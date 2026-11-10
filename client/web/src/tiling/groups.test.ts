@@ -139,26 +139,42 @@ describe("a Group", () => {
     })
   })
 
-  test("solo draws every Group of a Project's workspace the screen wide", () => {
+  test("solo draws every Group, and each column in none, the screen wide, on any workspace (ADR 0102, decision 8)", () => {
     const state = strip("abcd", "gg.h", 0)
-    // Not on a Project's workspace: as it is.
-    expect(soloed(state)).toBe(state)
-    state.list[0].project = "s" as ProjectId
     const drawn = soloed(state)
     expect(soloed(drawn)).toBe(drawn)
     const workspace = drawn.list[0]
     const [a, b, c, d] = workspace.columns
     // Each Group fills, its columns keeping their shares; a column in
-    // none stays as it is.
+    // none fills alone.
     expect(widthIn(workspace, a)).toBe("0.5")
     expect(widthIn(workspace, b)).toBe("0.5")
-    expect(widthIn(workspace, c)).toBe("1/2")
+    expect(widthIn(workspace, c)).toBe("1")
+    expect(groupEnds(workspace, 2).pad).toBe(false)
     expect(widthIn(workspace, d)).toBe("1")
     expect(groupEnds(workspace, 3).pad).toBe(false)
     // The engine's arrangement is not touched.
     expect(state.list[0].solo).toBeUndefined()
-    // The workspace Alt+M shows as the row for a while is as it is.
+    // The workspace Alt+M shows as the row for a while is as it is, and
+    // so is an empty one; a Project's and a free one both fill.
     expect(soloed(state, state.list[0].id)).toBe(state)
+    const two = strip("ab", "..", 0)
+    two.list.splice(1, 0, {
+      ...two.list[0],
+      id: "mine",
+      project: "s" as ProjectId,
+    })
+    const both = soloed(two, "mine")
+    expect(both.list.map((one) => one.solo)).toEqual([
+      true,
+      undefined,
+      undefined,
+    ])
+    expect(soloed(two).list.map((one) => one.solo)).toEqual([
+      true,
+      true,
+      undefined,
+    ])
     // Back to the row, a Group `Alt+M` filled gives the room back.
     const filled = strip("ab", "gg", 0)
     filled.list[0].filled = "g"

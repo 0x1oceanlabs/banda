@@ -94,8 +94,9 @@ export type Workspace = {
   /** The Group that takes the whole screen, its columns keeping their
    * shares of it (`Alt+M`, ADR 0065). */
   filled?: string
-  /** Solo (ADR 0079, decision 2): every Group here is drawn the whole
-   * screen wide, so the Strip scrolls from one Agent to the next. The
+  /** Solo (ADR 0079, decision 2; ADR 0102, decision 8): every Group here,
+   * and every column in none, is drawn the whole screen wide, so the Strip
+   * scrolls from one to the next. The
    * window's, as the Flow is; never the engine's (`soloed`). */
   solo?: true
   /** The Project whose Agents' Threads open here (ADR 0065, decision 9). */
@@ -182,23 +183,30 @@ export function runOf(
   return { start, end }
 }
 
-/** Whether the column at `c` is in the Group that fills the screen. */
+/** Whether the column at `c` fills the screen: in solo, any Group and
+ * any column in none (ADR 0102, decision 8); else the Group `Alt+M`
+ * filled. */
 export function filledAt(workspace: Workspace, c: number): boolean {
-  const group = workspace.columns[c]?.group
-  if (group === undefined) return false
-  return workspace.solo === true || workspace.filled === group
+  const column = workspace.columns[c]
+  if (column === undefined) return false
+  return (
+    workspace.solo === true ||
+    (column.group !== undefined && workspace.filled === column.group)
+  )
 }
 
-/** The workspaces as solo draws them: each Project's workspace with
- * every Group the whole screen wide, but `row`, the one `Alt+M` shows as
- * the row for a while. The same object when none changes. */
+/** The workspaces as solo draws them: every workspace with each Group,
+ * and each column in none, the whole screen wide (ADR 0102, decision 8),
+ * but `row`, the one `Alt+M` shows as the row for a while. The same
+ * object when none changes. */
 export function soloed(state: Workspaces, row?: string): Workspaces {
-  const wide = (one: Workspace) => one.project !== undefined && one.id !== row
-  if (!state.list.some((one) => wide(one) && !one.solo)) return state
+  const widens = (one: Workspace) =>
+    one.id !== row && one.columns.length > 0 && !one.solo
+  if (!state.list.some(widens)) return state
   return {
     ...state,
     list: state.list.map((one) =>
-      wide(one) && !one.solo ? { ...one, solo: true as const } : one
+      widens(one) ? { ...one, solo: true as const } : one
     ),
   }
 }
@@ -765,7 +773,13 @@ export function widen(
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  const now = drawn(share(widthIn(workspace, column, sizes)) ?? 0.5, floor)
+  // A column in no Group steps from its own width, though solo draws it
+  // the screen wide.
+  const width =
+    column.group === undefined
+      ? ownWidth(workspace, column, sizes)
+      : widthIn(workspace, column, sizes)
+  const now = drawn(share(width) ?? 0.5, floor)
   // Of the presets drawn alike, the widest stands for them all.
   const next = nextStep(sizes.presets, now, by, wrap, (at) => drawn(at, floor))
   if (next === undefined) return state

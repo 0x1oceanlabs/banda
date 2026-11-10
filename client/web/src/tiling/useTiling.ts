@@ -61,9 +61,10 @@ const standingIn = (seen: Seen) => seen.standing
  * before drew (roma-day.spec.ts holds it), and the commands go in that
  * order. It names no App and imports nothing of the Window. `machine`,
  * `modules` and `home` are for the arrangement a window kept before,
- * which moves to the engine once. With `solo`, every Group on a
- * Project's workspace is drawn the whole screen wide (ADR 0079), but on
- * the workspace `row` names: the engine's arrangement stays as it is.
+ * which moves to the engine once. With `solo`, every Group and every
+ * column in none is drawn the whole screen wide, on any workspace (ADR
+ * 0079; ADR 0102, decision 8), but on the workspace `row` names: the
+ * engine's arrangement stays as it is.
  */
 export function useTiling({
   engine,
@@ -94,7 +95,7 @@ export function useTiling({
   useLayoutEffect(() => {
     if (heard) store.set(hear(store.get(), heard.workspaces, heard.at))
   }, [store, heard])
-  // As drawn: in solo, each Project's workspace a Group the screen wide.
+  // As drawn: in solo, whatever has the focus the screen wide.
   const drawing = useMemo(
     () => (solo ? cached((state) => soloed(state, row)) : asIs),
     [solo, row]

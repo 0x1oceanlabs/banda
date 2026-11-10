@@ -8,7 +8,6 @@ import {
   type Column,
   current,
   type Entry,
-  filledAt,
   focusedColumn,
   runOf,
   type Workspaces,
@@ -76,7 +75,9 @@ export function filling(state: Workspaces): Plan | undefined {
  * view gives the room back. */
 export function unsoloing(state: Workspaces): Plan | undefined {
   const workspace = current(state)
-  const column = workspace.columns.find((_, c) => filledAt(workspace, c))
+  const column = workspace.columns.find(
+    (one) => one.group !== undefined && one.group === workspace.filled
+  )
   return column && fillPlan(column.id, false)
 }
 
