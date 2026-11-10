@@ -41,3 +41,13 @@ async fn the_servers_are_not_listed_nor_stopped_and_it_says_so() {
     assert_eq!(stopped.message, NO_SERVERS);
     assert!(NO_SERVERS.contains("not on Windows yet"));
 }
+
+/// With no terminal, none runs a program, and a machine's update does not
+/// wait for one (ADR 0106, decision 4).
+#[tokio::test]
+async fn no_terminal_runs_a_program() {
+    let world = World::new().await;
+    let mut running = world.running(world.project).await;
+    let said = running.recv().await.unwrap();
+    assert_eq!(said, json!({ "terminals": 0 }));
+}

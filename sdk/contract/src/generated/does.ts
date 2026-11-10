@@ -126,6 +126,7 @@ export const DOES = {
   "terminal.watch": "read",
   "terminal.ports": "read",
   "terminal.stop_server": "act",
+  "terminal.running": "read",
   "bytes.issue": "read",
   "harnesses.list": "read",
   "harnesses.account_profiles": "read",

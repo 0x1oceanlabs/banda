@@ -29,7 +29,7 @@ mod windows;
 pub use windows::{NO_SERVERS, NO_TERMINALS};
 
 use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
-use model::{Open, Piece, Servers, Size, TerminalId};
+use model::{Open, Piece, Running, Servers, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
 #[cfg(unix)]
@@ -39,6 +39,7 @@ use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
 #[cfg(unix)]
 use terminal::Terminal;
+use tokio::sync::{mpsc, watch};
 use ts_rs::TS;
 #[cfg(not(unix))]
 use windows::Terminal;
@@ -53,7 +54,11 @@ const AT_ONCE: usize = 64 * 1024;
 
 #[derive(Default)]
 pub struct Terminals {
-    open: Mutex<HashMap<TerminalId, Arc<Terminal>>>,
+    /// Every Project's open terminals, which each `running` counts.
+    open: Arc<Mutex<HashMap<TerminalId, Arc<Terminal>>>>,
+    /// Ticks as a terminal opens or closes, or a program comes to its
+    /// front or leaves it, so each Project's `running` counts again.
+    fronts: watch::Sender<()>,
     /// The servers started in Banda, a terminal's or an Agent's (ADR 0044).
     #[cfg(unix)]
     servers: Arc<Scanner>,
@@ -98,6 +103,10 @@ banda_kernel::methods! {
         stream ports(Nothing) -> Servers, Read;
         /// Stops a server of the Project's, and what it started.
         call stop_server(StopServer) -> (), Run;
+        /// How many of the Project's terminals run a program in front,
+        /// then that again each time it changes: a machine's update waits
+        /// while one does (ADR 0106, decision 4).
+        stream running(Nothing) -> Running, Read;
     }
 }
 
@@ -128,6 +137,16 @@ struct StopServer {
 struct Resize {
     terminal: TerminalId,
     size: Size,
+}
+
+/// How many of `project`'s terminals run a program in front.
+fn count(open: &HashMap<TerminalId, Arc<Terminal>>, project: ProjectId) -> Running {
+    let terminals = (open.values())
+        .filter(|terminal| terminal.project == project && terminal.runs_a_program())
+        .count();
+    Running {
+        terminals: u32::try_from(terminals).unwrap_or(u32::MAX),
+    }
 }
 
 fn allowed(size: Size) -> Result<(), Refusal> {
@@ -207,9 +226,12 @@ impl Terminals {
             found => found.cloned(),
         };
         let id = open.terminal;
-        let started = Terminal::start(project, open).map_err(Refusal::invalid)?;
+        let started =
+            Terminal::start(project, open, self.fronts.clone()).map_err(Refusal::invalid)?;
         open_now.insert(id, started);
         drop(open_now);
+        // A program opened as a terminal's own runs in front from now.
+        self.fronts.send_replace(());
         if let Some(ended) = ended {
             ended.close();
         }
@@ -245,6 +267,37 @@ impl Terminals {
 
     async fn watch(&self, call: Call, One { terminal }: One) -> Result<Stream, Refusal> {
         Ok(self.find(call.project().id(), terminal)?.watch())
+    }
+
+    async fn running(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        let project = call.project().id();
+        let open = self.open.clone();
+        let mut fronts = self.fronts.subscribe();
+        // One count waits at a time; a newer one follows it.
+        let (say, heard) = mpsc::channel(1);
+        tokio::spawn(async move {
+            let mut told = None;
+            loop {
+                fronts.mark_unchanged();
+                let now = count(&open.lock().unwrap(), project);
+                if told != Some(now) {
+                    let Ok(said) = serde_json::to_value(now) else {
+                        return;
+                    };
+                    if say.send(said).await.is_err() {
+                        return;
+                    }
+                    told = Some(now);
+                }
+                tokio::select! {
+                    changed = fronts.changed() => if changed.is_err() {
+                        return;
+                    },
+                    () = say.closed() => return,
+                }
+            }
+        });
+        Ok(heard)
     }
 
     #[cfg(unix)]

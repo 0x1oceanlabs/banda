@@ -1,7 +1,8 @@
 /**
  * The terminal module's words for TypeScript: what `terminal.open` starts
- * and what `terminal.watch` says, the servers `terminal.ports` finds, and
- * its `terminal.toml` as the look resolves it (ADR 0047).
+ * and what `terminal.watch` says, the servers `terminal.ports` finds, how
+ * many terminals `terminal.running` counts, and its `terminal.toml` as the
+ * look resolves it (ADR 0047).
  */
 import type { ModuleFile } from "./look"
 import type { Writing } from "./generated/terminal/Writing"
@@ -9,6 +10,7 @@ import type { Writing } from "./generated/terminal/Writing"
 export type { Ended } from "./generated/terminal/Ended"
 export type { Open } from "./generated/terminal/Open"
 export type { Piece } from "./generated/terminal/Piece"
+export type { Running } from "./generated/terminal/Running"
 export type { Size } from "./generated/terminal/Size"
 export type { TerminalId } from "./generated/terminal/TerminalId"
 export type { Title } from "./generated/terminal/Title"

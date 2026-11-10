@@ -7,6 +7,7 @@ use crate::model::{Open, Size};
 use banda_kernel::{ModuleProject, ProjectId, Stream};
 use std::convert::Infallible;
 use std::sync::Arc;
+use tokio::sync::watch;
 
 /// Why a terminal does not open on Windows.
 pub const NO_TERMINALS: &str = "Terminals are not on Windows yet: they come with a later \
@@ -23,11 +24,19 @@ pub struct Terminal {
 }
 
 impl Terminal {
-    pub fn start(_: &ModuleProject, _: Open) -> Result<Arc<Terminal>, String> {
+    pub fn start(
+        _: &ModuleProject,
+        _: Open,
+        _: watch::Sender<()>,
+    ) -> Result<Arc<Terminal>, String> {
         Err(NO_TERMINALS.to_owned())
     }
 
     pub fn ended(&self) -> bool {
+        match self.none {}
+    }
+
+    pub fn runs_a_program(&self) -> bool {
         match self.none {}
     }
 

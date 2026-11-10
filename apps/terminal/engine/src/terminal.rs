@@ -43,6 +43,10 @@ pub struct Terminal {
     now: Mutex<Now>,
     /// Ticks at every change, so watchers look again.
     changed: watch::Sender<()>,
+    /// The module's, shared by every terminal: ticks as a program comes
+    /// to the front or leaves it, and as the terminal ends or closes, so
+    /// `running` counts again.
+    fronts: watch::Sender<()>,
 }
 
 #[derive(Default)]
@@ -51,13 +55,21 @@ struct Now {
     size: Size,
     ended: Option<Ended>,
     title: Option<Title>,
+    /// Whether a program runs in front: the one it was opened with, or
+    /// one its shell started, as the shell's last look saw.
+    program: bool,
     closed: bool,
 }
 
 impl Terminal {
     /// Starts `open.program`, or the Person's shell, in `project`'s
-    /// folder and environment.
-    pub fn start(project: &ModuleProject, open: Open) -> Result<Arc<Terminal>, String> {
+    /// folder and environment. It ticks `fronts` as a program comes to its
+    /// front or leaves it, and as it ends or closes.
+    pub fn start(
+        project: &ModuleProject,
+        open: Open,
+        fronts: watch::Sender<()>,
+    ) -> Result<Arc<Terminal>, String> {
         let mut env = BTreeMap::from([
             ("TERM".to_owned(), "xterm-256color".to_owned()),
             ("COLORTERM".to_owned(), "truecolor".to_owned()),
@@ -86,9 +98,12 @@ impl Terminal {
             closing: Notify::new(),
             now: Mutex::new(Now {
                 size: open.size,
+                // A shell runs none until its look says so.
+                program: open.program.is_some(),
                 ..Now::default()
             }),
             changed: watch::Sender::new(()),
+            fronts,
         });
         let reading = tokio::spawn(terminal.clone().read(pty.output));
         // A shell's header says what runs in it; another program's keeps
@@ -125,13 +140,22 @@ impl Terminal {
                 if self.ended() {
                     return;
                 }
-                let Some(title) = front.look() else {
-                    continue;
-                };
+                let title = front.look();
+                let program = front.program();
                 let mut now = self.now.lock().unwrap();
-                if now.title.as_ref() != Some(&title) {
-                    now.title = Some(title);
-                    drop(now);
+                let came_or_left = std::mem::replace(&mut now.program, program) != program;
+                let titled = match title {
+                    Some(title) if now.title.as_ref() != Some(&title) => {
+                        now.title = Some(title);
+                        true
+                    }
+                    _ => false,
+                };
+                drop(now);
+                if came_or_left {
+                    self.fronts.send_replace(());
+                }
+                if titled {
                     self.changed.send_replace(());
                 }
             }
@@ -159,10 +183,18 @@ impl Terminal {
         let _ = tokio::time::timeout(LAST_WORDS, reading).await;
         self.now.lock().unwrap().ended = Some(ended);
         self.changed.send_replace(());
+        self.fronts.send_replace(());
     }
 
     pub fn ended(&self) -> bool {
         self.now.lock().unwrap().ended.is_some()
+    }
+
+    /// Whether a program runs in front: the one it was opened with, or one
+    /// its shell started, until the terminal ends or is closed.
+    pub fn runs_a_program(&self) -> bool {
+        let now = self.now.lock().unwrap();
+        now.program && now.ended.is_none() && !now.closed
     }
 
     /// Types `data` into the program.
@@ -185,6 +217,7 @@ impl Terminal {
     pub fn close(&self) {
         self.now.lock().unwrap().closed = true;
         self.changed.send_replace(());
+        self.fronts.send_replace(());
         self.closing.notify_one();
     }
 

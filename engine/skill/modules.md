@@ -182,7 +182,7 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `terminal.ports`: The servers started in Banda: the first one's port and how many more; a click lists them.
 
-Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
+Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`, `running`.
 
 ## Bytes (`bytes`)
 
