@@ -16,13 +16,14 @@ describe("the bar's widgets", () => {
         right: ["git.branch", "harnesses.limits", "git.branch"],
       },
       known({
+        "window.flow": "shown",
         "sidebar.counts": "shown",
         "git.branch": "shown",
         "harnesses.limits": "shown",
       })
     )
     expect(parts).toEqual({
-      left: ["workspaces.list"],
+      left: ["workspaces.list", "window.flow"],
       center: ["sidebar.counts"],
       right: ["git.branch", "harnesses.limits"],
     })
@@ -36,7 +37,11 @@ describe("the bar's widgets", () => {
         center: [],
         right: ["harnesses.limits", "workspaces.aside"],
       },
-      known({ "harnesses.limits": "off", "workspaces.aside": "shown" })
+      known({
+        "window.flow": "shown",
+        "harnesses.limits": "off",
+        "workspaces.aside": "shown",
+      })
     )
     expect(parts.right).toEqual(["workspaces.aside"])
     expect(problems).toEqual([])
@@ -45,7 +50,7 @@ describe("the bar's widgets", () => {
   it("name an id no module has at its line, as keys.toml's are", () => {
     const { parts, problems } = placed(
       { ...DEFAULT_BAR, center: [], right: ["git.brnch"] },
-      known({}),
+      known({ "window.flow": "shown" }),
       {
         "bar.right": {
           value: ["git.brnch"],
@@ -81,5 +86,20 @@ describe("the bar's widgets", () => {
     )
     expect(unlisted.parts.left).toEqual(["workspaces.list", "harnesses.limits"])
     expect(unlisted.problems).toEqual([])
+  })
+
+  it("show the Flow after the workspaces, as Banda's left lists it, and not where a left of the Person's own leaves it out", () => {
+    const flow = known({ "window.flow": "shown" })
+    const left = { ...DEFAULT_BAR, center: [], right: [] }
+    expect(DEFAULT_BAR.left).toEqual(["workspaces.list", "window.flow"])
+    expect(placed(left, flow).parts.left).toEqual([
+      "workspaces.list",
+      "window.flow",
+    ])
+    // A left written before the Flow came replaces Banda's whole (ADR
+    // 0098, decision 20): Alt+Shift+M still reaches it.
+    const theirs = placed({ ...left, left: ["workspaces.list"] }, flow)
+    expect(theirs.parts.left).toEqual(["workspaces.list"])
+    expect(theirs.problems).toEqual([])
   })
 })
