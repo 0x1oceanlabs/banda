@@ -8,7 +8,7 @@
  */
 import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { homedir } from "node:os"
-import { Engine, fileUrl } from "@banda/desktop-kit"
+import { Engine } from "@banda/desktop-kit"
 import { VISUALS } from "@banda/agents-pane/visual"
 import type { DesktopModule, Look } from "@banda/desktop-kit"
 import { Effect, Layer, Schema } from "effect"
@@ -35,7 +35,7 @@ export const agentsDesktop: DesktopModule<
               .call("bytes.issue", { path, use: "media" }, { project })
               .catch(() => null)
           )
-          return issued && fileUrl(issued.token)
+          return issued?.token ?? null
         }),
     ],
     paths: [

@@ -35,10 +35,12 @@ const mains = [
 
 /**
  * Where `source`, the code of `file`, asks where a Project is: each
- * string that names a `projects.*` method, and each `folderOf` it takes
- * of a value, as `Engine.folderOf`. Read as TypeScript reads it, so
- * comments and a function of its own by that name, as the channel's
- * `folderOf` of Banda's own folders, are not taken for one.
+ * string or template that names a `projects.*` method, and each
+ * `folderOf` it takes of a value, as `Engine.folderOf`,
+ * `Engine["folderOf"]` or `const { folderOf } = Engine`. Read as
+ * TypeScript reads it, so comments and a function of its own by that
+ * name, as the channel's `folderOf` of Banda's own folders, are not taken
+ * for one.
  */
 function projectReads(source: string, file: string): string[] {
   const found: string[] = []
@@ -46,10 +48,22 @@ function projectReads(source: string, file: string): string[] {
     if (ts.isStringLiteralLike(node) && /^projects\./.test(node.text))
       found.push(node.text)
     else if (
-      ts.isPropertyAccessExpression(node) &&
-      node.name.text === "folderOf"
+      ts.isTemplateExpression(node) &&
+      /^projects\./.test(node.head.text)
+    )
+      found.push(`${node.head.text}…`)
+    else if (
+      (ts.isPropertyAccessExpression(node) && node.name.text === "folderOf") ||
+      (ts.isElementAccessExpression(node) &&
+        ts.isStringLiteralLike(node.argumentExpression) &&
+        node.argumentExpression.text === "folderOf")
     )
       found.push(`${node.expression.getText()}.folderOf`)
+    else if (
+      ts.isBindingElement(node) &&
+      (node.propertyName ?? node.name).getText() === "folderOf"
+    )
+      found.push("{ folderOf }")
     ts.forEachChild(node, visit)
   }
   visit(ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true))
@@ -101,6 +115,9 @@ test("the lint finds a projects method and a folderOf asked of a value, and noth
   expect(read("const folder = yield* Engine.folderOf(project)")).toEqual([
     "Engine.folderOf",
   ])
+  expect(read('Engine["folderOf"](project)')).toEqual(["Engine.folderOf"])
+  expect(read("const { folderOf: where } = Engine")).toEqual(["{ folderOf }"])
+  expect(read("client.call(`projects.${which}`, {})")).toEqual(["projects.…"])
   expect(
     read(
       `// Engine.folderOf("p") and "projects.list"\nfolderOf("state", system)`

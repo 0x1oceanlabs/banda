@@ -4,10 +4,10 @@ import type { FoundFile } from "@banda/contract/agents"
 import { hostOf } from "@banda/ui/desktop"
 
 export const AGENTS_BRIDGE = {
-  /** A local media path, relative to its Project or absolute, as a URL
-   * of `app://files`, which this machine's engine serves for an hour;
-   * null if it cannot be shown. Images, video and sound alone: a reply's
-   * paths are an Agent's to write. */
+  /** A local media path, relative to its Project or absolute, as a token
+   * this machine's engine serves for an hour (`bytes.issue`, `media`),
+   * which `bytesUrl` names; null if it cannot be shown. Images, video and
+   * sound alone: a reply's paths are an Agent's to write. */
   media: invoke<[project: string, path: string], string | null>(),
   /** The file each path in a reply names, or none (ADR 0063, decision 2):
    * from the Project's folder, then from the folders `worked` names, the

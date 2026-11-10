@@ -4,7 +4,8 @@ import { createContext, useContext, useState } from "react"
 import { DialogTrigger } from "./dialog"
 import { ImagePreview } from "./image-preview"
 
-/** The desktop signs local paths; markdown never reads the filesystem. */
+/** The engine gives a token for a local path, which the Pane names as a
+ * URL; markdown never reads the filesystem. */
 const Resolver = createContext<Mint | null>(null)
 export function MarkdownMedia({
   resolve,

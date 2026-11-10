@@ -1808,7 +1808,8 @@ step 6). The agents Pane supplies the markdown renderer a resolver for
 its Project. The agents desktop part asks this machine's engine for a
 token for that path (`bytes.issue`, `media`), which the engine gives only
 for a picture, a video or a sound: a reply's paths are an Agent's to
-write. Until step 4c of ADR 0106 moves that ask into the page, it is the
+write. The Pane names the token with `bytesUrl`, as every byte URL is
+made. Until step 4c of ADR 0106 moves that ask into the page, it is the
 one ask of main's. Nothing plays automatically. Images open larger on a
 click; a missing or unsupported file stays a link.
 

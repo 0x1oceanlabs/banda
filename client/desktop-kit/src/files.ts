@@ -42,10 +42,11 @@ const TOKEN = /^\/([\w-]+)$/
 const missing = () => new Response("Not found", { status: 404 })
 
 /**
- * Where the engine listening at `address` (its API's `ws://` URL) serves
- * what `url` names: `app://files/<token>` at its `/b/<token>`,
- * `app://preview/<token>` at its `/p/<token>`. None for a URL of another
- * host, or with no token, more parts, a query or a fragment.
+ * Where the engine listening at `address` (its API's `ws://` URL, always
+ * on this machine's loopback) serves what `url` names:
+ * `app://files/<token>` at its `/b/<token>`, `app://preview/<token>` at
+ * its `/p/<token>`, over plain HTTP. None for a URL of another host, or
+ * with no token, more parts, a query or a fragment.
  */
 export function relayedTo(url: string, address: string): URL | null {
   const asked = new URL(url)
@@ -53,14 +54,9 @@ export function relayedTo(url: string, address: string): URL | null {
   const token = TOKEN.exec(asked.pathname)?.[1]
   if (!route || !token || asked.search || asked.hash) return null
   const engine = new URL(address)
-  engine.protocol = engine.protocol === "wss:" ? "https:" : "http:"
+  engine.protocol = "http:"
   return new URL(`/${route}/${token}`, engine)
 }
-
-/** The URL of `app://files` for a token of this machine's engine: the
- * agents module's media, until the page makes it from the Thread's
- * session (ADR 0106, step 4c). */
-export const fileUrl = (token: string) => `app://files/${token}`
 
 /** `answer`, the engine's, as the page's request gets it: its status,
  * its headers but the connection's own, and its body as it comes. */
@@ -102,10 +98,13 @@ function ask(to: URL, request: Request): Promise<Response> {
 
 /**
  * The answer to `request`, to `app://files` or `app://preview`: this
- * machine's engine's, relayed, once it listens. A URL that names no token
- * is refused here, and never asked; a method but `GET` and `HEAD` too. An
- * engine that does not answer gives 502, which the page takes for a URL
- * that broke.
+ * machine's engine's, relayed. A URL that names no token is refused here,
+ * and never asked; a method but `GET` and `HEAD` too. While the engine is
+ * between runs, the request waits till it listens again; an engine that
+ * refuses the connection gives 502, which the page takes for a URL that
+ * broke. Main puts no time limit on an answer, since a video's flows as
+ * long as it plays: a request waits till the engine answers, or till the
+ * page gives it up.
  */
 export const relay = (request: Request) =>
   Effect.gen(function* () {
