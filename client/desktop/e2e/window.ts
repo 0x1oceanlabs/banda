@@ -628,6 +628,16 @@ export async function setInFront(page: Page, front: boolean) {
 export async function newTerminal(page: Page): Promise<Locator> {
   await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  const screen = await openTerminal(page)
+  await expect(
+    page.locator("section[data-tile]").filter({ has: screen }).locator("header")
+  ).toContainText("root/Work")
+  return screen
+}
+
+/** A shell opened from the Pane in focus, by Alt+N, and its screen once it
+ * runs: in that Pane's Group, if it is in one. */
+export async function openTerminal(page: Page): Promise<Locator> {
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -635,9 +645,6 @@ export async function newTerminal(page: Page): Promise<Locator> {
     .click()
   const screen = page.getByRole("region", { name: "Terminal screen" })
   await expect(screen).toHaveAttribute("data-state", "running")
-  await expect(
-    page.locator("section[data-tile]").filter({ has: screen }).locator("header")
-  ).toContainText("root/Work")
   return screen
 }
 
@@ -733,17 +740,34 @@ export async function sharesOf(...found: Locator[]): Promise<number[]> {
   return shares.flat()
 }
 
+/** The room of the Strip on screen, in pixels across the page: past the
+ * Sidebar over its left, and short of its right padding. */
+function roomOf(page: Page): Promise<{ from: number; to: number }> {
+  return page.locator(`${ON_SCREEN} [data-strip]`).evaluate((strip) => {
+    const box = strip.getBoundingClientRect()
+    const style = getComputedStyle(strip)
+    return {
+      from: box.left + parseFloat(style.paddingLeft),
+      to: box.right - parseFloat(style.paddingRight),
+    }
+  })
+}
+
 /** How far `tile` stands from the left of the Strip on screen, in pixels:
  * none for a picked Agent (ADR 0065, decision 8). */
 export async function fromLeft(page: Page, tile: Locator): Promise<number> {
-  const left = await page
-    .locator(`${ON_SCREEN} [data-strip]`)
-    .evaluate(
-      (strip) =>
-        strip.getBoundingClientRect().left +
-        parseFloat(getComputedStyle(strip).paddingLeft)
-    )
-  return Math.abs((await tile.boundingBox())!.x - left)
+  const { from } = await roomOf(page)
+  return Math.abs((await tile.boundingBox())!.x - from)
+}
+
+/** How much of `tile`'s width shows in the room of the Strip on screen, in
+ * percent. */
+export async function shownOf(page: Page, tile: Locator): Promise<number> {
+  const room = await roomOf(page)
+  const box = (await tile.boundingBox())!
+  const shown =
+    Math.min(box.x + box.width, room.to) - Math.max(box.x, room.from)
+  return Math.round((Math.max(0, shown) / box.width) * 100)
 }
 
 /**

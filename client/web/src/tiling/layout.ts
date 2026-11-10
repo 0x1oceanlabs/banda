@@ -4,7 +4,7 @@
  * `resize`, and the columns a change puts elsewhere go there on its
  * `move`, as niri's do, instead of jumping.
  */
-import type { Columns as Look } from "@banda/contract/look"
+import type { Center, Columns as Look } from "@banda/contract/look"
 import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { minOf } from "../registry"
@@ -12,6 +12,7 @@ import {
   displayOf,
   drawn,
   type Ends,
+  filledAt,
   free,
   groupEnds,
   padded,
@@ -86,13 +87,15 @@ export function floorOf(id: string, min: number): number {
 }
 
 /** The columns of `workspace` as the look sizes them: the width each is
- * drawn at, and the least, in rem. */
+ * drawn at, and the least, in rem; whether it fills the screen with its
+ * Group. */
 export function sized(workspace: Workspace, look: Look) {
   return workspace.columns.map((column, c) => ({
     ...column,
     width: widthIn(workspace, column, look),
     min: minOf(column, look.min),
     ends: groupEnds(workspace, c),
+    filled: filledAt(workspace, c),
   }))
 }
 
@@ -244,6 +247,52 @@ export function places(
     left += width + gap + out(pads.right)
     return place
   })
+}
+
+/** How a column comes into view: as the look's `center` says, `before`
+ * the column focused before it; or with `left`, from `first`, its
+ * Group's first column. */
+export type Aim = { center: Center | "left"; before?: string; first?: string }
+
+/**
+ * Where the Strip's scroll goes, from `at`, to show the column `id` whole
+ * in its room, `pad` in from its left and `inner` wide: by the least
+ * scroll; to the middle; or to the middle only when it does not fit
+ * beside `before`, else by the least scroll that shows both. With `left`,
+ * `first`'s left edge goes to the room's left, as far as `id` stays
+ * whole: a Group wider than the screen shows its focused column. Never
+ * past the Strip's ends; none when `id` has no place.
+ */
+export function revealTo(
+  all: readonly Place[],
+  { pad, inner }: { pad: number; inner: number },
+  at: number,
+  id: string | undefined,
+  { center, before, first = id }: Aim
+): number | undefined {
+  const column = all.find((place) => place.id === id)
+  if (!column) return undefined
+  const least = (left: number, right: number) =>
+    left - pad < at
+      ? left - pad
+      : right - pad - inner > at
+        ? right - pad - inner
+        : at
+  const middle = (column.left + column.right - inner) / 2 - pad
+  let to = least(column.left, column.right)
+  if (center === "always") to = middle
+  if (center === "left") {
+    const start = all.find((place) => place.id === first) ?? column
+    to = Math.max(start.left, column.right - inner) - pad
+  }
+  const previous = all.find((place) => place.id === before)
+  if (center === "on-overflow" && previous && previous !== column) {
+    const left = Math.min(column.left, previous.left)
+    const right = Math.max(column.right, previous.right)
+    to = right - left <= inner ? least(left, right) : middle
+  }
+  const most = Math.max(0, (all.at(-1)?.right ?? 0) - pad - inner)
+  return Math.max(0, Math.min(most, to))
 }
 
 /** A column's width at `at`, a share of the room, as the Strip draws it;

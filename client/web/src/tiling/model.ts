@@ -157,15 +157,30 @@ export function widthIn(
   sizes: Sizes = SIZES
 ): Width {
   const c = workspace.columns.indexOf(column)
-  if (!column.full && filledAt(workspace, c)) {
-    // Of the screen, the share it has of its Group's.
-    const { start, end } = runOf(workspace.columns, c)
-    const of = (c: Column) => share(ownWidth(workspace, c, sizes)) ?? 0.5
-    const group = workspace.columns.slice(start, end)
-    const all = group.reduce((sum, c) => sum + of(c), 0)
-    return free(of(column) / all)
-  }
-  return ownWidth(workspace, column, sizes)
+  const own = ownWidth(workspace, column, sizes)
+  if (column.full || !filledAt(workspace, c)) return own
+  return free(shareAt(workspace, c, share(own) ?? 0.5, sizes))
+}
+
+/** The share of the screen the column at `c` is drawn at, were its own
+ * width `at`: in a Group that fills the screen, the share it has of its
+ * Group's, the others keeping theirs. */
+function shareAt(
+  workspace: Workspace,
+  c: number,
+  at: number,
+  sizes: Sizes
+): number {
+  if (!filledAt(workspace, c)) return at
+  const { start, end } = runOf(workspace.columns, c)
+  const others = workspace.columns
+    .slice(start, end)
+    .filter((_, i) => start + i !== c)
+    .reduce(
+      (sum, one) => sum + (share(ownWidth(workspace, one, sizes)) ?? 0.5),
+      0
+    )
+  return at / (at + others)
 }
 
 /** The columns of the Group the one at `c` is in, from `start` to before
@@ -865,17 +880,18 @@ export function widen(
   { floor = 0, wrap = false }: { floor?: number; wrap?: boolean } = {}
 ): Workspaces {
   const workspace = current(state)
-  const column = workspace.columns[workspace.focus]
+  const c = workspace.focus
+  const column = workspace.columns[c]
   if (!column) return state
-  // A column in no Group steps from its own width, though solo draws it
-  // the screen wide.
-  const width =
-    column.group === undefined
-      ? ownWidth(workspace, column, sizes)
-      : widthIn(workspace, column, sizes)
-  const now = drawn(share(width) ?? 0.5, floor)
+  // In a Group that fills the screen, in solo or by Alt+M, a width shows
+  // as its share of the Group's: each step goes on to one that shows, and
+  // a column that fills the screen alone has none, so the row never comes
+  // back at a width the Person did not see (ADR 0102, decision 8).
+  const shows = (at: number) => drawn(shareAt(workspace, c, at, sizes), floor)
+  const own = share(ownWidth(workspace, column, sizes)) ?? 0.5
+  const now = column.full ? 1 : shows(own)
   // Of the presets drawn alike, the widest stands for them all.
-  const next = nextStep(sizes.presets, now, by, wrap, (at) => drawn(at, floor))
+  const next = nextStep(sizes.presets, now, by, wrap, shows)
   if (next === undefined) return state
   return withFocused(state, { ...column, width: next, full: undefined })
 }

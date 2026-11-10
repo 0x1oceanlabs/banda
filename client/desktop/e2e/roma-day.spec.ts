@@ -19,9 +19,11 @@ import {
   fromLeft,
   layoutOf,
   ON_SCREEN,
+  openTerminal,
   pressAtOnce,
   projectId,
   sharesOf,
+  shownOf,
   startWindow,
   TEN_KEYS,
   textOf,
@@ -283,6 +285,60 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   // Back to the row, the room comes back.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])
+})
+
+test("in solo the focus past a Group's edge shows the next Group whole, from its first column, and Alt+R leaves an Agent alone the screen wide as it is (ADR 0102, decision 8)", async () => {
+  window = await startWindow({ look: HALVES })
+  const { page } = window
+  const [a, hello] = await agents(window, "hello a", "hello")
+  // A terminal opened at hello joins its Group, right of it; a new Agent
+  // comes last, a Group of its own.
+  const screen = await openTerminal(page)
+  const terminal = page.locator("section[data-tile]").filter({ has: screen })
+  const second = await startAgent(window, "second")
+  const groupOf = (tile: Locator) =>
+    tile.evaluate(
+      (element) => element.closest<HTMLElement>("[data-column]")!.dataset.group
+    )
+  expect(await groupOf(terminal)).toBe(await groupOf(hello))
+  expect(await groupOf(second)).not.toBe(await groupOf(hello))
+  const shown = () =>
+    Promise.all([a, hello, terminal, second].map((one) => shownOf(page, one)))
+
+  // Solo: the Agent in front fills the screen.
+  await page.keyboard.press("Alt+Shift+KeyM")
+  await expect(second).toHaveAttribute("data-focused", "true")
+  await expect.poll(shown).toEqual([0, 0, 0, 100])
+
+  // Past its edge, into the last column of hello's Group: that Group
+  // shows whole, from hello, and nothing of the Agents beside it.
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await expect.poll(shown).toEqual([0, 100, 100, 0])
+  await expect.poll(() => fromLeft(page, hello)).toBeLessThan(3)
+  // Inside the Group, nothing moves.
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(hello).toHaveAttribute("data-focused", "true")
+  expect(await shown()).toEqual([0, 100, 100, 0])
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(a).toHaveAttribute("data-focused", "true")
+  await expect.poll(shown).toEqual([100, 0, 0, 0])
+  // From the left, into its first column, the Group shows whole too.
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(hello).toHaveAttribute("data-focused", "true")
+  await expect.poll(shown).toEqual([0, 100, 100, 0])
+  await page.keyboard.press("Alt+ArrowRight")
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(second).toHaveAttribute("data-focused", "true")
+  await expect.poll(shown).toEqual([0, 0, 0, 100])
+
+  // Alt+R on the Agent that fills the screen alone shows nothing, and
+  // does nothing: back in the row it is as wide as it was.
+  await page.keyboard.press("Alt+KeyR")
+  await page.keyboard.press("Alt+KeyR")
+  expect(await sharesOf(second)).toEqual([100])
+  await page.keyboard.press("Alt+Shift+KeyM")
+  await expect.poll(() => sharesOf(a, second)).toEqual([50, 50])
 })
 
 test("ten Agents of a Project work side by side on its workspace, and a pick brings one to the Strip's left, filled in solo (ADR 0065, ADR 0079)", async () => {
