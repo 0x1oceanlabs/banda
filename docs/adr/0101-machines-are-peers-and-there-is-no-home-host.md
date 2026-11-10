@@ -183,6 +183,11 @@ their own ADR (Later).
    [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md):
    only a message to a Thread waits in that queue; every
    other act is refused at once._
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decision 4: a terminal Pane closed while its machine is away waits
+   there too, as ADR 0105's rule for H5e allows, and closes on that
+   machine once it is back._
 
 ## Later, each its own ADR when its slice comes
 

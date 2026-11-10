@@ -258,6 +258,14 @@ Machines) and `clip-notes.png`.
      sidebar does: this machine's with no label, then each other's under
      its label. A Thread started in another machine's Project starts on
      that machine's engine.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decision 2: "Not on arc yet" is for a kind that does not say
+   `elsewhere` (the kind checker holds those that do), and for an App or
+   a method arc's build lacks. New Pane on an arc Project lists what opens
+   on arc and shows the rest dimmed in those words, under "in banda on
+   arc". A terminal on arc names it after its folder: "zsh · ~/code/banda
+   · arc"._
 
 8. **Elsewhere, in words where icons do not draw.**
    - The top bar does not change: it is this device's, and its

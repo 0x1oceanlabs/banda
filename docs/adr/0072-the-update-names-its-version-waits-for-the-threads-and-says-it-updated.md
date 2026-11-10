@@ -52,6 +52,12 @@ layers) and took B and every change the mock proposed.
      waiting) and says so on `ready` as `waits`. The window knows the
      Threads that work, so it is the window that asks for the restart,
      once none has worked for two seconds.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decision 4: a restart also waits while one of its machine's terminals
+   runs a program in front, a build or a server, as it waits for a Turn,
+   since a restart ends every terminal. The popover says "Waits for a
+   program in a terminal to finish"; "Restart now" still restarts._
 4. **After a restart, the new Banda says it updated.**
    - Before it installs, main writes the version it leaves and the notes
      to `update.json` in the app's folder of data. The new Banda reads it

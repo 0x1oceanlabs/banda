@@ -267,6 +267,13 @@ stay his to change.
      one another, so Files runs git itself.
    - **`files.size { path }`** walks the folder, a link not followed, and
      says the bytes and files counted every 100 ms, then that it is done.
+   _Amended 2026-11-10 by
+   [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+   decision 6: bytes come from the Project's host. `platform/bytes` signs
+   them there as these links are signed, and the engine serves `/b/` and
+   `/p/`; `app://files` and `app://preview` become relays in main, by
+   machine, to that host's engine, this machine's too. `useFileUrl` asks
+   the Pane's session, and main reads no Project path._
 
 6. **A file is drawn by a previewer.**
    - A module declares a previewer in `defineModule({ previewers })` with
@@ -575,6 +582,15 @@ stay his to change.
     - **`move` is a keyword** in Rust: the kernel's `methods!` takes a
       method's name as a raw identifier (`r#move`), and the window calls it
       `move`.
+    _Amended 2026-11-10 by
+    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+    decisions 3 and 5: the rows that act on this device's disk (Open in
+    ‹editor›, Open with the system, Reveal, a drag out) show only for a
+    file of this computer, and "Show in Files" stands in for another
+    machine's. A drag and the window's clipboard carry each file's
+    Project; one dropped or pasted into another machine's Pane is refused,
+    "That file is on arc". `files.move` and `files.copy` are acts, refused
+    at once while their machine is away._
 
 11. **Finding a file is one engine call.**
     - `files.find` walks with `ignore` (gitignore-aware) and matches with
@@ -629,6 +645,13 @@ stay his to change.
     hidden files show by default. It also holds the editor to open in, the
     size past which a file is read-only, and the extensions mapped to a
     previewer. It follows the browser's settings pattern (ADR 0016).
+    _Amended 2026-11-10 by
+    [ADR 0106](0106-another-machine-s-panes-run-on-its-engine-and-this-device-only-draws-them.md),
+    decision 7, after ADR 0101 decision 3: `pinned` is the machine's, read
+    and written through that machine's engine, so each machine has its own
+    pins; until then another machine's Files shows its Home, Desktop,
+    Downloads and Projects. The rest of `files.toml`, the editor too, is
+    the device's._
 
 14. **What Files needs from the App SDK** (ADR 0062). Each piece is built
     for Files and then serves every App:
