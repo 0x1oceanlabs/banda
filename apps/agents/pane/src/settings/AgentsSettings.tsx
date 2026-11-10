@@ -132,8 +132,9 @@ export function AgentsSettings({
   if (opened.lit !== lit) setOpened({ lit, id: lit })
   const open = (id: string | undefined) => setOpened({ lit, id })
   const [adding, setAdding] = useState<Adding>()
-  const starts = useStartsOn(engine)
-  const { fallback } = useFile(AGENTS_FILE)
+  const start = useFile(AGENTS_FILE)
+  const starts = useStartsOn(engine, start)
+  const { fallback } = start
   const { limits, now } = useLimitsNow(engine)
   const uses = useUses(engine)
   if (list === undefined) return <Spinner />

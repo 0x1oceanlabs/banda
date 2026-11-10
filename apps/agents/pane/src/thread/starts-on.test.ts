@@ -1,6 +1,7 @@
 import { expect, test } from "vitest"
+import type { Defaults } from "@banda/contract/agents"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
-import { outOf, startsOn, startsOnWords } from "./starts-on"
+import { outOf, startOf, startsOn, startsOnWords } from "./starts-on"
 
 const NOW = 1_000_000
 const signedIn = new Map([
@@ -106,4 +107,18 @@ test("fallback requires a confirmed sign-in and also covers a signed-out default
   expect(
     startsOn(harnesses, agents, [limits("codex", 100)], NOW, signedOut)?.id
   ).toBe("work")
+})
+
+test("a draft starts by the accounts its machine named, once it said them", () => {
+  const said = {
+    account: "work",
+    fallback: "codex",
+  } as Partial<Defaults> as Defaults
+  expect(startOf(undefined)).toBeUndefined()
+  const start = startOf({ claude: said, work: said })
+  expect(start).toEqual(said)
+  expect(startsOn(harnesses, start!, [], NOW, signedIn)?.id).toBe("work")
+  // A machine that names none starts on its first one on.
+  const none = startOf({ claude: {} as Partial<Defaults> as Defaults })
+  expect(startsOn(harnesses, none!, [], NOW, signedIn)?.id).toBe("claude")
 })
