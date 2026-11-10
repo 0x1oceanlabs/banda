@@ -1,15 +1,26 @@
 //! What runs now, in memory: the Harness processes ([`Hosts`]), the turns
-//! they run and the Questions they wait on. A restart loses it, and the
-//! outbox settles what that cut short. A turn is held from [`Live::open`]
-//! until its [`TurnRun`] is let go, however its task ends, and is counted
-//! as at work for that long, waiting on its Person's Question too: the
-//! engine keeps its machine awake while any is (ADR 0097, decision 1).
+//! they run, the sub-agents at work in their sessions, and the Questions
+//! both wait on. A restart loses it, and the outbox settles what that cut
+//! short. A turn is held from [`Live::open`] until its [`TurnRun`] is let
+//! go, however its task ends, and is counted as at work for that long,
+//! waiting on its Person's Question too: the engine keeps its machine
+//! awake while any is (ADR 0097, decision 1).
 //!
-//! One lock holds the running turns, the cancels and the Questions
-//! together, so a stop that comes while a turn starts, or while it asks, is
-//! never lost. Whether a turn was asked to stop is the turn's own state
-//! (`agents_turns.stopping`), which the rules read; memory only keeps
-//! whether its Harness was told.
+//! A sub-agent at work holds what a running turn holds (ADR 0103,
+//! decision 11), from [`Live::lane`] until its [`LaneRun`] is let go: it
+//! counts as at work, keeps its process from being let go as idle, and
+//! keeps its Questions, which its turn's end leaves open. It holds its
+//! session weakly, so it never keeps alive a process Banda let go: as
+//! Banda lets one go, for a change of the Project's trust or of a
+//! Harness's account, or as a Thread moves elsewhere, it notes the cut on
+//! the sub-agents at work there ([`Cut`]), which end Lost in its words
+//! once the process is gone. A Project removed stops them.
+//!
+//! One lock holds the running turns, the cancels, the sub-agents and the
+//! Questions together, so a stop that comes while a turn starts, or while
+//! it asks, is never lost. Whether a turn was asked to stop is the turn's
+//! own state (`agents_turns.stopping`), which the rules read; memory only
+//! keeps whether its Harness was told.
 //!
 //! The Harness processes are one per Project and Harness entry: every Thread
 //! on that Harness in that Project is a session in the one process. A host
@@ -30,12 +41,12 @@
 //! in it. The kernel keeps every pass past an engine restart, until what
 //! holds it lets it go or it expires (ADR 0083, decision 2).
 
-use crate::acp::{Answer, Connection, Session};
+use crate::acp::{Answer, Connection, Session, WeakSession};
 use crate::doing::Doings;
-use crate::model::{ItemId, ThreadId, TurnId, Values};
+use crate::model::{ItemId, SubagentId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use crate::{Pipe, kept};
-use banda_harnesses::hosts::Hosts;
+use banda_harnesses::hosts::{Held, Hosts};
 use banda_harnesses::{Failed, Harness};
 use banda_kernel::{
     AgentId, AtWork, Holes, Listener, ModuleProject, Pass, Program, ProjectId, Working,
@@ -84,23 +95,71 @@ struct Turns {
     /// Turns a message was just sent into: what the Agent says next reads
     /// after it.
     steered: HashSet<TurnId>,
-    questions: HashMap<ItemId, (TurnId, oneshot::Sender<Answer>)>,
+    /// The Questions the Harness waits on, by whose they are.
+    questions: HashMap<ItemId, (Owner, oneshot::Sender<Answer>)>,
     /// What Persons typed in secret fields, until it goes to the Harness.
     /// Only memory holds it.
     secrets: HashMap<ItemId, Values>,
+    /// The sub-agents at work.
+    lanes: HashMap<SubagentId, LaneHeld>,
+}
+
+/// Whose a Question is: a turn's, or a sub-agent's, which its turn's end
+/// leaves open (ADR 0103, decision 8).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum Owner {
+    Turn(TurnId),
+    Lane(SubagentId),
+}
+
+/// A sub-agent at work, as memory holds it.
+struct LaneHeld {
+    project: ProjectId,
+    /// The Harness entry its process runs.
+    harness: String,
+    thread: ThreadId,
+    /// Its child session, as the Harness names it.
+    child: String,
+    /// Its Thread's session, held weakly.
+    session: WeakSession,
+    /// Why Banda cut it off, once it did.
+    cut: Option<Cut>,
+}
+
+/// Why Banda cut a sub-agent off from its Harness's process, as it let the
+/// process go: the lane ends Lost in these words (ADR 0103, decision 3).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum Cut {
+    /// The Person changed the Project's trust.
+    Trust,
+    /// The Harness's account changed.
+    Account,
+    /// Its Thread moved to another Harness entry, by its name.
+    Moved(String),
 }
 
 impl Turns {
     fn asking(&self, turn: TurnId) -> bool {
-        self.questions.values().any(|(of, _)| *of == turn)
+        let of = Owner::Turn(turn);
+        self.questions.values().any(|(owner, _)| *owner == of)
     }
 
-    /// The Harness hears that nobody will answer the turn's Questions.
+    /// The Harness hears that nobody will answer the turn's Questions; a
+    /// sub-agent's stay.
     fn release(&mut self, turn: TurnId) {
+        self.release_of(Owner::Turn(turn));
+    }
+
+    /// The Harness hears that nobody will answer the sub-agent's Questions.
+    fn release_lane(&mut self, sub: SubagentId) {
+        self.release_of(Owner::Lane(sub));
+    }
+
+    fn release_of(&mut self, of: Owner) {
         let asked: Vec<ItemId> = self
             .questions
             .iter()
-            .filter(|(_, (of, _))| *of == turn)
+            .filter(|(_, (owner, _))| *owner == of)
             .map(|(item, _)| *item)
             .collect();
         for item in asked {
@@ -108,6 +167,47 @@ impl Turns {
                 let _ = answer.send(Answer::Cancelled);
             }
         }
+    }
+
+    /// Notes `cut` on each sub-agent at work that `whose` names; which
+    /// they are.
+    fn cut(&mut self, cut: &Cut, whose: impl Fn(&LaneHeld) -> bool) -> Vec<SubagentId> {
+        let mut were = Vec::new();
+        for (sub, held) in self.lanes.iter_mut().filter(|(_, held)| whose(held)) {
+            held.cut = Some(cut.clone());
+            were.push(*sub);
+        }
+        were
+    }
+
+    /// The sub-agents at work that `whose` names.
+    fn lanes(&self, whose: impl Fn(&LaneHeld) -> bool) -> Vec<SubagentId> {
+        let held = self.lanes.iter().filter(|(_, held)| whose(held));
+        held.map(|(sub, _)| *sub).collect()
+    }
+
+    /// Stops sub-agents `subs` where their Harness lets Banda stop them
+    /// alone, then tells it nobody will answer their Questions, as ACP
+    /// asks of a client once it cancelled: a request left waiting would
+    /// keep the lane heard after its session closed. The Thread sessions
+    /// they work in, each once, to close.
+    fn stop_lanes(&mut self, subs: &[SubagentId]) -> Vec<Session> {
+        let mut sessions: Vec<Session> = Vec::new();
+        for sub in subs {
+            let Some(held) = self.lanes.get(sub) else {
+                continue;
+            };
+            if let Some(session) = held.session.upgrade() {
+                if let Err(error) = session.cancel_child(&held.child) {
+                    tracing::info!(%error, "a sub-agent Banda cut off could not be stopped");
+                }
+                if !sessions.iter().any(|one| one.is(&session)) {
+                    sessions.push(session);
+                }
+            }
+            self.release_lane(*sub);
+        }
+        sessions
     }
 }
 
@@ -234,11 +334,26 @@ impl Live {
     /// Lets go of `thread`'s session in each process of `project` but
     /// `keep`'s, as one of its turns starts on `keep`: a Thread's session
     /// is open in one process only, the account it runs on now (ADR 0078).
-    pub async fn forget_elsewhere(&self, project: ProjectId, thread: ThreadId, keep: &str) {
+    /// Its sub-agents at work elsewhere are cut off: stopped where they
+    /// can be, their Questions let go, before the session closes (ADR
+    /// 0103, decision 11). Those that ended are left as they are.
+    pub async fn forget_elsewhere(&self, project: ProjectId, thread: ThreadId, keep: &Harness) {
         for (harness, connection) in self.hosts.running(project).await {
-            if harness != keep {
-                connection.forget_thread(thread).await;
+            if harness == keep.id {
+                continue;
             }
+            let moved = Cut::Moved(keep.name.clone());
+            let stopped = {
+                let mut turns = self.turns.lock().unwrap();
+                let cut = turns.cut(&moved, |held| {
+                    (held.project, held.thread) == (project, thread) && held.harness == harness
+                });
+                turns.stop_lanes(&cut)
+            };
+            self.changed.notify_waiters();
+            // Theirs is the Thread's session, which closes now.
+            drop(stopped);
+            connection.forget_thread(thread).await;
         }
     }
 
@@ -264,8 +379,12 @@ impl Live {
         loop {
             match heard.next().await {
                 Ok(Some(event)) => {
-                    // It starts again on its next turn.
+                    // It starts again on its next turn, and its sub-agents
+                    // at work end with it.
                     if let Some(harness) = &event.subject {
+                        (self.turns.lock().unwrap()).cut(&Cut::Account, |held| {
+                            held.project == project && held.harness == *harness
+                        });
                         self.hosts.let_go(project, Some(harness));
                     }
                     if let Err(error) = heard.ack_through(event.seq).await {
@@ -283,13 +402,16 @@ impl Live {
 
     /// Lets go of every process of `project`, as the Person's trust in it
     /// changed: a turn that runs keeps its own until it ends, and the next
-    /// starts one that reads the Project as it is now.
+    /// starts one that reads the Project as it is now. Its sub-agents at
+    /// work end with it.
     pub fn let_go(&self, project: ProjectId) {
+        (self.turns.lock().unwrap()).cut(&Cut::Trust, |held| held.project == project);
         self.hosts.let_go(project, None);
     }
 
-    /// Stops every turn that runs on a Harness of `project`, as the Project is
-    /// removed, and lets go of its Harnesses.
+    /// Stops every turn that runs on a Harness of `project`, and every
+    /// sub-agent at work there, as the Project is removed, and lets go of
+    /// its Harnesses. Nothing is written: the Project's data goes.
     pub async fn close(&self, project: ProjectId) {
         (self.passes.lock().unwrap()).retain(|(of, _), _| *of != project);
         let hosts = self.hosts.forget(project).await;
@@ -302,6 +424,27 @@ impl Live {
                 tracing::warn!(%error, "a turn of a removed Project could not be stopped");
             }
         }
+        let cancelled = {
+            let mut turns = self.turns.lock().unwrap();
+            let lanes = turns.lanes(|held| held.project == project);
+            turns.stop_lanes(&lanes)
+        };
+        self.changed.notify_waiters();
+        // Its process goes with the last of `hosts`: a session no turn
+        // runs in is closed first, so the Harness has its cancels by then.
+        // One a turn runs in lives until that turn ends.
+        for session in cancelled {
+            if !session.prompting() {
+                session.close().await;
+            }
+        }
+        drop(hosts);
+    }
+
+    /// Why Banda cut sub-agent `sub` off, if it did while it worked.
+    pub fn cut(&self, sub: SubagentId) -> Option<Cut> {
+        let turns = self.turns.lock().unwrap();
+        turns.lanes.get(&sub).and_then(|held| held.cut.clone())
     }
 
     /// A turn the engine runs, from now until the returned run is let go:
@@ -311,6 +454,39 @@ impl Live {
         TurnRun {
             live: self.clone(),
             turn,
+            _at_work: self.working.hold(),
+        }
+    }
+
+    /// Sub-agent `sub` of `thread` in `project`, whose child session is
+    /// `child`, works in `session`, its Thread's, from now until the
+    /// returned run is let go: it counts as at work, keeps the process
+    /// from being let go as idle, and holds the session weakly.
+    pub fn lane(
+        self: &Arc<Self>,
+        project: ProjectId,
+        thread: ThreadId,
+        sub: SubagentId,
+        child: &str,
+        session: &Session,
+    ) -> LaneRun {
+        let held = LaneHeld {
+            project,
+            harness: session.harness().to_owned(),
+            thread,
+            child: child.to_owned(),
+            session: session.downgrade(),
+            cut: None,
+        };
+        self.hold_lane(sub, held, session.keep())
+    }
+
+    fn hold_lane(self: &Arc<Self>, sub: SubagentId, held: LaneHeld, kept: Held) -> LaneRun {
+        self.turns.lock().unwrap().lanes.insert(sub, held);
+        LaneRun {
+            live: self.clone(),
+            sub,
+            _held: kept,
             _at_work: self.working.hold(),
         }
     }
@@ -370,6 +546,15 @@ impl Live {
         waiting.is_some_and(|(_, answer)| answer.send(given).is_ok())
     }
 
+    /// Lets go of Question `item`: the Harness hears nobody will answer
+    /// it.
+    fn forget_question(&self, item: ItemId) {
+        if let Some((_, answer)) = self.turns.lock().unwrap().questions.remove(&item) {
+            let _ = answer.send(Answer::Cancelled);
+            self.changed.notify_waiters();
+        }
+    }
+
     /// Holds what a Person typed in a Question's secret fields until its
     /// answer goes to the Harness.
     pub fn keep_secret(&self, item: ItemId, secret: Values) {
@@ -427,17 +612,16 @@ impl TurnRun {
             let _ = answer.send(Answer::Cancelled);
             return false;
         }
-        turns.questions.insert(item, (self.turn, answer));
+        turns
+            .questions
+            .insert(item, (Owner::Turn(self.turn), answer));
         true
     }
 
     /// Lets go of a Question that could not be written, or that the
     /// Harness took back.
     pub fn forget(&self, item: ItemId) {
-        if let Some((_, answer)) = self.live.turns.lock().unwrap().questions.remove(&item) {
-            let _ = answer.send(Answer::Cancelled);
-            self.live.changed.notify_waiters();
-        }
+        self.live.forget_question(item);
     }
 
     /// Whether a message went into the turn since the last time asked.
@@ -458,9 +642,53 @@ impl Drop for TurnRun {
     }
 }
 
+/// A sub-agent at work, as memory holds it: letting it go, as it ends,
+/// ends it there, with its Questions.
+pub struct LaneRun {
+    live: Arc<Live>,
+    sub: SubagentId,
+    /// Its process is not let go as idle while it works.
+    _held: Held,
+    /// Counted as at work while it works, a Question it waits on too.
+    _at_work: AtWork,
+}
+
+impl LaneRun {
+    /// Holds one of its Questions until a Person answers it, or it ends.
+    pub fn ask(&self, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
+        let mut turns = self.live.turns.lock().unwrap();
+        turns
+            .questions
+            .insert(item, (Owner::Lane(self.sub), answer));
+        true
+    }
+
+    /// Lets go of a Question that could not be written, or that the
+    /// Harness took back.
+    pub fn forget(&self, item: ItemId) {
+        self.live.forget_question(item);
+    }
+
+    /// No message goes into a sub-agent (ADR 0103, decision 25).
+    pub fn take_steered(&self) -> bool {
+        false
+    }
+}
+
+/// It ended: memory lets go of it and its Questions.
+impl Drop for LaneRun {
+    fn drop(&mut self) {
+        let mut turns = self.live.turns.lock().unwrap();
+        turns.lanes.remove(&self.sub);
+        turns.release_lane(self.sub);
+        self.live.changed.notify_waiters();
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+    use banda_harnesses::hosts::Activity;
 
     fn live() -> Arc<Live> {
         live_counted(Working::new())
@@ -518,5 +746,106 @@ mod tests {
         assert_eq!(*count.borrow(), 1, "it waits on its Person, at work");
         drop(run);
         assert_eq!(*count.borrow(), 0);
+    }
+
+    /// A sub-agent of `thread` in `project` at work on a process whose
+    /// activity is `activity`, and of the Harness entry `harness`.
+    fn lane(
+        live: &Arc<Live>,
+        (project, thread): (ProjectId, ThreadId),
+        harness: &str,
+        activity: &Activity,
+    ) -> (SubagentId, LaneRun) {
+        let sub = SubagentId::new();
+        let held = LaneHeld {
+            project,
+            harness: harness.to_owned(),
+            thread,
+            child: format!("child-{sub}"),
+            session: WeakSession::gone("root"),
+            cut: None,
+        };
+        (sub, live.hold_lane(sub, held, activity.hold()))
+    }
+
+    #[tokio::test]
+    async fn a_lanes_questions_go_with_the_lane_not_its_turn() {
+        let live = live();
+        let (turn, activity) = (TurnId::new(), Activity::default());
+        let run = live.open(turn);
+        let at = (ProjectId::new(), ThreadId::new());
+        let (_, lane) = lane(&live, at, "fake", &activity);
+        let (asked, mut answered) = oneshot::channel();
+        assert!(lane.ask(ItemId::new(), asked));
+        assert!(!run.asking(), "the turn waits on none of its own");
+        tokio::time::timeout(Duration::from_secs(5), live.answered(turn))
+            .await
+            .expect("the turn is answered, whatever its sub-agent asks");
+        // The turn ends: the sub-agent's Question still waits.
+        drop(run);
+        assert!(answered.try_recv().is_err(), "it still waits");
+        // An answer reaches it.
+        let item = ItemId::new();
+        let (asked, answer) = oneshot::channel();
+        assert!(lane.ask(item, asked));
+        assert!(live.answer(item, "yes".to_owned(), None));
+        assert!(matches!(answer.await, Ok(Answer::Chose(chose)) if chose == "yes"));
+        // The sub-agent ends: nobody answers what it asked.
+        drop(lane);
+        assert!(matches!(answered.await, Ok(Answer::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn a_lane_at_work_keeps_its_host_busy_and_the_machine_awake() {
+        let working = Working::new();
+        let count = working.count();
+        let live = live_counted(working);
+        let activity = Activity::default();
+        let at = (ProjectId::new(), ThreadId::new());
+        let (_, one) = lane(&live, at, "fake", &activity);
+        let (_, two) = lane(&live, at, "fake", &activity);
+        assert_eq!(*count.borrow(), 2);
+        assert_eq!(activity.idle_since(), None, "not idle while one works");
+        drop(one);
+        assert_eq!(activity.idle_since(), None);
+        assert_eq!(*count.borrow(), 1);
+        drop(two);
+        assert!(activity.idle_since().is_some(), "idle once none works");
+        assert_eq!(*count.borrow(), 0);
+    }
+
+    #[tokio::test]
+    async fn a_lane_on_a_process_let_go_holds_it_no_longer() {
+        let live = live();
+        let activity = Activity::default();
+        let (project, other) = (ProjectId::new(), ProjectId::new());
+        let (thread, elsewhere) = (ThreadId::new(), ThreadId::new());
+        let (trusted, trusted_run) = lane(&live, (project, thread), "fake", &activity);
+        let (signed, signed_run) = lane(&live, (other, elsewhere), "claude", &activity);
+        let (moved, moved_run) = lane(&live, (other, thread), "codex", &activity);
+        // The Person changes the Project's trust: its process goes, and
+        // only its own sub-agents are cut off with it.
+        live.let_go(project);
+        assert_eq!(live.cut(trusted), Some(Cut::Trust));
+        assert_eq!(live.cut(signed), None);
+        // A Harness's account changes: its process's.
+        let accounts = Cut::Account;
+        (live.turns.lock().unwrap()).cut(&accounts, |held| held.harness == "claude");
+        assert_eq!(live.cut(signed), Some(Cut::Account));
+        assert_eq!(live.cut(moved), None);
+        // Held only weakly: the process that is gone is not kept.
+        let held = |sub| (live.turns.lock().unwrap().lanes[&sub].session).upgrade();
+        assert!(held(moved).is_none());
+        // Ended, a sub-agent is cut off no more, as memory let go of it.
+        drop(trusted_run);
+        assert_eq!(live.cut(trusted), None);
+        // The Project removed stops the rest of its sub-agents: nobody
+        // answers what they asked.
+        let (asked, answered) = oneshot::channel();
+        assert!(signed_run.ask(ItemId::new(), asked));
+        live.close(other).await;
+        assert!(matches!(answered.await, Ok(Answer::Cancelled)));
+        drop((signed_run, moved_run));
+        assert!(live.turns.lock().unwrap().lanes.is_empty());
     }
 }

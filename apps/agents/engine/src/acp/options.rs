@@ -159,6 +159,41 @@ fn category(option: &acp::SessionConfigOption) -> Option<String> {
     word.as_str().map(str::to_owned)
 }
 
+/// What a sub-agent's session runs with, as its options say: the name of
+/// the model it runs on, and its role, Claude Code's `agent` option.
+pub(super) fn lane_runs(options: &[acp::SessionConfigOption]) -> (Option<String>, Option<String>) {
+    let chosen = |option: &acp::SessionConfigOption| {
+        let acp::SessionConfigKind::Select(select) = &option.kind else {
+            return None;
+        };
+        let now = &select.current_value;
+        let named = match &select.options {
+            acp::SessionConfigSelectOptions::Ungrouped(choices) => {
+                choices.iter().find(|c| c.value == *now).map(|c| &c.name)
+            }
+            acp::SessionConfigSelectOptions::Grouped(groups) => (groups.iter())
+                .flat_map(|g| &g.options)
+                .find(|c| c.value == *now)
+                .map(|c| &c.name),
+            _ => None,
+        };
+        Some((now.0.to_string(), named.cloned()))
+    };
+    let model = (options.iter())
+        .find(|o| o.category == Some(acp::SessionConfigOptionCategory::Model))
+        .and_then(chosen)
+        .map(|(value, name)| name.unwrap_or(value));
+    let role = (options.iter())
+        .find(|o| &*o.id.0 == AGENT)
+        .and_then(chosen)
+        .map(|(value, _)| value);
+    (model, role)
+}
+
+/// Claude Code's option for the kind of agent a session is, which a
+/// sub-agent's session says.
+const AGENT: &str = "agent";
+
 /// The Harness's own permission modes.
 pub(super) fn is_mode(option: &acp::SessionConfigOption) -> bool {
     option.category == Some(acp::SessionConfigOptionCategory::Mode)

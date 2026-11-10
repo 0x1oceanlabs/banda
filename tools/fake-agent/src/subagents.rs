@@ -17,22 +17,27 @@
 //!
 //! Each word after `sub-agents` changes that, and they combine. All but
 //! `three`, `codex` and `load` act on the last sub-agent started. Without the
-//! client showing sub-agents, `outlive`, `again`, `codex`, `unknown`,
-//! `refuses`, `load` and `background` change nothing, and the rest come
-//! on the parent's session: `asks` asks as the parent itself does, as
-//! Claude Code's adapter asks today.
+//! client showing sub-agents, `outlive`, `later`, `again`, `codex`,
+//! `unknown`, `refuses`, `load`, `background`, `reworded` and `early`
+//! change nothing, and the rest come on the parent's session: `asks` asks
+//! as the parent itself does, as Claude Code's adapter asks today.
 //!
 //! - `three`: three at once, an Explore, a general-purpose and a
 //!   Reviewer, which end in the order 3, 1, 2.
 //! - `asks`: it waits on the Person (`requires_action`) and asks on its
 //!   own session to run `pnpm vitest`: allowed, its call ends done, else
-//!   failed. Then it works again.
+//!   failed. Then it works again, unless its session was cancelled
+//!   meanwhile: then it goes idle cancelled.
 //! - `form`: it asks a colour with a form on its own session.
 //! - `fails`: it goes idle with an error, and sends no report.
 //! - `nested`: it announces a sub-agent of its own, on its own session,
 //!   which works and reports there.
 //! - `outlive`: the parent answers its prompt while it still works; it
-//!   ends 200 milliseconds after the answer.
+//!   works on two seconds after the answer, or as many milliseconds as
+//!   `FAKE_AGENT_OUTLIVES_BY` says, and ends.
+//! - `later`: the parent starts it only as long after its answer as
+//!   `outlive` works on, by itself, as Claude Code goes on with what a
+//!   background task found; it works and ends then.
 //! - `again`: once it is idle, the parent announces it again and sends
 //!   it more, as Claude Code's SendMessage does: it works and goes idle.
 //! - `slow`: its command works until its own session is cancelled, or the
@@ -54,6 +59,9 @@
 //!   receipt, "Async agent launched…", sent at once, and it goes idle with
 //!   none after its last reply. The parent says it started, and replies
 //!   once it is done.
+//! - `reworded`: its report says its answer in more words than its last
+//!   reply did.
+//! - `early`: that report comes before it goes idle, not after.
 //! - `edit`: it edits `src/util.ts` in the session's folder and shows the
 //!   change, as `walk` does.
 //! - `dies`: the fake agent's process ends while it works.
@@ -121,14 +129,17 @@ const NESTED: Brief = Brief {
 
 /// The words that change nothing for a client that does not show
 /// sub-agents: what they change, Claude Code's old shape has no frame of.
-const APART_ONLY: [&str; 7] = [
+const APART_ONLY: [&str; 10] = [
     "outlive",
+    "later",
     "again",
     "codex",
     "unknown",
     "refuses",
     "load",
     "background",
+    "reworded",
+    "early",
 ];
 
 /// A sub-agent at work.
@@ -205,7 +216,9 @@ pub(super) async fn turn(
     let subs: Vec<Sub> = (briefs.iter().enumerate())
         .map(|(at, brief)| parent.sub(brief, &parent.session, at + 1 == briefs.len()))
         .collect();
-    for sub in &subs {
+    // What the Agent goes on with by itself after its answer.
+    let after = |sub: &Sub| parent.on(sub, "outlive") || parent.on(sub, "later");
+    for sub in subs.iter().filter(|sub| !parent.on(sub, "later")) {
         parent.start(sub)?;
     }
     let wait = format!("wait-{}", subs[0].n);
@@ -228,6 +241,10 @@ pub(super) async fn turn(
     let mut said = Vec::new();
     for &at in order {
         let sub = &subs[at];
+        if parent.on(sub, "later") {
+            said.push(format!("{} starts later", sub.brief.role));
+            continue;
+        }
         if parent.on(sub, "outlive") {
             said.push(format!("{} is still at work", sub.brief.role));
             continue;
@@ -248,10 +265,13 @@ pub(super) async fn turn(
     }
     let reply = format!("The sub-agents said: {}.", said.join("; "));
     parent.says_itself(&reply, background.map(|sub| format!("reply-{}", sub.n)))?;
-    if let Some(sub) = subs.iter().find(|sub| parent.on(sub, "outlive")).cloned() {
+    if let Some(sub) = subs.iter().find(|sub| after(sub)).cloned() {
         let parent = parent.clone();
         *then = Some(Box::pin(async move {
-            tokio::time::sleep(Duration::from_millis(200)).await;
+            tokio::time::sleep(outlives_by()).await;
+            if parent.on(&sub, "later") && parent.start(&sub).is_err() {
+                return;
+            }
             if let Ok(ended) = parent.work(&sub).await {
                 let _ = parent.end(&sub, &ended);
             }
@@ -576,6 +596,11 @@ impl Parent {
         }
         if self.on(sub, "asks") {
             self.asks(sub).await?;
+            // Stopped while it asked, as Banda stops it when its Thread
+            // moves.
+            if self.apart && self.fake.cancelled(&sub.session) {
+                return Ok(Ended::Stopped);
+            }
         }
         let mut answer = sub.brief.answer.to_owned();
         if self.on(sub, "form") {
@@ -631,24 +656,37 @@ impl Parent {
                 if self.codex {
                     self.says(&sub.session, self.options(sub, true))?;
                 }
+                let reports = !self.codex && !self.on(sub, "background");
+                let early = reports && self.on(sub, "early");
+                let answer = match self.on(sub, "reworded") || early {
+                    true => format!("{answer}, the first line of {}", sub.brief.reads),
+                    false => answer.clone(),
+                };
+                let report = tag(&self.tools(sub), &format!("\n\n{answer}"));
+                if early {
+                    self.report(sub, &sub.launch, &report)?;
+                }
                 self.idle(sub, why(ended))?;
                 if self.on(sub, "late") {
                     self.read_ends(sub)?;
                 }
-                if !self.codex && !self.on(sub, "background") {
-                    let report = tag(&self.tools(sub), &format!("\n\n{answer}"));
+                if reports && !early {
                     self.report(sub, &sub.launch, &report)?;
                 }
             }
             Ended::Failed(_) => self.idle(sub, why(ended))?,
             Ended::Stopped if self.codex => {
-                self.slow_fails(sub)?;
+                if self.on(sub, "slow") {
+                    self.slow_fails(sub)?;
+                }
                 self.idle(sub, why(ended))?;
             }
             Ended::Stopped => {
                 // Claude Code says its call failed only after it is idle.
                 self.idle(sub, why(ended))?;
-                self.slow_fails(sub)?;
+                if self.on(sub, "slow") {
+                    self.slow_fails(sub)?;
+                }
             }
         }
         self.no_stop(sub)?;
@@ -822,6 +860,15 @@ impl Parent {
         }
         let _ = std::fs::write(file, serde_json::to_vec(&all).unwrap_or_default());
     }
+}
+
+/// How long after its parent's answer a sub-agent that outlives its turn
+/// goes on: `FAKE_AGENT_OUTLIVES_BY` milliseconds, else two seconds, so
+/// a test on a busy machine (a CI runner among eleven others) sees its
+/// turn end while it works.
+fn outlives_by() -> Duration {
+    let set = std::env::var("FAKE_AGENT_OUTLIVES_BY").ok();
+    Duration::from_millis(set.and_then(|ms| ms.parse().ok()).unwrap_or(2000))
 }
 
 /// The `_meta` Claude Code's adapter puts on what it says: `fields` under

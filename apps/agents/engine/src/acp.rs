@@ -20,12 +20,13 @@
 
 use crate::model::{
     Choice, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
-    OptionChoice, OptionValue, PlanStep, Settings, Skill, SlashCommand, StepState, TextFormat,
-    ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    OptionChoice, OptionValue, PlanStep, Settings, Skill, SlashCommand, StepState, Subagent,
+    TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::plain;
 use crate::rules::Ending;
 use crate::touching::Place;
+use agent_client_protocol::schema::MaybeUndefined;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{Agent, Builder, Client, ConnectionTo, HandleDispatchFrom};
 use banda_harnesses::acp::Process;
@@ -59,7 +60,10 @@ use options::*;
 pub use routes::Between;
 use routes::*;
 use said::*;
-pub use said::{Answer, Said, ToolChange, ToolPart, unstarted};
+pub use said::{
+    Announced, Answer, IdleWhy, LaneSaid, LaneState, Said, StartedRx, ToolChange, ToolPart,
+    unstarted,
+};
 use session::*;
 pub use session::{Prompt, PromptImage, Session, Steered, WeakSession};
 
@@ -113,11 +117,12 @@ impl Host for Connection {
         harness: &Harness,
     ) -> Result<Arc<Connection>, Failed> {
         let (routes, learned) = (Routes::default(), Learned::default());
+        let activity = Activity::default();
         let ended = routes.clone();
         let (process, answer) = Process::start(
             environment,
             harness,
-            handlers(routes.clone(), learned.clone()),
+            handlers(routes.clone(), learned.clone(), activity.clone()),
             shows(harness.subagents),
             move || ended.clear(),
         )
@@ -127,7 +132,7 @@ impl Host for Connection {
             agreed: agreed(&answer),
             routes,
             learned,
-            activity: Activity::default(),
+            activity,
             sessions: Default::default(),
             trusted: harness.trusted(),
         }))
@@ -154,7 +159,9 @@ impl Host for Connection {
 impl Connection {
     /// Lets go of `thread`'s session in this process, if it has one: the
     /// Thread runs on another account now, and this process does not know
-    /// what was said there (ADR 0078, decision 4).
+    /// what was said there (ADR 0078, decision 4). Its sub-agents' lanes
+    /// end with the session; Live stops those at work first (ADR 0103,
+    /// decision 11).
     pub async fn forget_thread(self: &Arc<Self>, thread: ThreadId) {
         let open = self.sessions.lock().await.remove(&thread);
         if let Some((session, _pass)) = open {
@@ -192,10 +199,13 @@ impl Connection {
     }
 }
 
-/// What the sessions hear and are asked: routed to their turns.
+/// What the sessions hear and are asked: routed to their turns, and their
+/// sub-agents' to their lanes; `activity` is the process's, which a
+/// sub-agent holds from its announcement.
 fn handlers(
     routes: Routes,
     learned: Learned,
+    activity: Activity,
 ) -> Builder<Client, impl HandleDispatchFrom<Agent> + 'static> {
     let heard = routes.clone();
     let asked = routes;
@@ -204,31 +214,27 @@ fn handlers(
         .builder()
         .on_receive_notification(
             async move |note: acp::SessionNotification, _cx: ConnectionTo<Agent>| {
-                let said = match note.update {
-                    acp::SessionUpdate::ConfigOptionUpdate(now) => {
-                        let known = learn(&learned, &note.session_id, now.config_options);
-                        Some(Said::Runs(running(&known)))
+                let session = note.session_id;
+                match note.update {
+                    acp::SessionUpdate::SubagentUpdate(update) => {
+                        announced(&heard, &activity, &session, update);
                     }
-                    acp::SessionUpdate::AvailableCommandsUpdate(now) => {
-                        Some(Said::Runs(update(&learned, &note.session_id, |known| {
-                            known.said = Some(now.available_commands);
-                            known.read_commands();
-                            running(known)
-                        })))
+                    acp::SessionUpdate::SessionMessage(message) => sent(&heard, &session, message),
+                    acp::SessionUpdate::SessionMessageChunk(chunk) => {
+                        let id = chunk.message_id.0.to_string();
+                        let more = text_of_blocks([&chunk.content]);
+                        let now = heard.message(&session, &id, |kept| {
+                            kept.text.push_str(&more);
+                            kept.clone()
+                        });
+                        if let Some(now) = now {
+                            told(&heard, &session, &id, now);
+                        }
                     }
-                    now => said(now),
-                };
-                // What it has used may come between turns: the next turn
-                // writes what it last said.
-                if let Some(Said::Used { usage, .. }) = &said {
-                    update(&learned, &note.session_id, |known| {
-                        known.usage = Some(usage.clone());
-                    });
-                }
-                if let Some(said) = said
-                    && let Some(route) = heard.of(&note.session_id)
-                {
-                    route.send(said);
+                    update => match heard.child(&session) {
+                        Some(_) => in_lane(&heard, &session, update),
+                        None => in_thread(&heard, &learned, &session, update),
+                    },
                 }
                 Ok(())
             },
@@ -350,6 +356,186 @@ fn handlers(
             },
             agent_client_protocol::on_receive_request!(),
         )
+}
+
+/// What a Thread's own session says: to its turn, or to whoever hears it
+/// between turns.
+fn in_thread(
+    routes: &Routes,
+    learned: &Learned,
+    session: &acp::SessionId,
+    heard: acp::SessionUpdate,
+) {
+    let said = match heard {
+        acp::SessionUpdate::ConfigOptionUpdate(now) => {
+            let known = learn(learned, session, now.config_options);
+            Some(Said::Runs(running(&known)))
+        }
+        acp::SessionUpdate::AvailableCommandsUpdate(now) => {
+            Some(Said::Runs(update(learned, session, |known| {
+                known.said = Some(now.available_commands);
+                known.read_commands();
+                running(known)
+            })))
+        }
+        now => said(now),
+    };
+    // What it has used may come between turns: the next turn
+    // writes what it last said.
+    if let Some(Said::Used { usage, .. }) = &said {
+        update(learned, session, |known| {
+            known.usage = Some(usage.clone());
+        });
+    }
+    if let Some(said) = said
+        && let Some(route) = routes.of(session)
+    {
+        route.send(said);
+    }
+}
+
+/// What a sub-agent says on its own session `session`: to its lane. Its
+/// options say its model and role, never the Thread's, and its commands
+/// and what it used are not its Thread's (ADR 0103, decision 7).
+fn in_lane(routes: &Routes, session: &acp::SessionId, update: acp::SessionUpdate) {
+    let Some(lane) = routes.lane_of(session) else {
+        return;
+    };
+    let child = session.0.to_string();
+    let said = match update {
+        acp::SessionUpdate::ConfigOptionUpdate(now) => {
+            let (model, role) = lane_runs(&now.config_options);
+            LaneSaid::Runs { child, model, role }
+        }
+        acp::SessionUpdate::UsageUpdate(_) => return,
+        now => match said(now) {
+            Some(said) => LaneSaid::Said { child, said },
+            None => return,
+        },
+    };
+    let _ = lane.send(said);
+}
+
+/// A sub-agent announced on `on`, or changed: a child Banda knows goes on
+/// in its lane; a new one is mapped only from a session Banda listens to,
+/// and its start goes where it came, after what came before it, so the
+/// entry that shows it is written there (ADR 0103, decision 7). One nobody
+/// listens to, as a load's replay, is heard by nobody. A new one holds the
+/// process of `activity` from now, before its turn can end, until its
+/// lane holds it (decision 11).
+fn announced(
+    routes: &Routes,
+    activity: &Activity,
+    on: &acp::SessionId,
+    update: acp::SubagentUpdate,
+) {
+    let session = update.session_id;
+    if let Some(cancel) = routes.patch_cancel(&session, &update.capabilities) {
+        let Some(lane) = routes.lane_of(&session) else {
+            return;
+        };
+        let _ = lane.send(LaneSaid::Changed {
+            child: session.0.to_string(),
+            title: update.title.into(),
+            role: update.description.into(),
+            cancel: (!update.capabilities.is_undefined()).then_some(cancel),
+            state: lane_state(update.state),
+        });
+        return;
+    }
+    let Some(root) = routes.announce(on) else {
+        return;
+    };
+    let Some(lane) = routes.lane(&root) else {
+        return;
+    };
+    let cancel = cancel_of(false, &update.capabilities);
+    let announced = Announced {
+        child: session.0.to_string(),
+        title: update.title.take(),
+        role: update.description.take(),
+        cancel,
+        state: lane_state(update.state),
+    };
+    let child = Child {
+        root: root.clone(),
+        cancel,
+    };
+    routes.adopt(session, child);
+    let (started, heard) = oneshot::channel();
+    let start = Said::Subagent {
+        announced: announced.clone(),
+        started,
+    };
+    // Where its parent speaks: the Thread's own turn, or what hears it
+    // between turns, which opens one; or its parent's lane, which writes
+    // where it shows.
+    if let Some(route) = routes.of(on) {
+        route.send(start);
+    }
+    let parent = (*on != root).then(|| on.0.to_string());
+    let _ = lane.send(LaneSaid::Seen {
+        announced,
+        parent,
+        started: heard,
+        held: activity.hold(),
+    });
+}
+
+/// A message between sessions, or a change of it, that came on `on`.
+fn sent(routes: &Routes, on: &acp::SessionId, message: acp::SessionMessage) {
+    let id = message.message_id.0.to_string();
+    let kept = routes.message(on, &id, |kept| {
+        message.sender_session_id.update_to(&mut kept.sender);
+        message.recipient_session_id.update_to(&mut kept.recipient);
+        match message.content {
+            MaybeUndefined::Undefined => {}
+            MaybeUndefined::Null => kept.text.clear(),
+            MaybeUndefined::Value(blocks) => kept.text = text_of_blocks(&blocks),
+        }
+        kept.clone()
+    });
+    if let Some(kept) = kept {
+        told(routes, on, &id, kept);
+    }
+}
+
+/// What a message between sessions, `id` on `on`, tells a lane: a
+/// child's report to its parent, `<call>:reply`, which comes on its
+/// parent's session; or the brief its parent sent a child, on the parent's
+/// own view of it. The child's own view of its brief tells nothing more.
+fn told(routes: &Routes, on: &acp::SessionId, id: &str, message: Message) {
+    let Message {
+        sender,
+        recipient,
+        text,
+    } = message;
+    if text.is_empty() {
+        return;
+    }
+    if id.ends_with(":reply") {
+        if let Some(from) = sender
+            && let Some(text) = report(&text)
+            && let Some(lane) = routes.lane_of(&from)
+        {
+            let child = from.0.to_string();
+            let _ = lane.send(LaneSaid::Report { child, text });
+        }
+        return;
+    }
+    if sender.as_ref() != Some(on) {
+        return;
+    }
+    if let Some(to) = recipient.filter(|to| to != on)
+        && let Some(lane) = routes.lane_of(&to)
+    {
+        let (child, message) = (to.0.to_string(), id.to_owned());
+        let _ = lane.send(LaneSaid::Brief {
+            child,
+            message,
+            text,
+        });
+    }
 }
 
 /// What the engine declares it can show: sub-agents only when its engine

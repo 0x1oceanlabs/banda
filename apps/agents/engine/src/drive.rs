@@ -6,7 +6,7 @@
 use crate::acp::Said;
 use crate::live::TurnRun;
 use crate::rules::Ending;
-use crate::transcript::Transcript;
+use crate::transcript::{Holder, Transcript};
 use std::future::Future;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -26,7 +26,7 @@ pub async fn drive(
     // Both at once: what says how the turn ended may be what feeds `hear`.
     let mut ending = None;
     let listened = {
-        let mut listening = std::pin::pin!(transcript.listen(run, hear));
+        let mut listening = std::pin::pin!(transcript.listen(Holder::Turn(run), hear));
         loop {
             tokio::select! {
                 listened = &mut listening => break listened,

@@ -1,11 +1,13 @@
-//! Which file each turn at work in a Project reads or writes now, from its
-//! tool calls as they start (ADR 0073, decision 9): Files pulses that
-//! file's row in its tree and can follow it. The Harness names the files
-//! a tool call works on (ACP's locations), with a line where it has one;
-//! a diff names the file it changes. Only memory holds it, as it holds the
-//! turns: a turn's file goes as the turn ends, and a restart forgets all.
+//! Which file each worker at work in a Project reads or writes now, from
+//! its tool calls as they start (ADR 0073, decision 9, as ADR 0103
+//! amends it): one per worker, the turn and each sub-agent, so Files
+//! pulses each one's row in its tree and can follow it. The Harness names
+//! the files a tool call works on (ACP's locations), with a line where it
+//! has one; a diff names the file it changes. Only memory holds it, as it
+//! holds the turns: a turn's file goes as the turn ends, a sub-agent's as
+//! it ends, and a restart forgets all.
 
-use crate::model::{ThreadId, ToolContent, ToolKind};
+use crate::model::{SubagentId, ThreadId, ToolContent, ToolKind};
 use banda_kernel::{ProjectId, Stream};
 use serde::Serialize;
 use serde_json::Value;
@@ -31,11 +33,16 @@ pub enum TouchKind {
     Write,
 }
 
-/// The file a Thread's turn works on now.
+/// The file a worker of a Thread works on now: its turn, or one of its
+/// sub-agents.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Touched {
     pub thread: ThreadId,
+    /// The sub-agent that works on it, when it is not the turn.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub sub: Option<SubagentId>,
     /// The file, whole, as the Harness names it.
     pub path: String,
     /// The line the tool call names in it, from 1.
@@ -49,7 +56,7 @@ pub struct Touched {
 }
 
 /// What `agents.touching` says: the file each Thread at work in the
-/// Project works on now, one a Thread.
+/// Project works on now, one a worker of it.
 #[derive(Debug, Serialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Touching {
@@ -96,6 +103,7 @@ pub fn touched(
         })?;
     Some(Touched {
         thread,
+        sub: None,
         path: place.path,
         // ACP's lines start at 1; a 0 names none.
         line: place.line.filter(|line| *line > 0),
@@ -153,27 +161,29 @@ impl<T: Default + Send + Sync + 'static> ByProject<T> {
     }
 }
 
-/// What every Project's turns work on now, and who hears it.
+/// What every Project's workers work on now, and who hears it.
 #[derive(Default)]
 pub struct Touches {
     projects: ByProject<Vec<Touched>>,
 }
 
 impl Touches {
-    /// The turn of `touched.thread` works on its file now.
+    /// The worker `touched.sub` of `touched.thread`, or its turn, works on
+    /// its file now.
     pub fn touch(&self, project: ProjectId, touched: Touched) {
         self.projects.of(project).send_if_modified(|now| {
-            now.retain(|one| one.thread != touched.thread);
+            now.retain(|one| (one.thread, one.sub) != (touched.thread, touched.sub));
             now.push(touched);
             true
         });
     }
 
-    /// The Thread's turn ended: it works on no file.
-    pub fn end(&self, project: ProjectId, thread: ThreadId) {
+    /// The Thread's worker `sub`, or its turn, ended: it works on no file.
+    /// The Thread's other workers go on with theirs.
+    pub fn end(&self, project: ProjectId, thread: ThreadId, sub: Option<SubagentId>) {
         self.projects.of(project).send_if_modified(|now| {
             let was = now.len();
-            now.retain(|one| one.thread != thread);
+            now.retain(|one| (one.thread, one.sub) != (thread, sub));
             now.len() != was
         });
     }
@@ -189,20 +199,39 @@ impl Touches {
     }
 }
 
-/// What one turn's tool calls work on, told to [`Touches`] as each starts;
-/// let go as the turn ends, it works on nothing.
+/// What one worker's tool calls work on, a turn's or a sub-agent's, told
+/// to [`Touches`] as each starts; let go as the worker ends, it works on
+/// nothing.
 pub struct Toucher {
     touches: Arc<Touches>,
     project: ProjectId,
     thread: ThreadId,
+    sub: Option<SubagentId>,
 }
 
 impl Toucher {
+    /// A turn's.
     pub fn new(touches: Arc<Touches>, project: ProjectId, thread: ThreadId) -> Toucher {
         Toucher {
             touches,
             project,
             thread,
+            sub: None,
+        }
+    }
+
+    /// Sub-agent `sub`'s, while it is at work.
+    pub fn lane(
+        touches: Arc<Touches>,
+        project: ProjectId,
+        thread: ThreadId,
+        sub: SubagentId,
+    ) -> Toucher {
+        Toucher {
+            touches,
+            project,
+            thread,
+            sub: Some(sub),
         }
     }
 
@@ -211,14 +240,16 @@ impl Toucher {
     pub fn tool(&self, kind: ToolKind, places: &[Place], diff: Option<&str>) {
         let at = banda_kernel::now_ms();
         if let Some(touched) = touched(self.thread, kind, places, diff, at) {
-            self.touches.touch(self.project, touched);
+            let sub = self.sub;
+            self.touches.touch(self.project, Touched { sub, ..touched });
         }
     }
 }
 
+/// Its worker ended: its own file goes, and the others' stay.
 impl Drop for Toucher {
     fn drop(&mut self) {
-        self.touches.end(self.project, self.thread);
+        self.touches.end(self.project, self.thread, self.sub);
     }
 }
 
@@ -268,6 +299,7 @@ mod tests {
             read,
             Some(Touched {
                 thread,
+                sub: None,
                 path: "/w/a.ts".to_owned(),
                 line: Some(12),
                 kind: TouchKind::Read,
@@ -377,5 +409,61 @@ mod tests {
         // Another Project hears none of it.
         let mut elsewhere = touches.hear(ProjectId::new());
         assert_eq!(next(&mut elsewhere).await, json!({ "touched": [] }));
+    }
+
+    #[tokio::test]
+    async fn a_sub_agents_touch_ends_with_it_and_the_turns_with_the_turn() {
+        let touches = Arc::new(Touches::default());
+        let (project, thread) = (ProjectId::new(), ThreadId::new());
+        let (one, two) = (SubagentId::new(), SubagentId::new());
+        let turn = Toucher::new(touches.clone(), project, thread);
+        let first = Toucher::lane(touches.clone(), project, thread, one);
+        let second = Toucher::lane(touches.clone(), project, thread, two);
+        turn.tool(ToolKind::Edit, &[place("/w/turn.ts", None)], None);
+        first.tool(ToolKind::Read, &[place("/w/one.ts", None)], None);
+        second.tool(ToolKind::Read, &[place("/w/two.ts", None)], None);
+        let mut heard = touches.hear(project);
+        let paths = |piece: &Value| -> Vec<(String, Option<String>)> {
+            (piece["touched"].as_array().unwrap().iter())
+                .map(|one| {
+                    let sub = one.get("sub").and_then(Value::as_str);
+                    (
+                        one["path"].as_str().unwrap().to_owned(),
+                        sub.map(str::to_owned),
+                    )
+                })
+                .collect()
+        };
+        // Each worker of the one Thread has its own file.
+        let (one, two) = (Some(one.to_string()), Some(two.to_string()));
+        let piece = next(&mut heard).await;
+        assert_eq!(
+            paths(&piece),
+            [
+                ("/w/turn.ts".to_owned(), None),
+                ("/w/one.ts".to_owned(), one),
+                ("/w/two.ts".to_owned(), two.clone()),
+            ]
+        );
+        // A sub-agent's next call moves its file only.
+        first.tool(ToolKind::Edit, &[place("/w/one-b.ts", None)], None);
+        let piece = next(&mut heard).await;
+        assert_eq!(paths(&piece).len(), 3);
+        // A sub-agent that ends takes its file away, and the turn's stays.
+        drop(first);
+        let piece = next(&mut heard).await;
+        assert_eq!(
+            paths(&piece),
+            [
+                ("/w/turn.ts".to_owned(), None),
+                ("/w/two.ts".to_owned(), two.clone())
+            ]
+        );
+        // The turn's end clears only the turn's.
+        drop(turn);
+        let piece = next(&mut heard).await;
+        assert_eq!(paths(&piece), [("/w/two.ts".to_owned(), two)]);
+        drop(second);
+        assert_eq!(next(&mut heard).await, json!({ "touched": [] }));
     }
 }

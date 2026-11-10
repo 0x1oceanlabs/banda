@@ -38,6 +38,7 @@ mod handoff;
 mod images;
 mod issues;
 mod kept;
+mod lanes;
 mod laters;
 mod live;
 mod marks;
@@ -1578,7 +1579,8 @@ impl Module for Agents {
         project
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;
-                between::cut_short(tx)
+                between::cut_short(tx)?;
+                lanes::lost(tx)
             })
             .await?;
         let harnesses = self.harnesses.clone();
@@ -1624,6 +1626,11 @@ impl Module for Agents {
         if busy {
             return Err(Refusal::conflict(
                 "A Turn is running or queued in this Project. Stop it before moving the folder.",
+            ));
+        }
+        if project.read(store::any_lane_at_work).await? {
+            return Err(Refusal::conflict(
+                "A sub-agent still works in this Project.",
             ));
         }
         Ok(())
@@ -1743,7 +1750,10 @@ fn show_visual(
 
 /// Writes `body` by the Agent into its own Thread, in its turn that runs,
 /// or refuses with `refused` while none runs: an item an Agent's tool
-/// shows its Person, which the caller then says.
+/// shows its Person, which the caller then says. While no turn runs but
+/// a sub-agent works, its tool shows it: the item is the Thread's, in the
+/// launch turn of the newest at work, and moves the Thread nowhere (ADR
+/// 0103, decision 8).
 fn agent_item(
     tx: &mut Tx<'_>,
     agent: AgentId,
@@ -1751,9 +1761,13 @@ fn agent_item(
     body: Body,
 ) -> Result<(ThreadId, Item, TurnId), Error> {
     let thread = rules::to_thread::own_thread(store::thread_of(tx.sql(), agent)?)?;
-    let turn = store::running(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::conflict(refused))?
-        .id;
+    let (turn, by_lane) = match store::running(tx.sql(), thread)? {
+        Some(running) => (running.id, false),
+        None => {
+            let lane = store::newest_lane_at_work(tx.sql(), thread)?;
+            (lane.ok_or_else(|| Refusal::conflict(refused))?.turn, true)
+        }
+    };
     let item = Item {
         id: ItemId::new(),
         turn: Some(turn),
@@ -1762,7 +1776,9 @@ fn agent_item(
         body,
     };
     store::insert_item(tx.sql(), thread, &item, None)?;
-    store::touch_thread(tx.sql(), thread, item.at)?;
+    if !by_lane {
+        store::touch_thread(tx.sql(), thread, item.at)?;
+    }
     Ok((thread, item, turn))
 }
 

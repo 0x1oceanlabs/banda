@@ -37,7 +37,7 @@ use crate::model::{
 };
 use crate::rules::{self, Ending, Event};
 use crate::transcript::{Transcript, notice, offered, used};
-use crate::{emit, plain, store, writer};
+use crate::{emit, lanes, plain, store, writer};
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{Effect, Error, ModuleProject, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
@@ -568,6 +568,9 @@ async fn work(
         .connection(project, &harness)
         .await
         .map_err(|failed| Ending::failed(failed.to_string(), Some(Failure::HarnessStopped)))?;
+    // The process is not let go as idle while the turn opens its session
+    // in it: a sub-agent the turn starts holds it only once announced.
+    let opening = connection.keep();
     // The session the Thread had, and the account its turn before this
     // one ran on.
     let turn_id = turn.id;
@@ -584,8 +587,7 @@ async fn work(
         .map_err(|e| unplanned(plain(e)))?;
     // The Thread's session lives in this process alone: one another account
     // of it had goes (ADR 0078, decision 4).
-    live.forget_elsewhere(project.id(), thread, &harness.id)
-        .await;
+    live.forget_elsewhere(project.id(), thread, &harness).await;
     // Another account of the same Harness goes on with the same session.
     let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
     // A failed process start records a turn on the new entry before it
@@ -691,7 +693,19 @@ async fn work(
         harness: harness.name.clone(),
     };
     listener.hear(&session);
+    // Its sub-agents are heard apart, in lanes of the Thread, from before
+    // the prompt goes: a load's replay came before, and maps none.
+    let lanes = lanes::Hearer {
+        live: live.clone(),
+        project: project.clone(),
+        thread,
+        agent: turn.agent,
+        harness: harness.name.clone(),
+    };
+    lanes.hear(&session);
     let (mut hear, done) = session.prompt(&prompt);
+    // The prompt holds it now.
+    drop(opening);
     run.begin(session.clone());
     let transcript = Transcript::new(
         project.clone(),

@@ -17,6 +17,7 @@ pub struct Session {
 
 /// A session held without its Harness's process, by what should stop
 /// once the process is let go.
+#[derive(Clone)]
 pub struct WeakSession {
     connection: Weak<Connection>,
     id: acp::SessionId,
@@ -30,6 +31,15 @@ impl WeakSession {
             connection,
             id: self.id.clone(),
         })
+    }
+
+    /// A session whose process never ran, for a test of what holds one.
+    #[cfg(test)]
+    pub fn gone(id: &str) -> WeakSession {
+        WeakSession {
+            connection: Weak::new(),
+            id: acp::SessionId::new(id),
+        }
     }
 }
 
@@ -140,6 +150,11 @@ impl Session {
         self.connection.process.name()
     }
 
+    /// The ID of the Harness entry its process runs.
+    pub fn harness(&self) -> &str {
+        self.connection.process.harness()
+    }
+
     /// Whether the Harness takes a message into a running turn.
     pub fn steers(&self) -> bool {
         self.connection.steers()
@@ -174,6 +189,13 @@ impl Session {
     /// the Harness is gone.
     pub fn between(&self) -> Option<mpsc::UnboundedReceiver<Between>> {
         self.connection.routes.hear(&self.id)
+    }
+
+    /// Hears what the session's sub-agents say, from now on, apart from
+    /// its turns; `None` while someone already hears them. Nobody hears
+    /// them any more once the session closes or the Harness is gone.
+    pub fn lanes(&self) -> Option<mpsc::UnboundedReceiver<LaneSaid>> {
+        self.connection.routes.hear_lanes(&self.id)
     }
 
     /// Sets the session's options so it runs as `wanted`: one at a time,
@@ -372,6 +394,30 @@ impl Session {
                 connection.process.name()
             )),
         }
+    }
+
+    /// Asks the Harness to stop the sub-agent of this session whose child
+    /// session is `child`, alone: only one of its own that the Harness lets
+    /// a client stop (ADR 0103, decision 23).
+    pub fn cancel_child(&self, child: &str) -> Result<(), String> {
+        let child = acp::SessionId::new(child);
+        let known = self.connection.routes.child(&child);
+        match known {
+            Some(known) if known.root == self.id && known.cancel => {}
+            Some(known) if known.root == self.id => {
+                return Err(format!(
+                    "{} does not let Banda stop this sub-agent alone.",
+                    self.name()
+                ));
+            }
+            _ => return Err("This sub-agent is not this Thread's.".to_owned()),
+        }
+        let cancel = acp::CancelNotification::new(child);
+        self.connection
+            .process
+            .cx()
+            .send_notification(cancel)
+            .map_err(plain)
     }
 
     /// Asks the Harness to stop the session's turn.

@@ -1,38 +1,45 @@
 //! What a Harness says, written into its Thread as it says it: the
 //! Agent's replies and thoughts, gathered a moment so they are written
 //! together; its tool calls and what their commands print; its Questions,
-//! its plan and its notices; and what it uses and offers, between turns
-//! too; and which file its tool calls work on now, and what the turn
-//! does, which only memory keeps (`touching.rs`, `doing.rs`). The turn's
-//! own state is the writer's (`writer.rs`).
+//! its plan and its notices; the sub-agents it starts, where it starts
+//! them; and what it uses and offers, between turns too; and which file
+//! its tool calls work on now, and what the turn does, which only memory
+//! keeps (`touching.rs`, `doing.rs`). The turn's own state is the
+//! writer's (`writer.rs`).
+//!
+//! A sub-agent's words are written the same way, by a Transcript of its
+//! lane ([`Transcript::lane`]): its entries and their facts name the lane
+//! by `sub`, and never touch the Thread. Its Questions are the Thread's
+//! entries, which name the lane in their body, and are answered by the
+//! Thread's mode as they come (ADR 0103, decisions 8 and 28).
 
 mod content;
 mod output;
 
 use crate::acp::ToolPart;
 use crate::acp::{Answer, Running, Said, ToolChange, unstarted};
-use crate::doing::Doer;
-use crate::full_access::Chosen;
-use crate::live::TurnRun;
+use crate::doing::{Doer, Doings};
+use crate::full_access::{Chosen, runs_supervised};
+use crate::live::{LaneRun, TurnRun};
 use crate::model::{
-    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolKind, ToolStatus,
-    TurnId, Usage,
+    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, SubagentId, ThreadId, ToolKind,
+    ToolStatus, TurnId, Usage,
 };
 use crate::touching::{Place, Toucher, Touches, diffed};
-use crate::{emit, plain, questions, store};
+use crate::{emit, lanes, plain, questions, store};
 use banda_kernel::{AgentId, Error, ModuleProject, Participant, Tx};
 use output::{Piece, Pieces, Text};
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{mpsc, oneshot};
 use tokio::time::Instant;
 
 /// How long pieces of a reply gather before they are written together.
 const GATHER: Duration = Duration::from_millis(80);
 
 /// Returns at `at`, or never without one.
-async fn until(at: Option<Instant>) {
+pub async fn until(at: Option<Instant>) {
     match at {
         Some(at) => tokio::time::sleep_until(at).await,
         None => std::future::pending().await,
@@ -177,6 +184,45 @@ fn switched(
     )
 }
 
+/// Who holds what a Transcript hears, for its Questions: a turn that
+/// runs, or a sub-agent's lane, held while it is at work.
+#[derive(Clone, Copy)]
+pub enum Holder<'a> {
+    Turn(&'a TurnRun),
+    /// None once the sub-agent ended: nobody waits on what it asks then.
+    Lane(Option<&'a LaneRun>),
+}
+
+impl Holder<'_> {
+    /// Holds a Question until a Person answers it; false, the Harness
+    /// told at once, when nobody will.
+    fn ask(self, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
+        match self {
+            Holder::Turn(run) => run.ask(item, answer),
+            Holder::Lane(Some(run)) => run.ask(item, answer),
+            Holder::Lane(None) => {
+                let _ = answer.send(Answer::Cancelled);
+                false
+            }
+        }
+    }
+
+    fn forget(self, item: ItemId) {
+        match self {
+            Holder::Turn(run) => run.forget(item),
+            Holder::Lane(Some(run)) => run.forget(item),
+            Holder::Lane(None) => {}
+        }
+    }
+
+    fn take_steered(self) -> bool {
+        match self {
+            Holder::Turn(run) => run.take_steered(),
+            Holder::Lane(run) => run.is_some_and(LaneRun::take_steered),
+        }
+    }
+}
+
 /// A tool call the Thread shows.
 struct Shown {
     item: ItemId,
@@ -185,12 +231,16 @@ struct Shown {
     printed: output::Printed,
 }
 
-/// Writes what the Harness says into the Thread.
+/// Writes what the Harness says into the Thread, or what one of its
+/// sub-agents says into its lane.
 pub struct Transcript {
     project: ModuleProject,
     thread: ThreadId,
+    /// The turn it writes in: a sub-agent's launch turn, for its lane.
     turn: TurnId,
     agent: AgentId,
+    /// The sub-agent whose lane it writes; none for the Thread's own.
+    sub: Option<SubagentId>,
     /// The Harness's name, for plain words.
     harness: String,
     /// What the turn started with, and what the session runs with now.
@@ -209,10 +259,15 @@ pub struct Transcript {
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
     pub(crate) resets: Option<i64>,
-    /// Which file its tool calls work on now; nothing once it is let go.
-    toucher: Toucher,
-    /// What the turn does now; nothing once it is let go.
-    doer: Doer,
+    /// Which file its tool calls work on now; nothing once it is let go,
+    /// and for a sub-agent nothing while it is not at work.
+    toucher: Option<Toucher>,
+    /// What the turn does now; nothing once it is let go, and none for a
+    /// sub-agent, which adds no doing.
+    doer: Option<Doer>,
+    /// For a sub-agent, where its words move when the Thread last stepped
+    /// (ADR 0103, decision 8).
+    stepped: Option<Arc<Doings>>,
 }
 
 impl Transcript {
@@ -228,12 +283,14 @@ impl Transcript {
         doer: Doer,
     ) -> Transcript {
         Transcript {
-            toucher: Toucher::new(touches.clone(), project.id(), turn.thread),
-            doer,
+            toucher: Some(Toucher::new(touches.clone(), project.id(), turn.thread)),
+            doer: Some(doer),
+            stepped: None,
             project,
             thread: turn.thread,
             turn: turn.id,
             agent: turn.agent,
+            sub: None,
             harness,
             settings,
             running,
@@ -247,39 +304,100 @@ impl Transcript {
         }
     }
 
+    /// Writes what sub-agent `sub`, started in `turn` of `thread`, says
+    /// into its lane: `native` when its Thread's session keeps to the
+    /// Thread's mode itself, as its Harness has modes of its own. Its words
+    /// move when the Thread last stepped, in `doings`; it touches files
+    /// only while it is at work ([`Transcript::set_toucher`]).
+    #[expect(clippy::too_many_arguments, reason = "a lane's place and its Harness")]
+    pub fn lane(
+        project: ModuleProject,
+        thread: ThreadId,
+        agent: AgentId,
+        turn: TurnId,
+        sub: SubagentId,
+        harness: String,
+        native: bool,
+        doings: Arc<Doings>,
+    ) -> Transcript {
+        Transcript {
+            toucher: None,
+            doer: None,
+            stepped: Some(doings),
+            project,
+            thread,
+            turn,
+            agent,
+            sub: Some(sub),
+            harness,
+            settings: Settings::default(),
+            running: Running {
+                native,
+                ..Running::default()
+            },
+            pieces: Pieces::default(),
+            tools: HashMap::new(),
+            asked: HashMap::new(),
+            plan: None,
+            message: None,
+            due: None,
+            resets: None,
+        }
+    }
+
+    /// Which file a sub-agent's calls work on, while it is at work.
+    pub fn set_toucher(&mut self, toucher: Option<Toucher>) {
+        self.toucher = toucher;
+    }
+
     /// Writes what the Harness says until it ends the turn.
     pub async fn listen(
         &mut self,
-        run: &TurnRun,
+        holder: Holder<'_>,
         hear: &mut mpsc::UnboundedReceiver<Said>,
     ) -> Result<(), String> {
         loop {
             let due = self.due;
             let gathered = until(due);
-            let saying = until(self.doer.due());
+            let saying = until(self.doer.as_ref().and_then(Doer::due));
             tokio::select! {
                 biased;
                 said = hear.recv() => match said {
-                    Some(said) => self.hear(run, said).await?,
+                    Some(said) => self.hear(holder, said).await?,
                     None => break,
                 },
                 () = gathered => self.write_gathered().await?,
-                () = saying => self.doer.say(),
+                () = saying => if let Some(doer) = &mut self.doer {
+                    doer.say();
+                },
             }
         }
         self.close().await
     }
 
-    async fn hear(&mut self, run: &TurnRun, said: Said) -> Result<(), String> {
-        self.doer.hear(&said);
+    /// When what is gathered is written, if anything is.
+    pub fn due(&self) -> Option<Instant> {
+        self.due
+    }
+
+    /// Writes one thing the Harness said.
+    pub async fn hear(&mut self, holder: Holder<'_>, said: Said) -> Result<(), String> {
+        match (&mut self.doer, &self.stepped) {
+            (Some(doer), _) => doer.hear(&said),
+            (None, Some(doings)) => {
+                let at = banda_kernel::now_ms();
+                doings.stepped(self.project.id(), self.thread, at);
+            }
+            (None, None) => {}
+        }
         match said {
             Said::Reply { text, message } => {
-                self.after_steer(run).await?;
+                self.after_steer(holder).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Reply, &text).await
             }
             Said::Thought { text, message } => {
-                self.after_steer(run).await?;
+                self.after_steer(holder).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Thought, &text).await
             }
@@ -322,8 +440,10 @@ impl Transcript {
                     // What it works on now, if it says.
                     let shown = change.content.iter().flatten();
                     let diff = diffed(shown.filter_map(ToolPart::shown));
-                    if !places.is_empty() || diff.is_some() {
-                        self.toucher.tool(self.tools[&call].kind, &places, diff);
+                    if (!places.is_empty() || diff.is_some())
+                        && let Some(toucher) = &self.toucher
+                    {
+                        toucher.tool(self.tools[&call].kind, &places, diff);
                     }
                 }
                 let shown = self.tools.get_mut(&call).expect("started above");
@@ -355,9 +475,18 @@ impl Transcript {
                 let known = self.tools.get(&call);
                 let tool = tool.or(known.map(|shown| shown.kind));
                 let title = title.or_else(|| known.map(|shown| shown.title.clone()));
-                let by_mode = (!self.running.native).then_some(self.settings.mode);
+                let by_mode = match self.sub {
+                    // The Agent's own keep their turn's mode.
+                    None => (!self.running.native).then_some(self.settings.mode),
+                    Some(_) if self.running.native => None,
+                    // A sub-agent may ask after its turn ended: by the
+                    // Thread's mode as it asks (ADR 0103, decision 28).
+                    Some(_) => Some(self.mode_now().await?),
+                };
                 let tool = tool.unwrap_or(ToolKind::Other);
-                let asked = questions::ask(self.turn, by_mode, tool, title, offered, form, plan);
+                let asked = questions::ask(
+                    self.turn, by_mode, tool, title, offered, form, plan, self.sub,
+                );
                 let (id, body, asked) = match asked {
                     Ok(questions::Asked::Open(opened)) => *opened,
                     Ok(questions::Asked::ByMode(once)) => {
@@ -370,12 +499,12 @@ impl Transcript {
                     }
                 };
                 // Held before it is written, so an answer finds it.
-                if !run.ask(id, answer) {
+                if !holder.ask(id, answer) {
                     return Ok(());
                 }
                 let written = self.put(id, body, asked, None).await;
                 if written.is_err() {
-                    run.forget(id);
+                    holder.forget(id);
                 } else {
                     self.asked.insert(call, id);
                 }
@@ -385,7 +514,7 @@ impl Transcript {
                 let Some(id) = self.asked.remove(&call) else {
                     return Ok(());
                 };
-                run.forget(id);
+                holder.forget(id);
                 let agent = Participant::Agent(self.agent);
                 self.project
                     .write(move |tx| questions::withdrawn(tx, agent, id))
@@ -399,7 +528,7 @@ impl Transcript {
                     item: id,
                     turn: Some(self.turn),
                     text: text.clone(),
-                    sub: None,
+                    sub: self.sub,
                 };
                 self.put(id, Body::Notice { text }, posted, None).await
             }
@@ -415,7 +544,7 @@ impl Transcript {
                         item: id,
                         turn: self.turn,
                         steps: steps.clone(),
-                        sub: None,
+                        sub: self.sub,
                     };
                     self.put(id, Body::Plan { steps }, made, None).await
                 }
@@ -459,7 +588,40 @@ impl Transcript {
                     .await
                     .map_err(plain)
             }
+            // A sub-agent starts here, after what was said before it: its
+            // lane, under this one's for a nested one, and in this turn,
+            // its root's launch turn (ADR 0103, decision 7).
+            Said::Subagent { announced, started } => {
+                self.close().await?;
+                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                let (turn, parent) = (self.turn, self.sub);
+                let kept = self
+                    .project
+                    .write(move |tx| lanes::start(tx, agent, thread, &announced, turn, parent))
+                    .await
+                    .map_err(plain)?;
+                let _ = started.send(kept);
+                Ok(())
+            }
         }
+    }
+
+    /// The mode a sub-agent's Question is answered by as it asks: the
+    /// Thread's now, Supervised where the fence does not keep its Full
+    /// access, as a turn's start makes it.
+    async fn mode_now(&self) -> Result<Mode, String> {
+        let (thread, fence) = (self.thread, self.project.environment().fence());
+        self.project
+            .read(move |sql| {
+                let mode = store::settings(sql, thread)?.mode;
+                let chosen = store::full_access(sql, thread)?;
+                Ok(match runs_supervised(mode, chosen, &fence) {
+                    Some(_) => Mode::Supervised,
+                    None => mode,
+                })
+            })
+            .await
+            .map_err(plain)
     }
 
     async fn start_tool(
@@ -480,7 +642,9 @@ impl Transcript {
         };
         self.tools.insert(call, shown);
         let content = content::keep(&self.project, content).await?;
-        self.toucher.tool(tool, places, diffed(&content));
+        if let Some(toucher) = &self.toucher {
+            toucher.tool(tool, places, diffed(&content));
+        }
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,
@@ -488,7 +652,7 @@ impl Transcript {
             tool,
             status,
             content: content.clone(),
-            sub: None,
+            sub: self.sub,
         };
         let body = Body::Tool {
             title,
@@ -617,7 +781,8 @@ impl Transcript {
         Ok(())
     }
 
-    async fn write_gathered(&mut self) -> Result<(), String> {
+    /// Writes what has gathered.
+    pub async fn write_gathered(&mut self) -> Result<(), String> {
         self.due = None;
         if let Some(piece) = self.pieces.take() {
             self.write(piece).await?;
@@ -626,7 +791,7 @@ impl Transcript {
     }
 
     /// Writes what is gathered and ends the open item.
-    async fn close(&mut self) -> Result<(), String> {
+    pub async fn close(&mut self) -> Result<(), String> {
         self.due = None;
         self.end_text().await?;
         self.write_output().await
@@ -634,8 +799,8 @@ impl Transcript {
 
     /// A message a Person sent into the turn ends what the Agent said
     /// before it, for a Harness that does not name its messages.
-    async fn after_steer(&mut self, run: &TurnRun) -> Result<(), String> {
-        if run.take_steered() {
+    async fn after_steer(&mut self, holder: Holder<'_>) -> Result<(), String> {
+        if holder.take_steered() {
             self.end_text().await?;
         }
         Ok(())
@@ -665,7 +830,7 @@ impl Transcript {
     /// Writes a piece of a reply or a thought; a reply keeps the ID the
     /// Harness gave its message, which a fork goes to (ADR 0027).
     async fn write(&self, Piece { item, kind, text }: Piece) -> Result<(), String> {
-        let grew = kind.grew(item, self.turn, text.clone());
+        let grew = kind.grew(item, self.turn, text.clone(), self.sub);
         let named = match kind {
             Text::Reply => self.message.clone(),
             Text::Thought => None,
@@ -674,7 +839,9 @@ impl Transcript {
     }
 
     /// Writes an item, or a piece of one, and the fact of it; a reply
-    /// with `named`, the ID the Harness gave its message.
+    /// with `named`, the ID the Harness gave its message. A sub-agent's
+    /// goes into its lane, but for its Question, which is the Thread's
+    /// (ADR 0103, decision 8), and touches the Thread nowhere.
     async fn put(
         &self,
         id: ItemId,
@@ -683,6 +850,12 @@ impl Transcript {
         named: Option<String>,
     ) -> Result<(), String> {
         let (thread, turn, agent) = (self.thread, self.turn, Participant::Agent(self.agent));
+        let sub = self.sub;
+        let lane = if matches!(body, Body::Question { .. }) {
+            None
+        } else {
+            sub
+        };
         self.project
             .write(move |tx| {
                 let item = Item {
@@ -692,11 +865,13 @@ impl Transcript {
                     at: tx.now(),
                     body,
                 };
-                store::put(tx.sql(), thread, &item, named.as_deref(), None)?;
+                store::put(tx.sql(), thread, &item, named.as_deref(), lane)?;
                 if let Body::Tool { content, .. } = &item.body {
                     store::tool_images(tx.sql(), content, id, agent, tx.now())?;
                 }
-                store::touch_thread(tx.sql(), thread, tx.now())?;
+                if sub.is_none() {
+                    store::touch_thread(tx.sql(), thread, tx.now())?;
+                }
                 emit(tx, agent, thread, &fact)
             })
             .await

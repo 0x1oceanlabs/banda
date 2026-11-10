@@ -3,6 +3,6 @@ import type { Touched } from "./Touched";
 
 /**
  * What `agents.touching` says: the file each Thread at work in the
- * Project works on now, one a Thread.
+ * Project works on now, one a worker of it.
  */
 export type Touching = { touched: Array<Touched>, };
