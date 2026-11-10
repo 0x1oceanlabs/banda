@@ -11,24 +11,19 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import {
-  FileCogIcon,
-  FolderPlusIcon,
-  KeyboardIcon,
-  ListFilterIcon,
-  SettingsIcon,
-} from "lucide-react"
+import { FileCogIcon, ListFilterIcon, SettingsIcon } from "lucide-react"
 import { device } from "../boot"
 import { useLookSidebar } from "../look"
 import { useOpen } from "./open"
 import { PRESET_WORDS } from "./settings"
-import { ThemeMenu } from "./ThemeMenu"
 
 /**
- * The sidebar's foot: Banda's settings and keys, its theme, and how the
- * sidebar arranges, with "Add Project" beside it. Its view menu writes
- * the preset into `sidebar.toml`, through the desktop, and the new
- * arrangement comes back with the look.
+ * The sidebar's foot (ADR 0098, decision 21): Banda's settings and how the
+ * sidebar arranges, as icons with no words, each tooltip with its key in
+ * force where it has one. The key sheet and the theme went to the Banda
+ * menu, which the bar's logo opens, and Add Project to ✎'s menu. Its view
+ * menu writes the preset into `sidebar.toml`, through the desktop, and the
+ * new arrangement comes back with the look.
  */
 export function Foot() {
   const { preset, presets } = useLookSidebar()
@@ -52,17 +47,6 @@ export function Foot() {
       >
         <SettingsIcon />
       </Button>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        aria-label="Every action and its key"
-        title={keyFor("menu.keys", "Every action and its key")}
-        onClick={() => open("menu.at", { route: "actions" })}
-      >
-        <KeyboardIcon />
-      </Button>
-      <ThemeMenu />
       <DropdownMenu>
         <DropdownMenuTrigger
           render={
@@ -110,16 +94,8 @@ export function Foot() {
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        aria-label="Add Project"
-        title="Add Project"
-        onClick={() => open("project.add")}
-      >
-        <FolderPlusIcon />
-      </Button>
+      {/* Quiet's bell comes here (S9d), and the machines on the right
+        (S13). */}
     </div>
   )
 }

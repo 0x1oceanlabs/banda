@@ -5,6 +5,7 @@
  * class follows the scheme that shows. Until the first look comes, and
  * outside the desktop, Banda's own show in the system's light or dark.
  */
+import { useEffect, useState } from "react"
 import {
   type Bar,
   type Columns,
@@ -18,6 +19,7 @@ import {
   DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Keys,
+  type Listed,
   type Look,
   type Motion,
   type Move,
@@ -30,6 +32,7 @@ import {
 import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
 import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
 import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
+import { device } from "./boot"
 import { DEFAULT_NOTIFY } from "./calls/settings"
 import type { Host } from "@banda/desktop/bridge"
 
@@ -191,4 +194,28 @@ const NO_SETTINGS: Look["settings"] = {}
 /** Each key of each settings file, and where it comes from (ADR 0016). */
 export function useLookSettings(): Look["settings"] {
   return useLook((look) => look.settings, NO_SETTINGS)
+}
+
+const NO_THEMES: readonly Listed[] = []
+
+/**
+ * The themes there are, as `banda look themes` lists them, asked of the
+ * device each time `asked` turns true, as a theme folder may have come
+ * since; none until it answers, and without the desktop. The Banda menu
+ * asks as Themes… is gone into, Settings as its Appearance shows.
+ */
+export function useThemes(asked: boolean): readonly Listed[] {
+  const [themes, setThemes] = useState(NO_THEMES)
+  useEffect(() => {
+    if (!asked) return
+    let on = true
+    device.settings.themes().then(
+      (listed) => on && setThemes(listed),
+      () => on && setThemes(NO_THEMES)
+    )
+    return () => {
+      on = false
+    }
+  }, [asked])
+  return themes
 }
