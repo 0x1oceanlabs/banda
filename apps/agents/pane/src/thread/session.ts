@@ -47,7 +47,12 @@ import {
   harnessShort,
   useHarnesses,
 } from "../harnesses"
-import { useStartsOn } from "./starts-on"
+import {
+  startOf,
+  useAgentsTold,
+  useMachineStart,
+  useStartsOn,
+} from "./starts-on"
 import { useThread } from "./live-thread"
 import { settledTurn } from "../list/marks"
 import { useImageReader } from "../entries/parts/MessageImages"
@@ -269,10 +274,30 @@ export function useThreadSession({
   // it on, else the default, or the fallback while the default is out
   // (ADR 0093, decision 7).
   const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
-  const startsOn = useStartsOn(engine)
+  // Where it starts is its machine's to say, through that machine's
+  // engine, and follows its agents.toml (ADR 0106, step 5a).
+  const told = useAgentsTold(engine, thread === null)
+  // A Thread not yet started keeps its settings here until its first
+  // message, starting from its Harness's; each Harness's, as the model
+  // picker chooses the Harness with the model (ADR 0031, decision 6).
+  const everyDefaults = useHarnessDefaults(
+    engine,
+    project,
+    thread === null && machine && !unplaced ? offered : null,
+    told
+  )
+  const machineStart = useMachineStart(
+    engine,
+    thread === null && unplaced,
+    told
+  )
+  const startsOn = useStartsOn(
+    engine,
+    unplaced ? machineStart : startOf(everyDefaults)
+  )
   const harness =
     thread === null
-      ? args.harness || startsOn?.id || offered[0]?.id || ""
+      ? args.harness || startsOn?.id || ""
       : (state?.harness ?? args.harness)
   // The messages that wait for the Thread's machine (ADR 0105), which
   // keep what the Pane shows before that machine answers, as after a
@@ -309,14 +334,6 @@ export function useThreadSession({
     return seeWhenPresent(engine, project, thread, settled)
   }, [looking, front, thread, settled, engine, project])
 
-  // A Thread not yet started keeps its settings here until its first
-  // message, starting from its Harness's; each Harness's, as the model
-  // picker chooses the Harness with the model (ADR 0031, decision 6).
-  const everyDefaults = useHarnessDefaults(
-    engine,
-    project,
-    thread === null && machine && !unplaced ? offered : null
-  )
   const defaults = everyDefaults?.[harness]
   const [drafts, setDrafts] = useState<Record<string, Settings>>({})
   const draftOf = (id: string) =>
@@ -485,7 +502,8 @@ export function useThreadSession({
   const [unsent, setUnsent] = useState<{ text: string }>()
   const took = useRef<string>(undefined)
   useEffect(() => {
-    if (thread !== null || !args.ask || (!defaults && !unplaced && !out)) return
+    if (thread !== null || !args.ask) return
+    if ((unplaced ? !machineStart : !defaults) && !out) return
     const { ask, ...rest } = args
     update(rest)
     // Once, though the Pane is drawn again before its args lose them.
@@ -777,13 +795,15 @@ const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
 /**
  * What a new Thread on each of `harnesses` starts with: the mode the
- * fence allows, or agents.toml's, and what the Harness last offered,
- * such as its models.
+ * fence allows, or agents.toml's, what the Harness last offered, such as
+ * its models, and the accounts its machine starts one on. Read again as
+ * that machine's agents.toml is `told` to read otherwise.
  */
 function useHarnessDefaults(
   engine: Engine,
   project: ProjectId,
-  offered: HarnessView[] | null
+  offered: HarnessView[] | null,
+  told: number
 ): Record<string, Defaults> | undefined {
   type Every = { at: number; each: Record<string, Defaults> }
   const source = useMemo<Source<Every> | null>(() => {
@@ -809,6 +829,6 @@ function useHarnessDefaults(
           apply: () => READ_AGAIN,
         }
   }, [engine, project, offered])
-  const live = useLive(engine, project, source)
+  const live = useLive(engine, project, source, told)
   return live.state === "ready" ? live.view.each : undefined
 }

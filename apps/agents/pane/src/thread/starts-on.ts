@@ -4,10 +4,10 @@
  * Thread the Person put on an account themselves starts there; this is
  * for one they did not.
  */
-import { useMemo } from "react"
+import { useEffect, useMemo, useState } from "react"
 import { useAccount } from "../harnesses"
-import type { Engine } from "@banda/contract"
-import { AGENTS_FILE, type Agents } from "@banda/contract/agents"
+import { type Engine, Refused } from "@banda/contract"
+import { AGENTS_FILE, type Agents, type Defaults } from "@banda/contract/agents"
 import type {
   HarnessView,
   Limits,
@@ -21,9 +21,12 @@ import {
   type Source,
 } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
-import { useFile } from "@banda/ui/lib/look"
 import { MINUTE } from "@banda/ui/lib/words"
 import { clock } from "@banda/core/react"
+
+/** The accounts a machine starts a new Thread on, its `agents.toml`'s
+ * `[start]`: each machine has its own (ADR 0106, decision 7). */
+export type Start = Pick<Agents, "account" | "fallback">
 
 /** Where a new Thread starts, and why. */
 export type StartsOn = {
@@ -139,11 +142,81 @@ export function useLimitsNow(engine: Engine): {
   return { limits, now }
 }
 
+/** The accounts a draft in a Project starts by, from what `agents.defaults`
+ * said for each Harness, which names the same ones in each; none till it
+ * said. */
+export function startOf(
+  defaults: Record<string, Defaults> | undefined
+): Start | undefined {
+  return defaults && Object.values(defaults)[0]
+}
+
+/**
+ * How many times `engine`'s machine has told its `agents.toml` while `on`:
+ * first as it is, on every connection, then each time it reads otherwise,
+ * by hand or from Settings. What reads the file on that machine reads it
+ * again on each.
+ */
+export function useAgentsTold(engine: Engine, on: boolean): number {
+  const [told, setTold] = useState(0)
+  useEffect(() => {
+    if (!on) return
+    return engine.stream(
+      undefined,
+      "keys.settings_changed",
+      {},
+      ({ file }) => {
+        if (file === AGENTS_FILE.name) setTold((told) => told + 1)
+      },
+      () => {}
+    )
+  }, [engine, on])
+  return told
+}
+
+/**
+ * `engine`'s machine's `[start]`, read while `on`, again as it is `told`,
+ * for a draft in No Project: `agents.defaults` answers only in a Project,
+ * and it has none yet. None till the machine answers; an engine older than
+ * the read names no account.
+ */
+export function useMachineStart(
+  engine: Engine,
+  on: boolean,
+  told: number
+): Start | undefined {
+  const [read, setRead] = useState<{ engine: Engine; start: Start }>()
+  useEffect(() => {
+    if (!on) return
+    let stopped = false
+    const take = (start: Start) => {
+      if (!stopped) setRead({ engine, start })
+    }
+    engine.call("keys.settings_read", { file: AGENTS_FILE.name }).then(
+      ({ values }) => take((values ?? {}) as Start),
+      (error: unknown) => {
+        // A connection that broke tells the file again as it comes back.
+        if (error instanceof Refused) take({})
+      }
+    )
+    return () => {
+      stopped = true
+    }
+  }, [engine, on, told])
+  return read?.engine === engine ? read.start : undefined
+}
+
 /** Where a new Thread starts now, as {@link startsOn} says: the Harness
- * list, `agents.toml` and the machine's limits. */
-export function useStartsOn(engine: Engine): StartsOn | undefined {
+ * list and the limits of `engine`'s machine, and that machine's `start`;
+ * none till `start` is known, so a Thread never starts on the first account
+ * by being quicker than its machine's answer. */
+export function useStartsOn(
+  engine: Engine,
+  start: Start | undefined
+): StartsOn | undefined {
   const harnesses = useHarnesses(engine)
-  const { account, fallback } = useFile(AGENTS_FILE)
+  const known = start !== undefined
+  const { account, fallback } = start ?? {}
   const { limits, now } = useLimitsNow(engine)
   const first =
     harnesses.find((one) => one.enabled && one.id === account) ??
@@ -172,7 +245,10 @@ export function useStartsOn(engine: Engine): StartsOn | undefined {
     [first?.id, spare?.id, primary, secondary]
   )
   return useMemo(
-    () => startsOn(harnesses, { account, fallback }, limits, now, signedIn),
-    [harnesses, account, fallback, limits, now, signedIn]
+    () =>
+      known
+        ? startsOn(harnesses, { account, fallback }, limits, now, signedIn)
+        : undefined,
+    [known, harnesses, account, fallback, limits, now, signedIn]
   )
 }
