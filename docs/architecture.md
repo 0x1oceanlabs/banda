@@ -182,7 +182,15 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `agents.toml`, what Enter does in the composer, comes with it the same
   way (ADR 0016). The settings Pane writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
-  through `@banda/ui/lib/look`.
+  through `@banda/ui/lib/look`. Each file says whose copy each of its
+  top-level keys is (ADR 0101, decision 3), in its `SettingsFile` and as
+  `x-class` in its schema: the shared, the device's, or the machine's.
+  The machine's part (`machine.toml`, `harnesses.toml`, `sharing.toml`,
+  `agents.toml`'s `[start]`, `browser.toml`'s `[agents]`, `files.toml`'s
+  `pinned`) is read through that machine's engine, `keys.settings_read`,
+  and `keys.settings_changed` says as it changes, so a window of another
+  device shows that machine's; nothing else of a file leaves its device
+  (ADR 0106, decision 7).
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`
   prints its core, `banda skill <topic>` a topic, and
   `banda skill --export <folder>` writes an Agent Skills folder. Each
