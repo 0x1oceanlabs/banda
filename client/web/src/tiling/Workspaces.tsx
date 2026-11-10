@@ -1,6 +1,6 @@
 import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
@@ -28,7 +28,6 @@ export function Workspaces({
   workspaces,
   covered,
   overview,
-  engine,
   modules,
   projectOf,
   shows,
@@ -48,7 +47,6 @@ export function Workspaces({
   /** The overview shows them zoomed out, each under its row there, which
    * places it (`Overview`): the stack stands still. */
   overview: boolean
-  engine: Engine
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** What the Panes show, as their Apps list it, and how each calls. */
@@ -228,7 +226,6 @@ export function Workspaces({
               workspace={workspace}
               live={live}
               selected={current && (overview || live)}
-              engine={engine}
               modules={modules}
               projectOf={projectOf}
               shows={shows}

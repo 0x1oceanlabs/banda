@@ -118,7 +118,6 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
               <Machines hosts={hosts}>
                 <PaneFrame
                   entry={entry}
-                  engine={engine}
                   modules={modules}
                   focused
                   marked={false}

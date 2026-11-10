@@ -1,7 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Center } from "@banda/contract/look"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
@@ -63,7 +63,6 @@ export const Strip = memo(function Strip({
   workspace,
   live,
   selected,
-  engine,
   modules,
   projectOf,
   shows,
@@ -83,7 +82,6 @@ export const Strip = memo(function Strip({
   live: boolean
   /** Keeps the selection visible while the overview owns the keys. */
   selected: boolean
-  engine: Engine
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** What its Panes show, as their Apps list it, and how each calls. */
@@ -422,7 +420,6 @@ export const Strip = memo(function Strip({
               <PaneFrame
                 key={entry.id}
                 entry={entry}
-                engine={engine}
                 modules={modules}
                 focused={live && here && column.active === e}
                 selected={selected && here && column.active === e}
