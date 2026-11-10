@@ -10,9 +10,11 @@
  * one restored while arc is away says so, and none goes to this machine
  * in arc's place (decision 1). The same-path job runs this spec with arc
  * in a mount namespace of its own (ci.yml's `same-path`): the `new-pane`
- * and `restore` roads. With BANDA_E2E_SHOTS set to a folder, it leaves
+ * and `restore` roads, and step 5a's `start-account`: a new Thread on arc
+ * starts on arc's account. With BANDA_E2E_SHOTS set to a folder, it leaves
  * pictures of what it checks.
  */
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
@@ -54,9 +56,11 @@ function archivedOn(on: Pick<Arc, "banda">, project: string) {
  * arc's Project "banda", with a Thread done for each of `titles`, open in
  * the window from arc's part of the sidebar: the first. arc's engine runs
  * apart from the window's ssh, so a link that goes leaves it working.
+ * `before` readies arc's files before its engine starts.
  */
-async function onArc(titles = [TITLE]) {
+async function onArc(titles = [TITLE], before?: (arc: Arc) => void) {
   arc = newArc({ latency: 40 })
+  before?.(arc)
   stopArc = await arc.start()
   const folder = join(arc.code.arc, "banda")
   put(arc.disk(folder), { "README.md": "arc\n" })
@@ -305,4 +309,95 @@ test("what waits for arc still shows after a restart with arc held from the firs
   const answered = thread.getByText("The tests passed.")
   await expect(answered).toHaveCount(1, { timeout: 30_000 })
   await expect(thread.getByText(words, { exact: true })).toHaveCount(1)
+})
+
+/** arc's account a new Thread starts on, in its `agents.toml`. */
+const startsOnArc = (on: Arc, account: string) =>
+  put(join(on.dir, "config"), {
+    "agents.toml": `[start]\naccount = "${account}"\n`,
+  })
+
+test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Project and in No Project, and follows that file while it waits", async () => {
+  // arc has an account this machine does not, and starts on it; this
+  // machine's agents.toml names none, so its own first would be Fake AI.
+  const { page, composer, project } = await onArc([TITLE], (on) => {
+    const list = join(on.dir, "config/harnesses.toml")
+    const fake = readFileSync(list, "utf8")
+    const work = fake
+      .replace('id = "fake"', 'id = "work"')
+      .replace('name = "Fake AI"', 'name = "Work"')
+    writeFileSync(list, `${fake}\n${work}`)
+    startsOnArc(on, "work")
+  })
+  await composer.focus()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Thread" })
+    .click()
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  const message = (to: string) =>
+    draft.getByRole("textbox", { name: `Message to ${to}` })
+  await expect(message("Work")).toHaveAttribute(
+    "aria-placeholder",
+    /^Write to Work on arc\./
+  )
+  await shot(page, "new-thread-arc-account")
+
+  // arc's file changes, and the draft follows, as Settings on arc would.
+  startsOnArc(arc!, "fake")
+  await expect(message("Fake AI")).toBeVisible()
+  startsOnArc(arc!, "work")
+  await expect(message("Work")).toBeVisible()
+
+  // Moved to this machine it starts on this machine's own: a Harness of
+  // one machine may not be on another, so moving there leaves it to choose.
+  const menu = () => page.getByRole("menu")
+  const onArcMenu = () =>
+    menu().getByRole("group", { name: "arc", exact: true })
+  await draft.getByRole("button", { name: "Project: banda on arc" }).click()
+  await menu()
+    .getByRole("menuitemradio", { name: /^No Project/ })
+    .first()
+    .click()
+  await expect(message("Fake AI")).toBeVisible()
+
+  // In arc's No Project it has no Project to ask, and starts by arc's
+  // file all the same, and follows it.
+  await draft.getByRole("button", { name: "Project: No Project" }).click()
+  await onArcMenu()
+    .getByRole("menuitemradio", { name: /^No Project/ })
+    .click()
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project on arc" })
+  ).toBeVisible()
+  await expect(message("Work")).toBeVisible()
+  startsOnArc(arc!, "fake")
+  await expect(message("Fake AI")).toBeVisible()
+  startsOnArc(arc!, "work")
+  await expect(message("Work")).toBeVisible()
+  await draft
+    .getByRole("button", { name: "Project: No Project on arc" })
+    .click()
+  await onArcMenu()
+    .getByRole("menuitemradio", { name: /^banda/ })
+    .click()
+  await expect(message("Work")).toBeVisible()
+
+  // It starts there, on arc's engine.
+  await message("Work").fill("Started on Work")
+  await message("Work").press("Enter")
+  await expect(
+    page
+      .getByRole("region", { name: "Started on Work", exact: true })
+      .getByText("You said: Started on Work")
+  ).toBeVisible()
+  const { ok } = JSON.parse(
+    arc!.banda("call", "agents.threads", "--project", project)
+  ) as { ok: { threads: { title: string; harness: string }[] } }
+  expect(
+    ok.threads.find((one) => one.title === "Started on Work")?.harness
+  ).toBe("work")
 })
