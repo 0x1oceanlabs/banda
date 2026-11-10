@@ -4799,7 +4799,8 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
     .locator(":scope > span[aria-hidden]")
   const fill = () =>
     mark.evaluate((under) => getComputedStyle(under).backgroundColor)
-  const thinned = /\/ 0\.1\)$/
+  // `rgba(…, 0.1)` as Chromium writes a thinned hex, `/ 0.1)` another.
+  const thinned = /(\/|,) 0\.1\)$/
   await expect.poll(fill).toMatch(thinned)
   // Menus stay solid over glass, with no blur under them (ADR 0075).
   await page.keyboard.press("Alt+Space")

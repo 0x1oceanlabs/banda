@@ -169,8 +169,8 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     assert_eq!(look.vars["--focus-shadow-strength"], "0.25");
     assert_eq!(look.vars["--tile-dim"], "0");
     // Banda's colours (ADR 0075, decision 4).
-    assert_eq!(color(&look, false, "--desk-solid"), "#f4f4f5");
-    assert_eq!(color(&look, true, "--desk-solid"), "#111113");
+    assert_eq!(color(&look, false, "--desk"), "#f4f4f5");
+    assert_eq!(color(&look, true, "--desk"), "#111113");
     assert_eq!(color(&look, true, "--background"), "#19191c");
     assert_eq!(color(&look, false, "--border"), "oklch(0 0 0 / 8%)");
     assert_eq!(color(&look, false, "--attention"), "#e5590a");
@@ -939,7 +939,7 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     // wins.
     assert_eq!(color(&look, false, "--focus"), "#007aff");
     assert_eq!(color(&look, true, "--primary"), "#0a84ff");
-    assert_eq!(color(&look, true, "--desk-solid"), "#28282a");
+    assert_eq!(color(&look, true, "--desk"), "#28282a");
     let device = machine.places.config.join("device.json");
     write(&device, r##"{"accent":"#e0478c"}"##);
     machine.places.device = Some(device);
@@ -1017,6 +1017,73 @@ card = { dark = "#101010" }
         .map(|theme| theme.name)
         .collect();
     assert_eq!(listed, ["sea-light", "sea-dark"]);
+}
+
+#[test]
+fn glass_is_worked_out_from_the_solid_colours_and_a_theme_corrects_it() {
+    let machine = Machine::new(false);
+    theme_toml(
+        &machine,
+        "sea",
+        r##"[colors]
+background = { light = "#ffffff", dark = "#0e1a1c" }
+foreground = { light = "#18181b", dark = "#ededef" }
+
+[glass]
+opacity = 0.5
+
+[glass.tokens]
+border = { light = "#0000001f" }
+"##,
+    );
+    write(&machine.places.config.join("wall.png"), "a picture");
+    machine.look_toml("theme = \"sea\"\n[desk]\nglass = false\nwallpaper = \"wall.png\"\n");
+    let solid = machine.look();
+    assert!(solid.problems.is_empty(), "{:?}", solid.problems);
+    assert!(!solid.desk.glass);
+    assert_eq!(solid.schemes.light_glass, None);
+    assert_eq!(solid.schemes.dark_glass, None);
+    assert_eq!(color(&solid, false, "--tile"), "#ffffff");
+    assert_eq!(
+        color(&solid, true, "--panel"),
+        color(&solid, true, "--sidebar")
+    );
+
+    machine.look_toml("theme = \"sea\"\n[desk]\nwallpaper = \"wall.png\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert!(look.desk.glass);
+    let light = look.schemes.light_glass.as_ref().unwrap();
+    let dark = look.schemes.dark_glass.as_ref().unwrap();
+    // The theme's `[glass] opacity`: the desk half solid, the tiles
+    // solid, the panel halfway.
+    assert_eq!(look.vars["--desk-opacity"], "50%");
+    assert_eq!(light["--desk"], "rgb(255 255 255 / 0.5)");
+    assert_eq!(light["--tile"], "rgb(255 255 255)");
+    assert!(dark["--panel"].ends_with(" / 0.75)"), "{}", dark["--panel"]);
+    // ADR 0036's: the fills, lines and quiet text are the text, thinned,
+    // but where the theme corrects one.
+    assert!(dark["--muted"].ends_with(" / 0.1)"), "{}", dark["--muted"]);
+    assert!(
+        dark["--border"].ends_with(" / 0.1)"),
+        "{}",
+        dark["--border"]
+    );
+    assert!(light["--muted-foreground"].ends_with(" / 0.62)"));
+    assert_eq!(light["--border"], "#0000001f");
+    // The rest is the solid scheme's.
+    assert_eq!(light["--primary"], color(&look, false, "--primary"));
+    assert_eq!(light["--background"], "#ffffff");
+
+    // A key `[glass]` does not have is still named, at its line.
+    theme_toml(&machine, "sea", "[glass]\nopacity = 0.5\nblurr = 3\n");
+    let problems = machine.look().problems;
+    assert!(
+        problems
+            .iter()
+            .any(|p| p.message.contains("blurr") && p.line.is_some()),
+        "{problems:?}"
+    );
 }
 
 #[test]

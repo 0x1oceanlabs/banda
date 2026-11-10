@@ -8,6 +8,11 @@
 # the text's colour, as shadcn's do, so `[colors] accent = "…"` in
 # look.toml recolours the focus and the rings, not the buttons.
 #
+# Over glass the colours are worked out from these (ADR 0100, decision
+# 4): the desk, the panel and the tiles thinned, the fills, lines and
+# quiet text the text's colour thinned. [glass.tokens] corrects one, as
+# [tokens] does.
+#
 # To make a theme of your own, copy this file to
 # ~/.config/banda/themes/<name>/theme.toml, or start one with only
 # `extends` and the colours you change.
@@ -48,7 +53,7 @@ bright_blue = { light = "#3b82f6", dark = "#93c5fd" }
 bright_magenta = { light = "#d946ef", dark = "#f0abfc" }
 
 [tokens]
-desk-solid = "darker_background"
+desk = "darker_background"
 primary = "foreground"
 primary-foreground = { light = "#fafafa" }
 secondary = { light = "#f4f4f5", dark = "#27272a" }

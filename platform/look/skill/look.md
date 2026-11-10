@@ -33,6 +33,8 @@ Every key, with its default:
   control = 4                # a button's; a chip's is 0.6 of it
   [font]                     # as look.toml's [font]
   [glass]                    # as look.toml's [desk]
+  [glass.tokens]             # a colour token over glass, as [tokens]
+  muted = { light = "#0000001a" }
   ```
 
   With no `extends` the theme extends `"platform"`, this device's own:
@@ -45,6 +47,10 @@ Every key, with its default:
   by name; a value is a colour as it is: hex, `oklch(…)`, `rgb(…)` and
   the like, or a name. `var()`, `color-mix()` and other expressions are
   refused, as is a name that is no token.
+- Glass is worked out from the solid colours (ADR 0100, decision 4): the
+  desk, the sidebar's panel and the tiles thinned as `[desk]` and
+  `[tile]` `opacity` say, and the fills, lines and quiet text the text's
+  colour thinned. `[glass.tokens]` corrects one where that does not suit.
 - The corners are the theme's (ADR 0100, decision 11): `banda` is round,
   window 30 and control 10; `omarchy` takes Hyprland's rounding as the
   window's and a third of it as a control's, so a square Hyprland makes

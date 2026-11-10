@@ -14,7 +14,7 @@
 //! `--primary` and `--ring`. shadcn's `--accent` is something else, the
 //! background of a row under the pointer.
 
-use crate::color::{is_css_color, is_hex, mix};
+use crate::color::{Oklab, is_css_color, is_hex, mix, thinned};
 use crate::palette::{ANSI, Palette};
 use crate::{Device, Mode};
 use std::collections::{BTreeMap, BTreeSet};
@@ -142,9 +142,11 @@ pub const TOKENS: &[Token] = list! {
     // How dark the focused tile's shadow is, glass or not (ADR 0075,
     // decision 5), from 0 to 1.
     Focus Number ["focus-shadow-strength"];
-    // A theme's solid desk (ADR 0075); without it the page greys the
-    // background a little.
-    Desk Colour ["desk-solid"];
+    // The desk under the tiles, and the sidebar's panel over it (ADR
+    // 0023). Solid, the desk is a theme's own (ADR 0075), else its
+    // background a little greyed, and the panel the sidebar's colour; over
+    // glass, each is its colour thinned (ADR 0100, decision 4).
+    Desk Colour ["desk", "panel"];
     // Banda's own glass (ADR 0023): how frosted, how vivid the wallpaper
     // stays, the grain over it; how dark the sidebar's shadow on glass is.
     Desk Length ["desk-blur"];
@@ -153,7 +155,9 @@ pub const TOKENS: &[Token] = list! {
     Desk Percentage ["desk-opacity"];
     // The tiles' border; `[tile] dim-inactive`, a black veil over the
     // tiles without the focus, as Hyprland dims its windows; how dark a
-    // tile's shadow is on glass; how solid a tile is over glass.
+    // tile's shadow is on glass; how solid a tile is over glass. A tile
+    // is the background, over glass thinned as the desk is.
+    Tile Colour ["tile"];
     Tile Length ["tile-border"];
     Tile Number ["tile-dim", "tile-shadow-strength"];
     Tile Percentage ["tile-opacity"];
@@ -195,12 +199,10 @@ pub const RENAMED: &[(&str, &str)] = &[
     // shadcn's `--radius`, which every corner was a step of: the
     // control's now (ADR 0080, decision 6).
     ("radius", "control-radius"),
+    // A theme's solid desk (ADR 0075), now the desk, solid or glass (ADR
+    // 0100, decision 4).
+    ("desk-solid", "desk"),
 ];
-
-/// Tokens only a theme that says them has. The page works out what stands
-/// in for `desk-solid` (`--desk` in `globals.css`) until the desk is a
-/// token of its own, solid and glass (ADR 0100, step 4).
-pub const SAID_ONLY: &[&str] = &["desk-solid"];
 
 /// The value `[colors] accent` takes for the system's accent (ADR 0075,
 /// decision 6): the device's, else the theme's `blue`.
@@ -344,10 +346,39 @@ pub fn derive(palette: &Palette) -> BTreeMap<String, String> {
     tokens
 }
 
+/// `colour` as solid as `share` ([`thinned`]); one it cannot read stays as
+/// it is.
+fn thin(colour: &str, share: f64) -> String {
+    thinned(colour, share).unwrap_or_else(|| colour.to_owned())
+}
+
 /// `a` moved `amount` of the way to `b`, or `a` where either is not hex.
 fn mixed(a: &str, b: &str, amount: f64) -> String {
     mix(a, b, amount).unwrap_or_else(|| a.to_owned())
 }
+
+/// What a scheme's glass is made of (ADR 0100, decision 4): how solid the
+/// desk and the tiles are over it, from 0 to 1, as the look says them, and
+/// the tokens a theme's `[glass.tokens]` corrects, each a palette name, a
+/// token's name or a CSS colour.
+#[derive(Clone, Copy, Debug)]
+pub struct Glass<'a> {
+    pub desk: f64,
+    pub tile: f64,
+    pub tokens: &'a BTreeMap<String, String>,
+}
+
+/// ADR 0036's glass, the derive's defaults: shadcn's fills and lines are
+/// the text's own colour thinned to these shares, and quiet text the text
+/// at 62%, so each takes the colour of the glass under it.
+const THINNED: &[(&str, f64)] = &[
+    ("muted", 0.1),
+    ("accent", 0.1),
+    ("secondary", 0.1),
+    ("border", 0.1),
+    ("input", 0.12),
+    ("muted-foreground", 0.62),
+];
 
 /// One theme's colours as CSS variables, `--` included: its palette
 /// under the `colors` the layers replace, each a palette name or hex,
@@ -355,7 +386,10 @@ fn mixed(a: &str, b: &str, amount: f64) -> String {
 /// name, a token's name or a CSS colour. Last the focus: the focused
 /// tile's `border` and every other's, named so, else `primary` and
 /// `border`; and the tokens that follow others' final values. A palette
-/// whose `accent` is [`SYSTEM_ACCENT`] takes `device`'s.
+/// whose `accent` is [`SYSTEM_ACCENT`] takes `device`'s. With `glass`,
+/// the scheme over glass: the surfaces and ADR 0036's fills, lines and
+/// quiet text thinned from the solid scheme's final colours, under the
+/// theme's corrections (ADR 0080, decision 8).
 pub fn scheme<'a>(
     palette: &Palette,
     colors: impl IntoIterator<Item = (&'a str, &'a str)>,
@@ -363,6 +397,7 @@ pub fn scheme<'a>(
     border: Option<&str>,
     inactive_border: Option<&str>,
     device: &Device,
+    glass: Option<Glass>,
 ) -> BTreeMap<String, String> {
     let mut base = palette.clone();
     if base.get("accent") == Some(SYSTEM_ACCENT) {
@@ -416,13 +451,43 @@ pub fn scheme<'a>(
     // Worked out from the ground and the ink as they end, as the page did
     // (ADR 0058, ADR 0093), unless the theme says them.
     let (background, foreground) = (derived["background"].clone(), derived["foreground"].clone());
+    // The solid desk greys the background with 40% of the fills' colour,
+    // as the page did in oklab (ADR 0023).
+    let desk = (Oklab::parse(&derived["muted"]).zip(Oklab::parse(&background))).map_or_else(
+        || background.clone(),
+        |(muted, ground)| muted.mix(ground, 0.4).css(),
+    );
     for (name, value) in [
         ("block", mixed(&background, &foreground, 0.035)),
         ("raised", mixed(&background, &foreground, 0.07)),
         ("account-own", foreground),
+        ("desk", desk),
+        ("panel", derived["sidebar"].clone()),
+        ("tile", background),
     ] {
         if !said.contains(name) {
             derived.insert(name.to_owned(), value);
+        }
+    }
+    if let Some(glass) = glass {
+        // The glass's own: each surface its colour thinned, the panel
+        // halfway between the desk, the clearest, and the tiles.
+        let surfaces = [
+            ("desk", "background", glass.desk),
+            ("panel", "sidebar", (glass.desk + glass.tile) / 2.0),
+            ("tile", "background", glass.tile),
+        ];
+        let text = THINNED
+            .iter()
+            .map(|&(name, share)| (name, "foreground", share));
+        let thinned: Vec<_> = (surfaces.into_iter().chain(text))
+            .map(|(name, from, share)| (name.to_owned(), thin(&derived[from], share)))
+            .collect();
+        derived.extend(thinned);
+        for (key, value) in glass.tokens {
+            if let Some(resolved) = refer(&derived, value) {
+                derived.insert(key.clone(), resolved);
+            }
         }
     }
     derived
@@ -475,22 +540,30 @@ mod tests {
         let none = std::iter::empty();
         for mode in ["light", "dark"] {
             let palette = palette(&format!("mode = \"{mode}\"\nbackground = \"#ffffff\""));
-            let scheme = scheme(
-                &palette,
-                none.clone(),
-                none.clone(),
-                None,
-                None,
-                &Device::default(),
-            );
-            let colours = TOKENS.iter().filter(|t| t.kind == Kind::Colour);
-            for token in colours.filter(|t| !SAID_ONLY.contains(&t.name)) {
-                let value = &scheme[&format!("--{}", token.name)];
-                assert!(is_css_color(value), "--{}: {value}", token.name);
-            }
-            // And nothing the list does not have.
-            for name in scheme.keys() {
-                assert!(token(&name[2..]).is_some(), "{name} is in no list");
+            let corrections = BTreeMap::new();
+            let glass = Glass {
+                desk: 0.4,
+                tile: 1.0,
+                tokens: &corrections,
+            };
+            for glass in [None, Some(glass)] {
+                let scheme = scheme(
+                    &palette,
+                    none.clone(),
+                    none.clone(),
+                    None,
+                    None,
+                    &Device::default(),
+                    glass,
+                );
+                for token in TOKENS.iter().filter(|t| t.kind == Kind::Colour) {
+                    let value = &scheme[&format!("--{}", token.name)];
+                    assert!(is_css_color(value), "--{}: {value}", token.name);
+                }
+                // And nothing the list does not have.
+                for name in scheme.keys() {
+                    assert!(token(&name[2..]).is_some(), "{name} is in no list");
+                }
             }
         }
     }
@@ -507,6 +580,7 @@ mod tests {
                 Some("accent"),
                 None,
                 &device,
+                None,
             )
         };
         let apple = with(Device::default());
@@ -528,11 +602,80 @@ mod tests {
     fn tokens_that_follow_others_take_their_final_values() {
         let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
         let tokens = [("foreground", "#18181b"), ("raised", "#eeeeee")];
-        let scheme = scheme(&palette, [], tokens, None, None, &Device::default());
+        let scheme = scheme(&palette, [], tokens, None, None, &Device::default(), None);
         assert_eq!(scheme["--account-own"], "#18181b");
         // 3.5% of the ink in the ground, as color-mix() in sRGB.
         assert_eq!(scheme["--block"], "#f7f7f7");
         assert_eq!(scheme["--raised"], "#eeeeee");
+        assert_eq!(scheme["--tile"], "#ffffff");
+        assert_eq!(scheme["--panel"], scheme["--sidebar"]);
+    }
+
+    #[test]
+    fn glass_thins_the_solid_schemes_final_colours_under_the_themes_corrections() {
+        let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
+        let none = BTreeMap::new();
+        let with = |tokens: &[(&'static str, &'static str)], corrections| {
+            let glass = Glass {
+                desk: 0.4,
+                tile: 0.9,
+                tokens: corrections,
+            };
+            let tokens = tokens.iter().copied();
+            let solid = scheme(
+                &palette,
+                [],
+                tokens.clone(),
+                None,
+                None,
+                &Device::default(),
+                None,
+            );
+            let glass = scheme(
+                &palette,
+                [],
+                tokens,
+                None,
+                None,
+                &Device::default(),
+                Some(glass),
+            );
+            (solid, glass)
+        };
+        let (solid, glass) = with(&[("foreground", "#18181b"), ("desk", "#eeeeee")], &none);
+        assert_eq!(glass["--muted"], "rgb(24 24 27 / 0.1)");
+        assert_eq!(glass["--input"], "rgb(24 24 27 / 0.12)");
+        assert_eq!(glass["--muted-foreground"], "rgb(24 24 27 / 0.62)");
+        // The said solid desk is the solid one's; glass thins the ground.
+        assert_eq!(solid["--desk"], "#eeeeee");
+        assert_eq!(glass["--desk"], "rgb(255 255 255 / 0.4)");
+        assert_eq!(glass["--tile"], "rgb(255 255 255 / 0.9)");
+        assert_eq!(
+            glass["--panel"],
+            thin(&solid["--sidebar"], 0.65),
+            "halfway between the desk and the tiles"
+        );
+        // What glass does not thin stays the solid one's.
+        assert_eq!(glass["--primary"], solid["--primary"]);
+        assert_eq!(glass["--focus-inactive"], solid["--focus-inactive"]);
+        let corrections = BTreeMap::from([
+            ("muted".to_owned(), "#00000014".to_owned()),
+            ("border".to_owned(), "foreground".to_owned()),
+        ]);
+        let (_, corrected) = with(&[], &corrections);
+        assert_eq!(corrected["--muted"], "#00000014");
+        assert_eq!(corrected["--border"], "#000000");
+        // The rest is still the derive's: black ink, thinned.
+        assert_eq!(corrected["--accent"], "rgb(0 0 0 / 0.1)");
+    }
+
+    #[test]
+    fn the_solid_desk_greys_the_ground_as_the_page_did() {
+        let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
+        let scheme = scheme(&palette, [], [], None, None, &Device::default(), None);
+        let muted = Oklab::parse(&scheme["--muted"]).unwrap();
+        let white = Oklab::parse("#ffffff").unwrap();
+        assert_eq!(scheme["--desk"], muted.mix(white, 0.4).css());
     }
 
     #[test]

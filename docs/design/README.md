@@ -93,7 +93,7 @@ the `banda` theme
 | `--card` | `#1f1f23` | `#ffffff` | a card |
 | `--popover` (`--floating`) | `#202024` | `#ffffff` | the Top layer: menus, dialogs, toasts |
 | `--sidebar` | `#202024` | `#fafafa` | the sidebar's panel |
-| desk, solid | `#111113` | `#f4f4f5` | under the tiles with glass off (`desk-solid`) |
+| desk, solid | `#111113` | `#f4f4f5` | under the tiles with glass off (`--desk`) |
 | `--border`, `--input` | white 8%, 12% | black 8%, 12% | 1 px lines |
 | `--ring`, the accent | `#4ea3ff` | `#0b6fe0` | focus, selection (`#1e3a5f`, `#cfe1fb`), links |
 | `--attention` | `#ff8a3d` | `#e5590a` | asks: its mark, its time, "Asks you" |
@@ -247,7 +247,7 @@ something ([0099] d4):
 - In a mock the window is a rounded screen (30) with a 1 px light line, a
   highlight on its top edge and a soft drop shadow, over a wallpaper.
 - The desk inside it is the wallpaper, blurred and tinted (above); with
-  glass off it is `desk-solid`. Under the bar: the sidebar's panel, then
+  glass off it is the solid `--desk`. Under the bar: the sidebar's panel, then
   the Strip's columns, 8 px apart and 8 px from the edges.
 - On Linux Banda draws the glass from the wallpaper; on macOS and Windows
   the system does ([0030]).

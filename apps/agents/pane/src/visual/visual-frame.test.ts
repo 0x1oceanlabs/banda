@@ -110,6 +110,7 @@ test("main's look for a page comes from the look's scheme asked, its vars and it
       dark: { "--background": "black" },
     },
     vars: { "--control-radius": "4px", "--font-family-sans": "Inter" },
+    desk: { glass: false },
   } as unknown as Look
   const dark = visualLookOf(look, true)
   expect(dark.variables["--background"]).toBe("black")
@@ -123,6 +124,15 @@ test("main's look for a page comes from the look's scheme asked, its vars and it
     variables: { "--background": "white" },
   })
   expect(visualLookOf(null, true)).toEqual({ theme: "dark", variables: {} })
+  // Over glass, the glass scheme, as the window's page has it.
+  const glass = {
+    ...look,
+    desk: { glass: true },
+    schemes: { ...look.schemes, dark_glass: { "--muted": "rgb(0 0 0 / 0.1)" } },
+  } as unknown as Look
+  expect(visualLookOf(glass, true).variables["--muted"]).toBe(
+    "rgb(0 0 0 / 0.1)"
+  )
 })
 
 test("a frame is as tall as the window found its page at the widest width that fits", () => {

@@ -176,6 +176,10 @@ pub struct Theme {
     /// one it extends: a palette name, a token's name or a CSS colour. An
     /// old `banda.toml` sets its own in `look.toml`'s schema.
     pub tokens: BTreeMap<String, String>,
+    /// The tokens its `theme.toml` corrects over glass, `[glass.tokens]`,
+    /// each theme's over those of the one it extends (ADR 0080, decision
+    /// 8).
+    pub glass: BTreeMap<String, String>,
     /// Its files that say its shape, font and glass, the one it extends
     /// first.
     pub layers: Vec<Layer>,
@@ -549,6 +553,7 @@ fn over(
                 folder: None,
                 palette,
                 tokens: BTreeMap::new(),
+                glass: BTreeMap::new(),
                 layers: Vec::new(),
             }
         });
@@ -559,6 +564,7 @@ fn over(
             theme.palette.set(key, value.clone());
         }
         (theme.tokens).extend(file.tokens(mode).clone());
+        (theme.glass).extend(file.glass(mode).clone());
         theme.layers.push(layer.clone());
         theme
     };
@@ -600,6 +606,7 @@ fn old_folder(name: &str, origin: Origin, folder: &Path, wrong: &mut Vec<Wrong>)
         folder: Some(folder.to_owned()),
         palette,
         tokens: BTreeMap::new(),
+        glass: BTreeMap::new(),
         layers: (banda_toml.into_iter())
             .map(|text| Layer {
                 path: Some(banda_path.clone()),

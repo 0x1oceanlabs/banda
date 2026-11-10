@@ -377,9 +377,28 @@ pub(crate) struct ThemeFile {
     shape: ThemeShape,
     #[serde(default)]
     font: FontSettings,
-    /// `look.toml`'s `[desk]`.
     #[serde(default)]
-    glass: Desk,
+    glass: ThemeGlass,
+}
+
+/// A theme's `[glass]`: `look.toml`'s `[desk]`, and the tokens it
+/// corrects over glass, which `banda_theme` reads (ADR 0080, decision 8).
+#[derive(Clone, Debug, Default)]
+struct ThemeGlass {
+    desk: Desk,
+}
+
+impl<'de> Deserialize<'de> for ThemeGlass {
+    /// The table less its `tokens`, as `[desk]`: a key `[desk]` does not
+    /// have is refused, as it is in `look.toml` (serde's `flatten` would
+    /// let it by).
+    fn deserialize<D: serde::Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
+        let mut table = toml::Table::deserialize(from)?;
+        table.remove("tokens");
+        let desk =
+            Desk::deserialize(toml::Value::Table(table)).map_err(serde::de::Error::custom)?;
+        Ok(ThemeGlass { desk })
+    }
 }
 
 /// A theme's `[shape]`: `look.toml`'s sizes, its `[shape]`'s corners
@@ -439,7 +458,7 @@ impl ThemeFile {
                 height: shape.bar.height,
                 ..Bar::default()
             },
-            desk: self.glass,
+            desk: self.glass.desk,
             font: self.font,
             ..Settings::default()
         }
