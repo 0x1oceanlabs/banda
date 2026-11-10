@@ -28,6 +28,7 @@ import {
   markFullAccess,
   ON_SCREEN,
   newProject,
+  plateOf,
   projectId,
   sendAndLeave,
   sharesOf,
@@ -38,6 +39,7 @@ import {
   textOf,
   type Window,
   read,
+  workspaceNames,
 } from "./window"
 
 let window: Window
@@ -240,10 +242,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const draft = page.getByRole("region", { name: "New Thread" })
   await expect(draft).toBeVisible()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  const names = () =>
-    numbers
-      .getByRole("button")
-      .evaluateAll((buttons) => buttons.map((b) => b.ariaLabel))
+  const names = () => workspaceNames(page)
   await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
 
   // The + is the empty workspace at the bottom: a click goes there, and
@@ -2604,8 +2603,6 @@ test("what an Agent opens with no place goes into its Thread's Group as a Deck, 
   const ids = await Promise.all(
     [launcher, thread].map((tile) => tile.getAttribute("data-tile"))
   )
-  const plate = (tile: Locator) =>
-    tile.locator("xpath=ancestor::*[@data-column][1]/*[@data-group-plate]")
 
   // The Diff: a Deck right of the Thread, on the Thread's plate, out of
   // focus and marked.
@@ -2616,10 +2613,10 @@ test("what an Agent opens with no place goes into its Thread's Group as a Deck, 
   const shown = page.locator(`[data-tile="${diff}"]`)
   await expect(shown).toHaveAttribute("data-marked", "true")
   await expect.poll(() => layoutOf(page)).toEqual([[ids[0]], [ids[1]], [diff]])
-  const group = await plate(thread).getAttribute("data-group-plate")
+  const group = await plateOf(thread).getAttribute("data-group-plate")
   expect(group).toBeTruthy()
-  await expect(plate(shown)).toHaveAttribute("data-group-plate", group!)
-  await expect(plate(launcher)).toHaveCount(0)
+  await expect(plateOf(shown)).toHaveAttribute("data-group-plate", group!)
+  await expect(plateOf(launcher)).toHaveCount(0)
   await expect(launcher).toHaveAttribute("data-focused", "true")
   await settled(launcher, thread, shown)
   expect([await x(launcher), await x(thread)]).toEqual(before)
@@ -4095,6 +4092,76 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   await expect(
     strip.getByRole("textbox", { name: "Message to Fake AI" })
   ).toHaveCount(2)
+})
+
+test("Threads of no Project share the first free workspace, which takes a Project's Pane too (ADR 0102, decision 1)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const names = () => workspaceNames(page)
+  const threads = page
+    .locator(`${ON_SCREEN} [data-strip]`)
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  // Sends `words` from the New Thread in focus, its first message.
+  const say = async (words: string) => {
+    const box = page
+      .getByRole("region", { name: "New Thread" })
+      .and(page.locator('[data-focused="true"]'))
+      .getByRole("textbox", { name: "Message to Fake AI" })
+    await box.fill(words)
+    await box.press("Enter")
+    await expect(page.getByText(`You said: ${words}`)).toBeVisible()
+  }
+
+  // The first screen's Thread; one by Alt+Enter, with no Project yet; and
+  // one from No Project's section of the sidebar: all on workspace 1, the
+  // one free workspace, shown by its number.
+  await say("scratch one")
+  await page.keyboard.press("Alt+Enter")
+  await say("scratch two")
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^projects/ }).click()
+  await sidebar
+    .getByRole("button", { name: "New Thread in No Project" })
+    .click()
+  await say("scratch three")
+  await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
+  await expect(threads).toHaveCount(3)
+
+  // Alpha's Thread, on Alpha's workspace, goes onto it, as onto any free
+  // one, with no word of refusal.
+  await newProject(page, "Alpha")
+  await say("alpha one")
+  const current = numbers.locator("[aria-current]:not([inert])")
+  await expect(current).toHaveText("A")
+  await page.keyboard.press("Alt+Shift+Digit1")
+  await expect(
+    numbers.getByRole("button", { name: "Workspace 1" })
+  ).toHaveAttribute("aria-current", "true")
+  await expect(threads).toHaveCount(4)
+  const refused = page.getByText("Not onto another Project's workspace")
+  await expect(refused).toHaveCount(0)
+})
+
+test("in solo, a reply's Run in a Thread of no Project opens its terminal in the Thread's Group, and the Thread stays in view (ADR 0102, decision 3)", async () => {
+  window = await startWindow({
+    files: { "config/agents.toml": 'flow = "solo"\n' },
+  })
+  const { page } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  const thread = page.locator("section").filter({ has: composer })
+  // The reply starts with “You said: ”, so a fence cannot.
+  await composer.fill("Some code:\n\n```bash\necho hi >> said.txt\n```")
+  await composer.press("Enter")
+  const block = thread.locator("[data-quotable] [data-streamdown=code-block]")
+  await block.getByRole("button", { name: "Run", exact: true }).click()
+  const terminal = terminalTile(page)
+  await expect(terminal).toBeVisible()
+  const group = await plateOf(thread).getAttribute("data-group-plate")
+  expect(group).toBeTruthy()
+  await expect(plateOf(terminal)).toHaveAttribute("data-group-plate", group!)
+  await expect(thread).toBeInViewport()
 })
 
 test('agents.toml\'s workspaces = "off" keeps a new Thread where the Person is', async () => {

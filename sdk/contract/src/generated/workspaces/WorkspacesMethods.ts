@@ -142,11 +142,12 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * Only the args that choose what a Pane shows are yours to give;
  * the rest are your Person's. Beside a Pane `panes` lists; left
  * out, right of your Thread, in its Group, when your Thread is
- * shown, else beside your Project's Panes. A Thread opens as a
- * Group of its own; left out, beside your Project's Panes, never
- * in your Thread's. One shown already, a Thread's by its ID,
- * stays where it is, and is named. It takes no focus; the Person
- * sees a mark on it until they look.
+ * shown, else last on your Project's workspace, or beside your
+ * Project's Panes when it has none. A Thread opens as a Group of
+ * its own; left out, last on your Project's workspace or beside
+ * your Project's Panes, never in your Thread's. One shown already,
+ * a Thread's by its ID, stays where it is, and is named. It takes
+ * no focus; the Person sees a mark on it until they look.
  */
 open_pane: CommandMethod<OpenPane, Opened>, 
 /**

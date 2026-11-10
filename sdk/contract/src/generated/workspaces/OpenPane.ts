@@ -15,7 +15,8 @@ kind: string,
 args: JsonValue, 
 /**
  * A Pane `panes` lists, to open it beside. Left out, right of your
- * Thread, in its Group, when your Thread is shown, else beside your
- * Project's Panes; a Thread, beside your Project's Panes.
+ * Thread, in its Group, when your Thread is shown, else last on your
+ * Project's workspace, or beside your Project's Panes when it has
+ * none; a Thread, last on that workspace or beside those Panes.
  */
 beside?: Beside, };

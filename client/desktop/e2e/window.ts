@@ -680,6 +680,18 @@ export function projectId(window: Window, name: string): string {
 /** The workspace on screen. */
 export const ON_SCREEN = '[role="group"]:not([aria-hidden="true"])'
 
+/** The bar's workspace buttons by their names, from the top. */
+export function workspaceNames(page: Page) {
+  return page
+    .getByRole("navigation", { name: "Workspaces" })
+    .getByRole("button")
+    .evaluateAll((buttons) => buttons.map((b) => b.ariaLabel))
+}
+
+/** The plate of the Group whose column holds `tile`; none in no Group. */
+export const plateOf = (tile: Locator) =>
+  tile.locator("xpath=ancestor::*[@data-column][1]/*[@data-group-plate]")
+
 /** The workspace on screen: each column's Tiles, top down, by ID. */
 export function layoutOf(page: Page) {
   return page.evaluate(

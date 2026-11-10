@@ -437,6 +437,15 @@ pub fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Opt
     showing_asked(list, &asked).map(|pane| Place::Group { pane: pane.id })
 }
 
+/// Where a Pane an Agent opens with its Thread not shown goes: last on the
+/// workspace `project` owns, even emptied (ADR 0102, decision 4). With
+/// none owned, it has no place here.
+pub fn owned_place(list: &Arrangement, project: ProjectId) -> Option<Place> {
+    (list.iter())
+        .any(|w| w.project == Some(project))
+        .then_some(Place::Project { project })
+}
+
 /// A Pane to open: what it shows, and how.
 pub struct Opening {
     pub shown: Shown,
@@ -2136,6 +2145,21 @@ mod tests {
         );
         close(&mut list, pane, &seed()).unwrap();
         assert_eq!(agents_place(&list, work, thread), None);
+    }
+
+    #[test]
+    fn only_a_workspace_its_project_owns_takes_what_its_agent_opens_there() {
+        let mut list = start();
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        // A Pane of Work on a free workspace, or another Project's: no place.
+        opened(&mut list, shown(work, "a.a", 1), None);
+        assert_eq!(owned_place(&list, work), None);
+        list[0].project = Some(home);
+        assert_eq!(owned_place(&list, work), None);
+        // Work's own, emptied: last there.
+        list[1].project = Some(work);
+        let place = Some(Place::Project { project: work });
+        assert_eq!(owned_place(&list, work), place);
     }
 
     #[test]

@@ -138,11 +138,12 @@ banda_kernel::methods! {
         /// Only the args that choose what a Pane shows are yours to give;
         /// the rest are your Person's. Beside a Pane `panes` lists; left
         /// out, right of your Thread, in its Group, when your Thread is
-        /// shown, else beside your Project's Panes. A Thread opens as a
-        /// Group of its own; left out, beside your Project's Panes, never
-        /// in your Thread's. One shown already, a Thread's by its ID,
-        /// stays where it is, and is named. It takes no focus; the Person
-        /// sees a mark on it until they look.
+        /// shown, else last on your Project's workspace, or beside your
+        /// Project's Panes when it has none. A Thread opens as a Group of
+        /// its own; left out, last on your Project's workspace or beside
+        /// your Project's Panes, never in your Thread's. One shown already,
+        /// a Thread's by its ID, stays where it is, and is named. It takes
+        /// no focus; the Person sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
         /// Moves a Pane you opened beside another that `panes` lists.
         command move_own(MoveOwn) -> Done, Write, tool "move_pane";
@@ -283,8 +284,9 @@ pub struct OpenPane {
     #[schemars(with = "serde_json::Map<String, Value>")]
     pub args: Value,
     /// A Pane `panes` lists, to open it beside. Left out, right of your
-    /// Thread, in its Group, when your Thread is shown, else beside your
-    /// Project's Panes; a Thread, beside your Project's Panes.
+    /// Thread, in its Group, when your Thread is shown, else last on your
+    /// Project's workspace, or beside your Project's Panes when it has
+    /// none; a Thread, last on that workspace or beside those Panes.
     #[serde(default)]
     #[ts(optional)]
     pub beside: Option<Beside>,
@@ -732,8 +734,14 @@ impl Workspaces {
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
-            let place =
-                place.or_else(|| thread.and_then(|t| model::agents_place(list, wall.project, t)));
+            // With its Thread not shown, last on the workspace its Project
+            // owns, even emptied (ADR 0102, decision 4); with none, where a
+            // Pane with no place goes. The engine does not know the Flow,
+            // so one owned from the row draws it in the Flow `free` too.
+            let project = wall.project;
+            let place = place
+                .or_else(|| thread.and_then(|t| model::agents_place(list, project, t)))
+                .or_else(|| model::owned_place(list, project));
             let opening = Opening {
                 place,
                 by: Some(me),

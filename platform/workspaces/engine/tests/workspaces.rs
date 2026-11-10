@@ -718,6 +718,21 @@ fn on_thread(thread: Uuid) -> Value {
     showing("agents.thread", json!({ "thread": thread }))
 }
 
+/// A Pane of `project` that the Person opens at `place`, as the row puts it.
+fn placed(project: ProjectId, kind: &str, args: Value, place: Value) -> Value {
+    json!({ "project": project, "kind": kind, "args": args, "place": place })
+}
+
+/// In the row, `thread`'s Pane on `project`'s workspace, which the Person
+/// closes while its Agent works: the workspace stays, emptied.
+async fn closed_on_its_workspace(machine: &Machine, project: ProjectId, thread: Uuid) {
+    let row = json!({ "to": "project", "project": project });
+    let its = placed(project, "agents.thread", json!({ "thread": thread }), row);
+    let shown = machine.command("workspaces.open", its).await.unwrap();
+    let close = json!({ "pane": shown["pane"] });
+    machine.command("workspaces.close", close).await.unwrap();
+}
+
 #[tokio::test]
 async fn a_thread_opens_as_a_group_of_its_own_as_its_kind_says() {
     let root = tempfile::tempdir().unwrap();
@@ -1010,6 +1025,59 @@ async fn a_thread_an_agent_opens_starts_a_group_of_its_own_never_in_its_threads(
     let theirs = group_of(&list, &another["pane"]);
     assert!(theirs.is_string());
     assert_ne!(theirs, group);
+}
+
+#[tokio::test]
+async fn what_an_agent_opens_with_its_thread_not_shown_goes_last_on_its_projects_workspace() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = Uuid::now_v7();
+    let agent = agent_in(AgentId::new(), work, thread);
+    let open =
+        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    closed_on_its_workspace(&machine, work, thread).await;
+
+    // The Diff goes there, and no workspace is made for it.
+    let diff = open(changes()).await.unwrap().value;
+    let list = machine.opened().await;
+    let workspaces = list["workspaces"].as_array().unwrap();
+    assert_eq!(workspaces.len(), 2);
+    assert_eq!(workspaces[0]["project"], json!(work));
+    assert_eq!(last_column(&list)["panes"][0]["id"], diff["pane"]);
+    // A Thread it opens too: last there, a Group of its own.
+    let another = open(on_thread(Uuid::now_v7())).await.unwrap().value;
+    let list = machine.opened().await;
+    assert_eq!(list["workspaces"].as_array().unwrap().len(), 2);
+    assert_eq!(last_column(&list)["panes"][0]["id"], another["pane"]);
+    let group = group_of(&list, &another["pane"]);
+    assert!(group.is_string());
+    assert_ne!(group, group_of(&list, &diff["pane"]));
+}
+
+#[tokio::test]
+async fn what_an_agent_opens_passes_a_free_workspace_with_its_projects_panes() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = Uuid::now_v7();
+    let agent = agent_in(AgentId::new(), work, thread);
+    let open =
+        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    // A Work terminal on a free workspace, and under it Work's own.
+    let free = json!({ "to": "free" });
+    let terminal = placed(work, "terminal.terminal", json!({}), free);
+    machine.command("workspaces.open", terminal).await.unwrap();
+    closed_on_its_workspace(&machine, work, thread).await;
+
+    // The Diff goes onto Work's, not the free one above.
+    let diff = open(changes()).await.unwrap().value;
+    let list = machine.opened().await;
+    let workspaces = list["workspaces"].as_array().unwrap();
+    assert_eq!(workspaces.len(), 3);
+    assert_eq!(workspaces[0]["columns"].as_array().unwrap().len(), 1);
+    assert_eq!(workspaces[1]["project"], json!(work));
+    assert_eq!(workspaces[1]["columns"][0]["panes"][0]["id"], diff["pane"]);
 }
 
 #[tokio::test]

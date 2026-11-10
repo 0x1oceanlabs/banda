@@ -405,28 +405,33 @@ export function bringing(
  * scratch one, of no Project (ADR 0046). */
 export type Placing = { flow: Flow; scratch: (project: ProjectId) => boolean }
 
-/** How the Person works the Panes in `flow`, the Projects as they are now. */
-export function placingOf(
-  flow: Flow,
-  projects: readonly ProjectSummary[]
-): Placing {
-  return {
-    flow,
-    scratch: (project) =>
-      projects.some((one) => one.id === project && one.scratch),
-  }
+/** Those of no Project, the Projects as they are now: the scratch ones,
+ * and a draft in the `machine`'s own ID, as a new one in No Project
+ * starts. None of them owns a workspace (ADR 0102, decision 1). */
+export function noProjectOf(
+  projects: readonly ProjectSummary[],
+  machine?: ProjectId
+): ProjectId[] {
+  const scratch = projects.filter((one) => one.scratch).map((one) => one.id)
+  return machine ? [machine, ...scratch] : scratch
+}
+
+/** How the Person works the Panes in `flow`, with `none` of no Project
+ * (`noProjectOf`). */
+export function placingOf(flow: Flow, none: readonly ProjectId[]): Placing {
+  return { flow, scratch: (project) => none.includes(project) }
 }
 
 /**
  * Where a Pane the Person opens goes, by the Flow and the Projects as they
  * are now (`placingOf`; ADR 0102, decision 3).
  * In the Flow `free`, right of the Pane in front. In the row and solo:
- * - one an Agent opens with its Thread not shown (`agent`), last on its
- *   Project's workspace;
- * - a Thread, as its kind's `home` says, last on its Project's workspace,
- *   or, of no Project, on the top free workspace;
+ * - one an Agent opens with its Thread not shown (`agent`), or a Thread, as
+ *   its kind's `home` says, last on its Project's workspace, or, of no
+ *   Project, on the top free workspace;
+ * - a Pane opened from a Group of its Project, into that Group, of no
+ *   Project too;
  * - another Pane of no Project, right of the Pane in front;
- * - a Pane opened from a Group of its Project, into that Group;
  * - one opened on a free workspace, right of the Pane in front;
  * - any other, last into its Project's own Group, first on its workspace.
  */
@@ -438,16 +443,16 @@ export function placeFor(
   agent = false
 ): Place {
   if (flow === "free") return "right"
-  if (agent) return "project"
   const none = scratch(project)
-  if (homeOf(pane) === "project") return none ? "free" : "project"
-  if (none) return "right"
+  if (agent || homeOf(pane) === "project") return none ? "free" : "project"
   const { workspace, column } = focusedColumn(workspaces)
   const from = column?.entries[column.active]
+  const grouped = column?.group !== undefined && from?.project === project
+  if (none) return grouped ? "group" : "right"
   // From the Project's own Group, last into it, not stacked in a Deck.
   if (column?.group !== undefined && column.group === workspace.own)
     return "own"
-  if (column?.group !== undefined && from?.project === project) return "group"
+  if (grouped) return "group"
   return isFree(workspace) ? "right" : "own"
 }
 
