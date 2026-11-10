@@ -92,6 +92,8 @@ ADR 0002, decision 9, as decision 9 below says.
      - each runs in its own process group and dies with the engine;
      - it is released after 30 minutes with no running turn and no open
        Question;
+       _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+       nor while a sub-agent or a Crew of its sessions is at work._
      - a crash ends the running turns with a failure that can be retried,
        and the queue waits;
      - the next turn starts the process again, after a growing pause if it
@@ -184,3 +186,5 @@ ADR 0002, decision 9, as decision 9 below says.
   7. Usage and the CLI version check.
 - Later: subagents as child Threads, edit-and-resend through a fork, and
   the native Codex adapter.
+  _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+  a Harness's sub-agents are not child Threads but lanes of their Thread._

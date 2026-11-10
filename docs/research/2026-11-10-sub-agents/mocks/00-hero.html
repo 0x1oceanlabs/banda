@@ -1,0 +1,1231 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sub-agents and Crews</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* Only this page's layout lives here; every Banda part is in kit.css + sub.css. */
+  body { margin: 0; }
+  /* Cyrillic in the notes: Adwaita Sans (Inter-based) before the system face, so both scripts match */
+  .b-kit { --font-sans: "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif; }
+
+  /* ---------------- the hero: header + the 1440×900 screen, on the wallpaper ---------------- */
+  .hero { background: var(--wallpaper); background-size: cover; background-position: center; }
+  .pg-head { max-width: 1440px; margin: 0 auto; padding: 22px 36px 0; display: flex; align-items: center; gap: 14px 32px; flex-wrap: wrap; }
+  .pg-title { flex: 1 1 440px; min-width: 0; }
+  .pg-title h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .pg-title p { margin: 3px 0 0; max-width: 78ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pg-title kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+
+  /* the simulation's controls: page chrome, not Banda */
+  .sim { flex: 0 1 560px; min-width: 0; display: flex; flex-direction: column; gap: 6px; padding: 8px 14px 9px 8px; border-radius: var(--r-card);
+    background: color-mix(in oklab, var(--background) 62%, transparent); box-shadow: inset 0 0 0 1px var(--border);
+    -webkit-backdrop-filter: blur(24px) saturate(1.3); backdrop-filter: blur(24px) saturate(1.3); }
+  .sim-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+  .sim-play { min-width: 112px; height: 30px; }
+  .sim-play .b-icon { width: 14px; height: 14px; }
+  .sim-still { height: 30px; }
+  .sim-track { position: relative; flex: 1; min-width: 120px; height: 30px; margin-top: -6px; cursor: pointer; }
+  .sim-track::before { content: ""; position: absolute; left: 0; right: 0; top: 19px; height: 2px; border-radius: 1px; background: color-mix(in oklab, var(--foreground) 14%, transparent); }
+  .sim-fill { position: absolute; left: 0; top: 19px; height: 2px; border-radius: 1px; background: color-mix(in oklab, var(--foreground) 60%, transparent); }
+  .sim-tick { position: absolute; top: 14px; width: 9px; height: 12px; translate: -50% 0; display: grid; place-items: center; }
+  .sim-tick::after { content: ""; width: 2px; height: 8px; border-radius: 1px; background: color-mix(in oklab, var(--foreground) 32%, transparent); }
+  .sim-tick.is-past::after { background: color-mix(in oklab, var(--foreground) 70%, transparent); }
+  .sim-mark { position: absolute; top: 0; translate: -50% 0; font-size: 10px; line-height: 11px; color: var(--muted-foreground); pointer-events: none; }
+  .sim-head { position: absolute; top: 14px; width: 12px; height: 12px; translate: -50% 0; border-radius: 50%; background: var(--foreground); box-shadow: 0 0 0 3px color-mix(in oklab, var(--background) 70%, transparent); pointer-events: none; }
+  .sim-time { flex: none; font-size: 12px; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  /* two lines held open, so a longer caption never jumps the box or gets cut */
+  .sim-cap { min-width: 0; min-height: 36px; padding-left: 4px; font-size: 12.5px; line-height: 18px; color: color-mix(in oklab, var(--foreground) 85%, transparent); text-wrap: balance; }
+  .sim-cap b { font-weight: 600; }
+
+  #a { display: flex; justify-content: center; }
+  .stage { width: 1440px; height: 900px; flex: none; }
+  .stage > .b-screen { min-height: 0; height: 100%; padding: 28px; background: none; }
+
+  /* ---------------- inside the window ---------------- */
+  #grp { transition: background-color .45s var(--ease), box-shadow .45s var(--ease); }
+  #thread-tile { flex: 1.2 1 0; }
+  #crew-tile { flex: 0 1 0; opacity: 0; margin-left: calc(-1 * var(--gap)); transition: flex-grow .55s var(--ease), opacity .45s var(--ease), margin .55s var(--ease); }
+  #grp.is-paned #crew-tile { flex-grow: 1; opacity: 1; margin-left: 0; }
+  #crew-tile > * { min-width: 470px; }
+  .b-pane-detail.s-fit { text-overflow: clip; }
+  #crew-tile .b-pane-title { flex: none; overflow: visible; }
+
+  /* things that come and go glide (0.45 s), never jump */
+  .cl { display: grid; grid-template-columns: minmax(0, 1fr); grid-template-rows: 1fr; min-width: 0; transition: grid-template-rows .45s var(--ease), opacity .4s var(--ease), margin .45s var(--ease); }
+  .cl > .cl-in { min-height: 0; min-width: 0; overflow: clip; overflow-clip-margin: 10px; }
+  .cl.is-gone { grid-template-rows: 0fr; opacity: 0; margin-bottom: calc(-1 * var(--cl-gap, 0px)); pointer-events: none; }
+  .b-chat { --cl-gap: 20px; }
+  .b-composer-wrap { --cl-gap: 6px; }
+  .b-list { --cl-gap: 1px; }
+  .is-born { animation: born .45s var(--ease) both; }
+  .is-swap { animation: swap .45s var(--ease) both; }
+  @keyframes born { from { opacity: 0; translate: 0 3px; } }
+  @keyframes swap { from { opacity: .2; } }
+  .no-anim *, .no-anim *::before, .no-anim *::after { transition: none !important; }
+  .no-anim .is-born, .no-anim .is-swap { animation: none !important; }
+
+  [hidden] { display: none !important; }
+  /* the Thread follows its live edge (script keeps it scrolled to the end); older lines go up under the fade */
+  #thread > .b-chat { flex: none; }
+  .b-choice { transition: background-color .2s var(--ease); }
+  .b-choice.is-press { background: color-mix(in oklab, var(--foreground) 14%, transparent); }
+  #send.is-stop { background: var(--raised); color: var(--foreground); }
+  .s-row.is-flash > .s-line, .cp-row.is-flash, .cp-fold.is-flash, .cp-wait.is-flash { background: var(--current); }
+  .s-row > .s-line, .cp-row, .cp-fold, .cp-wait { transition: background-color .45s var(--ease); }
+  /* a folded group glides shut */
+  #a .s-group .s-members { display: flex; max-height: 240px; margin-right: -8px; padding-right: 8px; overflow: clip; overflow-clip-margin: 6px; transition: max-height .45s var(--ease), opacity .45s var(--ease); }
+  #a .s-group.is-folded .s-members { max-height: 0; opacity: 0; }
+  #a .s-group.is-settled { opacity: .55; }
+  #a .s-ghead { cursor: pointer; }
+  .s-dots > .s-sat.is-born { animation: born .45s var(--ease) both; }
+
+  /* ---------------- the Crew Pane (agents.crew) ---------------- */
+  .cp-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; padding: 12px 16px 16px; overflow: hidden; }
+  .cp-sum { display: flex; align-items: center; gap: 8px; min-height: 20px; font-size: 13px; color: var(--muted-foreground); white-space: nowrap; font-variant-numeric: tabular-nums; }
+  .cp-counts { min-width: 0; overflow: hidden; }
+  .cp-counts b { font-weight: 500; color: var(--foreground); }
+  .cp-clock { flex: none; color: var(--foreground); }
+  .cp-clock::before { content: "·"; margin-right: 8px; color: var(--s-faint); }
+  .cp-tok { flex: none; margin-left: auto; font-size: 12px; color: var(--s-faint); }
+  .cp-bar { display: flex; align-items: center; gap: 2px; margin: -4px 0 -2px -8px; }
+  .cp-bar button { height: 24px; padding: 0 8px; border-radius: var(--r-control); font-size: 12px; color: color-mix(in oklab, var(--muted-foreground) 75%, transparent); }
+  .cp-bar button:hover { color: var(--foreground); }
+  .cp-bar button.is-on { background: var(--current); color: var(--foreground); }
+  .cp-bar .cp-sp { flex: 1; }
+  .cp-body > .s-narr { margin: 0; }
+  /* the bands take the rest of the Pane; past phases fold their done rows only when the list would not fit (see renderPane) */
+  .cp-bands { flex: 1 1 auto; display: flex; flex-direction: column; gap: 14px; min-height: 0; overflow: visible clip; }
+  .cp-band { flex: none; display: flex; flex-direction: column; overflow: visible clip; }
+  .cp-bhead { display: flex; align-items: center; gap: 6px; height: 26px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); white-space: nowrap; }
+  .cp-bhead .b-icon { width: 12px; height: 12px; }
+  .cp-bhead .s-chev { margin-left: auto; rotate: 90deg; }
+  .cp-band.is-open > .cp-bhead { cursor: pointer; }
+  .cp-band.is-open > .cp-bhead:hover .s-chev { color: var(--foreground); }
+  /* a path reads by its file: the folders are quieter (as on page 03) */
+  .cp-dir { color: color-mix(in oklab, var(--muted-foreground) 72%, transparent); }
+  .cp-row[data-state="working"] .cp-dir { color: var(--s-faint); }
+  .cp-band.is-current .cp-bname { color: var(--foreground); }
+  .cp-band.is-future .cp-bhead { color: var(--s-faint); }
+  .cp-bn { font-weight: 400; font-variant-numeric: tabular-nums; }
+  .cp-bd { font-weight: 400; color: var(--s-faint); }
+  .cp-bd::before { content: "·"; margin-right: 6px; }
+  .cp-rows { display: flex; flex-direction: column; }
+  .cp-row { display: flex; align-items: flex-start; gap: 7px; min-width: 0; padding: 5px 8px; margin: 0 -8px; border-radius: var(--r-control); cursor: default; }
+  .cp-row:hover, .cp-fold:hover { background: var(--hover); }
+  .cp-row .s-slot, .cp-fold .s-slot, .cp-wait .s-slot { height: 20px; }
+  .cp-main { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+  .cp-label { font-size: 13.5px; line-height: 20px; color: var(--foreground); }
+  .cp-now { display: flex; align-items: center; gap: 6px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .cp-now code { font-family: var(--font-mono); font-size: 11.5px; }
+  .cp-now .b-tag { height: 16px; padding: 0 5px; font-size: 10.5px; }
+  .cp-row .s-time { line-height: 20px; }
+  .cp-row[data-state="working"] .cp-label { color: var(--s-grey); }
+  .cp-row[data-state="working"] :is(.cp-now, .s-time) { color: var(--s-faint); }
+  .cp-row[data-state="done"] .cp-label { color: color-mix(in oklab, var(--foreground) 78%, transparent); }
+  .cp-fold, .cp-wait { display: flex; align-items: center; gap: 7px; height: 30px; margin: 0 -8px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; color: var(--muted-foreground); white-space: nowrap; }
+  .cp-fold { cursor: pointer; }
+  .cp-fold b, .cp-wait b { font-weight: 500; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
+  .cp-fold .s-fit { flex: 0 1 auto; color: var(--s-faint); }
+  .cp-fold .s-chev { margin-left: auto; }
+  .cp-wait b { color: var(--muted-foreground); }
+  .cp-wait span:last-child { color: var(--s-faint); }
+  .cp-bands[data-filter="working"] .cp-rows > :not([data-state="working"]),
+  .cp-bands[data-filter="asks"] .cp-rows > :not([data-state="asks"]),
+  .cp-bands[data-filter="failed"] .cp-rows > :not([data-state="failed"]) { display: none; }
+  .cp-empty { padding: 4px 0; font-size: 12.5px; color: var(--s-faint); }
+  /* Timeline (a variant): one thin bar per agent */
+  .cp-tl { display: none; flex-direction: column; gap: 3px; font-size: 12px; }
+  .cp-body.is-tl .cp-tl { display: flex; }
+  .cp-body.is-tl .cp-bands { display: none; }
+  .cp-lane { display: grid; grid-template-columns: 118px minmax(0, 1fr); align-items: center; gap: 10px; height: 20px; }
+  .cp-lane > span:first-child { overflow: hidden; white-space: nowrap; color: var(--muted-foreground); font-size: 11.5px; -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent); mask-image: linear-gradient(to right, #000 calc(100% - 1rem), transparent); }
+  .cp-lane.is-ph > span:first-child { color: var(--foreground); font-weight: 500; -webkit-mask-image: none; mask-image: none; }
+  .cp-lane.is-ph { margin-top: 6px; }
+  .cp-trk { position: relative; height: 6px; }
+  .cp-trk > i { position: absolute; top: 0; height: 6px; min-width: 3px; border-radius: 3px; background: var(--sat-working); transition: width .45s var(--ease), left .45s var(--ease), background-color .45s var(--ease); }
+  .cp-trk > i[data-s="working"] { background: color-mix(in oklab, var(--foreground) 52%, transparent); }
+  .cp-trk > i[data-s="done"] { background: color-mix(in oklab, var(--foreground) 20%, transparent); }
+  .cp-trk > i[data-s="failed"] { background: var(--destructive); }
+  .cp-trk > i[data-s="queued"] { background: none; box-shadow: inset 0 0 0 1px var(--sat-queued); }
+  .cp-axis { display: grid; grid-template-columns: 118px minmax(0, 1fr); gap: 10px; margin-top: 8px; font-size: 11px; color: var(--s-faint); font-variant-numeric: tabular-nums; }
+  .cp-axis > span:last-child { display: flex; justify-content: space-between; border-top: 1px solid var(--border); padding-top: 4px; }
+
+  /* ---------------- the explanations below the window ---------------- */
+  .pg { max-width: 1384px; margin: 0 auto; padding: 44px 28px 96px; display: flex; flex-direction: column; gap: 56px; }
+  .sec { scroll-margin-top: 16px; }
+  .sec-h { display: flex; flex-direction: column; gap: 4px; padding: 0 4px 16px; }
+  .sec-h h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 17px; line-height: 24px; font-weight: 600; letter-spacing: -0.01em; }
+  .sec-id { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+  .sec-note { margin: 0; max-width: 100ch; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .sec-note b { font-weight: 500; color: var(--foreground); }
+  .panel { border-radius: var(--r-tile); background: var(--tile); box-shadow: inset 0 0 0 1px var(--border); }
+  [data-theme="light"] .panel { box-shadow: inset 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / .04); }
+
+  /* b: the idea */
+  .idea { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+  .idea-c { padding: 18px 20px 20px; display: flex; flex-direction: column; gap: 14px; }
+  .idea-v { height: 92px; display: flex; align-items: center; gap: 18px; padding: 0 4px; border-radius: var(--r-card); }
+  .idea-c p { margin: 0; font-size: 14.5px; line-height: 23px; }
+  .idea-c p b { font-weight: 600; }
+  .idea-n { font-size: 12px; font-weight: 600; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .places { display: grid; grid-template-columns: 18px auto; align-items: center; column-gap: 8px; row-gap: 5px; font-size: 12px; color: var(--muted-foreground); }
+  .places > span:nth-child(odd) { display: grid; place-items: center; }
+  .idea-thread { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 6px; font-size: 13px; }
+  .idea-thread .s-line { height: 24px; }
+  .idea-thread .s-strip { height: 18px; }
+  .mini-pane { flex: none; display: flex; align-items: center; gap: 6px; height: 64px; padding: 0 10px; border-radius: var(--r-card); box-shadow: inset 0 0 0 1px var(--border); font-size: 11px; color: var(--muted-foreground); }
+  .callwords { display: grid; grid-template-columns: 16px auto; align-items: center; column-gap: 10px; row-gap: 6px; font-size: 13px; }
+  .callwords > span:nth-child(odd) { display: grid; place-items: center; }
+  .callwords em { font-style: normal; color: var(--muted-foreground); }
+
+  /* c: the grammar */
+  .gram { padding: 6px 22px 18px; }
+  .gram-row { display: grid; grid-template-columns: 150px minmax(0, 1.1fr) minmax(0, 1.25fr) minmax(0, 1.35fr); gap: 20px; align-items: center; padding: 14px 0; border-top: 1px solid var(--border); }
+  .gram-row.is-th { border-top: 0; padding: 10px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); }
+  .gram-f b { display: block; font-size: 14px; font-weight: 600; }
+  .gram-f span { font-size: 12.5px; color: var(--muted-foreground); }
+  .figs { display: flex; align-items: flex-end; gap: 18px; flex-wrap: wrap; }
+  .figs figure { margin: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 44px; font-size: 11.5px; color: var(--muted-foreground); }
+  .figs .z { height: 36px; display: grid; place-items: center; }
+  .figs .sm { display: flex; align-items: center; gap: 6px; height: 14px; }
+  .gram-c { font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .gram-c b { font-weight: 500; color: var(--foreground); }
+  .gram-foot { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 24px; padding: 18px 0 2px; border-top: 1px solid var(--border); }
+  .gram-foot h3 { margin: 0 0 10px; font-size: 12.5px; font-weight: 600; }
+  .gram-foot p { margin: 8px 0 0; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .sizes { display: flex; align-items: center; gap: 18px; font-size: 11.5px; color: var(--muted-foreground); }
+  .sizes > span { display: inline-flex; align-items: center; gap: 6px; }
+  .grey { filter: grayscale(1); }
+  .on-mark { display: flex; align-items: center; gap: 22px; font-size: 11.5px; color: var(--muted-foreground); }
+  .on-mark figure { margin: 0; display: flex; align-items: center; gap: 10px; }
+  .on-mark b { display: block; font-weight: 500; color: var(--foreground); }
+
+  /* d: where things live */
+  .scale { padding: 4px 22px 18px; }
+  .sc-row { display: grid; grid-template-columns: 104px minmax(0, 1.6fr) minmax(0, 1.4fr) minmax(0, 1fr) 64px; gap: 20px; align-items: center; padding: 16px 0; border-top: 1px solid var(--border); }
+  .sc-row.is-th { border-top: 0; padding: 12px 0 8px; font-size: 12px; font-weight: 500; color: var(--muted-foreground); align-items: end; }
+  .sc-n b { display: block; font-size: 14px; font-weight: 600; }
+  .sc-n span { font-size: 12.5px; color: var(--muted-foreground); }
+  .sc-cell { min-width: 0; font-size: 13px; }
+  .sc-cell .s-crew { padding: 10px 8px 6px 12px; gap: 8px; }
+  .sc-beside { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+  .sc-beside .mini-head { display: flex; align-items: center; gap: 7px; min-width: 0; height: 34px; padding: 0 10px; border-radius: var(--r-card); box-shadow: inset 0 0 0 1px var(--border); white-space: nowrap; font-size: 13px; }
+  .sc-beside .mini-head b { font-weight: 500; }
+  .sc-beside .mini-head .b-muted { min-width: 0; overflow: hidden; font-size: 12px; }
+  .sc-beside .s-strip { padding: 0 10px; }
+  .sc-beside small { font-size: 12px; color: var(--muted-foreground); padding-left: 2px; }
+  .sc-sb { margin: 0 -8px; }
+  .sc-sb .b-card { padding: 6px 8px; }
+  .sc-mark { display: flex; align-items: center; gap: 12px; }
+  .never { display: flex; flex-wrap: wrap; gap: 6px 22px; padding: 14px 0 0; border-top: 1px solid var(--border); font-size: 12.5px; color: var(--muted-foreground); }
+  .never b { font-weight: 600; color: var(--foreground); }
+  .never span { display: inline-flex; align-items: center; gap: 6px; }
+  .never .b-icon { width: 13px; height: 13px; color: var(--s-faint); }
+
+  /* e: the other pages */
+  .pages { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+  .pagecard { display: flex; flex-direction: column; overflow: hidden; color: inherit; text-decoration: none; transition: box-shadow var(--dur) var(--ease); }
+  .pagecard:hover { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent); }
+  .thumb { position: relative; aspect-ratio: 16 / 10; margin: 6px 6px 0; border-radius: calc(var(--r-tile) - 6px); overflow: hidden; background: var(--wallpaper); background-size: cover; }
+  .thumb img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; object-position: top center; }
+  .thumb .ph { position: absolute; inset: 0; display: grid; place-items: center; font-size: 30px; font-weight: 600; color: rgb(255 255 255 / .55); }
+  .pagecard .meta { padding: 12px 14px 14px; display: flex; flex-direction: column; gap: 3px; }
+  .pagecard .meta b { font-size: 13.5px; font-weight: 600; }
+  .pagecard .meta b i { font-style: normal; color: var(--muted-foreground); font-weight: 500; margin-right: 6px; }
+  .pagecard .meta span { font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+
+  /* f: questions */
+  .qs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+  .q { padding: 16px 18px 16px; display: flex; flex-direction: column; gap: 10px; }
+  .q h3 { margin: 0; display: flex; gap: 10px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .q h3 i { flex: none; width: 20px; font-style: normal; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .opts { display: flex; flex-direction: column; gap: 4px; padding-left: 30px; }
+  .opt { display: flex; align-items: flex-start; gap: 8px; padding: 6px 10px; border-radius: var(--r-control); font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .opt.is-pick { background: color-mix(in oklab, var(--foreground) 6%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent); color: var(--foreground); }
+  .opt .pick { flex: none; margin-top: 1px; height: 17px; padding: 0 6px; border-radius: var(--r-small); background: var(--foreground); color: var(--background); font-size: 10.5px; font-weight: 600; line-height: 17px; white-space: nowrap; }
+  .opt .alt { flex: none; width: 17px; margin-top: 1px; text-align: center; font-size: 11px; color: var(--s-faint); }
+  .q .why { margin: 0; padding-left: 30px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+
+  @media (max-width: 1100px) {
+    .idea, .qs { grid-template-columns: minmax(0, 1fr); }
+    .pages { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .gram-row { grid-template-columns: 104px minmax(0, 1fr) minmax(0, 1fr); column-gap: 16px; }
+    .gram-row > .gram-c { grid-column: 2 / -1; }
+    .gram-row.is-th > :nth-child(n+4) { display: none; }
+    .gram-foot { grid-template-columns: minmax(0, 1fr); }
+    .sc-row { grid-template-columns: 96px minmax(0, 1fr); }
+    .sc-row.is-th { display: none; }
+    .sc-row > .sc-cell::before { content: attr(data-l); display: block; margin-bottom: 6px; font-size: 11.5px; font-weight: 500; color: var(--muted-foreground); }
+    .sc-row > .sc-n { grid-row: span 4; align-self: start; }
+    .pg { padding: 32px 16px 72px; gap: 44px; }
+    .pg-head { padding: 18px 16px 0; }
+    .sim { flex-basis: 100%; }
+  }
+  @media (max-width: 760px) {
+    .figs { gap: 12px; }
+    .gram-row > .gram-c { grid-column: 1 / -1; }
+    .sc-row { grid-template-columns: minmax(0, 1fr); }
+    .sc-row > .sc-n { grid-row: auto; }
+    .gram, .scale { padding-left: 14px; padding-right: 14px; }
+    .sim-row { flex-wrap: wrap; }
+  }
+</style>
+</head>
+<body class="b-kit" id="kit">
+
+<div class="hero">
+  <header class="pg-head" id="top">
+    <div class="pg-title">
+      <h1>Сабагенты и Crew: всё окно, вживую</h1>
+      <p>Агент — персонаж, его сабагенты — спутники. Это кадр в разгаре работы; «Прогнать» проиграет весь запуск за 40 секунд. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло.</p>
+    </div>
+    <div class="sim" id="sim">
+      <div class="sim-row">
+        <button class="b-btn is-primary sim-play" id="sim-play"><i data-icon="play"></i><span>Прогнать</span></button>
+        <div class="sim-track" id="sim-track"><span class="sim-fill" id="sim-fill"></span><span class="sim-head" id="sim-head"></span></div>
+        <span class="sim-time" id="sim-time">0:15 / 0:40</span>
+        <button class="b-btn is-ghost is-sm sim-still" id="sim-still" hidden>Кадр</button>
+      </div>
+      <div class="sim-cap" id="sim-cap"></div>
+    </div>
+  </header>
+
+  <section id="a" aria-label="Окно Banda">
+    <div class="stage" id="stage">
+      <div class="b-screen">
+        <div class="b-window" id="win">
+
+          <!-- the bar: logo (loudest Thread), workspaces, Flow | widgets -->
+          <header class="b-bar">
+            <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="failed" data-logo data-size="20"></span></button>
+            <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+            <button class="b-widget" title="Flow: Row"><i data-icon="columns-3"></i></button>
+            <div class="b-bar-right">
+              <span class="b-widget" title="Servers"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+              <span class="b-widget" title="Claude: weekly 71% spent"><span class="b-ring" style="--share:.71"></span></span>
+              <span class="b-widget" title="Notifications"><i data-icon="bell"></i></span>
+            </div>
+          </header>
+
+          <div class="b-body">
+            <!-- the sidebar: the Person's inbox -->
+            <aside class="b-sidebar">
+              <div class="b-sb-head">
+                <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+                <button class="b-ib" title="New Thread · Alt+N"><i data-icon="square-pen"></i></button>
+              </div>
+              <div class="b-tabs" role="tablist">
+                <button class="b-tab is-current">Inbox <span class="b-n is-turn" id="sb-inbox-n">3</span></button>
+                <button class="b-tab">Working <span class="b-n" id="sb-work-n">4</span></button>
+                <button class="b-tab">Later <span class="b-n">2</span></button>
+                <button class="b-tab b-end" title="Archive"><i data-icon="archive"></i></button>
+              </div>
+              <div class="b-list">
+                <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+                <div class="cl"><div class="b-card" data-look="done">
+                  <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div>
+                  <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL, keeps chromium.log</span><span class="b-pr">#1061 <span class="is-ok">✓</span></span></div>
+                  <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span class="b-machine"><i data-icon="laptop"></i>mac</span><span data-emblem="claude"></span></div>
+                </div></div>
+                <div class="cl"><div class="b-card" data-look="failed">
+                  <div class="b-line"><span data-mark="failed"></span><span class="b-title b-fade">Import March invoices</span><span class="b-time">4m</span></div>
+                  <div class="b-line"><span class="b-say b-fade"><span class="b-word">Failed</span>3 tests fail in invoices.spec.ts</span></div>
+                  <div class="b-line"><span class="b-where"><span class="b-sign" data-color="teal">W</span><span class="b-fade">Work</span></span><span data-emblem="codex"></span></div>
+                </div></div>
+                <div class="cl" id="sb-card-wrap"><div class="b-card is-current" data-look="asks" id="sb-card">
+                  <div class="b-line"><span id="sb-card-mark"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time" id="sb-card-time">1m</span></div>
+                  <div class="b-line"><span class="b-say b-fade" id="sb-say"><span class="b-word">Asks</span>Reviewer: allow pnpm vitest sidebar?</span></div>
+                  <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+                </div></div>
+
+                <div class="b-divider"></div>
+                <div class="b-row"><div class="b-line"><span data-mark="open"></span><span class="b-title b-fade">macOS Tahoe theme</span><span class="b-time">1d</span></div></div>
+
+                <div class="b-section"><span>Working · <span id="sb-work-n2">4</span></span></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="1"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">21m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+                <div class="cl" id="sb-row-wrap"><div class="b-row is-working is-current" id="sb-row"><div class="b-line"><span id="sb-row-mark"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time" id="sb-row-time">4m</span></div></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">Reconcile February bank export</span><span class="b-machine"><i data-icon="laptop"></i></span><span class="b-time">9m</span></div></div>
+                <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">waybar: show Banda's count</span><span class="b-time">3m</span></div></div>
+              </div>
+              <div class="b-sb-foot">
+                <button class="b-ib" title="Settings"><i data-icon="settings"></i></button>
+                <button class="b-ib" title="View"><i data-icon="list-filter"></i></button>
+                <button class="b-ib" title="Quiet"><i data-icon="bell"></i></button>
+                <span class="b-machines" title="Machines: arc (this one), mac"><span class="b-dot"></span>arc · mac</span>
+              </div>
+            </aside>
+
+            <div class="b-strip">
+              <!-- The Thread's Group: the Thread, and the Crew Pane it opened beside (ADR 0065) -->
+              <div class="b-group is-paned" data-state="asks" id="grp">
+
+                <section class="b-tile is-focused" id="thread-tile">
+                  <div class="b-pane-head b-bare">
+                    <span id="th-mark"></span>
+                    <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+                    <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+                    <div class="b-capsule">
+                      <button class="b-ib is-xs" title="Thread details"><i data-icon="square-menu"></i></button>
+                      <span class="b-capsule-line"></span>
+                      <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button>
+                      <button class="b-ib is-xs" title="Close"><i data-icon="x"></i></button>
+                    </div>
+                  </div>
+
+                  <div class="b-thread" id="thread">
+                    <div class="b-chat" id="chat">
+                      <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Also check that every route still does its access check: the settings routes moved too.</div>
+                      <div class="b-prose"><p>I'll split it. Three sub-agents take the settings: where the old <code>[row]</code> keys are read, the tests, and a review of the new schema. A Crew audits the routes.</p></div>
+                      <div id="group-host"></div>
+                      <div class="s-crew" data-crew="running" id="cc">
+                        <div class="s-crew-head"><span id="cc-glyph"></span><span class="s-crew-title"><span class="s-crew-word">Crew ·</span> audit-routes</span><span class="s-crew-desc s-fit">Find every route that skips the access check and fix it</span></div>
+                        <div class="s-strip" id="cc-strip"></div>
+                        <div class="s-narr"><i data-icon="chevron-right" data-size="12"></i><span class="s-fit" id="cc-narr"></span></div>
+                        <div class="s-crew-foot"><span class="s-crew-counts s-fit" id="cc-counts"></span><span class="s-crew-time" id="cc-time"></span><span class="s-crew-acts"><button class="b-btn is-ghost is-sm" id="cc-open" title="Open the Crew Pane · Enter">Open</button></span></div>
+                      </div>
+                      <div class="cl" id="w-reply1"><div class="b-prose"><p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The Reviewer found two problems and I fixed both: <code>row.density</code> has a default now, and <code>later.until</code> reads minutes. The Crew is still on the routes; I'll pick it up when it ends.</p></div></div>
+                      <div class="cl" id="w-liveA"><div class="b-trace" id="liveA"></div></div>
+                      <div class="cl" id="w-back"><div class="b-trace"><div class="b-tl"><i data-icon="corner-down-right"></i><span class="b-tl-text"><span class="b-subject">Crew audit-routes</span> finished · <span id="back-dur">14m</span> · Claude went on by itself</span></div></div></div>
+                      <div class="cl" id="w-reply2"><div class="b-prose"><p>12 routes checked; 7 skipped the access check, and 6 of them now call <code>requireAccess</code> first. Two need you: <a class="b-path" href="#">hosts/pair.ts</a> pairs before there is a session, so the check can't come first; and <code>keys.test.ts</code> expects 404 for a stranger but now gets 403. I'd update the test.</p></div></div>
+                      <div class="cl" id="w-liveB"><div class="b-trace" id="liveB"></div></div>
+                    </div>
+                  </div>
+
+                  <div class="b-composer-wrap" id="cw">
+                    <div class="cl" id="w-dock-crew"><div class="b-docked s-crewask">
+                      <div class="b-docked-head">Claude wants to start a Crew</div>
+                      <div class="s-crewask-title"><span data-glyph="asks"></span><b>audit-routes</b><span class="s-crew-desc s-fit">Find every route that skips the access check and fix it</span></div>
+                      <div class="s-phases"><span><i>1</i>Scan <em>read each route</em></span><span><i>2</i>Fix <em>one agent per route</em></span><span><i>3</i>Verify <em>run the tests</em></span></div>
+                      <div class="s-note"><i data-icon="users" data-size="13"></i>Up to 16 sub-agents at once · uses your limits faster</div>
+                      <button class="b-choice is-hl" data-go="2.2"><span class="b-kbd">1</span>Start<span class="s-hint">↵</span></button>
+                      <button class="b-choice"><span class="b-kbd">2</span>View script</button>
+                      <button class="b-choice b-muted"><span class="b-kbd">Esc</span>No, and tell Claude what to do instead…</button>
+                    </div></div>
+                    <div class="cl" id="w-dock-rev"><div class="b-docked">
+                      <div class="b-docked-head s-ask-head"><span data-sat="asks" data-size="10"></span><span><b>Reviewer</b> asks · <span id="rev-ago">1m</span></span></div>
+                      <div>Run a command in <code class="b-code-inline">~/code/banda</code>?</div>
+                      <code class="s-cmd"><span class="s-prompt">$</span>pnpm vitest sidebar</code>
+                      <button class="b-choice is-hl" data-go="16"><span class="b-kbd">1</span>Allow once<span class="s-hint">↵</span></button>
+                      <button class="b-choice"><span class="b-kbd">2</span>Allow for this Thread</button>
+                      <button class="b-choice b-muted"><span class="b-kbd">Esc</span>Deny, and tell it what to do differently…</button>
+                      <div class="s-note"><i data-icon="circle-alert" data-size="13"></i>“Allow for this Thread” covers Claude and all its sub-agents.</div>
+                    </div></div>
+                    <div class="b-composer">
+                      <div class="b-composer-text is-empty" id="ph">Steer this thread…</div>
+                      <div class="b-composer-row">
+                        <button class="b-ib" title="Add images and files" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                        <span class="b-spacer"></span>
+                        <button class="b-ctl" title="Supervised: asks before it runs commands"><i data-icon="shield"></i></button>
+                        <button class="b-ctl" title="Model"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort is-top">Ultracode</span></button>
+                        <button class="b-send is-stop" id="send" aria-label="Stop"></button>
+                      </div>
+                    </div>
+                  </div>
+                </section>
+
+                <!-- The Crew Pane: agents.crew, opened by itself in the Thread's Group -->
+                <section class="b-tile" id="crew-tile">
+                  <div class="b-pane-head">
+                    <span id="cp-glyph"></span>
+                    <span class="b-pane-title"><span class="s-crew-word">Crew ·</span> audit-routes</span>
+                    <span class="b-pane-detail s-fit">from Move sidebar settings to sidebar.toml</span>
+                    <div class="b-capsule">
+                      <button class="b-ib is-xs" title="Stop the Crew" id="cp-stop"><i data-sicon="stop" data-size="14"></i></button>
+                      <button class="b-ib is-xs" title="View script · Copy result · Save as command (later)"><i data-icon="ellipsis"></i></button>
+                      <span class="b-capsule-line"></span>
+                      <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button>
+                      <button class="b-ib is-xs" title="Close"><i data-icon="x"></i></button>
+                    </div>
+                  </div>
+                  <div class="cp-body" id="cp-body">
+                    <div class="cp-sum"><span class="cp-counts" id="cp-counts"></span><span class="cp-clock" id="cp-clock"></span><span class="cp-tok" id="cp-tok"></span></div>
+                    <div class="cp-bar" id="cp-bar">
+                      <button class="is-on" data-f="all">All</button><button data-f="working">Working</button><button data-f="asks">Asks</button><button data-f="failed">Failed</button>
+                      <span class="cp-sp"></span>
+                      <button class="is-on" data-v="phases">Phases</button><button data-v="timeline">Timeline</button>
+                    </div>
+                    <div class="s-narr"><i data-icon="chevron-right" data-size="12"></i><span class="s-fit" id="cp-narr"></span></div>
+                    <div class="s-strip is-spread" id="cp-strip"></div>
+                    <div class="cp-bands" id="cp-bands"></div>
+                    <div class="cp-tl" id="cp-tl"></div>
+                  </div>
+                </section>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+</div>
+
+<main class="pg">
+
+  <section class="sec" id="b">
+    <div class="sec-h">
+      <h2><span class="sec-id">b</span>Идея</h2>
+      <p class="sec-note">Три фразы. Всё остальное на этой и следующих страницах вытекает из них.</p>
+    </div>
+    <div class="idea">
+      <div class="panel idea-c">
+        <div class="idea-v">
+          <span data-mark="working" data-size="48" data-satellites="working,working,working" data-seed="1"></span>
+          <div class="places" id="places"></div>
+        </div>
+        <p><b>Агент — персонаж, его сабагенты — спутники.</b> Одна маленькая фигура значит сабагента везде: у Mark, в начале строки Thread, точкой в полосе Crew и в шапке его панели.</p>
+      </div>
+      <div class="panel idea-c">
+        <div class="idea-v">
+          <div class="idea-thread" id="idea-thread"></div>
+          <div class="mini-pane"><span data-glyph="running" data-size="14"></span>Crew<br>Pane</div>
+        </div>
+        <p><b>Thread остаётся тихим документом.</b> Несколько сабагентов — одна строка, Crew — одна карточка; большая картина живёт рядом, в панели Crew в Group этого Thread.</p>
+      </div>
+      <div class="panel idea-c">
+        <div class="idea-v">
+          <div class="callwords" id="callwords"></div>
+        </div>
+        <p><b>Форма говорит состояние, цвет — только когда зовут вас.</b> Оранжевый спрашивает, красный упал, работа серая, и тикают только одни часы на поверхности.</p>
+      </div>
+    </div>
+  </section>
+
+  <section class="sec" id="c">
+    <div class="sec-h">
+      <h2><span class="sec-id">c</span>Грамматика: спутник рядом с Mark</h2>
+      <p class="sec-note">Спутник — мини-фигура Mark без глаз и без своего движения (ADR 0099 d3: у сабагента нет своего Mark). Те же четыре формы, читаются без цвета. Смена состояния — плавно за 0.45 с, смена формы — маленький прыжок 0.6 с.</p>
+    </div>
+    <div class="panel gram" id="gram"></div>
+  </section>
+
+  <section class="sec" id="d">
+    <div class="sec-h">
+      <h2><span class="sec-id">d</span>Где что живёт: поверхность по размеру работы</h2>
+      <p class="sec-note">Чем больше работы, тем крупнее поверхность — но в Thread всегда одна строка или одна карточка. Строка 2 в сайдбаре видна у карточки и во вкладке Working; во входящих рабочая строка — одна строка (ADR 0098 d9).</p>
+    </div>
+    <div class="panel scale" id="scale"></div>
+  </section>
+
+  <section class="sec" id="e">
+    <div class="sec-h">
+      <h2><span class="sec-id">e</span>Остальные страницы</h2>
+      <p class="sec-note">Каждая разбирает одну поверхность подробно: все состояния, узкие и широкие раскладки, светлая тема.</p>
+    </div>
+    <div class="pages" id="pages"></div>
+  </section>
+
+  <section class="sec" id="f">
+    <div class="sec-h">
+      <h2><span class="sec-id">f</span>10 вопросов к Роме</h2>
+      <p class="sec-note">У каждого — мой выбор (в рамке) и почему. Достаточно ответить номером: «4 — нет, 7 — не открывать само».</p>
+    </div>
+    <div class="qs" id="qs"></div>
+  </section>
+</main>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+(() => {
+  'use strict'
+  const $ = (s, r) => (r || document).querySelector(s)
+  const $$ = (s, r) => Array.from((r || document).querySelectorAll(s))
+  const frag = (html) => { const t = document.createElement('template'); t.innerHTML = html.trim(); return t.content.firstElementChild }
+  const SPEED = 22          // one second of the run = 22 seconds of the story
+  // once Claude's turn is over (23.8) only the Crew works: the run speeds up (62x) until it ends (30), then 22x again
+  const LAPSE = [23.8, 30, 62.3]
+  const st = (t) => t <= LAPSE[0] ? SPEED * t : t <= LAPSE[1] ? SPEED * LAPSE[0] + LAPSE[2] * (t - LAPSE[0]) : SPEED * LAPSE[0] + LAPSE[2] * (LAPSE[1] - LAPSE[0]) + SPEED * (t - LAPSE[1])
+  const dS = (a, b) => st(b) - st(a)       // story seconds between two run times
+  // the run time at which the Crew (started at 2.8) has worked c story seconds: the same run as pages 02 and 03
+  const C = (c) => { const c1 = dS(2.8, LAPSE[0]); return c <= c1 ? 2.8 + c / SPEED : LAPSE[0] + (c - c1) / LAPSE[2] }
+  const END = 40, STILL = 15
+
+  // ------------------------------------------------------------------ the story
+  // Thread "Move sidebar settings to sidebar.toml", project banda, machine arc, Claude Code (Opus 5.5, Ultracode, Supervised).
+  const R0 = 'client/web/src/routes/'
+  const PH = [{ title: 'Scan', detail: 'read each route' }, { title: 'Fix', detail: 'one agent per route' }, { title: 'Verify', detail: 'run the tests' }]
+  // Scan 2 · Fix 7 · Verify 3 = 12 agents, the same Crew as pages 02, 03, 05: two scanners read 12 routes,
+  // each route that skips the check gets a Fix agent, a test suite starts once its routes are fixed
+  const AG = [
+    ['s1', 0, 'billing, settings, hosts'], ['s2', 0, 'threads, auth, files'],
+    ['f1', 1, 'billing/invoices.ts'], ['f2', 1, 'settings/keys.ts'], ['f3', 1, 'hosts/pair.ts'], ['f4', 1, 'threads/later.ts'],
+    ['f5', 1, 'threads/share.ts'], ['f6', 1, 'auth/session.ts'], ['f7', 1, 'files/upload.ts'],
+    ['v1', 2, 'Tests: billing, auth'], ['v2', 2, 'Tests: settings, files'], ['v3', 2, 'Tests: hosts, threads'],
+  ].map(([id, ph, p]) => ({ id, ph, label: p.startsWith('Tests:') ? p : R0 + p, base: p }))
+  const SUBS = [
+    { key: 'map', title: 'Map where [row] keys are read', role: 'Explore · Haiku',
+      brief: 'Find every place that still reads the old [row] keys: the sidebar, the settings Pane and the CLI. List the file and line of each.', work: 'Read 7 files, searched for 3 patterns' },
+    { key: 'tests', title: 'Check the settings tests', role: 'general',
+      brief: 'Run the settings and sidebar tests. If any fail, find which change broke them, but do not fix anything. Report what fails and why.', work: 'Ran 2 commands, read 3 files' },
+    { key: 'rev', title: 'Review the sidebar.toml schema', role: 'Reviewer',
+      brief: 'Read platform/look/sidebar.toml and the schema in client/web/src/settings/schema.ts. Check that every key has a default, a type and a doc line. Report problems as a short list.', work: 'Read 9 files, searched for 3 patterns' },
+  ]
+  const cmd = (c) => '<code>&gt;_ ' + c + '</code>'
+  const PAIR_WHY = 'Pairing runs before a session; the check can’t come first'
+
+  function initial() {
+    const S = { t: 0, dock: 'crew', askAt: -1.6, press: null, turn: 1, turn2At: null, done: false, doneAt: null,
+      pane: false, reply1: false, back: false, reply2: false, settled: false, settledAt: null,
+      crew: { state: 'asks', t0: null, t1: null, narr: '' },
+      subs: {
+        map: { state: 'working', now: 'Reading client/web/src/sidebar/settings.ts', t0: -3, tc: -1 },
+        tests: { state: 'working', now: cmd('pnpm vitest settings'), t0: -2.5, tc: -2.5 },
+        rev: { state: 'working', now: 'Reading platform/look/sidebar.toml', t0: -2, tc: -1.5 },
+      },
+      ag: {} }
+    AG.forEach((a) => { S.ag[a.id] = { on: false, state: 'queued', now: '', t0: null, t1: null, tc: null } })
+    return S
+  }
+  const EV = []
+  const at = (t, f) => EV.push({ t, f })
+  const upd = (S, x, o) => Object.assign(x, o, { tc: S.t })
+  // an agent's time counts from when the Crew made it (as on page 03), not from when it got a slot
+  const spawn = (S, id) => upd(S, S.ag[id], { on: true, state: 'queued', now: '', t0: S.t })
+  const begin = (S, id, now) => upd(S, S.ag[id], { state: 'working', now })
+  const end = (S, id, now, st) => upd(S, S.ag[id], { state: st || 'done', now, t1: S.t })
+  const finSub = (S, k, now) => upd(S, S.subs[k], { state: 'done', now, t1: S.t })
+
+  at(1.2, (S) => upd(S, S.subs.map, { now: 'Searching for [row] in client/web' }))
+  at(2.2, (S) => { S.press = 'crew' })
+  at(2.8, (S) => { S.dock = null; S.press = null; S.pane = true; Object.assign(S.crew, { state: 'running', t0: S.t, narr: 'Reading 12 routes' }); ['s1', 's2'].forEach((id) => spawn(S, id)) })
+  at(C(8), (S) => begin(S, 's1', 'Reading billing/invoices.ts'))
+  at(C(14), (S) => begin(S, 's2', 'Reading threads/later.ts'))
+  at(5.0, (S) => upd(S, S.subs.rev, { now: 'Reading client/web/src/settings/schema.ts' }))
+  at(C(60), (S) => upd(S, S.ag.s1, { now: 'Reading settings/keys.ts' }))
+  at(C(90), (S) => upd(S, S.ag.s2, { now: 'Reading threads/share.ts' }))
+  at(C(110), (S) => { end(S, 's1', '6 routes · invoices.ts, keys.ts and pair.ts skip the check'); ['f1', 'f2', 'f3'].forEach((id) => spawn(S, id)); S.crew.narr = '6 of 12 routes scanned · 3 need a fix' })
+  at(C(116), (S) => begin(S, 'f1', 'Reading invoices.ts'))
+  at(C(120), (S) => begin(S, 'f2', 'Reading keys.ts'))
+  at(C(124), (S) => begin(S, 'f3', 'Reading pair.ts'))
+  at(9.0, (S) => upd(S, S.subs.map, { now: 'Reading client/web/src/sidebar/card.ts' }))
+  at(9.8, (S) => { upd(S, S.subs.rev, { state: 'asks', now: 'Allow pnpm vitest sidebar?', askAt: S.t }); S.dock = 'rev'; S.askAt = S.t })
+  at(C(160), (S) => { spawn(S, 'f4'); upd(S, S.ag.s2, { now: 'Reading auth/session.ts' }); S.crew.narr = '9 of 12 routes scanned · 4 need a fix' })
+  at(C(166), (S) => begin(S, 'f4', 'Reading later.ts'))
+  at(C(180), (S) => upd(S, S.ag.f1, { now: 'Editing invoices.ts' }))
+  at(C(200), (S) => upd(S, S.ag.f3, { now: 'Editing pair.ts' }))
+  at(C(215), (S) => upd(S, S.ag.f2, { now: 'Editing keys.ts' }))
+  at(12.5, (S) => upd(S, S.subs.tests, { now: 'Reading settings.test.ts' }))
+  at(C(240), (S) => end(S, 'f1', 'Added requireAccess to GET · +8 −2'))
+  at(C(250), (S) => end(S, 'f3', PAIR_WHY, 'failed'))
+  // ---- the still is here (15 s): Fix 2/4, the second scanner still reading, pair.ts failed
+  at(16.0, (S) => { S.press = 'rev' })
+  at(16.5, (S) => { S.dock = null; S.press = null; upd(S, S.subs.rev, { state: 'working', now: cmd('pnpm vitest sidebar') }) })
+  at(C(294), (S) => end(S, 'f2', 'Checked PATCH like GET · +12 −3'))
+  at(C(300), (S) => { end(S, 's2', '6 routes · later.ts, share.ts, session.ts and upload.ts skip it'); ['f5', 'f6', 'f7'].forEach((id) => spawn(S, id)); S.crew.narr = '12 of 12 routes scanned · 7 need a fix · 2 fixed' })
+  at(C(305), (S) => begin(S, 'f5', 'Reading share.ts'))
+  at(C(310), (S) => begin(S, 'f6', 'Reading session.ts'))
+  at(C(315), (S) => begin(S, 'f7', 'Reading upload.ts'))
+  at(17.4, (S) => upd(S, S.ag.f4, { now: 'Editing later.ts' }))
+  at(18.0, (S) => finSub(S, 'map', 'Read in 3 places: settings.ts, schema.ts and card.ts'))
+  at(C(380), (S) => { end(S, 'f4', 'Snooze and wake check threads:write · +9 −2'); S.crew.narr = '12 of 12 routes scanned · 7 need a fix · 3 fixed' })
+  at(C(400), (S) => upd(S, S.ag.f5, { now: 'Attempt 2 · editing share.ts', ta: S.t }))
+  at(20.5, (S) => finSub(S, 'tests', 'All 54 settings and sidebar tests pass'))
+  at(C(420), (S) => upd(S, S.ag.f6, { now: 'Editing session.ts' }))
+  at(C(430), (S) => upd(S, S.ag.f7, { now: 'Editing upload.ts' }))
+  at(23.0, (S) => { finSub(S, 'rev', 'Two problems: row.density has no default, later.until is text'); S.settled = true; S.settledAt = S.t })
+  at(23.8, (S) => { S.reply1 = true; S.turn = 0 })
+  at(C(665), (S) => { end(S, 'f6', 'Reads the session after the check · +10 −4'); spawn(S, 'v1'); S.crew.narr = '5 of 7 routes fixed · testing billing, auth' })
+  at(C(668), (S) => begin(S, 'v1', cmd('pnpm vitest billing auth')))
+  at(C(690), (S) => { end(S, 'f5', 'Checks threads:share on POST · +7 −1'); end(S, 'f7', 'Checks files:write before upload · +5 −1'); spawn(S, 'v2'); spawn(S, 'v3'); S.crew.narr = '6 of 7 routes fixed · running 3 test suites' })
+  at(C(693), (S) => begin(S, 'v2', cmd('pnpm vitest settings files')))
+  at(C(696), (S) => begin(S, 'v3', cmd('pnpm vitest hosts threads')))
+  at(C(765), (S) => end(S, 'v1', '14 tests pass'))
+  at(C(815), (S) => end(S, 'v2', '1 test fails in keys.test.ts', 'failed'))
+  at(C(840), (S) => end(S, 'v3', '21 tests pass'))
+  at(30.0, (S) => { Object.assign(S.crew, { state: 'finished', t1: S.t, narr: '6 of 7 routes fixed · tests pass in 2 of 3 suites' }); S.back = true; S.turn = 2; S.turn2At = S.t })
+  at(33.5, (S) => { S.reply2 = true })
+  at(34.5, (S) => { S.turn = 0; S.done = true; S.doneAt = S.t })
+  EV.sort((a, b) => a.t - b.t)
+
+  const BEATS = [
+    [0, 'Claude хочет запустить Crew и спрашивает разрешения (режим Supervised)'],
+    [2.8, 'Старт: карточка Crew в Thread, панель Crew сама открылась рядом, в Group'],
+    [C(8), 'Scan: два сканера читают 12 маршрутов'],
+    [C(110), 'Конвейер: найденный маршрут сразу уходит в Fix'],
+    [9.8, 'Reviewer спрашивает: док называет его, Thread — в Your turn'],
+    [C(250), 'pair.ts упал в Fix: красные только его фигура и число, Thread идёт дальше'],
+    [16.5, 'Вы ответили: Reviewer работает дальше, Thread снова серый'],
+    [23, 'Сабагенты закончили: группа гаснет и складывается в одну строку'],
+    [23.8, 'Ход Claude кончился на Fix 4/7, Crew работает дальше; composer свободен. Дальше время ускорено'],
+    [C(690), 'Маршруты исправлены: наборы тестов уходят в Verify'],
+    [C(815), 'Набор settings, files упал: второе красное'],
+    [30, 'Crew закончил за 14m: строка ↩, Claude продолжил сам'],
+    [34.5, 'Done: Mark, карточка и плашка Group становятся зелёными'],
+  ]
+
+  function stateAt(t) {
+    const S = initial()
+    for (const e of EV) { if (e.t > t + 1e-9) break; S.t = e.t; e.f(S) }
+    S.t = t
+    return S
+  }
+
+  // ------------------------------------------------------------------ words and times
+  const story = (t) => 70 + st(t)               // seconds since Claude's turn began
+  const clock = (s) => { s = Math.max(0, Math.floor(s)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's' }
+  const dur = (s) => { s = Math.max(0, Math.round(s)); return s < 60 ? s + 's' : Math.floor(s / 60) + 'm ' + String(s % 60).padStart(2, '0') + 's' }   // "2m 04s", as Banda's duration()
+  const mins = (s) => Math.floor(Math.round(s) / 60) + 'm'   // a finished Crew in the Thread and on its card: "14m", as on page 02
+  const ago = (s) => s < 60 ? 'now' : s < 3600 ? Math.floor(s / 60) + 'm' : Math.floor(s / 3600) + 'h'   // as Banda's ago(): floored
+  const short = (s) => s < 5 ? 'now' : s < 60 ? Math.round(s) + 's' : Math.floor(s / 60) + 'm'
+  const tstate = (S) => S.dock ? 'asks' : S.done ? 'done' : 'working'
+  const live = (st) => st === 'working' || st === 'asks'
+  function timeOf(S, x) {
+    if (x.state === 'asks') return ago(dS(x.askAt, S.t))
+    const from = x.ta != null ? x.ta : x.t0   // a second attempt counts from its own start
+    if (x.state === 'done' || x.state === 'failed') return dur(dS(from, x.t1))
+    if (x.state === 'working') return short(dS(from, x.tc))
+    return ''
+  }
+  const crewAgents = (S) => AG.filter((a) => S.ag[a.id].on)
+  function sats(S) {
+    const l = []
+    SUBS.forEach((s) => { const st = S.subs[s.key].state; if (live(st)) l.push(st) })
+    if (S.crew.state === 'running') crewAgents(S).forEach((a) => { const st = S.ag[a.id].state; if (st === 'working' || st === 'failed') l.push(st) })
+    const o = { asks: 0, failed: 1, working: 2 }
+    return l.sort((a, b) => o[a] - o[b]).slice(0, 3)
+  }
+  function stripData(S, size) {
+    return { size, current: S.crew.state === 'asks' ? -1 : undefined,
+      phases: PH.map((p, i) => ({ title: p.title, agents: AG.filter((a) => a.ph === i && S.ag[a.id].on).map((a) => ({ id: a.id, state: S.ag[a.id].state, label: a.label })) })) }
+  }
+  function phaseNow(S) {   // "Fix 4/7": the phase where most work is open (the later one on a tie)
+    let best = null, most = 0
+    for (let i = 0; i < PH.length; i++) {
+      const xs = AG.filter((a) => a.ph === i && S.ag[a.id].on).map((a) => S.ag[a.id].state)
+      const open = xs.filter((s) => s === 'working' || s === 'queued' || s === 'asks').length
+      if (open && open >= most) { most = open; const t = Sub.tally(xs); best = PH[i].title + ' ' + (t.done + t.failed + t.stopped) + '/' + t.total }
+    }
+    return best || ''
+  }
+  function tokens(S) {
+    let s = 0
+    crewAgents(S).forEach((a) => { const x = S.ag[a.id]; if (x.t0 != null) s += dS(x.t0, x.t1 != null ? x.t1 : S.t) })
+    const n = Math.round(s * 730)   // 1.4M at 9m 40s (page 03, A), 1.9M at the end (03, E)
+    if (n < 1000) return ''
+    return n >= 1e6 ? (n / 1e6).toFixed(1) + 'M tokens' : Math.max(1, Math.round(n / 1000)) + 'k tokens'
+  }
+
+  // ------------------------------------------------------------------ small DOM helpers
+  function setSat(el, st, instant) {
+    st = Sub.norm(st)
+    if (!el.getAttribute('data-size')) el.setAttribute('data-size', parseFloat(el.style.getPropertyValue('--sat')) || 10)
+    if (!el.__sat) Sub.set(el, el.getAttribute('data-sat'))
+    if (el.__sat.st === st) return
+    if (instant) { el.__sat = null; el.setAttribute('data-sat', st); Sub.set(el, st); return }
+    Sub.set(el, st)
+  }
+  const LEAD = ':scope > .s-line > .s-slot > .s-sat, :scope > .s-slot > .s-sat'
+  // put a list of keyed items into a container; a satellite that changes state blends, new items fade in
+  function reconcile(box, items, instant) {
+    const keep = new Set(items.map((i) => i.key))
+    $$(':scope > [data-key]', box).forEach((n) => { if (!keep.has(n.dataset.key)) n.remove() })
+    items.forEach((it, idx) => {
+      const old = box.querySelector(':scope > [data-key="' + it.key + '"]')
+      let el = old
+      if (!old || old.__html !== it.html) {
+        el = frag(it.html); el.dataset.key = it.key; el.__html = it.html
+        if (old) {
+          const os = old.querySelector(LEAD), ns = el.querySelector(LEAD)
+          if (os && ns && !instant && os.getAttribute('data-sat') !== ns.getAttribute('data-sat')) { ns.replaceWith(os); setSat(os, ns.getAttribute('data-sat'), false) }
+          const on = old.querySelector('.s-now, .cp-now'), nn = el.querySelector('.s-now, .cp-now')
+          if (on && nn && !instant && on.textContent !== nn.textContent) nn.classList.add('is-swap')
+          if (old.classList.contains('is-flash')) el.classList.add('is-flash')
+          old.replaceWith(el)
+        } else {
+          if (!instant) el.classList.add('is-born')
+          box.appendChild(el)
+        }
+      }
+      if (box.children[idx] !== el) box.insertBefore(el, box.children[idx] || null)
+    })
+  }
+  // a strip that blends the dots whose agent changed state
+  const stripPrev = new WeakMap()
+  function patchStrip(el) {   // pipeline: every phase with work going on reads as current
+    const d = el.__strip; if (!d) return
+    $$(':scope > .s-phase', el).forEach((ph, i) => {
+      const p = d.phases[i]; if (!p || !ph.classList.contains('is-future')) return
+      if (!p.agents.some((a) => live(Sub.norm(a.state || a)))) return
+      ph.classList.replace('is-future', 'is-current')
+      const name = ph.querySelector('.s-ph-name')
+      if (!ph.classList.contains('has-bar') && name && !name.querySelector('.s-ph-n')) {
+        const t = Sub.tally(p.agents); name.insertAdjacentHTML('beforeend', ' <span class="s-ph-n">' + (t.done + t.failed + t.stopped) + '/' + t.total + '</span>')
+      }
+    })
+  }
+  function drawStrip(el, data, instant) {
+    if (!el.__mo) { el.__mo = new MutationObserver(() => patchStrip(el)); el.__mo.observe(el, { childList: true }) }
+    const prev = stripPrev.get(el)
+    Sub.strip(el, data)
+    patchStrip(el)
+    const now = {}
+    data.phases.forEach((p) => p.agents.forEach((a) => { now[a.id] = a.state }))
+    stripPrev.set(el, now)
+    if (instant || !prev) return
+    $$('[data-i]', el).forEach((dot) => {
+      const [pi, k] = dot.getAttribute('data-i').split(':').map(Number)
+      const a = data.phases[pi] && data.phases[pi].agents[k]; if (!a) return
+      const was = prev[a.id]
+      if (!was) { dot.classList.add('is-born'); return }
+      if (was !== a.state) { dot.setAttribute('data-size', data.size); dot.setAttribute('data-sat', Sub.norm(was)); dot.__sat = null; Sub.set(dot, was); Sub.set(dot, a.state) }
+    })
+  }
+  const show = (el, on) => el.classList.toggle('is-gone', !on)
+  function swapText(el, html, instant) {
+    if (el.__html === html) return
+    el.innerHTML = html; el.__html = html
+    if (!instant) { el.classList.remove('is-swap'); void el.offsetWidth; el.classList.add('is-swap') }
+  }
+
+  // ------------------------------------------------------------------ the parts we keep
+  const win = $('#win'), grp = $('#grp')
+  // every coming-and-going block collapses through a plain inner wrapper (padding never blocks the collapse)
+  $$('.cl').forEach((c) => { if (c.firstElementChild && c.firstElementChild.classList.contains('cl-in')) return; const w = document.createElement('div'); w.className = 'cl-in'; while (c.firstChild) w.appendChild(c.firstChild); c.appendChild(w) })
+  const ui = { open: {}, gfold: null, fold: {}, auto: new Set(), filter: 'all', view: 'phases' }
+  const marks = {
+    head: BandaMark.mount($('#th-mark'), { state: 'asks', calls: false }),
+    card: BandaMark.mount($('#sb-card-mark'), { state: 'asks', calls: false }),
+    row: BandaMark.mount($('#sb-row-mark'), { state: 'working', satellites: 3 }),
+  }
+  function setMark(h, o) {
+    const key = JSON.stringify(o)
+    if (h.__key === key) return
+    const first = h.__key == null
+    h.__key = key
+    h.set(Object.assign({}, o, first ? { news: false } : {}))
+  }
+  function markOpts(S, th, sl, instant) {
+    if (th === 'asks') return { state: 'asks' }
+    if (th === 'done') return { state: 'done', news: !instant }
+    return sl.length ? { state: 'working', satellites: sl, doing: undefined } : { state: 'working', satellites: 0, doing: 'reply' }
+  }
+
+  // the group of three plain sub-agents (one message launched them)
+  $('#group-host').outerHTML = '<div class="s-group" id="sg"><div class="s-line s-ghead" tabindex="0"><span class="s-sats">' +
+    SUBS.map(() => Sub.sat('working', 8)).join('') + '</span><span class="s-gtitle s-fit" id="sg-title"></span><span class="s-chev">' + Sub.icon('chevron-right', 14) + '</span></div><div class="s-members" id="sg-rows"></div></div>'
+  const subDetail = (S, s) => {
+    const x = S.subs[s.key]
+    const brief = '<div class="s-brief"><span class="s-brief-text"><span class="s-k">Claude asked</span>' + s.brief + '</span><button class="s-link">more</button></div>'
+    const work = x.state === 'done' ? '<button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">' + s.work + '</span><i data-icon="chevron-right" class="b-chev"></i></button>'
+      : '<div class="b-tl is-pending"><i data-icon="loader-circle"></i><span class="b-tl-text b-shimmer">' + x.now.replace(/<[^>]+>/g, '').replace('>_ ', 'Running ') + '</span></div>'
+    const report = x.state === 'done' ? '<div class="s-report"><p>' + x.now + '.</p></div>' : ''
+    const acts = '<div class="s-dacts"><button class="b-btn is-ghost is-sm">' + Sub.icon('panel-right', 14) + 'Open beside</button>' +
+      (live(x.state) ? '<button class="b-btn is-ghost is-sm">' + Sub.icon('stop', 13) + 'Stop</button>' : '') + '</div>'
+    return brief + work + report + acts
+  }
+  function renderGroup(S, instant) {
+    const states = SUBS.map((s) => S.subs[s.key].state)
+    $$('#sg .s-sats > .s-sat').forEach((el, i) => setSat(el, states[i], instant))
+    const t1 = Math.max(...SUBS.map((s) => S.subs[s.key].t1 || 0)), t0 = Math.min(...SUBS.map((s) => S.subs[s.key].t0))
+    swapText($('#sg-title'), S.settled ? 'Ran 3 sub-agents · ' + dur(dS(t0, t1)) : '<b>3 sub-agents</b> · ' + Sub.counts(states, { total: false }), instant)
+    const g = $('#sg')
+    g.classList.toggle('is-settled', S.settled)
+    g.classList.toggle('is-folded', ui.gfold != null ? ui.gfold : S.settled)
+    reconcile($('#sg-rows'), SUBS.map((s) => {
+      const x = S.subs[s.key]
+      return { key: s.key, html: Sub.row({ state: x.state, title: s.title, role: s.role, now: x.now, time: timeOf(S, x), open: !!ui.open[s.key], detail: ui.open[s.key] ? subDetail(S, s) : '' }) }
+    }), instant)
+  }
+
+  function renderCrewCard(S, instant) {
+    const c = S.crew, cc = $('#cc')
+    cc.dataset.crew = c.state
+    const g = c.state === 'asks' ? 'asks' : c.state === 'finished' ? 'finished' : 'running'
+    if (cc.__g !== g) { $('#cc-glyph').innerHTML = Sub.glyph(g, 16); cc.__g = g }
+    drawStrip($('#cc-strip'), stripData(S, 8), instant)
+    $('#cc-narr').parentElement.hidden = c.state === 'asks'
+    swapText($('#cc-narr'), c.narr || '', instant)
+    const all = crewAgents(S).map((a) => S.ag[a.id].state)
+    let foot, time = ''
+    if (c.state === 'asks') foot = '<span class="s-n-asks">Waiting for your OK</span> · not started'
+    else if (c.state === 'finished') { const t = Sub.tally(all); foot = t.total + ' agents · 3 phases' + (t.failed ? ' · <span class="s-n-failed">' + t.failed + ' failed</span>' : ''); time = mins(dS(c.t0, c.t1)) }
+    else { foot = Sub.counts(all); time = ago(dS(c.t0, S.t)) }
+    swapText($('#cc-counts'), foot, true)
+    const ct = $('#cc-time'); ct.textContent = time; ct.hidden = !time
+    $('#cc-open').hidden = c.state === 'asks'
+  }
+
+  // the live line: THE clock of the Thread
+  function liveKind(S) { if (S.done) return null; if (S.turn === 1) return 'turn'; if (S.turn === 2) return 'turn2'; if (S.crew.state === 'running') return 'crew'; return null }
+  function liveRest(S) {
+    if (S.dock) return '· Waiting for you'
+    const parts = [], n = SUBS.filter((s) => live(S.subs[s.key].state)).length
+    if (n) parts.push(n + ' sub-agent' + (n > 1 ? 's' : '') + ' at work')
+    if (S.crew.state === 'running') parts.push('Crew audit-routes · ' + phaseNow(S))
+    return parts.length ? '· ' + parts.join(' · ') : ''
+  }
+  function renderLive(S, instant) {
+    const k = liveKind(S)
+    show($('#w-liveA'), k === 'turn' || k === 'crew')
+    show($('#w-liveB'), k === 'turn2')
+    const A = $('#liveA')
+    if ((k === 'turn' || k === 'crew') && A.__k !== k) {
+      A.__k = k
+      A.innerHTML = k === 'turn'
+        ? '<div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num" data-clock="turn"></span><span class="b-quiet" data-rest></span></div>'
+        : '<div class="b-tl">' + Sub.glyph('running', 15) + '<span class="b-shimmer">Crew audit-routes is at work</span><span class="b-quiet" data-rest></span></div>'
+      BandaIcons.scan(A)
+    }
+    const rest = $('[data-rest]', A)
+    if (rest) { const r = A.__k === 'crew' ? '· ' + phaseNow(S) + ' · Claude goes on when it ends' : liveRest(S); if (rest.textContent !== r) rest.textContent = r }
+    const B = $('#liveB')
+    if (!B.firstChild) { B.innerHTML = '<div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num" data-clock="turn2"></span><span class="b-quiet">· Reading what the Crew found</span></div>'; BandaIcons.scan(B) }
+    tickClocks(S)
+  }
+  function tickClocks(S) {
+    const a = $('[data-clock="turn"]'); if (a) a.textContent = 'Working for ' + clock(story(S.t))
+    const b = $('[data-clock="turn2"]'); if (b) b.textContent = 'Working for ' + clock(3 + dS(S.turn2At || 30, S.t))
+    const c = S.crew, cl = $('#cp-clock')
+    cl.textContent = c.state === 'running' ? clock(dS(c.t0, S.t)) : c.state === 'finished' ? clock(dS(c.t0, c.t1)) : ''
+  }
+
+  // the Crew Pane: summary (its one clock), narrator, strip, phase bands
+  function paneRow(S, a) {
+    const x = S.ag[a.id], cut = a.label.lastIndexOf('/', a.label.length - 2) + 1
+    return '<div class="cp-row" data-state="' + x.state + '"><span class="s-slot">' + Sub.sat(x.state, 10) + '</span><span class="cp-main">' +
+      '<span class="cp-label s-path"><span><span class="cp-dir">' + a.label.slice(0, cut) + '</span>' + a.label.slice(cut) + '</span></span><span class="cp-now">' + (x.state === 'failed' ? '<span class="b-tag is-failed">Failed</span>' : '') + '<span>' + x.now + '</span></span></span>' +
+      '<span class="s-time">' + timeOf(S, x) + '</span></div>'
+  }
+  function renderPane(S, instant) {
+    const c = S.crew
+    grp.classList.toggle('is-paned', S.pane)
+    const g = c.state === 'finished' ? 'finished' : 'running'
+    if ($('#cp-glyph').__g !== g) { $('#cp-glyph').innerHTML = Sub.glyph(g, 16); $('#cp-glyph').__g = g }
+    $('#cp-stop').hidden = c.state !== 'running'
+    const all = crewAgents(S).map((a) => S.ag[a.id].state)
+    swapText($('#cp-counts'), c.state === 'finished' ? '<b>' + all.length + ' agents</b> · 3 phases' + (all.includes('failed') ? ' · <span class="s-n-failed">' + all.filter((x) => x === 'failed').length + ' failed</span>' : '') : all.length ? '<b>' + all.length + ' agents</b> · ' + Sub.counts(all, { total: false }) : '<b>Starting</b>', true)
+    $('#cp-tok').textContent = all.length ? tokens(S) : ''
+    swapText($('#cp-narr'), c.narr || 'Starting', instant)
+    drawStrip($('#cp-strip'), stripData(S, 10), instant)
+    const bands = $('#cp-bands')
+    bands.dataset.filter = ui.filter
+    // done rows of a past phase stay open while the list fits; when it would not, the oldest past phase folds first,
+    // and every phase folds its done rows once the Crew has finished. Work, asks and failures always show.
+    // The band head (open) and the fold row (folded) let the Person override it. Heights glide (0.45 s), never jump.
+    const was = instant ? null : $$(':scope > .cp-band', bands).map((b) => { const h = b.offsetHeight; b.getAnimations().forEach((x) => x.cancel()); return h })
+    if (instant) ui.auto = new Set()
+    renderBands(S, instant)
+    if (c.state !== 'finished' && ui.view === 'phases') {
+      const over = () => { const l = bands.lastElementChild; return l && l.getBoundingClientRect().bottom > bands.getBoundingClientRect().bottom + 0.5 }
+      for (let i = 0; i < PH.length && over(); i++) if (!ui.auto.has(i)) { ui.auto.add(i); renderBands(S, instant) }
+    }
+    if (was) $$(':scope > .cp-band', bands).forEach((b, i) => {
+      const h = b.offsetHeight
+      if (was[i] != null && Math.abs(was[i] - h) > 1) b.animate([{ height: was[i] + 'px' }, { height: h + 'px' }], { duration: 450, easing: 'cubic-bezier(0.2, 0.8, 0.2, 1)' })
+    })
+    renderTimeline(S)
+  }
+  function renderBands(S, instant) {
+    const bands = $('#cp-bands'), fin = S.crew.state === 'finished'
+    PH.forEach((p, i) => {
+      let band = bands.querySelector('[data-ph="' + i + '"]')
+      if (!band) { band = frag('<div class="cp-band" data-ph="' + i + '"><div class="cp-bhead"></div><div class="cp-rows"></div></div>'); bands.appendChild(band) }
+      const xs = AG.filter((a) => a.ph === i && S.ag[a.id].on), st = xs.map((a) => S.ag[a.id].state), t = Sub.tally(st)
+      const settled = t.done + t.failed + t.stopped, open = t.working + t.asks
+      const when = !t.total ? 'is-future' : open ? 'is-current' : settled === t.total ? 'is-past' : 'is-future'
+      const foldable = t.done > 0 && (when === 'is-past' || t.done > 6 || fin)
+      const fold = foldable && (ui.fold[i] != null ? ui.fold[i] : fin || t.done > 6 || ui.auto.has(i))
+      band.className = 'cp-band ' + when + (foldable && !fold ? ' is-open' : '')
+      const head = (when === 'is-past' && t.done === t.total ? Sub.icon('check', 12) : '') + '<span class="cp-bname">' + p.title + '</span>' +
+        (t.total ? '<span class="cp-bn">' + settled + '/' + t.total + '</span>' : '') + '<span class="cp-bd">' + p.detail + '</span>' +
+        (foldable && !fold ? '<span class="s-chev" title="Fold the done ones">' + Sub.icon('chevron-right', 14) + '</span>' : '')
+      const bh = band.firstElementChild; if (bh.__html !== head) { bh.innerHTML = head; bh.__html = head }
+      const items = []
+      if (fold) {
+        const names = xs.filter((a) => S.ag[a.id].state === 'done').map((a) => a.base).join(' · ')
+        items.push({ key: 'fold', html: '<div class="cp-fold" data-state="done"><span class="s-slot">' + Sub.sat('done', 10) + '</span><b>' + t.done + ' done</b><span class="s-fit">' + names + '</span><span class="s-chev">' + Sub.icon('chevron-right', 14) + '</span></div>' })
+      }
+      xs.forEach((a) => { const s = S.ag[a.id].state; if (s === 'queued' || (s === 'done' && fold)) return; items.push({ key: a.id, html: paneRow(S, a) }) })
+      if (t.queued) items.push({ key: 'wait', html: '<div class="cp-wait" data-state="queued"><span class="s-slot">' + Sub.sat('queued', 10) + '</span><b>' + t.queued + ' waiting</b><span>' + (i === 2 ? 'each suite starts when its routes are fixed' : 'for a slot') + '</span></div>' })
+      if (!t.total) items.push({ key: 'none', html: '<div class="cp-empty">' + (i === 0 ? 'Starts when you say so' : i === 1 ? 'Agents come as Scan finds work' : 'Each suite starts when its routes are fixed') + '</div>' })
+      reconcile(band.lastElementChild, items, instant)
+    })
+  }
+  function renderTimeline(S) {
+    const c = S.crew, t0 = c.t0 != null ? c.t0 : 0, tEnd = c.t1 != null ? c.t1 : Math.max(S.t, t0 + 1), span = Math.max(1, tEnd - t0)
+    const pc = (v) => (100 * Math.max(0, Math.min(1, dS(t0, v) / dS(t0, tEnd)))).toFixed(2) + '%'   // in story time, so the sped-up end is not squeezed
+    let html = ''
+    PH.forEach((p, i) => {
+      html += '<div class="cp-lane is-ph"><span>' + p.title + '</span><span></span></div>'
+      AG.filter((a) => a.ph === i && S.ag[a.id].on).forEach((a) => {
+        const x = S.ag[a.id]
+        const bar = x.t0 == null ? '<i data-s="queued" style="left:' + pc(S.t) + ';width:8px;margin-left:-8px"></i>'
+          : '<i data-s="' + x.state + '" style="left:' + pc(x.t0) + ';width:calc(' + pc(x.t1 != null ? x.t1 : S.t) + ' - ' + pc(x.t0) + ')"></i>'
+        html += '<div class="cp-lane"><span>' + a.base + '</span><span class="cp-trk">' + bar + '</span></div>'
+      })
+    })
+    html += '<div class="cp-axis"><span></span><span><span>0</span><span>' + dur(dS(t0, t0 + span)) + '</span></span></div>'
+    $('#cp-tl').innerHTML = html
+  }
+
+  function renderSidebar(S, th, sl, instant) {
+    show($('#sb-card-wrap'), th !== 'working')
+    show($('#sb-row-wrap'), th === 'working')
+    const card = $('#sb-card')
+    if (th !== 'working') {
+      card.dataset.look = th
+      const say = th === 'done' ? '<span class="b-word">Done</span>6 of 7 routes fixed · pair.ts and one test need you'
+        : S.dock === 'crew' ? '<span class="b-word">Asks</span>Start Crew audit-routes?' : '<span class="b-word">Asks</span>Reviewer: allow pnpm vitest sidebar?'
+      swapText($('#sb-say'), say, instant)
+      $('#sb-card-time').textContent = th === 'done' ? ago(dS(S.doneAt, S.t)) : ago(dS(S.askAt, S.t))
+      setMark(marks.card, markOpts(S, th, sl, instant))
+    }
+    setMark(marks.row, markOpts(S, 'working', sl.length ? sl : ['working'], instant))
+    $('#sb-row-time').textContent = ago(story(S.t))
+    // Working is oldest first: the row takes its place among the others as its time grows
+    const wrap = $('#sb-row-wrap'), m = Math.floor(story(S.t) / 60)
+    const rows = [...wrap.parentNode.querySelectorAll(':scope > .b-row.is-working')]
+    const younger = rows.find((r) => parseInt(r.querySelector('.b-time').textContent, 10) < m)
+    if (younger) { if (wrap.nextElementSibling !== younger) younger.before(wrap) } else if (rows[rows.length - 1].nextElementSibling !== wrap) rows[rows.length - 1].after(wrap)
+    const turn = 2 + (th !== 'working' ? 1 : 0), work = 6 + (th === 'working' ? 1 : 0)
+    $('#sb-inbox-n').textContent = turn
+    $('#sb-work-n').textContent = work; $('#sb-work-n2').textContent = work
+  }
+
+  // ------------------------------------------------------------------ render: the window at a moment
+  function render(S, instant) {
+    const A = $('#a')
+    if (instant) A.classList.add('no-anim')
+    const th = tstate(S), sl = sats(S)
+    grp.dataset.state = th
+    setMark(marks.head, markOpts(S, th, sl, instant))
+    show($('#w-dock-crew'), S.dock === 'crew')
+    show($('#w-dock-rev'), S.dock === 'rev')
+    $$('#w-dock-crew .b-choice.is-hl').forEach((b) => b.classList.toggle('is-press', S.press === 'crew'))
+    $$('#w-dock-rev .b-choice.is-hl').forEach((b) => b.classList.toggle('is-press', S.press === 'rev'))
+    if (S.dock === 'rev') $('#rev-ago').textContent = ago(dS(S.askAt, S.t))
+    renderGroup(S, instant)
+    renderCrewCard(S, instant)
+    show($('#w-reply1'), S.reply1)
+    show($('#w-back'), S.back)
+    if (S.crew.t1) $('#back-dur').textContent = mins(dS(S.crew.t0, S.crew.t1))
+    show($('#w-reply2'), S.reply2)
+    renderLive(S, instant)
+    const ph = $('#ph'), idle = S.done
+    ph.textContent = idle ? 'Write to Claude Code. @ files, / commands, $ skills' : 'Steer this thread…'
+    const send = $('#send')
+    send.className = 'b-send ' + (idle ? 'is-empty' : 'is-stop'); send.setAttribute('aria-label', idle ? 'Send' : 'Stop')
+    send.innerHTML = idle ? Sub.icon('arrow-up', 16) : ''
+    renderPane(S, instant)
+    renderSidebar(S, th, sl, instant)
+    BandaIcons.scan(win)
+    Sub.fit(win)
+    follow(instant ? 0 : 700)
+    if (instant) requestAnimationFrame(() => requestAnimationFrame(() => A.classList.remove('no-anim')))
+  }
+  // the Thread stays at its live edge while things glide in (and starts at the top when it all fits)
+  let followUntil = 0
+  function follow(ms) {
+    const th = $('#thread'), was = followUntil > performance.now()
+    followUntil = Math.max(followUntil, performance.now() + ms)
+    th.scrollTop = th.scrollHeight
+    if (was || !ms) return
+    const step = () => { th.scrollTop = th.scrollHeight; if (performance.now() < followUntil) requestAnimationFrame(step) }
+    requestAnimationFrame(step)
+  }
+
+  // ------------------------------------------------------------------ the run: still first, play on demand
+  let T = STILL, playing = false, last = 0, S = null, played = false
+  const beatAt = (t) => { let b = BEATS[0]; for (const x of BEATS) if (x[0] <= t + 1e-6) b = x; return b }
+  const fmtT = (t) => '0:' + String(Math.floor(t)).padStart(2, '0')
+  function seek(t, instant) { T = Math.max(0, Math.min(END, t)); S = stateAt(T); render(S, instant); controls() }
+  function frame(now) {
+    if (!playing) return
+    const dt = Math.min(0.1, (now - last) / 1000); last = now
+    const t0 = T; T = Math.min(END, T + dt)
+    if (EV.some((e) => e.t > t0 && e.t <= T)) { S = stateAt(T); render(S, false) }
+    else S.t = T
+    if (Math.floor(T) !== Math.floor(t0)) tickClocks(S)
+    controls()
+    if (T >= END) { playing = false; controls(); return }
+    requestAnimationFrame(frame)
+  }
+  function play() { if (T >= END) seek(0, true); playing = true; played = true; last = performance.now(); controls(); requestAnimationFrame(frame) }
+  function pause() { playing = false; controls() }
+  const track = $('#sim-track')
+  BEATS.forEach(([t, cap]) => track.insertAdjacentHTML('beforeend', '<span class="sim-tick" data-t="' + t + '" style="left:' + (100 * t / END) + '%" data-tip="' + fmtT(t) + ' · ' + cap + '"></span>'))
+  track.insertAdjacentHTML('beforeend', '<span class="sim-mark" style="left:' + (100 * STILL / END) + '%">кадр</span>')
+  function controls() {
+    const p = $('#sim-play')
+    p.innerHTML = playing ? Sub.icon('pause', 14) + '<span>Пауза</span>' : T >= END ? Sub.icon('rotate-ccw', 14) + '<span>Ещё раз</span>'
+      : (played && T > 0 && T !== STILL) ? Sub.icon('play', 14) + '<span>Дальше</span>' : Sub.icon('play', 14) + '<span>Прогнать</span>'
+    $('#sim-fill').style.width = (100 * T / END) + '%'
+    $('#sim-head').style.left = (100 * T / END) + '%'
+    $$('.sim-tick', track).forEach((k) => k.classList.toggle('is-past', +k.dataset.t <= T))
+    $('#sim-time').textContent = fmtT(T) + ' / ' + fmtT(END)
+    $('#sim-still').hidden = T === STILL && !playing
+    const cap = !played && T === STILL ? '<b>Кадр 0:15.</b> Reviewer спрашивает; Crew на Fix 2/4: второй сканер ещё читает, pair.ts упал.' : '<b>' + fmtT(T) + '</b> · ' + beatAt(T)[1]
+    const c = $('#sim-cap'); if (c.__h !== cap) { c.innerHTML = cap; c.__h = cap }
+  }
+  $('#sim-play').addEventListener('click', () => { if (playing) pause(); else if (!played || T === STILL && !played) { seek(0, true); play() } else play() })
+  $('#sim-still').addEventListener('click', () => { pause(); played = false; seek(STILL, true) })
+  track.addEventListener('click', (e) => {
+    const b = track.getBoundingClientRect(), z = parseFloat(getComputedStyle(track).zoom) || 1
+    const tick = e.target.closest('.sim-tick')
+    const t = tick ? +tick.dataset.t : (e.clientX - b.left) / b.width * END
+    played = true; const was = playing; pause(); seek(Math.round(t * 10) / 10, true); if (was) play()
+  })
+
+  // ------------------------------------------------------------------ what a click does inside the window
+  win.addEventListener('click', (e) => {
+    const go = e.target.closest('[data-go]')
+    if (go && !playing) { played = true; seek(+go.dataset.go - 0.1, true); play(); return }
+    const gh = e.target.closest('#sg .s-ghead')
+    if (gh) { ui.gfold = !$('#sg').classList.contains('is-folded'); render(S, false); return }
+    const row = e.target.closest('#sg-rows > .s-row > .s-line')
+    if (row && !e.target.closest('.s-acts')) { const k = row.parentElement.dataset.key; ui.open[k] = !ui.open[k]; render(S, false); return }
+    const fold = e.target.closest('.cp-fold')
+    if (fold) { ui.fold[+fold.closest('.cp-band').dataset.ph] = false; render(S, false); return }
+    const bh = e.target.closest('.cp-band.is-open > .cp-bhead')
+    if (bh) { ui.fold[+bh.parentElement.dataset.ph] = true; render(S, false); return }
+    const f = e.target.closest('#cp-bar [data-f]')
+    if (f) { ui.filter = f.dataset.f; $$('#cp-bar [data-f]').forEach((b) => b.classList.toggle('is-on', b === f)); render(S, false); return }
+    const v = e.target.closest('#cp-bar [data-v]')
+    if (v) { ui.view = v.dataset.v; $$('#cp-bar [data-v]').forEach((b) => b.classList.toggle('is-on', b === v)); $('#cp-body').classList.toggle('is-tl', ui.view === 'timeline'); render(S, true); return }
+    if (e.target.closest('#cc-open')) { focusTile($('#crew-tile')); return }
+    const tile = e.target.closest('.b-tile'); if (tile) focusTile(tile)
+  })
+  function focusTile(t) { $$('#grp > .b-tile').forEach((x) => x.classList.toggle('is-focused', x === t)) }
+  // a dot in a strip opens its agent in the Crew Pane
+  win.addEventListener('sub:open', (e) => {
+    const a = e.detail.agent; if (!a || !a.id) return
+    const id = a.id, ph = AG.find((x) => x.id === id).ph
+    focusTile($('#crew-tile'))
+    if (ui.view !== 'phases') $('#cp-bar [data-v="phases"]').click()
+    if (S.ag[id].state === 'done') { ui.fold[ph] = false; render(S, false) }
+    const band = $('#cp-bands [data-ph="' + ph + '"]')
+    const el = band && (band.querySelector('[data-key="' + id + '"]') || band.querySelector('[data-key="wait"]'))
+    if (el) { el.classList.add('is-flash'); setTimeout(() => el.classList.remove('is-flash'), 1400) }
+  })
+
+  // ------------------------------------------------------------------ the explanations under the window
+  // b: the idea
+  $('#places').innerHTML = [['working', 8, 'в полосе Crew'], ['asks', 10, 'в строке Thread'], ['done', 12, 'в шапке панели']]
+    .map(([s, z, w]) => '<span>' + Sub.sat(s, z) + '</span><span>' + w + '</span>').join('')
+  $('#idea-thread').innerHTML = Sub.group({ folded: true, members: [{ state: 'working' }, { state: 'working' }, { state: 'asks' }] }) +
+    '<div class="s-line"><span class="s-slot">' + Sub.glyph('running', 14) + '</span><span class="s-fit"><span class="s-crew-word">Crew ·</span> audit-routes</span></div>' +
+    '<div data-strip="Scan: done*2 | Fix: done done failed done working working working | Verify:" data-current="1" style="padding-left:23px"></div>'
+  $('#callwords').innerHTML = [['working', 'работает', 'серый'], ['asks', 'спрашивает', 'оранжевый, зовёт вас'], ['failed', 'упал', 'красный'], ['done', 'готово', 'спокойный, не зелёный']]
+    .map(([s, a, b]) => '<span>' + Sub.sat(s, 12) + '</span><span>' + a + ' <em>· ' + b + '</em></span>').join('')
+
+  // c: the grammar, Mark beside satellite
+  const fig = (inner, label) => '<figure><span class="z">' + inner + '</span><span class="sm"></span>' + label + '</figure>'
+  const mk = (st, extra) => '<span data-mark="' + st + '" data-size="34" data-still' + (extra || '') + '></span>'
+  const big = (st) => '<span class="sm">' + Sub.sat(st, 8) + Sub.sat(st, 10) + Sub.sat(st, 12) + '</span>'
+  const satFig = (st, w) => '<figure><span class="z">' + Sub.sat(st, 26) + '</span>' + big(st) + w + '</figure>'
+  $('#gram').innerHTML =
+    '<div class="gram-row is-th"><span>Форма</span><span>Mark · Thread (утверждено, ADR 0099)</span><span>Спутник · сабагент</span><span>Цвет и смысл</span></div>' +
+    '<div class="gram-row"><div class="gram-f"><b>Квадрат</b><span>спокойно</span></div><div class="figs">' + fig(mk('done'), 'Done') + fig(mk('open'), 'Open') + fig(mk('later'), 'Later') + '</div>' +
+      '<div class="figs">' + satFig('done', 'Done') + satFig('stopped', 'Stopped') + satFig('lost', 'Lost') + '</div>' +
+      '<div class="gram-c">У Mark зелёный — только <b>Done Thread</b>. «Готово» спутника спокойное, 70% текста: звать должен Thread, а не его сабагент. Stopped — контур, Lost (Banda перезапустилась) — бледный контур с разрывом.</div></div>' +
+    '<div class="gram-row"><div class="gram-f"><b>Круг</b><span>работа идёт</span></div><div class="figs">' + fig(mk('working', ' data-doing="read"'), 'Working') + fig(mk('working', ' data-satellites="3"'), 'со спутниками') + '</div>' +
+      '<div class="figs">' + satFig('working', 'Working') + satFig('queued', 'Queued') + '</div>' +
+      '<div class="gram-c">Работа серая, и строка тоже серая. <b>Queued</b> — пунктир, только в Crew: агент ждёт слот или свою очередь в конвейере.</div></div>' +
+    '<div class="gram-row"><div class="gram-f"><b>Треугольник</b><span>нужен человек</span></div><div class="figs">' + fig(mk('asks'), 'Asks') + '</div>' +
+      '<div class="figs">' + satFig('asks', 'Asks') + '</div>' +
+      '<div class="gram-c"><b>Единственный, кто зовёт.</b> Вопрос сабагента всплывает в док родителя и называет его: «Reviewer asks», а карточка Thread идёт в Your turn.</div></div>' +
+    '<div class="gram-row"><div class="gram-f"><b>Восьмиугольник</b><span>не вышло</span></div><div class="figs">' + fig(mk('failed'), 'Failed') + '</div>' +
+      '<div class="figs">' + satFig('failed', 'Failed') + '</div>' +
+      '<div class="gram-c">Красный, но <b>остаётся внутри Thread</b>: родитель идёт дальше и сам решает, что делать, его карточку ошибка не двигает. На 8 px почти круг — его выдаёт цвет.</div></div>' +
+    '<div class="gram-foot">' +
+      '<div><h3>Размер по месту</h3><div class="sizes"><span>' + Sub.sat('asks', 8) + '8 полоса</span><span>' + Sub.sat('asks', 10) + '10 строка</span><span>' + Sub.sat('asks', 12) + '12 шапка</span></div><p>Строка: спутник в слоте 16 px, на левом краю строки работы. Своих анимаций нет.</p></div>' +
+      '<div><h3>Без цвета читается</h3><div class="grey" data-strip="Scan: done*2 | Fix: done done failed done working asks working | Verify: queued*3" data-current="1"></div><p>Та же полоса в сером: формы различимы, кроме восьмиугольника на 8 px.</p></div>' +
+      '<div><h3>На Mark (предложение)</h3><div class="on-mark"><figure><span data-mark="working" data-size="48" data-satellites="working,failed,working" data-seed="2"></span><span><b>48</b>упавший —<br>красный спутник</span></figure><figure><span data-mark="working" data-size="16" data-satellites="working,failed,working" data-seed="3"></span><span><b>16</b>только цвет</span></figure></div><p>Сейчас kit рисует на Mark точки; форма на 48 px — следующий шаг.</p></div>' +
+    '</div>'
+
+  // d: where things live
+  const card2 = (sats, say, time) => '<div class="sc-sb"><div class="b-card is-working"><div class="b-line"><span data-mark="working" data-satellites="' + sats + '"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">' + time + '</span></div><div class="b-line"><span class="b-say b-fade">' + say + '</span></div></div></div>'
+  const markCell = (sats, size) => '<div class="sc-mark"><span data-mark="working" data-size="16" data-satellites="' + sats + '"></span><span data-mark="working" data-size="32" data-satellites="' + sats + '"></span></div>'
+  $('#scale').innerHTML =
+    '<div class="sc-row is-th"><span>Сколько</span><span>В Thread</span><span>Рядом, в Group</span><span>Сайдбар (строка 2)</span><span>Mark</span></div>' +
+    '<div class="sc-row"><div class="sc-n"><b>1 сабагент</b><span>строка там, где запущен</span></div>' +
+      '<div class="sc-cell" data-l="В Thread">' + Sub.row({ state: 'working', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Reading client/web/src/sidebar/settings.ts', time: '40s' }) + '</div>' +
+      '<div class="sc-cell sc-beside" data-l="Рядом"><div class="mini-head">' + Sub.sat('working', 12) + '<b>Map where [row] keys are read</b><span class="b-muted">Explore · sub-agent</span></div><small>по запросу: Open beside</small></div>' +
+      '<div class="sc-cell" data-l="Сайдбар">' + card2('1', 'Explore at work', '2m') + '</div>' +
+      '<div class="sc-cell" data-l="Mark">' + markCell('working') + '</div></div>' +
+    '<div class="sc-row"><div class="sc-n"><b>2–6</b><span>из одного сообщения</span></div>' +
+      '<div class="sc-cell" data-l="В Thread">' + Sub.group({ members: [
+        { state: 'working', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Reading card.ts', time: '2m' },
+        { state: 'working', title: 'Check the settings tests', role: 'general', now: cmd('pnpm vitest settings'), time: '3m' },
+        { state: 'done', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Two problems, both small', time: '2m 31s' }] }) + '</div>' +
+      '<div class="sc-cell sc-beside" data-l="Рядом"><div class="mini-head">' + Sub.sat('done', 12) + '<b>Reviewer</b><span class="b-muted">sub-agent of Move sidebar settings…</span></div><small>любой из них, по запросу</small></div>' +
+      '<div class="sc-cell" data-l="Сайдбар">' + card2('2', '3 sub-agents at work', '3m') + '</div>' +
+      '<div class="sc-cell" data-l="Mark">' + markCell('working,working') + '</div></div>' +
+    '<div class="sc-row"><div class="sc-n"><b>Crew</b><span>любой размер: 12, 50, 500</span></div>' +
+      '<div class="sc-cell" data-l="В Thread"><div id="sc-crew"></div></div>' +
+      '<div class="sc-cell sc-beside" data-l="Рядом"><div class="mini-head">' + Sub.glyph('running', 14) + '<b>Crew · audit-routes</b><span class="b-muted">Pane</span></div><div data-strip="Scan: done*2 | Fix: done done failed done working working working | Verify:" data-current="1"></div><small>открывается сама, один раз</small></div>' +
+      '<div class="sc-cell" data-l="Сайдбар">' + card2('3', 'Crew audit-routes · Fix 4/7', '11m') + '</div>' +
+      '<div class="sc-cell" data-l="Mark">' + markCell('working,working,working') + '</div></div>' +
+    '<div class="never"><b>Никогда:</b><span><i data-icon="x"></i>стены вложенных логов в родителе</span><span><i data-icon="x"></i>сабагенты карточками в сайдбаре (ADR 0098 d23)</span><span><i data-icon="x"></i>родитель «готов», пока его сабагенты работают</span></div>'
+  Sub.crew($('#sc-crew'), { name: 'audit-routes', desc: 'Find every route that skips the access check and fix it', time: '7m', current: 1,
+    phases: [{ title: 'Scan', agents: ['done', 'done'] }, { title: 'Fix', agents: ['done', 'done', 'failed', 'done', 'working', 'working', 'working'] }, { title: 'Verify', agents: [] }],
+    narrator: '12 of 12 routes scanned · 7 need a fix · 3 fixed' })
+
+  // e: the other pages
+  const PAGES = [
+    ['01-thread', '01', 'Сабагенты в Thread', 'строка, группа, все состояния, раскрытие на месте, конец работы'],
+    ['02-crew-in-thread', '02', 'Crew в Thread и composer', 'разрешение на старт, карточка Crew, работа после хода, Ultracode'],
+    ['03-crew-pane', '03', 'Панель Crew — большая картина', 'колонки и полосы, деталь агента, 50 агентов, Timeline, Lost'],
+    ['04-subagent-pane', '04', 'Сабагент, открытый рядом', 'статус-бар вместо composer, вложенность, worktree, Codex'],
+    ['05-sidebar', '05', 'Сайдбар, Mark, бар, уведомления', 'Your turn из-за сабагента, ↳ дети, спутники на Mark и лого'],
+  ]
+  $('#pages').innerHTML = PAGES.map(([f, n, t, d]) => '<a class="panel pagecard" href="' + f + '.html"><span class="thumb"><span class="ph">' + n + '</span><img alt="" src="png/' + f + '-a.png" onerror="this.remove()"></span>' +
+    '<span class="meta"><b><i>' + n + '</i>' + t + '</b><span>' + d + '</span></span></a>').join('')
+
+  // f: ten questions, each with my pick
+  const Q = [
+    ['Слово для workflow', ['Crew', 'Workflow', 'Run'], '«Workflow» и «Task» уже заняты в глоссарии Banda; банда — это и есть crew. Имя скрипта Harness — заголовок: «Crew · audit-routes».'],
+    ['Как выглядит сабагент', ['Мини-фигура по состоянию, везде одна', 'Иконка роли (лупа, бот) у каждого'], 'Одна грамматика с Mark, читается без цвета; роль и так написана словом после названия.'],
+    ['Ошибка сабагента', ['Остаётся в Thread, карточка родителя не двигается', 'Поднимает карточку в Your turn'], 'Родитель идёт дальше и сам решает, что делать; зовёт он, когда закончит.'],
+    ['Упавший сабагент на Mark', ['Да, только красный: на 48 px восьмиугольник, на 16 px красная точка', 'Нет, все спутники серые точки, как сейчас'], 'Упавший сабагент не двигает карточку, и без красной точки о нём не узнать до конца хода. Оранжевая не нужна: когда сабагент спрашивает, Mark уже треугольник (страница 05, C).'],
+    ['Сколько часов тикает', ['Одни на поверхность: живая строка и шапка панели Crew', 'Время в каждой строке'], 'Строки и полоса не тикают: экран спокойный, а «сколько идёт» видно в одном месте.'],
+    ['Где показывать токены', ['Только в панели Crew и деталях агента', 'Везде, где есть агент'], 'Для обычных сабагентов данных нет (только вызовы и время); в Thread токены — шум.'],
+    ['Открывается ли панель Crew сама', ['Да, в Group этого Thread, один раз; закрыли — больше не открывается для этого Crew', 'Нет, только по Open'], 'Crew — большая работа; рядом и в Group она не мешает Thread и не теряется.'],
+    ['Раскладка панели Crew', ['Колонки на широкой, полосы на узкой', 'Временная шкала главной'], 'Колонки и полосы показывают фазы и конвейер; шкала остаётся вкладкой Timeline.'],
+    ['Worktree сабагента', ['Review · Ask Claude to merge · Discard (позже, нужна работа в движке)', 'Не показывать'], 'Ветку сабагента движок пока не знает; карточку изменений сделаем, когда узнает.'],
+    ['Stop на Thread', ['Останавливает и сабагентов, и Crew — и говорит об этом', 'Только ход Claude'], 'Остановить один агент Crew Harness не даёт; Stop Thread — единственный честный способ.'],
+  ]
+  $('#qs').innerHTML = Q.map(([q, opts, why], i) => '<div class="panel q"><h3><i>' + (i + 1) + '</i>' + q + '</h3><div class="opts">' +
+    opts.map((o, k) => k === 0 ? '<div class="opt is-pick"><span class="pick">Мой выбор</span><span>' + o + '</span></div>' : '<div class="opt"><span class="alt">или</span><span>' + o + '</span></div>').join('') +
+    '</div><p class="why">' + why + '</p></div>').join('')
+
+  // ------------------------------------------------------------------ theme, glass, size
+  const root = document.documentElement
+  const apply = () => {
+    const h = location.hash
+    if (h.includes('light')) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+    if (h.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+    requestAnimationFrame(() => Sub.fit())
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.target.closest && e.target.closest('input, textarea')) return
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+  const stage = $('#stage')
+  const fitStage = () => { const w = document.documentElement.clientWidth; stage.style.zoom = w < 1440 ? (w / 1440).toFixed(4) : '' }
+  fitStage(); addEventListener('resize', fitStage)
+  // in the narrow table cells of d, a now-line with no room for a word stays out instead of showing a sliver ("R", "Two p")
+  const roomy = () => $$('#scale .s-now').forEach((n) => { n.style.visibility = ''; if (n.getBoundingClientRect().width < 56) n.style.visibility = 'hidden' })
+  roomy(); addEventListener('resize', roomy)
+  if (document.fonts) document.fonts.ready.then(roomy)
+
+  BandaIcons.scan(); Sub.scan()
+  const m = /at(\d+(?:\.\d+)?)/.exec(location.hash)
+  if (m) played = true
+  seek(m ? +m[1] : STILL, true)
+  if (document.fonts) document.fonts.ready.then(() => { Sub.fit(); render(S, true) })
+})()
+</script>
+</body>
+</html>

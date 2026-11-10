@@ -57,6 +57,10 @@ round too; the card is as wide as the messages, centred.
    left and a way back to the Harness's own defaults on the right; the
    model's name opens the list of models, each under the logo with what
    it is for.
+   _Amended 2026-11-10 by [ADR 0103](0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md):
+   Claude's Ultracode is a switch in the model picker, not in the mode
+   menu, and when it is on the label names Ultracode in that magenta,
+   `--effort-top`._
 4. **Only what is on shows.** Plan is not a button: `/plan` and `/default`
    switch it, and Shift+Tab, as before. While it is on, a quiet "Plan"
    sits beside `+`, and a click turns it off. The context ring shows from

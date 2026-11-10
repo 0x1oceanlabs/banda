@@ -1,0 +1,624 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sub-agents in the Thread</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* Only this page's layout lives here; every Banda part is in kit.css + sub.css. */
+  body { margin: 0; }
+  /* Cyrillic in the notes: fall to Adwaita Sans (Inter-based) before the system face, so the two scripts match */
+  .b-kit { --font-sans: "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif; }
+  .pg-screen { min-height: 100vh; padding: 28px; }
+  .pg-window { flex: 1; padding-bottom: 28px; }
+
+  /* the page's own header (Russian) */
+  .pg-head { display: flex; flex-direction: column; gap: 6px; padding: 14px 24px 2px; }
+  .pg-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .pg-lead { margin: 0; max-width: 100ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pg-lead kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .pg-toc { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 0 -9px; }
+  .pg-toc a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted-foreground); text-decoration: none; white-space: nowrap; }
+  .pg-toc a:hover { background: var(--hover); color: var(--foreground); }
+  .pg-toc a b { font-weight: 600; color: var(--foreground); }
+
+  /* sections */
+  .pg-sec { padding: 30px 16px 14px; scroll-margin-top: 8px; }
+  .pg-sec-head { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 14px; }
+  .pg-sec-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .pg-id { font-size: 13px; font-weight: 600; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .pg-note { margin: 0; max-width: 104ch; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-note b { font-weight: 500; color: var(--foreground); }
+  .pg-pick { margin: 2px 0 0; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-pick b { font-weight: 600; color: var(--foreground); }
+  .pg-cap { padding: 0 8px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-cap b { font-weight: 500; color: var(--foreground); }
+  .pg-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pg-fig > .b-tile { flex: none; }
+  .pg-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .pg-two.is-even { align-items: stretch; }
+  .pg-two.is-even > .pg-fig > .b-tile { flex: 1; }
+
+  /* a Thread Pane's composer while the turn runs: Stop is neutral, never red */
+  .pg-stop { background: var(--raised); color: var(--foreground); }
+  .pg-tile-chat .b-chat { padding-bottom: 20px; }
+
+  /* A: the sidebar, the Thread, the notes */
+  .pg-a { display: grid; grid-template-columns: 256px minmax(0, 1fr) 300px; gap: 8px; align-items: stretch; }
+  .pg-a > .b-sidebar { width: auto; }
+  .pg-a > .pg-notes { margin-left: 18px; }
+  .pg-a .b-say .dot { margin: 0 5px 0 -1px; color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+  .pg-notes { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding-top: 4px; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-notes h3 { margin: 0 0 -2px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--foreground); }
+  .pg-n { display: grid; grid-template-columns: 22px minmax(0, 1fr); column-gap: 8px; }
+  .pg-n > .pg-ic { display: flex; justify-content: center; align-items: flex-start; padding-top: 4px; color: var(--muted-foreground); }
+  .pg-n > .pg-ic .b-icon { width: 14px; height: 14px; }
+  .pg-n > .pg-ic.is-sats { gap: 2px; padding-top: 5px; }
+  .pg-n b { font-weight: 500; color: var(--foreground); }
+  .pg-n q { quotes: "«" "»"; color: color-mix(in oklab, var(--foreground) 80%, transparent); }
+
+  /* B: the state catalogue */
+  .pg-b { padding: 10px 22px 16px; }
+  .pg-spec { display: grid; grid-template-columns: minmax(0, 704px) minmax(0, 1fr); column-gap: 36px; row-gap: 4px; align-items: center; }
+  .pg-spec > .pg-h { grid-column: 1 / -1; padding: 12px 0 4px; font-size: 11.5px; line-height: 16px; font-weight: 500; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+  .pg-spec > .pg-h:first-child { padding-top: 6px; }
+  .pg-spec > .pg-h + * { }
+  .pg-spec > .pg-c { font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-spec > .pg-c b { font-weight: 500; color: var(--foreground); }
+  .pg-spec > .pg-r { min-width: 0; padding: 0 8px; }
+  .pg-spec > .pg-line { grid-column: 1 / -1; height: 1px; margin: 8px 0 2px; background: var(--border); }
+
+  /* D: the open settled group + notes */
+  .pg-d-low { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; margin-top: 16px; align-items: start; }
+  .pg-d-low .pg-notes { padding: 26px 8px 0; }
+  .pg-pad { padding: 14px 22px 16px; }
+
+  /* E: today vs new */
+  .pg-vs { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); column-gap: 16px; row-gap: 10px; align-items: start; }
+  .pg-vs > .pg-col { padding: 0 8px; font-size: 13px; font-weight: 600; line-height: 20px; }
+  .pg-vs > .pg-col span { font-weight: 400; color: var(--muted-foreground); }
+  .pg-vs > .pg-row-h { grid-column: 1 / -1; padding: 10px 8px 0; font-size: 12px; line-height: 16px; color: color-mix(in oklab, var(--muted-foreground) 85%, transparent); }
+  .pg-vs > .b-tile { flex: none; }
+  .pg-vs .b-tl-list { -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent); mask-image: linear-gradient(to bottom, #000 calc(100% - 2rem), transparent); }
+  .pg-stray { color: color-mix(in oklab, var(--foreground) 88%, transparent); }
+  .pg-e-notes { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px 28px; margin-top: 18px; padding: 0 8px; }
+
+  /* small satellite inline in Russian notes */
+  .pg-inl { display: inline-flex; vertical-align: -1px; margin: 0 2px; }
+
+  @media (max-width: 1180px) {
+    .pg-a { grid-template-columns: minmax(0, 1fr) 280px; }
+    .pg-a > .b-sidebar { display: none; }
+  }
+  @media (max-width: 1000px) {
+    .pg-screen { padding: 12px; }
+    .pg-a { grid-template-columns: minmax(0, 1fr); }
+    .pg-a > .pg-notes { margin: 14px 8px 0; }
+    .pg-two, .pg-vs, .pg-d-low { grid-template-columns: minmax(0, 1fr); }
+    .pg-vs > .pg-col { display: none; }
+    .pg-vs > .pg-mob { display: block; }
+    .pg-spec { grid-template-columns: minmax(0, 1fr); row-gap: 0; }
+    .pg-spec > .pg-c { padding: 0 8px 10px 31px; }
+    .pg-e-notes { grid-template-columns: minmax(0, 1fr); }
+    .pg-sec { padding-left: 8px; padding-right: 8px; }
+  }
+  .pg-mob { display: none; padding: 6px 8px 0; font-size: 12.5px; font-weight: 600; }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen pg-screen">
+  <div class="b-window pg-window" id="win">
+
+    <header class="b-bar">
+      <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="failed" data-logo data-size="20"></span></button>
+      <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget" title="Flow: Row"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget" title="Claude: weekly 58% spent"><span class="b-ring" style="--share:.58"></span></span>
+        <span class="b-widget" title="Notifications"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="pg-head">
+      <h1>Сабагенты в Thread</h1>
+      <p class="pg-lead">Как помощники Агента выглядят внутри Thread: строка на месте запуска, группа из одного сообщения, вопрос в доке над composer, строка раскрытая на месте, конец работы. Thread «Move sidebar settings to sidebar.toml», проект banda, машина arc, Claude Code. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло вкл/выкл.</p>
+      <nav class="pg-toc">
+        <a href="#a"><b>A</b>Посреди хода</a>
+        <a href="#b"><b>B</b>Строка: все состояния</a>
+        <a href="#c"><b>C</b>Строка раскрыта</a>
+        <a href="#d"><b>D</b>Когда закончили</a>
+        <a href="#e"><b>E</b>Сейчас и будет</a>
+      </nav>
+    </div>
+
+    <!-- ============================== A ============================== -->
+    <section class="pg-sec" id="a">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">A</span>Thread посреди хода</h2>
+        <p class="pg-note">Claude запустил трёх сабагентов одним сообщением. В Thread это одна строка группы, участники под ней. Reviewer спрашивает разрешение: оранжевые только его треугольник и время, а сам вопрос пристыкован к composer и называет, кто спрашивает.</p>
+      </div>
+
+      <div class="pg-a">
+        <!-- the sidebar at this moment -->
+        <aside class="b-sidebar">
+          <div class="b-sb-head">
+            <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+            <button class="b-ib" title="New Thread · Alt+N"><i data-icon="square-pen"></i></button>
+          </div>
+          <div class="b-tabs" role="tablist">
+            <button class="b-tab is-current">Inbox <span class="b-n is-turn">3</span></button>
+            <button class="b-tab">Working <span class="b-n">4</span></button>
+            <button class="b-tab">Later <span class="b-n">2</span></button>
+            <button class="b-tab b-end" title="Archive"><i data-icon="archive"></i></button>
+          </div>
+          <div class="b-list">
+            <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+            <div class="b-card" data-look="done">
+              <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL, keeps chromium.log</span><span class="b-pr">#1061 <span class="is-ok">✓</span></span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span class="b-machine"><i data-icon="laptop"></i>mac</span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-card" data-look="failed">
+              <div class="b-line"><span data-mark="failed"></span><span class="b-title b-fade">Import March invoices</span><span class="b-time">4m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Failed</span>3 tests fail in invoices.spec.ts</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="teal">W</span><span class="b-fade">Work</span></span><span data-emblem="codex"></span></div>
+            </div>
+            <div class="b-card is-current" data-look="asks">
+              <div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">2m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Reviewer: allow pnpm vitest sidebar?</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-divider"></div>
+            <div class="b-row"><div class="b-line"><span data-mark="open" data-seed="11"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">1h</span></div></div>
+            <div class="b-row"><div class="b-line"><span data-mark="open" data-seed="12"></span><span class="b-title b-fade">waybar: show Banda's count</span><span class="b-time">3h</span></div></div>
+            <div class="b-section"><span>Working · 4</span></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="2" data-seed="3"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="think"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">Reconcile February bank export</span><span class="b-machine"><i data-icon="laptop"></i></span><span class="b-time">9m</span></div></div>
+          </div>
+          <div class="b-sb-foot">
+            <button class="b-ib" title="Settings"><i data-icon="settings"></i></button>
+            <button class="b-ib" title="View"><i data-icon="list-filter"></i></button>
+            <button class="b-ib" title="Quiet"><i data-icon="bell"></i></button>
+            <span class="b-machines"><span class="b-dot"></span>arc · mac</span>
+          </div>
+        </aside>
+
+        <!-- the Thread Pane -->
+        <section class="b-tile is-focused">
+          <div class="b-pane-head b-bare">
+            <span data-mark="asks" data-calls="false"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+            <div class="b-capsule">
+              <button class="b-ib is-xs" title="Thread details"><i data-icon="square-menu"></i></button>
+              <span class="b-capsule-line"></span>
+              <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button>
+              <button class="b-ib is-xs" title="Close · Alt+W"><i data-icon="x"></i></button>
+            </div>
+          </div>
+          <div class="b-thread">
+            <div class="b-chat">
+              <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+              <div class="b-trace">
+                <button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button>
+              </div>
+              <div class="b-prose"><p>Three parts of this can run side by side, so I'll split them: one maps where the old <code>[row]</code> keys are read, one checks the settings tests, and a reviewer reads the new schema.</p></div>
+              <div id="a-group"></div>
+              <div class="b-trace">
+                <div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num" id="a-clock">Working for 3m 05s</span><span class="b-quiet">· 3 sub-agents at work</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="b-composer-wrap">
+            <div class="b-docked">
+              <div class="b-docked-head s-ask-head"><span data-sat="asks" data-size="10"></span><span><b>Reviewer</b> asks · 2m</span></div>
+              <div>Run a command in <code class="b-code-inline">~/code/banda</code>?</div>
+              <code class="s-cmd"><span class="s-prompt">$</span>pnpm vitest sidebar</code>
+              <button class="b-choice is-hl"><span class="b-kbd">1</span>Allow once<span class="s-hint">↵</span></button>
+              <button class="b-choice"><span class="b-kbd">2</span>Allow for this Thread</button>
+              <button class="b-choice b-muted"><span class="b-kbd">Esc</span>Deny, and tell it what to do differently…</button>
+              <div class="s-note"><i data-icon="circle-alert" data-size="13"></i>“Allow for this Thread” covers Claude and all its sub-agents.</div>
+            </div>
+            <div class="b-composer">
+              <div class="b-composer-text is-empty">Steer this thread…</div>
+              <div class="b-composer-row">
+                <button class="b-ib" title="Add images and files" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                <span class="b-spacer"></span>
+                <button class="b-ctl" title="How freely it acts"><i data-icon="shield"></i></button>
+                <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                <button class="b-send is-stop pg-stop" aria-label="Stop" title="Stop · Esc"></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- what to look at -->
+        <div class="pg-notes">
+          <h3>Что здесь видно</h3>
+          <div class="pg-n"><span class="pg-ic is-sats"><span data-sat="working" data-size="6"></span><span data-sat="working" data-size="6"></span><span data-sat="asks" data-size="6"></span></span>
+            <span><b>Группа.</b> Одна строка на сообщение Claude: <q>3 sub-agents · 2 working · 1 asks</q>. Участники — под ней, на шаг правее.</span></div>
+          <div class="pg-n"><span class="pg-ic"><span data-sat="working" data-size="10"></span></span>
+            <span><b>Работа серая.</b> Строка говорит, что сабагент делает сейчас: файл, команду. Время не тикает.</span></div>
+          <div class="pg-n"><span class="pg-ic"><span data-sat="asks" data-size="10"></span></span>
+            <span><b>Reviewer спрашивает.</b> Цвет — только у треугольника и «2m». Вопрос — в доке над composer, с именем: <q>Reviewer asks</q>. Ответ клавишами, как обычно.</span></div>
+          <div class="pg-n"><span class="pg-ic"><i data-icon="loader-circle"></i></span>
+            <span><b>Тикает одно место</b> — живая строка: <q>Working for 3m 05s · 3 sub-agents at work</q>.</span></div>
+          <div class="pg-n"><span class="pg-ic"><i data-icon="shield"></i></span>
+            <span><b>«Allow for this Thread»</b> разрешает и Claude, и всем его сабагентам: так устроена сессия Claude. Поэтому это сказано прямо под ответами.</span></div>
+          <div class="pg-n"><span class="pg-ic"><span data-mark="asks" data-size="14" data-calls="false"></span></span>
+            <span><b>Сайдбар.</b> Карточка Thread уходит в Your turn: <q>Asks Reviewer: allow pnpm vitest sidebar?</q>. Своей карточки у сабагента нет.</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== B ============================== -->
+    <section class="pg-sec" id="b">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">B</span>Строка сабагента: все состояния</h2>
+        <p class="pg-note">Одна строка с тем же левым краем, что у строки работы. Спутник в начале: форма = состояние, читается и без цвета. Дальше — задание, роль, что делает или чем кончил, время. Время не тикает: у работающего — сколько идёт, у закончившего — сколько шёл. Длинное гаснет.</p>
+      </div>
+      <div class="b-tile"><div class="pg-b"><div class="pg-spec" id="b-spec"></div></div></div>
+    </section>
+
+    <!-- ============================== C ============================== -->
+    <section class="pg-sec" id="c">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">C</span>Строка, раскрытая на месте</h2>
+        <p class="pg-note">Клик по строке раскрывает её здесь же, строки выше не сдвигаются: задание (две строки и «more»), вся работа одной строкой, отчёт цитатой с затуханием, тихие действия. <b>Open beside</b> открывает сабагента панелью рядом, в Group Thread. <b>Stop</b> есть, только пока он идёт.</p>
+      </div>
+      <div class="pg-two is-even">
+        <div class="pg-fig">
+          <div class="pg-cap"><b>Закончил:</b> отчёт цитатой, длинный гаснет</div>
+          <section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-mark="working" data-satellites="2" data-seed="5"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread pg-tile-chat"><div class="b-chat" id="c-done"></div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop pg-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="pg-fig">
+          <div class="pg-cap"><b>Идёт:</b> живая работа и Stop</div>
+          <section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-mark="working" data-satellites="2" data-seed="6"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread pg-tile-chat"><div class="b-chat" id="c-work"></div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop pg-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== D ============================== -->
+    <section class="pg-sec" id="d">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">D</span>Когда сабагенты закончили</h2>
+        <p class="pg-note">Слева: Claude сказал своё, а Reviewer ещё работает (ход держится открытым, но писать можно). Thread остаётся Working: серая марка со спутником, живая строка в конце, composer свободен. Справа: Reviewer вернулся — строка «Reviewer finished», и Claude продолжает сам. Группа — одна строка «Ran 3 sub-agents · 2m 40s», погашенная до 55%.</p>
+        <p class="pg-pick"><b>Мой выбор:</b> закончившаяся группа сворачивается в одну строку (как любая работа) и раскрывается кликом.</p>
+      </div>
+      <div class="pg-two is-even">
+        <div class="pg-fig">
+          <div class="pg-cap"><b>Claude сказал своё,</b> Reviewer ещё работает</div>
+          <section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-mark="working" data-satellites="1" data-seed="7"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread"><div class="b-chat" id="d-wait"></div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop pg-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+        <div class="pg-fig">
+          <div class="pg-cap"><b>Reviewer вернулся,</b> Claude продолжил сам</div>
+          <section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-mark="done" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="b-thread"><div class="b-chat" id="d-back"></div></div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-empty" aria-label="Send"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+      <div class="pg-d-low">
+        <div class="pg-fig">
+          <div class="pg-cap"><b>Клик по группе</b> раскрывает её: у каждого — начало отчёта и время</div>
+          <div class="b-tile"><div class="pg-pad" id="d-open"></div></div>
+        </div>
+        <div class="pg-notes">
+          <div class="pg-n"><span class="pg-ic"><span data-sat="working" data-size="10"></span></span>
+            <span><b>Работа пережила ход.</b> Пока Reviewer идёт, Thread не выглядит готовым: марка серая со спутником, в конце — <q>Reviewer is at work · Claude goes on when it ends</q>. Composer свободен: <q>Steer this thread…</q> направляет, а не ставит в очередь; пока поле пустое, кнопка — Stop, она останавливает и Reviewer.</span></div>
+          <div class="pg-n"><span class="pg-ic"><i data-icon="corner-down-right"></i></span>
+            <span><b>Возврат.</b> <q>Reviewer finished · 2m 40s · Claude went on by itself</q>, затем ответ Claude. Клик по строке ведёт к Reviewer в группе.</span></div>
+          <div class="pg-n"><span class="pg-ic is-sats"><span data-sat="done" data-size="6"></span><span data-sat="done" data-size="6"></span><span data-sat="done" data-size="6"></span></span>
+            <span><b>Глагол меняет время:</b> <q>3 sub-agents · 1 working</q> пока идут, <q>Ran 3 sub-agents · 2m 40s</q> когда все закончили. При наведении группа ярче (85%).</span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== E ============================== -->
+    <section class="pg-sec" id="e">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">E</span>Сейчас и будет</h2>
+        <p class="pg-note">Сейчас Banda не знает, что это сабагенты. У Claude каждый сабагент — строка с «мозгом», а его вызовы сложены в работу самого Claude. У Codex — строка <code class="b-code-inline">spawnAgent</code> с гаечным ключом и больше ничего. Тот же момент, слева как сейчас, справа как будет.</p>
+      </div>
+      <div class="pg-vs">
+        <div class="pg-col">Сейчас <span>· Banda сегодня</span></div>
+        <div class="pg-col">Будет <span>· этот дизайн</span></div>
+
+        <div class="pg-row-h">Claude Code · три сабагента одним сообщением</div>
+        <div class="pg-mob">Сейчас</div>
+        <section class="b-tile">
+          <div class="b-pane-head b-bare">
+            <span data-mark="working" data-doing="execute"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+          </div>
+          <div class="b-thread pg-tile-chat"><div class="b-chat">
+            <div class="b-prose"><p>Three parts of this can run side by side, so I'll split them.</p></div>
+            <div class="b-trace">
+              <button class="b-tl"><i data-icon="brain"></i><span class="b-tl-text"><span class="b-subject">Map where [row] keys are read</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <button class="b-tl"><i data-icon="brain"></i><span class="b-tl-text"><span class="b-subject">Check the settings tests</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <button class="b-tl"><i data-icon="brain"></i><span class="b-tl-text"><span class="b-subject">Review the sidebar.toml schema</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <button class="b-tl is-open"><i data-icon="layers"></i><span class="b-tl-text">Read 31 files, searched for 9 patterns, ran 12 commands</span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <div class="b-tl-list">
+                <div class="b-tl"><i data-icon="file-text"></i><span class="b-tl-text">Read <span class="b-subject">client/web/src/sidebar/settings.ts</span></span></div>
+                <div class="b-tl"><i data-icon="terminal"></i><span class="b-tl-text">Ran <span class="b-subject">pnpm vitest settings</span></span></div>
+                <div class="b-tl"><i data-icon="file-text"></i><span class="b-tl-text">Read <span class="b-subject">platform/look/sidebar.toml</span></span></div>
+                <div class="b-tl"><i data-icon="search"></i><span class="b-tl-text">Searched for <span class="b-subject">[row] in client/web</span></span></div>
+                <div class="b-tl"><i data-icon="file-text"></i><span class="b-tl-text">Read <span class="b-subject">client/web/src/settings/schema.ts</span></span></div>
+              </div>
+            </div>
+            <div class="b-prose pg-stray"><p>The schema has 14 keys. Two look wrong so far: <code>row.density</code> has no default, and <code>later.until</code> is typed as text.</p></div>
+            <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 3m 05s</span><span class="b-quiet">· Running pnpm vitest settings</span></div></div>
+          </div></div>
+        </section>
+        <div class="pg-mob">Будет</div>
+        <section class="b-tile">
+          <div class="b-pane-head b-bare">
+            <span data-mark="working" data-satellites="3" data-seed="8"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+          </div>
+          <div class="b-thread pg-tile-chat"><div class="b-chat" id="e-claude"></div></div>
+        </section>
+
+        <div class="pg-row-h">Codex · два сабагента, Thread «Research: Hyprland socket»</div>
+        <div class="pg-mob">Сейчас</div>
+        <section class="b-tile">
+          <div class="b-pane-head b-bare">
+            <span data-mark="working" data-doing="other"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Research: Hyprland socket</span>
+          </div>
+          <div class="b-thread pg-tile-chat"><div class="b-chat">
+            <div class="b-prose"><p>I'll send two agents: one reads Hyprland's socket code, the other compares it with niri's IPC.</p></div>
+            <div class="b-trace">
+              <button class="b-tl"><i data-icon="wrench"></i><span class="b-tl-text"><span class="b-subject">spawnAgent</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <button class="b-tl"><i data-icon="wrench"></i><span class="b-tl-text"><span class="b-subject">spawnAgent</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <button class="b-tl"><i data-icon="wrench"></i><span class="b-tl-text"><span class="b-subject">wait</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+            </div>
+            <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 6m 40s</span><span class="b-quiet">· wait</span></div></div>
+          </div></div>
+        </section>
+        <div class="pg-mob">Будет</div>
+        <section class="b-tile">
+          <div class="b-pane-head b-bare">
+            <span data-mark="working" data-satellites="2" data-seed="9"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Research: Hyprland socket</span>
+          </div>
+          <div class="b-thread pg-tile-chat"><div class="b-chat" id="e-codex"></div></div>
+        </section>
+      </div>
+
+      <div class="pg-e-notes pg-notes">
+        <div class="pg-n"><span class="pg-ic"><i data-icon="brain"></i></span>
+          <span><b>Сабагент — не «мысль».</b> Сейчас запуск рисуется иконкой мозга (это иконка think). Будет строка со спутником: форма говорит, идёт он, спрашивает или закончил.</span></div>
+        <div class="pg-n"><span class="pg-ic"><i data-icon="layers"></i></span>
+          <span><b>Чужая работа — не Claude.</b> Сейчас 31 файл и 12 команд всех троих записаны Claude, а текст сабагента приходит как реплика Claude (так по коду адаптера; записи нет). Будет: вызовы — внутри строки своего сабагента.</span></div>
+        <div class="pg-n"><span class="pg-ic"><i data-icon="loader-circle"></i></span>
+          <span><b>Живая строка и вопрос.</b> Сейчас она называет чужую команду, а вопрос сабагента приходит как «Asks you». Будет: <q>3 sub-agents at work</q> и <q>Reviewer asks</q>. У Codex вместо <code class="b-code-inline">spawnAgent</code> — <q>Agent 1 · Read the socket…</q>.</span></div>
+      </div>
+    </section>
+
+  </div>
+</div>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+  const $ = (s) => document.querySelector(s)
+  const brief = (t) => `<div class="s-brief"><span class="s-brief-text"><span class="s-k">Claude asked</span>${t}</span><button class="s-link">more</button></div>`
+  const work = (t, extra) => `<button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">${t}</span>${extra || ''}<i data-icon="chevron-right" class="b-chev"></i></button>`
+  const acts = (stop) => `<div class="s-dacts"><button class="b-btn is-ghost is-sm"><i data-sicon="panel-right" data-size="14"></i>Open beside</button>` +
+    (stop ? `<button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button>` : `<button class="b-btn is-ghost is-sm">Show all</button>`) + `</div>`
+  const live = (clock, quiet) => `<div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">${clock}</span><span class="b-quiet">· ${quiet}</span></div></div>`
+  const head = (lead, rest) => `<b>${lead}</b>` + (rest ? ' · ' + rest : '')
+  const asks = (n) => `<span class="s-n-asks">${n} asks</span>`
+  const you = `<div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>`
+  const split = `<div class="b-prose"><p>Three parts of this can run side by side, so I'll split them.</p></div>`
+
+  // the three sub-agents of the scenario (brief §9)
+  const MAP = { title: 'Map where [row] keys are read', role: 'Explore · Haiku' }
+  const CHECK = { title: 'Check the settings tests', role: 'general' }
+  const REV = { title: 'Review the sidebar.toml schema', role: 'Reviewer' }
+  const m = (base, more) => Object.assign({}, base, more)
+
+  // ---- A: the live group
+  $('#a-group').outerHTML = Sub.group({ title: head('3 sub-agents', '2 working · ' + asks(1)), members: [
+    m(MAP, { state: 'working', now: 'Reading client/web/src/sidebar/settings.ts', time: '3m' }),
+    m(CHECK, { state: 'working', now: '<code>&gt;_ pnpm vitest settings</code>', time: '3m' }),
+    m(REV, { state: 'asks', now: 'Allow pnpm vitest sidebar?', time: '2m' }),
+  ] })
+
+  // ---- B: one row per state, a note beside it
+  const B = [
+    ['Состояния'],
+    [m(MAP, { state: 'working', now: 'Reading client/web/src/sidebar/settings.ts', time: '40s' }), '<b>Working.</b> Всё серое; справа — что делает сейчас. Модель — только если не как у Claude.'],
+    [m(REV, { state: 'asks', now: 'Allow pnpm vitest sidebar?', time: '2m' }), '<b>Asks.</b> Оранжевые только треугольник и время. Сам вопрос — в доке над composer.'],
+    [m(MAP, { state: 'done', now: 'Read in 3 places: settings.ts, schema.ts and card.ts', time: '1m 12s' }), '<b>Done.</b> Квадрат, не зелёный: зелёный — только у Thread. Справа — начало отчёта.'],
+    [m(CHECK, { state: 'failed', now: '2 tests fail in settings.test.ts', time: '48s' }), '<b>Failed.</b> Красные только восьмиугольник и тег. Карточку Thread не двигает.'],
+    [m(CHECK, { state: 'stopped', now: 'Stopped by you', time: '31s' }), '<b>Stopped by you.</b> Контур квадрата, без цвета. Сам он уже не продолжит.'],
+    ['Детали'],
+    [m(CHECK, { state: 'working', now: '<code>&gt;_ pnpm vitest settings</code>', time: '1m', hover: true }), '<b>Наведение.</b> Вместо времени — Open beside и Stop, как в карточке сайдбара.'],
+    [m(REV, { state: 'done', wt: 'worktree · from main', now: '+120 −14 in 4 files', time: '3m' }), '<b>Свой worktree.</b> Чип — только когда это известно. Позже: нужна работа в движке.'],
+    [m(REV, { state: 'working', deep: 2, now: '2 sub-agents at work', time: '3m' }), '<b>Глубже.</b> В Thread виден один уровень, глубже — «+2». Цепочка — в открытой панели.'],
+    [{ state: 'working', title: 'Agent 2 · Compare with niri’s IPC and list what Hyprland lacks', now: '<code>&gt;_ rg socket2 ~/src/niri</code>', time: '5m' }, '<b>Codex без имени.</b> Banda берёт первые слова задания и номер среди соседей.'],
+  ]
+  $('#b-spec').innerHTML = B.map(([r, c]) => {
+    if (!c) return `<div class="pg-h">${r}</div>`
+    let h = Sub.row(r)
+    if (r.hover) h = h.replace('class="s-line"', 'class="s-line is-hover"')
+    return `<div class="pg-r">${h}</div><div class="pg-c">${c}</div>`
+  }).join('')
+
+  // ---- C: rows opened in place
+  const mapDone = m(MAP, { state: 'done', now: 'Read in 3 places: settings.ts, schema.ts and card.ts', time: '1m 12s' })
+  const revWork = m(REV, { state: 'working', now: 'Reading client/web/src/settings/schema.ts', time: '1m' })
+  $('#c-done').innerHTML = split + Sub.group({ title: head('3 sub-agents', '2 working · 1 done'), members: [
+    m(mapDone, { open: true, detail:
+      brief('Find every place that still reads the old [row] keys: the sidebar, the settings Pane and the tests. Give the file and line for each, and say which reads can go once sidebar.toml has defaults.') +
+      work('Read 12 files, searched for 4 patterns, ran 2 commands') +
+      `<div class="s-report is-long"><p>The old <code>[row]</code> keys are read in three places:</p><ol style="margin:8px 0 0;padding-left:20px"><li><code>client/web/src/sidebar/settings.ts:48</code>: <code>readRow()</code> falls back to <code>[row]</code> when a Person's file has no <code>[card]</code> yet.</li><li><code>client/web/src/settings/schema.ts:112</code>: the settings Pane maps <code>row.*</code> to line numbers.</li><li><code>client/web/src/sidebar/card.ts:20</code>: reads <code>row.density</code> only.</li></ol><p>The first two can go once sidebar.toml ships with defaults.</p></div>` +
+      acts(false) }),
+    m(CHECK, { state: 'working', now: '<code>&gt;_ pnpm vitest settings</code>', time: '1m' }),
+    revWork,
+  ] }) + live('Working for 1m 40s', '2 sub-agents at work')
+
+  $('#c-work').innerHTML = split + Sub.group({ title: head('3 sub-agents', '2 working · 1 done'), members: [
+    mapDone,
+    m(CHECK, { state: 'working', now: '<code>&gt;_ pnpm vitest settings</code>', time: '1m', open: true, detail:
+      brief('Run the settings tests and the sidebar tests. If any fail, find which change broke them, but do not fix anything. Report what fails and why.') +
+      `<div class="b-trace">` + work('Read 3 files, ran 1 command') +
+      `<div class="b-tl is-pending"><i data-icon="terminal"></i><span class="b-tl-text b-shimmer">Running pnpm vitest settings</span></div></div>` +
+      acts(true) }),
+    revWork,
+  ] }) + live('Working for 1m 40s', '2 sub-agents at work')
+
+  // ---- D: after the turn, and back
+  const mapEnd = m(MAP, { state: 'done', now: 'Read in 3 places: settings.ts, schema.ts and card.ts', time: '1m 12s' })
+  const checkEnd = m(CHECK, { state: 'done', now: 'All 54 tests pass', time: '48s' })
+  const turnEnd = `<div class="b-prose"><p>Map and the tests are back: the old keys are read in three places, and all 54 tests pass. The Reviewer is still reading the schema; I'll go on when it reports.</p></div>`
+  $('#d-wait').innerHTML = you + split + Sub.group({ title: head('3 sub-agents', '1 working · 2 done'), members: [
+    mapEnd, checkEnd, m(REV, { state: 'working', now: 'Reading client/web/src/settings/schema.ts', time: '2m' }),
+  ] }) + turnEnd +
+    `<div class="b-trace"><div class="b-tl"><span style="display:grid;place-items:center;width:15px;height:15px">${Sub.sat('working', 10)}</span><span class="b-shimmer">Reviewer is at work</span><span class="b-quiet">· Claude goes on when it ends</span></div></div>`
+
+  const revEnd = m(REV, { state: 'done', now: 'Two problems: row.density has no default, later.until is text', time: '2m 40s' })
+  $('#d-back').innerHTML = you + split + Sub.group({ settled: true, folded: true, title: head('Ran 3 sub-agents', '2m 40s'), members: [mapEnd, checkEnd, revEnd] }) + turnEnd +
+    `<div class="b-trace"><button class="b-tl"><i data-icon="corner-down-right"></i><span class="b-tl-text"><span class="b-subject">Reviewer</span> finished · 2m 40s · Claude went on by itself</span></button></div>` +
+    `<div class="b-prose"><p>The Reviewer found two small problems in the schema, and I fixed both: <code>row.density</code> now has a default, and <code>later.until</code> is a number of minutes.</p></div>` +
+    `<div class="b-trace">` + work('Edited 2 files, ran 1 command', '<span class="b-diff"><span class="is-add">+12</span><span class="is-del">−3</span></span>') + `</div>`
+
+  $('#d-open').innerHTML = Sub.group({ settled: true, title: head('Ran 3 sub-agents', '2m 40s'), members: [mapEnd, checkEnd, revEnd] })
+
+  // ---- E: the same moments in the new design
+  $('#e-claude').innerHTML = split + Sub.group({ title: head('3 sub-agents', '3 working'), members: [
+    m(MAP, { state: 'working', now: 'Reading client/web/src/sidebar/settings.ts', time: '3m' }),
+    m(CHECK, { state: 'working', now: '<code>&gt;_ pnpm vitest settings</code>', time: '3m' }),
+    m(REV, { state: 'working', now: 'Reading client/web/src/settings/schema.ts', time: '3m' }),
+  ] }) + live('Working for 3m 05s', '3 sub-agents at work')
+  $('#e-codex').innerHTML = `<div class="b-prose"><p>I'll send two agents: one reads Hyprland's socket code, the other compares it with niri's IPC.</p></div>` +
+    Sub.group({ title: head('2 sub-agents', '2 working'), members: [
+      { state: 'working', title: 'Agent 1 · Read the socket code in src/managers/EventManager.cpp and list every event', now: 'Reading EventManager.cpp', time: '6m' },
+      { state: 'working', title: 'Agent 2 · Compare with niri’s IPC and list what Hyprland lacks', now: '<code>&gt;_ rg socket2 ~/src/niri</code>', time: '6m' },
+    ] }) + live('Working for 6m 40s', '2 sub-agents at work')
+
+  BandaIcons.scan(); BandaMark.scan(); Sub.scan()
+
+  // ---- a little life: open rows, fold groups, "more"
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('.s-acts, .s-dacts, a')) return
+    const more = e.target.closest('.s-link')
+    if (more) { const b = more.closest('.s-brief'); b.classList.toggle('is-all'); more.textContent = b.classList.contains('is-all') ? 'less' : 'more'; return }
+    const gh = e.target.closest('.s-ghead')
+    if (gh) { gh.closest('.s-group').classList.toggle('is-folded'); Sub.fit(); return }
+    const line = e.target.closest('.s-row > .s-line')
+    if (line && line.parentElement.querySelector(':scope > .s-detail')) { line.parentElement.classList.toggle('is-open'); Sub.fit() }
+  })
+
+  // the one clock of this surface: the live line in A
+  let secs = 185
+  const clock = $('#a-clock')
+  setTimeout(() => setInterval(() => { secs++; clock.textContent = `Working for ${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s` }, 1000), 4000)
+
+  // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
+  const win = $('#win'), root = document.documentElement
+  const apply = () => {
+    if (location.hash.includes('light') || root.getAttribute('data-theme') === 'light' && !apply.seen) root.setAttribute('data-theme', 'light')
+    else root.removeAttribute('data-theme')
+    apply.seen = true
+    if (location.hash.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+    requestAnimationFrame(() => Sub.fit())
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea')) return
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>

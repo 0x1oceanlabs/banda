@@ -1,0 +1,615 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Crew in the Thread</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<link rel="stylesheet" href="../../../design/kit/sub.css" />
+<style>
+  /* Only this page's layout lives here; every Banda part is in kit.css + sub.css. */
+  body { margin: 0; }
+  .page { min-height: 100vh; padding: 28px; }
+  .page > .b-window { flex: 1; }
+
+  /* The page's own words (Russian), quiet, over the glass. */
+  .p-head { padding: 12px 24px 4px; display: flex; flex-direction: column; gap: 6px; }
+  .p-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.01em; }
+  .p-head p { margin: 0; max-width: 128ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .p-head kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .p-toc { display: flex; flex-wrap: wrap; gap: 4px 18px; margin-top: 4px; font-size: 12.5px; color: var(--muted-foreground); }
+  .p-toc a { color: inherit; text-decoration: none; }
+  .p-toc a b { font: 600 11px var(--font-sans); color: var(--foreground); margin-right: 6px; }
+  .p-toc a:hover { color: var(--foreground); }
+
+  .sec { padding: 30px 16px 6px; display: flex; flex-direction: column; gap: 14px; scroll-margin-top: 12px; }
+  .sec-head { padding: 0 8px; display: flex; flex-direction: column; gap: 4px; max-width: 1040px; }
+  .sec-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 16px; line-height: 24px; font-weight: 600; }
+  .sec-head h2 .id { font: 600 12px var(--font-sans); color: color-mix(in oklab, var(--muted-foreground) 75%, transparent); }
+  .sec-head p { margin: 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+  .sec-head p.pick { color: color-mix(in oklab, var(--foreground) 82%, transparent); }
+  .sec-head p.pick b { font-weight: 600; color: var(--foreground); }
+
+  .grid2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: var(--gap); align-items: start; }
+  .grid2.is-ab { grid-template-columns: minmax(0, 1.18fr) minmax(0, 1fr); }
+  .col { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .cap { display: flex; align-items: baseline; gap: 8px; padding: 0 10px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .cap b { font-weight: 600; color: var(--foreground); }
+
+  /* A Thread tile scrolled to its end: the newest sits on the composer. */
+  .t-tile { flex: none; }
+  .t-tile .b-thread { justify-content: flex-end; }
+  .t-tile .b-chat { flex: none; }
+  .h-a { height: 736px; }
+  .h-c { height: 760px; }
+  .h-d { height: 432px; }
+
+  /* B: the card states, each with a small caption, at a Thread column's width. */
+  .cat { padding: 18px 0 22px; }
+  .cat .b-chat { gap: 26px; padding-top: 8px; padding-bottom: 8px; }
+  .st { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .st-cap { display: flex; align-items: baseline; gap: 8px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .st-cap b { font-weight: 600; color: var(--foreground); }
+
+  /* D: the model picker, open over the Thread (a solid popover, as menus are). */
+  .anchor { position: relative; }
+  .picker { position: absolute; z-index: 5; width: 288px; min-width: 0; padding: 4px; }
+  .pk-head { position: relative; display: flex; align-items: center; justify-content: center; height: 36px; padding: 0 36px; }
+  .pk-fast { position: absolute; left: 0; top: 6px; }
+  .pk-model { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 8px; border-radius: var(--r-control); font-size: 13px; font-weight: 500; white-space: nowrap; }
+  .pk-model:hover { background: color-mix(in oklab, var(--foreground) 8%, var(--floating)); }
+  .pk-model .pk-eff { font-weight: 400; color: var(--effort); }
+  .pk-model .pk-eff.is-top { color: var(--effort-top); }
+  .pk-model .b-icon { width: 14px; height: 14px; color: var(--muted-foreground); }
+  /* The effort slider, as Banda's LevelSlider draws it (Codex's look). */
+  .lvl { padding: 4px 8px 8px; }
+  .lvl-track { height: 24px; border-radius: 999px; padding: 0 2px; background: color-mix(in oklab, var(--foreground) 10%, transparent); }
+  .lvl-ctl { position: relative; height: 100%; }
+  .lvl-fill { position: absolute; top: 0; bottom: 0; left: -2px; width: calc(10px + (100% - 20px) * var(--p) + 12px); border-radius: 999px; background: var(--primary); }
+  .lvl-stop { position: absolute; top: 50%; width: 4px; height: 4px; border-radius: 50%; translate: -50% -50%; background: color-mix(in oklab, var(--foreground) 25%, transparent); }
+  .lvl-stop.is-in { background: color-mix(in oklab, var(--primary-foreground) 50%, transparent); }
+  .lvl-thumb { position: absolute; top: 2px; width: 20px; height: 20px; border-radius: 50%; translate: -50% 0; background: var(--primary-foreground); box-shadow: 0 0 0 0.5px rgb(0 0 0 / 0.14), 0 1px 2px rgb(0 0 0 / 0.22), 0 2px 6px rgb(0 0 0 / 0.12); }
+  .lvl-ends { display: flex; justify-content: space-between; padding: 6px 4px 0; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .lvl-ends .is-on { color: var(--foreground); }
+  /* One switch row with its line of what it does. */
+  .pk-row { display: flex; align-items: flex-start; gap: 12px; padding: 8px 8px 8px 10px; border-radius: var(--r-item); }
+  .pk-row:hover { background: color-mix(in oklab, var(--foreground) 6%, var(--floating)); }
+  .pk-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+  .pk-name { font-size: 13px; line-height: 18px; font-weight: 500; }
+  .pk-about { font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .pk-note { display: flex; gap: 6px; padding: 2px 12px 8px; font-size: 12px; line-height: 16px; color: var(--muted-foreground); }
+  .sw { position: relative; flex: none; width: 36px; height: 20px; margin-top: 1px; border-radius: 999px; background: var(--input); }
+  .sw::after { content: ""; position: absolute; top: 2px; left: 2px; width: 16px; height: 16px; border-radius: 50%; background: var(--background); box-shadow: 0 1px 2px rgb(0 0 0 / 0.2); transition: translate var(--dur) var(--ease); }
+  .sw.is-on { background: var(--primary); }
+  .sw.is-on::after { translate: 16px 0; }
+  [data-theme="light"] .sw:not(.is-on) { background: #e4e4e7; }
+  /* The trigger, off and on, under each tile. */
+  .flip { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; padding: 2px 10px; font-size: 12px; color: var(--muted-foreground); }
+  .flip .b-ctl { pointer-events: none; }
+  .flip .b-ctl.is-pill { background: var(--block); box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .flip .b-icon { width: 14px; height: 14px; color: var(--s-faint); }
+
+  /* E: tips drawn still, as the pointer would see them. */
+  .tips { padding: 20px 24px 22px; display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 30px 32px; }
+  .tip-host { position: relative; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .tip-still { position: absolute; z-index: 4; translate: -50% calc(-100% - 7px); white-space: nowrap; pointer-events: none; box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.45); }
+  .tip-still::after { content: ""; position: absolute; left: var(--ax, 50%); bottom: -4px; translate: -50% 0; border: 4px solid transparent; border-bottom: 0; border-top-color: var(--foreground); }
+  .cursor { position: absolute; z-index: 6; width: 15px; height: 21px; pointer-events: none; filter: drop-shadow(0 1px 1.5px rgb(0 0 0 / 0.45)); }
+  .s-dots > .s-sat.is-hot { filter: brightness(1.35); }
+  .s-bar.is-hot { box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 22%, transparent); }
+
+  /* Questions for Roma, at the end. */
+  .qs { margin: 0; padding: 0 10px 0 30px; display: grid; gap: 8px; font-size: 13px; line-height: 20px; max-width: 980px; }
+  .qs li::marker { color: var(--muted-foreground); }
+  .qs span { color: var(--muted-foreground); }
+  .end { height: 28px; }
+  .b-send.is-stop.t-stop { background: var(--raised); color: var(--foreground); }
+
+  @media (max-width: 1100px) {
+    .grid2, .grid2.is-ab { grid-template-columns: minmax(0, 1fr); row-gap: 22px; }
+    .tips { grid-template-columns: minmax(0, 1fr); }
+  }
+  @media (max-width: 800px) {
+    .page { padding: 10px; }
+    .sec { padding: 24px 8px 4px; }
+    .p-head { padding: 10px 14px 4px; }
+    .tips { padding: 14px 14px 18px; }
+    .h-a { height: 760px; }
+    .h-c.is-lead { height: 704px; }
+  }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen page">
+  <div class="b-window" id="win">
+    <header class="b-bar">
+      <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="working" data-logo data-size="20" data-satellites="3"></span></button>
+      <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget" title="Flow"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget" title="Servers"><i data-icon="globe"></i>:5173</span>
+        <span class="b-widget" title="Claude: weekly 58% spent"><span class="b-ring" style="--share:.58"></span></span>
+        <span class="b-widget"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="p-head">
+      <h1>Crew в Thread и composer</h1>
+      <p>Как Crew просит запуск, живёт в Thread одной карточкой, переживает ход Claude и включается в composer. Сценарий из брифа: Thread «Move sidebar settings to sidebar.toml», Crew <b>audit-routes</b> — Scan · Fix · Verify, 12 агентов. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло вкл/выкл.</p>
+      <nav class="p-toc">
+        <a href="#a"><b>A</b>Разрешение на запуск</a>
+        <a href="#b"><b>B</b>Карточка: состояния</a>
+        <a href="#c"><b>C</b>Работа после хода</a>
+        <a href="#d"><b>D</b>Ultracode и Ultra</a>
+        <a href="#e"><b>E</b>Наведение на полосу</a>
+      </nav>
+    </div>
+
+    <!-- ===================================================== A -->
+    <section class="sec" id="a">
+      <div class="sec-head">
+        <h2><span class="id">A</span>Claude хочет запустить Crew</h2>
+        <p>Под Supervised и Accept edits запуск Crew — обычный запрос разрешения: он встаёт в док над composer, как любой вопрос. Имя, описание и фазы Banda берёт из meta скрипта; прогноза токенов нет, только честное «до 16 сразу». Под Full access ничего не спрашивает — карточка сразу появляется в Thread.</p>
+        <p class="pick"><b>Мой выбор:</b> пока ждёт ответа, в Thread только живая строка «Waiting for you», без карточки «не начат», чтобы фазы не стояли на экране дважды.</p>
+      </div>
+      <div class="grid2 is-ab">
+        <div class="col">
+          <div class="cap"><b>Supervised</b>спрашивает перед запуском</div>
+          <section class="b-tile is-focused t-tile h-a">
+            <div class="b-pane-head b-bare">
+              <span data-mark="asks" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs" title="Thread details"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs" title="Close"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-prose"><p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The settings tests pass.</p></div>
+                <div class="b-you">Before this ships, check that every route under client/web/src/routes does the access check, and fix the ones that don't.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 5 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>There are 12 routes, and at least three read a Thread before they call <code>requireAccess</code>. It is wide, even work, so I'll run it as a Crew: two agents scan the routes, one agent fixes each route that needs it, and three run the test suites as their routes are fixed.</p></div>
+                <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 1m 12s</span><span class="b-quiet">· Waiting for you</span></div></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-docked s-crewask">
+                <div class="b-docked-head">Claude wants to start a Crew</div>
+                <div class="s-crewask-title"><span data-glyph="asks"></span><b>audit-routes</b><span class="s-crew-desc s-fit">Find every route that skips the access check and fix it</span></div>
+                <div class="s-phases"><span><i>1</i>Scan <em>read each route</em></span><span><i>2</i>Fix <em>one agent per route</em></span><span><i>3</i>Verify <em>run the tests</em></span></div>
+                <div class="s-note"><i data-icon="users" data-size="13"></i>Up to 16 sub-agents at once · uses your limits faster</div>
+                <button class="b-choice is-hl"><span class="b-kbd">1</span>Start<span class="s-hint">↵</span></button>
+                <button class="b-choice"><span class="b-kbd">2</span>View script</button>
+                <button class="b-choice b-muted"><span class="b-kbd">Esc</span>No, and tell Claude what to do instead…</button>
+              </div>
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl" title="Supervised"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop t-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col">
+          <div class="cap"><b>Full access</b>не спрашивает: Crew сразу за работой</div>
+          <section class="b-tile t-tile h-a">
+            <div class="b-pane-head b-bare">
+              <span data-mark="working" data-satellites="2" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 6 files, searched for 2 patterns, ran 3 commands, edited 2 files</span><span class="b-diff"><span class="is-add">+38</span><span class="is-del">−9</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The settings tests pass.</p></div>
+                <div class="b-you">Before this ships, check that every route under client/web/src/routes does the access check, and fix the ones that don't.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 5 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>There are 12 routes, and at least three read a Thread before they call <code>requireAccess</code>. It is wide, even work, so I'll run it as a Crew.</p></div>
+                <div data-crew="started"></div>
+                <div class="b-trace"><div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 1m 34s</span><span class="b-quiet">· Crew audit-routes · Scan 0/2</span></div></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl" title="Full access"><svg class="b-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/><path d="M12 8v4"/><path d="M12 16h.01"/></svg></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop t-stop" aria-label="Stop" title="Stop · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== B -->
+    <section class="sec" id="b">
+      <div class="sec-head">
+        <h2><span class="id">B</span>Карточка Crew: все состояния</h2>
+        <p>Единственное, что Crew кладёт в Thread — там, где Claude его запустил. Цвет только у числа ошибок и у «asks»; работа серая, готовое спокойное. Время в карточке не тикает — тикает только живая строка. Счёт агентов растёт по ходу: скрипт запускает их сам, и Banda не знает заранее, сколько их будет.</p>
+        <p class="pick"><b>Мой выбор:</b> больше 24 точек в фазе (или не влезло в строку) — фаза сворачивается в тонкую полосу с долями и счётом «готово/всего». Одна строка и при 500.</p>
+      </div>
+      <div class="grid2">
+        <section class="b-tile cat">
+          <div class="b-chat">
+            <div class="st"><div class="st-cap"><b>Идёт</b>середина Fix: сканер ещё читает, фиксы уже пошли</div><div data-crew="running"></div></div>
+            <div class="st"><div class="st-cap"><b>Закончен</b>14m, две ошибки</div><div data-crew="finished"></div></div>
+            <div class="st"><div class="st-cap"><b>Потерян</b>Banda перезапустилась — запуск не живёт без процесса</div><div data-crew="lost"></div></div>
+          </div>
+        </section>
+        <section class="b-tile cat">
+          <div class="b-chat">
+            <div class="st"><div class="st-cap"><b>Перезапущен</b>бледные точки пришли из прошлого запуска</div><div data-crew="relaunched"></div></div>
+            <div class="st"><div class="st-cap"><b>50 агентов</b>Fix стал полосой</div><div data-crew="fifty"></div></div>
+            <div class="st"><div class="st-cap"><b>500 агентов</b>все фазы полосами, всё ещё одна строка</div><div data-crew="fivehundred"></div></div>
+          </div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ===================================================== C -->
+    <section class="sec" id="c">
+      <div class="sec-head">
+        <h2><span class="id">C</span>Работа переживает ход</h2>
+        <p>Claude запустил Crew и закончил свой ход. Thread остаётся Working (серая марка со спутниками), в конце — живая строка без часов: «Claude goes on when it ends». Composer свободен и подсказывает «Steer this thread…» — сообщение уйдёт Claude сразу, а не в очередь; пока поле пустое, кнопка — Stop, она останавливает и Crew. Когда Crew кончается, Claude продолжает сам: строка «finished · 14m», потом его ответ.</p>
+      </div>
+      <div class="grid2">
+        <div class="col">
+          <div class="cap"><b>Ход закончен</b>Crew ещё работает, composer свободен</div>
+          <section class="b-tile is-focused t-tile h-c is-lead">
+            <div class="b-pane-head b-bare">
+              <span data-mark="working" data-satellites="3" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 6 files, searched for 2 patterns, ran 3 commands, edited 2 files</span><span class="b-diff"><span class="is-add">+38</span><span class="is-del">−9</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The settings tests pass.</p></div>
+                <div class="b-you">Before this ships, check that every route under client/web/src/routes does the access check, and fix the ones that don't.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 5 files, searched for 2 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>There are 12 routes, and at least three read a Thread before they call <code>requireAccess</code>. It is wide, even work, so I'll run it as a Crew.</p></div>
+                <div data-crew="later"></div>
+                <div class="b-prose"><p>The Crew is on it. I'll pick it up when it ends; write here if you want to steer it meanwhile.</p></div>
+                <div class="b-trace"><div class="b-tl"><span data-glyph="running" data-size="15"></span><span class="b-shimmer">Crew audit-routes is at work</span><span class="b-quiet">· Fix 4/7 · Claude goes on when it ends</span></div></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-stop t-stop" aria-label="Stop" title="Stop the Crew · Esc"></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+
+        <div class="col">
+          <div class="cap"><b>Crew закончил</b>Claude продолжил сам</div>
+          <section class="b-tile t-tile h-c">
+            <div class="b-pane-head b-bare">
+              <span data-mark="done" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-prose"><p>There are 12 routes, and at least three read a Thread before they call <code>requireAccess</code>. It is wide, even work, so I'll run it as a Crew.</p></div>
+                <div data-crew="finished2"></div>
+                <div class="b-prose"><p>The Crew is on it. I'll pick it up when it ends; write here if you want to steer it meanwhile.</p></div>
+                <div class="b-trace"><div class="b-tl"><i data-icon="corner-down-right"></i><span class="b-tl-text"><span class="b-subject">Crew audit-routes</span> finished · 14m · Claude went on by itself</span></div></div>
+                <div class="b-prose">
+                  <p>12 routes checked; 7 read a Thread before the access check. Six of them now call <code>requireAccess</code> first.</p>
+                  <p>Two need you:</p>
+                  <ul>
+                    <li><a class="b-path" href="#">hosts/pair.ts</a>: pairing runs before there is a session, so the check can't come first. Keep it open for pairing only, or put pairing behind a one-time code?</li>
+                    <li>The settings suite fails one test in <code>keys.test.ts</code>: it expects 404 for a stranger and now gets 403. I'd update the test.</li>
+                  </ul>
+                </div>
+                <div class="b-block">
+                  <div class="b-block-head"><i data-icon="file-diff"></i><span class="b-block-title">Edited 6 files</span><span class="b-diff"><span class="is-add">+51</span><span class="is-del">−13</span></span><span class="b-end"><button class="b-btn is-ghost is-sm">Review</button></span></div>
+                </div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                  <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== D -->
+    <section class="sec" id="d">
+      <div class="sec-head">
+        <h2><span class="id">D</span>Composer: Ultracode и Ultra</h2>
+        <p>Модель и усилие — одна тихая подпись у кнопки отправки. Верхний уровень пурпурный (<code class="b-code-inline">--effort-top</code>), больше цвета нет. У Claude <b>Ultracode</b> — переключатель в выборе модели, при любом усилии: подпись становится «Opus 5.5 Ultracode». У Codex <b>Ultra</b> — последний уровень ползунка, как у самого Codex.</p>
+        <p class="pick"><b>Мой выбор:</b> одна строка под переключателем и под Ultra — что будет и что это стоит лимитов. Без значков-предупреждений и без лишних строк.</p>
+      </div>
+      <div class="grid2">
+        <div class="col">
+          <div class="cap"><b>Claude Code</b>выбор модели открыт, Ultracode включён</div>
+          <section class="b-tile is-focused t-tile h-d anchor" id="d-claude">
+            <div class="b-pane-head b-bare">
+              <span data-mark="open" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 6 files, searched for 2 patterns, ran 3 commands <span class="b-destructive">(1 failed)</span>, edited 2 files</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div class="b-prose"><p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The tests pass again; the first run failed on a default I had renamed.</p><p>The old <code>[row]</code> keys are still read in two places, and the settings Pane's schema still lists them.</p></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl is-open" data-trigger><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort is-top">Ultracode</span></button>
+                  <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+            <div class="b-menu picker" data-picker>
+              <div class="pk-head">
+                <button class="b-ib is-xs pk-fast" title="Fast mode"><i data-icon="zap"></i></button>
+                <button class="pk-model"><span data-emblem="claude"></span>Opus 5.5 <span class="pk-eff">High</span><i data-icon="chevron-right"></i></button>
+              </div>
+              <div class="lvl" data-levels="Low,Medium,High,Extra high,Max" data-at="2"></div>
+              <div class="b-menu-sep"></div>
+              <div class="pk-row">
+                <span class="pk-text"><span class="pk-name">Ultracode</span><span class="pk-about">Claude starts a Crew for every big task. Uses your limits faster.</span></span>
+                <span class="sw is-on" role="switch" aria-checked="true"></span>
+              </div>
+            </div>
+          </section>
+          <div class="flip"><span>подпись:</span><span class="b-ctl is-pill"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></span><i data-icon="arrow-right"></i><span class="b-ctl is-pill"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort is-top">Ultracode</span></span></div>
+        </div>
+
+        <div class="col">
+          <div class="cap"><b>Codex</b>выбор модели открыт, усилие Ultra</div>
+          <section class="b-tile t-tile h-d anchor" id="d-codex">
+            <div class="b-pane-head b-bare">
+              <span data-mark="open" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Research: Hyprland socket</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="b-thread">
+              <div class="b-chat">
+                <div class="b-you">How does Hyprland's socket work, and how is niri's different? Read both, don't change anything.</div>
+                <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 7 files, ran 4 commands</span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+                <div data-group="codex"></div>
+                <div class="b-prose"><p>Hyprland's event socket sends one line per event, <code>name&gt;&gt;data</code>, and never answers. Commands go to the other socket, <code>.socket.sock</code>, one per connection.</p><p>niri has one socket for both and speaks JSON, so a reader for it would look different.</p></div>
+              </div>
+            </div>
+            <div class="b-composer-wrap">
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Write to Codex. @ files, / commands, $ skills</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl is-open" data-trigger><span data-emblem="codex"></span>GPT-5.5 <span class="b-effort is-top">Ultra</span></button>
+                  <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+            <div class="b-menu picker" data-picker>
+              <div class="pk-head">
+                <button class="pk-model"><span data-emblem="codex"></span>GPT-5.5 <span class="pk-eff is-top">Ultra</span><i data-icon="chevron-right"></i></button>
+              </div>
+              <div class="lvl" data-levels="Light,Medium,High,Extra high,Max,Ultra" data-at="5"></div>
+              <div class="pk-note">Ultra hands work to sub-agents on its own. Uses your limits faster.</div>
+            </div>
+          </section>
+          <div class="flip"><span>подпись:</span><span class="b-ctl is-pill"><span data-emblem="codex"></span>GPT-5.5 <span class="b-effort">High</span></span><i data-icon="arrow-right"></i><span class="b-ctl is-pill"><span data-emblem="codex"></span>GPT-5.5 <span class="b-effort is-top">Ultra</span></span></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ===================================================== E -->
+    <section class="sec" id="e">
+      <div class="sec-head">
+        <h2><span class="id">E</span>Полоса: наведение и клик</h2>
+        <p>Наведение на точку — подсказка: метка агента из скрипта (часто путь) и его состояние словом. На свёрнутой фазе — её счёт. Клик по точке открывает этого агента в панели Crew, в Group этого Thread; Enter на карточке — саму панель.</p>
+      </div>
+      <section class="b-tile">
+        <div class="tips">
+          <div class="tip-host" data-tip-at="1:2"><div class="st-cap"><b>Точка</b>ошибка в Fix</div><div data-crew="later-tip"></div></div>
+          <div class="tip-host" data-tip-at="bar"><div class="st-cap"><b>Полоса</b>фаза из 150 агентов: её счёт</div><div data-crew="fivehundred-tip"></div></div>
+          <div class="tip-host" data-tip-at="1:0"><div class="st-cap"><b>Из прошлого запуска</b>бледная точка так и говорит</div><div data-crew="relaunched-tip"></div></div>
+          <div class="tip-host" data-tip-at="1:4"><div class="st-cap"><b>Работает</b>метка-путь целиком, состояние словом</div><div data-crew="later-tip2"></div></div>
+        </div>
+      </section>
+    </section>
+
+    <section class="sec" id="q">
+      <div class="sec-head"><h2><span class="id">?</span>Вопросы к Роме</h2></div>
+      <ol class="qs">
+        <li>Пока Crew ждёт разрешения — в Thread только живая строка, а фазы только в доке? <span>Мой выбор: да, без карточки «не начат».</span></li>
+        <li>Подпись с Ultracode: «Opus 5.5 Ultracode» (усилие видно в выборе модели) или «Opus 5.5 High · Ultracode»? <span>Мой выбор: первое, короче.</span></li>
+        <li>Живая строка после хода — без часов; часы Crew только в его панели. <span>Мой выбор: да, одни часы на поверхность.</span></li>
+        <li>Потерянный Crew: «Ask Claude to go on» шлёт Claude готовую просьбу продолжить с прошлого запуска. <span>Мой выбор: да, одна кнопка, без отдельного «Relaunch».</span></li>
+      </ol>
+    </section>
+    <div class="end"></div>
+  </div>
+</div>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script src="../../../design/kit/sub.js"></script>
+<script>
+  const $ = (s, r) => (r || document).querySelector(s)
+  const $$ = (s, r) => [...(r || document).querySelectorAll(s)]
+
+  // ---- the Crew audit-routes: Scan 2 · Fix 7 · Verify 3 = 12 agents
+  const R = 'client/web/src/routes/'
+  const SCAN = [R + 'billing, settings, hosts', R + 'threads, auth, files']
+  const FIX = ['billing/invoices.ts', 'settings/keys.ts', 'hosts/pair.ts', 'threads/later.ts', 'threads/share.ts', 'auth/session.ts', 'files/upload.ts'].map((p) => R + p)
+  const VER = ['Tests: billing, auth', 'Tests: settings, files', 'Tests: hosts, threads']
+  const ag = (labels) => (states) => states.map((s, i) => {
+    const dim = s.startsWith('~'), st = s.replace('~', '')
+    return { state: st, label: labels[i % labels.length], dim }
+  })
+  const scan = ag(SCAN), fix = ag(FIX), ver = ag(VER)
+  const crew = (a, b, c) => [{ title: 'Scan', agents: scan(a) }, { title: 'Fix', agents: fix(b) }, { title: 'Verify', agents: ver(c) }]
+  const many = (spec, label) => spec.split(' ').flatMap((t) => { const [s, n] = t.split('*'); return Array.from({ length: +n || 1 }, (_, i) => ({ state: s, label: label(i) })) })
+  const routeN = (i) => R + 'app-' + (1 + (i % 6)) + '/route-' + (i + 1) + '.ts'
+  const base = { name: 'audit-routes', desc: 'Find every route that skips the access check and fix it' }
+
+  const CREWS = {
+    started: { phases: crew(['working', 'working'], [], []), narrator: 'Reading 12 routes', time: '20s' },
+    running: { phases: crew(['done', 'working'], ['done', 'working', 'failed', 'working'], []), current: 1,
+      narrator: '9 of 12 routes scanned · 4 need a fix', time: '4m' },
+    later: { phases: crew(['done', 'done'], ['done', 'done', 'failed', 'done', 'working', 'working', 'working'], []), current: 1,
+      narrator: '12 of 12 routes scanned · 7 need a fix · 3 fixed', time: '7m' },
+    finished: { state: 'finished', phases: crew(['done', 'done'], ['done', 'done', 'failed', 'done', 'done', 'done', 'done'], ['done', 'failed', 'done']),
+      narrator: '6 of 7 routes fixed · tests pass in 2 of 3 suites', time: '14m' },
+    lost: { state: 'lost', phases: crew(['done', 'done'], ['done', 'done', 'failed', 'done', 'done', 'lost', 'done'], ['lost', 'lost', 'lost']),
+      narrator: '12 of 12 routes scanned · 7 need a fix · 5 fixed' },
+    relaunched: { state: 'relaunched', phases: crew(['~done', '~done'], ['~done', '~done', 'working', '~done', '~done', 'working', '~done'], ['queued', 'working', 'queued']),
+      narrator: 'Relaunched · 7 agents came back from the last run', time: '1m', foot: '12 agents · 3 working · 2 waiting · 7 from last run' },
+    // the same moment as page 03, C: 8 cores = 6 slots, so 5 work, 1 asks and 20 wait
+    fifty: { phases: [{ title: 'Scan', agents: many('done*10', routeN) }, { title: 'Fix', agents: many('done*12 failed*2 asks working*5 queued*8', routeN) }, { title: 'Verify', agents: many('queued*12', routeN) }],
+      current: 1, narrator: '48 routes in 6 apps scanned · 28 need a fix · 12 fixed', time: '18m' },
+    fivehundred: { phases: [{ title: 'Scan', agents: many('done*296 failed*4', routeN) }, { title: 'Fix', agents: many('done*60 failed*2 working*10 queued*78', routeN) }, { title: 'Verify', agents: many('done*4 working*6 queued*40', routeN) }],
+      current: 1, narrator: '1,184 routes scanned · 150 need a fix · 60 fixed', time: '38m' },
+  }
+  CREWS.finished2 = CREWS.finished
+  CREWS['later-tip'] = CREWS.later
+  CREWS['fivehundred-tip'] = CREWS.fivehundred
+  CREWS['relaunched-tip'] = CREWS.relaunched
+  CREWS['later-tip2'] = CREWS.later
+  $$('[data-crew]').forEach((el) => {
+    const d = CREWS[el.getAttribute('data-crew')]
+    if (d) Sub.crew(el, Object.assign({}, base, d))
+  })
+
+  // ---- the effort sliders, drawn as Banda's LevelSlider
+  $$('.lvl[data-levels]').forEach((el) => {
+    const names = el.dataset.levels.split(','), at = +el.dataset.at, last = names.length - 1
+    const pos = (i) => `calc(10px + (100% - 20px) * ${i / last})`
+    el.innerHTML = `<div class="lvl-track"><div class="lvl-ctl" style="--p:${at / last}"><span class="lvl-fill"></span>` +
+      names.map((n, i) => i === at ? '' : `<span class="lvl-stop${i < at ? ' is-in' : ''}" style="left:${pos(i)}"></span>`).join('') +
+      `<span class="lvl-thumb" style="left:${pos(at)}"></span></div></div>` +
+      `<div class="lvl-ends"><span class="${at === 0 ? 'is-on' : ''}">${names[0]}</span><span class="${at === last ? 'is-on' : ''}">${names[last]}</span></div>`
+  })
+
+  // ---- D: Codex's earlier sub-agents, settled into one group row (named by their prompts, brief 5.11)
+  const GROUPS = {
+    codex: { settled: true, folded: true, time: '1m 40s', members: [
+      { state: 'done', title: "Agent 1 · Read the socket code in Hyprland", now: 'Two sockets: events out, commands in', time: '1m 12s' },
+      { state: 'done', title: "Agent 2 · Compare with niri's IPC", now: 'One socket, JSON both ways', time: '1m 40s' },
+    ] },
+  }
+  $$('[data-group]').forEach((el) => { const g = GROUPS[el.dataset.group]; if (g) el.outerHTML = Sub.group(g) })
+
+  BandaIcons.scan(); BandaMark.scan(); Sub.scan()
+
+  // ---- D: each picker opens above its trigger, right edges aligned
+  const anchorPickers = () => $$('.anchor').forEach((host) => {
+    const m = $('[data-picker]', host), t = $('[data-trigger]', host)
+    if (!m || !t) return
+    const h = host.getBoundingClientRect(), b = t.getBoundingClientRect()
+    m.style.left = Math.max(8, b.right - h.left - m.offsetWidth) + 'px'
+    m.style.top = (b.top - h.top - m.offsetHeight - 6) + 'px'
+  })
+
+  // ---- E: a tip and the pointer, drawn still over a dot or a bar
+  const CURSOR = '<svg viewBox="0 0 15 21" width="15" height="21"><path d="M1.2 1.2v15.6l3.9-3.6 2.7 6.2 2.5-1.1-2.7-6.1h5.4z" fill="#fff" stroke="#111" stroke-width="1.1" stroke-linejoin="round"/></svg>'
+  const tips = () => $$('.tip-host').forEach((host) => {
+    const at = host.dataset.tipAt
+    const target = at === 'bar' ? $('.s-phase.is-current .s-bar', host) : $(`[data-i="${at}"]`, host)
+    if (!target) return
+    $$('.is-hot', host).forEach((n) => n.classList.remove('is-hot')); target.classList.add('is-hot')
+    let tip = $('.tip-still', host), cur = $('.cursor', host)
+    if (!tip) { tip = document.createElement('span'); tip.className = 'b-tip tip-still'; host.appendChild(tip) }
+    if (!cur) { cur = document.createElement('span'); cur.className = 'cursor'; cur.innerHTML = CURSOR; host.appendChild(cur) }
+    tip.textContent = target.getAttribute('data-tip')
+    const h = host.getBoundingClientRect(), b = target.getBoundingClientRect()
+    const x = at === 'bar' ? b.left + b.width * 0.42 : b.left + b.width / 2
+    const cx = Math.min(Math.max(x - h.left, tip.offsetWidth / 2), h.width - tip.offsetWidth / 2)
+    tip.style.left = cx + 'px'
+    tip.style.setProperty('--ax', (x - h.left - cx + tip.offsetWidth / 2) + 'px')
+    tip.style.top = (b.top - h.top) + 'px'
+    cur.style.left = (x - h.left - 1) + 'px'
+    cur.style.top = (b.top - h.top + b.height / 2 - 1) + 'px'
+  })
+
+  const layout = () => requestAnimationFrame(() => { Sub.fit(); anchorPickers(); tips() })
+  layout(); addEventListener('resize', layout)
+  if (document.fonts) document.fonts.ready.then(layout)
+
+  // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
+  const win = $('#win'), root = document.documentElement
+  const apply = () => {
+    if (location.hash.includes('light') || root.getAttribute('data-theme') === 'light' && !apply.seen) root.setAttribute('data-theme', 'light')
+    else root.removeAttribute('data-theme')
+    apply.seen = true
+    if (location.hash.includes('solid') || win.getAttribute('data-glass') === 'off' && !apply.glass) win.setAttribute('data-glass', 'off')
+    else win.removeAttribute('data-glass')
+    apply.glass = true
+    layout()
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea')) return
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>

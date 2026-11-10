@@ -152,6 +152,23 @@ permission to run an action. The Harness writes the choices, and the Person's
 answer goes back to the Harness unchanged.
 _Avoid_: prompt, approval request.
 
+**Sub-agent**:
+A Harness's helper at work inside a Thread, such as Claude Code's Agent
+tool or Codex's `spawn_agent`. It is part of the Thread's Agent, with no
+name, settings or pass of its own, and no card: its Thread's host keeps it
+with the Thread, which shows it as a row and as a satellite of its Mark,
+and opens it beside, read only. The Person reaches it through the Agent:
+Ask Claude about it (ADR 0103).
+_Avoid_: subagent, task, child Thread (that is a Thread another Agent
+started, ADR 0019).
+
+**Crew**:
+The sub-agents one Thread set to work together in **phases**, the steps
+its script names, such as Scan, Fix and Verify: what Claude Code calls a
+workflow. Its title is the Harness's name for it. It shows as one card in
+the Thread and as the Crew Pane in the Thread's Group (ADR 0103).
+_Avoid_: workflow (that is steps across Apps), task, swarm, team.
+
 ## Shape
 
 **Engine**:
@@ -865,7 +882,8 @@ Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
 colour say what the work calls the Person for: it asks them (a triangle),
 failed (an octagon), finished, woke from Later, is open, sleeps until
 later, or the engine is offline; while it works it shows what its Agent
-does: reads, edits, runs `>_`, waits on sub-agents (ADR 0099). In the bar
+does: reads, edits, runs `>_`, waits on sub-agents, which circle it as
+satellites, red for one that failed (ADR 0099, ADR 0103). In the bar
 it shows the loudest of every Thread, on its top tile only; in the
 sidebar, each Thread's own. A finished or failed
 turn settles once the Person has looked at its Thread; a Question asks until
