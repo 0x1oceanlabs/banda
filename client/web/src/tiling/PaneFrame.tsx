@@ -43,6 +43,7 @@ import {
 import { launcher } from "../launcher"
 import { kindOf, labelOf, sayLabel, showsOf, useLabel } from "../registry"
 import {
+  type KeptHosts,
   reachWords,
   UNKNOWN,
   usePaneOn,
@@ -133,19 +134,20 @@ type Handle = Pick<
  * opens, and its own args, name no host, as the directory says which
  * machine has each Project (ADR 0106, decision 1), whatever host its args
  * were handed (`paneOn`, `KeptHosts.paneOn`), so the arrangement keeps
- * none; and it takes nothing this machine attaches, as that names this
- * machine's files. */
+ * none, and a Project no machine lists yet is taken as that host's; and it
+ * takes nothing this machine attaches, as that names this machine's
+ * files. */
 export function handleOf(
   frame: Frame,
   entry: string,
   project: ProjectId,
   kind: string,
   host: string | undefined,
-  paneOn: (project: ProjectId, pane: PaneState) => PaneState
+  paneOn: KeptHosts["paneOn"]
 ): Handle {
   return {
     open: (pane, place, into = project) =>
-      frame.open(into, paneOn(into, pane), entry, place),
+      frame.open(into, paneOn(into, pane, host), entry, place),
     update: (args) => frame.update(entry, paneOn(project, { kind, args })),
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),

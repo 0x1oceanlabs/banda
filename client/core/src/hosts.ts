@@ -582,13 +582,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * which machine has its Project (ADR 0106, decision 1). A host its args
    * name, as an arrangement written before kept it, the directory takes
    * first where it knows nothing of that Project, so the Pane still goes
-   * there after a restart.
+   * there after a restart; so does the host of the Pane that opens it,
+   * `opener`, whose Project it is though that host has not listed it yet.
    */
-  paneOn(project: ProjectId, pane: PaneState): PaneState {
+  paneOn(project: ProjectId, pane: PaneState, opener?: string): PaneState {
     const named = paneHost(pane)
-    if (named === undefined) return pane
-    if (this.hostOf(project) === null) this.#learn(project, { host: named })
-    return withHost(pane, undefined)
+    const host = named ?? opener
+    if (host !== undefined && this.hostOf(project) === null)
+      this.#learn(project, { host })
+    return named === undefined ? pane : withHost(pane, undefined)
   }
 
   /** The Apps each host's engine last listed in its welcome, kept from

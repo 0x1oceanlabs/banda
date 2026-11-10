@@ -33,6 +33,8 @@ export function kept<V>(
   const none: Readonly<Record<string, V>> = {}
   const heard = new Set<() => void>()
   let here: Readonly<Record<string, V>> | undefined
+  // Whether the storage took `here`: what it holds then is the latest.
+  let stored = true
 
   const load = () => {
     try {
@@ -56,19 +58,23 @@ export function kept<V>(
     here = all
     try {
       localStorage.setItem(key, JSON.stringify(here))
+      stored = true
     } catch {
       // `here` holds it.
+      stored = false
     }
     heard.forEach((hear) => hear())
   }
   // A change starts from what is kept now: another window may have
-  // changed it while none here heard.
+  // changed it while none here heard. Where the storage would not take
+  // the last one, `here` has what it lacks.
+  const latest = () => (stored ? load() : read())
   const put = (id: string, value: V) => {
-    const others = Object.entries(load()).filter(([other]) => other !== id)
+    const others = Object.entries(latest()).filter(([other]) => other !== id)
     keepAll(Object.fromEntries([...others.slice(-(keep - 1)), [id, value]]))
   }
   const drop = (id: string) => {
-    if (!(id in load())) return
+    if (!(id in latest())) return
     keepAll(
       Object.fromEntries(
         Object.entries(read()).filter(([other]) => other !== id)

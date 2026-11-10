@@ -9,4 +9,12 @@
 import { isPlaced, type Placed } from "@banda/core"
 import { kept } from "@banda/ui/lib/kept"
 
-export const DIRECTORY = kept<Placed>("banda.machines.directory", isPlaced)
+// Past the Projects a device meets: each Thread's own scratch Project is
+// one too, and a machine's is learned again only while it lists it.
+const KEEP = 5000
+
+export const DIRECTORY = kept<Placed>(
+  "banda.machines.directory",
+  isPlaced,
+  KEEP
+)
