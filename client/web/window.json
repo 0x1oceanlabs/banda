@@ -440,6 +440,17 @@
       "keys": []
     },
     {
+      "id": "workspaces.unarrange",
+      "title": "Undo Arrange by Project",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "KeyZ",
+          "primary": true
+        }
+      ]
+    },
+    {
       "id": "flow.pick",
       "title": "Pick how the Agents' windows stand: free, row or solo",
       "section": "Workspaces",

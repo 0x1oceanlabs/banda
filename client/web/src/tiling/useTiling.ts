@@ -152,7 +152,8 @@ export function useTiling({
         },
         (error: unknown) => {
           unanswered.done(id)
-          refused(error)
+          if (plan.refused) plan.refused(error)
+          else refused(error)
           store.set(dropped(store.get(), id))
         }
       )

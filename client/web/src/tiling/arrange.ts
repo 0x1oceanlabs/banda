@@ -310,8 +310,14 @@ export function keptOf(state: Workspaces): Kept[] {
 
 /** A change for the engine to make, and the Pane to focus once it shows
  * it; a Pane opened is focused by the ID the engine gives it, unless
- * `focus` is false. */
-export type Plan = { command: Command; want?: string; focus?: false }
+ * `focus` is false. One the engine refuses is logged, unless `refused`
+ * says it otherwise. */
+export type Plan = {
+  command: Command
+  want?: string
+  focus?: false
+  refused?: (error: unknown) => void
+}
 
 /**
  * What a change of the workspaces comes to: the view alone, as the

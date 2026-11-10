@@ -136,13 +136,15 @@ export function movesOf(binds: Keys["binds"], from: Mod, to: Mod): Move[] {
 
 /** The keys in force for what names them (ADR 0068, decision 4), from
  * the actions with their keys in force: the mod, each action's first key
- * by its id, and every key by the scope its action works in. */
+ * by its id, and every key by the scope its action works in, but those a
+ * browser's page keeps (`pageKeeps`), which main never takes from it. */
 export function keysInForce<Context>(
   mod: Mod,
   actions: readonly Action<Context>[]
 ): KeysInForce {
   const byScope = new Map<string, Key[]>()
   for (const action of actions) {
+    if (action.pageKeeps) continue
     const scope = action.scope ?? ""
     const keys = byScope.get(scope) ?? []
     keys.push(...(action.keys ?? []))

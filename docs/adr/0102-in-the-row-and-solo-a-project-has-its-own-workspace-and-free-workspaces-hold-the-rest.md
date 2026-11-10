@@ -215,8 +215,7 @@ day.
    place, as its first Pane's Project says: last on that Project's
    workspace, or, of no Project, on the top free one; with `only`, that
    Project's alone, which the window sends when a Project of no Project
-   is made a Project's. `Ctrl+Z` does not undo it yet: the workspaces
-   have no undo. After the UX review: a Group goes as its Agent's
+   is made a Project's. After the UX review: a Group goes as its Agent's
    Thread's Project says, else as its first Pane's, as a Group moves
    (decision 6). On the Project's workspace, one with no Agent's Thread
    and no Pane an Agent opened goes into the own Group, first, which it
@@ -226,7 +225,13 @@ day.
    does for a Pane that opens: another machine's too, and one whose
    folder is missing; a draft in this machine's own ID, as a new Thread
    in No Project starts, is of no Project. The sidebar's Flow menu
-   offers it as well, in the row and solo.
+   offers it as well, in the row and solo. Then Undo: the Person's
+   Arrange says so in a toast; its Undo, or `Ctrl+Z` while the toast
+   shows and no field, program, page or Pane with an Undo of its own
+   (as Files) has the key, puts the workspaces back as they stood, each
+   Pane keeping the args it has now, and the Pane in front still in
+   front (`workspaces.unarrange`). Once they changed since, the engine
+   refuses Undo, and the window shows its words.
 
 ## Consequences
 

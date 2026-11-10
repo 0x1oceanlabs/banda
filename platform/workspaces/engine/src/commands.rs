@@ -7,13 +7,14 @@
 //! WebAssembly (T1), `apply` is what a client calls instead.
 //!
 //! What needs the module's store stays in the module: that it takes a
-//! window's arrangement once, the workspaces set aside, the Agents' tools
-//! behind their walls, the arrangement's upgrades as it is read, and the
-//! events. So does what it knows of the kinds of Pane: its handler of
-//! `open` fills `grouped` from the kind when it is left out, and that of
-//! `arrange` its `leads` from those kinds; `apply` takes both as sent. A
-//! window sends them by the kinds that open grouped (`PaneKind.grouped`),
-//! so its copy of the model knows no kind.
+//! window's arrangement once, the workspaces set aside, the last Arrange
+//! by Project that Undo puts back, the Agents' tools behind their walls,
+//! the arrangement's upgrades as it is read, and the events. So does what
+//! it knows of the kinds of Pane: its handler of `open` fills `grouped`
+//! from the kind when it is left out, and that of `arrange` its `leads`
+//! from those kinds; `apply` takes both as sent. A window sends them by
+//! the kinds that open grouped (`PaneKind.grouped`), so its copy of the
+//! model knows no kind.
 
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
@@ -27,7 +28,8 @@ use serde_json::{Value, json};
 use ts_rs::TS;
 
 /// The commands `apply` runs: the module's own, but for those that need
-/// its store (`set_aside`, `bring_back`) and the Agents' tools.
+/// its store (`set_aside`, `bring_back`, `unarrange`) and the Agents'
+/// tools.
 pub const METHODS: &[&str] = &[
     "open",
     "close",
