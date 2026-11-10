@@ -2,13 +2,17 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { AccountKey } from "./AccountKey";
 import type { AccountProfile } from "./AccountProfile";
 import type { AccountStatus } from "./AccountStatus";
 import type { Accounted } from "./Accounted";
+import type { AddGateway } from "./AddGateway";
 import type { AskLimits } from "./AskLimits";
 import type { AskUsage } from "./AskUsage";
 import type { ConnectAccount } from "./ConnectAccount";
+import type { GatewayAdded } from "./GatewayAdded";
 import type { HarnessView } from "./HarnessView";
+import type { Kept } from "./Kept";
 import type { LimitsNow } from "./LimitsNow";
 import type { LoginAccount } from "./LoginAccount";
 import type { LoginId } from "./LoginId";
@@ -81,6 +85,26 @@ sign_in: CommandMethod<SignIn, null>,
  * Asks the Harness to sign out.
  */
 sign_out: CommandMethod<OneHarness, null>, 
+/**
+ * Adds an Account that reaches its models through a gateway, its
+ * key kept in the machine's keyring, never in a file the Harness
+ * reads (ADR 0078, decision 1).
+ */
+add_gateway: CommandMethod<AddGateway, GatewayAdded>, 
+/**
+ * Keeps a new key for a gateway account.
+ */
+set_key: CommandMethod<AccountKey, Kept>, 
+/**
+ * A gateway account's key, for the Person and for that account's
+ * own Harness process, as its `banda secret get` asks.
+ */
+secret: CallMethod<OneHarness, string>, 
+/**
+ * Signs a Codex account in with an OpenAI API key, which Codex
+ * keeps.
+ */
+api_key: CommandMethod<AccountKey, null>, 
 /**
  * How much of each Harness account's usage limits is spent: a
  * window for its session and its week, each with the share spent

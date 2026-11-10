@@ -891,8 +891,14 @@ async fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
-    let open =
-        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let open = |params| {
+        machine.answer_from(
+            CommandId::new(),
+            agent.clone(),
+            "workspaces.open_pane",
+            params,
+        )
+    };
     // The window shows the Thread, a Group of its own, with what it keeps
     // beside its ID; the Person's page after it.
     let args = json!({ "thread": thread, "harness": "fake", "title": "Fix" });
@@ -947,8 +953,14 @@ async fn what_an_agent_opens_goes_beside_its_thread_on_its_workspace_and_only_it
     let (work, home) = (machine.project("Work").await, machine.project("Home").await);
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
-    let open =
-        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let open = |params| {
+        machine.answer_from(
+            CommandId::new(),
+            agent.clone(),
+            "workspaces.open_pane",
+            params,
+        )
+    };
     let page = json!({ "project": work, "kind": "browser.browser", "args": { "url": "a" } });
     let person = machine.command("workspaces.open", page).await.unwrap();
 
@@ -998,8 +1010,14 @@ async fn a_thread_an_agent_opens_starts_a_group_of_its_own_never_in_its_threads(
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
-    let open =
-        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let open = |params| {
+        machine.answer_from(
+            CommandId::new(),
+            agent.clone(),
+            "workspaces.open_pane",
+            params,
+        )
+    };
     let its = open(on_thread(thread)).await.unwrap().value;
     let diff = open(changes()).await.unwrap().value;
     let list = machine.list().await;
@@ -1034,8 +1052,14 @@ async fn what_an_agent_opens_with_its_thread_not_shown_goes_last_on_its_projects
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
-    let open =
-        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let open = |params| {
+        machine.answer_from(
+            CommandId::new(),
+            agent.clone(),
+            "workspaces.open_pane",
+            params,
+        )
+    };
     closed_on_its_workspace(&machine, work, thread).await;
 
     // The Diff goes there, and no workspace is made for it.
@@ -1062,8 +1086,14 @@ async fn what_an_agent_opens_passes_a_free_workspace_with_its_projects_panes() {
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
-    let open =
-        |params| machine.answer_from(CommandId::new(), agent, "workspaces.open_pane", params);
+    let open = |params| {
+        machine.answer_from(
+            CommandId::new(),
+            agent.clone(),
+            "workspaces.open_pane",
+            params,
+        )
+    };
     // A Work terminal on a free workspace, and under it Work's own.
     let free = json!({ "to": "free" });
     let terminal = placed(work, "terminal.terminal", json!({}), free);

@@ -148,11 +148,14 @@ mod build {
     }
 
     pub fn harnesses(host: &HostContext<'_>) -> HarnessesModule {
+        let secrets =
+            banda_harnesses::Secrets::new(crate::places::FOLDER, host.places.state.join("secrets"));
         HarnessesModule::new(host.harnesses.clone()).with_accounts(
             host.places.data.join("accounts"),
             std::sync::Arc::new(banda_settings::accounts::Store::new(
                 host.places.config.clone(),
             )),
+            secrets,
         )
     }
 
@@ -579,6 +582,31 @@ mod tests {
         }
         let listed: Vec<&str> = marked.iter().map(|(name, _)| *name).collect();
         assert_eq!(read_by_mark, listed, "the methods that say `read`");
+    }
+
+    /// A pass reaches a machine's method only as a tool, or by its line's
+    /// `pass` (ADR 0078, decision 1): those that say it are these alone,
+    /// each with why. A mark taken in error would hand every Agent's pass a
+    /// way past the machine's wall, so a new one is added here with its
+    /// reason, and its handler says whose pass it answers.
+    #[test]
+    fn only_these_methods_a_pass_reaches_that_are_no_tools() {
+        let marked = [(
+            "harnesses.secret",
+            "a gateway account's own Harness asks for its key",
+        )];
+        let passed: Vec<String> = (every_method().into_iter())
+            .filter(|(_, method)| method.pass)
+            .map(|(name, _)| name)
+            .collect();
+        let listed: Vec<&str> = marked.iter().map(|(name, _)| *name).collect();
+        assert_eq!(passed, listed, "the methods that say `pass`");
+        for (name, method) in every_method() {
+            assert!(
+                !(method.pass && method.tool.is_some()),
+                "{name} is a tool already"
+            );
+        }
     }
 
     /// `BANDA_SUBAGENTS=1` turns the switch on, and nothing else does: not

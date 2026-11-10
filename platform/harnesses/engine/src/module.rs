@@ -13,9 +13,10 @@
 //! It reads how much of each account's limits is spent, too (ADR 0043):
 //! [`crate::limits`].
 
+use crate::accounts::secrets::{Kept, Secrets};
 use crate::accounts::{
-    AccountProfile, AccountStatus, AccountStore, Accounted, Accounts, ConnectAccount, LoginAccount,
-    LoginId, LoginInput, LoginStatus, RemoveAccount,
+    AccountKey, AccountProfile, AccountStatus, AccountStore, Accounted, Accounts, AddGateway,
+    ConnectAccount, GatewayAdded, LoginAccount, LoginId, LoginInput, LoginStatus, RemoveAccount,
 };
 use crate::limits::Reader;
 use crate::model::{HarnessView, Limits, LimitsLook};
@@ -50,12 +51,15 @@ impl HarnessesModule {
         }
     }
 
+    /// Makes accounts' folders in `owned`, keeps them with `store`, and
+    /// gateways' keys in `secrets` (ADR 0078, decision 1).
     pub fn with_accounts(
         mut self,
         owned: std::path::PathBuf,
         store: Arc<dyn AccountStore>,
+        secrets: Secrets,
     ) -> Self {
-        self.accounts = self.accounts.with_store(owned, store);
+        self.accounts = self.accounts.with_store(owned, store, secrets);
         self
     }
 
@@ -107,6 +111,18 @@ banda_kernel::methods! {
         command sign_in(SignIn) -> (), Manage;
         /// Asks the Harness to sign out.
         command sign_out(OneHarness) -> (), Manage;
+        /// Adds an Account that reaches its models through a gateway, its
+        /// key kept in the machine's keyring, never in a file the Harness
+        /// reads (ADR 0078, decision 1).
+        command add_gateway(AddGateway) -> GatewayAdded, Manage;
+        /// Keeps a new key for a gateway account.
+        command set_key(AccountKey) -> Kept, Manage;
+        /// A gateway account's key, for the Person and for that account's
+        /// own Harness process, as its `banda secret get` asks.
+        call secret(OneHarness) -> String, Read, pass;
+        /// Signs a Codex account in with an OpenAI API key, which Codex
+        /// keeps.
+        command api_key(AccountKey) -> (), Manage;
         /// How much of each Harness account's usage limits is spent: a
         /// window for its session and its week, each with the share spent
         /// out of 100 and when it starts again, as last read. Before a long
@@ -195,6 +211,10 @@ impl Module for HarnessesModule {
 
     fn tools(&self) -> Vec<Tool> {
         Self::method_tools(self.name())
+    }
+
+    fn passes_reach(&self, method: &str) -> bool {
+        Self::method_passes(method)
     }
 
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
@@ -318,5 +338,21 @@ impl HarnessesModule {
         OneHarness { harness }: OneHarness,
     ) -> Result<(), Refusal> {
         self.accounts.sign_out(call, harness).await
+    }
+    async fn add_gateway(&self, _: Call, args: AddGateway) -> Result<GatewayAdded, Refusal> {
+        self.accounts.add_gateway(args).await
+    }
+    async fn set_key(&self, _: Call, args: AccountKey) -> Result<Kept, Refusal> {
+        self.accounts.set_key(args).await
+    }
+    async fn secret(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<String, Refusal> {
+        self.accounts.secret(&call, &harness).await
+    }
+    async fn api_key(&self, call: Call, args: AccountKey) -> Result<(), Refusal> {
+        self.accounts.api_key(call, args).await
     }
 }

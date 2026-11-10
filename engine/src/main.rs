@@ -208,6 +208,12 @@ enum Command {
         #[command(subcommand)]
         what: AccountCommand,
     },
+    /// A gateway account's key, kept in this machine's keyring (ADR 0078,
+    /// decision 1).
+    Secret {
+        #[command(subcommand)]
+        what: SecretCommand,
+    },
     /// Banda's settings files in ~/.config/banda: look.toml, sidebar.toml
     /// and harnesses.toml. Agents and people edit them; this checks them
     /// and prints what each may hold.
@@ -375,6 +381,20 @@ enum AccountCommand {
         #[arg(long)]
         name: Option<String>,
     },
+    /// Add an Account that reaches its models through a gateway at `url`,
+    /// as OpenRouter: its key is read from stdin into the keyring.
+    Gateway {
+        harness: String,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        url: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Sign a Codex Account in with an OpenAI API key, read from stdin.
+    /// Codex keeps it; Banda does not.
+    ApiKey { id: String },
     /// Connect an existing profile on the engine's machine, without copying credentials.
     Connect {
         harness: String,
@@ -788,6 +808,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
         Command::Account { what } => account_command(&places, what).await,
+        Command::Secret { what } => secret_command(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
         Command::Thread { what } => {
@@ -847,9 +868,97 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
     }
 }
 
+#[derive(Subcommand)]
+enum SecretCommand {
+    /// Print a gateway account's key, for its Harness: Claude Code's
+    /// apiKeyHelper and Codex's auth command run it. Only the Person and
+    /// that account's own Harness process get it.
+    Get { account: String },
+    /// Keep a new key for a gateway account, read from stdin. It may be a
+    /// reference instead: op://… for 1Password, pass:<name> for pass.
+    Set { account: String },
+}
+
+/// `banda secret`: the key printed as it is, or kept from stdin.
+async fn secret_command(places: &Places, what: SecretCommand) -> Result<(), Failure> {
+    match what {
+        SecretCommand::Get { account } => {
+            let key = Client::connect(places)
+                .await?
+                .call(
+                    "harnesses.secret",
+                    None,
+                    CommandId::new(),
+                    json!({ "harness": account }),
+                )
+                .await?;
+            println!("{}", key.as_str().unwrap_or_default());
+            Ok(())
+        }
+        SecretCommand::Set { account } => {
+            let key = read_key()?;
+            let params = json!({ "harness": account, "key": key });
+            print_call(places, "harnesses.set_key", None, CommandId::new(), params).await
+        }
+    }
+}
+
+/// A key from stdin: its first line, typed unseen at a terminal.
+fn read_key() -> Result<String, Failure> {
+    use std::io::{BufRead, IsTerminal, Write};
+    let stdin = std::io::stdin();
+    let mut line = String::new();
+    if stdin.is_terminal() {
+        eprint!("Key: ");
+        let _ = std::io::stderr().flush();
+        read_unseen(&stdin, &mut line)
+    } else {
+        stdin.lock().read_line(&mut line)
+    }
+    .map_err(Failure::broken)?;
+    let key = line.trim();
+    if key.is_empty() {
+        return Err(Failure::broken("No key was given on stdin."));
+    }
+    Ok(key.to_owned())
+}
+
+/// Reads a line typed at the terminal, with its echo off where it can be.
+fn read_unseen(stdin: &std::io::Stdin, line: &mut String) -> std::io::Result<usize> {
+    use std::io::BufRead;
+    #[cfg(unix)]
+    {
+        use rustix::termios::{LocalModes, OptionalActions, tcgetattr, tcsetattr};
+        if let Ok(was) = tcgetattr(stdin) {
+            let mut quiet = was.clone();
+            quiet.local_modes.remove(LocalModes::ECHO);
+            if tcsetattr(stdin, OptionalActions::Now, &quiet).is_ok() {
+                let read = stdin.lock().read_line(line);
+                let _ = tcsetattr(stdin, OptionalActions::Now, &was);
+                eprintln!();
+                return read;
+            }
+        }
+    }
+    stdin.lock().read_line(line)
+}
+
 /// Calls one method and prints its answer as `{"ok": …}`.
 async fn account_command(places: &Places, what: AccountCommand) -> Result<(), Failure> {
     let (method, params) = match what {
+        AccountCommand::Gateway {
+            harness,
+            id,
+            url,
+            name,
+        } => (
+            "harnesses.add_gateway",
+            json!({ "harness": harness, "id": id, "url": url, "name": name, "key": read_key()? }),
+        ),
+        AccountCommand::ApiKey { id } => (
+            "harnesses.api_key",
+            json!({ "harness": id, "key": read_key()? }),
+        ),
         AccountCommand::Remove { id } => ("harnesses.remove_account", json!({ "harness": id })),
         AccountCommand::List => ("harnesses.list", json!({})),
         AccountCommand::Discover => ("harnesses.account_profiles", json!({})),

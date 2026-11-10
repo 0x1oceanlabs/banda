@@ -10,7 +10,7 @@ overrides:
   minimatch@>=7.0.0 <11.0.1: ^11.0.1
 
 patchedDependencies:
-  '@agentclientprotocol/codex-acp@2.5.0': f1188fd563fe76c0b83fc855cd26aaab68fb10b884ba54ee3726cfef327d9de1
+  '@agentclientprotocol/codex-acp@2.5.0': 31d6f3c4614c39cf664cd3d72dd90a979f2ef32c1140669ea1eee8786a4f9cf3
   '@shadcn/react@0.3.1': 781066c670311e144da37ea3d42ccfd2a4d23475b8367b9e7d69efb30c4b7088
 
 importers:
@@ -710,7 +710,7 @@ importers:
         version: 0.99.1(@anthropic-ai/sdk@1.5.0(zod@4.6.7))(@modelcontextprotocol/sdk@1.32.2(supports-color@7.2.0)(zod@4.6.7))(@modelcontextprotocol/server@2.4.0)
       '@agentclientprotocol/codex-acp':
         specifier: 2.5.0
-        version: 2.5.0(patch_hash=f1188fd563fe76c0b83fc855cd26aaab68fb10b884ba54ee3726cfef327d9de1)(@modelcontextprotocol/server@2.4.0)
+        version: 2.5.0(patch_hash=31d6f3c4614c39cf664cd3d72dd90a979f2ef32c1140669ea1eee8786a4f9cf3)(@modelcontextprotocol/server@2.4.0)
     devDependencies:
       '@types/node':
         specifier: ^24
@@ -5546,7 +5546,7 @@ snapshots:
       - '@modelcontextprotocol/sdk'
       - '@modelcontextprotocol/server'
 
-  '@agentclientprotocol/codex-acp@2.5.0(patch_hash=f1188fd563fe76c0b83fc855cd26aaab68fb10b884ba54ee3726cfef327d9de1)(@modelcontextprotocol/server@2.4.0)':
+  '@agentclientprotocol/codex-acp@2.5.0(patch_hash=31d6f3c4614c39cf664cd3d72dd90a979f2ef32c1140669ea1eee8786a4f9cf3)(@modelcontextprotocol/server@2.4.0)':
     dependencies:
       '@agentclientprotocol/sdk': 2.1.0(@modelcontextprotocol/server@2.4.0)(zod@4.6.7)
       '@openai/codex': 0.165.0

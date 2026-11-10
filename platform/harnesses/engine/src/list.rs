@@ -53,6 +53,9 @@ pub struct Harness {
     pub of: Option<String>,
     /// How the account pays.
     pub kind: AccountKind,
+    /// A gateway account's address, where its Harness sends its requests,
+    /// when Banda keeps its key ([`HarnessEntry::url`]).
+    pub url: Option<String>,
     /// The letters of its mark, when its entry names them (decision 9).
     pub mark: Option<String>,
     /// The icon of its emblem, when its entry names one (ADR 0093).
@@ -337,6 +340,55 @@ impl Harness {
 /// sessions: a JSON object, whose keys may be dotted paths, as Codex's
 /// `-c` takes them.
 const CODEX_CONFIG: &str = "CODEX_CONFIG";
+
+/// The provider a Codex gateway account names for itself.
+const CODEX_PROVIDER: &str = "banda-gateway";
+
+/// How long Codex waits for `banda secret get`: a key kept as a reference
+/// may wait for its password manager to be unlocked (ADR 0078, decision 1).
+const SECRET_WAIT_MS: u64 = 60_000;
+
+/// Makes `harness`, an account, a gateway's at `url` (ADR 0078, decision
+/// 1): Claude Code sends its requests there, and asks for its key with the
+/// `apiKeyHelper` its folder's settings name; Codex gets a provider of its
+/// own there, over its entry's `CODEX_CONFIG`, chosen for its sessions,
+/// whose token it asks `banda secret get <id>` for. Neither gets the key.
+fn gateway(harness: &mut Harness, url: &str) -> Result<(), String> {
+    use crate::limits::Kind;
+    use serde_json::{Map, Value};
+    match Kind::of(harness) {
+        Some(Kind::Claude) => {
+            (harness.env).insert("ANTHROPIC_BASE_URL".to_owned(), url.to_owned());
+        }
+        Some(Kind::Codex) => {
+            let mut config = match harness
+                .env
+                .get(CODEX_CONFIG)
+                .map(|c| serde_json::from_str(c))
+            {
+                None => Map::new(),
+                Some(Ok(Value::Object(config))) => config,
+                Some(_) => return Err("a gateway's `CODEX_CONFIG` is a JSON object".to_owned()),
+            };
+            let key = |k: &str| format!("model_providers.{CODEX_PROVIDER}.{k}");
+            config.insert("model_provider".to_owned(), CODEX_PROVIDER.into());
+            config.insert(key("name"), harness.name.as_str().into());
+            config.insert(key("base_url"), url.into());
+            config.insert(key("wire_api"), "responses".into());
+            config.insert(key("auth.command"), "banda".into());
+            config.insert(
+                key("auth.args"),
+                serde_json::json!(["secret", "get", harness.id]),
+            );
+            config.insert(key("auth.timeout_ms"), SECRET_WAIT_MS.into());
+            (harness.env).insert(CODEX_CONFIG.to_owned(), Value::Object(config).to_string());
+            // What Codex's adapter starts its sessions with.
+            (harness.env).insert("MODEL_PROVIDER".to_owned(), CODEX_PROVIDER.to_owned());
+        }
+        None => return Err("a gateway is an account of Claude Code or Codex".to_owned()),
+    }
+    Ok(())
+}
 
 /// `before`, a `CODEX_CONFIG`, with `variables` set in Codex's shells and
 /// all it said kept. They go inside the `shell_environment_policy`, or its
@@ -631,6 +683,13 @@ struct HarnessEntry {
     /// How the account pays: `subscription`, `api` or `gateway`.
     #[schemars(extend("default" = "subscription"))]
     kind: Option<AccountKind>,
+    /// A gateway's address, where its Harness sends its requests: Anthropic's
+    /// API for Claude Code, such as `https://openrouter.ai/api`; OpenAI's
+    /// Responses API for Codex, such as `https://openrouter.ai/api/v1`. Only
+    /// a gateway takes one, and Banda keeps its key, in the machine's
+    /// keyring, never here (ADR 0078, decision 1). A gateway with none
+    /// says in its `env` how it is reached.
+    url: Option<String>,
     /// The letters of its mark, one or two: by default the first of its
     /// name, two when another account of its Harness starts the same. The
     /// emblem of a Harness Banda has no icons for shows them.
@@ -721,6 +780,10 @@ impl HarnessEntry {
         {
             return Err(format!("`colour` is 0 to {COLOURS}, not {colour}"));
         }
+        let kind = self.kind.unwrap_or_default();
+        if self.url.is_some() && (kind != AccountKind::Gateway || !account) {
+            return Err("only a gateway's account, `of` a Harness, takes a `url`".to_owned());
+        }
         // An account is of a Harness, never of another account.
         let of = self.of.as_deref().unwrap_or(&self.id);
         if let Some(icon) = self.icon
@@ -753,7 +816,8 @@ impl HarnessEntry {
             env,
             cli: self.cli.or(cli),
             of: self.of,
-            kind: self.kind.unwrap_or_default(),
+            kind,
+            url: self.url,
             mark: self.mark,
             icon: self.icon,
             colour: self.colour,
@@ -772,6 +836,9 @@ impl HarnessEntry {
             && crate::limits::Kind::of(&harness) == Some(crate::limits::Kind::Codex)
         {
             harness.shadows = shared_home;
+        }
+        if let Some(url) = harness.url.clone() {
+            gateway(&mut harness, &url)?;
         }
         Ok(harness)
     }
@@ -1151,6 +1218,7 @@ pub(super) fn known() -> Vec<Harness> {
                 }),
                 of: None,
                 kind: AccountKind::default(),
+                url: None,
                 mark: None,
                 icon: None,
                 colour: None,

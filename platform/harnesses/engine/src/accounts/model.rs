@@ -31,6 +31,11 @@ pub struct ConnectAccount {
     /// omitted, the one its Harness's accounts use least.
     #[ts(optional)]
     pub colour: Option<u8>,
+    /// How it pays: `subscription`, or `api` for the Harness's own API
+    /// sign-in. A gateway, which needs a key, is added by the Person only
+    /// (`add_gateway`).
+    #[ts(optional)]
+    pub kind: Option<crate::model::AccountKind>,
     /// Adopt an existing folder. Omitted: create an empty private folder.
     #[ts(optional)]
     pub folder: Option<String>,
@@ -76,6 +81,10 @@ pub struct ConnectedAccount {
     pub(super) harness: String,
     pub(super) variable: &'static str,
     pub(super) folder: std::path::PathBuf,
+    /// How it pays.
+    pub(super) kind: crate::model::AccountKind,
+    /// A gateway's address; never its key.
+    pub(super) url: Option<String>,
 }
 impl ConnectedAccount {
     pub fn id(&self) -> &str {
@@ -92,6 +101,12 @@ impl ConnectedAccount {
     }
     pub fn profile(&self) -> (&'static str, &std::path::Path) {
         (self.variable, &self.folder)
+    }
+    pub fn kind(&self) -> crate::model::AccountKind {
+        self.kind
+    }
+    pub fn url(&self) -> Option<&str> {
+        self.url.as_deref()
     }
 }
 
@@ -165,4 +180,46 @@ impl PreparedRetirement {
     pub fn entry(&self) -> (&str, &str, banda_kernel::Participant, bool) {
         (&self.id, &self.to, self.by, self.clear_fallback)
     }
+}
+
+/// A gateway account the Person adds (ADR 0078, decision 1): a Harness
+/// that sends its requests to `url`, with a key Banda keeps in the
+/// machine's secrets and the Harness asks for with `banda secret get`.
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "harnesses/")]
+pub struct AddGateway {
+    /// The registered Harness: claude or codex.
+    pub harness: String,
+    /// Stable Account ID: lowercase letters, digits and hyphens.
+    pub id: String,
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[ts(optional)]
+    pub colour: Option<u8>,
+    /// Its address: Anthropic's API for Claude Code, such as
+    /// `https://openrouter.ai/api`; OpenAI's Responses API for Codex, such
+    /// as `https://openrouter.ai/api/v1`.
+    pub url: String,
+    /// The key, or a reference to it: `op://…` or `pass:<name>`.
+    pub key: String,
+}
+
+/// A key for an account: a gateway's new one, which Banda keeps, or an
+/// API key for an account of Codex, which `codex login --with-api-key`
+/// takes and keeps while Banda forgets it. The window never reads one back.
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "harnesses/")]
+pub struct AccountKey {
+    pub harness: String,
+    pub key: String,
+}
+
+/// A gateway account added, and where its key went.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct GatewayAdded {
+    pub account: crate::model::HarnessView,
+    pub kept: super::secrets::Kept,
 }

@@ -62,6 +62,17 @@ pub enum AccountKind {
     Gateway,
 }
 
+impl AccountKind {
+    /// Its name in a Harness list.
+    pub fn as_str(self) -> &'static str {
+        match self {
+            AccountKind::Subscription => "subscription",
+            AccountKind::Api => "api",
+            AccountKind::Gateway => "gateway",
+        }
+    }
+}
+
 /// The icon of an account's emblem (ADR 0093, decision 2): two of its
 /// Harness's own for Claude Code and Codex, and the neutral ones any
 /// account may take.

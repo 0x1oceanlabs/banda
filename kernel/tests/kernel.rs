@@ -173,7 +173,7 @@ impl Module for Notes {
             "pass" => {
                 let agent: AgentId = decode(params["agent"].clone())?;
                 let thread: Option<Uuid> = decode(params["thread"].clone())?;
-                let pass = call.project().pass(agent, thread)?;
+                let pass = call.project().pass(agent, thread, None)?;
                 let secret = pass.secret().to_owned();
                 self.passes.lock().unwrap().push(pass);
                 Ok(json!(secret))
@@ -351,7 +351,7 @@ impl Module for Desk {
     fn right(&self, method: &str) -> Option<Right> {
         match method {
             "open" => Some(Right::Write),
-            "list" => Some(Right::Read),
+            "list" | "kinds" => Some(Right::Read),
             _ => None,
         }
     }
@@ -359,9 +359,14 @@ impl Module for Desk {
     fn kind(&self, method: &str) -> Option<Kind> {
         match method {
             "open" => Some(Kind::Command),
-            "list" => Some(Kind::Call),
+            "list" | "kinds" => Some(Kind::Call),
             _ => None,
         }
+    }
+
+    /// `kinds`, as a Harness process asks for what is its own.
+    fn passes_reach(&self, method: &str) -> bool {
+        method == "kinds"
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
@@ -2415,7 +2420,7 @@ async fn a_pass_outlives_a_restart_until_its_session_ends_or_it_expires() {
     let ended = issue(&kernel, Some(thread)).await;
     // The second session ends: its pass is revoked as it lets go of it.
     drop(notes.passes.lock().unwrap().remove(1));
-    assert_eq!(kernel.caller(&going_on), Some(in_thread));
+    assert_eq!(kernel.caller(&going_on), Some(in_thread.clone()));
     assert_eq!(kernel.holder(&ended), None);
 
     // The engine stops, and what held the passes goes with it: the next
@@ -2567,10 +2572,13 @@ async fn a_module_of_the_machine_names_no_project_and_keeps_its_own_log() {
     let kinds: Vec<_> = events.iter().map(|e| e.kind.as_str()).collect();
     assert_eq!(kinds, ["opened"]);
 
-    // An Agent's pass is for its Project: the machine is past its wall.
+    // An Agent's pass is for its Project: the machine is past its wall,
+    // but for what its module says passes reach.
     let agent = Caller::agent(AgentId::new(), work.id);
-    let by_agent = kernel.call(agent, "desk.list", None, None, Value::Null);
+    let by_agent = kernel.call(agent.clone(), "desk.list", None, None, Value::Null);
     assert_eq!(by_agent.await.unwrap_err().code, Code::Forbidden);
+    let reached = kernel.call(agent, "desk.kinds", None, None, Value::Null);
+    assert_eq!(reached.await.unwrap(), json!(["terminal"]));
 
     // After a restart, it is the same machine, with what it kept.
     drop(log);
@@ -2956,11 +2964,18 @@ async fn a_project_is_trusted_unless_its_folder_looks_foreign_and_only_the_perso
     // An Agent reads its Project's trust, and never changes it or looks
     // past its wall.
     let agent = Caller::agent(AgentId::new(), cloned.id);
-    let listed = (kernel.call(agent, "projects.list", None, None, Value::Null)).await;
+    let listed = (kernel.call(agent.clone(), "projects.list", None, None, Value::Null)).await;
     assert_eq!(listed.unwrap()[0]["trusted"], json!(false));
     let trust = json!({ "project": cloned.id, "trusted": true });
     let command = Some(CommandId::new());
-    let refused = (kernel.call(agent, "projects.trust", None, command, trust.clone())).await;
+    let refused = (kernel.call(
+        agent.clone(),
+        "projects.trust",
+        None,
+        command,
+        trust.clone(),
+    ))
+    .await;
     assert_eq!(refused.unwrap_err().code, Code::Forbidden);
     let look = json!({ "folder": elsewhere.path() });
     let refused = kernel

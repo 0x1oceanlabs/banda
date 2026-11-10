@@ -78,8 +78,9 @@ pub enum Whose {
     HarnessProbe,
     /// A terminal the Person opened, a Harness's sign-in among them.
     Terminal,
-    /// A git act the Person asked for, as a commit or a push, which runs
-    /// the repository's hooks as their own git does.
+    /// An act the Person asked for, on pipes: a git act, as a commit or a
+    /// push, which runs the repository's hooks as their own git does; or a
+    /// Harness's sign-in with a key they typed, on its input.
     Act,
 }
 
@@ -136,7 +137,8 @@ impl Program {
         Program::of(Whose::Terminal, program, args, Holes::default())
     }
 
-    /// A git act the Person asked for: to start outside the fence.
+    /// An act the Person asked for, a git act or a sign-in with a key
+    /// they typed: to start outside the fence.
     pub fn act(program: impl Into<String>, args: Vec<String>) -> Program {
         Program::of(Whose::Act, program, args, Holes::default())
     }

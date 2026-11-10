@@ -399,7 +399,7 @@ async fn an_agent_hears_the_name_and_names_no_machine() {
             params["file"] = json!("machine.toml");
             let command = Some(CommandId::new());
             let refused = kernel
-                .call(caller, method, None, command, params)
+                .call(caller.clone(), method, None, command, params)
                 .await
                 .unwrap_err();
             assert_eq!(
@@ -410,7 +410,7 @@ async fn an_agent_hears_the_name_and_names_no_machine() {
         }
 
         let mut named = kernel
-            .stream(caller, "machine.named", None, Value::Null)
+            .stream(caller.clone(), "machine.named", None, Value::Null)
             .await
             .unwrap();
         let heard = named.recv().await.unwrap();

@@ -761,11 +761,19 @@ impl ModuleProject {
     /// for a session's `banda mcp` and shell, which names the session's
     /// `thread`, or for the shells of a Harness process's Agents, which
     /// names none (ADR 0019, decision 2; ADR 0083, decision 2). A call
-    /// under it reads the Thread as [`Call::thread`](crate::Call::thread).
-    /// Its session holds it, and lets it go as it ends: dropped, it is
-    /// revoked.
-    pub fn pass(&self, agent: AgentId, thread: Option<Uuid>) -> Result<Pass, Error> {
-        self.project.passes.issue(agent, self.project.id, thread)
+    /// under it reads the Thread as [`Call::thread`](crate::Call::thread),
+    /// and what `runs` the process or session, an Agent's Harness entry,
+    /// as [`Call::runs`](crate::Call::runs). Its session holds it, and
+    /// lets it go as it ends: dropped, it is revoked.
+    pub fn pass(
+        &self,
+        agent: AgentId,
+        thread: Option<Uuid>,
+        runs: Option<&str>,
+    ) -> Result<Pass, Error> {
+        self.project
+            .passes
+            .issue(agent, self.project.id, thread, runs)
     }
 
     /// Asks the window `what`, under this module's name, for `by` in this

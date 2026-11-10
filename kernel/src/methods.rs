@@ -178,6 +178,9 @@ pub struct Method {
     pub does: Does,
     /// Its tool's name, when an Agent may call it as one.
     pub tool: Option<&'static str>,
+    /// Whether a pass reaches it on the machine though it is no tool: its
+    /// line's `pass`.
+    pub pass: bool,
     /// What it does, from its `///`.
     pub about: String,
 }
@@ -265,8 +268,10 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 ///
 /// After its right, a line takes marks: `read`, for a call or a stream
 /// that only reads with a right other than `Read`; `tool "<name>"`, for
-/// one an Agent calls. A `read` on a command, or on a line whose right is
-/// `Read`, does not compile: it would say nothing true.
+/// one an Agent calls; `pass`, for a machine's method a pass reaches
+/// though it is no tool, as a Harness process asks for what is its own
+/// (ADR 0078, decision 1). A `read` on a command, or on a line whose right
+/// is `Read`, does not compile: it would say nothing true.
 ///
 /// Each method needs a handler on the type, `async fn open(&self, ask:
 /// Call, params: Open) -> Result<(), Refusal>`, and a stream's returns a
@@ -281,6 +286,8 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 /// - `fn method_tools(module) -> Vec<Tool>`, the lines marked `tool`, for
 ///   [`Module::tools`](crate::Module::tools); a tool's params implement
 ///   `schemars::JsonSchema`;
+/// - `fn method_passes(name) -> bool`, whether the line is marked `pass`,
+///   for [`Module::passes_reach`](crate::Module::passes_reach);
 /// - [`MethodTable`], every line, and the TypeScript type's name and
 ///   folder, for `banda modules` and the list of Apps;
 ///
@@ -338,6 +345,14 @@ macro_rules! methods {
                 Err($crate::Refusal::invalid(format!("There is no stream \"{name}\".")))
             }
 
+            #[allow(dead_code)]
+            fn method_passes(name: &str) -> bool {
+                $( if name == $crate::methods::bare(stringify!($name)) {
+                    return $crate::methods!(@pass $($mark $($tool)?)*);
+                } )*
+                false
+            }
+
             #[allow(dead_code, unused_mut, unused_variables)]
             fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
                 let mut tools = Vec::new();
@@ -358,6 +373,7 @@ macro_rules! methods {
                         right: $crate::Right::$right,
                         does: $crate::methods!(@does $kind $right [$($mark $($tool)?)*]),
                         tool: $crate::methods!(@tool_name $($mark $($tool)?)*),
+                        pass: $crate::methods!(@pass $($mark $($tool)?)*),
                         about: $crate::methods::words(&[$($doc),*]),
                     },
                 )*]
@@ -375,17 +391,21 @@ macro_rules! methods {
     (@kind call) => { $crate::Kind::Call };
     (@kind command) => { $crate::Kind::Command };
     (@kind stream) => { $crate::Kind::Stream };
-    // A line's marks, after its right: `read`, and `tool "<name>"`.
+    // A line's marks, after its right: `read`, `tool "<name>"` and `pass`.
     (@tool_name) => { None };
     (@tool_name tool $tool:literal $($marks:tt)*) => { Some($tool) };
     (@tool_name read $($marks:tt)*) => { $crate::methods!(@tool_name $($marks)*) };
+    (@tool_name pass $($marks:tt)*) => { $crate::methods!(@tool_name $($marks)*) };
     (@tool_name $mark:tt $($marks:tt)*) => {
         compile_error!(concat!(
-            "A method's marks are `read` and `tool \"<name>\"`, not ",
+            "A method's marks are `read`, `tool \"<name>\"` and `pass`, not ",
             stringify!($mark),
             "."
         ))
     };
+    (@pass) => { false };
+    (@pass pass $($marks:tt)*) => { true };
+    (@pass $mark:tt $($marks:tt)*) => { $crate::methods!(@pass $($marks)*) };
     (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
     (@tool $tools:ident $module:ident $kind:ident $name:ident($p:ty) [$($doc:literal)*] tool $tool:literal $($marks:tt)*) => {
         $tools.push($crate::methods::Tool::new(

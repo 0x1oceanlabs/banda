@@ -80,6 +80,10 @@
           "default": "subscription",
           "$ref": "#/$defs/AccountKind"
         },
+        "url": {
+          "description": "A gateway's address, where its Harness sends its requests: Anthropic's\nAPI for Claude Code, such as `https://openrouter.ai/api`; OpenAI's\nResponses API for Codex, such as `https://openrouter.ai/api/v1`. Only\na gateway takes one, and Banda keeps its key, in the machine's\nkeyring, never here (ADR 0078, decision 1). A gateway with none\nsays in its `env` how it is reached.",
+          "type": "string"
+        },
         "mark": {
           "description": "The letters of its mark, one or two: by default the first of its\nname, two when another account of its Harness starts the same. The\nemblem of a Harness Banda has no icons for shows them.",
           "type": "string"

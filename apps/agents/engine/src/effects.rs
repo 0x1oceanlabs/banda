@@ -609,7 +609,7 @@ async fn work(
     };
     // A session that opens reaches Banda with a pass of its own, which
     // names its Thread (ADR 0019; ADR 0083, decision 2).
-    let banda = || live.banda(project, turn.agent, thread);
+    let banda = || live.banda(project, turn.agent, thread, &harness.id);
     let (session, opened) = connection
         .session(
             thread,
