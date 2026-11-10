@@ -81,22 +81,24 @@ const hereLayer = () =>
     door: Effect.die("unused"),
   })
 
-/** Main's hosts: `address` and `addressNow` as the test says, arc's by
- * default, each machine but arc refused. */
+/** Main's hosts: `addressWhenBack` and `addressNow` as the test says, arc's
+ * by default, each machine but arc refused. `address` would have a refused
+ * machine tried again, which a read of bytes never does. */
 const hostsLayer = ({
-  address = (name) =>
+  addressWhenBack = (name) =>
     name === "arc"
       ? Effect.sync(() => arc.address())
       : Effect.fail(new Refused({ message: `There is no host ${name}` })),
   addressNow = (name) =>
     Effect.sync(() => (name === "arc" ? arc.address() : undefined)),
 }: {
-  address?: (name: string) => Effect.Effect<Address, Refused>
+  addressWhenBack?: (name: string) => Effect.Effect<Address, Refused>
   addressNow?: (name: string) => Effect.Effect<Address | undefined>
 } = {}) =>
   Layer.succeed(Hosts)({
-    address,
+    address: () => Effect.die("unused"),
     addressNow,
+    addressWhenBack,
     current: Effect.die("unused"),
     changes: Stream.die("unused"),
     start: () => Effect.die("unused"),
@@ -148,7 +150,7 @@ it.effect(
     Effect.gen(function* () {
       let forward = arc
       const hosts = hostsLayer({
-        address: () => Effect.sync(() => forward.address()),
+        addressWhenBack: () => Effect.sync(() => forward.address()),
       })
       yield* Effect.gen(function* () {
         expect((yield* asked("app://files/arc/t1")).status).toBe(200)
@@ -183,34 +185,13 @@ it.effect(
   () =>
     Effect.gen(function* () {
       const back = yield* Deferred.make<Address>()
-      const hosts = hostsLayer({ address: () => Deferred.await(back) })
+      const hosts = hostsLayer({ addressWhenBack: () => Deferred.await(back) })
       yield* Effect.gen(function* () {
         const waiting = yield* Effect.forkChild(asked("app://files/arc/t1"))
         yield* Effect.yieldNow
         expect(arc.heard).toEqual([])
         yield* Deferred.succeed(back, arc.address())
         expect((yield* Fiber.join(waiting)).body).toBe("arc's bytes")
-      }).pipe(Effect.provide(main(hosts)))
-    })
-)
-
-it.effect(
-  "a request the page gave up while its machine was away ends, and no engine hears of it once the machine is back",
-  () =>
-    Effect.gen(function* () {
-      const back = yield* Deferred.make<Address>()
-      const hosts = hostsLayer({ address: () => Deferred.await(back) })
-      yield* Effect.gen(function* () {
-        const page = new AbortController()
-        const waiting = yield* Effect.forkChild(
-          asked("app://files/arc/t1", { signal: page.signal })
-        )
-        yield* Effect.yieldNow
-        page.abort()
-        expect((yield* Fiber.join(waiting)).status).toBe(502)
-        yield* Deferred.succeed(back, arc.address())
-        yield* Effect.yieldNow
-        expect(arc.heard).toEqual([])
       }).pipe(Effect.provide(main(hosts)))
     })
 )

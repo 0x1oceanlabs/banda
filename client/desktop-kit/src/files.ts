@@ -12,8 +12,10 @@
  */
 import { type IncomingMessage, request as asking } from "node:http"
 import { Readable } from "node:stream"
+import type { ReadableStream as NodeWeb } from "node:stream/web"
 import type { Address } from "@banda/contract"
 import { Effect } from "effect"
+import { writeWholeFrom } from "./whole"
 
 /** The hosts of `app://` main relays, each by its route on the engine: a
  * file's bytes, in ranges, and a page, into a frame alone. */
@@ -96,7 +98,9 @@ function relayed(answer: IncomingMessage, head: boolean): Response {
 }
 
 /** What the engine at `to` answers `request`, asked with only what
- * `PASSED` names of its headers. */
+ * `PASSED` names of its headers. Electron gives a handler's `request` no
+ * sign that the page gave up. It cancels the answer's body instead, as for
+ * a video that seeks elsewhere, and that ends the connection. */
 function ask(to: URL, request: Request): Promise<Response> {
   const headers: Record<string, string> = {}
   for (const name of PASSED) {
@@ -108,30 +112,27 @@ function ask(to: URL, request: Request): Promise<Response> {
       answered(relayed(answer, request.method === "HEAD"))
     )
     going.on("error", failed)
-    // A request the page gave up, as a video that seeks elsewhere, ends
-    // on the engine too.
-    request.signal.addEventListener("abort", () => going.destroy(), {
-      once: true,
-    })
     going.end()
   })
 }
 
-/** What the engine at `address` answers a plain `GET` of `named`, its
- * body as it comes. */
-export const askedOf = (named: Named, address: string): Promise<Response> => {
+/** Copies what the engine at `address` serves for `named` to `file`, whole
+ * or not at all. Fails for a link that has ended or broke, leaving `file`
+ * as it was. */
+export async function copyTo(
+  named: Named,
+  address: string,
+  file: string
+): Promise<void> {
   const to = relayedTo(named, address)
-  return ask(to, new Request(to))
+  const answer = await ask(to, new Request(to))
+  if (!answer.ok || !answer.body) {
+    // Unread, its connection would stay open.
+    await answer.body?.cancel()
+    throw new Error("that file's link has ended")
+  }
+  await writeWholeFrom(file, Readable.fromWeb(answer.body as NodeWeb))
 }
-
-/** Fails once the page gives `request` up. */
-const givenUp = (request: Request) =>
-  Effect.callback<never, Error>((resume) => {
-    const gone = () => resume(Effect.fail(new Error("The page gave it up")))
-    if (request.signal.aborted) gone()
-    else request.signal.addEventListener("abort", gone, { once: true })
-    return Effect.sync(() => request.signal.removeEventListener("abort", gone))
-  })
 
 /**
  * The answer to `request`, to `app://files` or `app://preview`: the
@@ -139,11 +140,12 @@ const givenUp = (request: Request) =>
  * listens now, so a link goes on working when ssh comes back on a new
  * port. A URL that names no token is refused here, and never asked; a
  * method but `GET` and `HEAD` too. While `addressOf` waits, as for an
- * engine between runs or a machine that is away, the request waits, till
- * the page gives it up, when no engine hears of it; one `addressOf` fails
- * for, and an engine that refuses the connection, give 502, which the
- * page takes for a URL that broke. Main puts no time limit on an answer,
- * since a video's flows as long as it plays.
+ * engine between runs or a machine that is away, the request waits, and
+ * goes once there is an address: Electron does not tell a handler that the
+ * page gave up, so one given up goes too, and its answer goes unread. One
+ * `addressOf` fails for, and an engine that refuses the connection, give
+ * 502, which the page takes for a URL that broke. Main puts no time limit
+ * on an answer, since a video's flows as long as it plays.
  */
 export const relay = <E, R>(
   request: Request,
@@ -155,7 +157,6 @@ export const relay = <E, R>(
     const named = namedBy(request.url)
     if (!named) return missing()
     return yield* addressOf(named.machine).pipe(
-      Effect.raceFirst(givenUp(request)),
       Effect.flatMap((address) =>
         Effect.tryPromise(() => ask(relayedTo(named, address.url), request))
       ),

@@ -1,12 +1,13 @@
 /** Writing the Person's files so that no reader ever sees half of one. */
+import { randomBytes } from "node:crypto"
 import {
+  createWriteStream,
   existsSync,
   mkdirSync,
   readFileSync,
   realpathSync,
   renameSync,
   rmSync,
-  createWriteStream,
   writeFileSync,
 } from "node:fs"
 import { rename } from "node:fs/promises"
@@ -54,7 +55,8 @@ export async function writeWholeFrom(
   bytes: Readable
 ): Promise<void> {
   const target = existsSync(file) ? realpathSync(file) : file
-  const next = `${target}.${process.pid}.new`
+  // Its own, since a save can take long enough for a second to start.
+  const next = `${target}.${randomBytes(4).toString("hex")}.new`
   try {
     await pipeline(bytes, createWriteStream(next))
     await rename(next, target)

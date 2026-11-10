@@ -1235,6 +1235,12 @@ it.live(
         })
         yield* Effect.sleep(300)
         expect(fake.runs("follower")).toHaveLength(1)
+        // A read of a file's bytes takes the refusal there is, and tries
+        // nothing.
+        const read = yield* Effect.flip(hosts.addressWhenBack("devbox"))
+        expect(read.message).toMatch(/^devbox: Banda there is of another build/)
+        yield* Effect.sleep(100)
+        expect(fake.runs("follower")).toHaveLength(1)
         // Asking where it listens tries it again, and fails with the new
         // go's refusal, not the old one's.
         const asked = yield* Effect.flip(hosts.address("devbox"))
@@ -1761,7 +1767,7 @@ it.live(
 )
 
 it.live(
-  "addressNow says where a live host listens, and none at once while it connects, is away or is not there",
+  "addressNow says where a live host listens, and none at once while it connects, is away or is not there; addressWhenBack waits for it",
   () =>
     Effect.gen(function* () {
       const fake = fakeSsh({
@@ -1778,8 +1784,15 @@ it.live(
       yield* Effect.gen(function* () {
         const hosts = yield* Hosts
         expect(yield* hosts.addressNow("devbox")).toBeUndefined()
+        const waiting = yield* Effect.forkChild(hosts.addressWhenBack("devbox"))
         fake.touch("up")
         yield* reaches((host) => host.state === "live")
+        expect(yield* Fiber.join(waiting)).toEqual(
+          yield* hosts.address("devbox")
+        )
+        expect(
+          (yield* Effect.flip(hosts.addressWhenBack("nowhere"))).message
+        ).toMatch(/no host "nowhere"/)
         expect(yield* hosts.addressNow("devbox")).toEqual(
           yield* hosts.address("devbox")
         )

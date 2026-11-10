@@ -8,17 +8,8 @@
  * no Project's path, here or there: a URL's token is all it knows of the
  * file.
  */
-import { Readable } from "node:stream"
-import type { ReadableStream as NodeWeb } from "node:stream/web"
 import type { Address } from "@banda/contract"
-import {
-  askedOf,
-  Engine,
-  namedBy,
-  Refused,
-  relay,
-  writeWholeFrom,
-} from "@banda/desktop-kit"
+import { copyTo, Engine, namedBy, Refused, relay } from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Hosts } from "./hosts"
 
@@ -27,17 +18,20 @@ type Where = Effect.Effect<Address, Refused, Engine | Hosts>
 
 /** Where the engine that gave a token listens: this machine's, or another
  * machine's through its forward, which waits while that machine is away,
- * as a read may (ADR 0106, law 4). */
+ * as a read may (ADR 0106, law 4). A URL can come from a page in a sandbox
+ * that names any machine it likes, so a read never has a refused machine
+ * tried again (`addressWhenBack`); only the Person opening one does. */
 const engineOf = (machine: string | null): Where =>
   machine === null
     ? Engine.use((engine) => engine.address)
-    : Hosts.use((hosts) => hosts.address(machine))
+    : Hosts.use((hosts) => hosts.addressWhenBack(machine))
 
 /** The answer to `request`, to `app://files` or `app://preview`. */
 export const relayed = (request: Request) => relay(request, engineOf)
 
 /** Where that engine listens now, and none while its machine is away: a
- * gesture goes now or says why not (ADR 0106, law 4). */
+ * gesture goes now or says why not (ADR 0106, law 4). This machine is
+ * never away, and its engine between runs is waited for: seconds. */
 const engineNow = (
   machine: string | null
 ): Effect.Effect<Address | undefined, never, Engine | Hosts> =>
@@ -49,10 +43,10 @@ const engineNow = (
  * Saves a copy on this device of the file the byte-host URL `url` names,
  * the capability `save_file` (ADR 0106, decision 6): `pick` asks the
  * Person where, offering `name`, and only then the bytes are fetched, from
- * the machine that has them. They land whole or not at all
- * (`writeWholeFrom`), so a link that ends halfway leaves nothing at the
- * place the Person picked. The address is asked again after the dialog,
- * since the Person may take a while and ssh come back on a new port.
+ * the machine that has them. They land whole or not at all (`copyTo`), so
+ * a link that ends halfway leaves nothing at the place the Person picked.
+ * The address is asked again after the dialog, since the Person may take a
+ * while and ssh come back on a new port.
  *
  * `away` while that machine is away, before the dialog or after it, and
  * if the link ended halfway and it is away by then; `canceled` when the
@@ -75,21 +69,13 @@ export const saveCopy = (
     const address = yield* engineNow(named.machine)
     if (address === undefined) return "away"
     return yield* Effect.tryPromise({
-      try: async (): Promise<"saved"> => {
-        const answer = await askedOf(named, address.url)
-        if (!answer.ok || !answer.body) {
-          // Unread, its connection would stay open.
-          await answer.body?.cancel()
-          throw new Error("that file's link has ended")
-        }
-        await writeWholeFrom(path, Readable.fromWeb(answer.body as NodeWeb))
-        return "saved"
-      },
+      try: () => copyTo(named, address.url, path),
       catch: (error) =>
         new Refused({
           message: `The copy was not saved: ${error instanceof Error ? error.message : String(error)}`,
         }),
     }).pipe(
+      Effect.as("saved" as const),
       Effect.catch((refused) =>
         Effect.flatMap(engineNow(named.machine), (now) =>
           now === undefined

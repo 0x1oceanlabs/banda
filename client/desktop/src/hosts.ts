@@ -1010,6 +1010,11 @@ export class Hosts extends Context.Service<
      * which goes now or says why not (ADR 0106, law 4), where `address`
      * would wait for the link. */
     readonly addressNow: (name: string) => Effect.Effect<Address | undefined>
+    /** As `address`, for a read of a file's bytes: it waits while the link
+     * is down, and starts no go of its own, so it fails at once for one
+     * refused. Whatever a page asks for, it is no one asking to try that
+     * machine again. */
+    readonly addressWhenBack: (name: string) => Effect.Effect<Address, Refused>
     /** Starts host `name` again at once when its engine is stopped there
      * or it is refused; it fails for one not in `hosts.toml`. */
     readonly start: (name: string) => Effect.Effect<void, Refused>
@@ -1252,33 +1257,38 @@ export class Hosts extends Context.Service<
               yield* Deferred.succeed(kept.next, undefined)
             return kept
           })
+        /** Where host `name`'s engine listens once it does, or the refusal
+         * of a go later than `past`. */
+        const listening = (name: string, past: number) =>
+          Effect.gen(function* () {
+            const found = yield* SubscriptionRef.changes(all).pipe(
+              Stream.map((list) => list.find((one) => one.name === name)),
+              Stream.filter(
+                (one) =>
+                  one === undefined ||
+                  one.address !== undefined ||
+                  (one.link.state === "refused" && one.go > past)
+              ),
+              Stream.runHead
+            )
+            const one = Option.getOrUndefined(found)
+            if (one?.address) return one.address
+            if (one?.link.state !== "refused") return yield* noHost(name)
+            return yield* new Refused({
+              message: `${name}: ${one.link.why}`,
+            })
+          })
         return {
           current: Effect.map(SubscriptionRef.get(all), seen),
           changes: SubscriptionRef.changes(all).pipe(Stream.map(seen)),
           address: (name: string) =>
-            Effect.gen(function* () {
-              const kept = yield* wake(name, ["refused"])
+            Effect.flatMap(wake(name, ["refused"]), (kept) =>
               // A refusal from the go that was asked past does not count.
-              const past = kept.link.state === "refused" ? kept.go : -1
-              const found = yield* SubscriptionRef.changes(all).pipe(
-                Stream.map((list) => list.find((one) => one.name === name)),
-                Stream.filter(
-                  (one) =>
-                    one === undefined ||
-                    one.address !== undefined ||
-                    (one.link.state === "refused" && one.go > past)
-                ),
-                Stream.runHead
-              )
-              const one = Option.getOrUndefined(found)
-              if (one?.address) return one.address
-              if (one?.link.state !== "refused") return yield* noHost(name)
-              return yield* new Refused({
-                message: `${name}: ${one.link.why}`,
-              })
-            }),
+              listening(name, kept.link.state === "refused" ? kept.go : -1)
+            ),
           addressNow: (name: string) =>
             Effect.map(keptOf(name), (one) => one?.address),
+          addressWhenBack: (name: string) => listening(name, -1),
           start: (name: string) =>
             Effect.asVoid(wake(name, ["stopped", "refused"])),
           add: (machine) => change((text) => addOf(text, machine)),
