@@ -510,8 +510,8 @@ Roma, 2026-11-06, among the vision's decisions:
       So a phone's command never runs hours late unless the Person chose
       it.
       _Amended 2026-11-10 by
-      [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md)
-      (proposed): only a message to a Thread waits, and "send when back"
+      [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md):
+      only a message to a Thread waits, and "send when back"
       is its Send. Past `not_after` its text goes back into the draft. The
       queue is kept on the device, per machine. The 10 minutes and the 7
       days stand._

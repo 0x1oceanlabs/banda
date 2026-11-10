@@ -180,8 +180,8 @@ their own ADR (Later).
    for a cloud host. The Person's files never are: each machine has its
    own copy, so a change to them never waits for another machine.
    _Amended 2026-11-10 by
-   [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md)
-   (proposed): only a message to a Thread waits in that queue; every
+   [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md):
+   only a message to a Thread waits in that queue; every
    other act is refused at once._
 
 ## Later, each its own ADR when its slice comes
