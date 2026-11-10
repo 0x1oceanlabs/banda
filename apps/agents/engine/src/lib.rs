@@ -288,6 +288,11 @@ impl Agents {
         self
     }
 
+    /// This machine's `agents.toml`, for an engine that keeps settings.
+    fn agents_file(&self) -> Option<PathBuf> {
+        (self.config.as_ref()).map(|config| config.join(sending::AgentsSettings::NAME))
+    }
+
     /// What a new Thread on Harness entry `id` starts with, when Threads
     /// may start with it.
     /// Full access in `agents.toml` counts only as the Person chose it in
@@ -295,11 +300,8 @@ impl Agents {
     /// choice, and the fence's default holds.
     fn new_start(&self, id: &str) -> Result<sending::Start, Refusal> {
         self.harness(id)?;
-        let file = self
-            .config
-            .as_ref()
-            .map(|c| c.join(sending::AgentsSettings::NAME));
-        let mut start = file.map_or_else(Default::default, |file| sending::start(&file, id));
+        let mut start =
+            (self.agents_file()).map_or_else(Default::default, |file| sending::start(&file, id));
         let chosen = (self.modes.as_deref()).and_then(|modes| chosen_modes::chosen(modes, id));
         if start.mode == Some(model::Mode::FullAccess) && chosen != start.mode {
             start.mode = None;
@@ -857,7 +859,8 @@ struct Configure {
 }
 
 /// What `agents.defaults` answers: what a new Thread on a Harness starts
-/// with, and what the Harness last offered in this Project. `at` is where the Project's log stood,
+/// with, what the Harness last offered in this Project, and the accounts
+/// this machine starts a new Thread on. `at` is where the Project's log stood,
 /// so a window hears when a Thread learns more of what the Harness offers.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -866,6 +869,17 @@ pub struct Defaults {
     pub at: i64,
     pub settings: Settings,
     pub offer: Offer,
+    /// The account a new Thread starts on, by its entry's ID, as this
+    /// machine's `agents.toml` names it: none, the first one on (ADR 0093,
+    /// decision 7).
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub account: Option<String>,
+    /// The account a new Thread starts on while `account` is out, as this
+    /// machine's `agents.toml` names it: none, no other.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub fallback: Option<String>,
 }
 
 /// What `agents.send` answers: the turn that will run the message, or
@@ -1117,6 +1131,11 @@ impl Agents {
         OneHarness { harness }: OneHarness,
     ) -> Result<Defaults, Refusal> {
         let start = self.new_start(&harness)?;
+        // The machine's own, so a window on another device starts a new
+        // Thread here by this machine's `[start]`, not its device's (ADR
+        // 0106, step 5a).
+        let (account, fallback) =
+            (self.agents_file()).map_or_else(Default::default, |file| sending::accounts(&file));
         let fence = call.project().environment().fence();
         // What the composer shows is what the new Thread gets.
         let (at, (settings, offer)) = call
@@ -1127,6 +1146,8 @@ impl Agents {
             at,
             settings,
             offer,
+            account,
+            fallback,
         })
     }
 

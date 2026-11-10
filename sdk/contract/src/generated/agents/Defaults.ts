@@ -4,7 +4,19 @@ import type { Settings } from "./Settings";
 
 /**
  * What `agents.defaults` answers: what a new Thread on a Harness starts
- * with, and what the Harness last offered in this Project. `at` is where the Project's log stood,
+ * with, what the Harness last offered in this Project, and the accounts
+ * this machine starts a new Thread on. `at` is where the Project's log stood,
  * so a window hears when a Thread learns more of what the Harness offers.
  */
-export type Defaults = { at: number, settings: Settings, offer: Offer, };
+export type Defaults = { at: number, settings: Settings, offer: Offer, 
+/**
+ * The account a new Thread starts on, by its entry's ID, as this
+ * machine's `agents.toml` names it: none, the first one on (ADR 0093,
+ * decision 7).
+ */
+account?: string, 
+/**
+ * The account a new Thread starts on while `account` is out, as this
+ * machine's `agents.toml` names it: none, no other.
+ */
+fallback?: string, };

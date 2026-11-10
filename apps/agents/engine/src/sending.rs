@@ -228,6 +228,17 @@ pub fn flow(file: &Path) -> Flow {
         .unwrap_or_default()
 }
 
+/// The accounts `file`'s `[start]` names for a new Thread (ADR 0093,
+/// decision 7): the one it starts on, and the one it starts on while that
+/// one is out. A file that is not there names neither.
+pub fn accounts(file: &Path) -> (Option<String>, Option<String>) {
+    let start = banda_look::file::read_at::<AgentsSettings>(file).and_then(|read| read.start);
+    let Starts {
+        account, fallback, ..
+    } = start.unwrap_or_default();
+    (account, fallback)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
