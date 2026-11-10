@@ -57,6 +57,26 @@ export function holderOf(element: Element | null): Element | null {
     : document.querySelector(`[${HOLDS}="${CSS.escape(id)}"]`)
 }
 
+/** Calls `take` with the place that holds a page in the layer as the page
+ * takes the keys. It takes them as an iframe does, with no focus event of
+ * its own: the focus leaves for it, or the window blurs as it takes it.
+ * Returns what stops it. */
+export function onPage(take: (holder: Element) => void): () => void {
+  const reach = (element: Element | null) => {
+    const holder = holderOf(element)
+    if (holder) take(holder)
+  }
+  const onLeave = (event: FocusEvent) =>
+    reach(event.relatedTarget instanceof Element ? event.relatedTarget : null)
+  const onBlur = () => reach(document.activeElement)
+  document.addEventListener("focusout", onLeave, true)
+  window.addEventListener("blur", onBlur)
+  return () => {
+    document.removeEventListener("focusout", onLeave, true)
+    window.removeEventListener("blur", onBlur)
+  }
+}
+
 /** The focused Pane's tile, which the window marks `data-focused`; while
  * the Sheet shows, the Sheet, which has the keys (ADR 0102, decision 5). */
 export function focusedTile(): HTMLElement | null {

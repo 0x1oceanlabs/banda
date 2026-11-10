@@ -357,22 +357,25 @@ function whoseIs(to: number, name: string | undefined): string {
 /**
  * What a move refused onto workspace `to`, from 0, is told (ADR 0102,
  * decision 6): whose it is, its Project `owner`'s, and where the Pane can
- * go. `as` is the Project it moves as; `along`, a Group of that Project
- * takes it along, and dragged alone it would go there. A Project not
- * known is another Project's.
+ * go. `as` is the Project it moves as, and `scratch` whether that is of
+ * no Project, as the Placing says: a draft in the machine's own ID is,
+ * with no summary. `along`, a Group of that Project takes it along, and
+ * dragged alone it would go there. A Project not known is another
+ * Project's.
  */
 export function refusalOf({
   to,
   owner,
   as,
+  scratch,
   along,
 }: {
   to: number
   owner: ProjectSummary | undefined
   as: ProjectSummary | undefined
+  scratch: boolean
   along: boolean
 }): { title: string; description: string } {
-  const scratch = as?.scratch === true
   const description = along
     ? `It goes with its Group, which is ${scratch ? "of no Project" : whose(as?.name)}. Drag it to move it alone.`
     : scratch

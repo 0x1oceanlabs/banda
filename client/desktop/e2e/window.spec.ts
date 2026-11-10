@@ -4224,7 +4224,10 @@ test("Threads of no Project share the first free workspace, which takes a Projec
     numbers.getByRole("button", { name: "Workspace 1" })
   ).toHaveAttribute("aria-current", "true")
   await expect(threads).toHaveCount(4)
-  const refused = page.getByText("Not onto another Project's workspace")
+  const refused = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Workspace 1 is " })
   await expect(refused).toHaveCount(0)
 })
 

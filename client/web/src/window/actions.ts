@@ -253,12 +253,36 @@ function movedTo(w: Workspaces, side: "first" | "last"): Step {
   return column && next !== w ? columnMoved(next, column.id) : undefined
 }
 
+/** The toast a workspace that cannot close shows: one, however often it
+ * is asked. */
+const UNCLOSABLE = "workspace-unclosable"
+
+/** Says why workspace `id` stays (`closableAt`): it holds Panes, or it is
+ * the empty one at the bottom. One no longer there says nothing. */
+function sayUnclosable(w: Workspaces, id: string) {
+  const at = w.list.findIndex((one) => one.id === id)
+  if (at < 0) return
+  if (w.list[at].columns.length > 0)
+    toast(`Workspace ${at + 1} holds Panes`, {
+      id: UNCLOSABLE,
+      description:
+        "Only an empty workspace closes. Close or move its Panes first.",
+    })
+  else
+    toast("The empty workspace at the bottom stays", {
+      id: UNCLOSABLE,
+      description: "It is where a new workspace starts.",
+    })
+}
+
 /** Closes the empty workspace `id`, a Project's too (`closingWorkspace`):
  * from the one on screen, the window goes to the one above it first, or
- * below when it is the first. */
+ * below when it is the first. One that cannot close says why. */
 function closeWorkspace(shell: Shell, id: string): void {
   shell.change((w) => {
-    if (closableAt(w, id) !== w.current) return undefined
+    const at = closableAt(w, id)
+    if (at === undefined) sayUnclosable(w, id)
+    if (at !== w.current) return undefined
     return step(w, w.current > 0 ? -1 : 1)
   })
   shell.change((w) => {
@@ -337,20 +361,23 @@ const strictNow = () => fileNow(AGENTS_FILE).flow !== "free"
 const REFUSED = "workspace-refused"
 
 /** Says why a move onto workspace `to` was refused: whose it is, and where
- * a Pane that moves as `as` can go, by `projectOf` (`refusalOf`). `to` is
- * numbered as in `w`, before the move, as the bar shows it: a move lets
- * an emptied free workspace above it go. */
+ * a Pane that moves as `as` can go, by `projectOf`, or as one of no
+ * Project when `scratch` says so (`refusalOf`). `to` is numbered as in
+ * `w`, before the move, as the bar shows it: a move lets an emptied free
+ * workspace above it go. */
 function sayRefused(
   w: Workspaces,
   to: Workspace,
   as: ProjectId,
   along: boolean,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined
+  projectOf: (project: ProjectId) => ProjectSummary | undefined,
+  scratch: Placing["scratch"]
 ) {
   const { title, description } = refusalOf({
     to: w.list.findIndex((one) => one.id === to.id),
     owner: to.project === undefined ? undefined : projectOf(to.project),
     as: projectOf(as),
+    scratch: scratch(as),
     along,
   })
   toast(title, { id: REFUSED, description })
@@ -359,11 +386,13 @@ function sayRefused(
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
  * window (ADR 0065), but one of the Project's own Group goes alone
- * (`takesGroup`). */
+ * (`takesGroup`). A refusal names the Projects by `projectOf`, and those
+ * of no Project as `scratch` says (`Placing`). */
 function moving(
   w: Workspaces,
   how: (w: Workspaces) => Workspaces,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined
+  projectOf: (project: ProjectId) => ProjectSummary | undefined,
+  scratch: Placing["scratch"]
 ): Step {
   const { workspace, column } = focusedColumn(w)
   const entry = focused(w)
@@ -382,7 +411,7 @@ function moving(
   ) {
     // Taken along by its Group, it would go there alone, by a drag.
     const along = as !== entry.project && admits(to, entry.project)
-    sayRefused(w, to, as, along, projectOf)
+    sayRefused(w, to, as, along, projectOf, scratch)
     return undefined
   }
   if (whole && to.id !== workspace.id) {
@@ -394,7 +423,7 @@ function moving(
 
 /** Moves the focused Pane as `moving` does, where `how` puts it. */
 const moveFocused = (shell: Shell, how: (w: Workspaces) => Workspaces) =>
-  shell.change((w) => moving(w, how, shell.projectOf))
+  shell.change((w) => moving(w, how, shell.projectOf, shell.placing().scratch))
 
 /** Each workspace as the Pane menu's "To workspace" offers it to the
  * Pane at `spot`, as `moving` would move it: its Project, and whether the
@@ -487,7 +516,14 @@ export function bringing(
 ): Step {
   const workspace = current(workspaces)
   if (placing.flow !== "free" && !admits(workspace, project)) {
-    sayRefused(workspaces, workspace, project, false, projectOf)
+    sayRefused(
+      workspaces,
+      workspace,
+      project,
+      false,
+      projectOf,
+      placing.scratch
+    )
     return undefined
   }
   const next = bring(workspaces, project, pane, {

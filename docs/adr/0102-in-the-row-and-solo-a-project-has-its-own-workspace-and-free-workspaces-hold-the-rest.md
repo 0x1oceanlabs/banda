@@ -55,13 +55,15 @@ day.
      Project has no Threads left.
    - The bar shows a Project's workspace by its Sign alone, and a free
      one by its number (changed in #1127: no call dot, no Group map).
-   _Built_ after step 6: emptied, a Project's workspace that keeps its
-   place says whose it is and that it keeps its place until the Person
-   closes it. "Close the workspace", under those words, in the Banda menu
-   and as a cross on its row in the overview, lets it go, and the
-   Project's next Thread makes it again at the end. One whose Project has
-   no Threads says only that it is empty, as a free one does. In the Flow
-   free, an emptied one goes once the Person leaves it, a Project's too.
+   _Built_ after the UX review: emptied, a Project's workspace that keeps
+   its place says whose it is and that it keeps its place until the
+   Person closes it. "Close the workspace", under those words, in the
+   Banda menu and as a cross on its row in the overview, lets it go, and
+   the Project's next Thread makes it again at the end. One whose Project
+   has no Threads says only that it is empty, as a free one does. In the
+   Flow `free`, an emptied one goes once the Person leaves it, a
+   Project's too. On one that holds Panes, or on the empty one at the
+   bottom, "Close the workspace" says in a toast why it stays.
 
 3. **Where a Pane opens, in this order:**
    1. A Pane an Agent opens goes into the Agent's Group, even when it is
@@ -80,22 +82,22 @@ day.
 
    _Built_ in step 1: a Pane opened on a free workspace stays there,
    right of the Pane in front (decision 1); step 2 put the rest into the
-   Project's own Group. A Pane that joins a
-   Group from inside it goes last into the Deck right of the Pane it is
-   opened from, as what an Agent opens does. A Pane of no Project other
-   than a Thread opens right of the Pane in front until the Sheet comes.
-   After the UX review: a Pane opened from the Banda menu goes where
-   the focus is, as by its key, so from inside a Group into it (3.2);
-   the own Group gathers a Project's Panes opened from another workspace
-   or from a loose column. A Pane of no Project opened from its Thread's
-   Group joins that Group, as a Project's does. A Thread of no Project,
-   a draft in the machine's own ID too, opens on the top free workspace,
-   and so does a browser its Agent opens with the Thread not shown. No
-   workspace is ever no Project's; one owned so before goes once emptied
-   and left. A New Thread moved to another Project by its picker, or to
-   No Project, goes where a new Thread of that Project opens, and the
-   window follows it; on a free workspace, or in the drawer, it changes
-   Project where it stands, and its first message never moves it.
+   Project's own Group. A Pane that joins a Group from inside it goes
+   last into the Deck right of the Pane it is opened from, as what an
+   Agent opens does. A Pane of no Project other than a Thread opens right
+   of the Pane in front until the Sheet comes. After the UX review: a
+   Pane opened from the Banda menu goes where the focus is, as by its
+   key, so from inside a Group into it (3.2); the own Group gathers a
+   Project's Panes opened from another workspace or from a loose column.
+   A Pane of no Project opened from its Thread's Group joins that Group,
+   as a Project's does. A Thread of no Project, a draft in the machine's
+   own ID too, opens on the top free workspace, and so does a browser its
+   Agent opens with the Thread not shown. No workspace is ever no
+   Project's; one owned so before goes once emptied and left. A New
+   Thread moved to another Project by its picker, or to No Project, goes
+   where a new Thread of that Project opens, and the window follows it;
+   on a free workspace, or in the drawer, it changes Project where it
+   stands, and its first message never moves it.
 
 4. **The Project's own Group.**
    - It holds the Panes the Person opened for the Project and not for an
@@ -108,23 +110,24 @@ day.
    _Built_ in step 2: the engine's `own` place puts a Pane last into the
    workspace's `own` Group, made first on the Project's workspace when it
    is gone; the Group's handle says the Project's name. A Pane opened from
-   inside the own Group goes last into it. What an Agent opens while its
-   Thread is not shown goes last on its Project's workspace, a Thread it
-   opens too; the window and the engine's `open_pane` agree on this
-   while the Project owns a workspace, even emptied. The engine does not
-   know the Flow: a workspace owned from the row, or by Arrange, still
-   takes what `open_pane` opens in the Flow `free`, where the window's
-   browser goes right of the Pane in front. With none owned, of no
-   Project too, `open_pane` puts it beside the Project's Panes, else on
-   the empty workspace at the bottom, while the window's browser makes
-   the Project's workspace there, or, of no Project, goes to the top
-   free workspace: the two differ there yet. Moved off the Project's
+   inside the own Group goes last into it. Moved off the Project's
    workspace, the own Group is a Group like any other, and the next Pane
-   starts a new one. `Alt+Shift+N` and the Pane menu move a
-   Pane of the own Group alone; a drag of its handle still takes it whole. After step 6, the tag stays on the
-   own Group while the handle is off, and a first Pane started from the
-   buttons of an emptied Project's workspace goes where the keys put it,
-   so a terminal makes the own Group there.
+   starts a new one. What an Agent opens while its Thread is not shown
+   goes last on its Project's workspace. After the UX review: so does a
+   Thread an Agent opens, and the window and the engine's `open_pane`
+   agree on this while the Project owns a workspace, even emptied. The
+   engine does not know the Flow: a workspace owned from the row, or by
+   Arrange, still takes what `open_pane` opens in the Flow `free`, where
+   the window's browser goes right of the Pane in front. With none owned,
+   of no Project too, `open_pane` puts it beside the Project's Panes,
+   else on the empty workspace at the bottom, while the window's browser
+   makes the Project's workspace there, or, of no Project, goes to the
+   top free workspace: the two differ there yet. `Alt+Shift+N` and the
+   Pane menu move a Pane of the own Group alone; a drag of its handle
+   still takes it whole. The tag stays on the own Group while the handle
+   is off, and a first Pane started from the buttons of an emptied
+   Project's workspace goes where the keys put it, so a terminal makes
+   the own Group there.
 
 5. **Settings, Usage and the notifications come as a Sheet over the
    workspace.**
@@ -140,15 +143,17 @@ day.
    for, in every Flow. A press on the tiles takes it away; the sidebar
    and the bar do not, so their gear goes to it where it is. The
    notifications stay the bell's list (ADR 0048), and a Pane of no
-   Project other than these opens as before. While it shows it has the
-   keys: `Alt+W` and `Esc` take it away wherever the focus is (a search
-   with words clears first), and so do a pick, even of the Pane in focus,
-   and the focus going to a Pane or the overview. That is any Pane that
-   takes the focus, as the neighbour of one closed behind the Sheet does.
-   As it goes, keys nothing took go back to the Pane they came from, else
-   to the focused one. The launcher and an empty workspace offer no kind
-   that comes as the Sheet, and such a tile kept from before step 5
-   closes once.
+   Project other than these opens as before. After the UX review: it has
+   the keys while it shows. `Alt+W` and `Esc` take it away wherever the
+   focus is (a search with words clears first), and so do a pick, even
+   of the Pane in focus, and the focus going to a Pane or the overview.
+   That is any Pane that takes the focus, as the neighbour of one closed
+   behind the Sheet does, the dropped drawer's and a browser's page too.
+   Opened while the drawer is dropped, it stands over it. As it goes,
+   keys nothing took go back to the Pane they came from, or to the
+   overview while it is open, else to the focused one. The launcher and
+   an empty workspace offer no kind that comes as the Sheet, and such a
+   tile kept from before step 5 closes once.
 
 6. **Moving a Pane between workspaces.**
    - A Project's Pane, or a whole Group, moves freely between its
@@ -167,14 +172,15 @@ day.
    mouse, in the row and solo; a Group moves as its Agent's Thread's
    Project, else as its first Pane's. During a drag the note under the
    Pane's name says why. The Sign shows in the header of every Pane on a
-   free workspace, as on a workspace of mixed Projects. Later, the toast
-   and the note say whose the workspace is ("Workspace 2 is Brand's") and
-   where the Pane can go ("To free workspace 3"); the Banda menu's Open
-   beside refuses as the keys do, and the Pane menu shows a Project's
-   workspace by its Sign and greys out those the keys refuse. The sidebar's mark is a small diamond after
-   the row's left parts, where its Later clock never covers it, and shows
-   only once the Thread's Project has a workspace, so going from the Flow
-   `free` to the row marks nothing.
+   free workspace, as on a workspace of mixed Projects. After the UX
+   review: the toast and the note say whose the workspace is
+   ("Workspace 2 is Brand's") and where the Pane can go
+   ("To free workspace 3"); the Banda menu's Open beside refuses as the
+   keys do, and the Pane menu shows a Project's workspace by its Sign and
+   greys out those the keys refuse. The sidebar's mark is a small diamond
+   after the row's left parts, where its Later clock never covers it, and
+   shows only once the Thread's Project has a workspace, so going from
+   the Flow `free` to the row marks nothing.
 
 7. **A Thread of no Project that becomes a Project's goes to that
    Project's workspace,** by the row's rules, with its Group. The
@@ -190,13 +196,13 @@ day.
      moved.
    _Built_ in step 4: solo draws every Group, and every column in none,
    the screen wide, on every workspace that holds a Pane; the workspace
-   `Alt+M` shows as the row stays as it is. A focus that goes into a
-   Group shows it whole from its first column, as a pick does, by keys
-   and at a swipe's end. The width keys do nothing on a column that
-   fills the screen alone, so the row never gets a width the Person did
-   not see, and on a column of a Group each press steps the share it
-   shows on. A Group `Alt+M` filled in the row does the same. The Flow menu, Settings and the title of
-   `Alt+Shift+M` say so.
+   `Alt+M` shows as the row stays as it is. After the UX review: the Flow
+   menu, Settings and the title of `Alt+Shift+M` say so. A focus that
+   goes into a Group shows it whole from its first column, as a pick
+   does, by keys and at a swipe's end. The width keys do nothing on a
+   column that fills the screen alone, so the row never gets a width the
+   Person did not see, and on a column of a Group each press steps the
+   share it shows on. A Group `Alt+M` filled in the row does the same.
 
 9. **From the Flow `free` to the row, nothing jumps.**
    - Panes already open stay where they are, and new ones follow these
@@ -206,20 +212,21 @@ day.
      A Pane of no Project goes to a free workspace.
    _Built_ in step 6, with decision 7: the engine's `workspaces.arrange`
    moves every Group, and every column in none, that stands off its
-   place, as its Agent's Thread's Project says, else its first Pane's,
-   as a Group moves (decision 6): to that Project's workspace, or, of no
-   Project, last on the top free one; with `only`, that Project's alone,
-   which the window sends when a Project of no Project is made a
-   Project's. On the Project's workspace, one with no Agent's Thread and
-   no Pane an Agent opened goes into the own Group, first, which it
+   place, as its first Pane's Project says: last on that Project's
+   workspace, or, of no Project, on the top free one; with `only`, that
+   Project's alone, which the window sends when a Project of no Project
+   is made a Project's. `Ctrl+Z` does not undo it yet: the workspaces
+   have no undo. After the UX review: a Group goes as its Agent's
+   Thread's Project says, else as its first Pane's, as a Group moves
+   (decision 6). On the Project's workspace, one with no Agent's Thread
+   and no Pane an Agent opened goes into the own Group, first, which it
    starts when there is none (decision 4); the Groups the Person made
    stand just after it, in the order they stood, and an Agent's goes
    last. A Group keeps its `Alt+M` fill. A Project counts as one as it
    does for a Pane that opens: another machine's too, and one whose
    folder is missing; a draft in this machine's own ID, as a new Thread
-   in No Project starts, is of no Project. `Ctrl+Z` does not undo it
-   yet: the workspaces have no undo. The sidebar's Flow menu offers it as
-   well, in the row and solo.
+   in No Project starts, is of no Project. The sidebar's Flow menu
+   offers it as well, in the row and solo.
 
 ## Consequences
 

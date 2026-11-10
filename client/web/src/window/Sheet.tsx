@@ -9,7 +9,13 @@ import {
 import type { Engine, ProjectId } from "@banda/contract"
 import { onDraw } from "@banda/ui/lib/frames"
 import { FIELDS } from "@banda/ui/lib/keys"
-import { focusedTile, type PaneState, paneOf } from "@banda/ui/pane"
+import {
+  focusedTile,
+  holderOf,
+  onPage,
+  type PaneState,
+  paneOf,
+} from "@banda/ui/pane"
 import { labelOf, sheetsOf } from "../registry"
 import { settingsPane } from "../settings/pane"
 import type { Change } from "../tiling/arrange"
@@ -24,9 +30,18 @@ export type Sheeted = { project: ProjectId; pane: PaneState }
  * suggestions in it. */
 const OVER_SHEET = "[role=menu], [role=dialog], [role=listbox]"
 
-/** Where a focus that goes takes the Sheet away: a tile, or the overview
- * of them. */
-const AWAY = "[data-stack], [data-overview-state]"
+/** Where a focus that goes takes the Sheet away: a tile, the dropped
+ * drawer's, or the overview of them. */
+const AWAY = "[data-stack], [data-drawer], [data-overview-state]"
+
+/** The overview while it is open, which keeps the keys it gave. */
+const OPEN_OVERVIEW = '[data-overview-state="open"]'
+
+/** Whether the keys going to `element` take the Sheet away: there, or to
+ * a page a tile holds in the layer, as a browser's. */
+export function awayTo(element: Element | null): boolean {
+  return element?.closest(AWAY) != null || holderOf(element) !== null
+}
 
 /** Whether an Esc at `target` takes the Sheet away: wherever the focus
  * is, as it is the top layer, but not one a menu, dialog or suggestions
@@ -41,16 +56,16 @@ export function escAway(
 }
 
 /** Where the keys go back to as the Sheet goes, when nothing took them:
- * the tile or field they came from, else the focused Pane's tile, as the
- * Banda menu gives them back. */
+ * the tile or field they came from, else `next`: the open overview, or
+ * the focused Pane's tile, as the Banda menu gives them back. */
 export function backTo(
   before: HTMLElement | null,
-  tile: HTMLElement | null
+  next: HTMLElement | null
 ): HTMLElement | null {
   const kept =
     before?.isConnected &&
     (before.closest("[data-tile]") !== null || before.matches(FIELDS))
-  return kept ? before : tile
+  return kept ? before : next
 }
 
 /** Puts the keys in the Sheet's `panel`. A toast's button gives them back
@@ -167,13 +182,14 @@ export function Sheet({
   const showing = sheet !== null
   // It takes the keys as it comes in, before it listens, as a toast's
   // button gives them back to a composer as it blurs; as it goes, it gives
-  // back those nothing took: where they were, or to the focused Pane.
-  // While it shows, a press on the tiles behind takes it away, and so does
-  // the focus going to a Pane, as Alt+1, a new Thread or the neighbour of
-  // a Pane closed give it, or to the overview; the sidebar and the bar
-  // stay the Person's, as their gear goes to it where it is. Esc takes it
-  // away, as `escAway` says. A focus that falls to nothing, as with a
-  // search result gone as it is pressed, comes back to it.
+  // back those nothing took: where they were, or to the open overview or
+  // the focused Pane. While it shows, a press on the tiles behind takes it
+  // away, and so does the focus going to a Pane, as Alt+1, a new Thread,
+  // the drawer dropped or the neighbour of a Pane closed give it, or to
+  // the overview; the sidebar and the bar stay the Person's, as their gear
+  // goes to it where it is. Esc takes it away, as `escAway` says. A focus
+  // that falls to nothing, as with a search result gone as it is pressed,
+  // comes back to it.
   useEffect(() => {
     if (!showing) return
     const before =
@@ -186,8 +202,7 @@ export function Sheet({
       if (target?.closest("[data-stack]")) close()
     }
     const onIn = (event: FocusEvent) => {
-      const target = event.target instanceof Element ? event.target : null
-      if (target?.closest(AWAY)) close()
+      if (awayTo(event.target instanceof Element ? event.target : null)) close()
     }
     const onOut = (event: FocusEvent) => {
       const target = event.target instanceof Element ? event.target : null
@@ -210,14 +225,19 @@ export function Sheet({
     document.addEventListener("focusin", onIn, true)
     document.addEventListener("focusout", onOut, true)
     window.addEventListener("keydown", onKey)
+    // A page a tile holds takes the keys too, as `onPage` says.
+    const offPage = onPage(() => close())
     return () => {
       document.removeEventListener("pointerdown", onDown, true)
       document.removeEventListener("focusin", onIn, true)
       document.removeEventListener("focusout", onOut, true)
       window.removeEventListener("keydown", onKey)
+      offPage()
+      // Under the open overview the tiles take no keys: it does.
       const at = document.activeElement
+      const open = document.querySelector<HTMLElement>(OPEN_OVERVIEW)
       if (!at || at === document.body)
-        backTo(before, focusedTile())?.focus({ preventScroll: true })
+        backTo(before, open ?? focusedTile())?.focus({ preventScroll: true })
     }
   }, [showing, close])
   // Asked for again while it shows, as from the gear or Alt+, it takes

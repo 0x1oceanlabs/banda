@@ -421,9 +421,11 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   const tile = page.locator("section[data-tile][data-focused=true]")
 
   // Esc in the search clears it first, and the next takes the Sheet
-  // away; the keys go back to the composer they came from.
+  // away; the keys go back to the composer they came from. The settings
+  // load with their first opening: once they show, / goes to the search.
   await openSettings(page)
   await expect(settings).toBeFocused()
+  await expect(search).toBeVisible()
   await page.keyboard.press("/")
   await expect(search).toBeFocused()
   await page.keyboard.type("radius")
@@ -478,12 +480,18 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await expect(settings).toHaveCount(0)
   await expect(tile).toBeFocused()
 
-  // The overview takes the keys, and the Sheet goes.
+  // The overview takes the keys, and the Sheet goes. Opened over the
+  // overview, the Sheet gives them back to it as it goes.
   await openSettings(page)
   await page.keyboard.press("Alt+KeyO")
   const overview = page.getByRole("dialog", { name: "Overview" })
   await expect(overview).toBeFocused()
   await expect(settings).toHaveCount(0)
+  await openSettings(page)
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await expect(overview).toBeFocused()
   await page.keyboard.press("Escape")
   await expect(page.locator("[data-overview-state]")).toHaveCount(0)
 
@@ -506,6 +514,34 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await openSettings(page)
   await row.click()
   await expect(settings).toHaveCount(0)
+  // And in the Banda menu.
+  await openSettings(page)
+  await page.keyboard.press("Alt+Space")
+  const find = menu.getByRole("combobox", { name: "Search" })
+  await find.fill("typed")
+  await expect(menu.getByRole("option").first()).toContainText("typed")
+  await find.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(settings).toHaveCount(0)
+
+  // So does the drawer as it drops, which has the keys then.
+  await openSettings(page)
+  await page.keyboard.press("Alt+Backquote")
+  const drawer = page.getByRole("dialog", { name: "Drawer" })
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await expect(settings).toHaveCount(0)
+  await expect(
+    drawer.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toBeFocused()
+  // Opened over the dropped drawer, from the Banda menu, it stands over
+  // it, and a press in it is its own.
+  await page.keyboard.press("Alt+KeyK")
+  await menu.getByRole("combobox", { name: "Search" }).fill("Open the settings")
+  await menu.getByRole("option", { name: /^Open the settings/ }).click()
+  await expect(settings).toBeFocused()
+  await search.click()
+  await expect(search).toBeFocused()
+  await expect(settings).toBeVisible()
 })
 
 test("Usage never becomes a tile: the launcher and an empty workspace leave it out (ADR 0102, decision 5)", async () => {

@@ -796,7 +796,10 @@ function Row({
         <Cross
           label={`Close workspace ${number}`}
           title="Close the workspace"
-          className="top-1/2 -translate-y-1/2 group-hover/place:opacity-100"
+          // In the middle by its margins, not a translate: a press sets
+          // the button's own, and the cross would drop off the row under
+          // the pointer, so the click went to the row.
+          className="inset-y-0 my-auto group-hover/place:opacity-100"
           onClose={onCloseWorkspace}
         />
       )}
