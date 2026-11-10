@@ -45,11 +45,14 @@
   --focus-inactive: oklch(0 0 0 / 8%);
   --focus-ring: 0px;
   --focus-shadow-strength: 0.25;
+  --desk: #f4f4f5;
+  --panel: #fafafa;
   --desk-blur: 40px;
   --desk-saturation: 1.4;
   --desk-grain: 0.04;
   --sidebar-shadow-strength: 0.45;
   --desk-opacity: 40%;
+  --tile: #ffffff;
   --tile-border: 1px;
   --tile-dim: 0;
   --tile-shadow-strength: 0;
@@ -139,6 +142,9 @@
   --removed: oklch(0.704 0.191 22.216);
   --focus: #4ea3ff;
   --focus-inactive: oklch(1 0 0 / 8%);
+  --desk: #111113;
+  --panel: #202024;
+  --tile: #19191c;
   --block: #202023;
   --raised: #28282b;
   --sign-violet: oklch(0.72 0.14 300);

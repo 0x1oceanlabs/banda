@@ -2,9 +2,10 @@
 //! every key optional, a value one for both or `{ light, dark }`.
 //!
 //! This crate reads what it says of the theme: the theme it `extends`, its
-//! `[colors]`, the palette by Omarchy's names, and its `[tokens]`. Its
-//! `[shape]`, `[font]` and `[glass]` are `look.toml`'s keys, which the look
-//! reads.
+//! `[colors]`, the palette by Omarchy's names, its `[tokens]`, and the
+//! tokens `[glass.tokens]` corrects over glass (ADR 0080, decision 8). Its
+//! `[shape]`, `[font]` and the rest of `[glass]` are `look.toml`'s keys,
+//! which the look reads.
 
 use crate::Mode;
 use crate::color::{is_css_color, is_hex};
@@ -33,8 +34,18 @@ struct Said {
     _shape: Option<IgnoredAny>,
     #[serde(rename = "font")]
     _font: Option<IgnoredAny>,
-    #[serde(rename = "glass")]
-    _glass: Option<IgnoredAny>,
+    #[serde(default)]
+    glass: GlassSaid,
+}
+
+/// A `theme.toml`'s `[glass]`: its `tokens`, and `look.toml`'s `[desk]`
+/// keys, the look's to read.
+#[derive(Default, Deserialize)]
+struct GlassSaid {
+    #[serde(default)]
+    tokens: BTreeMap<String, Spanned<toml::Value>>,
+    #[serde(flatten)]
+    _desk: BTreeMap<String, IgnoredAny>,
 }
 
 /// A `theme.toml`, read: the theme it extends, and its colours and tokens
@@ -46,6 +57,7 @@ pub struct ThemeToml {
     /// Light's, then dark's.
     colors: [BTreeMap<String, String>; 2],
     tokens: [BTreeMap<String, String>; 2],
+    glass: [BTreeMap<String, String>; 2],
 }
 
 impl ThemeToml {
@@ -57,6 +69,11 @@ impl ThemeToml {
     /// The tokens it sets in `mode`, by name.
     pub fn tokens(&self, mode: Mode) -> &BTreeMap<String, String> {
         &self.tokens[mode as usize]
+    }
+
+    /// The tokens it corrects over glass in `mode`, by name.
+    pub fn glass(&self, mode: Mode) -> &BTreeMap<String, String> {
+        &self.glass[mode as usize]
     }
 }
 
@@ -87,16 +104,21 @@ pub fn read(path: &Path, text: &str, wrong: &mut Vec<Wrong>) -> Option<ThemeToml
             let span = value.span();
             // A token by its name now: one that is not, or that `[tokens]`
             // does not set, is named and left out.
-            let key = if table == "tokens" {
+            let key = if table != "colors" {
+                // Told of the table it is in: `[tokens]` or `[glass.tokens]`.
+                let told = |said: String| {
+                    (said.replace("tokens.", &format!("{table}.")))
+                        .replace("[tokens]", &format!("[{table}]"))
+                };
                 match tokens::set_by(&key) {
                     Ok((name, note)) => {
                         if let Some(note) = note {
-                            wrong.push(Wrong::at(path, text, span.clone(), note));
+                            wrong.push(Wrong::at(path, text, span.clone(), told(note)));
                         }
                         name.to_owned()
                     }
                     Err(said) => {
-                        wrong.push(Wrong::at(path, text, span, said));
+                        wrong.push(Wrong::at(path, text, span, told(said)));
                         continue;
                     }
                 }
@@ -145,6 +167,7 @@ pub fn read(path: &Path, text: &str, wrong: &mut Vec<Wrong>) -> Option<ThemeToml
     each("colors", "a colour", said.colors, &mut read.colors);
     let token = "a palette name, a token's name or a CSS colour";
     each("tokens", token, said.tokens, &mut read.tokens);
+    each("glass.tokens", token, said.glass.tokens, &mut read.glass);
     Some(read)
 }
 
@@ -187,6 +210,24 @@ mod tests {
         assert_eq!(read.colors(Mode::Dark)["background"], "#0e1a1c");
         assert!(read.tokens(Mode::Light).is_empty());
         assert_eq!(read.tokens(Mode::Dark)["card"], "#101010");
+    }
+
+    #[test]
+    fn glass_tokens_are_tokens_and_the_rest_of_glass_is_the_looks() {
+        let (read, wrong) = read_text(
+            "[glass]\nopacity = 0.5\nblur = 30\n[glass.tokens]\nmuted = { light = \"#0000001a\" }\nborder = \"foreground\"\nradius = \"#fff\"\n",
+        );
+        let read = read.unwrap();
+        assert_eq!(read.glass(Mode::Light)["muted"], "#0000001a");
+        assert!(!read.glass(Mode::Dark).contains_key("muted"));
+        assert_eq!(read.glass(Mode::Dark)["border"], "foreground");
+        assert!(read.tokens(Mode::Light).is_empty());
+        // A token that is no colour is named, as in `[tokens]`.
+        assert!(!read.glass(Mode::Light).contains_key("control-radius"));
+        assert_eq!(
+            wrong,
+            ["glass.tokens.radius is a length; [glass.tokens] sets only colours for now"]
+        );
     }
 
     #[test]

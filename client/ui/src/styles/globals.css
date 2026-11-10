@@ -125,20 +125,11 @@
   --focus-shadow:
     0 6px 16px -4px rgb(0 0 0 / var(--focus-shadow-strength)),
     0 1px 3px rgb(0 0 0 / calc(var(--focus-shadow-strength) * 0.5));
-  /* The three surfaces (ADR 0023): the desk, the sidebar's panel over
-     it, and the tiles. Solid; html[data-glass] below makes the desk and
-     the panel glass, and the tiles only below [tile] opacity 1. They
-     become tokens with the glass (ADR 0100, step 4). */
-  /* A theme may name its solid desk (desk-solid, ADR 0075); else it is
-     the background, a little greyed. */
-  --desk: var(
-    --desk-solid,
-    color-mix(in oklab, var(--muted) 40%, var(--background))
-  );
-  --panel: var(--sidebar);
-  --tile: var(--background);
-  /* The overview follows the desk's theme (ADR 0052). A little of the
-     text colour sets the miniature screens apart on a solid desk. */
+  /* The three surfaces (ADR 0023), --desk, --panel and --tile, are
+     tokens: the look gives them solid, or thinned over glass (ADR 0100,
+     decision 4). The overview follows the desk's theme (ADR 0052). A
+     little of the text colour sets the miniature screens apart on a solid
+     desk. */
   --overview: color-mix(in oklab, var(--desk) 94%, var(--foreground));
   --overview-foreground: var(--foreground);
   /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
@@ -207,45 +198,13 @@ html[data-glass] body::before {
 html[data-glass] {
   /* The shell has already tinted the glass: the overview adds no sheet. */
   --overview: transparent;
-  --desk: color-mix(
-    in oklab,
-    var(--background) var(--desk-opacity),
-    transparent
-  );
-  --panel-opacity: calc((var(--desk-opacity) + var(--tile-opacity)) / 2);
-  --panel: color-mix(
-    in oklab,
-    var(--sidebar) var(--panel-opacity),
-    transparent
-  );
-  --tile: color-mix(
-    in oklab,
-    var(--background) var(--tile-opacity),
-    transparent
-  );
   --tile-shadow:
     0 18px 40px -12px rgb(0 0 0 / var(--tile-shadow-strength)),
     0 2px 6px rgb(0 0 0 / calc(var(--tile-shadow-strength) * 0.36));
   --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / var(--sidebar-shadow-strength));
-  /* shadcn's fills, lines and quiet text are the text's own colour,
-     thinned, not greys made for a solid page: they take the colour of the
-     glass under them, so a current number or tab shows on any wallpaper
-     and never sits on it as a patch (ADR 0036). Important, as the theme's
-     colours are set on the root itself. */
-  --muted: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
-  --accent: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
-  --secondary: color-mix(
-    in oklab,
-    var(--foreground) 10%,
-    transparent
-  ) !important;
-  --muted-foreground: color-mix(
-    in oklab,
-    var(--foreground) 62%,
-    transparent
-  ) !important;
-  --border: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
-  --input: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
+  /* The surfaces, and shadcn's fills, lines and quiet text, are the
+     look's glass scheme: thinned from the solid colours (ADR 0036, ADR
+     0100 decision 4). */
 }
 /* The sidebar's panel frosts what is under it, as the desk frosts the
    wallpaper. Menus, dialogs and toasts stay solid over glass (ADR 0075,

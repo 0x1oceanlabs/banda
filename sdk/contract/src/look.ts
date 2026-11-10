@@ -127,16 +127,20 @@ export const DEFAULT_MOTION: Motion = {
 
 /** The scheme that shows, and whether it is the dark one: the look's
  * mode, or the system's when the look follows it. A theme with one
- * scheme shows that one whatever the system says. */
+ * scheme shows that one whatever the system says. Over glass, that
+ * scheme's glass (ADR 0100, decision 4). */
 export function shown(
   look: Look,
   systemDark: boolean
 ): { dark: boolean; colors: Record<string, string> } {
-  const { light, dark } = look.schemes
+  const { light, dark, light_glass, dark_glass } = look.schemes
+  const glass = look.desk.glass
   const wantsDark =
     look.mode === "dark" || (look.mode === "system" && systemDark)
-  if (wantsDark ? dark : !light) return { dark: true, colors: dark ?? {} }
-  return { dark: false, colors: light ?? {} }
+  if (wantsDark ? dark : !light) {
+    return { dark: true, colors: (glass && dark_glass) || dark || {} }
+  }
+  return { dark: false, colors: (glass && light_glass) || light || {} }
 }
 
 /** A colour as a window's ground takes it before the page paints: a

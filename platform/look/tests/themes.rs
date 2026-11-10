@@ -190,11 +190,15 @@ fn drawn(look: &Look, roots: &[String; 2]) -> String {
     leaves("mode", &serde_json::to_value(look.mode).unwrap(), &mut out);
     leaves("desk", &desk, &mut out);
     leaves("vars", &serde_json::to_value(&look.vars).unwrap(), &mut out);
-    leaves(
-        "schemes",
-        &serde_json::to_value(&look.schemes).unwrap(),
-        &mut out,
-    );
+    // Each glass scheme by what it changes of its solid one.
+    let mut schemes = serde_json::to_value(&look.schemes).unwrap();
+    for (glass, solid) in [("light_glass", "light"), ("dark_glass", "dark")] {
+        let solid = schemes.get(solid).cloned().unwrap_or_default();
+        if let Some(Value::Object(colors)) = schemes.get_mut(glass) {
+            colors.retain(|name, value| solid.get(name) != Some(value));
+        }
+    }
+    leaves("schemes", &schemes, &mut out);
     leaves(
         "sources",
         &serde_json::to_value(&look.sources).unwrap(),

@@ -192,6 +192,8 @@ pub struct Wallpaper {
     pub from: &'static str,
 }
 
+/// The theme's colours, each scheme it has as CSS variables: solid, and
+/// over glass while the desk is glass (ADR 0100, decision 4).
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Schemes {
@@ -201,6 +203,16 @@ pub struct Schemes {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub dark: Option<BTreeMap<String, String>>,
+    /// Light over glass: the surfaces, and shadcn's fills, lines and quiet
+    /// text, thinned from light's (ADR 0036), under the theme's
+    /// `[glass.tokens]`.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub light_glass: Option<BTreeMap<String, String>>,
+    /// Dark over glass, the same way.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub dark_glass: Option<BTreeMap<String, String>>,
 }
 
 /// One layer of the look.
@@ -685,9 +697,19 @@ pub fn resolve(
         watched.push(path.clone());
         Device::read(path)
     });
+    // How solid the desk and the tiles are over glass, when it is.
+    let over = glass.then(|| {
+        let desk = share(all.desk.opacity, material.tint());
+        (desk, share(all.tile.opacity, 1.0))
+    });
+    let one = |theme: &Option<Laid>, glass| {
+        (theme.as_ref()).map(|theme| scheme(theme, &mine, &all, &device, glass))
+    };
     let schemes = Schemes {
-        light: light.as_ref().map(|t| scheme(t, &mine, &all, &device)),
-        dark: dark.as_ref().map(|t| scheme(t, &mine, &all, &device)),
+        light: one(&light, None),
+        dark: one(&dark, None),
+        light_glass: over.and_then(|over| one(&light, Some(over))),
+        dark_glass: over.and_then(|over| one(&dark, Some(over))),
     };
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
@@ -879,11 +901,14 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 /// One theme's colours as CSS variables: its palette under the colours
 /// an old `banda.toml` and `look.toml` replace, derived into tokens,
 /// under the tokens the theme and `look.toml` set ([`tokens::scheme`]).
+/// With `glass`, how solid the desk and the tiles are over it: the
+/// scheme over glass.
 fn scheme(
     theme: &Laid,
     mine: &Settings,
     all: &Settings,
     device: &Device,
+    glass: Option<(f64, f64)>,
 ) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
         (key, value.get_ref())
@@ -898,7 +923,21 @@ fn scheme(
         focus(&all.focus.border),
         focus(&all.focus.inactive_border),
         device,
+        glass.map(|(desk, tile)| tokens::Glass {
+            desk,
+            tile,
+            tokens: &theme.glass,
+        }),
     )
+}
+
+/// A share as the page gets it, to the thousandth of a percent ([`vars`]);
+/// `fallback` when it is none, or not from 0 to 1, which the file's
+/// problems name.
+fn share(value: Option<f64>, fallback: f64) -> f64 {
+    value
+        .filter(|v| settings::is_share(*v))
+        .map_or(fallback, |v| thousandths(v * 100.0) / 100.0)
 }
 
 /// One scheme's theme, read: its palette, and what its files say of it,
@@ -909,6 +948,8 @@ struct Laid {
     folder: Option<PathBuf>,
     palette: Palette,
     settings: Settings,
+    /// The tokens its `[glass.tokens]` corrects over glass.
+    glass: BTreeMap<String, String>,
     /// The theme's own file its settings were read from, so each key is
     /// known by its line; none for Banda's own.
     file: Option<(PathBuf, String)>,
@@ -960,6 +1001,7 @@ fn laid(picked: Picked, problems: &mut Vec<Problem>) -> Picked<Laid> {
             folder: theme.folder,
             palette: theme.palette,
             settings,
+            glass: theme.glass,
             file: file.clone(),
         }
     };

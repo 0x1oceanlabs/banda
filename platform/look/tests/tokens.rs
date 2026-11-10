@@ -7,7 +7,7 @@
 //! them stale, as it does for the types.
 
 use banda_look::{Look, Places, resolve};
-use banda_theme::tokens::{Kind, RENAMED, SAID_ONLY, TOKENS, Token, token};
+use banda_theme::tokens::{Kind, RENAMED, TOKENS, token};
 use std::collections::BTreeMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;
@@ -83,13 +83,6 @@ fn generated() -> PathBuf {
         .join("look")
 }
 
-/// What the page sets before the first look comes: every token but those
-/// only a theme that says them has, whose stand-in the page works out
-/// (ADR 0100, step 4).
-fn in_css(listed: &Token) -> bool {
-    !SAID_ONLY.contains(&listed.name)
-}
-
 const WRITTEN: &str = "Written by platform/look/tests/tokens.rs from the list in\n \
                        * platform/theme/src/tokens.rs and Banda's own theme: change them there.";
 
@@ -98,12 +91,11 @@ fn css(light: &BTreeMap<&str, &str>, dark: &BTreeMap<&str, &str>) -> String {
         "/*\n * Banda's tokens as `banda look` gives them with no files: what the\n \
          * page shows before the first look comes (ADR 0080, decision 7).\n * {WRITTEN}\n */\n:root {{\n"
     );
-    for listed in TOKENS.iter().filter(|listed| in_css(listed)) {
+    for listed in TOKENS {
         writeln!(css, "  --{}: {};", listed.name, light[listed.name]).unwrap();
     }
     css.push_str("}\n\n.dark {\n");
-    let colours = TOKENS.iter().filter(|listed| listed.kind == Kind::Colour);
-    for listed in colours.filter(|listed| in_css(listed)) {
+    for listed in TOKENS.iter().filter(|listed| listed.kind == Kind::Colour) {
         writeln!(css, "  --{}: {};", listed.name, dark[listed.name]).unwrap();
     }
     css.push_str("}\n");

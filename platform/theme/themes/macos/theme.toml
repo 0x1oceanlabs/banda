@@ -47,7 +47,7 @@ bright_blue = "#409cff"
 bright_magenta = { light = "#af52de", dark = "#da8fff" }
 
 [tokens]
-desk-solid = { light = "#ececec", dark = "#28282a" }
+desk = { light = "#ececec", dark = "#28282a" }
 primary-foreground = "#ffffff"
 border = { light = "oklch(0 0 0 / 10%)", dark = "oklch(1 0 0 / 10%)" }
 input = { light = "oklch(0 0 0 / 12%)", dark = "oklch(1 0 0 / 14%)" }

@@ -68,6 +68,22 @@ test("a pair follows the system when the look says so", () => {
   expect(shown(look("light", { light, dark }), true).dark).toBe(false)
 })
 
+test("over glass each scheme shows its glass", () => {
+  const glassy = (mode: Look["mode"], schemes: Look["schemes"]): Look => {
+    const one = look(mode, schemes)
+    return { ...one, desk: { ...one.desk, glass: true } }
+  }
+  const light_glass = { "--background": "#fff", "--muted": "#0001" }
+  const dark_glass = { "--background": "#000", "--muted": "#fff1" }
+  const schemes = { light, dark, light_glass, dark_glass }
+  expect(shown(glassy("dark", schemes), false).colors).toBe(dark_glass)
+  expect(shown(glassy("system", schemes), false).colors).toBe(light_glass)
+  // Solid, the glass schemes are not drawn; a glass look that has none
+  // shows the solid one.
+  expect(shown(look("dark", schemes), false).colors).toBe(dark)
+  expect(shown(glassy("dark", { light, dark }), false).colors).toBe(dark)
+})
+
 test("a theme with one scheme shows it whatever the system says", () => {
   expect(shown(look("dark", { dark }), false)).toEqual({
     dark: true,
