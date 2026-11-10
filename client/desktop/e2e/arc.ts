@@ -6,16 +6,17 @@
  * things keep arc from being this machine under another name.
  *
  * Its disk. Where bwrap can make a mount namespace, everything that runs
- * on arc runs in one where arc's own home is mounted at this machine's
- * home's path: one path names arc's file for arc and this machine's for
- * the window, as ~/code/banda does on Roma's two machines, and a window
- * that reads its own file for arc's reads "mac". Where it cannot, as in
- * devbox's containers, which give no user namespaces, arc's Projects are
- * only in arc's own folders: a window that asks this machine's engine for
- * them finds nothing there. A whole path read from this machine's disk
- * still finds arc's file then, which only the namespace catches, so the
- * job that runs same-path.spec.ts on a VM of its own sets
- * BANDA_SAME_PATH=require (ci.yml's `same-path`).
+ * on arc runs in one where arc's own home is mounted over a throwaway
+ * home in the test's folder, which stands in for this machine's (the
+ * real one is never touched): one path names arc's file for arc and this
+ * machine's for the window, as ~/code/banda does on Roma's two machines,
+ * and a window that reads its own file for arc's reads "mac". Where it
+ * cannot, as in devbox's containers, which give no user namespaces,
+ * arc's Projects are only in arc's own folders: a window that asks this
+ * machine's engine for them finds nothing there. A whole path read from
+ * this machine's disk still finds arc's file then, which only the
+ * namespace catches, so the job that runs same-path.spec.ts on a VM of
+ * its own sets BANDA_SAME_PATH=require (ci.yml's `same-path`).
  *
  * Its link. The forward holds what it carries `latency` ms a round trip,
  * half each way, as from far away. In a black hole it carries nothing and
@@ -23,17 +24,20 @@
  * network gone dead: what was sent waits, as TCP keeps it, and goes on if
  * the hole closes first, and ssh gives up once its keepalives go
  * unanswered as long as main's ServerAliveInterval and ServerAliveCountMax
- * say. A new ssh then waits its ConnectTimeout and gives up. The forward
+ * say. A new ssh then waits its ConnectTimeout and gives up. The hole
+ * holds the forward and each ssh started in it, not one that runs
+ * already, as main's follower does; and a forward started in it gives up
+ * even if it closes meanwhile. No test here needs more. The forward
  * notes each message the window sends arc, so a test counts what a
  * gesture costs.
  *
  * hosts.spec.ts still makes an arc of its own, as #1189 changes it; it
- * takes this one in #1221.
+ * takes this one in #1221. Only arc's home is arc's own yet: its Banda
+ * folders and HOME are shared until #1267.
  */
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
 import {
-  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -42,34 +46,49 @@ import {
 } from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
-import { startWindow } from "./window"
+import { read, startWindow } from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
 const program = join(repository, "target/debug/banda")
 const agent = join(repository, "target/debug/banda-fake-agent")
 
+/** Why `file` with `args` did not run here and end well, if it did not. */
+function fails(file: string, args: string[]): unknown {
+  try {
+    execFileSync(file, args, { stdio: "pipe" })
+    return undefined
+  } catch (error) {
+    return error ?? "it failed"
+  }
+}
+
 /**
  * Whether arc gets a mount namespace of its own here: bwrap, and the user
  * namespace it needs where it is not setuid. `BANDA_SAME_PATH=require`
  * fails the spec where it cannot, so the job that runs for it never
- * passes on arc's own folders alone; `off` never tries.
+ * passes on arc's own folders alone; `off` never tries. Outside CI, a
+ * system that gives user namespaces requires it, as scripts/check.sh
+ * requires the fence's tests: the weaker arc would hide a window that
+ * reads its own file for arc's. Where arc goes without, the spec says so.
  */
 export const SAME_PATH = (() => {
-  const asked = process.env.BANDA_SAME_PATH
+  const asked =
+    process.env.BANDA_SAME_PATH ??
+    (!process.env.CI && !fails("unshare", ["-Ur", "true"])
+      ? "require"
+      : undefined)
   if (asked === "off") return false
-  try {
-    execFileSync("bwrap", ["--dev-bind", "/", "/", "--", "true"], {
-      stdio: "pipe",
-    })
-    return true
-  } catch (error) {
-    if (asked === "require")
-      throw new Error(
-        "BANDA_SAME_PATH=require, but bwrap makes no mount namespace here",
-        { cause: error }
-      )
-    return false
-  }
+  const why = fails("bwrap", ["--dev-bind", "/", "/", "--", "true"])
+  if (!why) return true
+  if (asked === "require")
+    throw new Error(
+      "bwrap makes no mount namespace for arc here, and this run requires one (set BANDA_SAME_PATH=off to run without)",
+      { cause: why }
+    )
+  console.warn(
+    "same-path: bwrap makes no mount namespace here, so arc's Projects are only in arc's own folders (arc.ts)"
+  )
+  return false
 })()
 
 /** A word as sh takes it, whatever it holds. */
@@ -117,7 +136,9 @@ const HANDSHAKE = 4
  * listening once the handshake's round trips are done. Each chunk is held
  * half the `latency` in its folder, in order, each way; while `blackhole`
  * is there nothing moves, and ssh gives up as its options say. It writes
- * its two ports to `forward.port`, and what the window asks to `asked`.
+ * its two ports to `forward.port`, what it now applies to `applies`, and
+ * what the window asks to `asked`. Its clock is monotonic and finer than
+ * a millisecond, so no hold comes up short of its latency.
  */
 const FORWARD = `
 const fs = require("node:fs")
@@ -140,6 +161,13 @@ const read = (name) => {
 }
 let latency = Number(read("latency") ?? 0)
 let hole = read("blackhole") !== undefined
+// What it applies, for a test to wait for rather than for its poll.
+const applies = () =>
+  fs.writeFileSync(
+    path.join(__dirname, "applies"),
+    JSON.stringify({ latency, hole })
+  )
+applies()
 const END = Symbol("end")
 const ways = new Set()
 
@@ -151,16 +179,16 @@ const way = (into) => {
   const pump = () => {
     timer = undefined
     if (hole || into.destroyed) return
-    while (held.length > 0 && held[0].at <= Date.now()) {
+    while (held.length > 0 && held[0].at <= performance.now()) {
       const { chunk } = held.shift()
       if (chunk === END) into.end()
       else into.write(chunk)
     }
-    if (held.length > 0) timer = setTimeout(pump, held[0].at - Date.now())
+    if (held.length > 0) timer = setTimeout(pump, held[0].at - performance.now())
   }
   const one = {
     carry(chunk) {
-      held.push({ at: Date.now() + latency / 2, chunk })
+      held.push({ at: performance.now() + latency / 2, chunk })
       if (timer === undefined) pump()
     },
     again() {
@@ -257,9 +285,11 @@ if (hole) {
 } else {
   let giveUp
   setInterval(() => {
-    latency = Number(read("latency") ?? 0)
+    const far = Number(read("latency") ?? 0)
     const now = read("blackhole") !== undefined
-    if (now === hole) return
+    if (far === latency && now === hole) return
+    latency = far
+    if (now === hole) return applies()
     hole = now
     // ssh asks every ServerAliveInterval s with nothing heard, and goes
     // once more than ServerAliveCountMax asks were not answered.
@@ -273,6 +303,7 @@ if (hole) {
       clearTimeout(giveUp)
       for (const one of ways) one.again()
     }
+    applies()
   }, 50)
   setTimeout(() => {
     net
@@ -322,6 +353,9 @@ export type Arc = {
   latency: (ms: number) => void
   /** arc's link is a black hole while `on` (above). */
   blackhole: (on: boolean) => void
+  /** What arc's forward applies now, once one runs: its latency, and
+   * whether it is in the black hole. */
+  applies: () => { latency: number; hole: boolean } | undefined
   /** What the window has asked arc through its link so far, in order:
    * each WebSocket frame's type and the method it names, or an HTTP
    * request's line, to count what a gesture costs. */
@@ -337,8 +371,8 @@ export type Arc = {
 export function newArc({ latency = 0 } = {}): Arc {
   const dir = mkdtempSync(join(tmpdir(), "banda-arc-"))
   const at = (path: string) => join(dir, path)
-  // This machine's home, and arc's own, which arc's namespace mounts
-  // over it.
+  // A throwaway home that stands in for this machine's, and arc's own,
+  // which arc's namespace mounts over it.
   const home = at("home")
   const own = at("arc/home")
   for (const folder of [home, own])
@@ -426,7 +460,17 @@ export function newArc({ latency = 0 } = {}): Arc {
         env,
         stdio: ["pipe", "pipe", "inherit"],
       })
-      await once(engine.stdout, "data")
+      // It says a word once it runs; one that ends first says why here,
+      // not as the test's timeout.
+      await new Promise<void>((started, failed) => {
+        engine.stdout.once("data", () => started())
+        engine.once("error", failed)
+        engine.once("exit", (code, signal) =>
+          failed(
+            new Error(`arc's engine ended (${code ?? signal}) before it ran`)
+          )
+        )
+      })
       return async () => {
         if (engine.exitCode !== null || engine.signalCode !== null) return
         engine.stdin.end()
@@ -457,15 +501,22 @@ export function newArc({ latency = 0 } = {}): Arc {
       on
         ? writeFileSync(at("bin/blackhole"), "")
         : rmSync(at("bin/blackhole"), { force: true }),
+    applies: () => {
+      try {
+        return JSON.parse(readFileSync(at("bin/applies"), "utf8")) as {
+          latency: number
+          hole: boolean
+        }
+      } catch {
+        // No forward yet, or one writing it now.
+        return undefined
+      }
+    },
     asked: () =>
-      existsSync(at("bin/asked"))
-        ? readFileSync(at("bin/asked"), "utf8")
-            .split("\n")
-            .filter(Boolean)
-            .map(
-              (line) => JSON.parse(line) as { type: string; method?: string }
-            )
-        : [],
+      (read(at("bin/asked")) ?? "")
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => JSON.parse(line) as { type: string; method?: string }),
     ports: () => {
       const [from, to] = readFileSync(at("bin/forward.port"), "utf8")
         .split(" ")
