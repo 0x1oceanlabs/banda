@@ -209,6 +209,11 @@ ALTER TABLE agents_threads RENAME COLUMN snooze TO later;
 -- it (ADR 0078, decision 5).
 ALTER TABLE agents_threads ADD COLUMN sessions TEXT;
 "#,
+    r#"
+-- A handoff is pending until its first ordinary prompt succeeds. A failed
+-- attempt, a slash command or a restart must not consume its history.
+ALTER TABLE agents_threads ADD COLUMN arrival TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -1052,6 +1057,31 @@ pub fn set_sessions(
     sql.execute(
         "UPDATE agents_threads SET evidence = ?2, sessions = ?3 WHERE id = ?1",
         params![thread, now, json(earlier)?],
+    )?;
+    Ok(())
+}
+
+/// The handoff still owed to this Thread's next Harness.
+pub fn arrival<T: DeserializeOwned>(
+    sql: &Connection,
+    thread: ThreadId,
+) -> Result<Option<T>, Error> {
+    let text: Option<String> = sql.query_row(
+        "SELECT arrival FROM agents_threads WHERE id = ?1",
+        params![thread],
+        |row| row.get(0),
+    )?;
+    Ok(text.map(|text| serde_json::from_str(&text)).transpose()?)
+}
+
+pub fn set_arrival(
+    sql: &Connection,
+    thread: ThreadId,
+    arrival: Option<&impl Serialize>,
+) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET arrival = ?2 WHERE id = ?1",
+        params![thread, arrival.map(json).transpose()?],
     )?;
     Ok(())
 }

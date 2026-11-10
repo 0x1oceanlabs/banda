@@ -6103,6 +6103,87 @@ async fn a_thread_moves_to_another_harness_with_its_history_and_back_to_its_own_
     );
 }
 
+// A failed first request must not consume the history the new Harness
+// has not read yet.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_handoff_keeps_its_history_until_a_prompt_succeeds() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let world = World::new_on(root.path(), two_claude_accounts(&cli), "claude-a").await;
+    let (thread, _) = ask_session(&world, None).await;
+    world
+        .call(
+            world.person(),
+            "agents.switch",
+            json!({ "thread": thread, "harness": "other" }),
+        )
+        .await
+        .unwrap();
+    let sent = world.send(Some(&thread), "flaky what did you read").await;
+    let view = world.ended(&sent).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
+    let retry = world
+        .call(
+            world.person(),
+            "agents.retry",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| {
+            matches!(
+                state(v, &retry["turn"]),
+                Some(TurnState::Done | TurnState::Failed)
+            )
+        })
+        .await;
+    assert_eq!(
+        state(&view, &retry["turn"]),
+        Some(TurnState::Done),
+        "the same prompt, including its history, is tried again"
+    );
+    assert!(last_reply(&view).contains("[Person] which session"));
+    let (_, read) = ask_read(&world, &thread).await;
+    assert_eq!(
+        read, "what did you read",
+        "a successful handoff is sent only once"
+    );
+}
+
+// Slash commands retain their meaning and leave the history for a
+// message that the new Harness actually reads.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_handoff_waits_through_a_slash_command() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path());
+    let world = World::new_on(root.path(), two_claude_accounts(&cli), "claude-a").await;
+    let (thread, _) = ask_session(&world, None).await;
+    world
+        .call(
+            world.person(),
+            "agents.switch",
+            json!({ "thread": thread, "harness": "other" }),
+        )
+        .await
+        .unwrap();
+    let (_, view) = world.finish(Some(&thread), "/compact").await;
+    assert_eq!(last_reply(&view), "message: You said: /compact");
+    let (_, read) = ask_read(&world, &thread).await;
+    assert!(read.contains("[Person] which session"), "{read}");
+    let view = world.thread(&thread).await;
+    assert_eq!(
+        texts(&view)
+            .iter()
+            .filter(|text| text.starts_with("moved:"))
+            .count(),
+        1,
+        "one divider per move"
+    );
+}
+
 /// Two accounts of Codex, the fake agent each: `codex`, whose home is
 /// `codex` under `root`, and `work`, which signs in in `work` and shadows
 /// it (ADR 0078, decision 3).
