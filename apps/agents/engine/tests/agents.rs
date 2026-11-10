@@ -7105,4 +7105,32 @@ async fn a_turn_a_limit_stopped_goes_on_with_another_account_at_once() {
     assert!(later.woke.is_some(), "the move woke it");
     let again = world.call(world.person(), "agents.go_on", go_on).await;
     assert_eq!(again.unwrap(), Value::Null, "it went on already");
+
+    // Another window still has the old card. Its different destination
+    // must not change where the Thread is now or wake its new Later.
+    world
+        .call(
+            world.person(),
+            "agents.later",
+            json!({ "thread": thread, "until": until }),
+        )
+        .await
+        .unwrap();
+    let before = world.thread(thread).await.at;
+    let stale = world
+        .call(
+            world.person(),
+            "agents.go_on",
+            json!({ "turn": turn, "harness": "fake" }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(stale, Value::Null);
+    assert_eq!(
+        world.thread(thread).await.at,
+        before,
+        "a stale card writes nothing"
+    );
+    assert_eq!(world.thread(thread).await.thread.harness, "other");
+    assert!(world.later_of(thread).await.unwrap().woke.is_none());
 }
