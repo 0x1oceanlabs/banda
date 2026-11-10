@@ -1,7 +1,15 @@
 import { describe, expect, it } from "@effect/vitest"
 import { Deferred, Effect, Fiber } from "effect"
 import { TestClock } from "effect/testing"
-import { AGAIN, asksOnQuit, hidesOnClose, onDock, quitAsking } from "./closing"
+import {
+  AGAIN,
+  asksOnQuit,
+  dockShows,
+  hidesOnClose,
+  onDock,
+  quitAsking,
+  startsHidden,
+} from "./closing"
 
 const mac = { platform: "darwin", quitting: false, poweringOff: false } as const
 const macQuitting = { ...mac, quitting: true } as const
@@ -12,7 +20,7 @@ const others = (["linux", "win32"] as const).flatMap((platform) => [
   { platform, quitting: false, poweringOff: true },
 ])
 
-describe("on macOS, until Banda lives in the menu bar", () => {
+describe("on macOS, where Banda lives in the menu bar", () => {
   it("closing the main window hides it, and the engine and its Agents go on", () => {
     expect(hidesOnClose(mac)).toBe(true)
     expect(hidesOnClose(macPoweringOff)).toBe(true)
@@ -42,6 +50,20 @@ describe("on macOS, until Banda lives in the menu bar", () => {
     expect(onDock(macQuitting, true)).toBe(null)
     expect(onDock(macQuitting, false)).toBe(null)
   })
+
+  it("the Dock shows Banda's icon only while a window shows (ADR 0086, decision 4)", () => {
+    expect(dockShows("darwin", true)).toBe(true)
+    expect(dockShows("darwin", false)).toBe(false)
+  })
+
+  it("an app the engine opened, as it found none, shows no window: only the menu bar icon", () => {
+    const opened = ["/Applications/Banda Dev.app/Contents/MacOS/banda-dev"]
+    expect(startsHidden("darwin", [...opened, "--hidden"], false)).toBe(true)
+    // `open -j` leaves it hidden, as the Person's Hide does.
+    expect(startsHidden("darwin", opened, true)).toBe(true)
+    // Opened by the Person, from the Finder, Spotlight or the Dock.
+    expect(startsHidden("darwin", opened, false)).toBe(false)
+  })
 })
 
 describe("on Linux and Windows, as before", () => {
@@ -50,7 +72,13 @@ describe("on Linux and Windows, as before", () => {
       expect(hidesOnClose(at)).toBe(false)
       expect(asksOnQuit(at, true)).toBe(false)
       expect(onDock(at, true)).toBe(null)
+      expect(dockShows(at.platform, false)).toBe(null)
     }
+  })
+
+  it("every launch shows its window", () => {
+    for (const platform of ["linux", "win32"] as const)
+      expect(startsHidden(platform, ["banda", "--hidden"], true)).toBe(false)
   })
 })
 

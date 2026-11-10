@@ -355,6 +355,23 @@ starts at login too, later.
   hidden moves from 7c to 7e. Until 7e the app shows its window, in
   front, as it opens, so opened from another machine it would come up
   at the Mac's screen. 7e opens it with no window and turns this on.
+- Decisions 3 and 4 on macOS, as step 7e built it (2026-11-10): Banda
+  lives in the menu bar as the accepted mock draws it, from one child,
+  `banda status --follow --with-parent`. The Dock's icon is there only
+  while a window shows; closing the last one leaves the menu bar icon.
+  Two things differ from the mock: the number beside the icon is in the
+  menu bar's own colour, never orange, as a status item's title takes
+  only a terminal's eight colours and the lit hat says it already; and a
+  row says "Working", with no minutes, as `banda status` lists no start
+  time. Quit's words are one set, written once (`engine/src/quit.rs`)
+  and read by the page, macOS's dialog, the menu bar and `banda stop`;
+  off macOS they say "this computer". Where no window shows, macOS's
+  dialog asks, never the page brought to the front. Another machine's
+  Stop keeps its toast ("Agents work on arc" / "Stop anyway"), as the
+  mock had it. An engine with no app opens Banda.app hidden
+  (`open -g -j <app> --args --hidden`), and a Force Quit counts as a
+  quit, not a crash (Roma, 2026-11-10, #1038): the engine opens again
+  only an app that left a crash dump newer than its lock.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

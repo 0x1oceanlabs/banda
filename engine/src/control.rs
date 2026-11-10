@@ -37,7 +37,7 @@ use crate::run::{self, Before};
 use crate::serve::Serving;
 use crate::service::launchd::{self, Launchctl, Launchd};
 use crate::service::{self, Manager, Service, User, Way, Why};
-use crate::{Failure, build_id, parent, serve};
+use crate::{Failure, build_id, parent, quit, serve};
 use banda_kernel::{Code, CommandId, ENGINE_VARIABLE, Refusal};
 use serde_json::json;
 use std::fs::{File, TryLockError};
@@ -432,12 +432,13 @@ async fn working(client: &mut Client) -> Result<usize, Failure> {
     Ok(working)
 }
 
-/// The question Quit asks when Agents are working (decision 3).
+/// What Quit says when Agents are working, in the words it says them in
+/// everywhere (decision 3; `quit.rs`).
 fn question(working: usize) -> String {
-    match working {
-        1 => "An Agent is working. Stop it and quit?".to_owned(),
-        n => format!("{n} Agents are working. Stop them and quit?"),
-    }
+    let Some((title, detail)) = quit::asks(working, cfg!(target_os = "macos")) else {
+        return String::new();
+    };
+    format!("{title}. {detail}")
 }
 
 /// Asks the Person in the terminal whether to stop `working` Agents; with
@@ -445,11 +446,11 @@ fn question(working: usize) -> String {
 fn agreed(working: usize) -> Result<bool, Failure> {
     if !std::io::stdin().is_terminal() {
         return Err(Failure::Refused(Refusal::conflict(format!(
-            "{} Nothing was stopped: banda stop --force stops them.",
+            "{} Nothing was stopped: banda stop --force quits anyway.",
             question(working)
         ))));
     }
-    eprint!("{} [y/N] ", question(working));
+    eprint!("{} {}? [y/N] ", question(working), quit::QUIT);
     let _ = std::io::stderr().flush();
     let mut answer = String::new();
     std::io::stdin()
@@ -462,7 +463,7 @@ fn agreed(working: usize) -> Result<bool, Failure> {
 /// Whether process `pid` runs: one that ended and waits for its parent to
 /// hear it, a zombie, does not.
 #[cfg(target_os = "linux")]
-fn alive(pid: u32) -> bool {
+pub(crate) fn alive(pid: u32) -> bool {
     let Ok(stat) = std::fs::read_to_string(format!("/proc/{pid}/stat")) else {
         return false;
     };
@@ -474,7 +475,7 @@ fn alive(pid: u32) -> bool {
 }
 
 #[cfg(all(unix, not(target_os = "linux")))]
-fn alive(pid: u32) -> bool {
+pub(crate) fn alive(pid: u32) -> bool {
     let Some(pid) = i32::try_from(pid)
         .ok()
         .and_then(rustix::process::Pid::from_raw)
@@ -485,7 +486,7 @@ fn alive(pid: u32) -> bool {
 }
 
 #[cfg(not(unix))]
-fn alive(_: u32) -> bool {
+pub(crate) fn alive(_: u32) -> bool {
     false
 }
 
@@ -527,9 +528,20 @@ mod tests {
     use std::path::Path;
 
     #[test]
-    fn quit_asks_in_plain_words_how_many_agents_work() {
-        assert_eq!(question(1), "An Agent is working. Stop it and quit?");
-        assert_eq!(question(2), "2 Agents are working. Stop them and quit?");
+    fn banda_stop_asks_in_the_words_quit_says_everywhere() {
+        let here = if cfg!(target_os = "macos") {
+            "this Mac"
+        } else {
+            "this computer"
+        };
+        assert_eq!(
+            question(1),
+            format!("An Agent works on {here}. Quitting Banda stops it too.")
+        );
+        assert_eq!(
+            question(2),
+            format!("2 Agents work on {here}. Quitting Banda stops them too.")
+        );
     }
 
     #[test]

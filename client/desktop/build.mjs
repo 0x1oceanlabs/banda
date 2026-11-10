@@ -1,5 +1,7 @@
 // Bundles the main process (ESM) and the preload (CommonJS: a sandboxed
-// preload cannot be a module) into out/.
+// preload cannot be a module) into out/, with the menu bar's icons beside
+// main (src/tray.ts).
+import { cpSync } from "node:fs"
 import { build } from "esbuild"
 import { CHANNELS } from "./src/channel.ts"
 // The ACP adapters the app carries, bundled as it is imported (ADR 0059):
@@ -63,3 +65,9 @@ await Promise.all([
     format: "cjs",
   }),
 ])
+
+// The macOS menu bar's icons, drawn by icons/menu-bar/draw.mjs.
+cpSync("icons/menu-bar", "out/menu-bar", {
+  recursive: true,
+  filter: (from) => !from.endsWith(".mjs"),
+})
