@@ -78,6 +78,12 @@ impl AccountStore for Store {
         entry.insert("name", Value::from(account.name()));
         entry.insert("colour", Value::from(i64::from(account.colour())));
         entry.insert("of", Value::from(account.harness()));
+        if account.kind() != banda_harnesses::model::AccountKind::Subscription {
+            entry.insert("kind", Value::from(account.kind().as_str()));
+        }
+        if let Some(url) = account.url() {
+            entry.insert("url", Value::from(url));
+        }
         entry.insert("env", Value::InlineTable(env));
         crate::set(
             &self.config,
@@ -112,14 +118,18 @@ mod tests {
         )
         .unwrap();
         let harnesses = Harnesses::load(&path).unwrap();
-        let accounts = Accounts::new(harnesses.clone())
-            .with_store(root.path().join("accounts"), Arc::new(Store::new(config)));
+        let accounts = Accounts::new(harnesses.clone()).with_store(
+            root.path().join("accounts"),
+            Arc::new(Store::new(config)),
+            secrets(root.path()),
+        );
         let view = accounts
             .connect(ConnectAccount {
                 harness: "claude".into(),
                 id: "work".into(),
                 name: Some("Work".into()),
                 colour: None,
+                kind: None,
                 folder: None,
             })
             .unwrap();
@@ -136,12 +146,18 @@ mod tests {
                 .to_string_lossy()
         );
     }
+    /// Secrets kept in files under `root`: these accounts have none.
+    fn secrets(root: &std::path::Path) -> banda_harnesses::Secrets {
+        banda_harnesses::Secrets::with_keyring("banda-test", root.join("secrets"), None)
+    }
+
     fn add(id: &str, folder: Option<&std::path::Path>) -> ConnectAccount {
         ConnectAccount {
             harness: "claude".into(),
             id: id.into(),
             name: Some("Work".into()),
             colour: None,
+            kind: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }
     }
@@ -152,8 +168,11 @@ mod tests {
         std::fs::create_dir_all(&config).unwrap();
         let harnesses = Harnesses::load(&config.join("harnesses.toml")).unwrap();
         let owned = root.path().join("accounts");
-        let accounts = Accounts::new(harnesses.clone())
-            .with_store(owned.clone(), Arc::new(Store::new(config.clone())));
+        let accounts = Accounts::new(harnesses.clone()).with_store(
+            owned.clone(),
+            Arc::new(Store::new(config.clone())),
+            secrets(root.path()),
+        );
         accounts.connect(add("work", None)).unwrap();
         accounts.connect(add("spare", None)).unwrap();
         let by = banda_kernel::Participant::Agent(banda_kernel::AgentId::new());

@@ -52,11 +52,14 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
 /// Thread whose session the pass was made for (ADR 0083, decision 2). The
 /// owner's secret keeps them in none and names none. The Thread is the
 /// pass's, as the engine made it: nothing the caller sends names it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Caller {
     pub participant: Participant,
     pub only: Option<ProjectId>,
     pub thread: Option<Uuid>,
+    /// What runs the process or the session that holds the pass, as the
+    /// module that asked for it named it: an Agent's Harness entry.
+    pub runs: Option<String>,
 }
 
 impl Caller {
@@ -67,6 +70,7 @@ impl Caller {
             participant: Participant::Agent(agent),
             only: Some(project),
             thread: None,
+            runs: None,
         }
     }
 
@@ -74,6 +78,15 @@ impl Caller {
     pub fn in_thread(self, thread: Uuid) -> Caller {
         Caller {
             thread: Some(thread),
+            ..self
+        }
+    }
+
+    /// This caller, under a pass of a process or a session that `runs`
+    /// names.
+    pub fn running(self, runs: &str) -> Caller {
+        Caller {
+            runs: Some(runs.to_owned()),
             ..self
         }
     }
@@ -85,6 +98,7 @@ impl From<Participant> for Caller {
             participant,
             only: None,
             thread: None,
+            runs: None,
         }
     }
 }

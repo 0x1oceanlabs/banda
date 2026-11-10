@@ -251,15 +251,16 @@ impl Live {
 
     /// `banda mcp` as `agent`'s session of `thread` in `project` starts it,
     /// with a new pass that names the Thread (ADR 0019; ADR 0083, decision
-    /// 2), which the session's process holds while the session is open in
-    /// it.
+    /// 2), and the entry `harness`, which runs it, which the session's
+    /// process holds while the session is open in it.
     pub fn banda(
         &self,
         project: &ModuleProject,
         agent: AgentId,
         thread: ThreadId,
+        harness: &str,
     ) -> Option<(Program, Pass)> {
-        self.pipe.as_ref()?.program(project, agent, thread)
+        self.pipe.as_ref()?.program(project, agent, thread, harness)
     }
 
     /// The variables that hand the `banda` in every shell of `harness`'s
@@ -275,7 +276,8 @@ impl Live {
         if let Some((variables, _)) = passes.get(&key) {
             return variables.clone();
         }
-        let Some((variables, pass)) = pipe.variables(project, AgentId::new(), None) else {
+        let Some((variables, pass)) = pipe.variables(project, AgentId::new(), None, &harness.id)
+        else {
             return BTreeMap::new();
         };
         passes.insert(key, (variables.clone(), pass));

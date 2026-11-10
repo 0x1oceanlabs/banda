@@ -141,17 +141,18 @@ pub struct Pipe {
 
 impl Pipe {
     /// `banda mcp` as `agent`'s session of `thread` in `project` starts it,
-    /// with a new pass that names the Thread, which the session holds;
-    /// `None`, said in the log, if there is no pass. The Harness's process
-    /// starts it, behind that process's fence, so it has no holes in it of
-    /// its own (ADR 0083, decision 1).
+    /// with a new pass that names the Thread and the entry `harness`, which
+    /// runs it, which the session holds; `None`, said in the log, if there
+    /// is no pass. The Harness's process starts it, behind that process's
+    /// fence, so it has no holes in it of its own (ADR 0083, decision 1).
     fn program(
         &self,
         project: &ModuleProject,
         agent: AgentId,
         thread: ThreadId,
+        harness: &str,
     ) -> Option<(Program, Pass)> {
-        let (env, pass) = self.variables(project, agent, Some(thread))?;
+        let (env, pass) = self.variables(project, agent, Some(thread), harness)?;
         let banda = self.program.display().to_string();
         let mut program = Program::harness(banda, vec!["mcp".to_owned()], Holes::default());
         program.env = env;
@@ -160,7 +161,9 @@ impl Pipe {
 
     /// The variables that hand `banda` a new pass of `agent`'s, which the
     /// kernel walls in `project` and which names `thread`, the Thread whose
-    /// session it is for, when there is one (ADR 0083, decision 2), and
+    /// session it is for, when there is one (ADR 0083, decision 2), and the
+    /// entry `harness`, whose process or session holds it: a gateway
+    /// account's key goes only to its own (ADR 0078, decision 1). And
     /// where the engine listens, and the pass, which the session it goes to
     /// holds; `None`, said in the log, if there is no pass.
     fn variables(
@@ -168,9 +171,10 @@ impl Pipe {
         project: &ModuleProject,
         agent: AgentId,
         thread: Option<ThreadId>,
+        harness: &str,
     ) -> Option<(BTreeMap<String, String>, Pass)> {
         let pass = project
-            .pass(agent, thread.map(Into::into))
+            .pass(agent, thread.map(Into::into), Some(harness))
             .inspect_err(|error| tracing::warn!(%error, "an Agent goes without Banda"))
             .ok()?;
         let variables = pass_env(pass.secret().to_owned(), self.engine.clone());

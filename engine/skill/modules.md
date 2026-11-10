@@ -204,7 +204,7 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
 
-Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `connect_account`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `remove_account`, `login_finish`, `sign_in`, `sign_out`, `limits`, `usage`.
+Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `connect_account`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `remove_account`, `login_finish`, `sign_in`, `sign_out`, `add_gateway`, `set_key`, `secret`, `api_key`, `limits`, `usage`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

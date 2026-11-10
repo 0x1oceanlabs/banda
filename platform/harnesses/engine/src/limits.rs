@@ -201,11 +201,17 @@ impl Reader {
     }
 
     /// Every Harness on whose limits Banda reads, none while `[limits]
-    /// read` is off, and `[limits]`: one read of the file.
+    /// read` is off, and `[limits]`: one read of the file. A gateway's
+    /// account has none of its Harness's: the gateway bills it.
     fn limited(&self) -> (Vec<Harness>, LimitsSettings) {
         let (harnesses, settings) = self.harnesses.followed();
+        let read = |harness: &Harness| {
+            harness.enabled
+                && harness.kind != crate::model::AccountKind::Gateway
+                && Kind::of(harness).is_some()
+        };
         let limited = (harnesses.iter())
-            .filter(|harness| settings.read && harness.enabled && Kind::of(harness).is_some())
+            .filter(|harness| settings.read && read(harness))
             .cloned()
             .collect();
         (limited, settings)

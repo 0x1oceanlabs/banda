@@ -1,5 +1,5 @@
 diff --git a/dist/index.js b/dist/index.js
-index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..ffaf579736b852404bb1e044b2aabbcb06f32210 100755
+index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..1bd50b1ba6cf5695f88e58f1879df06996412fbb 100755
 --- a/dist/index.js
 +++ b/dist/index.js
 @@ -28098,7 +28098,11 @@ function startCodexConnection(codexPath, env, appServerStartupArgs = ["app-serve
@@ -40,3 +40,21 @@ index 2ce28d2f67d6e977760dd6cb784b8f96e4b6cab3..ffaf579736b852404bb1e044b2aabbcb
    }
    const bundledCodexPath = createRequire2(import.meta.url).resolve("@openai/codex/bin/codex.js");
    return spawn2(process.execPath, [bundledCodexPath, ...args], options);
+@@ -54022,9 +54033,15 @@ function spawnCodexCli(codexPath, args) {
+ 
+ // src/CodexHookConfig.ts
+ function prepareCodexHookConfig(config2) {
+-  if (config2?.["hooks"] === void 0) return { sessionConfig: config2, appServerStartupArgs: ["app-server"] };
++  // Banda (ADR 0078, decision 1): a gateway account's provider, its
++  // `model_provider` and `model_providers.*`, is the app server's own too,
++  // as hooks are: Codex refuses a chat whose provider is not its process's,
++  // and asks its process's provider whether it needs an OpenAI login.
++  // Dropped once the adapter starts its app server with its provider.
++  const providerArgs = Object.entries(config2 ?? {}).filter(([key]) => key === "model_provider" || key.startsWith("model_providers.")).flatMap(([key, value]) => ["-c", `${key}=${toToml(value)}`]);
++  if (config2?.["hooks"] === void 0) return { sessionConfig: config2, appServerStartupArgs: ["app-server", ...providerArgs] };
+   const { hooks, ...sessionConfig } = config2;
+-  return { sessionConfig, appServerStartupArgs: ["app-server", "-c", `hooks=${toToml(hooks)}`] };
++  return { sessionConfig, appServerStartupArgs: ["app-server", ...providerArgs, "-c", `hooks=${toToml(hooks)}`] };
+ }
+ function toToml(value) {
+   if (Array.isArray(value)) return `[${value.map(toToml).join(", ")}]`;

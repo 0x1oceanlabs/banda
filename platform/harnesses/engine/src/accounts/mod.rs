@@ -5,21 +5,23 @@ mod logins;
 mod model;
 mod omarchy;
 mod profiles;
+pub mod secrets;
 
 use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
-use crate::model::{Account, HarnessView};
+use crate::model::{Account, AccountKind, HarnessView, SignedInAs};
 use crate::{Failed, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
-use banda_kernel::{Call, Environment, EventFilter, Refusal};
+use banda_kernel::{Call, Environment, EventFilter, Participant, Refusal};
 use logins::Logins;
 pub use model::*;
 pub(crate) use omarchy::Omarchy;
 use profiles::Profiles;
+use secrets::{Kept, Secrets};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ts_rs::TS;
@@ -62,6 +64,7 @@ pub struct Accounted {
 pub struct Accounts {
     harnesses: Harnesses,
     profiles: Option<Profiles>,
+    secrets: Option<Secrets>,
     logins: Logins,
     hosts: Arc<Hosts<Asker>>,
 }
@@ -70,13 +73,157 @@ impl Accounts {
         Self {
             harnesses,
             profiles: None,
+            secrets: None,
             logins: Logins::default(),
             hosts: Hosts::new(IDLE),
         }
     }
 
-    pub fn with_store(mut self, owned: PathBuf, store: Arc<dyn AccountStore>) -> Self {
+    fn secrets(&self) -> Result<&Secrets, Refusal> {
+        self.secrets
+            .as_ref()
+            .ok_or_else(|| Refusal::conflict("This engine keeps no secrets."))
+    }
+
+    /// Adds a gateway account (ADR 0078, decision 1): a new folder for its
+    /// Harness, which sends its requests to `url` and asks for its key
+    /// with `banda secret get <id>`, and the key in the machine's secrets.
+    pub(crate) async fn add_gateway(&self, args: AddGateway) -> Result<GatewayAdded, Refusal> {
+        let url = gateway_url(&args.url)?;
+        let profiles = self.profiles.as_ref().ok_or_else(|| {
+            Refusal::conflict("Account folders are not configured on this engine.")
+        })?;
+        if self.harnesses.find(&args.id).is_some() {
+            return Err(Refusal::conflict("That Account ID is already registered."));
+        }
+        if !matches!(args.harness.as_str(), "claude" | "codex") {
+            return Err(Refusal::invalid("A gateway serves Claude Code or Codex."));
+        }
+        let kept = self.secrets()?.put(&args.id, &args.key).await?;
+        let account = ConnectAccount {
+            harness: args.harness,
+            id: args.id.clone(),
+            name: args.name,
+            colour: args.colour,
+            kind: Some(AccountKind::Gateway),
+            folder: None,
+        };
+        let account = match profiles.connect_as(account, Some(url)) {
+            Ok(account) => account,
+            Err(refused) => {
+                let _ = self.secrets()?.forget(&args.id).await;
+                return Err(refused);
+            }
+        };
+        if let Some(harness) = self.harnesses.find(&account.id)
+            && let Some(folder) = harness.env.get("CLAUDE_CONFIG_DIR")
+        {
+            ask_for_key(Path::new(folder), &account.id).map_err(|e| {
+                Refusal::conflict(format!(
+                    "The gateway's Claude Code settings could not be written: {e}."
+                ))
+            })?;
+        }
+        Ok(GatewayAdded { account, kept })
+    }
+
+    /// Keeps a new key for the gateway account `harness`.
+    pub(crate) async fn set_key(&self, args: AccountKey) -> Result<Kept, Refusal> {
+        self.gateway(&args.harness)?;
+        self.secrets()?.put(&args.harness, &args.key).await
+    }
+
+    /// The key of the gateway account `id`, for its Harness's `banda secret
+    /// get`: only the Person gets it, and a pass that account runs, of its
+    /// own process or of a session in it, which its Claude Code and Codex
+    /// ask with, and which its Agents' shells share.
+    pub(crate) async fn secret(&self, call: &Call, id: &str) -> Result<String, Refusal> {
+        self.gateway(id)?;
+        if let Participant::Agent(_) = call.participant()
+            && call.runs() != Some(id)
+        {
+            return Err(Refusal::forbidden(
+                "Only this Account's own Harness reads its key.",
+            ));
+        }
+        self.secrets()?.get(id).await
+    }
+
+    /// Hands `key` to Codex's own `codex login --with-api-key` for the
+    /// account `harness`, which keeps it: Banda keeps none.
+    pub(crate) async fn api_key(&self, call: Call, args: AccountKey) -> Result<(), Refusal> {
+        let harness = self
+            .harnesses
+            .get(&args.harness)
+            .map_err(Refusal::invalid)?;
+        if harness.harness() != "codex" {
+            return Err(Refusal::invalid(
+                "Only Codex takes an API key here: Claude Code signs in to Anthropic Console itself.",
+            ));
+        }
+        let key = args.key.trim();
+        if key.is_empty() {
+            return Err(Refusal::invalid("The key is empty."));
+        }
+        let environment = call.project().environment();
+        let (harness, cli) = crate::cli::find(&*environment, &harness).await?;
+        let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
+        if let Err(error) = harness.make_shadow().await {
+            tracing::warn!(%error, "an account's home does not shadow its Harness's");
+        }
+        // The Person's own act, with the key they typed on its input:
+        // outside the fence, on pipes, as Codex reads a key only from them.
+        let mut login =
+            banda_kernel::Program::act(&cli.path, vec!["login".into(), "--with-api-key".into()]);
+        login.env = harness.env.clone();
+        login_with_key(&*environment, &login, key).await?;
+        self.changed(&call, &harness.id).await
+    }
+
+    /// The entry `id`, if it is a gateway account whose key Banda keeps.
+    fn gateway(&self, id: &str) -> Result<Harness, Refusal> {
+        let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
+        if harness.url.is_none() {
+            return Err(Refusal::not_found(
+                "Banda keeps no key for this Account: only a gateway has one.",
+            ));
+        }
+        Ok(harness)
+    }
+
+    /// Who a gateway account is signed in as: its address, with its key
+    /// kept or not. No Harness is asked: Banda holds what it would say.
+    async fn gateway_signed_in(&self, harness: &Harness) -> SignedInAs {
+        let url = harness.url.clone().unwrap_or_default();
+        let host = reqwest::Url::parse(&url)
+            .ok()
+            .and_then(|u| u.host_str().map(str::to_owned))
+            .unwrap_or_else(|| url.clone());
+        let kept = match &self.secrets {
+            Some(secrets) => secrets.has(&harness.id).await,
+            None => false,
+        };
+        SignedInAs {
+            signed_in: kept,
+            label: if kept {
+                format!("Gateway · {host}")
+            } else {
+                "No key".to_owned()
+            },
+            detail: Some(url),
+            email: None,
+            organization: None,
+        }
+    }
+
+    pub fn with_store(
+        mut self,
+        owned: PathBuf,
+        store: Arc<dyn AccountStore>,
+        secrets: Secrets,
+    ) -> Self {
         self.profiles = Some(Profiles::new(owned, self.harnesses.clone(), store));
+        self.secrets = Some(secrets);
         self
     }
 
@@ -92,12 +239,20 @@ impl Accounts {
         call: Call,
         args: RemoveAccount,
     ) -> Result<String, Refusal> {
+        let gateway = self.gateway(&args.harness).is_ok();
         let to = self
             .profiles
             .as_ref()
             .ok_or_else(|| Refusal::conflict("Account settings are not configured."))?
             .remove(&args.harness, args.to.as_deref(), call.participant())?;
         self.hosts.let_go(call.project().id(), Some(&args.harness));
+        // A removed gateway's key does not outlive it in the keyring.
+        if gateway
+            && let Some(secrets) = &self.secrets
+            && let Err(refused) = secrets.forget(&args.harness).await
+        {
+            tracing::warn!(error = %refused.message, "a removed gateway's key stays");
+        }
         let author = call.participant();
         let to = call
             .command(move |tx| {
@@ -139,6 +294,16 @@ impl Accounts {
     pub(crate) async fn account(&self, call: Call, harness: String) -> Result<Accounted, Refusal> {
         // Read before the Harness is: a change after it is a later event.
         let at = call.project().at().await?;
+        if let Ok(gateway) = self.gateway(&harness) {
+            let account = Account {
+                ways: Vec::new(),
+                adapter: None,
+                cli: None,
+                signed_in_as: Some(self.gateway_signed_in(&gateway).await),
+                signs_out: false,
+            };
+            return Ok(Accounted { at, account });
+        }
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
         let account = asker.process.account(&harness).await?;
         Ok(Accounted { at, account })
@@ -192,6 +357,11 @@ impl Accounts {
         if !matches!(selected.harness(), "claude" | "codex") {
             return Err(Refusal::invalid(
                 "Managed sign-in supports Claude Code and Codex Accounts.",
+            ));
+        }
+        if selected.url.is_some() {
+            return Err(Refusal::invalid(
+                "A gateway signs in with its key: set_key gives it a new one.",
             ));
         }
         let (harness, asker, held) = self.asker(&call, &args.harness).await?;
@@ -335,6 +505,71 @@ impl Accounts {
     }
 }
 
+/// `url` as a gateway's address: an absolute http(s) URL with no
+/// credentials in it, which go in the key.
+fn gateway_url(url: &str) -> Result<String, Refusal> {
+    let parsed = reqwest::Url::parse(url.trim()).map_err(|_| {
+        Refusal::invalid("A gateway's address is a URL, such as https://openrouter.ai/api.")
+    })?;
+    if !matches!(parsed.scheme(), "https" | "http") || parsed.host_str().is_none() {
+        return Err(Refusal::invalid(
+            "A gateway's address starts with https://.",
+        ));
+    }
+    if !parsed.username().is_empty() || parsed.password().is_some() {
+        return Err(Refusal::invalid(
+            "A gateway's address carries no credentials: the key goes in the key.",
+        ));
+    }
+    Ok(url.trim().trim_end_matches('/').to_owned())
+}
+
+/// Has Claude Code in `folder`, a gateway account's own, ask for its key
+/// with `banda secret get <id>`: its `apiKeyHelper` (ADR 0078, decision 1).
+/// `banda` is first on the PATH of each Harness process Banda starts.
+fn ask_for_key(folder: &Path, id: &str) -> std::io::Result<()> {
+    let file = folder.join("settings.json");
+    let mut settings = match std::fs::read_to_string(&file) {
+        Ok(text) => serde_json::from_str(&text).unwrap_or_else(|_| serde_json::json!({})),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => serde_json::json!({}),
+        Err(error) => return Err(error),
+    };
+    settings["apiKeyHelper"] = format!("banda secret get {id}").into();
+    let text = serde_json::to_string_pretty(&settings).map_err(std::io::Error::other)?;
+    std::fs::write(file, text + "\n")
+}
+
+/// Runs `login`, Codex's `login --with-api-key`, in `environment` with
+/// `key` on its input.
+async fn login_with_key(
+    environment: &dyn Environment,
+    login: &banda_kernel::Program,
+    key: &str,
+) -> Result<(), Refusal> {
+    use tokio::io::AsyncWriteExt;
+    let mut started = environment
+        .spawn(login, banda_kernel::Input::Piped)
+        .map_err(|e| Refusal::conflict(format!("Codex could not start: {e}.")))?;
+    if let Some(mut input) = started.stdin.take() {
+        input
+            .write_all(format!("{key}\n").as_bytes())
+            .await
+            .map_err(|e| Refusal::conflict(format!("Codex took no key: {e}.")))?;
+    }
+    let output = tokio::time::timeout(Duration::from_secs(60), started.wait_with_output())
+        .await
+        .map_err(|_| Refusal::conflict("Codex's sign-in did not end in a minute."))?
+        .map_err(|e| Refusal::conflict(format!("Codex's sign-in failed: {e}.")))?;
+    if !output.status.success() {
+        let said = String::from_utf8_lossy(&output.stderr);
+        return Err(Refusal::conflict(format!(
+            "Codex refused the key: {}",
+            said.trim()
+        )));
+    }
+    Ok(())
+}
+
 /// The module's own process of a Harness: no session, only asked.
 struct Asker {
     process: Process,
@@ -365,6 +600,19 @@ impl Host for Asker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Codex reads a key only from its input, on pipes: the Person's
+    /// act's, which the environment starts so.
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_key_goes_to_its_sign_in_on_its_input() {
+        let check = r#"read key; [ "$key" = sk-1 ] || { echo "got $key" >&2; exit 1; }"#;
+        let login = banda_kernel::Program::act("sh", vec!["-c".into(), check.into()]);
+        let local = banda_environments::Local;
+        login_with_key(&local, &login, "sk-1").await.unwrap();
+        let refused = login_with_key(&local, &login, "sk-2").await.unwrap_err();
+        assert!(refused.message.contains("got sk-2"), "{}", refused.message);
+    }
     #[test]
     fn missing_persistence_is_a_refusal_not_a_partial_connection() {
         let accounts = Accounts::new(Harnesses::known());
@@ -376,6 +624,7 @@ mod tests {
                     id: "work".into(),
                     name: None,
                     colour: None,
+                    kind: None,
                     folder: None
                 })
                 .is_err()

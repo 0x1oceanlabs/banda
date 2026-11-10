@@ -484,10 +484,11 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 command,
                 params,
             } => {
-                let queue = api.kernel.queue(caller, &method, project);
+                let queue = api.kernel.queue(&caller, &method, project);
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 let name = method.clone();
+                let caller = caller.clone();
                 let run = async move {
                     let answer = kernel.answer(caller, &method, project, command, params);
                     let _ = out.send(answered(id, answer.await)).await;
@@ -505,7 +506,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 after,
                 filter,
             } => {
-                match api.kernel.follow(caller, project).await {
+                match api.kernel.follow(caller.clone(), project).await {
                     Ok(project) => {
                         // The answer goes out before the first event.
                         let ok = serde_json::json!({ "subscription": id });
@@ -527,7 +528,11 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 method,
                 params,
             } => {
-                match api.kernel.stream(caller, &method, project, params).await {
+                match api
+                    .kernel
+                    .stream(caller.clone(), &method, project, params)
+                    .await
+                {
                     Ok(pieces) => {
                         // The answer goes out before the first piece.
                         let ok = serde_json::json!({ "stream": id });

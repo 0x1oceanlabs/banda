@@ -40,6 +40,12 @@ ignore = "0.4.25"
 infer = "0.19"
 # A picture's EXIF, for Files' info (BSD-2-Clause).
 kamadak-exif = "0.6.2"
+# The machine's secrets: a gateway's key (ADR 0078, decision 1), in the
+# system keyring of each platform.
+keyring-core = "1.0.1"
+apple-native-keyring-store = { version = "1.0.2", features = ["keychain"] }
+windows-native-keyring-store = "1.1.0"
+zbus-secret-service-keyring-store = { version = "1.0.1", features = ["rt-tokio-crypto-rust"] }
 # Landlock's scopes for the fence around a Harness's programs (ADR 0083,
 # decision 1), in pure Rust.
 landlock = "0.4.7"

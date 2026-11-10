@@ -90,6 +90,47 @@ test("On Windows, Codex's adapter starts codex hidden, and with no shell to spli
   })
 })
 
+test("Codex's adapter starts its app server with a gateway account's provider", () => {
+  const manifest =
+    require.resolve("@agentclientprotocol/codex-acp/package.json")
+  const adapter = readFileSync(join(dirname(manifest), "dist/index.js"), "utf8")
+  const functions = ["prepareCodexHookConfig", "toToml"].map((name) => {
+    const found = new RegExp(`^function ${name}\\([^]*?^}`, "m").exec(adapter)
+    if (!found) throw new Error(`codex-acp has no ${name}`)
+    return found[0]
+  })
+  const prepare = (config: object | undefined) =>
+    runInNewContext(`${functions.join("\n")}\nprepareCodexHookConfig(config)`, {
+      config,
+    })
+  // As the engine writes a gateway account's CODEX_CONFIG (accounts/mod.rs).
+  const provider = "model_providers.banda-gateway"
+  const gateway = {
+    model_provider: "banda-gateway",
+    [`${provider}.base_url`]: "https://openrouter.ai/api/v1",
+    [`${provider}.auth.args`]: ["secret", "get", "gw"],
+    model: "o3",
+  }
+  expect(prepare(gateway).appServerStartupArgs).toEqual([
+    "app-server",
+    "-c",
+    'model_provider="banda-gateway"',
+    "-c",
+    `${provider}.base_url="https://openrouter.ai/api/v1"`,
+    "-c",
+    `${provider}.auth.args=["secret", "get", "gw"]`,
+  ])
+  expect(prepare(gateway).sessionConfig).toEqual(gateway)
+  const hooked = prepare({ ...gateway, hooks: { a: 1 } })
+  expect(hooked.appServerStartupArgs.slice(-2)).toEqual([
+    "-c",
+    'hooks={ "a" = 1 }',
+  ])
+  expect(hooked.sessionConfig).toEqual(gateway)
+  expect(prepare(undefined).appServerStartupArgs).toEqual(["app-server"])
+  expect(prepare({ model: "o3" }).appServerStartupArgs).toEqual(["app-server"])
+})
+
 test("Claude Code's adapter resolves only the Person's own settings in a Project not trusted", () => {
   expect(untrusted({ [variable]: "1" })).toBe(true)
   expect(untrusted({ [variable]: "" })).toBe(false)

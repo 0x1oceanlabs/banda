@@ -709,6 +709,7 @@ impl Kernel {
         let holder = self.passes.named(pass, Audience::Ws)?;
         Some(Caller {
             thread: holder.thread,
+            runs: holder.runs,
             ..Caller::agent(holder.agent, holder.project)
         })
     }
@@ -790,6 +791,7 @@ impl Kernel {
             participant,
             only,
             thread,
+            runs,
         } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
@@ -812,12 +814,20 @@ impl Kernel {
         }
         let (module, rest, right) = self.method(method)?;
         let kind = module.kind(rest).ok_or_else(|| no_method(method))?;
-        let (project, wall) = self.place(&**module, method, project, only).await?;
+        let (project, wall) = self.place(&**module, method, rest, project, only).await?;
         let _moving = project.moving.read().await;
         let scope = project.module(module.name());
         if kind != Kind::Command {
             access::decide(&participant, right, project.owner())?;
-            let call = Call::new(participant, scope, method.to_owned(), None, wall, thread);
+            let call = Call::new(
+                participant,
+                scope,
+                method.to_owned(),
+                None,
+                wall,
+                thread,
+                runs,
+            );
             return module.call(call, rest, params).await.map(plain);
         }
         let command = command.ok_or_else(|| needs_command_id(method))?;
@@ -837,6 +847,7 @@ impl Kernel {
                     Some(receipt),
                     wall,
                     thread,
+                    runs,
                 );
                 module.call(call, rest, params).await
             }
@@ -856,7 +867,7 @@ impl Kernel {
     /// its connection, for a Project of its choosing.
     pub(crate) fn queue(
         &self,
-        caller: Caller,
+        caller: &Caller,
         method: &str,
         project: Option<ProjectId>,
     ) -> Option<Queue> {
@@ -894,6 +905,7 @@ impl Kernel {
             participant,
             only,
             thread,
+            runs,
         } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
@@ -914,7 +926,7 @@ impl Kernel {
             return Ok(power());
         }
         let (module, rest, right) = self.method(method)?;
-        let (project, wall) = self.place(&**module, method, project, only).await?;
+        let (project, wall) = self.place(&**module, method, rest, project, only).await?;
         access::decide(&participant, right, project.owner())?;
         let call = Call::new(
             participant,
@@ -923,6 +935,7 @@ impl Kernel {
             None,
             wall,
             thread,
+            runs,
         );
         module.stream(call, rest, params).await
     }
@@ -996,12 +1009,14 @@ impl Kernel {
     /// this machine's scope, and its method names no Project, or the
     /// machine's own ID, as a stream does. Any other runs in the Project it
     /// names, or its caller's pass names, behind the Project wall. A pass
-    /// reaches the machine only through its tools, which are handed the
+    /// reaches the machine only through its tools, and what the module
+    /// says passes reach ([`Module::passes_reach`]), which are handed the
     /// wall they see behind (ADR 0032).
     async fn place(
         &self,
         module: &dyn Module,
         method: &str,
+        rest: &str,
         named: Option<ProjectId>,
         only: Option<ProjectId>,
     ) -> Result<(Arc<Project>, Option<Wall>), Refusal> {
@@ -1027,7 +1042,10 @@ impl Kernel {
         }
         let wall = match only {
             None => None,
-            Some(project) if self.tools.iter().any(|tool| tool.method == method) => {
+            Some(project)
+                if self.tools.iter().any(|tool| tool.method == method)
+                    || module.passes_reach(rest) =>
+            {
                 let sees_others = self.project(project).await?.sees_others();
                 Some(Wall {
                     project,

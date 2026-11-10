@@ -1,7 +1,7 @@
 //! Profile discovery, identity and creation. The store persists only the
 //! connection this service validated; it never decides account policy.
 use super::{AccountProfile, AccountStore, ConnectAccount, ConnectedAccount};
-use crate::model::HarnessView;
+use crate::model::{AccountKind, HarnessView};
 use crate::{Harness, Harnesses};
 use banda_kernel::Refusal;
 use std::collections::HashMap;
@@ -229,6 +229,20 @@ impl Profiles {
     }
 
     pub fn connect(&self, account: ConnectAccount) -> Result<HarnessView, Refusal> {
+        if account.kind == Some(AccountKind::Gateway) {
+            return Err(Refusal::invalid(
+                "A gateway needs its key: the Person adds it in Settings → Agents.",
+            ));
+        }
+        self.connect_as(account, None)
+    }
+
+    /// Connects `account`, at `url` when it is a gateway's.
+    pub fn connect_as(
+        &self,
+        account: ConnectAccount,
+        url: Option<String>,
+    ) -> Result<HarnessView, Refusal> {
         let _writing = self
             .writing
             .lock()
@@ -306,6 +320,8 @@ impl Profiles {
             harness: account.harness,
             variable,
             folder: folder.clone(),
+            kind: account.kind.unwrap_or_default(),
+            url,
         });
         if let Err(error) = result {
             // A newly made, still-empty folder only; never remove an
@@ -338,8 +354,12 @@ mod tests {
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|_| "[omarchy]\nenabled = false\n[[harness]]\nid = \"claude\"\n[[harness]]\nid = \"codex\"\n".into());
             let mut document: toml::Value = toml::from_str(&text).unwrap();
-            let entry = serde_json::json!({"id":account.id, "name":account.name, "colour":account.colour,
-                "of":account.harness, "env":{account.variable:account.folder.to_string_lossy()}});
+            let mut entry = serde_json::json!({"id":account.id, "name":account.name, "colour":account.colour,
+                "of":account.harness, "kind":account.kind,
+                "env":{account.variable:account.folder.to_string_lossy()}});
+            if let Some(url) = &account.url {
+                entry["url"] = url.as_str().into();
+            }
             document
                 .as_table_mut()
                 .unwrap()
@@ -370,6 +390,7 @@ mod tests {
             id: id.into(),
             name: Some("Work".into()),
             colour: None,
+            kind: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }
     }

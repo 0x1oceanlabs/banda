@@ -51,6 +51,14 @@ The points Roma decided are marked _decided_.
 
      The Harness asks for it with `banda secret get <account>`, Claude Code's `apiKeyHelper` and Codex's `auth.command`, so the key never sits in a file or in an environment. The window can write a key and never read it back. ADR 0004 gains this one exception: a key the Person typed into Banda.
 
+   - As built (step 8, the engine):
+     - `harnesses.add_gateway` makes the account: a new folder, `kind = "gateway"` and its address as `url` in `harnesses.toml`. The list makes its `env` from the `url`. Claude Code gets `ANTHROPIC_BASE_URL`, and `apiKeyHelper = "banda secret get <id>"` in the folder's `settings.json`. Codex gets a provider of its own in `CODEX_CONFIG`, `banda-gateway`: its `base_url`, `wire_api = "responses"`, and `auth.command = "banda"` with `auth.args = ["secret", "get", "<id>"]` and a minute's `auth.timeout_ms`, for a password manager's prompt. `MODEL_PROVIDER` chooses it. The carried codex-acp starts its app server with that provider too (a patch), as Codex refuses a chat whose provider is not its process's. A `gateway` with no `url` is the Person's own, reached as its `env` says: Banda keeps no key for it.
+     - The key goes in the keyring, named by Banda's data folder (`banda`, `banda-dev` or `banda-local`) and the account's ID. A host with no keyring keeps it in a 0600 file in the state folder's `secrets/`. `BANDA_KEYRING=off` keeps it in files, for tests.
+     - The Person reads it, and so does a pass that runs that account: each pass names the account its process or session runs (`runs` in `passes.sqlite3`), as the agents engine issues it. Claude Code's own environment carries its Thread's session pass, so that pass counts. The Agent's shell shares it, so it could read the key too. The Harness holds the key in memory anyway.
+     - `harnesses.secret` is no Agent tool. A pass reaches it because its `methods!` line is marked `pass` (`Module::passes_reach`), not because `banda mcp` lists it.
+     - A gateway account's status is its address and whether a key is kept: no Harness starts. `harnesses.set_key` (or `banda secret set`) replaces the key. Removing the account forgets it. Banda reads no usage limits for it.
+     - The `api` kind: Codex's key goes to `codex login --with-api-key` (`harnesses.api_key`), which keeps it in the account's own `auth.json`. Claude Code's is its `console-login` way.
+
 2. **A Thread runs on an account, and moves** (_decided_). This replaces ADR 0006 decision 1.
    - Each Turn records its Harness, account and model.
    - The Thread's current account is a setting of the Thread, as its model is.

@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 13] = [
+const ON_THE_HOST: [(&str, usize, &str); 14] = [
     (
         "kernel/src/host.rs",
         1,
@@ -47,6 +47,12 @@ const ON_THE_HOST: [(&str, usize, &str); 13] = [
         "loads, asks after and stops the engine itself as macOS's launchd job with the system's \
          launchctl, and starts the job again in its own place with the login shell's PATH (ADR \
          0086, decision 1)",
+    ),
+    (
+        "platform/harnesses/engine/src/accounts/secrets.rs",
+        1,
+        "reads a gateway's key the Person kept as a reference through their password manager, \
+         1Password's `op` or `pass`, as the Harness asks for it (ADR 0078, decision 1)",
     ),
     (
         "platform/git-cli/src/lib.rs",
@@ -128,12 +134,18 @@ const PORT: &str = "kernel/src/environment.rs";
 /// start behind the fence with its Project's holes, and its CLI asked
 /// about itself with none; a terminal the Person opened and a git act they
 /// asked for, outside it (ADR 0083, decision 1).
-const WHOSE: [(&str, &str, usize, &str); 8] = [
+const WHOSE: [(&str, &str, usize, &str); 9] = [
     (
         "platform/harnesses/engine/src/accounts/mod.rs",
         "terminal",
         1,
         "Codex's fixed device-code sign-in, initiated through the bounded Account contract and completed by the Person (ADR 0104)",
+    ),
+    (
+        "platform/harnesses/engine/src/accounts/mod.rs",
+        "act",
+        1,
+        "Codex's sign-in with the API key the Person typed, which it reads on its input (ADR 0078, decision 1)",
     ),
     (
         "apps/agents/engine/src/lib.rs",

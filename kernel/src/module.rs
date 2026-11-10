@@ -89,6 +89,15 @@ pub trait Module: Send + Sync + 'static {
         Vec::new()
     }
 
+    /// Whether a pass reaches `method` of this machine's module, named
+    /// without the module's prefix, though it is no Agent's tool: what a
+    /// Harness process asks for itself, as a gateway account's key (ADR
+    /// 0078, decision 1). Its handler says whose pass may. The lines of its
+    /// `methods!` table marked `pass`, `Self::method_passes(method)`.
+    fn passes_reach(&self, _method: &str) -> bool {
+        false
+    }
+
     /// Runs once a Project opens, after the outbox settled what a restart cut
     /// short and before any effect runs: a module can pick up its work here,
     /// and finds it as the last boot left it.
@@ -182,6 +191,7 @@ pub struct Call {
     receipt: Option<Receipt>,
     wall: Option<Wall>,
     thread: Option<Uuid>,
+    runs: Option<String>,
 }
 
 impl Call {
@@ -192,6 +202,7 @@ impl Call {
         receipt: Option<Receipt>,
         wall: Option<Wall>,
         thread: Option<Uuid>,
+        runs: Option<String>,
     ) -> Self {
         Self {
             participant,
@@ -200,6 +211,7 @@ impl Call {
             receipt,
             wall,
             thread,
+            runs,
         }
     }
 
@@ -218,6 +230,13 @@ impl Call {
     /// Agent never does.
     pub fn thread(&self) -> Option<Uuid> {
         self.thread
+    }
+
+    /// What runs the process or the session its caller's pass is for, as
+    /// the module that asked for the pass named it: an Agent's Harness
+    /// entry. None for the owner, and for a pass that names nothing.
+    pub fn runs(&self) -> Option<&str> {
+        self.runs.as_deref()
     }
 
     pub fn project(&self) -> &ModuleProject {

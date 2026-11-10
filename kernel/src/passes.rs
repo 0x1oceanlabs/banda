@@ -6,8 +6,11 @@
 //!
 //! A session's pass names its Thread too, which a module reads as
 //! [`Call::thread`](crate::Call::thread); a Harness process's names none.
-//! The module that asks for the pass names the Thread, as the engine opens
-//! the session: nothing an Agent sends does.
+//! Either may name what runs it, an Agent's Harness entry, which a module
+//! reads as [`Call::runs`](crate::Call::runs): a gateway account's key goes
+//! only to its own (ADR 0078, decision 1). The module that asks for the
+//! pass names both, as the engine opens the session: nothing an Agent
+//! sends does.
 //!
 //! The kernel keeps passes in the host's own store, `passes.sqlite3` in
 //! the engine's state, until the Host scope has a store of its own (ADR
@@ -65,6 +68,11 @@ CREATE INDEX passes_by_project ON passes (project);
     r#"
 ALTER TABLE passes ADD COLUMN thread TEXT;
 "#,
+    // What runs the process or the session a pass is for, an Agent's
+    // Harness entry (ADR 0078, decision 1): none for one made before.
+    r#"
+ALTER TABLE passes ADD COLUMN runs TEXT;
+"#,
 ];
 
 /// A secret no one can guess: 32 random bytes, in hex.
@@ -91,13 +99,15 @@ impl Audience {
     }
 }
 
-/// Who holds a pass: its Agent, the Project it works in, and the Thread
-/// whose session it was made for, none for a Harness process's.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Who holds a pass: its Agent, the Project it works in, the Thread whose
+/// session it was made for, none for a Harness process's, and what runs
+/// that process or session.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub(crate) struct Holder {
     pub(crate) agent: AgentId,
     pub(crate) project: ProjectId,
     pub(crate) thread: Option<Uuid>,
+    pub(crate) runs: Option<String>,
 }
 
 /// A pass's row, as the store keeps it.
@@ -105,6 +115,7 @@ struct Row {
     agent: String,
     project: String,
     thread: Option<String>,
+    runs: Option<String>,
     audience: String,
     expires_at: i64,
 }
@@ -222,24 +233,26 @@ impl Passes {
     }
 
     /// A new pass for `agent` in `project`, and in the session of
-    /// `thread` when it is a Thread's, taken by the API, which its session
-    /// holds.
+    /// `thread` when it is a Thread's, of a process or a session that
+    /// `runs` names, taken by the API, which its session holds.
     pub(crate) fn issue(
         self: &Arc<Self>,
         agent: AgentId,
         project: ProjectId,
         thread: Option<Uuid>,
+        runs: Option<&str>,
     ) -> Result<Pass, Error> {
         let secret = secret()?;
         let hash = hash(&secret);
         self.sql().execute(
-            "INSERT INTO passes (hash, agent, project, thread, audience, issued_at, expires_at)
-             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+            "INSERT INTO passes (hash, agent, project, thread, runs, audience, issued_at, expires_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
             params![
                 hash,
                 agent.to_string(),
                 project.to_string(),
                 thread.map(|thread| thread.to_string()),
+                runs,
                 Audience::Ws.word(),
                 now_ms(),
                 self.until()
@@ -274,6 +287,7 @@ impl Passes {
             // One that does not read names no Thread, and is still its
             // Agent's pass.
             thread: row.thread.and_then(|thread| thread.parse().ok()),
+            runs: row.runs,
         })
     }
 
@@ -289,15 +303,16 @@ impl Passes {
         let row = self
             .sql()
             .query_row(
-                "SELECT agent, project, thread, audience, expires_at FROM passes WHERE hash = ?1",
+                "SELECT agent, project, thread, runs, audience, expires_at FROM passes WHERE hash = ?1",
                 params![hash],
                 |row| {
                     Ok(Row {
                         agent: row.get(0)?,
                         project: row.get(1)?,
                         thread: row.get(2)?,
-                        audience: row.get(3)?,
-                        expires_at: row.get(4)?,
+                        runs: row.get(3)?,
+                        audience: row.get(4)?,
+                        expires_at: row.get(5)?,
                     })
                 },
             )
@@ -396,14 +411,14 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let passes = open(&dir, TERM);
         let (agent, project) = (AgentId::new(), ProjectId::new());
-        let pass = passes.issue(agent, project, None).unwrap();
+        let pass = passes.issue(agent, project, None, None).unwrap();
         assert_eq!(pass.secret().len(), 64);
         assert!(pass.secret().bytes().all(|b| b.is_ascii_hexdigit()));
         assert_eq!(
             passes.holder(pass.secret(), Audience::Ws),
             Some((agent, project))
         );
-        let other = passes.issue(agent, project, None).unwrap();
+        let other = passes.issue(agent, project, None, None).unwrap();
         assert_ne!(other.secret(), pass.secret(), "a session gets its own");
         assert_eq!(passes.holder("", Audience::Ws), None);
         assert_eq!(passes.holder(&secret().unwrap(), Audience::Ws), None);
@@ -431,14 +446,15 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let passes = open(&dir, TERM);
         let (agent, project, thread) = (AgentId::new(), ProjectId::new(), Uuid::now_v7());
-        let session = passes.issue(agent, project, Some(thread)).unwrap();
-        let process = passes.issue(agent, project, None).unwrap();
+        let session = passes.issue(agent, project, Some(thread), None).unwrap();
+        let process = passes.issue(agent, project, None, None).unwrap();
         assert_eq!(
             passes.named(session.secret(), Audience::Ws),
             Some(Holder {
                 agent,
                 project,
-                thread: Some(thread)
+                thread: Some(thread),
+                runs: None,
             })
         );
         assert_eq!(
@@ -446,7 +462,8 @@ mod tests {
             Some(Holder {
                 agent,
                 project,
-                thread: None
+                thread: None,
+                runs: None,
             })
         );
         // A Thread that does not read names none, and the pass is still
@@ -462,6 +479,20 @@ mod tests {
             (passes.named(session.secret(), Audience::Ws)).map(|holder| holder.thread),
             Some(None)
         );
+    }
+
+    #[test]
+    fn a_pass_names_what_runs_its_process_or_session() {
+        let dir = tempfile::tempdir().unwrap();
+        let passes = open(&dir, TERM);
+        let (agent, project, thread) = (AgentId::new(), ProjectId::new(), Uuid::now_v7());
+        let session = passes
+            .issue(agent, project, Some(thread), Some("gw"))
+            .unwrap();
+        let process = passes.issue(agent, project, None, Some("claude")).unwrap();
+        let runs = |pass: &Pass| (passes.named(pass.secret(), Audience::Ws)).map(|h| h.runs);
+        assert_eq!(runs(&session), Some(Some("gw".to_owned())));
+        assert_eq!(runs(&process), Some(Some("claude".to_owned())));
     }
 
     #[test]
@@ -492,11 +523,12 @@ mod tests {
             Some(Holder {
                 agent,
                 project,
-                thread: None
+                thread: None,
+                runs: None,
             })
         );
         let thread = Uuid::now_v7();
-        let session = passes.issue(agent, project, Some(thread)).unwrap();
+        let session = passes.issue(agent, project, Some(thread), None).unwrap();
         assert_eq!(
             (passes.named(session.secret(), Audience::Ws)).map(|holder| holder.thread),
             Some(Some(thread))
@@ -508,7 +540,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let passes = open(&dir, TERM);
         let pass = passes
-            .issue(AgentId::new(), ProjectId::new(), None)
+            .issue(AgentId::new(), ProjectId::new(), None, None)
             .unwrap();
         let secret = pass.secret().to_owned();
         passes.stopping();
@@ -534,12 +566,12 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let passes = open(&dir, TERM);
         let (agent, project) = (AgentId::new(), ProjectId::new());
-        let ended = passes.issue(agent, project, None).unwrap();
+        let ended = passes.issue(agent, project, None, None).unwrap();
         let secret = ended.secret().to_owned();
         drop(ended);
         assert_eq!(passes.holder(&secret, Audience::Ws), None);
 
-        let going_on = passes.issue(agent, project, None).unwrap();
+        let going_on = passes.issue(agent, project, None, None).unwrap();
         let secret = going_on.secret().to_owned();
         passes.stopping();
         drop(going_on);
@@ -555,7 +587,7 @@ mod tests {
         let term = Duration::from_millis(600);
         let passes = open(&dir, term);
         let (agent, project) = (AgentId::new(), ProjectId::new());
-        let pass = passes.issue(agent, project, None).unwrap();
+        let pass = passes.issue(agent, project, None, None).unwrap();
         let secret = pass.secret().to_owned();
         passes.stopping();
         drop(pass);
@@ -585,7 +617,7 @@ mod tests {
         .unwrap();
         let passes = open(&dir, TERM);
         let pass = passes
-            .issue(AgentId::new(), ProjectId::new(), None)
+            .issue(AgentId::new(), ProjectId::new(), None, None)
             .unwrap();
         assert!(passes.holder(pass.secret(), Audience::Ws).is_some());
         assert!(dir.path().join("passes.sqlite3.broken").exists());
@@ -597,8 +629,8 @@ mod tests {
         let term = Duration::from_millis(50);
         let passes = open(&dir, term);
         let (agent, work, home) = (AgentId::new(), ProjectId::new(), ProjectId::new());
-        let at_work = passes.issue(agent, work, None).unwrap();
-        let at_home = passes.issue(agent, home, None).unwrap();
+        let at_work = passes.issue(agent, work, None, None).unwrap();
+        let at_home = passes.issue(agent, home, None, None).unwrap();
         std::thread::sleep(term * 2);
         assert!(passes.holder(at_work.secret(), Audience::Ws).is_some());
         passes.revoke_project(work);
