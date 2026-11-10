@@ -357,6 +357,17 @@ export function newArc({ latency = 0 } = {}): Arc {
     // The engine stays in arc's namespace: never a systemd unit, which
     // its user manager would start outside it.
     BANDA_ENGINE_AS: "child",
+    // Nothing of this machine's desktop, as window.ts keeps the window's
+    // engine from it: no Omarchy, Hyprland, wallpaper or pictures cache.
+    BANDA_THUMBNAILS: "",
+    BANDA_OMARCHY: "",
+    BANDA_FONTCONFIG: "",
+    HYPRLAND_INSTANCE_SIGNATURE: "",
+    XDG_CURRENT_DESKTOP: "",
+    // A terminal on arc runs a shell every machine has, and its Trash is
+    // in arc's home, on the same mount as its Projects.
+    SHELL: "/bin/sh",
+    XDG_DATA_HOME: join(SAME_PATH ? home : own, ".local/share"),
   }
   const samePath = SAME_PATH
   // What every program on arc runs through. Killed, bwrap takes what it

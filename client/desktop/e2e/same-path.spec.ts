@@ -197,6 +197,11 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
   arc!.blackhole(true)
   await page.waitForTimeout(200)
   await stop.click()
+  // For a while the window cannot tell: no word of Stop, and arc not
+  // away, as a reset would have it at once.
+  await page.waitForTimeout(1_500)
+  await expect(toasts.filter({ hasText: "Stop" })).toHaveCount(0)
+  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0)
   await expect(
     toasts.filter({
       hasText:
@@ -230,8 +235,9 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
 // file, and turns on with the step it names: until then the window says
 // "Not on arc yet", or offers nothing, as hosts.spec.ts checks.
 
-test.fixme("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", async () => {
-  const { page, composer, there, here } = await opened()
+/** A terminal on arc's "Same", from New Pane in arc's Thread; its screen,
+ * running. */
+async function terminalOn(page: Page, composer: Locator) {
   await composer.focus()
   await page.keyboard.press("Alt+KeyN")
   await page
@@ -240,6 +246,12 @@ test.fixme("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc"
     .click()
   const screen = page.getByRole("region", { name: "Terminal screen" })
   await expect(screen).toHaveAttribute("data-state", "running")
+  return screen
+}
+
+test.fixme("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", async () => {
+  const { page, composer, there, here } = await opened()
+  await terminalOn(page, composer)
   await page.keyboard.type("cat who.txt > seen.txt")
   await page.keyboard.press("Enter")
   await expect
@@ -381,6 +393,25 @@ test.fixme("step 3c: a path in arc's reply opens arc's file", async () => {
   await expect(peek.getByText("arc", { exact: true })).toBeVisible()
 })
 
+test.fixme("step 3c: a path arc's terminal prints opens arc's file", async () => {
+  const { page, composer, there } = await opened()
+  const screen = await terminalOn(page, composer)
+  // The path on the first row, then the prompt.
+  await page.keyboard.type("clear; printf './who.txt\\n'; : > printed")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(arc!.disk(join(there, "printed")))).toBe("")
+  await screen
+    .locator("canvas")
+    .first()
+    .click({ button: "right", position: { x: 24, y: 8 } })
+  await page
+    .getByRole("menu", { name: "Terminal" })
+    .getByRole("menuitem", { name: "Open in Banda" })
+    .click()
+  const file = page.getByRole("region", { name: "who.txt", exact: true })
+  await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
+})
+
 test.fixme("step 4c: a picture in arc's reply is arc's", async () => {
   const { thread, composer, there, here } = await opened()
   // Each machine's who.png is its own size: arc's 3×2, this one's 1×1.
@@ -392,6 +423,34 @@ test.fixme("step 4c: a picture in arc's reply is arc's", async () => {
   await composer.fill("![who](who.png)")
   await composer.press("Enter")
   const picture = thread.locator('[data-quotable] img[alt="who"]')
+  await expect
+    .poll(() =>
+      picture.evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBe(3)
+})
+
+test.fixme("step 4c: Quick Look previews arc's picture, not this machine's at the same path", async () => {
+  const { page, composer, there, here } = await opened()
+  writeFileSync(
+    arc!.disk(join(there, "who.png")),
+    Buffer.from(PNG_3X2, "base64")
+  )
+  writeFileSync(join(here, "who.png"), Buffer.from(PNG_1X1, "base64"))
+  await composer.focus()
+  await page.keyboard.press("Alt+Space")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await search.fill("who.png")
+  await expect(menu.getByRole("option").first()).toContainText("who.png")
+  await search.press("Tab")
+  await menu
+    .getByRole("listbox", { name: "Actions" })
+    .getByRole("option", { name: "Quick Look" })
+    .click()
+  const picture = page.locator("[data-peek]").getByRole("img", {
+    name: "who.png",
+  })
   await expect
     .poll(() =>
       picture.evaluate((image: HTMLImageElement) => image.naturalWidth)
