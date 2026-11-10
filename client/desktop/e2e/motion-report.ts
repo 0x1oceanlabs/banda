@@ -33,6 +33,7 @@ import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import type { Reading, TerminalCount } from "./motion-probe"
 import {
+  type Composited,
   quantile,
   round,
   sortedOf,
@@ -81,6 +82,9 @@ export type Phase = {
   perSecond: PerSecond
   counted: Reading
   trace: Summary | null
+  /** The compositor's verdict on the Marks' loops, from a trace of their
+   * own; none where the phase took none. */
+  compositor?: Composited | null
 }
 
 type Gate = "hard" | "soft"
@@ -134,7 +138,15 @@ export function keysOf(keys: Reading["keys"]) {
 }
 
 /** A phase's numbers, as motion.json has them. */
-function numbersOf({ seconds, steps, load, perSecond, counted, trace }: Phase) {
+function numbersOf({
+  seconds,
+  steps,
+  load,
+  perSecond,
+  counted,
+  trace,
+  compositor,
+}: Phase) {
   const rate = (count: number) => round(count / (counted.ms / 1000), 1)
   const sum = (pick: (t: TerminalCount) => number) =>
     counted.terminals.reduce((total, t) => total + pick(t), 0)
@@ -230,6 +242,29 @@ function numbersOf({ seconds, steps, load, perSecond, counted, trace }: Phase) {
     pageFrames: trace?.pages ?? null,
     viz: trace?.viz ?? null,
     gpu: trace?.gpu ?? null,
+    /** What the window's main thread painted, a second. */
+    paints: trace?.paints ?? null,
+    /** The Marks' CSS animations that began in the compositor's trace,
+     * those it runs, and those it does not, with Chromium's reasons. */
+    compositor: compositor
+      ? {
+          animations: compositor.animations,
+          composited: compositor.composited,
+          failed: compositor.failed.reduce((sum, f) => sum + f.count, 0),
+          reasons: [
+            ...compositor.failed.map(
+              (f) =>
+                `${f.name} ×${f.count}: ${f.reasons}` +
+                (f.properties.length ? ` (${f.properties.join(", ")})` : "")
+            ),
+            ...(compositor.brief
+              ? [
+                  `${compositor.brief} undrawn, paused within 0.1 s: not counted`,
+                ]
+              : []),
+          ],
+        }
+      : null,
   }
 }
 
@@ -285,6 +320,34 @@ function table(head: string[], rows: (string | number)[][]): string {
     `|${head.map((_, i) => (i ? " ---: " : " --- ")).join("|")}|`,
     ...rows.map((row) => `| ${row.join(" | ")} |`),
   ].join("\n")
+}
+
+/** The compositor's verdict on the Marks' loops, for the phases that
+ * traced it (ADR 0099, decision 4); nothing for the rest. */
+function compositorOf(rows: [string, Numbers][]): string[] {
+  const traced = rows.flatMap(([name, n]) =>
+    n.compositor ? [[name, n.compositor] as const] : []
+  )
+  if (traced.length === 0) return []
+  return [
+    "",
+    "The Marks' loops: the CSS animations that began in a trace of the " +
+      "sidebar hidden and shown, those the compositor runs, and those it " +
+      "does not, with Chromium's reasons; and, not counted, those it did " +
+      "not take as nothing of them was drawn and that paused again at " +
+      "once, as a mark off screen does.",
+    "",
+    table(
+      ["Phase", "Animations", "Composited", "Not", "Why not"],
+      traced.map(([name, c]) => [
+        name,
+        c.animations,
+        c.composited,
+        c.failed,
+        c.reasons.join("; ") || "–",
+      ])
+    ),
+  ]
 }
 
 function summary(
@@ -363,6 +426,7 @@ function summary(
         "To screen ms p50 · p95",
         "viz frames",
         "GPU ms",
+        "Paints",
       ],
       rows.map(([name, n]) => [
         name,
@@ -381,8 +445,10 @@ function summary(
         pair(n.frames?.latencyMs?.p50, n.frames?.latencyMs?.p95),
         cell(n.viz?.perSecond),
         cell(n.gpu?.msPerSecond),
+        cell(n.paints?.perSecond),
       ])
     ),
+    ...compositorOf(rows),
     "",
     "React's drawings in the phase: of the Tiles in the Strips, the " +
       "Strips, the bar's widgets but the workspaces' Group map, and the " +
