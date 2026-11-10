@@ -547,6 +547,15 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "link_pull_request",
                 "unlink_pull_request",
                 "list_thread_pull_requests",
+                "accounts",
+                "account_profiles",
+                "connect_account",
+                "account_status",
+                "login_account",
+                "login_status",
+                "login_input",
+                "login_cancel",
+                "login_finish",
                 "limits",
                 "keys_list",
                 "keys_bind",
@@ -874,6 +883,69 @@ fn an_agents_banda_acts_under_its_pass() {
     let agents = std::fs::read_to_string(places.config.join("agents.toml")).unwrap_or_default();
     assert!(agents.contains("\nlater = \"full_access\""), "{agents}");
     assert!(!agents.contains("\nmode ="), "{agents}");
+    // Account operations are available through that same Agent pass,
+    // while arbitrary Harness execution settings remain Person-only.
+    places.ok("keys.settings_set", None, json!({ "file": "harnesses.toml", "key": "harness.claude", "value": "{ name = \"Claude Code\" }" }));
+    let added = places.as_agent(
+        session,
+        &[
+            "account",
+            "add",
+            "claude",
+            "--id",
+            "review-work",
+            "--name",
+            "Work",
+        ],
+    );
+    assert!(added.status.success(), "{added:?}");
+    let added: Value = serde_json::from_slice(&added.stdout).unwrap();
+    assert_eq!(added["ok"]["id"], "review-work");
+    let folder = places._dir.path().join("data/accounts/review-work");
+    assert!(folder.is_dir());
+    for args in [
+        vec!["account", "rename", "review-work", "Personal"],
+        vec!["account", "fallback", "review-work"],
+        vec!["account", "disable", "review-work"],
+        vec!["account", "enable", "review-work"],
+        vec!["account", "discover"],
+    ] {
+        let result = places.as_agent(session, &args);
+        assert!(result.status.success(), "{args:?}: {result:?}");
+    }
+    let arbitrary = places.as_agent(
+        session,
+        &[
+            "settings",
+            "set",
+            "harnesses.toml",
+            "harness.review-work.command",
+            "sh",
+        ],
+    );
+    assert!(
+        !arbitrary.status.success(),
+        "Account management grants no arbitrary program change"
+    );
+    let unknown = places.as_agent(session, &["account", "default", "not-registered"]);
+    assert!(!unknown.status.success());
+    let duplicate = places.as_agent(
+        session,
+        &[
+            "account",
+            "connect",
+            "claude",
+            "--id",
+            "duplicate",
+            "--folder",
+            folder.to_str().unwrap(),
+        ],
+    );
+    assert!(
+        !duplicate.status.success(),
+        "a second entry cannot quietly share the first sign-in"
+    );
+
     // Its own pass's status: the engine that gave it, and its fence, and
     // not who works and who waits, which is the Person's bar's.
     let status = places.as_agent(session, &["status"]);

@@ -17,6 +17,8 @@
 //!   arrangement from `sidebar.toml` and the browser's from
 //!   `browser.toml`; `--follow` prints it again on each change. It needs
 //!   no engine: the look is this machine's.
+//! - `banda account` discovers, connects and manages Accounts through the
+//!   engine, with the caller's pass (ADR 0103).
 //! - `banda machine` prints what this machine is called and drawn by, its
 //!   name and icon, as its engine says them to every window.
 //! - `banda --version` prints the version and the build id, by which the
@@ -201,6 +203,11 @@ enum Command {
         #[arg(long, requires = "follow")]
         with_parent: bool,
     },
+    /// Connect and manage Accounts through the engine, as this caller.
+    Account {
+        #[command(subcommand)]
+        what: AccountCommand,
+    },
     /// Banda's settings files in ~/.config/banda: look.toml, sidebar.toml
     /// and harnesses.toml. Agents and people edit them; this checks them
     /// and prints what each may hold.
@@ -352,6 +359,58 @@ enum ThreadCommand {
         #[arg(long)]
         project: Option<ProjectId>,
     },
+}
+
+#[derive(Subcommand)]
+enum AccountCommand {
+    /// List the registered Accounts as JSON.
+    List,
+    /// Find existing profile folders, including Omarchy's. Does not read credentials.
+    Discover,
+    /// Create an Account with a private folder of its own, ready for sign-in.
+    Add {
+        harness: String,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Connect an existing profile on the engine's machine, without copying credentials.
+    Connect {
+        harness: String,
+        #[arg(long)]
+        id: String,
+        #[arg(long)]
+        folder: PathBuf,
+        #[arg(long)]
+        name: Option<String>,
+    },
+    /// Ask the Harness whether this Account is signed in. Returns no credentials.
+    Status { id: String },
+    /// Start sign-in. The Person completes the browser step or supplies a code.
+    Login {
+        id: String,
+        #[arg(long)]
+        way: Option<String>,
+    },
+    /// Read sign-in progress and terminal output as JSON.
+    LoginStatus { login: String },
+    /// Send one line to the sign-in terminal (for example a confirmation code).
+    LoginInput { login: String, text: String },
+    /// Cancel a running sign-in.
+    LoginCancel { login: String },
+    /// Refresh after sign-in ends; use account status to confirm the identity.
+    LoginFinish { login: String },
+    /// Change the display name; the ID stays.
+    Rename { id: String, name: String },
+    /// Offer the Account for new Threads.
+    Enable { id: String },
+    /// Stop offering the Account for new Threads. Running Turns continue.
+    Disable { id: String },
+    /// Choose the default for new Threads.
+    Default { id: String },
+    /// Choose the fallback for new Threads; without an ID, clear it.
+    Fallback { id: Option<String> },
 }
 
 #[derive(Subcommand)]
@@ -725,6 +784,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             });
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
+        Command::Account { what } => account_command(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
         Command::Thread { what } => {
@@ -785,6 +845,89 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
 }
 
 /// Calls one method and prints its answer as `{"ok": …}`.
+async fn account_command(places: &Places, what: AccountCommand) -> Result<(), Failure> {
+    let (method, params) = match what {
+        AccountCommand::List => ("harnesses.list", json!({})),
+        AccountCommand::Discover => ("harnesses.account_profiles", json!({})),
+        AccountCommand::Add { harness, id, name } => (
+            "harnesses.connect_account",
+            json!({ "harness": harness, "id": id, "name": name }),
+        ),
+        AccountCommand::Connect {
+            harness,
+            id,
+            folder,
+            name,
+        } => (
+            "harnesses.connect_account",
+            json!({ "harness": harness, "id": id, "folder": folder, "name": name }),
+        ),
+        AccountCommand::Status { id } => ("harnesses.account_status", json!({ "harness": id })),
+        AccountCommand::Login { id, way } => (
+            "harnesses.login_account",
+            json!({"harness": id, "way": way}),
+        ),
+        AccountCommand::LoginStatus { login } => {
+            ("harnesses.login_status", json!({"login": login}))
+        }
+        AccountCommand::LoginInput { login, text } => (
+            "harnesses.login_input",
+            json!({"login": login, "text": format!("{text}\n")}),
+        ),
+        AccountCommand::LoginCancel { login } => {
+            ("harnesses.login_cancel", json!({"login": login}))
+        }
+        AccountCommand::LoginFinish { login } => {
+            ("harnesses.login_finish", json!({"login": login}))
+        }
+        AccountCommand::Fallback { id: None } => (
+            "keys.settings_reset",
+            json!({ "file": "agents.toml", "key": "start.fallback" }),
+        ),
+        change => {
+            let (id, file, leaf, value) = match change {
+                AccountCommand::Rename { id, name } => (id, "harnesses.toml", "name", json!(name)),
+                AccountCommand::Enable { id } => (id, "harnesses.toml", "enabled", json!(true)),
+                AccountCommand::Disable { id } => (id, "harnesses.toml", "enabled", json!(false)),
+                AccountCommand::Default { id } => {
+                    (id.clone(), "agents.toml", "start.account", json!(id))
+                }
+                AccountCommand::Fallback { id: Some(id) } => {
+                    (id.clone(), "agents.toml", "start.fallback", json!(id))
+                }
+                _ => unreachable!(),
+            };
+            let mut client = Client::connect(places).await?;
+            let list = client
+                .call("harnesses.list", None, CommandId::new(), json!({}))
+                .await?;
+            if !list
+                .as_array()
+                .is_some_and(|list| list.iter().any(|h| h["id"] == id))
+            {
+                return Err(Failure::Refused(Refusal::not_found(
+                    "There is no Account with that ID.",
+                )));
+            }
+            // Quote the entire ID as one TOML key; even a manually written
+            // ID containing dots cannot select another setting.
+            let key = if file == "harnesses.toml" {
+                format!(
+                    "harness.{}.{leaf}",
+                    serde_json::to_string(&id).map_err(Failure::broken)?
+                )
+            } else {
+                leaf.to_owned()
+            };
+            (
+                "keys.settings_set",
+                json!({ "file": file, "key": key, "value": value.to_string() }),
+            )
+        }
+    };
+    print_call(places, method, None, CommandId::new(), params).await
+}
+
 async fn print_call(
     places: &Places,
     method: &str,

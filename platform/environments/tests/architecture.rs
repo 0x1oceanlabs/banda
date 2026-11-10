@@ -128,7 +128,13 @@ const PORT: &str = "kernel/src/environment.rs";
 /// start behind the fence with its Project's holes, and its CLI asked
 /// about itself with none; a terminal the Person opened and a git act they
 /// asked for, outside it (ADR 0083, decision 1).
-const WHOSE: [(&str, &str, usize, &str); 7] = [
+const WHOSE: [(&str, &str, usize, &str); 8] = [
+    (
+        "platform/harnesses/engine/src/module.rs",
+        "terminal",
+        1,
+        "Codex's fixed device-code sign-in, initiated through the bounded Account contract and completed by the Person (ADR 0103)",
+    ),
     (
         "apps/agents/engine/src/lib.rs",
         "harness",

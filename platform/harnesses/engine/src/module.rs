@@ -13,6 +13,10 @@
 //! It reads how much of each account's limits is spent, too (ADR 0043):
 //! [`crate::limits`].
 
+use crate::accounts::{
+    AccountProfile, AccountSettings, AccountStatus, AccountWay, ConnectAccount, LoginAccount,
+    LoginId, LoginInput, LoginStatus, Logins,
+};
 use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
 use crate::limits::Reader;
@@ -60,6 +64,8 @@ pub fn account_changed() -> EventFilter {
 
 pub struct HarnessesModule {
     harnesses: Harnesses,
+    accounts: Option<Arc<dyn AccountSettings>>,
+    logins: Logins,
     hosts: Arc<Hosts<Asker>>,
     limits: Reader,
     usage: crate::usage::Reader,
@@ -71,8 +77,15 @@ impl HarnessesModule {
             limits: Reader::new(harnesses.clone()),
             usage: crate::usage::Reader::new(harnesses.clone()),
             harnesses,
+            accounts: None,
+            logins: Logins::default(),
             hosts: Hosts::new(IDLE),
         }
+    }
+
+    pub fn with_accounts(mut self, accounts: Arc<dyn AccountSettings>) -> Self {
+        self.accounts = Some(accounts);
+        self
     }
 
     /// Asks for Claude Code's limits at `url`, a stand-in of Anthropic's,
@@ -88,10 +101,31 @@ impl HarnessesModule {
 banda_kernel::methods! {
     HarnessesModule(Call) as "HarnessesMethods" in "harnesses/" {
         /// The Harnesses this computer can start.
-        call list(Nothing) -> Vec<HarnessView>, Read;
+        call list(Nothing) -> Vec<HarnessView>, Read, tool "accounts";
+        /// Profile folders on this machine. A discovered folder is not proof
+        /// of sign-in; no credentials are returned (ADR 0103).
+        call account_profiles(Nothing) -> Vec<AccountProfile>, Read, tool "account_profiles";
+        /// Connects a profile or creates an empty Account folder, without
+        /// changing what the registered Harness runs (ADR 0103).
+        call connect_account(ConnectAccount) -> HarnessView, Write, tool "connect_account";
         /// A Harness as it says: its program, who is signed in, how to sign
         /// in, at the machine's log's position it is current at.
         call account(OneHarness) -> Accounted, Manage;
+        /// Who is signed in, as the Harness says. No sign-in program,
+        /// environment or credentials are returned (ADR 0103).
+        call account_status(OneHarness) -> AccountStatus, Read, tool "account_status";
+        /// Starts the Harness's own sign-in. The Person completes its
+        /// browser or terminal step; poll login_status for its output.
+        call login_account(LoginAccount) -> LoginStatus, Write, tool "login_account";
+        /// Reads a sign-in's bounded terminal output and whether it ended.
+        call login_status(LoginId) -> LoginStatus, Read, tool "login_status";
+        /// Sends input to the running sign-in terminal, not to a shell.
+        call login_input(LoginInput) -> (), Write, tool "login_input";
+        /// Stops a running sign-in; finish it to refresh the Account.
+        call login_cancel(LoginId) -> (), Write, tool "login_cancel";
+        /// Refreshes the Account after a completed sign-in. Then ask
+        /// account_status to confirm the Harness's report.
+        command login_finish(LoginId) -> (), Write, tool "login_finish";
         /// Signs in with one of the Harness's ways. A way in a terminal ran
         /// there already: the Person signed in in it.
         command sign_in(SignIn) -> (), Manage;
@@ -110,7 +144,7 @@ banda_kernel::methods! {
     }
 }
 
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "harnesses/")]
 struct OneHarness {
     harness: String,
@@ -225,6 +259,24 @@ impl HarnessesModule {
         Ok(self.harnesses.views())
     }
 
+    async fn account_profiles(&self, _: Call, _: Nothing) -> Result<Vec<AccountProfile>, Refusal> {
+        self.accounts
+            .as_ref()
+            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
+            .profiles()
+    }
+
+    async fn connect_account(
+        &self,
+        _: Call,
+        account: ConnectAccount,
+    ) -> Result<HarnessView, Refusal> {
+        self.accounts
+            .as_ref()
+            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
+            .connect(account)
+    }
+
     async fn account(
         &self,
         call: Call,
@@ -235,6 +287,138 @@ impl HarnessesModule {
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
         let account = asker.process.account(&harness).await?;
         Ok(Accounted { at, account })
+    }
+
+    async fn account_status(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<AccountStatus, Refusal> {
+        let account = self
+            .account(
+                call,
+                OneHarness {
+                    harness: harness.clone(),
+                },
+            )
+            .await?;
+        let mut ways: Vec<_> = account
+            .account
+            .ways
+            .into_iter()
+            .map(|way| AccountWay {
+                id: way.id,
+                name: way.name,
+            })
+            .collect();
+        if account.account.cli.is_some()
+            && self
+                .harnesses
+                .find(&harness)
+                .is_some_and(|h| h.harness() == "codex")
+        {
+            ways.insert(
+                0,
+                AccountWay {
+                    id: "device-code".into(),
+                    name: "ChatGPT (device code on another computer)".into(),
+                },
+            );
+        }
+        Ok(AccountStatus {
+            harness,
+            ways,
+            signed_in_as: account.account.signed_in_as,
+        })
+    }
+
+    async fn login_account(&self, call: Call, args: LoginAccount) -> Result<LoginStatus, Refusal> {
+        let selected = self
+            .harnesses
+            .get(&args.harness)
+            .map_err(Refusal::invalid)?;
+        if !matches!(selected.harness(), "claude" | "codex") {
+            return Err(Refusal::invalid(
+                "Managed sign-in supports Claude Code and Codex Accounts.",
+            ));
+        }
+        let (harness, asker, held) = self.asker(&call, &args.harness).await?;
+        let ways = asker.process.ways();
+        let way = if args.way.as_deref() == Some("device-code") && harness.harness() == "codex" {
+            let (_, cli) = crate::cli::find(&*call.project().environment(), &harness).await?;
+            let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
+            // Codex's own device flow prints a URL and code, so the Person
+            // can finish on their Mac while this engine runs on arc.
+            let mut program = banda_kernel::Program::terminal(
+                &cli.path,
+                vec!["login".into(), "--device-auth".into()],
+            );
+            program.env = harness.env.clone();
+            crate::model::SignInWay {
+                id: "device-code".into(),
+                name: "ChatGPT (device code)".into(),
+                description: None,
+                terminal: Some(program),
+            }
+        } else {
+            match args.way {
+                Some(id) => ways.iter().find(|way| way.id == id),
+                None if ways.len() == 1 => ways.first(),
+                _ => None,
+            }
+            .ok_or_else(|| Refusal::invalid("Choose a sign-in way from account_status.ways."))?
+            .clone()
+        };
+        let (status, cancel) = self.logins.reserve(&harness.id)?;
+        if let Some(program) = way.terminal {
+            let started = call.project().environment().pty(
+                &program,
+                banda_kernel::PtySize {
+                    rows: 30,
+                    cols: 100,
+                },
+            );
+            match started {
+                Ok((process, pty)) => {
+                    self.logins
+                        .terminal(&status.login, process.holding(held), pty, cancel)
+                }
+                Err(error) => {
+                    self.logins.forget(&status.login);
+                    return Err(Refusal::conflict(format!(
+                        "The sign-in could not start: {error}"
+                    )));
+                }
+            }
+        } else {
+            self.logins.agent(
+                &status.login,
+                async move {
+                    let _held = held;
+                    asker.process.sign_in(&way.id).await.map_err(Into::into)
+                },
+                cancel,
+            );
+        }
+        Ok(status)
+    }
+    async fn login_status(&self, _: Call, args: LoginId) -> Result<LoginStatus, Refusal> {
+        self.logins.status(&args.login)
+    }
+    async fn login_input(&self, _: Call, args: LoginInput) -> Result<(), Refusal> {
+        self.logins.input(&args.login, &args.text).await
+    }
+    async fn login_cancel(&self, _: Call, args: LoginId) -> Result<(), Refusal> {
+        self.logins.cancel(&args.login)
+    }
+    async fn login_finish(&self, call: Call, args: LoginId) -> Result<(), Refusal> {
+        let status = self.logins.status(&args.login)?;
+        if !status.done {
+            return Err(Refusal::conflict("Sign-in is still running."));
+        }
+        self.changed(&call, &status.harness).await?;
+        self.logins.forget(&args.login);
+        Ok(())
     }
 
     async fn limits(

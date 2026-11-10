@@ -149,6 +149,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     #[cfg(target_os = "macos")]
     let (environment, noting) = crate::children::noted(environment, &places);
     harnesses.carry(carried(&program));
+    harnesses.accounts_in(places.data.join("accounts"));
     // Heard from here on: a TERM as the engine opens, or as soon as it
     // says where it listens, stops it as any other does, not by the
     // signal's default.

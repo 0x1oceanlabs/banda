@@ -33,7 +33,9 @@ Agent's pass, only for the bounded Account operations below.
    out another Account or read credentials through these operations.
 5. Sign-in remains the Harness's own flow. An Agent may initiate it; the
    Person completes any browser or interactive step. The engine owns that
-   process and the Account's folder. An exit code alone is not proof of
+   process and the Account's folder. Codex also offers its CLI's fixed
+   `login --device-auth` flow so a Person on another computer can open the
+   verification page; callers supply no program or arguments. An exit code alone is not proof of
    sign-in: ask the Harness again. The CLI explains what is waiting and
    how to continue; it never returns the stored credentials.
 6. Removing an Account does not sign it out. Its active Turn finishes on

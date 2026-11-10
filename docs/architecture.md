@@ -978,6 +978,18 @@ If Chat is removed, Agents still works through its own Thread.
     `agents.toml`'s `[start.<id>]`, set from the same bar in the settings,
     which writes it through the engine as the Person (ADR 0083):
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
+- **Agents connect Accounts through the engine** (ADR 0103).
+  `banda account` uses the caller's pass. `account_profiles` discovers
+  folders without reading credentials; `connect_account` adopts an
+  existing folder or creates a private one under the engine's data,
+  through the one settings writer. It accepts no command or arbitrary
+  environment. A managed profile opens only its own folder in its
+  Harness's fence. `account_status` omits sign-in programs and their
+  environments. `login_account`, `login_status`, `login_input`,
+  `login_cancel` and `login_finish` hold the Harness's sign-in in the
+  engine for at most ten minutes; the Person completes the provider's
+  browser or interactive step. Finishing emits the same account change
+  as the window's sign-in, and a fresh status confirms the identity.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A notice for the Agent** says what another module did for the

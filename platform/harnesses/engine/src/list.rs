@@ -308,6 +308,7 @@ impl Harness {
             holes.writes.push(sessions);
         }
         harness.cwd = trusted.then(|| folder.to_owned());
+        holes.writes.extend(self.holes.writes.iter().cloned());
         harness.holes = holes;
         harness
     }
@@ -393,6 +394,8 @@ struct List {
     /// Where this host keeps the adapters Banda carries and their Node,
     /// as the engine found them.
     carried: Option<Carried>,
+    /// The engine's own Account folders, never supplied by an Agent.
+    accounts: Option<PathBuf>,
 }
 
 impl List {
@@ -400,7 +403,30 @@ impl List {
     fn list(&mut self, listed: Vec<Harness>) {
         let carried = self.carried.as_ref();
         self.harnesses = (listed.iter().cloned())
-            .map(|harness| harness.carried_by(carried))
+            .map(|harness| {
+                let mut harness = harness.carried_by(carried);
+                if let Some(root) = &self.accounts {
+                    let variable = match harness.of.as_deref() {
+                        Some("claude") => Some("CLAUDE_CONFIG_DIR"),
+                        Some("codex") => Some("CODEX_HOME"),
+                        _ => None,
+                    };
+                    let home = variable
+                        .and_then(|key| harness.env.get(key))
+                        .and_then(|p| dunce::canonicalize(p).ok());
+                    // Exactly this Account's direct child of the engine's
+                    // folder: a symlink elsewhere opens no hole.
+                    if let (Ok(root), Some(home)) = (dunce::canonicalize(root), home)
+                        && home.parent() == Some(root.as_path())
+                        && home
+                            .file_name()
+                            .is_some_and(|name| name == harness.id.as_str())
+                    {
+                        harness.holes.writes.push(home);
+                    }
+                }
+                harness
+            })
             .collect();
         self.listed = listed;
     }
@@ -815,6 +841,15 @@ impl Harnesses {
     pub fn carry(&self, carried: Option<Carried>) {
         let mut list = self.0.lock().unwrap();
         list.carried = carried;
+        let listed = std::mem::take(&mut list.listed);
+        list.list(listed);
+    }
+
+    /// Gives only a created Account its own profile behind the fence.
+    /// The engine sets this root, not the settings or the caller.
+    pub fn accounts_in(&self, root: PathBuf) {
+        let mut list = self.0.lock().unwrap();
+        list.accounts = Some(root);
         let listed = std::mem::take(&mut list.listed);
         list.list(listed);
     }
@@ -1348,6 +1383,51 @@ mod tests {
             problems[0]
         );
         assert!(check(Path::new("h"), &template()).is_empty());
+    }
+
+    #[test]
+    fn a_managed_profile_opens_only_its_own_folder_in_the_fence() {
+        let root = tempfile::tempdir().unwrap();
+        let owned = root.path().join("accounts");
+        let folder = owned.join("work");
+        std::fs::create_dir_all(&folder).unwrap();
+        let folder = dunce::canonicalize(folder).unwrap();
+        let mut harness = known().remove(0);
+        harness.id = "work".into();
+        harness.of = Some("claude".into());
+        harness.env.insert(
+            "CLAUDE_CONFIG_DIR".into(),
+            folder.to_string_lossy().into_owned(),
+        );
+        let mut wrong = harness.clone();
+        wrong.id = "other".into();
+        let list = Harnesses::new(vec![harness, wrong]);
+        list.accounts_in(owned.clone());
+        let work = list.get("work").unwrap();
+        assert_eq!(work.holes.writes, vec![folder.clone()]);
+        assert!(list.get("other").unwrap().holes.writes.is_empty());
+        let in_project = work.in_project(
+            ProjectId::new(),
+            root.path(),
+            root.path(),
+            Holes::default(),
+            &BTreeMap::new(),
+            false,
+        );
+        assert!(in_project.holes.writes.contains(&folder));
+        assert!(!in_project.holes.writes.contains(&owned));
+        #[cfg(unix)]
+        {
+            let outside = root.path().join("outside");
+            std::fs::create_dir(&outside).unwrap();
+            std::fs::remove_dir(&folder).unwrap();
+            std::os::unix::fs::symlink(&outside, &folder).unwrap();
+            list.accounts_in(owned);
+            assert!(
+                list.get("work").unwrap().holes.writes.is_empty(),
+                "a link outside the owned root opens no hole"
+            );
+        }
     }
 
     #[test]

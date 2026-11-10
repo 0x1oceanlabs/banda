@@ -11,6 +11,7 @@ use banda_look::keys::Manifests;
 use banda_look::{Problem, SettingsFile};
 use std::path::{Path, PathBuf};
 
+pub mod accounts;
 mod person;
 mod write;
 pub use person::{chose, chose_renamed, only_the_person, only_the_person_renames};
