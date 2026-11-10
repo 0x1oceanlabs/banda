@@ -109,7 +109,8 @@ test("what that machine's engine refuses, a toast says", async () => {
 
 test("Sign in shows the Thread in its Project, naming no host: the directory places it on the machine it is on", () => {
   const { window, opened } = fake()
-  run(window, SHOW, { project: R, thread: "t1", harness: "fake" })
+  // Even a host its args name goes unsaid: its Project alone places it.
+  run(window, SHOW, { project: R, thread: "t1", harness: "fake", host: "arc" })
   run(window, SHOW, { project: P, thread: "t2", harness: "fake" })
   expect(opened.map(([pane, project]) => [pane.args, project])).toEqual([
     [{ thread: "t1", harness: "fake", title: "" }, R],
