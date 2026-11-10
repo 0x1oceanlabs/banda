@@ -3,6 +3,11 @@ import type { HarnessView, Limits } from "@banda/contract/harnesses"
 import { outOf, startsOn, startsOnWords } from "./starts-on"
 
 const NOW = 1_000_000
+const signedIn = new Map([
+  ["claude", true],
+  ["work", true],
+  ["codex", true],
+])
 const entry = (id: string, enabled = true) =>
   ({ id, name: id[0]!.toUpperCase() + id.slice(1), enabled }) as HarnessView
 const harnesses = [entry("claude"), entry("work"), entry("codex")]
@@ -14,30 +19,40 @@ const limits = (harness: string, used: number, resets_at?: number) =>
   }) as Limits
 
 test("a new Thread starts on the default: the one start names, else the first on", () => {
-  expect(startsOn(harnesses, {}, [], NOW)?.id).toBe("claude")
-  expect(startsOn(harnesses, { account: "work" }, [], NOW)?.id).toBe("work")
+  expect(startsOn(harnesses, {}, [], NOW, signedIn)?.id).toBe("claude")
+  expect(startsOn(harnesses, { account: "work" }, [], NOW, signedIn)?.id).toBe(
+    "work"
+  )
   const off = [entry("claude", false), entry("work")]
-  expect(startsOn(off, { account: "claude" }, [], NOW)?.id).toBe("work")
-  expect(startsOn([entry("claude", false)], {}, [], NOW)).toBeUndefined()
+  expect(startsOn(off, { account: "claude" }, [], NOW, signedIn)?.id).toBe(
+    "work"
+  )
+  expect(
+    startsOn([entry("claude", false)], {}, [], NOW, signedIn)
+  ).toBeUndefined()
 })
 
 test("while the default is out, a new Thread starts on the fallback, if it has room", () => {
   const out = [limits("work", 100, NOW + 60_000)]
   const agents = { account: "work", fallback: "codex" }
-  expect(startsOn(harnesses, agents, out, NOW)).toEqual({
+  expect(startsOn(harnesses, agents, out, NOW, signedIn)).toEqual({
     id: "codex",
     default: "work",
     out: { until: NOW + 60_000, window: "Weekly" },
     fallback: true,
   })
   const both = [...out, limits("codex", 100)]
-  expect(startsOn(harnesses, agents, both, NOW)?.id).toBe("work")
-  expect(startsOn(harnesses, { account: "work" }, out, NOW)?.id).toBe("work")
+  expect(startsOn(harnesses, agents, both, NOW, signedIn)?.id).toBe("work")
+  expect(startsOn(harnesses, { account: "work" }, out, NOW, signedIn)?.id).toBe(
+    "work"
+  )
   // Once its window resets, the default has room again.
-  expect(startsOn(harnesses, agents, out, NOW + 60_000)?.id).toBe("work")
+  expect(startsOn(harnesses, agents, out, NOW + 60_000, signedIn)?.id).toBe(
+    "work"
+  )
   // A fallback that is off is none.
   const codexOff = [entry("work"), entry("codex", false)]
-  expect(startsOn(codexOff, agents, out, NOW)?.id).toBe("work")
+  expect(startsOn(codexOff, agents, out, NOW, signedIn)?.id).toBe("work")
 })
 
 test("an account is out while a window of it is spent, till its last reset", () => {
@@ -49,7 +64,7 @@ test("an account is out while a window of it is spent, till its last reset", () 
 
 test("the settings say where new Threads start while the default is out", () => {
   const agents = { account: "work", fallback: "codex" }
-  const out = startsOn(harnesses, agents, [limits("work", 100)], NOW)!
+  const out = startsOn(harnesses, agents, [limits("work", 100)], NOW, signedIn)!
   expect(startsOnWords(out, harnesses)).toBe(
     "Work is out: new Threads start on Codex till Work has room."
   )
@@ -57,12 +72,38 @@ test("the settings say where new Threads start while the default is out", () => 
     harnesses,
     { account: "work" },
     [limits("work", 100)],
-    NOW
+    NOW,
+    signedIn
   )!
   expect(startsOnWords(none, harnesses)).toBe(
-    "Work is out: new Threads start on it still, as no fallback has room."
+    "Work is out: new Threads start on it still, as no signed-in fallback has room."
   )
   expect(
-    startsOnWords(startsOn(harnesses, agents, [], NOW)!, harnesses)
+    startsOnWords(startsOn(harnesses, agents, [], NOW, signedIn)!, harnesses)
   ).toBeUndefined()
+})
+
+test("fallback requires a confirmed sign-in and also covers a signed-out default", () => {
+  const agents = { account: "work", fallback: "codex" }
+  const out = [limits("work", 100)]
+  for (const status of [undefined, false]) {
+    const unknown = new Map([
+      ["work", true],
+      ["codex", status],
+    ])
+    expect(startsOn(harnesses, agents, out, NOW, unknown)?.id).toBe("work")
+  }
+  const signedOut = new Map([
+    ["work", false],
+    ["codex", true],
+  ])
+  const starts = startsOn(harnesses, agents, [], NOW, signedOut)!
+  expect(starts.id).toBe("codex")
+  expect(startsOnWords(starts, harnesses)).toBe(
+    "Work is signed out: new Threads start on Codex till Work signs in again."
+  )
+  expect(startsOn(harnesses, agents, [], NOW, signedIn)?.id).toBe("work")
+  expect(
+    startsOn(harnesses, agents, [limits("codex", 100)], NOW, signedOut)?.id
+  ).toBe("work")
 })

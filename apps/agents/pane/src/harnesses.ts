@@ -22,19 +22,22 @@ export { useHarnesses } from "@banda/ui/hooks/use-harnesses"
  */
 export function useAccount(
   engine: Engine,
-  harness: string,
+  harness: string | undefined,
   round = 0
 ): Live<Accounted> {
-  const source = useMemo<Source<Accounted>>(
-    () => ({
-      read: () => engine.call("harnesses.account", { harness }),
-      filter: {
-        module: "harnesses",
-        subject: harness,
-        kinds: ["account_changed"],
-      },
-      apply: () => READ_AGAIN,
-    }),
+  const source = useMemo<Source<Accounted> | null>(
+    () =>
+      harness === undefined
+        ? null
+        : {
+            read: () => engine.call("harnesses.account", { harness }),
+            filter: {
+              module: "harnesses",
+              subject: harness,
+              kinds: ["account_changed"],
+            },
+            apply: () => READ_AGAIN,
+          },
     [engine, harness]
   )
   return useMachineLive(engine, source, round)

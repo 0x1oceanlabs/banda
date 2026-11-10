@@ -58,6 +58,7 @@ import {
   Undo2Icon,
 } from "lucide-react"
 import { useAccount } from "../harnesses"
+import { AccountLogin } from "./AccountLogin"
 import { commandLine, wordsOf } from "../thread/sign-in"
 import { Problem, Ways, Warning } from "../thread/SignIn"
 import { outOf, usedOf } from "../thread/starts-on"
@@ -354,13 +355,17 @@ function AccountState({
           ? "Not signed in."
           : `${harness.name} does not say who is signed in.`}
       </p>
-      <Ways
-        engine={engine}
-        project={project}
-        harness={harness.id}
-        ways={account.ways}
-        open={open}
-      />
+      {["claude", "codex"].includes(harness.harness) ? (
+        <AccountLogin engine={engine} harness={harness.id} />
+      ) : (
+        <Ways
+          engine={engine}
+          project={project}
+          harness={harness.id}
+          ways={account.ways}
+          open={open}
+        />
+      )}
     </div>
   )
 }
@@ -430,7 +435,7 @@ export function Meter({ label, used }: { label: string; used: number }) {
 }
 
 /** The icons the account may take, by their groups, and the colours. */
-function EmblemPicker({
+export function EmblemPicker({
   harness,
   onIcon,
   onColour,

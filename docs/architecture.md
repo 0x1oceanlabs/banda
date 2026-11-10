@@ -988,7 +988,13 @@ If Chat is removed, Agents still works through its own Thread.
   environments. `login_account`, `login_status`, `login_input`,
   `login_cancel` and `login_finish` hold the Harness's sign-in in the
   engine for at most ten minutes; the Person completes the provider's
-  browser or interactive step. Finishing emits the same account change
+  browser or interactive step. Settings uses this same contract for its
+  three-step subscription setup: a private or existing profile, name and
+  emblem, then sign-in. A copied link lets a Person finish on another
+  computer; provider status confirms the identity. The new Account appears
+  in mounted pickers as soon as it is connected. A new Thread uses its
+  fallback only after that Account reports a sign-in and available limits.
+  Finishing emits the same account change
   as the window's sign-in, and a fresh status confirms the identity.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.

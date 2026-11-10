@@ -36,6 +36,7 @@ import {
 } from "@banda/ui/components/select"
 import { Input } from "@banda/ui/components/input"
 import { Spinner } from "@banda/ui/components/spinner"
+import { takeHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { useFile } from "@banda/ui/lib/look"
@@ -50,6 +51,7 @@ import {
 import { wordsOf } from "../thread/sign-in"
 import { type Open, Problem } from "../thread/SignIn"
 import { AccountCard, HarnessGroup } from "./AccountCards"
+import { AccountSetup } from "./AccountSetup"
 import { AccountPage, Row, type Roles } from "./AccountPage"
 import { groupsOf, pickStart, useUses } from "./accounts"
 
@@ -111,11 +113,13 @@ export function AgentsSettings({
   const [list, setList] = useState<HarnessView[] | { refused: string }>()
   const readList = useCallback(
     () =>
-      void engine
-        .call("harnesses.list", {})
-        .then(setList, (error: unknown) =>
-          setList({ refused: problem(error) })
-        ),
+      void engine.call("harnesses.list", {}).then(
+        (list) => {
+          setList(list)
+          takeHarnesses(engine, list)
+        },
+        (error: unknown) => setList({ refused: problem(error) })
+      ),
     [engine]
   )
   // Read as the window comes to the front, for the Person's own edits.
@@ -200,13 +204,24 @@ export function AgentsSettings({
         <PlusIcon />
         Add a Harness: any agent that speaks ACP
       </Button>
-      <AddEntry
-        file={props.harnesses}
-        taken={list}
-        adding={adding}
-        onClose={() => setAdding(undefined)}
-        onAdded={readList}
-      />
+      {adding?.of && ["claude", "codex"].includes(adding.of.harness) ? (
+        <AccountSetup
+          engine={engine}
+          file={props.harnesses}
+          base={list.find((one) => one.harness === adding.of!.harness)!}
+          taken={list}
+          onClose={() => setAdding(undefined)}
+          onAdded={readList}
+        />
+      ) : (
+        <AddEntry
+          file={props.harnesses}
+          taken={list}
+          adding={adding}
+          onClose={() => setAdding(undefined)}
+          onAdded={readList}
+        />
+      )}
     </div>
   )
 }
