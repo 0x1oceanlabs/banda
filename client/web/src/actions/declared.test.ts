@@ -149,4 +149,6 @@ test("no Pane reads a key it does not declare, but for a widget's own", () => {
   expect([...read].filter((place) => !(place in LEFT)).sort()).toEqual([])
   // One made an action comes off the list.
   expect(Object.keys(LEFT).filter((place) => !read.has(place))).toEqual([])
-})
+  // Parsing every Pane's code takes under a second alone, but past the
+  // default five while the architecture tests run beside it on CI.
+}, 30_000)
