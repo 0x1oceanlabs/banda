@@ -62,7 +62,7 @@
   --removed: oklch(0.704 0.191 22.216);       /* −lines */
   --woke: #f5c542;                            /* woke from Later; the same in both themes, no outline */
   --warning: oklch(0.8 0.15 80);
-  --working: oklch(0.72 0.13 255);            /* a Group's plate at work only (ADR 0065); never a row */
+  --working: oklch(0.72 0.13 255);            /* an Agent at work: a Group's plate, a working Mark (ADR 0107); never a row */
   --account-claude: #d97757;                  /* Claude's emblem */
   --effort: color-mix(in oklab, var(--foreground) 70%, transparent); /* the effort word: lighter text (ADR 0058 d8) */
   --effort-top: #e879f9;                      /* its top level only: Ultracode, Ultra (ADR 0031 d3, ADR 0103 d31) */
@@ -81,8 +81,7 @@
   --ansi-cyan: #22d3ee;
   /* Marks in quiet rows (ADR 0099 d10; marks-final.html). */
   --mark-open: var(--foreground);
-  --row-working-mark: currentColor;
-  --row-working-mark-opacity: 0.3;
+  --mark-working: color-mix(in oklab, var(--working) 60%, transparent);
   --row-later-mark: currentColor;
   --row-later-mark-opacity: 0.55;
   /* The wallpaper the glass frosts: "Dusk" from the theme sandbox. */
@@ -140,8 +139,7 @@
   --ansi-magenta: #c026d3;
   --ansi-cyan: #0891b2;
   --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
-  --row-working-mark: #71717a;
-  --row-working-mark-opacity: 0.7;
+  --mark-working: color-mix(in oklab, var(--working) 80%, transparent);
   --row-later-mark: #71717a;
   --row-later-mark-opacity: 0.55;
   /* "Tahoe" from the theme sandbox: bright, blue. */
@@ -797,7 +795,7 @@
 .b-card.is-working .b-time,
 .b-card.is-working .b-say { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
 .b-row.is-working svg[data-banda-mark],
-.b-card.is-working svg[data-banda-mark] { color: var(--row-working-mark); opacity: var(--row-working-mark-opacity); }
+.b-card.is-working svg[data-banda-mark] { color: var(--mark-working); }
 .b-row.is-later .b-title { color: color-mix(in oklab, var(--foreground) 55%, transparent); }
 .b-row.is-later .b-time { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
 .b-row.is-later svg[data-banda-mark] { color: var(--row-later-mark); opacity: var(--row-later-mark-opacity); }

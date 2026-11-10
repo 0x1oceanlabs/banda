@@ -84,6 +84,9 @@ From the audit (`2-code.md`):
      colour, newest first, under a divider.
    - **Working**: a grey shelf of one-line rows, by when they started, so
      rows do not jump while Agents write. The first six, then "+ N more".
+     _Amended 2026-11-10 by [ADR 0107](0107-a-working-mark-takes-the-group-plate-s-blue-muted.md):
+     the rows stay grey, and their Mark takes the Group plate's blue,
+     muted._
 4. **Inbox zero** is when Your turn and Open are both empty. The list
    says so in words, and what comes next: "Nothing waits for you · 7 at
    work · next wakes at 18:30".
