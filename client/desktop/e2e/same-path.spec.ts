@@ -1,0 +1,393 @@
+/**
+ * The same path on two machines (ADR 0106, law 3: an act runs where its
+ * values live). arc and this machine each have a Project "Same" in
+ * `code/Same`; where the system lets arc have a mount namespace of its
+ * own (arc.ts), both name it by one path, as ~/code/banda is on Roma's
+ * two machines. There arc's who.txt says "arc" and this machine's says
+ * "mac", so every road from arc's Thread must end at "arc": a window that
+ * reads this machine's file for arc's reads "mac", and one that asks this
+ * machine's engine for arc's finds nothing. Without the namespace, as on
+ * devbox, arc's Project is only in arc's folders and only the second is
+ * caught; ci.yml's `same-path` job runs this spec where both are.
+ *
+ * The roads that work today are tests: arc's Agent reads and writes its
+ * own disk, and @ in its Message box finds arc's files. Those a later step
+ * of the plan opens are `test.fixme`, each naming the step that turns it
+ * on. arc is 40 ms away a round trip, as a machine across a network is,
+ * and its link can go into a black hole: an act sent there waits for no
+ * answer until ssh gives up, and is never left hanging.
+ */
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { connect } from "node:net"
+import { join } from "node:path"
+import { expect, type Locator, type Page, test } from "@playwright/test"
+import { type Arc, newArc, put, withArc } from "./arc"
+import { agentSays, git, read, type Window } from "./window"
+
+let window: Window | undefined
+let arc: Arc | undefined
+let stopArc: (() => Promise<void>) | undefined
+
+test.afterEach(async () => {
+  await window?.close()
+  await stopArc?.()
+  arc?.close()
+  window = arc = stopArc = undefined
+})
+
+/** The title of arc's Thread in "Same". */
+const TITLE = "Bench same path"
+
+/** arc's part of the sidebar: its label and what it holds. */
+const arcOf = (page: Page) =>
+  page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("group", { name: "arc", exact: true })
+
+/**
+ * "Same" on both machines, each with its own who.txt and a file only it
+ * has, and arc's with a Thread done, open in the window from arc's part
+ * of the sidebar. arc's engine runs apart from the window's ssh, so a
+ * link that goes leaves it working. Each Project's folder, as its machine
+ * names it.
+ */
+async function opened({ latency = 40 } = {}) {
+  arc = newArc({ latency })
+  stopArc = await arc.start()
+  const there = join(arc.code.arc, "Same")
+  const here = join(arc.code.here, "Same")
+  put(arc.disk(there), {
+    "who.txt": "arc\n",
+    "only-arc.txt": "arc\n",
+    "notes.md": "arc\n",
+  })
+  put(here, {
+    "who.txt": "mac\n",
+    "only-mac.txt": "mac\n",
+    "notes.md": "mac\n",
+  })
+  const project = JSON.parse(arc.banda("project", "add", there)).ok.id as string
+  arc.send(project, TITLE)
+  await expect.poll(() => arc!.states(project)).toEqual([[TITLE, "done"]])
+  window = await withArc(arc)
+  const { page } = window
+  await arcOf(page).getByText(TITLE).click()
+  const thread = page.getByRole("region", { name: TITLE, exact: true })
+  await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()
+  // This machine's engine runs by now.
+  window.banda("project", "add", here)
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  return { page, thread, composer, project, there, here }
+}
+
+test("arc's Agent reads who.txt from arc's disk: arc, though this machine's at the same path says mac", async () => {
+  const { thread, composer, there, here } = await opened()
+  // Where the namespace holds, one path names both machines' Projects.
+  expect(there === here).toBe(arc!.samePath)
+  await composer.fill("cat who.txt")
+  await composer.press("Enter")
+  await expect(thread.getByText("who.txt holds arc.")).toBeVisible()
+  await expect(thread.getByText("who.txt holds mac.")).toHaveCount(0)
+})
+
+test("@ in arc's Message box finds arc's files, not this machine's at the same path, and its chip names arc's file to arc's Agent", async () => {
+  const { page, thread, composer } = await opened()
+  await composer.fill("cat @only")
+  const files = page.getByRole("listbox", { name: "Files" })
+  await expect(files.getByRole("option")).toHaveCount(1)
+  await expect(files.getByRole("option")).toContainText("only-arc.txt")
+  await composer.press("Enter")
+  await expect(composer.locator("[data-chip=file]")).toHaveText("only-arc.txt")
+  await composer.press("Enter")
+  await expect(thread.getByText("only-arc.txt holds arc.")).toBeVisible()
+})
+
+test("arc's Agent writes on arc's disk: this machine's files at the same path stay as they were", async () => {
+  const { thread, composer, there, here } = await opened()
+  await composer.fill("on disk")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("I edited notes.md and ran a script.")
+  ).toBeVisible()
+  expect(readFileSync(arc!.disk(join(there, "notes.md")), "utf8")).toBe(
+    "one\n2\nthree\n"
+  )
+  expect(existsSync(arc!.disk(join(there, "made.txt")))).toBe(true)
+  expect(readFileSync(join(here, "notes.md"), "utf8")).toBe("mac\n")
+  expect(existsSync(join(here, "made.txt"))).toBe(false)
+})
+
+/** How long `port` on loopback takes to say its first byte to an HTTP
+ * request, in ms. */
+function firstByte(port: number): Promise<number> {
+  return new Promise((done, failed) => {
+    const socket = connect(port, "127.0.0.1", () => {
+      const sent = performance.now()
+      socket.once("data", () => {
+        done(performance.now() - sent)
+        socket.destroy()
+      })
+      socket.write("GET / HTTP/1.1\r\nHost: 127.0.0.1\r\n\r\n")
+    })
+    socket.on("error", failed)
+  })
+}
+
+test("arc is as far as its latency: each round trip through its link waits that long, and its Thread hears it that much later", async () => {
+  const { thread, composer } = await opened()
+  // 40 ms each round trip through the forward; arc's engine itself
+  // answers on loopback.
+  expect(await firstByte(arc!.ports().from)).toBeGreaterThanOrEqual(40)
+  // Farther now, as the forward hears within 50 ms: what arc's Agent
+  // replies is heard a round trip after the message went, at least.
+  arc!.latency(800)
+  await thread.page().waitForTimeout(100)
+  await composer.fill("cat who.txt")
+  const sent = Date.now()
+  await composer.press("Enter")
+  await expect(thread.getByText("who.txt holds arc.")).toBeVisible()
+  expect(Date.now() - sent).toBeGreaterThanOrEqual(800)
+})
+
+test("arc in a black hole: Stop sent into it waits for no answer, then says what became of it once arc is away; the next is refused at once, and nothing lands there later", async () => {
+  // ssh gives up on a silent link in about 20 s (hosts.ts's QUICK), and
+  // comes back after its waits.
+  test.setTimeout(180_000)
+  const { page, thread, composer, project } = await opened()
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  const stop = thread.getByRole("button", { name: "Stop", exact: true })
+  const runs = () => expect(arc!.states(project)).toEqual([[TITLE, "running"]])
+  await composer.fill("wait for it")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+
+  // Nothing comes back from a black hole, not even a reset: the window
+  // learns arc is gone only as ssh gives up, or as nothing answers a
+  // ping. Stop was sent, or held back to ask first: either way it ends
+  // in words, and never reached arc.
+  arc!.blackhole(true)
+  await page.waitForTimeout(200)
+  await stop.click()
+  await expect(
+    toasts.filter({
+      hasText:
+        /arc (went away; Stop may have gone through|is away: Stop was not sent)\./,
+    })
+  ).toBeVisible({ timeout: 60_000 })
+  await expect(arcOf(page).getByText(/^away/)).toBeVisible()
+  runs()
+  // Pressed while arc is away, it is refused at once.
+  const refused = toasts.filter({ hasText: "arc is away: Stop was not sent." })
+  const before = await refused.count()
+  await stop.click()
+  await expect(refused).toHaveCount(before + 1, { timeout: 2_000 })
+  await expect(stop).toBeEnabled()
+
+  // Out of the hole, and heard again: what went into it, and what was
+  // refused, never lands there by itself.
+  arc!.blackhole(false)
+  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0, {
+    timeout: 90_000,
+  })
+  for (const until = Date.now() + 5_000; Date.now() < until;) {
+    runs()
+    await page.waitForTimeout(250)
+  }
+  await stop.click()
+  await expect.poll(() => arc!.states(project)).toEqual([[TITLE, "stopped"]])
+})
+
+// The roads later steps open (ADR 0106, the plan). Each ends at arc's
+// file, and turns on with the step it names: until then the window says
+// "Not on arc yet", or offers nothing, as hosts.spec.ts checks.
+
+test.fixme("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", async () => {
+  const { page, composer, there, here } = await opened()
+  await composer.focus()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await page.keyboard.type("cat who.txt > seen.txt")
+  await page.keyboard.press("Enter")
+  await expect
+    .poll(() => read(arc!.disk(join(there, "seen.txt"))))
+    .toBe("arc\n")
+  expect(existsSync(join(here, "seen.txt"))).toBe(false)
+})
+
+test.fixme("step 1c: Run on a line in arc's reply runs it in arc's terminal", async () => {
+  const { page, thread, composer, there, here } = await opened()
+  await composer.fill("Run it:\n\n```sh\ncat who.txt > ran.txt\n```")
+  await composer.press("Enter")
+  await thread
+    .locator("[data-quotable] [data-streamdown=code-block]")
+    .getByRole("button", { name: "Run", exact: true })
+    .click()
+  await expect(
+    page.getByRole("region", { name: "Terminal screen" })
+  ).toHaveAttribute("data-state", "running")
+  await expect.poll(() => read(arc!.disk(join(there, "ran.txt")))).toBe("arc\n")
+  expect(existsSync(join(here, "ran.txt"))).toBe(false)
+})
+
+test.fixme("step 2a: arc's Diff shows arc's change to who.txt", async () => {
+  const { page, composer, there, here } = await opened()
+  for (const [folder, now] of [
+    [arc!.disk(there), "arc changed\n"],
+    [here, "mac changed\n"],
+  ] as const) {
+    git(folder, "init", "-q", "-b", "main")
+    git(folder, "add", "-A")
+    git(folder, "commit", "-qm", "First")
+    put(folder, { "who.txt": now })
+  }
+  await composer.click()
+  await page.keyboard.press("Alt+KeyD")
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.getByText("arc changed")).toBeVisible()
+  await expect(diff.getByText("mac changed")).toHaveCount(0)
+})
+
+test.fixme("step 3a: Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
+  const { page, composer } = await opened()
+  await composer.focus()
+  await page.keyboard.press("Alt+Space")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await search.fill("who.txt")
+  await expect(menu.getByRole("option").first()).toContainText("who.txt")
+  await search.press("Tab")
+  await menu
+    .getByRole("listbox", { name: "Actions" })
+    .getByRole("option", { name: "Quick Look" })
+    .click()
+  const peek = page.locator("[data-peek]")
+  await expect(peek).toHaveAttribute("aria-label", "Quick Look: who.txt")
+  await expect(peek.getByText("arc", { exact: true })).toBeVisible()
+  await expect(peek.getByText("mac", { exact: true })).toHaveCount(0)
+})
+
+/** arc's Files on "Same", from the Banda menu in arc's Thread; the Pane. */
+async function filesOn(page: Page, composer: Locator) {
+  await composer.focus()
+  await page.keyboard.press("Alt+Space")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await menu.getByRole("combobox", { name: "Search" }).fill("Files")
+  await menu
+    .getByRole("option", { name: /^Files/ })
+    .first()
+    .click()
+  return page
+    .locator("section")
+    .filter({ has: page.getByRole("navigation", { name: "Places" }) })
+}
+
+test.fixme("step 3b: arc's Files lists arc's files and opens who.txt as arc's", async () => {
+  const { page, composer } = await opened()
+  const pane = await filesOn(page, composer)
+  const tree = pane.getByRole("tree")
+  await expect(
+    tree.getByRole("treeitem", { name: "only-arc.txt" })
+  ).toBeVisible()
+  await expect(
+    tree.getByRole("treeitem", { name: "only-mac.txt" })
+  ).toHaveCount(0)
+  await tree.getByRole("treeitem", { name: "who.txt", exact: true }).click()
+  await page.keyboard.press("Enter")
+  const file = page.getByRole("region", { name: "who.txt", exact: true })
+  await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
+})
+
+test.fixme("step 3b: a row of arc's Files dragged into arc's Message box names arc's file to arc's Agent", async () => {
+  const { page, thread, composer } = await opened()
+  const pane = await filesOn(page, composer)
+  await pane
+    .getByRole("tree")
+    .getByRole("treeitem", { name: "only-arc.txt" })
+    .dragTo(composer)
+  await expect(composer.locator("[data-chip=file]")).toHaveText("only-arc.txt")
+  await composer.press("Home")
+  await composer.pressSequentially("cat ")
+  await composer.press("Enter")
+  await expect(thread.getByText("only-arc.txt holds arc.")).toBeVisible()
+})
+
+test.fixme("step 3b: a folder pinned in arc's Files opens arc's folder again", async () => {
+  const { page, composer, there } = await opened()
+  put(arc!.disk(there), { "kept/only-arc-kept.txt": "arc\n" })
+  put(join(arc!.code.here, "Same"), { "kept/only-mac-kept.txt": "mac\n" })
+  const pane = await filesOn(page, composer)
+  const tree = pane.getByRole("tree")
+  await tree.getByRole("treeitem", { name: "kept" }).click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Pin" }).click()
+  await pane
+    .getByRole("navigation", { name: "Places" })
+    .getByRole("group", { name: "Pinned" })
+    .getByRole("button", { name: "kept" })
+    .click()
+  await expect(
+    tree.getByRole("treeitem", { name: "only-arc-kept.txt" })
+  ).toBeVisible()
+  await expect(
+    tree.getByRole("treeitem", { name: "only-mac-kept.txt" })
+  ).toHaveCount(0)
+})
+
+test.fixme("step 3c: a path in arc's reply opens arc's file", async () => {
+  const { page, thread, composer } = await opened()
+  await composer.fill("See `who.txt`.")
+  await composer.press("Enter")
+  const chip = thread.locator("[data-quotable] a[data-file]")
+  await expect(chip).toHaveText("who.txt")
+  await chip.click({ button: "right" })
+  await page
+    .getByRole("menu", { name: "Thread" })
+    .getByRole("menuitem", { name: "Quick Look" })
+    .click()
+  const peek = page.locator("[data-peek]")
+  await expect(peek.getByText("arc", { exact: true })).toBeVisible()
+})
+
+test.fixme("step 4c: a picture in arc's reply is arc's", async () => {
+  const { thread, composer, there, here } = await opened()
+  // Each machine's who.png is its own size: arc's 3×2, this one's 1×1.
+  writeFileSync(
+    arc!.disk(join(there, "who.png")),
+    Buffer.from(PNG_3X2, "base64")
+  )
+  writeFileSync(join(here, "who.png"), Buffer.from(PNG_1X1, "base64"))
+  await composer.fill("![who](who.png)")
+  await composer.press("Enter")
+  const picture = thread.locator('[data-quotable] img[alt="who"]')
+  await expect
+    .poll(() =>
+      picture.evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBe(3)
+})
+
+test.fixme("step 4d: a Visual arc's Agent shows is arc's", async () => {
+  const { thread, composer } = await opened()
+  await composer.fill("wait")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  await agentSays({ dir: arc!.dir }, "show_visual", {
+    html: '<p id="who">arc</p>',
+    title: "Whose",
+    height: 80,
+  })
+  const frame = thread.locator('iframe[title="Whose"]').contentFrame()
+  await expect(frame.locator("#who")).toHaveText("arc")
+})
+
+/** Two grey PNGs, told apart by their sizes. */
+const PNG_3X2 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAADklEQVR4nGNogAEGOAsAWhQJAbISPYcAAAAASUVORK5CYII="
+const PNG_1X1 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNoaGgAAAMEAYFL09IQAAAAAElFTkSuQmCC"

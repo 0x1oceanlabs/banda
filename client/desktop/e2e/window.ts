@@ -388,7 +388,11 @@ export const openedIn = (app: ElectronApplication) =>
   app.evaluate(() => (globalThis as { openedIn?: unknown[][] }).openedIn)
 
 /** What a tool of `banda mcp` says, which it did not refuse. */
-export async function agentSays(window: Window, name: string, args: object) {
+export async function agentSays(
+  window: Pick<Window, "dir">,
+  name: string,
+  args: object
+) {
   const said = await agentCalls(window, name, args)
   expect(said.isError, said.content[0]?.text).toBeFalsy()
   return said.content[0]!.text
@@ -403,10 +407,11 @@ export async function agentAnswers(window: Window, name: string, args: object) {
  * The Agent of the Thread whose session opened last calls Banda's tool
  * `name` with `args`, through `banda mcp` as its Harness would; what the
  * tool answered (ADR 0019). It waits without blocking, so the test's own
- * site answers the window meanwhile.
+ * site answers the window meanwhile. `window` is the folder whose fake
+ * agent wrote mcp.json: a window's, or another machine's (arc.ts).
  */
 export async function agentCalls(
-  window: Window,
+  window: Pick<Window, "dir">,
   name: string,
   args: object
 ): Promise<{
