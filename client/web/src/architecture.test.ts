@@ -95,7 +95,7 @@
  *   is listed, and the list only falls.
  * - A kind of Pane that opens on another machine reaches nothing past its
  *   three handles (ADR 0106, law 1): over all the code it takes, through
- *   every import, the kit's helpers too, what it still reaches of the
+ *   every import, `@banda/ui`'s helpers too, what it still reaches of the
  *   desktop's bridge, the clipboard, the browser's windows or an engine
  *   of its own, but through the device's own helpers, is listed by kind,
  *   each with the step that takes it, and the list only falls.

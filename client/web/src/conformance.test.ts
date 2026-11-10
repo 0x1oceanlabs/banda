@@ -26,7 +26,7 @@ const PENDING: Record<string, string> = {
   // Its calls and streams wait while arc is away until 0′, and its
   // `args.host` branches and its reaches past its handles go one per
   // slice, the last in 4d. It does not mount in the kit yet either: the
-  // kit's page has no CSS highlights, which its Find marks with.
+  // kit's page has no CSS highlights, which its Find marks with (#1250).
   "agents.thread": "0′, then its slices to 4d",
 }
 

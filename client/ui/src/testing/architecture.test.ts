@@ -311,6 +311,9 @@ test("the kind checker sees each way code reaches past a Pane's handles, and not
         `const engine = new Engine(address)`,
         `const other = new contract.Engine(address)`,
         `const view = <a onClick={() => window.open(url)} />`,
+        `import { Engine as Session } from "@banda/contract"`,
+        `const renamed = new Session(address)`,
+        `class Mine extends Session {}`,
       ].join("\n")
     )
   ).toEqual([
@@ -324,6 +327,8 @@ test("the kind checker sees each way code reaches past a Pane's handles, and not
     "8 new Engine",
     "9 new Engine",
     "10 window.open",
+    "12 new Engine",
+    "13 new Engine",
   ])
   expect(
     places(
@@ -347,8 +352,8 @@ test("the kind checker sees each way code reaches past a Pane's handles, and not
 /**
  * What `kindReaches` finds from `start` in `files`, written as code by
  * their paths: each place as `what at file:line, by a → b`. `@banda/ui/
- * desktop` is `desktop.ts`, the core is under `core/`, and a module
- * named bare is a package from outside.
+ * desktop` is `desktop.ts`, the core is under `core/`, the contract under
+ * `contract/`, and a module named bare is a package from outside.
  */
 function reachedIn(
   files: Record<string, string>,
@@ -358,6 +363,7 @@ function reachedIn(
   const resolve = (module: string, from: string) => {
     if (module === "@banda/ui/desktop") return "/desktop.ts"
     if (module === "@banda/core") return "/core/index.ts"
+    if (module === "@banda/contract") return "/contract/index.ts"
     if (!module.startsWith(".")) return undefined
     const path = join(from, "..", module)
     return [path, `${path}.ts`, `${path}.tsx`, `${path}/index.ts`].find(
@@ -424,12 +430,13 @@ test("the kind checker follows a kind's code through what it takes, and only tha
   )
 })
 
-test("the kind checker takes what runs as a file loads, what a call is handed then, a dynamic import, and stops at the core", () => {
+test("the kind checker takes what runs as a file loads, what a call is handed then, a dynamic import, and stops at the core and the contract", () => {
   const files = {
     "/kind.tsx": [
       `import { store } from "./store"`,
       `import { paneHost } from "@banda/core"`,
-      `export const kind = definePane({ Pane: () => store.get() + paneHost(pane) })`,
+      `import { bridge } from "@banda/contract"`,
+      `export const kind = definePane({ Pane: () => store.get() + paneHost(pane) + bridge() })`,
       `export const other = definePane({ Pane: () => import("./later") })`,
     ].join("\n"),
     // Made as it loads: what the call names runs then, and what it is
@@ -450,6 +457,7 @@ test("the kind checker takes what runs as a file loads, what a call is handed th
     "/later.ts": `export default function later() { window.open("https://b") }`,
     "/core/index.ts": `export { paneHost } from "./hosts"`,
     "/core/hosts.ts": `export const paneHost = () => new Engine(at)`,
+    "/contract/index.ts": `export const bridge = () => window.banda`,
   }
   expect(reachedIn(files, "/kind.tsx", "kind")).toEqual([
     "window.banda at /store.ts:4, by /kind.tsx → /store.ts",
@@ -525,6 +533,7 @@ test("the check sees where a Pane asks where it is, and each check of what it re
         `const said = (call: Call) => paneHost(call.pane)`,
         `const picked = (window: WindowApi) => window.here.get().pane?.host`,
         `function Moved({ args: { host } }: Props) { return host }`,
+        `const keyed = props.args["host"]`,
       ].join("\n")
     )
   ).toEqual([
@@ -532,6 +541,7 @@ test("the check sees where a Pane asks where it is, and each check of what it re
     "args.host",
     "paneHost",
     "pane.host",
+    "args.host",
     "args.host",
     "here",
     "here",
