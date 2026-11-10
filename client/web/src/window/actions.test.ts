@@ -7,7 +7,7 @@ import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
-import { arcHosts, ON_ARC, R1 } from "../tiling/arc.testing"
+import { arcHosts, ON_ARC, R1 } from "../tiling/testing"
 import { handlesOf } from "../tiling/mount"
 import {
   type Column,
