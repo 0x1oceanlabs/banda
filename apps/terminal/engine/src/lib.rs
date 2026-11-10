@@ -46,8 +46,10 @@ use windows::Terminal;
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): how the
 /// terminal writes, which the look resolves for the window (ADR 0047).
+/// How a terminal is drawn is the device's (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] =
-    [banda_look::SettingsFile::of::<settings::TerminalSettings>()];
+    [banda_look::SettingsFile::of::<settings::TerminalSettings>()
+        .class(banda_look::Class::Device, &[])];
 
 /// The most a window types at once.
 const AT_ONCE: usize = 64 * 1024;

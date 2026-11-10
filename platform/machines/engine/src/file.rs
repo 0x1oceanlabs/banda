@@ -19,8 +19,10 @@ use std::path::Path;
 /// Its name in the config folder.
 pub const NAME: &str = "machine.toml";
 
-/// `machine.toml` as the settings know it.
-pub const FILE: SettingsFile = SettingsFile::of::<MachineFile>();
+/// `machine.toml` as the settings know it: a machine's name, icon and when
+/// it stays awake are its own (ADR 0101, decision 3).
+pub const FILE: SettingsFile =
+    SettingsFile::of::<MachineFile>().class(banda_look::Class::Machine, &[]);
 
 /// This machine's name and icon, as every window shows it beside its
 /// Projects and Threads, whether Banda starts at login here, and when it

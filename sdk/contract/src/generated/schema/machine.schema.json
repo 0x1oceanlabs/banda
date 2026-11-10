@@ -7,23 +7,28 @@
     "name": {
       "description": "Its name, up to 16 characters. Left out or empty: its hostname, or\na word for a hostname the system made up.",
       "type": "string",
-      "maxLength": 16
+      "maxLength": 16,
+      "x-class": "machine"
     },
     "icon": {
       "description": "Its icon. Left out: what Banda finds the machine is, as a laptop by\nits battery.",
-      "$ref": "#/$defs/MachineIcon"
+      "$ref": "#/$defs/MachineIcon",
+      "x-class": "machine"
     },
     "start-at-login": {
       "description": "Start Banda at login: its engine starts as you log in, so its\nAgents and other machines find it running. Off, it starts as you\nopen Banda. On by default; macOS has it so far, Linux next.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "machine"
     },
     "awake-while-working": {
       "description": "Stay awake while Agents work: this machine does not idle-sleep\nwhile a Turn runs here, and for 10 minutes after, so a message\nfrom another machine finds it awake. Its display still sleeps, and\nclosing a MacBook's lid still sleeps it. On by default; macOS and\nLinux have it so far.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "machine"
     },
     "awake-plugged-in": {
       "description": "Stay awake while plugged in: on power, this machine does not\nidle-sleep, Agents or none, so other machines reach it. One with\nno battery is always on power. Off by default.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "machine"
     }
   },
   "additionalProperties": false,

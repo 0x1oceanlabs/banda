@@ -285,6 +285,135 @@ mod tests {
 }
 
 #[cfg(test)]
+mod classes {
+    use super::*;
+    use banda_look::Class::{self, Device, Machine, Shared};
+    use serde_json::Value;
+    use std::collections::BTreeSet;
+
+    /// Some top-level keys of a file, and whose copy they are.
+    type Keys = (Class, &'static [&'static str]);
+
+    /// Whose copy each top-level key of each file is, as ADR 0101's
+    /// decision 3 has it: the machine's are read and written through its
+    /// engine, and nothing else of the file leaves its device (ADR 0106,
+    /// decision 7). A new key takes its file's class unless the file says
+    /// otherwise, so it comes here with its class, chosen.
+    const TABLE: &[(&str, &[Keys])] = &[
+        (
+            "look.toml",
+            &[
+                (Shared, &["notify"]),
+                (
+                    Device,
+                    &[
+                        "theme", "mode", "radius", "hyprland", "colors", "tokens", "gaps", "desk",
+                        "tile", "focus", "bar", "drawer", "overview", "groups", "motion",
+                        "columns", "font", "sound",
+                    ],
+                ),
+            ],
+        ),
+        (
+            "sidebar.toml",
+            &[(
+                Shared,
+                &["preset", "group", "sort", "projects", "row", "bar", "later"],
+            )],
+        ),
+        ("keys.toml", &[(Shared, &["binds"]), (Device, &["mod"])]),
+        (
+            "agents.toml",
+            &[
+                (Machine, &["start"]),
+                (Shared, &["enter", "flow"]),
+                // Not in the ADR's table: the device's, as in doubt.
+                (Device, &["seen-after"]),
+            ],
+        ),
+        (
+            "browser.toml",
+            &[
+                (Machine, &["agents"]),
+                (Device, &["tabs", "search", "pinned", "blocker"]),
+            ],
+        ),
+        (
+            "files.toml",
+            &[
+                (Machine, &["pinned"]),
+                (
+                    Device,
+                    &["hidden", "ignored", "editor", "previewers", "thumbnails"],
+                ),
+            ],
+        ),
+        (
+            "terminal.toml",
+            &[(Device, &["font", "size", "ligatures", "cursor"])],
+        ),
+        (
+            "harnesses.toml",
+            &[(Machine, &["harness", "limits", "usage", "omarchy"])],
+        ),
+        (
+            "machine.toml",
+            &[(
+                Machine,
+                &[
+                    "name",
+                    "icon",
+                    "start-at-login",
+                    "awake-while-working",
+                    "awake-plugged-in",
+                ],
+            )],
+        ),
+        ("sharing.toml", &[(Machine, &["problems", "usage"])]),
+    ];
+
+    /// The top-level keys of `file`'s schema.
+    fn keys_of(file: &SettingsFile) -> BTreeSet<String> {
+        let schema = serde_json::to_value(file.schema()).unwrap();
+        let properties = schema["properties"]
+            .as_object()
+            .cloned()
+            .unwrap_or_default();
+        properties.keys().cloned().collect()
+    }
+
+    #[test]
+    fn each_file_says_whose_copy_each_of_its_keys_is() {
+        let named: BTreeSet<&str> = TABLE.iter().map(|(name, _)| *name).collect();
+        let every: BTreeSet<&str> = files().map(|file| file.name).collect();
+        assert_eq!(named, every, "each file Banda reads");
+        for (name, classes) in TABLE {
+            let file = file(name).unwrap();
+            let mut listed = BTreeSet::new();
+            for (class, keys) in *classes {
+                for key in *keys {
+                    assert_eq!(file.class_of(key), *class, "{name}: {key}");
+                    listed.insert((*key).to_owned());
+                }
+            }
+            assert_eq!(listed, keys_of(file), "{name}: each key, once");
+            for (section, _) in file.sections() {
+                assert!(listed.contains(*section), "{name} names no {section}");
+            }
+        }
+    }
+
+    #[test]
+    fn the_schema_tells_the_window_each_key_s_class() {
+        let agents = serde_json::to_value(file("agents.toml").unwrap().schema()).unwrap();
+        let class = |key: &str| agents["properties"][key]["x-class"].clone();
+        assert_eq!(class("start"), Value::from("machine"));
+        assert_eq!(class("enter"), Value::from("shared"));
+        assert_eq!(class("seen-after"), Value::from("device"));
+    }
+}
+
+#[cfg(test)]
 mod keys_in_force {
     use super::*;
     use banda_look::keys::{Keys, Mod, in_force};

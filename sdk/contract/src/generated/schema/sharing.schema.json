@@ -6,11 +6,13 @@
   "properties": {
     "problems": {
       "description": "Send problem reports: what broke in Banda, where in its code, and\nits version and system. Each problem once a day.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "machine"
     },
     "usage": {
       "description": "Send usage counts: one summary a day of how many Threads, Turns and\nPanes, by kind, and the country of the system's language. Never\nwords, paths or names.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "machine"
     }
   },
   "additionalProperties": false

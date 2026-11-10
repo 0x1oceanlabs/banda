@@ -9,18 +9,22 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/HarnessEntry"
-      }
+      },
+      "x-class": "machine"
     },
     "limits": {
       "description": "How Banda reads the usage limits of each Harness's account (ADR\n0043).",
-      "$ref": "#/$defs/LimitsEntry"
+      "$ref": "#/$defs/LimitsEntry",
+      "x-class": "machine"
     },
     "usage": {
       "description": "Whether local session journals are counted (ADR 0043).",
-      "$ref": "#/$defs/UsageSettings"
+      "$ref": "#/$defs/UsageSettings",
+      "x-class": "machine"
     },
     "omarchy": {
-      "$ref": "#/$defs/OmarchySettings"
+      "$ref": "#/$defs/OmarchySettings",
+      "x-class": "machine"
     }
   },
   "$defs": {

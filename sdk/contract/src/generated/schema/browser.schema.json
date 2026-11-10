@@ -6,26 +6,31 @@
   "properties": {
     "tabs": {
       "description": "Where the tabs are: a row above the page, or a rail beside it.",
-      "$ref": "#/$defs/Tabs"
+      "$ref": "#/$defs/Tabs",
+      "x-class": "device"
     },
     "search": {
       "description": "Where words that are not an address go: an http or https address\nwith %s where the words go. DuckDuckGo when left out.",
-      "type": "string"
+      "type": "string",
+      "x-class": "device"
     },
     "pinned": {
       "description": "The extensions whose buttons sit in the row, by their IDs; the rest\nare behind the Extensions button. The row's menu writes it.",
       "type": "array",
       "items": {
         "type": "string"
-      }
+      },
+      "x-class": "device"
     },
     "blocker": {
       "description": "Whether Banda blocks ads and trackers in the browser, with\nEasyList, EasyPrivacy and uBlock Origin's lists. On when left out.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "device"
     },
     "agents": {
       "description": "What Agents may do in the browser.",
-      "$ref": "#/$defs/AgentsSettings"
+      "$ref": "#/$defs/AgentsSettings",
+      "x-class": "machine"
     }
   },
   "additionalProperties": false,

@@ -6,31 +6,38 @@
   "properties": {
     "preset": {
       "description": "Banda's inbox, projects or places, or one of yours in sidebars/.",
-      "type": "string"
+      "type": "string",
+      "x-class": "shared"
     },
     "group": {
       "description": "How Threads fall into sections.",
-      "$ref": "#/$defs/GroupSettings"
+      "$ref": "#/$defs/GroupSettings",
+      "x-class": "shared"
     },
     "sort": {
       "description": "Their order in a section.",
-      "$ref": "#/$defs/SortSettings"
+      "$ref": "#/$defs/SortSettings",
+      "x-class": "shared"
     },
     "projects": {
       "description": "The Projects above the Threads. `[spaces]` before ADR 0069 (grace).",
-      "$ref": "#/$defs/ProjectsSettings"
+      "$ref": "#/$defs/ProjectsSettings",
+      "x-class": "shared"
     },
     "row": {
       "description": "What a Thread's row shows.",
-      "$ref": "#/$defs/RowSettings"
+      "$ref": "#/$defs/RowSettings",
+      "x-class": "shared"
     },
     "bar": {
       "description": "The counts in the bar's middle: who waits for you, who works.",
-      "$ref": "#/$defs/BarSettings"
+      "$ref": "#/$defs/BarSettings",
+      "x-class": "shared"
     },
     "later": {
       "description": "The Later's presets (ADR 0074). `[snooze]` before ADR 0098 (grace).",
-      "$ref": "#/$defs/LaterSettings"
+      "$ref": "#/$defs/LaterSettings",
+      "x-class": "shared"
     }
   },
   "additionalProperties": false,

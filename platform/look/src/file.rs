@@ -6,6 +6,11 @@
 //! them. A file that is one layer, the Person's, over Banda's defaults is a
 //! [`OneFile`], and [`resolve`] resolves every such file the same way, so
 //! the look carries a module's file by its name, a value and its keys.
+//!
+//! Each file says whose copy each of its sections is, its [`Class`] (ADR
+//! 0101, decision 3): a machine's part is read through that machine's
+//! engine, [`SettingsFile::part`], and nothing of the rest leaves it (ADR
+//! 0106, decision 7).
 
 use crate::Places;
 use crate::Problem;
@@ -17,6 +22,7 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
 use std::path::{Path, PathBuf};
+use ts_rs::TS;
 
 /// A file in `~/.config/banda/` that Banda reads. What it holds is its
 /// root struct's doc comment, the schema's `description`.
@@ -28,10 +34,45 @@ pub struct SettingsFile {
     template: fn() -> String,
     check: fn(&Path, &str) -> Vec<Problem>,
     resolve: Option<Resolve>,
+    /// Whose copy its keys are, but for those of `sections`.
+    class: Class,
+    /// Its top-level keys whose copy is another's than the file's.
+    sections: &'static [(&'static str, Class)],
 }
 
-/// How the look resolves a file: its value, and each key's.
-type Resolve = fn(&Places, &mut Vec<Problem>, &mut Vec<PathBuf>) -> (Value, Keyed);
+/// How the look resolves a file, from its text at a path, there or not:
+/// its value, and each key's.
+type Resolve = fn(&Path, Option<&str>, &mut Vec<Problem>) -> (Value, Keyed);
+
+/// Whose copy of a setting a window reads and writes (ADR 0101, decision
+/// 3). When in doubt, a setting is the device's: never copied, it never
+/// clashes, and moving it to shared later only adds.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum Class {
+    /// What the Person means everywhere: a copy on every machine, and a
+    /// window reads and writes its own machine's.
+    Shared,
+    /// How this screen looks and sits under the hand: it never leaves the
+    /// device.
+    Device,
+    /// What that machine has: read and written through its engine, from
+    /// any window (ADR 0106, decision 7).
+    Machine,
+}
+
+/// A file's keys of one class, as this machine has them.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Part {
+    /// The file as the look resolves it, for a file it resolves: its keys
+    /// of the class as the file says them, the rest as Banda has them.
+    pub value: Option<Value>,
+    /// Each key of the class, its value and where it comes from.
+    pub keyed: Keyed,
+    /// What is wrong in the file at those keys, or in the whole file.
+    pub problems: Vec<Problem>,
+}
 
 impl SettingsFile {
     /// The file `name`, whose keys are a `T`, that starts as `template`
@@ -47,6 +88,8 @@ impl SettingsFile {
             template,
             check,
             resolve: None,
+            class: Class::Device,
+            sections: &[],
         }
     }
 
@@ -58,10 +101,53 @@ impl SettingsFile {
         }
     }
 
-    /// The file's JSON Schema, titled with its name.
+    /// This file, its keys `class`'s but for the top-level keys `sections`
+    /// names. A file that says no class is the device's.
+    pub const fn class(
+        self,
+        class: Class,
+        sections: &'static [(&'static str, Class)],
+    ) -> SettingsFile {
+        SettingsFile {
+            class,
+            sections,
+            ..self
+        }
+    }
+
+    /// Whose copy `key` is, dotted, by its top-level key: `start` of
+    /// `start.account`.
+    pub fn class_of(&self, key: &str) -> Class {
+        let section = key.split_once('.').map_or(key, |(section, _)| section);
+        (self.sections.iter())
+            .find(|(name, _)| *name == section)
+            .map_or(self.class, |(_, class)| *class)
+    }
+
+    /// Whether any key of it is `class`'s.
+    pub fn has(&self, class: Class) -> bool {
+        self.class == class || self.sections.iter().any(|(_, each)| *each == class)
+    }
+
+    /// The top-level keys whose copy is another's than the file's.
+    pub fn sections(&self) -> &'static [(&'static str, Class)] {
+        self.sections
+    }
+
+    /// The file's JSON Schema, titled with its name, each top-level key
+    /// saying its class as `x-class`, for the window to know whose copy a
+    /// row is.
     pub fn schema(&self) -> Schema {
         let mut schema = (self.schema)();
         schema.insert("title".into(), self.name.into());
+        if let Some(Value::Object(keys)) = schema.get_mut("properties") {
+            for (name, key) in keys.iter_mut() {
+                if let Value::Object(key) = key {
+                    let class = serde_json::to_value(self.class_of(name));
+                    key.insert("x-class".into(), class.expect("a class is a word"));
+                }
+            }
+        }
         schema
     }
 
@@ -89,14 +175,56 @@ impl SettingsFile {
         problems: &mut Vec<Problem>,
         watched: &mut Vec<PathBuf>,
     ) -> Option<(Value, Keyed)> {
-        if let Some(resolve) = self.resolve {
-            return Some(resolve(places, problems, watched));
-        }
         let path = places.config.join(self.name);
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            problems.extend(self.check(&path, &text));
-        }
+        let text = std::fs::read_to_string(&path).ok();
+        let resolved = self.resolve_text(&path, text.as_deref(), problems);
         watched.push(path);
+        resolved
+    }
+
+    /// Its keys of `class` on this machine, the rest of the file read as if
+    /// it said nothing (ADR 0106, decision 7): what a window of another
+    /// device may read of it. The rest's entries are blanked, not taken
+    /// out, so each problem and key names its line in the file.
+    pub fn part(&self, places: &Places, class: Class) -> Part {
+        let path = places.config.join(self.name);
+        let kept = |key: &str| self.class_of(key) == class;
+        let whole = self.class == class && self.sections.iter().all(|(_, each)| *each == class);
+        let text = std::fs::read_to_string(&path).ok().map(|text| {
+            if whole {
+                return text;
+            }
+            // A file that is not TOML reads as nothing anyway, and says
+            // where it breaks.
+            keyed::only(&text, kept).unwrap_or(text)
+        });
+        let mut problems = Vec::new();
+        let resolved = self.resolve_text(&path, text.as_deref(), &mut problems);
+        let (value, mut keyed) =
+            resolved.map_or((None, Keyed::new()), |(value, keyed)| (Some(value), keyed));
+        keyed.retain(|key, _| kept(key));
+        Part {
+            value,
+            keyed,
+            problems,
+        }
+    }
+
+    /// The file at `path` from its `text`: a [`OneFile`]'s value and each
+    /// key's; any other's problems only, as its crate finds them, with
+    /// `None`.
+    fn resolve_text(
+        &self,
+        path: &Path,
+        text: Option<&str>,
+        problems: &mut Vec<Problem>,
+    ) -> Option<(Value, Keyed)> {
+        if let Some(resolve) = self.resolve {
+            return Some(resolve(path, text, problems));
+        }
+        if let Some(text) = text {
+            problems.extend(self.check(path, text));
+        }
         None
     }
 
@@ -168,7 +296,17 @@ pub fn resolve<T: OneFile>(
 ) -> (T::Resolved, Keyed) {
     let path = places.config.join(T::NAME);
     watched.push(path.clone());
-    let file = std::fs::read_to_string(&path).ok().map(|text| (path, text));
+    let text = std::fs::read_to_string(&path).ok();
+    resolve_from::<T>(&path, text.as_deref(), problems)
+}
+
+/// [`resolve`], from the file's `text` at `path`, there or not.
+fn resolve_from<T: OneFile>(
+    path: &Path,
+    text: Option<&str>,
+    problems: &mut Vec<Problem>,
+) -> (T::Resolved, Keyed) {
+    let file = text.map(|text| (path.to_owned(), text.to_owned()));
     let mine = file
         .as_ref()
         .and_then(|(path, text)| read::<T>(path, text, problems))
@@ -184,11 +322,11 @@ pub fn resolve<T: OneFile>(
 }
 
 fn resolve_value<T: OneFile>(
-    places: &Places,
+    path: &Path,
+    text: Option<&str>,
     problems: &mut Vec<Problem>,
-    watched: &mut Vec<PathBuf>,
 ) -> (Value, Keyed) {
-    let (resolved, keyed) = resolve::<T>(places, problems, watched);
+    let (resolved, keyed) = resolve_from::<T>(path, text, problems);
     let value = serde_json::to_value(resolved).expect("settings are plain data");
     (value, keyed)
 }
@@ -252,5 +390,150 @@ fn says_nothing(value: &Value) -> bool {
         Value::Null => true,
         Value::Object(table) => table.values().all(says_nothing),
         _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde::Deserialize;
+    use serde_json::json;
+    use std::collections::BTreeMap;
+
+    /// A file of two classes, as `browser.toml` is: the machine's
+    /// `[agents]` beside the device's own keys.
+    #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+    #[serde(deny_unknown_fields)]
+    struct Mixed {
+        search: Option<String>,
+        tabs: Option<String>,
+        agents: Option<Agents>,
+    }
+
+    #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+    #[serde(deny_unknown_fields)]
+    struct Agents {
+        enabled: Option<bool>,
+        sites: Option<BTreeMap<String, String>>,
+    }
+
+    impl OneFile for Mixed {
+        const NAME: &'static str = "mixed.toml";
+        const TEMPLATE: &'static str = "";
+        type Resolved = Mixed;
+
+        fn defaults() -> Self {
+            Mixed {
+                search: Some("duck".to_owned()),
+                tabs: Some("row".to_owned()),
+                agents: Some(Agents {
+                    enabled: Some(true),
+                    sites: None,
+                }),
+            }
+        }
+
+        fn over(self, under: Self) -> Self {
+            Mixed {
+                search: self.search.or(under.search),
+                tabs: self.tabs.or(under.tabs),
+                agents: self.agents.or(under.agents),
+            }
+        }
+
+        fn resolved(self) -> Self {
+            self
+        }
+    }
+
+    const MIXED: SettingsFile =
+        SettingsFile::of::<Mixed>().class(Class::Device, &[("agents", Class::Machine)]);
+
+    /// The device's keys say a search and a wrong `tabs`; the machine's,
+    /// a site and a wrong `enabled`.
+    const TEXT: &str = "search = \"https://kagi.com/?q=%s\"\ntabs = 3\n\n[agents]\nenabled = \"yes\"\nsites.github = \"allow\"\n";
+
+    fn places_with(text: &str) -> (tempfile::TempDir, Places) {
+        let folder = tempfile::tempdir().unwrap();
+        std::fs::write(folder.path().join("mixed.toml"), text).unwrap();
+        let places = Places::at(folder.path());
+        (folder, places)
+    }
+
+    #[test]
+    fn a_part_is_its_class_s_keys_and_nothing_else_of_the_file() {
+        let (_folder, places) = places_with(TEXT);
+        let machine = MIXED.part(&places, Class::Machine);
+        assert_eq!(
+            machine.keyed.keys().collect::<Vec<_>>(),
+            ["agents.sites.github"]
+        );
+        let site = &machine.keyed["agents.sites.github"];
+        assert_eq!(
+            (site.from.layer.as_str(), site.from.line),
+            ("file", Some(6))
+        );
+        // The device's search and tabs are Banda's here, not the file's.
+        assert_eq!(
+            machine.value,
+            Some(json!({
+                "search": "duck",
+                "tabs": "row",
+                "agents": { "enabled": null, "sites": { "github": "allow" } },
+            }))
+        );
+        let said: Vec<_> = (machine.problems.iter())
+            .map(|problem| (problem.key.as_deref(), problem.line))
+            .collect();
+        assert_eq!(said, [(Some("agents.enabled"), Some(5))]);
+
+        let device = MIXED.part(&places, Class::Device);
+        assert_eq!(device.keyed.keys().collect::<Vec<_>>(), ["search", "tabs"]);
+        assert_eq!(device.keyed["search"].from.line, Some(1));
+        assert_eq!(device.value.unwrap()["agents"]["enabled"], json!(true));
+        let said: Vec<_> = (device.problems.iter())
+            .map(|problem| (problem.key.as_deref(), problem.line))
+            .collect();
+        assert_eq!(said, [(Some("tabs"), Some(2))]);
+    }
+
+    #[test]
+    fn a_part_of_a_file_that_is_not_there_is_banda_s_own() {
+        let folder = tempfile::tempdir().unwrap();
+        let machine = MIXED.part(&Places::at(folder.path()), Class::Machine);
+        assert_eq!(machine.keyed.keys().collect::<Vec<_>>(), ["agents.enabled"]);
+        assert_eq!(machine.keyed["agents.enabled"].from.layer, "defaults");
+        assert!(machine.problems.is_empty());
+        assert_eq!(machine.value.unwrap()["agents"]["enabled"], json!(true));
+    }
+
+    #[test]
+    fn a_file_that_is_not_toml_says_where_it_breaks() {
+        let (_folder, places) = places_with("[agents]\nenabled = \n");
+        let machine = MIXED.part(&places, Class::Machine);
+        assert_eq!(machine.problems.len(), 1, "{:?}", machine.problems);
+        assert_eq!(machine.problems[0].line, Some(2));
+        assert_eq!(machine.value.unwrap()["agents"]["enabled"], json!(true));
+    }
+
+    #[test]
+    fn a_key_is_of_its_section_s_class_or_the_file_s() {
+        assert_eq!(MIXED.class_of("agents"), Class::Machine);
+        assert_eq!(MIXED.class_of("agents.sites.github.com"), Class::Machine);
+        assert_eq!(MIXED.class_of("search"), Class::Device);
+        assert_eq!(MIXED.class_of("nothing.said"), Class::Device);
+        assert!(MIXED.has(Class::Machine) && MIXED.has(Class::Device));
+        assert!(!MIXED.has(Class::Shared));
+        let unsaid = SettingsFile::of::<Mixed>();
+        assert_eq!(unsaid.class_of("agents"), Class::Device, "when in doubt");
+    }
+
+    #[test]
+    fn the_schema_says_each_top_level_key_s_class() {
+        let schema = serde_json::to_value(MIXED.schema()).unwrap();
+        let properties = &schema["properties"];
+        assert_eq!(properties["agents"]["x-class"], "machine");
+        assert_eq!(properties["search"]["x-class"], "device");
+        assert_eq!(properties["tabs"]["x-class"], "device");
     }
 }

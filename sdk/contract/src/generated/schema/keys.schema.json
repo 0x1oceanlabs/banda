@@ -6,14 +6,16 @@
   "properties": {
     "mod": {
       "description": "The keys held for every Banda key and the mouse's moves: Alt, or one\nor two of Alt, Ctrl and Super, as \"Ctrl+Alt\" where the desktop holds\nAlt. Super is ⌘ on a Mac. Banda's other keys hold Shift or one key\nmore with it (ADR 0068).",
-      "type": "string"
+      "type": "string",
+      "x-class": "device"
     },
     "binds": {
       "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas the key sheet lists them, or \"none\" to free the key for the\nPane. A key is Alt, Ctrl, Super (⌘ on a Mac) and Shift, any of them,\nthen a letter, a digit, F1 to F24, Left, Right, Up, Down, Return,\nSpace, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp,\nPageDown or one of [ ] , . / ; ' - = ` \\. An action keeps the\nwindow's own keys besides. A line may give the action what it\ntakes: `{ action = \"browser.open\", args = { address = \"…\" } }`.",
       "type": "object",
       "additionalProperties": {
         "$ref": "#/$defs/Bound"
-      }
+      },
+      "x-class": "shared"
     }
   },
   "additionalProperties": false,

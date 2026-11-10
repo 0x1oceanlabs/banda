@@ -6,20 +6,24 @@
   "properties": {
     "theme": {
       "description": "`\"platform\"`, this device's own, the default; `\"omarchy\"`, `\"macos\"`,\n`\"banda\"`, a theme's name, or `{ light, dark }`.",
-      "$ref": "#/$defs/ThemeChoice"
+      "$ref": "#/$defs/ThemeChoice",
+      "x-class": "device"
     },
     "mode": {
-      "$ref": "#/$defs/ModeChoice"
+      "$ref": "#/$defs/ModeChoice",
+      "x-class": "device"
     },
     "radius": {
       "description": "The old radius, which every corner was a step of: it reads as\n`[shape] roundness` of it over 7, its old default, so 7 is the\ntheme's own corners and 0 squares them all.",
       "type": "number",
       "format": "double",
-      "minimum": 0
+      "minimum": 0,
+      "x-class": "device"
     },
     "hyprland": {
       "description": "Whether to take Hyprland's rounding, border and gaps, glass or not.\nThe `omarchy` theme does, whose shape they are.",
-      "type": "boolean"
+      "type": "boolean",
+      "x-class": "device"
     },
     "colors": {
       "description": "Palette entries over the theme's: a palette name or hex.",
@@ -27,7 +31,8 @@
       "additionalProperties": {
         "type": "string"
       },
-      "default": {}
+      "default": {},
+      "x-class": "device"
     },
     "tokens": {
       "description": "Colour tokens over the derived ones, by their names without `--`\n(`banda_theme::tokens::TOKENS`): a palette name, a token's name or\na colour as it is, never `var()` or `color-mix()`.",
@@ -35,56 +40,70 @@
       "additionalProperties": {
         "type": "string"
       },
-      "default": {}
+      "default": {},
+      "x-class": "device"
     },
     "shape": {
       "description": "The corners (ADR 0080, decision 6).",
       "$ref": "#/$defs/Shape"
     },
     "gaps": {
-      "$ref": "#/$defs/Gaps"
+      "$ref": "#/$defs/Gaps",
+      "x-class": "device"
     },
     "desk": {
       "description": "The desk the tiles float over (ADR 0023).",
-      "$ref": "#/$defs/Desk"
+      "$ref": "#/$defs/Desk",
+      "x-class": "device"
     },
     "tile": {
-      "$ref": "#/$defs/Tile"
+      "$ref": "#/$defs/Tile",
+      "x-class": "device"
     },
     "focus": {
-      "$ref": "#/$defs/Focus"
+      "$ref": "#/$defs/Focus",
+      "x-class": "device"
     },
     "bar": {
-      "$ref": "#/$defs/Bar"
+      "$ref": "#/$defs/Bar",
+      "x-class": "device"
     },
     "drawer": {
       "description": "The drawer, a quick Thread over the workspace (ADR 0025, decision 8).",
-      "$ref": "#/$defs/Drawer"
+      "$ref": "#/$defs/Drawer",
+      "x-class": "device"
     },
     "overview": {
       "description": "The overview of every workspace (ADR 0025, decision 7).",
-      "$ref": "#/$defs/Overview"
+      "$ref": "#/$defs/Overview",
+      "x-class": "device"
     },
     "groups": {
       "description": "How a Group of columns shows (ADR 0065).",
-      "$ref": "#/$defs/Groups"
+      "$ref": "#/$defs/Groups",
+      "x-class": "device"
     },
     "motion": {
-      "$ref": "#/$defs/MotionSettings"
+      "$ref": "#/$defs/MotionSettings",
+      "x-class": "device"
     },
     "columns": {
-      "$ref": "#/$defs/ColumnsSettings"
+      "$ref": "#/$defs/ColumnsSettings",
+      "x-class": "device"
     },
     "font": {
-      "$ref": "#/$defs/FontSettings"
+      "$ref": "#/$defs/FontSettings",
+      "x-class": "device"
     },
     "sound": {
       "description": "Banda's sounds (ADR 0009, decision 5).",
-      "$ref": "#/$defs/SoundSettings"
+      "$ref": "#/$defs/SoundSettings",
+      "x-class": "device"
     },
     "notify": {
       "description": "How Banda tells its Person of a call (ADR 0011, decision 7).",
-      "$ref": "#/$defs/NotifySettings"
+      "$ref": "#/$defs/NotifySettings",
+      "x-class": "shared"
     }
   },
   "additionalProperties": false,

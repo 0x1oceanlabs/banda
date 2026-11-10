@@ -506,9 +506,11 @@ impl List {
 }
 
 /// `harnesses.toml` as the settings know it (ADR 0016): its schema, the
-/// text it starts as, and its check.
+/// text it starts as, and its check. The Harnesses a machine runs are its
+/// own (ADR 0101, decision 3).
 pub const FILE: banda_look::SettingsFile =
-    banda_look::SettingsFile::new::<HarnessFile>("harnesses.toml", template, check);
+    banda_look::SettingsFile::new::<HarnessFile>("harnesses.toml", template, check)
+        .class(banda_look::Class::Machine, &[]);
 
 /// The Harnesses this machine can start, in this order.
 /// Without the file, Banda starts Claude Code and Codex, each with the

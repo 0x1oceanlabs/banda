@@ -190,6 +190,58 @@ pub fn blank(text: &str, entry: Range<usize>) -> String {
     String::from_utf8(bytes).expect("whole characters, as the entry starts and ends at one")
 }
 
+/// `text` with only the top-level keys `keep` keeps: every entry and table
+/// header of the others as spaces, lines kept, so each place left is where
+/// it was, and what is said of it names its line. None when the text is
+/// not TOML.
+pub fn only(text: &str, keep: impl Fn(&str) -> bool) -> Option<String> {
+    let document = toml_edit::Document::parse(text).ok()?;
+    let top = document.as_table();
+    let mut spans = Vec::new();
+    for (name, _) in top.iter().filter(|(name, _)| !keep(name)) {
+        let (key, item) = top.get_key_value(name)?;
+        spans_under(text, key, item, &mut spans);
+    }
+    let mut bytes = text.as_bytes().to_vec();
+    for span in spans {
+        for byte in &mut bytes[span] {
+            if *byte != b'\n' {
+                *byte = b' ';
+            }
+        }
+    }
+    String::from_utf8(bytes).ok()
+}
+
+/// The bytes of each entry and table header under `key`. An entry runs
+/// from the start of its line, so a dotted name goes whole: no newline
+/// comes inside a key, and two entries of a table are never on one line.
+fn spans_under(text: &str, key: &toml_edit::Key, item: &Item, spans: &mut Vec<Range<usize>>) {
+    let tables = |table: &toml_edit::Table, spans: &mut Vec<Range<usize>>| {
+        // An implicit table, as `a` of `[a.b]`, has no header of its own,
+        // nor has a dotted one, as `a` of `a.b = 1`.
+        if !table.is_implicit() && !table.is_dotted() {
+            spans.extend(table.span());
+        }
+        for (name, _) in table.iter() {
+            if let Some((key, item)) = table.get_key_value(name) {
+                spans_under(text, key, item, spans);
+            }
+        }
+    };
+    match item {
+        Item::None => {}
+        Item::Table(table) => tables(table, spans),
+        Item::ArrayOfTables(list) => list.iter().for_each(|table| tables(table, spans)),
+        Item::Value(value) => {
+            if let (Some(name), Some(value)) = (key.span(), value.span()) {
+                let line = text[..name.start].rfind('\n').map_or(0, |at| at + 1);
+                spans.push(line..value.end);
+            }
+        }
+    }
+}
+
 fn entry_in(table: &dyn TableLike, offset: usize) -> Option<(String, Range<usize>)> {
     table.iter().find_map(|(name, item)| {
         if let toml_edit::Item::ArrayOfTables(list) = item {
@@ -374,6 +426,56 @@ mod tests {
             key_at(binds, binds.find("nope").unwrap()).as_deref(),
             Some("binds.Alt+M")
         );
+    }
+
+    #[test]
+    fn only_the_keys_kept_are_left_each_on_its_line() {
+        let text = "search = \"x\" # the device's\n\
+                    start.account = \"a\"\n\
+                    enter = \"queue\"\n\
+                    start.fallback = \"b\"\n\
+                    tabs = { side = true }\n\
+                    \n\
+                    [agents]\n\
+                    enabled = true\n\
+                    sites.\"github.com\" = \"allow\"\n\
+                    \n\
+                    [agents.more]\n\
+                    x = [\n  1,\n  2,\n]\n\
+                    \n\
+                    [look.tile]\n\
+                    border = 3\n\
+                    \n\
+                    [[harness]]\n\
+                    id = \"claude\"\n";
+        let kept = only(text, |key| key == "start" || key == "agents").unwrap();
+        assert_eq!(kept.lines().count(), text.lines().count(), "{kept}");
+        let at = |words: &str| kept.lines().position(|line| line.contains(words));
+        assert_eq!(at("start.account"), Some(1));
+        assert_eq!(at("start.fallback"), Some(3));
+        assert_eq!(at("[agents]"), Some(6));
+        assert_eq!(at("\"github.com\""), Some(8));
+        assert_eq!(at("[agents.more]"), Some(10));
+        for gone in [
+            "search", "enter", "tabs", "look", "border", "harness", "claude",
+        ] {
+            assert_eq!(at(gone), None, "{gone} in {kept}");
+        }
+        // A comment is no key's, and stays.
+        assert_eq!(at("# the device's"), Some(0));
+        let read: Value = toml::from_str(&kept).unwrap();
+        assert_eq!(
+            read,
+            json!({
+                "start": { "account": "a", "fallback": "b" },
+                "agents": {
+                    "enabled": true,
+                    "sites": { "github.com": "allow" },
+                    "more": { "x": [1, 2] },
+                },
+            })
+        );
+        assert_eq!(only("a = \n", |_| false), None, "not TOML");
     }
 
     #[test]

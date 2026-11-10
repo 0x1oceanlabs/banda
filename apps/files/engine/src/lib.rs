@@ -59,8 +59,15 @@ use std::sync::{Arc, Mutex};
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): what Files
 /// shows, which the look resolves for the window (ADR 0073, decision 13).
-pub const SETTINGS: [banda_look::SettingsFile; 1] =
-    [banda_look::SettingsFile::of::<settings::FilesSettings>()];
+/// The places pinned are paths on the machine, so its own; how Files
+/// shows things, and the editor, are the device's (ADR 0101, decision 3).
+pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
+
+const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<settings::FilesSettings>()
+    .class(
+        banda_look::Class::Device,
+        &[("pinned", banda_look::Class::Machine)],
+    );
 
 /// The files `files.recent` answers unless asked otherwise, and the most.
 const RECENT: u32 = 20;
