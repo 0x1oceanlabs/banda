@@ -44,6 +44,7 @@ pub const METHODS: &[&str] = &[
     "move_group",
     "fill",
     "tidy",
+    "arrange",
     "take",
 ];
 
@@ -199,6 +200,21 @@ pub struct Tidy {
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
+pub struct Arrange {
+    /// The Projects that have a workspace of their own; any other's Panes,
+    /// as one of no Project's (ADR 0046), go to a free one.
+    #[serde(default)]
+    #[ts(as = "Option<Vec<ProjectId>>", optional)]
+    pub projects: Vec<ProjectId>,
+    /// Only this Project's Panes move, as a Thread of no Project made a
+    /// Project's does (ADR 0102, decision 7). Left out, every Project's.
+    #[serde(default)]
+    #[ts(optional)]
+    pub only: Option<ProjectId>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
 pub struct Take {
     pub workspaces: Arrangement,
 }
@@ -319,6 +335,10 @@ pub fn apply(
         "tidy" => {
             let Tidy { keep, projects } = read(list, seed, params)?;
             model::tidy(list, keep, &projects);
+        }
+        "arrange" => {
+            let Arrange { projects, only } = read(list, seed, params)?;
+            model::arrange(list, &projects, only, seed);
         }
         "take" => {
             let Take { workspaces } = read(list, seed, params)?;

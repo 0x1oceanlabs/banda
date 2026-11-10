@@ -434,6 +434,12 @@
       ]
     },
     {
+      "id": "workspaces.arrange",
+      "title": "Arrange by Project",
+      "section": "Workspaces",
+      "keys": []
+    },
+    {
       "id": "flow.pick",
       "title": "Pick how the Agents' windows stand: free, row or solo",
       "section": "Workspaces",

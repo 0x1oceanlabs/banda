@@ -151,6 +151,13 @@ day.
    - "Arrange by Project", in the Banda menu, puts every Pane where
      these rules would have opened it, in one move that `Ctrl+Z` undoes.
      A Pane of no Project goes to a free workspace.
+   _Built_ in step 6, with decision 7: the engine's `workspaces.arrange`
+   moves every Group, and every column in none, that stands off its
+   place, as its first Pane's Project says: last on that Project's
+   workspace, or, of no Project, on the top free one; with `only`, that
+   Project's alone, which the window sends when a Project of no Project
+   is made a Project's. `Ctrl+Z` does not undo it yet: the workspaces
+   have no undo.
 
 ## Consequences
 

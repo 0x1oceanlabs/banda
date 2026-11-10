@@ -17,8 +17,11 @@ export type { Side } from "./generated/workspaces/Side"
 export type { Workspace } from "./generated/workspaces/Workspace"
 export type { WorkspaceId } from "./generated/workspaces/WorkspaceId"
 
-/** What a workspaces command makes, each at most once. */
-export type Made = "pane" | "column" | "group" | "workspace" | "bottom"
+/** What a workspaces command makes, each at most once; `bottom N`, the
+ * `N`th of the new empty workspaces one makes one after another, as
+ * `workspaces.arrange` does (`Seed::nth`). */
+export type Made =
+  "pane" | "column" | "group" | "workspace" | "bottom" | `bottom ${number}`
 
 /** Fixed for good, as `MADE` in `model.rs`. */
 const MADE = "63bdd961-aad0-4575-bfc1-5f1d352969ad"

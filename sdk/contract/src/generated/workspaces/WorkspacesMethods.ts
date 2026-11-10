@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { Arrange } from "./Arrange";
 import type { Arranged } from "./Arranged";
 import type { Done } from "./Done";
 import type { Fill } from "./Fill";
@@ -99,6 +100,12 @@ fill: CommandMethod<Fill, Done>,
  * and the last.
  */
 tidy: CommandMethod<Tidy, Done>, 
+/**
+ * Puts every Pane where the row would have opened it: last on
+ * its Project's workspace, or of no Project on a free one (ADR
+ * 0102, decisions 7 and 9).
+ */
+arrange: CommandMethod<Arrange, Done>, 
 /**
  * Puts a window's arrangement over the engine's, once (ADR 0025,
  * decision 2).

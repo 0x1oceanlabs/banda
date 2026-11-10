@@ -269,7 +269,7 @@ Its methods, `banda call sharing.<method>`: `state`, `new_id`, `example`.
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -319,6 +319,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the column right inside its Group (`group.column-right`), Ctrl+Alt+Shift+Right
 - The Group the whole screen wide, or back; in solo, the row for a while (`group.maximize`), Alt+M
 - Solo, every Agent the whole screen wide, or back to the row (`flow.solo`), Alt+Shift+M
+- Arrange by Project (`workspaces.arrange`)
 - Take the Pane into the column on the left, or out of its own (`pane.consume-left`), Alt+[
 - Take the Pane into the column on the right, or out of its own (`pane.consume-right`), Alt+]
 - The column the whole screen wide, or back (`column.maximize`), Alt+F

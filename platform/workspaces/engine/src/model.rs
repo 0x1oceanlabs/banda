@@ -102,6 +102,12 @@ impl Seed {
         WorkspaceId(self.made("bottom"))
     }
 
+    /// The `n`th of the new empty workspaces a command makes under the
+    /// last, one after another.
+    pub fn nth(&self, n: usize) -> WorkspaceId {
+        WorkspaceId(self.made(&format!("bottom {n}")))
+    }
+
     /// Refuses a seed whose IDs the workspaces hold: its command ran
     /// before, past the receipt that would have answered it, and what it
     /// made is still there.
@@ -594,9 +600,7 @@ fn put(
             list[w].own = Some(group);
         }
         Place::Free => {
-            let w = (list.iter())
-                .position(|w| w.project.is_none() && !w.columns.is_empty())
-                .unwrap_or(list.len() - 1);
+            let w = free_workspace(list);
             put_last(list, w, column, seed)?;
         }
         Place::Group { pane } => {
@@ -626,6 +630,14 @@ fn project_workspace(list: &mut Arrangement, project: ProjectId) -> usize {
     let w = (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
     list[w].project = Some(project);
     w
+}
+
+/// The top free workspace, one no Project owns that holds a Pane; else the
+/// empty one at the bottom (ADR 0102, decision 1).
+fn free_workspace(list: &Arrangement) -> usize {
+    (list.iter())
+        .position(|w| w.project.is_none() && !w.columns.is_empty())
+        .unwrap_or(list.len() - 1)
 }
 
 /// Puts a column last on workspace `w`.
@@ -966,6 +978,54 @@ pub fn move_group(
     columns.splice(at..at, moving);
     normalize(list, seed);
     Ok(())
+}
+
+/// Puts every Group, and every column in none, where the row would have
+/// opened it (ADR 0102, decisions 7 and 9): last on its Project's
+/// workspace, when it is one of `projects`, which have one; else on the
+/// top free one. A Project's own Group goes first, as its own still. What
+/// it is of is its first Pane's Project, as an Agent's Thread leads its
+/// Group. One already there stays; with `only`, only that Project's move.
+pub fn arrange(
+    list: &mut Arrangement,
+    projects: &[ProjectId],
+    only: Option<ProjectId>,
+    seed: &Seed,
+) {
+    let mut moving: Vec<(Option<ProjectId>, Vec<Column>, bool)> = Vec::new();
+    for workspace in list.iter_mut() {
+        let mut c = 0;
+        while c < workspace.columns.len() {
+            let range = run(&workspace.columns, c);
+            let project = workspace.columns[c].panes[0].shows.project;
+            let home = projects.contains(&project).then_some(project);
+            if workspace.project == home || only.is_some_and(|one| one != project) {
+                c = range.end;
+                continue;
+            }
+            let own = workspace.own.is_some() && workspace.columns[c].group == workspace.own;
+            moving.push((home, workspace.columns.drain(range).collect(), own));
+        }
+    }
+    let mut made = 0;
+    for (home, columns, own) in moving {
+        let w = match home {
+            Some(project) => project_workspace(list, project),
+            None => free_workspace(list),
+        };
+        if own && list[w].own.is_none() {
+            list[w].own = columns[0].group;
+            list[w].columns.splice(0..0, columns);
+        } else {
+            list[w].columns.extend(columns);
+        }
+        // The empty one at the bottom taken: a new one under it.
+        if w == list.len() - 1 {
+            list.push(blank(seed.nth(made)));
+            made += 1;
+        }
+    }
+    normalize(list, seed);
 }
 
 /// Whether the Group a column is in takes the whole screen, its columns
@@ -1810,6 +1870,42 @@ mod tests {
         let four = list[1].columns[0].panes[0].id;
         close(&mut list, four, &seed()).unwrap();
         assert_eq!(list[1].own, None);
+    }
+
+    #[test]
+    fn arranging_puts_each_projects_panes_on_its_workspace_and_no_projects_on_a_free_one() {
+        let mut list = start();
+        let (work, home, none) = (ProjectId::new(), ProjectId::new(), ProjectId::new());
+        // As the free Flow opens them: all on the first workspace.
+        for (project, n) in [(work, 1), (home, 2), (none, 3), (work, 4)] {
+            let workspace = list[0].id;
+            let last = Place::Column {
+                workspace,
+                index: usize::MAX,
+            };
+            opened(
+                &mut list,
+                shown(project, "terminal.terminal", n),
+                Some(last),
+            );
+        }
+        // Only `home`'s: a workspace of its own at the end.
+        arrange(&mut list, &[work, home], Some(home), &seed());
+        assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![4]]);
+        assert_eq!(layout(&list)[1], [vec![2]]);
+        assert_eq!(list[1].project, Some(home));
+        // Every one: `work`'s go to a workspace of its own; `none`'s stays
+        // where it is, on what is now a free workspace.
+        arrange(&mut list, &[work, home], None, &seed());
+        assert_eq!(layout(&list)[0], [vec![3]]);
+        assert_eq!(list[0].project, None);
+        assert_eq!(layout(&list)[2], [vec![1], vec![4]]);
+        assert_eq!(list[2].project, Some(work));
+        assert!(list.last().unwrap().columns.is_empty());
+        // Again, nothing moves.
+        let before = layout(&list);
+        arrange(&mut list, &[work, home], None, &seed());
+        assert_eq!(layout(&list), before);
     }
 
     #[test]
