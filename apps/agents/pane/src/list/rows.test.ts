@@ -144,11 +144,15 @@ test("a toast answers a Question by its choices, and a failed turn by trying aga
 test("a Thread is archived while its host's archive holds: nothing happened since, and it neither works nor asks", () => {
   const done = thread({ latest: { turn: "u1", state: "done", began: 3 } })
   expect(listedOf({ ...done, archived: { at: 5 } }, "").archived).toBe(true)
-  expect(listedOf({ ...done, archived: { at: 9 } }, "").archived).toBe(true)
-  // Something new in it brings it back.
-  expect(
-    listedOf({ ...done, archived: { at: 4 } }, "").archived
-  ).toBeUndefined()
+  // It lists when it was archived, which the Archive counts from.
+  expect(listedOf({ ...done, archived: { at: 9 } }, "")).toMatchObject({
+    archived: true,
+    archivedAt: 9,
+  })
+  // Something new in it brings it back, with no time of its archive.
+  const back = listedOf({ ...done, archived: { at: 4 } }, "")
+  expect(back.archived).toBeUndefined()
+  expect(back).not.toHaveProperty("archivedAt")
   const running = thread({
     archived: { at: 9 },
     latest: { turn: "u1", state: "running", began: 3 },

@@ -12,7 +12,7 @@
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
-import type { Listed } from "@banda/ui/pane"
+import type { Listed, Lists } from "@banda/ui/pane"
 import { STAND_WORDS, type Stand, standOf, wokeAt } from "@banda/ui/status"
 import type { Settings, State } from "./settings"
 
@@ -91,6 +91,33 @@ const RANK: Readonly<Record<Stand, number>> = {
   archived: 4,
 }
 
+/**
+ * The rows of `held`'s Projects, from what each lists, each where it
+ * stands at `now`, the Later clock, as `status.ts` says, and when it woke;
+ * each named after `host` when it is another machine's. The sidebar's
+ * arrangements all start from them, so none works out where a Thread
+ * stands by itself.
+ */
+export function rowsOf(
+  lists: Lists,
+  held: readonly ProjectSummary[],
+  now: number,
+  host?: string
+): Row[] {
+  return held.flatMap((project) =>
+    (lists[project.id] ?? []).map((listed) => {
+      const woke = wokeAt(listed, now)
+      return {
+        project,
+        listed,
+        stand: standOf(listed, now),
+        ...(woke === undefined ? {} : { woke }),
+        ...(host === undefined ? {} : { host }),
+      }
+    })
+  )
+}
+
 /** When a row last changed: a Thread that woke changed as it woke. */
 function changedOf(row: Row): number {
   return Math.max(row.listed.changed, row.woke ?? 0)
@@ -122,24 +149,11 @@ export function arrange(
 ): Arranged {
   const namedIn = (held: readonly ProjectSummary[]) =>
     held.filter((project) => !project.scratch)
-  const rowsOf = (held: readonly ProjectSummary[], host?: string): Row[] =>
-    held.flatMap((project) =>
-      (lists[project.id] ?? []).map((listed) => {
-        const woke = wokeAt(listed, now)
-        return {
-          project,
-          listed,
-          stand: standOf(listed, now),
-          ...(woke === undefined ? {} : { woke }),
-          ...(host === undefined ? {} : { host }),
-        }
-      })
-    )
   const named = namedIn(projects)
-  const all = rowsOf(projects)
+  const all = rowsOf(lists, projects, now)
   const others = elsewhere.map((host) => ({
     ...host,
-    all: rowsOf(host.projects, host.name),
+    all: rowsOf(lists, host.projects, now, host.name),
   }))
   const shown = (held: Row[]) =>
     held

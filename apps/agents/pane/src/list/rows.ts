@@ -103,8 +103,11 @@ export function listedOf(
       ? thread.seen === latest.turn
       : undefined
   // Archived while it may be and nothing happened in it since, both by
-  // its host's times (ADR 0096, decision 4).
-  const archived = archiveHolds(thread) && mayArchive({ mark })
+  // its host's times (ADR 0096, decision 4); the Archive counts from it.
+  const archivedAt =
+    archiveHolds(thread) && mayArchive({ mark })
+      ? thread.archived?.at
+      : undefined
   return {
     id: thread.id,
     title: thread.title || "New Thread",
@@ -119,7 +122,9 @@ export function listedOf(
     agent: thread.agent,
     ...(thread.was !== undefined ? { was: thread.was } : {}),
     ...(seenNow !== undefined ? { seen: seenNow } : {}),
-    ...(archived ? { archived: true as const } : {}),
+    ...(archivedAt === undefined
+      ? {}
+      : { archived: true as const, archivedAt }),
     pane: threadPaneOf(thread),
     ...(thread.later ? { later: laterOf(thread.later) } : {}),
   }

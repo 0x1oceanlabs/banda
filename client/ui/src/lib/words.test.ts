@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import { Lost, Refused, Unreachable } from "@banda/contract"
-import { DAY, duration, HOUR, left, MINUTE, problem } from "./words"
+import { ago, DAY, duration, HOUR, left, MINUTE, problem, short } from "./words"
 
 test("what went wrong reads as the Person can act on it; a machine out of reach by its words", () => {
   expect(problem(new Refused({ code: "conflict", message: "Taken" }))).toBe(
@@ -44,4 +44,32 @@ test("what is left reads rounded up, a minute short of an hour as the hour", () 
   expect(left(now + 3 * HOUR, now)).toBe("3h")
   expect(left(now + DAY - MINUTE, now)).toBe("1d")
   expect(left(now + 2 * DAY + 1, now)).toBe("3d")
+})
+
+test("a card's time is short and still: by tens of seconds, then minutes, hours, days, then the day", () => {
+  // Local times, as the Person's clock reads them.
+  const now = new Date(2026, 10, 10, 15, 0).getTime()
+  const before = (ms: number) => short(now - ms, now)
+  expect(before(0)).toBe("now")
+  expect(before(9_999)).toBe("now")
+  expect(before(10_000)).toBe("10s")
+  expect(before(19_999)).toBe("10s")
+  expect(before(59_000)).toBe("50s")
+  expect(before(MINUTE)).toBe("1m")
+  expect(before(HOUR - 1)).toBe("59m")
+  expect(before(HOUR)).toBe("1h")
+  expect(before(DAY - 1)).toBe("23h")
+  expect(before(DAY)).toBe("1d")
+  expect(before(7 * DAY - 1)).toBe("6d")
+  expect(short(new Date(2026, 2, 3, 9, 0).getTime(), now)).toBe("Mar 3")
+  expect(short(new Date(2025, 2, 3, 9, 0).getTime(), now)).toBe("Mar 2025")
+  // A moment ahead of the clock, as another machine's may be, is now.
+  expect(short(now + MINUTE, now)).toBe("now")
+})
+
+test("how long ago reads as a card's time, with the whole first minute now", () => {
+  const now = new Date(2026, 10, 10, 15, 0).getTime()
+  expect(ago(now - 40_000, now)).toBe("now")
+  expect(ago(now - 14 * MINUTE, now)).toBe("14m")
+  expect(ago(new Date(2025, 2, 3).getTime(), now)).toBe("Mar 2025")
 })
