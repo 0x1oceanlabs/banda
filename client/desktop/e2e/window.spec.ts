@@ -5568,7 +5568,17 @@ test("a Thread the focus only passes keeps its mark; one looked at for agents.to
     .getByRole("group", { name: "Threads" })
     .getByRole("button", { name: /hello/ })
   const done = row.getByRole("img", { name: "Done" })
-  // Typed in: seen at once.
+  // Typed in, and its turn ended while it had the focus: seen, on its host
+  // and in its row. A turn still at work is not Done either, and if it
+  // ended after Alt+N, it would call, with "Mark as read" in its menu.
+  const hosted = hostedOf(window)
+  await expect
+    .poll(() => {
+      const { seen, latest } = hosted()[0]!
+      return latest.state === "done" && seen === latest.turn
+    })
+    .toBe(true)
+  await expect(row.getByRole("img", { name: "Working" })).toBeHidden()
   await expect(done).toBeHidden()
   await page.keyboard.press("Alt+KeyN")
   const other = page.getByRole("region", { name: "New Pane" })
