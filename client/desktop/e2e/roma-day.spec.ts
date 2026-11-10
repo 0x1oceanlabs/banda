@@ -190,14 +190,17 @@ test("the Flow is picked in the Sidebar's header and kept in agents.toml, and Al
   await expect(flow).toHaveAccessibleName("Flow: Row")
   expect(written()).toBeUndefined()
 
-  // Its menu names the three; a pick draws its icon and writes the file,
+  // Its menu names the three, and in the row offers Arrange by Project
+  // (ADR 0102, decision 9); a pick draws its icon and writes the file,
   // and Esc closes the menu.
+  const arrange = page.getByRole("menuitem", { name: "Arrange by Project" })
   await flow.click()
   await expect(page.getByRole("menuitemradio")).toHaveText([
     /^Free/,
     /^Row/,
     /^Solo/,
   ])
+  await expect(arrange).toBeVisible()
   await page.keyboard.press("Escape")
   await pickFlow(page, "Solo")
   await expect.poll(written).toBe("solo")
@@ -210,12 +213,46 @@ test("the Flow is picked in the Sidebar's header and kept in agents.toml, and Al
   await expect(flow).toHaveAccessibleName("Flow: Solo")
   await expect.poll(written).toBe("solo")
 
-  // From free, it goes to solo.
+  // From free, it goes to solo; free's menu offers no Arrange.
   await pickFlow(page, "Free")
   await expect.poll(written).toBe("free")
+  await flow.click()
+  await expect(page.getByRole("menuitemradio")).toHaveCount(3)
+  await expect(arrange).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("menuitemradio")).toHaveCount(0)
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect(flow).toHaveAccessibleName("Flow: Solo")
   await expect.poll(written).toBe("solo")
+})
+
+test("in the row and solo the Flow menu's Arrange by Project takes each Pane to its Project's workspace (ADR 0102, decision 9)", async () => {
+  window = await startWindow({ files: FREE })
+  const { page } = window
+  await firstThread(page)
+  const workspaces = page
+    .getByRole("navigation", { name: "Workspaces" })
+    .getByRole("button", { name: /^Workspace \d/ })
+  const arrange = page.getByRole("menuitem", { name: "Arrange by Project" })
+  // Free put Work's New Thread on a workspace of no Project, and the row
+  // leaves it there.
+  await expect(workspaces).toHaveText(["1"])
+  await pickFlow(page, "Row")
+  await expect(workspaces).toHaveText(["1"])
+
+  // The menu's Arrange takes it to Work's workspace, the focus with it,
+  // and the free one, emptied, goes.
+  await flowOf(page).click()
+  await arrange.click()
+  await expect(page.getByRole("menuitemradio")).toHaveCount(0)
+  await expect(workspaces).toHaveText(["W"])
+
+  // Solo's menu offers it too.
+  await pickFlow(page, "Solo")
+  await flowOf(page).click()
+  await expect(arrange).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(arrange).toHaveCount(0)
 })
 
 test("in free a new Thread opens on the workspace the Person is on; in solo, as in the row, on its Project's (ADR 0065, ADR 0079)", async () => {

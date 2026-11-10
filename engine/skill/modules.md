@@ -325,7 +325,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - The column into the Group on the right, or out of its own that way (`group.join-right`), Alt+Shift+]
 - Move the column right inside its Group (`group.column-right`), Ctrl+Alt+Shift+Right
 - The Group the whole screen wide, or back; in solo, the row for a while (`group.maximize`), Alt+M
-- Solo, every Agent the whole screen wide, or back to the row (`flow.solo`), Alt+Shift+M
+- Solo, what has the focus the whole screen wide, or back to the row (`flow.solo`), Alt+Shift+M
 - Arrange by Project (`workspaces.arrange`)
 - Take the Pane into the column on the left, or out of its own (`pane.consume-left`), Alt+[
 - Take the Pane into the column on the right, or out of its own (`pane.consume-right`), Alt+]

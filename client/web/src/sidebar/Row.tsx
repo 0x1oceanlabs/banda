@@ -3,7 +3,7 @@ import type { Named } from "@banda/contract/machines"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
-import { MoveUpRightIcon } from "lucide-react"
+import { DiamondIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Row as Arranged } from "./arrange"
@@ -35,8 +35,8 @@ export function Row({
   /** It sits under its Project's header, which already names the Project. */
   inProject: boolean
   current: boolean
-  /** Its Thread stands on a free workspace, away from its Project's
-   * (ADR 0102, decision 6). */
+  /** Its Thread stands on a free workspace, away from the one its
+   * Project has (ADR 0102, decision 6). */
   away?: boolean
   /** A button that shows while the pointer is over the row: its Later's
    * clock, or Wake (ADR 0074). */
@@ -88,25 +88,22 @@ export function Row({
     >
       {card.lines.map((line, index) => {
         if (line.left.length + line.right.length === 0) return null
+        const marked = index === 0 && away
         return (
-          <span key={index} className="flex min-w-0 items-center gap-1.5">
+          <span
+            key={index}
+            className={cn(
+              "flex min-w-0 items-center gap-1.5",
+              // With nothing at its right, the title would push the mark
+              // under the button that shows over the row: the line keeps
+              // that button's room.
+              marked && line.right.length === 0 && "pe-7"
+            )}
+          >
             {line.left.map(slot)}
+            {marked && <Away />}
             {line.right.length > 0 && <span className="ml-auto" />}
             {line.right.map(slot)}
-            {index === 0 && away && (
-              <span
-                title="Away from its Project's workspace"
-                className={cn(
-                  "shrink-0 text-muted-foreground",
-                  line.right.length === 0 && "ml-auto"
-                )}
-              >
-                <MoveUpRightIcon
-                  aria-label="Away from its Project's workspace"
-                  className="size-3"
-                />
-              </span>
-            )}
           </span>
         )
       })}
@@ -120,6 +117,20 @@ export function Row({
         {action}
       </span>
     </div>
+  )
+}
+
+const AWAY = "Away from its Project's workspace"
+
+/** The mark of a Thread away from its Project's workspace (ADR 0102,
+ * decision 6): a small diamond, since an arrow is the sign of a Pane in
+ * its own window, after the line's left parts, where the row's Later
+ * clock never covers it. Only a mark, as the row is a button. */
+function Away() {
+  return (
+    <span title={AWAY} className="shrink-0 text-muted-foreground">
+      <DiamondIcon aria-label={AWAY} className="size-3" />
+    </span>
   )
 }
 

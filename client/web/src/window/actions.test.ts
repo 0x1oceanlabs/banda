@@ -521,6 +521,7 @@ test("a Thread on a free workspace stands away from its Project's, in the row an
   const thread = { kind: "agents.thread", args: { thread: "t1" } }
   const state: Workspaces = {
     list: [
+      { id: "mine", project: "a", columns: [], focus: 0 },
       {
         id: "free",
         focus: 0,
@@ -534,12 +535,59 @@ test("a Thread on a free workspace stands away from its Project's, in the row an
       },
       { id: "bottom", columns: [], focus: 0 },
     ],
-    current: 0,
+    current: 1,
   }
   const row = { flow: "row", scratch: () => false } as const
   expect([...strayedIn(state, row)]).toEqual(["t1"])
+  expect([...strayedIn(state, { ...row, flow: "solo" })]).toEqual(["t1"])
   expect(strayedIn(state, { ...row, flow: "free" }).size).toBe(0)
   expect(strayedIn(state, { ...row, scratch: () => true }).size).toBe(0)
+})
+
+test("from the Flow free to the row, no Project has a workspace yet, and no Thread is away from one (ADR 0102, decisions 6 and 9)", () => {
+  const entry = (id: string, project: string) => ({
+    id,
+    project,
+    pane: thread(id),
+  })
+  // Free formed these: none is a Project's.
+  const state: Workspaces = {
+    list: [
+      {
+        id: "one",
+        focus: 0,
+        columns: [
+          { id: "c1", active: 0, entries: [entry("t1", "a")] },
+          { id: "c2", active: 0, entries: [entry("t2", "b")] },
+        ],
+      },
+      {
+        id: "two",
+        focus: 0,
+        columns: [{ id: "c3", active: 0, entries: [entry("t3", "a")] }],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  }
+  const row = { flow: "row", scratch: () => false } as const
+  expect(strayedIn(state, row).size).toBe(0)
+  // Once a's first new Thread makes it one, a's Threads elsewhere are
+  // away; b's, with none, are not.
+  const made: Workspaces = {
+    ...state,
+    list: [
+      ...state.list.slice(0, 2),
+      {
+        id: "a's",
+        project: "a",
+        focus: 0,
+        columns: [{ id: "c4", active: 0, entries: [entry("t4", "a")] }],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+  }
+  expect([...strayedIn(made, row)].sort()).toEqual(["t1", "t3"])
 })
 
 test("Alt+Shift+N onto another Project's workspace does nothing in the row, and moves in the free Flow (ADR 0102, decision 6)", () => {

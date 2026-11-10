@@ -118,12 +118,12 @@
           "const": "free"
         },
         {
-          "description": "On its Project's workspace, in a row with the Project's other\nAgents, a pick at the left (ADR 0065). `project` before ADR 0079,\n`space` before ADR 0069 (grace).",
+          "description": "Each Project on its own workspace, its Agents in a row, a pick at\nthe left (ADR 0065, ADR 0102). `project` before ADR 0079, `space`\nbefore ADR 0069 (grace).",
           "type": "string",
           "const": "row"
         },
         {
-          "description": "As the row, and the Agent the focus is at fills the screen.",
+          "description": "As the row, and what has the focus fills the screen (ADR 0102).",
           "type": "string",
           "const": "solo"
         }
