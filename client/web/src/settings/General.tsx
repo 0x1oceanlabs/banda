@@ -66,8 +66,9 @@ export function General({ engine, lit, run }: SectionProps) {
         <ItemContent>
           <ItemTitle>These settings</ItemTitle>
           <ItemDescription className="text-xs">
-            A Pane, opened from the Banda menu
-            {settingsKey && ` or with ${settingsKey}`}; its × closes it.
+            Comes in over the tiles, from the Banda menu
+            {settingsKey && ` or with ${settingsKey}`}; Esc, a click on the
+            tiles or its × takes it away.
           </ItemDescription>
         </ItemContent>
       </Item>

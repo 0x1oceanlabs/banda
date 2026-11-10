@@ -341,6 +341,12 @@ function narrow(pane: PaneState): boolean {
   return kindOf(pane.kind)?.narrow === true
 }
 
+/** Whether a Pane comes as the Sheet, as its kind says (`PaneKind.sheet`,
+ * ADR 0102, decision 5). */
+export function sheetsOf(pane: PaneState): boolean {
+  return kindOf(pane.kind)?.sheet === true
+}
+
 /** How wide a new column for a Pane opens: a list at the narrowest
  * preset; the rest as the look says, by what is beside it. */
 export function widthOf(pane: PaneState): Width | undefined {
@@ -365,6 +371,12 @@ export function startable(engineModules: readonly string[]): PaneState[] {
     .map((kind) => paneOf(kind, kind.start!))
 }
 
+/** Those a tile can become: not a kind that comes as the Sheet, as Usage
+ * does. */
+export function tileable(engineModules: readonly string[]): PaneState[] {
+  return startable(engineModules).filter((pane) => !sheetsOf(pane))
+}
+
 /**
  * The launcher: a button for each Pane, which it becomes. Its letters are
  * its actions, which its scope runs: with Shift the Pane opens beside it,
@@ -373,7 +385,7 @@ export function startable(engineModules: readonly string[]): PaneState[] {
 function Launcher({ engine, open }: PaneProps<Args>) {
   const modules = useModules(engine)
   const pick = (args: ActionArgs | undefined, place: Place) => {
-    const pane = startable(modules).find((one) => one.kind === args?.kind)
+    const pane = tileable(modules).find((one) => one.kind === args?.kind)
     if (!pane) return false
     open(pane, place)
     return true
@@ -403,7 +415,7 @@ function Launcher({ engine, open }: PaneProps<Args>) {
   )
 }
 
-/** A button for each Pane a Person can start. */
+/** A button for each Pane a Person can start as a tile. */
 export function Choices({
   modules,
   letters = false,
@@ -416,7 +428,7 @@ export function Choices({
 }) {
   return (
     <div className="flex flex-wrap justify-center gap-2">
-      {startable(modules).map((pane) => {
+      {tileable(modules).map((pane) => {
         const kind = kindOf(pane.kind)!
         const Icon = kind.icon
         return (

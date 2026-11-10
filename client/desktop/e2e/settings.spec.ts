@@ -88,8 +88,8 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
     settings.getByRole("heading", { name: "Sounds & calls" })
   ).toBeVisible()
 
-  // One Pane, in the window: the sidebar's gear goes to it, where it is,
-  // and its × closes it.
+  // One Sheet, in the window: the sidebar's gear goes to it, where it is,
+  // and its × takes it away.
   await page
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: "Settings" })
@@ -261,6 +261,12 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   })
   await sections.getByRole("button", { name: /General/ }).click()
   await expect(settings.getByText(/^banda \d/)).toBeVisible()
+  // These settings say how they come and go.
+  await expect(
+    settings.getByText(
+      /^Comes in over the tiles, from the Banda menu or with .+; Esc, a click on the tiles or its × takes it away\.$/
+    )
+  ).toBeVisible()
   // The fence, off in the tests: why, what Full access means then, and
   // where each Harness's new Threads' mode is (ADR 0083).
   const fence = settings.locator('[data-key="fence"]')
@@ -403,6 +409,125 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n')
+})
+
+test("the Sheet is the one top layer: it has the keys while it shows, Esc and Alt+W take it, and going to a Pane or the overview puts it away (ADR 0102, decision 5)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const settings = settingsIn(page)
+  const search = settings.getByRole("textbox", { name: "Search settings" })
+  const tile = page.locator("section[data-tile][data-focused=true]")
+
+  // Esc in the search clears it first, and the next takes the Sheet
+  // away; the keys go back to the composer they came from.
+  await openSettings(page)
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("/")
+  await expect(search).toBeFocused()
+  await page.keyboard.type("radius")
+  await page.keyboard.press("Escape")
+  await expect(search).toHaveValue("")
+  await expect(settings).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await expect(composer).toBeFocused()
+
+  // A search result pressed goes as the row comes, and the keys stay in
+  // the Sheet: Alt+W takes it away, not the Thread behind it.
+  await openSettings(page)
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("/")
+  await page.keyboard.type("radius")
+  await settings.getByRole("button", { name: /look\.toml · radius$/ }).click()
+  await expect(settings.locator('[data-key="radius"]')).toBeVisible()
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("Alt+KeyW")
+  await expect(settings).toHaveCount(0)
+  await expect(composer).toBeFocused()
+
+  // The sidebar's gear goes to it where it is, and brings the keys back
+  // in; opened from the gear, Esc gives them to the Thread, which types
+  // in its composer.
+  const gear = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: "Settings" })
+  await openSettings(page)
+  await gear.click()
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("/")
+  await expect(search).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await gear.click()
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await expect(tile).toBeFocused()
+  await page.keyboard.type("hi")
+  await expect(composer).toHaveText("hi")
+
+  // From the Banda menu too.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await page.keyboard.press("Alt+KeyK")
+  await menu.getByRole("combobox", { name: "Search" }).fill("Open the settings")
+  await menu.getByRole("option", { name: /^Open the settings/ }).click()
+  await expect(settings).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
+  await expect(tile).toBeFocused()
+
+  // The overview takes the keys, and the Sheet goes.
+  await openSettings(page)
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await expect(overview).toBeFocused()
+  await expect(settings).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(page.locator("[data-overview-state]")).toHaveCount(0)
+
+  // So does a new Thread, which types what comes next.
+  await openSettings(page)
+  await page.keyboard.press("Alt+Enter")
+  await expect(settings).toHaveCount(0)
+  const fresh = tile.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(fresh).toBeFocused()
+  await expect(fresh).toHaveText("")
+  await page.keyboard.type("typed")
+  await expect(fresh).toHaveText("typed")
+
+  // A pick in the sidebar puts it away too, even of the Thread in front.
+  await page.keyboard.press("Enter")
+  const row = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /typed/ })
+  await expect(row).toBeVisible()
+  await openSettings(page)
+  await row.click()
+  await expect(settings).toHaveCount(0)
+})
+
+test("Usage never becomes a tile: the launcher and an empty workspace leave it out (ADR 0102, decision 5)", async () => {
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect(
+    launcher.getByRole("button", { name: /New Thread/ })
+  ).toBeVisible()
+  await expect(launcher.getByRole("button", { name: /Usage/ })).toHaveCount(0)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(launcher).toHaveCount(0)
+
+  await page.getByRole("button", { name: "New workspace" }).click()
+  const empty = page.getByRole("main")
+  await expect(
+    empty.getByRole("button", { name: "New Thread", exact: true })
+  ).toBeVisible()
+  await expect(empty.getByRole("button", { name: /Usage/ })).toHaveCount(0)
 })
 
 test("Keys: the main key moves Banda's keys, and the Person's lines with it (ADR 0068)", async () => {

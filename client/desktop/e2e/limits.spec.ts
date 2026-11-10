@@ -63,6 +63,15 @@ lines.on("line", line => {
   await page.keyboard.press("Escape")
   await expect(popup).toBeHidden()
   await expect(widget).toBeFocused()
+  // Its Usage comes as the Sheet over the tiles, never as a tile (ADR
+  // 0102, decision 5).
+  await widget.click()
+  await popup.getByRole("button", { name: "Usage →" }).click()
+  const usage = page.locator("[data-sheet]")
+  await expect(usage).toHaveAttribute("aria-label", "Usage")
+  await expect(page.locator("section[data-tile]")).toHaveCount(1)
+  await page.keyboard.press("Escape")
+  await expect(usage).toHaveCount(0)
   config += `\n[[harness]]\nid = "codex-work"\nname = "Work account"\ncommand = "acp"\ncli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\nenv = { TEST_LIMIT_USED = "100", TEST_EMAIL = "w@example.com" }\n`
   writeFileSync(join(dir, "config/harnesses.toml"), config)
   window.banda("call", "harnesses.limits", "--params", '{"read":true}')

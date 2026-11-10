@@ -1032,9 +1032,13 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   await again.getByRole("button", { name: "Learn more" }).click()
   await expect(fenceRow(page)).toBeVisible()
   await expect(again).toHaveCount(0)
-  // Settings come as a Sheet over the Thread: Esc takes it away.
+  // Settings come as a Sheet over the Thread: Esc takes it away, and the
+  // keys go back to the Thread.
   await page.keyboard.press("Escape")
   await expect(fenceRow(page)).toHaveCount(0)
+  await expect(
+    page.locator("section[data-tile][data-focused=true]")
+  ).toBeFocused()
   // Once on this machine, not once a Thread: a turn kept so again says
   // nothing, in the time a notice would take to show; nor as the window
   // opens again.

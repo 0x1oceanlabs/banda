@@ -16,6 +16,8 @@ import {
   saidNow,
   sayLabel,
   showsOf,
+  startable,
+  tileable,
   watches,
 } from "./registry"
 
@@ -37,6 +39,15 @@ test("a Pane shows while the engine runs its module, or always for a module with
   expect(kindRuns("window.launcher", [])).toBe(true)
   expect(kindRuns("nobody.knows", ["nobody"])).toBe(false)
   expect(watches.map(({ module }) => module.id)).toEqual(["agents", "browser"])
+})
+
+test("the launcher and an empty workspace offer every Pane a Person can start but Usage, which comes as the Sheet (ADR 0102, decision 5)", () => {
+  const running = ["agents", "terminal", "harnesses"]
+  const kinds = (panes: { kind: string }[]) => panes.map((pane) => pane.kind)
+  expect(kinds(startable(running))).toContain("harnesses.usage")
+  expect(kinds(tileable(running))).toEqual(
+    kinds(startable(running)).filter((kind) => kind !== "harnesses.usage")
+  )
 })
 
 /** Ids an action kept as it moved to its module, so `keys.toml` stays

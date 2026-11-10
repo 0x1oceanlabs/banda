@@ -64,6 +64,7 @@ import {
   identityOf,
   minOf,
   runs,
+  sheetsOf,
   showsOf,
   sources,
 } from "../registry"
@@ -102,7 +103,7 @@ import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
 import { Peek, type Peeked } from "./Peek"
-import { Sheet, sheetsOf, useSheet } from "./Sheet"
+import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
@@ -452,9 +453,10 @@ export function Shell({
 
   // The actions with the keys in force (keys.ts).
   const { mod, binds, keyed, keys, own } = useKeys()
-  // The settings Pane (ADR 0016), in the Project the Person is in.
+  // The Sheet (ADR 0102, decision 5), in the Project the Person is in.
   const sheet = useSheet(() => projectIn(drawnNow()) ?? home)
   const { settings } = sheet
+  useSheetTilesGo(ready, drawnNow, change)
   // A settings route opens the settings there; any other, the menu.
   const route = useCallback(
     (route: string) => {
@@ -572,7 +574,7 @@ export function Shell({
     putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
-    closeSheet: sheet.closeFocused,
+    closeSheet: sheet.close,
     glance,
     peek: (pane, project) =>
       setPeek((was) =>
@@ -741,8 +743,11 @@ export function Shell({
             ? focusEntry(w, entry)
             : undefined
         ),
+      // A Pane that comes as the Sheet comes so, asked for from a tile too.
       open: (project, pane, from, place) =>
-        change((w) => opening(w, project, pane, { from, place })),
+        sheetsOf(pane)
+          ? parts.open(pane, project)
+          : change((w) => opening(w, project, pane, { from, place })),
       update,
       close: (entry) => change(() => closing(entry)),
       run: parts.run,

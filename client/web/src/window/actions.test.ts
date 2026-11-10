@@ -236,11 +236,15 @@ test("pane.pick takes a Project and a Pane, as an Item carries it, and only it r
   ]
   for (const args of wrong) expect(pickOf(args)).toBeUndefined()
 
+  // A pick takes the Sheet away, even to the Pane in focus (ADR 0102,
+  // decision 5).
   const pick = vi.fn()
-  const shell = { pick } as unknown as Shell
+  const closeSheet = vi.fn(() => true)
+  const shell = { pick, closeSheet } as unknown as Shell
   runAction(shell, "pane.pick", { project: "project-a", pane })
   runAction(shell, "pane.pick", { project: "project-a" })
   expect(pick.mock.calls).toEqual([["project-a", pane]])
+  expect(closeSheet).toHaveBeenCalledOnce()
 })
 
 test("a Project's verbs and the menu at a route do what the sidebar's buttons did, by their ids", () => {
