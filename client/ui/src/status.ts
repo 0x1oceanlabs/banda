@@ -6,6 +6,7 @@
  * Later clock, so plain tests cover it.
  */
 import type { ProjectId } from "@banda/contract"
+import type { Count } from "@banda/contract/sidebar"
 import { loudest, type MarkState, works } from "./lib/mark-state"
 import { sleeps, wokeOf } from "./lib/later"
 import type { Attention, Call, Listed, Lists } from "./pane"
@@ -71,6 +72,24 @@ export function standOf(listed: Listed, now: number): Stand {
  * archived: what the bar's Mark, its counts and dots leave out. */
 export function isAway(stand: Stand): boolean {
   return stand === "later" || stand === "archived"
+}
+
+/** Which Threads each of the bar's counts takes (ADR 0035), by where they
+ * stand and their mark: the Person's turn, whole or by what asks or failed
+ * and what is done, or what works. */
+const TAKES: Record<Count, (stand: Stand, mark: MarkState) => boolean> = {
+  asking: (stand, mark) =>
+    stand === "turn" && (mark === "asking" || mark === "failed"),
+  done: (stand, mark) => stand === "turn" && mark === "done",
+  waiting: (stand) => stand === "turn",
+  working: (stand) => stand === "working",
+}
+
+/** Whether the bar's `count` takes a Thread that stands at `stand` with
+ * `mark`. What is put away no count takes: its caller leaves it out
+ * (`isAway`). */
+export function takes(count: Count, stand: Stand, mark: MarkState): boolean {
+  return TAKES[count](stand, mark)
 }
 
 /** Whether the Person may archive `listed`: not at work, not asking. */
