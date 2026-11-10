@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from "react"
-import type { Engine } from "@banda/contract"
+import { useCallback, useEffect, useMemo, useState } from "react"
+import type { Engine, ProjectSummary } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
 import { HostsContext, KeptHosts, onDevice, useOurs } from "@banda/core/react"
 import { useProjects } from "@banda/ui/hooks/use-projects"
@@ -50,6 +50,15 @@ export function App({ engine }: { engine: Engine }) {
   )
   useEffect(() => hosts.follow(), [hosts])
   useOurs(hosts, listed, machine)
+  // A Project made here is this machine's before the list says so, for
+  // what opens in it at once.
+  const created = useCallback(
+    (project: ProjectSummary) => {
+      hosts.added(project)
+      put(project)
+    },
+    [hosts, put]
+  )
 
   if (listed.state === "loading") {
     return (
@@ -88,7 +97,7 @@ export function App({ engine }: { engine: Engine }) {
                 modules={modules}
                 projects={projects}
                 home={home?.id ?? machine}
-                onCreated={put}
+                onCreated={created}
               />
             </Machines>
           </RoutingContext>

@@ -284,6 +284,19 @@ test("an act goes to the session of the machine that owns its Project, and never
   )
 })
 
+test("a Project this machine's engine just answered as made is this machine's at once, before its list says so, and the Projects it had stay", () => {
+  const here = { here: true } as unknown as Engine
+  const { device } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING, here)
+  hosts.ours([project("mine")], "m0" as ProjectId)
+  const made = "made" as ProjectId
+  expect(hosts.hostOf(made)).toBeNull()
+  hosts.added(project("made"))
+  expect(hosts.sessionOf(made)).toBe(here)
+  expect(hosts.sessionOf("mine" as ProjectId)).toBe(here)
+  expect(hosts.sessionOf("m0" as ProjectId)).toBe(here)
+})
+
 test("the directory keeps on the device which machine has each Project: after a restart with arc away from the first moment, arc's Projects are arc's, this machine's its own, and one no machine has fails closed", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)

@@ -436,6 +436,16 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   }
 
   /**
+   * Takes a Project this machine's engine just answered as made, before
+   * its list says so: what opens in it at once, as the first Thread of
+   * one the Person added, is this machine's, not a Project no machine has.
+   */
+  added(project: ProjectSummary): void {
+    const others = this.#ours.projects.filter((one) => one.id !== project.id)
+    this.ours([...others, project], this.#ours.machine)
+  }
+
+  /**
    * Host `name`'s engine: one for the Window's life, made as it is first
    * asked for. It asks the desktop where that engine listens on each
    * connect while the host is live, so a refused host is not tried again
