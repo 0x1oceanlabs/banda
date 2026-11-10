@@ -2,6 +2,7 @@
 import type { AgentId } from "../AgentId";
 import type { Archived } from "./Archived";
 import type { Asking } from "./Asking";
+import type { Doing } from "./Doing";
 import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
 import type { ThreadId } from "./ThreadId";
@@ -62,4 +63,24 @@ title: string, updated_at: number,
  * Its title before the Person last renamed it, which "Previous
  * title" brings back. None before a rename.
  */
-was?: string, };
+was?: string, 
+/**
+ * What its turn does now, and since when.
+ */
+doing?: Doing, 
+/**
+ * When its turn last said anything, a sub-agent's words too, in
+ * milliseconds since the epoch; the turn's start until it says
+ * something. A window tells by it that an Agent is stuck.
+ */
+stepped?: number, 
+/**
+ * Its Harness compacts the context now.
+ */
+compacting?: boolean, 
+/**
+ * When a usage limit the turn waits on lets it go on, in
+ * milliseconds since the epoch. Only a turn that runs waits so: one
+ * that failed on its limit says it as it ended (`Failure`).
+ */
+limit_until?: number, };

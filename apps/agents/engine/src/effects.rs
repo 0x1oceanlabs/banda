@@ -25,6 +25,7 @@
 
 use crate::acp::{self, Opened, Prompt, PromptImage, Running, Session, Steered};
 use crate::between;
+use crate::doing::Doer;
 use crate::drive::drive;
 use crate::handoff;
 use crate::images::Images;
@@ -543,6 +544,9 @@ async fn work(
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let thread = turn.thread;
+    // What the turn does is said from its start, while its Harness starts
+    // too, so one that never gets going shows as stuck.
+    let doer = Doer::new(live.doings().clone(), project.id(), thread, turn.id);
     let harness_id = project
         .read(move |sql| store::thread(sql, thread))
         .await
@@ -690,6 +694,7 @@ async fn work(
         settings,
         running,
         live.touches(),
+        doer,
     );
     let ended = async {
         done.await

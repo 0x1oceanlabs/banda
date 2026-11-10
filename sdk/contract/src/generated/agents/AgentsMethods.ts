@@ -39,6 +39,7 @@ import type { Since } from "./Since";
 import type { Switch } from "./Switch";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
+import type { ThreadsDoing } from "./ThreadsDoing";
 import type { Touching } from "./Touching";
 import type { TurnChanges } from "./TurnChanges";
 import type { VisualPage } from "./VisualPage";
@@ -92,6 +93,16 @@ write: StreamMethod<WriteAsk, Written>,
  * Thread's goes as its turn ends.
  */
 touching: StreamMethod<Nothing, Touching>, 
+/**
+ * What each Thread at work in this Project does now, from its
+ * turn's events (ADR 0099, decision 11): a tool call and what it
+ * works on, a thought or its reply; when the turn last said
+ * anything; whether its Harness compacts the context; and when a
+ * usage limit it waits on lets it go on. It says all of them at
+ * once, then each Thread's as it changes, no more than once a
+ * second; a Thread's comes with nothing as its turn ends.
+ */
+doing: StreamMethod<Nothing, ThreadsDoing>, 
 /**
  * Writes into a Thread of this Project, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's

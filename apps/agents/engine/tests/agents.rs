@@ -6009,6 +6009,103 @@ async fn the_file_a_turns_tool_calls_name_is_heard_as_each_starts_and_goes_as_th
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
 }
 
+impl World {
+    /// The Project's `agents.doing`.
+    async fn doing(&self) -> banda_kernel::Stream {
+        let heard =
+            self.kernel
+                .stream(self.person(), "agents.doing", Some(self.project), json!({}));
+        heard.await.unwrap()
+    }
+}
+
+/// What `heard` next says `thread` does that `holds`, in time.
+async fn doing_of(
+    heard: &mut banda_kernel::Stream,
+    thread: &Value,
+    holds: impl Fn(&Value) -> bool,
+) -> Value {
+    loop {
+        let piece = next_piece(heard).await;
+        let threads = piece["threads"].as_array().unwrap();
+        let found = threads.iter().find(|one| one["thread"] == *thread);
+        if let Some(one) = found.filter(|one| holds(one)) {
+            return one.clone();
+        }
+    }
+}
+
+#[tokio::test]
+async fn what_a_turn_does_is_heard_as_it_changes_listed_and_gone_as_the_turn_ends() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let mut heard = world.doing().await;
+    let none = json!({ "all": true, "threads": [] });
+    assert_eq!(next_piece(&mut heard).await, none);
+
+    // It reads card.ts, named by its base name.
+    let sent = world.send(None, "doing read src/card.ts").await;
+    let thread = &sent["thread"];
+    let read = doing_of(&mut heard, thread, |one| one["doing"]["what"] == "read").await;
+    assert_eq!(read["doing"]["title"], json!("card.ts"));
+
+    // Then it runs the tests: what it does moves on, and so does when it
+    // last said anything.
+    world.steer(thread, "doing execute pnpm test").await;
+    let runs = doing_of(&mut heard, thread, |one| one["doing"]["what"] == "execute").await;
+    assert_eq!(runs["doing"]["title"], json!("pnpm test"));
+    let (stepped, since) = (&runs["stepped"], &runs["doing"]["since"]);
+    assert!(stepped.as_i64() > read["stepped"].as_i64(), "{runs}");
+    assert!(since.as_i64() > read["doing"]["since"].as_i64(), "{runs}");
+
+    // A window that comes now hears it at once, and the list shows it.
+    let mut later = world.doing().await;
+    let all = json!({ "all": true, "threads": [runs] });
+    assert_eq!(next_piece(&mut later).await, all);
+    let listed = serde_json::to_value(world.listed(thread).await).unwrap();
+    assert_eq!(
+        (&listed["doing"], &listed["stepped"]),
+        (&runs["doing"], stepped)
+    );
+
+    // It replies, and its turn ends: the Thread does nothing.
+    world.steer(thread, "that is all").await;
+    let ended = doing_of(&mut heard, thread, |one| one.get("stepped").is_none()).await;
+    assert_eq!(ended, json!({ "thread": thread }));
+    let view = world.ended(&sent).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+    assert!(texts(&view).contains(&"message: Done: that is all.".to_owned()));
+    let listed = serde_json::to_value(world.listed(thread).await).unwrap();
+    assert!(listed.get("doing").is_none(), "{listed}");
+    assert!(listed.get("stepped").is_none(), "{listed}");
+}
+
+#[tokio::test]
+async fn a_turn_that_waits_on_its_usage_limit_says_until_when_and_does_not_fail() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let mut heard = world.doing().await;
+    next_piece(&mut heard).await;
+    let before = banda_kernel::now_ms();
+    let sent = world.send(None, "limit wait").await;
+    let thread = &sent["thread"];
+    let waits = doing_of(&mut heard, thread, |one| one["limit_until"].is_i64()).await;
+    let until = waits["limit_until"].as_i64().unwrap();
+    let hour = 3_600_000;
+    assert!(until >= before - 1000 + hour, "an hour on: {waits}");
+    assert!(
+        until <= banda_kernel::now_ms() + hour,
+        "an hour on: {waits}"
+    );
+
+    // A message goes into it, and it goes on to the end of its turn.
+    world.steer(thread, "go on").await;
+    let ended = doing_of(&mut heard, thread, |one| one.get("stepped").is_none()).await;
+    assert_eq!(ended, json!({ "thread": thread }));
+    let view = world.ended(&sent).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+}
+
 /// The fake agent as two accounts of Claude Code, `claude-a` and
 /// `claude-b`, which share their sessions, and one of another Harness.
 #[cfg(unix)]

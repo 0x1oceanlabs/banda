@@ -1,6 +1,7 @@
 //! The agents module's tables. Only this module writes them, and only
 //! through these functions.
 
+use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
     AccountUse, Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
@@ -716,8 +717,11 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
     Ok(())
 }
 
-/// The Project's Threads, the latest first, each with where its work stands.
-pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
+/// The Project's Threads, the latest first, each with where its work
+/// stands and what it does now, from `doing`: memory's, not the store's,
+/// read before them. A Thread takes what its latest turn does while that
+/// runs, so one whose turn ended or was handed over meanwhile takes none.
+pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Error> {
     // The Person's marks come with each row, not by a query of their own.
     let mut statement = sql.prepare(
         "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, later,
@@ -732,14 +736,21 @@ pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     summaries
         .into_iter()
         .map(|(thread, agent, (later, seen, archived))| {
+            let latest = last_begun(sql, thread.id)?;
+            let now = latest.as_ref().and_then(|latest| {
+                let (turn, now) = doing.get(&thread.id)?;
+                let runs = latest.turn == *turn && latest.state == TurnState::Running;
+                runs.then(|| now.clone())
+            });
             Ok(ListedThread {
                 agent,
-                latest: last_begun(sql, thread.id)?,
+                latest,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
                 later,
                 seen,
                 archived,
+                now: now.unwrap_or_default(),
                 thread,
             })
         })
@@ -1889,7 +1900,7 @@ mod tests {
         };
         let settings = Settings::default();
         insert_thread(&sql, &summary, agent, author, &settings).unwrap();
-        let listed = || threads(&sql).unwrap().remove(0);
+        let listed = || threads(&sql, &AtWork::new()).unwrap().remove(0);
         assert_eq!(listed().latest, None, "no turn began yet");
 
         let mut at = 0;
@@ -2001,7 +2012,7 @@ mod tests {
         let agents = [(writer, "codex".to_owned())];
         fill_harnesses(&sql, &agents).unwrap();
         fill_harnesses(&sql, &[(writer, "claude".to_owned())]).unwrap();
-        let mut named: Vec<_> = threads(&sql)
+        let mut named: Vec<_> = threads(&sql, &AtWork::new())
             .unwrap()
             .into_iter()
             .map(|t| (t.thread.title, t.thread.harness))

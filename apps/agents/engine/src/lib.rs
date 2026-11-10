@@ -29,6 +29,7 @@ mod between;
 mod changes;
 pub mod chosen_modes;
 pub mod counts;
+mod doing;
 mod drive;
 mod effects;
 mod full_access;
@@ -69,6 +70,7 @@ use banda_look::OneFile as _;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use changes::{ChangesAsk, TurnChanges};
+use doing::ThreadsDoing;
 use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
@@ -347,6 +349,14 @@ banda_kernel::methods! {
         /// It says them all at once, then again each time one changes; a
         /// Thread's goes as its turn ends.
         stream touching(Nothing) -> Touching, Read;
+        /// What each Thread at work in this Project does now, from its
+        /// turn's events (ADR 0099, decision 11): a tool call and what it
+        /// works on, a thought or its reply; when the turn last said
+        /// anything; whether its Harness compacts the context; and when a
+        /// usage limit it waits on lets it go on. It says all of them at
+        /// once, then each Thread's as it changes, no more than once a
+        /// second; a Thread's comes with nothing as its turn ends.
+        stream doing(Nothing) -> ThreadsDoing, Read;
         /// Writes into a Thread of this Project, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
@@ -866,7 +876,9 @@ fn write_fact(
 /// The handlers of the module's methods, one each (ADR 0014).
 impl Agents {
     async fn threads(&self, call: Call, _: Nothing) -> Result<ThreadList, Refusal> {
-        let (at, threads) = call.project().view(store::threads).await?;
+        let doing = self.live.doings().now(call.project().id());
+        let listed = move |sql: &_| store::threads(sql, &doing);
+        let (at, threads) = call.project().view(listed).await?;
         Ok(ThreadList { at, threads })
     }
 
@@ -991,6 +1003,10 @@ impl Agents {
 
     async fn touching(&self, call: Call, _: Nothing) -> Result<banda_kernel::Stream, Refusal> {
         Ok(self.live.touches().hear(call.project().id()))
+    }
+
+    async fn doing(&self, call: Call, _: Nothing) -> Result<banda_kernel::Stream, Refusal> {
+        Ok(self.live.doings().hear(call.project().id()))
     }
 
     async fn defaults(

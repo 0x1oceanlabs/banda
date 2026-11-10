@@ -31,6 +31,7 @@
 //! holds it lets it go or it expires (ADR 0083, decision 2).
 
 use crate::acp::{Answer, Connection, Session};
+use crate::doing::Doings;
 use crate::model::{ItemId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use crate::{Pipe, kept};
@@ -60,6 +61,8 @@ pub struct Live {
     passes: Mutex<HashMap<(ProjectId, String), ProcessPass>>,
     /// The file each running turn works on now.
     touches: Arc<Touches>,
+    /// What each running turn does now.
+    doings: Arc<Doings>,
     /// The count of the turns that run, which each [`TurnRun`] holds one
     /// of.
     working: Working,
@@ -119,6 +122,7 @@ impl Live {
             pipe,
             passes: Mutex::default(),
             touches: Arc::default(),
+            doings: Arc::default(),
             working,
         }
     }
@@ -126,6 +130,12 @@ impl Live {
     /// The file each running turn works on now, by Project.
     pub fn touches(&self) -> &Arc<Touches> {
         &self.touches
+    }
+
+    /// What each running turn does now, by Project (ADR 0099, decision
+    /// 11).
+    pub fn doings(&self) -> &Arc<Doings> {
+        &self.doings
     }
 
     /// `banda mcp` as `agent`'s session of `thread` in `project` starts it,
