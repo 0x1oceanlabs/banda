@@ -1,4 +1,4 @@
-//! Account folders shared by Settings and the CLI (ADR 0103). The
+//! Account folders shared by Settings and the CLI (ADR 0104). The
 //! settings writer implements the small write boundary; this module owns
 //! the machine API and never reads a provider's credentials.
 use crate::model::HarnessView;

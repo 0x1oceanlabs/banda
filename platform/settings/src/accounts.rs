@@ -1,6 +1,6 @@
 //! The Account operations use the existing comment-preserving settings
 //! writer. Each creates exactly one profile variable, never a program or
-//! arbitrary environment supplied by its caller (ADR 0103).
+//! arbitrary environment supplied by its caller (ADR 0104).
 use banda_harnesses::accounts::{AccountProfile, AccountSettings, ConnectAccount};
 use banda_harnesses::model::HarnessView;
 use banda_harnesses::{Harness, Harnesses};

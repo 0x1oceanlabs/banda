@@ -223,7 +223,7 @@ in `~/.config/banda-local/`, as their data and state too:
 ## Accounts through the CLI
 
 Use the existing Agent pass. Do not drop `BANDA_TOKEN`, edit credentials,
-or prepare a connection script for the Person (ADR 0103).
+or prepare a connection script for the Person (ADR 0104).
 
 ```sh
 banda account list
