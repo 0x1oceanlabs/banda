@@ -71,6 +71,7 @@ import {
   entries,
   even,
   fill,
+  find,
   focusEntry,
   focused,
   focusedColumn,
@@ -478,15 +479,69 @@ export function picking(
     : placed(workspaces, project, pane, placing)
 }
 
-/** Opens the Pane where the Flow says (`placeFor`). */
+/**
+ * Whether a Pane opened in place of `from` goes elsewhere, where the Flow
+ * says (`placeFor`): in the row and solo, one that shows what `from`
+ * showed, in another Project that the workspace holding `from` does not
+ * take, as a draft the Person moves to another Project, or to none (ADR
+ * 0102, decision 1). A draft that became its Thread with its first
+ * message stays where it stood.
+ */
+export function movesAway(
+  workspaces: Workspaces,
+  from: string,
+  project: ProjectId,
+  pane: PaneState,
+  { flow }: Placing
+): boolean {
+  if (flow === "free") return false
+  const at = find(workspaces, from)
+  if (!at) return false
+  const workspace = workspaces.list[at.workspace]
+  const was = workspace.columns[at.column].entries[at.entry]
+  return (
+    was.project !== project &&
+    showsOf(was.pane) === showsOf(pane) &&
+    !admits(workspace, project)
+  )
+}
+
+/**
+ * Opens a Pane as a tile asks (`Frame.open`), by `changing`, from the
+ * workspaces as drawn now. One in place of `from` that its workspace does
+ * not take (`movesAway`) opens anew where the Flow says, and the window
+ * follows it; `from` closes once it is drawn there, so no workspace
+ * empties in between.
+ */
+export function openFrom(
+  changing: (how: Change) => Promise<string | undefined>,
+  workspaces: Workspaces,
+  placing: Placing,
+  project: ProjectId,
+  pane: PaneState,
+  from: string,
+  place?: Place
+): Promise<unknown> {
+  if (
+    place !== "instead" ||
+    !movesAway(workspaces, from, project, pane, placing)
+  )
+    return changing((w) => opening(w, project, pane, { from, place }))
+  return changing((w) =>
+    placed(w, project, pane, placing, { again: true })
+  ).then((entry) => entry && changing(() => closing(from)))
+}
+
+/** Opens the Pane where the Flow says (`placeFor`), as `how` says. */
 export function placed(
   workspaces: Workspaces,
   project: ProjectId,
   pane: PaneState,
-  placing: Placing
+  placing: Placing,
+  how: Omit<Opening, "width" | "place"> = {}
 ): Step {
   const place = placeFor(workspaces, project, pane, placing)
-  return opening(workspaces, project, pane, { place })
+  return opening(workspaces, project, pane, { ...how, place })
 }
 
 /** What `pane.pick` is asked: a Project, and the Pane to open in it, its

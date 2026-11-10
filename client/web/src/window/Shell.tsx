@@ -123,6 +123,7 @@ import {
   closing,
   closingShown,
   opening,
+  openFrom,
   picking,
   placed,
   placeFor,
@@ -181,6 +182,8 @@ export function Shell({
   // go; the Panes the Person opens go where the Flow says.
   const [stores] = useState(newStores)
   const { placing, gone } = usePlacing(stores, flow, projects, machine)
+  // `placing` as last drawn, held steady for the Tiles' frame.
+  const latest = useSteady({ placing })
   const tiling = useTiling({ engine, machine, modules, home, solo, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
@@ -350,8 +353,9 @@ export function Shell({
     setDrawerShown(false)
     setDrawer(undefined)
   }, [])
+  // Its entry as its Pane changes it; lifted or closed, the drawer stays so.
   const changeDrawer = useCallback(
-    (pane: PaneState) => setDrawer((was) => was && { ...was, pane }),
+    (how: (was: Entry) => Entry) => setDrawer((was) => was && how(was)),
     []
   )
   // Quick Look's tile over the desk (ADR 0073, decision 7): one Pane, in
@@ -743,10 +747,17 @@ export function Shell({
             : undefined
         ),
       // A Pane that comes as the Sheet comes so, asked for from a tile too.
-      open: (project, pane, from, place) =>
+      open: (project, pane, ...asked) =>
         sheetsOf(pane)
           ? parts.open(pane, project)
-          : change((w) => opening(w, project, pane, { from, place })),
+          : void openFrom(
+              changing,
+              drawnNow(),
+              latest.placing,
+              project,
+              pane,
+              ...asked
+            ),
       update,
       close: (entry) => change(() => closing(entry)),
       run: parts.run,
@@ -784,7 +795,7 @@ export function Shell({
         }
       },
     }),
-    [change, update, parts, popOut, stores, drawnNow]
+    [change, changing, update, parts, popOut, stores, drawnNow, latest]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(

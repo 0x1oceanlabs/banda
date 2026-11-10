@@ -511,13 +511,17 @@ function placed(
     return opening.focus === false ? next : focusEntry(next, showing.id)
   }
 
-  const from = (opening.from && find(state, opening.from)) || focusedSpot(state)
+  // `instead` replaces its opener alone: from one in no workspace, as the
+  // drawer's, it opens beside the focused Pane.
+  const opener =
+    opening.from === undefined ? focusedSpot(state) : find(state, opening.from)
+  const from = opener ?? focusedSpot(state)
   const w = from?.workspace ?? state.current
   const workspace = state.list[w]
   const entry: Entry = { id: newId(), project, pane }
 
-  if (from && place === "instead") {
-    return showIn(state, from, entry)
+  if (opener && place === "instead") {
+    return showIn(state, opener, entry)
   }
   if (from && place === "below") {
     const column = workspace.columns[from.column]
