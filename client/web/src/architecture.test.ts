@@ -2605,7 +2605,7 @@ test("each of the device's own helpers still does what it is the device's for", 
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 5,
   "apps/agents/pane/src/thread/Thread.tsx": 21,
-  "apps/agents/pane/src/thread/session.ts": 10,
+  "apps/agents/pane/src/thread/session.ts": 1,
 }
 
 const askingWhere = Object.fromEntries(

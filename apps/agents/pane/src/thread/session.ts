@@ -14,7 +14,7 @@ import {
   KEEP,
   Unreachable,
   useQueue,
-  useShownOf,
+  useReach,
   useWaiting,
   type Wait,
   waitsFor,
@@ -497,9 +497,12 @@ export function useThreadSession({
   // minutes from now, unless the Person keeps it longer. A new Thread's
   // first words stay in its composer. It keeps what its Pane shows before
   // that machine answers: its Project, its title and its Harness's name
-  // (Q6).
+  // (Q6). The machine that waits is the one the directory says has its
+  // Project, by its hosts.toml name, as the queue keeps it (ADR 0106,
+  // decision 1).
+  const { host: there, shown } = useReach(project, args.host)
+  const host = there ?? undefined
   const queued = useQueue()
-  const shown = useShownOf(host)
   const later = thread !== null && waitsFor(shown, reach)
   const on = useSeenNamed(host)?.name
   const whenBack =
@@ -533,7 +536,7 @@ export function useThreadSession({
       carried: images,
       pane: {
         kind: "agents.thread",
-        args: { thread, harness, title: state?.title ?? args.title, host },
+        args: { thread, harness, title: state?.title ?? args.title },
       },
       shows: {
         ...(summary && { project: summary }),
