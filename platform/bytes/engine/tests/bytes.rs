@@ -23,8 +23,8 @@ struct World {
     project: ProjectId,
     folder: PathBuf,
     address: SocketAddr,
-    /// How far the module's clock is ahead of this machine's.
-    ahead: Arc<AtomicI64>,
+    /// The module's clock, when a test sets it; this machine's at 0.
+    at: Arc<AtomicI64>,
     http: reqwest::Client,
     root: tempfile::TempDir,
 }
@@ -33,10 +33,11 @@ impl World {
     async fn new() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
-        let ahead = Arc::new(AtomicI64::new(0));
-        let clock = ahead.clone();
-        let bytes = Bytes::on_clock(Arc::new(move || {
-            banda_kernel::now_ms() + clock.load(Ordering::SeqCst)
+        let at = Arc::new(AtomicI64::new(0));
+        let clock = at.clone();
+        let bytes = Bytes::on_clock(Arc::new(move || match clock.load(Ordering::SeqCst) {
+            0 => banda_kernel::now_ms(),
+            at => at,
         }));
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
             .module(bytes.clone())
@@ -71,7 +72,7 @@ impl World {
             project,
             folder,
             address,
-            ahead,
+            at,
             http,
             root,
         }
@@ -323,9 +324,9 @@ async fn an_unknown_token_one_past_its_hour_and_one_with_more_get_nothing() {
     let posted = world.asked(reqwest::Method::POST, &url, &[]).await;
     assert_eq!(posted.status, StatusCode::METHOD_NOT_ALLOWED);
     // An hour on, it serves nothing.
-    world.ahead.store(HOUR - 1_000, Ordering::SeqCst);
+    world.at.store(issued.until - 1, Ordering::SeqCst);
     assert_eq!(world.bytes(&issued.token).await.status, StatusCode::OK);
-    world.ahead.store(HOUR, Ordering::SeqCst);
+    world.at.store(issued.until, Ordering::SeqCst);
     assert_eq!(
         world.bytes(&issued.token).await.status,
         StatusCode::NOT_FOUND
@@ -359,6 +360,13 @@ async fn a_path_starts_at_the_projects_folder_and_one_from_home_the_network_or_a
     std::fs::create_dir(world.folder.join("folder.png")).unwrap();
     assert_eq!(world.refused("folder.png", "file").await, Code::Invalid);
     assert_eq!(world.refused(&world.folder, "file").await, Code::Invalid);
+    // Nor is one given in a Project this machine does not have.
+    let person = Participant::Person(world.owner);
+    let params = json!({ "path": path, "use": "file" });
+    let unknown = (world.kernel)
+        .call(person, "bytes.issue", Some(ProjectId::new()), None, params)
+        .await;
+    assert_eq!(unknown.unwrap_err().code, Code::NotFound);
 }
 
 /// On Windows a file's stream, or a path on a drive but from no folder, is

@@ -4,9 +4,10 @@
 //! range; and 404 for all else, so a wrong token says nothing of a right
 //! one.
 
+use crate::Bytes;
 use crate::file::pin;
 use crate::kinds::into_frame;
-use crate::{Bytes, byte_range};
+use crate::range::byte_range;
 use axum::body::{Body, Bytes as Piece};
 use axum::http::{StatusCode, header};
 use axum::response::{IntoResponse, Response};

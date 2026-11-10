@@ -96,12 +96,6 @@ mod build {
         Browser::new()
     }
 
-    /// The bytes module shares its tokens with the routes beside the API,
-    /// which the engine serves with it.
-    pub fn bytes(host: &HostContext<'_>) -> Bytes {
-        host.bytes.clone()
-    }
-
     /// Banda's settings are the settings Pane's to write (ADR 0073,
     /// decision 8), and what the fence keeps read-only no Agent writes
     /// through Files either; files' small pictures are kept in Banda's
@@ -126,6 +120,12 @@ mod build {
 
     pub fn terminal(_: &HostContext<'_>) -> Terminals {
         Terminals::new()
+    }
+
+    /// The bytes module shares its tokens with the routes beside the API,
+    /// which the engine serves with it.
+    pub fn bytes(host: &HostContext<'_>) -> Bytes {
+        host.bytes.clone()
     }
 
     pub fn harnesses(host: &HostContext<'_>) -> HarnessesModule {

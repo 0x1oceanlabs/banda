@@ -346,7 +346,6 @@ dependencies = [
  "axum",
  "banda-kernel",
  "dunce",
- "file-id",
  "futures",
  "libc",
  "reqwest",
@@ -355,6 +354,7 @@ dependencies = [
  "tempfile",
  "tokio",
  "ts-rs",
+ "winapi-util",
 ]
 
 [[package]]

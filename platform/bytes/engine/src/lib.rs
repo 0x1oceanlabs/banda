@@ -31,12 +31,10 @@ mod range;
 mod served;
 
 pub use kinds::{PAGE_CSP, Use};
-pub use range::byte_range;
 
 use banda_kernel::api::{self, Served};
 use banda_kernel::{Call, Kind, Module, Participant, Reach, Refusal, Right};
-use file::{Unpinned, on_this_machine, pin, resolvable};
-use file_id::FileId;
+use file::{Identity, Unpinned, on_this_machine, pin, resolvable};
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -90,7 +88,7 @@ impl std::fmt::Debug for Issued {
 struct Claim {
     /// Whole, and its own real path.
     path: PathBuf,
-    id: FileId,
+    id: Identity,
     until: i64,
     used: Use,
 }
@@ -138,7 +136,7 @@ impl Claims {
 }
 
 /// The clock tokens are given and served by: ms since the epoch.
-type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
+pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 /// The bytes module, and what answers its routes beside the API: one,
 /// cloned, shares its tokens.
@@ -160,7 +158,7 @@ impl Bytes {
     }
 
     /// Tokens given and served by `clock`, as a test moves it.
-    pub fn on_clock(clock: Arc<dyn Fn() -> i64 + Send + Sync>) -> Self {
+    pub fn on_clock(clock: Clock) -> Self {
         Bytes {
             claims: Arc::new(Mutex::new(Claims::new(MOST))),
             clock,
@@ -308,7 +306,7 @@ mod tests {
     fn claim(until: i64, used: Use) -> Claim {
         Claim {
             path: PathBuf::from("/a.png"),
-            id: FileId::new_inode(1, 2),
+            id: (1, 2),
             until,
             used,
         }

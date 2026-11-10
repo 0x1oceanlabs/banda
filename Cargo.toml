@@ -22,10 +22,6 @@ dirs = "6"
 dunce = "1.0.5"
 # Thumbnails are scaled with SIMD (ADR 0073, step F6).
 fast_image_resize = { version = "6.1.0", features = ["image"] }
-# A file known by its device and inode, on Windows by its volume and file
-# ID, so a token of the bytes module serves only the file it was given
-# for (ADR 0106, step 4a). notify brings it already.
-file-id = "0.2.3"
 flate2 = "1.1.10"
 futures = "0.3"
 getrandom = "0.4.3"
@@ -98,6 +94,10 @@ tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 uuid = { version = "1.29.0", features = ["v4", "v5", "v7", "serde"] }
+# A file's volume and index on Windows, read from the open file, so a
+# token of the bytes module serves only the file it was given for (ADR
+# 0106, step 4a). walkdir brings it already.
+winapi-util = "0.1.11"
 # The flags a program starts with on Windows, as `process-wrap` takes them:
 # its names only, no call (ADR 0090, decision 10).
 windows = { version = "0.62.2", default-features = false, features = ["Win32_System_Threading"] }
