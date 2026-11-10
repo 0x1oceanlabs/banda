@@ -12,6 +12,7 @@ import machine from "./generated/schema/machine.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
 import sidebar from "./generated/schema/sidebar.schema.json"
 import terminal from "./generated/schema/terminal.schema.json"
+import type { Class } from "./generated/look/Class"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 
 export type { From } from "./generated/look/From"
@@ -33,6 +34,8 @@ export type Schema = {
   minimum?: number
   maximum?: number
   $defs?: { [name: string]: Schema }
+  /** Of a top-level key: whose copy it is (ADR 0101, decision 3). */
+  "x-class"?: Class
 }
 
 /** Every settings file Banda reads, by name, with its schema. */
