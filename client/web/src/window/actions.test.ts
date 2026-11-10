@@ -1,4 +1,4 @@
-import type { ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
@@ -1024,4 +1024,29 @@ test("an action from a key goes through the router as one from a Pane: on arc, w
   expect(route).toHaveBeenCalledWith("actions")
   run!("menu.at", { route: "actions" })
   expect(ran).toHaveBeenCalledWith("menu.at", { route: "actions" })
+})
+
+test("a key in a Pane acts on the machine Here says, an old arrangement's host where the directory knows nothing of its Project, and none where nothing says one (ADR 0106, decision 1)", () => {
+  const hosts = arcHosts(["agents"])
+  const project = "old" as ProjectId
+  const pane = { id: "e1", project }
+  const said = `Not on arc yet: ${ACTIONS.find((one) => one.id === "git.diff")!.title}`
+  toasted.mockClear()
+  runAction(
+    shellOf({
+      hosts,
+      here: { get: () => ({ project, pane: { ...pane, host: "arc" } }) },
+    }),
+    "git.diff"
+  )
+  expect(toasted).toHaveBeenCalledWith(said, { id: expect.any(String) })
+  toasted.mockClear()
+  runAction(
+    shellOf({ hosts, here: { get: () => ({ project, pane }) } }),
+    "git.diff"
+  )
+  expect(toasted).toHaveBeenCalledWith(
+    "This window does not reach that machine",
+    { id: expect.any(String) }
+  )
 })
