@@ -12,6 +12,14 @@ import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
+export type { Device } from "./generated/look/Device"
+export {
+  BANDA,
+  TOKENS,
+  type Token,
+  type TokenGroup,
+  type TokenKind,
+} from "./generated/look/tokens"
 export type { Desk } from "./generated/look/Desk"
 export type { Wallpaper } from "./generated/look/Wallpaper"
 export type { Material } from "./generated/look/Material"

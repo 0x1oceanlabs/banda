@@ -43,6 +43,31 @@ impl Mode {
     }
 }
 
+/// What the device says of itself that the theme takes (ADR 0100,
+/// decision 1), as the window reads it from the system and writes it to
+/// `device.json` in Banda's state folder, where `banda look` reads it:
+/// so the look a terminal prints is the window's.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, Eq, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Device {
+    /// The accent set in the system's settings, `#rrggbb` (ADR 0075,
+    /// decision 6): macOS's and Windows'.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub accent: Option<String>,
+}
+
+impl Device {
+    /// The device's file at `path`; a file that is not there, or does not
+    /// read, says nothing. The window writes it, not the Person.
+    pub fn read(path: &std::path::Path) -> Device {
+        std::fs::read(path)
+            .ok()
+            .and_then(|bytes| serde_json::from_slice(&bytes).ok())
+            .unwrap_or_default()
+    }
+}
+
 /// Who makes the desk's glass (ADR 0023).
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]

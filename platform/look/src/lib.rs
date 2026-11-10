@@ -30,7 +30,7 @@ pub mod sound;
 use banda_theme::color::{is_css_color, is_hex};
 pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
-use banda_theme::{Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
+use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{OneFile, SettingsFile};
 use motion::Motion;
@@ -424,6 +424,16 @@ fn check_settings(path: &Path, text: &str, settings: &Settings, problems: &mut V
             ));
         }
     }
+    // A token by its name now (ADR 0100, decision 10).
+    for (key, value) in &settings.tokens {
+        let said = match tokens::set_by(key) {
+            Ok((_, note)) => note,
+            Err(said) => Some(said),
+        };
+        if let Some(said) = said {
+            problems.push(Problem::at(path, text, Some(value.span()), said));
+        }
+    }
     let references = settings
         .tokens
         .iter()
@@ -531,8 +541,12 @@ pub fn resolve(
         .map(|t| t.get_ref().clone())
         .unwrap_or_else(|| ThemeChoice::One("platform".to_owned()));
 
-    let missing = |name: &str, problems: &mut Vec<Problem>| {
-        let words = if name == "omarchy" {
+    // A theme that is not there, or whose file did not read: what was
+    // wrong in it is named already.
+    let missing = |name: &str, problems: &mut Vec<Problem>, before: usize| {
+        let words = if problems.len() > before {
+            format!("theme = \"{name}\" does not read; Banda's own shows")
+        } else if name == "omarchy" {
             "theme = \"omarchy\", but Omarchy's current theme is not here; Banda's own shows"
                 .to_owned()
         } else {
@@ -551,6 +565,7 @@ pub fn resolve(
 
     // The themes of each scheme, and which scheme shows.
     let wanted = mine.mode.unwrap_or(ModeChoice::System);
+    let before = problems.len();
     let (light, dark, shown) = match choice {
         ThemeChoice::One(name) => match pick(places, &name, &mut problems, &mut watched) {
             Some(Picked::Both(light, dark)) => (Some(light), Some(dark), shown_of(wanted)),
@@ -559,7 +574,7 @@ pub fn resolve(
                 Mode::Dark => (None, Some(theme), Shown::Dark),
             },
             None => {
-                missing(&name, &mut problems);
+                missing(&name, &mut problems, before);
                 let (light, dark) = banda(&mut problems);
                 (light, dark, shown_of(wanted))
             }
@@ -568,9 +583,10 @@ pub fn resolve(
             // Each takes its own scheme of a theme of both, or the one a
             // theme of one has.
             let mut side = |name: &str, mode: Mode| {
+                let before = problems.len();
                 let picked = pick(places, name, &mut problems, &mut watched);
                 if picked.is_none() {
-                    missing(name, &mut problems);
+                    missing(name, &mut problems, before);
                 }
                 picked.map(|picked| picked.of(mode))
             };
@@ -658,9 +674,15 @@ pub fn resolve(
     keyed_layers.push(keyed::Layer::new("file", &mine, mine_file.as_ref()));
     let all = mine.clone().over(layers);
 
+    // What the device says of itself: the system's accent (ADR 0100,
+    // decision 1).
+    let device = places.device.as_ref().map_or_else(Device::default, |path| {
+        watched.push(path.clone());
+        Device::read(path)
+    });
     let schemes = Schemes {
-        light: light.as_ref().map(|t| scheme(t, &mine, &all)),
-        dark: dark.as_ref().map(|t| scheme(t, &mine, &all)),
+        light: light.as_ref().map(|t| scheme(t, &mine, &all, &device)),
+        dark: dark.as_ref().map(|t| scheme(t, &mine, &all, &device)),
     };
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
@@ -852,7 +874,12 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 /// One theme's colours as CSS variables: its palette under the colours
 /// an old `banda.toml` and `look.toml` replace, derived into tokens,
 /// under the tokens the theme and `look.toml` set ([`tokens::scheme`]).
-fn scheme(theme: &Laid, mine: &Settings, all: &Settings) -> BTreeMap<String, String> {
+fn scheme(
+    theme: &Laid,
+    mine: &Settings,
+    all: &Settings,
+    device: &Device,
+) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
         (key, value.get_ref())
     }
@@ -865,6 +892,7 @@ fn scheme(theme: &Laid, mine: &Settings, all: &Settings) -> BTreeMap<String, Str
         theme.settings.tokens.iter().chain(&mine.tokens).map(named),
         focus(&all.focus.border),
         focus(&all.focus.inactive_border),
+        device,
     )
 }
 

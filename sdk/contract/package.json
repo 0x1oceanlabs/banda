@@ -19,6 +19,7 @@
     "./sharing": "./src/sharing.ts",
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
+    "./tokens.css": "./src/generated/look/tokens.css",
     "./sidebar": "./src/sidebar.ts",
     "./settings": "./src/settings.ts",
     "./bridge": "./src/bridge.ts"

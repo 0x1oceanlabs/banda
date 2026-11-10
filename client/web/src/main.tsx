@@ -7,7 +7,6 @@ import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
 import { HostsContext, KeptHosts, poppedOf } from "@banda/core/react"
 import { moveEnterKey } from "./enter-key"
-import { followAccent } from "./accent"
 import { followFrame } from "./frame"
 import { followLook } from "./look"
 import { keepProblem, watchProblems } from "./problems/keep"
@@ -19,7 +18,6 @@ const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
 followLook(host)
 followFrame(host)
-followAccent(host)
 const engine = host && new Engine(() => host.engine())
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */

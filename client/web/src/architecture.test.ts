@@ -2215,7 +2215,6 @@ test("the desktop imports nothing of the page", () => {
  * listed, and the list only falls: at last only the device's adapter.
  */
 const BRIDGE_TYPES = [
-  "web/src/accent.ts",
   "web/src/boot/desktop.ts",
   "web/src/enter-key.ts",
   "web/src/frame.ts",

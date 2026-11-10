@@ -53,6 +53,9 @@ pub struct Places {
     /// decision 2). From here rather than from the build, so a test asks
     /// for either.
     pub mac: bool,
+    /// The file the window writes what the system says of itself to, for
+    /// the theme ([`crate::Device`]): `device.json` in Banda's state folder.
+    pub device: Option<PathBuf>,
 }
 
 impl Places {
@@ -71,6 +74,7 @@ impl Places {
             gsettings: None,
             material: Material::Banda,
             mac: false,
+            device: None,
         }
     }
 
@@ -127,6 +131,7 @@ impl Places {
             config_home: Some(config_home),
             material: Material::PLATFORM,
             mac: cfg!(target_os = "macos"),
+            device: None,
         }
     }
 
@@ -422,8 +427,17 @@ impl Places {
         wrong: &mut Vec<Wrong>,
     ) -> Result<Option<Picked>, Cycle> {
         let path = folder.join("theme.toml");
-        let Ok(text) = std::fs::read_to_string(&path) else {
-            return Ok(old_folder(name, origin, folder, wrong).map(Picked::One));
+        let text = match std::fs::read_to_string(&path) {
+            Ok(text) => text,
+            Err(error) if path.is_file() => {
+                let said = format!("it does not read: {error}");
+                wrong.push(Wrong {
+                    left_out: true,
+                    ..Wrong::of_file(&path, said)
+                });
+                return Ok(None);
+            }
+            Err(_) => return Ok(old_folder(name, origin, folder, wrong).map(Picked::One)),
         };
         if seen.iter().any(|one| one == name) {
             return Err(Cycle);
@@ -432,20 +446,27 @@ impl Places {
             return Ok(None);
         };
         seen.push(name.to_owned());
-        let base = file.extends.as_ref().and_then(|base| {
+        // A theme of the Person's extends this device's own unless it says
+        // another (ADR 0100, decision 2), and so does one whose base is
+        // not there.
+        let said = file.extends.as_ref();
+        let mut base = said.and_then(|base| {
             let said = base.get_ref();
             let why = match self.find(said, seen, watched, wrong) {
                 Ok(Some(found)) => return Some(found),
-                Ok(None) => {
-                    format!("there is no theme \"{said}\" to extend, so {name} stands alone")
-                }
+                Ok(None) => format!(
+                    "there is no theme \"{said}\" to extend, so {name} extends \"platform\""
+                ),
                 Err(Cycle) => format!(
-                    "extends = \"{said}\" comes back round to {name}, so {name} stands alone"
+                    "extends = \"{said}\" comes back round to {name}, so {name} extends \"platform\""
                 ),
             };
             wrong.push(Wrong::at(&path, &text, base.span(), why));
             None
         });
+        if base.is_none() && said.is_none_or(|said| said.get_ref() != "platform") {
+            base = self.find("platform", seen, watched, wrong).ok().flatten();
+        }
         seen.pop();
         let layer = Layer {
             path: Some(path),
