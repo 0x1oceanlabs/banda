@@ -1,40 +1,19 @@
-import { MARK_WORDS, ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
+import { ThreadMark } from "@banda/ui/components/banda-mark"
 import type { Named } from "@banda/contract/machines"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
-import { AlarmClockIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
-import { ago, clock, left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
-import { useNow } from "@banda/ui/hooks/use-now"
-import type { Listed } from "@banda/ui/pane"
-import { calls } from "@banda/ui/status"
 import type { Row as Arranged } from "./arrange"
+import { type Card, cardOf, type Slot } from "./card"
+import { Status, TONES } from "./CardStatus"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
-import type { Part, Settings } from "./settings"
+import type { Settings } from "./settings"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
 
-/**
- * The built-in layouts (ADR 0008, decision 4). The line with the title is
- * always the mark and the title, so a Thread looks the same in every
- * density; the other lines add context.
- */
-export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
-  1: [["mark", "title", "~", "project", "status"]],
-  2: [
-    ["mark", "project", "~", "status"],
-    ["title", "~", "harness"],
-  ],
-  3: [["mark", "project", "~", "status"], ["title"], ["note", "~", "harness"]],
-}
-
 const NO_HARNESSES: readonly EmblemOf[] = []
-
-/** What a row draws: its parts, and another machine's mark where its
- * Project is hidden. */
-type Drawn = Part | "machine"
 
 /** One row of the sidebar, its parts laid out as the settings say; a
  * click opens the Pane it stands for, by `pane.pick`. */
@@ -68,18 +47,27 @@ export function Row({
   /** The Harness list its emblem is read from; none, the Harness's own. */
   harnesses?: readonly EmblemOf[]
 }) {
-  const { lines, hide, layout } = settings.row
   const onOpen = useOpenRow(row)
-  const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
-    line.flatMap((part): Drawn[] => {
-      if (part === "project" && inProject) return []
-      // A row that hides its Project still says where its Thread runs.
-      if (hide.includes(part))
-        return part === "project" && machine ? ["machine"] : []
-      return [part]
-    })
-  )
-  const one = parts.length === 1
+  const card = cardOf(row, settings, {
+    inProject,
+    elsewhere: machine !== undefined,
+  })
+  const one = card.lines.length === 1
+  const slot = (part: Slot, at: number) =>
+    part === "title" && field ? (
+      <Fragment key={`${part}${at}`}>{field}</Fragment>
+    ) : (
+      <Piece
+        key={`${part}${at}`}
+        part={part}
+        row={row}
+        card={card}
+        wide={!one}
+        machine={machine}
+        stillAt={stillAt}
+        harnesses={harnesses}
+      />
+    )
   const Element = field ? "div" : "button"
   const button = (
     <Element
@@ -93,28 +81,16 @@ export function Row({
       )}
       onClick={field ? undefined : onOpen}
     >
-      {parts.map(
-        (line, index) =>
-          line.length > 0 && (
-            <span key={index} className="flex min-w-0 items-center gap-1.5">
-              {line.map((part, at) =>
-                part === "title" && field ? (
-                  <Fragment key={`${part}${at}`}>{field}</Fragment>
-                ) : (
-                  <Piece
-                    key={`${part}${at}`}
-                    part={part}
-                    row={row}
-                    wide={!one}
-                    machine={machine}
-                    stillAt={stillAt}
-                    harnesses={harnesses}
-                  />
-                )
-              )}
-            </span>
-          )
-      )}
+      {card.lines.map((line, index) => {
+        if (line.left.length + line.right.length === 0) return null
+        return (
+          <span key={index} className="flex min-w-0 items-center gap-1.5">
+            {line.left.map(slot)}
+            {line.right.length > 0 && <span className="ml-auto" />}
+            {line.right.map(slot)}
+          </span>
+        )
+      })}
     </Element>
   )
   if (!action || field) return button
@@ -131,24 +107,23 @@ export function Row({
 function Piece({
   part,
   row,
+  card,
   wide,
   machine,
   stillAt,
   harnesses,
 }: {
-  part: Drawn
+  part: Slot
   row: Arranged
+  card: Card
   wide: boolean
   machine?: Named
   stillAt?: number
   harnesses: readonly EmblemOf[]
 }) {
   const { listed, project } = row
-  // Not the Person's turn and not at work: it steps back.
-  const quiet = row.stand !== "turn" && row.stand !== "working"
+  const { quiet } = card
   switch (part) {
-    case "~":
-      return <span className="ml-auto" />
     case "mark":
       return (
         <ThreadMark listed={listed} className={cn(quiet && "opacity-40")} />
@@ -188,27 +163,19 @@ function Piece({
       )
     }
     case "status":
-      if (row.stand === "later") return <Sleeps listed={listed} />
-      if (row.woke !== undefined) return <Woke listed={listed} at={row.woke} />
-      return <Status listed={listed} stillAt={stillAt} />
-    case "note": {
-      const text = listed.calls ?? listed.said
-      if (!text) return <span className="min-w-0 flex-1" />
+      return <Status said={card.status} stillAt={stillAt} />
+    case "note":
+      if (!card.note) return <span className="min-w-0 flex-1" />
       return (
         <span
           className={cn(
             "min-w-0 flex-1 truncate text-xs",
-            listed.calls && listed.mark === "asking"
-              ? "text-attention"
-              : listed.calls
-                ? "text-destructive"
-                : "text-muted-foreground"
+            TONES[card.note.tone]
           )}
         >
-          {text}
+          {card.note.text}
         </span>
       )
-    }
   }
 }
 
@@ -249,110 +216,4 @@ function Title({ row, quiet }: { row: Arranged; quiet: boolean }) {
       </span>
     </span>
   )
-}
-
-/**
- * What calls the Person, in its colour; the running turn's timer, which
- * stands at `stillAt` when it is given; or how long ago it last changed.
- */
-export function Status({
-  listed,
-  stillAt,
-}: {
-  listed: Listed
-  stillAt?: number
-}) {
-  const { mark, changed, began } = listed
-  switch (mark) {
-    case "asking":
-      return <Word className="text-attention">{MARK_WORDS.asking}</Word>
-    case "failed":
-    case "offline":
-      return <Word className="text-destructive">{MARK_WORDS[mark]}</Word>
-    case "done":
-      return <Word className="text-foreground">{MARK_WORDS.done}</Word>
-    case "running":
-    case "thinking":
-      return began === undefined ? null : (
-        <Timer from={began} stillAt={stillAt} />
-      )
-    default:
-      return (
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {ago(changed)}
-        </span>
-      )
-  }
-}
-
-/** When a put-off Thread wakes, and how long is left: "22:40 · 1h",
- * "Fri 09:00 · 12h", or "when done" (ADR 0074, decision 6). */
-function Sleeps({ listed }: { listed: Listed }) {
-  const now = useNow(15_000)
-  const until = listed.later?.until
-  const by = listed.later?.byAgent ? "Later by its Agent" : "Later"
-  return (
-    <span
-      className="shrink-0 text-xs text-muted-foreground tabular-nums"
-      title={until === undefined ? `${by}, until it's done` : by}
-    >
-      {until === undefined
-        ? "when done"
-        : `${clock(until, now)} · ${left(until, now)}`}
-    </span>
-  )
-}
-
-/** A Thread that woke while its Person was away: a clock before what calls,
- * or before the time it woke. */
-function Woke({ listed, at }: { listed: Listed; at: number }) {
-  return (
-    <span
-      className={cn(
-        "flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums",
-        toneOf(listed.mark) ?? "text-foreground"
-      )}
-      title="Woke from Later"
-    >
-      <AlarmClockIcon className="size-3" aria-label="Woke" />
-      {calls(listed.mark) ? MARK_WORDS[listed.mark] : clock(at)}
-    </span>
-  )
-}
-
-function Word({
-  className,
-  children,
-}: {
-  className: string
-  children: string
-}) {
-  return (
-    <span className={cn("shrink-0 text-xs font-medium", className)}>
-      {children}
-    </span>
-  )
-}
-
-/** How long the work that runs now has run, ticking each second, or
- * until `stillAt`, standing. */
-function Timer({ from, stillAt }: { from: number; stillAt?: number }) {
-  const now = useNow(1000, stillAt === undefined)
-  return (
-    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-      {elapsed((stillAt ?? now) - from)}
-    </span>
-  )
-}
-
-/** `0:41`, `7:05`, `1:02:09`. */
-export function elapsed(ms: number): string {
-  const all = Math.max(0, Math.floor(ms / 1000))
-  const [h, m, s] = [
-    Math.floor(all / 3600),
-    Math.floor(all / 60) % 60,
-    all % 60,
-  ]
-  const two = (n: number) => String(n).padStart(2, "0")
-  return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`
 }
