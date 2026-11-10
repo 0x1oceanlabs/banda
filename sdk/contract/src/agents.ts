@@ -4,7 +4,9 @@
  */
 import type { Event } from "./generated/Event"
 import type { Agents } from "./generated/agents/Agents"
+import type { Body } from "./generated/agents/Body"
 import type { Fact } from "./generated/agents/Fact"
+import type { Item } from "./generated/agents/Item"
 import type { ModuleFile } from "./look"
 import { VERSION } from "./generated/agents/VERSION"
 
@@ -138,6 +140,22 @@ const KINDS: ReadonlySet<string> = new Set(
   } satisfies Record<Fact["kind"], true>)
 )
 
+/** Every kind of Thread entry; the compiler checks it against the generated
+ * union, so a kind added in Rust is listed here before it type-checks. */
+export const BODY_KINDS: ReadonlySet<Body["kind"]> = new Set(
+  Object.keys({
+    message: true,
+    thought: true,
+    tool: true,
+    plan: true,
+    question: true,
+    notice: true,
+    moved: true,
+    issue: true,
+    visual: true,
+  } satisfies Record<Body["kind"], true>) as Body["kind"][]
+)
+
 /**
  * The fact an event carries, or `null` when this window does not know it:
  * another module's event, a newer version, or a kind added since. Unknown
@@ -151,6 +169,16 @@ export function decodeFact(event: Event): Fact | null {
     typeof event.payload === "object" &&
     event.payload !== null
   return known ? ({ kind: event.kind, payload: event.payload } as Fact) : null
+}
+
+/**
+ * Whether this window knows the kind of entry `item` is. A newer engine's
+ * view may hold one it does not, which its Thread leaves out (ADR 0103,
+ * decision 10): no fact brings one, as `decodeFact` drops a kind it does
+ * not know.
+ */
+export function knownItem(item: Item): boolean {
+  return BODY_KINDS.has(item.body.kind)
 }
 
 /** How messages are sent with no `agents.toml`, as `banda look` gives it:

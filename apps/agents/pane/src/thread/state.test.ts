@@ -1,5 +1,10 @@
 import type { Event, Participant } from "@banda/contract"
-import type { ListedThread, ThreadView, TurnView } from "@banda/contract/agents"
+import type {
+  Item,
+  ListedThread,
+  ThreadView,
+  TurnView,
+} from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { agent, event, person } from "../testing"
 import {
@@ -20,6 +25,7 @@ import {
   threadOf,
   writerOf,
 } from "./state"
+import { timeline } from "./timeline"
 
 /** `turn` as `state` has it now. */
 const turnIn = (state: ThreadState, turn: TurnView) =>
@@ -424,6 +430,55 @@ test("a turn Banda kept Supervised changes the Thread's settings alone, as the e
   expect({ ...kept, at: 0 }).toEqual(
     fromView({ ...view, settings: supervised })
   )
+})
+
+test("an entry of a kind this window does not know is left out of the Thread (ADR 0103, decision 10)", () => {
+  const known = play(
+    event(
+      "message.posted",
+      { item: "m", turn: "u", text: "hi", images: [] },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u" }),
+    event("tool.started", {
+      item: "x",
+      turn: "u",
+      title: "Run",
+      tool: "execute",
+      status: "done",
+      content: [],
+    }),
+    event("reply.grew", { item: "r", turn: "u", text: "Done." }),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  // Kinds a newer engine's view may hold, which no fact brings.
+  const newer = (id: string, kind: string, title: string) =>
+    ({
+      id,
+      turn: "u",
+      author: agent,
+      at: 3,
+      body: { kind, title },
+    }) as unknown as Item
+  const [message, ...rest] = known.items
+  const view = {
+    at: known.at,
+    thread: { title: "hi", harness: "fake" },
+    items: [
+      message,
+      newer("s", "subagent", "Explore the routes"),
+      ...rest,
+      newer("c", "crew", "Crew audit-routes"),
+    ],
+    turns: known.turns,
+    settings: known.settings,
+    offer: known.offer,
+    held: false,
+  } as unknown as ThreadView
+  const state = fromView(view)
+  expect(state.items).toEqual(known.items)
+  // No line, no gap and no work of theirs, so Find has nothing of theirs.
+  expect(timeline(state)).toEqual(timeline(known))
 })
 
 test("an Agent's plan is one item its steps change, and the context follows", () => {

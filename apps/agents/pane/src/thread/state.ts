@@ -5,6 +5,7 @@
 import type { Event } from "@banda/contract"
 import {
   decodeFact,
+  knownItem,
   type Body,
   type Can,
   type HarnessOption,
@@ -67,6 +68,9 @@ export const EMPTY: ThreadState = {
   held: false,
 }
 
+/** The Thread `view` holds, but for its entries of a kind this window does
+ * not know: they are left out here, the one place a view's entries come in,
+ * so nothing after has them (ADR 0103, decision 10). */
 export function fromView(view: ThreadView): ThreadState {
   const { at, items, turns, settings, offer, usage, held } = view
   const { title, harness } = view.thread
@@ -75,7 +79,7 @@ export function fromView(view: ThreadView): ThreadState {
     at,
     title,
     harness,
-    items,
+    items: items.filter(knownItem),
     turns,
     settings,
     offer,

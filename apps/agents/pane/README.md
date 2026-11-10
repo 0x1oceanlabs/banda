@@ -23,7 +23,11 @@ is ADR 0058.
 When a Thread is to show something new:
 
 1. Add its kind to the body in the engine's Rust (`Body`); the contract's
-   TypeScript is generated from it.
+   TypeScript is generated from it. List it in `BODY_KINDS`
+   (`sdk/contract/src/agents.ts`), as a window leaves out an entry of a
+   kind it does not know (ADR 0103, decision 10), and decide in the
+   engine's `handoff.rs` whether it goes to another Harness. Neither
+   compiles without it.
 2. Add `entries/<kind>.tsx`. Its view takes `EntryProps<"<kind>">`: the
    entry and what the Thread knows of it, as data. It draws from
    `@banda/ui`'s components with the look's values only (ADR 0058, ADR
