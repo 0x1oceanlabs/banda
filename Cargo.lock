@@ -261,6 +261,7 @@ dependencies = [
  "axum",
  "banda-agents",
  "banda-browser",
+ "banda-bytes",
  "banda-environments",
  "banda-fence",
  "banda-files",
@@ -334,6 +335,25 @@ dependencies = [
  "tempfile",
  "tokio",
  "toml",
+ "ts-rs",
+]
+
+[[package]]
+name = "banda-bytes"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "axum",
+ "banda-kernel",
+ "dunce",
+ "file-id",
+ "futures",
+ "libc",
+ "reqwest",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
  "ts-rs",
 ]
 

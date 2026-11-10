@@ -7,6 +7,7 @@ import type { FilesMethods } from "./files/FilesMethods"
 import type { GitMethods } from "./git/GitMethods"
 import type { PullsMethods } from "./pulls/PullsMethods"
 import type { TerminalMethods } from "./terminal/TerminalMethods"
+import type { BytesMethods } from "./bytes/BytesMethods"
 import type { HarnessesMethods } from "./harnesses/HarnessesMethods"
 import type { KeysMethods } from "./keys/KeysMethods"
 import type { MachinesMethods } from "./machines/MachinesMethods"
@@ -29,6 +30,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"git", GitMethods> &
   Prefixed<"pulls", PullsMethods> &
   Prefixed<"terminal", TerminalMethods> &
+  Prefixed<"bytes", BytesMethods> &
   Prefixed<"harnesses", HarnessesMethods> &
   Prefixed<"keys", KeysMethods> &
   Prefixed<"machines", MachinesMethods> &

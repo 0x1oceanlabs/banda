@@ -11,6 +11,7 @@
 use crate::places::{Places, channel, from_checkout};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
+use banda_bytes::Bytes;
 use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
@@ -57,6 +58,9 @@ pub struct HostContext<'a> {
     /// The count of the Turns that run, which each holds one of while it
     /// runs and the engine keeps its machine awake by (ADR 0097).
     pub working: &'a Working,
+    /// The tokens the bytes module gives, which the routes beside the API
+    /// serve (ADR 0106, step 4a).
+    pub bytes: &'a Bytes,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -90,6 +94,12 @@ mod build {
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
         Browser::new()
+    }
+
+    /// The bytes module shares its tokens with the routes beside the API,
+    /// which the engine serves with it.
+    pub fn bytes(host: &HostContext<'_>) -> Bytes {
+        host.bytes.clone()
     }
 
     /// Banda's settings are the settings Pane's to write (ADR 0073,
@@ -197,6 +207,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         kept: &[],
         machine: &machine,
         working: &Working::new(),
+        bytes: &Bytes::new(),
     })
 }
 
