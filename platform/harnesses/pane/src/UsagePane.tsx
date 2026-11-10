@@ -57,6 +57,7 @@ export const usagePane = definePane<UsageArgs>({
   kind: "harnesses.usage",
   title: () => "Usage",
   icon: GaugeIcon,
+  sheet: true,
   start: START,
   header: false,
   // One Usage per Project: another tab or period is the same Pane.
