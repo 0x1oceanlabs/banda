@@ -52,7 +52,7 @@ import {
 import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import { isFlow, nextFlow } from "../sidebar/FlowMenu"
+import { isFlow, nextFlow } from "../bar/Flow"
 import { archiving } from "../sidebar/items"
 import { makeProject } from "../titles/MakeProject"
 import { pickLater } from "../sidebar/LaterPicker"
@@ -1068,7 +1068,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => unarrange(shell),
   },
   {
-    // The sidebar's Flow menu: a pick of the three, where the key only
+    // The Flow's menu on the bar: a pick of the three, where the key only
     // goes to solo and back.
     id: "flow.pick",
     args: takes({ flow: "free, row or solo" }, ["flow"]),
