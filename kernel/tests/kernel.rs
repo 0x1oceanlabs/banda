@@ -838,6 +838,99 @@ async fn a_passing_refusal_is_not_kept_and_a_final_one_is() {
     );
 }
 
+/// Calls `notes.stamp` under `command` as the owner, to run only until
+/// `not_after`.
+async fn stamp_until(
+    kernel: &Kernel,
+    owner: PersonId,
+    project: &ProjectSummary,
+    command: CommandId,
+    not_after: i64,
+) -> Result<Value, Refusal> {
+    let person = Participant::Person(owner);
+    let stamped = kernel.answer_until(
+        person,
+        "notes.stamp",
+        Some(project.id),
+        Some(command),
+        Some(not_after),
+        Value::Null,
+    );
+    stamped.await.map(|answer| answer.value)
+}
+
+#[tokio::test]
+async fn a_command_past_its_not_after_is_refused_expired_and_never_runs_and_one_that_ran_gets_its_answer_however_late()
+ {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+
+    // Within its time it runs.
+    let ran = CommandId::new();
+    let first = stamp_until(&kernel, owner, &project, ran, now_ms() + 60_000).await;
+    assert_eq!(first.clone().unwrap()["stamp"], 1);
+
+    // Unseen, and past its time: refused before its module sees it, and
+    // that is its answer, so a resend gets it too.
+    let late = CommandId::new();
+    for _ in 0..2 {
+        let refused = stamp_until(&kernel, owner, &project, late, now_ms() - 1).await;
+        assert_eq!(refused.unwrap_err().code, Code::Expired);
+    }
+    let again = stamp(&kernel, owner, &project, late, Value::Null).await;
+    assert_eq!(
+        again.unwrap_err().code,
+        Code::Expired,
+        "expired is final: kept, whatever is sent after"
+    );
+    assert_eq!(
+        notes.stamped.load(Ordering::SeqCst),
+        1,
+        "only the first ran"
+    );
+
+    // One that ran, sent again past its time, as one that went as its
+    // machine went away: its receipt answers first, never expired.
+    let resent = stamp_until(&kernel, owner, &project, ran, now_ms() - 1).await;
+    assert_eq!(resent, first);
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 1, "it ran once");
+}
+
+#[tokio::test]
+async fn a_call_frame_s_not_after_reaches_the_receipt_check() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello).await;
+    let stamping = |id: u64, command: CommandId, not_after: i64| {
+        json!({
+            "type": "call", "id": id, "method": "notes.stamp", "project": project.id,
+            "command": command, "not_after": not_after
+        })
+    };
+
+    let ran = CommandId::new();
+    say(&mut socket, stamping(1, ran, now_ms() + 60_000)).await;
+    let first = next(&mut socket).await;
+    assert_eq!(first["ok"]["stamp"], 1);
+    let late = CommandId::new();
+    say(&mut socket, stamping(2, late, now_ms() - 1)).await;
+    let refused = next(&mut socket).await;
+    assert_eq!(refused["id"], 2);
+    assert_eq!(refused["error"]["code"], "expired");
+    say(&mut socket, stamping(3, ran, now_ms() - 1)).await;
+    let resent = next(&mut socket).await;
+    assert_eq!(resent["ok"], first["ok"], "a resend of one that ran");
+    assert_eq!(notes.stamped.load(Ordering::SeqCst), 1);
+}
+
 #[tokio::test]
 async fn a_command_sent_again_while_it_runs_waits_for_its_answer() {
     let root = tempfile::tempdir().unwrap();

@@ -217,6 +217,7 @@ impl Client {
             method: method.to_owned(),
             project,
             command: Some(command),
+            not_after: None,
             params,
         })
         .await?;

@@ -66,6 +66,7 @@ import { movedArgs, NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
 import { Transcript } from "./Transcript"
+import { WaitsAlone, WaitsFor } from "./WhenBack"
 import { useWriters } from "./writers"
 import { ThreadAroundProvider, type ThreadActs } from "./context"
 
@@ -151,6 +152,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     looking,
     acted,
     unsent,
+    whenBack,
+    waitsHere,
+    whenBackActions,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
   // Where a started Thread may move, and whether a move to another
@@ -439,6 +443,19 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 !(unplaced && holdsWhole(fence))
               }
             />
+          ) : live.state !== "ready" && waitsHere.length > 0 && on ? (
+            // What waits for its machine shows before the Thread can (ADR
+            // 0105).
+            <WaitsAlone
+              why={live.state === "refused" ? live.refusal.message : undefined}
+            >
+              <WaitsFor
+                waits={waitsHere}
+                machine={on}
+                reader={reader}
+                {...whenBackActions}
+              />
+            </WaitsAlone>
           ) : live.state === "loading" ? (
             <Centered>
               <Spinner />
@@ -472,6 +489,17 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   writers={writers}
                   queue={queue}
                   moves={moves}
+                  whenBack={
+                    waitsHere.length > 0 &&
+                    on && (
+                      <WaitsFor
+                        waits={waitsHere}
+                        machine={on}
+                        reader={reader}
+                        {...whenBackActions}
+                      />
+                    )
+                  }
                 />
               </ThreadAroundProvider>
             </MarkdownFiles>
@@ -553,7 +581,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           ref={composer}
           name={name}
           machine={on}
-          held={held}
+          held={whenBack === undefined ? held : undefined}
+          whenBack={whenBack}
           thread={thread}
           history={history}
           placeholder={

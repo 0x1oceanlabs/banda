@@ -27,6 +27,10 @@ pub enum Code {
     /// No answer came in time, and what was asked may have been done:
     /// look before asking again, as a second click may click twice.
     MayHaveRun,
+    /// A command came past its `not_after`, by this machine's clock, and
+    /// did not run (ADR 0105): what waited for this machine was kept too
+    /// long. Sending it again changes nothing.
+    Expired,
     /// The window and the engine speak different protocol versions.
     Protocol,
     /// Something broke inside the engine. The details are in its log.
@@ -37,12 +41,13 @@ impl Code {
     /// Whether a command's receipt keeps a refusal with this code as its
     /// answer, as long as it would keep a value (ADR 0082, decision 4). A
     /// passing one is not kept, so a resend may go through. `may_have_run`
-    /// is kept: a resend must not run again what may have run. A new code
-    /// decides here.
+    /// is kept: a resend must not run again what may have run; so is
+    /// `expired`, so a resend past its time gets it too. A new code decides
+    /// here.
     pub fn is_final(self) -> bool {
         match self {
             Code::Invalid | Code::NotFound | Code::Forbidden | Code::Conflict => true,
-            Code::MayHaveRun => true,
+            Code::MayHaveRun | Code::Expired => true,
             Code::Protocol | Code::Internal => false,
         }
     }
@@ -56,6 +61,7 @@ impl std::fmt::Display for Code {
             Code::Forbidden => "forbidden",
             Code::Conflict => "conflict",
             Code::MayHaveRun => "may_have_run",
+            Code::Expired => "expired",
             Code::Protocol => "protocol",
             Code::Internal => "internal",
         })
@@ -88,6 +94,10 @@ impl Refusal {
 
     pub fn may_have_run(message: impl Into<String>) -> Self {
         Self::new(Code::MayHaveRun, message)
+    }
+
+    pub fn expired(message: impl Into<String>) -> Self {
+        Self::new(Code::Expired, message)
     }
 
     pub fn internal() -> Self {

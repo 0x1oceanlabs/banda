@@ -6,7 +6,7 @@
  */
 import type { ComponentType, ReactNode } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Args, HereStore, Readable } from "@banda/core"
+import type { Args, HereStore, Queue, Readable } from "@banda/core"
 import type { Key } from "./lib/keys"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
@@ -130,6 +130,11 @@ export type WindowApi = {
    * hosts.toml, refuses so too: "This window does not reach arc".
    */
   sessionOf: (project: ProjectId, pane?: Pick<PaneState, "args">) => Engine
+  /** What waits for a machine that is away (ADR 0105): a message to a
+   * started Thread, sent with "Send when back". It goes once the Window
+   * reaches that machine again; past its time it comes back to its App,
+   * which hears it (`onBack`) and puts its words back into the draft. */
+  waiting: Queue
   /** Where the Person looks for `thing` (ADR 0056, decision 1), as the
    * calls part works it out (`sightOf`): from Here and what the Tiles of
    * the workspace on screen show, measured as it is asked (ADR 0087,

@@ -21,6 +21,7 @@ import {
   useAwayFor,
   useHostsBy,
   useNamedOf,
+  useWaiting,
 } from "@banda/core/react"
 
 function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
@@ -36,7 +37,8 @@ function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
  * hears the state as it changes, not each minute. Stopped, it has Start,
  * which starts Banda there: the Person's click alone, as no action does,
  * so no Agent reaches it. It takes the pointer only while it has Start,
- * so it never blocks the Pane under it otherwise.
+ * so it never blocks the Pane under it otherwise. It counts what waits
+ * for that machine on this device, from every Thread (ADR 0105, Q3).
  */
 export function MachinePill({
   shown,
@@ -46,6 +48,7 @@ export function MachinePill({
   onStart: () => void
 }) {
   const long = useAwayFor(shown)
+  const waiting = useWaiting(shown.name).length
   const words = reachWords(shown.name, shown, seenNamed)
   if (!words) return null
   const stopped = shown.state.state === "stopped"
@@ -61,6 +64,12 @@ export function MachinePill({
       <span className="min-w-0 truncate">
         <span role="status">{words}</span>
         {long && ` · ${long}`}
+        {waiting > 0 && (
+          <>
+            {" · "}
+            <span className="text-foreground">{waiting} waiting</span>
+          </>
+        )}
       </span>
       {stopped && (
         <>

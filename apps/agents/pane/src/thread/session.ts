@@ -5,10 +5,20 @@
  * queue's. The Thread Pane lays these out; it decides none of them. Each
  * that does not go says why: on the Thread's problem line, or, for a
  * machine the window does not reach, at once in a toast that names it.
+ * Only a message waits for that machine, as the Person sends it when back
+ * (ADR 0105).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { newId, type Engine, type ProjectId } from "@banda/contract"
-import { Unreachable } from "@banda/core/react"
+import {
+  KEEP,
+  Unreachable,
+  useQueue,
+  useShownOf,
+  useWaiting,
+  type Wait,
+  waitsFor,
+} from "@banda/core/react"
 import { toast } from "@banda/ui/components/sonner"
 import { problem } from "@banda/ui/lib/words"
 import type {
@@ -21,7 +31,7 @@ import type {
   TurnId,
   TurnView,
 } from "@banda/contract/agents"
-import { useMachine, useStatus } from "@banda/ui/hooks/use-status"
+import { useMachine, useSeenNamed, useStatus } from "@banda/ui/hooks/use-status"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
@@ -46,6 +56,8 @@ import type { QueueActions } from "./Queue"
 import { mark, type PersonMark } from "../list/sent"
 import { type WhenPresent, whenPresent } from "./presence"
 import { useLooking } from "./looking"
+import { imagesOf, tellBack, whenBackTitle } from "./WhenBack"
+import { putBack } from "../composer/drafts"
 import {
   asked,
   declined,
@@ -451,6 +463,88 @@ export function useThreadSession({
     took.current = ask
     void go(ask, [], false).then((went) => went || setUnsent({ text: ask }))
   })
+
+  // While a started Thread's machine is away, stopped or on another
+  // build, a message waits for it, by Send itself (ADR 0105, Q2), for 10
+  // minutes from now, unless the Person keeps it longer. A new Thread's
+  // first words stay in its composer.
+  const { host } = args
+  const queued = useQueue()
+  const shown = useShownOf(host)
+  const later = thread !== null && waitsFor(shown, reach)
+  const on = useSeenNamed(host)?.name
+  const whenBack =
+    later && on !== undefined
+      ? (now: number) => whenBackTitle(on, now + KEEP, now)
+      : undefined
+  const waitsHere = useWaiting(host, thread)
+  const sendWhenBack = (text: string, images: Image[]) => {
+    if (thread === null || host === undefined) return false
+    queued.add({
+      call: {
+        method: "agents.send",
+        params: {
+          thread,
+          text,
+          images: images.map(({ id }) => id),
+          settings: null,
+          steer: false,
+        },
+        // Fixed now: each send of it is this one command.
+        command: newId(),
+      },
+      host,
+      project,
+      item: thread,
+      text,
+      // To show, and to put back with its words.
+      carried: images,
+      pane: {
+        kind: "agents.thread",
+        args: { thread, harness, title: args.title, host },
+      },
+      at: Date.now(),
+    })
+    return true
+  }
+  // What comes back to this Thread that no Window takes, as in a window
+  // of its own, goes back into its draft here.
+  useEffect(
+    () =>
+      thread === null || host === undefined
+        ? undefined
+        : queued.onBack(
+            (back) =>
+              back.wait.host === host &&
+              back.wait.item === thread &&
+              (tellBack(back), true),
+            { after: true }
+          ),
+    [queued, host, thread]
+  )
+  const whenBackActions = {
+    /** Takes it back, its words and images into the draft. */
+    onCancel: (wait: Wait) => {
+      if (queued.cancel(wait.call.command))
+        putBack(wait.item, wait.text, imagesOf(wait))
+    },
+    /** Changes its words, by the same command and in its time; one that
+     * went meanwhile leaves the words typed in the draft. */
+    onEdit: (wait: Wait, text: string) => {
+      const { call } = wait
+      if (call.method !== "agents.send") return
+      const changed = queued.edit(call.command, text, {
+        ...call,
+        params: { ...call.params, text },
+      })
+      if (!changed) putBack(wait.item, text)
+    },
+    /** Holds it while its row is edited. */
+    onHold: (wait: Wait) => queued.hold(wait.call.command),
+    /** Keeps it for `keep` ms from when Send was pressed. */
+    onKeepFor: (wait: Wait, keep: number) =>
+      queued.keepFor(wait.call.command, keep),
+  }
   // Implement turns plan mode off and asks for the plan, in one command.
   const implement = () => {
     if (settings)
@@ -604,8 +698,17 @@ export function useThreadSession({
     waits,
     asking,
     planned,
-    send: (text: string, images: Image[], steer: boolean) =>
-      go(text, images, steer),
+    send: async (text: string, images: Image[], steer: boolean) =>
+      whenBack === undefined
+        ? go(text, images, steer)
+        : sendWhenBack(text, images),
+    /** Send's tooltip at `now` while a message waits for the machine, as
+     * Send then does: "Sends once arc is back, until 14:42 ↵"; none while
+     * it goes. */
+    whenBack,
+    /** The messages that wait for the machine, sent to this Thread. */
+    waitsHere,
+    whenBackActions,
     implement,
     answer,
     openDiff,

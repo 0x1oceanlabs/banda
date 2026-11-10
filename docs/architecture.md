@@ -642,10 +642,15 @@ command (with its ID)
   `may_have_run` included. A receipt whose command still runs stays,
   however long. A command sent again within them gets its first answer;
   past them, it runs as a new one.
-- Those seven days are today a convention of Banda's clients, not a
-  check: `banda mcp` sends a command again at once, within its session.
-  The host will check them: a command will carry `not_after`, and past it
-  the host will refuse it (ADR 0082, decisions 4 and 16).
+- Those seven days are a convention of Banda's clients for a command
+  that carries no `not_after`: `banda mcp` sends a command again at once,
+  within its session. A command may carry `not_after`, in ms since the
+  epoch by the host's clock, as a message that waited for its machine
+  does, seven days at most from when it was sent (ADR 0105). Its receipt
+  is looked up first, so one that ran gets its answer however late. One
+  not run yet is refused `expired` past it, before its module sees it,
+  and `expired` is kept as its answer, so a resend gets it too
+  (`Kernel::answer_until`; ADR 0082, decisions 4 and 16).
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.

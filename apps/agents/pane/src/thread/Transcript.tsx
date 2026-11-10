@@ -54,6 +54,7 @@ export function Transcript({
   writers,
   answering,
   moves,
+  whenBack,
 }: Answering & {
   writers: Listing
   /** The Thread waits for its Person: a Question, or a plan. */
@@ -67,6 +68,8 @@ export function Transcript({
   queue: QueueActions
   /** Where the Thread may move, for a limit's card. */
   moves?: Moves
+  /** The messages that wait for its machine, last (ADR 0105). */
+  whenBack?: React.ReactNode
 }) {
   const { thread, reader, acts } = useThreadAround()
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
@@ -186,6 +189,11 @@ export function Transcript({
                   onOpenThread={acts.openThread}
                   {...queue}
                 />
+              </MessageScrollerItem>
+            )}
+            {whenBack && (
+              <MessageScrollerItem key="when-back">
+                {whenBack}
               </MessageScrollerItem>
             )}
           </MessageScrollerContent>

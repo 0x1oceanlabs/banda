@@ -20,6 +20,7 @@ import { visualPane } from "./visual/VisualPane"
 import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
+import { hearBack } from "./thread/WhenBack"
 import { threadItems } from "./list/items"
 import { threadHeader } from "./list/header"
 import { waitingThreads } from "./list/waiting"
@@ -151,9 +152,10 @@ export const agents = defineModule({
   slots: [threadHeader, waitingThreads],
   // This machine's window moves the marks it kept to their host, once
   // (ADR 0096, decision 9): its own engine's, never another host's, the
-  // session of its home, a Project of this machine's.
+  // session of its home, a Project of this machine's. A message that
+  // waited for its machine and did not go comes back here (ADR 0105).
   start: (window) => {
     move.start(window.sessionOf(window.home))
-    return () => undefined
+    return hearBack(window)
   },
 })

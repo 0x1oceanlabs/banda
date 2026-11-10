@@ -198,7 +198,7 @@ function WaitingMessage({
 
 /** One of a waiting message's actions: a word, the foreground's colour
  * when pointed at or focused. */
-function Action(props: React.ComponentProps<"button">) {
+export function Action(props: React.ComponentProps<"button">) {
   return (
     <button
       type="button"
@@ -212,7 +212,7 @@ function Action(props: React.ComponentProps<"button">) {
  * Cancel leaves it as it was. It is the bubble it was, as tall as its
  * text, in the composer's values: the bubble's corner, a block's fill
  * and line, prose. */
-function EditWaiting({
+export function EditWaiting({
   text,
   busy,
   onSave,

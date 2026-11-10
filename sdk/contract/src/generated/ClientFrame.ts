@@ -8,7 +8,14 @@ export type ClientFrame = { "type": "hello", protocol: number, token: string, } 
 /**
  * Makes a command run once (ADR 0002, decision 2).
  */
-command?: CommandId, params: JsonValue, } | { "type": "subscribe", id: number, project: ProjectId, after: number, filter: EventFilter, } | { "type": "unsubscribe", id: number, subscription: number, } | { "type": "stream", id: number, 
+command?: CommandId, 
+/**
+ * The time past which a command does not run, in ms since the
+ * epoch by this machine's clock: one that waited for it is
+ * refused `expired` after (ADR 0105). A resend of one that ran
+ * gets its answer all the same.
+ */
+not_after?: number, params: JsonValue, } | { "type": "subscribe", id: number, project: ProjectId, after: number, filter: EventFilter, } | { "type": "unsubscribe", id: number, subscription: number, } | { "type": "stream", id: number, 
 /**
  * None for a stream of this machine's: `window.requests`,
  * `machine.named`, `machine.power`, or a module of the machine's.

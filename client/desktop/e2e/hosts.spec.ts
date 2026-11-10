@@ -8,7 +8,10 @@
  * stopped there, it says so, and Start brings it back. Its Thread opens
  * from the sidebar on arc's engine, and waits while arc is away: Send
  * says why in the pill's words, from the window's start, and turns on as
- * arc is back. Alt+U and a toast open one there too, as `pane.pick` keeps
+ * arc is back. In a started Thread it reads Send when back instead: the
+ * message waits at the Thread's end, counted in the pill, and goes once
+ * as arc is back, or past its time comes back into the draft (ADR 0105).
+ * Alt+U and a toast open one there too, as `pane.pick` keeps
  * its host, and a toast for one names arc, and its Allow and Try again go
  * to arc's engine, or are refused at once while arc is away. So is Stop
  * on its Thread, in a toast that names arc, and nothing goes there once
@@ -427,8 +430,8 @@ async function shot(page: Page, name: string, at = { x: 900, y: 700 }) {
  * again as its host is live, and its own wait is up to 5 s. */
 const SOON = 1_500
 
-/** What the pill over `pane` and its Send say at one moment; null where
- * one says nothing. */
+/** What the pill over `pane` and its Send say at one moment, and Send
+ * when back's tooltip; null where one says nothing. */
 const wordsOf = (pane: Locator) =>
   pane.evaluate((own) => ({
     pill:
@@ -437,18 +440,27 @@ const wordsOf = (pane: Locator) =>
     send:
       own.querySelector('button[aria-label="Send"]')?.getAttribute("title") ??
       null,
+    later:
+      [...own.querySelectorAll("button")]
+        .find((button) => button.textContent === "Send when back")
+        ?.getAttribute("title") ?? null,
   }))
 
 /** Watches `pane` for `ms`: whenever its pill and its Send both say why
  * it waits, they say the same, away with when Send goes (ADR 0095,
- * decision 7), and never "Connecting" beside "away". */
+ * decision 7), and never "Connecting" beside "away"; Send when back, as
+ * it waits for the machine instead, says when it sends (ADR 0105). */
 async function sameWords(pane: Locator, ms: number) {
   for (const until = Date.now() + ms; Date.now() < until;) {
-    const { pill, send } = await wordsOf(pane)
+    const { pill, send, later } = await wordsOf(pane)
     if (pill !== null && send !== null)
       expect(send).toBe(
         pill.endsWith(" is away") ? `${pill}. Send once it is back.` : pill
       )
+    if (later !== null) {
+      expect(send).toBeNull()
+      expect(later).toMatch(/^Sends once \S+ is back, until .+ ↵$/)
+    }
     await pane.page().waitForTimeout(100)
   }
 }
@@ -725,9 +737,10 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await shot(page, "pr3-1-remote-thread")
 
   // The link drops, and arc's engine ends with it: the Pane says so,
-  // and its Thread stays as it was. Send waits and says why, Enter sends
-  // nothing, and what is written stays. As arc is back, it reads it again
-  // and writes there. The page's clock moves on by hand from here.
+  // and its Thread stays as it was. Send reads "Send when back": Enter
+  // leaves the message at the end of the Thread, to wait for arc (ADR
+  // 0105). As arc is back, it reads it again, and the message goes there,
+  // once. The page's clock moves on by hand from here.
   arc.down(true)
   arc.cut()
   const away = page.getByRole("status").filter({ hasText: "arc is away" })
@@ -749,35 +762,35 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await expect(away).toHaveText("arc is away")
   await expect(label.getByText(said!, { exact: true })).toBeVisible()
   await composer.fill("back again")
-  const sending = thread.getByRole("button", { name: "Send", exact: true })
-  await expect(sending).toBeDisabled()
-  await expect(sending).toHaveAttribute(
+  const later = thread.getByRole("button", { name: "Send when back" })
+  await expect(later).toBeEnabled()
+  await expect(later).toHaveAttribute(
     "title",
-    "arc is away. Send once it is back."
+    /^Sends once arc is back, until /
   )
-  // Held, it still takes the pointer, so its tooltip shows.
-  await sending.hover({ timeout: 5_000 })
   await composer.press("Enter")
-  await expect(composer).toHaveText("back again")
-  await expect(sending).toBeDisabled()
+  await expect(composer).toHaveText("")
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits).toContainText("back again")
+  await expect(pill).toHaveText("arc is away · 2 min · 1 waiting")
   await shot(page, "pr3-2-away")
   arc.down(false)
   await expect(away).toHaveCount(0, { timeout: 60_000 })
-  // Its engine tries again as arc is live, not on its own wait: Send
-  // turns on as the pill goes, the draft still there.
-  await expect(sending).toBeEnabled({ timeout: SOON })
+  // Its engine tries again as arc is live, not on its own wait: the
+  // message goes as the pill goes, and Send is itself again.
+  await expect(thread.getByText("You said: back again")).toBeVisible({
+    timeout: 10_000,
+  })
+  await expect(waits).toHaveCount(0)
+  const sending = thread.getByRole("button", { name: "Send", exact: true })
   await expect(sending).not.toHaveAttribute("title")
-  await expect(composer).toHaveText("back again")
-  await composer.press("Enter")
-  await expect(thread.getByText("You said: back again")).toBeVisible()
-  await expect(composer).toHaveText("")
   // arc's Agent answered it there, in the same Thread.
   await expect
     .poll(() => states(arc!, banda))
     .toEqual([["Bench window tests", "done"]])
   const [only] = threadsOf(arc!, banda)
   expect(keptOf(arc!, banda, only!.id)).toContain("You said: back again")
-  // Once: nothing went while arc was away.
+  // Once: nothing went while arc was away, and it went once.
   await expect(thread.getByText("You said: back again")).toHaveCount(1)
   // The window's arrangement keeps the Pane on arc: drawn anew, as after
   // a restart, it opens there again.
@@ -853,7 +866,7 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   ])
 })
 
-test("another machine's Thread says on Send what its pill says from the window's start, with arc asleep, then refused; Send turns on as arc is back", async () => {
+test("another machine's Thread says on Send what its pill says from the window's start; with arc asleep, then refused, Send waits for it; Send turns on as arc is back", async () => {
   test.setTimeout(180_000)
   arc = newArc()
   await seed(arc)
@@ -866,7 +879,8 @@ test("another machine's Thread says on Send what its pill says from the window's
   ).toBeVisible()
 
   // arc asleep as the window starts again on what it left: its Thread
-  // says so in the pill, and Send says the same from the first moment.
+  // says so in the pill, and Send says the same from the first moment it
+  // says why, then waits for arc, as Send when back (ADR 0105).
   const { dir } = window
   await window.app.close()
   arc.down(true)
@@ -875,17 +889,34 @@ test("another machine's Thread says on Send what its pill says from the window's
   const thread = threadIn(page)
   const pill = thread.locator("[data-machine-pill] [role=status]")
   const sending = thread.getByRole("button", { name: "Send", exact: true })
+  const later = thread.getByRole("button", { name: "Send when back" })
   await expect(pill).toHaveText("arc is away", { timeout: 30_000 })
-  await expect(sending).toBeVisible()
+  await expect(later).toBeVisible()
   await sameWords(thread, 4_000)
-  await expect(sending).toHaveAttribute(
+  await expect(later).toHaveAttribute(
     "title",
-    "arc is away. Send once it is back."
+    /^Sends once arc is back, until /
   )
   await shot(page, "h5a-1-asleep")
 
-  // Back, but with no banda where hosts.toml says: refused, the pill and
-  // Send say why in the same words.
+  // A message sent now waits at the Thread's end, though the window has
+  // not read the Thread from arc yet (ADR 0105, Q3); Cancel puts it back.
+  const composer = thread.getByRole("textbox", { name: /^Message to / })
+  await composer.fill("and run them again")
+  await composer.press("Enter")
+  await expect(composer).toHaveText("")
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits).toContainText("and run them again")
+  await expect(waits).toContainText(/Waits for arc · until \S+/)
+  await expect(pill).toHaveText("arc is away")
+  await expect(thread.locator("[data-machine-pill]")).toContainText("1 waiting")
+  await shot(page, "h5e-6")
+  await waits.getByRole("button", { name: "Cancel" }).click()
+  await expect(waits).toHaveCount(0)
+  await expect(composer).toHaveText("and run them again")
+
+  // Back, but with no banda where hosts.toml says: refused, the pill says
+  // why, and Send still waits for arc.
   const hostsToml = join(dir, "config/hosts.toml")
   writeFileSync(
     hostsToml,
@@ -895,11 +926,13 @@ test("another machine's Thread says on Send what its pill says from the window's
   const refused = "arc: no /nowhere/banda there; check banda in hosts.toml"
   await expect(pill).toHaveText(refused, { timeout: 30_000 })
   await sameWords(thread, 2_000)
-  await expect(sending).toHaveAttribute("title", refused)
+  await expect(later).toHaveAttribute(
+    "title",
+    /^Sends once arc is back, until /
+  )
   // Its Harness's name is not known here yet: the box goes by it later.
-  const composer = thread.getByRole("textbox", { name: /^Message to / })
   await composer.fill("back on arc")
-  await expect(sending).toBeDisabled()
+  await expect(later).toBeEnabled()
 
   // Its banda right again, arc is live: Send turns on as the pill goes.
   writeFileSync(
@@ -1732,8 +1765,8 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
 
   // arc is away (Q7): its label says once, and not dim, what its rows are
   // as of, when the window last heard it, and its tooltip why; its rows
-  // dim, each with its own words; this machine's do not. The pill and
-  // Send say it as when its link is gone.
+  // dim, each with its own words; this machine's do not. The pill says it
+  // as when its link is gone, and Send waits for arc (ADR 0105).
   const asOf = there.getByText(AWAY_AS_OF)
   await expect(asOf).toBeVisible()
   const heard = (await asOf.textContent())!.replace("away · as of ", "")
@@ -1750,10 +1783,11 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   await expect(dimmed(sidebar).getByText("Sidebar for arc")).toHaveCount(0)
   await expect(pill).toHaveText("arc is away")
   await expect(pill.locator('[data-machine-icon="server"]')).toBeVisible()
-  await expect(sending).toBeDisabled()
-  await expect(sending).toHaveAttribute(
+  const later = thread.getByRole("button", { name: "Send when back" })
+  await expect(later).toBeEnabled()
+  await expect(later).toHaveAttribute(
     "title",
-    "arc is away. Send once it is back."
+    /^Sends once arc is back, until /
   )
   // What arc writes meanwhile, the window does not hear yet (#801).
   writeOnArc(arc, banda, only!.id, "written while quiet")
@@ -1806,7 +1840,7 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
 
   // Banda stopped there: its rows stay, dim, with their words (Q8), and
   // its label says stopped, as of when it was last heard, with Start; the
-  // pill and Send say why.
+  // pill says why, and Send waits for arc.
   await expect(sending).toBeEnabled({ timeout: 60_000 })
   expect(
     await page.evaluate(() =>
@@ -1816,7 +1850,10 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   await expect(there.getByText(STOPPED_AS_OF)).toBeVisible()
   await expect(dimmed(there).getByText("Bench window tests")).toBeVisible()
   await expect(pill).toHaveText("Banda is stopped on arc·Start")
-  await expect(sending).toHaveAttribute("title", "Banda is stopped on arc")
+  await expect(later).toHaveAttribute(
+    "title",
+    /^Sends once arc is back, until /
+  )
   await shot(page, "h5c-2")
   // Its words show whole beside Start. Its ⋯, shown as the pointer is
   // over its label or as Tab reaches it (headless, nothing hovers), sits
@@ -1858,6 +1895,209 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   await expect(there.getByText(/^stopped/)).toHaveCount(0, { timeout: 60_000 })
   await expect(dimmed(there)).toHaveCount(0, { timeout: 60_000 })
   await expect(pill).toHaveCount(0)
+  await stopEngine()
+})
+
+/** How many times the Person's message `text` reached arc's Thread
+ * `thread` in `project`. */
+function sentOf(arc: Arc, project: string, thread: string, text: string) {
+  const { ok } = JSON.parse(keptOf(arc, project, thread)) as {
+    ok: { items: { author: { kind: string }; body: { text?: string } }[] }
+  }
+  return ok.items.filter(
+    ({ author, body }) => author.kind === "person" && body.text === text
+  ).length
+}
+
+/** What the window keeps as Thread `thread`'s draft (drafts.ts). */
+const draftOf = (page: Page, thread: string) =>
+  page.evaluate(
+    (thread) => localStorage.getItem(`banda.agents.draft.${thread}`),
+    thread
+  )
+
+test("with arc away, a message to its Thread waits as Send when back, shown at its end and counted in the pill; past its time it is not sent and comes back into the draft; arc back, the next goes once (H5e)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  // arc's engine runs on as the link goes, so its Agent answers once the
+  // window reaches it again.
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  const { page } = window
+  await work(window)
+  // The page's clock starts at 14:30 today and is moved on by hand from
+  // there, its timers made anew: arc's engine keeps its own.
+  const today = new Date()
+  const at = (hours: number, minutes: number) =>
+    new Date(
+      today.getFullYear(),
+      today.getMonth(),
+      today.getDate(),
+      hours,
+      minutes
+    ).getTime()
+  await page.clock.install({ time: at(14, 30) })
+  await page.reload()
+  await expect(sidebarOf(page).getByText("Sidebar for arc")).toBeVisible()
+  await arcOf(page).getByText("Bench window tests").click()
+  const thread = page.getByRole("region", {
+    name: "Bench window tests",
+    exact: true,
+  })
+  await expect(thread.getByText("You said: Bench window tests")).toBeVisible()
+  const [only] = threadsOf(arc, banda)
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+  const pill = thread.locator("[data-machine-pill]")
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  // A ping says how far arc's clock is from the page's, which the time
+  // a message waits for goes to arc in.
+  await page.clock.fastForward("00:16")
+  await page.waitForTimeout(1_000)
+
+  // arc goes. In its started Thread, Send itself reads "Send when back",
+  // with when it gives up, 10 minutes from now (Q2).
+  arc.down(true)
+  arc.cut()
+  await expect(pill).toHaveText("arc is away", { timeout: 30_000 })
+  await page.clock.fastForward("02:00")
+  await expect(pill).toHaveText("arc is away · 2 min")
+  const words = "and run them again with 8 shards"
+  await composer.fill(words)
+  const later = thread.getByRole("button", { name: "Send when back" })
+  const at1442 = await clockAt(page, at(14, 42))
+  await expect(later).toBeEnabled()
+  await expect(later).toHaveAttribute(
+    "title",
+    `Sends once arc is back, until ${at1442} ↵`
+  )
+  await expect(
+    thread.getByRole("button", { name: "Send", exact: true })
+  ).toHaveCount(0)
+  const button = (await later.boundingBox())!
+  await shot(page, "h5e-1", {
+    x: button.x + button.width / 2,
+    y: button.y + button.height / 2,
+  })
+
+  // Enter does the same: the message waits at the end of the Thread, dim,
+  // with when it gives up, Edit and Cancel; the pill counts it (Q3).
+  await composer.press("Enter")
+  await expect(composer).toHaveText("")
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits.getByRole("listitem")).toHaveCount(1)
+  await expect(waits).toContainText(words)
+  await expect(waits).toContainText(`Waits for arc · until ${at1442}`)
+  await expect(waits.getByRole("button", { name: "Edit" })).toBeVisible()
+  await expect(waits.getByRole("button", { name: "Cancel" })).toBeVisible()
+  await expect(pill).toHaveText("arc is away · 2 min · 1 waiting")
+  // With nothing written it is quiet, as Send is.
+  await expect(later).toBeDisabled()
+  await shot(page, "h5e-2")
+
+  // "until 14:42" opens Keep for, the default checked (Q4); a right click
+  // on the message opens it too. Each counts from when Send was pressed.
+  const until = waits.getByRole("button", { name: `until ${at1442}` })
+  await until.click()
+  const menu = page.getByRole("menu")
+  await expect(menu).toContainText("Keep for")
+  await expect(
+    menu.getByRole("menuitemradio", { name: /^10 min/ })
+  ).toHaveAttribute("aria-checked", "true")
+  await expect(menu.getByRole("menuitemradio")).toHaveText([
+    /^10 min\s*default$/,
+    "1 hour",
+    "1 day",
+    "7 days",
+  ])
+  const hour = menu.getByRole("menuitemradio", { name: "1 hour" })
+  const item = (await hour.boundingBox())!
+  await shot(page, "h5e-3", {
+    x: item.x + item.width / 2,
+    y: item.y + item.height / 2,
+  })
+  await page.keyboard.press("Escape")
+  await expect(menu).toHaveCount(0)
+  await waits.getByText(words).click({ button: "right" })
+  await menu.getByRole("menuitemradio", { name: "1 hour" }).click()
+  await expect(waits).toContainText(
+    `Waits for arc · until ${await clockAt(page, at(15, 32))}`
+  )
+  await waits.getByRole("button", { name: /^until / }).click()
+  await menu.getByRole("menuitemradio", { name: /^10 min/ }).click()
+  await expect(waits).toContainText(`Waits for arc · until ${at1442}`)
+
+  // Edit opens it in place, and it keeps its time.
+  await waits.getByRole("button", { name: "Edit" }).click()
+  const editing = thread.getByRole("textbox", { name: "Waiting message" })
+  await expect(editing).toHaveValue(words)
+  await editing.fill("and run them again with 4 shards")
+  await editing.press("Enter")
+  await expect(waits).toContainText("and run them again with 4 shards")
+  await expect(waits).toContainText(`Waits for arc · until ${at1442}`)
+  await waits.getByRole("button", { name: "Edit" }).click()
+  await editing.fill(words)
+  await editing.press("Enter")
+  await expect(waits).toContainText(words)
+
+  // At 14:42 arc is still away: the message is not sent. Its words are
+  // back in the draft, and a toast says so, with no Open, as its Thread is
+  // on screen (Q5); the pill counts none.
+  await page.clock.fastForward("10:00")
+  const notSent = toasts.filter({
+    hasText: `Not sent: arc was still away at ${at1442}.`,
+  })
+  await expect(notSent).toBeVisible()
+  await expect(notSent.getByRole("button", { name: "Open" })).toHaveCount(0)
+  await expect(waits).toHaveCount(0)
+  await expect(composer).toHaveText(words)
+  await expect(pill).toHaveText("arc is away · 12 min")
+  await expect(later).toBeEnabled()
+  if (shots) {
+    await page.mouse.move(900, 700)
+    await page.waitForTimeout(500)
+    await page.screenshot({ path: join(shots, "h5e-5.png") })
+  }
+
+  // Cancel takes one back into the draft too, above anything new there,
+  // after a blank line.
+  await composer.press("Enter")
+  await expect(waits).toContainText(words)
+  await composer.fill("and the slow ones first")
+  await waits.getByRole("button", { name: "Cancel" }).click()
+  await expect(waits).toHaveCount(0)
+  await expect
+    .poll(() => draftOf(page, only!.id))
+    .toBe(`${words}\n\nand the slow ones first`)
+  await composer.fill(words)
+  await composer.press("Enter")
+  await expect(waits).toContainText(words)
+  await expect(pill).toHaveText("arc is away · 12 min · 1 waiting")
+
+  // arc back: the message goes once, by the ID it was queued with, and
+  // nothing says so; Send is itself again. The one past its time never
+  // went: arc's Agent heard it once.
+  arc.down(false)
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
+  const sent = thread.getByText(words, { exact: true })
+  await expect(sent).toBeVisible({ timeout: 10_000 })
+  await expect(waits).toHaveCount(0)
+  await expect(
+    thread.getByRole("button", { name: "Send", exact: true })
+  ).toBeVisible()
+  await expect(toasts).toHaveCount(0)
+  // Its Person's message went once: arc's Agent heard it once.
+  await expect.poll(() => sentOf(arc!, banda, only!.id, words)).toBe(1)
+  expect(keptOf(arc, banda, only!.id)).not.toContain("and the slow ones first")
+  // arc's Agent ran them once, and said so once.
+  const answered = thread.getByText("The tests passed.")
+  await expect(answered).toBeVisible()
+  await page.waitForTimeout(1_000)
+  await expect(sent).toHaveCount(1)
+  await expect(answered).toHaveCount(1)
+  await shot(page, "h5e-4")
   await stopEngine()
 })
 
