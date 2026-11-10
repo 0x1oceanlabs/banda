@@ -1,0 +1,1329 @@
+/*
+ * Banda mock kit: Banda's look as plain CSS, so an HTML mockup looks like
+ * the real window. Dark is the default; data-theme="light" on any element
+ * turns that subtree light. Glass is on by default (Roma, 2026-11-09);
+ * data-glass="off" on .b-window makes it solid.
+ *
+ * Sources (read 2026-11-10, main at 26feb9be):
+ *   client/ui/src/styles/globals.css            tokens, glass (ADR 0023, 0036), chat values (ADR 0058)
+ *   platform/theme/themes/banda-{dark,light}     the palette and the blue accent (ADR 0075)
+ *   the theme sandbox (brand workspace)          the 5 radius levels, Banda shape (ADR 0080 d6, ADR 0100)
+ *   the sidebar-card mocks (brand workspace)     the approved card, rows and Mark (ADR 0098, 0099)
+ *   client/web/src/bar, tiling, sidebar          bar, pane header (ADR 0066), sidebar
+ *   apps/agents/pane/src                         Thread lines, cards, composer (ADR 0031, 0058)
+ *
+ * Use with mark.js (the Mark) and icons.js (lucide icons, Harness emblems).
+ * Every kit class starts with "b-". The rules: ../README.md.
+ */
+
+@font-face {
+  font-family: "Inter Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 900;
+  src: url("fonts/inter-latin-wght-normal.woff2") format("woff2-variations");
+}
+@font-face {
+  font-family: "JetBrains Mono Variable";
+  font-style: normal;
+  font-display: swap;
+  font-weight: 100 800;
+  src: url("fonts/jetbrains-mono-latin-wght-normal.woff2") format("woff2-variations");
+}
+
+/* ------------------------------------------------------------------ */
+/* 1. Seeds: Banda Dark (default)                                      */
+/* ------------------------------------------------------------------ */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --background: #19191c;
+  --foreground: #ededef;
+  --card: #1f1f23;
+  --popover: #202024;
+  --primary: #ededef;              /* buttons take the text's colour, not the accent */
+  --primary-foreground: #19191c;
+  --secondary: #27272a;
+  --muted: #27272a;
+  --accent: #27272a;
+  --muted-foreground: #a1a1aa;
+  --border: oklch(1 0 0 / 8%);
+  --input: oklch(1 0 0 / 12%);
+  --sidebar: #202024;
+  --sidebar-accent: #2a2a2e;
+  --desk-solid: #111113;
+  /* The accent (ADR 0075 d4): focus, selection, links and rings only. */
+  --ring: #4ea3ff;
+  --selection: #1e3a5f;
+  /* One meaning each (ADR 0058 d1, ADR 0099). */
+  --attention: #ff8a3d;                       /* waits for the Person: asks */
+  --destructive: oklch(0.704 0.191 22.216);   /* failed, as a tag or the octagon */
+  --added: oklch(0.723 0.192 149.579);        /* done; +lines */
+  --removed: oklch(0.704 0.191 22.216);       /* −lines */
+  --woke: #f5c542;                            /* woke from Later; the same in both themes, no outline */
+  --warning: oklch(0.8 0.15 80);
+  --working: oklch(0.72 0.13 255);            /* a Group's plate at work only (ADR 0065); never a row */
+  --account-claude: #d97757;                  /* Claude's emblem */
+  --effort: color-mix(in oklab, var(--foreground) 70%, transparent); /* the effort word: lighter text (ADR 0058 d8) */
+  --effort-top: #e879f9;                      /* its top level only: Ultracode, Ultra (ADR 0031 d3, ADR 0103 d31) */
+  /* Project signs' quiet palette (ADR 0070): none of the state colours. */
+  --sign-violet: oklch(0.72 0.14 300);
+  --sign-magenta: oklch(0.72 0.14 340);
+  --sign-yellow: oklch(0.78 0.12 95);
+  --sign-teal: oklch(0.74 0.1 195);
+  --sign-sand: oklch(0.74 0.07 65);
+  /* The terminal's colours (banda-dark colors.toml). */
+  --ansi-red: #f87171;
+  --ansi-green: #4ade80;
+  --ansi-yellow: #facc15;
+  --ansi-blue: #4ea3ff;
+  --ansi-magenta: #e879f9;
+  --ansi-cyan: #22d3ee;
+  /* Marks in quiet rows (ADR 0099 d10; marks-final.html). */
+  --mark-open: var(--foreground);
+  --row-working-mark: currentColor;
+  --row-working-mark-opacity: 0.3;
+  --row-later-mark: currentColor;
+  --row-later-mark-opacity: 0.55;
+  /* The wallpaper the glass frosts: "Dusk" from the theme sandbox. */
+  --wallpaper:
+    radial-gradient(30% 40% at 76% 30%, #ff7a45 0%, rgb(255 122 69 / 0) 70%),
+    radial-gradient(55% 65% at 18% 82%, #5b3cc4 0%, rgb(91 60 196 / 0) 66%),
+    radial-gradient(45% 55% at 62% 104%, #0e7490 0%, rgb(14 116 144 / 0) 62%),
+    linear-gradient(180deg, #07081a, #191040 58%, #0a0b18);
+  --window-line: rgb(255 255 255 / 0.12);
+  --window-highlight: rgb(255 255 255 / 0.05);
+  --shadow-strength: 0.5;
+}
+
+/* ------------------------------------------------------------------ */
+/* 2. Seeds: Banda Light                                               */
+/* ------------------------------------------------------------------ */
+[data-theme="light"] {
+  color-scheme: light;
+  --background: #ffffff;
+  --foreground: #18181b;
+  --card: #ffffff;
+  --popover: #ffffff;
+  --primary: #18181b;
+  --primary-foreground: #fafafa;
+  --secondary: #f4f4f5;
+  --muted: #f4f4f5;
+  --accent: #f4f4f5;
+  --muted-foreground: #71717a;
+  --border: oklch(0 0 0 / 8%);
+  --input: oklch(0 0 0 / 12%);
+  --sidebar: #fafafa;
+  --sidebar-accent: #f0f0f2;
+  --desk-solid: #f4f4f5;
+  --ring: #0b6fe0;
+  --selection: #cfe1fb;
+  --attention: #e5590a;
+  --destructive: oklch(0.577 0.245 27.325);
+  --added: oklch(0.527 0.137 150.069);
+  --removed: oklch(0.577 0.245 27.325);
+  --woke: #f5c542;
+  --warning: oklch(0.65 0.16 70);
+  --working: oklch(0.6 0.15 255);
+  --account-claude: #c96442;
+  --effort: color-mix(in oklab, var(--foreground) 70%, transparent);
+  --effort-top: #c026d3;
+  --sign-violet: oklch(0.52 0.14 300);
+  --sign-magenta: oklch(0.52 0.14 340);
+  --sign-yellow: oklch(0.55 0.12 95);
+  --sign-teal: oklch(0.52 0.1 195);
+  --sign-sand: oklch(0.55 0.07 65);
+  --ansi-red: #dc2626;
+  --ansi-green: #16a34a;
+  --ansi-yellow: #ca8a04;
+  --ansi-blue: #0b6fe0;
+  --ansi-magenta: #c026d3;
+  --ansi-cyan: #0891b2;
+  --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --row-working-mark: #71717a;
+  --row-working-mark-opacity: 0.7;
+  --row-later-mark: #71717a;
+  --row-later-mark-opacity: 0.55;
+  /* "Tahoe" from the theme sandbox: bright, blue. */
+  --wallpaper:
+    radial-gradient(120% 80% at 6% 112%, #0a35b8 0%, rgb(10 53 184 / 0) 56%),
+    radial-gradient(90% 60% at 100% 0%, #78dcff 0%, rgb(120 220 255 / 0) 62%),
+    radial-gradient(70% 40% at 52% 52%, rgb(255 255 255 / 0.8) 0%, rgb(255 255 255 / 0) 62%),
+    radial-gradient(140% 70% at 60% 125%, #1b57ff 0%, rgb(27 87 255 / 0) 62%),
+    linear-gradient(168deg, #cdeeff 0%, #5fa9ff 46%, #1846cf 100%);
+  --window-line: rgb(0 0 0 / 0.12);
+  --window-highlight: rgb(255 255 255 / 0.5);
+  --shadow-strength: 0.22;
+}
+
+/* ------------------------------------------------------------------ */
+/* 3. Derived tokens, worked out where each theme is set               */
+/* ------------------------------------------------------------------ */
+:root,
+[data-theme] {
+  --focus: var(--ring);
+  --link: var(--ring);
+  /* The chat's surfaces (ADR 0058 d1): mixed from ground and ink. */
+  --block: color-mix(in srgb, var(--foreground) 3.5%, var(--background));
+  --raised: color-mix(in srgb, var(--foreground) 7%, var(--background));
+  --floating: var(--popover);                 /* menus, dialogs, toasts: solid, on glass too */
+  /* The three surfaces (ADR 0023), solid; .b-window makes them glass. */
+  --desk: var(--desk-solid);
+  --panel: var(--sidebar);
+  --tile: var(--background);
+  --tile-shadow: 0 0 #0000;   /* "none" would void a shadow list */
+  --panel-shadow: 0 0 #0000;
+  --focus-shadow: 0 6px 16px -4px rgb(0 0 0 / 0.22), 0 1px 3px rgb(0 0 0 / 0.11);
+  --hover: color-mix(in oklab, var(--foreground) 5%, transparent);
+  --current: color-mix(in oklab, var(--foreground) 8%, transparent);
+  color: var(--foreground);
+}
+
+/* Type, shape and motion: the same in both themes. */
+:root {
+  --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
+  --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "JetBrainsMono Nerd Font", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
+  /* ADR 0058 d1: ui 14/20, meta 12/16, code 12.5/20, prose 14/22 (15/24 wide). */
+  --text-ui: 14px;
+  --text-ui-lh: 20px;
+  --text-meta: 12px;
+  --text-meta-lh: 16px;
+  --text-code: 12.5px;
+  --text-code-lh: 20px;
+  --prose-size: 14px;
+  --prose-leading: 22px;
+  --chat-gutter: 16px;
+  /* Five concentric levels (ADR 0080 d6, Banda shape): window 30, gap 8,
+     tile = window − gap, card = tile − pad, control 10, small = 0.6 × control. */
+  --r-window: 30px;
+  --r-tile: 22px;
+  --r-card: 14px;
+  --r-control: 10px;
+  --r-small: 6px;
+  --r-row: 10px;      /* a row in a panel: min(control, tile − 6) */
+  --r-item: 10px;     /* a menu item: min(control, card − 4) */
+  --r-round: 999px;
+  --gap: 8px;
+  --pad: 8px;
+  --bar-height: 36px;
+  --sidebar-width: 256px;
+  /* Glass (ADR 0023): how clear each surface is, frost, colour, grain. */
+  --desk-opacity: 40%;
+  --tile-opacity: 95%;            /* ADR 0023 (Roma, 2026-11-02: 0.85 was too clear); shipped tiles are solid, ADR 0075 d3 */
+  --panel-opacity: 67.5%;         /* halfway between desk and tiles */
+  --desk-blur: 40px;
+  --desk-saturation: 1.4;
+  /* Motion. */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --dur-fast: 120ms;
+  --dur: 200ms;
+  font-family: var(--font-sans);
+  font-size: 16px;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ------------------------------------------------------------------ */
+/* 4. Base                                                             */
+/* ------------------------------------------------------------------ */
+.b-kit,
+.b-kit *,
+.b-kit *::before,
+.b-kit *::after,
+.b-window,
+.b-window *,
+.b-window *::before,
+.b-window *::after {
+  box-sizing: border-box;
+}
+.b-kit {
+  margin: 0;
+  background: var(--desk-solid);
+  color: var(--foreground);
+  font: var(--text-ui) / var(--text-ui-lh) var(--font-sans);
+}
+:where(.b-kit, .b-window) :where(button) {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+}
+:where(.b-kit, .b-window) :where(p, h1, h2, h3, h4, ul, ol, pre, figure) {
+  margin: 0;
+}
+[data-mark] { display: inline-flex; flex: none; line-height: 0; }
+/* The Mark's colours (ADR 0099): colour only on the calls. Rows dim the
+   quiet ones themselves (.b-row.is-working, .is-later). */
+:where(svg[data-banda-mark]) { overflow: visible; }
+:where(svg[data-banda-mark][data-look="asks"]) { color: var(--attention); }
+:where(svg[data-banda-mark][data-look="failed"]) { color: var(--destructive); }
+:where(svg[data-banda-mark][data-look="done"]) { color: var(--added); }
+:where(svg[data-banda-mark][data-look="woke"]) { color: var(--woke); }
+:where(svg[data-banda-mark][data-look="open"]) { color: var(--mark-open); }
+:where(svg[data-banda-mark]:is([data-look="later"], [data-look="offline"])) { color: var(--muted-foreground); }
+.b-icon,
+.b-emblem {
+  flex: none;
+  display: inline-block;
+  vertical-align: middle;
+}
+.b-mono,
+.b-window code,
+.b-window kbd,
+.b-window pre {
+  font-family: var(--font-mono);
+}
+.b-muted { color: var(--muted-foreground); }
+.b-faint { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
+.b-num { font-variant-numeric: tabular-nums; }
+.b-attention { color: var(--attention); }
+.b-destructive { color: var(--destructive); }
+.b-added { color: var(--added); }
+.b-woke { color: var(--woke); }
+.b-link { color: var(--link); }
+.b-grow { flex: 1; min-width: 0; }
+.b-hstack { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.b-vstack { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.b-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+/* Long text fades out at its end, never "…" (ADR 0098 d8). Give it room
+   (flex: 1) so short text never reaches the fade. */
+.b-fade {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+}
+.b-truncate { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* ------------------------------------------------------------------ */
+/* 5. The screen, the window, the desk                                 */
+/* ------------------------------------------------------------------ */
+/* A desktop under the window: the wallpaper, sharp. Optional. */
+.b-screen {
+  position: relative;
+  min-height: 100vh;
+  padding: 28px;
+  background: var(--wallpaper);
+  background-size: cover;
+  display: flex;
+  flex-direction: column;
+}
+/* The Banda window. Its own corner is the top level (30). The desk is the
+   wallpaper, frosted, under a 40% tint of the ground, with a grain. */
+.b-window {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  border-radius: var(--r-window);
+  color: var(--foreground);
+  font: var(--text-ui) / var(--text-ui-lh) var(--font-sans);
+  background: var(--desk-solid);
+  box-shadow:
+    0 0 0 1px var(--window-line),
+    inset 0 1px 0 var(--window-highlight),
+    0 30px 70px -20px rgb(0 0 0 / 0.55),
+    0 10px 24px -12px rgb(0 0 0 / 0.3);
+}
+.b-screen > .b-window { flex: 1; }
+.b-window.b-fill {
+  border-radius: 0;
+  box-shadow: none;
+  height: 100vh;
+}
+.b-window:not([data-glass="off"]) {
+  --desk: color-mix(in oklab, var(--background) var(--desk-opacity), transparent);
+  --panel: color-mix(in oklab, var(--sidebar) var(--panel-opacity), transparent);
+  --tile: color-mix(in oklab, var(--background) var(--tile-opacity), transparent);
+  --tile-shadow: 0 18px 40px -16px rgb(0 0 0 / var(--shadow-strength));
+  --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / calc(var(--shadow-strength) + 0.05));
+  /* ADR 0036: on glass, fills, lines and quiet text are the text's own
+     colour, thinned, so they take the colour of the glass under them. */
+  --muted: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --accent: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --secondary: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --muted-foreground: color-mix(in oklab, var(--foreground) 62%, transparent);
+  --border: color-mix(in oklab, var(--foreground) 10%, transparent);
+  --input: color-mix(in oklab, var(--foreground) 12%, transparent);
+  --block: color-mix(in oklab, var(--foreground) 4%, transparent);
+  --raised: color-mix(in oklab, var(--foreground) 8%, transparent);
+  background: transparent;
+}
+.b-window:not([data-glass="off"])::before {
+  content: "";
+  position: absolute;
+  z-index: -2;
+  inset: calc(-2 * var(--desk-blur));
+  background: var(--wallpaper);
+  background-size: cover;
+  filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
+  pointer-events: none;
+}
+.b-window:not([data-glass="off"])::after {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0;
+  pointer-events: none;
+  background-color: var(--desk);
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+}
+/* Under the bar: the sidebar panel, then the Strip of columns. */
+.b-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  gap: var(--gap);
+  padding: 0 var(--gap) var(--gap);
+}
+.b-strip {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  gap: var(--gap);
+}
+.b-column {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--gap);
+}
+
+/* ------------------------------------------------------------------ */
+/* 6. The bar (ADR 0024, 0064, 0098 d20–22)                             */
+/* ------------------------------------------------------------------ */
+/* No pills, no boxes: plain text and small icons, like Omarchy's bar.
+   Left: the logo (the sidebar's button and the Banda menu), the
+   workspaces' numbers, the Flow. Centre: the counts, only while the
+   sidebar is hidden. Right: widgets that show only with something to say. */
+.b-bar {
+  position: relative;
+  height: var(--bar-height);
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 0 10px 0 12px;
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+.b-bar-logo {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-control);
+  position: relative;
+}
+.b-bar-logo:hover { background: var(--hover); }
+.b-bar-logo > svg { width: 20px; height: 20px; }
+.b-bar-logo .b-badge {
+  position: absolute;
+  right: -2px;
+  bottom: -2px;
+}
+.b-ws {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: 4px;
+}
+.b-ws > * {
+  display: grid;
+  place-items: center;
+  min-width: 24px;
+  height: 24px;
+  padding: 0 4px;
+  border-radius: var(--r-control);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+.b-ws > *:hover { color: var(--foreground); }
+.b-ws > .is-current {
+  background: var(--muted);
+  color: var(--foreground);
+  font-weight: 500;
+}
+.b-ws > .is-empty { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
+.b-bar-center {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  translate: -50% -50%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.b-bar-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+/* A widget: an icon, maybe a number. */
+.b-widget {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 26px;
+  padding: 0 6px;
+  border-radius: var(--r-control);
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.b-widget:hover { background: var(--hover); color: var(--foreground); }
+.b-widget .b-icon { width: 14px; height: 14px; }
+/* The usage limit: only a ring, the share spent (ADR 0043). */
+.b-ring {
+  --share: 0.62;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: conic-gradient(currentColor calc(var(--share) * 360deg), color-mix(in oklab, currentColor 22%, transparent) 0);
+  -webkit-mask: radial-gradient(circle, transparent 4.2px, #000 4.7px);
+  mask: radial-gradient(circle, transparent 4.2px, #000 4.7px);
+  flex: none;
+}
+.b-ring.is-warn { color: var(--attention); }
+/* A count with its mark (the centre widget): "3 · 7". */
+.b-count {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+}
+.b-badge {
+  display: inline-grid;
+  place-items: center;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  border-radius: var(--r-round);
+  background: var(--attention);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1;
+}
+
+/* ------------------------------------------------------------------ */
+/* 7. Tiles and the Pane header (ADR 0023, 0066)                       */
+/* ------------------------------------------------------------------ */
+.b-tile {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: var(--r-tile);
+  background: var(--tile);
+  box-shadow: inset 0 0 0 1px var(--border), var(--tile-shadow);
+  container: tile / inline-size;
+}
+/* The focused tile: its line takes the accent, and it lifts a little. */
+.b-tile.is-focused {
+  box-shadow: inset 0 0 0 1px var(--focus), var(--focus-shadow), var(--tile-shadow);
+}
+/* One row as tall as every Pane's; no line under a Thread's (b-bare). */
+.b-pane-head {
+  height: 40px;
+  flex: none;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 8px 0 14px;
+  border-bottom: 1px solid var(--border);
+  font-size: var(--text-ui);
+  white-space: nowrap;
+  min-width: 0;
+}
+.b-pane-head.b-bare { border-bottom: 0; }
+.b-pane-head > .b-icon { width: 16px; height: 16px; color: var(--muted-foreground); }
+.b-pane-title { font-weight: 500; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+.b-pane-detail { color: var(--muted-foreground); min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+/* The Space beside a Thread's title: its sign and name, quiet. */
+.b-space {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+/* "The capsule": the buttons at the header's end, with no plate (amended
+   2026-11-05): the Pane's own, a thin line, then Banda's (the Pane menu,
+   close). Faint until the Pane has the focus or the pointer. */
+.b-capsule {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  transition: color var(--dur) var(--ease);
+}
+.b-tile:hover .b-capsule,
+.b-tile.is-focused .b-capsule { color: var(--muted-foreground); }
+.b-capsule-line {
+  width: 1px;
+  height: 14px;
+  margin: 0 2px;
+  background: color-mix(in oklab, var(--foreground) 10%, transparent);
+}
+.b-pane-body {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* An Agent's Group (ADR 0065): a plate behind its columns, in its
+   Agent's state; quiet text tint at rest. Put the columns inside. */
+.b-group {
+  --group-color: var(--foreground);
+  --group-fill: 4%;
+  --group-line: 9%;
+  display: flex;
+  gap: var(--gap);
+  padding: calc(var(--gap) / 2);
+  margin: calc(var(--gap) / -2);
+  border-radius: calc(var(--r-tile) + var(--gap) / 2);
+  background: color-mix(in oklab, var(--group-color) var(--group-fill), transparent);
+  box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--group-color) var(--group-line), transparent);
+  flex: 1;
+  min-width: 0;
+}
+.b-group[data-state="working"] { --group-color: var(--working); --group-fill: 7%; --group-line: 18%; animation: b-breath 3.2s ease-in-out infinite; }
+.b-group[data-state="asks"] { --group-color: var(--attention); --group-fill: 13%; --group-line: 48%; }
+.b-group[data-state="done"] { --group-color: var(--added); --group-fill: 10%; --group-line: 30%; }
+.b-group[data-state="failed"] { --group-color: var(--destructive); --group-fill: 10%; --group-line: 36%; }
+
+/* ------------------------------------------------------------------ */
+/* 8. The sidebar: the Person's inbox (ADR 0098)                        */
+/* ------------------------------------------------------------------ */
+.b-sidebar {
+  width: var(--sidebar-width);
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: var(--r-tile);
+  background: var(--panel);
+  box-shadow: inset 0 0 0 1px var(--border), var(--panel-shadow);
+  -webkit-backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
+  backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
+  font-size: var(--text-ui);
+}
+/* The header: Search (quiet, no frame, its key on hover) and ✎. */
+.b-sb-head {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 10px 10px 4px;
+}
+.b-search {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  margin-right: 4px;
+  border-radius: var(--r-control);
+  font-size: 13px;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+}
+.b-search:hover { background: var(--hover); color: var(--muted-foreground); }
+.b-search .b-icon { width: 14px; height: 14px; }
+.b-search .b-key { margin-left: auto; font-size: 11px; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.b-search:hover .b-key { opacity: 0.6; }
+/* Tabs under the search: Inbox, Working, Later, and Archive as an icon. */
+.b-tabs {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 0 10px 6px;
+}
+.b-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-control);
+  font-size: 13px;
+  color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
+  white-space: nowrap;
+}
+.b-tab:hover { color: var(--foreground); }
+.b-tab.is-current { background: var(--current); color: var(--foreground); }
+.b-tab .b-n { font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.b-tab .b-n.is-turn { color: var(--attention); font-weight: 600; }
+.b-tab.b-end { margin-left: auto; padding: 0 6px; }
+.b-tab .b-icon { width: 14px; height: 14px; }
+.b-list {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 0 6px 8px;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 1.5rem), transparent);
+}
+/* A section's label ("Your turn"), and a Project's header when grouped:
+   its sign, name, a fold, and a rollup on the right (calls in the loudest
+   colour, the working in grey). */
+.b-section {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding: 10px 8px 4px;
+  font-size: var(--text-meta);
+  font-weight: 500;
+  color: var(--muted-foreground);
+}
+.b-section .b-hint { font-weight: 400; font-size: 11px; opacity: 0.6; }
+.b-proj {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  margin-top: 4px;
+  padding: 0 8px;
+  border-radius: var(--r-row);
+  font-size: 13px;
+}
+.b-proj:hover { background: var(--hover); }
+.b-proj-name { font-weight: 500; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.b-proj .b-chev { width: 12px; height: 12px; color: color-mix(in oklab, var(--muted-foreground) 50%, transparent); }
+.b-roll {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+}
+.b-roll .b-w { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
+.b-roll .b-t { font-weight: 600; }
+.b-divider { height: 1px; margin: 6px 8px; background: var(--border); }
+
+/* A card: three lines, each with a left and a right (ADR 0098 d8).
+   1: mark, title | time in the call's colour
+   2: a neutral word and what it says | a PR ✓, or the diff in grey
+   3: the Project's sign and name | machine, the Harness's emblem
+   .b-row is the one-line form (open, working, later). */
+.b-card,
+.b-row {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  padding: 6px 8px;
+  border-radius: var(--r-row);
+  color: var(--foreground);
+  cursor: default;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.b-row { padding: 4px 8px; }
+.b-card:hover,
+.b-row:hover { background: var(--hover); }
+.b-card.is-current,
+.b-row.is-current { background: var(--current); }   /* no shadow under the open one */
+.b-card.is-selected,
+.b-row.is-selected { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 15%, transparent); }
+.b-line {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  white-space: nowrap;
+}
+.b-line + .b-line { padding-left: 22px; }  /* under the title, past the mark */
+.b-title { flex: 1; min-width: 0; font-size: var(--text-ui); }
+.b-card .b-title { font-weight: 500; }
+.b-time {
+  flex: none;
+  font-size: var(--text-meta);
+  font-variant-numeric: tabular-nums;
+  color: var(--muted-foreground);
+}
+/* Colour only on the mark and the time of a call. */
+.b-card[data-look] .b-time { font-weight: 500; }
+.b-card[data-look="asks"] .b-time { color: var(--attention); }
+.b-card[data-look="failed"] .b-time { color: var(--destructive); }
+.b-card[data-look="done"] .b-time { color: var(--added); }
+.b-card[data-look="woke"] .b-time { color: var(--woke); }
+.b-say { flex: 1; min-width: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-word { margin-right: 4px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 85%, transparent); }
+.b-where {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+.b-pr { flex: none; display: inline-flex; gap: 4px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.b-pr .is-ok { color: var(--added); }
+.b-pr .is-bad { color: var(--destructive); }
+.b-diffgrey { flex: none; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); font-variant-numeric: tabular-nums; }
+/* Quiet rows: working is grey so it does not pull the eye; later and
+   archived are a step dimmer still. Open rows keep the normal colour. */
+.b-row.is-working .b-title,
+.b-card.is-working .b-title { color: color-mix(in oklab, var(--foreground) 45%, transparent); font-weight: 400; }
+.b-row.is-working .b-time,
+.b-card.is-working .b-time,
+.b-card.is-working .b-say { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
+.b-row.is-working svg[data-banda-mark],
+.b-card.is-working svg[data-banda-mark] { color: var(--row-working-mark); opacity: var(--row-working-mark-opacity); }
+.b-row.is-later .b-title { color: color-mix(in oklab, var(--foreground) 55%, transparent); }
+.b-row.is-later .b-time { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+.b-row.is-later svg[data-banda-mark] { color: var(--row-later-mark); opacity: var(--row-later-mark-opacity); }
+.b-row.is-away { opacity: 0.5; }
+.b-indent { flex: none; width: 10px; text-align: center; font-size: var(--text-meta); color: var(--muted-foreground); }
+/* Hover actions: inline at line 1's right; the time hides. */
+.b-acts {
+  position: absolute;
+  right: 6px;
+  top: 5px;
+  display: none;
+  align-items: center;
+  gap: 2px;
+}
+.b-card:hover .b-acts,
+.b-row:hover .b-acts { display: flex; }
+.b-card:hover > .b-line:first-child .b-time,
+.b-row:hover > .b-line:first-child .b-time { visibility: hidden; }
+.b-act {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 5px;
+  color: var(--muted-foreground);
+}
+.b-act:hover { background: color-mix(in oklab, var(--foreground) 10%, transparent); color: var(--foreground); }
+.b-act .b-icon { width: 14px; height: 14px; }
+.b-more { padding: 4px 8px; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+/* Inbox zero, and any empty place: what goes here, one way to fill it. */
+.b-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 36px 16px 28px;
+  text-align: center;
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+.b-empty b { font-size: var(--text-ui); font-weight: 500; color: var(--foreground); margin-top: 8px; }
+/* The foot: Settings, View, Quiet | the machines. No words. */
+.b-sb-foot {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 8px 8px;
+}
+.b-machines {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 6px;
+  border-radius: var(--r-control);
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+}
+.b-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--added); flex: none; display: inline-block; }
+.b-dot.is-away { background: var(--muted-foreground); opacity: 0.5; }
+
+/* A Project's sign: a small tile with letters, tinted in its colour. */
+.b-sign {
+  --sign: var(--muted-foreground);
+  display: inline-grid;
+  place-items: center;
+  flex: none;
+  width: 14px;
+  height: 14px;
+  border-radius: 4px;
+  font-size: 8.5px;
+  font-weight: 700;
+  line-height: 1;
+  color: var(--sign);
+  background: color-mix(in oklab, var(--sign) 16%, transparent);
+}
+.b-sign.is-plain { color: var(--muted-foreground); background: color-mix(in oklab, var(--foreground) 10%, transparent); }
+.b-sign.is-none { background: none; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--muted-foreground) 60%, transparent); border-radius: 4px; }
+.b-sign.is-16 { width: 16px; height: 16px; font-size: 10px; }
+.b-sign[data-color="violet"] { --sign: var(--sign-violet); }
+.b-sign[data-color="magenta"] { --sign: var(--sign-magenta); }
+.b-sign[data-color="yellow"] { --sign: var(--sign-yellow); }
+.b-sign[data-color="teal"] { --sign: var(--sign-teal); }
+.b-sign[data-color="sand"] { --sign: var(--sign-sand); }
+/* A machine: its icon and name, quiet. */
+.b-machine { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+.b-machine .b-icon { width: 12px; height: 12px; }
+
+/* ------------------------------------------------------------------ */
+/* 9. The Thread: a quiet document (ADR 0058)                           */
+/* ------------------------------------------------------------------ */
+.b-thread {
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  container: thread / inline-size;
+  display: flex;
+  flex-direction: column;
+  /* the messages fade out under the header and over the composer (ADR 0031 d7) */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 20px), transparent);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 16px, #000 calc(100% - 20px), transparent);
+}
+.b-chat {
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 16px var(--chat-gutter) 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;               /* the Thread's rhythm: 20 between rows */
+  font-size: var(--prose-size);
+  line-height: var(--prose-leading);
+}
+@container thread (width >= 40rem) {
+  .b-chat { --prose-size: 15px; --prose-leading: 24px; --chat-gutter: 24px; }
+}
+/* The Person's message: a flat grey bubble on the right. No avatar. */
+.b-you {
+  align-self: flex-end;
+  max-width: 80%;
+  padding: 8px 14px;
+  border-radius: var(--r-card);
+  background: var(--raised);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+.b-you.is-queued { background: none; box-shadow: inset 0 0 0 1px var(--border); border: 1px dashed var(--border); }
+/* The Agent's reply: well-set text, no bubble, no avatar. */
+.b-prose { color: var(--foreground); overflow-wrap: anywhere; }
+.b-prose > * + * { margin-top: 10px; }
+.b-prose h1 { font-size: 18px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; margin-top: 24px; }
+.b-prose h2 { font-size: 16px; line-height: 24px; font-weight: 600; margin-top: 20px; }
+.b-prose h3 { font-size: inherit; font-weight: 600; margin-top: 16px; }
+.b-prose ul,
+.b-prose ol { padding-left: 20px; }
+.b-prose li { padding-block: 2px; }
+.b-prose li::marker { color: var(--muted-foreground); }
+.b-prose a { color: inherit; text-decoration: underline; text-decoration-color: color-mix(in srgb, currentColor 35%, transparent); text-underline-offset: 3px; }
+.b-prose a.b-path { text-decoration-color: color-mix(in oklab, var(--ring) 60%, transparent); }
+.b-prose code,
+.b-code-inline {
+  padding: 1px 5px;
+  border-radius: var(--r-small);
+  background: var(--raised);
+  font-family: var(--font-mono);
+  font-size: 0.875em;
+}
+.b-prose blockquote { margin: 12px 0; padding-left: 14px; border-left: 2px solid var(--border); color: var(--muted-foreground); }
+/* A run of work, a tool call: one muted line, its icon (15px), a past-tense
+   verb in grey and its subject in the text's colour; counts; a chevron.
+   Hover lights it. What failed is a tag, not a red row. */
+.b-trace { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.b-tl {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: fit-content;
+  max-width: 100%;
+  min-width: 0;
+  font-size: var(--text-ui);
+  line-height: var(--text-ui-lh);
+  color: var(--muted-foreground);
+  border-radius: var(--r-small);
+  transition: color var(--dur-fast) var(--ease);
+}
+.b-tl:hover { color: var(--foreground); }
+.b-tl > .b-icon { width: 15px; height: 15px; }
+.b-tl .b-subject { color: var(--foreground); }
+.b-tl .b-tl-text { min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+.b-tl .b-chev { width: 15px; height: 15px; margin-left: -4px; transition: rotate var(--dur) var(--ease); }
+.b-tl.is-open .b-chev { rotate: 90deg; }
+.b-tl .b-quiet { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); font-variant-numeric: tabular-nums; }
+.b-tl.is-pending { opacity: 0.6; }
+.b-tl.is-failed > .b-icon:first-child { color: var(--destructive); }
+.b-tag {
+  display: inline-flex;
+  align-items: center;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-small);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--muted-foreground);
+  background: var(--raised);
+}
+.b-tag.is-failed { color: var(--destructive); background: color-mix(in oklab, var(--destructive) 12%, transparent); }
+.b-tag.is-waiting { color: var(--attention); background: color-mix(in oklab, var(--attention) 12%, transparent); }
+.b-tag.is-ok { color: var(--added); background: color-mix(in oklab, var(--added) 12%, transparent); }
+/* What a line opens to: one list under one rule from the line's icon. */
+.b-tl-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0 0 4px 7px;
+  padding-left: 16px;
+  border-left: 1px solid var(--border);
+}
+/* What one call holds (its output) sits under its words, no rule. */
+.b-tl-inset { margin: 0 0 4px 24px; }
+/* The live edge: "Working for 45s · Running pnpm test · 11s". */
+.b-shimmer {
+  --shimmer-dim: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  background: linear-gradient(90deg, var(--shimmer-dim) 0%, var(--foreground) 40%, var(--shimmer-dim) 80%) 0 0 / 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: b-shimmer 1.2s linear infinite;
+}
+.b-spin { animation: b-spin 1s linear infinite; }
+/* "Waiting for you: …" where a Question docks on the composer. */
+.b-waiting { color: var(--attention); }
+.b-diff { display: inline-flex; gap: 4px; flex: none; font-family: var(--font-mono); font-size: var(--text-code); font-variant-numeric: tabular-nums; }
+.b-diff .is-add { color: var(--added); }
+.b-diff .is-del { color: var(--removed); }
+
+/* One block for code, tables, diagrams, cards, consoles, diffs (ADR
+   0058 d3): the block surface, a 1px line, the card radius; a label in
+   the top-left, actions in the top-right, faded until hovered. */
+.b-block {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  border-radius: var(--r-card);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: var(--text-ui);
+  line-height: var(--text-ui-lh);
+}
+.b-block-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 40px;
+  padding: 6px 8px 6px 12px;
+}
+.b-block-head > .b-icon { width: 15px; height: 15px; color: var(--muted-foreground); }
+.b-block-title { font-weight: 550; min-width: 0; }
+.b-block-head .b-end { margin-left: auto; display: flex; align-items: center; gap: 2px; }
+.b-block-rows > * {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-top: 1px solid var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--text-code-lh);
+}
+.b-block-rows > *:hover { background: var(--raised); }
+.b-file { display: flex; flex: 1; min-width: 0; }
+.b-file .b-dir { color: var(--muted-foreground); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.b-file .b-name { flex: none; }
+.b-block-body { padding: 0 12px 12px; }
+.b-code {
+  padding: 32px 16px 14px;
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--text-code-lh);
+  white-space: pre;
+  overflow: hidden;
+}
+.b-code-label { position: absolute; top: 0; left: 0; height: 32px; padding-left: 14px; display: flex; align-items: center; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-console {
+  padding: 8px 12px;
+  border-radius: var(--r-small);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--text-code-lh);
+  white-space: pre-wrap;
+  color: var(--foreground);
+}
+.b-console-foot { margin-top: 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-family: var(--font-sans); }
+/* Syntax: a few of the terminal's colours, kept to 3:1. */
+.b-k1 { color: var(--ansi-blue); }
+.b-k2 { color: var(--ansi-green); }
+.b-k3 { color: var(--ansi-magenta); }
+.b-k4 { color: var(--muted-foreground); }
+
+/* ------------------------------------------------------------------ */
+/* 10. The composer, and what docks on it (ADR 0031, 0058 d6–8)         */
+/* ------------------------------------------------------------------ */
+.b-composer-wrap {
+  flex: none;
+  width: 100%;
+  max-width: 768px;
+  margin: 0 auto;
+  padding: 0 var(--chat-gutter) 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  container: composer / inline-size;
+}
+.b-composer {
+  display: flex;
+  flex-direction: column;
+  border-radius: var(--r-card);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  transition: box-shadow var(--dur) var(--ease);
+}
+.b-composer:focus-within,
+.b-composer.is-focused { box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 15%, transparent); }
+[data-theme="light"] .b-composer,
+[data-theme="light"].b-composer {
+  background: var(--background);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024);
+}
+.b-composer-text {
+  min-height: 44px;
+  padding: 12px 14px 6px;
+  font-size: var(--prose-size, 14px);
+  line-height: var(--prose-leading, 22px);
+  color: var(--foreground);
+}
+.b-composer-text.is-empty,
+.b-placeholder { color: var(--muted-foreground); }
+.b-composer-row {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px 8px 8px;
+}
+.b-composer-row .b-spacer { flex: 1; }
+/* A footer control: 28px, text-xs, muted; quiet until hovered. */
+.b-ctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 8px;
+  border-radius: var(--r-control);
+  font-size: var(--text-meta);
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+.b-ctl:hover,
+.b-ctl.is-open { background: var(--raised); color: var(--foreground); }
+.b-ctl .b-icon { width: 14px; height: 14px; }
+.b-ctl .b-effort { color: var(--effort); }
+.b-ctl .b-effort.is-top { color: var(--effort-top); }
+/* Send: round, primary, a thin arrow; quiet with nothing to send. Stop:
+   round, neutral, a rounded square inside, never red. */
+.b-send {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: var(--primary);
+  color: var(--primary-foreground);
+  flex: none;
+}
+.b-send .b-icon { width: 16px; height: 16px; }
+.b-send.is-empty { background: color-mix(in oklab, var(--foreground) 10%, transparent); color: var(--muted-foreground); }
+.b-send.is-stop::before { content: ""; width: 10px; height: 10px; border-radius: 2.5px; background: currentColor; }
+/* The context ring, shown from half full; warns from 80%. */
+.b-ctx { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+/* A new Thread's Space, bare under the card. */
+.b-under { display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: var(--text-meta); color: var(--muted-foreground); }
+/* What docks on the composer: a Question, a permission, a plan. */
+.b-docked {
+  border-radius: var(--r-card);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  padding: 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.b-docked-head { font-size: var(--text-meta); font-weight: 600; color: var(--attention); }
+.b-choice {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 34px;
+  padding: 6px 10px;
+  border-radius: var(--r-control);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: var(--text-ui);
+  text-align: left;
+}
+.b-choice:hover { background: var(--hover); }
+.b-docked-foot { display: flex; align-items: center; justify-content: flex-end; gap: 6px; }
+
+/* ------------------------------------------------------------------ */
+/* 11. Small parts: buttons, chips, kbd, menus, toasts                   */
+/* ------------------------------------------------------------------ */
+.b-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border-radius: var(--r-control);
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+  color: var(--foreground);
+  transition: background-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease);
+}
+.b-btn .b-icon { width: 14px; height: 14px; }
+.b-btn.is-primary { background: var(--primary); color: var(--primary-foreground); }
+.b-btn.is-primary:hover { background: color-mix(in oklab, var(--primary) 90%, transparent); }
+.b-btn.is-outline { box-shadow: inset 0 0 0 1px var(--input); }
+.b-btn.is-outline:hover,
+.b-btn.is-ghost:hover { background: var(--hover); }
+.b-btn.is-ghost { color: var(--muted-foreground); }
+.b-btn.is-ghost:hover { color: var(--foreground); }
+.b-btn.is-sm { height: 24px; padding: 0 8px; font-size: var(--text-meta); }
+.b-btn.is-danger { color: var(--destructive); }
+/* Icon buttons: 24 in headers (xs), 28 in rows (sm). */
+.b-ib {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-control);
+  color: var(--muted-foreground);
+}
+.b-ib:hover { background: var(--hover); color: var(--foreground); }
+.b-ib.is-on { background: var(--current); color: var(--foreground); }
+.b-ib .b-icon { width: 16px; height: 16px; }
+.b-ib.is-xs { width: 24px; height: 24px; border-radius: 8px; }
+.b-ib.is-xs .b-icon { width: 14px; height: 14px; }
+.b-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 22px;
+  padding: 0 8px;
+  border-radius: var(--r-small);
+  background: var(--raised);
+  font-size: var(--text-meta);
+  color: var(--foreground);
+  white-space: nowrap;
+}
+.b-chip .b-icon { width: 13px; height: 13px; color: var(--muted-foreground); }
+.b-chip.is-quiet { background: none; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+.b-pill { border-radius: var(--r-round); }
+.b-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  height: 20px;
+  min-width: 20px;
+  padding: 0 4px;
+  border-radius: var(--r-small);
+  box-shadow: inset 0 0 0 1px var(--border);
+  background: var(--muted);
+  font-family: var(--font-sans);
+  font-size: 11px;
+  font-weight: 500;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+/* Menus, popovers, dialogs: solid over glass (ADR 0075 d3). */
+.b-menu {
+  min-width: 220px;
+  padding: 4px;
+  border-radius: var(--r-card);
+  background: var(--floating);
+  color: var(--foreground);
+  box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08);
+  font-size: 13px;
+}
+.b-menu-label { padding: 6px 8px 2px; font-size: 11px; font-weight: 500; color: var(--muted-foreground); }
+.b-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 30px;
+  padding: 0 8px;
+  border-radius: var(--r-item);
+}
+.b-menu-item:hover,
+.b-menu-item.is-hl { background: color-mix(in oklab, var(--foreground) 8%, var(--floating)); }
+.b-menu-item .b-icon { width: 16px; height: 16px; color: var(--muted-foreground); }
+.b-menu-item .b-key { margin-left: auto; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
+.b-toast {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 300px;
+  padding: 12px 14px;
+  border-radius: var(--r-card);
+  background: var(--floating);
+  box-shadow: 0 0 0 1px var(--border), 0 12px 32px -12px rgb(0 0 0 / 0.4);
+  font-size: 13px;
+}
+.b-toast .b-btn { margin-left: auto; }
+/* A tooltip. */
+.b-tip {
+  display: inline-block;
+  padding: 4px 8px;
+  border-radius: var(--r-small);
+  background: var(--foreground);
+  color: var(--background);
+  font-size: var(--text-meta);
+}
+
+/* ------------------------------------------------------------------ */
+/* 12. Motion                                                          */
+/* ------------------------------------------------------------------ */
+@keyframes b-shimmer {
+  from { background-position: 100% 0; }
+  to { background-position: -100% 0; }
+}
+@keyframes b-spin {
+  to { rotate: 360deg; }
+}
+@keyframes b-breath {
+  50% { background-color: color-mix(in oklab, var(--group-color) 12%, transparent); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .b-shimmer,
+  .b-spin,
+  .b-group { animation: none !important; }
+}

@@ -1,0 +1,385 @@
+/*
+ * Sub-agents and Crews: the parts every sub-agent mock shares (brief §3, §5).
+ * Load after kit.css; sub.js draws the satellites and strips. Every class
+ * starts with "s-". Colour only on calls: orange asks, red failed. Working
+ * is grey, done is calm (fg 70%), never green. Nothing here ticks.
+ *
+ *  .s-sat[data-sat]      a satellite (Sub.sat / <span data-sat="asks" data-size="10">)
+ *  .s-row[data-state]    a sub-agent row in the Thread; .is-open shows .s-detail
+ *    .s-line > .s-slot .s-title .s-role .s-deep .s-wt .s-now .s-time .s-acts .s-chev
+ *    .s-detail > .s-brief .b-tl .s-report .s-dacts
+ *  .s-group              2–6 sub-agents from one message; .is-settled dims; .is-folded
+ *    .s-ghead > .s-sats .s-gtitle   .s-members > .s-row… .s-more
+ *  .s-strip              a Crew's phases (Sub.strip); .is-big = 10px dots; .is-spread
+ *  .s-crew[data-crew]    a Crew card: running | finished | lost | relaunched | asks
+ *    .s-crew-head .s-strip .s-narr .s-crew-foot
+ *  .s-ask-head           "Reviewer asks · 2m" inside .b-docked-head; .s-cmd, .s-note
+ *  .s-crewask            "Claude wants to start a Crew", docked on the composer
+ *  .s-statusbar[data-state]  the composer slot of an opened sub-agent
+ *  .s-crumbs, .s-asked   the opened sub-agent Pane's breadcrumb and "Claude asked" bubble
+ *  .s-fit / .s-path      fade the end / the start of a line, only when it overflows
+ */
+
+/* ------------------------------------------------------------------ */
+/* 0. Tokens, worked out where each theme is set                       */
+/* ------------------------------------------------------------------ */
+:root,
+[data-theme] {
+  --sat-working: color-mix(in oklab, var(--foreground) 45%, transparent);
+  --sat-done: color-mix(in oklab, var(--foreground) 70%, transparent);
+  --sat-stopped: color-mix(in oklab, var(--foreground) 38%, transparent);
+  --sat-queued: color-mix(in oklab, var(--foreground) 32%, transparent);
+  --sat-lost: color-mix(in oklab, var(--foreground) 30%, transparent);
+  --s-grey: color-mix(in oklab, var(--foreground) 52%, transparent);   /* a working row's title */
+  --s-faint: color-mix(in oklab, var(--foreground) 38%, transparent);  /* its now-line and time */
+  --s-rule: color-mix(in oklab, var(--foreground) 12%, transparent);
+}
+
+/* ------------------------------------------------------------------ */
+/* 1. The satellite                                                     */
+/* ------------------------------------------------------------------ */
+.s-sat {
+  --sat: 10px;
+  display: inline-grid;
+  flex: none;
+  width: var(--sat);
+  height: var(--sat);
+  line-height: 0;
+  vertical-align: middle;
+  color: var(--sat-working);
+  transition: color 0.45s var(--ease), opacity 0.45s var(--ease);
+}
+.s-sat > svg { grid-area: 1 / 1; display: block; overflow: visible; }
+.s-sat[data-sat="asks"],   .s-gsat[data-sat="asks"],   .s-bar > [data-sat="asks"]   { color: var(--attention); }
+.s-sat[data-sat="failed"], .s-gsat[data-sat="failed"], .s-bar > [data-sat="failed"] { color: var(--destructive); }
+.s-sat[data-sat="done"],   .s-gsat[data-sat="done"],   .s-bar > [data-sat="done"]   { color: var(--sat-done); }
+.s-sat[data-sat="stopped"], .s-gsat[data-sat="stopped"], .s-bar > [data-sat="stopped"] { color: var(--sat-stopped); }
+.s-sat[data-sat="queued"], .s-gsat[data-sat="queued"] { color: var(--sat-queued); }
+.s-sat[data-sat="lost"],   .s-gsat[data-sat="lost"],   .s-bar > [data-sat="lost"]   { color: var(--sat-lost); }
+.s-gsat[data-sat="working"], .s-bar > [data-sat="working"] { color: var(--sat-working); }
+.s-sat.is-dim { opacity: 0.42; }                  /* "from last run" */
+.s-sat > svg.is-in { animation: s-blend-in 0.45s var(--ease) both; }
+.s-sat > svg.is-leap { animation: s-leap 0.6s var(--ease) both; }
+.s-sat > svg.is-out { animation: s-blend-out 0.45s var(--ease) both; }
+@keyframes s-blend-in { from { opacity: 0; scale: 0.7; } }
+@keyframes s-blend-out { to { opacity: 0; scale: 0.7; } }
+@keyframes s-leap {
+  0% { opacity: 0; scale: 0.5; translate: 0 0; }
+  45% { opacity: 1; scale: 1.12; translate: 0 -2px; }
+  100% { opacity: 1; scale: 1; translate: 0 0; }
+}
+/* The Crew glyph: three satellites in a cluster. */
+.s-glyph { --glyph: 16px; display: inline-grid; flex: none; width: var(--glyph); height: var(--glyph); line-height: 0; vertical-align: middle; }
+.s-glyph > svg { display: block; overflow: visible; }
+
+/* ------------------------------------------------------------------ */
+/* 2. A sub-agent row (§5.1)                                            */
+/* ------------------------------------------------------------------ */
+/* One line on the work line's left edge: the satellite in a 16px slot,
+   the title from 23px like a work line's words. Rows never tick. */
+.s-row { display: flex; flex-direction: column; min-width: 0; font-size: var(--text-ui); line-height: var(--text-ui-lh); }
+.s-line {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  height: 28px;
+  margin: 0 -8px;
+  padding: 0 8px;
+  border-radius: var(--r-control);
+  white-space: nowrap;
+  cursor: default;
+  outline: none;
+  transition: background-color var(--dur-fast) var(--ease);
+}
+.s-line:hover,
+.s-line.is-hover { background: var(--hover); }
+.s-line:focus-visible { box-shadow: inset 0 0 0 1px var(--focus); }
+.s-slot { flex: none; display: grid; place-items: center; width: 16px; height: 20px; }
+.s-title { flex: 0 1 auto; min-width: 2.5em; max-width: 58%; overflow: hidden; color: var(--foreground); }
+.s-role { flex: none; font-size: var(--text-meta); color: var(--muted-foreground); }
+.s-deep { flex: none; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--s-faint); }
+.s-wt {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 18px;
+  padding: 0 6px;
+  border-radius: var(--r-small);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 11px;
+  color: var(--muted-foreground);
+}
+.s-wt .b-icon { width: 11px; height: 11px; }
+.s-now {
+  flex: 1 1 0;
+  min-width: 0;
+  margin-left: 6px;
+  overflow: hidden;
+  font-size: 13px;
+  color: var(--muted-foreground);
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+}
+.s-now b { font-weight: 500; }
+.s-now code, .s-mono { font-family: var(--font-mono); font-size: 12px; }
+.s-time { flex: none; min-width: 44px; text-align: right; font-size: var(--text-meta); font-variant-numeric: tabular-nums; color: var(--muted-foreground); }
+.s-chev { flex: none; display: grid; place-items: center; width: 14px; color: color-mix(in oklab, var(--muted-foreground) 55%, transparent); transition: rotate var(--dur) var(--ease); }
+.s-chev .b-icon { width: 14px; height: 14px; }
+.is-open > .s-line .s-chev { rotate: 90deg; }
+/* Hover: the actions take the time's place (as in the sidebar card). */
+.s-acts { position: absolute; right: 29px; top: 4px; display: none; align-items: center; gap: 2px; }
+.s-line:hover .s-acts,
+.s-line.is-hover .s-acts { display: flex; }
+.s-line:hover .s-time,
+.s-line.is-hover .s-time { visibility: hidden; }
+/* States. Working is grey all through; colour only where it calls. */
+.s-row[data-state="working"] .s-title,
+.s-row[data-state="queued"] .s-title { color: var(--s-grey); }
+.s-row[data-state="working"] .s-role,
+.s-row[data-state="working"] .s-now,
+.s-row[data-state="working"] .s-time,
+.s-row[data-state="queued"] .s-now,
+.s-row[data-state="queued"] .s-time { color: var(--s-faint); }
+.s-row[data-state="asks"] .s-now { color: var(--foreground); }
+.s-row[data-state="asks"] .s-time { color: var(--attention); font-weight: 500; }
+.s-row[data-state="failed"] .s-now { margin-left: 0; }
+.s-row:is([data-state="stopped"], [data-state="lost"]) .s-title { color: var(--s-grey); }
+.s-row:is([data-state="stopped"], [data-state="lost"]) .s-now { color: var(--s-faint); }
+.s-row.is-dim .s-title { color: var(--s-grey); }
+/* Opened in place: the brief, its work as one line, its report, actions. */
+.s-detail { display: none; flex-direction: column; gap: 10px; padding: 4px 0 8px 23px; }
+.s-row.is-open > .s-detail { display: flex; }
+.s-brief { display: flex; align-items: flex-end; gap: 8px; min-width: 0; font-size: 13px; line-height: 20px; color: var(--muted-foreground); }
+.s-brief-text {
+  flex: 1;
+  min-width: 0;
+  max-height: 40px;
+  overflow: hidden;
+  /* two lines; the second fades at its end */
+  -webkit-mask: linear-gradient(#000 0 0) top / 100% 20px no-repeat, linear-gradient(to right, #000 calc(100% - 5rem), transparent) bottom / 100% 20px no-repeat;
+  mask: linear-gradient(#000 0 0) top / 100% 20px no-repeat, linear-gradient(to right, #000 calc(100% - 5rem), transparent) bottom / 100% 20px no-repeat;
+}
+.s-brief-text .s-k { color: var(--foreground); font-weight: 500; margin-right: 4px; }
+.s-brief.is-all .s-brief-text { max-height: none; -webkit-mask: none; mask: none; }
+.s-link { flex: none; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); text-decoration: underline; text-decoration-color: color-mix(in oklab, currentColor 35%, transparent); text-underline-offset: 3px; cursor: pointer; }
+.s-link:hover { color: var(--foreground); }
+.s-report {
+  position: relative;
+  padding-left: 14px;
+  box-shadow: inset 2px 0 0 var(--s-rule);
+  font-size: var(--prose-size, 14px);
+  line-height: var(--prose-leading, 22px);
+  color: color-mix(in oklab, var(--foreground) 88%, transparent);
+}
+.s-report > * + * { margin-top: 8px; }
+.s-report code { padding: 1px 5px; border-radius: var(--r-small); background: var(--raised); font-family: var(--font-mono); font-size: 0.86em; }
+.s-report.is-long {
+  max-height: calc(var(--prose-leading, 22px) * 4 + 8px);
+  overflow: hidden;
+  -webkit-mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+  mask-image: linear-gradient(to bottom, #000 calc(100% - 2.5rem), transparent);
+}
+.s-dacts { display: flex; align-items: center; gap: 2px; margin-left: -10px; }
+.s-dacts .b-btn { font-weight: 450; }
+
+/* ------------------------------------------------------------------ */
+/* 3. A group: 2–6 sub-agents started by one message (§5.2)             */
+/* ------------------------------------------------------------------ */
+.s-group { display: flex; flex-direction: column; min-width: 0; transition: opacity var(--dur) var(--ease); }
+.s-sats { flex: none; display: inline-flex; align-items: center; gap: 3px; width: 30px; }
+.s-ghead .s-gtitle { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--muted-foreground); }
+.s-ghead .s-gtitle b { font-weight: 400; color: var(--foreground); }
+.s-ghead { gap: 8px; }
+.s-ghead .s-chev { margin-left: 0; rotate: 90deg; }
+.s-group.is-folded .s-ghead .s-chev { rotate: 0deg; }
+.s-members { display: flex; flex-direction: column; padding-left: 35px; }
+.s-group.is-folded .s-members { display: none; }
+.s-more { padding: 4px 0 2px 23px; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 75%, transparent); }
+.s-group.is-settled { opacity: 0.55; }
+.s-group.is-settled:hover { opacity: 0.85; }
+.s-n-asks { color: var(--attention); }
+.s-n-failed { color: var(--destructive); }
+
+/* ------------------------------------------------------------------ */
+/* 4. The Crew strip (§5.3)                                             */
+/* ------------------------------------------------------------------ */
+.s-strip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  height: 20px;
+  overflow: hidden;
+  white-space: nowrap;
+  font-size: var(--text-meta);
+  line-height: 16px;
+}
+.s-phase { flex: none; display: inline-flex; align-items: center; gap: 8px; }
+.s-phase.has-bar { flex: 0 1 auto; }
+.s-ph-name { flex: none; display: inline-flex; align-items: center; gap: 3px; color: var(--muted-foreground); }
+.s-ph-name .b-icon { width: 12px; height: 12px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+.s-phase.is-current .s-ph-name { color: var(--foreground); font-weight: 500; }
+.s-phase.is-future .s-ph-name { color: var(--s-faint); }
+.s-ph-n { font-weight: 400; color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.s-phase.is-future .s-ph-n { color: var(--s-faint); }
+.s-dots { display: inline-flex; align-items: center; gap: 3px; }
+.s-dots > .s-sat { cursor: pointer; }
+.s-dots > .s-sat:hover { filter: brightness(1.35); }
+.s-rule { flex: 0 0 14px; height: 1px; background: var(--s-rule); }
+.s-strip.is-spread .s-rule { flex: 1 1 14px; }
+.s-bar {
+  display: flex;
+  gap: 1px;
+  flex: 0 1 104px;
+  min-width: 44px;
+  height: 4px;
+  border-radius: 2px;
+  overflow: hidden;
+  background: color-mix(in oklab, var(--foreground) 9%, transparent);
+}
+.s-bar > i { display: block; min-width: 1px; background: currentColor; }
+.s-bar > [data-sat="queued"] { background: transparent; }
+.s-strip.is-big { gap: 12px; height: 22px; font-size: 13px; }
+.s-strip.is-big .s-dots { gap: 4px; }
+.s-strip.is-big .s-bar { height: 6px; border-radius: 3px; flex-basis: 160px; }
+.s-strip.is-big .s-rule { flex-basis: 20px; }
+
+/* ------------------------------------------------------------------ */
+/* 5. The Crew card (§5.4): the only card a Crew puts in the Thread     */
+/* ------------------------------------------------------------------ */
+.s-crew {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+  padding: 12px 10px 8px 14px;
+  border-radius: var(--r-card);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: var(--text-ui);
+  line-height: var(--text-ui-lh);
+}
+.s-crew-head { display: flex; align-items: center; gap: 8px; min-width: 0; padding-right: 4px; white-space: nowrap; }
+.s-crew-title { flex: none; font-weight: 550; }
+.s-crew-word { font-weight: 500; color: var(--muted-foreground); }
+.s-crew-desc { flex: 0 1 auto; min-width: 0; overflow: hidden; color: var(--muted-foreground); }
+.s-narr { display: flex; align-items: center; gap: 4px; min-width: 0; margin-top: -2px; font-size: var(--text-meta); line-height: 16px; color: var(--muted-foreground); white-space: nowrap; }
+.s-narr .b-icon { width: 12px; height: 12px; flex: none; color: var(--s-faint); }
+.s-narr .s-fit { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.s-crew-foot { display: flex; align-items: center; gap: 8px; min-height: 24px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.s-crew-counts { flex: 0 1 auto; min-width: 0; overflow: hidden; }
+.s-crew-time { flex: none; color: var(--s-faint); }
+.s-crew-time::before { content: "·"; margin-right: 8px; color: var(--s-faint); }
+.s-crew-acts { margin-left: auto; display: flex; align-items: center; gap: 4px; flex: none; }
+.s-crew[data-crew="finished"] .s-crew-head,
+.s-crew[data-crew="finished"] .s-strip { opacity: 0.85; }
+.s-crew[data-crew="lost"] .s-strip { opacity: 0.8; }
+.s-crew[data-crew="asks"] .s-strip { opacity: 0.9; }
+
+/* ------------------------------------------------------------------ */
+/* 6. What docks on the composer, naming who asks (§5.6)                */
+/* ------------------------------------------------------------------ */
+.s-ask-head { display: flex; align-items: center; gap: 6px; }
+.s-ask-head b { font-weight: 700; }
+.s-ask-head > span:last-child { min-width: 0; }
+.s-ask-head .s-sat { margin-right: 1px; }
+.s-cmd {
+  display: block;
+  padding: 7px 10px;
+  border-radius: var(--r-control);
+  background: var(--raised);
+  font-family: var(--font-mono);
+  font-size: var(--text-code);
+  line-height: var(--text-code-lh);
+  color: var(--foreground);
+  white-space: pre-wrap;
+}
+.s-cmd .s-prompt { color: var(--s-faint); margin-right: 8px; }
+.s-note { display: flex; align-items: center; gap: 6px; font-size: var(--text-meta); line-height: 16px; color: var(--muted-foreground); }
+.s-note .b-icon { width: 13px; height: 13px; flex: none; color: var(--s-faint); }
+.b-choice .s-hint { margin-left: auto; font-size: 12px; color: var(--s-faint); }
+.b-choice.is-hl { background: var(--hover); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--foreground) 16%, transparent); }
+/* Claude wants to start a Crew. */
+.s-crewask-title { display: flex; align-items: center; gap: 8px; min-width: 0; white-space: nowrap; }
+.s-crewask-title b { font-weight: 550; flex: none; }
+.s-crewask-title .s-crew-desc { font-size: 13px; }
+.s-phases { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; font-size: 13px; color: var(--foreground); }
+.s-phases > span { display: inline-flex; align-items: baseline; gap: 6px; }
+.s-phases i { font-style: normal; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--s-faint); }
+.s-phases em { font-style: normal; color: var(--muted-foreground); font-size: 12px; }
+
+/* ------------------------------------------------------------------ */
+/* 7. An opened sub-agent: its Pane's bits and the status bar (§5.9)    */
+/* ------------------------------------------------------------------ */
+.s-crumbs { display: inline-flex; align-items: center; gap: 2px; min-width: 0; font-size: var(--text-meta); color: var(--muted-foreground); white-space: nowrap; }
+.s-crumbs .b-icon { width: 12px; height: 12px; flex: none; color: var(--s-faint); }
+.s-crumbs > span { min-width: 0; overflow: hidden; }
+.s-crumbs > .is-here { color: var(--foreground); font-size: var(--text-ui); font-weight: 500; }
+.s-asked { align-self: flex-end; max-width: 80%; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.s-asked > .s-asked-label { display: inline-flex; align-items: center; gap: 5px; padding-right: 4px; font-size: var(--text-meta); line-height: 16px; color: var(--muted-foreground); }
+.s-asked > .b-you { max-width: 100%; align-self: auto; }
+/* The composer's slot, as a bar: same shape as the composer, no text box. */
+.s-statusbar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 48px;
+  padding: 8px 8px 8px 14px;
+  border-radius: var(--r-card);
+  background: var(--block);
+  box-shadow: inset 0 0 0 1px var(--border);
+  font-size: 13px;
+  line-height: 20px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+}
+[data-theme="light"] .s-statusbar,
+[data-theme="light"].s-statusbar {
+  background: var(--background);
+  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024);
+}
+.s-sb-text { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 6px; }
+.s-sb-text > span { flex: none; }
+.s-sb-text .s-sep { color: var(--s-faint); }
+.s-sb-word { font-weight: 500; color: var(--foreground); }
+.s-statusbar[data-state="working"] .s-sb-word { color: var(--s-grey); }
+.s-statusbar[data-state="asks"] .s-sb-word { color: var(--attention); }
+.s-statusbar[data-state="failed"] .s-sb-word { color: var(--destructive); }
+.s-statusbar[data-state="stopped"] .s-sb-word,
+.s-statusbar[data-state="lost"] .s-sb-word { color: var(--muted-foreground); }
+.s-sb-acts { flex: none; margin-left: auto; display: flex; align-items: center; gap: 4px; }
+.s-sb-acts .b-btn .b-icon { width: 13px; height: 13px; }
+
+/* ------------------------------------------------------------------ */
+/* 8. Fades that only show when the text overflows (sub.js sets .is-over) */
+/* ------------------------------------------------------------------ */
+.s-fit { overflow: hidden; white-space: nowrap; min-width: 0; }
+.s-fit.is-over {
+  -webkit-mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to right, #000 calc(100% - 1.75rem), transparent);
+}
+/* A path keeps its end (the file's name) and fades from its start. */
+.s-path { display: flex; overflow: hidden; white-space: nowrap; min-width: 0; }
+.s-path > * { flex: none; }
+.s-path.is-over {
+  justify-content: flex-end;
+  -webkit-mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+  mask-image: linear-gradient(to left, #000 calc(100% - 1.75rem), transparent);
+}
+/* The floating tip for [data-tip]. */
+.s-tipfloat {
+  position: fixed;
+  z-index: 1000;
+  pointer-events: none;
+  translate: -50% calc(-100% - 6px);
+  white-space: nowrap;
+  box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.4);
+}
+.s-tipfloat[hidden] { display: none; }
+
+@media (prefers-reduced-motion: reduce) {
+  .s-sat, .s-sat > svg { transition: none !important; animation: none !important; }
+}

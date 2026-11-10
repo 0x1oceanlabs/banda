@@ -23,3 +23,9 @@ client/ghostty/README.md says where each came from, at which commit.
 - LiteLLM's model price data, in platform/harnesses/engine/src/usage/prices.json:
   MIT, platform/harnesses/engine/src/usage/LICENSE-LITELLM.
   Copyright (c) 2023 Berri AI. The snapshot records its source and commit.
+- The mock kit in docs/design/kit, which Banda does not ship: Inter and
+  JetBrains Mono in its fonts/, OFL-1.1, fonts/LICENSE-Inter.txt and
+  fonts/LICENSE-JetBrainsMono.txt, Copyright 2016 The Inter Project Authors,
+  Copyright 2020 The JetBrains Mono Project Authors; lucide's icons in
+  icons.js, ISC, LICENSE-LUCIDE, Copyright (c) 2026 Lucide Icons and
+  Contributors; and the Harnesses' emblems of emblem.tsx, as above.

@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Sub-agent Kit</title>
+<link rel="stylesheet" href="kit.css" />
+<link rel="stylesheet" href="sub.css" />
+<style>
+  /* Only the sheet's own layout lives here; every Banda part is in kit.css + sub.css. */
+  body { margin: 0; }
+  .sheet-screen { min-height: 100vh; padding: 28px; }
+  .sheet-window { flex: 1; }
+  .sheet-head { display: flex; align-items: baseline; gap: 14px; flex-wrap: wrap; padding: 10px 22px 18px; }
+  .sheet-head h1 { margin: 0; font-size: 18px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; }
+  .sheet-head p { margin: 0; font-size: 13px; color: var(--muted-foreground); }
+  .sheet-head kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .sheet-cols { display: flex; gap: 24px; padding: 0 16px 20px; align-items: flex-start; }
+  .sheet-col { flex: 1 1 0; min-width: 0; display: flex; flex-direction: column; gap: 26px; }
+  @media (max-width: 1100px) { .sheet-cols { flex-direction: column; align-items: stretch; } .sheet-screen { padding: 12px; } }
+  .sec > h2 { margin: 0 6px 2px; font-size: 14px; line-height: 20px; font-weight: 600; }
+  .sec > .note { margin: 0 6px 10px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); max-width: 62ch; }
+  .sec > .b-tile { flex: none; }
+  .pad { padding: 14px 18px 16px; display: flex; flex-direction: column; gap: 12px; }
+  .chat { padding: 18px 24px 22px; display: flex; flex-direction: column; gap: 20px; font-size: 15px; line-height: 24px; }
+  /* captions (Russian) beside reference rows */
+  .spec { display: grid; grid-template-columns: 112px minmax(0, 1fr); column-gap: 14px; row-gap: 2px; align-items: center; }
+  .spec > .cap { font-size: 11.5px; line-height: 16px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); text-align: right; }
+  .spec > .cap.top { align-self: start; padding-top: 6px; }
+  .spec.gap { row-gap: 14px; }
+  .cap-line { grid-column: 1 / -1; height: 1px; background: var(--border); margin: 8px 0; }
+  /* the satellite table */
+  .sats { display: grid; grid-template-columns: 76px 22px 22px 22px 56px 56px minmax(0, 1fr); align-items: center; column-gap: 10px; row-gap: 6px; font-size: 13px; }
+  .sats .th { font-size: 11.5px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+  .sats .c { display: grid; place-items: center; height: 26px; }
+  .sats .z { height: 44px; border-radius: var(--r-control); background: color-mix(in oklab, var(--foreground) 3%, transparent); }
+  .sats .z > .s-sat { zoom: 3.2; }
+  .sats .g > .s-sat { filter: grayscale(1); }
+  .sats .w { font-weight: 500; }
+  .sats .d { font-size: 12px; color: var(--muted-foreground); }
+  .marks { display: flex; align-items: center; gap: 22px; flex-wrap: wrap; padding-top: 4px; }
+  .marks figure { margin: 0; display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted-foreground); }
+  .marks figure b { display: block; color: var(--foreground); font-weight: 500; }
+  .blend { display: flex; align-items: center; gap: 10px; font-size: 12px; color: var(--muted-foreground); }
+  .tipdemo { position: relative; padding-top: 30px; }
+  .tipdemo .b-tip { position: absolute; translate: -50% 0; top: 0; white-space: nowrap; }
+  .tipdemo .b-tip::after { content: ""; position: absolute; left: 50%; bottom: -4px; translate: -50% 0; border: 4px solid transparent; border-bottom: 0; border-top-color: var(--foreground); }
+  .hr { height: 1px; background: var(--border); margin: 2px 0; }
+  .wrap-tight { display: flex; flex-direction: column; gap: 8px; }
+  .comp { padding: 0 16px 14px; max-width: none; }
+  .wt-acts { display: flex; gap: 4px; padding: 0 10px 10px 34px; flex-wrap: wrap; }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen sheet-screen">
+  <div class="b-window sheet-window" id="win">
+    <header class="b-bar">
+      <button class="b-bar-logo"><span data-mark="working" data-logo data-size="20" data-satellites="working,working,asks"></span></button>
+      <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget"><span class="b-ring" style="--share:.58"></span></span>
+        <span class="b-widget"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="sheet-head">
+      <h1>Сабагенты и Crew: общие детали</h1>
+      <p>Основа всех макетов: спутник, строка, группа, полоса, карточка Crew, док, статус-бар. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло вкл/выкл.</p>
+    </div>
+
+    <div class="sheet-cols">
+      <!-- ============================== LEFT ============================== -->
+      <div class="sheet-col">
+
+        <section class="sec">
+          <h2>Спутник: форма = состояние</h2>
+          <p class="note">Та же грамматика, что у Mark, но без глаз и без своего движения. Читается без цвета. Цвет только у «спрашивает» и «ошибка».</p>
+          <div class="b-tile"><div class="pad">
+            <div class="sats" id="sats">
+              <span class="th">Состояние</span><span class="th c">8</span><span class="th c">10</span><span class="th c">12</span><span class="th c">×3</span><span class="th c">без цвета</span><span class="th">где и что</span>
+            </div>
+            <div class="hr"></div>
+            <div class="marks">
+              <div class="blend"><span id="blend" data-sat="working" data-size="12"></span><button class="b-btn is-outline is-sm" id="blend-btn">Сменить</button><span>смена: 0.45 с, новая форма — прыжок 0.6 с</span></div>
+            </div>
+            <div class="hr"></div>
+            <div class="marks">
+              <figure><span data-mark="working" data-size="48" data-satellites="working,asks,failed" data-seed="1"></span><span><b>Mark 48</b>спутники в цвете<br>своего состояния</span></figure>
+              <figure><span data-mark="working" data-size="16" data-satellites="working,asks,working" data-seed="2"></span><span><b>Mark 16</b>только цвет</span></figure>
+              <figure><span data-mark="working" data-size="16" data-doing="subagents" data-satellites="3"></span><span><b>Как сейчас</b>простые точки</span></figure>
+            </div>
+          </div></div>
+        </section>
+
+        <section class="sec">
+          <h2>В Thread: группа из одного сообщения</h2>
+          <p class="note">Claude запустил трёх сабагентов. Одна строка на группу, участники под ней. Работа серая, Reviewer спрашивает — оранжевый треугольник и время.</p>
+          <section class="b-tile">
+            <div class="b-pane-head b-bare">
+              <span data-mark="asks" data-calls="false"></span>
+              <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+              <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule">
+                <button class="b-ib is-xs"><i data-icon="square-menu"></i></button><span class="b-capsule-line"></span>
+                <button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button>
+              </div>
+            </div>
+            <div class="chat">
+              <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+              <div class="b-prose"><p>I'll split it three ways: map where the old keys are read, check the settings tests, and have a reviewer look at the new schema.</p></div>
+
+              <!-- a live group, written as markup (copy this) -->
+              <div class="s-group">
+                <div class="s-line s-ghead" tabindex="0">
+                  <span class="s-sats"><span data-sat="working" data-size="8"></span><span data-sat="working" data-size="8"></span><span data-sat="asks" data-size="8"></span></span>
+                  <span class="s-gtitle s-fit"><b>3 sub-agents</b> · 2 working · <span class="s-n-asks">1 asks</span></span>
+                  <span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span>
+                </div>
+                <div class="s-members">
+                  <div class="s-row" data-state="working">
+                    <div class="s-line" tabindex="0">
+                      <span class="s-slot"><span data-sat="working"></span></span>
+                      <span class="s-title s-fit">Map where [row] keys are read</span>
+                      <span class="s-role">Explore · Haiku</span>
+                      <span class="s-now">Reading client/web/src/sidebar/settings.ts</span>
+                      <span class="s-time">40s</span>
+                      <span class="s-acts"><button class="b-act" title="Open beside"><i data-sicon="panel-right" data-size="14"></i></button><button class="b-act" title="Stop"><i data-sicon="stop" data-size="14"></i></button></span>
+                      <span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span>
+                    </div>
+                  </div>
+                  <div class="s-row" data-state="working">
+                    <div class="s-line" tabindex="0">
+                      <span class="s-slot"><span data-sat="working"></span></span>
+                      <span class="s-title s-fit">Check the settings tests</span>
+                      <span class="s-role">general</span>
+                      <span class="s-now"><code>&gt;_ pnpm vitest settings</code></span>
+                      <span class="s-time">1m</span>
+                      <span class="s-acts"><button class="b-act" title="Open beside"><i data-sicon="panel-right" data-size="14"></i></button><button class="b-act" title="Stop"><i data-sicon="stop" data-size="14"></i></button></span>
+                      <span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span>
+                    </div>
+                  </div>
+                  <div class="s-row" data-state="asks">
+                    <div class="s-line" tabindex="0">
+                      <span class="s-slot"><span data-sat="asks"></span></span>
+                      <span class="s-title s-fit">Review the sidebar.toml schema</span>
+                      <span class="s-role">Reviewer</span>
+                      <span class="s-now"><b>Asks:</b> Allow pnpm vitest sidebar?</span>
+                      <span class="s-time">2m</span>
+                      <span class="s-acts"><button class="b-act" title="Open beside"><i data-sicon="panel-right" data-size="14"></i></button><button class="b-act" title="Stop"><i data-sicon="stop" data-size="14"></i></button></span>
+                      <span class="s-chev"><i data-icon="chevron-right" data-size="14"></i></span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div class="b-trace">
+                <div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 2m 14s</span><span class="b-quiet">· 3 sub-agents at work</span></div>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="sec">
+          <h2>Строка сабагента: все состояния</h2>
+          <p class="note">Одна строка, ритм 20 px, тот же левый край, что у строки работы. Время не тикает. Длинное гаснет, путь гаснет с начала.</p>
+          <div class="b-tile"><div class="pad"><div class="spec" id="states"></div></div></div>
+        </section>
+
+        <section class="sec">
+          <h2>Строка, открытая на месте · группа после работы</h2>
+          <p class="note">Клик раскрывает строку без сдвига строк выше: задание (2 строки), работа одной строкой, отчёт цитатой с затуханием, тихие действия. Закончившаяся группа гаснет до 55%.</p>
+          <div class="b-tile"><div class="chat" id="opened"></div></div>
+        </section>
+      </div>
+
+      <!-- ============================== RIGHT ============================== -->
+      <div class="sheet-col">
+
+        <section class="sec">
+          <h2>Полоса Crew</h2>
+          <p class="note">Фазы слева направо: имя и точки 8 px, между ними тонкая черта. Текущая фаза — в цвете текста, прошлые — приглушены с ✓, будущие — бледные. Больше 24 агентов (или не влезло) — тонкая полоса с долями.</p>
+          <div class="b-tile"><div class="pad"><div class="spec gap" id="strips"></div></div></div>
+        </section>
+
+        <section class="sec">
+          <h2>Карточка Crew в Thread</h2>
+          <p class="note">Единственная карточка, которую Crew кладёт в Thread: заголовок, полоса, строка рассказчика (последний log), счёт и Open. Красное — только число ошибок.</p>
+          <div class="b-tile"><div class="pad"><div class="spec gap" id="crews"></div></div></div>
+        </section>
+
+        <section class="sec">
+          <h2>Живая строка и док над composer</h2>
+          <p class="note">Тикает только живая строка. Вопрос сабагента всплывает в док родителя и называет, кто спрашивает. Запуск Crew просит разрешения (кроме Full access).</p>
+          <section class="b-tile">
+            <div class="chat" style="gap:14px">
+              <div class="spec" id="live"></div>
+            </div>
+            <div class="b-composer-wrap comp">
+              <div class="b-docked">
+                <div class="b-docked-head s-ask-head"><span data-sat="asks" data-size="10"></span><span><b>Reviewer</b> asks · 2m</span></div>
+                <div>Run a command in <code class="b-code-inline">~/code/banda</code>?</div>
+                <code class="s-cmd"><span class="s-prompt">$</span>pnpm vitest sidebar</code>
+                <button class="b-choice is-hl"><span class="b-kbd">1</span>Allow once<span class="s-hint">↵</span></button>
+                <button class="b-choice"><span class="b-kbd">2</span>Allow for this Thread</button>
+                <button class="b-choice b-muted"><span class="b-kbd">Esc</span>Deny, and tell it what to do differently…</button>
+                <div class="s-note"><i data-icon="circle-alert" data-size="13"></i>“For this Thread” allows it for this Thread, Claude and its sub-agents.</div>
+              </div>
+              <div class="b-composer">
+                <div class="b-composer-text is-empty">Steer this thread…</div>
+                <div class="b-composer-row">
+                  <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                  <span class="b-spacer"></span>
+                  <button class="b-ctl"><i data-icon="shield"></i></button>
+                  <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort is-top">Ultracode</span></button>
+                  <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+                </div>
+              </div>
+            </div>
+            <div class="b-composer-wrap comp">
+              <div class="b-docked s-crewask">
+                <div class="b-docked-head">Claude wants to start a Crew</div>
+                <div class="s-crewask-title"><span data-glyph="asks"></span><b>audit-routes</b><span class="s-crew-desc s-fit">Find every route that skips the access check and fix it</span></div>
+                <div class="s-phases"><span><i>1</i>Scan <em>read each route</em></span><span><i>2</i>Fix <em>one agent per route</em></span><span><i>3</i>Verify <em>run its tests</em></span></div>
+                <div class="s-note"><i data-icon="users" data-size="13"></i>Up to 16 sub-agents at once · uses your limits faster</div>
+                <button class="b-choice is-hl"><span class="b-kbd">1</span>Start<span class="s-hint">↵</span></button>
+                <button class="b-choice"><span class="b-kbd">2</span>View script</button>
+                <button class="b-choice b-muted"><span class="b-kbd">Esc</span>No, and tell Claude what to do instead…</button>
+              </div>
+            </div>
+          </section>
+        </section>
+
+        <section class="sec">
+          <h2>Сабагент, открытый рядом · статус-бар</h2>
+          <p class="note">Панель в Group Thread, только чтение. Вместо composer — статус-бар той же формы. Написать сабагенту напрямую нельзя: «Ask Claude about it».</p>
+          <section class="b-tile">
+            <div class="b-pane-head">
+              <span data-sat="working" data-size="12"></span>
+              <span class="b-pane-title">Reviewer</span>
+              <span class="b-pane-detail">reviewer · sub-agent of Move sidebar settings to sidebar.toml</span>
+              <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+            </div>
+            <div class="chat" style="padding-bottom:16px">
+              <div class="s-asked">
+                <span class="s-asked-label"><span data-emblem="claude" data-size="12"></span>Claude asked</span>
+                <div class="b-you">Read platform/look/sidebar.toml and the schema in client/web/src/settings/schema.ts. Check that every key has a default, a type and a doc line. Report problems as a short list.</div>
+              </div>
+              <div class="b-trace">
+                <button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 9 files, searched for 3 patterns</span><i data-icon="chevron-right" class="b-chev"></i></button>
+              </div>
+              <div class="b-prose"><p>The schema has 14 keys. Two look wrong so far: <code>row.density</code> has no default, and <code>later.until</code> is typed as text.</p></div>
+              <div class="b-trace"><div class="b-tl is-pending"><i data-icon="file-text"></i><span class="b-tl-text b-shimmer">Reading client/web/src/sidebar/card.ts</span></div></div>
+            </div>
+            <div class="b-composer-wrap comp">
+              <div class="s-statusbar" data-state="working">
+                <span data-sat="working" data-size="12"></span>
+                <span class="s-sb-text"><span class="s-sb-word">Working</span><span class="s-sep">·</span><span>reviewer</span><span class="s-sep">·</span><span>Runs on its own</span></span>
+                <span class="s-sb-acts"><button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></span>
+              </div>
+            </div>
+          </section>
+          <div class="b-tile" style="margin-top:8px"><div class="pad"><div class="spec gap" id="bars"></div></div></div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script src="icons.js"></script>
+<script src="mark.js"></script>
+<script src="sub.js"></script>
+<script>
+  const $ = (s) => document.querySelector(s)
+  const cap = (t, cls) => `<span class="cap${cls ? ' ' + cls : ''}">${t}</span>`
+
+  // ---- 1. the satellite table
+  const SAT = [
+    ['working', 'Working', 'серый круг; строка тоже серая'],
+    ['asks', 'Asks', 'треугольник, оранжевый: зовёт вас'],
+    ['failed', 'Failed', 'восьмиугольник, красный; карточку не двигает'],
+    ['done', 'Done', 'квадрат, спокойный (не зелёный)'],
+    ['stopped', 'Stopped', 'контур квадрата: «Stopped by you»'],
+    ['queued', 'Queued', 'пунктирный круг: ждёт слот (Crew)'],
+    ['lost', 'Lost', 'бледный контур с разрывом: Banda перезапустилась'],
+  ]
+  $('#sats').insertAdjacentHTML('beforeend', SAT.map(([s, w, d]) =>
+    `<span class="w">${w}</span><span class="c">${Sub.sat(s, 8)}</span><span class="c">${Sub.sat(s, 10)}</span><span class="c">${Sub.sat(s, 12)}</span>` +
+    `<span class="c z">${Sub.sat(s, 10)}</span><span class="c z g">${Sub.sat(s, 10)}</span><span class="d">${d}</span>`).join(''))
+  let bi = 0
+  $('#blend-btn').addEventListener('click', () => { bi = (bi + 1) % Sub.states.length; Sub.set($('#blend'), Sub.states[bi]) })
+
+  // ---- 2. every row state
+  const OPEN = '<span class="s-acts"></span>'
+  const states = [
+    ['работает', { state: 'working', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Reading client/web/src/sidebar/settings.ts', time: '40s' }],
+    ['спрашивает', { state: 'asks', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Allow pnpm vitest sidebar?', time: '2m' }],
+    ['готово', { state: 'done', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Read in 3 places: settings.ts, schema.ts and card.ts', time: '1m 12s' }],
+    ['ошибка', { state: 'failed', title: 'Check the settings tests', role: 'general', now: '2 tests fail in settings.test.ts', time: '48s' }],
+    ['остановлен', { state: 'stopped', title: 'Check the settings tests', role: 'general', now: 'Stopped by you', time: '31s' }],
+    ['ждёт слот', { state: 'queued', title: 'client/web/src/routes/threads/later.ts', path: true, role: 'Verify', now: 'Waiting for a slot' }],
+    ['потерян', { state: 'lost', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Lost · stopped when Banda restarted', time: '9m' }],
+    ['наведение', { state: 'working', title: 'Check the settings tests', role: 'general', now: '<code>&gt;_ pnpm vitest settings</code>', time: '1m', hover: true }],
+    ['глубже (+2)', { state: 'working', title: 'Review the sidebar.toml schema', role: 'Reviewer', deep: 2, now: '2 sub-agents at work', time: '3m' }],
+    ['Codex', { state: 'working', title: 'Agent 2 · Compare with niri’s IPC and list what Hyprland lacks', now: '<code>&gt;_ rg socket2 ~/src/niri</code>', time: '5m' }],
+    ['попытка 2', { state: 'working', title: 'client/web/src/routes/settings/keys.ts', path: true, role: 'Fix', tag: 'attempt 2', now: 'Editing keys.ts', time: '2m' }],
+    ['прошлый запуск', { state: 'done', dim: true, title: 'client/web/src/routes/billing/invoices.ts', path: true, role: 'Scan', now: 'from last run · no access check on GET', time: '1m 04s' }],
+    ['worktree (позже)', { state: 'done', title: 'Review the sidebar.toml schema', wt: 'worktree · from main', now: 'Left changes on worktree-reviewer · +120 −14', time: '3m' }],
+  ]
+  $('#states').innerHTML = states.map(([c, r]) => cap(c) + Sub.row(r).replace('class="s-line"', r.hover ? 'class="s-line is-hover"' : 'class="s-line"')).join('')
+
+  // ---- 3. opened rows + a settled group
+  const brief = (t) => `<div class="s-brief"><span class="s-brief-text"><span class="s-k">Claude asked</span>${t}</span><button class="s-link">more</button></div>`
+  const work = (t) => `<button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">${t}</span><i data-icon="chevron-right" class="b-chev"></i></button>`
+  $('#opened').innerHTML =
+    Sub.row({ state: 'done', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Two problems: row.density has no default, later.until is text', time: '1m 12s', open: true,
+      detail: brief('Read platform/look/sidebar.toml and the schema in client/web/src/settings/schema.ts. Check that every key has a default, a type and a doc line, and that the old [row] keys still map to the new ones. Report problems as a short list.') +
+        work('Read 12 files, searched for 4 patterns, ran 2 commands') +
+        `<div class="s-report is-long"><p>Two problems, both small.</p><ol style="margin:0;padding-left:20px"><li><code>row.density</code> has no default, so a fresh install reads nothing and falls back to the old <code>[row]</code> key.</li><li><code>later.until</code> is typed as text, but the sidebar parses it as minutes. A value like <code>"2h"</code> fails silently.</li><li>Everything else maps one to one; the old keys are read in <code>settings.ts</code> only.</li></ol></div>` +
+        `<div class="s-dacts"><button class="b-btn is-ghost is-sm"><i data-sicon="panel-right" data-size="14"></i>Open beside</button><button class="b-btn is-ghost is-sm">Show all</button></div>` }) +
+    Sub.row({ state: 'working', title: 'Check the settings tests', role: 'general', now: '<code>&gt;_ pnpm vitest settings</code>', time: '1m', open: true,
+      detail: brief('Run the settings tests and the sidebar tests. If any fail, find which change broke them, but do not fix anything. Report what fails and why.') +
+        `<div class="b-tl is-pending"><i data-icon="terminal"></i><span class="b-tl-text b-shimmer">Running pnpm vitest settings</span></div>` +
+        `<div class="s-dacts"><button class="b-btn is-ghost is-sm"><i data-sicon="panel-right" data-size="14"></i>Open beside</button><button class="b-btn is-ghost is-sm"><i data-sicon="stop" data-size="13"></i>Stop</button></div>` }) +
+    Sub.group({ settled: true, time: '2m 40s', more: 2, moreStates: ['done', 'done'], members: [
+      { state: 'done', title: 'Map where [row] keys are read', role: 'Explore · Haiku', now: 'Read in 3 places', time: '1m 12s' },
+      { state: 'failed', title: 'Check the settings tests', role: 'general', now: '2 tests fail in settings.test.ts', time: '48s' },
+      { state: 'done', title: 'Review the sidebar.toml schema', role: 'Reviewer', now: 'Two problems, both small', time: '2m 31s' },
+    ] })
+
+  // ---- 4. strips
+  const routes = ['billing/invoices.ts', 'settings/keys.ts', 'hosts/pair.ts', 'threads/later.ts', 'threads/index.ts', 'auth/session.ts', 'files/upload.ts', 'hosts/list.ts', 'billing/plans.ts', 'settings/agents.ts', 'threads/share.ts', 'auth/logout.ts']
+  const A = (state, i, extra) => Object.assign({ state, label: 'client/web/src/routes/' + routes[i % routes.length] }, extra)
+  const twelve = [
+    { title: 'Scan', agents: [A('done', 0), A('done', 1), A('done', 2), A('done', 3)] },
+    { title: 'Fix', agents: [A('done', 0), A('done', 2), A('failed', 3), A('working', 1), A('asks', 4)] },
+    { title: 'Verify', agents: [A('queued', 0), A('queued', 2), A('queued', 5)] },
+  ]
+  const many = (spec) => spec.split(' ').flatMap((t) => { const [s, n] = t.split('*'); return Array.from({ length: +n || 1 }, (_, i) => A(s, i)) })
+  const S = $('#strips')
+  const addStrip = (c, data, cls) => { S.insertAdjacentHTML('beforeend', cap(c) + `<div class="${cls || ''}"><div class="s-strip"></div></div>`); Sub.strip(S.lastElementChild.querySelector('.s-strip'), data) }
+  addStrip('12 агентов', { phases: twelve })
+  addStrip('из брифа', 'Scan: done*3 | Fix: done done working working asks queued queued | Verify: queued*3')
+  addStrip('перезапуск', { phases: [{ title: 'Scan', agents: many('done*4').map((a) => ({ ...a, dim: true })) }, { title: 'Fix', agents: [A('done', 0, { dim: true }), A('done', 2, { dim: true }), A('working', 3), A('working', 1), A('queued', 4)] }, { title: 'Verify', agents: many('queued*3') }] })
+  addStrip('50 агентов', { phases: [{ title: 'Scan', agents: many('done*22 failed*2') }, { title: 'Fix', agents: many('done*6 working*8 asks*1 queued*3') }, { title: 'Verify', agents: many('queued*8') }] })
+  addStrip('500 агентов', { phases: [{ title: 'Scan', agents: many('done*296 failed*4') }, { title: 'Fix', agents: many('done*60 failed*2 asks*1 working*12 queued*75') }, { title: 'Verify', agents: many('done*4 working*6 queued*40') }] })
+  addStrip('в панели Crew<br>10 px, во всю ширину', { phases: twelve, size: 10 }, 'is-spread-host')
+  S.lastElementChild.querySelector('.s-strip').classList.add('is-spread')
+  S.insertAdjacentHTML('beforeend', cap('наведение на точку', 'top') + '<div class="tipdemo" id="tipdemo"><div class="s-strip"></div><span class="b-tip"></span></div>')
+  Sub.strip($('#tipdemo .s-strip'), { phases: twelve })
+
+  // ---- 5. crew cards
+  const C = $('#crews')
+  const addCrew = (c, d) => { C.insertAdjacentHTML('beforeend', cap(c, 'top') + '<div></div>'); Sub.crew(C.lastElementChild, Object.assign({ name: 'audit-routes', desc: 'Find every route that skips the access check and fix it' }, d)) }
+  addCrew('идёт', { phases: twelve, narrator: '4 routes need a fix · 2 fixed, 1 failed', time: '6m' })
+  addCrew('перезапущен', { state: 'relaunched', narrator: 'Relaunched · 6 agents came back from the last run', time: '1m',
+    phases: [{ title: 'Scan', agents: many('done*4').map((a) => ({ ...a, dim: true })) }, { title: 'Fix', agents: [A('done', 0, { dim: true }), A('done', 2, { dim: true }), A('working', 3), A('working', 1), A('queued', 4)] }, { title: 'Verify', agents: many('queued*3') }] })
+  addCrew('закончен', { state: 'finished', narrator: '12 routes checked · 3 fixed · 1 still fails its test', time: '14m',
+    phases: [{ title: 'Scan', agents: many('done*4') }, { title: 'Fix', agents: many('done*4 failed*1') }, { title: 'Verify', agents: many('done*2 failed*1') }] })
+  addCrew('потерян', { state: 'lost', narrator: '4 routes need a fix · 2 fixed', time: '22m',
+    phases: [{ title: 'Scan', agents: many('done*4') }, { title: 'Fix', agents: many('done*3 lost*2') }, { title: 'Verify', agents: many('lost*3') }] })
+  addCrew('ждёт разрешения', { state: 'asks', open: false, phases: [{ title: 'Scan' }, { title: 'Fix' }, { title: 'Verify' }], current: -1 })
+
+  // ---- 6. live lines
+  const glyph = Sub.glyph('running', 15)
+  $('#live').innerHTML = [
+    ['сабагенты', `<div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 45s</span><span class="b-quiet">· 3 sub-agents at work</span></div>`],
+    ['ждёт одного', `<div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 1m 02s</span><span class="b-quiet">· Waiting on Explore</span></div>`],
+    ['Crew в ходе', `<div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 6m 12s</span><span class="b-quiet">· Crew audit-routes · Fix 3/5</span></div>`],
+    ['после хода', `<div class="b-tl">${glyph}<span class="b-shimmer">Crew audit-routes is at work</span><span class="b-quiet">· Fix 3/5 · Claude goes on when it ends</span></div>`],
+    ['вернулся', `<div class="b-tl"><i data-icon="corner-down-right"></i><span class="b-tl-text"><span class="b-subject">Crew audit-routes</span> finished · 14m · Claude went on by itself</span></div>`],
+  ].map(([c, h]) => cap(c) + h).join('')
+
+  // ---- 7. status bar variants and the breadcrumb
+  const bar = (st, word, rest, acts) => `<div class="s-statusbar" data-state="${st}">${Sub.sat(st, 12)}<span class="s-sb-text"><span class="s-sb-word">${word}</span>${rest.map((r) => `<span class="s-sep">·</span><span>${r}</span>`).join('')}</span><span class="s-sb-acts">${acts}</span></div>`
+  const ask = `<button class="b-btn is-outline is-sm"><i data-icon="at-sign"></i>Ask Claude about it</button>`
+  $('#bars').innerHTML = [
+    ['спрашивает', bar('asks', 'Asks you', ['Allow pnpm vitest sidebar?'], `<button class="b-btn is-outline is-sm">Answer</button>`)],
+    ['готово', bar('done', 'Done', ['1m 12s', 'Returned its report to Claude'], ask)],
+    ['ошибка', bar('failed', 'Failed', ['2 tests fail in settings.test.ts'], ask)],
+    ['остановлен', bar('stopped', 'Stopped by you', ['31s'], ask)],
+    ['вложенный', `<div class="s-crumbs"><span>Move sidebar settings to sidebar.toml</span><i data-icon="chevron-right"></i><span>Reviewer</span><i data-icon="chevron-right"></i>${Sub.sat('working', 12)}&nbsp;<span class="is-here">Explore</span></div>`],
+    ['worktree (позже)', `<div class="b-block"><div class="b-block-head"><i data-icon="git-branch"></i><span class="b-block-title">Left changes on <code class="b-code-inline">worktree-reviewer</code></span><span class="b-diff"><span class="is-add">+120</span><span class="is-del">−14</span></span></div><div class="wt-acts"><button class="b-btn is-outline is-sm">Review</button><button class="b-btn is-ghost is-sm">Ask Claude to merge</button><button class="b-btn is-ghost is-sm">Discard</button></div></div>`],
+  ].map(([c, h]) => cap(c) + h).join('')
+
+  // icons and marks inside what we just wrote, then fit the fades
+  BandaIcons.scan(); BandaMark.scan(); Sub.scan()
+
+  // the hover tip, drawn still for the sheet
+  const tipAt = () => {
+    const host = $('#tipdemo'), dot = host.querySelector('.s-sat[data-sat="asks"]'), tip = host.querySelector('.b-tip')
+    tip.textContent = dot.getAttribute('data-tip')
+    const h = host.getBoundingClientRect(), d = dot.getBoundingClientRect()
+    tip.style.left = (d.left + d.width / 2 - h.left) + 'px'
+  }
+  tipAt(); addEventListener('resize', tipAt)
+
+  // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
+  const win = $('#win'), root = document.documentElement
+  const apply = () => {
+    const light = location.hash.includes('light') || root.getAttribute('data-theme') === 'light' && !apply.seen
+    apply.seen = true
+    if (light) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+    if (location.hash.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+    requestAnimationFrame(() => Sub.fit())
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.target.closest('input, textarea')) return
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>

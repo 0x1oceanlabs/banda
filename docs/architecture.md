@@ -1729,7 +1729,7 @@ banda/
   scripts/try.sh      builds a tree and opens a window of its own from it, to click through
   scripts/local.sh    starts a checkout's window in a systemd unit of its own (ADR 0086)
   scripts/layout.sh   moves the old folders where ADR 0062 puts them, on a branch made before too
-  docs/               adr/ · architecture.md · research/
+  docs/               adr/ · architecture.md · design/ (the look, and the kit for mocks) · research/
   GLOSSARY.md
 ```
 

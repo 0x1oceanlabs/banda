@@ -19,3 +19,6 @@ client/desktop/test-results/
 *.toml
 # T3 Code's terminal adapter, vendored as it is: a newer pin is a copy.
 client/ghostty/src/t3/
+# The mock kit, kept as the mocks that link it have it (docs/design).
+docs/design/kit/*
+!docs/design/kit/shot.mjs
