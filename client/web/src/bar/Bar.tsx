@@ -26,12 +26,14 @@ import { PARTS, type Part } from "./placed"
 import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
 import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
+import { useRun } from "@banda/core/react"
 
 /**
- * The bar across the window's top (ADR 0005, decision 9): the sidebar's
- * button on the left, which is Banda's mark and shows the loudest state of
- * the work, with how many things wait for the Person when more than one
- * does. The widgets, the Tiling's workspaces among them, stand on the
+ * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
+ * the left, which opens the Banda menu (ADR 0098, decision 21) and shows
+ * the loudest state of the work, with how many things wait for the Person
+ * when more than one does; `Alt+A`, and the menu's action, show and hide
+ * the sidebar. The widgets, the Tiling's workspaces among them, stand on the
  * left, in the middle, centred on the window whatever the sides hold, and
  * on the right before the engine's connection, as the look's `[bar]` lists
  * them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
@@ -40,16 +42,12 @@ import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
  */
 export function Bar({
   status,
-  sidebar,
-  onSidebar,
   problems,
   widgets,
   listed,
   onArrange,
 }: {
   status: Status
-  sidebar: boolean
-  onSidebar: () => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
   /** The widgets of each part, drawn. */
@@ -60,6 +58,7 @@ export function Bar({
   onArrange?: (bar: Layout) => void
 }) {
   const keyFor = useKeyLabel()
+  const run = useRun()
   // What the modules' work calls the Person for, for the mark to show,
   // and how many Threads work now, which a restart into an update stops.
   const attention = useCalls(barAttention)
@@ -117,15 +116,18 @@ export function Bar({
         dragging && "cursor-grabbing select-none"
       )}
     >
-      {/* The Mark stays at the left edge, as the Apple menu does. */}
+      {/* The Mark stays at the left edge, as the Apple menu does, and
+        opens the Banda menu at its root, as the sidebar's Search does:
+        Alt+Space's own action would fill the desk with Quick Look's tile
+        where one shows. */}
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label={`Sidebar${words}`}
-        aria-pressed={sidebar}
-        title={`${keyFor("sidebar.toggle", "Sidebar")}${words}`}
+        aria-label={`Banda menu${words}`}
+        aria-haspopup="dialog"
+        title={`${keyFor("menu.open", "Banda menu")}${words}`}
         className="relative"
-        onClick={onSidebar}
+        onClick={() => run("menu.at")}
       >
         <BandaMark state={mark} className="size-5" />
         {waiting > 1 && (

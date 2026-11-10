@@ -485,11 +485,27 @@ export function wallpaper(dir: string) {
   )
 }
 
+/** Opens the Banda menu at "Add Project" as the Person does, by ✎'s
+ * menu in the sidebar's header (ADR 0098, decision 16): the sidebar
+ * shows. The menu, at its ways to add one. */
+export async function addProject(page: Page): Promise<Locator> {
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: "New Thread", exact: true })
+    .click({ button: "right" })
+  await page
+    .getByRole("menu", { name: "New Thread" })
+    .getByRole("menuitem", { name: "Add Project…" })
+    .click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
+  return menu
+}
+
 /** Makes a Project called `name` from the Banda menu, as the Person does:
  * its New Thread shows. */
 export async function newProject(page: Page, name: string): Promise<void> {
-  await page.getByRole("button", { name: "Add Project", exact: true }).click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const menu = await addProject(page)
   await menu.getByRole("option", { name: /New Project/ }).click()
   await menu.getByRole("combobox").fill(name)
   await menu.getByRole("combobox").press("Enter")
