@@ -135,6 +135,9 @@ day.
    - `Alt+←` and `Alt+→` past an edge go to the next one, which fills
      the screen. The Strip slides, so where it went shows by the way it
      moved.
+   _Built_ in step 4: solo draws every Group, and every column in none,
+   the screen wide, on every workspace that holds a Pane; the workspace
+   `Alt+M` shows as the row stays as it is.
 
 9. **From the Flow `free` to the row, nothing jumps.**
    - Panes already open stay where they are, and new ones follow these
