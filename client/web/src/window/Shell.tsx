@@ -17,7 +17,7 @@ import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
-import { sameEach, useEngineOf, usePaneOn, useStore } from "@banda/core/react"
+import { useEngineOf, usePaneOn, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
@@ -32,7 +32,6 @@ import {
   listedIn,
   newStores,
   nowOf,
-  threadlessIn,
   workingHere,
 } from "../calls/stores"
 import { keysOf, useOrderNow } from "../sidebar/order"
@@ -105,6 +104,7 @@ import { Drawer } from "./Drawer"
 import { Peek, type Peeked } from "./Peek"
 import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
+import { usePlacing } from "./placing"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
 import {
@@ -128,7 +128,6 @@ import {
   placeFor,
   focusedIn,
   strayedIn,
-  placingOf,
   runAction,
   updating,
   type Shell as Parts,
@@ -178,9 +177,10 @@ export function Shell({
   const flow = useFile(AGENTS_FILE).flow
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
-  // A Project with no Threads lets its emptied workspace go.
+  // A Project with no Threads, or of no Project, lets its emptied workspace
+  // go; the Panes the Person opens go where the Flow says.
   const [stores] = useState(newStores)
-  const gone = useStore(stores.items, threadlessIn, sameEach)
+  const { placing, gone } = usePlacing(stores, flow, projects, machine)
   const tiling = useTiling({ engine, machine, modules, home, solo, row, gone })
   const { ready, aside, workspaces, standing, drawnNow, changing } = tiling
   const { change, update } = tiling
@@ -290,7 +290,6 @@ export function Shell({
   useEffect(() => {
     projectsNow.current = projects
   }, [projects])
-  const placing = useMemo(() => placingOf(flow, projects), [flow, projects])
   useMadeGoesHome(projects, flow, change)
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that

@@ -18,9 +18,11 @@ import {
 import {
   ACTIONS,
   closingShown,
+  noProjectOf,
   opening,
   picking,
   placeFor,
+  placingOf,
   strayedIn,
   type Placing,
   pickOf,
@@ -216,6 +218,44 @@ test("a Pane the Person opens goes where the Flow says (ADR 0102, decision 3)", 
   expect(placeFor(free, "a", thread, { ...row, scratch: () => true })).toBe(
     "free"
   )
+  // What an Agent opens with its Thread not shown: the same.
+  expect(placeFor(free, "a", terminal, row, true)).toBe("project")
+  expect(
+    placeFor(free, "a", terminal, { ...row, scratch: () => true }, true)
+  ).toBe("free")
+  // Of no Project, from its Thread's Group on a free workspace, into it,
+  // as a Project's does; from another's, right of the Pane in front.
+  const its = on({ columns: [column("c", "a", "g")] })
+  expect(where(its, "solo", true)).toBe("group")
+  expect(where(its, "row", true)).toBe("group")
+  expect(where(on({ columns: [column("c", "b", "g")] }), "row", true)).toBe(
+    "right"
+  )
+})
+
+test("a draft in the machine's own ID is of no Project: its Thread opens on the top free workspace, and its other Panes stay where they are opened (ADR 0102, decision 1)", () => {
+  const projects = [
+    { id: "a", scratch: false },
+    { id: "s", scratch: true },
+  ] as unknown as ProjectSummary[]
+  // Those of no Project, whose emptied workspace goes too, as a Project's
+  // with no Threads does; before the engine names the machine, only the
+  // scratch Projects.
+  const none = noProjectOf(projects, "machine")
+  expect(none).toEqual(["machine", "s"])
+  expect(noProjectOf(projects)).toEqual(["s"])
+  const placing = placingOf("row", none)
+  expect(["a", "s", "machine", "b"].map(placing.scratch)).toEqual([
+    false,
+    true,
+    true,
+    false,
+  ])
+  const draft = { kind: "agents.thread", args: { thread: "t" } }
+  expect(placeFor(start(), "machine", draft, placing)).toBe("free")
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const free = open(start(), "b", terminal, { place: "right" })
+  expect(placeFor(free, "machine", terminal, placing)).toBe("right")
 })
 
 test("pane.pick takes a Project and a Pane, as an Item carries it, and only it reaches the Window's answer", () => {

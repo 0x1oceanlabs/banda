@@ -77,6 +77,15 @@ day.
    Group from inside it goes last into the Deck right of the Pane it is
    opened from, as what an Agent opens does. A Pane of no Project other
    than a Thread opens right of the Pane in front until the Sheet comes.
+   After the UX review: a Pane opened from the Banda menu goes where
+   the focus is, as by its key, so from inside a Group into it (3.2);
+   the own Group gathers a Project's Panes opened from another workspace
+   or from a loose column. A Pane of no Project opened from its Thread's
+   Group joins that Group, as a Project's does. A Thread of no Project,
+   a draft in the machine's own ID too, opens on the top free workspace,
+   and so does a browser its Agent opens with the Thread not shown. No
+   workspace is ever no Project's; one owned so before goes once emptied
+   and left.
 
 4. **The Project's own Group.**
    - It holds the Panes the Person opened for the Project and not for an
@@ -90,9 +99,18 @@ day.
    workspace's `own` Group, made first on the Project's workspace when it
    is gone; the Group's handle says the Project's name. A Pane opened from
    inside the own Group goes last into it. What an Agent opens while its
-   Thread is not shown goes last on its Project's workspace. Moved off
-   the Project's workspace, the own Group is a Group like any other, and
-   the next Pane starts a new one.
+   Thread is not shown goes last on its Project's workspace, a Thread it
+   opens too; the window and the engine's `open_pane` agree on this
+   while the Project owns a workspace, even emptied. The engine does not
+   know the Flow: a workspace owned from the row, or by Arrange, still
+   takes what `open_pane` opens in the Flow `free`, where the window's
+   browser goes right of the Pane in front. With none owned, of no
+   Project too, `open_pane` puts it beside the Project's Panes, else on
+   the empty workspace at the bottom, while the window's browser makes
+   the Project's workspace there, or, of no Project, goes to the top
+   free workspace: the two differ there yet. Moved off the Project's
+   workspace, the own Group is a Group like any other, and the next Pane
+   starts a new one.
 
 5. **Settings, Usage and the notifications come as a Sheet over the
    workspace.**

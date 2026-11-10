@@ -311,6 +311,22 @@ describe("plans", () => {
       method: "workspaces.tidy",
       params: { keep: current(kept).id },
     })
+    // One a draft in the machine's own ID came to own, before such a draft
+    // went to a free one, goes once the window names it gone; in view, it
+    // stays (ADR 0102, decision 1).
+    const machine = "machine" as ProjectId
+    const owned: Workspaces = {
+      list: [
+        { id: "owned", columns: [], focus: 0, project: machine },
+        ...state.list,
+      ],
+      current: 1,
+    }
+    expect(tidied(owned, [mine, machine])).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: current(owned).id },
+    })
+    expect(tidied({ ...owned, current: 0 }, [machine])).toBeUndefined()
     // With another empty one to let go, it is named to stay.
     const both: Workspaces = {
       list: [...kept.list.slice(0, 1), ...left.list],
