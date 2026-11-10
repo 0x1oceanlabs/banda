@@ -39,7 +39,6 @@ import {
   widthOf,
   windowModule,
 } from "../registry"
-import { settingsPane } from "../settings/pane"
 import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
@@ -130,6 +129,9 @@ export type Shell = WindowApi & {
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
    * decision 7); false when nothing peeks. */
   fillPeek: () => boolean
+  /** Takes the Sheet away while it has the keys (ADR 0102, decision 5);
+   * false when it has not. */
+  closeSheet: () => boolean
   /** In solo, the workspace in view as the row for a while, or back to
    * solo (ADR 0079); false when the Flow is not solo. */
   glance: () => boolean
@@ -478,32 +480,6 @@ export function pickOf(
 /** Whether `value` is an object of JSON values, as a Pane's args are. */
 function isArgs(value: JsonValue | undefined): value is Args {
   return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-/**
- * Opens the settings Pane at `link` in `project`, or goes to the one a
- * workspace shows, there when a link is given: one at a time.
- */
-export function settingsAt(
-  workspaces: Workspaces,
-  project: ProjectId,
-  link = ""
-): Step {
-  const pane = paneOf(settingsPane, { link })
-  const shown = entries(workspaces).find(
-    (entry) => entry.pane.kind === settingsPane.kind
-  )
-  if (!shown) return opening(workspaces, project, pane, { place: "right" })
-  if (!link || link === shown.pane.args.link) {
-    return focusEntry(workspaces, shown.id)
-  }
-  return {
-    command: {
-      method: "workspaces.update",
-      params: { pane: shown.id, args: pane.args },
-    },
-    want: shown.id,
-  }
 }
 
 /** Closes a Pane; its neighbour takes the focus. */
@@ -859,7 +835,9 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     title: "Close the Pane",
     keys: [{ code: "KeyW", mod: true }],
+    // The Sheet, when it has the keys; else the focused Pane.
     run: (shell) =>
+      shell.closeSheet() ||
       shell.change((w) => {
         const entry = focused(w)
         return entry && closing(entry.id)

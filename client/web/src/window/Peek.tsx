@@ -16,6 +16,7 @@ import {
 } from "lucide-react"
 import { kindOf, kindRuns, labelOf } from "../registry"
 import { Broken } from "../tiling/PaneFrame"
+import { opening, type Shell } from "./actions"
 
 /** What peeks over the desk: a Pane of a Project, and whether it fills
  * the desk. */
@@ -34,28 +35,28 @@ export function Peek({
   peek,
   engine,
   modules,
-  run,
-  open,
+  shell,
   onUpdate,
-  onOpen,
   onFill,
   onClose,
 }: {
   peek: Peeked
   engine: Engine
   modules: readonly string[]
-  run: (action: string, args?: Args) => void
-  /** Opens a Pane the peeking Pane asks for, in the workspace. */
-  open: (project: ProjectId, pane: PaneState, place?: Place) => void
+  /** What opens a Pane the peeking Pane asks for, in the workspace, opens
+   * it there itself, and runs actions. */
+  shell: Pick<Shell, "change" | "open" | "run">
   onUpdate: (pane: PaneState) => void
-  onOpen: () => void
   onFill: () => void
   onClose: () => void
 }) {
+  const { run } = shell
+  const open = (project: ProjectId, pane: PaneState, place?: Place) =>
+    shell.change((w) => opening(w, project, pane, { place }))
+  const onOpen = () =>
+    shell.open(peek.pane, peek.project, { again: false, update: true })
   const keyFor = useKeyLabel()
   const { project, pane, fill } = peek
-  const kind = kindOf(pane.kind)
-  const shown = kind && kindRuns(pane.kind, modules) ? kind : undefined
   // What the Pane says it shows, kept for the header while it peeks.
   const [said, setSaid] = useState<Label | null>(null)
   const label = useCallback((label: Label | null) => setSaid(label), [])
@@ -95,7 +96,7 @@ export function Peek({
         data-peek=""
         data-fill={fill || undefined}
         data-selected="true"
-        className="group/tile pointer-events-auto flex h-[82%] w-[min(100%,max(64%,36rem),56rem)] animate-in flex-col overflow-hidden rounded-xl bg-popover/95 text-popover-foreground shadow-[0_30px_80px_-12px_rgb(0_0_0/0.45)] ring-1 ring-foreground/10 backdrop-blur-xl backdrop-saturate-150 transition-[width,height] duration-200 ease-out fade-in-0 zoom-in-95 data-fill:h-full data-fill:w-full motion-reduce:animate-none motion-reduce:transition-none"
+        className={`${FLOATING} group/tile pointer-events-auto flex h-[82%] w-[min(100%,max(64%,36rem),56rem)] animate-in flex-col overflow-hidden transition-[width,height] duration-200 ease-out fade-in-0 zoom-in-95 data-fill:h-full data-fill:w-full motion-reduce:animate-none motion-reduce:transition-none`}
       >
         <TileHeader value={{ actions }}>
           <HeaderSlot>
@@ -112,35 +113,83 @@ export function Peek({
                 </span>
               )}
             </PaneHeader>
-            {/* The Pane on the tile's own fill: a view that paints the
-                page's background, as code does, paints the tile's. */}
-            <div className="min-h-0 flex-1 [--background:var(--popover)]">
-              {shown ? (
-                <Broken close={onClose}>
-                  <shown.Pane
-                    engine={engine}
-                    project={project}
-                    args={pane.args}
-                    focused={false}
-                    open={(next, place, other) =>
-                      open(other ?? project, next, place)
-                    }
-                    update={(args) => onUpdate({ kind: pane.kind, args })}
-                    close={onClose}
-                    label={label}
-                    run={run}
-                    peek
-                  />
-                </Broken>
-              ) : (
-                <p className="p-4 text-sm text-muted-foreground">
-                  This window does not show this kind of Pane now.
-                </p>
-              )}
-            </div>
+            <FloatingPane
+              engine={engine}
+              modules={modules}
+              project={project}
+              pane={pane}
+              open={open}
+              update={onUpdate}
+              close={onClose}
+              label={label}
+              run={run}
+              peek
+            />
           </HeaderSlot>
         </TileHeader>
       </section>
+    </div>
+  )
+}
+
+/** The card what floats over the desk is drawn on, Quick Look's tile and
+ * the Sheet: as the window's menus, their fill and hairline, a deep
+ * shadow, and a blur of what is under it. */
+export const FLOATING =
+  "rounded-xl bg-popover/95 text-popover-foreground shadow-[0_30px_80px_-12px_rgb(0_0_0/0.45)] ring-1 ring-foreground/10 backdrop-blur-xl backdrop-saturate-150"
+
+/** A Pane drawn over the desk, in no workspace, on its card's own fill:
+ * a view that paints the page's background, as code does, paints the
+ * card's. A Pane it opens goes in the workspace. */
+export function FloatingPane({
+  engine,
+  modules,
+  project,
+  pane,
+  open,
+  update,
+  close,
+  label,
+  run,
+  focused = false,
+  peek = false,
+}: {
+  engine: Engine
+  modules: readonly string[]
+  project: ProjectId
+  pane: PaneState
+  open: (project: ProjectId, pane: PaneState, place?: Place) => void
+  update: (pane: PaneState) => void
+  close: () => void
+  label: (label: Label | null) => void
+  run: (action: string, args?: Args) => void
+  focused?: boolean
+  peek?: boolean
+}) {
+  const kind = kindOf(pane.kind)
+  const shown = kind && kindRuns(pane.kind, modules) ? kind : undefined
+  return (
+    <div className="min-h-0 flex-1 [--background:var(--popover)]">
+      {shown ? (
+        <Broken close={close}>
+          <shown.Pane
+            engine={engine}
+            project={project}
+            args={pane.args}
+            focused={focused}
+            open={(next, place, other) => open(other ?? project, next, place)}
+            update={(args) => update({ kind: pane.kind, args })}
+            close={close}
+            label={label}
+            run={run}
+            peek={peek}
+          />
+        </Broken>
+      ) : (
+        <p className="p-4 text-sm text-muted-foreground">
+          This window does not show this kind of Pane now.
+        </p>
+      )}
     </div>
   )
 }

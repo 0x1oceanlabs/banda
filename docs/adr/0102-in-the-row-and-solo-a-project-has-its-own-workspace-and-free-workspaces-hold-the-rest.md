@@ -103,6 +103,12 @@ day.
      time, in the top layer (glossary, Top layer).
    - The Drawer stays the quick Thread from the top (ADR 0025,
      decision 8). The Sheet is its own thing.
+   _Built_ in step 5: a Pane kind says `sheet` (`PaneKind.sheet`), as
+   Settings and Usage do, and opens as the Sheet wherever it is asked
+   for, in every Flow. A press on the tiles takes it away; the sidebar
+   and the bar do not, so their gear goes to it where it is. The
+   notifications stay the bell's list (ADR 0048), and a Pane of no
+   Project other than these opens as before.
 
 6. **Moving a Pane between workspaces.**
    - A Project's Pane, or a whole Group, moves freely between its

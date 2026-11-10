@@ -19,6 +19,7 @@ export const settingsPane = definePane<SettingsArgs>({
   kind: "window.settings",
   title: () => "Settings",
   icon: SettingsIcon,
+  sheet: true,
   // Its own header says where it is, and closes it.
   header: false,
   Pane: (props) => (

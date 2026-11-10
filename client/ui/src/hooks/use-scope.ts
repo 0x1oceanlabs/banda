@@ -82,7 +82,7 @@ type Taking = {
   owns?: (event: KeyboardEvent) => boolean
   /** A Pane's scope is its whole tile, which the window marks with
    * `data-tile`: a key pressed with the tile itself focused, as after a
-   * click on its header, is the Pane's too. */
+   * click on its header, is the Pane's too; in the Sheet, the Sheet. */
   tile?: boolean
 }
 
@@ -103,7 +103,7 @@ export function useScope(
     (element: HTMLElement | null) => {
       if (!element) return undefined
       const at = tile
-        ? (element.closest<HTMLElement>("[data-tile]") ?? element)
+        ? (element.closest<HTMLElement>("[data-tile], [data-sheet]") ?? element)
         : element
       at.dataset.scope = scope
       const onActed = (event: Event) => {

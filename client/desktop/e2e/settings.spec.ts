@@ -373,15 +373,23 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
   )
 
   // The reset chord brings the window's own keys back, and goes to Keys:
-  // Alt+Q is nothing again, and Alt+W closes the Pane.
+  // Alt+Q is nothing again, and Alt+W closes the Pane. Esc takes the
+  // Sheet away, and the focus goes back where it was (ADR 0102, decision
+  // 5).
+  await page.keyboard.press("Escape")
+  await expect(settings).toHaveCount(0)
   await composer.click()
   await page.keyboard.press("Control+Alt+Shift+KeyK")
   await expect(settings).toHaveAttribute("data-focused", "true")
-  await composer.click()
+  // A press on the tiles takes it away too.
+  await composer.dispatchEvent("pointerdown")
+  await expect(settings).toHaveCount(0)
+  await expect(composer).toBeFocused()
   await page.keyboard.press("Alt+KeyQ")
   await expect(composer).toBeVisible()
   await page.keyboard.press("Alt+KeyW")
   await expect(composer).toBeHidden()
+  await page.keyboard.press("Control+Alt+Shift+KeyK")
 
   // ↶ takes a line out.
   await settings
@@ -647,6 +655,7 @@ test("Terminal: terminal.toml's rows write the file, and a terminal open follows
   await expect(ligatures).toHaveAttribute("aria-checked", "false")
   // The terminal stays running as its file changes under it.
   await expect(screen).toHaveAttribute("data-state", "running")
+  await page.keyboard.press("Escape")
   await screen.click()
   await page.screenshot({ path: "test-results/terminal-toml.png" })
 })

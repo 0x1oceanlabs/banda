@@ -57,9 +57,13 @@ export function holderOf(element: Element | null): Element | null {
     : document.querySelector(`[${HOLDS}="${CSS.escape(id)}"]`)
 }
 
-/** The focused Pane's tile, which the window marks `data-focused`. */
+/** The focused Pane's tile, which the window marks `data-focused`; while
+ * the Sheet shows, the Sheet, which has the keys (ADR 0102, decision 5). */
 export function focusedTile(): HTMLElement | null {
-  return document.querySelector<HTMLElement>("[data-tile][data-focused=true]")
+  return (
+    document.querySelector<HTMLElement>("[data-sheet]") ??
+    document.querySelector<HTMLElement>("[data-tile][data-focused=true]")
+  )
 }
 
 /** Whether `element` is in `tile`, or in the layer and held by it. */
@@ -164,6 +168,9 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
    * does (ADR 0081, decision 4). Another kind there says it is not on
    * that host yet: it would reach this machine's files. */
   elsewhere?: true
+  /** It comes as the Sheet, in from the right edge over the tiles, not as
+   * a tile, as Settings and Usage do (ADR 0102, decision 5). */
+  sheet?: true
   /**
    * False when the Pane draws its own header, as the browser's row of tabs
    * and address: the frame then draws none (`PaneHeader` draws one).

@@ -102,6 +102,7 @@ import { AGENTS_FILE } from "@banda/contract/agents"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
 import { Peek, type Peeked } from "./Peek"
+import { Sheet, sheetsOf, useSheet } from "./Sheet"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
 import {
@@ -127,7 +128,6 @@ import {
   strayedIn,
   placingOf,
   runAction,
-  settingsAt,
   updating,
   type Shell as Parts,
   windowApiOf,
@@ -451,10 +451,8 @@ export function Shell({
   // The actions with the keys in force (keys.ts).
   const { mod, binds, keyed, keys, own } = useKeys()
   // The settings Pane (ADR 0016), in the Project the Person is in.
-  const settings = useCallback(
-    (link?: string) => change((w) => settingsAt(w, projectIn(w) ?? home, link)),
-    [change, home]
-  )
+  const sheet = useSheet(() => projectIn(drawnNow()) ?? home)
+  const { settings } = sheet
   // A settings route opens the settings there; any other, the menu.
   const route = useCallback(
     (route: string) => {
@@ -488,6 +486,7 @@ export function Shell({
       { beside, again = true, update, toggle, drawer, ...how } = {}
     ) => {
       if (drawer) return intoDrawer(pane, project ?? home)
+      if (sheetsOf(pane)) return sheet.show(pane, project, { toggle, again })
       // The Pane that peeks, opened in the workspace, peeks no more.
       const peeked = peekNow.current
       if (
@@ -571,6 +570,7 @@ export function Shell({
     putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
+    closeSheet: sheet.closeFocused,
     glance,
     peek: (pane, project) =>
       setPeek((was) =>
@@ -874,23 +874,20 @@ export function Shell({
                     peek={peek}
                     engine={engine}
                     modules={modules}
-                    run={parts.run}
-                    open={(project, pane, place) =>
-                      change((w) => opening(w, project, pane, { place }))
-                    }
+                    shell={parts}
                     onUpdate={(pane) =>
                       setPeek((was) => was && { ...was, pane })
-                    }
-                    onOpen={() =>
-                      parts.open(peek.pane, peek.project, {
-                        again: false,
-                        update: true,
-                      })
                     }
                     onFill={fillPeek}
                     onClose={closePeek}
                   />
                 )}
+                <Sheet
+                  state={sheet}
+                  engine={engine}
+                  modules={modules}
+                  shell={parts}
+                />
                 <Toaster />
                 <LaterPicker />
                 <QuitDialog
