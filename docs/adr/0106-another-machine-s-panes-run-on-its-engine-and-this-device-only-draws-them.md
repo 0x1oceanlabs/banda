@@ -574,6 +574,13 @@ round trip.
      12), so a reply's paths are found by the host that has them. It
      keeps `findFiles`'s rule that a path to a network share is never
      looked at (`onThisMachine`, `apps/agents/desktop/src/paths.ts:6-8`).
+   - _Amended 2026-11-10, with step 3c:_ an answer is
+     `{asked, file, relative, inside}`, what the window draws a path
+     with, and has no `line`: the window takes a path's line off before
+     it asks, and matches the answer by `asked`. Only paths that name a
+     file are answered. An Agent's call looks only inside its Project's
+     folder, so what it finds says nothing of what is outside, and a
+     URL's path (`smb://host/…`) is never looked at.
    - Until pairing (H3) a token is the capability, bound to the file and
      the hour, not yet to a device (#1248).
    - **Save a copy to this Mac** (step 4c) is a device capability,
@@ -649,7 +656,7 @@ round trip.
 | host | `terminal.running`, a Read stream of how many of a Project's terminals run a program in front, again as it changes; the update's wait sums its machine's Projects (the terminal module is a Project's, `kernel/src/module.rs:23-29`) | 1d |
 | `client/core` | a terminal's close in H5e's queue (ADR 0105), with the `boot` it ran under | 1d |
 | `client/core` | `ProjectFile {project, path}`, made only by a session; `MachineFile {machine, path}` | 3b |
-| host | `files.locate {paths, worked}` → `[{asked, file, line?}]`, with byte URLs | 3c |
+| host | `files.locate {paths, worked}` → `[{asked, file, relative, inside}]` (amended with step 3c), with byte URLs (4c) | 3c |
 | host | `bytes.issue {path, use}` → `{token, until}`, under `files.read`'s right and reach; `GET /b/<token>` with ranges; `GET /p/<token>`, sandboxed | 4a |
 | desktop | `app://files/<machine>/<token>`, `app://preview/<machine>/<token>` relayed to that machine | 4b, 4c |
 | device | `save_file`, a save dialog and then the bytes by the host's URL | 4c |

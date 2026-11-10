@@ -1,8 +1,8 @@
 //! The files module through the kernel, as a Pane and an Agent use it.
 
 use banda_files::model::{
-    Archive, Found, Kind, Listing, Locked, Opened, Packing, Places, Sheet, Stat, Text, Watched,
-    Written,
+    Archive, Found, Kind, Listing, Located, Locked, Opened, Packing, Places, Sheet, Stat, Text,
+    Watched, Written,
 };
 use banda_kernel::{AgentId, Caller, Code, Participant};
 use serde_json::json;
@@ -199,6 +199,42 @@ async fn find_ranks_a_name_above_a_folder_and_leaves_out_what_is_ignored() {
     .await;
     assert_eq!(found.paths.len(), 1);
     assert_eq!(found.dir, world.folder.join("src").to_string_lossy());
+}
+
+#[tokio::test]
+async fn locate_finds_a_replys_files_where_its_tools_worked_and_an_agent_only_in_its_project() {
+    let world = World::new().await;
+    world.write("src/a.ts", "");
+    // A repository of its own beside the Project, where the tools worked.
+    let outside = world.outside();
+    std::fs::create_dir_all(outside.join(".git")).unwrap();
+    let secret = outside.join("secret.txt").to_string_lossy().into_owned();
+    // And one inside it, after: an Agent finds its file there, as the
+    // one outside is never looked at.
+    let sub = world.folder.join("sub");
+    std::fs::create_dir_all(sub.join(".git")).unwrap();
+    world.write("sub/secret.txt", "");
+    let ask = json!({
+        "paths": ["src/a.ts", "secret.txt", "src", &secret],
+        "worked": [&secret, sub.join("x.ts")],
+    });
+    let asked =
+        |found: &[Located]| -> Vec<String> { found.iter().map(|one| one.asked.clone()).collect() };
+    let found: Vec<Located> = world.ask("files.locate", ask.clone()).await;
+    assert_eq!(asked(&found), ["src/a.ts", "secret.txt", &secret]);
+    let a = world.folder.join("src").join("a.ts");
+    assert_eq!(found[0].file, a.to_string_lossy());
+    assert!(found[0].inside);
+    assert_eq!(found[1].file, secret);
+    assert_eq!(
+        (found[1].relative.as_str(), found[1].inside),
+        ("secret.txt", false)
+    );
+
+    let found = world.call_as_agent("files.locate", ask).await.unwrap();
+    let found: Vec<Located> = serde_json::from_value(found).unwrap();
+    assert_eq!(asked(&found), ["src/a.ts", "secret.txt"]);
+    assert_eq!(found[1].file, sub.join("secret.txt").to_string_lossy());
 }
 
 #[tokio::test]

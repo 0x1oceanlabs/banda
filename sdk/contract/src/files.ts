@@ -2,12 +2,13 @@
  * The files module's words for TypeScript: one folder's names as
  * `files.list` reads them, what `files.stat` says a path is, a file's text
  * from `files.read` and what `files.write` answers, the paths `files.find`
- * finds, the pieces of `files.watch`, the Person's places, the files
- * opened lately, what an archive holds and a workbook's sheet, for the
+ * finds, the files a reply's paths name, as `files.locate` finds them,
+ * the pieces of `files.watch`, the Person's places, the files opened
+ * lately, what an archive holds and a workbook's sheet, for the
  * previewers; what an operation did and what undoes it, the pieces of a
- * move or a copy, the system's Trash, and the lines `files.search`
- * finds; a file's small picture, what a path is at length and what a
- * folder holds, counted; and its `files.toml` as the look resolves it (ADR 0073,
+ * move or a copy, the system's Trash, and the lines `files.search` finds;
+ * a file's small picture, what a path is at length and what a folder
+ * holds, counted; and its `files.toml` as the look resolves it (ADR 0073,
  * decision 13).
  */
 import type { ModuleFile } from "./look"
@@ -20,6 +21,8 @@ export type { FindAsk } from "./generated/files/FindAsk"
 export type { Found } from "./generated/files/Found"
 export type { Kind } from "./generated/files/Kind"
 export type { ListAsk } from "./generated/files/ListAsk"
+export type { LocateAsk } from "./generated/files/LocateAsk"
+export type { Located } from "./generated/files/Located"
 export type { Locked } from "./generated/files/Locked"
 export type { Listing } from "./generated/files/Listing"
 export type { ReadAsk } from "./generated/files/ReadAsk"
