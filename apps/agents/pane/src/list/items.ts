@@ -472,7 +472,6 @@ const move: ItemAction = {
   },
   runsAsPerson: true,
   group: "other",
-  elsewhere: true,
   row: () => null,
   run: (window, args) => {
     const at = threadAt(window, args)
