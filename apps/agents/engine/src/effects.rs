@@ -563,10 +563,14 @@ async fn work(
     // The session the Thread had, and the account its turn before this
     // one ran on.
     let turn_id = turn.id;
-    let (earlier, before): (Option<acp::Evidence>, _) = project
+    let (earlier, before, pending): (Option<acp::Evidence>, _, Option<Arrived>) = project
         .read(move |sql| {
             let before = store::ran_before(sql, thread, turn_id)?;
-            Ok((store::evidence(sql, thread)?, before))
+            Ok((
+                store::evidence(sql, thread)?,
+                before,
+                store::arrival(sql, thread)?,
+            ))
         })
         .await
         .map_err(|e| unplanned(plain(e)))?;
@@ -576,13 +580,24 @@ async fn work(
         .await;
     // Another account of the same Harness goes on with the same session.
     let kin = |other: &str| (harnesses.find(other)).is_some_and(|o| o.shares_sessions(&harness));
-    let (earlier, arrived) = match before.filter(|before| *before != harness.id) {
-        Some(before) => {
-            let (earlier, arrived) =
-                arrive(project, harnesses, turn, &harness, &before, earlier).await?;
-            (earlier, Some(arrived))
+    // A failed process start records a turn on the new entry before it
+    // ever opens a session. Its retry still owes the old session's history.
+    let before = earlier
+        .as_ref()
+        .filter(|e| before.as_deref() == Some(&harness.id) && !kin(e.harness()))
+        .map(|e| e.harness().to_owned())
+        .or(before);
+    let (earlier, arrived) = if let Some(pending) = pending.filter(|p| p.divider.1 == harness.id) {
+        (earlier, Some(pending))
+    } else {
+        match before.filter(|before| *before != harness.id) {
+            Some(before) => {
+                let (earlier, arrived) =
+                    arrive(project, harnesses, turn, &harness, &before, earlier).await?;
+                (earlier, Some(arrived))
+            }
+            None => (earlier, None),
         }
-        None => (earlier, None),
     };
     // A session that opens reaches Banda with a pass of its own, which
     // names its Thread (ADR 0019; ADR 0083, decision 2).
@@ -621,23 +636,29 @@ async fn work(
             .await
             .map_err(unplanned)?;
     refused.extend(left_out);
-    // A Harness the Thread moved to reads its history first; a command
-    // runs as it is.
-    let divider = arrived.map(|arrived| {
-        if let Some(history) = arrived.history
-            && prompt.command.is_none()
-        {
-            prompt.text = history + &prompt.text;
-        }
-        arrived.divider
-    });
+    // A command runs as it is. Keep the handoff for the first ordinary
+    // prompt that succeeds, including across a restart or retry.
+    let command = runs_command(project, thread, &running, &prompt)
+        .await
+        .map_err(unplanned)?;
+    let handed = arrived.is_some() && !command;
+    if let Some(history) = arrived.as_ref().and_then(|a| a.history.as_ref())
+        && !command
+    {
+        prompt.text = history.clone() + &prompt.text;
+    }
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = session.usage();
     project
         .write(move |tx| {
-            if let Some((from, to, how)) = divider {
-                crate::transcript::moved(tx, agent, thread, id, from, to, how)?;
+            if let Some(mut arrived) = arrived {
+                if !arrived.shown {
+                    let (from, to, how) = arrived.divider.clone();
+                    crate::transcript::moved(tx, agent, thread, id, from, to, how)?;
+                    arrived.shown = true;
+                }
+                store::set_arrival(tx.sql(), thread, Some(&arrived))?;
             }
             offered(tx, agent, thread, &now)?;
             if let Some(usage) = usage {
@@ -675,6 +696,12 @@ async fn work(
             .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()))
     };
     let ending = drive(&run, transcript, &mut hear, ended).await;
+    if handed && ending.state == TurnState::Done {
+        project
+            .write(move |tx| store::set_arrival(tx.sql(), thread, None::<&Arrived>))
+            .await
+            .map_err(|e| unplanned(plain(e)))?;
+    }
     // What it said while the turn began but heard nothing yet, such as
     // Claude Code's slash commands just after its session opened.
     // The turn ended as it did, whether or not this is written.
@@ -689,7 +716,10 @@ async fn work(
 }
 
 /// What a turn on a Thread that moved before it starts with (ADR 0078).
+#[derive(Clone, Serialize, Deserialize)]
 struct Arrived {
+    /// The divider was written already, even if its prompt failed.
+    shown: bool,
     /// The history it reads before the message, from another Harness.
     history: Option<String>,
     /// The Thread's divider: from, to, and how.
@@ -741,6 +771,7 @@ async fn arrive(
             tracing::warn!(%error, "a moved session was not readied for its new account");
         }
         let arrived = Arrived {
+            shown: false,
             history: None,
             divider: divider(Moved::Same),
         };
@@ -788,13 +819,18 @@ async fn arrive(
         }
     };
     let now = back.clone();
-    project
-        .write(move |tx| store::set_sessions(tx.sql(), thread, now.as_ref(), &sessions))
-        .await
-        .map_err(unplanned)?;
     let arrived = Arrived {
+        shown: false,
         history,
         divider: divider(how),
     };
+    let pending = arrived.clone();
+    project
+        .write(move |tx| {
+            store::set_sessions(tx.sql(), thread, now.as_ref(), &sessions)?;
+            store::set_arrival(tx.sql(), thread, Some(&pending))
+        })
+        .await
+        .map_err(unplanned)?;
     Ok((back, arrived))
 }
