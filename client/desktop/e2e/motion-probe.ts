@@ -8,7 +8,9 @@
  *
  * - The page's own ticks: each `requestAnimationFrame` callback, the ticks
  *   any of them ran in, and the reads of layout made inside them, those
- *   of the clock's read phase (`afterMoves`) too.
+ *   of the clock's read phase (`afterMoves`) too; and of those, the reads
+ *   of the sidebar's own elements, as the Tiling's and the pages' moves
+ *   read theirs in the same ticks.
  * - Each terminal: its draws, while its canvas shows on screen and while it
  *   does not, and its fits. A draw is one pass of drawing calls, within one
  *   task; a fit, the canvas taking a new size. When it came on screen, as
@@ -70,6 +72,8 @@ export type Reading = {
   ticks: number
   /** Reads of layout (sizes, places, rects) inside those callbacks. */
   reads: number
+  /** Of those, the reads of the sidebar's own elements. */
+  sidebarReads: number
   terminals: TerminalCount[]
   /** The tasks that changed a Mark's drawing. */
   marks: number
@@ -117,6 +121,7 @@ export function install(): void {
     callbacks: 0,
     ticks: 0,
     reads: 0,
+    sidebarReads: 0,
     marks: 0,
     longTasks: { count: 0, worstMs: 0 },
     longFrames: hasLongFrames ? { count: 0, worstMs: 0, blockingMs: 0 } : null,
@@ -150,15 +155,19 @@ export function install(): void {
       }
     })
 
-  // Reads of layout, counted only inside a tick.
+  // Reads of layout, counted only inside a tick, the sidebar's apart.
+  const countRead = (element: Element) => {
+    state.reads += 1
+    if (element.closest("aside[data-sidebar]")) state.sidebarReads += 1
+  }
   const countReads = (proto: object, name: string) => {
     const own = Object.getOwnPropertyDescriptor(proto, name)
     const get = own?.get
     if (!own || !get) return
     Object.defineProperty(proto, name, {
       ...own,
-      get() {
-        if (inside) state.reads += 1
+      get(this: Element) {
+        if (inside) countRead(this)
         return get.call(this)
       },
     })
@@ -179,11 +188,11 @@ export function install(): void {
   const rect = Element.prototype.getBoundingClientRect
   const rects = Element.prototype.getClientRects
   Element.prototype.getBoundingClientRect = function () {
-    if (inside) state.reads += 1
+    if (inside) countRead(this)
     return rect.call(this)
   }
   Element.prototype.getClientRects = function () {
-    if (inside) state.reads += 1
+    if (inside) countRead(this)
     return rects.call(this)
   }
 
@@ -515,6 +524,7 @@ export function install(): void {
       callbacks: state.callbacks,
       ticks: state.ticks,
       reads: state.reads,
+      sidebarReads: state.sidebarReads,
       marks: state.marks,
       terminals: [...terminals.values()].map(
         ({ name, draws, calls, fits, came, texts }) => ({

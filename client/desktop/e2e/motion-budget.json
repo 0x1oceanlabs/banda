@@ -211,6 +211,41 @@
       "gate": "soft",
       "budget": 0,
       "note": "never a long animation frame in a move that only translates"
+    },
+    {
+      "measure": "sidebar.ticks.sidebarReadsPerSecond",
+      "gate": "hard",
+      "budget": 0,
+      "note": "no layout of the sidebar's read in a frame: its list moves by element.animate, by opacity, with no frame loop of its own (ADR 0098, S5c); the Tiling's and the pages' reads as the archived Thread's Pane closes are theirs"
+    },
+    {
+      "measure": "sidebar.ticks.readsPerSecond",
+      "gate": "soft",
+      "budget": 0,
+      "note": "every layout read in a frame during the phase, the sidebar's and others': the Tiling's and the browser pages' as the archived Thread's Pane closes (#1292)"
+    },
+    {
+      "measure": "sidebar.longFrames.count",
+      "gate": "soft",
+      "budget": 0,
+      "note": "never a long animation frame as the list moves (ADR 0098, S5c); soft: the archived Thread's Pane closing in the phase blocks one frame of its own (#1293), and the machine's load adds more"
+    },
+    {
+      "measure": "sidebar.moving.layouts",
+      "gate": "hard",
+      "budget": 0.2,
+      "note": "each batch lays out once, in the commit that adds and takes rows; the frames of its fades lay out none"
+    },
+    {
+      "measure": "sidebar.moving.mainMs.p95",
+      "gate": "soft",
+      "budget": 4
+    },
+    {
+      "measure": "settled.ticks.callbacksPerSecond",
+      "gate": "hard",
+      "budget": 0,
+      "note": "once the list's batch is over, nothing asks for a frame but a Mark's news (ADR 0088, decision 3)"
     }
   ],
   "recorded": {

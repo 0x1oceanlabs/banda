@@ -127,7 +127,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   const a = page.getByRole("region", { name: "pages 1", exact: true })
   await expect(a).toBeVisible()
   await expect
-    .poll(() => threadNamed(window, "pages 1")?.latest.state)
+    .poll(() => threadNamed(window, "pages 1")?.latest?.state)
     .toBe("running")
   await page.keyboard.press("Alt+Enter")
   const box = page
@@ -179,7 +179,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   // message below would wait in it, never asked.
   writeFileSync(join(window.dir, "root/Work/go"), "")
   await expect
-    .poll(() => threadNamed(window, "pages 1")?.latest.state)
+    .poll(() => threadNamed(window, "pages 1")?.latest?.state)
     .toBe("done")
   await expect(row).toContainText("someday")
   const { id, later } = threadNamed(window, "pages 1")!

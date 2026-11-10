@@ -1,10 +1,11 @@
-import { Fragment, useContext } from "react"
+import { useContext, useRef } from "react"
 import { flushSync } from "react-dom"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
 import { Separator } from "@banda/ui/components/separator"
 import { useRun } from "@banda/core/react"
+import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import {
@@ -14,26 +15,36 @@ import {
   SquarePenIcon,
 } from "lucide-react"
 import type { Row as Arranged } from "./arrange"
+import { lineCount } from "./card"
 import { EmptyTab, InboxZero } from "./Empty"
-import type { Block } from "./inbox"
-import type { Settings } from "./settings"
-import { rowKey } from "./hold"
+import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
+import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
 import { NewThreadIn } from "./NewThreadIn"
 import type { GroupBlock, Region } from "./regions"
 import { Rollup } from "./Rollup"
 import type { WithMenu } from "./ProjectMenu"
+import type { Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
+import { HoldingContext } from "./useHold"
+import type { Holds } from "./useOrdered"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /**
- * The regions of the tab in view (ADR 0098, decisions 3–5): Your turn
- * under its head, Open under a hairline, the Working shelf in grey with
- * "+ N more", which opens in place; Later and the Archive by day; inbox
- * zero and an empty tab in words; and, grouped, each group under its
- * header, which folds it.
+ * The regions of the tab in view (ADR 0098, decisions 3–6), as one flat
+ * list, keyed, its heads and headers among its cards: Your turn under its
+ * head, Open under a hairline, the Working shelf in grey with "+ N more",
+ * which opens in place; Later and the Archive by day; inbox zero and an
+ * empty tab in words; and, grouped, each group under its header, which
+ * folds it. A card keeps its node from one part to another, so its Mark
+ * plays its change as news; the list moves as `motion.ts` plays it. While
+ * the list holds, a card that left stays dimmed in its slot, saying where
+ * it went, and one the Person's pointer took away stands as a ghost line.
+ * What the Person does to a card from it, by its menu or its hover
+ * actions, is their own act, which the list draws at once; for a moment
+ * after one by key closed a slot, the hover actions take no click.
  */
 export function SectionView({
   regions,
@@ -48,6 +59,7 @@ export function SectionView({
   withMenu,
   only,
   projects,
+  holds,
 }: {
   regions: readonly Region[]
   settings: Settings
@@ -68,16 +80,35 @@ export function SectionView({
   /** The Project whose rows alone the list shows, if one. */
   only: ProjectId | undefined
   projects: readonly ProjectSummary[]
+  holds: Holds
 }) {
   const keyFor = useKeyLabel()
   const run = useRun()
+  const holding = useContext(HoldingContext)
   const dismiss = useContext(Dismiss)
   // Grouped by Project, a header names each card's Project.
   const grouped = regions.some((region) => region.group?.by === "project")
-  // A row's Later and Wake are its Thread's App's (ADR 0087, decision 12).
-  const wake = ({ project, listed }: Arranged) => {
-    const action = itemActionOf(listed, "wake")
-    if (action) run(action.id, { project: project.id, item: listed.id })
+  const inProject = (row: Arranged) => grouped || row.project.scratch
+  const items = itemsOf(
+    regions,
+    (row) =>
+      lineCount(settings, {
+        inProject: inProject(row),
+        elsewhere: row.host !== undefined && !named,
+      }),
+    holds
+  )
+  const list = useRef<HTMLDivElement>(null)
+  // Each look, with its font, is measured again, as the cards' density.
+  const look = useLook((one) => one.vars, undefined)
+  useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
+  // A row's Later and Wake are its Thread's App's (ADR 0087, decision 12),
+  // and the Person's own acts, which the list draws at once.
+  const wake = (row: Arranged) => {
+    const action = itemActionOf(row.listed, "wake")
+    if (!action || holding?.quiet()) return
+    holding?.act(row)
+    run(action.id, { project: row.project.id, item: row.listed.id })
   }
   const laterKey = (listed: Listed) =>
     keyFor(itemActionOf(listed, "later")?.id ?? "")
@@ -141,12 +172,80 @@ export function SectionView({
     return project && mine ? withMenu(project, head) : head
   }
 
-  const drawBlock = (block: Block) => {
+  /** A card's hover action: Wake in Later, else its Later's clock, which
+   * opens the picker at the card. */
+  const actionOf = (row: Arranged) =>
+    row.stand === "later" ? (
+      <Button variant="ghost" size="xs" onClick={() => wake(row)}>
+        <AlarmClockIcon />
+        Wake
+      </Button>
+    ) : (
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Later"
+        title={`Later ${laterKey(row.listed)}`}
+        onClick={(event) => {
+          if (holding?.quiet()) return
+          const anchor = event.currentTarget.closest("[data-row]")
+          pickLater({
+            project: row.project.id,
+            listed: row.listed,
+            ...(anchor ? { anchor } : {}),
+            onPicked: () => holding?.act(row, "pointer"),
+          })
+        }}
+      >
+        <AlarmClockIcon />
+      </Button>
+    )
+
+  const card = (item: Extract<Item, { kind: "card" }>) => {
+    const { row } = item.entry
+    const went = item.ghost ?? item.went
+    const said = went && wentWords(went, holds.now)
+    const drawn = (
+      <ThreadRow
+        engine={engine}
+        row={row}
+        settings={settings}
+        inProject={inProject(row)}
+        current={isCurrent(row.project.id, row.listed.pane)}
+        away={strayed.has(row.listed.id)}
+        named={named}
+        {...(went ? { gone: said ?? "" } : { action: actionOf(row) })}
+      />
+    )
+    return (
+      <>
+        {/* Dimmed as it left, or faded out under its ghost line. */}
+        <div
+          inert={item.ghost ? true : undefined}
+          aria-hidden={item.ghost ? true : undefined}
+          className={cn(
+            "transition-opacity",
+            item.ghost && "opacity-0 duration-(--dur-fast) ease-(--ease-exit)",
+            item.went && "opacity-50 duration-(--dur) ease-(--ease)"
+          )}
+        >
+          {drawn}
+        </div>
+        {item.ghost && (
+          <p className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0">
+            {said}
+          </p>
+        )}
+      </>
+    )
+  }
+
+  const piece = (item: Extract<Item, { kind: "piece" }>) => {
+    const block = item.piece
     switch (block.kind) {
       case "head":
         return (
           <div
-            key={block.key}
             data-block={block.key}
             className="flex items-baseline gap-1 px-2 pt-2.5 pb-1 text-xs font-medium text-muted-foreground"
           >
@@ -157,23 +256,19 @@ export function SectionView({
           </div>
         )
       case "divider":
-        return <Separator key={block.key} className="mx-2 my-1.5 w-auto!" />
+        return <Separator className="mx-2 my-1.5 w-auto!" />
       case "more":
         return (
           <button
-            key={block.key}
             type="button"
-            className="rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            className="w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
             onClick={(event) => {
               // It goes as the rest shows: the focus goes on to the first
               // card it showed, never to the page.
-              const cards = event.currentTarget.previousElementSibling
-              const shown = cards?.childElementCount ?? 0
+              const last =
+                event.currentTarget.parentElement?.previousElementSibling
               flushSync(onMore)
-              const first = cards?.children[shown]
-              const card = first?.matches("button")
-                ? first
-                : first?.querySelector("button")
+              const card = last?.nextElementSibling?.querySelector("button")
               if (card instanceof HTMLElement) card.focus()
             }}
           >
@@ -183,71 +278,41 @@ export function SectionView({
           </button>
         )
       case "zero":
-        return <InboxZero key={block.key} zero={block} />
+        return <InboxZero zero={block} />
       case "empty":
-        return (
-          <EmptyTab
-            key={block.key}
-            tab={block.tab}
-            only={only}
-            projects={projects}
-          />
-        )
+        return <EmptyTab tab={block.tab} only={only} projects={projects} />
       case "group":
-        return null
-      case "rows":
-        return (
-          <div key={block.key} className="flex flex-col gap-px">
-            {block.rows.map(({ row }) => (
-              <ThreadRow
-                key={rowKey(row)}
-                engine={engine}
-                row={row}
-                settings={settings}
-                inProject={grouped || row.project.scratch}
-                current={isCurrent(row.project.id, row.listed.pane)}
-                away={strayed.has(row.listed.id)}
-                named={named}
-                action={
-                  row.stand === "later" ? (
-                    <Button variant="ghost" size="xs" onClick={() => wake(row)}>
-                      <AlarmClockIcon />
-                      Wake
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="ghost"
-                      size="icon-xs"
-                      aria-label="Later"
-                      title={`Later ${laterKey(row.listed)}`}
-                      onClick={(event) => {
-                        const anchor = event.currentTarget.closest("[data-row]")
-                        pickLater({
-                          project: row.project.id,
-                          listed: row.listed,
-                          ...(anchor ? { anchor } : {}),
-                        })
-                      }}
-                    >
-                      <AlarmClockIcon />
-                    </Button>
-                  )
-                }
-              />
-            ))}
-          </div>
-        )
+        return header(block, item.place ?? "")
     }
   }
 
-  return regions.map((region) =>
-    region.label === undefined ? (
-      <Fragment key={region.key}>{region.blocks.map(drawBlock)}</Fragment>
-    ) : (
-      <div key={region.key} role="group" aria-label={region.label}>
-        {region.group && header(region.group, region.label)}
-        {!region.group?.folded && region.blocks.map(drawBlock)}
-      </div>
-    )
+  return (
+    <div ref={list} className="flex flex-col">
+      {items.map((item, i) => {
+        const gap = gapAbove(items[i - 1], item)
+        const deleted = item.kind === "card" && item.went?.to === "deleted"
+        // The scroller keeps what is read in place as rows come above
+        // it, by a card, never by a head.
+        const head =
+          item.kind === "piece" &&
+          (item.piece.kind === "head" || item.piece.kind === "group")
+        return (
+          <div
+            key={item.key}
+            data-key={item.key}
+            data-place={item.place}
+            data-measure={item.measure}
+            inert={deleted || undefined}
+            style={gap > 0 ? { marginTop: gap } : undefined}
+            className={cn(
+              "relative flow-root",
+              head && "[overflow-anchor:none]"
+            )}
+          >
+            {item.kind === "card" ? card(item) : piece(item)}
+          </div>
+        )
+      })}
+    </div>
   )
 }

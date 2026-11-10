@@ -1,4 +1,10 @@
-import { type ComponentProps, useCallback } from "react"
+import {
+  type ComponentProps,
+  useCallback,
+  useContext,
+  useEffect,
+  useState,
+} from "react"
 import type { Engine } from "@banda/contract"
 import {
   ContextMenu,
@@ -14,17 +20,22 @@ import {
 } from "@banda/core/react"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { useNaming } from "@banda/ui/lib/naming"
+import { stopNaming, useNaming } from "@banda/ui/lib/naming"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import type { Row as Arranged } from "./arrange"
 import { Row } from "./Row"
 import type { Settings } from "./settings"
+import { HoldingContext, useHoldWhile } from "./useHold"
 
 /**
  * A Thread's row, with the Thread menu a right click opens (ADR 0077,
  * decision 5); its Rename… opens the field in the row itself. Another
- * host's has neither yet (`ElsewhereRow`).
+ * host's has neither yet (`ElsewhereRow`), nor has one that left the tab
+ * while the list held. The menu, while open, and the field hold the list
+ * still, and what its Person does from the menu is their own act, which
+ * the list draws at once where it takes the card elsewhere (ADR 0098,
+ * decision 6).
  */
 export function ThreadRow({
   engine,
@@ -39,6 +50,18 @@ export function ThreadRow({
   const project = row.project.id
   const naming = useNaming(project, row.listed.id, "row")
   const harnesses = useHarnesses(engine)
+  const [menu, setMenu] = useState(false)
+  // A card that left takes its menu and its field with it, which say
+  // nothing as it goes: the half-typed title is not kept, and neither
+  // holds the list any more.
+  const gone = props.gone !== undefined
+  if (menu && gone) setMenu(false)
+  const renaming = naming !== null
+  useEffect(() => {
+    if (gone && renaming) stopNaming()
+  }, [gone, renaming])
+  useHoldWhile((menu || renaming) && !gone)
+  const holding = useContext(HoldingContext)
   if (row.host !== undefined)
     return (
       <ElsewhereRow
@@ -47,8 +70,11 @@ export function ThreadRow({
         inProject={props.inProject}
         current={props.current}
         named={named}
+        gone={props.gone}
       />
     )
+  if (props.gone !== undefined)
+    return <Row row={row} {...props} harnesses={harnesses} />
   if (naming)
     return (
       <Row
@@ -66,12 +92,17 @@ export function ThreadRow({
       />
     )
   return (
-    <ContextMenu>
+    <ContextMenu onOpenChange={setMenu}>
       <ContextMenuTrigger>
         <Row row={row} {...props} harnesses={harnesses} />
       </ContextMenuTrigger>
       <ContextMenuContent aria-label="Thread menu" className="min-w-60">
-        <ThreadRows project={project} listed={row.listed} where="row" />
+        <ThreadRows
+          project={project}
+          listed={row.listed}
+          where="row"
+          onAct={() => holding?.act(row)}
+        />
       </ContextMenuContent>
     </ContextMenu>
   )
@@ -90,6 +121,7 @@ function ElsewhereRow({
   inProject,
   current,
   named,
+  gone,
 }: {
   row: Arranged
   settings: Settings
@@ -97,6 +129,8 @@ function ElsewhereRow({
   current: boolean
   /** A label above names its host. */
   named: boolean
+  /** It left the tab while the list held: where it went. */
+  gone?: string
 }) {
   const { host } = row
   const machineOf = useCallback(
@@ -123,6 +157,7 @@ function ElsewhereRow({
       current={current}
       machine={machine}
       stillAt={away}
+      gone={gone}
     />
   )
   return !named && away !== undefined ? (

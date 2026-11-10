@@ -738,13 +738,13 @@ export function call(window: Window, method: string, params?: object) {
 }
 
 /** Work's Thread named `title`, as the engine lists it; none until it is
- * listed. */
+ * listed, and with no latest turn until its first has begun. */
 export function threadNamed(window: Window, title: string) {
   const { threads } = call(window, "agents.threads") as {
     threads: {
       id: string
       title: string
-      latest: { turn: string; state: string }
+      latest?: { turn: string; state: string }
       later?: { someday?: boolean; woke?: { by: string }; woke_seen?: string }
     }[]
   }
@@ -759,11 +759,33 @@ export const pickerOf = (page: Page) =>
 export const toastsOf = (page: Page) =>
   page.getByRole("region", { name: "Notifications" })
 
-/** The pointer leaves the Sidebar for the Strip: its list holds still
- * under the pointer, and moves once it leaves. */
+/**
+ * The pointer leaves the Sidebar for the Strip: its list holds still
+ * under the pointer, and moves once it leaves; a card the pointer put
+ * away leaves a ghost line in its slot until then (ADR 0098, S5c).
+ *
+ * It never lands on a browser Pane's page, but just above it, on its
+ * Pane: a move CDP sends goes straight to the frame under the point, so
+ * one into a `<webview>` can reach that page alone, and the window's page
+ * never hears the pointer leave its list, which then holds for good (seen
+ * in motion.spec.ts). Whether a real mouse's moves do the same is not
+ * checked yet: they go through Chromium's input router, which may tell the
+ * window's page the pointer left. Until the window hears it from main,
+ * #1291 tracks it.
+ */
 export async function leaveSidebar(page: Page) {
   const box = (await sidebarOf(page).boundingBox())!
-  await page.mouse.move(box.x + box.width + 200, box.y + box.height / 2)
+  const x = box.x + box.width + 200
+  const y = await page.evaluate(
+    ([x, y]) => {
+      const under = document.elementFromPoint(x, y)
+      return under?.tagName === "WEBVIEW"
+        ? under.getBoundingClientRect().top - 4
+        : y
+    },
+    [x, box.y + box.height / 2]
+  )
+  await page.mouse.move(x, y)
 }
 
 /** The Agent at work in Work's Thread named `title` ends its turn, done:
@@ -772,6 +794,30 @@ export function finish(window: Window, title: string) {
   const thread = threadNamed(window, title)!.id
   call(window, "agents.send", { thread, text: "go", steer: true })
 }
+
+/** A Thread in Work started with `text` from outside the Window, with no
+ * Pane, one after the other, so each is newer than the one before: at
+ * work while its words say "wait", else answered, calling its Person. */
+export async function send(window: Window, text: string): Promise<void> {
+  call(window, "agents.send", { harness: "fake", text, settings: null })
+  await expect
+    .poll(() => threadNamed(window, text)?.latest?.state)
+    .toBe(text.includes("wait") ? "running" : "done")
+}
+
+/**
+ * The items of the sidebar list's region `name` in `scope`: its cards,
+ * heads and group header. The list is drawn flat, so a card keeps its node
+ * from one region to another, and each item names its region (ADR 0098,
+ * S5c); the first is the region's head or header.
+ */
+export const placeOf = (scope: Page | Locator, name: string): Locator =>
+  scope.locator(`[data-place="${name}"]`)
+
+/** Where each of `rows` stands, from the window's top, in px: the list
+ * holds still while none of them moves. */
+export const topsOf = (rows: Locator): Promise<number[]> =>
+  rows.evaluateAll((all) => all.map((one) => one.getBoundingClientRect().top))
 
 /** The workspace on screen. */
 export const ON_SCREEN = '[role="group"]:not([aria-hidden="true"])'
