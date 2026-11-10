@@ -96,7 +96,8 @@ export function groupsOf(
  * ones it has: `C4` beside C1 to C3, else `Claude Code 2`; the colour of
  * the four its accounts use least, so no two share one while they can.
  * It is written with the account; the engine's `looks()` gives those that
- * name none the colours left, by the same rule. */
+ * name none the colours left, by the same rule, and its `fresh()` names
+ * and colours an account added without a name, from the CLI, alike. */
 export function newAccountOf(
   harness: string,
   taken: readonly HarnessView[]

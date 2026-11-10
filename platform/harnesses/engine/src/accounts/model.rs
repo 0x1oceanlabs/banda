@@ -23,9 +23,14 @@ pub struct ConnectAccount {
     pub harness: String,
     /// Stable Account ID: lowercase letters, digits and hyphens.
     pub id: String,
-    /// Its display name. The Harness's name when omitted.
+    /// Its display name. When omitted, the next of its Harness's numbered
+    /// names, `C4` after C1 to C3, else `Claude Code 2`.
     #[ts(optional)]
     pub name: Option<String>,
+    /// Its colour: 0 its Harness's own, 1 to 4 the accounts'. When
+    /// omitted, the one its Harness's accounts use least.
+    #[ts(optional)]
+    pub colour: Option<u8>,
     /// Adopt an existing folder. Omitted: create an empty private folder.
     #[ts(optional)]
     pub folder: Option<String>,
@@ -65,6 +70,9 @@ pub trait AccountStore: Send + Sync {
 pub struct ConnectedAccount {
     pub(super) id: String,
     pub(super) name: String,
+    /// Its colour: the one asked for, else the one its Harness's
+    /// accounts use least.
+    pub(super) colour: u8,
     pub(super) harness: String,
     pub(super) variable: &'static str,
     pub(super) folder: std::path::PathBuf,
@@ -75,6 +83,9 @@ impl ConnectedAccount {
     }
     pub fn name(&self) -> &str {
         &self.name
+    }
+    pub fn colour(&self) -> u8 {
+        self.colour
     }
     pub fn harness(&self) -> &str {
         &self.harness

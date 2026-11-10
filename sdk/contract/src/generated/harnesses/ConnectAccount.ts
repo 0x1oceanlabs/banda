@@ -10,9 +10,15 @@ harness: string,
  */
 id: string, 
 /**
- * Its display name. The Harness's name when omitted.
+ * Its display name. When omitted, the next of its Harness's numbered
+ * names, `C4` after C1 to C3, else `Claude Code 2`.
  */
 name?: string, 
+/**
+ * Its colour: 0 its Harness's own, 1 to 4 the accounts'. When
+ * omitted, the one its Harness's accounts use least.
+ */
+colour?: number, 
 /**
  * Adopt an existing folder. Omitted: create an empty private folder.
  */

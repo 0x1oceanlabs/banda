@@ -127,6 +127,30 @@ pub(super) fn variable(harness: &str) -> Option<(&'static str, &'static str)> {
     }
 }
 
+/// What a new account is called and coloured beside `theirs`, the entries
+/// of its Harness, as the window's `newAccountOf`: `C4` beside C1 to C3,
+/// else `Claude Code 2`; and the colour its accounts use least, written
+/// with it so it repaints none of them (ADR 0093, decision 3).
+fn fresh(program: &str, theirs: &[HarnessView]) -> (String, u8) {
+    // A name that ends in a number: what goes before it, and the number.
+    let numbered = |name: &str| -> Option<(String, u64)> {
+        let prefix = name.trim_end_matches(|c: char| c.is_ascii_digit());
+        Some((prefix.to_owned(), name[prefix.len()..].parse().ok()?))
+    };
+    let numbered: Option<Vec<_>> = theirs.iter().map(|h| numbered(&h.name)).collect();
+    let name = match numbered.as_deref() {
+        Some(all @ [(prefix, _), ..]) if all.iter().all(|(p, _)| p == prefix) => {
+            let next = all.iter().map(|(_, n)| n + 1).max().unwrap_or(1);
+            format!("{prefix}{next}")
+        }
+        _ => format!("{program} {}", theirs.len() + 1),
+    };
+    let colour = (1..=crate::list::COLOURS as u8)
+        .min_by_key(|colour| theirs.iter().filter(|h| h.colour == *colour).count())
+        .unwrap_or(1);
+    (name, colour)
+}
+
 /// Both automatic discovery and the connect picker use the same XDG rule.
 pub(super) fn omarchy_root(home: &Path, state_home: Option<&Path>) -> PathBuf {
     state_home
@@ -158,7 +182,14 @@ impl Profiles {
             if let Some(home) = &self.home {
                 let root = omarchy_root(home, self.state_home.as_deref()).join(id);
                 if let Ok(entries) = std::fs::read_dir(root) {
-                    folders.extend(entries.flatten().map(|entry| entry.path()));
+                    // Omarchy's own folders, such as the `.pending` of a
+                    // sign-in it has not finished, are no account's.
+                    folders.extend(
+                        entries
+                            .flatten()
+                            .filter(|entry| !entry.file_name().to_string_lossy().starts_with('.'))
+                            .map(|entry| entry.path()),
+                    );
                 }
                 // Ordinary named homes, e.g. ~/.claude_second.
                 if let Ok(entries) = std::fs::read_dir(home) {
@@ -217,18 +248,19 @@ impl Profiles {
         if self.harnesses.find(&account.id).is_some() {
             return Err(Refusal::conflict("That Account ID is already registered."));
         }
-        let name = account.name.unwrap_or_else(|| {
-            format!(
-                "{} {}",
-                harness.name,
-                self.harnesses
-                    .views()
-                    .iter()
-                    .filter(|h| h.harness == harness.id)
-                    .count()
-                    + 1
-            )
-        });
+        let theirs: Vec<_> = (self.harnesses.views().into_iter())
+            .filter(|h| h.harness == harness.id)
+            .collect();
+        let program = crate::list::program(&harness.id).unwrap_or(&harness.name);
+        let (default_name, default_colour) = fresh(program, &theirs);
+        let name = account.name.unwrap_or(default_name);
+        let colour = account.colour.unwrap_or(default_colour);
+        if colour > crate::list::COLOURS as u8 {
+            return Err(Refusal::invalid(format!(
+                "An Account's colour is 0 to {}.",
+                crate::list::COLOURS
+            )));
+        }
         if name.trim().is_empty() || name.len() > 200 {
             return Err(Refusal::invalid(
                 "An Account needs a name of at most 200 bytes.",
@@ -270,6 +302,7 @@ impl Profiles {
         let result = self.store.save(&ConnectedAccount {
             id: account.id.clone(),
             name: name.trim().into(),
+            colour,
             harness: account.harness,
             variable,
             folder: folder.clone(),
@@ -305,7 +338,7 @@ mod tests {
             let text = std::fs::read_to_string(&path)
                 .unwrap_or_else(|_| "[omarchy]\nenabled = false\n[[harness]]\nid = \"claude\"\n[[harness]]\nid = \"codex\"\n".into());
             let mut document: toml::Value = toml::from_str(&text).unwrap();
-            let entry = serde_json::json!({"id":account.id, "name":account.name,
+            let entry = serde_json::json!({"id":account.id, "name":account.name, "colour":account.colour,
                 "of":account.harness, "env":{account.variable:account.folder.to_string_lossy()}});
             document
                 .as_table_mut()
@@ -336,6 +369,7 @@ mod tests {
             harness: "claude".into(),
             id: id.into(),
             name: Some("Work".into()),
+            colour: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }
     }
@@ -362,6 +396,71 @@ mod tests {
         );
         assert!(accounts.connect(add("work", None)).is_err());
         assert!(accounts.connect(add("alias", Some(&folder))).is_err());
+    }
+
+    #[test]
+    fn a_new_account_is_named_and_coloured_after_the_others() {
+        let root = tempfile::tempdir().unwrap();
+        let config = root.path().join("config");
+        std::fs::create_dir_all(&config).unwrap();
+        let unnamed = |id: &str| ConnectAccount {
+            name: None,
+            ..add(id, None)
+        };
+        let looks = |view: HarnessView| (view.name, view.colour);
+        std::fs::write(
+            config.join("harnesses.toml"),
+            "[omarchy]\nenabled = false\n[[harness]]\nid = \"claude\"\n",
+        )
+        .unwrap();
+        // The Harness's own entry ends in no number: its program's name.
+        let first = accounts(root.path());
+        assert_eq!(
+            looks(first.connect(unnamed("a")).unwrap()),
+            ("Claude Code 2".into(), 1)
+        );
+        assert_eq!(
+            looks(first.connect(unnamed("b")).unwrap()),
+            ("Claude Code 3".into(), 2)
+        );
+        // C1 to C3: the next is C4, in the colour none of them has.
+        std::fs::write(
+            config.join("harnesses.toml"),
+            "[omarchy]\nenabled = false\n[[harness]]\nid = \"claude\"\nname = \"C1\"\n\
+             [[harness]]\nid = \"c2\"\nof = \"claude\"\nname = \"C2\"\ncolour = 1\n\
+             [[harness]]\nid = \"c3\"\nof = \"claude\"\nname = \"C3\"\ncolour = 3\n",
+        )
+        .unwrap();
+        let numbered = accounts(root.path());
+        assert_eq!(
+            looks(numbered.connect(unnamed("c4")).unwrap()),
+            ("C4".into(), 2)
+        );
+        assert_eq!(numbered.harnesses.find("c4").unwrap().colour, Some(2));
+        // The colour the Person picked wins; one of none of the five is refused.
+        let picked = |id: &str, colour| ConnectAccount {
+            colour: Some(colour),
+            ..unnamed(id)
+        };
+        assert_eq!(looks(numbered.connect(picked("c5", 4)).unwrap()).1, 4);
+        assert!(numbered.connect(picked("c6", 9)).is_err());
+    }
+
+    #[test]
+    fn omarchy_s_own_folders_are_no_profiles() {
+        let root = tempfile::tempdir().unwrap();
+        let accounts = accounts(root.path());
+        let omarchy =
+            (accounts.home.as_ref().unwrap()).join(".local/state/omarchy/agents/accounts/claude");
+        for folder in ["c2", ".pending"] {
+            std::fs::create_dir_all(omarchy.join(folder)).unwrap();
+        }
+        let found: Vec<_> = (accounts.profiles().unwrap().into_iter())
+            .map(|p| p.folder)
+            .filter(|f| f.contains("omarchy"))
+            .collect();
+        let c2 = dunce::canonicalize(omarchy.join("c2")).unwrap();
+        assert_eq!(found, [c2.to_string_lossy()]);
     }
 
     #[test]
