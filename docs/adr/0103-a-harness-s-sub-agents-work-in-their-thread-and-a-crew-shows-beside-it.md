@@ -58,17 +58,23 @@ sub-agents and the Crew `audit-routes`:
   child makes comes on the parent's session with
   `_meta.claudeCode.parentToolUseId`, which `acp/said.rs` drops, so the
   work line counts it as the parent's (`did`,
-  `apps/agents/pane/src/thread/timeline.ts:296`). The child's streamed
-  text may open replies written as the parent's, since a new message id
-  opens a new entry (`transcript.rs:600-609`): _inferred_, no recording
-  shows it.
-- **Codex shows a `spawnAgent` row**, a wrench with the tool's name
-  (`ToolCall.tsx:202`), and none of the child's work. A child's approval
+  `apps/agents/pane/src/thread/timeline.ts:296`). The child's own words
+  never come: its report is the Agent call's result, which shows Claude
+  Code's internal `<tools-used-before-summary>` tag as text. The feared
+  stray replies, a child's text written as the parent's, are not real:
+  step 0's recordings show none.
+- **Codex shows its sub-agents as their start, the wait and their end**:
+  "Start subagent read_a", "wait" and "Complete subagent" rows, with none
+  of the child's work or report. That is its newer multi-agent mode; the
+  older one's `spawnAgent` row is a wrench with the tool's name
+  (`ToolCall.tsx:202`). A child's approval
   comes as the parent's own Question, with no sign of who asks.
 - **A Claude workflow is invisible until it ends.** The Workflow call is
   a "Workflow" row that ends at once. The turn ends, the Mark shows Done
   while up to 16 agents work, and nothing shows until "‹Agent› went on by
-  itself." (`apps/agents/engine/src/between.rs:183`). The composer
+  itself." (`apps/agents/engine/src/between.rs:183`). A workflow agent's
+  Question opens that turn early, naming no agent, and its call stays
+  Pending for good. The composer
   already offers Ultracode, in the mode menu with the Harness's other
   options (`apps/agents/pane/src/composer/picker.ts:1-4`,
   `picker.test.ts:40`), so a Person can start one today.
@@ -144,6 +150,10 @@ sub-agents and the Crew `audit-routes`:
      any of the child's traffic, so its Question and its forms reach the
      Thread and are not cancelled.
    - A replayed child is matched by its session and not written twice.
+   - With the declaration, Claude sends no call for an Agent launch. A
+     lane takes its place in the turn when its `subagent_update` comes,
+     and is tied to its launch by the tool use id that keys its
+     `session_message` and the raw `task_started`.
 8. **It keeps lanes and says what they do.**
    - A table, `agents_subagents`, holds a lane: its Thread and turn, its
      parent lane, its Crew and phase; its title, role and model; its
@@ -182,11 +192,17 @@ sub-agents and the Crew `audit-routes`:
       label, phase, state, model, attempt, tokens, calls, took, prompt,
       result, lane.
     - `Body` gains two anchors, `subagent` and `crew`. `ThreadView` gains
-      `subagents` and `crews`. `Question` gains `sub`, who asks, and a
-      list's `Asking` the asker's label, for the card's line 2.
-    - `ListedThread` gains `subagents` (the direct ones that work or
-      ask), `failed` (those that failed while the Thread works), `crew`
-      (title, phase, phases, working, done) and `parent`.
+      `subagents` and `crews`. `Question` gains `sub`, who asks.
+    - `ListedThread` gains `subagents`, `crew` and `parent`, as step 0's
+      recordings settled them:
+      - `subagents`: `working`, the direct ones that run or ask (the grey
+        satellites); `failed`, those that failed since the turn began (the
+        red one); `only`, the label of the one at work when it is one
+        ("Waiting on Explore").
+      - `crew`: `title`, `phase`, `done` and `of`, what line 2 says ("Crew
+        audit-routes · Fix 4/7"); `of` grows as the script calls agents.
+      - A list's `Asking` gains `asker`: the lane's label, or "Crew
+        ‹title›" for a workflow agent's Question.
     - Methods: `agents.subagent` and `agents.crew` (Read),
       `agents.stop_subagent` (Write).
 11. **A Harness's process with sub-agents at work is not idle.**
@@ -258,8 +274,10 @@ sub-agents and the Crew `audit-routes`:
       and opens on a click.
 16. **The Thread shows one level.** A sub-agent's own sub-agents are
     "(+2)" on its row; its Pane goes deeper (decision 21).
-17. **A Codex sub-agent without a name** is named by its number among its
-    siblings and its prompt's first words, faded: "Agent 2 · Map the
+17. **A sub-agent's label is its role, unless the role is Claude's
+    default `general-purpose`; then it is its title** ("Explore", "Read
+    a.txt one line"). A Codex sub-agent without a name is named by its
+    number among its siblings and its prompt's first words, faded: "Agent 2 · Map the
     auth…". Codex has no Crews.
 18. **A Crew's card is the one thing a Crew puts in the Thread**, where
     Claude started it.
@@ -348,8 +366,8 @@ sub-agents and the Crew `audit-routes`:
     tooltip says it before. (Roma's call 10.)
     - It cancels the turn, then each lane at work with its own
       `session/cancel`: a background sub-agent outlives the parent's
-      cancel once Banda declares sub-agents. How the Crew stops is an
-      open question below.
+      cancel once Banda declares sub-agents. A `session/cancel` with no
+      prompt open stops a Crew, as step 0 recorded.
 25. **No message goes to a sub-agent directly**: ACP lets a client only
     cancel a child. **Ask Claude about it** focuses the parent's
     composer with a chip of the sub-agent's satellite and name; the
@@ -442,8 +460,8 @@ sub-agents and the Crew `audit-routes`:
   decision 24 gets `parent`.
 - **ADR 0099, decisions 2–3**: a satellite is its sub-agent's shape, and
   only a failed one takes colour (decisions 12–13 here). **Decision 11**:
-  `subagents` counts the direct ones that work or ask, with `failed` and
-  `crew` beside it.
+  `subagents` counts the direct ones that work or ask, with the failed
+  ones and the one label in it, and `crew` beside it (decision 10).
 - **GLOSSARY**: **Sub-agent** and **Crew** (with its phases) are new; the
   Mark's entry says a failed sub-agent's satellite is red. Entry gains the
   sub-agent row and the Crew card when they are built.
@@ -462,6 +480,11 @@ it is in.
    capability and without it. They confirm or refute the "stray replies"
    (Where it stands): if real, they are fixed at once, before lanes, by
    routing or dropping what is stamped `parentToolUseId`.
+   - Done on 2026-11-10: the stray replies are not real, so nothing was
+     fixed. What came is in
+     `docs/research/2026-11-10-sub-agents/recordings.md`, with replay
+     tests beside the edit recordings. It settled decision 10's list
+     fields and three open questions.
 1. **Sub-agents in the Thread** (decisions 1, 3–8, 10–12, 14–17, 19,
    23–24, 28–29): the capability, the routing, lanes and their facts,
    `agents.subagent`, `agents.stop_subagent`, the Thread's Stop, the host
@@ -470,15 +493,15 @@ it is in.
 2. **A sub-agent opened beside** (decisions 21, 25): its Pane, the status
    bar, Ask Claude about it, the breadcrumb, the screen on top.
 3. **The sidebar and the Mark** (decisions 13, 28, 32, 34):
-   `ListedThread.subagents`, `failed` and `parent`, the asker's label on
-   `Asking`; the satellites and line 2's words for sub-agents.
+   `ListedThread.subagents` and `parent`, `Asking.asker`; the satellites
+   and line 2's words for sub-agents.
    - It is split with ADR 0099's steps, agreed between the two sessions
      on 2026-11-10: the Mark's looks, `doing`, `stepped`, `compacting`,
      `limit_until` and the window following them are ADR 0099's steps
      1–3. This step adds the fields above, the red satellite on top of
      0099's looks, and the words. The card keeps an optional
-     `subagents` that reads nothing until this step fills it; its shape
-     is settled by step 0's recordings.
+     `subagents` that reads nothing until this step fills it, in
+     decision 10's shape.
 4. **A Crew in the Thread** (decisions 2, 9, 18–20, 26, 33): the raw SDK
    frames into Crews, `agents.crew`, `ListedThread.crew` and line 2's
    Crew words, the card, the live line after the turn, the host kept
@@ -527,19 +550,20 @@ tooltip on a one-line working row.
 
 ## Open questions
 
-- **Who asks inside a Crew.** A workflow's agents are not ACP children;
-  whether their Questions say which agent asks is not known (`gaps.md`
-  §2.12). Step 0 records it; until then such a Question names the Crew.
-- **How Stop reaches a Crew.** The Claude adapter stops background
-  workflows after a cancel only with `perTaskStopAffordance`, and turns
-  that on for a client that declares sub-agents (claude-agent-acp 0.99.1,
-  `dist/acp-agent.js:9044` and `:9484`). So the declaration should be
-  enough. That is read from the code: step 0 records it, and if it does
-  not hold, Banda patches the adapter it carries.
-- **An agent's work in the Crew Pane.** A workflow's agents write their
-  transcripts in its `transcriptDir`; whether they pass through Banda's
-  session store is not checked. Without them, the detail shows the brief
-  and the result only.
+- **Answered by step 0** (2026-11-10):
+  - _Who asks inside a Crew_: nobody is named, with the declaration too.
+    Such a Question names the Crew; with two Crews at work it cannot tell
+    which.
+  - _How Stop reaches a Crew_: a `session/cancel` with no prompt open
+    stops it once Banda declares sub-agents; no patch is needed.
+  - _An agent's work in the Crew Pane_: the agents' transcripts reach
+    Banda's session store, so an agent's detail can show its work.
+- **A Crew's open calls.** A workflow agent's call that asked never ends,
+  even after its Crew stops. Step 4 decides whether the engine ends a
+  Crew's open calls when the Crew ends.
+- **Stopping one Codex sub-agent.** Its command goes on running, and its
+  parent waits on it until the parent is stopped too. Step 1 decides
+  whether Banda then tells the parent, as a steer.
 - **Lanes under rewind and fork** (ADR 0027), and in find and Copy as
   Markdown: whether they go with the Thread or stay out. Decided with
   step 1.
