@@ -218,7 +218,11 @@ test("Agents show each account as a card, its page who is signed in, and write h
     .getByRole("button", { name: "Remove" })
     .click()
   await expect(other).toHaveCount(0)
-  expect(readFileSync(file, "utf8")).not.toContain("other")
+  // Removal hides the Account but keeps the source needed by old sessions.
+  const removed = readFileSync(file, "utf8")
+  expect(removed).toContain('id = "other-agent"')
+  expect(removed).toContain("[harness.retired]")
+  expect(removed).toContain('to = "fake"')
 
   // A mistake made in an editor shows here, at its line, and the list
   // from before stays.
