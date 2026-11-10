@@ -52,6 +52,10 @@ export type Status =
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
+  /** The machine the engine is on is out of reach (`Engine.away`): a
+   * command fails at once, and the client tries nothing until it is
+   * woken (`Engine.wake`). */
+  | { state: "away" }
   /** The engine said goodbye, for example to an older window. */
   | { state: "refused"; refusal: Refusal }
 
@@ -77,12 +81,59 @@ export class Lost extends Error {
   }
 }
 
+/**
+ * A command refused at once, or given up on its way, as the machine its
+ * engine is on is out of reach (ADR 0082, decision 16): nothing waits for
+ * that machine to send it later. Its message says why, as the machine's
+ * pill does: "arc is away".
+ */
+export class Unreachable extends Error {
+  /** The machine, as the client knows it: its key in `hosts.toml`, a
+   * Pane's `args.host`. */
+  readonly host: string
+  /** Its name, as the client shows it. */
+  readonly machine: string
+  /** Since when it is out of reach, in ms since the epoch, where known. */
+  readonly as_of?: number
+  /** Whether it may have run there all the same: it was on its way as
+   * the machine went. Else it was not sent. */
+  readonly may_have_run: boolean
+  constructor(
+    host: string,
+    words: string,
+    {
+      machine = host,
+      as_of,
+      may_have_run = false,
+    }: { machine?: string; as_of?: number; may_have_run?: boolean } = {}
+  ) {
+    super(words)
+    this.name = "Unreachable"
+    this.host = host
+    this.machine = machine
+    if (as_of !== undefined) this.as_of = as_of
+    this.may_have_run = may_have_run
+  }
+
+  /** The same, for a command that was on its way. */
+  sent(): Unreachable {
+    const { host, message, machine, as_of } = this
+    return new Unreachable(host, message, {
+      machine,
+      as_of,
+      may_have_run: true,
+    })
+  }
+}
+
 /** The engine's answer to one call, whole: its `ok`, and a command's `at`. */
 type Result = Extract<EngineFrame, { type: "result" }>
 
 type Pending = {
   resolve: (result: Result) => void
   reject: (error: Error) => void
+  /** A command's, which may have run once it went. */
+  command: boolean
 }
 
 /**
@@ -106,14 +157,16 @@ export type Answered<M extends MethodOf<"command">> = {
  */
 export type CommandOptions = {
   /**
-   * Sent once at most: when the connection breaks after it went, it
-   * fails with `Lost` at once and is not sent again once the engine is
-   * back. For what must not land later than its caller said it failed,
+   * Sent now, once at most: while the engine is not open it fails at
+   * once, and when the connection breaks after it went, it fails then
+   * and is not sent again once the engine is back. It fails with `Lost`,
+   * or with `Unreachable` for an engine on another machine: while that
+   * machine is away, or where the engine names it (`unreachable`), with
+   * `may_have_run` once it went. For what must not land later than its caller said it failed,
    * as a Person's mark (ADR 0096, decision 8). One that reached the
    * engine before the break may still run, even after commands sent once
    * the engine is back, so it keeps no place in their order (ADR 0082,
-   * decision 4): its fact then says so. A command made while the engine
-   * is away still waits for it, and goes then.
+   * decision 4): its fact then says so.
    */
   once?: boolean
 }
@@ -150,7 +203,13 @@ const LONGEST_WAIT = 5000
  * - It connects at once, and again whenever the connection breaks, asking
  *   `address` each time: a restarted engine listens elsewhere. Each try
  *   waits longer than the last, up to 5 s; `wake` tries at once.
- * - A call made while the engine is away waits for it.
+ * - A call made while the connection is down waits for it, and so does a
+ *   command while its machine is in reach.
+ * - A command made while its machine is out of reach fails at once, and
+ *   one on its way as the machine goes fails then, never to go later by
+ *   itself (`away`, ADR 0082, decision 16).
+ * - A command sent `once` fails at once while the connection is down,
+ *   and as it breaks; on another machine, in that machine's words.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
  * - A stream is heard again after a reconnect, from its start; one heard
@@ -169,9 +228,27 @@ export class Engine {
   /** The next try, while the connection is lost. */
   #next: ReturnType<typeof setTimeout> | undefined
   #closed = false
+  /** Why the machine is out of reach, while the status is `away`. */
+  #why: Unreachable | undefined
+  /** Each connect's number: one that `away` or a later one overtook
+   * connects nothing. */
+  #go = 0
+  readonly #unreachable: (() => Unreachable) | undefined
 
-  constructor(address: () => Promise<Address>) {
+  /**
+   * `address` says where the engine listens now. It may throw
+   * `Unreachable` while the engine's machine is out of reach: the engine
+   * is then `away` until woken. `unreachable` names the machine of an
+   * engine on another one: a command sent `once` that the connection
+   * lost fails with it, not `Lost`, as that machine may be gone before
+   * the client is told so.
+   */
+  constructor(
+    address: () => Promise<Address>,
+    { unreachable }: { unreachable?: () => Unreachable } = {}
+  ) {
     this.#address = address
+    this.#unreachable = unreachable
     void this.#connect()
   }
 
@@ -198,22 +275,29 @@ export class Engine {
   async #call<T>(
     method: string,
     params: unknown,
-    options: { project?: ProjectId; command?: CommandId }
+    options: { project?: ProjectId }
   ): Promise<T> {
     const result = await this.#ask(method, params, options)
     return (result.ok ?? null) as T
   }
 
-  /** Calls `method`, and gives the engine's answer whole. */
+  /** Calls `method`, and gives the engine's answer whole. A command's
+   * `sent` hears that it went. */
   async #ask(
     method: string,
     params: unknown,
-    options: { project?: ProjectId; command?: CommandId }
+    options: {
+      project?: ProjectId
+      command?: CommandId
+      once?: boolean
+      sent?: () => void
+    }
   ): Promise<Result> {
-    await this.#opened()
+    const command = options.command !== undefined
+    await this.#opened(command, options.once ?? false)
     const id = this.#nextId++
     const answer = new Promise<Result>((resolve, reject) =>
-      this.#pending.set(id, { resolve, reject })
+      this.#pending.set(id, { resolve, reject, command })
     )
     this.#send({
       type: "call",
@@ -223,6 +307,7 @@ export class Engine {
       command: options.command,
       params: params as JsonValue,
     })
+    options.sent?.()
     return answer
   }
 
@@ -253,6 +338,10 @@ export class Engine {
    * One sent `once` is not sent again, so it keeps no place in that
    * order: one that reached the engine before the break may run after
    * those sent since.
+   *
+   * It goes again only while its machine is in reach: once that machine
+   * is out of reach (`away`) it fails with `Unreachable` and goes no
+   * more, with `may_have_run` once it went.
    */
   async commandAt<M extends MethodOf<"command">>(
     method: M,
@@ -261,18 +350,37 @@ export class Engine {
     command: CommandId = newId(),
     { once = false }: CommandOptions = {}
   ): Promise<Answered<M>> {
+    let went = false
+    const sent = () => void (went = true)
     for (let attempt = 1; ; attempt++) {
       try {
-        const result = await this.#ask(method, params, { project, command })
+        const result = await this.#ask(method, params, {
+          project,
+          command,
+          once,
+          sent,
+        })
         return {
           answer: (result.ok ?? null) as Answer<M>,
           at: result.at ?? null,
         }
       } catch (error) {
-        if (!(error instanceof Lost) || once || attempt === ATTEMPTS)
-          throw error
+        // Refused as the try after a break waited: the one before went.
+        if (error instanceof Unreachable && went && !error.may_have_run)
+          throw error.sent()
+        if (!(error instanceof Lost)) throw error
+        if (once) throw this.#lostOnce(went) ?? error
+        if (attempt === ATTEMPTS) throw error
       }
     }
+  }
+
+  /** Why a command sent `once` that the connection lost failed, in the
+   * words of the machine the engine is on, as one that may have run once
+   * it `went`; none for an engine that names no machine, or is closed. */
+  #lostOnce(went: boolean): Unreachable | undefined {
+    const why = this.#closed ? undefined : this.#unreachable?.()
+    return went ? why?.sent() : why
   }
 
   /** Runs a command made elsewhere, as a Pane's args carry one. */
@@ -356,14 +464,39 @@ export class Engine {
 
   /**
    * Tries again at once, as when the machine it is on is back: a lost
-   * connection does not wait out its try, and the next waits from the
-   * first wait again. Open, connecting or refused, only the wait changes.
+   * connection does not wait out its try, nor does one away, and the
+   * next waits from the first wait again. Open, connecting or refused,
+   * only the wait changes.
    */
   wake(): void {
     this.#wait = FIRST_WAIT
-    if (this.#closed || this.#status.state !== "lost") return
+    const { state } = this.#status
+    if (this.#closed || (state !== "lost" && state !== "away")) return
     clearTimeout(this.#next)
     void this.#connect()
+  }
+
+  /**
+   * The machine the engine is on is out of reach now, `why`, as the
+   * client that reaches it says (ADR 0082, decision 16). Each command on
+   * its way fails with `why`, as one that may have run there, and goes no
+   * more; each made from now on fails with it at once, until the engine
+   * is woken (`wake`) as the machine is back. A call waits for that, as
+   * for any connection. The connection ends, and none is tried meanwhile.
+   * Away already, it only says `why` from now on.
+   */
+  away(why: Unreachable): void {
+    // One that said goodbye tries no more: it stays refused.
+    if (this.#closed || this.#status.state === "refused") return
+    this.#why = why
+    if (this.#status.state === "away") return
+    this.#go++
+    clearTimeout(this.#next)
+    const socket = this.#socket
+    this.#socket = null
+    socket?.close()
+    this.#lose(why)
+    this.#set({ state: "away" })
   }
 
   /** Closes the connection for good. */
@@ -378,48 +511,57 @@ export class Engine {
     for (const watcher of this.#watchers) watcher(status)
   }
 
-  #opened(): Promise<void> {
+  /** Waits for the engine to be open: a command fails at once while its
+   * machine is out of reach, and one sent `once` while it is not open. */
+  #opened(command: boolean, once: boolean): Promise<void> {
     return new Promise((resolve, reject) => {
       const stop = this.watch((status) => {
-        if (status.state === "open") {
+        const done = (error?: Error) => {
           queueMicrotask(() => stop())
-          resolve()
-        } else if (status.state === "refused") {
-          queueMicrotask(() => stop())
-          reject(new Refused(status.refusal))
-        } else if (this.#closed) {
-          queueMicrotask(() => stop())
-          reject(new Lost())
+          if (error) reject(error)
+          else resolve()
         }
+        if (status.state === "open") done()
+        else if (status.state === "refused") done(new Refused(status.refusal))
+        else if (this.#closed) done(new Lost())
+        else if (command && status.state === "away")
+          done(this.#why ?? new Lost())
+        else if (once) done(new Lost())
       })
     })
   }
 
   async #connect(): Promise<void> {
     if (this.#closed) return
+    const go = ++this.#go
     this.#set({ state: "connecting" })
     let address: Address
     try {
       address = await this.#address()
-    } catch {
-      this.#retry()
+    } catch (error) {
+      if (go !== this.#go) return
+      if (error instanceof Unreachable) this.away(error)
+      else this.#retry()
       return
     }
+    // Overtaken while it asked: by `away`, or by a later connect.
+    if (go !== this.#go || this.#closed) return
     const socket = new WebSocket(address.url)
     this.#socket = socket
     // What the engine says comes `latency` ms late, its close too, each
-    // in the order it came: timers of one delay run in the order set.
+    // in the order it came: timers of one delay run in the order set. A
+    // connection let go of meanwhile is heard no more.
     const latency = address.latency ?? 0
-    const later = (heard: () => void) =>
-      latency > 0 ? void setTimeout(heard, latency) : heard()
+    const later = (heard: () => void) => {
+      const now = () => void (this.#socket === socket && heard())
+      if (latency > 0) setTimeout(now, latency)
+      else now()
+    }
     socket.onopen = () =>
       this.#send({ type: "hello", protocol: PROTOCOL, token: address.secret })
     socket.onmessage = (message) =>
       later(() => this.#receive(String(message.data)))
-    socket.onclose = () =>
-      later(() => {
-        if (this.#socket === socket) this.#drop()
-      })
+    socket.onclose = () => later(() => this.#drop())
   }
 
   #send(frame: ClientFrame): void {
@@ -532,15 +674,24 @@ export class Engine {
     this.#pending.clear()
   }
 
-  #drop(): void {
-    this.#socket = null
-    this.#fail(new Lost())
-    // What is heard once and was asked may have run: it ends, not again.
+  /** What was on its way as the connection ended: each fails, a command
+   * with `why` where its machine went out of reach, as one that may have
+   * run. What is heard once and was asked may have run: it ends, not
+   * again. */
+  #lose(why?: Unreachable): void {
+    for (const pending of this.#pending.values())
+      pending.reject(why && pending.command ? why.sent() : new Lost())
+    this.#pending.clear()
     for (const [id, hearing] of this.#hearing) {
       if (!hearing.once || !hearing.sent) continue
       this.#hearing.delete(id)
       hearing.onEnd({ code: "may_have_run", message: LOST })
     }
+  }
+
+  #drop(): void {
+    this.#socket = null
+    this.#lose()
     if (!this.#closed && this.#status.state !== "refused") this.#retry()
   }
 

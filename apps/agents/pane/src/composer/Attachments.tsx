@@ -133,7 +133,9 @@ export function useAttachments({
         }
         const key = crypto.randomUUID()
         change((all) => [...all, { key, name: file.name, size: file.size }])
-        const done = add(key, file).catch((error: unknown) => words(error))
+        const done = add(key, file).catch((error: unknown) =>
+          words(error, "the image")
+        )
         order.current = order.current
           .then(() => done)
           .then((done) => {

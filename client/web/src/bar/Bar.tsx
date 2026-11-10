@@ -323,9 +323,9 @@ function Connection({ status }: { status: Status }) {
   const words =
     status.state === "connecting"
       ? "Connecting…"
-      : status.state === "lost"
-        ? "Reconnecting…"
-        : status.refusal.message
+      : status.state === "refused"
+        ? status.refusal.message
+        : "Reconnecting…"
   return (
     <div
       role="status"

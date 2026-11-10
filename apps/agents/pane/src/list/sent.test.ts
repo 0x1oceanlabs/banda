@@ -3,9 +3,11 @@ import {
   type Engine,
   Lost,
   type ProjectId,
+  Refused,
   type Status,
 } from "@banda/contract"
 import type { ListedThread, ThreadList } from "@banda/contract/agents"
+import { Unreachable } from "@banda/core/react"
 import { beforeEach, expect, test, vi } from "vitest"
 import { attentionOf } from "@banda/ui/status"
 import { applyThreads } from "./list"
@@ -51,12 +53,25 @@ type Held = {
   refuse: (error: Error) => void
 }
 
-/** An engine in `state`, whose commands wait for the test to answer them;
- * `go` changes its state, as a connection that breaks. */
+/** What an engine that said goodbye says. */
+const OLDER = { code: "protocol", message: "This window is older." } as const
+
+/** Why arc is out of reach, as its engine says it while away. */
+const ARC_AWAY = new Unreachable("arc", "arc is away")
+
+/**
+ * An engine in `state`, whose commands wait for the test to answer them;
+ * `go` changes its state, as a connection that breaks. As the engine
+ * sends a command `once`: refused at once while it is not open, never
+ * sent, and failed as the connection breaks, or as its machine goes,
+ * where it may have run.
+ */
 function engineIn(state: Status["state"] = "open") {
   const asked: Held[] = []
   const watchers = new Set<(status: Status) => void>()
-  let status = { state } as Status
+  const statusOf = (state: Status["state"]) =>
+    (state === "refused" ? { state, refusal: OLDER } : { state }) as Status
+  let status = statusOf(state)
   const engine = {
     get status() {
       return status
@@ -72,8 +87,12 @@ function engineIn(state: Status["state"] = "open") {
       _: ProjectId,
       command: string,
       options?: CommandOptions
-    ) =>
-      new Promise((resolve, reject) =>
+    ) => {
+      if (status.state === "away") return Promise.reject(ARC_AWAY)
+      if (status.state === "refused") return Promise.reject(new Refused(OLDER))
+      if (options?.once && status.state !== "open")
+        return Promise.reject(new Lost())
+      return new Promise((resolve, reject) =>
         asked.push({
           method,
           params,
@@ -82,10 +101,15 @@ function engineIn(state: Status["state"] = "open") {
           answer: (at) => resolve({ answer: null, at }),
           refuse: reject,
         })
-      ),
+      )
+    },
   } as unknown as Engine
   const go = (state: Status["state"]) => {
-    status = { state } as Status
+    status = statusOf(state)
+    if (state !== "open")
+      for (const { options, refuse } of asked)
+        if (options?.once)
+          refuse(state === "away" ? ARC_AWAY.sent() : new Lost())
     for (const watcher of [...watchers]) watcher(status)
   }
   return { engine, asked, go }
@@ -268,7 +292,30 @@ test("a host away is sent nothing and keeps nothing: a menu's mark says so, the 
   expect(said.errors).toEqual([
     "Banda lost its engine for a moment. Try again.",
     "Banda lost its engine for a moment. Try again.",
-    "Banda lost its engine for a moment. Try again.",
+    "This window is older.",
+  ])
+})
+
+test("a mark to a machine out of reach is sent nothing, and its toast names the machine and the mark; one on its way as the machine went may have gone through", async () => {
+  const { engine, asked, go } = engineIn("away")
+  expect(await mark(engine, PROJECT, "t1", { archived: true })).toBe(false)
+  expect(await mark(engine, PROJECT, "t1", { seen: null })).toBe(false)
+  expect(
+    await mark(engine, PROJECT, "t1", { seen: "u1" }, { quiet: true })
+  ).toBe(false)
+  expect(asked).toEqual([])
+  expect(sendingTo(engine)).toEqual({})
+  // Back, and gone again before it answers: taken back, and said so.
+  go("open")
+  const sent = mark(engine, PROJECT, "t1", { archived: false })
+  expect(sendingTo(engine).t1).toBeDefined()
+  go("away")
+  expect(await sent).toBe(false)
+  expect(sendingTo(engine)).toEqual({})
+  expect(said.errors).toEqual([
+    "arc is away: Archive was not sent.",
+    "arc is away: Mark as unread was not sent.",
+    "arc went away; Unarchive may have gone through.",
   ])
 })
 
@@ -322,6 +369,24 @@ test("a refusal takes back its own mark alone, and says why; a quiet one says no
   asked[2]!.refuse(new Error("unknown method"))
   expect(await seen).toBe(false)
   expect(said.errors).toHaveLength(2)
+})
+
+test("a mark refused at once leaves an earlier one of its kind, answered and waiting for its fact, as it was", async () => {
+  const { engine, asked, go } = engineIn()
+  const unread = mark(engine, PROJECT, "t1", { seen: null })
+  asked[0]!.answer(12)
+  expect(await unread).toBe(true)
+  const waiting = sendingTo(engine).t1
+  expect(waiting?.seen).toMatchObject({ to: null, at: 12 })
+  // The connection breaks before its fact comes: Mark as read, and the
+  // window's own seen, are refused at once, and the Thread stays unread.
+  go("lost")
+  expect(await mark(engine, PROJECT, "t1", { seen: "latest" })).toBe(false)
+  expect(
+    await mark(engine, PROJECT, "t1", { seen: "u1" }, { quiet: true })
+  ).toBe(false)
+  expect(sendingTo(engine).t1).toBe(waiting)
+  expect(shownOf(engine, list(11, thread({ seen: "u1" }))).seen).toBeUndefined()
 })
 
 test("an earlier mark's answer never stands for a later one's", async () => {

@@ -121,30 +121,25 @@ test("a command sent once fails as the connection breaks and is not sent again, 
   await flush()
   // It fails as the connection breaks, not once the engine is back.
   expect(ended).toBeInstanceOf(Lost)
-  // One made while the engine is away waits for it, as any call does.
-  const away = engine.commandAt(
-    "agents.unread",
-    { thread: "t1" },
-    "project",
-    undefined,
-    { once: true }
-  )
+  // One made while the engine is away fails at once: it goes now or not.
+  await expect(
+    engine.commandAt("agents.unread", { thread: "t1" }, "project", undefined, {
+      once: true,
+    })
+  ).rejects.toBeInstanceOf(Lost)
 
   await vi.advanceTimersByTimeAsync(250)
   const second = Socket.made[1]
   second.welcome()
   await flush()
-  // The plain one goes again, with its own command ID; the one sent
-  // once does not.
+  // The plain one goes again, with its own command ID; neither sent
+  // once does.
   const again = second.sent.slice(1)
   expect(again).toEqual([
     expect.objectContaining({ method: "agents.send", command: send.command }),
-    expect.objectContaining({ method: "agents.unread" }),
   ])
   second.say({ type: "result", id: again[0].id, ok: { thread: "t2" }, at: 3 })
   await expect(plain).resolves.toEqual({ answer: { thread: "t2" }, at: 3 })
-  second.say({ type: "result", id: again[1].id, ok: null, at: 4 })
-  await expect(away).resolves.toEqual({ answer: null, at: 4 })
   engine.close()
 })
 

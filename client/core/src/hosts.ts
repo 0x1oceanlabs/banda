@@ -16,6 +16,7 @@ import {
   type ProjectId,
   type ProjectSummary,
   type Status,
+  Unreachable,
 } from "@banda/contract"
 import {
   type AwakeWhy,
@@ -238,8 +239,14 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return this.#device.follow((hosts) => this.take(hosts)) ?? (() => {})
   }
 
-  /** Takes the hosts as the desktop tells them now, at `at`. A host
-   * live again has its engine try at once, not after its wait. */
+  /**
+   * Takes the hosts as the desktop tells them now, at `at`. A host live
+   * again has its engine try at once, not after its wait. One not live,
+   * or gone from `hosts.toml`, has its engine away (`Engine.away`): a
+   * command to it fails at once, in the words of its pill, and one on its
+   * way fails as one that may have run, never to go later by itself (ADR
+   * 0082, decision 16).
+   */
   take(hosts: readonly HostState[], at = Date.now()): void {
     const was = new Map(this.get().map((one) => [one.name, one]))
     const now = hosts.map((host) =>
@@ -254,9 +261,11 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     }
     this.#shown.set(this.#placed(now))
     this.#hearPowers()
-    for (const one of now)
-      if (live(one) && was.get(one.name)?.state.state !== "live")
-        this.#engines.get(one.name)?.wake()
+    for (const [name, engine] of this.#engines) {
+      const one = now.find((host) => host.name === name)
+      if (!one || !live(one)) engine.away(this.#unreachable(name))
+      else if (was.get(name)?.state.state !== "live") engine.wake()
+    }
   }
 
   /** Takes host `name`'s Projects, as its engine listed them, while the
@@ -282,17 +291,24 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /**
    * Host `name`'s engine: one for the Window's life, made as it is first
    * asked for. It asks the desktop where that engine listens on each
-   * connect, once the host is live, so a refused host is not tried again
-   * by it, and a restarted engine is found where it listens now. What the
-   * host says it is called and drawn by, the Window shows from then on.
+   * connect while the host is live, so a refused host is not tried again
+   * by it, and a restarted engine is found where it listens now. While
+   * the host is not live it is away, and tries again as the host is live
+   * (`take`). A mark it loses with the connection names the host, as the
+   * link may drop before the desktop says the host is away. What the host
+   * says it is called and drawn by, the Window shows from then on.
    */
   engine(name: string): Engine {
     let engine = this.#engines.get(name)
     if (!engine) {
-      engine = new Engine(async () => {
-        await this.#live(name)
-        return this.#device.engine(name)
-      })
+      engine = new Engine(
+        async () => {
+          const one = this.get().find((host) => host.name === name)
+          if (!one || !live(one)) throw this.#unreachable(name)
+          return this.#device.engine(name)
+        },
+        { unreachable: () => this.#unreachable(name) }
+      )
       this.#engines.set(name, engine)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
@@ -333,12 +349,24 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       return this.#here
     }
     const shown = this.get().find((one) => one.name === host)
-    if (!shown) {
-      const { name } = this.seen(host)
-      throw new Unreachable(host, `This window does not reach ${name}`)
-    }
-    if (drawn || live(shown)) return this.engine(host)
-    throw new Unreachable(host, reachWords(host, shown, this.seen)!)
+    if (shown && (drawn || live(shown))) return this.engine(host)
+    throw this.#unreachable(host)
+  }
+
+  /**
+   * Why an act on host `name` is refused now: in the words its Panes'
+   * pill says, as "arc is away", by the name it says it has, since when
+   * it is away; while it is live, as Send says it while its engine is not
+   * open, "Connecting to arc"; for a host the Window does not know, as
+   * one taken out of hosts.toml, "This window does not reach arc".
+   */
+  #unreachable(name: string): Unreachable {
+    const shown = this.get().find((one) => one.name === name)
+    const machine = (shown?.named ?? this.seen(name)).name
+    const words = shown
+      ? (reachWords(name, shown, this.seen) ?? `Connecting to ${machine}`)
+      : `This window does not reach ${machine}`
+    return new Unreachable(name, words, { machine, as_of: shown?.away })
   }
 
   /** `pane` of `project` as a pick opens it (`pane.pick`): its args name
@@ -415,20 +443,6 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   #sayMachines(): void {
     const now = machinesOf(this.#ours, this.get())
     if (!sameData(now, this.#machines.get())) this.#machines.set(now)
-  }
-
-  /** Waits until host `name` is live. */
-  #live(name: string): Promise<void> {
-    return new Promise((done) => {
-      const look = () => {
-        const one = this.get().find((host) => host.name === name)
-        if (one?.state.state !== "live") return
-        stop()
-        done()
-      }
-      const stop = this.subscribe(look)
-      look()
-    })
   }
 
   /**
@@ -510,19 +524,11 @@ export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
   return machines
 }
 
-/** An act refused at once (`KeptHosts.sessionOf`): the machine that owns
- * its Project, `host`, is one the Window does not reach now, or does not
- * know. For one it does not reach now it says so in the words its Panes'
- * pill says (`reachWords`), as "arc is away"; for one it does not know,
- * as one taken out of hosts.toml, "This window does not reach arc". */
-export class Unreachable extends Error {
-  readonly host: string
-  constructor(host: string, words: string) {
-    super(words)
-    this.name = "Unreachable"
-    this.host = host
-  }
-}
+/** An act refused at once (`KeptHosts.sessionOf`, `Engine.away`): the
+ * machine that owns its Project is one the Window does not reach now, or
+ * does not know. The contract's, handed on with the hosts, so an App
+ * takes it from where it takes them. */
+export { Unreachable }
 
 /** A host's Project as this Window draws it: a picture sign shows its
  * first letter, as only that host's engine reads its picture. */

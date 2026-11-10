@@ -319,10 +319,11 @@ test("a host live again while its engine waits for it has that engine wait from 
     await vi.advanceTimersByTimeAsync(wait)
   }
   Socket.opened.at(-1)!.close()
-  // arc goes away before the next try, which waits for arc to be live.
+  // arc goes away before the next try: its engine is away, and tries
+  // nothing until arc is live.
   tell([away])
   await vi.advanceTimersByTimeAsync(4_000)
-  expect(engine.status).toEqual({ state: "connecting" })
+  expect(engine.status).toEqual({ state: "away" })
   const opened = Socket.opened.length
   tell([live])
   await vi.advanceTimersByTimeAsync(0)
@@ -330,6 +331,168 @@ test("a host live again while its engine waits for it has that engine wait from 
   // That try fails at once: the next waits the first wait, not 5 s.
   Socket.opened.at(-1)!.close()
   expect(engine.status).toEqual({ state: "lost", retryIn: 250 })
+  engine.close()
+})
+
+/** What arc's engine says as a window opens: open, with no name. */
+const opened = { type: "welcome", engine: "0.1.0", modules: [], boot: "b1" }
+
+test("a host not live has its engine refuse a command at once in its pill's words, one on its way as one that may have run, and send none of them once it is back", async () => {
+  vi.useFakeTimers({ now: 1_000 })
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say(opened)
+  expect(engine.status.state).toBe("open")
+
+  // On its way as arc goes: refused at once, as one that may have run.
+  const going = engine.command("projects.create", { name: "Going" })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(Socket.opened[0]!.sent.at(-1)).toMatchObject({
+    method: "projects.create",
+  })
+  vi.setSystemTime(5_000)
+  tell([away])
+  await expect(going).rejects.toBeInstanceOf(Unreachable)
+  await expect(going).rejects.toMatchObject({
+    message: "arc is away",
+    host: "arc",
+    machine: "arc",
+    as_of: 5_000,
+    may_have_run: true,
+  })
+  expect(engine.status).toEqual({ state: "away" })
+
+  // Made while arc is away: refused at once, never sent; a read waits.
+  const refused = engine.command("projects.create", { name: "Refused" })
+  await expect(refused).rejects.toMatchObject({
+    message: "arc is away",
+    may_have_run: false,
+  })
+  const read = engine.call("projects.list", {})
+  // Stopped there now: the words follow.
+  tell([{ name: "arc", ssh: "arc", state: "stopped" }])
+  await expect(
+    engine.command("projects.create", { name: "No" })
+  ).rejects.toThrow("Banda is stopped on arc")
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(Socket.opened).toHaveLength(1)
+
+  // Back: the read goes, and none of the commands goes again.
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(Socket.opened).toHaveLength(2)
+  Socket.opened[1]!.say(opened)
+  await vi.advanceTimersByTimeAsync(0)
+  const calls = Socket.opened[1]!.sent.filter(({ type }) => type === "call")
+  expect(calls.map(({ method }) => method)).toEqual(["projects.list"])
+  Socket.opened[1]!.say({ type: "result", id: calls[0]!.id, ok: [] })
+  expect(await read).toEqual([])
+  engine.close()
+})
+
+test("arc's link drops before the desktop says arc is away: a mark on its way names arc as one that may have run, one made meanwhile is not sent, and a command waiting to go again fails as one that went; none goes once arc is back", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say(opened)
+  const once = { once: true }
+  const marking = engine.commandAt(
+    "projects.create",
+    { name: "Mark" },
+    undefined,
+    undefined,
+    once
+  )
+  const stopping = engine.command("projects.create", { name: "Stop" })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(Socket.opened[0]!.sent.filter(({ type }) => type === "call")).toEqual([
+    expect.objectContaining({ method: "projects.create" }),
+    expect.objectContaining({ method: "projects.create" }),
+  ])
+
+  // The connection closes first, with arc still live to the window: the
+  // mark fails at once, naming arc, as one that may have run.
+  Socket.opened[0]!.close()
+  await expect(marking).rejects.toMatchObject({
+    name: "Unreachable",
+    machine: "arc",
+    may_have_run: true,
+  })
+  // One made now is not sent, in the words Send says meanwhile.
+  await expect(
+    engine.commandAt(
+      "projects.create",
+      { name: "No" },
+      undefined,
+      undefined,
+      once
+    )
+  ).rejects.toMatchObject({
+    message: "Connecting to arc",
+    machine: "arc",
+    may_have_run: false,
+  })
+  // Then arc is away: the command that waits to go again is refused as
+  // the one before may have run.
+  tell([away])
+  await expect(stopping).rejects.toMatchObject({
+    message: "arc is away",
+    may_have_run: true,
+  })
+
+  // Back: none of them goes again.
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  const back = Socket.opened.at(-1)!
+  back.say(opened)
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(back.sent.filter(({ type }) => type === "call")).toEqual([])
+  engine.close()
+})
+
+test("a host taken out of hosts.toml has its engine refuse at once, as one the window does not reach", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const names: Names = {
+    ...FORGETTING,
+    seen: () => ({ name: "Studio", icon: "server" }),
+  }
+  const hosts = new KeptHosts(device, names)
+  hosts.follow()
+  // Not told yet: away from the start, and the desktop is not asked.
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  expect(engine.status).toEqual({ state: "away" })
+  expect(device.engine).not.toHaveBeenCalled()
+  await expect(
+    engine.command("projects.create", { name: "x" })
+  ).rejects.toMatchObject({
+    message: "This window does not reach Studio",
+    machine: "Studio",
+    may_have_run: false,
+  })
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(device.engine).toHaveBeenCalledTimes(1)
+  tell([])
+  await expect(
+    engine.command("projects.create", { name: "y" })
+  ).rejects.toThrow("This window does not reach Studio")
+  expect(engine.status).toEqual({ state: "away" })
   engine.close()
 })
 
@@ -737,14 +900,6 @@ test("a host goes by the name this device remembers until its engine says one, a
   engine.close()
 })
 
-/** What arc's engine says as a window opens: open, with no name. */
-const opened = {
-  type: "welcome",
-  engine: "0.1.0",
-  modules: [],
-  boot: 1,
-}
-
 /** m1pro on battery at 42%, kept awake by its Agents. */
 const discharging = {
   battery: { percent: 42, charging: false, on_power: false, left: 122 },
@@ -803,17 +958,21 @@ test("a live host says its battery on its engine's machine.power; away it says n
   tell([connecting])
   expect(hosts.get()[0]!.power).toBeUndefined()
 
-  // Live again: heard anew, once.
+  // Live again: heard anew, once, on its engine's new connection, as
+  // away ended the last.
   tell([live])
-  expect(powerAsked(socket)).toHaveLength(2)
+  await vi.advanceTimersByTimeAsync(0)
+  const back = Socket.opened[1]!
+  back.say(opened)
+  expect(powerAsked(back)).toHaveLength(1)
   tell([live])
-  expect(powerAsked(socket)).toHaveLength(2)
-  const again = powerAsked(socket)[1]!
-  socket.say({ type: "piece", stream: again.id, data: discharging })
+  expect(powerAsked(back)).toHaveLength(1)
+  const again = powerAsked(back)[0]!
+  back.say({ type: "piece", stream: again.id, data: discharging })
   expect(hosts.get()[0]!.power).toEqual(discharging)
   // Taken out of hosts.toml, it is let go too.
   tell([])
-  expect(socket.sent.at(-1)).toMatchObject({
+  expect(back.sent.at(-1)).toMatchObject({
     type: "unsubscribe",
     subscription: again.id,
   })
@@ -847,10 +1006,14 @@ test("an engine older than machine.power refuses it: no battery and nothing show
   const second = Socket.opened[1]!
   second.say(opened)
   expect(powerAsked(second)).toEqual([])
-  // Away and live again, as after an update there: asked once more.
+  // Away and live again, as after an update there: asked once more, on
+  // the connection made as it is live again.
   tell([away])
   tell([live])
-  expect(powerAsked(second)).toHaveLength(1)
+  await vi.advanceTimersByTimeAsync(0)
+  const third = Socket.opened[2]!
+  third.say(opened)
+  expect(powerAsked(third)).toHaveLength(1)
   engine.close()
 })
 

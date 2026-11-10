@@ -9,9 +9,10 @@
  *   list has heard what its command did: the Person never sees the mark
  *   flip back while its fact is on its way, whichever of the answer and
  *   the fact comes first (ADR 0082, decision 4).
- * - Nothing waits for a host away (decision 8): a mark made then is not
- *   sent, and one whose host went while it was on its way is taken back,
- *   and is not sent again once the host is back. A toast says so, as for
+ * - Nothing waits for a host away (decision 8): its command goes `once`
+ *   (`Engine.commandAt`), so a mark made then is not sent, and one whose
+ *   host went while it was on its way is taken back, and is not sent again
+ *   once the host is back. A toast says so, naming that machine, as for
  *   one the host refused, but for the seen the window marks by itself,
  *   which fails quietly.
  * - A mark moves no Thread (decision 6): what shows changes the marks
@@ -26,7 +27,6 @@
  */
 import {
   type Engine,
-  Lost,
   type MethodOf,
   newId,
   type Params,
@@ -122,14 +122,15 @@ function change(
 /**
  * Sends `mark` of `thread`, in `project`, to its host, `engine`: shown at
  * once, until the list hears what it did (`settle`). Whether the host took
- * it. A host away is sent nothing, and one that goes before it answers
- * takes the mark back here; either way, and when the host refuses it, a
- * toast says so, unless it is `quiet`, as the seen the window marks by
- * itself. Its command is sent `once` (`Engine.commandAt`): one whose
- * connection broke is not sent again once its host is back, so a mark
- * said to have failed does not land later. One that reached the host
- * before the break may have landed all the same: its fact then shows it,
- * as any mark made there.
+ * it. Its command is sent `once` (`Engine.commandAt`): a host away, or an
+ * engine not open, is sent nothing, and what is on its way of that Thread
+ * stays as it was; one whose host goes, or whose connection breaks,
+ * before it answers takes the mark back here, and is not sent again once
+ * the host is back, so a mark said to have failed does not land later.
+ * Either way, and when the host refuses it, a toast says so, unless it is
+ * `quiet`, as the seen the window marks by itself. One that reached the
+ * host before it went may have landed all the same: its fact then shows
+ * it, as any mark made there.
  */
 export async function mark(
   engine: Engine,
@@ -138,11 +139,6 @@ export async function mark(
   mark: PersonMark,
   { quiet = false }: { quiet?: boolean } = {}
 ): Promise<boolean> {
-  const failed = (error: unknown) => {
-    if (!quiet) toast.error(problem(error))
-    return false
-  }
-  if (engine.status.state !== "open") return failed(new Lost())
   const [which, to]: [Which, unknown] =
     "seen" in mark
       ? ["seen", mark.seen]
@@ -150,21 +146,15 @@ export async function mark(
         ? ["archived", mark.archived]
         : ["woke", mark.woke]
   const command = newId()
-  change(engine, thread, which, () => ({ to, command }))
+  const sending = commandOf(engine, project, thread, mark, command)
+  // Shown only as it goes: one the engine refuses at once leaves an
+  // earlier mark still waiting for its fact as it was.
+  if (engine.status.state === "open")
+    change(engine, thread, which, () => ({ to, command }))
   // This mark's part, and no later one's, which took its place.
   const own = (part: Part<unknown> | undefined) => part?.command === command
-  const answer = commandOf(engine, project, thread, mark, command)
-  // Its own Lost, which comes after `gone` said its host went, has no
-  // one to hear it.
-  answer.catch(() => undefined)
-  let stop = () => {}
-  const gone = new Promise<never>((_, reject) => {
-    stop = engine.watch((status) => {
-      if (status.state !== "open") reject(new Lost())
-    })
-  })
   try {
-    const { at } = await Promise.race([answer, gone])
+    const { at } = await sending
     // What wrote nothing has nothing to wait for: the list holds it.
     change(engine, thread, which, (part) =>
       !own(part) ? part : at === null ? undefined : { ...part!, at }
@@ -172,10 +162,16 @@ export async function mark(
     return true
   } catch (error) {
     change(engine, thread, which, (part) => (own(part) ? undefined : part))
-    return failed(error)
-  } finally {
-    stop()
+    if (!quiet) toast.error(problem(error, actOf(mark)))
+    return false
   }
+}
+
+/** `mark` as the menu or the line that makes it names it. */
+export function actOf(mark: PersonMark): string {
+  if ("archived" in mark) return mark.archived ? "Archive" : "Unarchive"
+  if ("woke" in mark) return "Dismiss"
+  return mark.seen === null ? "Mark as unread" : "Mark as read"
 }
 
 /** The command that carries `mark`. */

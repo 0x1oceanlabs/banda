@@ -88,7 +88,11 @@ test("with that machine out of reach, an answer and a retry are refused at once,
     host: "devbox",
   })
   expect(sent).toEqual([])
-  expect(said.errors).toEqual(["arc is away", "arc is away", "devbox is away"])
+  expect(said.errors).toEqual([
+    "arc is away: your answer was not sent.",
+    "arc is away: Try again was not sent.",
+    "devbox is away: your answer was not sent.",
+  ])
 })
 
 test("what that machine's engine refuses, a toast says", async () => {

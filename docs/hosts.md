@@ -7,9 +7,15 @@ machine's, and its state in words while it is not live. Its row, the
 bar's counts, a toast, `Alt+U` and the Banda menu open its Thread on its
 engine: you read it and write to it there, as to one of this machine's.
 A toast for its Thread names it after the title, and its Allow, Reject and
-Try again go to its engine too. While it is not live, they and the
-Thread menu's rename, Later, wake, mark and archive say so at once, in
-the words of its pill ("arc is away"), and send nothing to run later.
+Try again go to its engine too. While it is not live, they, the Thread
+menu's rename, Later, wake, mark and archive, and what its Thread sends,
+as Stop, an answer, Implement, Try again, Fork, Edit or a new model or
+mode, say so at once in a toast, in the words of its pill and the act's
+("arc is away: Stop was not sent."), and send nothing to run later. One
+on its way as it goes says so too ("arc went away; Stop may have gone
+through."), and is not sent again once it is back. Words the Banda menu
+starts a new Thread on it with are refused the same way, and wait in
+that Thread's composer for you to send.
 What would reach this machine's files waits for a later step: other
 Panes for its Projects say "Not on <name> yet"; in its replies a path or
 an image opens nothing, a code block has no Run, and a Visual shows only

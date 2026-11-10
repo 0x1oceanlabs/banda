@@ -1,6 +1,5 @@
 import { expect, test } from "vitest"
-import { Lost, Refused } from "@banda/contract"
-import { Unreachable } from "@banda/core"
+import { Lost, Refused, Unreachable } from "@banda/contract"
 import { DAY, duration, HOUR, left, MINUTE, problem } from "./words"
 
 test("what went wrong reads as the Person can act on it; a machine out of reach by its words", () => {
@@ -10,10 +9,24 @@ test("what went wrong reads as the Person can act on it; a machine out of reach 
   expect(problem(new Lost())).toBe(
     "Banda lost its engine for a moment. Try again."
   )
-  expect(problem(new Unreachable("arc", "arc is away"))).toBe("arc is away")
   expect(problem(new Error("socket said no"))).toBe(
     "Something went wrong. Try again."
   )
+  // A machine out of reach is named, as its pill names it, with the act
+  // that was not sent, or that went as it went away.
+  const away = new Unreachable("arc", "arc is away")
+  expect(problem(away, "Stop")).toBe("arc is away: Stop was not sent.")
+  expect(problem(away)).toBe("arc is away: nothing was sent.")
+  const studio = new Unreachable("arc", "Banda is stopped on Studio", {
+    machine: "Studio",
+  })
+  expect(problem(studio, "your answer")).toBe(
+    "Banda is stopped on Studio: your answer was not sent."
+  )
+  expect(problem(studio.sent(), "Stop")).toBe(
+    "Studio went away; Stop may have gone through."
+  )
+  expect(problem(away.sent())).toBe("arc went away; it may have gone through.")
 })
 
 test("a duration reads as a clock would", () => {

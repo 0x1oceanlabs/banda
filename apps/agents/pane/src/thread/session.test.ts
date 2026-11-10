@@ -1,5 +1,12 @@
-import type { Engine, ProjectId, Status } from "@banda/contract"
+import {
+  type CommandOptions,
+  type Engine,
+  Lost,
+  type ProjectId,
+  type Status,
+} from "@banda/contract"
 import type { ThreadId, TurnId } from "@banda/contract/agents"
+import { Unreachable } from "@banda/core/react"
 import { beforeEach, expect, test, vi } from "vitest"
 import { presence } from "./presence"
 
@@ -8,7 +15,7 @@ vi.mock("@banda/ui/components/sonner", () => ({
   toast: { error: (words: string) => void said.errors.push(words) },
 }))
 
-const { seeWhenPresent } = await import("./session")
+const { named, seeWhenPresent } = await import("./session")
 const { mark, sendingTo } = await import("../list/sent")
 
 const PROJECT = "0196f000-0000-7000-8000-000000000021" as ProjectId
@@ -23,11 +30,15 @@ const SEEN = ["agents.read", { thread: THREAD, turn: TURN }, PROJECT]
 type Answers = "takes" | "refuses" | "holds"
 
 /** An engine in `state`, and the commands it was sent; `go` changes its
- * state, as a connection that breaks and comes back. */
+ * state, as a connection that breaks and comes back. As the engine sends
+ * a command `once`: refused at once while it is not open, never sent, and
+ * failed as the connection breaks. */
 function engineIn(state: Status["state"], answers: Answers = "takes") {
   const sent: unknown[][] = []
   const watchers = new Set<(status: Status) => void>()
   let status = { state } as Status
+  /** How each command held on its way fails. */
+  const held: ((error: Error) => void)[] = []
   const engine = {
     get status() {
       return status
@@ -37,15 +48,25 @@ function engineIn(state: Status["state"], answers: Answers = "takes") {
       watcher(status)
       return () => void watchers.delete(watcher)
     },
-    commandAt: async (method: string, params: unknown, project: string) => {
+    commandAt: async (
+      method: string,
+      params: unknown,
+      project: string,
+      _: string,
+      options?: CommandOptions
+    ) => {
+      if (options?.once && status.state !== "open") throw new Lost()
       sent.push([method, params, project])
       if (answers === "refuses") throw new Error("unknown method")
-      if (answers === "holds") return new Promise(() => undefined)
+      if (answers === "holds")
+        return new Promise((_, refuse) => held.push(refuse))
       return { answer: null, at: 7 }
     },
   } as unknown as Engine
   const go = (state: Status["state"]) => {
     status = { state } as Status
+    if (state !== "open")
+      for (const refuse of held.splice(0)) refuse(new Lost())
     for (const watcher of [...watchers]) watcher(status)
   }
   /** Whether anything still watches its status. */
@@ -65,10 +86,11 @@ test("the mark goes to the Pane's own engine, in its Project, and shows at once"
   expect(sendingTo(engine)[THREAD]?.seen?.to).toBe(TURN)
 })
 
-test("a host away is not sent the mark to keep for later, and none shows", () => {
+test("a host away is not sent the mark to keep for later, and none shows", async () => {
   for (const state of ["connecting", "lost", "refused"] as const) {
     const { engine, sent } = engineIn(state)
     seeWhenPresent(engine, PROJECT, THREAD, TURN)
+    await answered()
     expect(sent).toEqual([])
     expect(sendingTo(engine)).toEqual({})
   }
@@ -189,4 +211,21 @@ test("armed again as its host is back, the seen waits for the Person, and nothin
     expect(other.sent).toEqual([])
   }
   expect(watched()).toBe(false)
+})
+
+test("an act on a machine out of reach says so at once in a toast that names it and the act; anything else goes on to the problem line", async () => {
+  const away = new Unreachable("arc", "arc is away")
+  expect(await named("Stop", () => Promise.reject(away))()).toBeUndefined()
+  expect(
+    await named("your answer", () => Promise.reject(away.sent()))()
+  ).toBeUndefined()
+  expect(said.errors).toEqual([
+    "arc is away: Stop was not sent.",
+    "arc went away; your answer may have gone through.",
+  ])
+  await expect(
+    named("Stop", () => Promise.reject(new Lost()))()
+  ).rejects.toBeInstanceOf(Lost)
+  expect(await named("Stop", () => Promise.resolve(7))()).toBe(7)
+  expect(said.errors).toHaveLength(2)
 })
