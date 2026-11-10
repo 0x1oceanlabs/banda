@@ -42,10 +42,6 @@ export function isPlaced(value: unknown): value is Placed {
   )
 }
 
-/** Whether two places say the same. */
-export const samePlace = (a: Placed | undefined, b: Placed): boolean =>
-  a !== undefined && a.machine === b.machine && a.host === b.host
-
 /** A directory kept in this window's memory alone, as where no Window
  * keeps one: it is gone with the window. */
 export function inWindow(): DirectoryMemory {

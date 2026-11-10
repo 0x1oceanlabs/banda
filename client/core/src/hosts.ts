@@ -27,12 +27,7 @@ import {
   type Power,
 } from "@banda/contract/machines"
 import type { HostState } from "./device"
-import {
-  type DirectoryMemory,
-  inWindow,
-  type Placed,
-  samePlace,
-} from "./directory"
+import { type DirectoryMemory, inWindow, type Placed } from "./directory"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
@@ -527,7 +522,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** Keeps `placed` for `project` in the directory, where it says
    * something new. */
   #learn(project: ProjectId, placed: Placed): void {
-    if (!samePlace(this.#directory.read()[project], placed))
+    if (!sameData(this.#directory.read()[project], placed))
       this.#directory.put(project, placed)
   }
 

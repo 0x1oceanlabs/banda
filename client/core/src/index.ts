@@ -15,12 +15,7 @@ export {
   poppedOf,
   poppedRoute,
 } from "./device"
-export {
-  type DirectoryMemory,
-  inWindow,
-  isPlaced,
-  type Placed,
-} from "./directory"
+export { isPlaced, type Placed } from "./directory"
 export type { Here, HereStore } from "./here"
 export {
   agentsWork,
