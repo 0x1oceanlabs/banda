@@ -3184,17 +3184,70 @@ async fn what_the_agent_does_at_once_after_a_turn_waits_for_that_turn_to_end() {
     for _ in 0..5 {
         let root = tempfile::tempdir().unwrap();
         let world = World::new(root.path()).await;
-        let sent = world.send(None, "background soon").await;
+        let sent = world.send(None, "background at once").await;
         let view = world
             .until(&sent["thread"], |v| {
                 texts(v).iter().any(|t| t.contains("The task finished."))
                     && v.turns.iter().all(|t| t.state == TurnState::Done)
             })
             .await;
-        // The Harness's words reach the Thread, in whichever turn they
-        // came: they may come before its turn ended, and join its reply.
-        // Never with two turns running.
-        assert!(view.turns.len() <= 2, "{:?}", view.turns);
+        // What it says right after its answer is never that turn's: it
+        // goes on in a turn of its own, once that one ended.
+        assert_eq!(view.turns.len(), 2, "{:?}", view.turns);
+    }
+}
+
+/// What a Harness says after it answered a prompt comes after the turn has
+/// ended, as Claude Code's workflows say what they do, with no time between
+/// on the wire: it goes between turns, and a Question it asks there is
+/// the Agent's own, not cancelled (#1182).
+#[tokio::test]
+async fn what_a_harness_says_at_once_after_it_answers_a_prompt_goes_between_turns() {
+    for _ in 0..20 {
+        let root = tempfile::tempdir().unwrap();
+        let world = World::new(root.path()).await;
+        let sent = world.send(None, "background at once asks").await;
+        let thread = &sent["thread"];
+        let view = world.until(thread, |v| open(v).is_some()).await;
+        let (question, _) = open(&view).unwrap();
+        let answer = json!({ "item": question, "choice": "allow" });
+        world
+            .call(world.person(), "agents.answer", answer)
+            .await
+            .unwrap();
+        let view = world
+            .until(thread, |v| {
+                v.turns.len() >= 2 && v.turns.iter().all(|t| t.state == TurnState::Done)
+            })
+            .await;
+        assert_eq!(view.turns.len(), 2, "{:?}", view.turns);
+        assert_eq!(
+            texts(&view),
+            [
+                "message: background at once asks",
+                "message: Started a task.",
+                "notice: Fake went on by itself.",
+                "message: The task finished.",
+                "tool: Run a check (Done)",
+                "question: Run a check (Answered)",
+                "message: The check passed.",
+            ]
+        );
+        let (first, own) = (&view.turns[0], &view.turns[1]);
+        let check = view.items.iter().filter(|item| match &item.body {
+            Body::Tool { title, .. } | Body::Question { title, .. } => title == "Run a check",
+            _ => false,
+        });
+        let turns: Vec<_> = check.map(|item| item.turn).collect();
+        assert_eq!(turns, [Some(own.id); 2], "the call and its Question");
+        let items = &view.items;
+        let begins = items.iter().position(|item| item.id == own.message);
+        let last = items.iter().rposition(|item| item.turn == Some(first.id));
+        assert!(
+            last.unwrap() < begins.unwrap(),
+            "the first turn holds nothing after its end: {:?}",
+            texts(&view)
+        );
     }
 }
 

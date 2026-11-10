@@ -266,27 +266,47 @@ impl Session {
 
     /// Sends a prompt: its text, then its images. What the Harness says
     /// comes on the receiver; the returned task ends with the turn.
+    ///
+    /// The turn's route ends as the prompt's answer is dispatched, before
+    /// anything the Harness says after it is routed: that is between turns.
     pub fn prompt(&self, prompt: &Prompt) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (connection, session) = (&*self.connection, &self.id);
         connection.touch();
-        let hear = connection.routes.prompt(session);
+        let (hear, route) = connection.routes.prompt(session);
         let request = acp::PromptRequest::new(session.clone(), blocks(prompt));
-        // Sent here, not in the task: a stop that follows must reach the
-        // Harness after the prompt it stops.
-        let sent = connection.process.cx().send_request(request);
+        let (told, answered) = oneshot::channel();
         let (routes, activity) = (connection.routes.clone(), connection.activity.clone());
-        let (session, name) = (session.clone(), connection.process.name().to_owned());
-        let done = tokio::spawn(async move {
-            let answer = sent.block_task().await;
+        let (id, ends) = (session.clone(), route.clone());
+        // Sent here, not in the task: a stop that follows must reach the
+        // Harness after the prompt it stops. The answer is handled in the
+        // connection's order, so what comes after it is routed once the
+        // turn's route has ended. The callback never fails, as that would
+        // end the connection.
+        let prepared = connection.process.cx().prepare_request(request);
+        let sent = prepared.on_receiving_result(move |answer| async move {
             activity.touch();
-            routes.ended(&session);
+            routes.ended(&id, &ends);
+            let _ = told.send(answer);
+            Ok(())
+        });
+        let (routes, session) = (connection.routes.clone(), session.clone());
+        let name = connection.process.name().to_owned();
+        let done = tokio::spawn(async move {
+            // No answer means the connection's tasks have gone, as its
+            // Harness has: the prompt was never sent, or never answered.
+            let answer = match sent {
+                Ok(()) => answered.await.ok(),
+                Err(_) => None,
+            };
+            // Unless its answer ended the route already.
+            routes.ended(&session, &route);
             match answer {
-                Ok(answer) => ending(&answer.stop_reason),
-                Err(error) if gone(&error) => Ending::failed(
+                Some(Ok(answer)) => ending(&answer.stop_reason),
+                Some(Err(error)) if !gone(&error) => failed(&name, &error),
+                _ => Ending::failed(
                     format!("{name} stopped while it worked."),
                     Some(Failure::HarnessStopped),
                 ),
-                Err(error) => failed(&name, &error),
             }
         });
         (hear, done)

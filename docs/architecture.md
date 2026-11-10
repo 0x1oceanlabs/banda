@@ -1353,7 +1353,11 @@ module reaches a Harness through an adapter:
   one handle (`prompt`, `steer`, `cancel`, `settle`, `running`); what
   listens between turns holds it weakly, so a process let go stops.
   `acp/routes.rs` alone says where what a session says goes: to the turn
-  whose prompt it answers, or to whoever hears it between turns.
+  whose prompt it answers, or to whoever hears it between turns. A
+  turn's route ends as its prompt's answer is dispatched, before any
+  later frame of that connection is routed, and what listens between
+  turns starts before the prompt goes, so what the Harness says right
+  after its answer is between turns.
 - **Capabilities.** The engine declares what the window can show (notices,
   options that are on or off, forms, and a command's output as it comes),
   and the adapter reads what the
