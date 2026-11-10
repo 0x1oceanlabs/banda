@@ -4183,8 +4183,13 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
         .await
         .unwrap();
     // The machine's module `harnesses` comes first, with its own.
-    let limits = tools.as_array_mut().unwrap().remove(0);
-    assert_eq!(limits["method"], "harnesses.limits");
+    let machine = tools.as_array_mut().unwrap();
+    assert!(
+        machine
+            .iter()
+            .any(|tool| tool["method"] == "harnesses.limits")
+    );
+    machine.retain(|tool| !tool["method"].as_str().unwrap().starts_with("harnesses."));
     // The last: its own Thread put off while it waits, and woken (ADR
     // 0074), with only what an Agent sets.
     let wake = tools.as_array_mut().unwrap().pop().unwrap();

@@ -219,3 +219,42 @@ in `~/.config/banda-local/`, as their data and state too:
 | `harnesses.toml` | the Harnesses Threads start with |
 | `machine.toml` | this machine's name and icon, as every window shows it; `banda machine` prints them |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |
+
+## Accounts through the CLI
+
+Use the existing Agent pass. Do not drop `BANDA_TOKEN`, edit credentials,
+or prepare a connection script for the Person (ADR 0103).
+
+```sh
+banda account list
+banda account discover
+banda account connect claude --id claude-work --name Work --folder /absolute/profile
+banda account add codex --id codex-work --name Work
+banda account status codex-work
+banda account rename codex-work Personal
+banda account enable codex-work
+banda account disable codex-work
+banda account default claude-work
+banda account fallback codex-work
+banda account fallback # clear it
+```
+
+The folder is on the engine's machine. Discovery includes Omarchy's
+profiles, and does not prove they are signed in. Connecting preserves the
+existing credentials; Add creates a private, empty profile. IDs stay;
+names can change. The same folder cannot be connected twice.
+
+For sign-in, use `banda account login ID --way WAY`, with the way from
+`account status` (omit it if there is only one). It returns a login ID.
+`banda account login-status LOGIN` reads its progress and terminal output;
+`banda account login-input LOGIN CODE` submits one line when needed.
+For Codex on a remote engine, `--way device-code` uses its own device
+login: the output gives the verification URL and one-time code for the
+Person to open on their computer.
+The Person completes the provider's browser step. Do not ask them for a
+password or copy credentials. `banda account login-cancel LOGIN` cancels.
+Once done, `banda account login-finish LOGIN` refreshes the Account; ask
+`banda account status ID` again to confirm who signed in. A successful
+program exit alone is not proof. A login lasts at most ten minutes, and
+only one runs for each Account. These commands print JSON and refuse
+unknown Accounts, unsupported ways and invalid changes.

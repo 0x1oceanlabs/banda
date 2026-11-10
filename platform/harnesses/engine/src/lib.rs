@@ -7,6 +7,7 @@
 
 use banda_kernel::{Code, Refusal};
 
+pub mod accounts;
 pub mod acp;
 pub mod carried;
 pub mod cli;

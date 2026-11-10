@@ -2,11 +2,18 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { AccountProfile } from "./AccountProfile";
+import type { AccountStatus } from "./AccountStatus";
 import type { Accounted } from "./Accounted";
 import type { AskLimits } from "./AskLimits";
 import type { AskUsage } from "./AskUsage";
+import type { ConnectAccount } from "./ConnectAccount";
 import type { HarnessView } from "./HarnessView";
 import type { LimitsNow } from "./LimitsNow";
+import type { LoginAccount } from "./LoginAccount";
+import type { LoginId } from "./LoginId";
+import type { LoginInput } from "./LoginInput";
+import type { LoginStatus } from "./LoginStatus";
 import type { OneHarness } from "./OneHarness";
 import type { SignIn } from "./SignIn";
 import type { UsageNow } from "./UsageNow";
@@ -17,10 +24,47 @@ export type HarnessesMethods = {
  */
 list: CallMethod<Nothing, Array<HarnessView>>, 
 /**
+ * Profile folders on this machine. A discovered folder is not proof
+ * of sign-in; no credentials are returned (ADR 0103).
+ */
+account_profiles: CallMethod<Nothing, Array<AccountProfile>>, 
+/**
+ * Connects a profile or creates an empty Account folder, without
+ * changing what the registered Harness runs (ADR 0103).
+ */
+connect_account: CallMethod<ConnectAccount, HarnessView>, 
+/**
  * A Harness as it says: its program, who is signed in, how to sign
  * in, at the machine's log's position it is current at.
  */
 account: CallMethod<OneHarness, Accounted>, 
+/**
+ * Who is signed in, as the Harness says. No sign-in program,
+ * environment or credentials are returned (ADR 0103).
+ */
+account_status: CallMethod<OneHarness, AccountStatus>, 
+/**
+ * Starts the Harness's own sign-in. The Person completes its
+ * browser or terminal step; poll login_status for its output.
+ */
+login_account: CallMethod<LoginAccount, LoginStatus>, 
+/**
+ * Reads a sign-in's bounded terminal output and whether it ended.
+ */
+login_status: CallMethod<LoginId, LoginStatus>, 
+/**
+ * Sends input to the running sign-in terminal, not to a shell.
+ */
+login_input: CallMethod<LoginInput, null>, 
+/**
+ * Stops a running sign-in; finish it to refresh the Account.
+ */
+login_cancel: CallMethod<LoginId, null>, 
+/**
+ * Refreshes the Account after a completed sign-in. Then ask
+ * account_status to confirm the Harness's report.
+ */
+login_finish: CommandMethod<LoginId, null>, 
 /**
  * Signs in with one of the Harness's ways. A way in a terminal ran
  * there already: the Person signed in in it.

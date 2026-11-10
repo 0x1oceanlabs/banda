@@ -198,10 +198,19 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
 
-Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`, `limits`, `usage`.
+Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `connect_account`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `login_finish`, `sign_in`, `sign_out`, `limits`, `usage`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
+- `accounts`: The Harnesses this computer can start.
+- `account_profiles`: Profile folders on this machine. A discovered folder is not proof of sign-in; no credentials are returned (ADR 0103).
+- `connect_account`: Connects a profile or creates an empty Account folder, without changing what the registered Harness runs (ADR 0103).
+- `account_status`: Who is signed in, as the Harness says. No sign-in program, environment or credentials are returned (ADR 0103).
+- `login_account`: Starts the Harness's own sign-in. The Person completes its browser or terminal step; poll login_status for its output.
+- `login_status`: Reads a sign-in's bounded terminal output and whether it ended.
+- `login_input`: Sends input to the running sign-in terminal, not to a shell.
+- `login_cancel`: Stops a running sign-in; finish it to refresh the Account.
+- `login_finish`: Refreshes the Account after a completed sign-in. Then ask account_status to confirm the Harness's report.
 - `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
 
 ## Keys (`keys`)
