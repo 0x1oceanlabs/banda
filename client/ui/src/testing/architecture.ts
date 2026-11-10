@@ -643,8 +643,8 @@ export type Past = { what: PastHandle; line: number }
 
 /**
  * What a Pane that opens on another machine reaches past its three
- * handles (ADR 0106, law 1): the desktop's bridge, by the kit's typed
- * part of it (`@banda/ui/desktop`, which `kindReaches` finds as an
+ * handles (ADR 0106, law 1): the desktop's bridge, by `@banda/ui`'s
+ * typed part of it (`@banda/ui/desktop`, which `kindReaches` finds as an
  * import) or by `window.banda`; the device's clipboard; the browser's
  * windows; and an engine of its own.
  */
@@ -664,9 +664,10 @@ export type PastHandle = (typeof PAST_HANDLES)[number]
  * sees): `window.banda` and `globalThis.banda`, `navigator.clipboard` and
  * `window.navigator.clipboard`, also taken apart (`const { clipboard } =
  * navigator`), a call of `window.open` or of the global `open`, and `new
- * Engine`. A name the file declares around the place, as a parameter
- * `window` that is the Window's API, is not the page's global, so its
- * `open` is no place. Read as TypeScript reads it, by the file's kind, so
+ * Engine`, by any name it is imported as, or a class that extends it. A
+ * name the file declares around the place, as a parameter `window` that
+ * is the Window's API, is not the page's global, so its `open` is no
+ * place. Read as TypeScript reads it, by the file's kind, so
  * comments, strings and types are not taken for a place.
  */
 export function pastHandles(source: string, file: string): Past[] {
@@ -677,6 +678,22 @@ export function pastHandles(source: string, file: string): Past[] {
 /** A place past the handles, with where it is in its file: its offset,
  * and whether it is inside a function, so runs only once called. */
 type Place = Past & { at: number; called: boolean }
+
+/** Whether `node` names the contract's `Engine`: by its name, off a
+ * namespace, or by the name an import gives it (`import { Engine as E
+ * }`). */
+function engine(node: ts.Expression): boolean {
+  const it = bare(node)
+  if (reads(it, "Engine")) return true
+  if (!ts.isIdentifier(it)) return false
+  if (it.text === "Engine") return true
+  const imported = bindingOf(it)?.parent
+  return (
+    !!imported &&
+    ts.isImportSpecifier(imported) &&
+    imported.propertyName?.text === "Engine"
+  )
+}
 
 /** The places past a Pane's handles in `tree` (`pastHandles`). */
 function placesIn(tree: ts.SourceFile): Place[] {
@@ -703,12 +720,13 @@ function placesIn(tree: ts.SourceFile): Place[] {
       )
         at(node, "window.open")
     } else if (ts.isNewExpression(node)) {
-      const made = bare(node.expression)
-      if (
-        (ts.isIdentifier(made) && made.text === "Engine") ||
-        reads(made, "Engine")
-      )
-        at(node, "new Engine")
+      if (engine(node.expression)) at(node, "new Engine")
+    } else if (
+      ts.isHeritageClause(node) &&
+      node.token === ts.SyntaxKind.ExtendsKeyword &&
+      node.types.some((type) => engine(type.expression))
+    ) {
+      at(node, "new Engine")
     } else if (
       ts.isVariableDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
@@ -1016,22 +1034,26 @@ export type Reached = Past & { file: string; chain: string[] }
 /**
  * Each place the code of a kind of Pane reaches past its handles (ADR
  * 0106, law 1, `PAST_HANDLES`): in `start`, the file that declares the
- * kind, and in all it takes as values, through every import, the kit's
- * helpers and the core included (`resolve`, `workspaceResolver`'s), but
- * no package from outside. Of each file it takes what the kind's code
- * reaches: the declarations at its top it names, and all they name in
- * turn, and what runs as the file loads; so a function of the same file
- * that the kind never names is not its code, nor is the rest of an
- * `index.ts` it takes one name of. `@banda/ui/desktop` is the place
- * itself where its import is taken, and is not read further. Types are no
- * edge.
+ * kind, and in all it takes as values, through every import,
+ * `@banda/ui`'s helpers included (`resolve`, `workspaceResolver`'s), but
+ * not the core or the contract, which are the platform's and held by
+ * their own ratchets, nor a package from outside. Of each file it takes
+ * what the kind's code reaches: the declarations at its top it names,
+ * and all they name in turn, and what runs as the file loads; so a
+ * function of the same file that the kind never names is not its code,
+ * nor is the rest of an `index.ts` it takes one name of.
+ * `@banda/ui/desktop` is the place itself where its import is taken, and
+ * is not read further. Types are no edge.
  *
  * It is a lint: it reads names as written, so it cannot see what code
  * reaches dynamically, by a computed name (`window[name]`), a value
  * handed in from outside (a callback that opens a window), `eval` or a
- * global another file set. A name the code says that its file declares
- * twice, or that a local variable shadows, it takes for the top's, so it
- * may take more than runs, never less.
+ * global another file set; nor a global by another name (`const w =
+ * window`, `window.top`), `open` taken as a value and called later, or
+ * another machine's session asked of the core (`useEngineOf()`), which
+ * it does not read. A name the code says that its file declares twice,
+ * or that a local variable shadows, it takes for the top's, so it may
+ * take more than runs, never less.
  */
 export function kindReaches(
   start: string,
@@ -1046,11 +1068,14 @@ export function kindReaches(
   } = {}
 ): Reached[] {
   const desktop = resolve("@banda/ui/desktop", start)
-  // The core is the platform's, which has no device (ADR 0089, decision
-  // 1, as the window's architecture test holds): the sessions it makes are
-  // the handles a Pane is given, so its code is not the kind's.
-  const core = resolve("@banda/core", start)
-  const platform = core && dirname(core)
+  // The core and the contract are the platform's, which has no device
+  // (ADR 0089, decision 1, as the window's architecture test holds): they
+  // make the sessions a Pane is given as its handles, and the bridge, so
+  // their code is not the kind's.
+  const platform = ["@banda/core", "@banda/contract"].flatMap((name) => {
+    const index = resolve(name, start)
+    return index ? [dirname(index) + sep] : []
+  })
   const models = new Map<string, Model>()
   const modelFor = (file: string) => {
     let known = models.get(file)
@@ -1077,7 +1102,7 @@ export function kindReaches(
     chain: string[]
   ) => {
     const file = resolve(module, from)
-    if (!file || (platform && file.startsWith(platform + sep))) return
+    if (!file || platform.some((folder) => file.startsWith(folder))) return
     if (file !== desktop) work.push({ file, name, chain: [...chain, file] })
     else if (!imported.has(`${from}:${line}`)) {
       imported.add(`${from}:${line}`)
@@ -1166,6 +1191,8 @@ export function kindsIn(
   source: string,
   file: string
 ): { kind: string; name: string }[] {
+  // Most of the page declares none, and parsing it all would be slow.
+  if (!source.includes("definePane")) return []
   const tree = ts.createSourceFile(file, source, ts.ScriptTarget.Latest, true)
   return tree.statements.filter(ts.isVariableStatement).flatMap((statement) =>
     statement.declarationList.declarations.flatMap((declaration) => {
@@ -1201,8 +1228,8 @@ export function kindsIn(
  * it says there:
  *
  * - its args' `host`, as `args.host`: `args.host`, `props.args.host`,
- *   `const { host } = args`, and `{ args: { host } }` taken apart in a
- *   parameter;
+ *   `args["host"]`, `const { host } = args`, and `{ args: { host } }`
+ *   taken apart in a parameter;
  * - Here's Pane's, as `pane.host`: `here.pane.host`, `….pane?.host`,
  *   `const { host } = here.pane`;
  * - the core's `paneHost(…)`, which reads the first;
@@ -1221,12 +1248,9 @@ export function hostReads(source: string, file: string): string[] {
   // What `node` is read off: `args` or `….args`, `….pane`.
   const of = (node: ts.Expression): "args" | "pane" | undefined => {
     const it = bare(node)
-    if (ts.isIdentifier(it) && it.text === "args") return "args"
-    if (ts.isPropertyAccessExpression(it) && it.name.text === "args")
+    if ((ts.isIdentifier(it) && it.text === "args") || reads(it, "args"))
       return "args"
-    if (ts.isPropertyAccessExpression(it) && it.name.text === "pane")
-      return "pane"
-    return undefined
+    return reads(it, "pane") ? "pane" : undefined
   }
   // The `host` a pattern takes apart, as the name it keeps it by.
   const hostIn = (pattern: ts.ObjectBindingPattern) =>
@@ -1237,12 +1261,12 @@ export function hostReads(source: string, file: string): string[] {
         : []
     })
   // The places that read a host, and the names that keep what they read.
-  const reads = new Map<ts.Node, string>()
+  const hosts = new Map<ts.Node, string>()
   const kept = new Set<ts.Identifier>()
   const visit = (node: ts.Node): void => {
-    if (ts.isPropertyAccessExpression(node) && node.name.text === "host") {
+    if (reads(node, "host")) {
       const read = of(node.expression)
-      if (read) reads.set(node, `${read}.host`)
+      if (read) hosts.set(node, `${read}.host`)
     } else if (
       ts.isVariableDeclaration(node) &&
       ts.isObjectBindingPattern(node.name) &&
@@ -1251,7 +1275,7 @@ export function hostReads(source: string, file: string): string[] {
       const read = of(node.initializer)
       const names = hostIn(node.name)
       if (read && names.length > 0) {
-        reads.set(node.name, `${read}.host`)
+        hosts.set(node.name, `${read}.host`)
         for (const name of names) kept.add(name)
       }
     } else if (
@@ -1263,22 +1287,24 @@ export function hostReads(source: string, file: string): string[] {
     ) {
       const names = hostIn(node.name)
       if (names.length > 0) {
-        reads.set(node.name, "args.host")
+        hosts.set(node.name, "args.host")
         for (const name of names) kept.add(name)
       }
     } else if (ts.isCallExpression(node)) {
       const callee = bare(node.expression)
       if (ts.isIdentifier(callee) && callee.text === "paneHost")
-        reads.set(node, "paneHost")
+        hosts.set(node, "paneHost")
     }
     ts.forEachChild(node, visit)
   }
   visit(tree)
+  // Most files read none, and nothing can keep what none read.
+  if (hosts.size === 0) return []
   // Whether `node`'s value is worked out of a host: it reads one, or
   // says a name that keeps one, but not in a function, a call or a
   // literal, which make something else of it.
   const says = (node: ts.Node): boolean =>
-    reads.has(node) ||
+    hosts.has(node) ||
     (ts.isIdentifier(node) && kept.has(bindingOf(node)!)) ||
     (!ts.isFunctionLike(node) &&
       !ts.isCallExpression(node) &&
@@ -1307,7 +1333,7 @@ export function hostReads(source: string, file: string): string[] {
           }
   }
   // Each check of a name kept: a name said, not the one declared.
-  const found = [...reads.values()]
+  const found = [...hosts.values()]
   const checks = (node: ts.Node): void => {
     if (
       ts.isIdentifier(node) &&

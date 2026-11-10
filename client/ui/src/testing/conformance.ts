@@ -14,9 +14,10 @@
  *   is one act (law 4): each call, command and stream heard `once` ends,
  *   done, refused or `may_have_run`. One may wait only where the Pane says
  *   so in its own words, naming the machine it waits for, as "send when
- *   back" does. A read made outside a gesture may wait while arc is away:
- *   the Frame's pill says why. A refusal the kind leaves unhandled is
- *   said nowhere, so it counts too.
+ *   back" does: words that came since it mounted, so a top that names
+ *   arc all along excuses nothing. A read made outside a gesture may wait
+ *   while arc is away: the Frame's pill says why. A refusal the kind
+ *   leaves unhandled is said nowhere, so it counts too.
  * - **One pill, the Frame's.** The platform watches the link (law 5): the
  *   Frame alone says that arc is away. A Pane that draws a pill of its
  *   own, or a line that says only the pill's words, draws a second. Words
@@ -46,6 +47,12 @@ import {
 } from "react"
 import { createRoot } from "react-dom/client"
 import type { PaneKind, PaneProps } from "../pane"
+
+// happy-dom has no `compatMode`, which KaTeX takes for quirks mode and
+// warns of as it loads: the kit's page is in standards mode, as the
+// window's is.
+if (typeof document !== "undefined" && !("compatMode" in document))
+  Object.defineProperty(document, "compatMode", { value: "CSS1Compat" })
 
 /** The other machine, as the kit names it. */
 export const MACHINE = "arc"
@@ -455,9 +462,16 @@ function pillsIn(root: HTMLElement): number {
   ).length
 }
 
-/** Whether the Pane names arc in its own words, as one that says why it
- * waits does: "Sends when arc is back". */
-const naming = new RegExp(`\\b${MACHINE}\\b`)
+/** How often `root` names arc in its own words, as a Pane that says why
+ * it waits does: "Sends when arc is back". Each text is read apart, so
+ * "on arc" and the button after it are not one word. */
+function naming(root: HTMLElement): number {
+  const texts: string[] = []
+  const walk = document.createTreeWalker(root, NodeFilter.SHOW_TEXT)
+  for (let text = walk.nextNode(); text; text = walk.nextNode())
+    texts.push(text.textContent ?? "")
+  return texts.join(" ").match(new RegExp(`\\b${MACHINE}\\b`, "g"))?.length ?? 0
+}
 
 /**
  * What `spec.kind` does wrong when arc is live, away before an act, away
@@ -474,6 +488,7 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
   const page = globalThis.WebSocket
   globalThis.WebSocket = Socket as unknown as typeof WebSocket
   const flags = globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
+  const acting = flags.IS_REACT_ACT_ENVIRONMENT
   flags.IS_REACT_ACT_ENVIRONMENT = true
   /** Mounts the kind and plays `scenario` around `gesture`, noting what
    * it does wrong; what it leaves unhandled as it mounts is the mount's. */
@@ -497,6 +512,9 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
       try {
         one = await mount(spec, lacks)
         mounting = left.length
+        // What names arc as it mounts, as New Pane's "in banda on arc",
+        // says nothing of an act: only words that came since do.
+        const named = naming(one.mounted.root)
         if (scenario === "away before an act") one.away()
         if (scenario === "back with a new boot") {
           one.away()
@@ -516,9 +534,9 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
         }
         one.state.gesture = false
         // What the Pane says itself, the Frame's pill aside.
-        const own = mounted.root.textContent ?? ""
+        const says = naming(mounted.root) > named
         for (const asked of one.asked.slice(before))
-          if (asked.act && asked.ended === undefined && !naming.test(own))
+          if (asked.act && asked.ended === undefined && !says)
             found.add(
               `${at}: ${asked.method} still waits, and nothing says why`
             )
@@ -571,6 +589,7 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
         await play(scenario, name, gesture)
   } finally {
     globalThis.WebSocket = page
+    flags.IS_REACT_ACT_ENVIRONMENT = acting
   }
   return [...found]
 }

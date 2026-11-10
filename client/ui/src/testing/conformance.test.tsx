@@ -59,6 +59,38 @@ function Checks({ engine }: PaneProps<None>) {
   )
 }
 
+/** Checks as `Checks` does, under a top that names arc all along, as New
+ * Pane's "in banda on arc" does: that says nothing of the read. */
+function Headed(props: PaneProps<None>) {
+  return (
+    <div>
+      <h1>in banda on arc</h1>
+      <Checks {...props} />
+    </div>
+  )
+}
+
+/** Checks as `Checks` does, and says while the read waits that it waits
+ * for arc, as "send when back" does. */
+function Waits({ engine }: PaneProps<None>) {
+  const [said, say] = useState("")
+  const check = () => {
+    say("Checks once arc is back")
+    return engine.call("projects.list", null as never).then(
+      () => say("Checked"),
+      () => say("Not checked")
+    )
+  }
+  return (
+    <div>
+      <button type="button" onClick={() => void check()}>
+        Check
+      </button>
+      <p>{said}</p>
+    </div>
+  )
+}
+
 /** Reads again what the link lost on its way: once arc is away the read
  * waits, so the click would complete later by itself, the one in flight
  * as arc went too. */
@@ -127,6 +159,16 @@ test("a kind that hangs on an act without words does not, and the kit says where
   expect(await conformance({ kind: kind("kit.checks", Checks) })).toEqual([
     "kit.checks, away before an act, Check: projects.list still waits, and nothing says why",
   ])
+})
+
+test("a kind that names arc all along does not say so why an act waits", async () => {
+  expect(await conformance({ kind: kind("kit.headed", Headed) })).toEqual([
+    "kit.headed, away before an act, Check: projects.list still waits, and nothing says why",
+  ])
+})
+
+test("a kind that says an act waits for arc may let it wait", async () => {
+  expect(await conformance({ kind: kind("kit.waits", Waits) })).toEqual([])
 })
 
 test("a kind that asks again what was in flight as arc went hangs too", async () => {
