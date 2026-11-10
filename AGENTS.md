@@ -50,6 +50,15 @@ itself. An agent takes one: reads what changed in the release notes, makes
 reason. A major waits unopened on the Dependency Dashboard issue: tick its
 box to get the PR.
 
+## Show it first
+
+A change Roma will see is shown to Roma before it is built: a mock,
+drawn with the kit in [`docs/design/kit/`](docs/design/kit/) to
+[the Banda look](docs/design/README.md), with its variants and the one you
+would pick. Take its pictures with `node docs/design/kit/shot.mjs`, at
+1440 and 728 wide, in light and with the glass off, and look at each
+before Roma does. Build it once Roma has chosen, then try it as below.
+
 ## See what you changed
 
 A change that shows in the window, you try in the window before its PR:

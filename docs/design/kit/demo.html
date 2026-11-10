@@ -1,0 +1,335 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Banda Mock Kit</title>
+<link rel="stylesheet" href="kit.css" />
+<style>
+  /* Only the demo's own layout lives here; everything Banda is in kit.css. */
+  body { margin: 0; }
+  .demo-screen { height: 100vh; min-height: 720px; box-sizing: border-box; }
+  .demo-term { flex: 0 0 34%; }
+  .term pre { margin: 0; padding: 4px 16px 12px; font-family: var(--font-mono); font-size: var(--text-code); line-height: 1.6; white-space: pre; overflow: hidden; color: var(--foreground); }
+  .t-g { color: var(--ansi-green); } .t-r { color: var(--ansi-red); } .t-b { color: var(--ansi-blue); } .t-m { color: var(--ansi-magenta); } .t-q { color: var(--muted-foreground); } .t-y { color: var(--ansi-yellow); }
+  .cursor { display: inline-block; width: .6em; height: 1.1em; vertical-align: -0.2em; background: var(--foreground); }
+  /* The reference sheet under the window. */
+  .sheet { padding: 32px 28px 64px; display: grid; gap: 28px; max-width: 1384px; margin: 0 auto; }
+  .sheet h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; }
+  .sheet p.note { margin: 0 0 12px; color: var(--muted-foreground); font-size: 13px; }
+  .tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(118px, 1fr)); gap: 8px; }
+  .tiles figure { margin: 0; padding: 14px 8px 10px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); display: flex; flex-direction: column; align-items: center; gap: 10px; font-size: 12px; color: var(--muted-foreground); text-align: center; }
+  .tiles figure b { color: var(--foreground); font-weight: 500; display: block; }
+  .row-of { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+  .panel-demo { padding: 16px; border-radius: var(--r-tile); background: var(--tile); box-shadow: inset 0 0 0 1px var(--border); }
+  .radii { display: flex; gap: 14px; align-items: flex-end; flex-wrap: wrap; }
+  .radii div { background: var(--raised); box-shadow: inset 0 0 0 1px var(--border); display: grid; place-items: center; font-size: 12px; color: var(--muted-foreground); }
+  .swatches { display: flex; flex-wrap: wrap; gap: 8px; }
+  .swatches span { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; color: var(--muted-foreground); padding: 4px 10px 4px 4px; border-radius: var(--r-round); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); }
+  .swatches i { width: 18px; height: 18px; border-radius: 50%; display: inline-block; box-shadow: inset 0 0 0 1px var(--border); }
+</style>
+</head>
+<body class="b-kit" id="kit">
+
+<div class="b-screen demo-screen" id="screen">
+  <div class="b-window" id="win">
+
+    <!-- The bar: logo, workspaces, Flow | (centre empty while the sidebar shows) | widgets -->
+    <header class="b-bar">
+      <button class="b-bar-logo" title="Sidebar · Alt+A — Banda menu · Alt+Space"><span data-mark="asks" data-logo data-size="20"></span></button>
+      <nav class="b-ws" aria-label="Workspaces">
+        <button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button>
+      </nav>
+      <button class="b-widget" title="Flow: Row · Alt+Shift+M"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget" title="Servers"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+        <span class="b-widget" title="Claude: weekly 62% spent"><span class="b-ring" style="--share:.62"></span></span>
+        <span class="b-widget" title="Notifications"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="b-body">
+      <!-- The sidebar: the Person's inbox -->
+      <aside class="b-sidebar">
+        <div class="b-sb-head">
+          <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+          <button class="b-ib" title="New Thread · Alt+N"><i data-icon="square-pen"></i></button>
+        </div>
+        <div class="b-tabs" role="tablist">
+          <button class="b-tab is-current">Inbox <span class="b-n is-turn">4</span></button>
+          <button class="b-tab">Working <span class="b-n">5</span></button>
+          <button class="b-tab">Later <span class="b-n">2</span></button>
+          <button class="b-tab b-end" title="Archive · 4"><i data-icon="archive"></i></button>
+        </div>
+
+        <div class="b-list">
+          <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+
+          <div class="b-card is-current" data-look="asks">
+            <div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">14m</span></div>
+            <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Keep the old [row] keys as aliases, or drop them?</span></div>
+            <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span class="b-emblem-slot" data-emblem="claude"></span></div>
+          </div>
+
+          <div class="b-card" data-look="done">
+            <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div>
+            <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL, keeps chromium.log</span><span class="b-pr">#1061 <span class="is-ok">✓</span></span></div>
+            <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span class="b-machine"><i data-icon="laptop"></i>mac</span><span data-emblem="claude"></span></div>
+            <div class="b-acts"><button class="b-act" title="Later (Z)"><i data-icon="clock"></i></button><button class="b-act" title="Archive (S)"><i data-icon="check"></i></button></div>
+          </div>
+
+          <div class="b-card" data-look="failed">
+            <div class="b-line"><span data-mark="failed"></span><span class="b-title b-fade">Import March invoices</span><span class="b-time">4m</span></div>
+            <div class="b-line"><span class="b-say b-fade"><span class="b-word">Failed</span>3 tests fail in invoices.spec.ts</span></div>
+            <div class="b-line"><span class="b-where"><span class="b-sign" data-color="teal">W</span><span class="b-fade">Work</span></span><span data-emblem="codex"></span></div>
+          </div>
+
+          <div class="b-card" data-look="woke">
+            <div class="b-line"><span data-mark="woke"></span><span class="b-title b-fade">Review ADR 0095 machine list</span><span class="b-time">1m</span></div>
+            <div class="b-line"><span class="b-say b-fade"><span class="b-word">Woke</span>You put it off 3h ago: read the list again</span></div>
+            <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+          </div>
+
+          <div class="b-divider"></div>
+          <div class="b-row"><div class="b-line"><span data-mark="open"></span><span class="b-title b-fade">Research: Hyprland socket</span><span class="b-time">47m</span></div></div>
+
+          <div class="b-section"><span>Working · 5</span></div>
+          <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="read"></span><span class="b-title b-fade">Overview open/close zoom</span><span class="b-time">21m</span></div></div>
+          <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-satellites="3"></span><span class="b-title b-fade">Audit the sidebar code</span><span class="b-time">16m</span></div></div>
+          <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="think"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+          <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="execute"></span><span class="b-title b-fade">Reconcile February bank export</span><span class="b-machine"><i data-icon="laptop"></i></span><span class="b-time">9m</span></div></div>
+          <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="edit"></span><span class="b-title b-fade">waybar: show Banda's count</span><span class="b-time">3m</span></div></div>
+        </div>
+
+        <div class="b-sb-foot">
+          <button class="b-ib" title="Settings · Alt+,"><i data-icon="settings"></i></button>
+          <button class="b-ib" title="View"><i data-icon="list-filter"></i></button>
+          <button class="b-ib" title="Quiet"><i data-icon="bell"></i></button>
+          <span class="b-machines" title="Machines: arc (this one), mac"><span class="b-dot"></span>arc · mac</span>
+        </div>
+      </aside>
+
+      <div class="b-strip">
+        <!-- One Thread Pane, focused -->
+        <section class="b-tile is-focused">
+          <div class="b-pane-head b-bare">
+            <span data-mark="asks" data-calls="false"></span>
+            <span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span>
+            <span class="b-pane-title">Move sidebar settings to sidebar.toml</span>
+            <div class="b-capsule">
+              <button class="b-ib is-xs" title="Thread details"><i data-icon="square-menu"></i></button>
+              <span class="b-capsule-line"></span>
+              <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button>
+              <button class="b-ib is-xs" title="Close · Alt+W"><i data-icon="x"></i></button>
+            </div>
+          </div>
+
+          <div class="b-thread">
+            <div class="b-chat">
+              <div class="b-you">Move the sidebar's settings into sidebar.toml, one file per module. Keep what people already set working.</div>
+
+              <div class="b-trace">
+                <button class="b-tl is-open"><i data-icon="layers"></i><span class="b-tl-text">Read 6 files, searched for 2 patterns, ran 3 commands <span class="b-destructive">(1 failed)</span>, edited 2 files</span><span class="b-diff"><span class="is-add">+38</span><span class="is-del">−9</span></span><i data-icon="chevron-right" class="b-chev"></i></button>
+                <div class="b-tl-list">
+                  <div class="b-tl"><i data-icon="file-text"></i><span class="b-tl-text">Read <span class="b-subject">client/web/src/sidebar/settings.ts</span></span></div>
+                  <div class="b-tl"><i data-icon="search"></i><span class="b-tl-text">Searched for <span class="b-subject">[row] in platform/look</span></span></div>
+                  <div class="b-tl"><i data-icon="wrench"></i><span class="b-tl-text"><span class="b-subject">Find where the old [row] keys are read</span></span></div>
+                  <div class="b-tl is-failed"><i data-icon="terminal"></i><span class="b-tl-text">Ran <span class="b-subject">pnpm vitest sidebar</span></span><span class="b-tag is-failed">Failed</span></div>
+                  <div class="b-tl"><i data-icon="file-pen"></i><span class="b-tl-text">Edited <span class="b-subject">platform/look/sidebar.toml</span></span><span class="b-diff"><span class="is-add">+24</span><span class="is-del">−3</span></span></div>
+                  <div class="b-tl"><i data-icon="file-pen"></i><span class="b-tl-text">Edited <span class="b-subject">client/web/src/sidebar/settings.ts</span></span><span class="b-diff"><span class="is-add">+14</span><span class="is-del">−6</span></span></div>
+                  <div class="b-tl"><i data-icon="terminal"></i><span class="b-tl-text">Ran <span class="b-subject">pnpm vitest sidebar</span></span></div>
+                </div>
+              </div>
+
+              <div class="b-prose">
+                <p>Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <a class="b-path" href="#">platform/look/sidebar.toml</a>. The tests pass again; the first run failed on a default I had renamed.</p>
+                <p>The old <code>[row]</code> keys are still read in two places:</p>
+                <ul>
+                  <li><code>settings.ts</code>, when a Person's file has no <code>[card]</code> yet</li>
+                  <li>the settings Pane's schema, for its line numbers</li>
+                </ul>
+              </div>
+
+              <div class="b-block" role="region" aria-label="Changed files">
+                <div class="b-block-head"><i data-icon="file-diff"></i><span class="b-block-title">Edited 2 files</span><span class="b-diff"><span class="is-add">+38</span><span class="is-del">−9</span></span><span class="b-end"><button class="b-btn is-ghost is-sm">Review</button></span></div>
+                <div class="b-block-rows">
+                  <button><span class="b-file"><span class="b-dir">platform/look/</span><span class="b-name">sidebar.toml</span></span><span class="b-diff"><span class="is-add">+24</span><span class="is-del">−3</span></span></button>
+                  <button><span class="b-file"><span class="b-dir">client/web/src/sidebar/</span><span class="b-name">settings.ts</span></span><span class="b-diff"><span class="is-add">+14</span><span class="is-del">−6</span></span></button>
+                </div>
+              </div>
+
+              <div class="b-trace">
+                <div class="b-tl"><i data-icon="loader-circle" class="b-spin"></i><span class="b-shimmer b-num">Working for 6m 12s</span><span class="b-quiet">· Waiting for you</span></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="b-composer-wrap">
+            <div class="b-docked">
+              <div class="b-docked-head">Asks you · 14m</div>
+              <div>Keep the old <code class="b-code-inline">[row]</code> keys as aliases for one release, or drop them now?</div>
+              <button class="b-choice"><span class="b-kbd">1</span>Keep them as aliases for one release</button>
+              <button class="b-choice"><span class="b-kbd">2</span>Drop them now</button>
+              <button class="b-choice b-muted"><span class="b-kbd">3</span>No, and tell it what to do differently…</button>
+            </div>
+            <div class="b-composer">
+              <div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+              <div class="b-composer-row">
+                <button class="b-ib" title="Add images and files" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+                <span class="b-spacer"></span>
+                <button class="b-ctl" title="How freely it acts"><i data-icon="shield"></i></button>
+                <button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+                <button class="b-send is-empty" aria-label="Send"><i data-icon="arrow-up"></i></button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- A terminal beside it, without the focus -->
+        <section class="b-tile demo-term term">
+          <div class="b-pane-head">
+            <i data-icon="terminal"></i>
+            <span class="b-pane-title">pnpm vitest</span>
+            <span class="b-pane-detail">~/code/banda</span>
+            <div class="b-capsule">
+              <span class="b-capsule-line" style="display:none"></span>
+              <button class="b-ib is-xs" title="Pane menu"><i data-icon="layout-panel-left"></i></button>
+              <button class="b-ib is-xs" title="Close · Alt+W"><i data-icon="x"></i></button>
+            </div>
+          </div>
+<pre><span class="t-b">~/code/banda</span> <span class="t-g">feat/sidebar-toml</span> <span class="t-m">❯</span> pnpm vitest sidebar
+
+ <span class="t-g">✓</span> settings.test.ts <span class="t-q">(14 tests)</span> 212ms
+ <span class="t-g">✓</span> card.test.ts <span class="t-q">(31 tests)</span> 98ms
+ <span class="t-g">✓</span> order.test.ts <span class="t-q">(9 tests)</span> 41ms
+
+ <span class="t-q">Test Files</span>  <span class="t-g">3 passed</span> (3)
+      <span class="t-q">Tests</span>  <span class="t-g">54 passed</span> (54)
+   <span class="t-q">Duration</span>  1.31s
+
+<span class="t-b">~/code/banda</span> <span class="t-g">feat/sidebar-toml</span> <span class="t-m">❯</span> <span class="cursor"></span></pre>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- A reference sheet of the kit's parts, under the window -->
+<div class="sheet">
+  <section>
+    <h2>The Mark: whose turn it is</h2>
+    <p class="note">Seven looks (ADR 0099). Colour only on the four calls. Hover a row to see awake marks glance at the pointer.</p>
+    <div class="tiles" id="looks"></div>
+  </section>
+  <section>
+    <h2>The Mark at work: what it does</h2>
+    <p class="note">Grey and quiet, from the Thread's events. Sub-agents are satellites, one per sub-agent, up to three.</p>
+    <div class="tiles" id="doings"></div>
+  </section>
+  <section>
+    <h2>Satellites, coloured by each sub-agent (extension for the sub-agent mocks)</h2>
+    <p class="note"><code class="b-code-inline">satellites: ["working","asks","done"]</code>: not in ADR 0099's approved set; a proposal to try in mocks.</p>
+    <div class="tiles" id="sats"></div>
+  </section>
+  <section>
+    <h2>The logo: only the hat takes the colour</h2>
+    <div class="tiles" id="logos"></div>
+  </section>
+  <section>
+    <h2>Small parts</h2>
+    <div class="panel-demo b-vstack" style="gap:14px">
+      <div class="row-of">
+        <button class="b-btn is-primary">Commit</button>
+        <button class="b-btn is-outline">Discard</button>
+        <button class="b-btn is-ghost">Review</button>
+        <button class="b-btn is-ghost is-sm">Undo</button>
+        <button class="b-ib"><i data-icon="settings"></i></button>
+        <button class="b-ib is-xs"><i data-icon="x"></i></button>
+        <span class="b-chip"><i data-icon="git-branch"></i>feat/sidebar-toml</span>
+        <span class="b-chip is-quiet"><span class="b-sign" data-color="violet">B</span>banda</span>
+        <span class="b-kbd">Alt</span><span class="b-kbd">K</span><span class="b-kbd">↵</span><span class="b-kbd">Esc</span>
+        <span class="b-tag is-failed">Failed</span><span class="b-tag is-waiting">Waiting</span><span class="b-tag is-ok">passed</span><span class="b-tag">stopped</span>
+        <span class="b-diff"><span class="is-add">+38</span><span class="is-del">−9</span></span>
+        <span class="b-send"><i data-icon="arrow-up"></i></span><span class="b-send is-empty"><i data-icon="arrow-up"></i></span><span class="b-send is-stop" style="background:var(--raised);color:var(--foreground)"></span>
+        <span class="b-widget"><span class="b-ring" style="--share:.85"></span></span><span class="b-widget"><span class="b-ring is-warn" style="--share:.93"></span></span>
+      </div>
+      <div class="row-of" style="align-items:flex-start">
+        <div class="b-menu">
+          <div class="b-menu-label">Pane menu</div>
+          <div class="b-menu-item"><i data-icon="maximize-2"></i>Full width<span class="b-key">Alt+F</span></div>
+          <div class="b-menu-item is-hl"><i data-icon="layers"></i>As a Deck<span class="b-key">Alt+T</span></div>
+          <div class="b-menu-item"><i data-icon="external-link"></i>In its own window</div>
+          <div class="b-menu-sep"></div>
+          <div class="b-menu-item"><i data-icon="x"></i>Close<span class="b-key">Alt+W</span></div>
+        </div>
+        <div class="b-toast"><span>Archived “Fix blank window on reload”</span><button class="b-btn is-outline is-sm">Undo</button></div>
+        <span class="b-tip">Later (Z)</span>
+      </div>
+      <div class="radii">
+        <div style="width:120px;height:80px;border-radius:var(--r-window)">window 30</div>
+        <div style="width:104px;height:70px;border-radius:var(--r-tile)">tile 22</div>
+        <div style="width:90px;height:60px;border-radius:var(--r-card)">card 14</div>
+        <div style="width:80px;height:28px;border-radius:var(--r-control)">control 10</div>
+        <div style="width:64px;height:20px;border-radius:var(--r-small)">small 6</div>
+      </div>
+      <div class="swatches">
+        <span><i style="background:var(--attention)"></i>--attention asks</span>
+        <span><i style="background:var(--destructive)"></i>--destructive failed</span>
+        <span><i style="background:var(--added)"></i>--added done, +</span>
+        <span><i style="background:var(--woke)"></i>--woke</span>
+        <span><i style="background:var(--ring)"></i>--ring focus, links</span>
+        <span><i style="background:var(--working)"></i>--working Group plate</span>
+        <span><i style="background:var(--account-claude)"></i>--account-claude</span>
+        <span><i style="background:var(--muted-foreground)"></i>--muted-foreground</span>
+      </div>
+    </div>
+  </section>
+</div>
+
+<script src="icons.js"></script>
+<script src="mark.js"></script>
+<script>
+  // Fill the reference sheet.
+  const tile = (host, label, note, opts) => {
+    const fig = document.createElement('figure'); fig.className = 'b-glance'
+    fig.innerHTML = `<span></span><span><b>${label}</b>${note}</span>`
+    host.appendChild(fig)
+    BandaMark.mount(fig.firstChild, Object.assign({ size: 40 }, opts))
+  }
+  const looks = document.getElementById('looks')
+  ;[['Asks', 'triangle, hops each 4.4 s', { state: 'asks' }], ['Failed', 'octagon, shakes', { state: 'failed' }],
+    ['Done', 'flips, then ^^', { state: 'done', news: true }], ['Woke', 'wakes, rings', { state: 'woke', news: true }],
+    ['Open', 'looks round, blinks', { state: 'open' }], ['Later', 'asleep', { state: 'later' }],
+    ['Offline', 'asleep, zz', { state: 'offline' }], ['Asks, open Thread', 'does not call', { state: 'asks', calls: false }]]
+    .forEach(([l, n, o]) => tile(looks, l, n, o))
+  const doings = document.getElementById('doings')
+  ;[['think', 'eyes up, sways'], ['read', 'eyes scan lines'], ['search', 'a lens eye'], ['edit', 'tilts each stroke'], ['execute', '>_ cursor 530 ms'],
+    ['fetch', 'a dot goes out'], ['reply', 'types in bursts'], ['other', 'a calm series'], ['compacting', 'squeezes'], ['stuck', 'no events 3 min'], ['limit', 'dozes, sand drips']]
+    .forEach(([d, n]) => tile(doings, d, n, { state: 'working', doing: d }))
+  ;[1, 2, 3].forEach(n => tile(doings, n + ' sub-agent' + (n > 1 ? 's' : ''), 'satellites', { state: 'working', satellites: n }))
+  const sats = document.getElementById('sats')
+  tile(sats, 'one asks', 'its dot orange', { state: 'working', satellites: ['working', 'asks', 'working'] })
+  tile(sats, 'one done', 'its dot green', { state: 'working', satellites: ['done', 'working'] })
+  tile(sats, 'one failed', 'its dot red', { state: 'working', satellites: ['working', 'failed', 'done'] })
+  tile(sats, 'runs + 2 subs', 'execute and orbit', { state: 'working', doing: 'execute', satellites: 2 })
+  const logos = document.getElementById('logos')
+  ;[['rest', 'no eyes', { state: 'rest' }], ['working', 'muted hat', { state: 'working', doing: 'other' }], ['asks', '', { state: 'asks' }],
+    ['failed', '', { state: 'failed' }], ['done', '', { state: 'done' }], ['woke', '', { state: 'woke' }], ['offline', '', { state: 'offline' }]]
+    .forEach(([l, n, o]) => tile(logos, l, n, Object.assign({ logo: true }, o)))
+  logos.querySelectorAll('svg[data-look=working]').forEach(s => s.style.color = 'var(--muted-foreground)')
+
+  // t: light/dark, g: glass on/off; #light and #solid in the address do the same.
+  const screen = document.getElementById('screen'), win = document.getElementById('win'), kit = document.getElementById('kit')
+  const apply = () => {
+    const light = location.hash.includes('light'), solid = location.hash.includes('solid')
+    kit.toggleAttribute('data-theme', light); if (light) kit.setAttribute('data-theme', 'light')
+    if (solid) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', e => {
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>
