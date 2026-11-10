@@ -667,17 +667,19 @@ test("one place answers a pick, and only the action reaches it", () => {
 })
 
 /**
- * What the Window, the Tiling and the sidebar list still say of an App,
- * once for each place they do, by file (`appStrings`): a string that names
- * an action or a kind of the agents module's (`agents.…`) or a Thread's
- * (`thread.…`), and that module's settings file (`AGENTS_FILE`). None of
- * them names an App (ADR 0087, decision 1); these go with the Flow (T-b)
- * and intents (B8c), and the sidebar's New Thread with them, as the key
- * starts one. None joins the list, and one that goes leaves it. Not what
- * only tests use.
+ * What the Window, its Bar, the Tiling and the sidebar list still say of
+ * an App, once for each place they do, by file (`appStrings`): a string
+ * that names an action or a kind of the agents module's (`agents.…`) or a
+ * Thread's (`thread.…`), and that module's settings file (`AGENTS_FILE`).
+ * None of them names an App (ADR 0087, decision 1); these go with the
+ * Flow (T-b) and intents (B8c), and the sidebar's New Thread with them,
+ * as the key starts one. The Flow's widget took its string from the
+ * sidebar to the Bar (ADR 0098, decision 20), so the Bar is read too.
+ * None joins the list, and one that goes leaves it. Not what only tests
+ * use.
  */
 const APP_STRINGS = [
-  "web/src/sidebar/FlowMenu.tsx: AGENTS_FILE",
+  "web/src/bar/Flow.tsx: AGENTS_FILE",
   "web/src/sidebar/open.ts: thread.new",
   "web/src/window/Shell.tsx: AGENTS_FILE",
   "web/src/window/Shell.tsx: thread.new",
@@ -690,6 +692,7 @@ const APP_STRINGS = [
 
 const saying = [
   "web/src/window",
+  "web/src/bar",
   "web/src/tiling",
   "web/src/sidebar",
   "web/src/boot",
@@ -756,8 +759,8 @@ test("the sidebar's frame keeps under its ceiling, and the ceiling follows it do
  * says. Their props stay steady too, which the motion numbers hold: the
  * Tiles React draws again for a key (motion.spec.ts). The list only
  * grows, but where a part comes to be memoized by a line already on it:
- * the window's own widgets, the counts and the Tiling's, stand in the
- * registry's, as the modules' do (ADR 0087, B4f).
+ * the window's own widgets, the counts, the Flow and the Tiling's, stand
+ * in the registry's, as the modules' do (ADR 0087, B4f).
  */
 const MEMOIZED = [
   "web/src/tiling/PaneFrame.tsx: export const PaneFrame = memo(",
@@ -778,7 +781,12 @@ test("the parts the Window draws on every move stay memoized", () => {
   expect(lost).toEqual([])
   // The window's own widgets the registry memoizes as a module's, by its
   // line above.
-  for (const id of ["sidebar.counts", "workspaces.list", "workspaces.aside"])
+  for (const id of [
+    "sidebar.counts",
+    "window.flow",
+    "workspaces.list",
+    "workspaces.aside",
+  ])
     expect(widgets.get(id)?.module, id).toBe(windowModule)
 })
 

@@ -104,6 +104,10 @@ Every key, with its default:
   part's widgets by id, in order, and a part's list replaces Banda's (the
   defaults above), so leave the id out, or move it to `center`. What each
   module's widget shows is in the `modules` topic and `banda modules`.
+  The window's own are `workspaces.list`, `workspaces.aside`, the Flow's
+  icon `window.flow` and `sidebar.counts`. A `left` of the Person's own
+  written before the Flow came to the bar lacks it: add `"window.flow"`
+  after `"workspaces.list"`. Alt+Shift+M works either way.
 - "Less motion": `[motion]` `slowdown = 2`, or `off = true`.
 - "No sounds": `[sound]` `family = "off"`. Only when something fails:
   `done = false` and `asking = false`.
