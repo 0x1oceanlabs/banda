@@ -17,6 +17,7 @@ mod limits;
 mod list;
 pub mod model;
 mod module;
+mod omarchy;
 mod record;
 mod serving;
 mod shadow;

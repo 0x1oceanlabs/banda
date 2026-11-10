@@ -396,13 +396,28 @@ struct List {
     carried: Option<Carried>,
     /// The engine's own Account folders, never supplied by an Agent.
     accounts: Option<PathBuf>,
+    omarchy: Option<crate::omarchy::Omarchy>,
+    discover_omarchy: bool,
+    excluded_omarchy: Vec<String>,
 }
 
 impl List {
     /// Starts each of `listed` as it starts on this host.
     fn list(&mut self, listed: Vec<Harness>) {
         let carried = self.carried.as_ref();
-        self.harnesses = (listed.iter().cloned())
+        let resolved = match &self.omarchy {
+            Some(omarchy) if self.discover_omarchy => omarchy
+                .merge(listed.clone())
+                .into_iter()
+                .filter(|h| {
+                    !self.excluded_omarchy.contains(&h.id)
+                        || listed.iter().any(|own| own.id == h.id)
+                })
+                .collect(),
+            _ => listed.clone(),
+        };
+        self.harnesses = resolved
+            .into_iter()
             .map(|harness| {
                 let mut harness = harness.carried_by(carried);
                 if let Some(root) = &self.accounts {
@@ -453,6 +468,27 @@ struct HarnessFile {
     /// Whether local session journals are counted (ADR 0043).
     #[serde(default)]
     usage: UsageSettings,
+    #[serde(default)]
+    omarchy: OmarchySettings,
+}
+
+/// Automatic discovery on Omarchy. Explicit Harness entries take priority.
+#[derive(Clone, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+struct OmarchySettings {
+    /// Discover installed ACP Harnesses and Accounts from Omarchy's registry.
+    #[schemars(extend("default" = true))]
+    enabled: bool,
+    /// Discovered entries removed in Banda. Explicit entries still win.
+    excluded: Vec<String>,
+}
+impl Default for OmarchySettings {
+    fn default() -> Self {
+        Self {
+            enabled: true,
+            excluded: vec![],
+        }
+    }
 }
 
 /// Local journal collection. Turning it off preserves saved totals but reads no files.
@@ -813,6 +849,7 @@ impl Harnesses {
                 harnesses,
                 limits,
                 usage: UsageSettings::default(),
+                omarchy: OmarchySettings::default(),
             },
             None,
         )
@@ -823,11 +860,14 @@ impl Harnesses {
             harnesses,
             limits,
             usage,
+            omarchy,
         } = read;
         let mut list = List {
             limits,
             usage,
             file,
+            discover_omarchy: omarchy.enabled,
+            excluded_omarchy: omarchy.excluded,
             ..List::default()
         };
         list.list(harnesses);
@@ -867,7 +907,14 @@ impl Harnesses {
     pub fn load(path: &Path) -> Result<Self, String> {
         let text = read(path)?;
         let read = listed(path, text.as_deref())?;
-        Ok(Self::with(read, Some((path.to_owned(), text))))
+        let result = Self::with(read, Some((path.to_owned(), text)));
+        {
+            let mut list = result.0.lock().unwrap();
+            list.omarchy = crate::omarchy::Omarchy::on_host();
+            let listed = list.listed.clone();
+            list.list(listed);
+        }
+        Ok(result)
     }
 
     /// The list as its file says now. A file that changed into one that
@@ -886,6 +933,8 @@ impl Harnesses {
                         Ok(read) => {
                             list.limits = read.limits;
                             list.usage = read.usage;
+                            list.discover_omarchy = read.omarchy.enabled;
+                            list.excluded_omarchy = read.omarchy.excluded;
                             list.list(read.harnesses);
                         }
                         Err(error) => tracing::warn!(%error, "the Harness list does not read"),
@@ -900,12 +949,38 @@ impl Harnesses {
             };
             list.file = Some((path, now));
         }
+        if list.omarchy.is_some() {
+            let listed = list.listed.clone();
+            list.list(listed);
+        }
         (list.harnesses.clone(), list.limits)
     }
 
     pub(crate) fn usage(&self) -> (Arc<[Harness]>, UsageSettings) {
         let (harnesses, _) = self.followed();
         (harnesses, self.0.lock().unwrap().usage)
+    }
+
+    /// Whether removing this entry would reveal an Omarchy entry underneath.
+    /// Built-in primary Accounts retain the normal settings reset behaviour.
+    pub fn from_omarchy(&self, id: &str) -> bool {
+        let list = self.0.lock().unwrap();
+        list.discover_omarchy
+            && list.omarchy.as_ref().is_some_and(|omarchy| {
+                omarchy.merge(known()).iter().any(|h| h.id == id)
+                    && !known().iter().any(|h| h.id == id)
+            })
+    }
+
+    /// An entry supplied by host discovery rather than the settings file.
+    /// The settings writer materializes it before its first explicit edit.
+    pub fn discovered(&self, id: &str) -> Option<Harness> {
+        self.followed();
+        let list = self.0.lock().unwrap();
+        if list.listed.iter().any(|h| h.id == id) {
+            return None;
+        }
+        list.harnesses.iter().find(|h| h.id == id).cloned()
     }
 
     pub fn find(&self, id: &str) -> Option<Harness> {
@@ -967,7 +1042,7 @@ const ADAPTERS: [Adapter; 2] = [
 /// Each adapter as Banda starts it: from npm, as `npx` downloads it,
 /// without the vendors' CLIs it never runs; or the copy Banda carries,
 /// when the engine found it and a Node on its host (`Harness::start`).
-fn known() -> Vec<Harness> {
+pub(super) fn known() -> Vec<Harness> {
     ADAPTERS
         .iter()
         .map(|adapter| {
@@ -1031,6 +1106,7 @@ struct Read {
     harnesses: Vec<Harness>,
     limits: LimitsSettings,
     usage: UsageSettings,
+    omarchy: OmarchySettings,
 }
 
 fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
@@ -1047,6 +1123,7 @@ fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
         harnesses,
         limits,
         usage: file.usage,
+        omarchy: file.omarchy,
     })
 }
 
@@ -1067,6 +1144,7 @@ fn listed(path: &Path, text: Option<&str>) -> Result<Read, String> {
             harnesses: known(),
             limits: LimitsSettings::default(),
             usage: UsageSettings::default(),
+            omarchy: OmarchySettings::default(),
         }),
     }
 }
@@ -1126,6 +1204,54 @@ fn template() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn omarchy_accounts_follow_metadata_and_explicit_removal() {
+        let root = tempfile::tempdir().unwrap();
+        let home = root.path().join("home");
+        let state = root.path().join("accounts");
+        std::fs::create_dir_all(home.join(".claude")).unwrap();
+        std::fs::create_dir_all(state.join("claude/c2")).unwrap();
+        let registry = state.join("claude.json");
+        std::fs::write(&registry, r#"{"accounts":[{"id":"c2","label":"C2"}]}"#).unwrap();
+        let list = Harnesses::known();
+        list.0.lock().unwrap().omarchy = Some(crate::omarchy::Omarchy::fixture(home, state));
+        let account = list.find("omarchy-claude-c2").unwrap();
+        assert!(list.from_omarchy(&account.id));
+        assert!(list.discovered(&account.id).is_some());
+        list.0
+            .lock()
+            .unwrap()
+            .excluded_omarchy
+            .push(account.id.clone());
+        assert!(list.find(&account.id).is_none());
+        list.0.lock().unwrap().listed.push(account.clone());
+        assert!(
+            list.find(&account.id).is_some(),
+            "an explicit entry overrides exclusion"
+        );
+        list.0.lock().unwrap().listed.pop();
+        list.0.lock().unwrap().excluded_omarchy.clear();
+        list.0.lock().unwrap().discover_omarchy = false;
+        assert!(list.find(&account.id).is_none());
+        list.0.lock().unwrap().discover_omarchy = true;
+        std::fs::write(&registry, r#"{"accounts":[]}"#).unwrap();
+        assert!(list.find(&account.id).is_none());
+        assert!(!root.path().join("harnesses.toml").exists());
+    }
+
+    #[test]
+    fn omarchy_discovery_can_be_disabled_and_rejects_unknown_options() {
+        let path = Path::new("harnesses.toml");
+        assert!(parse(path, "").unwrap().omarchy.enabled);
+        assert!(
+            !parse(path, "[omarchy]\nenabled = false")
+                .unwrap()
+                .omarchy
+                .enabled
+        );
+        assert!(parse(path, "[omarchy]\ncommand = 'other'").is_err());
+    }
 
     /// The folder of a test's Project.
     fn work() -> &'static Path {
