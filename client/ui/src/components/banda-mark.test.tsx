@@ -1,5 +1,7 @@
+import { readFileSync } from "node:fs"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
+import { LOOPED, LOOPS } from "../lib/mark-rhythm"
 import type { Listed } from "../pane"
 import {
   BandaMark,
@@ -83,6 +85,46 @@ test("still, offline snores and Later does not", () => {
   )
   for (const state of STATES)
     if (state !== "offline") expect(zzOf(state), state).toHaveLength(0)
+})
+
+// Live, marks.css's `mark-zz` moves each z from where the mark draws it,
+// about that point, so offline's snores rise as marks-final.html's: up and
+// to the right, to twice their size, showing then fading. Each starts a
+// third of the loop after the last (mark-rhythm.test.ts holds marks.css's
+// delays).
+test("live, offline's snores rise as the approved mock's do", () => {
+  const css = readFileSync(
+    new URL("../styles/marks.css", import.meta.url),
+    "utf8"
+  )
+  const [ox, oy] = /\.mark-z \{\s*transform-origin: ([\d.-]+)px ([\d.-]+)px;/
+    .exec(css)!
+    .slice(1)
+    .map(Number) as [number, number]
+  const zs = snoresIn(
+    renderToStaticMarkup(<BandaMark variant="agent" state="offline" />)
+  )
+  expect(zs).toHaveLength(3)
+  for (const z of zs) {
+    // Unseen until the loop shows it, at the foot it grows from.
+    expect([z.x, z.y, z.opacity]).toEqual([ox, oy, 0])
+    for (const [q, [dx, dy, scale, opacity]] of LOOPS.zz.keys) {
+      // The mock's snore at `q` of its loop.
+      const mock = [100 + 12 * q, 4 - 24 * q, 8 + 8 * q, Math.sin(Math.PI * q)]
+      const drawn = [
+        ox + dx! + scale! * (z.x - ox),
+        oy + dy! + scale! * (z.y - oy),
+        z.size * scale!,
+        opacity!,
+      ]
+      drawn.forEach((value, at) =>
+        expect(value, `${q}`).toBeCloseTo(mock[at]!, 3)
+      )
+    }
+  }
+  // The mock's loop is 1/0.45 s; marks.css's, 2.2 s.
+  expect(LOOPS.zz.period).toBeCloseTo(1 / 0.45, 1)
+  expect(LOOPED.offline).toContain("zz")
 })
 
 /** An SVG transform as a matrix, `[a b c d e f]`, as SVG writes one. */
@@ -321,13 +363,19 @@ test("only the Agent takes its look's colour", () => {
   expect(plain).not.toMatch(/<g data-agent[^>]*class=/)
 })
 
+/** A mark's CSS animations, as its motion starts them over. */
+type Animations = { currentTime: number | null }[]
+
 /** What a mark's motion writes to and listens on, kept by its parts: each
  * part's attributes, by the selector it was found by and its place. */
 function svg(): {
   svg: SVGSVGElement
-  attributes: (selector: string, at?: number) => Record<string, string>
+  /** The SVG's own attributes and style, without a selector. */
+  attributes: (selector?: string, at?: number) => Record<string, string>
+  animations: Animations
 } {
   const parts = new Map<string, Record<string, string>>()
+  const animations: Animations = [{ currentTime: 1234 }]
   const part = (key: string) => {
     const attributes: Record<string, string> = {}
     parts.set(key, attributes)
@@ -335,6 +383,21 @@ function svg(): {
       setAttribute: (name: string, value: string) => {
         attributes[name] = value
       },
+      removeAttribute: (name: string) => {
+        delete attributes[name]
+      },
+      hasAttribute: (name: string) => name in attributes,
+      toggleAttribute: (name: string, on: boolean) => {
+        if (on) attributes[name] = ""
+        else delete attributes[name]
+        return on
+      },
+      style: {
+        setProperty: (name: string, value: string) => {
+          attributes[name] = value
+        },
+      },
+      getAnimations: () => animations,
       addEventListener: () => {},
       removeEventListener: () => {},
     }
@@ -342,32 +405,73 @@ function svg(): {
   const element = {
     ...part("svg"),
     querySelector: (selector: string) => part(selector),
-    // Two eyes and two bells; three z's for its snores.
+    // Two eyes, two lenses and two bells; two lids to an eye; three z's.
     querySelectorAll: (selector: string) =>
-      Array.from({ length: selector.includes("zz") ? 3 : 2 }, (_, at) =>
-        part(`${selector}${at}`)
+      Array.from(
+        { length: { "[data-lid]": 4, "[data-zz] text": 3 }[selector] ?? 2 },
+        (_, at) => part(`${selector}${at}`)
       ),
   } as unknown as SVGSVGElement
   return {
     svg: element,
-    attributes: (selector, at) =>
+    attributes: (selector = "svg", at) =>
       parts.get(at === undefined ? selector : `${selector}${at}`) ?? {},
+    animations,
   }
 }
 
+/** The four turns a mark's pose is drawn in, as one transform. */
+const turnsOf = (drawn: ReturnType<typeof svg>) =>
+  ["[data-move]", "[data-turn]", "[data-size]", "[data-spin]"]
+    .map((selector) => drawn.attributes(selector).transform)
+    .join(" ")
+
+/** Each z a mark snores: where it stands, how big, how much it shows; as
+ * an SVG's markup writes them, or as a mark's motion wrote them. */
+function snoresIn(mark: string | ReturnType<typeof svg>) {
+  const zs =
+    typeof mark === "string"
+      ? [...mark.matchAll(/<text ([^>]*)>z<\/text>/g)].map(([, attributes]) =>
+          Object.fromEntries(
+            [...attributes!.matchAll(/([\w-]+)="([^"]*)"/g)].map(
+              ([, name, value]) => [name, value]
+            )
+          )
+        )
+      : [0, 1, 2].map((at) => mark.attributes("[data-zz] text", at))
+  return zs.map((z) => ({
+    x: Number(z.x),
+    y: Number(z.y),
+    size: Number(z["font-size"]),
+    opacity: Number(z.opacity),
+  }))
+}
+
+/** Where a mark's loops start, in seconds, as marks.css reads it. */
+const phaseIn = (drawn: ReturnType<typeof svg>) =>
+  Number.parseFloat(drawn.attributes()["--mark-phase"]!)
+
+type Seen = (entries: { target: unknown; isIntersecting: boolean }[]) => void
+
 /** The marks' motion afresh, on a clock whose ticks and timers the test
- * runs by hand; with `reduced`, the Person asked for less motion. */
-async function motion({ reduced = false } = {}) {
+ * runs by hand; with `reduced`, the Person asked for less motion, and with
+ * `still`, for none (`html[data-still]`). */
+async function motion({ reduced = false, still = false } = {}) {
   vi.resetModules()
   vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] })
   const asked: ((now: number) => void)[] = []
   vi.stubGlobal("requestAnimationFrame", (run: (now: number) => void) =>
     asked.push(run)
   )
+  let seen: Seen = () => {}
   vi.stubGlobal(
     "IntersectionObserver",
     class {
+      constructor(run: Seen) {
+        seen = run
+      }
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
   )
@@ -378,9 +482,42 @@ async function motion({ reduced = false } = {}) {
   }))
   vi.stubGlobal("addEventListener", () => {})
   vi.stubGlobal("removeEventListener", () => {})
+  // The page's root, which `[motion] off` marks.
+  const html = new Set(still ? ["data-still"] : [])
+  let changed = () => {}
+  vi.stubGlobal("document", {
+    documentElement: { hasAttribute: (name: string) => html.has(name) },
+    hidden: false,
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })
+  vi.stubGlobal(
+    "MutationObserver",
+    class {
+      constructor(run: () => void) {
+        changed = run
+      }
+      observe() {}
+      disconnect() {}
+    }
+  )
   const { Animator } = await import("./banda-mark")
   return {
     Animator,
+    /** A mark of `variant` on `drawn`, first drawn in `state`, on the beat
+     * of `beat`. */
+    mark(
+      drawn: ReturnType<typeof svg>,
+      state: MarkState,
+      { variant = "agent", news = false, beat = "t", playful = 0 } = {}
+    ) {
+      const mark = new Animator(drawn.svg, variant as "agent" | "logo")
+      mark.set({ state, playful, news, beat })
+      return {
+        mark,
+        set: (state: MarkState) => mark.set({ state, playful, news, beat }),
+      }
+    },
     /** Whether the clock asked for a tick. */
     ticking: () => asked.length > 0,
     /** Runs the ticks asked for, a frame apart, at most `most` of them:
@@ -394,6 +531,20 @@ async function motion({ reduced = false } = {}) {
       }
       return ran
     },
+    /** The marks `entries` name come into view, or leave it. */
+    seen: (...entries: [ReturnType<typeof svg>, boolean][]) =>
+      seen(
+        entries.map(([drawn, isIntersecting]) => ({
+          target: drawn.svg,
+          isIntersecting,
+        }))
+      ),
+    /** The Person turns all motion off, or back on. */
+    still(on: boolean) {
+      if (on) html.add("data-still")
+      else html.delete("data-still")
+      changed()
+    },
   }
 }
 
@@ -402,72 +553,212 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-test("a mark ticks while it moves, and a mark at rest stops the clock", async () => {
+// ADR 0099, decision 4: a mark drawn for the first time starts in its look,
+// mid-rhythm, as if it had been there.
+test("a first draw plays no news: the mark starts in its look, and its loops are marks.css's", async () => {
   const time = await motion()
-  const mark = new time.Animator(svg().svg, "agent")
-  mark.set({ state: "rest", playful: 0, news: false })
-  // It settles, and then asks for no tick.
-  expect(time.run(1000)).toBeLessThan(100)
-  expect(time.ticking()).toBe(false)
-  // At work it moves on every tick, for as long as it works.
-  mark.set({ state: "running", playful: 0, news: false })
-  expect(time.run(600)).toBe(600)
-  expect(time.ticking()).toBe(true)
-  mark.set({ state: "rest", playful: 0, news: false })
-  time.run(1000)
-  expect(time.ticking()).toBe(false)
-  mark.dispose()
-})
-
-// Until the Mark's motion comes (ADR 0099, step 1's second part), woke and
-// later stand still: once drawn, they cost no tick.
-test("a look with no motion yet stops the clock once drawn in its still pose", async () => {
-  const time = await motion()
-  for (const state of ["woke", "later"] as const) {
+  // Each a Thread of its own.
+  for (const state of STATES) {
     const drawn = svg()
-    const mark = new time.Animator(drawn.svg, "agent")
-    mark.set({ state, playful: 0, news: false })
-    expect(time.run(1000), state).toBeLessThan(100)
-    expect(time.ticking()).toBe(false)
-    expect(drawn.attributes("[data-body]").d).toBe(outlineOf(state))
+    const { mark } = time.mark(drawn, state, { beat: state })
+    expect(time.ticking(), state).toBe(false)
+    expect(drawn.attributes()["data-news"], state).toBeUndefined()
+    expect(drawn.attributes()["data-loop"], state).toBe(
+      LOOPED[state] ? state : undefined
+    )
+    expect(drawn.attributes("[data-body]").d, state).toBe(outlineOf(state))
     mark.dispose()
   }
+})
+
+test("a toast's call is news as it is first drawn: done flips and woke arrives, the rest start in their look", async () => {
+  const time = await motion()
+  const done = svg()
+  time.mark(done, "done", { news: true })
+  time.run(1)
+  expect(done.attributes()["data-news"]).toBe("flip")
+  const asking = svg()
+  time.mark(asking, "asking", { news: true })
+  expect(asking.attributes()["data-news"]).toBeUndefined()
+  expect(asking.attributes()["data-loop"]).toBe("asking")
+})
+
+test("news hands back to the keyframes: it plays on the clock for its length, then the clock stops and the loops take over", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "idle")
+  expect(time.ticking()).toBe(false)
+  // A new shape leaps into it.
+  set("running")
+  expect(time.ticking()).toBe(true)
+  time.run(1)
+  expect(drawn.attributes()["data-news"]).toBe("leap")
+  // For 0.6 s, a frame apart, then no more.
+  expect(time.run(1000)).toBeLessThan(45)
+  expect(time.ticking()).toBe(false)
+  const own = drawn.attributes()
+  expect(own["data-news"]).toBeUndefined()
+  expect(own["data-loop"]).toBe("running")
+  expect(own["--mark-phase"]).toMatch(/^-\d+\.\d{3}s$/)
+  // Its last drawing is its look between moves, what marks.css moves.
+  expect(drawn.attributes("[data-body]").d).toBe(outlineOf("running"))
+  expect(turnsOf(drawn)).toBe(
+    "translate(0.00 0.00) rotate(-8.00 54 45) translate(76 45) scale(1.00 1.00) translate(-76 -45) rotate(0.00 76 22.5)"
+  )
+  // The same shape blends; done flips.
+  set("thinking")
+  time.run(1)
+  expect(drawn.attributes()["data-news"]).toBe("blend")
+  time.run(1000)
+  set("done")
+  time.run(1)
+  expect(drawn.attributes()["data-news"]).toBe("flip")
+  time.run(1000)
+  expect(time.ticking()).toBe(false)
+  expect(drawn.attributes()["data-loop"]).toBe("done")
+})
+
+test("woke arrives asleep, stretches, then rings", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "later")
+  set("woke")
+  const stages: (string | undefined)[] = []
+  while (time.ticking()) {
+    time.run(1)
+    const stage = drawn.attributes()["data-news"]
+    if (stage !== stages.at(-1)) stages.push(stage)
+  }
+  expect(stages).toEqual(["asleep", "stretch", undefined])
+  expect(drawn.attributes()["data-loop"]).toBe("woke")
+  expect(drawn.attributes("[data-bells]").opacity).toBe("1.00")
+})
+
+test("one Thread keeps one rhythm wherever its mark shows, and each Thread its own", async () => {
+  const time = await motion()
+  const a = svg()
+  time.mark(a, "idle", { beat: "t1" })
+  // Drawn a second later, the same Thread's mark starts its loops a second
+  // further in, so the two move as one.
+  vi.advanceTimersByTime(1000)
+  const b = svg()
+  time.mark(b, "idle", { beat: "t1" })
+  expect(phaseIn(a) - phaseIn(b)).toBeCloseTo(1, 2)
+  const other = svg()
+  time.mark(other, "idle", { beat: "t2" })
+  expect(Math.abs(phaseIn(other) - phaseIn(b))).toBeGreaterThan(0.01)
+})
+
+// Until one keyed list keeps a row's node (ADR 0098, step 5), the sidebar
+// draws a Thread's row afresh as it changes part: Working to Your turn.
+test("a Thread's mark drawn again just as its last went is that mark moved: a new look is news, the same look none", async () => {
+  const time = await motion()
+  const { mark: working } = time.mark(svg(), "running", { beat: "t1" })
+  working.dispose()
+  const done = svg()
+  time.mark(done, "done", { beat: "t1" })
+  time.run(1)
+  expect(done.attributes()["data-news"]).toBe("flip")
+  time.run(1000)
+  expect(done.attributes()["data-loop"]).toBe("done")
+  // The same look again, as the sidebar is hidden and shown, or another
+  // Thread's, is no news.
+  const { mark: asking } = time.mark(svg(), "asking", { beat: "t2" })
+  asking.dispose()
+  const again = svg()
+  time.mark(again, "asking", { beat: "t2" })
+  const another = svg()
+  time.mark(another, "failed", { beat: "t3" })
+  expect(time.ticking()).toBe(false)
+  // Nor is a mark drawn a while after its last went.
+  const { mark: failed } = time.mark(svg(), "failed", { beat: "t4" })
+  failed.dispose()
+  vi.advanceTimersByTime(1500)
+  const late = svg()
+  time.mark(late, "done", { beat: "t4" })
+  expect(time.ticking()).toBe(false)
+  expect(late.attributes()["data-loop"]).toBe("done")
+})
+
+test("out of view its loops wait, and come back on its rhythm; news unseen skips to its end", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "idle")
+  const before = phaseIn(drawn)
+  time.seen([drawn, false])
+  expect(drawn.attributes()["data-paused"]).toBe("")
+  vi.advanceTimersByTime(5000)
+  time.seen([drawn, true])
+  expect(drawn.attributes()["data-paused"]).toBeUndefined()
+  // Its loops start over, five seconds further on.
+  expect(drawn.animations[0]!.currentTime).toBe(0)
+  expect(before - phaseIn(drawn)).toBeCloseTo(5, 2)
+  time.seen([drawn, false])
+  set("asking")
+  expect(time.run(1000)).toBe(1)
+  expect(drawn.attributes()["data-news"]).toBeUndefined()
+  expect(drawn.attributes()["data-loop"]).toBe("asking")
+})
+
+// ADR 0099, decision 8.
+test("with no motion asked for, a mark draws its look's still pose, and no loop plays", async () => {
+  const time = await motion({ still: true })
+  const drawn = svg()
+  const { set } = time.mark(drawn, "failed")
+  time.run(1000)
+  expect(time.ticking()).toBe(false)
+  expect(drawn.attributes("[data-body]").d).toBe(outlineOf("failed"))
+  const still = /<g transform="([^"]+)"/.exec(stillMark("failed", colors))![1]
+  expect(turnsOf(drawn)).toBe(still)
+  expect(drawn.attributes()["data-loop"]).toBeUndefined()
+  // A new look is no news.
+  set("woke")
+  expect(time.ticking()).toBe(false)
+  expect(drawn.attributes("[data-bells]").opacity).toBe("1.00")
+  expect(drawn.attributes()["data-loop"]).toBeUndefined()
+  // Motion back on, its loops play.
+  time.still(false)
+  expect(drawn.attributes()["data-loop"]).toBe("woke")
+  time.still(true)
+  expect(drawn.attributes()["data-loop"]).toBeUndefined()
+  // Offline snores still, its zz where a still mark draws them; with
+  // motion on, they stand unseen where the SVG drew them, for marks.css's
+  // snores to rise from.
+  set("offline")
+  expect(drawn.attributes("[data-zz]").opacity).toBe("1.00")
+  expect(snoresIn(drawn)).toEqual(snoresIn(stillMark("offline", colors)))
+  time.still(false)
+  expect(drawn.attributes()["data-loop"]).toBe("offline")
+  expect(snoresIn(drawn)).toEqual(
+    snoresIn(
+      renderToStaticMarkup(<BandaMark variant="agent" state="offline" />)
+    )
+  )
 })
 
 test("with less motion asked for, a mark draws its look's still pose", async () => {
   const time = await motion({ reduced: true })
   const drawn = svg()
-  const mark = new time.Animator(drawn.svg, "agent")
-  mark.set({ state: "failed", playful: 0, news: false })
-  time.run(1000)
+  const { set } = time.mark(drawn, "asking")
+  set("done")
   expect(time.ticking()).toBe(false)
-  expect(drawn.attributes("[data-body]").d).toBe(outlineOf("failed"))
-  const still = /<g transform="([^"]+)"/.exec(stillMark("failed", colors))![1]
-  expect(drawn.attributes("[data-hat]").transform).toBe(still)
-  mark.set({ state: "woke", playful: 0, news: false })
-  time.run(1000)
-  expect(drawn.attributes("[data-bells]").opacity).toBe("1.00")
-  // Offline snores still, its zz where a still mark draws them.
-  mark.set({ state: "offline", playful: 0, news: false })
-  time.run(1000)
-  expect(time.ticking()).toBe(false)
-  const zz = [...stillMark("offline", colors).matchAll(/<text ([^>]+)>/g)].map(
-    ([, attributes]) => attributes
+  expect(drawn.attributes()["data-loop"]).toBeUndefined()
+  expect(drawn.attributes("[data-glyph]").d).toBe(
+    /<path d="([^"]+)" fill="none"/.exec(stillMark("done", colors))![1]
   )
-  for (let at = 0; at < 3; at++) {
-    const z = drawn.attributes("[data-zz] text", at)
-    expect(zz[at]).toBe(
-      `x="${z.x}" y="${z.y}" font-size="${z["font-size"]}" opacity="${z.opacity}"`
-    )
-  }
-  expect(drawn.attributes("[data-zz] text", 2).opacity).toBe("1.00")
-  mark.dispose()
+  // Offline snores still, its zz where a still mark draws them.
+  set("offline")
+  expect(time.ticking()).toBe(false)
+  expect(drawn.attributes("[data-zz]").opacity).toBe("1.00")
+  expect(snoresIn(drawn)).toEqual(snoresIn(stillMark("offline", colors)))
 })
 
 test("the logo at rest wakes for its trick by a timer, not the clock", async () => {
   const time = await motion()
-  const logo = new time.Animator(svg().svg, "logo")
-  logo.set({ state: "rest", playful: 2, news: false })
+  const { mark: logo } = time.mark(svg(), "rest", {
+    variant: "logo",
+    playful: 2,
+  })
   time.run(1000)
   expect(time.ticking()).toBe(false)
   // Its trick comes within 1.25 times `playful` seconds.
@@ -484,14 +775,16 @@ test("the logo at rest wakes for its trick by a timer, not the clock", async () 
 
 test("the logo at rest sets its timer once, however often another mark ticks", async () => {
   const time = await motion()
-  const logo = new time.Animator(svg().svg, "logo")
-  logo.set({ state: "rest", playful: 30, news: false })
+  const { mark: logo } = time.mark(svg(), "rest", {
+    variant: "logo",
+    playful: 30,
+  })
   time.run(1000)
   const timers = vi.spyOn(globalThis, "setTimeout")
-  // A Thread at work beside it ticks on, and the logo, still, with it.
-  const mark = new time.Animator(svg().svg, "agent")
-  mark.set({ state: "running", playful: 0, news: false })
-  expect(time.run(300)).toBe(300)
+  // A Thread's news beside it ticks, and the logo, still, with it.
+  const { mark, set } = time.mark(svg(), "running")
+  set("asking")
+  expect(time.run(300)).toBeGreaterThan(20)
   expect(timers).not.toHaveBeenCalled()
   mark.dispose()
   logo.dispose()

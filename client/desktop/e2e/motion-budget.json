@@ -246,6 +246,25 @@
       "gate": "hard",
       "budget": 0,
       "note": "once the list's batch is over, nothing asks for a frame but a Mark's news (ADR 0088, decision 3)"
+    },
+    {
+      "measure": "marks.ticks.callbacksPerSecond",
+      "gate": "hard",
+      "budget": 0,
+      "note": "5 Open and 2 Asks cards, 3 more on Later's tab: a Mark between news asks for no tick, its loops are CSS (ADR 0099, decision 4)",
+      "blocks": true
+    },
+    {
+      "measure": "marks.paints.perSecond",
+      "gate": "soft",
+      "budget": 0,
+      "note": "the window's paints while the Marks only live: none where the compositor runs their loops"
+    },
+    {
+      "measure": "marks.compositor.failed",
+      "gate": "hard",
+      "budget": 0,
+      "note": "the Marks' loops the compositor does not run, in a trace of the sidebar hidden and shown (ADR 0099, step 1): at a zoom of 1 the test fails on any, as marks.spec does for woke's; at another, as at 1.6, Chromium may run an SVG's on the main thread, and it is only told"
     }
   ],
   "recorded": {

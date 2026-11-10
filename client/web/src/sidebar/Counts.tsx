@@ -184,7 +184,7 @@ function List({
           className="gap-2 py-1.5"
           onClick={() => run("pane.pick", { project, pane: listed.pane })}
         >
-          <ThreadMark listed={listed} look={look} news={false} />
+          <ThreadMark listed={listed} look={look} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           {where && <ProjectSign project={where} />}
           <TimeNow time={timeAt(placedOf(listed, now), look)} />

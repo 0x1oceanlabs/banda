@@ -2,7 +2,7 @@
  * Starts the real window on a throwaway machine: its own folders, and the
  * fake agent as the only Harness, so no test reaches a paid model.
  */
-import { execFileSync, spawn } from "node:child_process"
+import { execFileSync, spawn, spawnSync } from "node:child_process"
 import { once } from "node:events"
 import {
   existsSync,
@@ -23,6 +23,7 @@ import {
   type ElectronApplication,
   type Locator,
   type Page,
+  test,
 } from "@playwright/test"
 
 const repository = resolve(import.meta.dirname, "../../..")
@@ -507,6 +508,173 @@ export async function firstThread(
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }
+}
+
+/** Starts a New Thread with `text` in the Project in front, as the Person
+ * does, from Alt+Enter: its region, which has the focus. */
+export async function startAgent(page: Page, text: string): Promise<Locator> {
+  await page.keyboard.press("Alt+Enter")
+  const box = page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(box).toBeFocused()
+  await box.fill(text)
+  await box.press("Enter")
+  return page.getByRole("region", { name: text, exact: true })
+}
+
+/** A recording `record` began. */
+export type Recording = {
+  /** Stops capturing: the last frame the page drew runs on to now, and
+   * ffmpeg has kept every frame once it settles. The video is not written
+   * yet, so a recording stopped while another goes on takes nothing from
+   * it. */
+  stop: () => Promise<void>
+  /** Encodes the frames `stop` kept as the video, then removes them. */
+  encode: () => Promise<void>
+  /** Leaves nothing of a recording not encoded: it stops capturing, as far
+   * as the page still answers, kills ffmpeg, and removes its frames and
+   * any video half written. It never fails, and does nothing once
+   * `encode` is done. A test runs it whatever happened (`finally`), and
+   * the page's closing runs it if the recording was never stopped. */
+  discard: () => Promise<void>
+}
+
+/** `promise`, settled or not after `ms`: what a page gone may never
+ * answer. */
+const settled = (promise: Promise<unknown>, ms: number) =>
+  Promise.race([
+    promise.catch(() => {}),
+    new Promise<void>((done) => setTimeout(done, ms).unref()),
+  ])
+
+/**
+ * Records what `page` shows from now as the WebM video `path`, at `size`:
+ * 25 frames a second, each the last the page drew by then; it is written
+ * once `encode()` is, after `stop()`. The machine's ffmpeg makes it, as
+ * Playwright's own (`recordVideo`) needs its ffmpeg, which these tests never
+ * download, and without it the page never answers; where the machine has
+ * none, it records nothing and says so in the test's annotations. While
+ * the page plays, ffmpeg only keeps its JPEGs as they come, beside `path`
+ * (`<path>.mjpeg.mkv`, about 100 MB a minute), so encoding takes nothing
+ * from what is recorded, nor holds frames in memory as it falls behind.
+ * Whatever is not encoded, `discard()` removes.
+ */
+export async function record(
+  page: Page,
+  path: string,
+  size: { width: number; height: number }
+): Promise<Recording> {
+  if (spawnSync("ffmpeg", ["-version"]).status !== 0) {
+    test.info().annotations.push({
+      type: "not recorded",
+      description: `${path}: no ffmpeg on this machine`,
+    })
+    const none = async () => {}
+    return { stop: none, encode: none, discard: none }
+  }
+  const fps = 25
+  const frames = `${path}.mjpeg.mkv`
+  const ffmpeg = (args: string[], stdin: "pipe" | "ignore" = "ignore") =>
+    spawn("ffmpeg", ["-loglevel", "error", "-y", ...args], {
+      stdio: [stdin, "ignore", "inherit"],
+    })
+  /** What `run` ended with, as an error that names `what` unless 0. */
+  const ended = async (run: ReturnType<typeof ffmpeg>, what: string) => {
+    const [code] = await once(run, "close")
+    if (code !== 0) throw new Error(`ffmpeg, ${what} ${path}: ${code}`)
+  }
+  const kept = ffmpeg(
+    [
+      ...["-f", "image2pipe", "-framerate", `${fps}`, "-c:v", "mjpeg"],
+      ...["-i", "pipe:0", "-an", "-c:v", "copy", "-f", "matroska", frames],
+    ],
+    "pipe"
+  )
+  const keeping = ended(kept, "keeping the frames of")
+  // Awaited as it stops; meanwhile a failure waits for it there.
+  keeping.catch(() => {})
+  let broken: Error | undefined
+  kept.stdin!.on("error", (error) => (broken ??= error))
+  // Capturing, stopping, its frames kept, encoding, then done: encoded,
+  // or discarded.
+  let stage: "capturing" | "stopping" | "kept" | "encoding" | "done" =
+    "capturing"
+  let encoding: Promise<void> | undefined
+  let encoder: ReturnType<typeof ffmpeg> | undefined
+  // The last frame the page drew, when it drew it by its clock and by
+  // ours, and how many frames of the video are written.
+  let last: { data: Buffer; at: number; here: number } | undefined
+  let first = 0
+  let written = 0
+  /** The last frame again, until the video is `at` ms long. */
+  const upTo = (at: number) => {
+    const due = Math.floor(((at - first) * fps) / 1000)
+    for (; last && written < due; written++) kept.stdin!.write(last.data)
+  }
+  const discard = async () => {
+    if (stage === "done") return
+    const was = stage
+    stage = "done"
+    page.off("close", closed)
+    kept.stdin!.end()
+    kept.kill("SIGKILL")
+    encoder?.kill("SIGKILL")
+    if (was === "capturing") await settled(page.screencast.stop(), 5000)
+    await Promise.allSettled([keeping, encoding])
+    rmSync(frames, { force: true })
+    if (encoder) rmSync(path, { force: true })
+  }
+  // A page that closes, or is killed, before its recording stops.
+  const closed = () => void discard()
+  page.once("close", closed)
+  try {
+    await page.screencast.start({
+      size,
+      onFrame: ({ data, timestamp }) => {
+        if (stage !== "capturing") return
+        if (!last) first = timestamp
+        upTo(timestamp)
+        last = { data, at: timestamp, here: Date.now() }
+      },
+    })
+  } catch (error) {
+    await discard()
+    throw error
+  }
+  return {
+    stop: async () => {
+      if (stage !== "capturing") return
+      stage = "stopping"
+      page.off("close", closed)
+      try {
+        await page.screencast.stop()
+      } finally {
+        // Whatever the page says, ffmpeg ends with what it has.
+        if (last) upTo(last.at + (Date.now() - last.here) + 1000 / fps)
+        kept.stdin!.end()
+      }
+      await keeping
+      if (broken) throw new Error(`ffmpeg, recording ${path}: ${broken}`)
+      if (stage === "stopping") stage = "kept"
+    },
+    encode: async () => {
+      if (stage !== "kept")
+        throw new Error(`${path}: encoded while ${stage}, not stopped`)
+      stage = "encoding"
+      encoder = ffmpeg([
+        ...["-nostdin", "-i", frames, "-an"],
+        ...["-c:v", "libvpx", "-deadline", "good", "-cpu-used", "5"],
+        ...["-crf", "10", "-b:v", "4M", "-pix_fmt", "yuv420p", path],
+      ])
+      encoding = ended(encoder, "encoding")
+      await encoding
+      if (stage !== "encoding") return
+      stage = "done"
+      rmSync(frames, { force: true })
+    },
+    discard,
+  }
 }
 
 /**
