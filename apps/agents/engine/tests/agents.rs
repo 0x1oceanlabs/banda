@@ -1053,7 +1053,10 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
         engine: engine.to_owned(),
     };
     let fake = harnesses_with(&[("FAKE_AGENT_SHELLS", shells.to_str().unwrap())]);
-    let agents = (Agents::new(fake).piped(pipe)).idle_after(Duration::from_millis(100));
+    // Idle long enough that the opened session, and with it its pass, is
+    // still there when the checks below read it on a loaded machine
+    // (#766); the sleep further down outlasts it, to see a restart.
+    let agents = (Agents::new(fake).piped(pipe)).idle_after(Duration::from_millis(500));
     let world = World::new_with(root.path(), agents).await;
     let told = || -> Value {
         let told = serde_json::from_slice(&std::fs::read(&shells).unwrap()).unwrap();
@@ -1084,7 +1087,7 @@ async fn an_agents_shell_gets_a_pass_walled_to_its_project() {
     assert_eq!(walled(&aside["process"]), process);
     assert_eq!(aside["session"], Value::Null);
 
-    tokio::time::sleep(Duration::from_millis(600)).await;
+    tokio::time::sleep(Duration::from_millis(1500)).await;
     let (_, (resumed_as, _)) = ask_session(&world, Some(&thread)).await;
     assert_eq!(resumed_as, opened_as, "the Thread resumed its session");
     let resumed = told();
