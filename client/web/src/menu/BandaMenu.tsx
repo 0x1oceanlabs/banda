@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Bind } from "@banda/contract/look"
+import type { Bind, Look } from "@banda/contract/look"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { calls, lookOf } from "@banda/ui/status"
@@ -23,6 +23,7 @@ import {
   Suggestions,
 } from "@banda/ui/components/suggestions"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { useLook } from "@banda/ui/lib/look"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import {
@@ -59,13 +60,17 @@ import {
   GitBranchIcon,
   ListFilterIcon,
   type LucideIcon,
+  MoonIcon,
   PlusIcon,
   SearchIcon,
+  SunIcon,
+  SunMoonIcon,
+  SwatchBookIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
 import { focusedTile } from "@banda/ui/pane"
 import { useLists } from "../calls/stores"
-import { useLookSidebar } from "../look"
+import { useLookSidebar, useThemes } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
@@ -103,6 +108,12 @@ import {
   usePickFolder,
 } from "./browse"
 import { opened, useOpened, weightOf } from "./opened"
+import {
+  type Shown as Scheme,
+  themeDetail,
+  themeNowOf,
+  THEMES_ROW,
+} from "./theme"
 import { Soon, Waits } from "../trust/TrustCard"
 import { ASK, ASK_ABOUT, askedOf, ISOLATED } from "../trust/trust"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
@@ -326,6 +337,9 @@ function Finder({
 /** The Project the Person is in, as Here says it. */
 const projectOf = (here: Here) => here.project
 
+/** The look as it is, for the theme's rows to read. */
+const whole = (look: Look) => look
+
 /** What the menu looks for: the words typed at its root, or the Project it
  * went into, or in one source alone. */
 type Looking = { words: string; entered?: ProjectId; only?: string }
@@ -398,12 +412,20 @@ function Menu({
     () => (atRoot && query ? machinesFound(hosts, query) : undefined),
     [atRoot, query, hosts]
   )
+  // The theme in force, and the themes there are once Themes… is gone into.
+  const look = useLook(whole, null)
+  const listed = useThemes(inside?.kind === "themes")
+  const theme = useMemo(
+    () => ({ now: themeNowOf(look), listed }),
+    [look, listed]
+  )
   const sources: Sources = useMemo(
     () => ({
       lists,
       projects,
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
+      theme,
       now: laterClock,
       items: itemActionsOf,
       found: machines ? [...found, machines] : found,
@@ -416,6 +438,7 @@ function Menu({
       actions,
       presets,
       preset,
+      theme,
       laterClock,
       found,
       machines,
@@ -910,6 +933,36 @@ function RowView({
           {row.current && <CheckIcon className="size-4 shrink-0" />}
         </>
       )
+    case "theme":
+    case "themes": {
+      const { now } = sources.theme
+      // Theme stands among the root's Actions, which have no icon, so it
+      // has none; Themes… among the schemes, which each have one.
+      const root = row.kind === "theme"
+      return (
+        <>
+          {!root && (
+            <SwatchBookIcon className="size-4 shrink-0 text-muted-foreground" />
+          )}
+          <span className="min-w-0 flex-1 truncate">
+            {root ? branchName(row) : THEMES_ROW}
+          </span>
+          <Detail>{root ? themeDetail(now) : now.label}</Detail>
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      )
+    }
+    case "look": {
+      const Icon = row.key === "mode" ? SCHEME_ICONS[row.value] : null
+      return (
+        <>
+          {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+          <span className="min-w-0 flex-1 truncate">{row.title}</span>
+          {row.about && <Detail>{row.about}</Detail>}
+          {row.current && <CheckIcon className="size-4 shrink-0" />}
+        </>
+      )
+    }
     case "action":
       return (
         <>
@@ -1006,6 +1059,13 @@ function RowView({
     case "free":
       return null
   }
+}
+
+/** Each scheme's icon, as its row in the theme's branch shows it. */
+const SCHEME_ICONS: Record<Scheme, LucideIcon> = {
+  light: SunIcon,
+  dark: MoonIcon,
+  system: SunMoonIcon,
 }
 
 /** A row of the question: its icon, then its title over a quiet line. */
