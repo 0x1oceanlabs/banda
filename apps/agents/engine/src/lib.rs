@@ -48,6 +48,7 @@ mod old_agents;
 mod questions;
 mod retirements;
 mod rules;
+mod search;
 pub mod sending;
 mod skills;
 mod store;
@@ -87,6 +88,7 @@ use model::{
 use notes::Notify;
 use rules::Event;
 use schemars::JsonSchema;
+use search::{Found, SearchAsk};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -367,6 +369,14 @@ banda_kernel::methods! {
         /// the files one of them changed, from its tool calls: the Diff's
         /// Turn (ADR 0034).
         call changes(ChangesAsk) -> TurnChanges, Read;
+        /// The Threads of this Project with a message, its Person's or an
+        /// Agent's, that holds every one of `words`: in any case, with or
+        /// without accents, and from two letters on as the start of a
+        /// longer word too. Each Thread comes once, by its best such
+        /// message, the best first, with a line of that message around the
+        /// words and where they are in it (ADR 0098, decision 17). Titles
+        /// are the window's to search.
+        call search(SearchAsk) -> Vec<Found>, Read;
         /// What a Thread's Harness, or a Harness a new Thread starts on,
         /// replies to a prompt, in a short run of its own no Thread shows:
         /// on the Thread's model at the least effort it offers, asking
@@ -1020,6 +1030,17 @@ impl Agents {
         Ok(TurnChanges { at, turns, files })
     }
 
+    async fn search(
+        &self,
+        call: Call,
+        SearchAsk { words, limit }: SearchAsk,
+    ) -> Result<Vec<Found>, Refusal> {
+        let found = call
+            .project()
+            .read(move |sql| search::search(sql, &words, limit));
+        Ok(found.await?)
+    }
+
     async fn write(
         &self,
         call: Call,
@@ -1614,6 +1635,8 @@ impl Module for Agents {
             let live = self.live.clone();
             tokio::spawn(live.let_go_as_accounts_change(project.id(), heard));
         }
+        // The messages from before the message index join it meanwhile.
+        tokio::spawn(search::backfill(project.downgrade()));
         Ok(())
     }
 
@@ -2099,6 +2122,9 @@ fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Res
 fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = turn_of(tx, turn)?;
     writer::apply(tx, author, &found, Event::Withdraw)??;
+    // Once taken back before any turn ran it, the message shows nowhere in
+    // its Thread, so it is found nowhere either (ADR 0098, decision 17).
+    search::index(tx.sql(), found.message)?;
     Ok(())
 }
 

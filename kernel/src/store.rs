@@ -1792,4 +1792,56 @@ mod tests {
             .await
             .unwrap();
     }
+
+    #[tokio::test]
+    async fn a_module_s_full_text_index_is_its_own_on_both_connections() {
+        let dir = tempfile::tempdir().unwrap();
+        let refused_steps: [&'static [&'static str]; 2] = [
+            &["CREATE VIRTUAL TABLE other_search USING fts5(text)"],
+            &["CREATE VIRTUAL TABLE notes_boxes USING rtree(id, low, high)"],
+        ];
+        let path = dir.path().join("refused.sqlite3");
+        for steps in refused_steps {
+            let opened = Store::open(&path, &tables_of_notes(steps));
+            assert!(opened.is_err_and(|e| refused(&e)), "{steps:?}");
+        }
+        let store = Store::open(
+            &dir.path().join("project.sqlite3"),
+            &tables_of_notes(&["CREATE VIRTUAL TABLE notes_search USING fts5(text)"]),
+        )
+        .unwrap();
+        // FTS5 writes its shadow tables and asks its change count.
+        store
+            .write("notes", |tx| {
+                tx.sql().execute_batch(
+                    "INSERT INTO notes_search (rowid, text) VALUES (1, 'a kept note');
+                     INSERT OR REPLACE INTO notes_search (rowid, text) VALUES (1, 'a found note');
+                     INSERT INTO notes_search (rowid, text) VALUES (2, 'another note');
+                     DELETE FROM notes_search WHERE rowid = 2;",
+                )?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let found = store
+            .read_as("notes", |sql| {
+                Ok(sql.query_row(
+                    "SELECT highlight(notes_search, 0, '[', ']'), bm25(notes_search)
+                     FROM notes_search WHERE notes_search MATCH 'fou*'",
+                    [],
+                    |row| row.get::<_, String>(0),
+                )?)
+            })
+            .await
+            .unwrap();
+        assert_eq!(found, "a [found] note", "read on the reader");
+        let made = store
+            .write("notes", |tx| {
+                Ok(tx
+                    .sql()
+                    .execute_batch("CREATE VIRTUAL TABLE notes_more USING fts5(text)")?)
+            })
+            .await;
+        assert!(made.is_err_and(|e| refused(&e)), "only in a step");
+    }
 }
