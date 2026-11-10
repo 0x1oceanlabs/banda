@@ -56,6 +56,7 @@ import {
   openingOf,
   settingsLinkOf,
 } from "../menu/menu"
+import { writeLook } from "../menu/theme"
 import {
   columnsOf,
   useLookColumns,
@@ -229,10 +230,6 @@ export function Shell({
   const [over, setOver] = useState(false)
   if (over && !narrow) setOver(false)
   const setShown = narrow ? setOver : setSidebar
-  const toggleSidebar = useCallback(
-    () => setShown((shows) => !shows),
-    [setShown]
-  )
   const showSidebar = useCallback(() => setShown(true), [setShown])
   const hideSidebar = useCallback(() => setShown(false), [setShown])
   const [overviewState, setOverview] = useState<"closed" | "open" | "closing">(
@@ -548,7 +545,7 @@ export function Shell({
     projects: () => open,
     projectOf,
     placing: () => placing,
-    toggleSidebar,
+    toggleSidebar: () => setShown((shows) => !shows),
     showSidebar,
     toggleOverview,
     drawer: () => toggleDrawer(parts),
@@ -728,6 +725,8 @@ export function Shell({
           })
         case "preset":
           return device.sidebar.preset(row.name)
+        case "look":
+          return writeLook(parts.writeSetting, row)
         case "found":
           return row.row.run(parts)
       }
@@ -823,8 +822,6 @@ export function Shell({
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar
               status={status}
-              sidebar={narrow ? over : sidebar}
-              onSidebar={toggleSidebar}
               problems={bar.problems}
               widgets={bar.parts}
               listed={bar.listed}

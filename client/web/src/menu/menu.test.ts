@@ -59,6 +59,10 @@ const sources: Sources = {
   projects,
   actions,
   presets: { names: ["inbox", "projects", "places"], current: "inbox" },
+  theme: {
+    now: { theme: "platform", label: "Banda", mode: "system", both: true },
+    listed: [],
+  },
   now: 10,
   items: itemActionsOf,
   found: [],
@@ -115,7 +119,10 @@ function nameOf(row: Choice): string {
         .filter(Boolean)
         .join(" ")
     case "preset":
-      return row.current ? `${row.name} ✓` : row.name
+    case "look": {
+      const name = row.kind === "look" ? row.title : row.name
+      return row.current ? `${name} ✓` : name
+    }
     case "item":
       return `${row.action} ${row.listed.id}`
     case "found":
@@ -131,7 +138,10 @@ function nameOf(row: Choice): string {
     case "locate":
     case "finds":
     case "trust":
+    case "theme":
       return branchName(row)
+    case "themes":
+      return `${branchName(row)} ›`
     case "adding":
       return "name" in row.how
         ? `create ${row.how.name}`
@@ -176,7 +186,29 @@ describe("the Banda menu", () => {
         "Recent Threads",
         ["slow hello", "hello from claude", "Fix the login form"],
       ],
-      ["Actions", ["New Thread", "New browser"]],
+      [
+        "Actions",
+        ["New Thread", "New browser", "Show or hide the sidebar", "Theme"],
+      ],
+    ])
+  })
+
+  test("empty, it offers what the bar's logo and the sidebar's foot did: the sidebar shown or hidden, the key sheet and the theme (ADR 0098, decision 21)", () => {
+    const keys = action("menu.keys", "Every action and its key")
+    const more = { actions: [...actions, keys] }
+    expect(labels("", "root", undefined, more).at(-1)).toEqual([
+      "Actions",
+      [
+        "New Thread",
+        "New browser",
+        "Show or hide the sidebar",
+        "Every action and its key",
+        "Theme",
+      ],
+    ])
+    expect(labels("theme")).toEqual([
+      ["Actions", ["Theme"]],
+      ["", ["ask: theme", "web: theme"]],
     ])
   })
 
@@ -243,7 +275,35 @@ describe("the Banda menu", () => {
     ])
     expect(labels("", "root", undefined, { weight }).at(-1)).toEqual([
       "Actions",
-      ["New browser", "Show or hide the sidebar", "New Thread"],
+      ["New browser", "Show or hide the sidebar", "New Thread", "Theme"],
+    ])
+  })
+
+  test("what is chosen often pushes out T3 Code's rows, never the toggle, the key sheet or the theme", () => {
+    const all = [
+      ...actions,
+      action("pane.new", "New Pane", "Panes"),
+      action("calls.answer", "Answer the call", "Threads"),
+      action("overview.toggle", "Overview", "Workspaces"),
+      action("menu.keys", "Every action and its key"),
+      action("settings.open", "Settings"),
+    ]
+    const weight = (id: string) =>
+      ({ views: 3, "project.add": 2, "action:settings.open": 1 })[id] ?? 0
+    expect(
+      labels("", "root", undefined, { actions: all, weight }).at(-1)
+    ).toEqual([
+      "Actions",
+      [
+        "Sidebar view",
+        "Add Project",
+        "Settings",
+        "New Thread",
+        "New browser",
+        "Show or hide the sidebar",
+        "Every action and its key",
+        "Theme",
+      ],
     ])
   })
 
@@ -255,7 +315,7 @@ describe("the Banda menu", () => {
     expect(labels("", "actions")).toEqual([
       ["Threads", ["New Thread", "Show or hide the sidebar", "Sidebar view"]],
       ["Panes", ["New browser"]],
-      ["Banda", ["Add Project"]],
+      ["Banda", ["Add Project", "Theme"]],
     ])
     expect(labels("side", "actions")).toEqual([
       ["Actions", ["Sidebar view", "Show or hide the sidebar"]],
@@ -349,6 +409,66 @@ describe("its branches and acts", () => {
     expect(labels("", "root", views)).toEqual([
       ["", ["inbox ✓", "projects", "places"]],
     ])
+  })
+
+  test("the theme holds its schemes, the one in force ticked, then Themes…", () => {
+    const theme: Branch = { kind: "theme", id: "theme" }
+    expect(labels("", "root", theme)).toEqual([
+      ["", ["Light", "Dark", "As the system ✓", "Themes ›"]],
+    ])
+    expect(labels("dar", "root", theme)).toEqual([["", ["Dark"]]])
+    // A theme with one scheme has nothing to switch to.
+    const one = {
+      theme: {
+        now: { theme: "night", mode: "dark" as const, both: false },
+        listed: [],
+      },
+    }
+    expect(labels("", "root", theme, one)).toEqual([["", ["Themes ›"]]])
+  })
+
+  test("Themes… holds this device's, Banda's pairs, Omarchy's with a current one, then each listed, the one look.toml names ticked, each name once", () => {
+    const themes: Branch = { kind: "themes", id: "theme.themes" }
+    expect(labels("", "root", themes)).toEqual([
+      ["", ["This device's ✓", "Banda", "Banda macOS"]],
+    ])
+    // As `banda look themes` lists them: a theme of both by its schemes.
+    const banda = (name: string, mode: "light" | "dark") => ({
+      name,
+      mode,
+      origin: "banda" as const,
+    })
+    const listed = {
+      theme: {
+        ...sources.theme,
+        listed: [
+          banda("banda-light", "light"),
+          banda("banda-dark", "dark"),
+          banda("macos-light", "light"),
+          banda("macos-dark", "dark"),
+          {
+            name: "omarchy",
+            mode: "dark" as const,
+            origin: "current" as const,
+          },
+          { name: "banda", mode: "light" as const, origin: "yours" as const },
+          { name: "nord", mode: "dark" as const, origin: "omarchy" as const },
+        ],
+      },
+    }
+    expect(labels("", "root", themes, listed)).toEqual([
+      [
+        "",
+        ["This device's ✓", "Banda", "Banda macOS", "Banda Omarchy", "nord"],
+      ],
+    ])
+    const nord = menuFor("nord", "root", themes, listed)[0].rows[0]
+    expect(nord).toMatchObject({
+      kind: "look",
+      key: "theme",
+      value: "nord",
+      about: "dark",
+    })
   })
 
   test("Tab on a Thread opens it, beside, puts it off or archives it", () => {

@@ -10,11 +10,14 @@
  * 0095, decision 4). Esc gives ✎ the focus back, never the page; a press
  * on ✎ while it is open shuts it, and starts nothing. The Flow left the
  * header for the bar, after the workspaces, as it arranges the desk, not
- * the list (decision 20, S9b). Pictures for Roma, dark and light, with
- * glass and without, at 1440×900: `test-results/sidebar-s9a-*.png` and
- * `test-results/sidebar-s9b-*.png`.
+ * the list (decision 20, S9b). The foot keeps Settings and View, each
+ * tooltip with its key; the key sheet and the theme went to the Banda
+ * menu, which the bar's logo opens now, not the sidebar, and Add Project
+ * to ✎'s menu (decision 21, S9c). Pictures for Roma, dark and light, with
+ * glass and without, at 1440×900: `test-results/sidebar-s9a-*.png`,
+ * `test-results/sidebar-s9b-*.png` and `test-results/sidebar-s9c-*.png`.
  */
-import { writeFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import {
@@ -279,4 +282,111 @@ test("the Flow on the bar, and its menu: the one in force checked, its key besid
     page.getByRole("menuitem", { name: "Arrange by Project" })
   ).toBeVisible()
   await shots(window, "s9b-menu")
+})
+
+test("the foot keeps the gear and the view; the bar's logo opens the Banda menu, whose root holds the sidebar's toggle, the key sheet and the theme, and the theme writes look.toml", async () => {
+  const { window, page, sidebar } = await withTwoProjects()
+  const html = page.locator("html")
+  const file = join(window.dir, "config/look.toml")
+
+  // The foot: the gear and the view, no words; the gear's tooltip names
+  // its key in force. The key sheet, the theme and Add Project left it.
+  await expect(
+    sidebar.getByRole("button", { name: "Settings" })
+  ).toHaveAttribute("title", "Settings (Alt+,)")
+  await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
+  for (const gone of ["Every action and its key", /^Theme/, "Add Project"])
+    await expect(sidebar.getByRole("button", { name: gone })).toHaveCount(0)
+  // The pointer off the sidebar, for the picture of its foot at rest.
+  await page.mouse.move(900, 450)
+  await shots(window, "s9c-foot")
+
+  // The bar's logo opens the Banda menu, not the sidebar's toggle (§5
+  // E2); its tooltip names the menu's key in force.
+  const logo = page
+    .getByRole("banner")
+    .getByRole("button", { name: /^Banda menu/ })
+  await expect(logo).toHaveAttribute("title", /^Banda menu \(Alt\+Space\)/)
+  await logo.click()
+  const banda = page.getByRole("dialog", { name: "Banda menu" })
+  const actions = banda.getByRole("group", { name: "Actions" })
+  await expect(
+    actions.getByRole("option", { name: /^Show or hide the sidebar/ })
+  ).toBeVisible()
+  await expect(
+    actions.getByRole("option", { name: /^Every action and its key/ })
+  ).toBeVisible()
+  await expect(actions.getByRole("option", { name: /^Theme/ })).toBeVisible()
+  // The click left the sidebar shown. The menu is modal, so the page
+  // behind it is hidden from the accessibility tree: the sidebar is
+  // found by its element, not its role.
+  await expect(page.locator('aside[aria-label="Sidebar"]')).toBeVisible()
+  await shots(window, "s9c-menu")
+
+  // The key sheet's row opens the menu at its Actions, as Alt+K does.
+  await actions
+    .getByRole("option", { name: /^Every action and its key/ })
+    .click()
+  await expect(banda.getByRole("group", { name: "Banda" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(banda).toBeHidden()
+
+  // The toggle's row hides the sidebar, and Alt+A shows it again.
+  await logo.click()
+  await actions
+    .getByRole("option", { name: /^Show or hide the sidebar/ })
+    .click()
+  await expect(banda).toBeHidden()
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeVisible()
+
+  // The theme: Light, Dark and As the system, the one in force ticked by
+  // look.toml, then Themes…; Dark writes look.toml, and the window darkens.
+  await expect(html).not.toHaveClass(/dark/)
+  await logo.click()
+  await actions.getByRole("option", { name: /^Theme/ }).click()
+  await expect(banda.getByRole("option")).toHaveText([
+    /^Light/,
+    /^Dark/,
+    /^As the system/,
+    /^Themes…\s*Banda/,
+  ])
+  await shots(window, "s9c-theme")
+  await banda.getByRole("option", { name: /^Dark/ }).click()
+  await expect(banda).toBeHidden()
+  await expect(html).toHaveClass(/dark/)
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^mode = "dark"$/m)
+
+  // Themes…: this device's first, the default, which a look.toml with no
+  // theme takes; then Banda's own pairs, by the names the menu gives them
+  // (ADR 0100, decision 2). A pick writes look.toml's theme.
+  const themes = async () => {
+    await logo.click()
+    await actions.getByRole("option", { name: /^Theme/ }).click()
+    await banda.getByRole("option", { name: /^Themes…/ }).click()
+  }
+  await themes()
+  const options = banda.getByRole("option")
+  await expect(options.nth(0)).toHaveText(
+    /^This device's\s*the default, Banda here/
+  )
+  await expect(options.nth(1)).toHaveText(/^Banda\s*light and dark/)
+  await expect(options.nth(2)).toHaveText(/^Banda macOS/)
+  await shots(window, "s9c-themes")
+  await banda.getByRole("option", { name: /^Banda macOS/ }).click()
+  await expect(banda).toBeHidden()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^theme = "macos"$/m)
+
+  // And back to this device's.
+  await themes()
+  await banda.getByRole("option", { name: /^This device's/ }).click()
+  await expect(banda).toBeHidden()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^theme = "platform"$/m)
 })
