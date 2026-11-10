@@ -107,11 +107,52 @@
         "to": {
           "type": "string"
         },
-        "by": true
+        "by": {
+          "$ref": "#/$defs/Participant"
+        }
       },
       "required": [
         "to",
         "by"
+      ]
+    },
+    "Participant": {
+      "description": "Anyone who acts in a Project: a Person or an Agent.",
+      "oneOf": [
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "person"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        {
+          "type": "object",
+          "properties": {
+            "kind": {
+              "type": "string",
+              "const": "agent"
+            },
+            "id": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        }
       ]
     },
     "Cli": {
