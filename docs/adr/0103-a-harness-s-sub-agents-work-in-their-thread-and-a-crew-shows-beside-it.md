@@ -6,7 +6,7 @@ date: 2026-11-10
 # A Harness's sub-agents work in their Thread, and a Crew shows beside it
 
 _It amends ADR 0003 (its "Later" and decision 6's idle release), ADR 0031
-(Ultracode in the model picker), ADR 0058 (decisions 4–6 and 8), ADR 0089
+(Ultracode's label), ADR 0058 (decisions 4–6 and 8), ADR 0089
 (decision 8, the phone) and ADR 0099 (decisions 2, 3 and 11), and gives
 ADR 0098, decision 24, its field. Amended before step 1, it also amends
 ADR 0027 (decisions 1, 3 and 4), ADR 0073 (decision 9) and ADR 0078
@@ -15,6 +15,11 @@ ADR 0027 (decisions 1, 3 and 4), ADR 0073 (decision 9) and ADR 0078
 at `bec527a3`; the research read `26feb9be`. The amendments of
 2026-11-10, made before step 1, cite main at `1464393e` and step 0's
 [`recordings.md`](../research/2026-11-10-sub-agents/recordings.md)._
+
+_Amended 2026-11-10, during step 1, by Roma's calls 11 and 12: Banda
+shows a Harness's sub-agents and Crews, and the Harness manages them.
+Banda stops none of them and starts no Crew. Decisions 15, 19, 21–24 and
+31 and the Plan say what goes._
 
 Roma, on 2026-11-10 (translated), over the mocks: "First, very good work
 on the design of the windows and how Banda looks overall — let's describe
@@ -541,6 +546,10 @@ sub-agents and the Crew `audit-routes`:
         (`apps/agents/pane/src/thread/timeline.ts:296-345`).
       - **Open beside comes in step 2**, with the sub-agent's Pane. In
         step 1 an open row offers Stop alone.
+    - _Amended 2026-11-10, during step 1 (Roma's call 11):_ a row has no Stop, and no row says
+      "Stopped by you". A stopped sub-agent says "Stopped", with the
+      Harness's reason when it gives one. In step 1 an open row offers
+      nothing; step 2 adds Open beside.
 16. **The Thread shows one level.** A sub-agent's own sub-agents are
     "(+2)" on its row; its Pane goes deeper (decision 21).
     - _Amended 2026-11-10, before step 1:_ "(+2)" counts the row's
@@ -626,6 +635,10 @@ sub-agents and the Crew `audit-routes`:
         row, and what Claude then says is its "went on by itself" turn
         (`apps/agents/engine/src/between.rs:183`). Reason: no recording
         shows one, so its words have nothing to be tried on.
+    - _Amended 2026-11-10, during step 1 (Roma's call 11):_ no Stop stays after the turn
+      (decision 24). While sub-agents outlive their turn, the rows and the
+      live line say the work goes on, and the composer is an idle
+      Thread's.
       - **Codex's `wait` stays the parent's own call**, neither hidden
         nor marked: its `receiverThreadIds` are empty
         (`recordings.md:276-280`). The live line puts the sub-agents'
@@ -649,6 +662,9 @@ sub-agents and the Crew `audit-routes`:
     - The composer's place holds a status bar of the composer's shape,
       with no text box: "Working · Explore · Haiku · Runs on its own",
       Ask Claude about it, and Stop while it can.
+      _Amended 2026-11-10, during step 1 (Roma's call 11):_ no Stop. Ask Claude about it
+      stays: it is a message to the Thread's Agent, which manages its
+      sub-agents.
     - A Group holds one sub-agent Pane: Open beside on another changes
       what it shows, and its row stays lit while it shows it. Its own
       sub-agents are rows in it, one level, and open in the same Pane.
@@ -665,6 +681,8 @@ sub-agents and the Crew `audit-routes`:
     - Its header: "Crew · audit-routes", "from ‹Thread›", Stop while it
       works, and a menu with View script and Copy result. A finished Crew
       keeps its Pane open, its clock stopped.
+      _Amended 2026-11-10, during step 1 (Roma's call 11):_ no Stop. To stop a Crew, the
+      Person tells Claude, which runs it.
     - Its body: one line of counts with the clock and the tokens, a
       filter (All, Working, Asks, Failed), the script's last log line,
       the strip, then the phases.
@@ -695,6 +713,11 @@ sub-agents and the Crew `audit-routes`:
       Thread's Agent cannot see these sub-agents, and only the Person's
       gesture acts as the Person (ADR 0083). After one Codex sub-agent
       is stopped, Banda tells its parent (Open questions).
+    - _Amended 2026-11-10, during step 1 (Roma's call 11):_ **dropped.** Banda stops no
+      sub-agent: no `agents.stop_subagent`, and no Stop on a row, in a
+      sub-agent's Pane or in the Crew Pane. Reason: the Harness already
+      manages its sub-agents, as Claude Code and Codex do on their own;
+      Banda shows them.
 24. **The Thread's Stop stops its sub-agents and its Crew too, and says
     so**: "You stopped Claude, 2 sub-agents and Crew audit-routes". Its
     tooltip says it before. (Roma's call 10.)
@@ -747,6 +770,19 @@ sub-agents and the Crew `audit-routes`:
       - **After the turn, the rows say it.** The turn's own words stay
         as it ended; each sub-agent stopped says "Stopped by you" on
         its row.
+    - _Amended 2026-11-10, during step 1 (Roma's call 11):_ **dropped.** The Thread's Stop is
+      today's: it stops the turn, and the Harness decides what becomes of
+      its sub-agents and its Crew. With the declaration, Claude holds its
+      turn while a background sub-agent works (`recordings.md:311-321`),
+      so that Stop reaches them through Claude. No Stop is offered after
+      the turn, and Stop's words stay today's. Call 10 gives way to call 11.
+      - What Banda still does to a sub-agent comes from what it holds,
+        the Harness's process and session, not from steering the
+        sub-agent. A sub-agent's Question is the Harness's, answered as
+        the Person chooses (decision 28). When Banda ends a process or a
+        session itself (a restart, the Harness stopping, a trust or
+        account change, a move, a Project removed), the sub-agents at
+        work in it end Lost (decision 11).
 25. **No message goes to a sub-agent directly**: ACP lets a client only
     cancel a child. **Ask Claude about it** focuses the parent's
     composer with a chip of the sub-agent's satellite and name; the
@@ -823,6 +859,11 @@ sub-agents and the Crew `audit-routes`:
     - Claude's Ultracode moves from the mode menu into the model picker,
       a switch at any effort: "Claude starts a Crew for every big task.
       Uses your limits faster." On, the label reads "Opus 5.5 Ultracode".
+      _Amended 2026-11-10, during step 1 (Roma's call 12):_ dropped.
+      Ultracode stays where the Harness offers it today, in the mode
+      menu, and Banda adds no button or switch to start a Crew: the Person
+      starts one as in Claude Code. What holds is showing it: the label
+      names Ultracode in the top effort's magenta.
     - Codex's Ultra is its slider's last stop, with one line on what it
       costs; the label reads "GPT-5.5 Ultra".
     - While background sub-agents run, the composer says "Steer this
@@ -856,8 +897,9 @@ sub-agents and the Crew `audit-routes`:
 - **ADR 0027, decisions 1, 3 and 4** (amended 2026-11-10, before step
   1): a rewind takes the sub-agents of its turns with it, a fork copies
   them, and neither runs while a sub-agent works (Open questions).
-- **ADR 0031**: Ultracode moves from the mode menu into the model picker,
-  and the label names it in the top effort's magenta (decision 31).
+- **ADR 0031**: the label names Ultracode in the top effort's magenta
+  (decision 31). Amended 2026-11-10, during step 1: Ultracode stays in
+  the mode menu (Roma's call 12).
 - **ADR 0058, decisions 4–6**: the work line counts the parent's work
   only, the live line names sub-agents and outlives the turn while they
   work, and a docked Question names who asks. **Decision 8**: the
@@ -1006,6 +1048,24 @@ it is in.
      with the switch off, which proves each dark PR. After ON, the Part A replays still pin an adapter that
      ignores the declaration, since a replay lets `initialize` differ
      (`tools/fake-agent/src/replay.rs:10`, `:168`).
+   - _Amended 2026-11-10, during step 1 (Roma's calls 11 and 12):_ S0,
+     F0, E0, E1a and E1b are on main. The rest lands in this order:
+     1. **E1c**, as above.
+     2. **W1** without Stop: the satellite, the rows, the group row, a row
+        opened in place, the row's now, Find and Files' Follow.
+     3. **ON**, with R in it: the paid recording through Banda and its
+        replay tests land with the declaration. ON is armed once W1 is on
+        main, a Dev that has F0 runs on both of Roma's machines, and one
+        real Claude Code run and one real Codex run have been shown to
+        Roma.
+     4. **W2**: the live line's words, without Stop's.
+     5. **W3**, as above.
+
+     E2 is dropped with decisions 23 and 24. E3 leaves step 1 for issue
+     #1326, with #1281: both Harnesses wait for their sub-agents before
+     they end a turn, so a sub-agent's edit after its turn is rare.
+     Reason: Roma wants sub-agents to try sooner, and they show without
+     Banda stopping them.
 2. **A sub-agent opened beside** (decisions 21, 25): its Pane, the status
    bar, Ask Claude about it, the breadcrumb, the screen on top.
 3. **The sidebar and the Mark** (decisions 13, 28, 32, 34):
@@ -1038,6 +1098,9 @@ it is in.
    agent's detail.
 6. **The Crew's start and the composer** (decisions 30–31): the
    Question built from `meta`; Ultracode and Ultra.
+   - _Amended 2026-11-10, during step 1 (Roma's call 12):_ no button
+     starts a Crew. This step shows Claude's own Question to start one,
+     and Ultracode's and Ultra's magenta.
 
 Later: a worktree's changes (decision 27); Save as command in the Crew
 Pane's menu, the script copied to `.claude/workflows/`; Crews of Banda's
@@ -1065,7 +1128,7 @@ questions, each as recommended:
 9. A worktree sub-agent's changes: Review, Ask Claude to merge, Discard;
    later, after the engine learns the branch (decision 27).
 10. The Thread's Stop stops its sub-agents and its Crew, and says so
-    (decision 24).
+    (decision 24). It gave way to call 11.
 
 And the mocks' other picks: a finished group folds to one line; no card
 while a Crew waits to start; "Opus 5.5 Ultracode", the shorter label; one
@@ -1073,6 +1136,16 @@ action for a Lost Crew; one sub-agent Pane per Group; the chip with the
 satellite; "Claude wrote" for the parent's later messages; a screen on
 top on a phone; a finished Crew without a sound of its own; line 2 as a
 tooltip on a one-line working row.
+
+On 2026-11-10, during step 1 (translated):
+
+11. "Look, Claude already manages the agents without us. We don't need
+    to manage them; the Agent does that already." Then: "For sub-agents
+    we do as Claude does: we show them, but we don't manage them. The
+    Harness does the managing." Banda shows sub-agents and Crews and
+    stops none of them (decisions 15, 19, 21–24).
+12. Ultracode: "I start it as usual, without special buttons"
+    (decision 31).
 
 ## Open questions
 
@@ -1136,6 +1209,7 @@ tooltip on a one-line working row.
     (`apps/agents/engine/src/lib.rs:1478-1482`, `:1526-1529`), so it
     would have nothing to steer. It goes by that shape, not by the
     Harness's id, so the fake agent can test it.
+    _Dropped 2026-11-10 with decision 23 (Roma's call 11)._
 - **A Crew's open calls.** A workflow agent's call that asked never ends,
   even after its Crew stops. Step 4 decides whether the engine ends a
   Crew's open calls when the Crew ends.
