@@ -25,20 +25,52 @@ export function useOpen(): Run {
   }
 }
 
-/**
- * A new Thread in `project`, as its key starts one (`thread.new`, the
- * agents module's); a Project whose folder is missing finds it first (ADR
- * 0026, decision 6).
- */
-export function newThread(open: Run, project: ProjectId, missing = false) {
-  if (missing) open("projects.locate", { project })
-  else open("thread.new", { project })
+/** The action that starts a new Thread, the agents module's, by which its
+ * key in force is read too. */
+export const NEW_THREAD = "thread.new"
+
+/** Where a new Thread starts, as its key's action takes it. */
+export type NewThread = {
+  /** Its Project, on the machine that has it, or a machine's No Project. */
+  project: ProjectId
+  /** The Harness it starts on, by its entry's ID; none, the machine's
+   * default. */
+  harness?: string
+  /** The Project's folder is missing. */
+  missing?: boolean
 }
 
 /**
- * How the sidebar's own buttons start a Thread: in `only`, the Project
- * whose rows alone the list shows, or else where the Person is, as
- * Alt+Enter starts one (`Here.starts`), read as it is pressed.
+ * A new Thread where `args` say, as its key starts one; a Project whose
+ * folder is missing finds it first (ADR 0026, decision 6).
+ */
+export function newThread(
+  open: Run,
+  { project, harness, missing = false }: NewThread
+) {
+  if (missing) open("projects.locate", { project })
+  else open(NEW_THREAD, { project, ...(harness && { harness }) })
+}
+
+/**
+ * What the sidebar's own buttons start: in `only`, the Project whose rows
+ * alone the list shows, if one, else in `starts`, where Alt+Enter starts
+ * one (`Here.starts`, ADR 0102). A Project whose folder is missing is
+ * found first.
+ */
+export function clickOf(
+  starts: ProjectId,
+  only: ProjectId | undefined,
+  projects: readonly ProjectSummary[]
+): NewThread {
+  const project = only ?? starts
+  const { missing } = projects.find((one) => one.id === project) ?? {}
+  return { project, ...(missing && { missing }) }
+}
+
+/**
+ * How the sidebar's own buttons start a Thread, ✎ and the Working tab's
+ * when empty: where `clickOf` says, read as it is pressed.
  */
 export function useNewThread(
   only: ProjectId | undefined,
@@ -46,11 +78,7 @@ export function useNewThread(
 ): () => void {
   const open = useOpen()
   const here = useContext(HereContext)
-  return () => {
-    const project = only ?? here.get().starts
-    const { missing } = projects.find((one) => one.id === project) ?? {}
-    newThread(open, project, missing)
-  }
+  return () => newThread(open, clickOf(here.get().starts, only, projects))
 }
 
 /**
