@@ -9,6 +9,7 @@ import { Choices } from "../registry"
 import {
   type Entry,
   groupAttributes,
+  isFree,
   runOf,
   share,
   type Workspace,
@@ -65,6 +66,7 @@ export const Strip = memo(function Strip({
   selected,
   modules,
   projectOf,
+  strict,
   shows,
   marked,
   away,
@@ -84,6 +86,9 @@ export const Strip = memo(function Strip({
   selected: boolean
   modules: readonly string[]
   projectOf: (project: ProjectId) => ProjectSummary | undefined
+  /** In the row and solo, where a Project's workspace holds its Panes
+   * only (ADR 0102). */
+  strict: boolean
   /** What its Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -333,7 +338,9 @@ export const Strip = memo(function Strip({
   const projects = new Set(
     workspace.columns.flatMap((column) => column.entries.map((e) => e.project))
   )
-  const mixed = projects.size > 1
+  // A Pane says its Project where others' stand by it, and on a free
+  // workspace of the row and solo (ADR 0102, decision 6).
+  const mixed = projects.size > 1 || (strict && isFree(workspace))
   return (
     <div
       ref={scroller}

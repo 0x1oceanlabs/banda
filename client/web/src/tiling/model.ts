@@ -246,6 +246,56 @@ export function isFree(workspace: Workspace): boolean {
   return workspace.project === undefined && workspace.columns.length > 0
 }
 
+/** Whether `workspace` takes a Pane of `project` moved to it, in the row
+ * and solo: a free one, an empty one, or its Project's (ADR 0102,
+ * decision 6). */
+export function admits(workspace: Workspace, project: ProjectId): boolean {
+  return workspace.project === undefined || workspace.project === project
+}
+
+/** The Project Pane `pane` moves as: its own alone; `whole`, with its
+ * Group, the Group's lead's, as `lead` says (an Agent's Thread), else its
+ * first Pane's. */
+export function movingAs(
+  state: Workspaces,
+  pane: string,
+  whole: boolean,
+  lead: (entry: Entry) => boolean
+): ProjectId | undefined {
+  const at = find(state, pane)
+  if (!at) return undefined
+  const { columns } = state.list[at.workspace]
+  const column = columns[at.column]
+  if (!whole || column.group === undefined)
+    return column.entries[at.entry].project
+  const { start, end } = runOf(columns, at.column)
+  const all = columns.slice(start, end).flatMap((one) => one.entries)
+  return (all.find(lead) ?? all[0]).project
+}
+
+/** The workspaces Pane `pane`, or `whole` its Group, may not move to:
+ * every other Project's but the one it stands on (ADR 0102, decision 6). */
+export function refusedTo(
+  state: Workspaces,
+  pane: string,
+  whole: boolean,
+  lead: (entry: Entry) => boolean
+): Set<string> {
+  const project = movingAs(state, pane, whole, lead)
+  const from = find(state, pane)?.workspace
+  return new Set(
+    project === undefined
+      ? []
+      : state.list
+          .filter((w, at) => at !== from && !admits(w, project))
+          .map((w) => w.id)
+  )
+}
+
+/** What a move onto another Project's workspace is told (ADR 0102,
+ * decision 6). */
+export const REFUSED = "Not onto another Project's workspace"
+
 /** The focused column of the workspace on screen, and its place. */
 export function focusedColumn(state: Workspaces) {
   const workspace = current(state)

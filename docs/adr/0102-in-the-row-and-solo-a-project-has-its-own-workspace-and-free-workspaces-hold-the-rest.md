@@ -117,6 +117,11 @@ day.
    - A Thread the Person moved to a free workspace stays there. A pick
      goes to it, and its sidebar row has a small mark saying that it is
      away from its Project's workspace.
+   _Built_ in step 3: the window refuses the move, by keys and by the
+   mouse, in the row and solo; a Group moves as its Agent's Thread's
+   Project, else as its first Pane's. During a drag the note under the
+   Pane's name says why. The Sign shows in the header of every Pane on a
+   free workspace, as on a workspace of mixed Projects.
 
 7. **A Thread of no Project that becomes a Project's goes to that
    Project's workspace,** by the row's rules, with its Group. The

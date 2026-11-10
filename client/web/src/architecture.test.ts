@@ -661,6 +661,7 @@ const APP_STRINGS = [
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/actions.ts: AGENTS_FILE",
   "web/src/window/actions.ts: AGENTS_FILE",
+  "web/src/window/actions.ts: AGENTS_FILE",
 ]
 
 const saying = [

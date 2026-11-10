@@ -3,6 +3,7 @@ import type { Named } from "@banda/contract/machines"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectName, ProjectSign } from "@banda/ui/components/project-sign"
+import { MoveUpRightIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Row as Arranged } from "./arrange"
@@ -22,6 +23,7 @@ export function Row({
   settings,
   inProject,
   current,
+  away,
   action,
   field,
   machine,
@@ -33,6 +35,9 @@ export function Row({
   /** It sits under its Project's header, which already names the Project. */
   inProject: boolean
   current: boolean
+  /** Its Thread stands on a free workspace, away from its Project's
+   * (ADR 0102, decision 6). */
+  away?: boolean
   /** A button that shows while the pointer is over the row: its Later's
    * clock, or Wake (ADR 0074). */
   action?: ReactNode
@@ -88,6 +93,20 @@ export function Row({
             {line.left.map(slot)}
             {line.right.length > 0 && <span className="ml-auto" />}
             {line.right.map(slot)}
+            {index === 0 && away && (
+              <span
+                title="Away from its Project's workspace"
+                className={cn(
+                  "shrink-0 text-muted-foreground",
+                  line.right.length === 0 && "ml-auto"
+                )}
+              >
+                <MoveUpRightIcon
+                  aria-label="Away from its Project's workspace"
+                  className="size-3"
+                />
+              </span>
+            )}
           </span>
         )
       })}

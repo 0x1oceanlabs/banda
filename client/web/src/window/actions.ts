@@ -31,6 +31,7 @@ import { modules } from "../modules"
 import {
   groupedOf,
   homeOf,
+  leads,
   identityOf,
   launcher,
   minOf,
@@ -75,6 +76,9 @@ import {
   focused,
   focusedColumn,
   isFree,
+  movingAs,
+  REFUSED,
+  admits,
   fresh,
   go,
   heighten,
@@ -234,6 +238,35 @@ function movedTo(w: Workspaces, side: "first" | "last"): Step {
   return column && next !== w ? columnMoved(next, column.id) : undefined
 }
 
+/** Whether a Pane is the focused one of `workspaces`, by all its args. */
+export function focusedIn(workspaces: Workspaces) {
+  const entry = focused(workspaces)
+  return (project: ProjectId, pane: PaneState) =>
+    entry !== undefined && samePane(entry, { project, pane }, identityOf)
+}
+
+/** What the Threads away from their Project's workspace show, on a free
+ * one or another Project's, in the row and solo: their sidebar rows say so
+ * (ADR 0102, decision 6). */
+export function strayedIn(
+  workspaces: Workspaces,
+  { flow, scratch }: Placing
+): ReadonlySet<string> {
+  if (flow === "free") return new Set()
+  return new Set(
+    workspaces.list
+      .flatMap((workspace) =>
+        workspace.columns
+          .flatMap((c) => c.entries)
+          .filter((entry) => entry.project !== workspace.project)
+      )
+      .filter(
+        (entry) => !scratch(entry.project) && homeOf(entry.pane) === "project"
+      )
+      .flatMap((entry) => showsOf(entry.pane) ?? [])
+  )
+}
+
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
  * window (ADR 0065). */
@@ -242,7 +275,23 @@ function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
   const entry = focused(w)
   const next = how(w)
   if (!entry || next === w) return undefined
-  if (column?.group !== undefined && current(next).id !== workspace.id) {
+  const to = current(next).id
+  // Never onto another Project's workspace, in the row and solo (ADR
+  // 0102, decision 6): it says why, once however long the key is held.
+  const as = movingAs(w, entry.id, column?.group !== undefined, leads)
+  if (
+    to !== workspace.id &&
+    as !== undefined &&
+    !admits(current(next), as) &&
+    fileNow(AGENTS_FILE).flow !== "free"
+  ) {
+    toast(REFUSED, {
+      id: REFUSED,
+      description: "A Pane goes to its Project's workspace, or to a free one.",
+    })
+    return undefined
+  }
+  if (column?.group !== undefined && to !== workspace.id) {
     const plan = columnMoved(next, column.id)
     return plan && { ...plan, want: entry.id }
   }

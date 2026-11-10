@@ -4,6 +4,8 @@ import { describe, expect, test } from "vitest"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
 import {
   bring,
+  refusedTo,
+  admits,
   carry,
   close,
   consume,
@@ -685,4 +687,56 @@ describe("bringing a Pane here", () => {
     state = bring(state, A, thread("t2"), { place: "right" })
     expect(columns(state)).toEqual([["t1"], ["t2"], ["x1"]])
   })
+})
+
+test("a Pane moves to its Project's workspace or a free one, never another Project's; a Group as its Agent's Thread (ADR 0102, decision 6)", () => {
+  const entry = (id: string, project: string, kind = "terminal") => ({
+    id,
+    project,
+    pane: { kind, args: {} },
+  })
+  const state = {
+    list: [
+      {
+        id: "a",
+        project: "pa",
+        focus: 0,
+        columns: [
+          {
+            id: "c1",
+            group: "g",
+            active: 0,
+            entries: [entry("browser", "pb")],
+          },
+          {
+            id: "c2",
+            group: "g",
+            active: 0,
+            entries: [entry("thread", "pa", "thread")],
+          },
+        ],
+      },
+      {
+        id: "b",
+        project: "pb",
+        focus: 0,
+        columns: [{ id: "c3", active: 0, entries: [entry("t", "pb")] }],
+      },
+      {
+        id: "free",
+        focus: 0,
+        columns: [{ id: "c4", active: 0, entries: [entry("x", "pc")] }],
+      },
+      { id: "bottom", focus: 0, columns: [] },
+    ],
+    current: 0,
+  }
+  const lead = (one: { pane: { kind: string } }) => one.pane.kind === "thread"
+  expect(admits(state.list[2], "pa")).toBe(true)
+  expect(admits(state.list[1], "pa")).toBe(false)
+  // Alone, the browser is Project B's, yet it moves on A's, where it stands.
+  expect([...refusedTo(state, "browser", false, lead)]).toEqual([])
+  // With its Group, it goes as the Agent's Thread, Project A's.
+  expect([...refusedTo(state, "browser", true, lead)]).toEqual(["b"])
+  expect([...refusedTo(state, "x", false, lead)]).toEqual(["a", "b"])
 })

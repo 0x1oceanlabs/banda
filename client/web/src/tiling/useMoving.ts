@@ -18,7 +18,9 @@ import { cn } from "@banda/ui/lib/utils"
  */
 import { type RefObject, useEffect, useRef } from "react"
 import type { Place } from "@banda/contract/workspaces"
+import { leads } from "../registry"
 import type { Plan } from "./arrange"
+import { REFUSED, refusedTo, type Workspaces } from "./model"
 import { room, scrollOf, stripOf } from "./layout"
 import {
   carriesGroup,
@@ -61,6 +63,19 @@ export type Carrying = {
   scroll: (x: number, y: number) => boolean
   /** A contrasting ring keeps the hint visible over the overview. */
   ringed?: boolean
+  /** The workspaces `pane`, or `whole` its Group, may not go to. */
+  refuses?: (pane: string, whole: boolean) => ReadonlySet<string>
+}
+
+/** `Carrying.refuses` over `state`, in the row and solo, `strict`: every
+ * other Project's workspace (ADR 0102, decision 6). */
+export function refusing(
+  state: Workspaces,
+  strict: boolean
+): Carrying["refuses"] {
+  return strict
+    ? (pane, whole) => refusedTo(state, pane, whole, leads)
+    : undefined
 }
 
 /** How long, in milliseconds, a Pane held over a workspace's number goes
@@ -113,6 +128,11 @@ type Carry = Press & {
    * until the first move says. */
   whole?: boolean
   looks: HTMLElement[]
+  /** What the note says of the Group, over a workspace it may go to. */
+  said: string
+  /** The workspaces it may not go to, and what is dimmed for them. */
+  refused: ReadonlySet<string>
+  dimmed: HTMLElement[]
   /** Where it lands, if let go now. */
   place?: Place
   grouped?: boolean
@@ -226,6 +246,9 @@ export function useMoving(
         note,
         hint,
         looks: [from.lifted],
+        said: "",
+        refused: new Set(),
+        dimmed: [],
         frame: requestAnimationFrame(edge),
       }
       window.addEventListener("keydown", onKey, true)
@@ -246,7 +269,9 @@ export function useMoving(
       )
       if (whole === carry.whole) return false
       carry.whole = whole
-      carry.note.textContent = note ?? ""
+      carry.said = note ?? ""
+      carry.note.textContent = carry.said
+      dim(carrying.current.refuses?.(carry.pane, whole) ?? new Set())
       for (const one of carry.looks) delete one.dataset.lifted
       // The handle stays shown, lifted with its Group.
       carry.looks =
@@ -257,6 +282,22 @@ export function useMoving(
       return true
     }
 
+    /** Dims the workspaces in `refused`, in the bar and the overview,
+     * which take no drop (ADR 0102, decision 6). */
+    const dim = (refused: ReadonlySet<string>) => {
+      if (!carry) return
+      for (const one of carry.dimmed) delete one.dataset.refused
+      carry.refused = refused
+      carry.dimmed = [
+        ...document.querySelectorAll<HTMLElement>(
+          "[data-workspace],[data-row]"
+        ),
+      ].filter((one) =>
+        refused.has(one.dataset.workspace ?? one.dataset.row ?? "")
+      )
+      for (const one of carry.dimmed) one.dataset.refused = ""
+    }
+
     /** Where the Pane lands with the pointer at `x`, `y`, drawn. */
     const aim = (x: number, y: number) => {
       if (!carry) return
@@ -265,19 +306,30 @@ export function useMoving(
       carry.ghost.style.transform = `translate(${x + 12}px, ${y + 12}px)`
       const hit = document.elementFromPoint(x, y)
       const number = hit?.closest<HTMLElement>("[data-workspace]") ?? undefined
-      dropOn(number)
       const workspace = number?.dataset.workspace
-      const { place, hint, grouped }: Landed = workspace
-        ? { place: { to: "column", workspace, index: LAST } }
-        : hit
-          ? carrying.current.land(
-              hit,
-              x,
-              y,
-              carry.pane,
-              carry.whole ? carry.group?.id : undefined
-            )
-          : {}
+      // Over a workspace it may not go to: its number, its overview row,
+      // its Strip.
+      const over =
+        carry.refused.size > 0 &&
+        (workspace ??
+          hit?.closest<HTMLElement>("[data-row]")?.dataset.row ??
+          hit?.closest<HTMLElement>("[data-strip]")?.dataset.strip)
+      const refused = !!over && carry.refused.has(over)
+      carry.note.textContent = refused ? REFUSED : carry.said
+      dropOn(refused ? undefined : number)
+      const { place, hint, grouped }: Landed = refused
+        ? {}
+        : workspace
+          ? { place: { to: "column", workspace, index: LAST } }
+          : hit
+            ? carrying.current.land(
+                hit,
+                x,
+                y,
+                carry.pane,
+                carry.whole ? carry.group?.id : undefined
+              )
+            : {}
       carry.place = place
       carry.grouped = grouped
       carry.hint.classList.toggle("hidden", !hint)
@@ -320,13 +372,14 @@ export function useMoving(
       window.removeEventListener("pointercancel", onCancel, true)
       if (!carry) return
       dropOn(undefined)
-      const { pane, ghost, hint, place, grouped, frame, looks, group, whole } =
-        carry
+      const { pane, ghost, hint, place, grouped, frame, looks, dimmed } = carry
+      const { group, whole } = carry
       carry = undefined
       cancelAnimationFrame(frame)
       ghost.remove()
       hint.remove()
       for (const one of looks) delete one.dataset.lifted
+      for (const one of dimmed) delete one.dataset.refused
       delete html.dataset.drag
       window.removeEventListener("keydown", onKey, true)
       window.removeEventListener("keyup", onKey, true)

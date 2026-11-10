@@ -20,6 +20,7 @@ import {
   opening,
   picking,
   placeFor,
+  strayedIn,
   type Placing,
   pickOf,
   runAction,
@@ -335,4 +336,76 @@ test("workspace.go goes to a workspace by its place, past the ninth too, and onl
   const action = ACTIONS.find((action) => action.id === "workspace.go")
   expect(action?.unlisted).toBe(true)
   expect(action?.keys).toBeUndefined()
+})
+
+test("a Thread on a free workspace stands away from its Project's, in the row and solo (ADR 0102, decision 6)", () => {
+  const thread = { kind: "agents.thread", args: { thread: "t1" } }
+  const state: Workspaces = {
+    list: [
+      {
+        id: "free",
+        focus: 0,
+        columns: [
+          {
+            id: "c",
+            active: 0,
+            entries: [{ id: "e", project: "a", pane: thread }],
+          },
+        ],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  }
+  const row = { flow: "row", scratch: () => false } as const
+  expect([...strayedIn(state, row)]).toEqual(["t1"])
+  expect(strayedIn(state, { ...row, flow: "free" }).size).toBe(0)
+  expect(strayedIn(state, { ...row, scratch: () => true }).size).toBe(0)
+})
+
+test("Alt+Shift+N onto another Project's workspace does nothing in the row, and moves in the free Flow (ADR 0102, decision 6)", () => {
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const state: Workspaces = {
+    list: [
+      {
+        id: "mine",
+        project: "a",
+        focus: 0,
+        columns: [
+          {
+            id: "c",
+            active: 0,
+            entries: [{ id: "e", project: "a", pane: terminal }],
+          },
+        ],
+      },
+      {
+        id: "theirs",
+        project: "b",
+        focus: 0,
+        columns: [
+          {
+            id: "d",
+            active: 0,
+            entries: [{ id: "f", project: "b", pane: terminal }],
+          },
+        ],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  }
+  const sent = (flow: Flow) => {
+    takeLook({
+      files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } },
+    } as unknown as Look)
+    let step: unknown
+    const shell = {
+      change: (how: (w: Workspaces) => unknown) => (step = how(state)),
+    } as unknown as Shell
+    runAction(shell, "pane.send-2")
+    return step
+  }
+  expect(sent("row")).toBeUndefined()
+  expect(sent("free")).toBeDefined()
 })

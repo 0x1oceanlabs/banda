@@ -124,6 +124,7 @@ export function Sidebar({
   home,
   machine,
   isCurrent,
+  strayed,
 }: {
   /**
    * Shown over the Strip in a narrow window (ADR 0025, decision 10): a
@@ -144,6 +145,9 @@ export function Sidebar({
   /** Whether a Pane is the one that has the focus, by all its args, as
    * before; `Here.pane` says it by what it shows, which is #827's fix. */
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
+  /** The Threads that stand away from their Project's workspace, by what
+   * their Panes show (ADR 0102, decision 6). */
+  strayed: ReadonlySet<string>
 }) {
   const keyFor = useKeyLabel()
   // What every module lists, from the Window's items.
@@ -223,6 +227,7 @@ export function Sidebar({
       settings={settings}
       more={more.has(section.key)}
       isCurrent={isCurrent}
+      strayed={strayed}
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       engine={engine}
@@ -464,6 +469,7 @@ function SectionView({
   settings,
   more,
   isCurrent,
+  strayed,
   onToggle,
   onMore,
   engine,
@@ -474,6 +480,7 @@ function SectionView({
   settings: Settings
   more: boolean
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
+  strayed: ReadonlySet<string>
   onToggle: () => void
   onMore: () => void
   engine: Engine
@@ -560,6 +567,7 @@ function SectionView({
               settings={settings}
               inProject={project !== undefined || row.project.scratch}
               current={isCurrent(row.project.id, row.listed.pane)}
+              away={strayed.has(row.listed.id)}
               named={!mine}
               action={
                 row.stand === "later" ? (
