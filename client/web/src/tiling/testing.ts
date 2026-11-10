@@ -39,5 +39,6 @@ export function arcHosts(modules: readonly string[] | undefined): Hosts {
     seen: (name) => ({ name, icon: "server" }),
     machines: { get: () => machines, subscribe: () => () => undefined },
     modulesOf: (name) => (name === "arc" ? modules : undefined),
+    reread: () => Promise.resolve(),
   }
 }

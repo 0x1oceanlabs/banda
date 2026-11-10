@@ -32,6 +32,7 @@ import {
   within,
 } from "@banda/ui/pane"
 import { withHost } from "@banda/core"
+import { projectsChanged } from "@banda/ui/lib/projects"
 import type { Args } from "@banda/ui/module"
 import { holdTile, TileBox, TileContext } from "@banda/ui/lib/tile"
 import {
@@ -229,6 +230,11 @@ export const PaneFrame = memo(function PaneFrame({
   const reach = useReach(entry.project, paneHost(entry.pane))
   const unknown = reach.host === null
   const there = reach.host ?? undefined
+  // A Pane of a Project added on this machine since its list was read
+  // finds it by reading it again; one no machine has stays unknown.
+  useEffect(() => {
+    if (unknown) projectsChanged()
+  }, [unknown])
   const words =
     there === undefined ? undefined : reachWords(there, reach.shown, seenNamed)
   // Its host out of reach while the Pane shows: a pill under its header

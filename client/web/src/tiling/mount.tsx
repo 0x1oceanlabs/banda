@@ -23,7 +23,9 @@ import {
   type From,
   type Hosts,
   type Owner,
+  type Route,
   routeAct,
+  UNKNOWN,
 } from "@banda/core"
 import { HostsContext } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
@@ -33,6 +35,7 @@ import {
   EmptyDescription,
 } from "@banda/ui/components/empty"
 import { toast } from "@banda/ui/components/sonner"
+import { projectsChanged } from "@banda/ui/lib/projects"
 import type { AnyPaneKind, Args } from "@banda/ui/module"
 import type { PaneProps, PaneState, Runs } from "@banda/ui/pane"
 import { KindsContext } from "../launcher"
@@ -76,6 +79,30 @@ export function refused(said: string): void {
 }
 
 /**
+ * Runs an act as `route` says, or says why not (ADR 0106, law 3). A
+ * Project no machine the Window knows has may be this machine's, added
+ * since its list was read: that list is read once more, from this
+ * machine's own engine, before the act is refused, so nothing fails closed
+ * only because this window has not looked.
+ */
+export function actAs(
+  hosts: Pick<Hosts, "reread">,
+  route: () => Route,
+  run: (args: Args | undefined) => void
+): void {
+  const first = route()
+  if (first.runs) return run(first.args)
+  if (first.why !== UNKNOWN) return refused(first.said)
+  void hosts.reread().then(() => {
+    const again = route()
+    if (!again.runs) return refused(again.said)
+    // The rest of the window hears of the Project too.
+    projectsChanged()
+    run(again.args)
+  })
+}
+
+/**
  * The handles of a Pane whose values are `owner`'s, `pane` of it where it
  * is a Pane of a Project, as the Window's `hosts` place them and its
  * `routing` weighs its acts (ADR 0106, laws 1, 3 and 6):
@@ -114,9 +141,11 @@ export function handlesOf(
         own.project = project
       if (subject && own.item === undefined && act.takes("item"))
         own.item = subject
-      const route = routeAct(hosts, act, from, own)
-      if (!route.runs) return refused(route.said)
-      run(action, route.args)
+      actAs(
+        hosts,
+        () => routeAct(hosts, act, from, own),
+        (args) => run(action, args)
+      )
     })
   const runs: NonNullable<Handles["runs"]> = (what, args) => {
     const act = typeof what === "string" ? routing.act(what) : kindAct(what)
