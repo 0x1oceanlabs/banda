@@ -45,7 +45,8 @@
     },
     "shape": {
       "description": "The corners (ADR 0080, decision 6).",
-      "$ref": "#/$defs/Shape"
+      "$ref": "#/$defs/Shape",
+      "x-class": "device"
     },
     "gaps": {
       "$ref": "#/$defs/Gaps",
