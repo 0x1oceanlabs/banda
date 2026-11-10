@@ -181,22 +181,26 @@ function Branches({
   // Enter picks the first branch listed; Create when none is.
   const choices = listed.length + (creates ? 1 : 0)
   const at = chosen.words === words ? chosen.at : 0
-  const act = async (run: () => Promise<unknown>) => {
-    if ((await acting.act(run)) !== undefined) onDone()
+  // Named as its row says it, where it was not done.
+  const act = async (run: () => Promise<unknown>, what: string) => {
+    if ((await acting.act(run, what)) !== undefined) onDone()
   }
   const card = thread === null ? {} : { thread }
   const pick = (ref: Ref) => {
     if (acting.busy) return
     if (ref.current) onDone()
     else
-      void act(() =>
-        engine.call("git.switch", { name: ref.name, ...card }, { project })
+      void act(
+        () =>
+          engine.call("git.switch", { name: ref.name, ...card }, { project }),
+        `the switch to “${ref.name}”`
       )
   }
   const create = () => {
     if (!acting.busy)
-      void act(() =>
-        engine.call("git.branch", { name: made, ...card }, { project })
+      void act(
+        () => engine.call("git.branch", { name: made, ...card }, { project }),
+        `Create branch “${made}”`
       )
   }
   const choose = (at: number) => {

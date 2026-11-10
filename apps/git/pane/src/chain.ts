@@ -6,8 +6,19 @@
  * a second press while it runs does nothing. While the message is
  * written, Stop ends the run quietly: `agents.write` let go stops the
  * Harness's run, and nothing is committed.
+ *
+ * A press is one act (ADR 0106, law 4): its reads go `once`, as the
+ * writer and `git.act` do, so while the Project's machine is away it is
+ * refused whole, at once, and never completes later by itself.
  */
-import { type Engine, Refused, type ProjectId } from "@banda/contract"
+import {
+  type Engine,
+  Lost,
+  type ProjectId,
+  type Refusal,
+  Refused,
+  Unreachable,
+} from "@banda/contract"
 import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
 import { afterRun, type Ended } from "./ended"
@@ -37,6 +48,15 @@ const LINES_EVERY = 200
 export const LOST = "The connection to the engine was lost; check the status."
 /** What a run says when its stream ended with neither ✓ nor an error. */
 export const UNSAID = "Git stopped without saying how it ended."
+
+/** Each run's name, as its button says it, and as words that say it was
+ * not done name it: "arc is away: Commit was not sent." */
+const NAMES: Record<Action, string> = {
+  commit: "Commit",
+  commit_push: "Commit & push",
+  push: "Push",
+  pull: "Pull",
+}
 
 const STEPS: Record<Step, string> = {
   branching: "Making the branch…",
@@ -86,7 +106,8 @@ export type Writer = { name: string } & (
 
 /** What `writer` replies to `prompt`, heard on `agents.write`; null once
  * `signal` aborts, which lets it go and so stops the Harness's run. Heard
- * once: a reconnect never runs the writer again. */
+ * once: a reconnect never runs the writer again, and one refused or cut
+ * off by the client fails with its error, in its machine's words. */
 function written(
   engine: Engine,
   project: ProjectId,
@@ -103,9 +124,10 @@ function written(
         piece.kind === "reply"
           ? resolve(piece.text)
           : reject(new Refused(piece.refusal)),
-      (refusal) => {
+      (refusal, error) => {
         const message = `${name} stopped without writing the message.`
-        reject(new Refused(refusal ?? { code: "conflict", message }))
+        if (error) reject(unsent(error))
+        else reject(new Refused(refusal ?? { code: "conflict", message }))
       },
       { once: true }
     )
@@ -118,6 +140,17 @@ function written(
       { once: true }
     )
   })
+}
+
+/** `error` as one that was not sent: the writer cut off on its way may
+ * have run, but nothing is committed before it replies, so the Commit was
+ * not sent. */
+function unsent(error: Error): Error {
+  if (error instanceof Unreachable) {
+    const { host, message, machine, as_of } = error
+    return new Unreachable(host, message, { machine, as_of })
+  }
+  return error instanceof Lost ? new Lost() : error
 }
 
 /** How a commit goes: on a new branch named for the change (`feature`),
@@ -168,7 +201,7 @@ export async function run(
   try {
     let message = own
     let branch: string | undefined
-    const ask = { project }
+    const ask = { project, once: true }
     if (writing) {
       const { prompt } = await engine.call(
         "git.prompt",
@@ -238,23 +271,32 @@ export async function run(
             return end({ is: "failed", message: piece.message })
         }
       },
-      (refusal) => {
+      (refusal, error) => {
         // A line due after it ended shows nowhere: the run is not running.
         clearTimeout(showing)
         if (ended) return
-        const message = !refusal
-          ? UNSAID
-          : refusal.code === "may_have_run"
-            ? LOST
-            : refusal.message
-        end({ is: "failed", message })
+        end({ is: "failed", message: endWords(action, refusal, error) })
       },
       // Heard again after a reconnect, it would commit or push again.
       { once: true }
     )
   } catch (error) {
-    if (!signal.aborted) end({ is: "failed", message: problem(error) })
+    if (!signal.aborted)
+      end({ is: "failed", message: problem(error, NAMES[action]) })
   } finally {
     if (stopping.get(project) === stopper) stopping.delete(project)
   }
+}
+
+/** Why `git.act` for `action` ended with no ✓ or error of git's: what
+ * the client says, as it was refused or cut off on its way, naming the
+ * machine and the run; else as the engine refused it. */
+function endWords(
+  action: Action,
+  refusal: Refusal | undefined,
+  error: Error | undefined
+): string {
+  if (error) return problem(error, NAMES[action])
+  if (!refusal) return UNSAID
+  return refusal.code === "may_have_run" ? LOST : refusal.message
 }

@@ -14,17 +14,12 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import { MinusIcon, PlusIcon, Undo2Icon } from "lucide-react"
-import type { Act } from "./stage"
+import { NAMES, type Act } from "./stage"
 
 const ICONS: Record<Act, typeof PlusIcon> = {
   stage: PlusIcon,
   unstage: MinusIcon,
   revert: Undo2Icon,
-}
-const NAMES: Record<Act, string> = {
-  stage: "Stage",
-  unstage: "Unstage",
-  revert: "Revert",
 }
 
 /** What can be done to a file or a hunk: icons in a file's header, or

@@ -7,7 +7,7 @@ export type Heard = {
   method: string
   params: unknown
   onPiece: (piece: never) => void
-  onEnd: (refusal?: Refusal) => void
+  onEnd: (refusal?: Refusal, error?: Error) => void
   once: boolean
   stopped: boolean
 }
@@ -31,7 +31,7 @@ export function fakeEngine(answers: Record<string, unknown> = {}): {
       method: string,
       params: unknown,
       onPiece: (piece: never) => void,
-      onEnd: (refusal?: Refusal) => void,
+      onEnd: (refusal?: Refusal, error?: Error) => void,
       how?: { once?: boolean }
     ) => {
       const heard = {

@@ -10,6 +10,14 @@ import type { Scope } from "./scope"
 
 export type Act = "stage" | "unstage" | "revert"
 
+/** Each act's name, as its button says it, and as words that say it was
+ * not done name it: "arc is away: Revert was not sent." */
+export const NAMES: Record<Act, string> = {
+  stage: "Stage",
+  unstage: "Unstage",
+  revert: "Revert",
+}
+
 /** What a scope's changes can have done to them; the rest only show. */
 export function actsOf(scope: Scope): Act[] {
   switch (scope.kind) {
