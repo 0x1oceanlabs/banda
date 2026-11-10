@@ -47,7 +47,7 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import { useFence } from "@banda/ui/hooks/use-status"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { cn } from "@banda/ui/lib/utils"
-import { clock } from "@banda/ui/lib/words"
+import { clock, problem } from "@banda/ui/lib/words"
 import {
   ArrowLeftIcon,
   CheckIcon,
@@ -165,6 +165,21 @@ export function AccountPage({
           <NewThreads {...props} project={project} write={write} />
         </Section>
       )}
+      <Row
+        title="Remove"
+        about="Moves its Threads to the default after their current Turn. Keeps its profile signed in."
+      >
+        <Remove
+          engine={props.engine}
+          harness={harness}
+          roles={roles}
+          count={props.use?.threads}
+          onRemoved={() => {
+            onWritten()
+            onBack()
+          }}
+        />
+      </Row>
       <Section title="How it starts">
         <HowItStarts harness={harness} file={harnesses} write={write} />
       </Section>
@@ -655,15 +670,6 @@ function HowItStarts({
           Edit in harnesses.toml
         </Button>
       </Row>
-      <Row
-        title="Remove"
-        about="Takes the entry out of harnesses.toml. It stays signed in."
-      >
-        <Remove
-          harness={harness}
-          onRemove={() => write(file.reset(`harness.${harness.id}`))}
-        />
-      </Row>
     </div>
   )
 }
@@ -690,41 +696,76 @@ export function Row({
 }
 
 function Remove({
+  engine,
   harness,
-  onRemove,
+  roles,
+  count,
+  onRemoved,
 }: {
+  engine: Engine
   harness: HarnessView
-  onRemove: () => void
+  roles: Roles
+  count?: number
+  onRemoved: () => void
 }) {
   const [asking, setAsking] = useState(false)
+  const [busy, setBusy] = useState(false)
+  const [refused, setRefused] = useState<string>()
+  const list = useRead(
+    useCallback(() => engine.call("harnesses.list", {}), [engine])
+  )
+  const target =
+    list.state === "ready"
+      ? list.value.find((h) => h.id === roles.default)
+      : undefined
+  const canRemove = target?.enabled && target.id !== harness.id
+  const remove = async () => {
+    setBusy(true)
+    setRefused(undefined)
+    try {
+      await engine.command("harnesses.remove_account", {
+        harness: harness.id,
+        to: target?.id,
+      })
+      onRemoved()
+    } catch (error) {
+      setRefused(problem(error))
+    } finally {
+      setBusy(false)
+    }
+  }
   return (
     <>
       <Button variant="ghost" size="sm" onClick={() => setAsking(true)}>
         <Trash2Icon />
         Remove
       </Button>
-      <Dialog open={asking} onOpenChange={setAsking}>
+      <Dialog
+        open={asking}
+        onOpenChange={(open) => {
+          if (!busy) setAsking(open)
+        }}
+      >
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Remove {harness.name}?</DialogTitle>
             <DialogDescription>
-              Its entry leaves harnesses.toml. Its Threads stay, and cannot go
-              on until an entry with the ID {harness.id} is back. Turning it off
-              keeps the entry.
+              {canRemove
+                ? `${count === undefined ? "Its Threads move" : count === 1 ? "1 Thread moves" : `${count} Threads move`} to ${target.name} after their current Turn. History stays. Its profile stays signed in and is kept for existing sessions.`
+                : "Choose another enabled default Account before removing this one."}
             </DialogDescription>
           </DialogHeader>
+          {refused && <Problem>{refused}</Problem>}
           <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
+            <DialogClose render={<Button variant="outline" disabled={busy} />}>
               Cancel
             </DialogClose>
             <Button
               variant="destructive"
-              onClick={() => {
-                setAsking(false)
-                onRemove()
-              }}
+              disabled={!canRemove || busy}
+              onClick={() => void remove()}
             >
-              Remove
+              {busy && <Spinner />}Remove account
             </Button>
           </DialogFooter>
         </DialogContent>

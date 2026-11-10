@@ -198,7 +198,7 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
 
-Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `connect_account`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `login_finish`, `sign_in`, `sign_out`, `limits`, `usage`.
+Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `connect_account`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `remove_account`, `login_finish`, `sign_in`, `sign_out`, `limits`, `usage`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -210,6 +210,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `login_status`: Reads a sign-in's bounded terminal output and whether it ended.
 - `login_input`: Sends input to the running sign-in terminal, not to a shell.
 - `login_cancel`: Stops a running sign-in; finish it to refresh the Account.
+- `remove_account`: Removes an Account from choices and moves its Threads to the default after their current Turn. Keeps profiles and history; refuses removing the default.
 - `login_finish`: Refreshes the Account after a completed sign-in. Then ask account_status to confirm the Harness's report.
 - `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
 

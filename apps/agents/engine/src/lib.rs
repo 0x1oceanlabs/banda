@@ -45,6 +45,7 @@ mod notes;
 mod notices;
 mod old_agents;
 mod questions;
+mod retirements;
 mod rules;
 pub mod sending;
 mod skills;
@@ -1497,6 +1498,26 @@ impl Module for Agents {
                 between::cut_short(tx)
             })
             .await?;
+        let harnesses = self.harnesses.clone();
+        project
+            .write(move |tx| retirements::quiet(tx, &harnesses))
+            .await?;
+        if let Some(heard) = project
+            .listen_to_machine("removed-accounts", banda_harnesses::account_changed())
+            .await?
+        {
+            tokio::spawn(retirements::follow(heard, self.harnesses.clone(), true));
+        }
+        let ended = banda_kernel::EventFilter {
+            module: Some("agents".into()),
+            subject: None,
+            kinds: Some(vec!["turn.ended".into()]),
+        };
+        tokio::spawn(retirements::follow(
+            project.listen("removed-accounts-turns", ended).await?,
+            self.harnesses.clone(),
+            false,
+        ));
         // What git did from a Thread's card, and the tabs its Person lent
         // it, its Agent reads next, each once.
         for (name, filter) in notices::heard() {

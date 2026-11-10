@@ -555,6 +555,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "login_status",
                 "login_input",
                 "login_cancel",
+                "remove_account",
                 "login_finish",
                 "limits",
                 "keys_list",
@@ -944,6 +945,62 @@ fn an_agents_banda_acts_under_its_pass() {
     assert!(
         !duplicate.status.success(),
         "a second entry cannot quietly share the first sign-in"
+    );
+
+    let retired_key = places.as_agent(
+        session,
+        &[
+            "settings",
+            "set",
+            "harnesses.toml",
+            "harness.review-work.retired",
+            "{}",
+        ],
+    );
+    assert!(
+        !retired_key.status.success(),
+        "retirement is only through its bounded contract"
+    );
+    let removed = places.as_agent(session, &["account", "remove", "review-work"]);
+    assert!(removed.status.success(), "{removed:?}");
+    assert!(folder.is_dir(), "session provenance is retained");
+    let listed = places.as_agent(session, &["account", "list"]);
+    let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
+    assert!(
+        !listed["ok"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|h| h["id"] == "review-work")
+    );
+
+    // Removal's machine event moves an idle Thread in another Project,
+    // without giving the Agent access to that Project's contents.
+    places.ok("keys.settings_set", None, json!({ "file": "harnesses.toml", "key": "harness.temporary", "value": "{ name = \"Temporary\", of = \"fake\" }" }));
+    let old = places.ok(
+        "agents.send",
+        Some(&home),
+        json!({"harness": "temporary", "text": "hello"}),
+    );
+    wait_for(Duration::from_secs(10), || {
+        let view = places.ok(
+            "agents.thread",
+            Some(&home),
+            json!({"thread": old["thread"]}),
+        );
+        (view["turns"][0]["state"] == "done").then_some(())
+    })
+    .expect("temporary Account's Turn ended");
+    let removed = places.as_agent(session, &["account", "remove", "temporary"]);
+    assert!(removed.status.success(), "{removed:?}");
+    let view = places.ok(
+        "agents.thread",
+        Some(&home),
+        json!({"thread": old["thread"]}),
+    );
+    assert_eq!(
+        view["thread"]["harness"], "fake",
+        "the cross-scope reaction moves idle Threads before answering"
     );
 
     // Its own pass's status: the engine that gave it, and its fence, and

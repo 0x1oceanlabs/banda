@@ -51,3 +51,22 @@ The Account contract validates its inputs before invoking that writer;
 it does not make `settings_set`'s arbitrary Harness execution keys writable
 to Agents. Tests cover the same calls under a Person and an Agent pass,
 invalid IDs and folders, duplicate connections and retained credentials.
+
+### Removing an Account
+
+Removal records its destination and caller in the existing settings entry.
+The Account leaves pickers and refuses new Threads immediately. Each
+Project moves its idle Threads, including archived Threads, through its own
+store; a running Turn keeps its Account and moves once it ends. A Project
+opened later applies the same instruction. The next Turn also checks it,
+so a queued Turn cannot race a listener. The receipt is idempotent.
+
+The old entry remains as session provenance: Codex may need its old home
+to resume a session, and another Harness needs its name for a handoff.
+Profile folders are retained, including Banda-created folders, until no
+session needs them; removal never recursively deletes provider data.
+This makes explicit the ownership condition in ADR 0093 decision 9; it
+is not permission to delete an adopted folder. Automatic reclamation is
+separate maintenance. Missing or disabled destinations cause a visible
+refusal; a removal cannot target itself, remove the default, or remove a
+Harness whose other Accounts still inherit its program.

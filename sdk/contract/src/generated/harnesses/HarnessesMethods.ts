@@ -15,6 +15,7 @@ import type { LoginId } from "./LoginId";
 import type { LoginInput } from "./LoginInput";
 import type { LoginStatus } from "./LoginStatus";
 import type { OneHarness } from "./OneHarness";
+import type { RemoveAccount } from "./RemoveAccount";
 import type { SignIn } from "./SignIn";
 import type { UsageNow } from "./UsageNow";
 
@@ -64,7 +65,7 @@ login_cancel: CallMethod<LoginId, null>,
  * Refreshes the Account after a completed sign-in. Then ask
  * account_status to confirm the Harness's report.
  */
-login_finish: CommandMethod<LoginId, null>, 
+remove_account: CommandMethod<RemoveAccount, string>, login_finish: CommandMethod<LoginId, null>, 
 /**
  * Signs in with one of the Harness's ways. A way in a terminal ran
  * there already: the Person signed in in it.

@@ -15,7 +15,7 @@
 
 use crate::accounts::{
     AccountProfile, AccountSettings, AccountStatus, AccountWay, ConnectAccount, LoginAccount,
-    LoginId, LoginInput, LoginStatus, Logins,
+    LoginId, LoginInput, LoginStatus, Logins, RemoveAccount,
 };
 use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
@@ -123,6 +123,10 @@ banda_kernel::methods! {
         call login_input(LoginInput) -> (), Write, tool "login_input";
         /// Stops a running sign-in; finish it to refresh the Account.
         call login_cancel(LoginId) -> (), Write, tool "login_cancel";
+        /// Removes an Account from choices and moves its Threads to the
+        /// default after their current Turn. Keeps profiles and history;
+        /// refuses removing the default.
+        command remove_account(RemoveAccount) -> String, Write, tool "remove_account";
         /// Refreshes the Account after a completed sign-in. Then ask
         /// account_status to confirm the Harness's report.
         command login_finish(LoginId) -> (), Write, tool "login_finish";
@@ -275,6 +279,32 @@ impl HarnessesModule {
             .as_ref()
             .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
             .connect(account)
+    }
+
+    async fn remove_account(&self, call: Call, args: RemoveAccount) -> Result<String, Refusal> {
+        let to = self
+            .accounts
+            .as_ref()
+            .ok_or_else(|| Refusal::conflict("Account settings are not configured."))?
+            .remove(&args.harness, args.to.as_deref(), call.participant())?;
+        self.hosts.let_go(call.project().id(), Some(&args.harness));
+        let author = call.participant();
+        let to = call
+            .command(move |tx| {
+                tx.emit(
+                    ACCOUNT_CHANGED,
+                    VERSION,
+                    Some(&args.harness),
+                    author,
+                    &serde_json::json!({"removed": true, "to": to}),
+                )?;
+                Ok(to)
+            })
+            .await?;
+        if !call.project().reacted(REACTED).await {
+            tracing::warn!("Account removed; some Projects will apply the move when they catch up");
+        }
+        Ok(to)
     }
 
     async fn account(

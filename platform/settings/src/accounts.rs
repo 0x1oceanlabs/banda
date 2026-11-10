@@ -67,6 +67,106 @@ fn valid_id(id: &str) -> bool {
 }
 
 impl AccountSettings for Accounts {
+    fn remove(
+        &self,
+        id: &str,
+        expected: Option<&str>,
+        by: banda_kernel::Participant,
+    ) -> Result<String, Refusal> {
+        let _writing = self
+            .writing
+            .lock()
+            .map_err(|_| Refusal::conflict("Account settings are busy."))?;
+        let harness = self
+            .harnesses
+            .find(id)
+            .ok_or_else(|| Refusal::not_found("That Account does not exist."))?;
+        if harness.retired.is_some() {
+            return self
+                .harnesses
+                .replacement(id)
+                .map_err(Refusal::conflict)?
+                .map(|(to, _)| to)
+                .ok_or_else(|| Refusal::conflict("The Account's removal destination is missing."));
+        }
+        let path = self.config.join("agents.toml");
+        let settings = if path.exists() {
+            let text =
+                std::fs::read_to_string(&path).map_err(|e| Refusal::invalid(e.to_string()))?;
+            let mut problems = Vec::new();
+            let settings = banda_look::file::read::<banda_agents::sending::AgentsSettings>(
+                &path,
+                &text,
+                &mut problems,
+            );
+            if !problems.is_empty() {
+                return Err(Refusal::invalid(
+                    "Fix agents.toml before removing an Account.",
+                ));
+            }
+            settings
+                .ok_or_else(|| Refusal::invalid("Fix agents.toml before removing an Account."))?
+        } else {
+            Default::default()
+        };
+        let start = settings.start.unwrap_or_default();
+        let to = start
+            .account
+            .or_else(|| {
+                self.harnesses
+                    .views()
+                    .into_iter()
+                    .find(|h| h.enabled)
+                    .map(|h| h.id)
+            })
+            .ok_or_else(|| Refusal::conflict("Choose a default Account first."))?;
+        if expected.is_some_and(|was| was != to) {
+            return Err(Refusal::conflict(
+                "The default Account changed. Review the removal again.",
+            ));
+        }
+        if to == id {
+            return Err(Refusal::conflict(
+                "Choose another default Account before removing this one.",
+            ));
+        }
+        self.harnesses.get(&to).map_err(Refusal::conflict)?;
+        if self.harnesses.views().iter().any(|h| {
+            self.harnesses
+                .find(&h.id)
+                .is_some_and(|h| h.of.as_deref() == Some(id))
+        }) {
+            return Err(Refusal::conflict(
+                "Other Accounts inherit this Harness. Remove those Accounts first.",
+            ));
+        }
+        // Clear the fallback before retirement. A failed second write leaves
+        // the Account usable and reports the problem; repeating is safe.
+        if start.fallback.as_deref() == Some(id) {
+            crate::reset(&self.config, "agents.toml", "start.fallback")
+                .map_err(|e| Refusal::invalid(format!("Could not clear the fallback: {e:?}")))?;
+        }
+        let mut author = InlineTable::new();
+        let (kind, id_of_author) = match by {
+            banda_kernel::Participant::Person(id) => ("person", id.to_string()),
+            banda_kernel::Participant::Agent(id) => ("agent", id.to_string()),
+        };
+        author.insert("kind", Value::from(kind));
+        author.insert("id", Value::from(id_of_author));
+        let mut retired = InlineTable::new();
+        retired.insert("to", Value::from(to.clone()));
+        retired.insert("by", Value::InlineTable(author));
+        let value = Value::InlineTable(retired);
+        crate::set(
+            &self.config,
+            "harnesses.toml",
+            &format!("harness.{}.retired", Value::from(id)),
+            &value.to_string(),
+        )
+        .map_err(|e| Refusal::invalid(format!("Could not remove the Account: {e:?}")))?;
+        Ok(to)
+    }
+
     fn profiles(&self) -> Result<Vec<AccountProfile>, Refusal> {
         let mut profiles = Vec::new();
         for id in ["claude", "codex"] {
@@ -241,6 +341,64 @@ mod tests {
             name: Some("Work".into()),
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }
+    }
+
+    #[test]
+    fn removal_keeps_provenance_and_profiles_and_validates_the_destination() {
+        let root = tempfile::tempdir().unwrap();
+        let accounts = accounts(root.path());
+        accounts.connect(add("work", None)).unwrap();
+        accounts.connect(add("spare", None)).unwrap();
+        let by = banda_kernel::Participant::Agent(banda_kernel::AgentId::new());
+        let settings = accounts.config.join("agents.toml");
+        std::fs::write(
+            &settings,
+            "[start]\naccount = \"work\"\nfallback = \"spare\"\n",
+        )
+        .unwrap();
+        assert!(
+            accounts.remove("work", None, by).is_err(),
+            "the default cannot remove itself"
+        );
+        assert!(
+            accounts.remove("claude", None, by).is_err(),
+            "inherited programs stay"
+        );
+        let credentials = accounts.owned.join("spare/.credentials.json");
+        std::fs::write(&credentials, "kept untouched").unwrap();
+        assert!(
+            accounts.remove("spare", Some("claude"), by).is_err(),
+            "stale confirmation writes nothing"
+        );
+        assert_eq!(accounts.remove("spare", None, by).unwrap(), "work");
+        assert_eq!(
+            accounts.remove("spare", None, by).unwrap(),
+            "work",
+            "idempotent"
+        );
+        assert!(accounts.harnesses.get("spare").is_err());
+        assert!(!accounts.harnesses.views().iter().any(|h| h.id == "spare"));
+        assert_eq!(
+            accounts.harnesses.replacement("spare").unwrap(),
+            Some(("work".into(), by))
+        );
+        assert!(
+            accounts.harnesses.find("spare").is_some(),
+            "old sessions keep their source"
+        );
+        assert_eq!(
+            std::fs::read_to_string(credentials).unwrap(),
+            "kept untouched"
+        );
+        assert!(
+            !std::fs::read_to_string(settings)
+                .unwrap()
+                .contains("fallback")
+        );
+        assert!(
+            accounts.connect(add("spare", None)).is_err(),
+            "an old ID cannot name a different session source"
+        );
     }
 
     #[test]

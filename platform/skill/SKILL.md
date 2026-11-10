@@ -237,6 +237,7 @@ banda account disable codex-work
 banda account default claude-work
 banda account fallback codex-work
 banda account fallback # clear it
+banda account remove codex-work
 ```
 
 The folder is on the engine's machine. Discovery includes Omarchy's
@@ -258,3 +259,8 @@ Once done, `banda account login-finish LOGIN` refreshes the Account; ask
 program exit alone is not proof. A login lasts at most ten minutes, and
 only one runs for each Account. These commands print JSON and refuse
 unknown Accounts, unsupported ways and invalid changes.
+
+Removing an Account moves its Threads to the current default after their
+active Turn. Choose another default before removing that one. Removal
+keeps history, the old session source and profile folders; it does not
+sign out. An Account's old ID stays reserved for its sessions.
