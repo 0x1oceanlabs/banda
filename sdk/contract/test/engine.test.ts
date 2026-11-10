@@ -38,6 +38,8 @@ beforeAll(() => {
 let dir: string
 let engine: ChildProcess | null = null
 let client: Engine | null = null
+/** A second client a test makes, closed after it however it went. */
+let other: Engine | null = null
 
 beforeEach(() => {
   dir = mkdtempSync(join(tmpdir(), "banda-contract-"))
@@ -50,6 +52,8 @@ beforeEach(() => {
 
 afterEach(async () => {
   client?.close()
+  other?.close()
+  other = null
   await stop()
   rmSync(dir, { recursive: true, force: true })
   vi.unstubAllGlobals()
@@ -442,11 +446,13 @@ type Sent = { type: string; method?: string; command?: string }
  * The WebSocket the window opens, which notes each frame it sends, on
  * each connection; told to `drop`, it ends its connection itself right
  * after the next command goes, as a link that breaks, so that command's
- * answer is never heard (a socket closing hears nothing more).
+ * answer is never heard (a socket closing hears nothing more). Told to
+ * `cut` a method, it does so after the next call or stream of it.
  */
 class Noting extends WebSocket {
   static opened: Noting[] = []
   static drop = false
+  static cut: string | undefined
   readonly frames: Sent[] = []
   constructor(url: string | URL) {
     super(url)
@@ -456,6 +462,10 @@ class Noting extends WebSocket {
     super.send(data)
     const frame = JSON.parse(String(data)) as Sent
     this.frames.push(frame)
+    if (frame.method !== undefined && frame.method === Noting.cut) {
+      Noting.cut = undefined
+      this.close()
+    }
     if (frame.command === undefined || !Noting.drop) return
     Noting.drop = false
     this.close()
@@ -472,6 +482,7 @@ const sentWith = (id: string) =>
 function noting() {
   Noting.opened = []
   Noting.drop = false
+  Noting.cut = undefined
   vi.stubGlobal("WebSocket", Noting)
 }
 
@@ -659,4 +670,244 @@ test("an engine that names no machine fails a command sent once with Lost as its
       once: true,
     })
   ).rejects.toBeInstanceOf(Lost)
+})
+
+/** The frames the window sent that ask for `method`, on any connection. */
+const asked = (method: string) =>
+  Noting.opened.flatMap((socket) =>
+    socket.frames.filter((frame) => frame.method === method)
+  )
+
+/** How a stream ended, as `onEnd` hears it. */
+type End = { code?: string; error?: Error }
+
+/** Hears `git.act`, an act, in `project`; returns how it ended. */
+function committing(engine: Engine, project: ProjectId): End[] {
+  const ends: End[] = []
+  engine.stream(
+    project,
+    "git.act",
+    { action: "commit", message: "Never" },
+    () => {},
+    (refusal, error) => ends.push({ code: refusal?.code, error })
+  )
+  return ends
+}
+
+test("with its machine away, a call that acts and a stream that acts are refused at once and never sent; reads, and only reads, wait", async () => {
+  noting()
+  await serve()
+  client = new Engine(address, { unreachable: arcAway })
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  client.away(arcAway())
+
+  // A hunk reverted in arc's Diff, a Commit on arc's card.
+  const reverting = client.call(
+    "git.revert",
+    { files: ["a.txt"] },
+    { project: project.id }
+  )
+  await expect(reverting).rejects.toBeInstanceOf(Unreachable)
+  await expect(reverting).rejects.toMatchObject({
+    message: "arc is away",
+    may_have_run: false,
+  })
+  const commit = committing(client, project.id)
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]!.code).toBe("conflict")
+  expect(commit[0]!.error).toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  // A read sent once, as a gesture's reads before its act, is refused as
+  // they are.
+  await expect(
+    client.call("git.status", {}, { project: project.id, once: true })
+  ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+
+  // A read call and a read stream wait for it.
+  let status: unknown
+  void client
+    .call("git.status", {}, { project: project.id })
+    .then((read) => (status = read))
+  const watched: unknown[] = []
+  client.stream(
+    project.id,
+    "git.watch",
+    {},
+    (piece) => watched.push(piece),
+    () => {}
+  )
+  await new Promise((done) => setTimeout(done, 300))
+  expect(status).toBeUndefined()
+  expect(watched).toEqual([])
+
+  // Back: the reads are answered, and the acts went nowhere.
+  client.wake()
+  await until(client, "open")
+  await expect.poll(() => status).toMatchObject({ repo: false })
+  await expect.poll(() => watched).not.toEqual([])
+  await new Promise((done) => setTimeout(done, 300))
+  expect(asked("git.revert")).toEqual([])
+  expect(asked("git.act")).toEqual([])
+  expect(commit).toHaveLength(1)
+})
+
+test("an act asked while its engine is down, its machine in reach, waits and goes once it is back, on this machine's own engine too; one still waiting as its machine goes is refused, never sent", async () => {
+  noting()
+  await serve()
+  client = new Engine(address, { unreachable: arcAway })
+  await until(client, "open")
+  const work = await client.command("projects.create", { name: "Work" })
+  const here = await client.command("projects.create", { name: "Here" })
+  const plain = (other = new Engine(address))
+  await until(plain, "open")
+  await stop()
+  await until(client, "lost")
+  await until(plain, "lost")
+
+  // A live machine's link coming back, and this machine's engine as it
+  // restarts: what is asked meanwhile waits, and goes once it is back.
+  const init = client.call("git.init", {}, { project: work.id })
+  const status = client.call("git.status", {}, { project: work.id, once: true })
+  const commit = committing(client, work.id)
+  const initHere = plain.call("git.init", {}, { project: here.id })
+  await new Promise((done) => setTimeout(done, 300))
+  expect(asked("git.init")).toEqual([])
+  await serve()
+  await expect(init).resolves.toBeNull()
+  await expect(initHere).resolves.toBeNull()
+  await expect(status).resolves.toMatchObject({})
+  // The engine, not the client, ends the commit: it went once it opened.
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]!.error).toBeUndefined()
+  expect(asked("git.init")).toHaveLength(2)
+  expect(asked("git.act")).toHaveLength(1)
+
+  // Down again, and arc said to be away before it is back: what waited
+  // is refused as not sent, and goes no more.
+  await stop()
+  await until(client, "lost")
+  const waiting = client.call("git.init", {}, { project: work.id })
+  const read = client.call("git.status", {}, { project: work.id, once: true })
+  const unsent = committing(client, work.id)
+  client.away(arcAway())
+  for (const refused of [waiting, read])
+    await expect(refused).rejects.toMatchObject({
+      name: "Unreachable",
+      message: "arc is away",
+      may_have_run: false,
+    })
+  await expect.poll(() => unsent).toHaveLength(1)
+  expect(unsent[0]).toMatchObject({
+    code: "conflict",
+    error: { name: "Unreachable", may_have_run: false },
+  })
+  await serve()
+  client.wake()
+  await until(client, "open")
+  await new Promise((done) => setTimeout(done, 300))
+  expect(asked("git.init")).toHaveLength(2)
+  expect(asked("git.act")).toHaveLength(1)
+  expect(unsent).toHaveLength(1)
+})
+
+test("an act asked before the first connection is tried waits for that try, and goes as it opens", async () => {
+  noting()
+  await serve()
+  // A Project made first, by a client of its own, for the acts to name.
+  const maker = (other = new Engine(address))
+  const project = await maker.command("projects.create", { name: "First" })
+  client = new Engine(address, { unreachable: arcAway })
+  expect(client.status.state).toBe("connecting")
+  const made = client.command("projects.create", { name: "Second" })
+  const init = client.call("git.init", {}, { project: project.id })
+  const ends: End[] = []
+  client.stream(
+    project.id,
+    "git.act",
+    { action: "commit", message: "None to commit" },
+    () => {},
+    (refusal, error) => ends.push({ code: refusal?.code, error })
+  )
+  expect(client.status.state).toBe("connecting")
+  await expect(made).resolves.toMatchObject({ name: "Second" })
+  await expect(init).resolves.toBeNull()
+  // It went once it opened: the engine, not the client, ends it.
+  await expect.poll(() => ends).toHaveLength(1)
+  expect(ends[0]!.error).toBeUndefined()
+  expect(asked("git.init")).toHaveLength(1)
+  expect(asked("git.act")).toHaveLength(1)
+})
+
+test("a call and a stream that act, on their way as their machine goes, end as ones that may have run, and are not asked again", async () => {
+  noting()
+  await serve()
+  // Answers come late, as from a machine far away: each is on its way as
+  // the machine goes.
+  client = new Engine(async () => ({ ...(await address()), latency: 1_000 }), {
+    unreachable: arcAway,
+  })
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const init = client.call("git.init", {}, { project: project.id })
+  const commit = committing(client, project.id)
+  await expect.poll(() => asked("git.init")).toHaveLength(1)
+  await expect.poll(() => asked("git.act")).toHaveLength(1)
+  client.away(arcAway())
+  await expect(init).rejects.toMatchObject({
+    name: "Unreachable",
+    host: "arc",
+    may_have_run: true,
+  })
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]!.code).toBe("may_have_run")
+  expect(commit[0]!.error).toMatchObject({
+    name: "Unreachable",
+    may_have_run: true,
+  })
+
+  // It reached the engine before the machine went, and ran there once;
+  // nothing went again once it was back.
+  client.wake()
+  await until(client, "open")
+  expect(
+    await client.call("git.status", {}, { project: project.id })
+  ).toMatchObject({ repo: true })
+  await new Promise((done) => setTimeout(done, 1_200))
+  expect(asked("git.init")).toHaveLength(1)
+  expect(asked("git.act")).toHaveLength(1)
+  expect(commit).toHaveLength(1)
+  // Each round trip takes a second.
+}, 15_000)
+
+test("an act on its way as the link to this machine's own engine breaks fails as one that may have run, with Lost, and is not asked again once it is back", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  // The link breaks as each goes, so its answer is never heard.
+  Noting.cut = "git.init"
+  const init = client.call("git.init", {}, { project: project.id })
+  await expect(init).rejects.toMatchObject({ name: "Lost", may_have_run: true })
+  await until(client, "open")
+  Noting.cut = "git.act"
+  const commit = committing(client, project.id)
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]).toMatchObject({
+    code: "may_have_run",
+    error: { name: "Lost", may_have_run: true },
+  })
+  // Each reached the engine, and went no more once it was back.
+  await until(client, "open")
+  expect(
+    await client.call("git.status", {}, { project: project.id })
+  ).toMatchObject({ repo: true })
+  await new Promise((done) => setTimeout(done, 300))
+  expect(asked("git.init")).toHaveLength(1)
+  expect(asked("git.act")).toHaveLength(1)
+  expect(commit).toHaveLength(1)
 })

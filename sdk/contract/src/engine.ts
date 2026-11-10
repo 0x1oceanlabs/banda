@@ -1,5 +1,6 @@
 import type { ClientFrame } from "./generated/ClientFrame"
 import type { CommandId } from "./generated/CommandId"
+import { DOES, type Does } from "./generated/does"
 import type { EngineFrame } from "./generated/EngineFrame"
 import type { Event } from "./generated/Event"
 import type { EventFilter } from "./generated/EventFilter"
@@ -52,9 +53,9 @@ export type Status =
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
-  /** The machine the engine is on is out of reach (`Engine.away`): a
-   * command fails at once, and the client tries nothing until it is
-   * woken (`Engine.wake`). */
+  /** The machine the engine is on is out of reach (`Engine.away`): an
+   * act fails at once, and the client tries nothing until it is woken
+   * (`Engine.wake`). */
   | { state: "away" }
   /** The engine said goodbye, for example to an older window. */
   | { state: "refused"; refusal: Refusal }
@@ -73,19 +74,36 @@ export class Refused extends Error {
  * the connection broke before the engine answered. */
 const LOST = "The engine went away before it answered."
 
-/** The connection broke before the engine answered. */
+/** The connection broke before the engine answered, or the client was
+ * closed. */
 export class Lost extends Error {
-  constructor() {
+  /** Whether it may have run all the same: an act on its way as the
+   * connection broke. Else it was not sent, or it only read. */
+  readonly may_have_run: boolean
+  constructor({ may_have_run = false }: { may_have_run?: boolean } = {}) {
     super(LOST)
     this.name = "Lost"
+    this.may_have_run = may_have_run
   }
 }
 
 /**
- * A command refused at once, or given up on its way, as the machine its
- * engine is on is out of reach (ADR 0082, decision 16): nothing waits for
- * that machine to send it later. Its message says why, as the machine's
- * pill does: "arc is away".
+ * Whether `method` acts, as the contract says of each of its methods (ADR
+ * 0106, law 4): an act goes at most once, and fails at once while its
+ * machine is away; a read may wait for the connection and go again. A
+ * stream the contract does not list, the kernel's own `machine.named` and
+ * `machine.power`, reads: it is the machine's, heard again on each
+ * connection.
+ */
+function acts(method: string): boolean {
+  return (DOES as Readonly<Record<string, Does>>)[method] === "act"
+}
+
+/**
+ * An act refused at once, or given up on its way, as the machine its
+ * engine is on is out of reach (ADR 0082, decision 16; ADR 0106, law 4):
+ * nothing waits for that machine to send it later. Its message says why,
+ * as the machine's pill does: "arc is away".
  */
 export class Unreachable extends Error {
   /** The machine, as the client knows it: its key in `hosts.toml`, a
@@ -115,7 +133,7 @@ export class Unreachable extends Error {
     this.may_have_run = may_have_run
   }
 
-  /** The same, for a command that was on its way. */
+  /** The same, for an act that was on its way. */
   sent(): Unreachable {
     const { host, message, machine, as_of } = this
     return new Unreachable(host, message, {
@@ -134,7 +152,18 @@ type Pending = {
   reject: (error: Error) => void
   /** A command's, which may have run once it went. */
   command: boolean
+  /** A call that acts, which may have run once it went. */
+  act: boolean
+  /** A call that fails as the connection breaks in its machine's words:
+   * one that acts, or a read sent `once` as part of an act. */
+  once: boolean
 }
+
+/** How an ask waits for the engine to be open (`#opened`): a read waits,
+ * while its machine is away too; an act, or a read asked as part of one,
+ * waits while its machine is in reach and fails at once while it is away;
+ * a command sent `once` goes now or fails. */
+type Going = "read" | "act" | "now"
 
 /**
  * A command's answer, and its place in the log of its scope (ADR 0082,
@@ -184,8 +213,9 @@ type Hearing = {
   method: string
   params: JsonValue
   onPiece: (piece: unknown) => void
-  onEnd: (refusal?: Refusal) => void
-  /** Never said again after a reconnect (`stream`'s `once`). */
+  onEnd: (refusal?: Refusal, error?: Error) => void
+  /** Never said again after a reconnect: a stream that acts, or one heard
+   * `once`. */
   once: boolean
   /** The engine was asked for it on this connection. */
   sent: boolean
@@ -203,17 +233,28 @@ const LONGEST_WAIT = 5000
  * - It connects at once, and again whenever the connection breaks, asking
  *   `address` each time: a restarted engine listens elsewhere. Each try
  *   waits longer than the last, up to 5 s; `wake` tries at once.
- * - A call made while the connection is down waits for it, and so does a
- *   command while its machine is in reach.
- * - A command made while its machine is out of reach fails at once, and
- *   one on its way as the machine goes fails then, never to go later by
- *   itself (`away`, ADR 0082, decision 16).
+ * - A read made while the connection is down waits for it, while its
+ *   machine is away too.
+ * - An act is a command, or a call or a stream the contract says acts
+ *   (`acts`; ADR 0106, law 4). While its machine is out of reach (`away`,
+ *   ADR 0082, decision 16) it fails at once, in that machine's words
+ *   (`Unreachable`), and is never sent later by itself. While its machine
+ *   is in reach and the connection is only down, as a window starts or a
+ *   live machine's link comes back, it waits for the connection and goes
+ *   then, as a read does: it would go then had it been asked a moment
+ *   later. This machine's own engine is never away from it, so an act
+ *   asked as that engine restarts waits for it.
+ * - An act on its way as the connection breaks fails then, as one that
+ *   may have run, and is never asked again; a stream that acts ends with
+ *   `may_have_run`. A command alone goes again with its ID, which keeps it
+ *   from running twice, once the engine is back, while its machine is in
+ *   reach; one sent `once` does not.
  * - A command sent `once` fails at once while the connection is down,
  *   and as it breaks; on another machine, in that machine's words.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
- * - A stream is heard again after a reconnect, from its start; one heard
- *   `once` ends instead.
+ * - A stream that reads is heard again after a reconnect, from its start;
+ *   one that acts, or is heard `once`, ends instead.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -239,9 +280,9 @@ export class Engine {
    * `address` says where the engine listens now. It may throw
    * `Unreachable` while the engine's machine is out of reach: the engine
    * is then `away` until woken. `unreachable` names the machine of an
-   * engine on another one: a command sent `once` that the connection
-   * lost fails with it, not `Lost`, as that machine may be gone before
-   * the client is told so.
+   * engine on another one: an act, or a read sent `once`, that the
+   * connection lost fails with it, not `Lost`, as that machine may be gone
+   * before the client is told so.
    */
   constructor(
     address: () => Promise<Address>,
@@ -263,11 +304,20 @@ export class Engine {
     return () => this.#watchers.delete(watcher)
   }
 
-  /** Calls a method that is not a command; see {@link command} for one. */
+  /**
+   * Calls a method that is not a command; see {@link command} for one. A
+   * call that acts fails at once while its machine is away, and as one
+   * that may have run where the connection breaks on its way (`Engine`).
+   * One that reads waits for the connection, unless it is sent `once`, as
+   * part of an act, as a gesture's reads before its act are (ADR 0106, law
+   * 4): then it fails as that act would, at once while its machine is away
+   * and as the connection breaks, as not done, so the gesture is refused
+   * whole and never completes later by itself.
+   */
   call<M extends MethodOf<"call">>(
     method: M,
     params: Params<M>,
-    options: { project?: ProjectId } = {}
+    options: { project?: ProjectId; once?: boolean } = {}
   ): Promise<Answer<M>> {
     return this.#call(method, params, options)
   }
@@ -275,7 +325,7 @@ export class Engine {
   async #call<T>(
     method: string,
     params: unknown,
-    options: { project?: ProjectId }
+    options: { project?: ProjectId; once?: boolean }
   ): Promise<T> {
     const result = await this.#ask(method, params, options)
     return (result.ok ?? null) as T
@@ -294,10 +344,20 @@ export class Engine {
     }
   ): Promise<Result> {
     const command = options.command !== undefined
-    await this.#opened(command, options.once ?? false)
+    const once = options.once ?? false
+    const act = !command && acts(method)
+    await this.#opened(
+      command ? (once ? "now" : "act") : act || once ? "act" : "read"
+    )
     const id = this.#nextId++
     const answer = new Promise<Result>((resolve, reject) =>
-      this.#pending.set(id, { resolve, reject, command })
+      this.#pending.set(id, {
+        resolve,
+        reject,
+        command,
+        act,
+        once: act || once,
+      })
     )
     this.#send({
       type: "call",
@@ -369,18 +429,10 @@ export class Engine {
         if (error instanceof Unreachable && went && !error.may_have_run)
           throw error.sent()
         if (!(error instanceof Lost)) throw error
-        if (once) throw this.#lostOnce(went) ?? error
+        if (once) throw this.#gone(went)
         if (attempt === ATTEMPTS) throw error
       }
     }
-  }
-
-  /** Why a command sent `once` that the connection lost failed, in the
-   * words of the machine the engine is on, as one that may have run once
-   * it `went`; none for an engine that names no machine, or is closed. */
-  #lostOnce(went: boolean): Unreachable | undefined {
-    const why = this.#closed ? undefined : this.#unreachable?.()
-    return went ? why?.sent() : why
   }
 
   /** Runs a command made elsewhere, as a Pane's args carry one. */
@@ -427,16 +479,21 @@ export class Engine {
    * start. `onEnd` hears when the module ends it, or refuses it. Returns how
    * to stop. A stream of this machine's, `window.requests`, has no Project.
    *
-   * A stream that does something, as a commit, is heard `once`: asked
-   * again it would do it again. When the connection breaks after it was
-   * asked, it ends with `may_have_run` instead, and the caller checks.
+   * A stream that does something, as a commit, is heard `once`, whether it
+   * is asked so or the contract says it acts: asked again it would do it
+   * again. Asked while its machine is out of reach, it is not sent and ends
+   * at once, refused, as it does when that machine goes before it was
+   * sent; when the connection breaks after it was asked, it ends with
+   * `may_have_run`, and the caller checks. Either way `onEnd` hears the
+   * client's error too, in its machine's words (`Unreachable`), or `Lost`,
+   * for the caller to say what was not done.
    */
   stream<M extends MethodOf<"stream">>(
     project: ProjectId | undefined,
     method: M,
     params: Params<M>,
     onPiece: (piece: Answer<M>) => void,
-    onEnd: (refusal?: Refusal) => void,
+    onEnd: (refusal?: Refusal, error?: Error) => void,
     { once = false }: { once?: boolean } = {}
   ): () => void {
     const id = this.#nextId++
@@ -446,8 +503,20 @@ export class Engine {
       params: params as JsonValue,
       onPiece: onPiece as (piece: unknown) => void,
       onEnd,
-      once,
+      once: once || acts(method),
       sent: false,
+    }
+    const { state } = this.#status
+    if (
+      hearing.once &&
+      (state === "away" || state === "refused" || this.#closed)
+    ) {
+      // Nothing keeps it to go later by itself; it ends once its caller
+      // holds how to stop, unless that stopped it first.
+      let heard = true
+      const error = this.#unopened()
+      queueMicrotask(() => heard && this.#ended(hearing, error))
+      return () => void (heard = false)
     }
     this.#hearing.set(id, hearing)
     if (this.#status.state === "open") this.#hear(id, hearing)
@@ -478,12 +547,13 @@ export class Engine {
 
   /**
    * The machine the engine is on is out of reach now, `why`, as the
-   * client that reaches it says (ADR 0082, decision 16). Each command on
-   * its way fails with `why`, as one that may have run there, and goes no
-   * more; each made from now on fails with it at once, until the engine
-   * is woken (`wake`) as the machine is back. A call waits for that, as
-   * for any connection. The connection ends, and none is tried meanwhile.
-   * Away already, it only says `why` from now on.
+   * client that reaches it says (ADR 0082, decision 16). Each act on its
+   * way fails with `why`, as one that may have run there, and goes no
+   * more; each waiting to go, and each made from now on, fails with it at
+   * once, as not sent, until the engine is woken (`wake`) as the machine
+   * is back (ADR 0106, law 4). A read waits for that. The connection
+   * ends, and none is tried meanwhile. Away already, it only says `why`
+   * from now on.
    */
   away(why: Unreachable): void {
     // One that said goodbye tries no more: it stays refused.
@@ -511,9 +581,10 @@ export class Engine {
     for (const watcher of this.#watchers) watcher(status)
   }
 
-  /** Waits for the engine to be open: a command fails at once while its
-   * machine is out of reach, and one sent `once` while it is not open. */
-  #opened(command: boolean, once: boolean): Promise<void> {
+  /** Waits for the engine to be open, as an ask is `going`: an act fails
+   * at once while its machine is out of reach, and a command sent `once`
+   * while the engine is not open. */
+  #opened(going: Going): Promise<void> {
     return new Promise((resolve, reject) => {
       const stop = this.watch((status) => {
         const done = (error?: Error) => {
@@ -522,13 +593,50 @@ export class Engine {
           else resolve()
         }
         if (status.state === "open") done()
-        else if (status.state === "refused") done(new Refused(status.refusal))
-        else if (this.#closed) done(new Lost())
-        else if (command && status.state === "away")
-          done(this.#why ?? new Lost())
-        else if (once) done(new Lost())
+        else if (status.state === "refused" || this.#closed)
+          done(this.#unopened())
+        else if (going === "act" && status.state === "away")
+          done(this.#unopened())
+        else if (going === "now") done(this.#unopened())
       })
     })
+  }
+
+  /** Why what is asked now cannot go, as the engine is not open: it said
+   * goodbye; it is closed; or its machine is away, or the connection is
+   * down for a command sent `once`, in its machine's words (`#gone`). */
+  #unopened(): Error {
+    const { status } = this
+    if (status.state === "refused") return new Refused(status.refusal)
+    if (this.#closed) return new Lost()
+    return this.#gone(false)
+  }
+
+  /**
+   * Why an act, or what is asked `once`, fails as its machine is away or
+   * its connection ends: in the words of the machine the engine is on, as
+   * it went away (`why`), as it is away, or as the client that reaches it
+   * says now; `Lost` for an engine that names no machine, or is closed. As
+   * one that may have run, where it `went`.
+   */
+  #gone(went: boolean, why?: Unreachable): Error {
+    const away = this.#status.state === "away" ? this.#why : undefined
+    const words =
+      why ?? away ?? (this.#closed ? undefined : this.#unreachable?.())
+    if (!words) return new Lost({ may_have_run: went })
+    return went ? words.sent() : words
+  }
+
+  /** Ends `hearing`, heard `once`, as the client: one that `went` may
+   * have run, and ends with `may_have_run`; one never sent is refused. */
+  #ended(hearing: Hearing, error: Error, went = false): void {
+    const refusal: Refusal =
+      error instanceof Refused
+        ? error.refusal
+        : went
+          ? { code: "may_have_run", message: LOST }
+          : { code: "conflict", message: error.message }
+    hearing.onEnd(refusal, error)
   }
 
   async #connect(): Promise<void> {
@@ -674,18 +782,29 @@ export class Engine {
     this.#pending.clear()
   }
 
-  /** What was on its way as the connection ended: each fails, a command
-   * with `why` where its machine went out of reach, as one that may have
-   * run. What is heard once and was asked may have run: it ends, not
-   * again. */
+  /**
+   * What was on its way as the connection ended, `why` where its machine
+   * went out of reach. Each call fails: one that acts, as one that may have
+   * run, and a read sent `once`, in its machine's words; a command, for
+   * `commandAt` to send again or not. What is heard once and was asked
+   * ends, as one that may have run, not to be asked again. One not asked
+   * yet waits for the next connection while its machine is in reach, as
+   * an act asked then would, and is refused once it is out of reach.
+   */
   #lose(why?: Unreachable): void {
     for (const pending of this.#pending.values())
-      pending.reject(why && pending.command ? why.sent() : new Lost())
+      pending.reject(
+        pending.command
+          ? (why?.sent() ?? new Lost())
+          : pending.once
+            ? this.#gone(pending.act, why)
+            : new Lost()
+      )
     this.#pending.clear()
     for (const [id, hearing] of this.#hearing) {
-      if (!hearing.once || !hearing.sent) continue
+      if (!hearing.once || (!hearing.sent && !why)) continue
       this.#hearing.delete(id)
-      hearing.onEnd({ code: "may_have_run", message: LOST })
+      this.#ended(hearing, this.#gone(hearing.sent, why), hearing.sent)
     }
   }
 

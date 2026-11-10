@@ -9,6 +9,13 @@ test("what went wrong reads as the Person can act on it; a machine out of reach 
   expect(problem(new Lost())).toBe(
     "Banda lost its engine for a moment. Try again."
   )
+  // An act on its way as this machine's engine went may have run there.
+  expect(problem(new Lost({ may_have_run: true }), "Revert")).toBe(
+    "Banda lost its engine for a moment; Revert may have gone through."
+  )
+  expect(problem(new Lost({ may_have_run: true }))).toBe(
+    "Banda lost its engine for a moment; it may have gone through."
+  )
   expect(problem(new Error("socket said no"))).toBe(
     "Something went wrong. Try again."
   )
