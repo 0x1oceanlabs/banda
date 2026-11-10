@@ -2372,7 +2372,6 @@ const UI_FROM_CORE = [
   "client/ui/src/pane.ts: PaneState",
   "client/ui/src/pane.ts: Place",
   "client/ui/src/pane.ts: paneHost",
-  "client/ui/src/pane.ts: withHost",
 ]
 
 test("the kit names the core again only as listed", () => {
@@ -2597,18 +2596,16 @@ test("each of the device's own helpers still does what it is the device's for", 
  * Where App code asks where its Pane is (ADR 0106, law 6; `hostReads`), by
  * file: what reads its args' `host`, Here's Pane's or `paneHost`, and
  * each check of what they read. Today's counts, which only fall: the
- * Thread's checks go a few with each of its slices, New Thread's as the
- * directory names a Project's machine (1a″), and a notification's as its
- * actions go to the Thread's machine by the router (1a″), and Send when
- * back's as its queue is keyed by the Pane (#1324). The title's went with
- * the router (1a).
+ * Thread's checks go a few with each of its slices, and Send when back's
+ * as its queue is keyed by the Pane (#1324). The title's went with the
+ * router (1a); New Thread's as the directory names a Project's machine,
+ * and a notification's as the Window marks which machine lists what calls
+ * (`Listed.host`), with the directory (1a″).
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 5,
-  "apps/agents/pane/src/composer/NewThread.tsx": 3,
   "apps/agents/pane/src/thread/Thread.tsx": 21,
   "apps/agents/pane/src/thread/session.ts": 10,
-  "platform/notifications/pane/src/system.ts": 3,
 }
 
 const askingWhere = Object.fromEntries(

@@ -21,7 +21,6 @@ import {
   type Lists,
   type PaneState,
   QUIET,
-  withHost,
 } from "@banda/ui/pane"
 import { attentionOf, callsOf, mayArchive } from "@banda/ui/status"
 import { nextWake, wakeAfter } from "../sidebar/later"
@@ -105,8 +104,7 @@ function mergedLists(hosts: ReadonlyMap<string, Lists>): Lists {
 }
 
 /** Takes what host `host`'s Watches list now: the items hold it with
- * every other host's, another host's as the Window opens it there
- * (`onHost`). */
+ * every other host's, another host's marked as that host's (`onHost`). */
 export function takeLists(
   { items, hosts }: Stores,
   lists: Lists,
@@ -117,23 +115,16 @@ export function takeLists(
   items.set(keptLists(items.get(), mergedLists(hosts)))
 }
 
-/** What host `host` lists, as the Window opens it (ADR 0081): each
- * Pane on that host (`withHost`), so a row, a call or the Banda menu opens
- * it there, and each toast's answer with the host in its args, so its
- * action sends it there (`WindowApi.sessionOf`), never to this machine's
+/** What host `host` lists, each marked as that host's (`Listed.host`, ADR
+ * 0081), so a notice and the Banda menu name the machine. Its Panes and
+ * its toasts' answers name no host: a row, a call or the Banda menu opens
+ * it there, and an answer's action sends it there, by its Project, as the
+ * directory places it (ADR 0106, decision 1), never to this machine's
  * engine. */
 function onHost(lists: Lists, host: string): Lists {
   const placed: Record<ProjectId, readonly Listed[]> = {}
   for (const [project, listed] of Object.entries(lists))
-    placed[project as ProjectId] = listed.map((one) => {
-      const there: Listed = { ...one, pane: withHost(one.pane, host) }
-      if (one.answers)
-        there.answers = one.answers.map((answer) => ({
-          ...answer,
-          args: { ...answer.args, host },
-        }))
-      return there
-    })
+    placed[project as ProjectId] = listed.map((one) => ({ ...one, host }))
   return placed
 }
 

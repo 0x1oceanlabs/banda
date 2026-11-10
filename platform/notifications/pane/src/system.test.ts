@@ -62,9 +62,12 @@ test("with more than one Project, a call's notice and toast name its Project", (
 })
 
 test("a call on another machine names that machine in words, after its Project, by the name it says it has, on its notice and its toast", () => {
+  // Marked as arc's by the list it came in (`Call.host`): its Pane and
+  // its answers name no host, as the directory places them.
   const there = (title: string): Call => ({
     ...heard(title, "asking"),
-    pane: { kind: "agents.thread", args: { thread: title, host: "arc" } },
+    pane: { kind: "agents.thread", args: { thread: title } },
+    host: "arc",
   })
   // Before its first welcome here, by its key.
   expect(noticeOf(there("Bench"), true, "banda").title).toBe(
@@ -73,8 +76,8 @@ test("a call on another machine names that machine in words, after its Project, 
   expect(noticeOf(there("Bench"), true).title).toBe("Bench · arc")
   // Its toast, with its Allow and Deny, says where as its notice does.
   const answers = [
-    { label: "Allow", action: "agents.answer", args: { host: "arc" } },
-    { label: "Deny", action: "agents.answer", args: { host: "arc" } },
+    { label: "Allow", action: "agents.answer", args: { choice: "once" } },
+    { label: "Deny", action: "agents.answer", args: { choice: "no" } },
   ]
   expect(toldOfCall({ ...there("Bench"), answers }, true)).toMatchObject({
     title: "Bench",
