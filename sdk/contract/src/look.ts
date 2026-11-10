@@ -67,7 +67,7 @@ export const WALLPAPER_URL = "app://banda/desk/wallpaper"
 /** The bar, as `banda look` gives it with no files. */
 export const DEFAULT_BAR: Bar = {
   workspaces: "numbers",
-  left: ["workspaces.list"],
+  left: ["workspaces.list", "window.flow"],
   center: ["sidebar.counts"],
   right: [
     "workspaces.aside",
