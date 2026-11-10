@@ -190,14 +190,26 @@ with Roma._
     old name as an alias, and `check` names the new one. The same will
     hold for `theme.css`'s slots (decision 7).
 
-11. **Banda's shape against the system's is open.** Three ways stand: A,
-    a platform theme takes the system's shape whole (on a square
-    Hyprland, Banda is square); B, the window and the tiles take the
-    system's radius, and inside (cards, controls, the composer) stays
-    Banda's, soft and large; C, the shape is always Banda's and the
-    system gives colours, accent and font. Roma decides after trying them
-    in a sandbox page. Step 3 builds the five levels so that any
-    of the three is a choice in the base themes' files, not code.
+11. **A platform theme takes its system's shape whole** (way A). Roma
+    chose it on 2026-11-10, after the sandbox page. So the choice is
+    between two looks, never a mix:
+
+    - a platform theme is as round as its system. On arc's Hyprland,
+      rounding 12, Banda Omarchy's window is 12; on a square Hyprland,
+      rounding 0, it is square. Banda macOS is as round as Tahoe.
+      Where a system names a radius (the window, a control), the level
+      takes it; the rest come from ADR 0080's rule (tile = window − gap,
+      card = tile − padding);
+    - `banda` is Banda's own: airy and large (decision 3). It starts
+      from the sandbox's numbers: window 30, gap 8, padding 8, so tile
+      22 and card 14; control 10, small 6. Step 7 tunes them.
+
+    Who wants Banda's round look on a square system takes `theme =
+    "banda"`. Two other ways were weighed and left: B, the system's
+    radius on the window and the tiles and Banda's inside; C, always
+    Banda's shape with the system's colours. A Person's own theme may
+    still mix them, since step 3 keeps every level a number in the
+    theme's file.
 
 ## Steps
 
@@ -241,8 +253,8 @@ colours, fonts, the wallpaper and Hyprland's reader, and the built-in
 themes), and `look` uses it. Nothing on screen changes, and no file
 changes owner: which file is whose is ADR 0101's. Then steps 1 to 4 go
 in order. Step 4 adds decision 8's checks; step 6 marks beta themes
-(decision 9); step 2 keeps old token names (decision 10); step 3 waits
-for Roma's call on decision 11 only for the numbers in the base themes.
+(decision 9); step 2 keeps old token names (decision 10); step 3 builds
+decision 11's way A.
 
 Later: `theme.css` (its own ADR, decision 7); colour themes (Ocean,
 Moss…); where the web works a theme out.
