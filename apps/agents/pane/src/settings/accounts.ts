@@ -115,6 +115,62 @@ export function newAccountOf(
   return { name, colour: uses.indexOf(Math.min(...uses)) + 1 }
 }
 
+/** The first of `id`, `id-2`, `id-3`… that no entry has. */
+export function freeId(id: string, taken: readonly HarnessView[]): string {
+  const free = (one: string) => taken.every((entry) => entry.id !== one)
+  if (free(id)) return id
+  let n = 2
+  while (!free(`${id}-${n}`)) n++
+  return `${id}-${n}`
+}
+
+/** A gateway the Add account step knows (ADR 0078, decision 1): its
+ * address for each Harness that speaks to it, Anthropic's API for Claude
+ * Code and OpenAI's Responses API for Codex. */
+export interface Gateway {
+  id: string
+  name: string
+  urls: Readonly<Partial<Record<string, string>>>
+}
+
+const GATEWAYS: readonly Gateway[] = [
+  {
+    id: "openrouter",
+    name: "OpenRouter",
+    urls: {
+      claude: "https://openrouter.ai/api",
+      codex: "https://openrouter.ai/api/v1",
+    },
+  },
+  {
+    id: "zai",
+    name: "z.ai",
+    urls: { claude: "https://api.z.ai/api/anthropic" },
+  },
+  {
+    id: "kimi",
+    name: "Kimi",
+    urls: { claude: "https://api.moonshot.ai/anthropic" },
+  },
+  {
+    id: "litellm",
+    name: "LiteLLM",
+    urls: {
+      claude: "http://localhost:4000",
+      codex: "http://localhost:4000/v1",
+    },
+  },
+]
+
+/** The gateways `harness` speaks to, and one of the Person's own, which
+ * has no address yet. */
+export function gatewaysOf(harness: string): readonly Gateway[] {
+  return [
+    ...GATEWAYS.filter((gateway) => gateway.urls[harness]),
+    { id: "gateway", name: "Gateway", urls: {} },
+  ]
+}
+
 /** How an account pays, as its page says it. */
 export const KIND_WORDS: Readonly<Record<AccountKind, string>> = {
   subscription: "Subscription",

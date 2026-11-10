@@ -58,6 +58,10 @@ The points Roma decided are marked _decided_.
      - `harnesses.secret` is no Agent tool. A pass reaches it because its `methods!` line is marked `pass` (`Module::passes_reach`), not because `banda mcp` lists it.
      - A gateway account's status is its address and whether a key is kept: no Harness starts. `harnesses.set_key` (or `banda secret set`) replaces the key. Removing the account forgets it. Banda reads no usage limits for it.
      - The `api` kind: Codex's key goes to `codex login --with-api-key` (`harnesses.api_key`), which keeps it in the account's own `auth.json`. Claude Code's is its `console-login` way.
+   - As built (step 8, the window): Add account asks first how the account pays.
+     - A subscription goes on as before.
+     - An API key account is named and given its emblem. Then Claude Code's signs in to Anthropic Console, and Codex's takes an OpenAI key in the dialog. Its status offers only the `console-login` way for Claude Code and none for Codex, whatever else the Harness offers.
+     - A gateway is chosen from presets (OpenRouter, z.ai, Kimi, LiteLLM, each where its Harness speaks to it) or the Person's own address, with its key. The dialog says where the key went and never shows it again.
 
 2. **A Thread runs on an account, and moves** (_decided_). This replaces ADR 0006 decision 1.
    - Each Turn records its Harness, account and model.
