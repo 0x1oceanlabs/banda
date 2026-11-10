@@ -1428,7 +1428,7 @@ module reaches a Harness through an adapter:
 
 ```
 client/desktop                      Electron main: starts the engine, serves the page, hands it the address
-client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
+client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the relay of the byte host to the engine
 client/web                          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
 client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words, the hosts
 client/ui                           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
@@ -1834,36 +1834,44 @@ full text and `href` for copying. Local-file links are a separate contract.
 
 Markdown in a Thread shows local images, video and audio (ADR 0037,
 step 6). The agents Pane supplies the markdown renderer a resolver for
-its Project. The agents desktop part resolves relative paths against that
-Project's folder and gives only supported media a signed `app://files`
-URL: a reply's paths are an Agent's to write. Nothing plays
-automatically. Images open larger on a click; a missing or unsupported
-file stays a link.
+its Project. The agents desktop part asks this machine's engine for a
+token for that path (`bytes.issue`, `media`), which the engine gives only
+for a picture, a video or a sound: a reply's paths are an Agent's to
+write. Until step 4c of ADR 0106 moves that ask into the page, it is the
+one ask of main's. Nothing plays automatically. Images open larger on a
+click; a missing or unsupported file stays a link.
 
-The byte host behind those URLs is `FileHost` in `@banda/desktop-kit`
-(ADR 0073, decision 5), which main serves. Its signer lives in the main
-runtime, never on disk. A URL lasts an hour and names the canonical path,
-device and inode; serving checks the identity again through the opened
-file, which it opens without following a link. Byte ranges let players
-seek without reading the whole file. It serves any file, typed by its
-extension: text as plain text, so an HTML file never runs, and what it
-does not know as bytes, each never sniffed and sandboxed. A Pane the
-Person drives asks for any file through the bridge's `files.url`,
-typed in `@banda/ui/desktop`, and `useFileUrl` keeps its URL fresh. No
-frame shows the host. The page reads its ranges with `fetch`, as a PDF
-is read: the `app` scheme allows CORS, the host answers any origin that
-holds a link, and the page's `connect-src` names it.
+The bytes behind those URLs are the engine's (`platform/bytes`; ADR
+0106, decision 6). A Pane asks the engine of its session for a token,
+`bytes.issue {path, use}`, with the right and the reach `files.read`
+asks, and one function in `@banda/ui/hooks/use-file-url` makes the URL
+that names it: `app://files/<token>`, or `app://preview/<token>` for a
+page. Main relays those two hosts to the engine's `GET /b/<token>` and
+`GET /p/<token>` (`relay` in `@banda/desktop-kit`), passing on only the
+range and what tells a frame's navigation from a page's fetch, and
+gives back the engine's answer as it came: main reads no file and finds
+no Project's folder (`client/desktop/src/architecture.test.ts` holds it
+to that). A token serves the one file it was given for, by its real
+path, device and inode, through no link, for an hour or until the
+engine restarts; `useFileUrl` keeps the Pane's path, never the URL, and
+asks again before the hour ends and once the engine's boot changes.
+Byte ranges let players seek without reading the whole file. The engine
+serves any file, typed by its extension: text as plain text, so an HTML
+file never runs, and what it does not know as bytes, each never sniffed
+and sandboxed. No frame shows the byte host. The page reads its ranges
+with `fetch`, as a PDF is read: the `app` scheme allows CORS, the engine
+answers any origin, and the page's `connect-src` names the host. Until
+step 4c, a session of another machine gets no URL.
 
-A page among the Person's files, HTML or an SVG document, is shown by a
-second host, `PreviewHost`, `app://preview` (ADR 0073, decision 5),
-signed by its own secret and asked through `files.preview`. It answers a
-frame's navigation only, never a page's fetch nor a picture (Electron's
-handler hears no `Sec-Fetch-*`, so a navigation is what asks to be
-upgraded and names no origin), and its response sandboxes the page
-whatever the frame says: `sandbox allow-scripts`, never
-`allow-same-origin`, with `default-src 'none'`, pictures inline or from
-the byte host, inline styles and scripts. The page's `frame-src` names it
-beside the modules' hosts.
+A page among the Person's files, HTML or an SVG document, is shown by
+the sandbox host, `app://preview` (ADR 0073, decision 5), by a token
+given for a page. The engine answers a frame's navigation only, never a
+page's fetch nor a picture (Electron's handler hears no `Sec-Fetch-*`,
+so a navigation is what asks to be upgraded and names no origin), and
+its response sandboxes the page whatever the frame says: `sandbox
+allow-scripts`, never `allow-same-origin`, with `default-src 'none'`,
+pictures inline or from the byte host, inline styles and scripts. The
+page's `frame-src` names it beside the modules' hosts.
 
 Mermaid code fences render as SVG through `@streamdown/mermaid`, with
 copy, zoom and fullscreen controls and the look's light or dark scheme.

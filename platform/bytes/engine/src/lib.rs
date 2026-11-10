@@ -13,11 +13,12 @@
 //! of this machine's may try.
 //!
 //! These are the window's byte host and sandbox host moved to the engine
-//! as they are (`FileLinks`, `client/desktop-kit/src/files.ts`, and
-//! `preview.ts`): a token serves the one file it was given for, by its
-//! real path, device and inode, for an hour. No link is followed as it is
-//! served, and another file put in its place is not served. What a file
-//! is served as comes from its extension (`kinds`).
+//! as they were (`FileLinks` and `PreviewHost`, which step 4b took out of
+//! the window's main process, which now relays both hosts here): a token
+//! serves the one file it was given for, by its real path, device and
+//! inode, for an hour. No link is followed as it is served, and another
+//! file put in its place is not served. What a file is served as comes
+//! from its extension (`kinds`).
 //!
 //! A token is 256 bits from the system's randomness, so none is guessed,
 //! and it names nothing: the file it serves is kept only in the engine's
