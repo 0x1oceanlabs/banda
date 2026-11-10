@@ -1,8 +1,8 @@
 //! What a token is for, what a file is served as by its extension, and the
 //! headers each use goes with: the rules of the byte host and the sandbox
-//! host, as the window's main process has them (`FileLinks`' `BYTES_HOST`
-//! and `PREVIEW_HOST`, `client/desktop-kit/src/files.ts` and `preview.ts`;
-//! ADR 0073, decision 5).
+//! host, as the window's main process had them (`FileLinks`' `BYTES_HOST`
+//! and `PREVIEW_HOST`, until step 4b relayed both hosts here; ADR 0073,
+//! decision 5).
 
 use axum::http::{HeaderMap, HeaderName, header};
 use banda_kernel::api::Served;

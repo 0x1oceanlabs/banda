@@ -1,8 +1,8 @@
 //! The answer at `/b/<token>` and `/p/<token>`, as the window's byte host
-//! answers (`FileLinks.serve`): the token's file, when it is still the
-//! file it was given for, through no link; its bytes whole or in one
-//! range; and 404 for all else, so a wrong token says nothing of a right
-//! one.
+//! answered (`FileLinks.serve`, until step 4b): the token's file, when it
+//! is still the file it was given for, through no link; its bytes whole or
+//! in one range; and 404 for all else, so a wrong token says nothing of a
+//! right one.
 
 use crate::Bytes;
 use crate::file::pin;

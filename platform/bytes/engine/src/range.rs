@@ -1,6 +1,6 @@
-//! The one range of a file's bytes a `Range` header asks for, as the byte
-//! host reads it (`byteRange`, `client/desktop-kit/src/files.ts`): a
-//! start and an end, a start alone, or the last so many bytes.
+//! The one range of a file's bytes a `Range` header asks for, as the
+//! window's byte host read it (`byteRange`, until step 4b relayed it
+//! here): a start and an end, a start alone, or the last so many bytes.
 
 /// The inclusive bounds `range` asks of a file of `size` bytes; none for a
 /// range that is not one of those, or that the file cannot meet.

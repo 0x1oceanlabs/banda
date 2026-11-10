@@ -7,9 +7,10 @@ use std::io;
 use std::path::Path;
 
 /// Whether `asked` is a path Banda resolves at all, as the window's main
-/// process does (`wholeIn`): none is empty, or starts at home (`~`), on
-/// the network (`//`, `\\`) or with a scheme, which it refuses before it
-/// resolves. A scheme has two letters or more, as one is a Windows drive.
+/// process did (`wholeIn`, until step 4b): none is empty, or starts at
+/// home (`~`), on the network (`//`, `\\`) or with a scheme, which it
+/// refuses before it resolves. A scheme has two letters or more, as one is
+/// a Windows drive.
 pub fn resolvable(asked: &str) -> bool {
     let bytes = asked.as_bytes();
     let scheme = || {
