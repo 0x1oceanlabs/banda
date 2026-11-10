@@ -139,10 +139,10 @@ test("arc is as far as its latency: each round trip through its link waits that 
   // 40 ms each round trip through the forward; arc's engine itself
   // answers on loopback.
   expect(await firstByte(arc!.ports().from)).toBeGreaterThanOrEqual(40)
-  // Farther now, as the forward hears within 50 ms: what arc's Agent
-  // replies is heard a round trip after the message went, at least.
+  // Farther now, once the forward applies it: what arc's Agent replies
+  // is heard a round trip after the message went, at least.
   arc!.latency(800)
-  await thread.page().waitForTimeout(100)
+  await expect.poll(() => arc!.applies()?.latency).toBe(800)
   await composer.fill("cat who.txt")
   const sent = Date.now()
   await composer.press("Enter")
@@ -195,19 +195,27 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
   // ping. Stop was sent, or held back to ask first: either way it ends
   // in words, and never reached arc.
   arc!.blackhole(true)
-  await page.waitForTimeout(200)
+  await expect.poll(() => arc!.applies()?.hole).toBe(true)
+  const since = arc!.asked().length
   await stop.click()
   // For a while the window cannot tell: no word of Stop, and arc not
   // away, as a reset would have it at once.
   await page.waitForTimeout(1_500)
   await expect(toasts.filter({ hasText: "Stop" })).toHaveCount(0)
   await expect(arcOf(page).getByText(/^away/)).toHaveCount(0)
-  await expect(
-    toasts.filter({
-      hasText:
-        /arc (went away; Stop may have gone through|is away: Stop was not sent)\./,
-    })
-  ).toBeVisible({ timeout: 60_000 })
+  const told = toasts.filter({
+    hasText:
+      /arc (went away; Stop may have gone through|is away: Stop was not sent)\./,
+  })
+  await expect(told).toBeVisible({ timeout: 60_000 })
+  // Which words are true is whether Stop went onto arc's link.
+  const sent = arc!
+    .asked()
+    .slice(since)
+    .some(({ method }) => method === "agents.stop")
+  await expect(told).toContainText(
+    sent ? "went away; Stop may have gone through" : "Stop was not sent"
+  )
   await expect(arcOf(page).getByText(/^away/)).toBeVisible()
   runs()
   // Pressed while arc is away, it is refused at once.
@@ -232,8 +240,8 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
 })
 
 // The roads later steps open (ADR 0106, the plan). Each ends at arc's
-// file, and turns on with the step it names: until then the window says
-// "Not on arc yet", or offers nothing, as hosts.spec.ts checks.
+// file, and turns on with the step it names (#1270): until then the window
+// says "Not on arc yet", or offers nothing, as hosts.spec.ts checks.
 
 /** A terminal on arc's "Same", from New Pane in arc's Thread; its screen,
  * running. */
@@ -463,6 +471,8 @@ test.fixme("step 4d: a Visual arc's Agent shows is arc's", async () => {
   await composer.fill("wait")
   await composer.press("Enter")
   await expect(thread.getByText("Waiting.")).toBeVisible()
+  // agentSays runs `banda mcp` on this machine, where a tool that takes
+  // a path would read this machine's file: step 4d runs it on arc.
   await agentSays({ dir: arc!.dir }, "show_visual", {
     html: '<p id="who">arc</p>',
     title: "Whose",
