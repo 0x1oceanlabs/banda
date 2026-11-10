@@ -772,10 +772,11 @@ sub-agents and the Crew `audit-routes`:
         its row.
     - _Amended 2026-11-10, during step 1 (Roma's call 11):_ **dropped.** The Thread's Stop is
       today's: it stops the turn, and the Harness decides what becomes of
-      its sub-agents and its Crew. With the declaration, Claude holds its
-      turn while a background sub-agent works (`recordings.md:311-321`),
-      so that Stop reaches them through Claude. No Stop is offered after
-      the turn, and Stop's words stay today's. Call 10 gives way to call 11.
+      its sub-agents and its Crew. As recorded, a foreground sub-agent
+      stops with the turn, while a background one goes on to its end and
+      Claude replies after it by itself (`recordings.md`, Part C). Banda
+      shows that and does not hold it back. No Stop is offered after the
+      turn, and Stop's words stay today's. Call 10 gives way to call 11.
       - What Banda still does to a sub-agent comes from what it holds,
         the Harness's process and session, not from steering the
         sub-agent. A sub-agent's Question is the Harness's, answered as

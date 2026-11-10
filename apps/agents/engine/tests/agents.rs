@@ -80,7 +80,6 @@ fn fake_with(env: &[(&str, &str)]) -> Harness {
         shadows: None,
         carried: None,
         record: None,
-        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -188,13 +187,6 @@ impl World {
 
     async fn new_with(root: &Path, agents: Agents) -> World {
         World::new_on(root, agents, "fake").await
-    }
-
-    /// A World whose engine declares sub-agents to `harnesses` as it
-    /// starts them, as `BANDA_SUBAGENTS=1` has it: their sub-agents work
-    /// in lanes of their Threads (ADR 0103, decision 7).
-    async fn declaring(root: &Path, harnesses: Harnesses) -> World {
-        World::new_with(root, Agents::new(harnesses).declaring_subagents()).await
     }
 
     /// A Project whose new Threads start on `harness`.
@@ -1738,7 +1730,6 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
         shadows: None,
         carried: None,
         record: None,
-        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -3830,7 +3821,6 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         shadows: None,
         carried: None,
         record: None,
-        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -3875,11 +3865,27 @@ async fn record_the_real_harnesses_editing_a_file() {
 const FILES: [(&str, &str); 3] = [("a.txt", "alpha"), ("b.txt", "bravo"), ("c.txt", "charlie")];
 
 /// A Thread of a recording: its mode, what a Person sends in it, a turn
-/// each, and whether the Agent goes on by itself after the last.
+/// each, whether the Agent goes on by itself after the last, whether the
+/// first Question of a sub-agent is allowed always and not once, and what
+/// the Person does once the last is sent.
 struct Asked {
     mode: &'static str,
     sends: &'static [&'static str],
     goes_on: bool,
+    always: bool,
+    steps: &'static [Step],
+}
+
+/// What a Person does in a Thread of a recording, once the last is sent.
+#[derive(Clone, Copy)]
+enum Step {
+    /// Once this many of the Thread's sub-agents work and have had a
+    /// moment to start what they run, stops its latest turn, then listens
+    /// long enough to hear what a sub-agent still does after that.
+    StopThreadWhileLanesWork(usize),
+    /// Stops the latest turn if it still runs after that many seconds, as
+    /// a Codex can keep waiting.
+    StopThreadAfter(u64),
 }
 
 /// A recording of sub-agents: its file in `tests/recordings`, its
@@ -3891,13 +3897,128 @@ struct SubAgents {
     threads: &'static [Asked],
 }
 
-/// What a Person asks the real Harnesses to do with sub-agents (ADR 0103,
-/// step 0), as Banda runs them before it declares them.
-const SUB_AGENTS: [&SubAgents; 3] = [&CLAUDE_SUB_AGENTS, &CLAUDE_WORKFLOW, &CODEX_SUB_AGENTS];
+/// What the real Harnesses are asked to do with sub-agents, as Banda
+/// declares them (ADR 0103, Plan step 1, item 10).
+const DECLARED: [&SubAgents; 2] = [&CLAUDE_LANES, &CODEX_LANES];
+
+/// Claude Code's sub-agents in lanes: three at once in the foreground; one
+/// in the background; one that starts its own; one whose command asks and
+/// is allowed always, then the same command by another sub-agent and by
+/// Claude itself; and two in the foreground with one in the background,
+/// stopped by the Thread's Stop as they work.
+const CLAUDE_LANES: SubAgents = SubAgents {
+    file: "claude-lanes",
+    harness: "claude",
+    threads: &[
+        Asked {
+            mode: "full_access",
+            sends: &["Call the Agent tool three times in one message, each with \
+                     run_in_background false and model haiku: one reads a.txt, one b.txt, one \
+                     c.txt, and each answers with that file's first line only. Then answer \
+                     with the three lines, comma-separated, and nothing else."],
+            goes_on: false,
+            always: false,
+            steps: &[],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "Call the Agent tool once with run_in_background true and model haiku: it \
+                     reads a.txt and answers with its first line only. Answer `started` at \
+                     once; when it is done, answer with what it said, and nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "Call the Agent tool once with run_in_background false and model haiku, \
+                     and have that sub-agent call the Agent tool itself, once, with \
+                     run_in_background false and model haiku, for a sub-agent that reads \
+                     b.txt and answers with its first line only. Then answer with what came \
+                     back, and nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[],
+        },
+        Asked {
+            mode: "supervised",
+            sends: &[
+                "Call the Agent tool once with run_in_background false and model \
+                     haiku: it runs `echo delta > d.txt` with Bash and answers `done`. Then \
+                     answer with what it said, and nothing else.",
+                "Call the Agent tool once with run_in_background false and model \
+                     haiku: it runs the same command, `echo delta > d.txt`, with Bash and \
+                     answers `done`. Then run that command yourself with Bash, and answer \
+                     with what the sub-agent said, and nothing else.",
+            ],
+            goes_on: false,
+            always: true,
+            steps: &[],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "Call the Agent tool three times in one message, each with model haiku: \
+                     two with run_in_background false and one with run_in_background true. \
+                     Each runs `python3 -c \"import time; time.sleep(60)\"` with Bash and \
+                     answers `slept`. Then answer with what they said, and nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[Step::StopThreadWhileLanesWork(3)],
+        },
+    ],
+};
+
+/// Codex's sub-agents in lanes: two named ones, one of which asks,
+/// supervised; and a slow one the Thread's Stop stops as it works.
+const CODEX_LANES: SubAgents = SubAgents {
+    file: "codex-lanes",
+    harness: "codex",
+    threads: &[
+        Asked {
+            mode: "supervised",
+            sends: &[
+                "I explicitly ask you to delegate: call spawn_agent twice now, in parallel, \
+                     with the task names read_e and write_f. Do not read the file or run \
+                     the command yourself: only they may. read_e: read a.txt and answer with \
+                     its one line only. write_f: run the shell command `touch d.txt`; the \
+                     sandbox is read-only, so run it with escalated permissions \
+                     (sandbox_permissions require_escalated), which asks me for approval; \
+                     then answer done. Then wait for both with wait_agent and answer me with \
+                     their two answers on one line, nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[Step::StopThreadAfter(120)],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "I explicitly ask you to delegate: call spawn_agent now, with the task name \
+                     slow_g. The slow command below must run inside that spawned child: do \
+                     not run it yourself, in any tool of yours; only the child may. slow_g: \
+                     run `python3 -c \"import time; time.sleep(60)\"` with your shell tool \
+                     and answer `slept`. Then wait for it with wait_agent and answer me with \
+                     what it said, nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[Step::StopThreadWhileLanesWork(1)],
+        },
+    ],
+};
 
 /// Claude Code's Agent tool three at once in the foreground, one in the
 /// background and one that starts its own, with Full access; then one
-/// whose command asks first, supervised.
+/// whose command asks first, supervised. This and the two below were
+/// recorded before Banda declared sub-agents and stay for their replays:
+/// they pin an adapter that ignores the declaration, as a replay does not
+/// compare `initialize`.
 const CLAUDE_SUB_AGENTS: SubAgents = SubAgents {
     file: "claude-subagents",
     harness: "claude",
@@ -3919,6 +4040,8 @@ const CLAUDE_SUB_AGENTS: SubAgents = SubAgents {
                      back, and nothing else.",
             ],
             goes_on: false,
+            always: false,
+            steps: &[],
         },
         Asked {
             mode: "supervised",
@@ -3928,6 +4051,8 @@ const CLAUDE_SUB_AGENTS: SubAgents = SubAgents {
                           Then answer with what it said, and nothing else.",
             ],
             goes_on: false,
+            always: false,
+            steps: &[],
         },
     ],
 };
@@ -3950,6 +4075,8 @@ const CLAUDE_WORKFLOW: SubAgents = SubAgents {
                       lines.join(', ')\n```",
         ],
         goes_on: true,
+        always: false,
+        steps: &[],
     }],
 };
 
@@ -3965,6 +4092,8 @@ const CODEX_SUB_AGENTS: SubAgents = SubAgents {
                       with the two lines, comma-separated, and nothing else.",
         ],
         goes_on: false,
+        always: false,
+        steps: &[],
     }],
 };
 
@@ -3978,18 +4107,19 @@ fn least(harness: &str) -> Value {
 }
 
 /// Records the real Claude Code and Codex at work with sub-agents, as
-/// [`SUB_AGENTS`] asks, each into its `tests/recordings/<file>.jsonl`,
+/// [`DECLARED`] asks, each into its `tests/recordings/<file>.jsonl`,
 /// with who is signed in and the Person's home folder written out;
 /// `BANDA_RECORD=<file>` records only that one. It calls the models,
 /// which costs money: run it by hand when an adapter changes,
 /// `cargo test -p banda-agents --test agents
 /// record_the_real_harnesses_with_sub_agents -- --ignored --nocapture`,
-/// and read the files before committing them.
+/// and read the files before committing them. The recordings from before
+/// the declaration stay as they are: this cannot record them again.
 #[tokio::test]
 #[ignore = "calls the real models, which costs money"]
 async fn record_the_real_harnesses_with_sub_agents() {
     let only = std::env::var("BANDA_RECORD").ok();
-    for recorded in SUB_AGENTS
+    for recorded in DECLARED
         .iter()
         .filter(|r| only.as_deref().is_none_or(|o| o == r.file))
     {
@@ -3997,6 +4127,7 @@ async fn record_the_real_harnesses_with_sub_agents() {
         let world = World::recording(root.path(), recorded.harness, raw.path()).await;
         for view in world.sub_agents(recorded, Duration::from_secs(600)).await {
             println!("{}: {:#?}", recorded.file, texts(&view));
+            println!("{}: {:#?}", recorded.file, view.subagents);
         }
         std::fs::write(
             recorded_file(recorded.file),
@@ -4025,6 +4156,8 @@ impl World {
             .as_str()
             .expect("the Harness says who is signed in");
         let home = std::env::var("HOME").unwrap();
+        // The folder Claude Code names after it, each other sign a dash.
+        let slug = home.replace(|c: char| !c.is_alphanumeric(), "-");
         // Where the Person keeps a Harness's own state, when it is not
         // that Harness's default, before the home folder it may be in.
         let claude = std::env::var("CLAUDE_CONFIG_DIR").ok();
@@ -4034,6 +4167,7 @@ impl World {
             (Some(email), "person@example.invalid"),
             (claude.as_deref(), "/home/person/.claude"),
             (codex.as_deref(), "/home/person/.codex"),
+            (Some(slug.as_str()), "-home-person"),
             (Some(home.as_str()), "/home/person"),
         ];
         let recorded = std::fs::read_dir(raw)
@@ -4051,12 +4185,21 @@ impl World {
         for was in left.filter(|was| !was.is_empty()) {
             assert!(!scrubbed.contains(was), "the recording still names it");
         }
+        // A user's and a machine's names have no shape to look for, so
+        // only the machine that records can tell.
+        for name in [std::env::var("USER").ok(), this_machine()]
+            .into_iter()
+            .flatten()
+            .filter(|name| !name.is_empty())
+        {
+            assert!(!names(&scrubbed, &name), "the recording names this machine");
+        }
         scrubbed
     }
 
     /// Has the Agent do what `recorded` asks, in [`FILES`], allowing each
-    /// Question once, and waits up to `limit` for each step: each Thread
-    /// as it is once it is done.
+    /// Question once unless [`Asked::always`] says otherwise, and waits up
+    /// to `limit` for each step: each Thread as it is once it is done.
     async fn sub_agents(&self, recorded: &SubAgents, limit: Duration) -> Vec<ThreadView> {
         let project = self.kernel.project(self.project).await.unwrap();
         for (name, line) in FILES {
@@ -4075,29 +4218,88 @@ impl World {
                 .await
                 .unwrap();
             let thread = &sent["thread"];
-            let mut view = self.allowing(thread, limit, 1).await;
+            let mut always = asked.always;
             for (n, text) in rest.iter().enumerate() {
+                self.answering(thread, limit, n + 1, &mut always).await;
                 self.send(Some(thread), text).await;
-                view = self.allowing(thread, limit, n + 2).await;
             }
+            let turns = asked.sends.len();
+            for step in asked.steps {
+                self.stepping(*step, thread, turns, limit, &mut always)
+                    .await;
+            }
+            let mut view = self.answering(thread, limit, turns, &mut always).await;
             if asked.goes_on {
                 // The turn the Agent opens by itself.
-                view = self.allowing(thread, limit, asked.sends.len() + 1).await;
+                view = self.answering(thread, limit, turns + 1, &mut always).await;
             }
             views.push(view);
         }
         views
     }
 
+    /// Does `step` in `thread`, whose last send opened turn number `turns`.
+    async fn stepping(
+        &self,
+        step: Step,
+        thread: &Value,
+        turns: usize,
+        limit: Duration,
+        always: &mut bool,
+    ) {
+        match step {
+            Step::StopThreadWhileLanesWork(n) => {
+                let working = |v: &ThreadView| {
+                    (v.subagents.iter())
+                        .filter(|lane| lane.state.works())
+                        .count()
+                        >= n
+                };
+                self.until_within(limit, thread, working).await;
+                tokio::time::sleep(patience(limit, 8)).await;
+                let view = self.thread(thread).await;
+                let latest = json!(view.turns.last().expect("the turn it sent").id);
+                self.on_turn("agents.stop", &latest).await.unwrap();
+                // What a sub-agent that outlives the Stop does comes after
+                // it: it sleeps for a minute at most.
+                tokio::time::sleep(patience(limit, 75)).await;
+            }
+            Step::StopThreadAfter(secs) => {
+                // Not cut short for a replay: its turn ends as recorded, and
+                // a Stop its recording does not hold would derail it.
+                tokio::select! {
+                    _ = self.answering(thread, limit, turns, always) => {}
+                    _ = tokio::time::sleep(Duration::from_secs(secs)) => {
+                        let view = self.thread(thread).await;
+                        let latest = view.turns.last().expect("the turn it sent");
+                        if matches!(latest.state, TurnState::Queued | TurnState::Running) {
+                            // It may have ended just now: then it is refused.
+                            let _ = self.on_turn("agents.stop", &json!(latest.id)).await;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
     /// Allows each Question in `thread` once, until it has `turns` turns,
-    /// or more if a real Harness goes on by itself, and none of them runs;
-    /// waits up to `limit` for each step.
-    async fn allowing(&self, thread: &Value, limit: Duration, turns: usize) -> ThreadView {
+    /// or more if a real Harness goes on by itself, none of them runs and
+    /// no sub-agent works; waits up to `limit` for each step. While
+    /// `always` holds, the next Question of a sub-agent is allowed always,
+    /// and then no more.
+    async fn answering(
+        &self,
+        thread: &Value,
+        limit: Duration,
+        turns: usize,
+        always: &mut bool,
+    ) -> ThreadView {
         let done = |v: &ThreadView| {
             v.turns.len() >= turns
                 && v.turns
                     .iter()
                     .all(|t| !matches!(t.state, TurnState::Queued | TurnState::Running))
+                && !v.subagents.iter().any(|lane| lane.state.works())
         };
         loop {
             let view = self
@@ -4106,12 +4308,30 @@ impl World {
             let Some((question, choices)) = open(&view) else {
                 return view;
             };
-            let once = choices.iter().find(|c| c.allows && !c.always).unwrap();
-            let answer = json!({ "item": question, "choice": once.id });
+            let by_sub_agent = asked(&view).is_some_and(|(_, sub)| sub.is_some());
+            let choice = if *always && by_sub_agent {
+                *always = false;
+                choices.iter().find(|c| c.allows && c.always).unwrap()
+            } else {
+                choices.iter().find(|c| c.allows && !c.always).unwrap()
+            };
+            let answer = json!({ "item": question, "choice": choice.id });
             self.call(self.person(), "agents.answer", answer)
                 .await
                 .unwrap();
         }
+    }
+}
+
+/// How long a replay waits for each step.
+const REPLAY: Duration = Duration::from_secs(10);
+
+/// What a recording waits `secs` for. A replay waits for nothing: its
+/// frames have no time to pass.
+fn patience(limit: Duration, secs: u64) -> Duration {
+    match limit == REPLAY {
+        true => Duration::ZERO,
+        false => Duration::from_secs(secs),
     }
 }
 
@@ -4175,15 +4395,26 @@ const OWN_COMMANDS: [&str; 8] = [
     "compact", "context", "init", "mcp", "model", "plan", "review", "status",
 ];
 
-/// `recorded` without the Person's skills, plugins and agents: each list
-/// of commands cut to [`OWN_COMMANDS`], and Claude Code's `agent` option
-/// to its default.
+/// What a recording keeps of the account that is signed in.
+const ACCOUNT: [&str; 3] = ["email", "organization", "plan"];
+
+/// `recorded` without the Person's skills, plugins and agents, or what a
+/// Harness says of its account beyond [`ACCOUNT`]: each list of commands
+/// cut to [`OWN_COMMANDS`], Claude Code's `agent` option to its default,
+/// and no `detail` on an auth status.
 fn without_personal_setup(recorded: &str) -> String {
     recorded
         .lines()
         .map(|line| {
             let mut entry: Value = serde_json::from_str(line).unwrap();
             let frame = &mut entry["frame"];
+            let status = frame.pointer_mut("/params/authStatus");
+            if let Some(status) = status.and_then(Value::as_object_mut) {
+                status.remove("detail");
+                if let Some(account) = status.get_mut("account").and_then(Value::as_object_mut) {
+                    account.retain(|key, _| ACCOUNT.contains(&key.as_str()));
+                }
+            }
             if let Some(update) = frame.pointer_mut("/params/update")
                 && update["sessionUpdate"] == "available_commands_update"
                 && let Some(commands) = update.get_mut("availableCommands")
@@ -4222,22 +4453,204 @@ fn the_recordings_hold_no_personal_setup() {
                 .collect()
         };
         assert_eq!(frames(&without_personal_setup(&text)), frames(&text));
-        let emails: Vec<_> = text
-            .split(|c: char| c == '"' || c.is_whitespace())
-            .filter(|word| word.contains('@') && word.contains('.') && !word.starts_with('@'))
-            .collect();
-        assert!(
-            emails.iter().all(|e| *e == "person@example.invalid"),
-            "{emails:?}"
-        );
-        // Every home folder is the Person's, written out.
-        let named = |rest: &str| rest.split(['/', '"', '\\']).next() == Some("person");
-        assert!(
-            text.split("/home/").skip(1).all(named),
-            "{}",
-            path.display()
-        );
+        let found = personal_in(&text);
+        assert!(found.is_empty(), "{}: {found:?}", path.display());
     }
+}
+
+/// Folders of a Person's other than under `/home`, which
+/// [`personal_in`] reads apart.
+const FOLDERS: [&str; 6] = [
+    "/Users/",
+    "C:\\Users",
+    "/root/",
+    "~/.local",
+    "~/.config",
+    "-Users-",
+];
+
+/// How a token starts.
+const TOKENS: [&str; 3] = ["sk-ant-", "sk-proj-", "Bearer "];
+
+/// What holds a credential or an account's ID, in lower case.
+const CREDENTIALS: [&str; 7] = [
+    "access_token",
+    "refresh_token",
+    "id_token",
+    "cookie",
+    "accountid",
+    "account_id",
+    "organizationid",
+];
+
+/// What in `text`, the lines of a recording, may name a Person or be a
+/// secret: the kind of each, not the thing, which a test's output would
+/// publish. None if it is clean.
+fn personal_in(text: &str) -> Vec<String> {
+    let email = |word: &&str| word.contains('@') && word.contains('.') && !word.starts_with('@');
+    let mut found: Vec<String> = text
+        .split(|c: char| c == '"' || c.is_whitespace())
+        .filter(email)
+        .filter(|word| *word != "person@example.invalid")
+        .map(|_| "an email".to_owned())
+        .collect();
+    // Every home folder is the Person's, written out, and so is the
+    // folder Claude Code names after it.
+    for (mark, ends) in [("/home/", ['/', '"', '\\']), ("-home-", ['-', '"', '/'])] {
+        let others =
+            (text.split(mark).skip(1)).filter(|rest| rest.split(ends).next() != Some("person"));
+        found.extend(others.map(|_| format!("a folder: {mark}")));
+    }
+    for line in text.lines() {
+        let entry: Value = serde_json::from_str(line).unwrap();
+        personal_value(&entry, "", &mut found);
+    }
+    found
+}
+
+/// [`personal_in`] for `value`, found under `key`.
+fn personal_value(value: &Value, key: &str, found: &mut Vec<String>) {
+    let credential = |text: &str| {
+        let text = text.to_lowercase();
+        CREDENTIALS.iter().any(|name| text.contains(name))
+    };
+    match value {
+        Value::String(text) => {
+            // Codex's own agents are named `/root/<task>`.
+            let folders = (FOLDERS.iter()).filter(|at| key != "agentPath" || **at != "/root/");
+            found.extend(
+                folders
+                    .filter(|at| text.contains(**at))
+                    .map(|at| format!("a folder: {at}")),
+            );
+            found.extend(
+                (TOKENS.iter())
+                    .filter(|start| text.contains(**start))
+                    .map(|start| format!("a token: {start}")),
+            );
+            let base64url = |c: &char| c.is_ascii_alphanumeric() || matches!(c, '-' | '_');
+            if (text.match_indices("eyJ"))
+                .any(|(at, _)| text[at..].chars().take_while(base64url).count() >= 16)
+            {
+                found.push("a token: JWT".to_owned());
+            }
+            if text.starts_with("org_") && text != "org_level_disabled" {
+                found.push("an organization's ID".to_owned());
+            }
+            if credential(text) {
+                found.push("a credential, named in a value".to_owned());
+            }
+        }
+        Value::Array(items) => {
+            for item in items {
+                personal_value(item, key, found);
+            }
+        }
+        Value::Object(fields) => {
+            for (name, field) in fields {
+                if credential(name) {
+                    found.push("a credential, named in a key".to_owned());
+                }
+                if name == "authStatus" {
+                    personal_status(field, found);
+                }
+                personal_value(field, name, found);
+            }
+        }
+        _ => {}
+    }
+}
+
+/// [`personal_in`] for an auth status: only what [`ACCOUNT`] names, its
+/// organization written out, and no `detail`.
+fn personal_status(status: &Value, found: &mut Vec<String>) {
+    if status.get("detail").is_some() {
+        found.push("an auth status's detail".to_owned());
+    }
+    let account = status.get("account").and_then(Value::as_object);
+    for (name, field) in account.into_iter().flatten() {
+        let written_out = name != "organization" || field == "Example Org";
+        if !ACCOUNT.contains(&name.as_str()) || !written_out {
+            found.push(format!("an account's {name}"));
+        }
+    }
+}
+
+/// Whether `text` holds `name` as a word of its own, not inside another.
+fn names(text: &str, name: &str) -> bool {
+    text.match_indices(name).any(|(at, _)| {
+        let before = text[..at].chars().next_back();
+        let after = text[at + name.len()..].chars().next();
+        ![before, after]
+            .into_iter()
+            .flatten()
+            .any(char::is_alphanumeric)
+    })
+}
+
+/// The name of this machine, if it says one.
+fn this_machine() -> Option<String> {
+    let out = std::process::Command::new("hostname").output().ok()?;
+    Some(String::from_utf8_lossy(&out.stdout).trim().to_owned())
+}
+
+#[test]
+fn a_recording_that_names_a_person_or_holds_a_secret_is_refused() {
+    let line = |frame: Value| json!({ "to": "client", "frame": frame }).to_string();
+    let says = |value: &str| line(json!({ "text": value }));
+    let status = |status: Value| line(json!({ "params": { "authStatus": status } }));
+    let refused = [
+        says("someone@example.com"),
+        says("/home/someone/notes"),
+        says("/Users/someone/notes"),
+        says("C:\\Users\\someone"),
+        says("/root/notes"),
+        says("~/.local/state/harness"),
+        says("~/.config/harness"),
+        says("/home/person/.claude/projects/-home-someone-Banda/x.jsonl"),
+        says("-Users-someone-Banda"),
+        says("sk-ant-key"),
+        says("sk-proj-key"),
+        says("eyJhbGciOiJIUzI1NiJ9.e30.mark"),
+        says("Bearer key"),
+        says("org_01abc"),
+        says("the access_token"),
+        says("the refresh_token"),
+        says("the id_token"),
+        says("a Cookie"),
+        says("the accountId"),
+        says("the account_id"),
+        says("the organizationId"),
+        line(json!({ "access_token": "key" })),
+        line(json!({ "accountId": "key" })),
+        status(json!({ "account": { "name": "Someone" } })),
+        status(json!({ "account": { "organization": "Someone's Company" } })),
+        status(json!({ "detail": "Someone" })),
+    ];
+    for line in refused {
+        assert!(!personal_in(&line).is_empty(), "{line}");
+    }
+    let clean = [
+        says("/home/person/.claude/projects/-home-person-Banda/x.jsonl"),
+        says("org_level_disabled"),
+        line(json!({ "agentPath": "/root/read_a" })),
+        status(json!({ "account": {
+            "email": "person@example.invalid",
+            "organization": "Example Org",
+            "plan": "max",
+        } })),
+    ];
+    for line in clean {
+        assert_eq!(personal_in(&line), Vec::<String>::new(), "{line}");
+    }
+    let said =
+        status(json!({ "detail": "Someone", "account": { "plan": "max", "name": "Someone" } }));
+    assert_eq!(
+        personal_in(&without_personal_setup(&said)),
+        Vec::<String>::new(),
+        "the scrubber cuts them"
+    );
+    assert!(names("at someone's", "someone") && !names("handsomeones", "someone"));
 }
 
 /// The recording of `harness` doing [`EDIT`].
@@ -4266,7 +4679,7 @@ impl World {
             .call(self.person(), "agents.send", params)
             .await
             .unwrap();
-        self.allowing(&sent["thread"], limit, 1).await
+        self.answering(&sent["thread"], limit, 1, &mut false).await
     }
 }
 
@@ -4309,10 +4722,12 @@ impl World {
         (world, view, folder)
     }
 
-    /// [`sub_agents`](World::sub_agents) as its recording says it went.
-    async fn replay_sub_agents(root: &Path, recorded: &SubAgents) -> Vec<ThreadView> {
+    /// [`sub_agents`](World::sub_agents) as its recording says it went,
+    /// and the World, to read a lane's own entries.
+    async fn replay_sub_agents(root: &Path, recorded: &SubAgents) -> (World, Vec<ThreadView>) {
         let world = World::new_with(root, playing(recorded.file)).await;
-        world.sub_agents(recorded, Duration::from_secs(10)).await
+        let views = world.sub_agents(recorded, REPLAY).await;
+        (world, views)
     }
 }
 
@@ -4327,7 +4742,7 @@ fn replies(view: &ThreadView) -> Vec<&str> {
         .collect()
 }
 
-/// Before Banda declares sub-agents (ADR 0103, step 0), Claude Code's
+/// Before Banda declared sub-agents (ADR 0103, step 0), Claude Code's
 /// Agent call is a thought titled with its task, and what its sub-agent
 /// does comes flat in the parent's turn: its calls as the Agent's own,
 /// stamped `_meta.claudeCode.parentToolUseId`, which the engine drops;
@@ -4341,7 +4756,7 @@ fn replies(view: &ThreadView) -> Vec<&str> {
 async fn claude_code_s_sub_agents_work_as_the_agent_s_own_and_write_no_reply_of_theirs() {
     let root = tempfile::tempdir().unwrap();
     let recorded = &CLAUDE_SUB_AGENTS;
-    let views = World::replay_sub_agents(root.path(), recorded).await;
+    let (_world, views) = World::replay_sub_agents(root.path(), recorded).await;
     let [full, supervised] = &views[..] else {
         panic!("one view per Thread: {}", views.len())
     };
@@ -4422,7 +4837,7 @@ async fn claude_code_s_sub_agents_work_as_the_agent_s_own_and_write_no_reply_of_
 )]
 async fn a_claude_workflow_ends_its_turn_at_once_and_its_agent_asks_as_claude_by_itself() {
     let root = tempfile::tempdir().unwrap();
-    let views = World::replay_sub_agents(root.path(), &CLAUDE_WORKFLOW).await;
+    let (_world, views) = World::replay_sub_agents(root.path(), &CLAUDE_WORKFLOW).await;
     let view = &views[0];
     assert_eq!(
         texts(view),
@@ -4443,7 +4858,7 @@ async fn a_claude_workflow_ends_its_turn_at_once_and_its_agent_asks_as_claude_by
     assert!(view.turns.iter().all(|t| t.state == TurnState::Done));
 }
 
-/// Codex's sub-agents, before Banda declares them, are rows of their
+/// Codex's sub-agents, before Banda declared them, are rows of their
 /// start, the parent's wait and their end, with none of their work or
 /// what they report.
 #[tokio::test]
@@ -4453,7 +4868,7 @@ async fn a_claude_workflow_ends_its_turn_at_once_and_its_agent_asks_as_claude_by
 )]
 async fn codex_s_sub_agents_show_as_their_start_the_wait_and_their_end() {
     let root = tempfile::tempdir().unwrap();
-    let views = World::replay_sub_agents(root.path(), &CODEX_SUB_AGENTS).await;
+    let (_world, views) = World::replay_sub_agents(root.path(), &CODEX_SUB_AGENTS).await;
     assert_eq!(
         texts(&views[0]),
         [
@@ -4468,6 +4883,316 @@ async fn codex_s_sub_agents_show_as_their_start_the_wait_and_their_end() {
         ]
     );
     assert_eq!(views[0].turns[0].state, TurnState::Done);
+}
+
+// What real Harnesses said once Banda declared sub-agents (ADR 0103, Plan
+// step 1, item 10), played through the engine with the fake agent. What
+// they hold is told in docs/research/2026-11-10-sub-agents/recordings.md,
+// Part C.
+
+/// Claude Code's three sub-agents at once are three lanes, each with its
+/// own work and report, its internal tag cut; the Thread keeps one entry
+/// for each, and no Think row for its launch.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_sub_agents_are_lanes_with_their_reports_and_no_think_rows() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_LANES).await;
+    let view = &views[0];
+    assert_eq!(
+        texts(view),
+        [
+            format!("message: {}", CLAUDE_LANES.threads[0].sends[0]),
+            anchor(&view.subagents[0]),
+            anchor(&view.subagents[1]),
+            anchor(&view.subagents[2]),
+            "message: alpha, bravo, charlie".into(),
+        ]
+    );
+    assert_eq!(view.turns[0].state, TurnState::Done);
+    for (title, read, report) in [
+        ("Read first line of a.txt", "Read a.txt", "alpha"),
+        ("Read first line of b.txt", "Read b.txt (1 - 1)", "bravo"),
+        ("Read first line of c.txt", "Read c.txt (1 - 1)", "charlie"),
+    ] {
+        let lane = lane(view, title);
+        assert_eq!(
+            (lane.state, lane.report.as_deref(), lane.role.as_deref()),
+            (SubagentState::Done, Some(report), Some("general-purpose")),
+            "{title}"
+        );
+        assert_eq!(lane.model.as_deref(), Some("Haiku 5.5"), "{title}");
+        assert_eq!(
+            entries(&world.subagent(lane).await.items),
+            [format!("tool: {read} (Done)"), format!("message: {report}")],
+            "{title}"
+        );
+    }
+}
+
+/// A background sub-agent of Claude Code holds its turn until it ends, and
+/// says no report of its own to its parent: its last words are its report.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_background_sub_agent_holds_its_turn_and_its_last_words_are_its_report() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_LANES).await;
+    let view = &views[1];
+    assert_eq!(view.turns.len(), 1, "nothing went on by itself");
+    assert_eq!(view.turns[0].state, TurnState::Done);
+    let lane = &view.subagents[0];
+    assert_eq!(
+        texts(view),
+        [
+            format!("message: {}", CLAUDE_LANES.threads[1].sends[0]),
+            anchor(lane),
+            "tool: true (Done)".into(),
+            "message: alpha".into(),
+        ]
+    );
+    assert_eq!(
+        (lane.state, lane.report.as_deref()),
+        (SubagentState::Done, Some("alpha"))
+    );
+    assert_eq!(
+        entries(&world.subagent(lane).await.items),
+        ["tool: Read a.txt (1 - 1) (Done)", "message: alpha"]
+    );
+}
+
+/// A sub-agent Claude Code's own sub-agent starts is a lane of that lane,
+/// in the turn its root started in, with its own work and report.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_nested_sub_agent_is_a_lane_of_its_lane() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_LANES).await;
+    let view = &views[2];
+    let [outer, inner] = &view.subagents[..] else {
+        panic!("two sub-agents: {:?}", view.subagents)
+    };
+    assert_eq!(
+        texts(view),
+        [
+            format!("message: {}", CLAUDE_LANES.threads[2].sends[0]),
+            anchor(outer),
+            "message: bravo".into(),
+        ],
+        "the Thread shows the one it started"
+    );
+    assert_eq!(outer.title, "Read b.txt first line via nested agent");
+    assert_eq!(inner.title, "Read first line of b.txt");
+    assert_eq!((outer.parent, inner.parent), (None, Some(outer.id)));
+    assert_eq!(inner.turn, outer.turn, "its root's turn");
+    for lane in [outer, inner] {
+        assert_eq!(
+            (lane.state, lane.report.as_deref()),
+            (SubagentState::Done, Some("bravo")),
+            "{}",
+            lane.title
+        );
+    }
+    let below = world.subagent(outer).await;
+    let ids: Vec<_> = below.subagents.iter().map(|lane| lane.id).collect();
+    assert_eq!(ids, [inner.id]);
+    assert_eq!(
+        entries(&world.subagent(inner).await.items),
+        ["tool: Read b.txt (1 - 1) (Done)", "message: bravo"]
+    );
+}
+
+/// A Claude Code sub-agent's Question is docked in its Thread and names
+/// who asks. As recorded, its always answer holds for neither another
+/// sub-agent nor Claude itself, who each ask again for the same command;
+/// whether it holds for that sub-agent's own next command is unrecorded.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn a_claude_sub_agent_asks_in_its_thread_and_its_always_answer_holds_as_recorded() {
+    let root = tempfile::tempdir().unwrap();
+    let (_world, views) = World::replay_sub_agents(root.path(), &CLAUDE_LANES).await;
+    let view = &views[3];
+    let [first, second] = &view.subagents[..] else {
+        panic!("two sub-agents: {:?}", view.subagents)
+    };
+    let sends = CLAUDE_LANES.threads[3].sends;
+    assert_eq!(
+        texts(view),
+        [
+            format!("message: {}", sends[0]),
+            anchor(first),
+            "question: echo delta > d.txt (Answered)".into(),
+            "message: done".into(),
+            format!("message: {}", sends[1]),
+            "tool: echo delta > d.txt (Done)".into(),
+            anchor(second),
+            "question: echo delta > d.txt (Answered)".into(),
+            "question: echo delta > d.txt (Answered)".into(),
+            "message: done".into(),
+        ]
+    );
+    assert_eq!(
+        questions(view),
+        [
+            (Some(first.id), Some("allow-with-updates")),
+            (Some(second.id), Some("allow-once")),
+            (None, Some("allow-once")),
+        ]
+    );
+    for lane in [first, second] {
+        assert_eq!(
+            (lane.state, lane.report.as_deref()),
+            (SubagentState::Done, Some("done"))
+        );
+    }
+}
+
+/// The Thread's Stop on Claude Code cancels its turn, and its sub-agents
+/// in the foreground go with it, with no report.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn the_threads_stop_stops_claude_and_its_foreground_sub_agents() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_LANES).await;
+    let view = &views[4];
+    assert_eq!(view.turns[0].state, TurnState::Stopped);
+    for title in ["Sleep 60s, reply slept (1)", "Sleep 60s, reply slept (2)"] {
+        let lane = lane(view, title);
+        assert_eq!(
+            (lane.state, lane.why.as_deref(), lane.report.as_deref()),
+            (SubagentState::Stopped, None, None),
+            "{title}"
+        );
+        let failed = ["tool: python3 -c \"import time; time.sleep(60)\" (Failed)"];
+        world
+            .subagent_until(lane, |own| entries(&own.items) == failed)
+            .await;
+    }
+}
+
+/// Codex's sub-agents are lanes named from their tasks, each with its own
+/// work. Codex says no report to the parent, so a lane's last words are
+/// its report. A sub-agent's command asks in its Thread and names who
+/// asks; the parent's waits stay its own rows.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn codexs_sub_agents_are_lanes_and_their_last_words_their_reports() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CODEX_LANES).await;
+    let view = &views[0];
+    let [read, write] = &view.subagents[..] else {
+        panic!("two sub-agents: {:?}", view.subagents)
+    };
+    assert_eq!(
+        texts(view),
+        [
+            format!("message: {}", CODEX_LANES.threads[0].sends[0]),
+            anchor(read),
+            anchor(write),
+            "tool: wait (Done)".into(),
+            "question: Run command (Answered)".into(),
+            "tool: wait (Done)".into(),
+            "message: alpha done".into(),
+        ]
+    );
+    assert_eq!(view.turns[0].state, TurnState::Done);
+    let project = world.kernel.project(world.project).await.unwrap();
+    let file = project.folder().join("a.txt");
+    for (lane, title, own, report) in [
+        (
+            read,
+            "Read e",
+            vec![
+                format!("tool: Read file '{}' (Done)", file.display()),
+                "message: alpha".to_owned(),
+            ],
+            "alpha",
+        ),
+        (
+            write,
+            "Write f",
+            vec![
+                "tool: touch d.txt (Done)".to_owned(),
+                "question: Run command (Answered)".to_owned(),
+                "message: done".to_owned(),
+            ],
+            "done",
+        ),
+    ] {
+        assert_eq!(
+            (
+                lane.title.as_str(),
+                lane.state,
+                lane.report.as_deref(),
+                lane.model.as_deref()
+            ),
+            (title, SubagentState::Done, Some(report), Some("6 Luna")),
+        );
+        assert_eq!((lane.role.as_deref(), lane.prompt.as_deref()), (None, None));
+        assert_eq!(entries(&world.subagent(lane).await.items), own, "{title}");
+    }
+    assert_eq!(questions(view), [(Some(write.id), Some("allow_once"))]);
+}
+
+/// The Thread's Stop on Codex cancels its turn, and its sub-agent at work
+/// ends Stopped, with no report. What the parent's `wait` row and the
+/// child's command row should say after it is still open, so this does not
+/// pin their state (`recordings.md`, Part C).
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn the_threads_stop_stops_codex_and_its_sub_agent() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CODEX_LANES).await;
+    let view = &views[1];
+    assert_eq!(view.turns[0].state, TurnState::Stopped);
+    let [lane] = &view.subagents[..] else {
+        panic!("one sub-agent: {:?}", view.subagents)
+    };
+    assert_eq!(
+        (lane.title.as_str(), lane.model.as_deref()),
+        ("Slow g", Some("6 Luna"))
+    );
+    assert_eq!(
+        (lane.state, lane.why.as_deref(), lane.report.as_deref()),
+        (SubagentState::Stopped, None, None)
+    );
+    let rows = texts(view);
+    assert_eq!(
+        rows[..2],
+        [
+            format!("message: {}", CODEX_LANES.threads[1].sends[0]),
+            anchor(lane),
+        ]
+    );
+    assert!(
+        rows.len() == 3 && rows[2].starts_with("tool: wait"),
+        "{rows:?}"
+    );
+    let own = entries(&world.subagent(lane).await.items);
+    assert!(
+        own.len() == 1 && own[0].starts_with("tool: python3 -c "),
+        "{own:?}"
+    );
 }
 
 #[tokio::test]
@@ -4597,16 +5322,12 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
 }
 
 /// What the engine tells the fake it can show as it starts it, read from
-/// the first frame of its recording: declaring sub-agents, or not.
-async fn shown(declaring: bool) -> Value {
+/// the first frame of its recording.
+async fn shown() -> Value {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let mut harness = harnesses().find("fake").unwrap().clone();
     harness.record = Some(kept.path().join("recordings"));
-    let harnesses = Harnesses::new(vec![harness]);
-    let world = match declaring {
-        true => World::declaring(root.path(), harnesses).await,
-        false => World::new_with(root.path(), Agents::new(harnesses)).await,
-    };
+    let world = World::new_with(root.path(), Agents::new(Harnesses::new(vec![harness]))).await;
     ask_session(&world, None).await;
 
     let mut files = std::fs::read_dir(kept.path().join("recordings")).unwrap();
@@ -4621,80 +5342,13 @@ async fn shown(declaring: bool) -> Value {
     first["frame"]["params"]["clientCapabilities"].clone()
 }
 
-/// The engine tells a Harness it shows sub-agents only once its engine
-/// declares them, as `BANDA_SUBAGENTS=1` has it, and says nothing else
-/// differently then (ADR 0103, decision 7).
+/// The engine always tells a Harness it shows sub-agents (ADR 0103,
+/// decision 7).
 #[tokio::test]
-async fn banda_declares_sub_agents_only_once_its_engine_does() {
-    let today = shown(false).await;
-    assert!(today.get("subagents").is_none(), "{today}");
-    assert_eq!(today["elicitation"], json!({ "form": {} }), "{today}");
-
-    let mut declared = shown(true).await;
-    let subagents = declared.as_object_mut().unwrap().remove("subagents");
-    assert_eq!(subagents, Some(json!({})));
-    assert_eq!(declared, today, "the rest as before");
-}
-
-/// Undeclared, a Harness's sub-agent comes as on Dev today: its Agent
-/// call a think call titled with its task and ending with its answer,
-/// its own calls in its parent's turn, and nothing of a sub-agent apart
-/// (ADR 0103, decision 7).
-#[tokio::test]
-async fn undeclared_sub_agents_stay_in_their_parents_turn_as_on_dev_today() {
-    let root = tempfile::tempdir().unwrap();
-    let world = World::new(root.path()).await;
-    let sent = world.send(None, "sub-agents").await;
-    let view = world
-        .until(&sent["thread"], |v| {
-            state(v, &sent["turn"]) == Some(TurnState::Done)
-        })
-        .await;
-    assert_eq!(
-        texts(&view),
-        [
-            "message: sub-agents",
-            "tool: Read a.txt one line (Done)",
-            "tool: Read a.txt (Done)",
-            "message: The sub-agents said: alpha.",
-        ]
-    );
-    assert_eq!(view.turns.len(), 1, "all in the parent's one turn");
-    let Body::Tool { tool, content, .. } = &view.items[1].body else {
-        unreachable!()
-    };
-    let text = |text: &str| ToolContent::Text { text: text.into() };
-    assert_eq!(
-        (*tool, content.clone()),
-        (
-            ToolKind::Think,
-            vec![
-                text("<tools-used-before-summary>Read</tools-used-before-summary>\n"),
-                text("alpha")
-            ]
-        )
-    );
-
-    let project = world.kernel.project(world.project).await.unwrap();
-    let events = (project.events_after(0, Default::default(), 1000).await).unwrap();
-    let apart: Vec<_> = events
-        .iter()
-        .map(|event| event.kind.as_str())
-        .filter(|kind| kind.starts_with("subagent.") || kind.starts_with("crew."))
-        .collect();
-    assert!(apart.is_empty(), "{apart:?}");
-    assert!(
-        !(view.items.iter()).any(|item| matches!(item.body, Body::Subagent { .. })),
-        "no lane's entry"
-    );
-    assert!(view.subagents.is_empty(), "{:?}", view.subagents);
-    let sql =
-        rusqlite::Connection::open(project_data(root.path()).join("project.sqlite3")).unwrap();
-    let lanes: i64 = (sql.query_row("SELECT count(*) FROM agents_subagents", [], |row| {
-        row.get(0)
-    }))
-    .unwrap();
-    assert_eq!(lanes, 0);
+async fn banda_declares_sub_agents() {
+    let shows = shown().await;
+    assert_eq!(shows["subagents"], json!({}), "{shows}");
+    assert_eq!(shows["elicitation"], json!({ "form": {} }), "{shows}");
 }
 
 /// `threads`, `read` and `send` are tools from the methods table (ADR
@@ -6711,7 +7365,6 @@ fn two_claude_accounts(cli: &Path) -> Agents {
         shadows: None,
         carried: None,
         record: None,
-        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -7041,7 +7694,6 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
         shadows: None,
         carried: Some("claude-agent-acp.mjs".into()),
         record: None,
-        subagents: false,
         cwd: None,
         holes: Holes::default(),
         credentials: Default::default(),
@@ -8073,7 +8725,7 @@ async fn removing_an_account_keeps_its_running_turn_then_moves_its_threads() {
 }
 
 // A Harness's sub-agents, each in a lane of its Thread, as the engine
-// hears them once it declares them (ADR 0103, step 1).
+// hears them (ADR 0103, step 1).
 
 /// Whether the Thread has `n` sub-agents and none of them works.
 fn lanes_ended(view: &ThreadView, n: usize) -> bool {
@@ -8103,6 +8755,17 @@ fn asked(view: &ThreadView) -> Option<(ItemId, Option<SubagentId>)> {
         } => Some((item.id, *sub)),
         _ => None,
     })
+}
+
+/// Each Question in `view`: the sub-agent that asked it, and its answer.
+fn questions(view: &ThreadView) -> Vec<(Option<SubagentId>, Option<&str>)> {
+    view.items
+        .iter()
+        .filter_map(|item| match &item.body {
+            Body::Question { sub, answer, .. } => Some((*sub, answer.as_deref())),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The Project's database, as the module keeps it.
@@ -8161,6 +8824,21 @@ impl World {
         serde_json::from_value(read.unwrap()).unwrap()
     }
 
+    /// Waits up to ten seconds for sub-agent `lane` to satisfy `check`.
+    async fn subagent_until(&self, lane: &Subagent, check: impl Fn(&SubagentView) -> bool) {
+        for _ in 0..1000 {
+            if check(&self.subagent(lane).await) {
+                return;
+            }
+            tokio::time::sleep(Duration::from_millis(10)).await;
+        }
+        panic!(
+            "{} never got there: {:#?}",
+            lane.title,
+            self.subagent(lane).await
+        );
+    }
+
     /// The Project's facts of its sub-agents, the first first: each one's
     /// kind and what it says.
     async fn lane_facts(&self) -> Vec<(String, Value)> {
@@ -8192,13 +8870,13 @@ impl World {
     }
 }
 
-/// Declared, a sub-agent works in a lane of its Thread: the Thread shows
+/// A sub-agent works in a lane of its Thread: the Thread shows
 /// where it started, and its calls and words are its own, read with it
 /// (ADR 0103, decisions 4 and 8).
 #[tokio::test]
 async fn a_sub_agents_work_goes_to_its_lane_and_not_into_the_thread() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents", 1).await;
     let lane = &view.subagents[0];
     assert_eq!(
@@ -8262,7 +8940,7 @@ async fn a_sub_agents_work_goes_to_its_lane_and_not_into_the_thread() {
 #[tokio::test]
 async fn a_sub_agent_takes_its_place_in_the_turn_after_what_the_agent_said_before_it() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let shot = (world.attach(world.person(), "image/png", PNG, Some("shot.png")))
         .await
         .unwrap();
@@ -8288,7 +8966,7 @@ async fn a_sub_agent_takes_its_place_in_the_turn_after_what_the_agent_said_befor
 #[tokio::test]
 async fn three_sub_agents_end_in_their_own_order_with_their_reports() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents three", 3).await;
     assert_eq!(
         last_reply(&view),
@@ -8326,7 +9004,7 @@ async fn three_sub_agents_end_in_their_own_order_with_their_reports() {
 #[tokio::test]
 async fn sub_agents_keep_the_order_they_started_in() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents three", 3).await;
     let roles: Vec<_> = (view.subagents.iter())
         .map(|lane| lane.role.as_deref().unwrap())
@@ -8349,7 +9027,7 @@ async fn sub_agents_keep_the_order_they_started_in() {
 #[tokio::test]
 async fn a_sub_agents_question_docks_in_its_thread_and_its_answer_reaches_the_child() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents asks").await;
     let thread = &sent["thread"];
     let view = world.until(thread, |v| asked(v).is_some()).await;
@@ -8401,7 +9079,7 @@ async fn a_sub_agents_question_docks_in_its_thread_and_its_answer_reaches_the_ch
 #[tokio::test]
 async fn a_sub_agents_form_reaches_its_thread() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents form").await;
     let thread = &sent["thread"];
     let view = world.until(thread, |v| asked(v).is_some()).await;
@@ -8429,7 +9107,7 @@ async fn a_sub_agents_form_reaches_its_thread() {
 #[tokio::test]
 async fn a_lanes_question_outlives_its_turn_and_closes_when_the_lane_ends() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = &sent["thread"];
     let view = world.until(thread, |v| asked(v).is_some()).await;
@@ -8464,7 +9142,7 @@ async fn a_lanes_question_outlives_its_turn_and_closes_when_the_lane_ends() {
 #[tokio::test]
 async fn a_sub_agents_file_is_heard_as_its_own_until_it_ends() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let mut heard = (world.kernel)
         .stream(
             world.person(),
@@ -8517,7 +9195,7 @@ async fn a_lanes_question_asks_by_the_threads_mode_now() {
         ("FAKE_AGENT_OUTLIVES_BY", "3000"),
     ];
     let harnesses = harnesses_with(&env);
-    let world = World::declaring(root.path(), harnesses).await;
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
     // In Full access, the Person chooses Supervised before it asks.
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = sent["thread"].clone();
@@ -8556,7 +9234,7 @@ async fn a_lanes_question_asks_by_the_threads_mode_now() {
 #[tokio::test]
 async fn a_sub_agents_options_and_usage_leave_the_threads_alone() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (thread, before) = world.finish(None, "hello").await;
     let (_, view) = world.lanes_end(Some(&thread), "sub-agents", 1).await;
     assert_eq!(view.subagents[0].model.as_deref(), Some("Haiku 5.5"));
@@ -8570,7 +9248,7 @@ async fn a_sub_agents_options_and_usage_leave_the_threads_alone() {
 #[tokio::test]
 async fn what_a_lane_says_after_its_turn_opens_no_turn() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents outlive", 1).await;
     assert_eq!(
         last_reply(&view),
@@ -8597,7 +9275,7 @@ async fn what_a_lane_says_after_its_turn_opens_no_turn() {
 async fn a_sub_agent_started_between_turns_starts_in_a_turn_of_the_agents_own() {
     let root = tempfile::tempdir().unwrap();
     let agents = Agents::new(harnesses()).quiet_after(Duration::from_millis(300));
-    let world = World::new_with(root.path(), agents.declaring_subagents()).await;
+    let world = World::new_with(root.path(), agents).await;
     let sent = world.send(None, "sub-agents later").await;
     let view = world
         .until(&sent["thread"], |v| {
@@ -8633,7 +9311,7 @@ async fn a_sub_agent_started_between_turns_starts_in_a_turn_of_the_agents_own() 
 #[tokio::test]
 async fn a_sub_agents_own_sub_agent_is_a_lane_under_it() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents nested", 2).await;
     let (outer, inner) = (
         lane(&view, "Read a.txt one line"),
@@ -8677,7 +9355,7 @@ async fn a_sub_agents_own_sub_agent_is_a_lane_under_it() {
 #[tokio::test]
 async fn a_sub_agent_that_fails_says_why_and_its_turn_goes_on() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents fails", 1).await;
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
     assert_eq!(
@@ -8703,7 +9381,7 @@ async fn a_sub_agent_that_fails_says_why_and_its_turn_goes_on() {
 #[tokio::test]
 async fn a_failed_sub_agent_leaves_the_listed_thread_as_it_was() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "sub-agents").await;
     let listed = world.listed(&thread).await;
     let (sent, view) = world.lanes_end(Some(&thread), "sub-agents fails", 2).await;
@@ -8722,7 +9400,7 @@ async fn a_failed_sub_agent_leaves_the_listed_thread_as_it_was() {
 #[tokio::test]
 async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents again", 1).await;
     let lane = &view.subagents[0];
     let anchors = texts(&view)
@@ -8774,7 +9452,7 @@ async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
 #[tokio::test]
 async fn a_lanes_call_that_ends_after_its_idle_is_kept() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, _) = world.lanes_end(None, "sub-agents late", 1).await;
     let mut tries = 0;
     let own = loop {
@@ -8801,7 +9479,7 @@ async fn a_lanes_call_that_ends_after_its_idle_is_kept() {
 #[tokio::test]
 async fn a_sub_agents_calls_write_no_subagent_changed() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents edit asks late").await;
     let view = world.until(&sent["thread"], |v| asked(v).is_some()).await;
     world.answer(asked(&view).unwrap().0, "allow-once").await;
@@ -8834,7 +9512,7 @@ async fn a_sub_agents_calls_write_no_subagent_changed() {
 #[tokio::test]
 async fn duplicate_running_updates_write_no_fact() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents codex three", 3).await;
     let facts = world.lane_facts().await;
     for lane in &view.subagents {
@@ -8852,7 +9530,7 @@ async fn duplicate_running_updates_write_no_fact() {
 async fn a_codex_sub_agent_announced_without_a_state_works_and_its_repeated_updates_write_nothing()
 {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents codex", 1).await;
     let lane = &view.subagents[0];
     let facts = world.lane_facts().await;
@@ -8879,7 +9557,7 @@ async fn a_codex_sub_agent_announced_without_a_state_works_and_its_repeated_upda
 #[tokio::test]
 async fn codexs_wait_stays_the_parents_own_call() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents codex", 1).await;
     let lane = &view.subagents[0];
     assert_eq!(
@@ -8905,7 +9583,7 @@ async fn codexs_wait_stays_the_parents_own_call() {
 #[tokio::test]
 async fn a_codex_childs_usage_leaves_the_thread_alone() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (thread, before) = world.finish(None, "hello").await;
     let (_, view) = world.lanes_end(Some(&thread), "sub-agents codex", 1).await;
     assert_eq!(view.usage, before.usage);
@@ -8917,7 +9595,7 @@ async fn a_codex_childs_usage_leaves_the_thread_alone() {
 #[tokio::test]
 async fn a_background_sub_agents_report_is_its_last_words() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents background", 1).await;
     let lane = &view.subagents[0];
     assert_eq!(lane.report.as_deref(), Some("alpha"));
@@ -8944,7 +9622,7 @@ async fn a_background_sub_agents_report_is_its_last_words() {
 #[tokio::test]
 async fn a_reply_after_the_end_changes_the_report_only_when_its_words_differ() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents", 1).await;
     let lane = &view.subagents[0];
     // Its `:reply` comes after it went idle, the words of its last reply.
@@ -8998,7 +9676,7 @@ async fn a_reply_after_the_end_changes_the_report_only_when_its_words_differ() {
 #[tokio::test]
 async fn a_reply_before_the_end_is_the_report_and_not_its_last_words() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (_, view) = world.lanes_end(None, "sub-agents early", 1).await;
     let lane = &view.subagents[0];
     let reported = "alpha, the first line of a.txt";
@@ -9023,7 +9701,7 @@ async fn a_reply_before_the_end_is_the_report_and_not_its_last_words() {
 #[tokio::test]
 async fn an_unknown_state_loses_a_lane_until_it_says_again() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents unknown").await;
     let done = |v: &ThreadView| {
         v.subagents
@@ -9137,7 +9815,7 @@ fn a_restart_loses_the_lanes_at_work_and_closes_their_questions() {
     let root = tempfile::tempdir().unwrap();
     across_a_restart(
         root.path(),
-        || Agents::new(harnesses()).declaring_subagents(),
+        || Agents::new(harnesses()),
         async |world| {
             let sent = world.send(None, "sub-agents asks").await;
             let view = world.until(&sent["thread"], |v| asked(v).is_some()).await;
@@ -9183,7 +9861,7 @@ async fn lanes_end_lost_when_their_harness_stops() {
     let working = Working::new();
     let mut count = working.count();
     let agents = Agents::new(harnesses()).counted_in(working);
-    let world = World::new_with(root.path(), agents.declaring_subagents()).await;
+    let world = World::new_with(root.path(), agents).await;
     let (sent, view) = world.lanes_end(None, "sub-agents dies", 1).await;
     let lane = &view.subagents[0];
     assert_eq!(lane.state, SubagentState::Lost);
@@ -9202,7 +9880,7 @@ async fn lanes_end_lost_when_their_harness_stops() {
 async fn a_harness_with_a_sub_agent_at_work_is_not_let_go() {
     let root = tempfile::tempdir().unwrap();
     let agents = Agents::new(harnesses()).idle_after(Duration::from_millis(100));
-    let world = World::new_with(root.path(), agents.declaring_subagents()).await;
+    let world = World::new_with(root.path(), agents).await;
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = &sent["thread"];
     let view = world.until(thread, |v| asked(v).is_some()).await;
@@ -9237,7 +9915,7 @@ async fn removing_a_project_stops_its_sub_agents() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
     let harnesses = Harnesses::new(vec![recorded_fake(&recordings)]);
-    let world = World::declaring(root.path(), harnesses).await;
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
     world.outlived(None, "sub-agents slow outlive").await;
     let child = child_of(root.path());
     let params = json!({ "project": world.project });
@@ -9265,7 +9943,7 @@ async fn removing_a_project_stops_its_sub_agents() {
 async fn a_folder_does_not_move_while_a_sub_agent_works() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let agents = Agents::new(harnesses()).declaring_subagents();
+    let agents = Agents::new(harnesses());
     let kernel = World::open_with(root.path(), owner, agents).await;
     let person = Participant::Person(owner);
     let scratch = json!({ "scratch": true });
@@ -9300,7 +9978,7 @@ async fn a_folder_does_not_move_while_a_sub_agent_works() {
 #[tokio::test]
 async fn changing_a_projects_trust_lets_go_of_a_process_its_lanes_held() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = &sent["thread"];
     world.until(thread, |v| asked(v).is_some()).await;
@@ -9326,7 +10004,7 @@ async fn changing_a_harnesss_account_lets_go_of_a_process_its_lanes_held() {
     let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let home = home.path().display().to_string();
     let harnesses = harnesses_with(&[("FAKE_AGENT_HOME", &home)]);
-    let world = World::declaring(root.path(), harnesses).await;
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
     world.sign_in(world.person(), "fake-browser").await.unwrap();
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = &sent["thread"];
@@ -9362,7 +10040,7 @@ fn fake_and_other(recordings: &Path) -> Harnesses {
 async fn a_thread_moved_to_another_account_stops_its_lanes_when_its_next_turn_starts() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
-    let world = World::declaring(root.path(), fake_and_other(&recordings)).await;
+    let world = World::new_with(root.path(), Agents::new(fake_and_other(&recordings))).await;
     let (sent, _) = world.outlived(None, "sub-agents slow outlive").await;
     let (thread, child) = (&sent["thread"], child_of(root.path()));
     let switch = json!({ "thread": thread, "harness": "other" });
@@ -9411,7 +10089,7 @@ async fn a_thread_moved_to_another_account_stops_its_lanes_when_its_next_turn_st
 async fn a_thread_moved_while_its_sub_agent_asks_stops_it_and_closes_its_question() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
-    let world = World::declaring(root.path(), fake_and_other(&recordings)).await;
+    let world = World::new_with(root.path(), Agents::new(fake_and_other(&recordings))).await;
     let sent = world.send(None, "sub-agents asks outlive").await;
     let thread = &sent["thread"];
     let view = world.until(thread, |v| asked(v).is_some()).await;
@@ -9473,7 +10151,7 @@ async fn a_thread_moved_while_its_sub_agent_asks_stops_it_and_closes_its_questio
 async fn go_on_moves_a_thread_whose_sub_agents_work() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
-    let world = World::declaring(root.path(), fake_and_other(&recordings)).await;
+    let world = World::new_with(root.path(), Agents::new(fake_and_other(&recordings))).await;
     let (sent, _) = world.outlived(None, "sub-agents slow outlive").await;
     let thread = &sent["thread"];
     let (_, view) = world.finish(Some(thread), "over the limit").await;
@@ -9504,7 +10182,7 @@ async fn go_on_moves_a_thread_whose_sub_agents_work() {
 async fn a_sub_agent_that_cannot_be_stopped_alone_gets_no_cancel_as_its_thread_moves() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
-    let world = World::declaring(root.path(), fake_and_other(&recordings)).await;
+    let world = World::new_with(root.path(), Agents::new(fake_and_other(&recordings))).await;
     let (sent, view) = world
         .outlived(None, "sub-agents slow outlive refuses")
         .await;
@@ -9544,7 +10222,7 @@ async fn a_sub_agent_that_cannot_be_stopped_alone_gets_no_cancel_as_its_thread_m
 async fn a_sub_agent_that_ended_gets_no_cancel_as_its_thread_moves() {
     let (root, kept) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let recordings = kept.path().join("recordings");
-    let world = World::declaring(root.path(), fake_and_other(&recordings)).await;
+    let world = World::new_with(root.path(), Agents::new(fake_and_other(&recordings))).await;
     let (sent, view) = world.lanes_end(None, "sub-agents", 1).await;
     let (thread, child) = (&sent["thread"], child_of(root.path()));
     let switch = json!({ "thread": thread, "harness": "other" });
@@ -9570,7 +10248,7 @@ async fn a_sub_agent_that_ended_gets_no_cancel_as_its_thread_moves() {
 #[tokio::test]
 async fn while_sub_agents_work_fork_and_rewind_wait() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     // In the background, the fake Agent names its replies, as forks need.
     let sent = world.send(None, "sub-agents asks outlive background").await;
     let thread = &sent["thread"];
@@ -9605,7 +10283,7 @@ async fn while_sub_agents_work_fork_and_rewind_wait() {
 #[tokio::test]
 async fn a_rewind_takes_the_lanes_of_its_turns_with_them() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     // A named reply to go back to.
     let (thread, before) = world.finish(None, "remember apples").await;
     let (sent, view) = world
@@ -9633,7 +10311,7 @@ async fn a_rewind_takes_the_lanes_of_its_turns_with_them() {
 #[tokio::test]
 async fn a_fork_rewrites_who_asks_in_its_copied_questions() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     // In the background, the fake Agent names its replies, as forks need.
     let sent = world.send(None, "sub-agents asks background").await;
     let thread = &sent["thread"];
@@ -9669,7 +10347,7 @@ async fn a_fork_rewrites_who_asks_in_its_copied_questions() {
 #[tokio::test]
 async fn the_threads_changes_card_and_diff_agree_on_a_sub_agents_edits() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, view) = world.lanes_end(None, "sub-agents edit", 1).await;
     let [edit] = view.edits.as_slice() else {
         panic!("one edit: {:?}", view.edits);
@@ -9702,7 +10380,7 @@ async fn the_threads_changes_card_and_diff_agree_on_a_sub_agents_edits() {
 #[tokio::test]
 async fn a_sub_agents_writes_after_its_turn_move_the_thread_nowhere() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, _) = world.outlived(None, "sub-agents outlive").await;
     let thread = &sent["thread"];
     world.archive(world.person(), thread, true).await.unwrap();
@@ -9732,7 +10410,7 @@ async fn a_sub_agents_writes_after_its_turn_move_the_thread_nowhere() {
 #[tokio::test]
 async fn a_sub_agents_visual_lands_in_its_thread_after_the_turn_ended() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (sent, _) = world.outlived(None, "sub-agents slow outlive").await;
     let thread = &sent["thread"];
     let changed = world.changed(thread).await;
@@ -9769,7 +10447,7 @@ async fn a_sub_agents_visual_lands_in_its_thread_after_the_turn_ended() {
 #[tokio::test]
 async fn an_answer_back_to_another_thread_is_the_agents_reply_not_a_sub_agents() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     let (a, asking) = world.finish(None, "hello").await;
     let (b, _) = world.finish(None, "hi there").await;
     (world.write(agent_of(&asking), Some(&b), "sub-agents").await).unwrap();
@@ -9797,7 +10475,7 @@ async fn an_answer_back_to_another_thread_is_the_agents_reply_not_a_sub_agents()
 #[tokio::test]
 async fn a_sub_agents_words_move_stepped_but_not_doing() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::declaring(root.path(), harnesses()).await;
+    let world = World::new(root.path()).await;
     // Its process is up, so its turn's first second is its sub-agent's.
     let (thread, _) = world.finish(None, "hello").await;
     let sent = world.send(Some(&thread), "sub-agents asks form slow").await;
@@ -9858,7 +10536,7 @@ fn a_load_that_replays_sub_agents_writes_nothing_and_a_later_update_goes_on_in_i
             ("FAKE_AGENT_NO_RESUME", "1"),
             ("FAKE_AGENT_SESSIONS", kept.as_str()),
         ];
-        Agents::new(harnesses_with(&env)).declaring_subagents()
+        Agents::new(harnesses_with(&env))
     };
     across_a_restart(
         root.path(),
@@ -9916,7 +10594,7 @@ fn a_load_that_replays_sub_agents_writes_nothing_and_a_later_update_goes_on_in_i
 async fn two_lanes_with_the_same_call_id_keep_their_own_calls() {
     let root = tempfile::tempdir().unwrap();
     let agents = Agents::new(harnesses()).idle_after(Duration::from_millis(100));
-    let world = World::new_with(root.path(), agents.declaring_subagents()).await;
+    let world = World::new_with(root.path(), agents).await;
     let (sent, first) = world.lanes_end(None, "sub-agents", 1).await;
     let thread = &sent["thread"];
     let before = world.subagent(&first.subagents[0]).await;
@@ -10618,7 +11296,7 @@ impl World {
 #[tokio::test]
 async fn a_thread_whose_sub_agent_ended_moves_with_its_lane_its_entries_and_its_edit() {
     let root = tempfile::tempdir().unwrap();
-    let work = World::declaring(root.path(), harnesses()).await;
+    let work = World::new(root.path()).await;
     let (home, _) = work.beside("Home").await;
     let person = work.person();
     let (sent, before) = work.lanes_end(None, "sub-agents edit", 1).await;
@@ -10679,7 +11357,7 @@ async fn a_thread_whose_sub_agent_ended_moves_with_its_lane_its_entries_and_its_
 async fn a_thread_whose_sub_agent_works_after_its_turn_stays_and_nothing_of_it_is_copied() {
     let root = tempfile::tempdir().unwrap();
     let harnesses = harnesses_with(&[("FAKE_AGENT_OUTLIVES_BY", "3000")]);
-    let work = World::declaring(root.path(), harnesses).await;
+    let work = World::new_with(root.path(), Agents::new(harnesses)).await;
     let (home, _) = work.beside("Home").await;
     let person = work.person();
     let (sent, view) = work.outlived(None, "sub-agents outlive").await;
@@ -10717,7 +11395,7 @@ async fn a_thread_whose_sub_agent_works_after_its_turn_stays_and_nothing_of_it_i
 #[tokio::test]
 async fn a_thread_whose_sub_agent_asks_after_its_turn_stays_until_it_is_answered() {
     let root = tempfile::tempdir().unwrap();
-    let work = World::declaring(root.path(), harnesses()).await;
+    let work = World::new(root.path()).await;
     let (home, _) = work.beside("Home").await;
     let person = work.person();
     let sent = work.send(None, "sub-agents asks outlive").await;

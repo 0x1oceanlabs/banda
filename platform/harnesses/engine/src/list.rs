@@ -83,10 +83,6 @@ pub struct Harness {
     /// replay. Only a test sets it, never a Harness list: a recording holds
     /// everything said, a secret typed into a form too.
     pub record: Option<PathBuf>,
-    /// Whether the agents engine declares sub-agents to the Harness as it
-    /// starts it. That engine sets it, never a Harness list (ADR 0103,
-    /// decision 7); it goes once Banda always declares them.
-    pub subagents: bool,
     /// The folder its process starts in: a trusted Project's, as
     /// [`Harness::in_project`] says; else the engine's own.
     pub cwd: Option<PathBuf>,
@@ -833,7 +829,6 @@ impl HarnessEntry {
             shadows: None,
             carried,
             record: None,
-            subagents: false,
             cwd: None,
             holes: Holes::default(),
             credentials: Credentials::default(),
@@ -1234,7 +1229,6 @@ pub(super) fn known() -> Vec<Harness> {
                 shadows: None,
                 carried: Some(adapter.file()),
                 record: None,
-                subagents: false,
                 cwd: None,
                 holes: Holes::default(),
                 credentials: Credentials::default(),

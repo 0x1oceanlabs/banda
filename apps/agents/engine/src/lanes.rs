@@ -34,8 +34,6 @@ use tokio::sync::mpsc;
 
 /// Why a lane at work when Banda stopped is Lost.
 const RESTARTED: &str = "Stopped when Banda restarted.";
-/// Why a lane the Person stopped is Stopped.
-const BY_YOU: &str = "Stopped by you";
 
 /// Who hears a Thread's sub-agents.
 pub struct Hearer {
@@ -294,14 +292,12 @@ enum Next {
     Keep,
     /// It is in `0` now, for why `1`.
     Is(SubagentState, Option<String>),
-    /// It stopped: by the Person, when the Person asked it to.
-    Stopped,
 }
 
 /// What `said` makes of a lane of `harness`, at work or not as `works`
 /// says, which Banda cut off as `cut` says, if it did (ADR 0103, decision
-/// 3). A cancel heard once it ended changes nothing: one its Harness sent
-/// it after, or for its parent.
+/// 3). A cancel or an unknown heard once it ended changes nothing: one its
+/// Harness sent it after, or for its parent, or that it no longer tracks it.
 fn next(said: LaneState, works: bool, cut: Option<Cut>, harness: &str) -> Next {
     let failed = |why: &str| Next::Is(SubagentState::Failed, Some(why.to_owned()));
     match said {
@@ -312,7 +308,7 @@ fn next(said: LaneState, works: bool, cut: Option<Cut>, harness: &str) -> Next {
         // What Banda cut off stops as cancelled: why it did wins.
         LaneState::Idle(IdleWhy::Cancelled) => match cut {
             Some(cut) => Next::Is(SubagentState::Lost, Some(cut_words(&cut, harness))),
-            None => Next::Stopped,
+            None => Next::Is(SubagentState::Stopped, None),
         },
         LaneState::Idle(IdleWhy::Error(said)) if said.is_empty() => {
             failed(&format!("{harness} said the sub-agent failed."))
@@ -321,6 +317,7 @@ fn next(said: LaneState, works: bool, cut: Option<Cut>, harness: &str) -> Next {
         LaneState::Idle(IdleWhy::Refusal) => failed("It refused to go on."),
         LaneState::Idle(IdleWhy::MaxTokens) => failed("It ran out of room to answer."),
         LaneState::Idle(IdleWhy::MaxTurnRequests) => failed("It reached its limit of steps."),
+        LaneState::Unknown if !works => Next::Keep,
         LaneState::Unknown => Next::Is(
             SubagentState::Lost,
             Some(format!("{harness} cannot say how it goes.")),
@@ -537,28 +534,23 @@ impl Lane {
 
     /// Keeps `now`, in the state `said` makes of it, if the Harness said one.
     async fn change(&mut self, mut now: Subagent, said: Option<LaneState>) {
-        let mut stopped = false;
         if let Some(said) = said {
             let cut = self.hearer.live.cut(self.record.id);
             let works = self.record.state.works();
             match next(said, works, cut, &self.hearer.harness) {
                 Next::Keep => {}
                 Next::Is(state, why) => (now.state, now.why) = (state, why),
-                Next::Stopped => {
-                    (now.state, now.why, stopped) = (SubagentState::Stopped, None, true)
-                }
             }
         }
         if now.state.works() {
             (now.why, now.ended) = (None, None);
         }
         now.can_stop = self.cancel && now.state.works();
-        self.write(now, stopped).await;
+        self.write(now).await;
     }
 
-    /// Writes `now`, as it is or as it ends; `stopped` says why it is
-    /// Stopped once the store says who asked.
-    async fn write(&mut self, now: Subagent, stopped: bool) {
+    /// Writes `now`, as it is or as it ends.
+    async fn write(&mut self, now: Subagent) {
         let was = self.record.clone();
         if ends(&was, &now) {
             // What it said before it ended is written before its end.
@@ -571,13 +563,7 @@ impl Lane {
         let kept = self
             .hearer
             .project
-            .write(move |tx| {
-                let mut now = now;
-                if stopped && store::stopped_by_person(tx.sql(), now.id)? {
-                    now.why = Some(BY_YOU.to_owned());
-                }
-                keep(tx, agent, thread, &was, now, replied)
-            })
+            .write(move |tx| keep(tx, agent, thread, &was, now, replied))
             .await
             .map_err(plain);
         match kept {
@@ -636,7 +622,7 @@ impl Lane {
             can_stop: false,
             ..self.record.clone()
         };
-        self.write(now, false).await;
+        self.write(now).await;
     }
 }
 
@@ -798,7 +784,11 @@ mod tests {
                 None,
                 Next::Is(SubagentState::Done, None),
             ),
-            (idle(IdleWhy::Cancelled), None, Next::Stopped),
+            (
+                idle(IdleWhy::Cancelled),
+                None,
+                Next::Is(SubagentState::Stopped, None),
+            ),
             (
                 idle(IdleWhy::Cancelled),
                 Some(Cut::Moved("Codex".to_owned())),
@@ -855,9 +845,10 @@ mod tests {
         for (said, cut, expected) in cases {
             assert_eq!(next(said.clone(), true, cut, "Fake"), expected, "{said:?}");
         }
-        // Ended, it is not stopped again; it may work again.
+        // Ended, it is not stopped or lost again; it may work again.
         let cancelled = idle(IdleWhy::Cancelled);
         assert_eq!(next(cancelled, false, None, "Fake"), Next::Keep);
+        assert_eq!(next(LaneState::Unknown, false, None, "Fake"), Next::Keep);
         let back = next(LaneState::Running, false, None, "Fake");
         assert_eq!(back, Next::Is(SubagentState::Running, None));
     }

@@ -2,9 +2,8 @@
  * A Harness's sub-agents in their Thread (ADR 0103, decisions 12–17): a
  * row where each started, a group of the ones one message started, and a
  * row opened in place. Banda shows them and stops none (Roma's call 11).
- * Dark on Dev until Banda declares sub-agents: these windows turn the
- * engine's switch on (decision 7). The fake agent's `sub-agents …` words
- * play them (tools/fake-agent/src/subagents.rs).
+ * The fake agent's `sub-agents …` words play them
+ * (tools/fake-agent/src/subagents.rs).
  */
 import { expect, type Locator, test } from "@playwright/test"
 import { writeFileSync } from "node:fs"
@@ -27,10 +26,6 @@ test.afterEach(async () => {
 /** Light, and with the glass off, as the mocks' pictures are taken; still,
  * so a window resized for them is drawn at once. */
 const LOOK = 'mode = "light"\n[desk]\nglass = false\n[motion]\noff = true\n'
-
-/** A window whose engine declares sub-agents, at a laptop's size. */
-const declaring = () =>
-  startWindow({ look: LOOK, env: { BANDA_SUBAGENTS: "1" } })
 
 /** The window at `width` by `height`, drawn at that size. */
 async function sized({ app, page }: Window, width: number, height = 900) {
@@ -64,7 +59,7 @@ const placeOf = async (part: Locator) => {
 }
 
 test("sub-agents show as rows where they started, grouped, and settle into one line", async () => {
-  window = await declaring()
+  window = await startWindow({ look: LOOK })
   const { thread, composer } = await firstThread(window.page)
   await composer.fill("sub-agents three asks")
   await composer.press("Enter")
@@ -126,7 +121,7 @@ test("sub-agents show as rows where they started, grouped, and settle into one l
 })
 
 test("a row opens in place and nothing above it moves", async () => {
-  window = await declaring()
+  window = await startWindow({ look: LOOK })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   for (const word of ["one", "two", "three"]) {
@@ -178,11 +173,7 @@ test("a row opens in place and nothing above it moves", async () => {
 })
 
 test("a Pane opened while a sub-agent works goes into its Thread's Group", async () => {
-  window = await startWindow({
-    files: FREE,
-    look: LOOK,
-    env: { BANDA_SUBAGENTS: "1" },
-  })
+  window = await startWindow({ files: FREE, look: LOOK })
   const { page, dir } = window
   const { thread, composer } = await firstThread(page)
   writeFileSync(join(dir, "root", "Work", "notes.md"), "one\n")
@@ -203,7 +194,7 @@ test("a Pane opened while a sub-agent works goes into its Thread's Group", async
 })
 
 test("a sub-agent that fails stays in its row and the Thread keeps working", async () => {
-  window = await declaring()
+  window = await startWindow({ look: LOOK })
   const { thread, composer } = await firstThread(window.page)
   await composer.fill("sub-agents fails")
   await composer.press("Enter")
@@ -216,19 +207,4 @@ test("a sub-agent that fails stays in its row and the Thread keeps working", asy
     thread.getByText("The sub-agents said: general-purpose failed.")
   ).toBeVisible()
   await shots(window, "failed")
-})
-
-test("a window without BANDA_SUBAGENTS draws today's think row", async () => {
-  window = await startWindow({ look: LOOK })
-  const { thread, composer } = await firstThread(window.page)
-  await composer.fill("sub-agents")
-  await composer.press("Enter")
-  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
-  // The Harness speaks as it does to a client that shows no sub-agents:
-  // a call titled with the task, among the parent's work.
-  await expect(thread.locator("[data-slot=subagent]")).toHaveCount(0)
-  await thread.getByRole("button", { name: /^Worked for/ }).click()
-  await expect(thread.getByText("Read a.txt one line")).toBeVisible()
-  await expect(thread.locator("[data-slot=satellite]")).toHaveCount(0)
-  await shots(window, "today")
 })

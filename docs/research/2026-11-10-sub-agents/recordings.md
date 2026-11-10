@@ -520,3 +520,102 @@ pub struct CrewBrief {
 - **`crew`** comes from the last `workflow_progress`, and stays while
   `background_tasks_changed` names the workflow.
 - **`parent` and the Thread's own state** are as the ADR has them.
+
+## Part C: through Banda, with the declaration
+
+Recordings in `apps/agents/engine/tests/recordings/`, made by
+`record_the_real_harnesses_with_sub_agents` with the declaration on and the
+engine writing lanes (Banda at `194a1b25`), the versions as in Part A.
+`file:N` below is line N of a file there. The replay tests beside the recorder
+play them through the engine with the fake agent.
+
+| File | Lines, bytes | What was asked |
+|---|---|---|
+| `claude-lanes.jsonl` | 289, 168 KB | Full access: three Agent calls at once (15); one in the background (75); one that starts its own (118). Supervised: one whose command asks, allowed always (159), then the same command by a new sub-agent and by Claude (188). Full access: two in the foreground and one in the background, each running a 60-second command, stopped by the Thread's Stop (231, the Stop at 258) |
+| `codex-lanes.jsonl` | 86, 68 KB | Supervised: two named sub-agents, one that reads and one whose command asks (12, the Question at 40). Full access: one slow sub-agent, stopped by the Thread's Stop as its command runs (67, the Stop at 79) |
+
+Costs, as Claude Code says them: $0.06 for the whole of `claude-lanes.jsonl`
+(62, 105, 149, 186, 218, 261, 289). Codex says tokens only.
+
+**Limits:**
+
+- One kept run each, at low effort.
+- These files have no times, as the engine's recorder writes none.
+- **Codex delegates only when told to in so many words.** Two earlier tries
+  were not kept. In one, Codex read the file itself and answered "alpha,
+  done" with no sub-agent; in the other it ran the slow command itself. The
+  words kept (`codex-lanes.jsonl:12, 67`) name `spawn_agent` and keep the
+  work from the parent. A task name must be new in its Thread: Codex
+  refuses one already used, and starts no sub-agent for it. A sub-agent under
+  Supervised asks only when told to run with escalated permissions (12).
+- A stop of one sub-agent is not asked: Banda stops none (ADR 0103, call 11).
+
+### What Banda got
+
+- **Only `subagent_update` and the child's own streams.** Banda's
+  `session/new` asks for no raw SDK frames (`claude-lanes.jsonl:3`), so
+  none of Part B's `_claude/sdkMessage` came.
+- **Claude's three at once are three lanes,** announced in the prompt's
+  order (20, 24, 28), each with its prompt, model and work, and no Think
+  row in the Thread for the launch. The tag ahead of a report is cut,
+  whether it comes as its own block (45) or in one with the words (141). A
+  later `:reply` can carry no tag at all (210).
+- **A background child holds its turn,** which ends only after it (97, 106).
+  It sent no `:reply`, so its report is its last words (96).
+- **A nested child is announced on its parent's stream** (130) and is a lane
+  of that lane, in its root's turn.
+- **A Codex lane** is named from its task, "Read e", has `capabilities: {}`
+  and then `cancel` (`codex-lanes.jsonl:15, 20`), its model from its own
+  `config_option_update` (16), and no prompt, as Part B found.
+- **A Codex lane's report is its last words.** A child says nothing to its
+  parent: "alpha" on its own stream (31), then `idle` with `end_turn` (34),
+  and "done" (45, 49). "alpha done" is the parent's own reply (53–54).
+- **A Codex child's Question comes on its own stream** (40), after
+  `requires_action` on the lane (39), which goes back to `running` once it
+  is allowed (41, 42). Its title is "Run command", where the row of the same
+  call says `touch d.txt` (38). Banda names the lane on the Question.
+- **Codex's waits stay the parent's own rows** (27 to 36, 47 to 51), and name
+  no child: `receiverThreadIds` is empty.
+
+### What it settled
+
+**A background child outlives the parent's cancel.**
+
+- The Thread's Stop sends one `session/cancel`, on the Thread's own session
+  (`claude-lanes.jsonl:258`). It is the only one in the file, so Banda's own
+  cancel never reached the child.
+- The child's command runs out, exit 0 (265–267), it says "slept" (268) and
+  ends `end_turn` (269), under a minute after the Stop.
+- Claude then replies with no prompt open (271–287): "The background agent
+  replied…", and the usage names a `task-notification` (289). In the Thread
+  that is "‹Agent› went on by itself", a Done turn after the Stopped one.
+
+**The reason ADR 0103 first gave for dropping decision 24 did not hold.** Its
+amendment (call 11) said that with the declaration Claude holds its turn while
+a background sub-agent works, "so that Stop reaches them through Claude". Here
+it does not: the turn ends at the Stop while the background child goes on, and
+Claude holds a turn for a background child only when nothing stops it (97,
+106). The amendment now says what was recorded, and the Thread's Stop stays as
+it is: the Harness decides what becomes of its sub-agents.
+
+**How far a root cancel reaches.**
+
+- **Claude:** the two foreground children end `cancelled` at once (259–260)
+  and their calls fail, "The turn was cancelled before this tool call
+  returned a result" (262–263), with `exit_code: null`, so whether their
+  commands died is not recorded. The prompt answers `cancelled` (264).
+- **Codex:** the child at work ends too: its call fails
+  (`codex-lanes.jsonl:81`), `idle` with `cancelled` (82), `cancel: null`
+  (83), and the prompt answers `cancelled` (85). Its command is not killed:
+  it reports `completed`, exit 0, after the prompt's answer (86), as Part B
+  found for a child stopped alone, so its row in the lane, Failed at the
+  Stop, ends Done. The parent's `wait` (77) gets no update, so its row stays
+  Running. What either row should say is open, so the replay pins neither.
+
+**The scope of an always answer (W3's note words it).**
+
+A child's "Yes, and allow access to Work/ and echo delta * commands" (174,
+answered `allow-with-updates` at 175) holds for neither of the others asked
+next. A new sub-agent asks again for the same command (201–202), and so
+does Claude itself (211), each offered the same choice. Whether it holds
+for that same sub-agent's next command is unrecorded: it ran one.
