@@ -43,6 +43,7 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
     "thread.wake",
     "agents.archive-thread",
     "agents.delete-thread",
+    "agents.move-thread",
     "sidebar.archive",
   ])
 })

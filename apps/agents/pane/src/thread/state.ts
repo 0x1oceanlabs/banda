@@ -410,8 +410,14 @@ function project(state: ThreadState, event: Event): ThreadState {
     case "marks.moved":
       return next
     // A deleted Thread's Panes close as the Window puts it away; until
-    // then, what one shows stays as it was.
+    // then, what one shows stays as it was. A move to another Project is
+    // the lists' too (ADR 0098): the window that moved the Thread puts its
+    // Panes away, and its new Project's reads it whole. A Pane another
+    // window has open on it stays as it was, on a Thread its Project no
+    // longer has.
     case "thread.deleted":
+    case "thread.left":
+    case "thread.arrived":
       return next
     case "thread.rewound": {
       // The turn and every one after it leave, with their messages and

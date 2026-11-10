@@ -734,6 +734,11 @@ mod tests {
                 bound("Ctrl+Alt+L", "problems.look-into"),
                 json!({ "fingerprint": "3124" }),
             ),
+            // A Thread taken to another Project, where its Agents read it.
+            given(
+                bound("Alt+Return", "agents.move-thread"),
+                json!({ "to": "p" }),
+            ),
             // The action as the look finds it, spaces around its id aside.
             given(
                 bound("Ctrl+Alt+H", " thread.new"),

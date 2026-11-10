@@ -48,6 +48,12 @@ impl Evidence {
         &self.session
     }
 
+    /// Whether the Thread's next session is a fork of this one, at the
+    /// reply it was forked or rewound to (ADR 0027), not opened yet.
+    pub fn forks(&self) -> bool {
+        self.fork.is_some()
+    }
+
     /// The session of a Thread that forks this one's at `at`.
     pub fn forked_at(mut self, at: ForkAt) -> Evidence {
         self.fork = Some(at);

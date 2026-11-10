@@ -56,6 +56,7 @@ mod store;
 mod switching;
 mod time_comes;
 mod titles;
+mod to_project;
 mod touching;
 mod transcript;
 mod visual_page;
@@ -79,7 +80,7 @@ use full_access::Chosen;
 use images::Images;
 use issues::{AnswerIssue, DraftIssue};
 use laters::{LaterAsk, SeeWokeAsk, WakeAsk};
-use live::Live;
+use live::{Hold, Live};
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
     AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, SubagentId,
@@ -97,6 +98,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use to_project::MoveThread;
 use touching::Touching;
 use ts_rs::TS;
 use visuals::{Inlined, Visuals};
@@ -540,8 +542,8 @@ banda_kernel::methods! {
         /// 0098, decision 14): its messages, turns and marks leave the
         /// Project, and every list drops it. The Project's log keeps what
         /// it said, as after a rewind. A Thread not in Archive, one at
-        /// work, or one that asks, is refused. Only a Person deletes a
-        /// Thread.
+        /// work, one that asks, or one moving to another Project, is
+        /// refused. Only a Person deletes a Thread.
         command delete(OneThread) -> (), Manage;
         /// Moves the marks a window kept of this Project's Threads to
         /// their host, once, by ID: the turn of each it saw last, which
@@ -569,6 +571,17 @@ banda_kernel::methods! {
         /// if it was put off, moves there, and the turn's message goes
         /// again, at once. Only a Person moves a Thread.
         command go_on(GoOn) -> Option<Sent>, Write;
+        /// Moves a Thread to another Project of this machine, whole: its
+        /// turns, items, sub-agents, marks and Later, and its session,
+        /// which goes on in that Project's folder from its next turn, as a
+        /// line in the Thread says; it is searched there from then on.
+        /// What its Agent changed stays in this Project's folder. A Thread
+        /// at work or whose sub-agent is, one that asks or has a message
+        /// waiting, one another Thread works for, one being deleted, and a
+        /// fork that has not run yet, is refused; none moves into a
+        /// Project of No project. Only a Person moves a Thread (ADR 0098,
+        /// decision 14).
+        command move_thread(MoveThread) -> (), Write;
     }
 }
 
@@ -1356,6 +1369,8 @@ impl Agents {
         // The kernel refuses an Agent: deleting a Thread takes its Agent
         // out of the Project, which only a Person manages.
         let author = call.participant();
+        // Not while it moves to another Project, nor moves as it goes.
+        let _held = (self.live.hold(thread, Hold::Deleting)).map_err(Hold::refused)?;
         call.command(move |tx| deleting::delete(tx, author, thread))
             .await?;
         deleting::let_go(&self.live, call.project(), thread);
@@ -1421,6 +1436,10 @@ impl Agents {
             retry(tx, author, turn)
         })
         .await
+    }
+
+    async fn move_thread(&self, call: Call, ask: MoveThread) -> Result<(), Refusal> {
+        to_project::move_thread(&self.live, &call, ask).await
     }
 
     async fn suggest_title(

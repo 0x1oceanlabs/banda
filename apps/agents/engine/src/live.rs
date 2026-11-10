@@ -49,7 +49,7 @@ use crate::{Pipe, kept};
 use banda_harnesses::hosts::{Held, Hosts};
 use banda_harnesses::{Failed, Harness};
 use banda_kernel::{
-    AgentId, AtWork, Holes, Listener, ModuleProject, Pass, Program, ProjectId, Working,
+    AgentId, AtWork, Holes, Listener, ModuleProject, Pass, Program, ProjectId, Refusal, Working,
 };
 use std::collections::{BTreeMap, HashMap, HashSet};
 use std::sync::{Arc, Mutex};
@@ -80,11 +80,44 @@ pub struct Live {
     /// Whether each Harness process it starts is told it shows sub-agents
     /// (ADR 0103, decision 7).
     subagents: bool,
+    /// The Threads a move to another Project or a delete holds now, each
+    /// with what holds it ([`Live::hold`]).
+    holds: Mutex<HashMap<ThreadId, Hold>>,
 }
 
 /// The variables that hand a Harness process's Agents' shells their pass,
 /// and the pass, held while its Project is open.
 type ProcessPass = (BTreeMap<String, String>, Pass);
+
+/// What holds a Thread a while ([`Live::hold`]): its move to another
+/// Project, or its delete (ADR 0098, decision 14).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Hold {
+    Moving,
+    Deleting,
+}
+
+impl Hold {
+    /// The refusal of what finds a Thread held so.
+    pub fn refused(self) -> Refusal {
+        Refusal::conflict(match self {
+            Hold::Moving => "This Thread is moving to another Project now.",
+            Hold::Deleting => "This Thread is being deleted now.",
+        })
+    }
+}
+
+/// A Thread held ([`Live::hold`]), let go as this is.
+pub struct Holding<'a> {
+    live: &'a Live,
+    thread: ThreadId,
+}
+
+impl Drop for Holding<'_> {
+    fn drop(&mut self) {
+        self.live.holds.lock().unwrap().remove(&self.thread);
+    }
+}
 
 #[derive(Default)]
 struct Turns {
@@ -235,6 +268,7 @@ impl Live {
             doings: Arc::default(),
             working,
             subagents,
+            holds: Mutex::default(),
         }
     }
 
@@ -360,11 +394,29 @@ impl Live {
     }
 
     /// Lets go of `thread`'s session in each process of `project`, as its
-    /// Person deleted the Thread: what its Harness says between turns then
-    /// has no Thread to go to.
+    /// Person deleted the Thread, or moved it to another Project: what its
+    /// Harness says between turns then has no Thread to go to here, and a
+    /// moved Thread's next turn opens its session there.
     pub async fn forget_thread(&self, project: ProjectId, thread: ThreadId) {
         for (_, connection) in self.hosts.running(project).await {
             connection.forget_thread(thread).await;
+        }
+    }
+
+    /// Holds `thread` for `why`, until what this answers is let go; or,
+    /// while something holds it already, says what. So two moves of one
+    /// Thread, as from two windows, never cross, and neither takes back the
+    /// copy the other made; and a Thread is never deleted as it moves,
+    /// which would leave its copy in the other Project, nor moves as it is
+    /// deleted.
+    pub fn hold(&self, thread: ThreadId, why: Hold) -> Result<Holding<'_>, Hold> {
+        use std::collections::hash_map::Entry;
+        match self.holds.lock().unwrap().entry(thread) {
+            Entry::Occupied(held) => Err(*held.get()),
+            Entry::Vacant(free) => {
+                free.insert(why);
+                Ok(Holding { live: self, thread })
+            }
         }
     }
 

@@ -4,10 +4,10 @@
  * title, give back the title it had before, mark it unread or read (ADR
  * 0077), make a Project of the No Project it is in (ADR 0046), put it off
  * and wake it (ADR 0074), archive it as the sidebar list asks (ADR 0096),
- * and delete it for good (ADR 0098, decision 14). The Window draws their
- * rows in the Thread menu, the Pane menu and the Banda menu, and runs them
- * by id, as any action; Threads does them, on the engine of the host that
- * lists the Thread (ADR 0081).
+ * delete it for good, and move it to another Project (ADR 0098, decision
+ * 14). The Window draws their rows in the Thread menu, the Pane menu and
+ * the Banda menu, and runs them by id, as any action; Threads does them,
+ * on the engine of the host that lists the Thread (ADR 0081).
  */
 import { type Engine, newId, type ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
@@ -456,6 +456,50 @@ const remove: ItemAction = {
   },
 }
 
+/**
+ * Moves the Thread to another Project of its host, `to`, whole (ADR 0098,
+ * decision 14): what picks the Project asks it so, as the card's "Move to
+ * Project…" will. It has no row of its own. Once the host moved it, its
+ * Panes here are put away, as they show a Thread this Project no longer
+ * has; the other Project's list has it now. One the host refuses, as a
+ * Thread at work, stays as it was, Panes and all, and a toast says why.
+ * Without `to`, or with the Project it is in, nothing. It goes `once`, as
+ * a delete does, so a move said to have failed never lands later (ADR
+ * 0096, decision 8). Only the Person binds a key to it (ADR 0083,
+ * decision 3): it takes a Thread across the wall between Projects, where
+ * the other Project's Agents read it.
+ */
+const move: ItemAction = {
+  id: "agents.move-thread",
+  section: "Threads",
+  title: "Move a Thread to another Project on its host",
+  unlisted: true,
+  args: {
+    ...itemArgs({ to: "the Project it moves to, on the same host" }),
+    required: ["to"],
+  },
+  runsAsPerson: true,
+  group: "other",
+  elsewhere: true,
+  row: () => null,
+  run: (window, args) => {
+    const at = threadAt(window, args)
+    const to = args?.to
+    if (!at || typeof to !== "string" || to === at.project) return
+    const thread = at.listed.id as ThreadId
+    const asked = { thread, project: to as ProjectId }
+    reached(window, at, "Move to Project")
+      ?.commandAt("agents.move_thread", asked, at.project, newId(), {
+        once: true,
+      })
+      .then(
+        () =>
+          window.run("pane.put-away", { project: at.project, item: thread }),
+        (error: unknown) => toast.error(problem(error, "Move to Project"))
+      )
+  },
+}
+
 /** Threads' item actions, in the order the Thread menu lists their rows. */
 export const threadItems: readonly ItemAction[] = [
   rename,
@@ -467,4 +511,5 @@ export const threadItems: readonly ItemAction[] = [
   wake,
   archive,
   remove,
+  move,
 ]

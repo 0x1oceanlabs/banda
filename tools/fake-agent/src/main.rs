@@ -46,8 +46,9 @@
 //!   prompt takes it in; `asks`, asking to run a check; `quiet`, never
 //!   saying what that cost; `dies`, ending its process; `at once`, going
 //!   on right after its answer, with no frame between, before Banda wrote
-//!   how the turn ended. `background detached` runs a command that ends
-//!   after the turn, and nothing more.
+//!   how the turn ended; `on cue`, going on once a file `cue` is in the
+//!   session's folder, which it takes. `background detached` runs a
+//!   command that ends after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
 //! - `sub-agents`: starts a sub-agent that reads `a.txt`, as Claude Code's
 //!   Agent tool does: in a session of its own for a client that shows
@@ -82,6 +83,11 @@
 //! - images: it says how many it was shown and of what kinds, then does
 //!   what the words ask.
 //! - anything else: a short thought, then a reply that quotes the prompt.
+//!
+//! The words are the Person's message's: the notices Banda puts before it
+//! ask nothing, as its Agent is told, so no word of theirs chooses what it
+//! does, as one in the folders a moved Thread's notice names: a Windows
+//! runner's `runneradmin` holds `run`. It still quotes them.
 //!
 //! Just after a session opens it says its commands, `/review` and
 //! `/compact`, as Claude Code does.
@@ -426,6 +432,16 @@ fn words_of(prompt: &[ContentBlock]) -> String {
         .join(" ")
 }
 
+/// The Person's message in `said`, a prompt's words, past the notices
+/// Banda puts before it (the agents engine's `notices::before`).
+fn asked(said: &str) -> &str {
+    const NOTICES: &str = "Since your last turn, Banda told your Person this";
+    match said.strip_prefix(NOTICES) {
+        Some(notices) => notices.split_once("\n\n").map_or(said, |(_, asked)| asked),
+        None => said,
+    }
+}
+
 /// What it says of the images it was shown, if it was shown any.
 fn seen(prompt: &[ContentBlock]) -> Option<String> {
     let kinds: Vec<&str> = prompt
@@ -660,7 +676,8 @@ async fn turn(
     if let Some(seen) = seen(&prompt.prompt) {
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(&seen)))?;
     }
-    let words = words_of(&prompt.prompt);
+    let said = words_of(&prompt.prompt);
+    let words = asked(&said).to_owned();
     // Before the words its own words hold: `fails` holds `fail`.
     if words.contains("sub-agents") {
         if !fake.signed_in.load(Ordering::Relaxed) {
@@ -941,11 +958,13 @@ async fn turn(
         // until it is stopped or a prompt takes it in; `asks`, it asks to
         // run a check first; `quiet`, it never says what that cost, as
         // Codex; `dies`, its process ends; `at once`, it goes on right
-        // after its answer, with nothing between. `detached` runs a command
-        // in the background, which ends after the turn, and nothing more.
+        // after its answer, with nothing between; `on cue`, once a file
+        // `cue` is in its folder. `detached` runs a command in the
+        // background, which ends after the turn, and nothing more.
         let (after, its, fake) = (cx.clone(), session.clone(), fake.clone());
         let long = words.contains("long");
         let at_once = words.contains("at once");
+        let cue = (words.contains("on cue")).then(|| fake.setup(&session).folder.join("cue"));
         let (asks, quiet, dies) = (
             words.contains("asks"),
             words.contains("quiet"),
@@ -1039,6 +1058,12 @@ async fn turn(
         } else {
             tokio::spawn(async move {
                 tokio::time::sleep(Duration::from_millis(100)).await;
+                if let Some(cue) = cue {
+                    while !cue.exists() {
+                        tokio::time::sleep(Duration::from_millis(50)).await;
+                    }
+                    let _ = std::fs::remove_file(&cue);
+                }
                 goes_on.await;
             });
         }
@@ -1323,7 +1348,7 @@ async fn turn(
         &session,
         SessionUpdate::AgentThoughtChunk(text("Reading the request.")),
     )?;
-    for piece in ["You said: ", &words] {
+    for piece in ["You said: ", &said] {
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(piece)))?;
     }
     Ok(StopReason::EndTurn)

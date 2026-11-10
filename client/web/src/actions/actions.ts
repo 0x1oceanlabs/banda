@@ -83,6 +83,18 @@ export function inScope<Context>(
   return true
 }
 
+/** Whether `action`, given `args`, acts as the Person (ADR 0083,
+ * decision 3): whatever it is given, or given one of the args that make
+ * it so, as `thread.new`'s `ask`; as the engine's `Action::as_person`. */
+export function actsAsPerson<Context>(
+  action: Action<Context>,
+  args?: Args
+): boolean {
+  const runs = action.runsAsPerson
+  if (runs === true) return true
+  return runs?.some((name) => args?.[name] !== undefined) ?? false
+}
+
 /** The action a key press runs, if any. */
 export function actionFor<Context>(
   actions: readonly Action<Context>[],

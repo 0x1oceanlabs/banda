@@ -461,6 +461,23 @@ test("Delete goes to the Thread's host for the Thread it names, and puts it away
   expect(said.errors).toEqual([])
 })
 
+test("Move asks the Thread's host to move it whole, and puts its Panes here away once it moved", async () => {
+  const move = action("agents.move-thread")
+  expect(move.row(listed(), AT)).toBeNull()
+  const at = { project: "s1", item: "t1" }
+  const { window, sent, ran } = fake(listed())
+  // Asked for no Project, or the one it is in, it does nothing.
+  move.run(window, at)
+  move.run(window, { ...at, to: "s1" })
+  expect(sent).toEqual([])
+  move.run(window, { ...at, to: "s2" })
+  expect(sent).toEqual([
+    ["agents.move_thread", { thread: "t1", project: "s2" }],
+  ])
+  await vi.waitFor(() => expect(ran).toEqual([["pane.put-away", at]]))
+  expect(said.errors).toEqual([])
+})
+
 test("a delete its host refuses keeps the Thread's Panes with a toast, and one whose host is away is not sent", async () => {
   const at = { project: "s1", item: "t1" }
   const refusal = { code: "conflict", message: "This Thread is at work." }
@@ -487,6 +504,33 @@ test("another host's Thread is deleted on its own engine", () => {
   const { window, asked } = fake(item)
   action("agents.delete-thread").run(window, { project: "s1", item: "t1" })
   expect(asked).toEqual([{ host: "arc", name: "agents.delete" }])
+})
+
+test("a move its host refuses keeps the Thread and its Panes where they were, with a toast", async () => {
+  const atWork = "This Thread is at work: move it once its turn ends."
+  const refused = new Refused({ code: "conflict", message: atWork })
+  const { window, ran } = fake(listed(), refused)
+  action("agents.move-thread").run(window, {
+    project: "s1",
+    item: "t1",
+    to: "s2",
+  })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+  expect(said.errors).toEqual([atWork])
+  expect(ran).toEqual([])
+
+  // One whose host is away is not sent, so it never lands later.
+  said.errors = []
+  const away = fake(listed())
+  Object.assign(away.engineOf(undefined), { status: { state: "lost" } })
+  action("agents.move-thread").run(away.window, {
+    project: "s1",
+    item: "t1",
+    to: "s2",
+  })
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+  expect(away.sent).toEqual([])
+  expect(away.ran).toEqual([])
 })
 
 test("another host's Thread is archived on its own engine", () => {

@@ -247,3 +247,19 @@ export const MOD = isMac ? "⌘" : "Ctrl+"
  * and copy. */
 export const FIELDS =
   "input,textarea,select,[contenteditable=true],[contenteditable=plaintext-only],[role=textbox],[role=combobox],[role=spinbutton]"
+
+/** The presses a page in a frame said it took, which its frame presses
+ * on itself, as a Visual's Esc and zoom (ADR 0037, decision 5). */
+const PAGES = new WeakSet<Event>()
+
+/** `event`, a press a page in a frame said: no Person pressed it, so it
+ * runs no action that acts as the Person (ADR 0083, decision 3). */
+export function saidByAPage<E extends Event>(event: E): E {
+  PAGES.add(event)
+  return event
+}
+
+/** Whether a page in a frame said `event` (`saidByAPage`). */
+export function aPageSaid(event: Event): boolean {
+  return PAGES.has(event)
+}

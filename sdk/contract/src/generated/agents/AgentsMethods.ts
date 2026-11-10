@@ -22,6 +22,7 @@ import type { Imported } from "./Imported";
 import type { Keep } from "./Keep";
 import type { Kept } from "./Kept";
 import type { LaterAsk } from "./LaterAsk";
+import type { MoveThread } from "./MoveThread";
 import type { Notify } from "./Notify";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
@@ -316,8 +317,8 @@ unarchive: CommandMethod<OneThread, null>,
  * 0098, decision 14): its messages, turns and marks leave the
  * Project, and every list drops it. The Project's log keeps what
  * it said, as after a rewind. A Thread not in Archive, one at
- * work, or one that asks, is refused. Only a Person deletes a
- * Thread.
+ * work, one that asks, or one moving to another Project, is
+ * refused. Only a Person deletes a Thread.
  */
 delete: CommandMethod<OneThread, null>, 
 /**
@@ -355,4 +356,17 @@ switch: CommandMethod<Switch, null>,
  * if it was put off, moves there, and the turn's message goes
  * again, at once. Only a Person moves a Thread.
  */
-go_on: CommandMethod<GoOn, Sent | null>, };
+go_on: CommandMethod<GoOn, Sent | null>, 
+/**
+ * Moves a Thread to another Project of this machine, whole: its
+ * turns, items, sub-agents, marks and Later, and its session,
+ * which goes on in that Project's folder from its next turn, as a
+ * line in the Thread says; it is searched there from then on.
+ * What its Agent changed stays in this Project's folder. A Thread
+ * at work or whose sub-agent is, one that asks or has a message
+ * waiting, one another Thread works for, one being deleted, and a
+ * fork that has not run yet, is refused; none moves into a
+ * Project of No project. Only a Person moves a Thread (ADR 0098,
+ * decision 14).
+ */
+move_thread: CommandMethod<MoveThread, null>, };

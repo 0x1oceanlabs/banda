@@ -1,6 +1,7 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
+use banda_kernel::ProjectId;
 use banda_kernel::{AgentId, Participant};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -1388,6 +1389,16 @@ pub enum Fact {
         harness: String,
         was: String,
     },
+    /// The Person moved the Thread to another Project of this machine,
+    /// `to` (ADR 0098, decision 14): it is not here any more. This
+    /// Project's log keeps what it said here.
+    #[serde(rename = "thread.left")]
+    ThreadLeft { thread: ThreadId, to: ProjectId },
+    /// The Thread came here, whole, from another Project of this machine,
+    /// `from`: its turns, items and marks as they were there. A list reads
+    /// itself again, as only the engine knows all of it.
+    #[serde(rename = "thread.arrived")]
+    ThreadArrived { thread: ThreadId, from: ProjectId },
     /// The Thread's settings changed, by a Person or by the Harness; or
     /// by Banda, which started it Supervised, as `supervised` says why.
     #[serde(rename = "thread.configured")]

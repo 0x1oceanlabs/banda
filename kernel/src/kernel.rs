@@ -828,6 +828,7 @@ impl Kernel {
                 thread,
                 runs,
             );
+            let call = call.reaching(self.projects.clone());
             return module.call(call, rest, params).await.map(plain);
         }
         let command = command.ok_or_else(|| needs_command_id(method))?;
@@ -849,6 +850,7 @@ impl Kernel {
                     thread,
                     runs,
                 );
+                let call = call.reaching(self.projects.clone());
                 module.call(call, rest, params).await
             }
             Err(refusal) => Err(refusal),
@@ -1058,15 +1060,7 @@ impl Kernel {
     }
 
     pub async fn project(&self, id: ProjectId) -> Result<Arc<Project>, Refusal> {
-        match self.projects.read().await.get(&id) {
-            Some(Entry::Open(project)) => Ok(project.clone()),
-            Some(Entry::Missing { manifest, .. }) => Err(Refusal::not_found(format!(
-                "The folder of the Project \"{}\", {}, is gone: locate it first.",
-                manifest.name,
-                manifest.folder.display()
-            ))),
-            None => Err(no_project()),
-        }
+        open_in(&self.projects, id).await
     }
 
     /// Every Project, the missing too.
@@ -1655,7 +1649,11 @@ impl Kernel {
                 return Ok(());
             }
         };
+        // A call that reaches it from another Project lands what it brings
+        // first, and finds it removed after.
+        let reached = project.reached.write().await;
         project.delete_when_closed(put_away(project.data(), gone));
+        drop(reached);
         // What acts for it stops reaching Banda.
         self.passes.revoke_project(project.id());
         for module in project.modules() {
@@ -1665,7 +1663,21 @@ impl Kernel {
     }
 }
 
-fn no_project() -> Refusal {
+/// The Project `id` of `projects`, while it is open: one whose folder is
+/// gone waits to be located.
+pub(crate) async fn open_in(projects: &Projects, id: ProjectId) -> Result<Arc<Project>, Refusal> {
+    match projects.read().await.get(&id) {
+        Some(Entry::Open(project)) => Ok(project.clone()),
+        Some(Entry::Missing { manifest, .. }) => Err(Refusal::not_found(format!(
+            "The folder of the Project \"{}\", {}, is gone: locate it first.",
+            manifest.name,
+            manifest.folder.display()
+        ))),
+        None => Err(no_project()),
+    }
+}
+
+pub(crate) fn no_project() -> Refusal {
     Refusal::not_found("There is no such Project on this computer.")
 }
 

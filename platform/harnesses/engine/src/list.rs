@@ -19,6 +19,13 @@ use std::time::Duration;
 /// to the adapter Banda carries (ADR 0078, decision 3).
 pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
 
+/// The folder of a Project's Claude Code sessions in its `data`, which
+/// every Claude account's process reads and writes (ADR 0078, decision 3),
+/// and which a Thread's go with it to another Project.
+pub fn claude_sessions(data: &Path) -> PathBuf {
+    data.join("sessions").join("claude")
+}
+
 /// Whether a Project's Harness process may load what the Project's folder
 /// names (ADR 0083, decision 5): `1` when the Person has not trusted it,
 /// else empty. Every process of a Project is told, whatever the engine's
@@ -312,7 +319,7 @@ impl Harness {
             }
         }
         if Kind::of(self) == Some(Kind::Claude) {
-            let sessions = data.join("sessions").join("claude");
+            let sessions = claude_sessions(data);
             (harness.env).insert(SESSIONS_VARIABLE.to_owned(), sessions.display().to_string());
             holes.writes.push(sessions);
         }
