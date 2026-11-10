@@ -553,12 +553,11 @@ export function Shell({
     // Alt+U: the next call below the Thread in front, as the sidebar lists
     // them, another machine's among this one's (ADR 0079, decision 4), picked.
     answer: () => {
-      const keys = keysOf(
-        orderNow(stores.items.get(), projects, stores.calls.get().now)
-      )
+      const calls = stores.calls.get()
+      const keys = keysOf(orderNow(stores.items.get(), projects, calls.now))
       const { pane } = here.get()
       const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
-      const call = nextCall(stores.calls.get().list, keys, at)
+      const call = nextCall(calls.list, keys, at)
       if (call)
         parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
