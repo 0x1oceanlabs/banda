@@ -27,7 +27,7 @@ import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
 import type { Chip } from "@banda/ui/module"
-import { paneOf, type PaneProps, withHost } from "@banda/ui/pane"
+import { paneOf, type PaneProps } from "@banda/ui/pane"
 import { BotIcon } from "lucide-react"
 import { threadPaneOf } from "../list/rows"
 import { suggested } from "../composer/slash"
@@ -654,12 +654,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             project={project}
             host={host}
             disabled={sending}
-            onProject={(other, there) =>
+            onProject={(other, same) =>
               open(
-                withHost(
-                  paneOf(threadPane, movedArgs(args, harness, there)),
-                  there
-                ),
+                paneOf(threadPane, movedArgs(args, harness, same)),
                 "instead",
                 other
               )

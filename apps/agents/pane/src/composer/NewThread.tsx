@@ -65,19 +65,21 @@ export function groupsOf(
 }
 
 /**
- * A new Thread's args as it moves to a Project on machine `there`, from
- * `args` on Harness `harness`: the folder its draft made goes; on another
- * machine its Harness and how that folder was made go too, as a Harness
- * of one machine may not be on another, which starts it on its own.
+ * A new Thread's args as it moves to another Project, on the `same`
+ * machine or another, from `args` on Harness `harness`: the folder its
+ * draft made goes; on another machine its Harness and how that folder was
+ * made go too, as a Harness of one machine may not be on another, which
+ * starts it on its own. They name no machine: the directory places its
+ * new Project (ADR 0106, decision 1).
  */
 export function movedArgs(
   args: ThreadArgs,
   harness: string,
-  there: string | undefined
+  same: boolean
 ): ThreadArgs {
-  const same = there === args.host
   return {
     ...args,
+    host: undefined,
     scratch: undefined,
     scratchCommand: same ? args.scratchCommand : undefined,
     harness: same ? harness : "",
@@ -152,8 +154,9 @@ export function NewThreadBar({
   /** The other machine its Pane is on, by its key; none for this one. */
   host: string | undefined
   disabled: boolean
-  /** Moves it to `project`, on machine `host`, none for this one. */
-  onProject: (project: ProjectId, host: string | undefined) => void
+  /** Moves it to `project`, on the `same` machine as its Pane or
+   * another. */
+  onProject: (project: ProjectId, same: boolean) => void
   /** Opens "Add Project" in the Banda menu (ADR 0026), from the Project list. */
   onAddProject?: () => void
 }) {
@@ -196,7 +199,7 @@ export function NewThreadBar({
             }
           }
           disabled={disabled}
-          onChange={(id) => onProject(id as ProjectId, on.get(id))}
+          onChange={(id) => onProject(id as ProjectId, on.get(id) === host)}
           more={
             onAddProject && {
               title: "Add Project",

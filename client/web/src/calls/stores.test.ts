@@ -267,49 +267,47 @@ test("a Project with no Thread but archived ones at rest counts as having none",
   ).toEqual([p, r])
 })
 
-test("a host's Listed opens its Pane on that host, and each answer goes there, never to this machine's engine", () => {
+test("a host's Listed is marked as that host's, its Pane and its answers naming none, so each goes there by its Project, never to this machine's engine", () => {
   const stores = newStores(0)
   const allow = { project: "x", item: "q1", choice: "allow" }
   const answers = [{ label: "Allow", action: "agents.answer", args: allow }]
   takeLists(stores, { [p]: [thread("a", { answers })] })
-  // What a host says of its own host does not choose where it goes.
-  const said = [{ ...answers[0]!, args: { ...allow, host: "devbox" } }]
-  takeLists(stores, { [r]: [thread("b", { answers: said })] }, "arc")
+  takeLists(stores, { [r]: [thread("b", { answers })] }, "arc")
   const [here] = stores.items.get()[p]!
   const [there] = stores.items.get()[r]!
   expect(here!.pane.args).toEqual({ thread: "a" })
+  expect(here!.host).toBeUndefined()
   expect(here!.answers).toEqual(answers)
-  expect(there!.pane.args).toEqual({ thread: "b", host: "arc" })
-  expect(there!.answers).toEqual([
-    {
-      label: "Allow",
-      action: "agents.answer",
-      args: { ...allow, host: "arc" },
-    },
-  ])
-  // The calls, a toast's buttons, carry them so.
+  // The directory places each by its Project (ADR 0106, decision 1).
+  expect(there!.pane.args).toEqual({ thread: "b" })
+  expect(there!.host).toBe("arc")
+  expect(there!.answers).toEqual(answers)
+  // The calls, a toast's buttons, carry the mark, for the notice's words.
   const stop = followCalls(stores)
   takeLists(stores, { [r]: [thread("b", { mark: "asking", answers })] }, "arc")
   const call = stores.calls.get().list.find((one) => one.about === "b")
-  expect(call?.answers?.[0]?.args).toEqual({ ...allow, host: "arc" })
+  expect(call?.host).toBe("arc")
+  expect(call?.answers?.[0]?.args).toEqual(allow)
   stop()
 })
 
-test("what a host lists and calls for, as Alt+U, a toast, the woke notice and the counts pick it, opens on that host", () => {
+test("what a host lists and calls for, as Alt+U, a toast, the woke notice and the counts pick it, names no host in its Pane: it opens there by its Project", () => {
   const stores = newStores(0)
   const stop = followCalls(stores)
   takeLists(stores, { [p]: [thread("a", { mark: "done" })] })
   takeLists(stores, { [r]: [thread("b", { mark: "asking" })] }, "arc")
   const picked = Object.fromEntries(
-    stores.calls.get().list.map((call) => [call.about, call.pane.args])
+    stores.calls
+      .get()
+      .list.map((call) => [call.about, [call.pane.args, call.host]])
   )
   expect(picked).toEqual({
-    a: { thread: "a" },
-    b: { thread: "b", host: "arc" },
+    a: [{ thread: "a" }, undefined],
+    b: [{ thread: "b" }, "arc"],
   })
   const [there] = stores.items.get()[r]!
   expect(wokeTold(r, there!)).toMatchObject({
-    buttons: [{ args: { project: r, pane: { args: { host: "arc" } } } }],
+    buttons: [{ args: { project: r, pane: { args: { thread: "b" } } } }],
   })
   stop()
 })

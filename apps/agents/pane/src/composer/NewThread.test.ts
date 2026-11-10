@@ -109,7 +109,7 @@ test("a new Thread moved to another machine drops its Harness and its folder's m
     scratch: "s1" as ProjectId,
     scratchCommand: "c1",
   }
-  expect(movedArgs(draft, "claude", undefined)).toEqual({
+  expect(movedArgs(draft, "claude", true)).toEqual({
     thread: null,
     harness: "claude",
     title: "",
@@ -117,21 +117,24 @@ test("a new Thread moved to another machine drops its Harness and its folder's m
     scratchCommand: "c1",
   })
   // A Harness of this machine may not be on arc: arc starts it on its own.
-  expect(movedArgs(draft, "claude", "arc")).toEqual({
+  expect(movedArgs(draft, "claude", false)).toEqual({
     thread: null,
     harness: "",
     title: "",
     scratch: undefined,
     scratchCommand: undefined,
   })
-  // From arc back to this machine, the same.
+  // From arc back to this machine, the same; and none names a machine,
+  // as the directory places its new Project.
   const there = { ...draft, host: "arc" }
-  expect(movedArgs(there, "codex", undefined)).toMatchObject({
+  expect(movedArgs(there, "codex", false)).toMatchObject({
     harness: "",
     scratchCommand: undefined,
+    host: undefined,
   })
-  expect(movedArgs(there, "codex", "arc")).toMatchObject({
+  expect(movedArgs(there, "codex", true)).toMatchObject({
     harness: "codex",
     scratchCommand: "c1",
+    host: undefined,
   })
 })

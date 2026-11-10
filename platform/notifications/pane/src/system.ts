@@ -11,7 +11,7 @@ import {
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import type { Chime } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
-import { type Call, paneHost } from "@banda/ui/pane"
+import type { Call } from "@banda/ui/pane"
 import type { Desktop, Notice } from "./desktop"
 import type { Told } from "./told"
 import { loudestChime } from "./sound"
@@ -47,10 +47,11 @@ export function noticeOf(
 }
 
 /** Where a call's thing is, after its title: its Project, by `project`,
- * and on another machine that machine, by the name it says it has, in
- * words, as a notice draws no icon (ADR 0095, decision 8). */
+ * and on another machine, as the Window marked it (`Call.host`), that
+ * machine, by the name it says it has, in words, as a notice draws no
+ * icon (ADR 0095, decision 8). */
 function whereOf(call: Call, project?: string): string | undefined {
-  const host = paneHost(call.pane)
+  const { host } = call
   if (host === undefined) return project
   const { name } = seenNamed(host)
   return project ? `${project} on ${name}` : name

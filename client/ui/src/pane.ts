@@ -11,13 +11,7 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { ChangedLines, Doing } from "@banda/contract/agents"
-import {
-  type Device,
-  paneHost,
-  type PaneState,
-  type Place,
-  withHost,
-} from "@banda/core"
+import { type Device, paneHost, type PaneState, type Place } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
@@ -100,10 +94,12 @@ export function within(tile: Element, element: Element | null): boolean {
   )
 }
 
-/** What one tile shows, the host a Pane is on, and where a Pane opens:
- * the core's (ADR 0089), named here too for the modules that take them
- * from here, until L3 splits this package. */
-export { paneHost, type PaneState, type Place, withHost }
+/** What one tile shows, the host an arrangement written before named for
+ * a Pane, and where a Pane opens: the core's (ADR 0089), named here too
+ * for the modules that take them from here, until L3 splits this
+ * package. No App writes a Pane's host: the directory says which machine
+ * has each Project (ADR 0106, decision 1). */
+export { paneHost, type PaneState, type Place }
 
 /** Whether something runs from a Pane, as the router answers it (ADR
  * 0106, law 6): it does, or why not, in the Person's words, "Not on arc
@@ -340,6 +336,13 @@ export type Listed = {
   archivedAt?: number
   /** What a click on it opens. */
   pane: PaneState
+  /** The other machine of `hosts.toml` that lists it, by its key, as the
+   * Window marks what each machine lists (ADR 0081, decision 4); none for
+   * this machine's. Its App never says it. What opens it, or acts on it,
+   * goes to its Project's machine by its Project alone (ADR 0106,
+   * decision 1); a notice and the Banda menu name that machine by it (ADR
+   * 0095, decision 8). */
+  host?: string
   /** Its latest Later (ADR 0074): the sidebar puts it away while it
    * sleeps. */
   later?: ListedLater
@@ -400,6 +403,9 @@ export type Call = {
   detail?: string
   /** What answering the call opens. */
   pane: PaneState
+  /** The other machine it is on, by its key in `hosts.toml`, as the Window
+   * marked it (`Listed.host`); none for this machine's. */
+  host?: string
   /** When it last changed, in ms since the epoch. */
   since: number
   /** What answers it there and then (`Listed.answers`). */

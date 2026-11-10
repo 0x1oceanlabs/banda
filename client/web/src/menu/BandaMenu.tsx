@@ -63,7 +63,7 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, writeBind } from "../actions/actions"
-import { focusedTile, paneHost } from "@banda/ui/pane"
+import { focusedTile } from "@banda/ui/pane"
 import { useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -164,24 +164,19 @@ export const BandaMenu = memo(function BandaMenu({
     [running, rows]
   )
   // The sources look in the Project the Person is in, or the one gone into,
-  // through its machine's session (ADR 0106, law 3): arc's for an arc
-  // Project, placed by the Pane in focus where it is that Project's.
+  // through its machine's session, as the directory places it (ADR 0106,
+  // law 3): arc's for an arc Project.
   const project = useHere(projectOf)
-  const paneProject = useHere(paneProjectOf)
-  const paneHost = useHere(paneHostOf)
   const hosts = useContext(HostsContext)
   const at: MenuAt = useMemo(() => {
     const where = looking.entered ?? project
-    const pane =
-      paneHost !== undefined && where === paneProject
-        ? { args: { host: paneHost } }
-        : undefined
     let session = engine
     try {
-      session = hosts.sessionOf(where, pane, { drawn: true })
+      session = hosts.sessionOf(where, undefined, { drawn: true })
     } catch {
-      // A host this window does not show: none of this machine's
-      // Projects is that one, so this machine's engine finds nothing.
+      // A host this window does not show, or a Project no machine it
+      // knows has: none of this machine's Projects is that one, so this
+      // machine's engine finds nothing.
     }
     return {
       engine: session,
@@ -190,16 +185,7 @@ export const BandaMenu = memo(function BandaMenu({
       entered: looking.entered !== undefined,
       ...(looking.only && { only: looking.only }),
     }
-  }, [
-    engine,
-    hosts,
-    project,
-    paneProject,
-    paneHost,
-    projects,
-    looking.entered,
-    looking.only,
-  ])
+  }, [engine, hosts, project, projects, looking.entered, looking.only])
   const hear = useCallback((id: string, heard?: readonly MenuRow[]) => {
     setRows((rows) => {
       if (rows[id] === heard) return rows
@@ -339,9 +325,6 @@ function Finder({
 
 /** The Project the Person is in, as Here says it. */
 const projectOf = (here: Here) => here.project
-/** The Pane in focus's Project, and the host its frame names. */
-const paneProjectOf = (here: Here) => here.pane?.project
-const paneHostOf = (here: Here) => here.pane?.host
 
 /** What the menu looks for: the words typed at its root, or the Project it
  * went into, or in one source alone. */
@@ -858,8 +841,9 @@ function RowView({
     case "thread": {
       const { listed } = row
       // Another machine's names its Project and then that machine (ADR
-      // 0095, decision 8): "banda ▭ arc · waits".
-      const host = paneHost(listed.pane)
+      // 0095, decision 8): "banda ▭ arc · waits", as the Window marked
+      // what that machine lists.
+      const { host } = listed
       const there =
         host === undefined ? undefined : namedIn(hosts, host, seenNamed)
       const listing =
