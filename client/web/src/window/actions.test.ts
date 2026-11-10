@@ -5,6 +5,7 @@ import { takeLook } from "@banda/ui/lib/look"
 import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
+import type { Change } from "../tiling/arrange"
 import {
   type Column,
   entries,
@@ -18,8 +19,10 @@ import {
 import {
   ACTIONS,
   closingShown,
+  movesAway,
   noProjectOf,
   opening,
+  openFrom,
   picking,
   placeFor,
   placingOf,
@@ -256,6 +259,104 @@ test("a draft in the machine's own ID is of no Project: its Thread opens on the 
   const terminal = { kind: "terminal.terminal", args: {} }
   const free = open(start(), "b", terminal, { place: "right" })
   expect(placeFor(free, "machine", terminal, placing)).toBe("right")
+})
+
+/** Work's workspace, holding its draft `e`, and a free one holding a
+ * terminal, `f`. */
+function draftOnWork(): Workspaces {
+  const draft = { kind: "agents.thread", args: { harness: "fake" } }
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const column = (id: string, entry: Column["entries"][number]): Column => ({
+    id,
+    active: 0,
+    entries: [entry],
+  })
+  return {
+    list: [
+      {
+        id: "work",
+        project: "work",
+        focus: 0,
+        columns: [column("c", { id: "e", project: "work", pane: draft })],
+      },
+      {
+        id: "free",
+        focus: 0,
+        columns: [column("d", { id: "f", project: "work", pane: terminal })],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  }
+}
+
+test("a Pane in place of one on a Project's workspace goes elsewhere when it shows the same in another Project, or in none, in the row and solo (ADR 0102, decision 1)", () => {
+  const state = draftOnWork()
+  const row = placingOf("row", ["machine"])
+  const draft: PaneState = { kind: "agents.thread", args: { harness: "fake" } }
+  const away = (from: string, project: string, pane = draft, placing = row) =>
+    movesAway(state, from, project, pane, placing)
+  // A draft moved to Brand, or to No Project, from Work's workspace.
+  expect(away("e", "brand")).toBe(true)
+  expect(away("e", "machine")).toBe(true)
+  expect(away("e", "brand", draft, placingOf("solo", []))).toBe(true)
+  // The same Project; a free workspace, which takes any; the Flow free.
+  expect(away("e", "work")).toBe(false)
+  expect(away("f", "brand")).toBe(false)
+  expect(away("e", "brand", draft, placingOf("free", []))).toBe(false)
+  // From one in no workspace, as the drawer's.
+  expect(away("", "brand")).toBe(false)
+  // A draft that became its Thread, in a scratch Project not listed yet,
+  // or another machine's: it stays where it stood.
+  expect(away("e", "scratch", thread("t1"))).toBe(false)
+})
+
+test("a draft moved to another Project opens anew where the Flow says, and its tile closes once that is drawn; on a free workspace, or once it became its Thread, it is replaced in place (ADR 0102, decision 1)", async () => {
+  const state = draftOnWork()
+  const row = placingOf("row", ["machine"])
+  const draft: PaneState = { kind: "agents.thread", args: { harness: "fake" } }
+  const asked = async (
+    from: string,
+    project: string,
+    pane = draft,
+    opens = true
+  ) => {
+    const plans: unknown[] = []
+    const changing = (how: Change) => {
+      plans.push(how(state))
+      return Promise.resolve(opens ? "new" : undefined)
+    }
+    await openFrom(changing, state, row, project, pane, from, "instead")
+    return plans as { command: { method: string; params: object } }[]
+  }
+  const [brand, closed] = await asked("e", "brand")
+  expect(brand!.command).toMatchObject({
+    method: "workspaces.open",
+    params: { project: "brand", place: { to: "project", project: "brand" } },
+  })
+  expect(closed).toEqual({
+    command: { method: "workspaces.close", params: { pane: "e" } },
+  })
+  // No Project: the top free workspace.
+  const [none] = await asked("e", "machine")
+  expect(none!.command.params).toMatchObject({ place: { to: "free" } })
+  // Opened nowhere, it closes nothing.
+  expect(await asked("e", "brand", draft, false)).toHaveLength(1)
+  // On a free workspace, in place.
+  const [kept, ...rest] = await asked("f", "brand")
+  expect(kept!.command).toMatchObject({
+    method: "workspaces.open",
+    params: { project: "brand", instead: "f" },
+  })
+  expect(rest).toEqual([])
+  // Its first message, its Thread in a new scratch Project: in place, on
+  // Work's workspace still.
+  const [sent, ...after] = await asked("e", "scratch", thread("t1"))
+  expect(sent!.command).toMatchObject({
+    method: "workspaces.open",
+    params: { project: "scratch", instead: "e" },
+  })
+  expect(after).toEqual([])
 })
 
 test("pane.pick takes a Project and a Pane, as an Item carries it, and only it reaches the Window's answer", () => {

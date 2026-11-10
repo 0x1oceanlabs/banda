@@ -1,8 +1,7 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react"
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import { newId, type ProjectId, type ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
-import type { PaneState } from "@banda/ui/pane"
 import { PinIcon } from "lucide-react"
 import { boxOf } from "@banda/ui/lib/tile"
 import { type Shows, useItemShown } from "../tiling/shows"
@@ -41,7 +40,8 @@ export const Drawer = memo(function Drawer({
   frame: Frame
   onLift: () => void
   onPin: () => void
-  onChange: (pane: PaneState) => void
+  /** Its entry, as `how` changes it. */
+  onChange: (how: (was: Entry) => Entry) => void
   onClose: () => void
 }) {
   const item = useItemShown(shows, entry)
@@ -49,9 +49,13 @@ export const Drawer = memo(function Drawer({
     () => ({
       // The focus is the drawer's while it shows; the workspace keeps its own.
       focus: () => undefined,
+      // What it opens in its own place stays in it, under a new ID, as a
+      // draft that changes Project; the rest opens on the workspace.
       open: (project, pane, _from, place) =>
-        frame.open(project, pane, "", place),
-      update: (_entry, pane) => onChange(pane),
+        place === "instead"
+          ? onChange(() => ({ id: newId(), project, pane }))
+          : frame.open(project, pane, "", place),
+      update: (_entry, pane) => onChange((was) => ({ ...was, pane })),
       close: onClose,
       run: frame.run,
       arrange: frame.arrange,

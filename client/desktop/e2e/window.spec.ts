@@ -4094,6 +4094,29 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   ).toHaveCount(2)
 })
 
+/** Sends `words` from the New Thread in focus, its first message. */
+async function say(page: Page, words: string) {
+  const box = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await box.fill(words)
+  await box.press("Enter")
+  await expect(page.getByText(`You said: ${words}`)).toBeVisible()
+}
+
+/** Moves the New Thread in `scope` from the Project `from` to the one
+ * whose name starts with `to`, by its picker. */
+async function pickProject(scope: Locator, from: string, to: string) {
+  await scope.getByRole("button", { name: `Project: ${from}` }).click()
+  await scope
+    .page()
+    .getByRole("menu")
+    .getByRole("menuitemradio", { name: new RegExp(`^${to}`) })
+    .first()
+    .click()
+}
+
 test("Threads of no Project share the first free workspace, which takes a Project's Pane too (ADR 0102, decision 1)", async () => {
   window = await startWindow()
   const { page } = window
@@ -4103,36 +4126,26 @@ test("Threads of no Project share the first free workspace, which takes a Projec
     .locator(`${ON_SCREEN} [data-strip]`)
     .getByRole("textbox", { name: "Message to Fake AI" })
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  // Sends `words` from the New Thread in focus, its first message.
-  const say = async (words: string) => {
-    const box = page
-      .getByRole("region", { name: "New Thread" })
-      .and(page.locator('[data-focused="true"]'))
-      .getByRole("textbox", { name: "Message to Fake AI" })
-    await box.fill(words)
-    await box.press("Enter")
-    await expect(page.getByText(`You said: ${words}`)).toBeVisible()
-  }
 
   // The first screen's Thread; one by Alt+Enter, with no Project yet; and
   // one from No Project's section of the sidebar: all on workspace 1, the
   // one free workspace, shown by its number.
-  await say("scratch one")
+  await say(page, "scratch one")
   await page.keyboard.press("Alt+Enter")
-  await say("scratch two")
+  await say(page, "scratch two")
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^projects/ }).click()
   await sidebar
     .getByRole("button", { name: "New Thread in No Project" })
     .click()
-  await say("scratch three")
+  await say(page, "scratch three")
   await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
   await expect(threads).toHaveCount(3)
 
   // Alpha's Thread, on Alpha's workspace, goes onto it, as onto any free
   // one, with no word of refusal.
   await newProject(page, "Alpha")
-  await say("alpha one")
+  await say(page, "alpha one")
   const current = numbers.locator("[aria-current]:not([inert])")
   await expect(current).toHaveText("A")
   await page.keyboard.press("Alt+Shift+Digit1")
@@ -4142,6 +4155,66 @@ test("Threads of no Project share the first free workspace, which takes a Projec
   await expect(threads).toHaveCount(4)
   const refused = page.getByText("Not onto another Project's workspace")
   await expect(refused).toHaveCount(0)
+})
+
+test("a New Thread moved to another Project goes to that Project's workspace, or of no Project to the first free one, and the window follows it (ADR 0102, decision 1)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const names = () => workspaceNames(page)
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const current = numbers.locator("[aria-current]:not([inert])")
+  const onScreen = page.locator(`${ON_SCREEN} [data-strip]`)
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  await firstThread(page)
+  await say(page, "work one")
+  await newProject(page, "Brand")
+  await say(page, "brand one")
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "New workspace"])
+
+  // From Work's workspace to Brand: last on Brand's, in focus.
+  await numbers.getByRole("button", { name: "Workspace 1" }).click()
+  await expect(current).toHaveText("W")
+  await page.keyboard.press("Alt+Enter")
+  await pickProject(draft, "Work", "Brand")
+  await expect(current).toHaveText("B")
+  await expect(
+    draft.getByRole("button", { name: "Project: Brand" })
+  ).toBeVisible()
+  await expect(
+    onScreen.getByRole("region", { name: "brand one" })
+  ).toBeVisible()
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "New workspace"])
+
+  // From Work's workspace to No Project: on the first free workspace,
+  // where its first message keeps it.
+  await numbers.getByRole("button", { name: "Workspace 1" }).click()
+  await expect(
+    onScreen.getByRole("region", { name: "New Thread" })
+  ).toHaveCount(0)
+  await page.keyboard.press("Alt+Enter")
+  await pickProject(draft, "Work", "No Project")
+  const free = numbers.getByRole("button", { name: "Workspace 3" })
+  await expect(free).toHaveAttribute("aria-current", "true")
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project", exact: true })
+  ).toBeVisible()
+  await say(page, "loose one")
+  await expect(free).toHaveAttribute("aria-current", "true")
+  await expect(
+    onScreen.getByRole("region", { name: "loose one" })
+  ).toBeVisible()
+
+  // Work's workspace holds Work's Thread alone.
+  await numbers.getByRole("button", { name: "Workspace 1" }).click()
+  await expect(onScreen.getByRole("region", { name: "work one" })).toBeVisible()
+  for (const other of ["New Thread", "loose one", "brand one"])
+    await expect(onScreen.getByRole("region", { name: other })).toHaveCount(0)
 })
 
 test("in solo, a reply's Run in a Thread of no Project opens its terminal in the Thread's Group, and the Thread stays in view (ADR 0102, decision 3)", async () => {
@@ -6744,6 +6817,68 @@ test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, 
   await page.keyboard.press("Alt+Backquote")
   await expect(drawer).toHaveAttribute("data-drawer")
   await expect(drawer.getByText("You said: quick one")).toBeHidden()
+})
+
+test("the drawer's New Thread changes Project in the drawer, and the workspace under it stays as it was, its terminal running", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await firstThread(page)
+  await newProject(page, "Brand")
+  await page
+    .getByRole("navigation", { name: "Workspaces" })
+    .getByRole("button", { name: "Workspace 1" })
+    .click()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const terminal = terminalTile(page)
+  const screen = terminal.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type("echo $$ > shell.pid")
+  await page.keyboard.press("Enter")
+  const pid = join(dir, "root", "Work", "shell.pid")
+  await expect.poll(() => read(pid)).toMatch(/^\d+\n$/)
+  const shell = Number(read(pid))
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  const before = await layoutOf(page)
+  const drawer = page.getByRole("dialog", { name: "Drawer" })
+  // Lifted, the workspace is as it was, its terminal in focus and running.
+  const unchanged = async () => {
+    await page.keyboard.press("Alt+Backquote")
+    await expect(drawer).not.toHaveAttribute("data-drawer")
+    await expect(terminal).toHaveAttribute("data-focused", "true")
+    expect(await layoutOf(page)).toEqual(before)
+    await expect(screen).toHaveAttribute("data-state", "running")
+    expect(running(shell)).toBe(true)
+  }
+
+  // Another Project, picked in the drawer: its draft, in home, which is
+  // Work as the first Project made, is Brand's now, in the drawer.
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await pickProject(drawer, "Work", "Brand")
+  await expect(
+    drawer.getByRole("button", { name: "Project: Brand" })
+  ).toBeVisible()
+  await unchanged()
+
+  // No Project, and its first message, which makes its scratch Project:
+  // the Thread stays in the drawer, and the drawer, lifted as it was
+  // sent, stays lifted as the Thread comes.
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await pickProject(drawer, "Brand", "No Project")
+  const ask = drawer.getByRole("textbox", { name: "Message to Fake AI" })
+  await ask.fill("quick one")
+  await ask.press("Enter")
+  await unchanged()
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await expect(drawer.getByText("You said: quick one")).toBeVisible()
+  await unchanged()
 })
 
 test("a Pane pops out into a window of its own, its place keeps a stand-in, and closing that window brings it back", async () => {

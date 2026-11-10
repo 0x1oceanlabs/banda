@@ -136,6 +136,13 @@ describe("opening", () => {
     expect(columns(state)).toEqual([["x1"]])
   })
 
+  test("instead from an opener in no workspace, as the drawer's, replaces none: it opens beside the focused Pane", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { from: "", place: "instead" })
+    expect(columns(state)).toEqual([["t1"], ["x1"]])
+    expect(focusName(state)).toBe("x1")
+  })
+
   test("with no place, a Pane takes the place of one of its kind", () => {
     let state = open(start(), A, thread("t1"))
     state = open(state, A, terminal("x1"), { place: "right" })

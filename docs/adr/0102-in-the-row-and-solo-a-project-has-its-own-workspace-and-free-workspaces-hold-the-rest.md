@@ -85,7 +85,10 @@ day.
    a draft in the machine's own ID too, opens on the top free workspace,
    and so does a browser its Agent opens with the Thread not shown. No
    workspace is ever no Project's; one owned so before goes once emptied
-   and left.
+   and left. A New Thread moved to another Project by its picker, or to
+   No Project, goes where a new Thread of that Project opens, and the
+   window follows it; on a free workspace, or in the drawer, it changes
+   Project where it stands, and its first message never moves it.
 
 4. **The Project's own Group.**
    - It holds the Panes the Person opened for the Project and not for an
