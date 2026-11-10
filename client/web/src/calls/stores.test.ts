@@ -1,5 +1,6 @@
 import type { ProjectId } from "@banda/contract"
 import type { Listed, Lists } from "@banda/ui/pane"
+import { emptyIn, type HostState, shownOf } from "@banda/core"
 import { afterEach, expect, test, vi } from "vitest"
 import { wokeTold } from "./woke"
 import {
@@ -196,6 +197,36 @@ test("each host's lists are kept apart, and the items hold them all, this machin
   expect(Object.keys(stores.items.get())).toEqual([p])
   dropHost(stores, "arc")
   expect(heard).toHaveBeenCalledTimes(1)
+})
+
+test("a host stopped there keeps its lists, as one away does: only a host the Window shows no rows of is let go of (#989)", () => {
+  const stores = newStores(0)
+  takeLists(stores, { [p]: [thread("a")] })
+  takeLists(stores, { [r]: [thread("b", { mark: "done" })] }, "arc")
+  const arc = { name: "arc", ssh: "arc" }
+  const live: HostState = {
+    ...arc,
+    state: "live",
+    build: null,
+    version: null,
+    own: { build: null, version: null },
+  }
+  // What the Window's Watches do as the hosts change (`Elsewhere`).
+  const told = (...states: HostState[]) => {
+    let shown = shownOf(undefined, live, 0)
+    for (const [at, state] of states.entries())
+      shown = shownOf(shown, state, at + 1)
+    for (const name of emptyIn([shown])) dropHost(stores, name)
+  }
+  told({ ...arc, state: "stopped" })
+  told({ ...arc, state: "away", why: "ssh ended" })
+  told({ ...arc, state: "stopped" }, { ...arc, state: "connecting" })
+  expect(stores.items.get()[r]?.map((one) => [one.id, one.mark])).toEqual([
+    ["b", "done"],
+  ])
+  told({ ...arc, state: "refused", why: "another protocol" })
+  expect(stores.items.get()[r]).toBeUndefined()
+  expect(Object.keys(stores.items.get())).toEqual([p])
 })
 
 test("the bar's Mark is every host's lists' loudest, and their turns in all, put away left out", () => {

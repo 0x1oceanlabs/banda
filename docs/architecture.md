@@ -765,7 +765,8 @@ and `client/desktop/src/modules.ts`; the tests write the contract's
   acts; a call or a stream reads when its right is Read, or when its line
   ends `, read`, as `terminal.watch` does, and acts otherwise. The tests
   write which each is to `sdk/contract/src/generated/does.ts`, and the
-  window's client fails an act at once while its machine is away.
+  window's client fails an act at once while its machine is away, or
+  while that machine's engine answers nothing (ADR 0082, decision 11).
 - **Events it publishes.** These are its published language, and they carry a
   version.
 - **Its tables.** Only this module writes them, and no other module reads

@@ -436,9 +436,10 @@ export function useThreadSession({
   // first, so they go once. With its machine out of reach they go at
   // once, to be refused, never to start a Thread by themselves once it is
   // back (ADR 0082, decision 16); words that did not go wait in the
-  // composer.
+  // composer. So do they while its engine answers nothing: the Pane is
+  // drawn again as its machine shows away.
   const { state: reach } = useStatus(engine)
-  const out = reach === "away" || reach === "refused"
+  const out = reach === "away" || reach === "refused" || engine.stale
   const [unsent, setUnsent] = useState<{ text: string }>()
   const took = useRef<string>(undefined)
   useEffect(() => {

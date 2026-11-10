@@ -228,6 +228,28 @@ const FIRST_WAIT = 250
 const LONGEST_WAIT = 5000
 
 /**
+ * How a client asks the engine of another machine whether it still
+ * answers (ADR 0082, decision 11), in ms.
+ */
+export type Ping = {
+  /** How often it pings while open: two pings in a row heard nothing
+   * after, and the engine is stale. */
+  every: number
+  /** How long the engine may say nothing before an act asks it first. */
+  quiet: number
+  /** How long that asking waits for any answer before the engine is
+   * stale. */
+  within: number
+}
+
+/** As a window asks another machine's engine: a ping every 15 s; an act
+ * after 5 s of quiet asks first, and hears an answer in 3 s or fails. */
+export const PING: Ping = { every: 15_000, quiet: 5_000, within: 3_000 }
+
+/** Pings in a row that heard nothing after them, and the engine is stale. */
+const MISSED = 2
+
+/**
  * A window's connection to the engine: JSON frames over one WebSocket.
  *
  * - It connects at once, and again whenever the connection breaks, asking
@@ -255,6 +277,9 @@ const LONGEST_WAIT = 5000
  *   delivered, so a Pane sees no gap and no repeat.
  * - A stream that reads is heard again after a reconnect, from its start;
  *   one that acts, or is heard `once`, ends instead.
+ * - The engine of another machine is pinged (`ping`): one that answers
+ *   nothing, its connection open or not, is stale until it is heard again,
+ *   and an act to it fails as one to a machine away does.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -275,6 +300,32 @@ export class Engine {
    * connects nothing. */
   #go = 0
   readonly #unreachable: (() => Unreachable) | undefined
+  readonly #ping: Ping | undefined
+  readonly #onStale: ((stale: boolean) => void) | undefined
+  /** When it last heard the engine say anything, by this machine's clock. */
+  #heard: number | undefined
+  /** Whether it heard anything since its last ping. */
+  #answered = true
+  /** Pings in a row that heard nothing after them. */
+  #missed = 0
+  #pinging: ReturnType<typeof setInterval> | undefined
+  /** Each ping on its way, by its ID: when it went. */
+  readonly #pings = new Map<number, number>()
+  #stale = false
+  /** Each act waiting for the connection to open, failed as the engine
+   * is stale. */
+  readonly #hushed = new Set<(why: Error) => void>()
+  /** An act's asking whether the engine answers, while it waits: heard,
+   * or not as the connection ended first. */
+  #probe:
+    | {
+        heard: Promise<boolean>
+        answered: (heard: boolean) => void
+        failed: (error: Error) => void
+        timer: ReturnType<typeof setTimeout>
+      }
+    | undefined
+  #offset: number | undefined
 
   /**
    * `address` says where the engine listens now. It may throw
@@ -282,19 +333,56 @@ export class Engine {
    * is then `away` until woken. `unreachable` names the machine of an
    * engine on another one: an act, or a read sent `once`, that the
    * connection lost fails with it, not `Lost`, as that machine may be gone
-   * before the client is told so.
+   * before the client is told so, and so does one while it is stale. With
+   * `ping`, the engine is asked whether it still answers (ADR 0082,
+   * decision 11), and `onStale` hears as it is stale and as it answers
+   * again.
    */
   constructor(
     address: () => Promise<Address>,
-    { unreachable }: { unreachable?: () => Unreachable } = {}
+    {
+      unreachable,
+      ping,
+      onStale,
+    }: {
+      unreachable?: () => Unreachable
+      ping?: Ping
+      onStale?: (stale: boolean) => void
+    } = {}
   ) {
     this.#address = address
     this.#unreachable = unreachable
+    this.#ping = ping
+    this.#onStale = onStale
     void this.#connect()
   }
 
   get status(): Status {
     return this.#status
+  }
+
+  /**
+   * Whether the engine answers nothing (ADR 0082, decision 11): two pings
+   * in a row heard nothing after them, or an act asked first and heard
+   * nothing in time. Its connection may still be open: an act fails at
+   * once, one on its way fails as one that may have run, and a read waits.
+   * It is no more as soon as the engine says anything, or is away.
+   */
+  get stale(): boolean {
+    return this.#stale
+  }
+
+  /** When the client last heard the engine say anything, in ms since the
+   * epoch by this machine's clock; none before it first did. */
+  get heard(): number | undefined {
+    return this.#heard
+  }
+
+  /** How far the engine's clock is ahead of this machine's, in ms, as its
+   * last `pong` said, with half the way there and back taken off; none
+   * before one. */
+  get offset(): number | undefined {
+    return this.#offset
   }
 
   /** Hears every change of status, starting with the current one. */
@@ -346,7 +434,7 @@ export class Engine {
     const command = options.command !== undefined
     const once = options.once ?? false
     const act = !command && acts(method)
-    await this.#opened(
+    await this.#ready(
       command ? (once ? "now" : "act") : act || once ? "act" : "read"
     )
     const id = this.#nextId++
@@ -481,12 +569,13 @@ export class Engine {
    *
    * A stream that does something, as a commit, is heard `once`, whether it
    * is asked so or the contract says it acts: asked again it would do it
-   * again. Asked while its machine is out of reach, it is not sent and ends
-   * at once, refused, as it does when that machine goes before it was
-   * sent; when the connection breaks after it was asked, it ends with
-   * `may_have_run`, and the caller checks. Either way `onEnd` hears the
-   * client's error too, in its machine's words (`Unreachable`), or `Lost`,
-   * for the caller to say what was not done.
+   * again. It goes as an act call does: asked while its machine is out of
+   * reach, or its engine is stale, it is not sent and ends at once,
+   * refused, as it does when that machine goes before it was sent; when
+   * the connection breaks after it was asked, or the engine goes stale, it
+   * ends with `may_have_run`, and the caller checks. Either way `onEnd`
+   * hears the client's error too, in its machine's words (`Unreachable`),
+   * or `Lost`, for the caller to say what was not done.
    */
   stream<M extends MethodOf<"stream">>(
     project: ProjectId | undefined,
@@ -506,21 +595,26 @@ export class Engine {
       once: once || acts(method),
       sent: false,
     }
-    const { state } = this.#status
-    if (
-      hearing.once &&
-      (state === "away" || state === "refused" || this.#closed)
-    ) {
-      // Nothing keeps it to go later by itself; it ends once its caller
-      // holds how to stop, unless that stopped it first.
-      let heard = true
-      const error = this.#unopened()
-      queueMicrotask(() => heard && this.#ended(hearing, error))
-      return () => void (heard = false)
+    let stopped = false
+    if (!hearing.once) {
+      this.#hearing.set(id, hearing)
+      if (this.#status.state === "open") this.#hear(id, hearing)
+    } else {
+      // It goes as an act call does, and nothing keeps it to go later by
+      // itself: refused, it ends unsent, unless its caller stopped it first.
+      void this.#ready("act").then(
+        () => {
+          if (stopped) return
+          this.#hearing.set(id, hearing)
+          this.#hear(id, hearing)
+        },
+        (error: Error) => {
+          if (!stopped) this.#ended(hearing, error)
+        }
+      )
     }
-    this.#hearing.set(id, hearing)
-    if (this.#status.state === "open") this.#hear(id, hearing)
     return () => {
+      stopped = true
       if (this.#hearing.delete(id) && this.#status.state === "open") {
         this.#send({
           type: "unsubscribe",
@@ -559,6 +653,8 @@ export class Engine {
     // One that said goodbye tries no more: it stays refused.
     if (this.#closed || this.#status.state === "refused") return
     this.#why = why
+    // Away, it is no more stale: the client that reaches it says why.
+    this.#stale = false
     if (this.#status.state === "away") return
     this.#go++
     clearTimeout(this.#next)
@@ -573,6 +669,7 @@ export class Engine {
   close(): void {
     this.#closed = true
     this.#socket?.close()
+    this.#quiet(new Lost())
     this.#fail(new Lost())
   }
 
@@ -581,17 +678,34 @@ export class Engine {
     for (const watcher of this.#watchers) watcher(status)
   }
 
-  /** Waits for the engine to be open, as an ask is `going`: an act fails
+  /**
+   * Waits for the engine to be open, as an ask is `going`: an act fails
    * at once while its machine is out of reach, and a command sent `once`
-   * while the engine is not open. */
+   * while the engine is not open. An act to a pinged engine fails,
+   * unsent, as it is stale; and one that finds it connecting after a
+   * quiet while waits `ping.within` at most, as one asking first does,
+   * before it is stale.
+   */
   #opened(going: Going): Promise<void> {
     return new Promise((resolve, reject) => {
+      let settled = false
+      let timer: ReturnType<typeof setTimeout> | undefined
+      const done = (error?: Error) => {
+        if (settled) return
+        settled = true
+        clearTimeout(timer)
+        this.#hushed.delete(done)
+        queueMicrotask(() => stop())
+        if (error) reject(error)
+        else resolve()
+      }
+      const ping = going === "read" ? undefined : this.#ping
+      if (ping) {
+        this.#hushed.add(done)
+        if (this.#status.state === "connecting" && this.#quietFor(ping))
+          timer = setTimeout(() => this.#hush(), ping.within)
+      }
       const stop = this.watch((status) => {
-        const done = (error?: Error) => {
-          queueMicrotask(() => stop())
-          if (error) reject(error)
-          else resolve()
-        }
         if (status.state === "open") done()
         else if (status.state === "refused" || this.#closed)
           done(this.#unopened())
@@ -600,6 +714,22 @@ export class Engine {
         else if (going === "now") done(this.#unopened())
       })
     })
+  }
+
+  /**
+   * Waits until an ask may go, as it is `going` (`#opened`). An act to a
+   * pinged engine fails at once, unsent, while it is stale, and asks it
+   * first after a quiet while (`#answering`); where the connection ends
+   * before it answers, the act waits again as its machine's status says.
+   * A read only waits for the connection. Closed, nothing else goes.
+   */
+  async #ready(going: Going): Promise<void> {
+    if (going === "read") return this.#opened(going)
+    if (this.#closed) throw new Lost()
+    if (this.#stale) throw this.#gone(false)
+    do {
+      await this.#opened(going)
+    } while (!(await this.#answering()))
   }
 
   /** Why what is asked now cannot go, as the engine is not open: it said
@@ -639,6 +769,11 @@ export class Engine {
     hearing.onEnd(refusal, error)
   }
 
+  /** Whether the engine said nothing for `ping.quiet` ms, or never did. */
+  #quietFor(ping: Ping): boolean {
+    return this.#heard === undefined || Date.now() - this.#heard >= ping.quiet
+  }
+
   async #connect(): Promise<void> {
     if (this.#closed) return
     const go = ++this.#go
@@ -656,6 +791,7 @@ export class Engine {
     if (go !== this.#go || this.#closed) return
     const socket = new WebSocket(address.url)
     this.#socket = socket
+    this.#pingEach()
     // What the engine says comes `latency` ms late, its close too, each
     // in the order it came: timers of one delay run in the order set. A
     // connection let go of meanwhile is heard no more.
@@ -698,6 +834,7 @@ export class Engine {
   }
 
   #receive(text: string): void {
+    this.#heardNow()
     let frame: EngineFrame
     try {
       frame = JSON.parse(text)
@@ -725,7 +862,17 @@ export class Engine {
         this.#set({ state: "refused", refusal: frame.reason })
         this.#socket?.close()
         break
+      case "pong": {
+        const went = this.#pings.get(frame.id)
+        this.#pings.delete(frame.id)
+        if (went !== undefined)
+          this.#offset = frame.time - (went + Date.now()) / 2
+        break
+      }
       case "result": {
+        // An engine from before the ping answers one as a frame that does
+        // not fit: it answers all the same.
+        if (this.#pings.delete(frame.id)) break
         const pending = this.#pending.get(frame.id)
         if (pending) {
           this.#pending.delete(frame.id)
@@ -777,6 +924,121 @@ export class Engine {
     }
   }
 
+  /** Pings the engine every `ping.every` ms from now, while the
+   * connection is open: two pings in a row that hear nothing after them,
+   * and it is stale. Counted from the connection's start, so one whose
+   * engine never says welcome is stale in as long. */
+  #pingEach(): void {
+    const ping = this.#ping
+    if (!ping) return
+    clearInterval(this.#pinging)
+    this.#answered = true
+    this.#missed = 0
+    this.#pinging = setInterval(() => {
+      this.#missed = this.#answered ? 0 : this.#missed + 1
+      if (this.#missed >= MISSED) this.#hush()
+      this.#answered = false
+      if (this.#status.state === "open") this.#sendPing()
+    }, ping.every)
+  }
+
+  #sendPing(): void {
+    const id = this.#nextId++
+    this.#pings.set(id, Date.now())
+    this.#send({ type: "ping", id })
+  }
+
+  /**
+   * Waits until the engine of another machine answers, before an act goes
+   * to it (ADR 0082, decision 11): at once when it was heard within
+   * `ping.quiet`; else it is pinged, and with nothing heard in
+   * `ping.within` it is stale, and the act fails unsent. False where the
+   * connection ended before it answered.
+   */
+  #answering(): Promise<boolean> {
+    const ping = this.#ping
+    if (!ping) return Promise.resolve(true)
+    if (this.#stale) return Promise.reject(this.#gone(false))
+    if (!this.#quietFor(ping)) return Promise.resolve(true)
+    if (!this.#probe) {
+      let answered: (heard: boolean) => void = () => {}
+      let failed: (error: Error) => void = () => {}
+      const heard = new Promise<boolean>((resolve, reject) => {
+        answered = resolve
+        failed = reject
+      })
+      const timer = setTimeout(() => this.#hush(), ping.within)
+      this.#probe = { heard, answered, failed, timer }
+      this.#sendPing()
+    }
+    return this.#probe.heard
+  }
+
+  /** The engine said something: it answers, and is stale no more. */
+  #heardNow(): void {
+    this.#heard = Date.now()
+    this.#answered = true
+    this.#missed = 0
+    const probe = this.#probe
+    this.#probe = undefined
+    if (probe) {
+      clearTimeout(probe.timer)
+      probe.answered(true)
+    }
+    if (!this.#stale) return
+    this.#stale = false
+    this.#onStale?.(false)
+  }
+
+  /**
+   * The engine answers nothing: it is stale, and its machine shows away
+   * first, so what fails says so in that machine's words. Each act on its
+   * way, and each read sent `once` as part of one, fails as the connection
+   * ending fails it (`#broken`), and is not sent again; a stream that acts
+   * ends with `may_have_run`. An act waiting for the connection, or asking
+   * first, fails unsent; a read waits for the engine to answer, on the
+   * connection still open.
+   */
+  #hush(): void {
+    if (this.#stale || this.#closed) return
+    this.#stale = true
+    this.#onStale?.(true)
+    const why = this.#unreachable?.()
+    const unsent = this.#gone(false, why)
+    const probe = this.#probe
+    this.#probe = undefined
+    if (probe) {
+      clearTimeout(probe.timer)
+      probe.failed(unsent)
+    }
+    for (const waiting of [...this.#hushed]) waiting(unsent)
+    for (const [id, pending] of this.#pending) {
+      if (!pending.command && !pending.once) continue
+      this.#pending.delete(id)
+      pending.reject(this.#broken(pending, why))
+    }
+    for (const [id, hearing] of this.#hearing) {
+      if (!hearing.once) continue
+      this.#hearing.delete(id)
+      this.#ended(hearing, this.#gone(hearing.sent, why), hearing.sent)
+    }
+  }
+
+  /** The connection ended: no more pings. An act that asked whether the
+   * engine answers waits again as its machine's status says (`#ready`),
+   * or fails with `why`, unsent, as the client closes. */
+  #quiet(why?: Error): void {
+    clearInterval(this.#pinging)
+    this.#pinging = undefined
+    this.#pings.clear()
+    const probe = this.#probe
+    this.#probe = undefined
+    if (!probe) return
+    clearTimeout(probe.timer)
+    if (why) probe.failed(why)
+    else probe.answered(false)
+  }
+
   #fail(error: Error): void {
     for (const pending of this.#pending.values()) pending.reject(error)
     this.#pending.clear()
@@ -784,28 +1046,30 @@ export class Engine {
 
   /**
    * What was on its way as the connection ended, `why` where its machine
-   * went out of reach. Each call fails: one that acts, as one that may have
-   * run, and a read sent `once`, in its machine's words; a command, for
-   * `commandAt` to send again or not. What is heard once and was asked
-   * ends, as one that may have run, not to be asked again. One not asked
-   * yet waits for the next connection while its machine is in reach, as
-   * an act asked then would, and is refused once it is out of reach.
+   * went out of reach. Each call fails (`#broken`). What is heard once and
+   * was asked ends, as one that may have run, not to be asked again. An
+   * act not asked yet waits for the next connection while its machine is
+   * in reach, and is refused once it is out of reach (`#ready`).
    */
   #lose(why?: Unreachable): void {
+    this.#quiet()
     for (const pending of this.#pending.values())
-      pending.reject(
-        pending.command
-          ? (why?.sent() ?? new Lost())
-          : pending.once
-            ? this.#gone(pending.act, why)
-            : new Lost()
-      )
+      pending.reject(this.#broken(pending, why))
     this.#pending.clear()
     for (const [id, hearing] of this.#hearing) {
-      if (!hearing.once || (!hearing.sent && !why)) continue
+      if (!hearing.once) continue
       this.#hearing.delete(id)
       this.#ended(hearing, this.#gone(hearing.sent, why), hearing.sent)
     }
+  }
+
+  /** Why a call on its way fails as the connection ends, or as the engine
+   * is stale: one that acts, as one that may have run, and a read sent
+   * `once`, in its machine's words (`why` where it went out of reach); a
+   * command, for `commandAt` to send again or not. */
+  #broken(pending: Pending, why?: Unreachable): Error {
+    if (pending.command) return why?.sent() ?? new Lost()
+    return pending.once ? this.#gone(pending.act, why) : new Lost()
   }
 
   #drop(): void {

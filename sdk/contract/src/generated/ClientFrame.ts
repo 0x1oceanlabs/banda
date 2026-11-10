@@ -13,4 +13,4 @@ command?: CommandId, params: JsonValue, } | { "type": "subscribe", id: number, p
  * None for a stream of this machine's: `window.requests`,
  * `machine.named`, `machine.power`, or a module of the machine's.
  */
-project?: ProjectId, method: string, params: JsonValue, };
+project?: ProjectId, method: string, params: JsonValue, } | { "type": "ping", id: number, };

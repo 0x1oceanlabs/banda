@@ -14,7 +14,7 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import { cn } from "@banda/ui/lib/utils"
-import { clock } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import {
   CheckIcon,
   ChevronLeftIcon,

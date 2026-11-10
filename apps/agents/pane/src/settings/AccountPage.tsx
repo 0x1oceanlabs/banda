@@ -47,7 +47,8 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import { useFence } from "@banda/ui/hooks/use-status"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { cn } from "@banda/ui/lib/utils"
-import { clock, problem } from "@banda/ui/lib/words"
+import { problem } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import {
   ArrowLeftIcon,
   CheckIcon,

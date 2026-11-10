@@ -7,7 +7,7 @@
  */
 import { Button } from "@banda/ui/components/button"
 import { Emblem } from "@banda/ui/components/emblem"
-import { clock } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { CheckIcon, ChevronLeftIcon, CornerDownRightIcon } from "lucide-react"
 import type { Move } from "../thread/moves"

@@ -28,7 +28,8 @@ import { toast } from "@banda/ui/components/sonner"
 import { Spinner } from "@banda/ui/components/spinner"
 import { openWithSystem } from "@banda/ui/lib/outside"
 import { cn } from "@banda/ui/lib/utils"
-import { clock, problem } from "@banda/ui/lib/words"
+import { problem } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import {
   FileIcon,
   FolderIcon,

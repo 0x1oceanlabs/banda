@@ -41,4 +41,4 @@ named?: Named, } | { "type": "result", id: number, ok?: JsonValue, error?: Refus
  * fact, which leaves nothing to wait to hear (#880), for a
  * refusal, or for a call.
  */
-at?: number, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, };
+at?: number, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, } | { "type": "pong", id: number, time: number, };

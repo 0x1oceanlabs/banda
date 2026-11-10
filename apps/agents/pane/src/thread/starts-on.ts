@@ -22,7 +22,8 @@ import {
 } from "@banda/ui/hooks/use-live"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useFile } from "@banda/ui/lib/look"
-import { MINUTE, clock } from "@banda/ui/lib/words"
+import { MINUTE } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 
 /** Where a new Thread starts, and why. */
 export type StartsOn = {

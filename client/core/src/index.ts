@@ -17,8 +17,10 @@ export {
 export type { Here, HereStore } from "./here"
 export {
   agentsWork,
+  asOfWords,
   awakeWords,
   awayFor,
+  awaySince,
   batteryWords,
   cleanPower,
   emptyIn,
@@ -34,6 +36,7 @@ export {
   machinesOf,
   namedIn,
   type Names,
+  notAnswered,
   onBattery,
   otherBuild,
   type Ours,
@@ -49,3 +52,4 @@ export { paneHost, type PaneState, type Place, withHost } from "./pane"
 export { openProjects, shownProjects } from "./projects"
 export type { Args, Run } from "./run"
 export { type Readable, sameData, sameEach, Store } from "./store"
+export { clock } from "./time"

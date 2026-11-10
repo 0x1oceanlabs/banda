@@ -4,9 +4,12 @@ import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "./device"
 import {
   agentsWork,
+  asOfWords,
   awakeWords,
+  awaySince,
   batteryWords,
   cleanPower,
+  emptyIn,
   FORGETTING,
   heldWords,
   KeptHosts,
@@ -22,6 +25,7 @@ import {
   Unreachable,
 } from "./hosts"
 import type { Args } from "./run"
+import { clock } from "./time"
 import { away, desktop, live, project, Socket } from "./testing"
 
 afterEach(() => {
@@ -35,7 +39,7 @@ const connecting: HostState = { name: "arc", ssh: "arc", state: "connecting" }
 /** arc before its first welcome on this device: its key. */
 const unnamed = { name: "arc", icon: "desktop" }
 
-test("a host that goes away stays away through the tries after, its rows standing as they were", () => {
+test("a host that goes away or stops stays so through the tries after, its rows standing as they were, as of when it was last heard", () => {
   const first = shownOf(undefined, connecting, 0)
   expect(first).toEqual({
     name: "arc",
@@ -44,17 +48,19 @@ test("a host that goes away stays away through the tries after, its rows standin
     projects: [],
   })
   const listed = [project("r1")]
-  const lost = shownOf(
-    { ...shownOf(first, live, 1), projects: listed },
-    away,
-    5
-  )
-  expect(lost).toMatchObject({ away: 5, projects: listed })
-  // Another go, and another loss: still away since then.
+  const shown = { ...shownOf(first, live, 1), projects: listed }
+  // Its engine last heard at 4.
+  const lost = shownOf(shown, away, 5, keyNamed, 4)
+  expect(lost).toMatchObject({ away: 5, asOf: 4, projects: listed })
+  // Another go, and another loss: still away since then, as of then.
   expect(shownOf(lost, connecting, 9)).toBe(lost)
-  expect(shownOf(lost, { ...away, why: "again" }, 20)).toMatchObject({
+  expect(shownOf(lost, { ...away, why: "again" }, 20, keyNamed, 9)).toEqual({
+    name: "arc",
+    named: unnamed,
+    state: { ...away, why: "again" },
     away: 5,
-    state: { why: "again" },
+    asOf: 4,
+    projects: listed,
   })
   // Live again, it keeps its Projects until its engine lists them anew.
   expect(shownOf(lost, live, 30)).toEqual({
@@ -63,9 +69,35 @@ test("a host that goes away stays away through the tries after, its rows standin
     state: live,
     projects: listed,
   })
-  // Stopped, signing in or refused, it shows none.
+  // Stopped, its rows stay as they were too (#989); started again, they
+  // stay while it starts, and it says so.
+  const stopped: HostState = { name: "arc", ssh: "arc", state: "stopped" }
+  const still = shownOf(shown, stopped, 40, keyNamed, 38)
+  expect(still).toEqual({
+    name: "arc",
+    named: unnamed,
+    state: stopped,
+    away: 40,
+    asOf: 38,
+    projects: listed,
+  })
+  expect(shownOf(still, connecting, 50)).toEqual({
+    ...still,
+    state: connecting,
+  })
+  expect(shownOf(shownOf(still, connecting, 50), connecting, 60)).toEqual({
+    ...still,
+    state: connecting,
+  })
+  // Never heard, it is away as of nothing, and counts from when it was
+  // found so; heard, its pill and rows count from then.
+  const unheard = shownOf(undefined, away, 5, keyNamed, undefined)
+  expect(unheard).not.toHaveProperty("asOf")
+  expect(awaySince(unheard)).toBe(5)
+  expect(awaySince(lost)).toBe(4)
+  expect(awaySince(shownOf(lost, live, 30))).toBeUndefined()
+  // Signing in or refused, it shows none.
   for (const now of [
-    { name: "arc", ssh: "arc", state: "stopped" },
     {
       name: "arc",
       ssh: "arc",
@@ -123,9 +155,14 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   expect(hosts.hostOf("d1" as ProjectId, undefined)).toBe("devbox")
   expect(hosts.hostOf("mine" as ProjectId, undefined)).toBeUndefined()
 
-  // A host that stops shows none, and lists none until it is live again:
-  // the one after it shows what it no longer does.
+  // A host that stops keeps its rows as they were, and its Panes their
+  // host (#989): the one after it still shows none of them.
   tell([{ name: "arc", ssh: "arc", state: "stopped" }, devbox])
+  expect(ids()).toEqual([["r1", "s"], ["d1"]])
+  expect(hosts.hostOf("r1" as ProjectId, undefined)).toBe("arc")
+  // Refused there, it shows none, and lists none until it is live again:
+  // the one after it shows what it no longer does.
+  tell([{ ...away, state: "refused" }, devbox])
   hosts.projects("arc", [project("r1")])
   expect(ids()).toEqual([[], ["r1", "d1"]])
   hosts.start("arc")
@@ -460,6 +497,175 @@ test("arc's link drops before the desktop says arc is away: a mark on its way na
   await vi.advanceTimersByTimeAsync(10_000)
   expect(back.sent.filter(({ type }) => type === "call")).toEqual([])
   engine.close()
+})
+
+/** 14:02 today, by this machine's clock. */
+const at1402 = new Date(2026, 10, 10, 14, 2, 0).getTime()
+
+/** arc live and open in a window, its engine heard at 14:02, with its
+ * Project r1. */
+async function arcHeard() {
+  vi.useFakeTimers({ now: at1402 })
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING)
+  hosts.follow()
+  tell([live])
+  const engine = hosts.engine("arc")
+  await vi.advanceTimersByTimeAsync(0)
+  const [socket] = Socket.opened
+  socket!.say(opened)
+  hosts.projects("arc", [project("r1")])
+  const arc = () => hosts.get()[0]!
+  return { hosts, tell, engine, socket: socket!, arc }
+}
+
+const pings = (socket: Socket) =>
+  socket.sent.filter(({ type }) => type === "ping")
+
+test("arc's engine answers nothing to two pings in a row: arc shows away, as of when it was last heard, its rows kept, and an act fails at once; anything it says and it is live again", async () => {
+  const { hosts, tell, engine, socket, arc } = await arcHeard()
+  // A ping every 15 s; one answered keeps it live.
+  await vi.advanceTimersByTimeAsync(15_000)
+  expect(pings(socket)).toHaveLength(1)
+  socket.say({ type: "pong", id: pings(socket)[0]!.id, time: at1402 + 15_100 })
+  expect(engine.offset).toBe(100)
+  await vi.advanceTimersByTimeAsync(15_000)
+  expect(arc().state).toEqual(live)
+  // From 14:02:15 on, it hears nothing: the ping at :30 has no answer by
+  // :45, nor that one by 14:03:00.
+  await vi.advanceTimersByTimeAsync(15_000)
+  expect(arc().state).toEqual(live)
+  await vi.advanceTimersByTimeAsync(15_000)
+  expect(engine.stale).toBe(true)
+  expect(arc()).toEqual({
+    name: "arc",
+    named: { name: "arc", icon: "desktop" },
+    state: {
+      name: "arc",
+      ssh: "arc",
+      state: "away",
+      why: "arc has not answered since 14:02",
+    },
+    stale: true,
+    away: at1402 + 60_000,
+    asOf: at1402 + 15_000,
+    projects: [project("r1")],
+  })
+  // By 24 hours, the day too once it is not today's.
+  expect(asOfWords(arc())).toBe("as of 14:02")
+  const tomorrow = at1402 + 24 * 60 * 60_000
+  expect(asOfWords(arc(), tomorrow)).toBe(
+    `as of ${clock(at1402, tomorrow, { hours: 24 })}`
+  )
+  expect(asOfWords(arc(), tomorrow)).toMatch(/^as of \S+ 14:02$/)
+  // One word for the Person, as the link gone says (Q7).
+  expect(reachWords("arc", arc(), keyNamed)).toBe("arc is away")
+  expect(heldWords("arc", arc(), "open", keyNamed)).toBe(
+    "arc is away. Send once it is back."
+  )
+  expect(machinesOf({ projects: [] }, hosts.get())[1]).toMatchObject({
+    state: "away",
+  })
+  // An act is refused at once, unsent; its engine stays open to hear it.
+  expect(() => hosts.sessionOf("r1" as ProjectId)).toThrow(Unreachable)
+  await expect(
+    engine.command("projects.create", { name: "No" })
+  ).rejects.toMatchObject({ message: "arc is away", may_have_run: false })
+  expect(socket.sent.filter(({ type }) => type === "call")).toEqual([])
+  expect(engine.status.state).toBe("open")
+  // The desktop telling arc live again changes nothing while it is quiet.
+  tell([live])
+  expect(arc().stale).toBe(true)
+
+  // It says anything: live again, its rows as they were.
+  socket.say({ type: "result", id: 999, ok: null })
+  expect(engine.stale).toBe(false)
+  expect(arc()).toEqual({
+    name: "arc",
+    named: { name: "arc", icon: "desktop" },
+    state: live,
+    projects: [project("r1")],
+  })
+  expect(hosts.sessionOf("r1" as ProjectId)).toBe(engine)
+  engine.close()
+})
+
+test("an act on arc after 5 s of quiet asks it first: answered, it goes; with nothing in 3 s, arc shows away and the act fails unsent", async () => {
+  const { engine, socket, arc } = await arcHeard()
+  await vi.advanceTimersByTimeAsync(6_000)
+  const asked = engine.command("projects.create", { name: "Asked" })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(socket.sent.at(-1)?.type).toBe("ping")
+  // An engine from before the ping answers it as a frame that does not
+  // fit: an answer all the same.
+  socket.say({
+    type: "result",
+    id: socket.sent.at(-1)!.id,
+    error: { code: "invalid", message: "This frame does not fit." },
+  })
+  await vi.advanceTimersByTimeAsync(0)
+  const call = socket.sent.at(-1)!
+  expect(call).toMatchObject({ type: "call", method: "projects.create" })
+  socket.say({ type: "result", id: call.id, ok: { name: "Asked" } })
+  expect(await asked).toEqual({ name: "Asked" })
+  expect(engine.offset).toBeUndefined()
+
+  // Quiet again, and it answers nothing: the act fails at once after 3 s.
+  await vi.advanceTimersByTimeAsync(6_000)
+  const sent = socket.sent.length
+  const unsent = engine.command("projects.create", { name: "Unsent" })
+  void unsent.catch(() => undefined)
+  await vi.advanceTimersByTimeAsync(2_900)
+  expect(arc().state).toEqual(live)
+  await vi.advanceTimersByTimeAsync(100)
+  await expect(unsent).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  expect(arc()).toMatchObject({ stale: true, asOf: at1402 + 6_000 })
+  const since = socket.sent.slice(sent).map(({ type }) => type)
+  expect(since).toContain("ping")
+  expect(since).not.toContain("call")
+  engine.close()
+})
+
+test("arc quiet, then its link gone: away in the desktop's words, as of when it was last heard; live again, its engine connects anew", async () => {
+  const { tell, engine, socket, arc } = await arcHeard()
+  await vi.advanceTimersByTimeAsync(45_000)
+  expect(arc().stale).toBe(true)
+  tell([away])
+  expect(arc()).toMatchObject({
+    state: away,
+    away: at1402 + 45_000,
+    asOf: at1402,
+  })
+  expect(arc().stale).toBeUndefined()
+  expect(engine.stale).toBe(false)
+  expect(engine.status).toEqual({ state: "away" })
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  expect(Socket.opened).toHaveLength(2)
+  expect(socket).not.toBe(Socket.opened[1])
+  Socket.opened[1]!.say(opened)
+  expect(arc()).toMatchObject({ state: live })
+  expect(arc().asOf).toBeUndefined()
+  engine.close()
+})
+
+test("a host the Window shows rows of, live, away or stopped, keeps its lists; one refused lets go of them", () => {
+  const listed = [project("r1")]
+  const shown = { ...shownOf(undefined, live, 0), projects: listed }
+  const stopped = shownOf(shown, { ...away, state: "stopped" }, 5, keyNamed, 4)
+  const refused = shownOf(shown, { ...away, state: "refused" }, 5)
+  expect(emptyIn([shown, shownOf(shown, away, 5), stopped])).toEqual([])
+  expect(emptyIn([refused])).toEqual(["arc"])
+  expect(asOfWords(stopped)).toBe(
+    `as of ${clock(4, Date.now(), { hours: 24 })}`
+  )
+  expect(reachWords("arc", stopped, keyNamed)).toBe("Banda is stopped on arc")
 })
 
 test("a host taken out of hosts.toml has its engine refuse at once, as one the window does not reach", async () => {

@@ -11,6 +11,7 @@ import {
   rmSync,
   writeFileSync,
 } from "node:fs"
+import { type AddressInfo, createServer, type Socket } from "node:net"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { createInterface } from "node:readline"
@@ -755,6 +756,24 @@ test("with its machine away, a call that acts and a stream that acts are refused
   expect(commit).toHaveLength(1)
 })
 
+test("closed for good, a client refuses a call and a stream that act at once, never sent", async () => {
+  noting()
+  await serve()
+  client = new Engine(address, { unreachable: arcAway })
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  client.close()
+  await expect(
+    client.call("git.init", {}, { project: project.id })
+  ).rejects.toBeInstanceOf(Lost)
+  const commit = committing(client, project.id)
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]!.code).toBe("conflict")
+  expect(commit[0]!.error).toBeInstanceOf(Lost)
+  expect(asked("git.init")).toEqual([])
+  expect(asked("git.act")).toEqual([])
+})
+
 test("an act asked while its engine is down, its machine in reach, waits and goes once it is back, on this machine's own engine too; one still waiting as its machine goes is refused, never sent", async () => {
   noting()
   await serve()
@@ -910,4 +929,447 @@ test("an act on its way as the link to this machine's own engine breaks fails as
   expect(asked("git.init")).toHaveLength(1)
   expect(asked("git.act")).toHaveLength(1)
   expect(commit).toHaveLength(1)
+})
+
+/**
+ * The WebSocket the window opens, noting each frame it sends, which hears
+ * nothing while `held`, as a link that looks up and carries nothing, or an
+ * engine that hangs: what comes meanwhile it hears once let go.
+ */
+class Holding extends Noting {
+  static held = false
+  readonly #kept: unknown[] = []
+  constructor(url: string | URL) {
+    super(url)
+    this.addEventListener("message", (event) => {
+      if (!Holding.held) return
+      event.stopImmediatePropagation()
+      this.#kept.push(event.data)
+    })
+  }
+
+  /** Each socket hears what came while it was held, in order. */
+  static let(): void {
+    Holding.held = false
+    for (const socket of Noting.opened as Holding[])
+      for (const data of socket.#kept.splice(0))
+        socket.onmessage?.(new MessageEvent("message", { data }))
+  }
+}
+
+/** The window watches its WebSockets, and may hold what they hear. */
+function holding() {
+  noting()
+  Holding.held = false
+  vi.stubGlobal("WebSocket", Holding)
+}
+
+const wait = (ms: number) => new Promise((done) => setTimeout(done, ms))
+
+test("an engine that hears nothing after two pings is stale: a command fails at once, one on its way as one that may have run, and a read waits; heard again, it answers, and says how far its clock is", async () => {
+  holding()
+  await serve()
+  const said: boolean[] = []
+  client = new Engine(address, {
+    unreachable: arcAway,
+    ping: { every: 100, quiet: 1_000, within: 300 },
+    onStale: (stale) => said.push(stale),
+  })
+  await until(client, "open")
+  expect(client.stale).toBe(false)
+  // It pings while open, and hears each pong.
+  await expect.poll(() => client!.offset).toBeDefined()
+  expect(Math.abs(client.offset!)).toBeLessThan(1_000)
+  expect(Date.now() - client.heard!).toBeLessThan(1_000)
+
+  // It hears nothing from now on: a command on its way, and a read.
+  Holding.held = true
+  const went = newId()
+  const made = client.command(
+    "projects.create",
+    { name: "On its way" },
+    undefined,
+    went
+  )
+  let read: string[] | undefined
+  void names(client).then((listed) => (read = listed))
+  await expect(made).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: true,
+  })
+  expect(client.stale).toBe(true)
+  expect(said).toEqual([true])
+  // Its connection is still open, and a command now fails at once, unsent.
+  expect(client.status.state).toBe("open")
+  const unsent = newId()
+  await expect(
+    client.command("projects.create", { name: "Unsent" }, undefined, unsent)
+  ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+  expect(sentWith(unsent)).toEqual([])
+  expect(read).toBeUndefined()
+
+  // Heard again: it answers, the read is answered on the same connection,
+  // and nothing refused went.
+  Holding.let()
+  expect(client.stale).toBe(false)
+  expect(said).toEqual([true, false])
+  await expect.poll(() => read).toBeDefined()
+  // What was on its way reached the engine, and ran there once.
+  const listed = await names(client)
+  expect(listed.filter((name) => name === "On its way")).toHaveLength(1)
+  expect(listed).not.toContain("Unsent")
+  expect(sentWith(went)).toHaveLength(1)
+  expect(Noting.opened).toHaveLength(1)
+})
+
+test("a command after a quiet while asks the engine first: answered, it goes; with nothing heard in time it fails unsent, and the engine is stale until heard", async () => {
+  holding()
+  await serve()
+  client = new Engine(address, {
+    unreachable: arcAway,
+    ping: { every: 60_000, quiet: 100, within: 300 },
+  })
+  await until(client, "open")
+  const [socket] = Noting.opened
+  await wait(150)
+  const asked = await client.command("projects.create", { name: "Asked" })
+  expect(asked.name).toBe("Asked")
+  expect(socket!.frames.slice(-2).map((frame) => frame.type)).toEqual([
+    "ping",
+    "call",
+  ])
+  // Heard a moment ago: the next goes at once.
+  await client.command("projects.create", { name: "At once" })
+  expect(socket!.frames.at(-2)?.type).toBe("call")
+
+  await wait(150)
+  Holding.held = true
+  const id = newId()
+  const from = performance.now()
+  await expect(
+    client.command("projects.create", { name: "Not sent" }, undefined, id)
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  const took = performance.now() - from
+  expect(took).toBeGreaterThanOrEqual(290)
+  expect(took).toBeLessThan(2_000)
+  expect(client.stale).toBe(true)
+  expect(sentWith(id)).toEqual([])
+  // Its answer to the ping, heard late, says it answers.
+  Holding.let()
+  expect(client.stale).toBe(false)
+  expect((await names(client)).includes("Not sent")).toBe(false)
+})
+
+test("a stale engine fails a call and a stream that act on their way as ones that may have run, and a read sent once with them as one that did not; refuses each made then at once, unsent, and a read sent once with them; a read waits, and is answered once the engine answers", async () => {
+  holding()
+  await serve()
+  client = new Engine(address, {
+    unreachable: arcAway,
+    ping: { every: 100, quiet: 1_000, within: 300 },
+  })
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+
+  // It hears nothing from now on: a call and a stream that act go, and a
+  // Commit's read, sent once with its act.
+  Holding.held = true
+  const init = client.call("git.init", {}, { project: project.id })
+  const gesture = expect(
+    client.call("git.status", {}, { project: project.id, once: true })
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  const commit = committing(client, project.id)
+  await expect.poll(() => asked("git.act")).toHaveLength(1)
+  await expect.poll(() => asked("git.status")).toHaveLength(1)
+  await expect(init).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: true,
+  })
+  await gesture
+  expect(client.stale).toBe(true)
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]).toMatchObject({
+    code: "may_have_run",
+    error: { name: "Unreachable", may_have_run: true },
+  })
+
+  // Its connection still open, each act now is refused at once, unsent,
+  // and a read sent once as part of one; a read goes, and waits.
+  expect(client.status.state).toBe("open")
+  await expect(
+    client.call("git.revert", { files: ["a.txt"] }, { project: project.id })
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  await expect(
+    client.call("git.status", {}, { project: project.id, once: true })
+  ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+  const unsent = committing(client, project.id)
+  await expect.poll(() => unsent).toHaveLength(1)
+  expect(unsent[0]).toMatchObject({
+    code: "conflict",
+    error: { name: "Unreachable", message: "arc is away", may_have_run: false },
+  })
+  let status: unknown
+  void client
+    .call("git.status", {}, { project: project.id })
+    .then((read) => (status = read))
+  await expect.poll(() => asked("git.status")).toHaveLength(2)
+  await wait(300)
+  expect(status).toBeUndefined()
+
+  // Heard again: the read is answered on the same connection; what was on
+  // its way ran there once, and nothing refused went.
+  Holding.let()
+  expect(client.stale).toBe(false)
+  await expect.poll(() => status).toBeDefined()
+  expect(
+    await client.call("git.status", {}, { project: project.id })
+  ).toMatchObject({ repo: true })
+  await wait(300)
+  expect(asked("git.init")).toHaveLength(1)
+  expect(asked("git.act")).toHaveLength(1)
+  expect(asked("git.revert")).toEqual([])
+  expect([commit.length, unsent.length]).toEqual([1, 1])
+  expect(Noting.opened).toHaveLength(1)
+})
+
+test("a call or a stream that acts after a quiet while asks the engine first, and with nothing heard in time fails unsent; a read asks nothing, and waits with no limit", async () => {
+  holding()
+  await serve()
+  client = new Engine(address, {
+    unreachable: arcAway,
+    ping: { every: 60_000, quiet: 100, within: 300 },
+  })
+  await until(client, "open")
+  const project = await client.command("projects.create", { name: "Work" })
+  const pings = () =>
+    Noting.opened[0]!.frames.filter((frame) => frame.type === "ping").length
+
+  await wait(150)
+  Holding.held = true
+  let before = pings()
+  let status: unknown
+  void client
+    .call("git.status", {}, { project: project.id })
+    .then((read) => (status = read))
+  await expect.poll(() => asked("git.status")).toHaveLength(1)
+  await wait(400)
+  expect(pings()).toBe(before)
+  expect(client.stale).toBe(false)
+  expect(status).toBeUndefined()
+
+  const from = performance.now()
+  await expect(
+    client.call("git.init", {}, { project: project.id })
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "arc is away",
+    may_have_run: false,
+  })
+  const took = performance.now() - from
+  expect(took).toBeGreaterThanOrEqual(290)
+  expect(took).toBeLessThan(2_000)
+  expect(pings()).toBe(before + 1)
+  expect(client.stale).toBe(true)
+  expect(asked("git.init")).toEqual([])
+
+  // Heard again, the read is answered; after another quiet while, a
+  // stream that acts asks first too.
+  Holding.let()
+  expect(client.stale).toBe(false)
+  await expect.poll(() => status).toBeDefined()
+  await wait(150)
+  Holding.held = true
+  before = pings()
+  const commit = committing(client, project.id)
+  await wait(150)
+  expect(commit).toEqual([])
+  expect(pings()).toBe(before + 1)
+  await expect.poll(() => commit).toHaveLength(1)
+  expect(commit[0]).toMatchObject({
+    code: "conflict",
+    error: { name: "Unreachable", may_have_run: false },
+  })
+  expect(client.stale).toBe(true)
+  expect(asked("git.act")).toEqual([])
+  Holding.let()
+  expect(client.stale).toBe(false)
+})
+
+/** A server that takes a connection and says nothing on it, as an engine
+ * that hangs behind its forward does: the WebSocket is never opened. */
+async function hung(): Promise<{
+  at: () => Promise<Address>
+  end: () => void
+}> {
+  const taken: Socket[] = []
+  const server = createServer((socket) => void taken.push(socket))
+  await new Promise<void>((done) => server.listen(0, "127.0.0.1", done))
+  const { port } = server.address() as AddressInfo
+  return {
+    at: async () => ({ url: `ws://127.0.0.1:${port}/ws`, secret: "unread" }),
+    end: () => {
+      for (const socket of taken) socket.destroy()
+      server.close()
+    },
+  }
+}
+
+test("an engine that never opens its connection is stale as long after: a command waiting fails unsent, at once once stale, and in its time from a quiet start", async () => {
+  const silent = await hung()
+  try {
+    const said: boolean[] = []
+    client = new Engine(silent.at, {
+      unreachable: arcAway,
+      ping: { every: 100, quiet: 1_000, within: 60_000 },
+      onStale: (stale) => said.push(stale),
+    })
+    // Waiting for the connection, a command fails as the engine is stale.
+    const waiting = client.command("projects.create", { name: "Waiting" })
+    await expect(waiting).rejects.toMatchObject({
+      name: "Unreachable",
+      message: "arc is away",
+      may_have_run: false,
+    })
+    expect(client.stale).toBe(true)
+    expect(client.status.state).toBe("connecting")
+    expect(said).toEqual([true])
+    await expect(
+      client.command("projects.create", { name: "Later" })
+    ).rejects.toMatchObject({ may_have_run: false })
+    client.close()
+
+    // A command to an engine never heard waits `within` at most.
+    client = new Engine(silent.at, {
+      unreachable: arcAway,
+      ping: { every: 60_000, quiet: 1_000, within: 300 },
+    })
+    const from = performance.now()
+    await expect(
+      client.command("projects.create", { name: "Asked" })
+    ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+    const took = performance.now() - from
+    expect(took).toBeGreaterThanOrEqual(290)
+    expect(took).toBeLessThan(2_000)
+    expect(client.stale).toBe(true)
+  } finally {
+    silent.end()
+  }
+})
+
+test("waiting for a connection its engine never opens, a call and a stream that act fail unsent as the engine is stale, each asked after at once, and a read waits on", async () => {
+  const silent = await hung()
+  try {
+    client = new Engine(silent.at, {
+      unreachable: arcAway,
+      ping: { every: 100, quiet: 1_000, within: 60_000 },
+    })
+    const project = newId()
+    const init = client.call("git.init", {}, { project })
+    const commit = committing(client, project)
+    let read = false
+    const done = () => void (read = true)
+    void client.call("git.status", {}, { project }).then(done, done)
+    await expect(init).rejects.toMatchObject({
+      name: "Unreachable",
+      message: "arc is away",
+      may_have_run: false,
+    })
+    expect(client.stale).toBe(true)
+    await expect.poll(() => commit).toHaveLength(1)
+    expect(commit[0]).toMatchObject({
+      code: "conflict",
+      error: { name: "Unreachable", may_have_run: false },
+    })
+
+    // Stale, each act asked now is refused at once, the connection still
+    // not open, and a read sent once as part of one.
+    await expect(
+      client.call("git.init", {}, { project })
+    ).rejects.toMatchObject({
+      name: "Unreachable",
+      message: "arc is away",
+      may_have_run: false,
+    })
+    await expect(
+      client.call("git.status", {}, { project, once: true })
+    ).rejects.toMatchObject({ name: "Unreachable", may_have_run: false })
+    const later = committing(client, project)
+    await expect.poll(() => later).toHaveLength(1)
+    expect(later[0]).toMatchObject({
+      code: "conflict",
+      error: {
+        name: "Unreachable",
+        message: "arc is away",
+        may_have_run: false,
+      },
+    })
+    await wait(300)
+    expect(read).toBe(false)
+    expect(client.status.state).toBe("connecting")
+  } finally {
+    silent.end()
+  }
+})
+
+/** The WebSocket of a window to an engine from before the ping: it
+ * pings by a frame that engine does not know, as such an engine sees a
+ * ping. */
+class Older extends Noting {
+  override send(data: Parameters<WebSocket["send"]>[0]): void {
+    const frame = JSON.parse(String(data)) as { type: string }
+    super.send(
+      frame.type === "ping"
+        ? JSON.stringify({ ...frame, type: "ping_from_later" })
+        : data
+    )
+  }
+}
+
+test("an engine from before the ping answers one as a frame that does not fit, and it counts as an answer: never stale", async () => {
+  noting()
+  vi.stubGlobal("WebSocket", Older)
+  await serve()
+  client = new Engine(address, {
+    unreachable: arcAway,
+    ping: { every: 100, quiet: 100, within: 300 },
+  })
+  await until(client, "open")
+  await wait(450)
+  expect(client.stale).toBe(false)
+  // A command after a quiet while asks first, and its answer lets it go.
+  await wait(150)
+  const made = await client.command("projects.create", { name: "Old" })
+  expect(made.name).toBe("Old")
+  // Such an engine says no time.
+  expect(client.offset).toBeUndefined()
+  expect(
+    Noting.opened[0]!.frames.filter((frame) => frame.type === "ping_from_later")
+      .length
+  ).toBeGreaterThan(1)
+})
+
+test("this machine's own engine is never pinged, nor stale", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  await until(client, "open")
+  await wait(200)
+  await client.command("projects.create", { name: "Here" })
+  expect(client.stale).toBe(false)
+  expect(Noting.opened[0]!.frames.map((frame) => frame.type)).not.toContain(
+    "ping"
+  )
 })

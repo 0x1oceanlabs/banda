@@ -5,7 +5,13 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { namedIn, sameData, type Shown, useHostsBy } from "@banda/core/react"
+import {
+  awaySince,
+  namedIn,
+  sameData,
+  type Shown,
+  useHostsBy,
+} from "@banda/core/react"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { useNaming } from "@banda/ui/lib/naming"
@@ -75,8 +81,8 @@ export function ThreadRow({
  * Another host's Thread (ADR 0081): shown as this machine's are, and a
  * click opens it there, as its listed Pane names its host; with no menu
  * or put off yet, as the row's would go to this machine's engine. Where no
- * label above names its host, the row does; away, it dims and its timer
- * stands.
+ * label above names its host, the row does; away or stopped, it dims
+ * with its own words, its timer and how long ago standing.
  */
 function ElsewhereRow({
   row,
@@ -99,9 +105,13 @@ function ElsewhereRow({
     [named, host]
   )
   const machine = useHostsBy(machineOf, sameData)
-  // When its host went away, while it is.
+  // As of when its host was last heard, while the Window does not reach
+  // it, away or stopped.
   const awayOf = useCallback(
-    (hosts: readonly Shown[]) => hosts.find((one) => one.name === host)?.away,
+    (hosts: readonly Shown[]) => {
+      const one = hosts.find((shown) => shown.name === host)
+      return one && awaySince(one)
+    },
     [host]
   )
   const away = useHostsBy(awayOf)

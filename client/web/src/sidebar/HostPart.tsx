@@ -3,7 +3,7 @@
  * label, what the label says of its state, and its lines in the list of
  * Projects; beside `MachineCard`, the card its name opens.
  */
-import { type ReactNode, useContext } from "react"
+import { type ReactNode, useCallback, useContext } from "react"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
@@ -15,14 +15,15 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import {
-  awayFor,
+  asOfWords,
   HostsContext,
+  notAnswered,
   otherBuild,
   type Shown,
+  useNowOf,
   useRun,
 } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
-import { useNow } from "@banda/ui/hooks/use-now"
 import {
   ChevronDownIcon,
   ChevronUpIcon,
@@ -46,9 +47,11 @@ export function saysSomething(host: Shown): boolean {
  * Another host of `hosts.toml` (ADR 0081, decision 4): its quiet label,
  * its icon and the name it says it has (ADR 0095, decision 6), what is
  * not as usual in words on its right, and what it holds below, unless the
- * Person folded it. Away, what it holds dims. Its ⋯ folds it, opens the
- * settings, and stops Banda there while Banda answers there, by the
- * Window's actions.
+ * Person folded it. While the Window does not reach it, away or stopped,
+ * what it holds dims, as it was last heard; the label does not. Its ⋯
+ * folds it, opens the settings, and stops Banda there while Banda answers
+ * there, by the Window's actions. Short of room, the words give way, then
+ * a long name.
  */
 export function HostPart({
   host,
@@ -66,15 +69,20 @@ export function HostPart({
   const { name } = host.named
   return (
     <div role="group" aria-label={name} className="flex flex-col">
-      <div className="group/label relative flex min-h-8 items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
+      {/* By columns, as each gives way in turn: the name takes what it
+          needs first, up to most of the label; its words, on the right,
+          what is left; Start and ⋯, each in its own column, never give
+          way. Short of room, the words go first, then the name. */}
+      <div className="group/label relative grid min-h-8 grid-flow-col grid-cols-[fit-content(60%)_minmax(0,1fr)] items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
         <h3 className="flex min-w-0">
           <MachineCard host={host.name}>
-            <MachineMark named={host.named} form="full" />
+            <MachineMark named={host.named} form="full" className="shrink" />
           </MachineCard>
         </h3>
-        <span className="ml-auto flex min-w-0 items-center gap-1.5 tabular-nums">
+        <span className="flex min-w-0 items-center justify-end gap-1.5 tabular-nums">
           <HostWords host={host} />
         </span>
+        {host.state.state === "stopped" && <StartThere host={host} />}
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
@@ -84,16 +92,18 @@ export function HostPart({
                 aria-label={`${name} menu`}
                 title={name}
                 // Out of sight until the pointer is over the label, and
-                // still reached by Tab, which shows it.
-                className="sr-only -my-1 -mr-1.5 group-hover/label:not-sr-only focus-visible:not-sr-only data-popup-open:not-sr-only pointer-coarse:not-sr-only"
+                // still reached by Tab, which shows it. Shown, it takes
+                // its place at once, as only its colours ease: Start
+                // moves aside in one step, never sliding under it.
+                className="sr-only transition-[color,background-color,border-color,box-shadow] group-hover/label:not-sr-only focus-visible:not-sr-only data-popup-open:not-sr-only pointer-coarse:not-sr-only"
               />
             }
           >
             <EllipsisIcon />
           </DropdownMenuTrigger>
           <DropdownMenuContent align="end" className="w-auto min-w-48">
-            {/* A label with nothing under it, as the Inbox's or a
-                stopped machine's, has nothing to fold. */}
+            {/* A label with nothing under it, as the Inbox's, has
+                nothing to fold. */}
             {children && (
               <DropdownMenuItem onClick={onFold}>
                 {folded ? <ChevronDownIcon /> : <ChevronUpIcon />}
@@ -135,7 +145,7 @@ export function HostPart({
         <div
           className={cn(
             "flex flex-col gap-1",
-            host.state.state === "away" && "opacity-45"
+            host.away !== undefined && "opacity-45"
           )}
         >
           {children}
@@ -146,9 +156,9 @@ export function HostPart({
 }
 
 /** What a host's label says of its state: nothing when live, and only
- * the window's own words; stopped, its Start starts Banda there. */
+ * the window's own words; away or stopped, what its rows are as of, once
+ * here and on no row. */
 function HostWords({ host }: { host: Shown }) {
-  const kept = useContext(HostsContext)
   const { state } = host
   switch (state.state) {
     case "connecting":
@@ -168,22 +178,9 @@ function HostWords({ host }: { host: Shown }) {
     case "live":
       return otherBuild(state) ? <span>other build</span> : null
     case "away":
-      return <Away since={host.away} why={state.why} />
+      return <Away host={host} why={state.why} />
     case "stopped":
-      return (
-        <>
-          <span>stopped</span>
-          <Button
-            variant="ghost"
-            size="xs"
-            className="-my-1 -mr-1.5"
-            onClick={() => kept.start(host.name)}
-          >
-            <PlayIcon />
-            Start
-          </Button>
-        </>
-      )
+      return <AsOf state="stopped" host={host} />
     case "refused":
       return (
         <span className="min-w-0 truncate" title={state.why}>
@@ -193,10 +190,60 @@ function HostWords({ host }: { host: Shown }) {
   }
 }
 
-/** How long a host has been away, by the label's own rule (`awayFor`). */
-function Away({ since, why }: { since?: number; why: string }) {
-  const away = awayFor(since, useNow(15_000))
-  return <span title={why}>{away ? `away · ${away}` : "away"}</span>
+/** A stopped host's Start: it starts Banda there. */
+function StartThere({ host }: { host: Shown }) {
+  const kept = useContext(HostsContext)
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      // Its own inset is room enough from the words before it.
+      className="-my-1 -mr-1.5 -ml-1 shrink-0"
+      onClick={() => kept.start(host.name)}
+    >
+      <PlayIcon />
+      Start
+    </Button>
+  )
+}
+
+/** A host away, as of when it was last heard; its tooltip says why: the
+ * link ended, or it has not answered since then (ADR 0082, decision 11). */
+function Away({ host, why }: { host: Shown; why: string }) {
+  // Said again only as the day turns, as a clock's words then change.
+  const title = useNowOf(
+    useCallback(
+      (now: number) =>
+        host.stale ? notAnswered(host.named, host.asOf, now) : why,
+      [host, why]
+    )
+  )
+  return <AsOf state="away" host={host} title={title} />
+}
+
+/** A state, and what a host's rows are as of, by the Window's one clock:
+ * "away · as of 14:02", whole in its tooltip where it gives way. */
+function AsOf({
+  state,
+  host,
+  title,
+}: {
+  state: string
+  host: Shown
+  title?: string
+}) {
+  const words = useNowOf(
+    useCallback(
+      (now: number) =>
+        [state, asOfWords(host, now)].filter(Boolean).join(" · "),
+      [state, host]
+    )
+  )
+  return (
+    <span className="min-w-0 truncate" title={title ?? words}>
+      {words}
+    </span>
+  )
 }
 
 /** Three faint dots: ssh still reaches the host. */
