@@ -16,11 +16,17 @@ use notify_debouncer_full::{DebounceEventResult, Debouncer, NoCache, new_debounc
 use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, MutexGuard, OnceLock};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tokio::sync::mpsc;
 
 /// How far apart two changes may be and still come as one.
 const QUIET: Duration = Duration::from_millis(120);
+
+/// Whether the system tells changes through FSEvents, as on a Mac, whose
+/// watch can hear a change from just before it began ([`told`]).
+fn fsevents() -> bool {
+    <RecommendedWatcher as notify::Watcher>::kind() == notify::WatcherKind::Fsevent
+}
 
 /// What a [`Watch`] hears.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -150,8 +156,18 @@ struct Hearers {
 }
 
 struct Hearer {
-    dirs: HashSet<PathBuf>,
+    /// Each folder heard, and when it was made, as its watch began.
+    dirs: HashMap<PathBuf, Made>,
     say: mpsc::UnboundedSender<Changed>,
+}
+
+/// When a folder was made, which tells it from one made at its path since:
+/// none where the system does not say.
+type Made = Option<SystemTime>;
+
+/// When the folder at `path` was made: none if it is gone.
+fn made(path: &Path) -> Made {
+    std::fs::metadata(path).and_then(|meta| meta.created()).ok()
 }
 
 fn held<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -182,11 +198,14 @@ impl Watcher {
         let mut hearers = held(&self.hearers);
         let (say, heard) = mpsc::unbounded_channel();
         let mut limited = Vec::new();
-        let mut watched = HashSet::new();
+        let mut watched = HashMap::new();
         for dir in dirs {
-            if watched.contains(&dir) || !dir.is_dir() {
+            if watched.contains_key(&dir) {
                 continue;
             }
+            let Some(meta) = std::fs::metadata(&dir).ok().filter(|meta| meta.is_dir()) else {
+                continue;
+            };
             let count = hearers.counts.get(&dir).copied().unwrap_or(0);
             if count == 0 {
                 match system.watch(&dir, RecursiveMode::NonRecursive) {
@@ -202,7 +221,7 @@ impl Watcher {
                 }
             }
             hearers.counts.insert(dir.clone(), count + 1);
-            watched.insert(dir);
+            watched.insert(dir, meta.created().ok());
         }
         hearers.next += 1;
         let id = hearers.next;
@@ -211,7 +230,7 @@ impl Watcher {
             say,
         };
         hearers.by_id.insert(id, hearer);
-        let watched = watched.into_iter().collect();
+        let watched = watched.into_keys().collect();
         Watch {
             id,
             heard,
@@ -226,7 +245,7 @@ impl Watcher {
         let Some(hearer) = hearers.by_id.remove(&id) else {
             return;
         };
-        for dir in hearer.dirs {
+        for dir in hearer.dirs.into_keys() {
             let Some(count) = hearers.counts.get_mut(&dir) else {
                 continue;
             };
@@ -262,7 +281,9 @@ impl Watcher {
             hearers.counts.remove(dir);
         }
         for hearer in hearers.by_id.values_mut() {
-            let lost: Vec<PathBuf> = hearer.dirs.extract_if(|dir| dirs.contains(dir)).collect();
+            let lost: Vec<PathBuf> = (hearer.dirs.extract_if(|dir, _| dirs.contains(dir)))
+                .map(|(dir, _)| dir)
+                .collect();
             if !lost.is_empty() {
                 let _ = hearer.say.send(Changed::Again(lost));
             }
@@ -283,45 +304,62 @@ impl Watcher {
 
 /// Tells each hearer what changed in its folders.
 fn tell(hearers: &Hearers, result: DebounceEventResult) {
-    let mut changed: HashSet<&Path> = HashSet::new();
-    let mut again = false;
     let events = match &result {
         Ok(events) => events.as_slice(),
         // What the system could not say may be anything.
-        Err(_) => {
-            again = true;
-            &[]
-        }
+        Err(_) => &[],
     };
-    for event in events {
-        if event.need_rescan() {
-            again = true;
-        }
-        if !touches(&event.kind) {
-            continue;
-        }
-        for path in &event.paths {
-            changed.insert(path);
-            if let Some(parent) = path.parent() {
-                changed.insert(parent);
-            }
-        }
-    }
+    let again = result.is_err() || events.iter().any(|event| event.need_rescan());
+    let fsevents = fsevents();
     for hearer in hearers.by_id.values() {
         let changed = if again {
-            Changed::Again(hearer.dirs.iter().cloned().collect())
+            Changed::Again(hearer.dirs.keys().cloned().collect())
         } else {
-            let dirs: Vec<PathBuf> = (hearer.dirs.iter())
-                .filter(|dir| changed.contains(dir.as_path()))
-                .cloned()
+            let dirs: HashSet<&Path> = (events.iter())
+                .flat_map(|event| event.paths.iter().map(move |path| (&event.kind, path)))
+                .flat_map(|(kind, path)| told(kind, path, &hearer.dirs, fsevents, made))
                 .collect();
             if dirs.is_empty() {
                 continue;
             }
-            Changed::Dirs(dirs)
+            Changed::Dirs(dirs.into_iter().map(Path::to_path_buf).collect())
         };
         let _ = hearer.say.send(changed);
     }
+}
+
+/// The folders of a hearer's `dirs` whose listings a change of `kind` to
+/// `path` changes: the folder that holds `path`, and `path` itself when it
+/// is one of them. `made` says when the folder at a path was made.
+///
+/// With FSEvents (`fsevents`), a watch starts the stream from "now", and on
+/// a busy Mac a change from just before can still come after it (#732): a
+/// folder made just before it was watched is heard made. When the folder
+/// there is the very one watched, as `made` says, that is no news to it or
+/// its parent.
+fn told<'a>(
+    kind: &EventKind,
+    path: &'a Path,
+    dirs: &HashMap<PathBuf, Made>,
+    fsevents: bool,
+    made: impl FnOnce(&Path) -> Made,
+) -> Vec<&'a Path> {
+    if !touches(kind) {
+        return Vec::new();
+    }
+    let parent = path.parent().filter(|parent| dirs.contains_key(*parent));
+    let Some(watched) = dirs.get(path) else {
+        return parent.into_iter().collect();
+    };
+    // The very folder watched, made before its watch began: said late.
+    let late = fsevents
+        && matches!(kind, EventKind::Create(_))
+        && watched.is_some()
+        && made(path) == *watched;
+    if late {
+        return Vec::new();
+    }
+    [path].into_iter().chain(parent).collect()
 }
 
 /// Whether a change changes what a listing shows: reading a file or a
@@ -429,6 +467,86 @@ mod tests {
         // The folder beside it is still heard.
         std::fs::write(beside.join("new.txt"), "x").unwrap();
         assert_eq!(heard(&mut watch).await, Changed::Dirs(vec![beside]));
+    }
+
+    /// What a Pane that shows `/p`, its folder `src` open, hears of a change
+    /// to `path`, from inotify or from FSEvents (`fsevents`): the folder at
+    /// `path` was made `made_at` seconds in, `/p` at 1 and `src` at 2 as
+    /// their watch began.
+    fn told_to_a_pane(kind: EventKind, path: &str, fsevents: bool, made_at: u64) -> Vec<PathBuf> {
+        let at = |secs| Some(SystemTime::UNIX_EPOCH + Duration::from_secs(secs));
+        let dirs = HashMap::from([
+            (PathBuf::from("/p"), at(1)),
+            (PathBuf::from("/p/src"), at(2)),
+        ]);
+        let mut told: Vec<PathBuf> =
+            (super::told(&kind, Path::new(path), &dirs, fsevents, |_| at(made_at)))
+                .into_iter()
+                .map(Path::to_path_buf)
+                .collect();
+        told.sort();
+        told
+    }
+
+    fn paths(paths: &[&str]) -> Vec<PathBuf> {
+        paths.iter().map(PathBuf::from).collect()
+    }
+
+    #[test]
+    fn a_change_is_told_to_the_folder_whose_listing_has_it_on_linux_and_on_a_mac() {
+        use notify::event::{CreateKind, DataChange, RemoveKind, RenameMode};
+        for fsevents in [false, true] {
+            let told = |kind, path| told_to_a_pane(kind, path, fsevents, 2);
+            // A file written in src: src, not the folder above it.
+            let new = EventKind::Create(CreateKind::File);
+            assert_eq!(told(new, "/p/src/new.rs"), paths(&["/p/src"]));
+            let written = EventKind::Modify(ModifyKind::Data(DataChange::Content));
+            assert_eq!(told(written, "/p/src/new.rs"), paths(&["/p/src"]));
+            // A file made or gone in the root: the root.
+            assert_eq!(told(new, "/p/notes.md"), paths(&["/p"]));
+            let gone_file = EventKind::Remove(RemoveKind::File);
+            assert_eq!(told(gone_file, "/p/notes.md"), paths(&["/p"]));
+            // A folder not watched, made or renamed: the one that holds it.
+            let new_folder = EventKind::Create(CreateKind::Folder);
+            assert_eq!(told(new_folder, "/p/lib"), paths(&["/p"]));
+            let renamed = EventKind::Modify(ModifyKind::Name(RenameMode::Any));
+            assert_eq!(told(renamed, "/p/lib"), paths(&["/p"]));
+            // src gone, renamed, or changed itself: src, and the folder that
+            // lists it.
+            let gone = EventKind::Remove(RemoveKind::Folder);
+            assert_eq!(told(gone, "/p/src"), paths(&["/p", "/p/src"]));
+            assert_eq!(told(renamed, "/p/src"), paths(&["/p", "/p/src"]));
+            let changed = EventKind::Modify(ModifyKind::Metadata(MetadataKind::Any));
+            assert_eq!(told(changed, "/p/src"), paths(&["/p", "/p/src"]));
+            let content = EventKind::Modify(ModifyKind::Any);
+            assert_eq!(told(content, "/p/src"), paths(&["/p", "/p/src"]));
+            // Reading is no change.
+            let read = EventKind::Access(AccessKind::Open(notify::event::AccessMode::Read));
+            assert_eq!(told(read, "/p/src"), paths(&[]));
+        }
+    }
+
+    #[test]
+    fn on_a_mac_a_watched_folder_heard_made_late_is_no_news() {
+        use notify::event::CreateKind;
+        let new_folder = EventKind::Create(CreateKind::Folder);
+        // inotify, as before: src made tells src and the root, as the
+        // root's watch says it.
+        for made_at in [2, 3] {
+            assert_eq!(
+                told_to_a_pane(new_folder, "/p/src", false, made_at),
+                paths(&["/p", "/p/src"])
+            );
+        }
+        // FSEvents: the making of src, or of /p itself, from before the
+        // watch, as it says it late: no news (#732).
+        assert_eq!(told_to_a_pane(new_folder, "/p/src", true, 2), paths(&[]));
+        assert_eq!(told_to_a_pane(new_folder, "/p", true, 1), paths(&[]));
+        // src made again since: the root lists it again.
+        assert_eq!(
+            told_to_a_pane(new_folder, "/p/src", true, 3),
+            paths(&["/p", "/p/src"])
+        );
     }
 
     #[test]
