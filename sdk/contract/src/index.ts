@@ -47,4 +47,5 @@ export {
   type Status,
 } from "./engine"
 export { newId } from "./ids"
+export { quitAsks, type QuitAsks } from "./quit"
 export type { Answer, CommandCall, MethodOf, Methods, Params } from "./methods"

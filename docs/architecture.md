@@ -1467,20 +1467,47 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   starts it again (waiting up to 10 s between tries). Closing the last
   window only closes it: the engine and its Agents go on. Quit Banda
   (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is
-  there) asks first while Agents work ("2 Agents are working. Stop them
-  and quit?"), then main runs `banda stop --force`. On macOS the app
-  stays until it lives in the menu bar (plan step 7e), though its
-  engine, a launchd job, outlives it
+  there) asks first while Agents work, then main runs `banda stop
+  --force`. Quit asks in one set of words everywhere, the page, macOS's
+  dialog, the menu bar and `banda stop` alike: "2 Agents work on this
+  Mac" (this computer, off macOS) / "Quitting Banda stops them too." /
+  "Quit anyway" or "Cancel", Cancel the default; with one Agent, "An
+  Agent works on this Mac" / "Quitting Banda stops it too."
+  (`engine/src/quit.rs` writes them for the contract's `quitAsks`). On
+  macOS the app stays, and its engine, a launchd job, outlives it
   (`client/desktop/src/closing.ts`): closing the main window hides it,
   its page left to call the Person and sound, and its Panes' own windows
   close; the Dock's icon, or Window > Banda, shows it again. In the page
-  ⌘Q is Quit Banda's own key. The app menu's and the Dock's Quit, and ⌘Q
-  where the page leaves the key (in a terminal, over a dialog, with the
-  window hidden), run `banda stop`, which stops the engine where no Agent
-  works; where some do, the window comes to the front and its Quit Banda
-  asks first, or a system dialog does when the page crashed or loads, or
-  the Person quits again within 10 s. A logout, restart or shutdown quits
-  without asking. `banda look --follow --with-parent` stays the window's
+  ⌘Q is Quit Banda's own key. The menu bar's Quit Banda, the app menu's
+  and the Dock's Quit, and ⌘Q where the page leaves the key (in a
+  terminal, over a dialog, with the window hidden), run `banda stop`,
+  which stops the engine where no Agent works; where some do, the page's
+  Quit Banda asks first while its window shows, or a system dialog does
+  when no window shows, the page crashed or loads, or the Person quits
+  again within 10 s. A logout, restart or shutdown quits without asking.
+- **On macOS Banda lives in the menu bar** (ADR 0086, decision 4; the
+  accepted mock, mac-menubar-v1). With no window shown, Banda.app keeps
+  running with no Dock icon, only its icon in the menu bar: the Dock's
+  icon is there only while a window shows. The icon is Banda's mark, a
+  template in the menu bar's own colour: its hat a square at rest, a
+  circle while Agents work, a triangle lit in orange while one asks the
+  Person or failed, happy eyes while what waits is done, asleep and dimmed
+  while the engine does not answer; beside it one number, how many wait
+  for the Person, else how many work. Its menu, a plain macOS menu built
+  again on each change, lists this Mac's Threads, what waits first, then
+  what works, each row opening its Thread in the window (the page's
+  `pane.pick`); then Open Banda, the version, and Quit Banda (⌘Q while
+  it is open). All of it comes from one child of main, `banda status
+  --follow --with-parent`, started again when it dies (`status.ts`,
+  `menubar.ts`, `tray.ts`; its icons drawn by
+  `client/desktop/icons/menu-bar/draw.mjs`). An engine with no app opens
+  Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
+  which then shows no window and no Dock icon, only the menu bar's; it
+  never opens an app that runs, nor one the Person quit or ended with
+  Force Quit, which leaves no crash dump newer than the app's lock, and
+  stops trying after three opens with no app that ran five minutes
+  (`engine/src/service/app.rs`). Linux and Windows have no menu bar icon
+  yet (`hasMenuBar`). `banda look --follow --with-parent` stays the window's
   child. Both are Effect services in main (`Engine`, `Look`; ADR 0020),
   started by one runtime and stopped when it is disposed. The client
   then reconnects and follows on from the last event it delivered, so a

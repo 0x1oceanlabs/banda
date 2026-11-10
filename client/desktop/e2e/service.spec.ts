@@ -79,12 +79,15 @@ test("closing the window leaves the engine and its Agent at work, and Quit Banda
   await expect(page.getByText("Waiting.", { exact: true })).toBeVisible()
   expect(statusOf(window).pid).toBe(started.pid)
 
-  // Quit Banda asks first, then stops the engine and the window with it.
+  // Quit Banda asks first, in the words Quit says everywhere, then stops
+  // the engine and the window with it.
   const quitting = window.app.waitForEvent("close")
   await page.keyboard.press("Control+q")
-  const ask = page.getByRole("dialog", { name: "Quit Banda?" })
-  await expect(ask).toContainText("An Agent is working. Stop it and quit?")
-  await ask.getByRole("button", { name: "Stop and quit" }).click()
+  const ask = page.getByRole("dialog", {
+    name: "An Agent works on this computer",
+  })
+  await expect(ask).toContainText("Quitting Banda stops it too.")
+  await ask.getByRole("button", { name: "Quit anyway" }).click()
   await quitting
   await expect.poll(() => statusOf(window!).running).toBe(false)
 })
@@ -107,15 +110,19 @@ test("main runs the page's Quit Banda, as macOS's Quit does while Agents work, a
       })
     )
   await quit()
-  const ask = page.getByRole("dialog", { name: "Quit Banda?" })
-  await expect(ask).toContainText("An Agent is working. Stop it and quit?")
+  const ask = page.getByRole("dialog", {
+    name: "An Agent works on this computer",
+  })
+  await expect(ask).toContainText("Quitting Banda stops it too.")
+  // Cancel is the default: a stray Quit leaves the Agent working.
+  await expect(ask.getByRole("button", { name: "Cancel" })).toBeFocused()
   await ask.getByRole("button", { name: "Cancel" }).click()
   await expect(ask).toBeHidden()
   expect(statusOf(window).running).toBe(true)
 
   await quit()
   const quitting = app.waitForEvent("close")
-  await ask.getByRole("button", { name: "Stop and quit" }).click()
+  await ask.getByRole("button", { name: "Quit anyway" }).click()
   await quitting
   await expect.poll(() => statusOf(window!).running).toBe(false)
 })

@@ -1432,8 +1432,15 @@ fn banda_status_says_whether_the_engine_runs_and_banda_stop_quits_it() {
     let asked = places.banda(&["stop"]).output().unwrap();
     assert_eq!(refusal(&asked), "conflict");
     let said: Value = serde_json::from_slice(&asked.stdout).unwrap();
+    // In the words Quit says everywhere (ADR 0086, decision 3).
+    let here = if cfg!(target_os = "macos") {
+        "this Mac"
+    } else {
+        "this computer"
+    };
+    let question = format!("An Agent works on {here}. Quitting Banda stops it too.");
     assert!(
-        text(&said["error"]["message"]).starts_with("An Agent is working. Stop it and quit?"),
+        text(&said["error"]["message"]).starts_with(&question),
         "{said}"
     );
     assert_eq!(status()["running"], true, "nothing was stopped");

@@ -4,8 +4,9 @@
  * does not run, or else its child (engine.ts, ADR 0086), serves the page
  * from `app://banda` and hands the page the engine's address. Closing it
  * is not quitting Banda: the engine and its Agents go on, and Quit Banda
- * stops them; on macOS, until Banda lives in the menu bar, closing it
- * hides it (closing.ts). It also
+ * stops them; on macOS closing it hides it, and Banda lives in the menu
+ * bar, its icon there saying who works and who waits (closing.ts,
+ * menubar.ts, tray.ts). It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
  * opens the system's folder picker for "Add Project" (ADR 0026), and a
@@ -37,7 +38,7 @@ import {
   systemPreferences,
   type WebContents,
 } from "electron"
-import type { Address } from "@banda/contract"
+import { type Address, quitAsks } from "@banda/contract"
 import {
   BANDA,
   type Device,
@@ -75,11 +76,16 @@ import { channel, configFolder, dataFolder, stateFolder } from "./channel"
 import {
   asksOnQuit,
   type Closing,
+  dockShows,
   hidesOnClose,
   onDock,
   quitAsking,
+  startsHidden,
 } from "./closing"
 import { listApp, listShortcut } from "./entry"
+import { hasMenuBar } from "./menubar"
+import { Status, statusLayer } from "./status"
+import { menuBar } from "./tray"
 import { Hosts } from "./hosts"
 import { startLog, watchProblems } from "./problems"
 import { revive } from "./revive"
@@ -283,6 +289,8 @@ const runtime = ManagedRuntime.make(
         ),
         Stop.layer,
         lookLayer,
+        // Who works and who waits here, for the menu bar (macOS).
+        statusLayer(hasMenuBar(process.platform)),
         // The settings open their files with `Editors.edit`.
         settingsLayer.pipe(Layer.provideMerge(Editors.layer)),
         Window.layer(() => window)
@@ -342,6 +350,14 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
 }
 
 async function ready(): Promise<void> {
+  // A launch the engine made, as it found no app, shows no window and no
+  // Dock icon: only the menu bar's (closing.ts).
+  const hidden = startsHidden(
+    process.platform,
+    process.argv,
+    process.platform === "darwin" && app.isHidden()
+  )
+  if (hidden) app.dock?.hide()
   listShortcut()
   followDevice()
   const listen = (now: LookValue) => {
@@ -633,7 +649,8 @@ async function ready(): Promise<void> {
   const first = await runtime.runPromise(firstLook(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
-  window = openWindow()
+  if (hasMenuBar(process.platform)) showMenuBar()
+  window = openWindow(!hidden)
   // The Dock's icon shows the window again, hidden as it closed on macOS
   // (closing.ts).
   app.on("activate", () => {
@@ -665,6 +682,55 @@ async function ready(): Promise<void> {
 let shutDoor: (() => void) | null = null
 
 /**
+ * Banda's icon in macOS's menu bar and its menu (ADR 0086, decision 4),
+ * drawn from `banda status --follow` alone (status.ts): a row opens its
+ * Thread in the window, Open Banda the window, and Quit Banda is ⌘Q's.
+ */
+function showMenuBar(): void {
+  const bar = menuBar(channel.name, app.getVersion(), {
+    open: () => void openBanda(),
+    // The Thread's Pane where a workspace shows it, or opened (the page's
+    // `pane.pick`, as a call's notice goes there); the Thread Pane's
+    // kind is the agents module's (ThreadPane.tsx).
+    openThread: (project, thread, title) => {
+      const contents = openBanda().webContents
+      const tell = () =>
+        tellPage(contents, BRIDGE.popped.asked, {
+          run: {
+            action: "pane.pick",
+            args: {
+              project,
+              pane: {
+                kind: "agents.thread",
+                args: { thread, harness: "", title },
+              },
+            },
+          },
+        })
+      if (contents.isLoadingMainFrame()) contents.once("did-finish-load", tell)
+      else tell()
+    },
+    // As ⌘Q: Quit Banda, asking first while Agents work (closing.ts).
+    quit: () => app.quit(),
+  })
+  runtime.runFork(
+    Status.use((status) =>
+      status.changes.pipe(
+        Stream.runForEach((now) => Effect.sync(() => bar.show(now)))
+      )
+    )
+  )
+}
+
+/** The window brought to the front, or opened where there is none. */
+function openBanda(): BrowserWindow {
+  return inFront() ?? (window = openWindow())
+}
+
+/** What the menu bar last heard of who works here; none off macOS. */
+const statusNow = () => runtime.runSync(Status.use((status) => status.current))
+
+/**
  * Quit Banda (ADR 0086, decision 3): the engine stops (engine.ts), which
  * stops its Agents, Harnesses and Terminals, and the window quits once it
  * has gone. Its follower hears the engine stop as asked and quits the
@@ -688,23 +754,36 @@ const quitBanda = Effect.sync(() => {
  */
 const askToQuit = quitAsking({
   working: Stop.use((stop) => stop.unlessWorking),
+  // With no window shown, as Banda lives in the menu bar, macOS asks.
   pageCan: Effect.sync(() => {
     const contents = window?.webContents
-    return !!contents && !contents.isCrashed() && !contents.isLoadingMainFrame()
+    return (
+      !!window?.isVisible() &&
+      !!contents &&
+      !contents.isCrashed() &&
+      !contents.isLoadingMainFrame()
+    )
   }),
   askPage: Effect.sync(() =>
     tellPage(inFront()?.webContents, BRIDGE.popped.asked, {
       run: { action: "banda.quit" },
     })
   ),
-  askSystem: Effect.suspend(() =>
-    confirm(inFront(), {
-      message: "Quit Banda?",
-      detail: "Quitting stops every Agent at work.",
-      yes: "Stop and quit",
-      no: "Cancel",
+  // How many work, as the menu bar heard: one at least, as `banda stop`
+  // found some. Over the window when it shows; else in front, by itself.
+  askSystem: Effect.suspend(() => {
+    const working = statusNow()?.agents?.working ?? 0
+    const asks = quitAsks(Math.max(1, working), process.platform === "darwin")
+    if (!asks) return Effect.succeed(true)
+    const over = window?.isVisible() ? inFront() : null
+    if (!over) app.focus({ steal: true })
+    return confirm(over, {
+      message: asks.title,
+      detail: asks.detail,
+      yes: asks.quit,
+      no: asks.cancel,
     })
-  ),
+  }),
   quitBanda,
   leave: Effect.sync(leave),
 })
@@ -719,14 +798,29 @@ function openMenu(route: unknown): string {
   return "ok"
 }
 
-/** The window, or `shown`, brought to the front; none when it is closed. */
+/** The window, or `shown`, brought to the front; none when it is closed.
+ * On macOS, from the menu bar alone, the Dock's icon comes back first,
+ * and Banda comes to the front. */
 function inFront(shown = window): BrowserWindow | null {
   if (!shown) return null
   if (shown === window) hiding = false
+  if (app.dock && !app.dock.isVisible())
+    void app.dock.show().then(() => app.focus({ steal: true }))
   if (shown.isMinimized()) shown.restore()
   shown.show()
   shown.focus()
   return shown
+}
+
+/** On macOS the Dock shows Banda's icon only while a window shows (ADR
+ * 0086, decision 4): with none, Banda lives in the menu bar. */
+function followDock(): void {
+  const shown = BrowserWindow.getAllWindows().some(
+    (one) => !one.isDestroyed() && one.isVisible()
+  )
+  const docked = dockShows(process.platform, shown)
+  if (docked === true) void app.dock?.show()
+  else if (docked === false) app.dock?.hide()
 }
 
 /** Serves the built page; nothing outside its folder. */
@@ -882,7 +976,9 @@ function fromPage(url: string): boolean {
   return url === ORIGIN || url.startsWith(`${ORIGIN}/`)
 }
 
-function openWindow(): BrowserWindow {
+/** The main window; one the engine opened Banda for loads its page, and
+ * shows only when asked (`shows`). */
+function openWindow(shows = true): BrowserWindow {
   const opened = pageWindow(
     {
       width: 1280,
@@ -896,7 +992,8 @@ function openWindow(): BrowserWindow {
       }),
     },
     // The system's glass lets its material through (ADR 0023, ADR 0030).
-    SYSTEM_MATERIAL !== null && systemGlass(lookNow())
+    SYSTEM_MATERIAL !== null && systemGlass(lookNow()),
+    shows
   )
   if (OWN_FRAME) {
     // In full screen the system hides the window buttons: the bar takes
@@ -972,13 +1069,15 @@ function tellPopped(): void {
   tellPage(window?.webContents, BRIDGE.popped.listen, [...popped.keys()])
 }
 
-/** A window that shows Banda's page, in the look's first colour. */
+/** A window that shows Banda's page, in the look's first colour, as it
+ * is ready, unless it `shows` only when asked. */
 function pageWindow(
   options: Omit<
     BrowserWindowConstructorOptions,
     "show" | "backgroundColor" | "webPreferences"
   >,
-  glass = false
+  glass = false,
+  shows = true
 ): BrowserWindow {
   const current = lookNow()
   const opened = new BrowserWindow({
@@ -1003,7 +1102,11 @@ function pageWindow(
   if (glass) clear = opened
   // The modules' parts hear of each window that shows the page.
   runtime.runSync(modules.opened(opened.webContents))
-  opened.once("ready-to-show", () => opened.show())
+  if (shows) opened.once("ready-to-show", () => opened.show())
+  // The Dock's icon is there while a window shows, however it shows.
+  opened.on("show", followDock)
+  opened.on("hide", followDock)
+  opened.on("closed", followDock)
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
   // A page whose process died loads again, as it was (#343).
@@ -1053,9 +1156,9 @@ function macMenu(): Menu {
 // Closing the last window closes the window only: an engine that is the
 // session's service goes on, and its Agents with it (ADR 0086, decision
 // 3). One that is the window's child, as on Windows, on a Linux without
-// systemd and in Banda Local, stops with it. On macOS, until Banda lives
-// in the menu bar (plan step 7e), the main window hides as it closes
-// instead (closing.ts), so this comes on Linux and Windows.
+// systemd and in Banda Local, stops with it. On macOS the main window
+// hides as it closes instead, and Banda lives in the menu bar (closing.ts,
+// decision 4), so this comes on Linux and Windows.
 app.on("window-all-closed", () => app.quit())
 
 // On macOS a quit the app is asked for, by the app menu's or the Dock's

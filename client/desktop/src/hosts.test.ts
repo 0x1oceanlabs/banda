@@ -1945,7 +1945,8 @@ it.live(
               out: JSON.stringify({
                 error: {
                   code: "conflict",
-                  message: "An Agent is working. Nothing was stopped",
+                  message:
+                    "An Agent works on this computer. Quitting Banda stops it too. Nothing was stopped: banda stop --force quits anyway.",
                 },
               }),
               exit: 1,

@@ -200,13 +200,14 @@ and Banda there starts it when it does not run. Banda on another machine
 starts it too, over ssh, while the Person is logged in at the Mac's
 screen, locked or not (step 7c): the engine runs in that session, with
 the Person's sign-ins, as if started there, and takes its PATH from the
-login shell. It does not open Banda.app there yet: from step 7e it
-opens it hidden, with no window. So Banda on another machine sees the
-Mac's Projects and Agents, Banda's window open there or not. With nobody
-logged in at the Mac's screen, as after a logout, or while the Mac
-sleeps, the host shows "away" (its tooltip says which), and Banda tries
-again each minute. Quit Banda at the Mac stops its engine, and the host
-shows stopped until you start it here, or Banda here starts again.
+login shell. It opens Banda.app there hidden, with no window, so the
+Mac's menu bar shows Banda's icon (step 7e). So Banda on another
+machine sees the Mac's Projects and Agents, Banda's window open there
+or not. With nobody logged in at the Mac's screen, as after a logout,
+or while the Mac sleeps, the host shows "away" (its tooltip says which),
+and Banda tries again each minute. Quit Banda at the Mac stops its
+engine, and the host shows stopped until you start it here, or Banda
+here starts again.
 
 Here arc is a Linux machine, and m1pro a Mac on the same tailnet, at
 `100.79.149.28`. On the Mac:

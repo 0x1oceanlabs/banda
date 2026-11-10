@@ -235,7 +235,7 @@ it.live(
       const working = script(
         `echo "$@" >> "$(dirname "$0")/runs"\n` +
           `[ "$2" = "--force" ] && exit 0\n` +
-          `echo '{"error":{"code":"conflict","message":"An Agent is working. Stop it and quit?"}}'\n` +
+          `echo '{"error":{"code":"conflict","message":"An Agent works on this computer. Quitting Banda stops it too."}}'\n` +
           "exit 1"
       )
       const asks = yield* Stop.use((stop) =>

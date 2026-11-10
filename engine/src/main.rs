@@ -59,6 +59,7 @@ mod modules;
 mod parent;
 mod places;
 mod problems;
+mod quit;
 mod run;
 mod serve;
 mod service;

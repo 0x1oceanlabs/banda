@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 14] = [
+const ON_THE_HOST: [(&str, usize, &str); 15] = [
     (
         "kernel/src/host.rs",
         1,
@@ -53,6 +53,12 @@ const ON_THE_HOST: [(&str, usize, &str); 14] = [
         1,
         "reads a gateway's key the Person kept as a reference through their password manager, \
          1Password's `op` or `pass`, as the Harness asks for it (ADR 0078, decision 1)",
+    ),
+    (
+        "engine/src/service/app.rs",
+        1,
+        "opens Banda's own app, hidden, with the system's open, when the engine's launchd job \
+         has none (ADR 0086, decision 4)",
     ),
     (
         "platform/git-cli/src/lib.rs",

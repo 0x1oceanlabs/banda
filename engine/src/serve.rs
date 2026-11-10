@@ -16,8 +16,9 @@
 //! As macOS's launchd job (`service/launchd.rs`) it stops with exit 0,
 //! which launchd leaves stopped, where another engine holds its state's
 //! lock, and where it started again after a crash three times within a
-//! minute. On macOS it keeps its job's plist where "Start Banda at login"
-//! says, the job or not.
+//! minute. It opens its app, hidden, when it has none, from once it is
+//! whole until it is asked to stop (`service/app.rs`). On macOS it keeps
+//! its job's plist where "Start Banda at login" says, the job or not.
 //!
 //! While its Agents work, and while plugged in if the Person says so, it
 //! keeps its machine from idle sleep, until it stops (ADR 0097).
@@ -25,7 +26,7 @@
 use crate::apps::{self, HostContext};
 use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
 use crate::run::{self, Before, Left, Run};
-use crate::service::{self, launchd};
+use crate::service::{self, app, launchd};
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
@@ -136,6 +137,8 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     #[cfg(windows)]
     banda_git_cli::no_hooks_in(&places.state.join("no-hooks")).map_err(Failure::broken)?;
     let program = std::env::current_exe().map_err(Failure::broken)?;
+    // The app the job opens when it has none (macOS).
+    let to_keep = app::to_keep(&places, &program, job);
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     let listener = listen(port, last_port).await?;
     let port = listener.local_addr().map_err(Failure::broken)?.port();
@@ -228,7 +231,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         owner,
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
-    let app = api::router(kernel.clone(), identity, engine).merge(api::bytes(bytes));
+    let router = api::router(kernel.clone(), identity, engine).merge(api::bytes(bytes));
     // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {
@@ -239,16 +242,25 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         println!("{line}");
     }
     tracing::info!(port = running.port, root = %places.root.display(), "the engine serves");
+    let keeping = to_keep.map(|app| tokio::spawn(app::keep_open(app::Mac::of(&places), app)));
+    let keeps = keeping.as_ref().map(tokio::task::JoinHandle::abort_handle);
 
     let asked = run.clone();
     let stop = async move {
         stopped(with_parent, term).await;
-        // Asked to stop: what ends it from here on ends it as asked.
+        // Asked to stop: what ends it from here on ends it as asked, and
+        // it opens its app no more.
         asked.left(Left::Stopping);
+        if let Some(keeps) = keeps {
+            keeps.abort();
+        }
     };
-    let served = axum::serve(listener, app)
+    let served = axum::serve(listener, router)
         .with_graceful_shutdown(stop)
         .await;
+    if let Some(keeping) = keeping {
+        keeping.abort();
+    }
     kernel.stopping();
     drop(awake);
     places.withdraw();

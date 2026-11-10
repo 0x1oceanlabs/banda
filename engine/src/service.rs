@@ -26,7 +26,8 @@
 //! On macOS it runs as a launchd job in the Person's gui domain,
 //! `<bundle id>.engine`, which launchd starts at login while "Start Banda
 //! at login" is on, and any client starts when no engine answers, another
-//! machine's window over ssh too ([`launchd`]).
+//! machine's window over ssh too ([`launchd`]). The job opens its app,
+//! hidden, when it has none ([`app`]).
 //!
 //! Where neither answers (a Mac with nobody logged in at its screen;
 //! Windows, until its own; a container; CI), or where the unit or the job
@@ -41,6 +42,7 @@
 //! [`launchd::Launchd`], so tests give their own; what a client asks of
 //! either to see the engine run, or stop it, is their [`Manager`].
 
+pub mod app;
 pub mod launchd;
 
 use crate::Failure;
