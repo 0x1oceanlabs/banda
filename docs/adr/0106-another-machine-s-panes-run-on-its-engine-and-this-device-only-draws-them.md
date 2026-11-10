@@ -595,7 +595,7 @@ round trip.
 
    | Class (ADR 0101, decision 3) | Files | Read and written |
    |---|---|---|
-   | Machine | `machine.toml`, `harnesses.toml`, `sharing.toml`, `agents.toml` `[start]`, `browser.toml`'s Agents' part, `files.toml` `pinned` | through that machine's engine: `keys.settings_read` with `settings.changed` (new), `keys.settings_set` and the rest (there) |
+   | Machine | `machine.toml`, `harnesses.toml`, `sharing.toml`, `agents.toml` `[start]`, `browser.toml`'s Agents' part, `files.toml` `pinned` | through that machine's engine: `keys.settings_read` with `keys.settings_changed` (new), `keys.settings_set` and the rest (there) |
    | Shared | `keys.toml` `[binds]`, `sidebar.toml`, `[notify]`, `themes/`, `agents.toml` `enter` and `flow` | each machine's own copy; a window reads and writes its own machine's, never another's (copied later, E14) |
    | Device | `hosts.toml`, `terminal.toml`, `mod`, the rest of `look.toml`, `files.toml` but `pinned`, the Person's browser | never leave the device |
 
@@ -661,7 +661,7 @@ round trip.
 | desktop | `app://files/<machine>/<token>`, `app://preview/<machine>/<token>` relayed to that machine | 4b, 4c |
 | device | `save_file`, a save dialog and then the bytes by the host's URL | 4c |
 | host | `agents.defaults` also says the machine's start account and fallback | 5a |
-| host | `keys.settings_read {file}` → `{values, keyed, problems, rev}`; `settings.changed` | 5b |
+| host | `keys.settings_read {file}` → `{file, values?, keyed, problems, rev}`; `keys.settings_changed` → `{file, rev}`, a Read stream (amended with step 5b) | 5b |
 
 - **Kept, now checked:** `PaneKind.elsewhere`.
 - **Never added:** the draft's `Action.elsewhere`, and `PaneProps.runs` as
@@ -730,7 +730,7 @@ files, tests, words, pictures and order are in the build plan,
 | 4c | both, M | The relay to another machine; media in arc's replies; Files' byte previewers; "Save a copy to this Mac" (`save_file`) |
 | 4d | both, S-M | Visuals by `/p/`; `agents.visual` `elsewhere`; the Thread's list ends |
 | 5a | both, S | A new Thread on arc starts on arc's account |
-| 5b | both, M | `keys.settings_read`, `settings.changed`; the class per section; "Settings for: This Mac / arc" |
+| 5b | both, M | `keys.settings_read`, `keys.settings_changed`; the class per section; "Settings for: This Mac / arc" |
 
 0′, both 1a′ and 4a come first, one on each track; the kind checker
 comes before 1a, which needs it. The first try, arc's terminal, is ready
