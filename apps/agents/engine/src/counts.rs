@@ -269,6 +269,7 @@ mod tests {
                 was: None,
             },
             agent: AgentId::new(),
+            parent: None,
             latest: None,
             asking: Vec::new(),
             message: None,

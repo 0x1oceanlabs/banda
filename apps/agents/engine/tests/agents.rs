@@ -4968,6 +4968,55 @@ async fn an_agent_starts_a_thread_on_a_harness_and_hears_from_it() {
 }
 
 #[tokio::test]
+async fn a_thread_an_agent_started_is_the_child_of_the_agents_thread() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    // Its Agent names its reply, which a fork goes to.
+    let (a, view) = world.finish(None, "remember apples").await;
+    let agent = agent_of(&view);
+    // The Person's own Thread is no one's child, and a fork is none's,
+    // even one an Agent made. It forks first: once its child answers, the
+    // Thread works again and is not forked.
+    let turn = json!({ "turn": view.turns[0].id });
+    let forked = world.call(agent, "agents.fork", turn).await.unwrap();
+    for none in [&a, &forked["thread"]] {
+        assert_eq!(world.listed(none).await.parent, None);
+        let started = world.events_of(none, "thread.started").await;
+        assert_eq!(started[0].get("parent"), None);
+    }
+
+    let sent = world.write(agent, None, "look around").await.unwrap();
+    let child = &sent["thread"];
+    // The list says it, and so does the fact a window's list follows.
+    let parent = world.listed(child).await.parent;
+    assert_eq!(parent.map(|parent| json!(parent)), Some(a.clone()));
+    let started = world.events_of(child, "thread.started").await;
+    assert_eq!(started[0]["parent"], a);
+    // Its answer comes back as any child's does.
+    world.until(&a, settled(2)).await;
+}
+
+#[tokio::test]
+async fn a_child_whose_parent_was_deleted_still_names_it_and_lists() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (a, view) = world.finish(None, "remember apples").await;
+    let sent = world.write(agent_of(&view), None, "look around").await;
+    let child = &sent.unwrap()["thread"];
+    world.until(&a, settled(2)).await;
+    let person = world.person();
+    world.archive(person, &a, true).await.unwrap();
+    world.delete(person, &a).await.unwrap();
+
+    // The child keeps its parent's id, a Thread no list has now, and the
+    // list reads as before (ADR 0098, decisions 14 and 24).
+    let threads = world.threads().await.threads;
+    assert_eq!(threads.len(), 1);
+    assert_eq!(json!(threads[0].thread.id), *child);
+    assert_eq!(threads[0].parent.map(|parent| json!(parent)), Some(a));
+}
+
+#[tokio::test]
 async fn a_failed_turn_an_agent_asked_for_answers_again_when_tried_again() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

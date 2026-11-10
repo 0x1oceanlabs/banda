@@ -32,6 +32,11 @@ test("a quiet Thread lists its title, Harness, Agent and what it was asked", () 
   expect(listed.began).toBeUndefined()
 })
 
+test("a Thread an Agent started names its parent; one its Person started names none (ADR 0098, decision 24)", () => {
+  expect(listedOf(thread({ parent: "t0" }), "Claude").parent).toBe("t0")
+  expect(listedOf(thread(), "Claude")).not.toHaveProperty("parent")
+})
+
 test("a Thread that asks says what it asks", () => {
   const asking = thread({
     latest: { turn: "u1", state: "running", began: 3 },
