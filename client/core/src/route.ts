@@ -93,7 +93,7 @@ function whereOf(hosts: Hosts, owner: Owner): Where | undefined {
     const machine = hosts.machines
       .get()
       .find((one) => one.machine === owner.machine)
-    if (!machine) return { nowhere: "This window does not reach that machine" }
+    if (!machine) return { nowhere: UNKNOWN }
     return machine.host === undefined ? { here: true } : { host: machine.host }
   }
   const host = hosts.hostOf(owner.project, owner.pane && paneHost(owner.pane))
@@ -214,21 +214,15 @@ export type Device = {
 }
 
 /**
- * The device for a Pane whose owner is `owner`, as `has` says what this
- * device can do: a file is this computer's where its Project is this
- * machine's, placed as the Pane's own is.
+ * The device for a Pane, as `has` says what this device can do: a file is
+ * this computer's only where the directory places its Project on this
+ * machine, whichever machine's Pane asks.
  */
-export function deviceFor(
-  hosts: Hosts,
-  owner: Owner,
-  has: (cap: Cap) => boolean
-): Device {
-  const hint =
-    typeof owner === "object" && "project" in owner ? owner.pane : undefined
+export function deviceFor(hosts: Hosts, has: (cap: Cap) => boolean): Device {
   return {
     has,
     local: (file) => {
-      const where = whereOf(hosts, { project: file.project, pane: hint })
+      const where = whereOf(hosts, { project: file.project })
       return where && "here" in where ? file.path : undefined
     },
   }

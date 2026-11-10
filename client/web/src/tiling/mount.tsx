@@ -124,7 +124,7 @@ export function handlesOf(
     const route = routeAct(hosts, act, from, args)
     return route.runs ? { runs: true } : { runs: false, why: route.why }
   }
-  return { run: routed, runs, device: deviceFor(hosts, owner, routing.has) }
+  return { run: routed, runs, device: deviceFor(hosts, routing.has) }
 }
 
 /** The handles of a Pane whose values are `owner`'s (`handlesOf`): the

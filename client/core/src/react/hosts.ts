@@ -146,13 +146,10 @@ export function useShownNow(): (name: string) => Shown | undefined {
 /** A Pane of a Project as a pick or a Pane opens it, with no host in its
  * args (`KeptHosts.paneOn`); the same function while the Window's hosts
  * stay. */
-export function usePaneOn(): (
-  project: ProjectId,
-  pane: PaneState
-) => PaneState {
+export function usePaneOn(): KeptHosts["paneOn"] {
   const kept = useContext(HostsContext)
   return useCallback(
-    (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane),
+    (project, pane, opener) => kept.paneOn(project, pane, opener),
     [kept]
   )
 }

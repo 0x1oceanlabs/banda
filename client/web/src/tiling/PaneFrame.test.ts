@@ -54,8 +54,8 @@ function placing() {
     FORGETTING
   )
   kept.ours([mine], "m0" as ProjectId)
-  const paneOn = (project: ProjectId, pane: PaneState) =>
-    kept.paneOn(project, pane)
+  const paneOn: KeptHosts["paneOn"] = (project, pane, opener) =>
+    kept.paneOn(project, pane, opener)
   return { kept, paneOn }
 }
 
@@ -76,6 +76,13 @@ test("a Pane on another host opens what it opens, and changes its args, naming n
   // directory keeps where that Project is, so it goes there, not to arc.
   arc.open(thread({ host: "devbox" }), "instead", "d1" as ProjectId)
   expect(open).toHaveBeenLastCalledWith("d1", thread(), "e1", "instead")
+  expect(kept.hostOf("d1" as ProjectId)).toBe("devbox")
+  // A Project its host has not listed yet is arc's, as arc's Pane opens
+  // it; one the Window knows stays whose it is.
+  arc.open(thread(), "instead", "fresh" as ProjectId)
+  expect(open).toHaveBeenLastCalledWith("fresh", thread(), "e1", "instead")
+  expect(kept.hostOf("fresh" as ProjectId)).toBe("arc")
+  arc.open(thread(), "instead", "d1" as ProjectId)
   expect(kept.hostOf("d1" as ProjectId)).toBe("devbox")
   // Its own args name no host either, even one stamped on them.
   arc.update({ thread: "t1" })

@@ -228,15 +228,16 @@ test("an App arc does not run, or the device's, is not on arc yet, and the toast
 test("a Pane's device says a file is this computer's only where its Project is this machine's", async () => {
   const { hosts } = await machines()
   const has = () => true
-  const here = deviceFor(hosts, onMine.pane, has)
+  const here = deviceFor(hosts, has)
   expect(here.local({ project: "mine" as ProjectId, path: "/mine/a" })).toBe(
     "/mine/a"
   )
-  const there = deviceFor(hosts, onArc.pane, has)
+  const there = deviceFor(hosts, has)
   expect(
     there.local({ project: "r1" as ProjectId, path: "/r1/a" })
   ).toBeUndefined()
-  // Unlisted on arc yet, a file of arc's Pane is arc's, not this one's.
+  // Unlisted on arc yet, it is no file of this computer's: a Project no
+  // machine has is never placed here.
   expect(
     there.local({ project: "s9" as ProjectId, path: "/s9/a" })
   ).toBeUndefined()
