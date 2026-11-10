@@ -30,6 +30,8 @@ import {
   ON_SCREEN,
   newProject,
   plateOf,
+  placeOf,
+  leaveSidebar,
   projectId,
   sendAndLeave,
   sharesOf,
@@ -2684,9 +2686,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
     "aria-selected",
     "true"
   )
-  const work = sidebar
-    .getByRole("tabpanel")
-    .getByRole("group", { name: "Work" })
+  const work = placeOf(sidebar.getByRole("tabpanel"), "Work")
   await expect(work.getByRole("button", { name: /hello/ })).toBeVisible()
   await page.screenshot({ path: "test-results/22-sidebar-projects.png" })
 
@@ -5444,7 +5444,7 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   await composer.press("Enter")
   await expect(thread).not.toHaveAccessibleName("New Thread")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = sidebar.getByRole("group", { name: "Threads" })
+  const list = placeOf(sidebar, "Threads")
   const row = list.getByRole("button", { name: /hello/ })
   await expect(row).toBeVisible()
 
@@ -5453,7 +5453,7 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   // In the Archive, which its tab counts (ADR 0098, decision 2); its Pane
   // is put away.
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
-  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const shelf = placeOf(sidebar, "Archive")
   await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(row).toBeHidden()
   await expect(thread).toBeHidden()
@@ -5466,9 +5466,9 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   // out of the Archive and into the Inbox.
   await archived.click()
   await expect(thread).toBeVisible()
-  await expect(shelf).toBeVisible()
+  await expect(shelf.first()).toBeVisible()
   await page.keyboard.press("Alt+S")
-  await expect(shelf).toBeHidden()
+  await expect(shelf).toHaveCount(0)
   await expect(sidebar.getByText("Nothing archived yet")).toBeVisible()
   await expect(thread).toBeVisible()
   await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
@@ -5509,7 +5509,7 @@ function hostedOf(window: Window) {
 /** In the page, whether the sidebar's Threads list has a row with `title`,
  * and with `mark` on it when one is named. */
 const rowIn = (title: string, mark?: string) =>
-  `[...document.querySelectorAll('[role="group"][aria-label="Threads"] button')].some((row) => row.textContent.includes(${JSON.stringify(title)})${mark ? ` && row.querySelector('[role="img"][aria-label=${JSON.stringify(mark)}]') !== null` : ""})`
+  `[...document.querySelectorAll('[data-place="Threads"] button')].some((row) => row.textContent.includes(${JSON.stringify(title)})${mark ? ` && row.querySelector('[role="img"][aria-label=${JSON.stringify(mark)}]') !== null` : ""})`
 
 /** Follows `check`, a test of the page's as `rowIn` writes one, from now:
  * what it was at first, then each change as the page drew it, once
@@ -5552,11 +5552,11 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
     })
     .toBe(true)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = sidebar.getByRole("group", { name: "Threads" })
+  const list = placeOf(sidebar, "Threads")
   const row = list.getByRole("button", { name: /hello/ })
   const done = row.getByRole("img", { name: "Done" })
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
-  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const shelf = placeOf(sidebar, "Archive")
   await expect(done).toBeHidden()
   // Another Pane has the focus, so nothing reads the Thread again.
   await page.keyboard.press("Alt+KeyN")
@@ -5601,14 +5601,16 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   await archive.click()
   await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
-  await expect(shelf).toBeHidden()
+  // Its ghost line stands in its slot till the pointer leaves the list.
+  await leaveSidebar(page)
+  await expect(shelf).toHaveCount(0)
   await expect(archive).toHaveAccessibleName("Archive")
   await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
   await expect(row).toBeVisible()
   await expect.poll(() => first().archived).toBeUndefined()
   await drawnAgain(page)
   await expect(row).toBeVisible()
-  await expect(shelf).toBeHidden()
+  await expect(shelf).toHaveCount(0)
 })
 
 test("a Thread the focus only passes keeps its mark; one looked at for agents.toml's seen-after, or clicked, settles it (ADR 0096, decision 3)", async () => {
@@ -5622,9 +5624,9 @@ test("a Thread the focus only passes keeps its mark; one looked at for agents.to
   await composer.press("Enter")
   await expect(thread).toHaveAccessibleName("hello")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = sidebar
-    .getByRole("group", { name: "Threads" })
-    .getByRole("button", { name: /hello/ })
+  const row = placeOf(sidebar, "Threads").getByRole("button", {
+    name: /hello/,
+  })
   const done = row.getByRole("img", { name: "Done" })
   // Typed in, and its turn ended while it had the focus: seen, on its host
   // and in its row. A turn still at work is not Done either, and if it
@@ -5690,12 +5692,12 @@ test("from a far host, a mark shows at once and never flips back as its fact com
     })
     .toBe(true)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = sidebar
-    .getByRole("group", { name: "Threads" })
-    .getByRole("button", { name: /hello/ })
+  const row = placeOf(sidebar, "Threads").getByRole("button", {
+    name: /hello/,
+  })
   const done = row.getByRole("img", { name: "Done" })
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
-  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const shelf = placeOf(sidebar, "Archive")
   await expect(row.getByRole("img", { name: "Working" })).toBeHidden()
   await expect(done).toBeHidden()
   // Long enough for the answer and the fact to come, both late.
@@ -5754,9 +5756,9 @@ test("from a far host, a mark shows at once and never flips back as its fact com
   await expect(
     toasts.getByText("This Thread is at work: archive it once its turn ends.")
   ).toBeVisible()
-  const working = sidebar
-    .getByRole("group", { name: "Working" })
-    .getByRole("button", { name: /hello/ })
+  const working = placeOf(sidebar, "Working").getByRole("button", {
+    name: /hello/,
+  })
   await expect(working).toBeVisible()
   await expect(archive).toHaveAccessibleName("Archive")
   await expect(thread).toBeHidden()
@@ -5795,7 +5797,7 @@ test("the marks this window kept move to its host once, and its first list shows
     .poll(() => titled("hello").seen)
     .toBe(titled("hello").latest.turn)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = sidebar.getByRole("group", { name: "Threads" })
+  const list = placeOf(sidebar, "Threads")
   const hello = list.getByRole("button", { name: /hello/ })
   const marked = list.getByRole("button", { name: /from outside/ })
   await expect(marked.getByRole("img", { name: "Done" })).toBeVisible()
@@ -5828,7 +5830,7 @@ test("the marks this window kept move to its host once, and its first list shows
   await drawnAgain(page)
 
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
-  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const shelf = placeOf(sidebar, "Archive")
   await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(marked).toBeVisible()
   await expect(marked.getByRole("img", { name: "Done" })).toBeHidden()
@@ -5851,7 +5853,9 @@ test("the marks this window kept move to its host once, and its first list shows
   await archive.click()
   await shelf.getByRole("button", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
-  await expect(shelf).toBeHidden()
+  // Its ghost line stands in its slot till the pointer leaves the list.
+  await leaveSidebar(page)
+  await expect(shelf).toHaveCount(0)
   await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
   await expect(hello).toBeVisible()
   await expect.poll(() => titled("hello").archived).toBeUndefined()
@@ -6001,7 +6005,7 @@ test("the Person renames a Thread in place: a double click on its title, F2, and
     header.getByRole("button", { name, exact: true })
   const field = header.getByRole("textbox", { name: "Title" })
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const list = sidebar.getByRole("group", { name: "Threads" })
+  const list = placeOf(sidebar, "Threads")
   const width = async () => (await thread.boundingBox())?.width
   // Two columns, so a double click on the header would widen one.
   await page.keyboard.press("Alt+Enter")
@@ -6099,9 +6103,7 @@ test("Suggest a title renames in one press with Undo, and Mark as unread calls a
   const { thread, composer } = await ownTile(page, first.thread)
   const header = thread.locator("header")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const row = sidebar
-    .getByRole("group", { name: "Threads" })
-    .getByRole("button")
+  const row = placeOf(sidebar, "Threads").getByRole("button")
   const toasts = page.getByRole("region", { name: "Notifications" })
 
   // From the Thread menu: the Harness's model names it, and a toast says
@@ -6229,7 +6231,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   const thread = page.getByRole("region", { name: "hello" })
   await expect(thread.getByText("You said: hello")).toBeVisible()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const play = sidebar.getByRole("group", { name: "Play" })
+  const play = placeOf(sidebar, "Play")
   await expect(play.getByRole("button", { name: /hello/ })).toBeVisible()
   // Its turn over, as a Thread at work is never archived.
   await expect(thread.getByRole("img", { name: "Nothing runs" })).toBeVisible()
@@ -6347,12 +6349,12 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
   )
   await expect(words).toBeHidden()
 
-  // Play's next Thread makes its workspace again, at the end.
+  // Play's next Thread makes its workspace again, at the end. Its head
+  // stands in the sidebar's one flat list, among the cards, by its place
+  // (ADR 0098, S5c), no group around them.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await sidebar
-    .getByRole("group", { name: "Play", exact: true })
-    .getByRole("button", { name: "New Thread in Play" })
-    .click()
+  const play = placeOf(sidebar, "Play")
+  await play.getByRole("button", { name: "New Thread in Play" }).click()
   await expect(inPlay).toBeVisible()
   await expect(plays).toHaveCount(1)
   await expect(bar.locator("[aria-current]")).toHaveAccessibleName(
@@ -6377,10 +6379,7 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
 
   // In the Flow free every workspace is free: emptied, Play's says only
   // that it is empty, and goes once the Person leaves it (decision 1).
-  await sidebar
-    .getByRole("group", { name: "Play", exact: true })
-    .getByRole("button", { name: "New Thread in Play" })
-    .click()
+  await play.getByRole("button", { name: "New Thread in Play" }).click()
   await expect(inPlay).toBeVisible()
   await expect(plays).toHaveCount(1)
   const flow = sidebar.getByRole("button", { name: /^Flow: / })
@@ -7297,7 +7296,7 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   // Listed by Project: a section's own, its menu's, and No Project's.
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^projects/ }).click()
-  const section = sidebar.getByRole("group", { name: "Work", exact: true })
+  const section = placeOf(sidebar, "Work")
   await section.getByRole("button", { name: "New Thread in Work" }).click()
   await startsIn("Work")
   await section.getByRole("button", { name: /^Work/ }).click({
@@ -7972,20 +7971,16 @@ test("No Project creates a folder only on the first message", async () => {
     page.getByRole("complementary", { name: "Sidebar" })
   ).toContainText("scratch hello")
   expect(existsSync(join(dir, "root", "scratch"))).toBe(true)
-  await expect(
-    page.getByRole("group", { name: "No Project", exact: true })
-  ).toHaveCount(0)
+  await expect(placeOf(page, "No Project")).toHaveCount(0)
   const view = page.getByRole("button", { name: /^View: / })
   await view.click()
   await page.getByRole("menuitemradio", { name: /^projects/ }).click()
   await expect(
-    page.getByRole("group", { name: "No Project", exact: true })
-  ).toContainText("scratch hello")
+    placeOf(page, "No Project").filter({ hasText: "scratch hello" })
+  ).toHaveCount(1)
   await view.click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
-  await expect(
-    page.getByRole("group", { name: "No Project", exact: true })
-  ).toHaveCount(0)
+  await expect(placeOf(page, "No Project")).toHaveCount(0)
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })
   ).toContainText("scratch hello")

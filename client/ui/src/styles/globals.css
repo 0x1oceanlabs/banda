@@ -165,6 +165,17 @@
   --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
   --mark-working: color-mix(in oklab, var(--working) 80%, transparent);
   --mark-later: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  /* How the sidebar's list moves (ADR 0098, S5c), by the design kit's
+     names: what is quick (a hover coming in, a row going, a ghost's
+     crossfade), a hover going, what comes (a row, a dim), and what is
+     slow (inbox zero's words, a machine away and back). What comes eases
+     in, what goes eases out; only opacity moves (ADR 0088, decision 2). */
+  --dur-fast: 120ms;
+  --dur-out: 80ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
 }
 
 .dark {
@@ -739,6 +750,24 @@ html[data-drag="view"] * {
 }
 html[data-sidebar="desk"] [data-sidebar-shown] {
   --sidebar-inset: var(--sidebar-width);
+}
+/* With no motion, `[motion] off` or reduced motion, the sidebar and the
+   toasts jump (ADR 0098, S5c): Sonner heeds the system's wish, not
+   `[motion] off`. The sidebar is the aside, as the root's own
+   `data-sidebar` says how it is drawn. */
+html[data-still] :is(aside[data-sidebar], [data-sonner-toaster]) *,
+html[data-still] aside[data-sidebar] *::before,
+html[data-still] [data-sonner-toast] {
+  transition: none !important;
+  animation: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  :is(aside[data-sidebar], [data-sonner-toaster]) *,
+  aside[data-sidebar] *::before,
+  [data-sonner-toast] {
+    transition: none !important;
+    animation: none !important;
+  }
 }
 
 /*

@@ -66,7 +66,7 @@ async function say(window: Window, box: Locator, text: string) {
   }
   await expect(thread.getByText(`You said: ${text}`)).toBeVisible()
   // Its turn is over in the engine, and the Window took it in, seen.
-  await expect.poll(() => threadNamed(window, text)?.latest.state).toBe("done")
+  await expect.poll(() => threadNamed(window, text)?.latest?.state).toBe("done")
   const row = sidebarOf(page).getByRole("button", { name: new RegExp(text) })
   await expect(row.getByRole("img", { name: "Nothing runs" })).toBeVisible()
   return thread
@@ -125,7 +125,7 @@ async function toastedOutOfView(
   // that much time goes by before this one ends.
   for (const other of others)
     await expect
-      .poll(() => threadNamed(window, other)?.latest.state)
+      .poll(() => threadNamed(window, other)?.latest?.state)
       .toBe("done")
   await page.waitForTimeout(1_600)
   const notes = await countNotes(page)
@@ -601,7 +601,7 @@ test("a Thread at work put off until it's done comes back as its turn ends, with
   // Its turn ends. A word from its Person would wake it by itself (ADR
   // 0074, decision 3), so the turn is stopped from outside: any end of it
   // wakes it.
-  const { turn } = threadNamed(window, "wait a")!.latest
+  const { turn } = threadNamed(window, "wait a")!.latest!
   call(window, "agents.stop", { turn })
   // It woke by itself, calling for nothing: a toast says so, and its row
   // is back in the list with a clock.

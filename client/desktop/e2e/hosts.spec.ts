@@ -56,7 +56,14 @@ import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import type { Host } from "../src/bridge"
-import { headerShows, setInFront, startWindow, type Window } from "./window"
+import {
+  headerShows,
+  leaveSidebar,
+  placeOf,
+  setInFront,
+  startWindow,
+  type Window,
+} from "./window"
 
 const repository = resolve(import.meta.dirname, "../../..")
 const program = join(repository, "target/debug/banda")
@@ -481,9 +488,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   const label = there.getByRole("heading", { name: "arc" })
   await expect(label).toBeVisible()
   await expect(label.locator('[data-machine-icon="server"]')).toBeVisible()
-  await expect(
-    there.getByRole("group", { name: "banda", exact: true })
-  ).toBeVisible()
+  await expect(placeOf(there, "banda").first()).toBeVisible()
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(there.getByRole("status", { name: "Connecting" })).toHaveCount(0)
   // A Thread started there shows as it starts, its timer running.
@@ -663,6 +668,9 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(there.getByText(/^stopped/)).toHaveCount(0, {
     timeout: 60_000,
   })
+  // What arc lists anew lands as the pointer leaves: the list holds under
+  // it (ADR 0098 decision 6, S5c).
+  await leaveSidebar(page)
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(dimmed(there)).toHaveCount(0)
 
