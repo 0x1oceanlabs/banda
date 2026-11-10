@@ -828,6 +828,23 @@ pub struct ThreadList {
     pub threads: Vec<ListedThread>,
 }
 
+/// How much a Project's Threads use one account, a Harness entry, as its
+/// settings say it (ADR 0093, decision 6).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct AccountUse {
+    /// The entry's ID.
+    pub harness: String,
+    /// Its Threads now: those on it that are not archived.
+    pub threads: u32,
+    /// When its latest turn began, in milliseconds since the epoch.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(type = "number", optional)]
+    pub last: Option<i64>,
+    /// Its turns that began since the time asked.
+    pub turns: u32,
+}
+
 /// A Thread as a list shows it: what it is, and where its work stands. A
 /// list follows it from the Thread's facts; what that means to a Person,
 /// such as "needs you", is the window's to say (ADR 0005, decision 8).

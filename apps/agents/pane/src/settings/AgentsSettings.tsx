@@ -1,16 +1,11 @@
-import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import {
-  AGENTS_FILE,
-  type Defaults,
-  type Settings,
-} from "@banda/contract/agents"
-import type { Account, HarnessView } from "@banda/contract/harnesses"
+import { AGENTS_FILE } from "@banda/contract/agents"
+import type { HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {
   Card,
-  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -40,36 +35,23 @@ import {
   SelectValue,
 } from "@banda/ui/components/select"
 import { Input } from "@banda/ui/components/input"
-import {
-  Item,
-  ItemActions,
-  ItemContent,
-  ItemDescription,
-  ItemTitle,
-} from "@banda/ui/components/item"
 import { Spinner } from "@banda/ui/components/spinner"
-import { Switch } from "@banda/ui/components/switch"
-import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
-import { useRead } from "@banda/ui/hooks/use-read"
-import { useFence } from "@banda/ui/hooks/use-status"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { useFile } from "@banda/ui/lib/look"
-import { cn } from "@banda/ui/lib/utils"
 import { problem } from "@banda/ui/lib/words"
+import { PlusIcon } from "lucide-react"
 import {
-  FileCogIcon,
-  LogOutIcon,
-  PlusIcon,
-  RotateCwIcon,
-  Trash2Icon,
-  Undo2Icon,
-} from "lucide-react"
-import { useAccount } from "../harnesses"
-import { startsOnWords, useStartsOn } from "../thread/starts-on"
-import { commandLine, wordsOf } from "../thread/sign-in"
-import { type Open, Problem, Warning, Ways } from "../thread/SignIn"
-import { SettingsBar } from "./ThreadSettings"
+  type StartsOn,
+  startsOnWords,
+  useLimitsNow,
+  useStartsOn,
+} from "../thread/starts-on"
+import { wordsOf } from "../thread/sign-in"
+import { type Open, Problem } from "../thread/SignIn"
+import { AccountCard, HarnessGroup } from "./AccountCards"
+import { AccountPage, Row, type Roles } from "./AccountPage"
+import { groupsOf, pickStart, useUses } from "./accounts"
 
 /** Where the window's settings say why a new Thread starts Supervised. */
 export { FENCE_LINK } from "./fence"
@@ -89,7 +71,7 @@ export type SettingsFile = {
   reveal: () => void
 }
 
-type Props = {
+export type Props = {
   engine: Engine
   /** A Project, where there is one: what a new Thread starts with is
    * offered in it, and a sign-in in a terminal runs there. */
@@ -103,20 +85,26 @@ type Props = {
   onFence: () => void
 }
 
+/** The Harness a new entry is an account of, or none for a Harness of
+ * its own. */
+type Adding = { of?: { harness: string; name: string } }
+
 /**
- * The settings Pane's Agents (ADR 0016, decision 7), as T3 Code's
- * providers: a card per Harness entry with who is signed in, on or off,
- * and how it starts; adding one. The Harnesses and their accounts are the
- * machine's module `harnesses` (ADR 0040), so they show with no Project. What a message written while an Agent
- * works does is `agents.toml`'s, drawn from its schema under these. The
- * engine reads `harnesses.toml` again once it changed, so the list is
- * asked again after each change, and when the window comes to the front.
+ * The settings Pane's Agents (ADR 0016, decision 7; ADR 0093, decision 9):
+ * New Threads on top, where a new Thread starts; then the accounts as
+ * cards by Harness, each Harness ending with an Add card. A card opens the
+ * account's page, and so does a link that names its entry. The Harnesses
+ * and their accounts are the machine's module `harnesses` (ADR 0040), so
+ * they show with no Project. What a message written while an Agent works
+ * does is `agents.toml`'s, drawn from its schema under these. The engine
+ * reads `harnesses.toml` again once it changed, so the list is asked again
+ * after each change, and when the window comes to the front.
  */
 export function AgentsSettings({
   lit,
   ...props
 }: Props & {
-  /** A link's Harness: it shows lit. */
+  /** A link's entry: its page opens. */
   lit?: string
 }) {
   const { engine } = props
@@ -135,26 +123,90 @@ export function AgentsSettings({
   useEffect(() => {
     if (front) readList()
   }, [front, readList])
+  // A new link opens its entry's page.
+  const [opened, setOpened] = useState({ lit, id: lit })
+  if (opened.lit !== lit) setOpened({ lit, id: lit })
+  const open = (id: string | undefined) => setOpened({ lit, id })
+  const [adding, setAdding] = useState<Adding>()
+  const starts = useStartsOn(engine)
+  const { fallback } = useFile(AGENTS_FILE)
+  const { limits, now } = useLimitsNow(engine)
+  const uses = useUses(engine)
+  if (list === undefined) return <Spinner />
+  if ("refused" in list) return <Problem>{list.refused}</Problem>
+  const on = list.filter((one) => one.enabled)
+  const roles: Roles = {
+    default: starts?.default,
+    fallback: on.some(
+      (one) => one.id === fallback && one.id !== starts?.default
+    )
+      ? fallback
+      : undefined,
+  }
+  const groups = groupsOf(list)
+  const shown = list.find((one) => one.id === opened.id)
+  const of = (one: HarnessView) =>
+    groups.find((group) => group.harness === one.harness)!.name
+  const limitsOf = (id: string) => limits.find((l) => l.harness === id)
+  if (shown)
+    return (
+      <AccountPage
+        {...props}
+        harness={shown}
+        of={of(shown)}
+        limits={limitsOf(shown.id)}
+        now={now}
+        use={uses?.get(shown.id)}
+        roles={roles}
+        onBack={() => open(undefined)}
+        onWritten={readList}
+      />
+    )
   return (
-    <div className="flex flex-col gap-4">
-      {list === undefined && <Spinner />}
-      {list && "refused" in list && <Problem>{list.refused}</Problem>}
-      {Array.isArray(list) && list.some((one) => one.enabled) && (
-        <StartAccounts engine={engine} list={list} file={props.agents} />
+    <div className="flex flex-col gap-5">
+      {on.length > 0 && (
+        <StartAccounts
+          starts={starts}
+          on={on}
+          fallback={roles.fallback}
+          file={props.agents}
+        />
       )}
-      {Array.isArray(list) &&
-        list.map((harness) => (
-          <HarnessCard
-            key={harness.id}
-            {...props}
-            harness={harness}
-            lit={harness.id === lit}
-            onWritten={readList}
-          />
-        ))}
-      {Array.isArray(list) && (
-        <AddHarness file={props.harnesses} taken={list} onAdded={readList} />
-      )}
+      {groups.map(({ harness, name, accounts }) => (
+        <HarnessGroup
+          key={harness}
+          name={name}
+          onAdd={() => setAdding({ of: { harness, name } })}
+        >
+          {accounts.map((one) => (
+            <AccountCard
+              key={one.id}
+              engine={engine}
+              harness={one}
+              limits={limitsOf(one.id)}
+              now={now}
+              use={uses?.get(one.id)}
+              roles={roles}
+              onOpen={() => open(one.id)}
+            />
+          ))}
+        </HarnessGroup>
+      ))}
+      <Button
+        variant="outline"
+        className="h-auto min-h-9 justify-start border-dashed text-left whitespace-normal text-muted-foreground"
+        onClick={() => setAdding({})}
+      >
+        <PlusIcon />
+        Add a Harness: any agent that speaks ACP
+      </Button>
+      <AddEntry
+        file={props.harnesses}
+        taken={list}
+        adding={adding}
+        onClose={() => setAdding(undefined)}
+        onAdded={readList}
+      />
     </div>
   )
 }
@@ -169,24 +221,19 @@ const NO_FALLBACK = "none"
  * new Threads start now, while the default is out.
  */
 function StartAccounts({
-  engine,
-  list,
+  starts,
+  on,
+  fallback,
   file,
 }: {
-  engine: Engine
-  list: readonly HarnessView[]
+  starts: StartsOn | undefined
+  /** The entries that are on. */
+  on: readonly HarnessView[]
+  fallback: string | undefined
   file: SettingsFile
 }) {
   const { refused, write } = useWrite()
-  const { fallback } = useFile(AGENTS_FILE)
-  const starts = useStartsOn(engine)
-  const on = list.filter((one) => one.enabled)
-  const now = starts && startsOnWords(starts, list)
-  const pick = (key: string, id: string | undefined) =>
-    write(id === undefined ? file.reset(key) : file.set(key, tomlOf(id)))
-  const fallbackNow = on.some((one) => one.id === fallback)
-    ? fallback!
-    : NO_FALLBACK
+  const now = starts && startsOnWords(starts, on)
   return (
     <Card size="sm" role="group" aria-label="New Threads">
       <CardHeader>
@@ -202,7 +249,7 @@ function StartAccounts({
             label="Default account"
             value={starts?.default ?? on[0]!.id}
             accounts={on}
-            onChange={(id) => pick("start.account", id)}
+            onChange={(id) => write(pickStart(file, "start.account", id))}
           />
         </Row>
         <Row
@@ -211,11 +258,17 @@ function StartAccounts({
         >
           <AccountSelect
             label="Fallback account"
-            value={fallbackNow}
+            value={fallback ?? NO_FALLBACK}
             accounts={on.filter((one) => one.id !== starts?.default)}
             none="None"
             onChange={(id) =>
-              pick("start.fallback", id === NO_FALLBACK ? undefined : id)
+              write(
+                pickStart(
+                  file,
+                  "start.fallback",
+                  id === NO_FALLBACK ? undefined : id
+                )
+              )
             }
           />
         </Row>
@@ -268,373 +321,26 @@ function AccountSelect({
   )
 }
 
-type HarnessProps = Props & { harness: HarnessView }
-
-/** A Harness entry: its account, on or off, and how it starts. */
-function HarnessCard({
-  lit,
-  onWritten,
-  ...props
-}: HarnessProps & { lit: boolean; onWritten: () => void }) {
-  const { harness, harnesses, project } = props
-  const { refused, write } = useWrite({ onWritten, against: harness })
-  const card = useRef<HTMLDivElement>(null)
-  useEffect(() => {
-    if (lit) card.current?.scrollIntoView({ block: "center" })
-  }, [lit])
-  const enabled = `harness.${harness.id}.enabled`
-  const frame: FrameProps = {
-    harness,
-    lit,
-    card,
-    refused,
-    toggle: (
-      <Switch
-        label={`${harness.name} on`}
-        on={harness.enabled}
-        onChange={(on) =>
-          write(on ? harnesses.reset(enabled) : harnesses.set(enabled, "false"))
-        }
-      />
-    ),
-    starts: (
-      <>
-        {harness.enabled && project && (
-          <NewThreads {...props} project={project} write={write} />
-        )}
-        <HowItStarts harness={harness} file={harnesses} write={write} />
-      </>
-    ),
-  }
-  return harness.enabled ? (
-    <Reading {...props} frame={frame} />
-  ) : (
-    <Frame {...frame} about="Off: no new Thread starts on it." />
-  )
-}
-
-type FrameProps = {
-  harness: HarnessView
-  lit: boolean
-  card: React.RefObject<HTMLDivElement | null>
-  refused: string[]
-  toggle: ReactNode
-  starts: ReactNode
-}
-
-/** A card as T3 Code draws a provider: its logo and name, what it runs,
- * its switch; who is signed in; how it starts. */
-function Frame({
-  harness,
-  lit,
-  card,
-  refused,
-  toggle,
-  starts,
-  about,
-  aboutTitle,
-  action,
-  children,
-}: FrameProps & {
-  about?: string
-  aboutTitle?: string
-  action?: ReactNode
-  children?: ReactNode
-}) {
-  return (
-    <Card
-      ref={card}
-      size="sm"
-      role="group"
-      aria-label={harness.name}
-      className={cn(lit && "ring-2 ring-primary/60")}
-    >
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Emblem of={harness} className="size-4" />
-          {harness.name}
-        </CardTitle>
-        {about && <CardDescription title={aboutTitle}>{about}</CardDescription>}
-        <CardAction className="flex items-center gap-1">
-          {action}
-          {toggle}
-        </CardAction>
-      </CardHeader>
-      {children && (
-        <CardContent className="flex flex-col gap-3">{children}</CardContent>
-      )}
-      <CardContent className="flex flex-col divide-y border-t">
-        {starts}
-        {refused.map((message) => (
-          <Problem key={message}>{message}</Problem>
-        ))}
-      </CardContent>
-    </Card>
-  )
-}
-
-/** What a Harness runs: the Person's CLI with its version, through its
- * adapter. */
-function runs({ cli, adapter }: Account): string {
-  const own = cli && [cli.path.split("/").pop(), cli.version].filter(Boolean)
-  const through = adapter && `${adapter.name} ${adapter.version}`
-  return [own?.join(" "), through].filter(Boolean).join(" · ")
-}
-
-/** Asks the Harness, which starts it if it does not run; again at a
- * Person's "check again", and as its account changes. */
-function Reading({ frame, ...props }: HarnessProps & { frame: FrameProps }) {
-  const { engine, harness } = props
-  const [checks, setChecks] = useState(0)
-  const read = useAccount(engine, harness.id, checks)
-  const account = read.state === "ready" ? read.view.account : undefined
-  return (
-    <Frame
-      {...frame}
-      about={account && runs(account)}
-      aboutTitle={account?.cli?.path}
-      action={
-        read.state !== "loading" && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label={`Check ${harness.name} again`}
-            title="Check again"
-            onClick={() => setChecks((n) => n + 1)}
-          >
-            <RotateCwIcon />
-          </Button>
-        )
-      }
-    >
-      {read.state === "loading" && (
-        <span className="flex items-center gap-2 text-sm text-muted-foreground">
-          <Spinner /> Starting {harness.name}…
-        </span>
-      )}
-      {read.state === "refused" && (
-        <Problem>
-          {harness.name} does not start: {read.refusal.message}
-        </Problem>
-      )}
-      {account?.cli?.outdated && <Warning>{account.cli.outdated}</Warning>}
-      {account && <AccountState {...props} account={account} />}
-    </Frame>
-  )
-}
-
-/** What a new Thread on the Harness starts with, `agents.toml`'s
- * `[start.<id>]`: the composer's own bar, over what the Harness offered in
- * this Project. */
-function NewThreads({
-  engine,
-  project,
-  harness,
-  agents,
-  onFence,
-  write,
-}: HarnessProps & {
-  project: ProjectId
-  write: (said: Promise<string[]>) => void
-}) {
-  // Asked again after its own writes, and as the window comes to the
-  // front, for the Person's own edits.
-  const [writes, setWrites] = useState(0)
-  const front = useInFront()
-  const read = useRead(
-    useCallback(
-      () =>
-        engine.call("agents.defaults", { harness: harness.id }, { project }),
-      // eslint-disable-next-line react-hooks/exhaustive-deps -- asked again on purpose
-      [engine, project, harness.id, writes, front]
-    )
-  )
-  const fence = useFence(engine)
-  // What it was shows while it is asked again.
-  const [shown, setShown] = useState<Defaults>()
-  if (read.state === "ready" && read.value !== shown) setShown(read.value)
-  if (!shown) return null
-  const { settings, offer } = shown
-  const start = `start.${harness.id}`
-  const change = (said: Promise<string[]>) =>
-    write(said.finally(() => setWrites((n) => n + 1)))
-  const onChange = (next: Settings) => {
-    const changed = changeOf(settings, next)
-    if (changed)
-      change(agents.set(`${start}.${changed[0]}`, tomlOf(changed[1])))
-  }
-  return (
-    <Row
-      title="New Threads"
-      about={`What a new Thread on it starts with.${offer.options.length > 0 ? "" : ` Its model shows once a Thread here has run on ${harness.name}.`}`}
-    >
-      <SettingsBar
-        settings={settings}
-        offer={offer}
-        disabled={false}
-        onChange={onChange}
-        fence={{ fence, onLearn: onFence }}
-      />
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`${harness.name}'s own`}
-        title="The Harness's own"
-        onClick={() => change(agents.reset(start))}
-      >
-        <Undo2Icon />
-      </Button>
-    </Row>
-  )
-}
-
-/** The one key `next` changed from `settings`, and its value. */
-function changeOf(
-  settings: Settings,
-  next: Settings
-): [string, string | boolean] | undefined {
-  if (next.mode !== settings.mode) return ["mode", next.mode]
-  if (next.plan !== settings.plan) return ["plan", next.plan]
-  return Object.entries(next.options).find(
-    ([id, value]) => settings.options[id] !== value
-  )
-}
-
-/** How the entry starts its program, as the file says, to change here;
- * its environment's values may be secrets, so they stay in the file. */
-function HowItStarts({
-  harness,
-  file,
-  write,
-}: {
-  harness: HarnessView
-  file: SettingsFile
-  write: (said: Promise<string[]>) => void
-}) {
-  const [program = "", ...args] = harness.command
-  const line = commandLine({ program, args, env: {} })
-  const commit = (text: string) => {
-    const [command, ...rest] = wordsOf(text)
-    if (!command || text === line) return
-    const entry = `{ command = ${tomlOf(command)}, args = ${tomlOf(rest)} }`
-    write(file.set(`harness.${harness.id}`, entry))
-  }
-  return (
-    <>
-      <Row
-        title="Command"
-        about="The program that speaks ACP, then its arguments."
-      >
-        <Input
-          // A new value from the file starts the field afresh.
-          key={line}
-          aria-label={`${harness.name} command`}
-          defaultValue={line}
-          className="h-8 w-72 max-w-full font-mono text-xs"
-          onBlur={(event) => commit(event.target.value)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") commit(event.currentTarget.value)
-          }}
-        />
-      </Row>
-      <Row
-        title="Environment"
-        about={
-          harness.env.length === 0
-            ? "None over yours."
-            : `${harness.env.join(", ")}: their values stay in the file.`
-        }
-      >
-        <Button variant="outline" size="sm" onClick={file.reveal}>
-          <FileCogIcon />
-          Edit in harnesses.toml
-        </Button>
-      </Row>
-      <Row title="Remove" about="Takes the entry out of harnesses.toml.">
-        <Remove
-          harness={harness}
-          onRemove={() => write(file.reset(`harness.${harness.id}`))}
-        />
-      </Row>
-    </>
-  )
-}
-
-function Row({
-  title,
-  about,
-  children,
-}: {
-  title: string
-  about: string
-  children: ReactNode
-}) {
-  return (
-    <Item className="rounded-none px-0">
-      <ItemContent className="min-w-40">
-        <ItemTitle>{title}</ItemTitle>
-        <ItemDescription className="text-xs">{about}</ItemDescription>
-      </ItemContent>
-      <ItemActions>{children}</ItemActions>
-    </Item>
-  )
-}
-
-function Remove({
-  harness,
-  onRemove,
-}: {
-  harness: HarnessView
-  onRemove: () => void
-}) {
-  const [asking, setAsking] = useState(false)
-  return (
-    <>
-      <Button variant="ghost" size="sm" onClick={() => setAsking(true)}>
-        <Trash2Icon />
-        Remove
-      </Button>
-      <Dialog open={asking} onOpenChange={setAsking}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Remove {harness.name}?</DialogTitle>
-            <DialogDescription>
-              Its entry leaves harnesses.toml. Its Threads stay, and cannot go
-              on until an entry with the ID {harness.id} is back. Turning it off
-              keeps the entry.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              Cancel
-            </DialogClose>
-            <Button
-              variant="destructive"
-              onClick={() => {
-                setAsking(false)
-                onRemove()
-              }}
-            >
-              Remove
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
-}
-
-/** A new entry: any agent that speaks ACP, or a second account of one. */
-function AddHarness({
+/**
+ * A new entry in `harnesses.toml`: any agent that speaks ACP, by its
+ * command, or another account of a Harness, which takes its program. The
+ * steps of Add account, its folder made and signed in, come later
+ * (ADR 0093, decision 9).
+ */
+function AddEntry({
   file,
   taken,
+  adding,
+  onClose,
   onAdded,
 }: {
   file: SettingsFile
   taken: HarnessView[]
+  adding: Adding | undefined
+  onClose: () => void
   onAdded: () => void
 }) {
-  const [asking, setAsking] = useState(false)
+  const of = adding?.of
   const [name, setName] = useState("")
   const [id, setId] = useState<string>()
   const [line, setLine] = useState("")
@@ -645,69 +351,72 @@ function AddHarness({
     : taken.some((h) => h.id === wanted)
       ? `There is a Harness with the ID ${wanted} already.`
       : undefined
-  const ready = !wrong && command !== undefined && name.trim() !== ""
+  const ready =
+    !wrong && (of !== undefined || command !== undefined) && name.trim() !== ""
+  const close = () => {
+    setName("")
+    setId(undefined)
+    setLine("")
+    onClose()
+  }
   const { refused, write } = useWrite({
     onWritten: () => {
-      setAsking(false)
-      setName("")
-      setId(undefined)
-      setLine("")
+      close()
       onAdded()
     },
   })
   const add = () => {
-    if (!ready || !command) return
-    const entry = `{ name = ${tomlOf(name.trim())}, command = ${tomlOf(command)}, args = ${tomlOf(args)} }`
+    if (!ready) return
+    const named = `name = ${tomlOf(name.trim())}`
+    const entry = of
+      ? `{ ${named}, of = ${tomlOf(of.harness)} }`
+      : `{ ${named}, command = ${tomlOf(command!)}, args = ${tomlOf(args)} }`
     write(file.set(`harness.${wanted}`, entry))
   }
+  const title = of ? `Add a ${of.name} account` : "Add a Harness"
   return (
-    <>
-      <Button
-        variant="outline"
-        className="h-auto min-h-9 justify-start border-dashed text-left whitespace-normal text-muted-foreground"
-        onClick={() => setAsking(true)}
-      >
-        <PlusIcon />
-        Add a Harness: any agent that speaks ACP, or a second account
-      </Button>
-      <Dialog open={asking} onOpenChange={setAsking}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Add a Harness</DialogTitle>
-            <DialogDescription>
-              A new entry in harnesses.toml. A second account of one is the same
-              command with its own config folder in its environment, which you
-              set in the file.
-            </DialogDescription>
-          </DialogHeader>
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              add()
-            }}
-          >
-            <FieldGroup>
-              <Field>
-                <FieldLabel htmlFor="harness-name">Name</FieldLabel>
-                <Input
-                  id="harness-name"
-                  value={name}
-                  placeholder="Gemini CLI"
-                  onChange={(event) => setName(event.target.value)}
-                />
-              </Field>
-              <Field>
-                <FieldLabel htmlFor="harness-id">ID</FieldLabel>
-                <Input
-                  id="harness-id"
-                  value={wanted}
-                  onChange={(event) => setId(event.target.value)}
-                  className="font-mono"
-                />
-                <FieldDescription>
-                  How Threads name it. It stays: a Thread keeps the ID.
-                </FieldDescription>
-              </Field>
+    <Dialog
+      open={adding !== undefined}
+      onOpenChange={(open) => !open && close()}
+    >
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>{title}</DialogTitle>
+          <DialogDescription>
+            {of
+              ? `A new entry in harnesses.toml that runs ${of.name}. To sign in to another account, give it a config folder of its own in its environment there (CLAUDE_CONFIG_DIR or CODEX_HOME).`
+              : "A new entry in harnesses.toml: an agent's program that speaks ACP."}
+          </DialogDescription>
+        </DialogHeader>
+        <form
+          onSubmit={(event) => {
+            event.preventDefault()
+            add()
+          }}
+        >
+          <FieldGroup>
+            <Field>
+              <FieldLabel htmlFor="harness-name">Name</FieldLabel>
+              <Input
+                id="harness-name"
+                value={name}
+                placeholder={of ? "Work" : "Gemini CLI"}
+                onChange={(event) => setName(event.target.value)}
+              />
+            </Field>
+            <Field>
+              <FieldLabel htmlFor="harness-id">ID</FieldLabel>
+              <Input
+                id="harness-id"
+                value={wanted}
+                onChange={(event) => setId(event.target.value)}
+                className="font-mono"
+              />
+              <FieldDescription>
+                How Threads name it. It stays: a Thread keeps the ID.
+              </FieldDescription>
+            </Field>
+            {!of && (
               <Field>
                 <FieldLabel htmlFor="harness-command">Command</FieldLabel>
                 <Input
@@ -721,23 +430,23 @@ function AddHarness({
                   The program that speaks ACP on its stdio, then its arguments.
                 </FieldDescription>
               </Field>
-              {name && wrong && <Problem>{wrong}</Problem>}
-              {refused.map((message) => (
-                <Problem key={message}>{message}</Problem>
-              ))}
-            </FieldGroup>
-            <DialogFooter className="mt-4">
-              <DialogClose render={<Button variant="outline" />}>
-                Cancel
-              </DialogClose>
-              <Button type="submit" disabled={!ready}>
-                Add
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
-    </>
+            )}
+            {name && wrong && <Problem>{wrong}</Problem>}
+            {refused.map((message) => (
+              <Problem key={message}>{message}</Problem>
+            ))}
+          </FieldGroup>
+          <DialogFooter className="mt-4">
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button type="submit" disabled={!ready}>
+              Add
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   )
 }
 
@@ -747,90 +456,4 @@ function idOf(name: string): string {
     .toLowerCase()
     .replaceAll(/[^a-z0-9]+/g, "-")
     .replaceAll(/^-|-$/g, "")
-}
-
-function AccountState({
-  engine,
-  project,
-  harness,
-  open,
-  account,
-}: Omit<HarnessProps, "harnesses" | "agents"> & { account: Account }) {
-  const who = account.signed_in_as
-  if (who?.signed_in)
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p className="text-sm">
-          Signed in as {[who.email, who.label].filter(Boolean).join(" · ")}
-          {who.detail && (
-            <span className="text-muted-foreground"> ({who.detail})</span>
-          )}
-        </p>
-        {account.signs_out && <SignOut engine={engine} harness={harness} />}
-      </div>
-    )
-  return (
-    <div className="flex flex-col gap-2">
-      <p className="text-sm text-muted-foreground">
-        {who
-          ? "Not signed in."
-          : `${harness.name} does not say who is signed in.`}
-      </p>
-      <Ways
-        engine={engine}
-        project={project}
-        harness={harness.id}
-        ways={account.ways}
-        open={open}
-      />
-    </div>
-  )
-}
-
-function SignOut({
-  engine,
-  harness,
-}: Pick<HarnessProps, "engine" | "harness">) {
-  const [asking, setAsking] = useState(false)
-  const signing = useAct()
-  const signOut = async () => {
-    const done = await signing.act(() =>
-      engine.command("harnesses.sign_out", { harness: harness.id })
-    )
-    if (done !== undefined) setAsking(false)
-  }
-  return (
-    <>
-      <Button variant="outline" size="xs" onClick={() => setAsking(true)}>
-        <LogOutIcon data-icon="inline-start" />
-        Sign out
-      </Button>
-      <Dialog open={asking} onOpenChange={setAsking}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Sign out of {harness.name}?</DialogTitle>
-            <DialogDescription>
-              This signs {harness.name} out on this computer, in your own
-              terminal too. Its Agents in every Project stop until someone signs
-              in again; their Threads stay.
-            </DialogDescription>
-          </DialogHeader>
-          {signing.problem && <Problem>{signing.problem}</Problem>}
-          <DialogFooter>
-            <DialogClose render={<Button variant="outline" />}>
-              Cancel
-            </DialogClose>
-            <Button
-              variant="destructive"
-              disabled={signing.busy}
-              onClick={() => void signOut()}
-            >
-              {signing.busy && <Spinner />}
-              Sign out
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-    </>
-  )
 }

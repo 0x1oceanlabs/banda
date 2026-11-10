@@ -76,8 +76,8 @@ use laters::{LaterAsk, SeeWokeAsk, WakeAsk};
 use live::Live;
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
-    Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
-    ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
+    AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId,
+    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
 use notes::Notify;
 use rules::Event;
@@ -325,6 +325,11 @@ banda_kernel::methods! {
         call thread(OneThread) -> ThreadView, Read, tool "read";
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
+        /// How much this Project's Threads use each account, a Harness
+        /// entry, they ran on: its Threads now, not archived, when its
+        /// latest turn began, and its turns begun since `since`
+        /// (ADR 0093, decision 6).
+        call accounts(Since) -> Vec<AccountUse>, Read;
         /// The turns of a Thread that changed files, the latest first, and
         /// the files one of them changed, from its tool calls: the Diff's
         /// Turn (ADR 0034).
@@ -508,6 +513,15 @@ banda_kernel::methods! {
 #[ts(export_to = "agents/")]
 struct OneHarness {
     harness: String,
+}
+
+/// What `agents.accounts` is asked: from when its turns count.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct Since {
+    /// In milliseconds since the epoch: the start of the Person's week.
+    #[ts(type = "number")]
+    since: i64,
 }
 
 /// What `agents.write` is asked: who writes, a Thread or a Harness, one
@@ -996,6 +1010,17 @@ impl Agents {
             settings,
             offer,
         })
+    }
+
+    async fn accounts(
+        &self,
+        call: Call,
+        Since { since }: Since,
+    ) -> Result<Vec<AccountUse>, Refusal> {
+        let uses = call
+            .project()
+            .read(move |sql| store::account_uses(sql, since));
+        Ok(uses.await?)
     }
 
     async fn send(&self, call: Call, params: Send) -> Result<Sent, Refusal> {
