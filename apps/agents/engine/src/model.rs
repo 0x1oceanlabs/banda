@@ -23,6 +23,12 @@ banda_kernel::id!(
     export_to = "agents/"
 );
 banda_kernel::id!(
+    /// A sub-agent: a Harness's helper at work inside a Thread, kept as a
+    /// lane of it (ADR 0103, decision 4).
+    SubagentId,
+    export_to = "agents/"
+);
+banda_kernel::id!(
     /// An image a Thread item carries.
     ImageId,
     export_to = "agents/"
@@ -640,6 +646,12 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         values: Option<Values>,
+        /// The sub-agent that asks, when it is not the Agent itself. Its
+        /// Question is an entry of the Thread, not of its lane, so the
+        /// Thread asks (ADR 0103, decision 8).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     /// A line from Banda about the Thread, such as a session the
     /// Harness could not continue.
@@ -680,6 +692,11 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         url: Option<String>,
+    },
+    /// Where a sub-agent started, which shows it (ADR 0103, decision 15):
+    /// its record is the Thread's `subagents`, its work its own lane.
+    Subagent {
+        subagent: SubagentId,
     },
 }
 
@@ -805,6 +822,118 @@ pub struct ThreadView {
     #[ts(optional, as = "Option<bool>")]
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub unfenced: bool,
+    /// Its sub-agents, nested ones with their parent, in the order they
+    /// started (ADR 0103, decision 10). Left out when it has none, so a
+    /// window and an engine from before read the same view.
+    #[ts(optional, as = "Option<Vec<Subagent>>")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub subagents: Vec<Subagent>,
+    /// The calls of its sub-agents that edit, delete or move files, in the
+    /// order they came: of a lane's entries only these come with the
+    /// Thread, so its turns' changes count them (ADR 0103, decision 8).
+    #[ts(optional, as = "Option<Vec<Item>>")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub edits: Vec<Item>,
+}
+
+/// Where a sub-agent's work stands, in Banda's words (ADR 0103, decision
+/// 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum SubagentState {
+    /// It works.
+    Running,
+    /// It waits for its Person to answer its Question.
+    Asks,
+    /// It finished.
+    Done,
+    /// It ended without finishing what it was given.
+    Failed,
+    /// The Person, its Thread's Agent or its parent stopped it.
+    Stopped,
+    /// A Crew's agent waits for a slot. No lane is in it before Crews come
+    /// (ADR 0103, step 4).
+    Queued,
+    /// It was cut off from Banda: by a restart, its Harness stopping, or
+    /// Banda letting go of its process. A state the Harness says later
+    /// undoes it.
+    Lost,
+}
+
+impl SubagentState {
+    /// Whether it is at work: it runs or asks. Fork and rewind wait for
+    /// such a lane, as for a turn that runs (ADR 0103, Open questions).
+    pub fn works(self) -> bool {
+        matches!(self, SubagentState::Running | SubagentState::Asks)
+    }
+}
+
+/// A sub-agent as its Thread keeps it: a lane of the Thread, with a slice
+/// of its entries of its own (ADR 0103, decisions 4 and 10). It keeps no
+/// counts and nothing of what it does now: those come from its entries.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Subagent {
+    pub id: SubagentId,
+    /// The turn it started in; a nested one's is its root's, so a rewind
+    /// takes a whole tree with its turn.
+    pub turn: TurnId,
+    /// The sub-agent that started it, when one did.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub parent: Option<SubagentId>,
+    /// What its parent calls it, as the Harness says; empty once the
+    /// Harness cleared it.
+    pub title: String,
+    /// What it is for, as the Harness says: "Explore", "general-purpose".
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub role: Option<String>,
+    /// The model it runs on, when the Harness says.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    pub state: SubagentState,
+    /// Why it ended as it did, in plain words, when that is worth saying.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// It may be stopped alone, as the Harness allows
+    /// (`capabilities.cancel`).
+    pub can_stop: bool,
+    /// When it started, in milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub started: i64,
+    /// When it ended, the same way; none while it is at work.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended: Option<i64>,
+    /// The brief it was given as it started.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// What it reported back as it went idle.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub report: Option<String>,
+}
+
+/// A sub-agent as its Pane, or its row opened in place, reads it
+/// (`agents.subagent`): its own entries and the Questions it asked, and
+/// its own sub-agents, one level down. It is current at `at`, as a
+/// Thread's view is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct SubagentView {
+    #[ts(type = "number")]
+    pub at: i64,
+    /// The Thread it works in.
+    pub thread: ThreadId,
+    pub subagent: Subagent,
+    pub items: Vec<Item>,
+    /// The sub-agents it started, in the order they started.
+    pub subagents: Vec<Subagent>,
 }
 
 /// Why Banda started a turn of a Thread in Full access Supervised, and
@@ -1247,12 +1376,20 @@ pub enum Fact {
         item: ItemId,
         turn: TurnId,
         text: String,
+        /// The sub-agent whose lane it is of, when it is not the Agent's
+        /// own; so for each fact below that names `sub`.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     #[serde(rename = "thought.grew")]
     ThoughtGrew {
         item: ItemId,
         turn: TurnId,
         text: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     #[serde(rename = "tool.started")]
     ToolStarted {
@@ -1263,6 +1400,9 @@ pub enum Fact {
         status: ToolStatus,
         #[serde(default)]
         content: Vec<ToolContent>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     /// Each field given replaces the tool call's.
     #[serde(rename = "tool.changed")]
@@ -1297,6 +1437,9 @@ pub enum Fact {
         item: ItemId,
         turn: TurnId,
         steps: Vec<PlanStep>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     /// The plan's steps now, all of them.
     #[serde(rename = "plan.changed")]
@@ -1304,6 +1447,9 @@ pub enum Fact {
     /// How full the Agent's context in the Thread is now.
     #[serde(rename = "thread.used")]
     ThreadUsed { thread: ThreadId, usage: Usage },
+    /// A Question, the Agent's own or a sub-agent's, `sub`. A
+    /// sub-agent's is the Thread's entry all the same, in its launch turn
+    /// (ADR 0103, decision 8).
     #[serde(rename = "question.asked")]
     QuestionAsked {
         item: ItemId,
@@ -1316,6 +1462,9 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         plan: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     #[serde(rename = "question.answered")]
     QuestionAnswered {
@@ -1347,6 +1496,73 @@ pub enum Fact {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         turn: Option<TurnId>,
         text: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
+    },
+    /// A sub-agent started, a lane of the Thread, and `item` is where it
+    /// shows: its anchor, an entry of the Thread's, or of its parent's lane
+    /// for a nested one (ADR 0103, decision 8). Its entries are each a
+    /// fact of its own, naming it by `sub`.
+    #[serde(rename = "subagent.started")]
+    SubagentStarted { item: ItemId, subagent: Subagent },
+    /// What changed of a sub-agent, and only that: each field given
+    /// replaces its own. A state at work, running or asks, takes its
+    /// `ended` and `why` away.
+    #[serde(rename = "subagent.changed")]
+    SubagentChanged {
+        subagent: SubagentId,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        state: Option<SubagentState>,
+        /// Empty when the Harness cleared it.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        /// `null` when the Harness cleared it.
+        #[ts(optional = nullable, as = "Option<String>")]
+        #[serde(
+            default,
+            deserialize_with = "banda_kernel::present",
+            skip_serializing_if = "Option::is_none"
+        )]
+        role: Option<Option<String>>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        model: Option<String>,
+        /// `false` when the Harness cleared what it lets a client do.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        can_stop: Option<bool>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        prompt: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        report: Option<String>,
+    },
+    /// A sub-agent ended, as `state` says, and can no longer be stopped.
+    /// `why` is this end's, none for one that needs none; a `report` given
+    /// replaces its own. `turn` is the turn it started in, as a turn's end
+    /// names its own, so git takes that turn's changes again (ADR 0103,
+    /// decision 8).
+    #[serde(rename = "subagent.ended")]
+    SubagentEnded {
+        subagent: SubagentId,
+        turn: TurnId,
+        state: SubagentState,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        report: Option<String>,
+        /// When it ended, in milliseconds since the epoch.
+        #[ts(type = "number")]
+        ended: i64,
     },
     /// The Agent showed its Person a Visual (ADR 0037).
     #[serde(rename = "visual.shown")]
@@ -1394,7 +1610,7 @@ pub const VERSION: u32 = 1;
 
 #[cfg(test)]
 mod tests {
-    use super::VERSION;
+    use super::*;
 
     /// Writes `VERSION` beside the generated types, as ts-rs writes them,
     /// so a window reads the facts' version from the Rust.
@@ -1413,5 +1629,49 @@ mod tests {
             std::fs::create_dir_all(file.parent().unwrap()).unwrap();
             std::fs::write(&file, text).unwrap();
         }
+    }
+
+    #[test]
+    fn a_change_names_a_cleared_role_and_leaves_out_what_did_not_change() {
+        let subagent = SubagentId::new();
+        let change = |role| Fact::SubagentChanged {
+            subagent,
+            state: None,
+            title: None,
+            role,
+            model: None,
+            can_stop: None,
+            why: None,
+            prompt: None,
+            report: None,
+        };
+        let id = subagent.to_string();
+        for (role, said) in [
+            (None, serde_json::json!({ "subagent": id })),
+            (
+                Some(None),
+                serde_json::json!({ "subagent": id, "role": null }),
+            ),
+            (
+                Some(Some("Explore".to_owned())),
+                serde_json::json!({ "subagent": id, "role": "Explore" }),
+            ),
+        ] {
+            let fact = change(role);
+            let written = serde_json::to_value(&fact).unwrap();
+            assert_eq!(written["payload"], said);
+            assert_eq!(serde_json::from_value::<Fact>(written).unwrap(), fact);
+        }
+    }
+
+    #[test]
+    fn what_a_thread_wrote_before_sub_agents_reads_and_writes_as_it_did() {
+        let question = r#"{"kind":"question","title":"Run it?","choices":[],"state":"open"}"#;
+        let body: Body = serde_json::from_str(question).unwrap();
+        assert!(matches!(body, Body::Question { sub: None, .. }));
+        assert_eq!(serde_json::to_string(&body).unwrap(), question);
+        let grew = r#"{"kind":"reply.grew","payload":{"item":"0195f0a8-0000-7000-8000-000000000000","turn":"0195f0a8-0000-7000-8000-000000000001","text":"Hi"}}"#;
+        let fact: Fact = serde_json::from_str(grew).unwrap();
+        assert_eq!(serde_json::to_string(&fact).unwrap(), grew);
     }
 }

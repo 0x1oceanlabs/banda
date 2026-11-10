@@ -399,3 +399,64 @@ test("a turn that ended and changed files says which, after its reply", () => {
     { changes: ["/a.md"] },
   ])
 })
+
+test("a sub-agent's Question leaves the Agent's call that waits unmarked", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("tool.started", {
+      item: "a",
+      turn: "u",
+      title: "pnpm test",
+      tool: "execute",
+      status: "pending",
+      content: [],
+    }),
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      sub: "l",
+      title: "Allow pnpm lint?",
+      choices: [{ id: "yes", name: "Allow", allows: true, always: false }],
+    })
+  )
+  // Its call is in its lane; the Agent's waits for something else.
+  expect([...awaiting(state)]).toEqual([])
+})
+
+test("a turn's changes count its sub-agents' edits; its work says the Agent's own", () => {
+  const lane = {
+    id: "l",
+    turn: "u",
+    title: "Explore",
+    state: "running",
+    can_stop: true,
+    started: 1,
+  }
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("subagent.started", { item: "s", subagent: lane }),
+    event("tool.started", {
+      item: "le",
+      turn: "u",
+      sub: "l",
+      title: "Edit b.md",
+      tool: "edit",
+      status: "done",
+      content: [{ kind: "diff", path: "/b.md", old: "x\n", new: "y\n" }],
+    }),
+    edited("e", "/a.md", undefined),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  expect(state.edits.map((item) => item.id)).toEqual(["le"])
+  expect(shape(timeline(state))).toEqual([
+    "m",
+    "s",
+    { fold: ["e"] },
+    "r",
+    { changes: ["/b.md", "/a.md"] },
+  ])
+  expect(didWords(did(state.items, "done"))).toBe("edited a file")
+})

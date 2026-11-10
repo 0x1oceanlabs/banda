@@ -389,6 +389,7 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Moved { from, to, how } => format!("moved: {from} → {to} {how:?}"),
             Body::Visual { title, height, .. } => format!("visual: {title} ({height}px)"),
             Body::Issue { title, state, .. } => format!("issue: {title} ({state:?})"),
+            Body::Subagent { subagent } => format!("sub-agent: {subagent}"),
         })
         .collect()
 }
@@ -2424,6 +2425,179 @@ async fn the_diff_s_turn_is_what_the_turn_s_tool_calls_changed() {
         )
         .await;
     assert_eq!(gone.unwrap_err().code, Code::NotFound);
+}
+
+#[tokio::test]
+async fn agents_subagent_answers_not_found_for_an_unknown_lane() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "edit the notes").await;
+    let read = world
+        .call(world.person(), "agents.thread", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    assert!(
+        read.get("subagents").is_none() && read.get("edits").is_none(),
+        "a Thread with none reads as before: {read}"
+    );
+    let unknown = world
+        .call(
+            world.person(),
+            "agents.subagent",
+            json!({ "subagent": banda_agents::model::SubagentId::new() }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(unknown.code, Code::NotFound);
+    assert_eq!(unknown.message, "There is no such sub-agent.");
+}
+
+/// A Thread's lanes, kept in its Project's database by hand as the engine
+/// will keep them, as its methods read them: the view lists them and
+/// their edits, the changes count those in the lane's launch turn, and
+/// fork and rewind wait while one works (ADR 0103, decisions 8 and 21).
+#[tokio::test]
+async fn a_threads_lanes_are_read_with_it_and_fork_and_rewind_wait_for_them() {
+    use banda_agents::model::SubagentId;
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "remember apples").await;
+    let turn = view.turns[0].id;
+    let (lane, nested) = (SubagentId::new(), SubagentId::new());
+    let (anchor, edit, inner) = (ItemId::new(), ItemId::new(), ItemId::new());
+
+    let sql =
+        rusqlite::Connection::open(project_data(root.path()).join("project.sqlite3")).unwrap();
+    sql.busy_timeout(Duration::from_secs(5)).unwrap();
+    // Each entry as the Agent's reply of that turn: its author, its time.
+    let item = |id: ItemId, body: &Body, sub: Option<SubagentId>| {
+        sql.execute(
+            "INSERT INTO agents_items (id, thread, turn, author, at, body, sub)
+             SELECT ?1, thread, turn, author, at, ?2, ?3 FROM agents_items
+             WHERE turn = ?4 AND sub IS NULL ORDER BY rowid DESC LIMIT 1",
+            rusqlite::params![id, serde_json::to_string(body).unwrap(), sub, turn],
+        )
+        .unwrap();
+    };
+    let kept = |id: SubagentId, parent: Option<SubagentId>, item: ItemId, state: &str| {
+        sql.execute(
+            "INSERT INTO agents_subagents (id, thread, turn, parent, item, title, state, started_at)
+             VALUES (?1, ?2, ?3, ?4, ?5, 'Read the notes', ?6, 1)",
+            rusqlite::params![id, thread.as_str().unwrap(), turn, parent, item, state],
+        )
+        .unwrap();
+    };
+    item(anchor, &Body::Subagent { subagent: lane }, None);
+    kept(lane, None, anchor, "running");
+    let changed = Body::Tool {
+        title: "Edit notes.md".into(),
+        tool: ToolKind::Edit,
+        status: ToolStatus::Done,
+        content: vec![ToolContent::Diff {
+            path: "/work/notes.md".into(),
+            old: Some("one\n".into()),
+            new: "two\n".into(),
+        }],
+        output: None,
+    };
+    item(edit, &changed, Some(lane));
+    item(inner, &Body::Subagent { subagent: nested }, Some(lane));
+    kept(nested, Some(lane), inner, "done");
+
+    let view = world.thread(&thread).await;
+    let lanes: Vec<_> = view.subagents.iter().map(|one| one.id).collect();
+    assert_eq!(lanes, [lane, nested], "every lane, nested ones too");
+    assert_eq!(
+        view.edits.iter().map(|one| one.id).collect::<Vec<_>>(),
+        [edit]
+    );
+    assert!(
+        (view.items.iter()).all(|one| one.id != edit && one.id != inner),
+        "a lane's work stays out of the Thread"
+    );
+    assert!(view.items.iter().any(|one| one.id == anchor));
+    assert!(
+        (view.turns.iter()).all(|one| !one.can.fork && !one.can.rewind),
+        "{:?}",
+        view.turns
+    );
+
+    let refused = (world.call(world.person(), "agents.fork", json!({ "turn": turn })))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(
+        refused.message,
+        "The Thread can be forked once its sub-agents end."
+    );
+    let refused = (world.call(world.person(), "agents.rewind", json!({ "turn": turn })))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(
+        refused.message,
+        "The Thread can go back once its sub-agents end."
+    );
+
+    // The lane's edit counts in the turn it started in.
+    let changes = |turn: Option<TurnId>| {
+        world.call(
+            world.person(),
+            "agents.changes",
+            json!({ "thread": thread, "turn": turn }),
+        )
+    };
+    let listed = changes(None).await.unwrap();
+    assert_eq!(listed["turns"][0]["turn"], json!(turn), "{listed}");
+    assert_eq!(listed["turns"][0]["n"], 1);
+    let one = changes(Some(turn)).await.unwrap();
+    assert_eq!(
+        one["files"],
+        json!([{ "path": "/work/notes.md", "old": "one\n", "new": "two\n" }])
+    );
+
+    let read = (world.call(
+        world.person(),
+        "agents.subagent",
+        json!({ "subagent": lane }),
+    ))
+    .await
+    .unwrap();
+    assert_eq!(read["thread"], thread);
+    assert_eq!(read["subagent"]["id"], json!(lane));
+    assert_eq!(read["subagent"]["state"], "running");
+    let ids = |list: &Value| -> Vec<Value> {
+        (list.as_array().unwrap().iter())
+            .map(|one| one["id"].clone())
+            .collect()
+    };
+    assert_eq!(ids(&read["items"]), [json!(edit), json!(inner)]);
+    assert_eq!(ids(&read["subagents"]), [json!(nested)]);
+
+    // Once it ends, the Thread forks, its lanes with it under IDs of
+    // their own.
+    sql.execute(
+        "UPDATE agents_subagents SET state = 'done', ended_at = 2 WHERE id = ?1",
+        rusqlite::params![lane],
+    )
+    .unwrap();
+    let view = world.thread(&thread).await;
+    assert!(view.turns.iter().all(|one| one.can.fork && one.can.rewind));
+    let forked = (world.call(world.person(), "agents.fork", json!({ "turn": turn })))
+        .await
+        .unwrap();
+    let fork = world.thread(&forked["thread"]).await;
+    assert_eq!(fork.subagents.len(), 2);
+    assert!(fork.subagents.iter().all(|one| !lanes.contains(&one.id)));
+    assert_eq!(fork.edits.len(), 1);
+    assert_ne!(fork.edits[0].id, edit);
+
+    // Back to before its message, its lanes go with its turn.
+    (world.call(world.person(), "agents.rewind", json!({ "turn": turn })))
+        .await
+        .unwrap();
+    let view = world.thread(&thread).await;
+    assert!(view.turns.is_empty() && view.subagents.is_empty() && view.edits.is_empty());
 }
 
 #[tokio::test]

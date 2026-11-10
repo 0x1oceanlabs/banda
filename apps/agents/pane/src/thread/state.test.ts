@@ -2,6 +2,7 @@ import type { Event, Participant } from "@banda/contract"
 import type {
   Item,
   ListedThread,
+  Subagent,
   ThreadView,
   TurnView,
 } from "@banda/contract/agents"
@@ -11,8 +12,11 @@ import {
   EMPTY,
   apply,
   asked as askedOf,
+  atWork,
+  declined,
   declineOnce,
   fromView,
+  planOf,
   proposedPlan,
   choose,
   chosen,
@@ -466,7 +470,7 @@ test("an entry of a kind this window does not know is left out of the Thread (AD
     thread: { title: "hi", harness: "fake" },
     items: [
       message,
-      newer("s", "subagent", "Explore the routes"),
+      newer("s", "reminder", "Look at the routes tomorrow"),
       ...rest,
       newer("c", "crew", "Crew audit-routes"),
     ],
@@ -752,4 +756,251 @@ test("a reply in plan mode is a plan that waits for the Person", () => {
     turns: done.turns.map((t) => ({ ...t, plan: false })),
   }
   expect(proposedPlan(before)).toBeUndefined()
+})
+
+/** A sub-agent of turn `u` as it starts. */
+const lane = (id: string, more: Partial<Subagent> = {}): Subagent => ({
+  id,
+  turn: "u",
+  title: `Lane ${id}`,
+  state: "running",
+  can_stop: true,
+  started: 1,
+  ...more,
+})
+
+/** Turn `turn` as its message `item` starts it. */
+const begun = (item = "m", turn = "u") => [
+  event(
+    "message.posted",
+    { item, turn, text: "hi", images: [] },
+    { author: person }
+  ),
+  event("turn.started", { turn }),
+]
+
+const call = (item: string, tool: string, sub?: string, turn = "u") =>
+  event("tool.started", {
+    item,
+    turn,
+    ...(sub && { sub }),
+    title: `Tool ${item}`,
+    tool,
+    status: "running",
+    content: [],
+  })
+
+test("a sub-agent's entries stay out of the Thread, and its Question docks there naming who asks", () => {
+  const state = play(
+    ...begun(),
+    event("subagent.started", { item: "s", subagent: lane("l") }),
+    call("c", "read", "l"),
+    event("thought.grew", { item: "t", turn: "u", sub: "l", text: "Hm" }),
+    event("reply.grew", { item: "r", turn: "u", sub: "l", text: "Found it." }),
+    event("tool.changed", { item: "c", status: "done" }),
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      sub: "l",
+      title: "Run?",
+      choices: [],
+    })
+  )
+  expect(state.items.map((item) => item.id)).toEqual(["m", "s", "q"])
+  expect(state.items[1].body).toEqual({ kind: "subagent", subagent: "l" })
+  expect(state.items[2].body).toMatchObject({
+    kind: "question",
+    sub: "l",
+    state: "open",
+  })
+  expect(askedOf(state)?.id).toBe("q")
+  expect(state.edits).toEqual([])
+})
+
+test("a sub-agent's edits come for its turn's changes, and go with the turn", () => {
+  const diff = { kind: "diff", path: "/a.md", old: "one\n", new: "two\n" }
+  const ended = (subagent: string, turn: string) =>
+    event("subagent.ended", { subagent, turn, state: "done", ended: 9 })
+  const state = play(
+    ...begun(),
+    event("subagent.started", { item: "s", subagent: lane("l") }),
+    call("e", "edit", "l"),
+    call("c", "execute", "l"),
+    event("tool.changed", { item: "e", status: "done", content: [diff] }),
+    event("turn.ended", { turn: "u", state: "done" }),
+    ended("l", "u"),
+    ...begun("m2", "v"),
+    event("subagent.started", {
+      item: "s2",
+      subagent: lane("k", { turn: "v" }),
+    }),
+    call("f", "move", "k", "v"),
+    event("turn.ended", { turn: "v", state: "done" }),
+    ended("k", "v")
+  )
+  expect(state.items.map((item) => item.id)).toEqual(["m", "s", "m2", "s2"])
+  expect(state.edits.map((item) => item.id)).toEqual(["e", "f"])
+  expect(state.edits[0].body).toMatchObject({
+    kind: "tool",
+    tool: "edit",
+    status: "done",
+    content: [diff],
+  })
+  // Back to before the second turn, the first keeps its sub-agent.
+  const rewound = apply(
+    state,
+    event("thread.rewound", { thread: "t", turn: "v" })
+  )
+  expect(rewound.items.map((item) => item.id)).toEqual(["m", "s"])
+  expect(rewound.subagents.map((sub) => sub.id)).toEqual(["l"])
+  expect(rewound.edits.map((item) => item.id)).toEqual(["e"])
+  // An engine from before sub-agents says neither.
+  const older = {
+    at: 0,
+    thread: { title: "Fix it", harness: "fake" },
+    items: [],
+    turns: [],
+    settings: EMPTY.settings,
+    offer: EMPTY.offer,
+    held: false,
+  } as unknown as ThreadView
+  expect(fromView(older)).toMatchObject({ subagents: [], edits: [] })
+})
+
+test("sub-agents keep the order they started in as they change and end", () => {
+  const state = play(
+    ...begun(),
+    event("subagent.started", { item: "s", subagent: lane("a") }),
+    // A nested one shows in its parent's lane, not in the Thread.
+    event("subagent.started", {
+      item: "n",
+      subagent: lane("b", { parent: "a" }),
+    }),
+    event("subagent.started", { item: "z", subagent: lane("c") }),
+    event("subagent.changed", {
+      subagent: "a",
+      title: "Review",
+      role: "reviewer",
+    }),
+    event("subagent.ended", {
+      subagent: "a",
+      turn: "u",
+      state: "failed",
+      why: "It broke.",
+      report: "Half done.",
+      ended: 9,
+    })
+  )
+  expect(state.subagents.map((sub) => sub.id)).toEqual(["a", "b", "c"])
+  expect(state.items.map((item) => item.id)).toEqual(["m", "s", "z"])
+  expect(state.subagents[0]).toMatchObject({
+    title: "Review",
+    role: "reviewer",
+    state: "failed",
+    why: "It broke.",
+    report: "Half done.",
+    ended: 9,
+    can_stop: false,
+  })
+  // At work again, it has not ended; a cleared role is gone.
+  const again = apply(
+    state,
+    event("subagent.changed", { subagent: "a", state: "running", role: null })
+  )
+  const a = again.subagents[0]
+  expect(atWork(a)).toBe(true)
+  expect(a.ended).toBeUndefined()
+  expect(a.why).toBeUndefined()
+  expect(a.role).toBeUndefined()
+  expect(a.report).toBe("Half done.")
+  expect(again.subagents.map((sub) => sub.id)).toEqual(["a", "b", "c"])
+  // An end that says no why has none, and keeps the report it had.
+  const stopped = [
+    event("subagent.changed", {
+      subagent: "a",
+      why: "Waits on the build.",
+      can_stop: true,
+    }),
+    event("subagent.ended", {
+      subagent: "a",
+      turn: "u",
+      state: "stopped",
+      ended: 12,
+    }),
+  ].reduce(apply, again).subagents[0]
+  expect(stopped).toMatchObject({
+    state: "stopped",
+    ended: 12,
+    can_stop: false,
+    report: "Half done.",
+  })
+  expect(stopped.why).toBeUndefined()
+})
+
+test("while a sub-agent works, the Thread neither forks nor goes back", () => {
+  const done = play(
+    ...begun(),
+    event("subagent.started", { item: "s", subagent: lane("l") }),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  expect(done.turns[0].can).toMatchObject({ fork: false, rewind: false })
+  for (const state of ["asks", "queued"] as const) {
+    const now = apply(done, event("subagent.changed", { subagent: "l", state }))
+      .turns[0].can
+    // Only one that asks still works; a queued one has not started.
+    const free = state === "queued"
+    expect(now).toMatchObject({ fork: free, rewind: free })
+  }
+  const ended = apply(
+    done,
+    event("subagent.ended", {
+      subagent: "l",
+      turn: "u",
+      state: "stopped",
+      ended: 9,
+    })
+  )
+  expect(ended.turns[0].can).toMatchObject({ fork: true, rewind: true })
+})
+
+test("a message says no only to the Agent's own Question", () => {
+  const choices = [
+    { id: "allow", name: "Allow", allows: true, always: false },
+    { id: "reject", name: "Reject", allows: false, always: false },
+  ]
+  const lanes = play(
+    event("question.asked", {
+      item: "q1",
+      turn: "u",
+      sub: "l",
+      title: "Run?",
+      choices,
+    })
+  )
+  // Docked, it stays open as the message goes to the Agent.
+  expect(askedOf(lanes)?.id).toBe("q1")
+  expect(declined(lanes)).toBeUndefined()
+  const both = apply(
+    lanes,
+    event("question.asked", { item: "q2", turn: "u", title: "Edit?", choices })
+  )
+  expect(askedOf(both)?.id).toBe("q2")
+  expect(declined(both)).toEqual({ item: "q2", choice: "reject" })
+})
+
+test("a sub-agent's plan is not the Agent's plan of its turn", () => {
+  const planning = { ...EMPTY, settings: { ...EMPTY.settings, plan: true } }
+  const plan = (item: string, sub?: string) =>
+    event("question.asked", {
+      item,
+      turn: "u",
+      ...(sub && { sub }),
+      title: "Carry it out?",
+      choices: [],
+      plan: `# Plan ${item}`,
+    })
+  const state = [...begun(), plan("q1", "l")].reduce(apply, planning)
+  expect(planOf(state.turns[0], state.items)).toBeUndefined()
+  const own = apply(state, plan("q2"))
+  expect(planOf(own.turns[0], own.items)?.id).toBe("q2")
 })

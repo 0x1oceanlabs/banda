@@ -557,7 +557,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           history={history}
           placeholder={
             asking
-              ? `Answer above, or write to say no and tell ${name} what to do instead`
+              ? asking.body.sub === undefined
+                ? `Answer above, or write to say no and tell ${name} what to do instead`
+                : `Answer above, or write to ${name}`
               : planned
                 ? "Write to refine the plan, or implement it"
                 : undefined

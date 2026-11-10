@@ -37,16 +37,16 @@ const project = "p" as ProjectId
 test("a read that left entries out says so once in the window's log, naming their kinds", async () => {
   const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined)
   const engine = engineWith({
-    a: "subagent",
+    a: "reminder",
     m: "message",
     b: "crew",
-    c: "subagent",
+    c: "reminder",
   })
   const read = await readThread(engine, project, "t")
   expect(read.items.map((item) => item.id)).toEqual(["m"])
   expect(warned.mock.calls).toEqual([
     [
-      "agents: left out entries of kinds this window does not know: subagent, crew",
+      "agents: left out entries of kinds this window does not know: reminder, crew",
     ],
   ])
 })

@@ -84,7 +84,7 @@ pub use events::{Event, EventFilter};
 pub use fence::{Fence, FenceLayer, FenceWhy};
 pub use foreign::{Foreign, ForeignWhy};
 pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
-pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
+pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode, present};
 pub use methods::{Kind, Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use named::{MachineIcon, NAME_MOST, Named};

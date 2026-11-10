@@ -96,8 +96,18 @@ impl Text {
 
     pub fn grew(self, item: ItemId, turn: TurnId, text: String) -> Fact {
         match self {
-            Text::Reply => Fact::ReplyGrew { item, turn, text },
-            Text::Thought => Fact::ThoughtGrew { item, turn, text },
+            Text::Reply => Fact::ReplyGrew {
+                item,
+                turn,
+                text,
+                sub: None,
+            },
+            Text::Thought => Fact::ThoughtGrew {
+                item,
+                turn,
+                text,
+                sub: None,
+            },
         }
     }
 }

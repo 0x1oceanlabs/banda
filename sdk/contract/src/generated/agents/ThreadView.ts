@@ -2,6 +2,7 @@
 import type { Item } from "./Item";
 import type { Offer } from "./Offer";
 import type { Settings } from "./Settings";
+import type { Subagent } from "./Subagent";
 import type { ThreadId } from "./ThreadId";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TurnView } from "./TurnView";
@@ -33,4 +34,16 @@ forked_from?: ThreadId,
  * It is in Full access its Person chose where the fence does not
  * hold (ADR 0083): it runs so, its Agent acting as the Person.
  */
-unfenced?: boolean, };
+unfenced?: boolean, 
+/**
+ * Its sub-agents, nested ones with their parent, in the order they
+ * started (ADR 0103, decision 10). Left out when it has none, so a
+ * window and an engine from before read the same view.
+ */
+subagents?: Array<Subagent>, 
+/**
+ * The calls of its sub-agents that edit, delete or move files, in the
+ * order they came: of a lane's entries only these come with the
+ * Thread, so its turns' changes count them (ADR 0103, decision 8).
+ */
+edits?: Array<Item>, };

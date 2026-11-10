@@ -9,6 +9,7 @@ import type { Moved } from "./Moved";
 import type { Output } from "./Output";
 import type { PlanStep } from "./PlanStep";
 import type { QuestionState } from "./QuestionState";
+import type { SubagentId } from "./SubagentId";
 import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
 import type { ToolStatus } from "./ToolStatus";
@@ -44,7 +45,13 @@ plan?: string, state: QuestionState, answer?: string,
 /**
  * What the Person filled in the form.
  */
-values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "moved", from: string, to: string, how: Moved, } | { "kind": "visual", visual: VisualId, title: string, height: number, 
+values?: { [key in string]: FieldValue }, 
+/**
+ * The sub-agent that asks, when it is not the Agent itself. Its
+ * Question is an entry of the Thread, not of its lane, so the
+ * Thread asks (ADR 0103, decision 8).
+ */
+sub?: SubagentId, } | { "kind": "notice", text: string, } | { "kind": "moved", from: string, to: string, how: Moved, } | { "kind": "visual", visual: VisualId, title: string, height: number, 
 /**
  * How tall the page laid out at each of several widths, as the
  * window found when it showed; none without a window.
@@ -57,4 +64,4 @@ comment_on?: number, state: IssueState,
 /**
  * Where it went, once it did.
  */
-url?: string, };
+url?: string, } | { "kind": "subagent", subagent: SubagentId, };

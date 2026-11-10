@@ -109,6 +109,17 @@ test("a Question is about the call of its turn with its title, or the last that 
   expect(aboutOf([later, call("d", "Later", "fetch")], later)).toBeUndefined()
 })
 
+test("a sub-agent's Question is about none of the Agent's calls", () => {
+  // Its own calls are in its lane, which the Thread does not hold.
+  const lanes = item("q", question({ title: "Edit a.ts", sub: "l" })) as Asked
+  const items = [call("a", "Edit a.ts", "edit"), lanes]
+  expect(aboutOf(items, lanes)).toBeUndefined()
+  const pending = item("q", question({ sub: "l" })) as Asked
+  expect(aboutOf([call("b", "Read b.ts", "read"), pending], pending)).toBe(
+    undefined
+  )
+})
+
 test("the answers: no once with Esc, the first that allows once the main, the kept under More", () => {
   expect(answersOf(PERMISSION)).toEqual({
     decline: PERMISSION[2],

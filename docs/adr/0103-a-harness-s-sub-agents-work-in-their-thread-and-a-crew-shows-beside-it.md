@@ -273,10 +273,21 @@ sub-agents and the Crew `audit-routes`:
        as it closes a turn's own (`writer.rs:192`, `store.rs:1459-1466`):
        it closes when its lane ends or is Lost.
      - **Except its edits.** `agents.thread` leaves a lane's entries out
-       but for its calls that changed a file, whatever their kind: a
-       call with a diff in it that did not fail, as `files_of` counts a
-       turn's (`apps/agents/engine/src/changes.rs:107-135`). They come as
-       `ThreadView.edits`. A sub-agent's file changes count in its launch
+       but for its calls that edit, delete or move a file, by the kind
+       each starts with, failed or not. They come as `ThreadView.edits`,
+       and what they changed is counted as a turn's own calls are: a
+       call with a diff in it that did not fail, by `files_of`
+       (`apps/agents/engine/src/changes.rs:107-135`). _Amended at step
+       1, E1a:_ the set was a lane's calls with a diff that did not fail,
+       whatever their kind. A call's kind is set as it starts
+       (`apps/agents/engine/src/transcript.rs:499-548`), but its diff can
+       come later: Claude sends an edit's diff only in an update after its
+       start (`apps/agents/engine/tests/recordings/claude-edit.jsonl`), and
+       `tool.changed` names only the item. So a window that cut a lane's
+       call as it started could not keep a set chosen by its diff, and
+       its fold would differ from the view. A diff in a lane's call of
+       another kind is not counted, where the Agent's own would be: a
+       known gap. A sub-agent's file changes count in its launch
        turn wherever a turn's changes are counted: the Thread's changes
        card, `agents.changes`, the Diff's Turn and Files' turn paths, by
        one merge, in `changes.rs` and `changes.ts`. When a lane ends

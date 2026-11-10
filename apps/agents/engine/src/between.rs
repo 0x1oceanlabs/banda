@@ -293,11 +293,12 @@ fn open(
         at: tx.now(),
         body: Body::Notice { text: text.clone() },
     };
-    store::insert_item(tx.sql(), thread, &item)?;
+    store::insert_item(tx.sql(), thread, &item, None)?;
     let posted = Fact::NoticePosted {
         item: item.id,
         turn: Some(turn.id),
         text,
+        sub: None,
     };
     emit(tx, by, thread, &posted)?;
     let (settings, step) = writer::make(tx, by, &turn, Event::Open, None)?;
