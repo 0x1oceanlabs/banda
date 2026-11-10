@@ -5,7 +5,7 @@ date: 2026-11-09
 
 # The sidebar is the Person's inbox of their Agents' work
 
-_It amends ADR 0005 (decision 8), ADR 0008 (decisions 4 and 5: the row
+_It amends ADR 0005 (decisions 8 and 9), ADR 0008 (decisions 4 and 5: the row
 and the presets), ADR 0017 (decision 3), ADR 0067 (decisions 3 and 4:
 the header and the foot), ADR 0069 (Archive as a shelf), ADR 0074
 (decisions 1 and 6, asking and the Snoozed shelf, and its name: Snooze
@@ -310,6 +310,9 @@ From the audit (`2-code.md`):
 - **ADR 0017, decision 3; ADR 0067, decisions 3 and 4**: the header and
   the foot are decisions 19–21's. **ADR 0079**: the Flow's menu is in
   the bar.
+- **ADR 0005, decision 9** (an erratum, added with step 9: this list first
+  left it out): the bar's logo opens the Banda menu (decision 21), not the
+  sidebar; `Alt+A`, and the Banda menu's action, show and hide it.
 - **ADR 0069** and **ADR 0074, decision 6**: Archive and Later are
   tabs, not shelves. **ADR 0074, decision 1**: a Thread that asks may be
   put off. **ADR 0074 as a whole**: its Snooze is called Later.
