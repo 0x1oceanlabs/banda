@@ -144,7 +144,9 @@ function WaitFor({
               text={wait.text}
               busy={false}
               onSave={async (text) => {
-                onEdit(wait, text)
+                // Emptied, with no image to carry, it keeps its words.
+                if (text.trim() !== "" || imagesOf(wait).length > 0)
+                  onEdit(wait, text)
                 edit(false)
               }}
               onCancel={() => edit(false)}

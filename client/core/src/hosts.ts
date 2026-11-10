@@ -30,7 +30,7 @@ import type { HostState } from "./device"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
-import { inMemory, Waiting } from "./queue"
+import { inMemory, Waiting, type WaitingStorage } from "./queue"
 import { type Readable, sameData, sameEach, Store } from "./store"
 
 /** How the Window reaches the desktop's hosts: `device.hosts`. */
@@ -285,14 +285,29 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly waiting: Waiting
 
   /** `here` is this machine's engine; none outside a Window, where no
-   * Project is this machine's to act on. */
-  constructor(device: HostsDevice, names: Names, here?: Engine) {
+   * Project is this machine's to act on. What waits is kept in `waiting`,
+   * the device's storage in a Window, which every window on the device
+   * shares; only the main window `drains` it: sends it, and gives back
+   * what does not go (#1299). */
+  constructor(
+    device: HostsDevice,
+    names: Names,
+    here?: Engine,
+    {
+      waiting = inMemory(),
+      drains = true,
+    }: { waiting?: WaitingStorage; drains?: boolean } = {}
+  ) {
     this.#device = device
     this.#names = names
     this.#here = here
     this.#shown.subscribe(() => this.#sayMachines())
-    this.waiting = new Waiting(inMemory(), {
+    this.waiting = new Waiting(waiting, {
       named: (host) => namedIn(this.get(), host, this.seen).name,
+      // A message queued now goes in its host's time as its engine heard
+      // it last.
+      ahead: (host) => this.#engines.get(host)?.offset,
+      drains,
     })
     this.waiting.subscribe(() => this.#sendWaiting())
   }
@@ -303,9 +318,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** Host `key`'s name and icon as this device last saw it (`Names`). */
   readonly seen = (key: string): Named => this.#names.seen(key)
 
-  /** Follows the desktop's hosts; returns how to stop. */
+  /** Follows the desktop's hosts, and what waits for them; returns how to
+   * stop. */
   follow(): () => void {
-    return this.#device.follow((hosts) => this.take(hosts)) ?? (() => {})
+    const waiting = this.waiting.start()
+    const hosts = this.#device.follow((hosts) => this.take(hosts))
+    return () => {
+      hosts?.()
+      waiting()
+    }
   }
 
   /**
@@ -342,8 +363,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   }
 
   /** Sends what waits for each host the Window reaches now: live, its
-   * engine open and answering. Its engine is made for it if need be. */
+   * engine open and answering. Its engine is made for it if need be. Only
+   * the main window sends. */
   #sendWaiting(): void {
+    if (!this.waiting.drains) return
     const hosts = new Set(this.waiting.get().map((wait) => wait.host))
     for (const shown of this.get()) {
       if (!hosts.has(shown.name) || !live(shown)) continue

@@ -61,12 +61,14 @@ export function kept<V>(
     }
     heard.forEach((hear) => hear())
   }
+  // A change starts from what is kept now: another window may have
+  // changed it while none here heard.
   const put = (id: string, value: V) => {
-    const others = Object.entries(read()).filter(([other]) => other !== id)
+    const others = Object.entries(load()).filter(([other]) => other !== id)
     keepAll(Object.fromEntries([...others.slice(-(keep - 1)), [id, value]]))
   }
   const drop = (id: string) => {
-    if (!(id in read())) return
+    if (!(id in load())) return
     keepAll(
       Object.fromEntries(
         Object.entries(read()).filter(([other]) => other !== id)

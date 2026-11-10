@@ -17,9 +17,10 @@ afterEach(() => {
 
 const MINUTE = 60_000
 
-/** arc as the Window shows it, `state` since `at`: a server. */
-const shown = (state: HostState, at = 0): Shown => ({
-  ...shownOf(undefined, state, at),
+/** arc as the Window shows it, `state` since `at`, when the Window last
+ * heard it, unless `unheard`: a server. */
+const shown = (state: HostState, at = 0, unheard = false): Shown => ({
+  ...shownOf(undefined, state, at, undefined, unheard ? undefined : at),
   named: { name: "arc", icon: "server" },
 })
 
@@ -57,6 +58,11 @@ test("away, the pill has the machine's icon and says for how long, as its label 
   expect(later.words).toBe("arc is away · 2 min")
   expect(pill(shown(away, since), since + 90 * MINUTE).words).toBe(
     "arc is away · 1 h"
+  )
+  // Never heard since the window started, as after a restart while it is
+  // away, it does not know since when (the mock's frame 6).
+  expect(pill(shown(away, since, true), since + 90 * MINUTE).words).toBe(
+    "arc is away"
   )
   // A screen reader hears that it is away, not each minute after.
   expect(later.markup).toContain('<span role="status">arc is away</span>')

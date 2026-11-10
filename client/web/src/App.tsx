@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
-import { HostsContext, KeptHosts, useOurs } from "@banda/core/react"
+import { HostsContext, KeptHosts, onDevice, useOurs } from "@banda/core/react"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import {
@@ -35,13 +35,15 @@ export function App({ engine }: { engine: Engine }) {
   const { listed, put } = useProjects(engine)
   // The names it shows each host by, as this device last saw them, are
   // the device's to keep (ADR 0081, decision 1); this machine's own
-  // Projects are its engine's.
+  // Projects are its engine's. What waits for a host is the device's too,
+  // and this window sends it (ADR 0105, Q6).
   const [hosts] = useState(
     () =>
       new KeptHosts(
         device.hosts,
         { seen: seenNamed, follow: followNamed },
-        engine
+        engine,
+        { waiting: onDevice(() => localStorage, window) }
       )
   )
   useEffect(() => hosts.follow(), [hosts])

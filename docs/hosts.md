@@ -32,8 +32,21 @@ the ID it was given as it was queued, and nothing says so. Past its time
 it is not sent: its words and images go back into the draft, above
 anything new there, and a toast says so ("Not sent: arc was still away
 at 14:42."). One on its way as the machine goes again may have gone
-through ("arc went away; your message may have gone through."). For now
-the window keeps what waits in memory, so closing the window drops it.
+through ("arc went away; your message may have gone through.").
+
+What waits is this device's, kept in its storage per machine for its
+time, so it is still there after the window starts again: the row, and
+what the Pane needs before arc answers, the Thread's title, its Project,
+its Harness's name and the skills its composer offers; the pill then
+says "arc is away · 1 waiting", with no minutes, as the window does not
+know since when. One past its time while the window was closed comes
+back into the draft as it starts, with the toast, and is kept until it
+is; one whose machine is live goes at once. It is one queue for every
+window on the device: a message sent from a Pane in a window of its own
+counts in the main window's pill, and stays as that window closes. The
+main window alone sends it, and gives it back to the window that shows
+its Thread. A draft is kept the same way, a new Thread's too, whatever
+its machine does (#838).
 
 A machine whose link looks up but which answers nothing, as one asleep
 before ssh notices or an engine that hangs, is away too (ADR 0082,

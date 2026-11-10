@@ -49,9 +49,14 @@ export function harnessShort(harnesses: HarnessView[], id: string): string {
   return harnesses.find((harness) => harness.id === id)?.short ?? id
 }
 
-/** A Harness's name, or its ID when this computer does not know it. */
-export function harnessName(harnesses: HarnessView[], id: string): string {
-  return harnesses.find((harness) => harness.id === id)?.name ?? id
+/** A Harness's name, or `unknown` when this computer does not know it:
+ * its ID, unless the caller kept its name (ADR 0105, Q6). */
+export function harnessName(
+  harnesses: HarnessView[],
+  id: string,
+  unknown = id
+): string {
+  return harnesses.find((harness) => harness.id === id)?.name ?? unknown
 }
 
 /** The Harnesses Banda knows, by what their accounts are grouped under:

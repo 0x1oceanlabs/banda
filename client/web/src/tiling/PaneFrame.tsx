@@ -42,7 +42,7 @@ import {
 } from "lucide-react"
 import { launcher } from "../launcher"
 import { kindOf, labelOf, sayLabel, showsOf, useLabel } from "../registry"
-import { reachWords, usePaneOn, useReach } from "@banda/core/react"
+import { reachWords, usePaneOn, useReach, useWaiting } from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
 import type { Plan } from "./arrange"
@@ -178,7 +178,7 @@ export const PaneFrame = memo(function PaneFrame({
   marked,
   zoomed = false,
   height,
-  item = false,
+  item: listed = false,
   project,
   mixed,
   frame,
@@ -267,8 +267,19 @@ export const PaneFrame = memo(function PaneFrame({
     there === undefined ? undefined : runs,
     modules
   )
+  // Where the Window has not heard its host, as after a restart while it
+  // is away, a message waiting for it keeps what the header shows: its
+  // Project, and that it shows an Item (ADR 0105, Q6). Not once heard: a
+  // window that lists no Items, as a popped-out Pane's, keeps its header.
+  const unheard =
+    reach.shown?.state.state !== "live" && reach.shown?.asOf === undefined
+  const kept = useWaiting(there, subject ?? null).find((wait) => wait.shows)
+  const shows = unheard ? kept?.shows : undefined
+  const item = listed || shows !== undefined
   const summary =
-    project ?? reach.shown?.projects.find((one) => one.id === entry.project)
+    project ??
+    reach.shown?.projects.find((one) => one.id === entry.project) ??
+    shows?.project
   const launches =
     entry.pane.kind === launcher.kind && there !== undefined && summary
   // What the Slot in its header is given: the Pane alone. What fills it

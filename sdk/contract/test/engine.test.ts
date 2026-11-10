@@ -960,6 +960,15 @@ test("a command kept until a time carries it as not_after in the host's time, by
     }
   )
   expect(sentWith(ran)).toEqual([expect.objectContaining({ not_after: kept })])
+  // None heard yet, but the caller knew how far ahead: by that.
+  const known = newId()
+  await client.commandAt("workspaces.open", page(4), undefined, known, {
+    notAfter: kept,
+    ahead: 5_000,
+  })
+  expect(sentWith(known)).toEqual([
+    expect.objectContaining({ not_after: kept + 5_000 }),
+  ])
   // Past its time, unseen: refused expired, and that is its answer.
   const late = newId()
   for (let send = 0; send < 2; send++)
@@ -982,7 +991,7 @@ test("a command kept until a time carries it as not_after in the host's time, by
   client.close()
 
   // This machine's clock a minute behind the host's: the pong says so,
-  // and not_after goes a minute on.
+  // and not_after goes a minute on, whatever the caller knew before.
   const real = Date.now.bind(Date)
   const behind = vi.spyOn(Date, "now").mockImplementation(() => real() - 60_000)
   try {
@@ -997,6 +1006,7 @@ test("a command kept until a time carries it as not_after in the host's time, by
     const at = Date.now() + 60_000
     await client.commandAt("workspaces.open", page(3), undefined, ahead, {
       notAfter: at,
+      ahead: 5_000,
     })
     const [frame] = sentWith(ahead)
     expect(Math.abs(frame!.not_after! - (at + 60_000))).toBeLessThan(1_000)

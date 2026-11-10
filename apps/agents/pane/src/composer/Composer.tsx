@@ -105,8 +105,8 @@ export function Composer({
   ref,
 }: {
   name: string
-  /** The Thread it writes to, which keeps its draft; null before it
-   * starts. */
+  /** The key its draft is kept under: its Thread's, or a new Thread's own
+   * (`useDraftKey`); with none, only while its Pane is open. */
   thread: string | null
   /** What the Person sent the Thread before, oldest first, read when ↑
    * or ↓ asks. */

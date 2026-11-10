@@ -11,11 +11,14 @@ import { afterEach, expect, test, vi } from "vitest"
 import { FORGETTING, KeptHosts, type Shown, shownOf } from "./hosts"
 import {
   type Back,
+  type DeviceStorage,
   inMemory,
   KEEP,
   KEEPS,
   type NewWait,
+  onDevice,
   type Sender,
+  type StorageEvents,
   Waiting,
   waitsFor,
 } from "./queue"
@@ -53,7 +56,8 @@ function hearing(waiting: Waiting) {
 }
 
 /** A sender each command of which the test settles, open until the test
- * says its window was refused. */
+ * says its window was refused; it notes each one's `not_after` as an
+ * engine that heard no pong says it. */
 function held() {
   const sent: { command: string; notAfter?: number }[] = []
   const settles: { ok: () => void; fail: (error: Error) => void }[] = []
@@ -63,7 +67,11 @@ function held() {
       return connection.status
     },
     commandAt: ((_m, _p, _project, command, options) => {
-      sent.push({ command: command!, notAfter: options?.notAfter })
+      const notAfter =
+        options?.notAfter === undefined
+          ? undefined
+          : options.notAfter + (options.ahead ?? 0)
+      sent.push({ command: command!, notAfter })
       return new Promise((resolve, reject) =>
         settles.push({
           ok: () => resolve({ answer: null, at: null } as never),
@@ -365,7 +373,7 @@ test("what comes back goes to the Window first, to a Pane only where none takes 
   await vi.advanceTimersByTimeAsync(KEEP)
   const pane: string[] = []
   const stop = waiting.onBack((one) => pane.push(one.wait.text) > 0, {
-    after: true,
+    item: THREAD,
   })
   expect(pane).toEqual(["before anyone heard"])
   const windows: string[] = []
@@ -383,9 +391,12 @@ test("what was kept as on its way may have gone through, as the window starts ag
   const first = new Waiting(storage)
   first.add({ ...message("kept"), at: Date.now() })
   first.send("arc", held().engine)
-  expect(storage.read()[0]).toMatchObject({ going: true })
+  expect(JSON.parse([...storage.read().values()][0]!)).toMatchObject({
+    going: true,
+  })
   first.close()
   const again = new Waiting(storage)
+  again.start()
   expect(again.get()).toEqual([expect.objectContaining({ went: true })])
   expect(again.get()[0]).not.toHaveProperty("going")
   again.close()
@@ -418,4 +429,412 @@ test("a message to a started Thread waits while its machine is away, stopped or 
   ).toBe(false)
   // Not known yet, as before the desktop first tells the hosts.
   expect(waitsFor(undefined, "connecting")).toBe(false)
+})
+
+/** A device's storage, as a browser keeps it for the windows on it: each
+ * hears what another changes, a moment after, never what it changes
+ * itself. `broken` makes it refuse every read and write. */
+function aDevice() {
+  const kept = new Map<string, string>()
+  const windows: Set<(event: { key: string | null }) => void>[] = []
+  let broken = false
+  const shut = () => {
+    if (broken) throw new Error("The storage is shut.")
+  }
+  return {
+    kept,
+    break: () => void (broken = true),
+    /** A window on the device: its queue, the main window's if it
+     * `drains`, named arc's machine "arc", started. */
+    window(drains: boolean, more: { ahead?: () => number } = {}) {
+      const heard = new Set<(event: { key: string | null }) => void>()
+      windows.push(heard)
+      const tell = (key: string) => {
+        for (const other of windows)
+          if (other !== heard)
+            for (const hear of [...other])
+              void Promise.resolve().then(() => hear({ key }))
+      }
+      const storage: DeviceStorage = {
+        get length() {
+          shut()
+          return kept.size
+        },
+        key: (i) => [...kept.keys()][i] ?? null,
+        getItem: (key) => kept.get(key) ?? null,
+        setItem: (key, value) => {
+          shut()
+          if (kept.get(key) === value) return
+          kept.set(key, value)
+          tell(key)
+        },
+        removeItem: (key) => {
+          shut()
+          if (kept.delete(key)) tell(key)
+        },
+      }
+      const events: StorageEvents = {
+        addEventListener: (_, listener) => void heard.add(listener),
+        removeEventListener: (_, listener) => void heard.delete(listener),
+      }
+      const waiting = new Waiting(
+        onDevice(() => storage, events),
+        { named: () => "arc", drains, ...more }
+      )
+      waiting.start()
+      return waiting
+    },
+  }
+}
+
+/** Lets what a window heard from another reach it. */
+const heard = () => vi.advanceTimersByTimeAsync(0)
+
+test("one queue for this device's windows: a message queued in a Pane's own window shows in the main window, which alone sends it, once; it stays as that window closes", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  const main = device.window(true)
+  const popped = device.window(false)
+  const command = newId()
+  popped.add(message("from its own window", command))
+  await heard()
+  expect(main.get()).toEqual([
+    expect.objectContaining({ text: "from its own window", seq: 1 }),
+  ])
+  expect(popped.get()).toEqual(
+    main.get().map((one) => expect.objectContaining(one))
+  )
+
+  // Only the main window sends, and once.
+  const { engine, sent, settles } = held()
+  popped.send("arc", engine)
+  expect(sent).toEqual([])
+  main.send("arc", engine)
+  main.send("arc", engine)
+  expect(sent.map((one) => one.command)).toEqual([command])
+  await heard()
+  expect(popped.get()[0]).toMatchObject({ going: true })
+  settles[0]!.ok()
+  await heard()
+  expect(main.get()).toEqual([])
+  expect(popped.get()).toEqual([])
+
+  // Queued there as that window closes, as its Pane docks back: it waits
+  // here, in the order queued.
+  popped.add(message("first", newId()))
+  popped.add(message("second", newId()))
+  popped.close()
+  await heard()
+  expect(main.get().map((one) => one.text)).toEqual(["first", "second"])
+  // What it kept of the window it was went with it.
+  expect(
+    [...device.kept.keys()].filter((key) => key.includes("window."))
+  ).toEqual([])
+  main.close()
+})
+
+test("an Edit in a Pane's own window holds the main window: the message neither goes nor comes back until it is saved, as that window says every 20 s for 5 minutes, longer than a hidden window's clock sleeps; one held by a window that broke goes within them", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  const main = device.window(true)
+  const popped = device.window(false)
+  const back = hearing(main)
+  const { engine, sent } = held()
+  const command = newId()
+  popped.add(message("8 shards", command))
+  const release = popped.hold(command)
+  await heard()
+  main.send("arc", engine)
+  expect(sent).toEqual([])
+  const holds = () =>
+    [...device.kept]
+      .filter(([key]) => key.includes("window."))
+      .map(([, text]) => JSON.parse(text).held[command])
+  expect(holds()).toEqual([Date.now() + 5 * 60_000])
+  await vi.advanceTimersByTimeAsync(20_000)
+  expect(holds()).toEqual([Date.now() + 5 * 60_000])
+  // Past its time while it is edited there: it waits for the edit.
+  await vi.advanceTimersByTimeAsync(KEEP + 30_000)
+  expect(back).toEqual([])
+  popped.edit(command, "4 shards", {
+    ...popped.get()[0]!.call,
+    params: { ...popped.get()[0]!.call.params, text: "4 shards" },
+  } as CommandCall)
+  release()
+  await heard()
+  expect(back).toEqual([
+    expect.objectContaining({
+      wait: expect.objectContaining({ text: "4 shards" }),
+      why: { kind: "expired" },
+    }),
+  ])
+
+  // A window that broke as it held one says no more: its hold lapses
+  // within 5 minutes, and the message goes.
+  const late = newId()
+  main.add(message("held there", late, Date.now()))
+  device.kept.set(
+    "banda.waiting.window.gone",
+    JSON.stringify({
+      at: Date.now(),
+      held: { [late]: Date.now() + 5 * 60_000 },
+      shows: [],
+    })
+  )
+  main.add(message("nudge", newId(), Date.now()))
+  main.send("arc", engine)
+  expect(sent.map((one) => one.command)).not.toContain(late)
+  await vi.advanceTimersByTimeAsync(4 * 60_000)
+  main.send("arc", engine)
+  expect(sent.map((one) => one.command)).not.toContain(late)
+  await vi.advanceTimersByTimeAsync(60_000)
+  main.send("arc", engine)
+  expect(sent.map((one) => one.command)).toContain(late)
+  popped.close()
+  main.close()
+})
+
+test("past its time, it comes back once, to the window that shows its Thread, whose composer has the draft; where that window does not take it, the main window does", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  const main = device.window(true)
+  const popped = device.window(false)
+  const inMain: Back[] = []
+  main.onBack((one) => inMain.push(one) > 0)
+  const there: Back[] = []
+  const pane = popped.onBack((one) => there.push(one) > 0, { item: THREAD })
+  popped.add(message("only in its own window"))
+  await heard()
+  await vi.advanceTimersByTimeAsync(KEEP)
+  await heard()
+  expect(there).toEqual([
+    {
+      wait: expect.objectContaining({ text: "only in its own window" }),
+      why: { kind: "expired" },
+      machine: "arc",
+    },
+  ])
+  expect(main.get()).toEqual([])
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(inMain).toEqual([])
+  expect(there).toHaveLength(1)
+  expect([...device.kept.keys()].some((key) => key.includes("told."))).toBe(
+    false
+  )
+
+  // Shown in the main window too, it is the main window's alone.
+  const here = main.onBack(() => false, { item: THREAD })
+  main.add(message("shown here too", newId(), Date.now()))
+  await vi.advanceTimersByTimeAsync(KEEP)
+  await heard()
+  expect(inMain.map((one) => one.wait.text)).toEqual(["shown here too"])
+  expect(there).toHaveLength(1)
+  here()
+
+  // Its Pane gone from that window, as it docks back: the main window.
+  pane()
+  main.add(message("its Pane docked", newId(), Date.now()))
+  await vi.advanceTimersByTimeAsync(KEEP)
+  await heard()
+  expect(inMain.at(-1)).toMatchObject({ wait: { text: "its Pane docked" } })
+  expect(there).toHaveLength(1)
+
+  // A window that says it shows the Thread, but broke: the main window
+  // takes it after a while, once.
+  popped.close()
+  device.kept.set(
+    "banda.waiting.window.gone",
+    JSON.stringify({ at: Date.now(), held: {}, shows: [THREAD] })
+  )
+  main.add(message("to a window gone", newId(), Date.now()))
+  await vi.advanceTimersByTimeAsync(KEEP)
+  expect(inMain.at(-1)).toMatchObject({ wait: { text: "its Pane docked" } })
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(inMain.filter((one) => one.wait.text === "to a window gone")).toEqual([
+    expect.objectContaining({ why: { kind: "expired" } }),
+  ])
+  main.close()
+
+  // Handed to a window that did not take it as the main window went: the
+  // next one takes it, once.
+  device.kept.set(
+    "banda.waiting.told.x",
+    JSON.stringify({ to: "gone", back: inMain.at(-1) })
+  )
+  const last = device.window(true)
+  const backAgain = hearing(last)
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(backAgain).toEqual([
+    expect.objectContaining({
+      wait: expect.objectContaining({ text: "to a window gone" }),
+    }),
+  ])
+  await vi.advanceTimersByTimeAsync(5_000)
+  expect(backAgain).toHaveLength(1)
+  last.close()
+})
+
+test("after a restart, what waits is still there: one that was on its way may have gone through and goes again as it is; one past its time comes back, never sent; one whose machine is live goes at once, once, by its ID and its host's time as queued", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  // arc's clock is 2 s ahead, as its last pong said.
+  const first = device.window(true, { ahead: () => 2_000 })
+  const going = newId()
+  const short = newId()
+  const waits = newId()
+  first.add(message("on its way", going))
+  first.add({ ...message("for a minute", short), keep: 60_000 })
+  first.add({ ...message("for an hour", waits), keep: KEEPS[1]!.for })
+  expect(first.get().map((one) => one.notAfter - one.until)).toEqual([
+    2_000, 2_000, 2_000,
+  ])
+  const before = held()
+  first.send("arc", before.engine)
+  expect(before.sent).toHaveLength(3)
+  before.settles[1]!.fail(new Unreachable("arc", "arc is away"))
+  before.settles[2]!.fail(new Unreachable("arc", "arc is away"))
+  await heard()
+  // The window goes, as one quits, with the first on its way.
+  first.close()
+
+  // Started again 5 minutes on, arc live; its engine heard no pong yet.
+  vi.setSystemTime(at1432 + 5 * 60_000)
+  const again = device.window(true)
+  const back = hearing(again)
+  await heard()
+  expect(back).toEqual([
+    expect.objectContaining({
+      wait: expect.objectContaining({ text: "for a minute" }),
+      why: { kind: "expired" },
+    }),
+  ])
+  expect(again.get()).toEqual([
+    expect.objectContaining({ text: "on its way", went: true }),
+    expect.objectContaining({ text: "for an hour" }),
+  ])
+  const after = held()
+  again.send("arc", after.engine)
+  again.send("arc", after.engine)
+  expect(after.sent).toEqual([
+    { command: going, notAfter: at1432 + KEEP + 2_000 },
+    { command: waits, notAfter: at1432 + 60 * 60_000 + 2_000 },
+  ])
+  after.settles.forEach((one) => one.ok())
+  await heard()
+  expect(again.get()).toEqual([])
+  expect([...device.kept.keys()]).toEqual([])
+  again.close()
+})
+
+test("what comes back before the Window hears, as a window starts again, leaves the storage only once taken: a window that goes before it hears leaves it to the next, which takes it once", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  const first = device.window(true)
+  const command = newId()
+  first.add(message("past its time while closed", command))
+  first.close()
+
+  // Started again an hour on: it comes back before the Window hears, and
+  // that window goes before it does.
+  vi.setSystemTime(at1432 + 60 * 60_000)
+  const unheard = device.window(true)
+  await heard()
+  expect(unheard.get()).toEqual([])
+  expect([...device.kept.keys()]).toEqual([`banda.waiting.told.${command}`])
+  unheard.close()
+
+  // The next takes it as it hears, once.
+  const next = device.window(true)
+  const back = hearing(next)
+  expect(back).toEqual([
+    {
+      wait: expect.objectContaining({ text: "past its time while closed" }),
+      why: { kind: "expired" },
+      machine: "arc",
+    },
+  ])
+  await vi.advanceTimersByTimeAsync(10_000)
+  expect(back).toHaveLength(1)
+  expect([...device.kept.keys()]).toEqual([])
+  next.close()
+})
+
+test("after a restart, a message goes in its host's time as it was queued until its engine hears a pong, and by that pong once it does, never by both: one that goes after its engine was quiet, which asks first", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  // Queued as arc's clock was 2 minutes behind, as its last pong said.
+  const storage = inMemory()
+  const before = new Waiting(storage, { ahead: () => -120_000 })
+  const command = newId()
+  before.add({ ...message("after the edit", command), keep: KEEPS[1]!.for })
+  before.close()
+
+  // Started again, arc live; its engine is open, but heard no pong, and
+  // an Edit holds the message past the engine's quiet.
+  const { device, tell } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING, undefined, {
+    waiting: storage,
+  })
+  const stop = hosts.follow()
+  const release = hosts.waiting.hold(command)
+  tell([live])
+  await vi.advanceTimersByTimeAsync(0)
+  const socket = Socket.opened[0]!
+  socket.say(opened)
+  await vi.advanceTimersByTimeAsync(8_000)
+  expect(hosts.engine("arc").offset).toBeUndefined()
+  expect(callsOn(socket)).toEqual([])
+
+  // Let go, it goes; its engine asks first, and the pong says the same.
+  release()
+  await vi.advanceTimersByTimeAsync(0)
+  const ping = socket.sent.findLast(({ type }) => type === "ping")!
+  socket.say({ type: "pong", id: ping.id, time: Date.now() - 120_000 })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(hosts.engine("arc").offset).toBe(-120_000)
+  const [call] = callsOn(socket)
+  expect(callsOn(socket)).toEqual([
+    expect.objectContaining({
+      command,
+      not_after: at1432 + 60 * 60_000 - 120_000,
+    }),
+  ])
+  socket.say({ type: "result", id: call!.id, ok: { thread: THREAD } })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(hosts.waiting.get()).toEqual([])
+  stop()
+  hosts.engine("arc").close()
+})
+
+test("a storage that fails keeps what waits in memory, for the window's life", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  device.break()
+  const main = device.window(true)
+  main.add(message("kept here"))
+  expect(main.get()).toEqual([expect.objectContaining({ text: "kept here" })])
+  const command = main.get()[0]!.call.command
+  main.keepFor(command, KEEPS[1]!.for)
+  expect(main.get()[0]).toMatchObject({ until: at1432 + 60 * 60_000 })
+  const { engine, sent } = held()
+  main.send("arc", engine)
+  expect(sent).toHaveLength(1)
+  expect(device.kept.size).toBe(0)
+  main.close()
+})
+
+test("what is kept that is no message, as one broken or of another build, is let go as the main window starts", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  const device = aDevice()
+  device.kept.set("banda.waiting.message.x", "{not json")
+  device.kept.set(
+    "banda.waiting.message.y",
+    JSON.stringify({ text: "an older build's" })
+  )
+  device.kept.set("banda.agents.draft.t1", "a draft")
+  const main = device.window(true)
+  expect(main.get()).toEqual([])
+  expect([...device.kept.keys()]).toEqual(["banda.agents.draft.t1"])
+  main.close()
 })

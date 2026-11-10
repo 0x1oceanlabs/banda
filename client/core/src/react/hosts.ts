@@ -8,7 +8,6 @@ import type { Named } from "@banda/contract/machines"
 import { createContext, useCallback, useContext, useEffect } from "react"
 import {
   awayFor,
-  awaySince,
   FORGETTING,
   type HostsDevice,
   KeptHosts,
@@ -188,9 +187,12 @@ export function useNowOf<S>(select: (now: number) => S, ticking = true): S {
 
 /** How long host `shown` has been away, by the Window's one clock, as its
  * pill and its card say it after "away" (`awayFor`), so both say the
- * same; none while it is not away, as stopped says no time. */
+ * same: since the Window last heard it. None while it is not away, as
+ * stopped says no time, nor where the Window never heard it, as after a
+ * restart while it is away: it does not know since when (ADR 0105, the
+ * mock's frame 6). */
 export function useAwayFor(shown: Shown): string | undefined {
-  const since = shown.state.state === "away" ? awaySince(shown) : undefined
+  const since = shown.state.state === "away" ? shown.asOf : undefined
   return useNowOf(
     useCallback((now: number) => awayFor(since, now), [since]),
     since !== undefined

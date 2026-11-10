@@ -203,11 +203,16 @@ export type CommandOptions = {
    * machine's clock, as for a message that waited for its machine (ADR
    * 0105). It goes on the frame as `not_after`, in the host's time: plus
    * how far the host's clock is ahead, as its last `pong` said (`offset`),
-   * or as it is while none was heard. The host refuses it `expired` after,
-   * unless it ran: then it answers as it did. An older host ignores it,
-   * so the caller drops it in time itself.
+   * else as the caller knew it (`ahead`), else as it is. The host refuses
+   * it `expired` after, unless it ran: then it answers as it did. An older
+   * host ignores it, so the caller drops it in time itself.
    */
   notAfter?: number
+  /** How far the host's clock is ahead, in ms, as the caller knew it
+   * before, for `notAfter` while this engine heard no `pong`: as for a
+   * message kept across a restart. Read as the frame goes, so a `pong`
+   * heard on the way wins. */
+  ahead?: number
 }
 
 type Following = {
@@ -444,6 +449,7 @@ export class Engine {
       command?: CommandId
       once?: boolean
       notAfter?: number
+      ahead?: number
       sent?: () => void
     }
   ): Promise<Result> {
@@ -469,7 +475,7 @@ export class Engine {
       method,
       project: options.project,
       command: options.command,
-      not_after: hostTime(options.notAfter, this.#offset),
+      not_after: hostTime(options.notAfter, this.#offset ?? options.ahead),
       params: params as JsonValue,
     })
     options.sent?.()
@@ -513,7 +519,7 @@ export class Engine {
     params: Params<M>,
     project?: ProjectId,
     command: CommandId = newId(),
-    { once = false, notAfter }: CommandOptions = {}
+    { once = false, notAfter, ahead }: CommandOptions = {}
   ): Promise<Answered<M>> {
     let went = false
     const sent = () => void (went = true)
@@ -524,6 +530,7 @@ export class Engine {
           command,
           once,
           notAfter,
+          ahead,
           sent,
         })
         return {
