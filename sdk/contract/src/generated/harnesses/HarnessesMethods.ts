@@ -26,12 +26,12 @@ export type HarnessesMethods = {
 list: CallMethod<Nothing, Array<HarnessView>>, 
 /**
  * Profile folders on this machine. A discovered folder is not proof
- * of sign-in; no credentials are returned (ADR 0103).
+ * of sign-in; no credentials are returned (ADR 0104).
  */
 account_profiles: CallMethod<Nothing, Array<AccountProfile>>, 
 /**
  * Connects a profile or creates an empty Account folder, without
- * changing what the registered Harness runs (ADR 0103).
+ * changing what the registered Harness runs (ADR 0104).
  */
 connect_account: CallMethod<ConnectAccount, HarnessView>, 
 /**
@@ -41,7 +41,7 @@ connect_account: CallMethod<ConnectAccount, HarnessView>,
 account: CallMethod<OneHarness, Accounted>, 
 /**
  * Who is signed in, as the Harness says. No sign-in program,
- * environment or credentials are returned (ADR 0103).
+ * environment or credentials are returned (ADR 0104).
  */
 account_status: CallMethod<OneHarness, AccountStatus>, 
 /**
