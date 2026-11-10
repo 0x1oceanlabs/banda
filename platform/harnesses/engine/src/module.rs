@@ -4,7 +4,7 @@
 //! there is one.
 //!
 //! It asks through a Harness process of its own, with no session, in a
-//! pool keyed by the machine's ID, let go after [`IDLE`] with nothing
+//! pool keyed by the machine's ID, let go after five minutes with nothing
 //! asked. A sign-in or sign-out writes `account_changed`, whose subject is
 //! the Harness's ID: every holder of that Harness's process lets go of it,
 //! this module first, and the command answers once every reaction has
@@ -14,59 +14,28 @@
 //! [`crate::limits`].
 
 use crate::accounts::{
-    AccountProfile, AccountSettings, AccountStatus, AccountWay, ConnectAccount, LoginAccount,
-    LoginId, LoginInput, LoginStatus, Logins, RemoveAccount,
+    AccountProfile, AccountStatus, AccountStore, Accounted, Accounts, ConnectAccount, LoginAccount,
+    LoginId, LoginInput, LoginStatus, RemoveAccount,
 };
-use crate::acp::Process;
-use crate::hosts::{Activity, Held, Host, Hosts};
 use crate::limits::Reader;
-use crate::model::{Account, HarnessView, Limits, LimitsLook};
+use crate::model::{HarnessView, Limits, LimitsLook};
 use crate::usage::UsageNow;
-use crate::{FILE, Failed, Harness, Harnesses};
-use agent_client_protocol::Client;
-use agent_client_protocol::schema::v1 as acp;
+use crate::{FILE, Harnesses};
 use banda_kernel::{
-    Call, Environment, Error, EventFilter, Kind, Module, ModuleProject, Nothing, Refusal, Right,
-    Scope, Tool,
+    Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use ts_rs::TS;
-
-/// The version of every event this module writes.
-const VERSION: u32 = 1;
-
-/// What a sign-in or sign-out writes; its subject is the Harness's ID.
-const ACCOUNT_CHANGED: &str = "account_changed";
-
-/// How long the module's own process of a Harness may sit with nothing
-/// asked.
-const IDLE: Duration = Duration::from_secs(5 * 60);
-
-/// How long a sign-in waits for every holder of the Harness's process to
-/// let go of it.
-const REACTED: Duration = Duration::from_secs(5);
 
 /// The module's settings files in `~/.config/banda` (ADR 0016).
 pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
 
-/// What hears that an account changed: the module's `account_changed`.
-pub fn account_changed() -> EventFilter {
-    EventFilter {
-        module: Some("harnesses".into()),
-        subject: None,
-        kinds: Some(vec![ACCOUNT_CHANGED.into()]),
-    }
-}
-
 pub struct HarnessesModule {
     harnesses: Harnesses,
-    accounts: Option<Arc<dyn AccountSettings>>,
-    logins: Logins,
-    hosts: Arc<Hosts<Asker>>,
+    accounts: Accounts,
     limits: Reader,
     usage: crate::usage::Reader,
 }
@@ -76,15 +45,17 @@ impl HarnessesModule {
         Self {
             limits: Reader::new(harnesses.clone()),
             usage: crate::usage::Reader::new(harnesses.clone()),
+            accounts: Accounts::new(harnesses.clone()),
             harnesses,
-            accounts: None,
-            logins: Logins::default(),
-            hosts: Hosts::new(IDLE),
         }
     }
 
-    pub fn with_accounts(mut self, accounts: Arc<dyn AccountSettings>) -> Self {
-        self.accounts = Some(accounts);
+    pub fn with_accounts(
+        mut self,
+        owned: std::path::PathBuf,
+        store: Arc<dyn AccountStore>,
+    ) -> Self {
+        self.accounts = self.accounts.with_store(owned, store);
         self
     }
 
@@ -103,17 +74,17 @@ banda_kernel::methods! {
         /// The Harnesses this computer can start.
         call list(Nothing) -> Vec<HarnessView>, Read, tool "accounts";
         /// Profile folders on this machine. A discovered folder is not proof
-        /// of sign-in; no credentials are returned (ADR 0103).
+        /// of sign-in; no credentials are returned (ADR 0104).
         call account_profiles(Nothing) -> Vec<AccountProfile>, Read, tool "account_profiles";
         /// Connects a profile or creates an empty Account folder, without
-        /// changing what the registered Harness runs (ADR 0103).
+        /// changing what the registered Harness runs (ADR 0104).
         call connect_account(ConnectAccount) -> HarnessView, Write, tool "connect_account";
         /// A Harness as it says: its program, who is signed in, how to sign
         /// in, at the machine's log's position it is current at.
         // It needs Manage, and only asks the Harness who is signed in.
         call account(OneHarness) -> Accounted, Manage, read;
         /// Who is signed in, as the Harness says. No sign-in program,
-        /// environment or credentials are returned (ADR 0103).
+        /// environment or credentials are returned (ADR 0104).
         call account_status(OneHarness) -> AccountStatus, Read, tool "account_status";
         /// Starts the Harness's own sign-in. The Person completes its
         /// browser or terminal step; poll login_status for its output.
@@ -204,16 +175,6 @@ struct SignIn {
     way: String,
 }
 
-/// Who is signed in to a Harness, as of the machine's log's position `at`:
-/// a window reads it again on an `account_changed` after it.
-#[derive(Serialize, Deserialize, TS)]
-#[ts(export, export_to = "harnesses/")]
-pub struct Accounted {
-    #[ts(type = "number")]
-    pub at: i64,
-    pub account: Account,
-}
-
 #[async_trait::async_trait]
 impl Module for HarnessesModule {
     fn name(&self) -> &'static str {
@@ -265,47 +226,17 @@ impl HarnessesModule {
     }
 
     async fn account_profiles(&self, _: Call, _: Nothing) -> Result<Vec<AccountProfile>, Refusal> {
-        self.accounts
-            .as_ref()
-            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
-            .profiles()
+        self.accounts.profiles()
     }
-
     async fn connect_account(
         &self,
         _: Call,
         account: ConnectAccount,
     ) -> Result<HarnessView, Refusal> {
-        self.accounts
-            .as_ref()
-            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
-            .connect(account)
+        self.accounts.connect(account)
     }
-
     async fn remove_account(&self, call: Call, args: RemoveAccount) -> Result<String, Refusal> {
-        let to = self
-            .accounts
-            .as_ref()
-            .ok_or_else(|| Refusal::conflict("Account settings are not configured."))?
-            .remove(&args.harness, args.to.as_deref(), call.participant())?;
-        self.hosts.let_go(call.project().id(), Some(&args.harness));
-        let author = call.participant();
-        let to = call
-            .command(move |tx| {
-                tx.emit(
-                    ACCOUNT_CHANGED,
-                    VERSION,
-                    Some(&args.harness),
-                    author,
-                    &serde_json::json!({"removed": true, "to": to}),
-                )?;
-                Ok(to)
-            })
-            .await?;
-        if !call.project().reacted(REACTED).await {
-            tracing::warn!("Account removed; some Projects will apply the move when they catch up");
-        }
-        Ok(to)
+        self.accounts.remove_account(call, args).await
     }
 
     async fn account(
@@ -313,145 +244,30 @@ impl HarnessesModule {
         call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<Accounted, Refusal> {
-        // Read before the Harness is: a change after it is a later event.
-        let at = call.project().at().await?;
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        let account = asker.process.account(&harness).await?;
-        Ok(Accounted { at, account })
+        self.accounts.account(call, harness).await
     }
-
     async fn account_status(
         &self,
         call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<AccountStatus, Refusal> {
-        let account = self
-            .account(
-                call,
-                OneHarness {
-                    harness: harness.clone(),
-                },
-            )
-            .await?;
-        let mut ways: Vec<_> = account
-            .account
-            .ways
-            .into_iter()
-            .map(|way| AccountWay {
-                id: way.id,
-                name: way.name,
-            })
-            .collect();
-        if account.account.cli.is_some()
-            && self
-                .harnesses
-                .find(&harness)
-                .is_some_and(|h| h.harness() == "codex")
-        {
-            ways.insert(
-                0,
-                AccountWay {
-                    id: "device-code".into(),
-                    name: "ChatGPT (device code on another computer)".into(),
-                },
-            );
-        }
-        Ok(AccountStatus {
-            harness,
-            ways,
-            signed_in_as: account.account.signed_in_as,
-        })
+        self.accounts.status(call, harness).await
     }
-
     async fn login_account(&self, call: Call, args: LoginAccount) -> Result<LoginStatus, Refusal> {
-        let selected = self
-            .harnesses
-            .get(&args.harness)
-            .map_err(Refusal::invalid)?;
-        if !matches!(selected.harness(), "claude" | "codex") {
-            return Err(Refusal::invalid(
-                "Managed sign-in supports Claude Code and Codex Accounts.",
-            ));
-        }
-        let (harness, asker, held) = self.asker(&call, &args.harness).await?;
-        let ways = asker.process.ways();
-        let way = if args.way.as_deref() == Some("device-code") && harness.harness() == "codex" {
-            let (_, cli) = crate::cli::find(&*call.project().environment(), &harness).await?;
-            let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
-            // Codex's own device flow prints a URL and code, so the Person
-            // can finish on their Mac while this engine runs on arc.
-            let mut program = banda_kernel::Program::terminal(
-                &cli.path,
-                vec!["login".into(), "--device-auth".into()],
-            );
-            program.env = harness.env.clone();
-            crate::model::SignInWay {
-                id: "device-code".into(),
-                name: "ChatGPT (device code)".into(),
-                description: None,
-                terminal: Some(program),
-            }
-        } else {
-            match args.way {
-                Some(id) => ways.iter().find(|way| way.id == id),
-                None if ways.len() == 1 => ways.first(),
-                _ => None,
-            }
-            .ok_or_else(|| Refusal::invalid("Choose a sign-in way from account_status.ways."))?
-            .clone()
-        };
-        let (status, cancel) = self.logins.reserve(&harness.id)?;
-        if let Some(program) = way.terminal {
-            let started = call.project().environment().pty(
-                &program,
-                banda_kernel::PtySize {
-                    rows: 30,
-                    cols: 100,
-                },
-            );
-            match started {
-                Ok((process, pty)) => {
-                    self.logins
-                        .terminal(&status.login, process.holding(held), pty, cancel)
-                }
-                Err(error) => {
-                    self.logins.forget(&status.login);
-                    return Err(Refusal::conflict(format!(
-                        "The sign-in could not start: {error}"
-                    )));
-                }
-            }
-        } else {
-            self.logins.agent(
-                &status.login,
-                async move {
-                    let _held = held;
-                    asker.process.sign_in(&way.id).await.map_err(Into::into)
-                },
-                cancel,
-            );
-        }
-        Ok(status)
+        self.accounts.login_account(call, args).await
     }
     async fn login_status(&self, _: Call, args: LoginId) -> Result<LoginStatus, Refusal> {
-        self.logins.status(&args.login)
+        self.accounts.login_status(args)
     }
     async fn login_input(&self, _: Call, args: LoginInput) -> Result<(), Refusal> {
-        self.logins.input(&args.login, &args.text).await
+        self.accounts.login_input(args).await
     }
     async fn login_cancel(&self, _: Call, args: LoginId) -> Result<(), Refusal> {
-        self.logins.cancel(&args.login)
+        self.accounts.login_cancel(args)
     }
     async fn login_finish(&self, call: Call, args: LoginId) -> Result<(), Refusal> {
-        let status = self.logins.status(&args.login)?;
-        if !status.done {
-            return Err(Refusal::conflict("Sign-in is still running."));
-        }
-        self.changed(&call, &status.harness).await?;
-        self.logins.forget(&args.login);
-        Ok(())
+        self.accounts.login_finish(call, args).await
     }
-
     async fn limits(
         &self,
         call: Call,
@@ -494,89 +310,13 @@ impl HarnessesModule {
     }
 
     async fn sign_in(&self, call: Call, SignIn { harness, way }: SignIn) -> Result<(), Refusal> {
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        let process = &asker.process;
-        let found = (process.ways().iter().find(|w| w.id == way)).ok_or_else(|| {
-            Refusal::not_found(format!("{} offers no such way to sign in.", harness.name))
-        })?;
-        if found.terminal.is_none() {
-            process.sign_in(&way).await?;
-        }
-        self.changed(&call, &harness.id).await
+        self.accounts.sign_in(call, harness, way).await
     }
-
     async fn sign_out(
         &self,
         call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<(), Refusal> {
-        let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        asker.process.sign_out().await?;
-        self.changed(&call, &harness.id).await
-    }
-
-    /// Harness entry `id` with the module's process of it, started if need
-    /// be, held busy while the guard lives. A start that failed is refused
-    /// as [`Failed`] says: `conflict` only when it lasts.
-    async fn asker(&self, call: &Call, id: &str) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
-        let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
-        let project = call.project();
-        let asker = (self.hosts)
-            .get(project.id(), project.environment(), &harness)
-            .await?;
-        let held = asker.activity.hold();
-        Ok((harness, asker, held))
-    }
-
-    /// After a sign-in or a sign-out: ACP has a client start the Harness
-    /// again, so it reads the account anew. The module lets go of its own
-    /// process, says the account changed, and answers once every holder of
-    /// the Harness's process has heard it. The receipt keeps the answer,
-    /// and the kernel answers the same command, sent again, from it.
-    async fn changed(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
-        self.hosts.let_go(call.project().id(), Some(harness));
-        let (author, subject) = (call.participant(), harness.to_owned());
-        call.command(move |tx| {
-            tx.emit(
-                ACCOUNT_CHANGED,
-                VERSION,
-                Some(&subject),
-                author,
-                &Value::Null,
-            )
-            .map(|_| ())
-        })
-        .await?;
-        if !call.project().reacted(REACTED).await {
-            tracing::warn!(harness, "an account changed before all heard it");
-        }
-        Ok(())
-    }
-}
-
-/// The module's own process of a Harness: no session, only asked.
-struct Asker {
-    process: Process,
-    activity: Activity,
-}
-
-impl Host for Asker {
-    async fn start(
-        environment: Arc<dyn Environment>,
-        harness: &Harness,
-    ) -> Result<Arc<Self>, Failed> {
-        let shows = acp::ClientCapabilities::new();
-        let (process, _) =
-            Process::start(environment, harness, Client.builder(), shows, || {}).await?;
-        let activity = Activity::default();
-        Ok(Arc::new(Asker { process, activity }))
-    }
-
-    fn alive(&self) -> bool {
-        self.process.alive()
-    }
-
-    fn idle_since(&self) -> Option<Instant> {
-        self.activity.idle_since()
+        self.accounts.sign_out(call, harness).await
     }
 }

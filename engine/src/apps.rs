@@ -148,13 +148,12 @@ mod build {
     }
 
     pub fn harnesses(host: &HostContext<'_>) -> HarnessesModule {
-        HarnessesModule::new(host.harnesses.clone()).with_accounts(std::sync::Arc::new(
-            banda_settings::accounts::Accounts::new(
+        HarnessesModule::new(host.harnesses.clone()).with_accounts(
+            host.places.data.join("accounts"),
+            std::sync::Arc::new(banda_settings::accounts::Store::new(
                 host.places.config.clone(),
-                host.places.data.join("accounts"),
-                host.harnesses.clone(),
-            ),
-        ))
+            )),
+        )
     }
 
     /// Banda's keys, which an Agent binds for its Person (ADR 0071), and

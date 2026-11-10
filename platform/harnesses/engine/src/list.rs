@@ -402,7 +402,7 @@ struct List {
     carried: Option<Carried>,
     /// The engine's own Account folders, never supplied by an Agent.
     accounts: Option<PathBuf>,
-    omarchy: Option<crate::omarchy::Omarchy>,
+    omarchy: Option<crate::accounts::Omarchy>,
     discover_omarchy: bool,
     excluded_omarchy: Vec<String>,
 }
@@ -952,7 +952,7 @@ impl Harnesses {
         let result = Self::with(read, Some((path.to_owned(), text)));
         {
             let mut list = result.0.lock().unwrap();
-            list.omarchy = crate::omarchy::Omarchy::on_host();
+            list.omarchy = crate::accounts::Omarchy::on_host();
             let listed = list.listed.clone();
             list.list(listed);
         }
@@ -1299,7 +1299,7 @@ mod tests {
         let registry = state.join("claude.json");
         std::fs::write(&registry, r#"{"accounts":[{"id":"c2","label":"C2"}]}"#).unwrap();
         let list = Harnesses::known();
-        list.0.lock().unwrap().omarchy = Some(crate::omarchy::Omarchy::fixture(home, state));
+        list.0.lock().unwrap().omarchy = Some(crate::accounts::Omarchy::fixture(home, state));
         let account = list.find("omarchy-claude-c2").unwrap();
         assert!(list.from_omarchy(&account.id));
         assert!(list.discovered(&account.id).is_some());

@@ -28,7 +28,7 @@ struct Account {
 
 impl Omarchy {
     #[cfg(test)]
-    pub(super) fn fixture(home: PathBuf, state: PathBuf) -> Self {
+    pub(crate) fn fixture(home: PathBuf, state: PathBuf) -> Self {
         Self {
             home,
             state,
@@ -41,10 +41,8 @@ impl Omarchy {
             return None;
         }
         let home = dirs::home_dir()?;
-        let state = std::env::var_os("XDG_STATE_HOME")
-            .map(PathBuf::from)
-            .filter(|p| p.is_absolute())
-            .unwrap_or_else(|| home.join(".local/state"));
+        let state_home = std::env::var_os("XDG_STATE_HOME").map(PathBuf::from);
+        let state = super::profiles::omarchy_root(&home, state_home.as_deref());
         let mise = home.join(".local/share/mise/installs");
         let programs = [
             (
@@ -77,7 +75,7 @@ impl Omarchy {
         .collect();
         Some(Self {
             home,
-            state: state.join("omarchy/agents/accounts"),
+            state,
             programs,
         })
     }
@@ -110,7 +108,8 @@ impl Omarchy {
             harness.carried = None;
             list.push(harness);
         }
-        for (provider, variable) in [("claude", "CLAUDE_CONFIG_DIR"), ("codex", "CODEX_HOME")] {
+        for provider in ["claude", "codex"] {
+            let (variable, default) = super::profiles::variable(provider).unwrap();
             let Some(base) = list
                 .iter()
                 .find(|h| h.id == provider && h.of.is_none() && h.enabled)
@@ -147,7 +146,7 @@ impl Omarchy {
                     continue;
                 }
                 let expected = if account.primary {
-                    self.home.join(format!(".{provider}"))
+                    self.home.join(default)
                 } else {
                     self.state.join(provider).join(&account.id)
                 };

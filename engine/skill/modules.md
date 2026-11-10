@@ -209,9 +209,9 @@ Its methods, `banda call harnesses.<method>`: `list`, `account_profiles`, `conne
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
 - `accounts`: The Harnesses this computer can start.
-- `account_profiles`: Profile folders on this machine. A discovered folder is not proof of sign-in; no credentials are returned (ADR 0103).
-- `connect_account`: Connects a profile or creates an empty Account folder, without changing what the registered Harness runs (ADR 0103).
-- `account_status`: Who is signed in, as the Harness says. No sign-in program, environment or credentials are returned (ADR 0103).
+- `account_profiles`: Profile folders on this machine. A discovered folder is not proof of sign-in; no credentials are returned (ADR 0104).
+- `connect_account`: Connects a profile or creates an empty Account folder, without changing what the registered Harness runs (ADR 0104).
+- `account_status`: Who is signed in, as the Harness says. No sign-in program, environment or credentials are returned (ADR 0104).
 - `login_account`: Starts the Harness's own sign-in. The Person completes its browser or terminal step; poll login_status for its output.
 - `login_status`: Reads a sign-in's bounded terminal output and whether it ended.
 - `login_input`: Sends input to the running sign-in terminal, not to a shell.

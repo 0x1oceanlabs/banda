@@ -17,13 +17,13 @@ mod limits;
 mod list;
 pub mod model;
 mod module;
-mod omarchy;
 mod record;
 mod serving;
 mod shadow;
 
+pub use accounts::account_changed;
 pub use list::{Cli, Credentials, FILE, Harness, Harnesses, LimitsSettings};
-pub use module::{HarnessesModule, LimitsNow, SETTINGS, account_changed};
+pub use module::{HarnessesModule, LimitsNow, SETTINGS};
 
 pub mod usage;
 

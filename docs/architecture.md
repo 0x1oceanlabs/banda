@@ -989,6 +989,17 @@ If Chat is removed, Agents still works through its own Thread.
     `agents.toml`'s `[start.<id>]`, set from the same bar in the settings,
     which writes it through the engine as the Person (ADR 0083):
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
+- **Accounts has one lifecycle owner**, `platform/harnesses/engine/src/accounts`.
+  Its `Accounts` service owns profile discovery and connection, duplicate
+  folder checks, the provider process pool, bounded sign-in sessions and
+  account-change publication. The machine API preserves its `harnesses.*`
+  methods and rights and delegates to this service. Its `AccountStore`
+  boundary saves one prepared connection; Settings implements it through
+  the existing comment-preserving writer, with no account discovery or
+  folder policy of its own. Omarchy discovery lives inside this boundary;
+  the Harness list still owns the effective list and explicit overrides.
+  Thread defaults, fallback and moving Threads stay with Agents. Account
+  presentation keys continue through the validated settings writer.
 - **Agents connect Accounts through the engine** (ADR 0104).
   `banda account` uses the caller's pass. `account_profiles` discovers
   folders without reading credentials; `connect_account` adopts an
