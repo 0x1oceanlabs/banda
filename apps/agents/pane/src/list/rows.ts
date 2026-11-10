@@ -16,15 +16,13 @@ import {
   type Answering,
   type Listed,
   type ListedLater,
+  NO_REASON,
   paneOf,
   type PaneState,
 } from "@banda/ui/pane"
 import { archiveHolds } from "./list"
 import { markOf } from "./marks"
 import { threadPane } from "../ThreadPane"
-
-/** What a failed turn says when its Harness gave no reason. */
-export const FAILED = "The turn failed"
 
 /** The agents module's actions a toast's buttons run (index.ts). */
 export const ANSWER = "agents.answer"
@@ -89,7 +87,7 @@ export function listedOf(
     mark === "asking"
       ? thread.asking[0]?.title
       : mark === "failed"
-        ? latest?.reason || FAILED
+        ? latest?.reason || NO_REASON
         : mark === "done"
           ? latest?.note
           : undefined

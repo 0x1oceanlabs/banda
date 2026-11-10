@@ -1,117 +1,78 @@
 /**
- * How a card's status and its colours are drawn (`card.ts`): the sidebar's
- * rows and the counts' list draw them alike.
+ * How a card's time is drawn (`card.ts`, spec §2.5): short and still,
+ * "now", "40s", "14m", "2h", "3d", "Mar 3"; put off, when it wakes,
+ * "18:30", "Tue 9:00", "Mar 3", "someday" or "when done". Nothing ticks:
+ * the list's clock (`clock.ts`) draws a time again only as its words
+ * change. A call's time takes its colour, the only colour on a card but
+ * its mark's (ADR 0098, decision 8).
  */
-import { AlarmClockIcon } from "lucide-react"
-import { useNow } from "@banda/ui/hooks/use-now"
+import { COLOR_CLASS } from "@banda/ui/components/banda-mark"
 import { cn } from "@banda/ui/lib/utils"
-import { ago, left } from "@banda/ui/lib/words"
-import { clock } from "@banda/core/react"
-import type { Said, Tone } from "./card"
+import { short, wakes } from "@banda/ui/lib/words"
+import type { Quiet, Time, Tone } from "./card"
+import { nextOf, useClock } from "./clock"
 
-/** Each tone's colour. */
-export const TONES: Readonly<Record<Tone, string>> = {
-  attention: "text-attention",
-  destructive: "text-destructive",
-  added: "text-added",
-  plain: "text-foreground",
-  muted: "text-muted-foreground",
+/** Each call's colour, as the Mark's; woke's yellow darker on a light
+ * theme, where it is small text. */
+const TONES: Readonly<Record<Tone, string>> = {
+  ...COLOR_CLASS,
+  woke: "text-woke-text",
 }
 
-/**
- * What a card's status says: what calls the Person, in its colour; the
- * running turn's timer; how long ago it last changed; when a put-off
- * Thread wakes; or that it woke. Given `stillAt`, as of when its machine
- * was last heard, the timer and how long ago stand as they were then.
- */
-export function Status({ said, stillAt }: { said: Said; stillAt?: number }) {
-  switch (said.kind) {
-    case "word":
-      return <Word className={TONES[said.tone]}>{said.word}</Word>
-    case "timer":
-      return <Timer from={said.from} stillAt={stillAt} />
+/** How muted a quiet card's time is: work and the Archive a step more
+ * than Later, whose time says when it wakes. */
+const QUIET: Readonly<Record<Quiet, string>> = {
+  working: "text-muted-foreground/60",
+  later: "text-muted-foreground/70",
+  archived: "text-muted-foreground/60",
+}
+
+/** What `time` says at `now`. */
+export function timeWords(time: Time, now: number): string {
+  switch (time.kind) {
     case "ago":
-      return (
-        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {ago(said.at, stillAt)}
-        </span>
-      )
-    case "later":
-      return <Sleeps said={said} />
-    case "woke":
-      return (
-        <span
-          className={cn(
-            "flex shrink-0 items-center gap-1 text-xs font-medium tabular-nums",
-            TONES[said.tone]
-          )}
-          title="Woke from Later"
-        >
-          <AlarmClockIcon className="size-3" aria-label="Woke" />
-          {said.word ?? clock(said.at)}
-        </span>
-      )
-    case "none":
-      return null
+      return short(time.at, now)
+    case "wakes":
+      return wakes(time.at, now)
+    case "someday":
+      return "someday"
+    case "when done":
+      return "when done"
   }
 }
 
-/** When a put-off Thread wakes, and how long is left: "22:40 · 1h",
- * "Fri 09:00 · 12h", "when done" (ADR 0074, decision 6), or "someday",
- * which no time wakes (ADR 0098, decision 12). */
-function Sleeps({ said }: { said: Extract<Said, { kind: "later" }> }) {
-  const { until, someday } = said
-  // A clock only for a time: the other two say the same all along.
-  const now = useNow(15_000, until !== undefined)
-  const by = said.byAgent ? "Later by its Agent" : "Later"
-  const [text, title] = someday
-    ? ["someday", `${by}, someday: no time wakes it`]
-    : until === undefined
-      ? ["when done", `${by}, until it's done`]
-      : [`${clock(until, now)} · ${left(until, now)}`, by]
+/** A card's time at `now`: in its call's colour, or muted, more so on a
+ * quiet card. */
+export function CardTime({
+  time,
+  now,
+  quiet,
+}: {
+  time: Time
+  now: number
+  quiet?: Quiet
+}) {
+  const tone = time.kind === "ago" ? time.tone : undefined
   return (
     <span
-      className="shrink-0 text-xs text-muted-foreground tabular-nums"
-      title={title}
+      data-time=""
+      className={cn(
+        "shrink-0 text-xs tabular-nums",
+        tone
+          ? cn("font-medium", TONES[tone])
+          : quiet
+            ? QUIET[quiet]
+            : "text-muted-foreground"
+      )}
     >
-      {text}
+      {timeWords(time, now)}
     </span>
   )
 }
 
-function Word({
-  className,
-  children,
-}: {
-  className: string
-  children: string
-}) {
-  return (
-    <span className={cn("shrink-0 text-xs font-medium", className)}>
-      {children}
-    </span>
-  )
-}
-
-/** How long the work that runs now has run, ticking each second, or
- * until `stillAt`, standing. */
-function Timer({ from, stillAt }: { from: number; stillAt?: number }) {
-  const now = useNow(1000, stillAt === undefined)
-  return (
-    <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-      {elapsed((stillAt ?? now) - from)}
-    </span>
-  )
-}
-
-/** `0:41`, `7:05`, `1:02:09`. */
-export function elapsed(ms: number): string {
-  const all = Math.max(0, Math.floor(ms / 1000))
-  const [h, m, s] = [
-    Math.floor(all / 3600),
-    Math.floor(all / 60) % 60,
-    all % 60,
-  ]
-  const two = (n: number) => String(n).padStart(2, "0")
-  return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`
+/** A time with its own place on the list's clock, where no card draws
+ * it, as in the counts' list. */
+export function TimeNow({ time }: { time: Time }) {
+  const now = useClock((at) => nextOf(time, at))
+  return <CardTime time={time} now={now} />
 }

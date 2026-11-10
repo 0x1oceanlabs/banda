@@ -28,6 +28,21 @@ export type Row = {
   host?: string
 }
 
+/** Where a Thread stands, and when it woke: a row but for its Project
+ * and host. */
+export type Placed = Pick<Row, "listed" | "stand" | "woke">
+
+/** Where `listed` stands at `now`, the Later clock, as `status.ts` says,
+ * and when it woke. */
+export function placedOf(listed: Listed, now: number): Placed {
+  const woke = wokeAt(listed, now)
+  return {
+    listed,
+    stand: standOf(listed, now),
+    ...(woke === undefined ? {} : { woke }),
+  }
+}
+
 /** Another host's Projects, by its name, in `hosts.toml`'s order. */
 export type Elsewhere = {
   name: string
@@ -69,16 +84,11 @@ export function rowsOf(
   host?: string
 ): Row[] {
   return held.flatMap((project) =>
-    (lists[project.id] ?? []).map((listed) => {
-      const woke = wokeAt(listed, now)
-      return {
-        project,
-        listed,
-        stand: standOf(listed, now),
-        ...(woke === undefined ? {} : { woke }),
-        ...(host === undefined ? {} : { host }),
-      }
-    })
+    (lists[project.id] ?? []).map((listed) => ({
+      project,
+      ...placedOf(listed, now),
+      ...(host === undefined ? {} : { host }),
+    }))
   )
 }
 

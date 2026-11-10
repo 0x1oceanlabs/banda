@@ -79,6 +79,10 @@ test.afterEach(async () => {
   window = arc = undefined
 })
 
+/** A card's time, short and still (ADR 0098, decision 8): "now", "40s",
+ * "14m". */
+const SHORT_TIME = /(now|\d+[smhd])$/
+
 /** A word as sh takes it, whatever it holds. */
 const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`
 
@@ -433,6 +437,18 @@ async function shot(page: Page, name: string, at = { x: 900, y: 700 }) {
   await page.screenshot({ path: join(shots, `${name}.png`) })
 }
 
+/** A `shot` of what shows in the light look, then dark again. */
+async function lightShot({ page, dir }: Window, name: string) {
+  if (!shots) return
+  const look = join(dir, "config/look.toml")
+  const html = page.locator("html")
+  writeFileSync(look, 'mode = "light"\n')
+  await expect(html).not.toHaveClass(/\bdark\b/)
+  await shot(page, name)
+  writeFileSync(look, 'mode = "dark"\n')
+  await expect(html).toHaveClass(/\bdark\b/)
+}
+
 /** How soon Send turns on after the pill goes, in ms: the engine tries
  * again as its host is live, and its own wait is up to 5 s. */
 const SOON = 1_500
@@ -491,11 +507,11 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(placeOf(there, "banda").first()).toBeVisible()
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(there.getByRole("status", { name: "Connecting" })).toHaveCount(0)
-  // A Thread started there shows as it starts, its timer running.
+  // A Thread started there shows as it starts, with how long it works.
   send(arc, banda, "Hosts over ssh, wait")
   await expect(
     there.getByRole("button").filter({ hasText: "Hosts over ssh, wait" })
-  ).toContainText(/\d:\d\d/)
+  ).toContainText(SHORT_TIME)
   await shot(page, "pr2-1-projects-live")
   // Its label's card has its longer facts: what it is, why it is awake,
   // with its Agent at work there, its build and its address; its battery
@@ -628,7 +644,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   send(arc, banda, "Hold arc, wait")
   await expect(
     there.getByRole("button").filter({ hasText: "Hold arc, wait" })
-  ).toContainText(/\d:\d\d/)
+  ).toContainText(SHORT_TIME)
   await more.focus()
   await page.keyboard.press("Enter")
   await page.getByRole("menuitem", { name: "Stop Banda on arc" }).click()
@@ -1809,6 +1825,7 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   await expect(pill).toHaveText("arc is away · 2 min")
   await expect(there.getByText(`away · as of ${heard}`)).toBeVisible()
   await shot(page, "h5c-1")
+  await lightShot(window, "h5c-1-light")
 
   // arc answers again: its label goes quiet, its rows undim, the pill
   // goes and Send is on, the words still there; what it wrote meanwhile
@@ -1864,6 +1881,7 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
     /^Sends once arc is back, until /
   )
   await shot(page, "h5c-2")
+  await lightShot(window, "h5c-2-light")
   // Its words show whole beside Start. Its ⋯, shown as the pointer is
   // over its label or as Tab reaches it (headless, nothing hovers), sits
   // beside Start, never over it: the words give way, whole in their

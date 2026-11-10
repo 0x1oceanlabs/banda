@@ -1,6 +1,5 @@
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { clock } from "@banda/core/react"
 import { BandaMark } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -14,6 +13,7 @@ import {
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import type { MarkState } from "@banda/ui/lib/mark-state"
 import { cn } from "@banda/ui/lib/utils"
+import { wakes } from "@banda/ui/lib/words"
 import { SquarePenIcon } from "lucide-react"
 import type { Tab, Zero } from "./inbox"
 import { actionDoing, archiving } from "./items"
@@ -31,7 +31,7 @@ export const SOMEDAY_HEAD = "later:someday:head"
 export function zeroSays({ working, next }: Zero, now = Date.now()): string {
   const said = [
     ...(working > 0 ? [`${working} at work`] : []),
-    ...(next === undefined ? [] : [`next wakes at ${clock(next, now)}`]),
+    ...(next === undefined ? [] : [`next wakes at ${wakes(next, now)}`]),
   ]
   return said.length > 0 ? said.join(" · ") : "No Agent works now"
 }

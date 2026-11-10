@@ -1,0 +1,236 @@
+import type { ProjectSummary } from "@banda/contract"
+import type { Named } from "@banda/contract/machines"
+import { HOUR, MINUTE } from "@banda/ui/lib/words"
+import type { Listed } from "@banda/ui/pane"
+import type { Stand } from "@banda/ui/status"
+import type { ReactNode } from "react"
+import { renderToStaticMarkup } from "react-dom/server"
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import type { Row } from "./arrange"
+import { Card } from "./CardView"
+import { cardOf, type CardOf } from "./card"
+
+// The title reads the window's naming store, which a page's render has
+// none of.
+vi.mock("@banda/ui/lib/naming", () => ({
+  THINKING: "Naming…",
+  useThinking: () => false,
+}))
+
+/** Tuesday, 10 November 2026, 15:00 by the local clock. */
+const NOW = new Date(2026, 10, 10, 15, 0).getTime()
+
+beforeEach(() => {
+  vi.useFakeTimers()
+  vi.setSystemTime(NOW)
+})
+afterEach(() => {
+  vi.useRealTimers()
+})
+
+const banda: ProjectSummary = {
+  id: "b1",
+  name: "banda",
+  folder: "/code/banda",
+  pinned: false,
+  archived: false,
+  sees_others: false,
+  sign: { kind: "letters", text: "B", picked: false },
+  trusted: true,
+  scratch: false,
+  missing: false,
+}
+const arc: Named = { name: "arc", icon: "server" }
+
+const rowOf = (
+  stand: Stand,
+  more: Partial<Listed> = {},
+  host?: string
+): Row => ({
+  project: banda,
+  listed: {
+    id: "t1",
+    title: "Bench window tests",
+    mark: "asking",
+    changed: NOW - 14 * MINUTE,
+    calls: "Which port for the dev server?",
+    harness: "claude",
+    by: "Claude Code",
+    pane: { kind: "agents.thread", args: { thread: "t1" } },
+    ...more,
+  },
+  stand,
+  ...(host === undefined ? {} : { host }),
+})
+
+/** The card of `row`, drawn in its own place, as the sidebar draws it,
+ * with `action` over it. */
+const drawn = (
+  row: Row,
+  more: Partial<Omit<CardOf, "row">> = {},
+  current = false,
+  action?: ReactNode
+) =>
+  renderToStaticMarkup(
+    <Card
+      card={cardOf({
+        row,
+        place: row.stand,
+        at: row.listed.changed,
+        now: NOW,
+        view: { density: "auto", group: "none" },
+        ...more,
+      })}
+      row={row}
+      current={current}
+      action={action}
+    />
+  )
+
+/** The classes of the first element `html` has with `attribute`. */
+const classOf = (html: string, attribute: string) =>
+  new RegExp(`<[^>]*${attribute}[^>]*class="([^"]*)"`).exec(html)?.[1] ??
+  new RegExp(`<[^>]*class="([^"]*)"[^>]*${attribute}`).exec(html)?.[1]
+
+test("an asking card: orange only on its mark and its time; Asks in the text's colour, then its question", () => {
+  const html = drawn(rowOf("turn"))
+  expect(html).toContain('data-tone="attention"')
+  expect(classOf(html, "data-time")).toContain("text-attention")
+  expect(html).toMatch(/data-time=""[^>]*>14m</)
+  expect(html.match(/text-attention/g)).toHaveLength(2)
+  expect(/<svg[^>]*data-look="asking".*?<\/svg>/.exec(html)?.[0]).toContain(
+    "text-attention"
+  )
+  // The word and the question are in the text's colours, never orange.
+  expect(html).toMatch(
+    /text-foreground\/85">Asks<\/span> Which port for the dev server\?<\/span>/
+  )
+})
+
+test("Done's note is never red", () => {
+  const noted = drawn(
+    rowOf("turn", { mark: "done", calls: "Toast and a test added" })
+  )
+  expect(classOf(noted, "data-time")).toContain("text-added")
+  expect(noted).toMatch(/>Done<\/span> Toast and a test added<\/span>/)
+  expect(noted).not.toContain("text-destructive")
+})
+
+test("a woke card's time is the darker yellow small text takes; its mark keeps its own", () => {
+  const html = drawn(
+    rowOf("turn", {
+      later: { at: NOW - HOUR, woke: { at: NOW - MINUTE, by: "time" } },
+    })
+  )
+  expect(classOf(html, "data-time")).toContain("text-woke-text")
+  expect(/<svg[^>]*data-look="woke".*?<\/svg>/.exec(html)?.[0]).toContain(
+    "text-woke"
+  )
+  expect(html).toContain("You put it off 1h ago · Which port")
+})
+
+test("a screen reader hears the card by spokenOf", () => {
+  const html = drawn(rowOf("turn"))
+  expect(html).toContain('aria-label="Bench window tests, Asks, 14 minutes"')
+  expect(html).toContain(
+    'aria-description="Asks Which port for the dev server? banda. Claude Code"'
+  )
+})
+
+test("one that left while the list held says where it went in its time's place, with no action", () => {
+  const html = drawn(rowOf("archived", { mark: "rest", archived: true }), {
+    place: "open",
+    went: { to: "archived", from: "open" },
+  })
+  expect(html).toContain(">Archived</span>")
+  expect(html).not.toContain("data-time")
+  expect(html).toContain("data-row")
+})
+
+test("its machine away, its time stands as it was then", () => {
+  const html = drawn(rowOf("working", { mark: "running" }, "arc"), {
+    machine: arc,
+    at: NOW - 30 * MINUTE,
+    away: NOW - 12 * MINUTE,
+  })
+  expect(html).toMatch(/data-time=""[^>]*>18m</)
+})
+
+test("a machine the window does not reach: a card says how long ago as of when it was last heard, not as of now", () => {
+  const said = (away?: number) =>
+    drawn(rowOf("open", { mark: "rest" }, "arc"), {
+      machine: arc,
+      at: NOW - 15 * MINUTE,
+      ...(away === undefined ? {} : { away }),
+    })
+  // Heard 30 s after it changed: "30s", however long ago that was.
+  expect(said(NOW - 15 * MINUTE + 30_000)).toMatch(/data-time=""[^>]*>30s</)
+  expect(said(NOW - 11 * MINUTE)).toMatch(/data-time=""[^>]*>4m</)
+  // Reached, it counts on to now.
+  expect(said()).toMatch(/data-time=""[^>]*>15m</)
+})
+
+test("a Thread away from its Project's workspace bears a small diamond right after its title, before its card's right parts, where its action never covers it (ADR 0102, decision 6)", () => {
+  for (const density of [1, 2, 3] as const)
+    for (const group of ["none", "project"] as const) {
+      const html = drawn(rowOf("turn"), {
+        view: { density, group },
+        strayed: true,
+      })
+      const mark = html.indexOf("lucide-diamond")
+      expect(mark, `${density} lines`).toBeGreaterThan(-1)
+      expect(mark).toBeGreaterThan(html.indexOf(">Bench window tests<"))
+      expect(mark).toBeLessThan(html.indexOf('class="ml-auto'))
+      expect(html).toContain('title="Away from its Project&#x27;s workspace"')
+      // Its right parts stand where every card's do, as wide as the
+      // Later clock that shows over them, whatever its time.
+      expect(html).toMatch(/class="ml-auto [^"]*min-w-5"><span data-time/)
+    }
+  // In Later, as wide as its Wake.
+  const later = drawn(
+    rowOf("later", { mark: "idle", later: { at: NOW, until: NOW + HOUR } }),
+    { strayed: true }
+  )
+  expect(later).toMatch(/class="ml-auto [^"]*min-w-15"><span data-time/)
+  const plain = drawn(rowOf("turn"))
+  expect(plain).not.toContain("lucide-diamond")
+  expect(plain).not.toMatch(/min-w-(5|15)\b/)
+  // The title is only as wide as its words, so the mark follows them.
+  expect(plain).toMatch(/class="min-w-0 truncate text-sm[^"]*"><span>Bench/)
+})
+
+test("a screen reader hears the diamond once, in the card's description (ADR 0102, decision 6)", () => {
+  const html = drawn(rowOf("open", { mark: "idle", calls: undefined }), {
+    strayed: true,
+  })
+  expect(html).toMatch(
+    /aria-description="[^"]*Away from its Project&#x27;s workspace"/
+  )
+  expect(/<svg[^>]*lucide-diamond[^>]*>/.exec(html)?.[0]).toContain(
+    'aria-hidden="true"'
+  )
+})
+
+test("while its action shows, line 1's right hides under it whole, and the diamond stays in sight", () => {
+  const hides =
+    "group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible"
+  const html = drawn(
+    rowOf("turn"),
+    { strayed: true },
+    false,
+    <button type="button">Later</button>
+  )
+  expect(html).toMatch(
+    new RegExp(`class="ml-auto [^"]*${hides}[^"]*"><span data-time`)
+  )
+  expect(html.indexOf("lucide-diamond")).toBeLessThan(html.indexOf(hides))
+  // Line 3's right, under the action's line, keeps its own.
+  expect(html.match(/:invisible/g)).toHaveLength(3)
+  // With no action, and on one that left, it never hides.
+  expect(drawn(rowOf("turn"))).not.toContain(":invisible")
+  const gone = drawn(rowOf("archived", { mark: "rest", archived: true }), {
+    place: "open",
+    went: { to: "archived", from: "open" },
+  })
+  expect(gone).not.toContain(":invisible")
+})

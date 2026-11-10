@@ -1,6 +1,7 @@
 import type { ListedThread } from "@banda/contract/agents"
+import { NO_REASON } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { ANSWER, FAILED, listedOf, RETRY, SHOW } from "./rows"
+import { ANSWER, listedOf, RETRY, SHOW } from "./rows"
 
 const thread = (more: Partial<ListedThread> = {}): ListedThread => ({
   id: "t1",
@@ -88,7 +89,7 @@ test("a failed Thread says why, or that it failed", () => {
   expect(listedOf(failed("Sign in to Codex"), "").calls).toBe(
     "Sign in to Codex"
   )
-  expect(listedOf(failed(), "").calls).toBe(FAILED)
+  expect(listedOf(failed(), "").calls).toBe(NO_REASON)
   expect(listedOf({ ...failed(), seen: "u1" }, "").calls).toBeUndefined()
 })
 

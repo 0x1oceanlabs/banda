@@ -16,7 +16,7 @@
  * away. Pure, so plain tests cover it.
  */
 import type { Stand } from "@banda/ui/status"
-import { clock } from "@banda/core"
+import { wakes } from "@banda/ui/lib/words"
 import type { Row } from "./arrange"
 import type { Block, Entry } from "./inbox"
 
@@ -282,7 +282,7 @@ export function wentWords(went: Went, now: number): string | undefined {
     case "later": {
       const when =
         went.until !== undefined
-          ? clock(went.until, now)
+          ? wakes(went.until, now)
           : went.someday
             ? "someday"
             : "when it's done"
