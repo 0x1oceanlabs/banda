@@ -362,14 +362,15 @@ export type Answering = {
 }
 
 /**
- * A Thread put away until a time, or until its turn ends, as its module
- * keeps it (ADR 0074). It sleeps until `until`, unless `woke` says what
- * woke it first.
+ * A Thread put away until a time, until its turn ends, or Someday, as its
+ * module keeps it (ADR 0074; ADR 0098, decision 12). It sleeps until
+ * `until`, unless `woke` says what woke it first.
  */
 export type ListedLater = {
   /** When it was put off, in ms since the epoch. */
   at: number
-  /** When it wakes; none: when its turn ends. */
+  /** When it wakes; none: when its turn ends, or never by itself with
+   * `someday`. */
   until?: number
   /** Put off with no time: it sleeps until something wakes it (ADR 0098, decision 12). */
   someday?: true

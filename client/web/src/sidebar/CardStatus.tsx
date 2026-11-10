@@ -57,19 +57,24 @@ export function Status({ said, stillAt }: { said: Said; stillAt?: number }) {
 }
 
 /** When a put-off Thread wakes, and how long is left: "22:40 · 1h",
- * "Fri 09:00 · 12h", or "when done" (ADR 0074, decision 6). */
+ * "Fri 09:00 · 12h", "when done" (ADR 0074, decision 6), or "someday",
+ * which no time wakes (ADR 0098, decision 12). */
 function Sleeps({ said }: { said: Extract<Said, { kind: "later" }> }) {
-  const now = useNow(15_000)
-  const { until } = said
+  const { until, someday } = said
+  // A clock only for a time: the other two say the same all along.
+  const now = useNow(15_000, until !== undefined)
   const by = said.byAgent ? "Later by its Agent" : "Later"
+  const [text, title] = someday
+    ? ["someday", `${by}, someday: no time wakes it`]
+    : until === undefined
+      ? ["when done", `${by}, until it's done`]
+      : [`${clock(until, now)} · ${left(until, now)}`, by]
   return (
     <span
       className="shrink-0 text-xs text-muted-foreground tabular-nums"
-      title={until === undefined ? `${by}, until it's done` : by}
+      title={title}
     >
-      {until === undefined
-        ? "when done"
-        : `${clock(until, now)} · ${left(until, now)}`}
+      {text}
     </span>
   )
 }

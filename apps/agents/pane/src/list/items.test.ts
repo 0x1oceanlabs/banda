@@ -305,6 +305,17 @@ test("Later till its turn ends sends no time", async () => {
   expect(sent).toEqual([["agents.later", { thread: "t1" }]])
 })
 
+test("Later Someday sends no time but Someday, and its toast says so (ADR 0098, decision 12)", async () => {
+  const { window, sent, ran } = fake(listed({ mark: "asking" }))
+  const at = { project: "s1", item: "t1" }
+  action("thread.later").run(window, { ...at, someday: true })
+  await vi.waitFor(() =>
+    expect(said.toasts.map((toast) => toast.words)).toEqual(["Later, someday"])
+  )
+  expect(sent).toEqual([["agents.later", { thread: "t1", someday: true }]])
+  expect(ran).toEqual([["pane.put-away", at]])
+})
+
 test("Later asked for no time opens the Window's picker, for the Thread named or the one in focus", () => {
   const { window, sent, ran } = fake(listed())
   action("thread.later").run(window)
@@ -340,13 +351,14 @@ test("another host's Thread is put off and woken on its own engine", async () =>
   ])
 })
 
-test("Later… is off while the Thread asks, and Wake now takes its place while it sleeps", () => {
+test("Later… is on while the Thread asks too, and Wake now takes its place while it sleeps", () => {
   const later = action("thread.later")
   const wake = action("thread.wake")
   const sleeping = listed({ later: { at: 0, until: 100 } })
   expect(later.row(listed(), AT)).toMatchObject({ title: "Later…" })
   expect(later.row(listed(), AT)?.off).toBeUndefined()
-  expect(later.row(listed({ mark: "asking" }), AT)?.off).toBe(true)
+  // Its Person may put off a question: it waits (ADR 0098, decision 11).
+  expect(later.row(listed({ mark: "asking" }), AT)?.off).toBeUndefined()
   expect(later.row(sleeping, AT)).toBeNull()
   expect(wake.row(sleeping, AT)?.title).toBe("Wake now")
   expect(wake.row(sleeping, { ...AT, now: 100 })).toBeNull()

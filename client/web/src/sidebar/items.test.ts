@@ -70,7 +70,9 @@ test("the Thread menu's rows, as it stands", () => {
     "Previous title",
     "Mark as unread",
     "Make a Project from it…",
-    "Later… (off)",
+    // Its Person may put off a question; not archive it (ADR 0098,
+    // decision 11).
+    "Later…",
     "Archive thread (off)",
   ])
   expect(
@@ -86,7 +88,9 @@ test("the Pane menu offers Later… or Wake now, and nothing that is off", () =>
   expect(ids(thread({ later: { at: 1, until: Date.now() + 60_000 } }))).toEqual(
     [["thread.wake", "Wake now", item]]
   )
-  expect(ids(thread({ mark: "asking" }))).toEqual([])
+  expect(ids(thread({ mark: "asking" }))).toEqual([
+    ["thread.later", "Later…", item],
+  ])
 })
 
 test("Archive asks the Item's App to archive it on its host, in one command; an archived one, to bring it back", () => {

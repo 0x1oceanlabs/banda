@@ -219,3 +219,14 @@ test("a put-off Thread lists its Later, and whether its Person saw it wake", () 
     wokeSeen: true,
   })
 })
+
+test("a Thread put off Someday lists it, which no time tells from until done (ADR 0098, decision 12)", () => {
+  const person = { kind: "person", id: "p1" } as const
+  const someday = { at: 1, by: person, someday: true }
+  expect(listedOf(thread({ later: someday }), "Claude").later).toEqual({
+    at: 1,
+    someday: true,
+  })
+  const done = { at: 1, by: person, someday: false }
+  expect(listedOf(thread({ later: done }), "Claude").later).toEqual({ at: 1 })
+})

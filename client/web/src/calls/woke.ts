@@ -1,15 +1,24 @@
 /**
  * A Thread that woke from its Later by itself is told of once (ADR 0074,
  * decision 7): one that calls, by its call; one that does not, by the
- * notifications module, here. It is the calls part's, as what calls is: it
- * looks as the calls follow the lists and the Later clock.
+ * notifications module, here. It is told as its host says it woke
+ * (`thread.woke`, by its time or as its turn ended), not as each window's
+ * clock passes its time: the host's word is the one moment, whichever
+ * windows are open. It is the calls part's, as what calls is: it looks as
+ * the calls follow the lists.
  */
 import { useEffect } from "react"
 import type { ProjectId } from "@banda/contract"
+import { MINUTE } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
-import { asleep, wokeAt } from "@banda/ui/status"
+import { wokeAt } from "@banda/ui/status"
 import type { Stores } from "./stores"
+
+/** How long after it woke a Thread is still told of. Past that its card
+ * says so alone: the host's first start after a while writes the wake of
+ * every Later whose time passed meanwhile, each at its own time. */
+const TOLD_FOR = 10 * MINUTE
 
 /** What the notifications module tells of a Thread that woke by itself
  * with nothing that calls: one that calls is told of by its call. Its
@@ -35,31 +44,35 @@ export function wokeTold(project: ProjectId, listed: Listed): Args {
   }
 }
 
-/** Tells, by `run`, of each Thread `stores` list that wakes by itself
- * from here on, once, and of none that calls; returns how to stop. */
+/**
+ * Tells, by `run`, of each Thread `stores` list whose host says it woke by
+ * itself, once for each Later: not of one that calls, which its call
+ * tells of; not of one its Person woke or saw wake, on this machine or
+ * another; and not of one that woke over `TOLD_FOR` ago. Returns how to
+ * stop.
+ */
 export function tellWoke(
   stores: Stores,
   run: (action: string, args?: Args) => void
 ): () => void {
-  let sleeping = new Set<string>()
+  // Each Later's waking is heard once, told or not, by its Thread and
+  // when it was put off.
+  const heard = new Set<string>()
   const look = () => {
-    const was = sleeping
     const lists = stores.items.get()
-    const { now, list } = stores.calls.get()
-    const calls = new Set(list.map((call) => call.key))
-    sleeping = new Set()
+    const calls = new Set(stores.calls.get().list.map((call) => call.key))
+    const now = Date.now()
     for (const [project, listed] of Object.entries(lists))
       for (const one of listed) {
-        if (!one.later) continue
+        const later = one.later
+        if (!later?.woke) continue
         const key = `${project}:${one.id}`
-        const slept = `${key}@${one.later.at}`
-        if (asleep(one, now)) sleeping.add(slept)
-        else if (
-          was.has(slept) &&
-          !calls.has(key) &&
-          wokeAt(one, now) !== undefined
-        )
-          run("notifications.tell", wokeTold(project as ProjectId, one))
+        const once = `${key}@${later.at}`
+        if (heard.has(once)) continue
+        heard.add(once)
+        const at = wokeAt(one, now)
+        if (calls.has(key) || at === undefined || now - at > TOLD_FOR) continue
+        run("notifications.tell", wokeTold(project as ProjectId, one))
       }
   }
   look()

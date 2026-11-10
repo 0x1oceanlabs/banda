@@ -720,6 +720,47 @@ export function projectId(window: Window, name: string): string {
   return ok.find((project) => project.name === name)!.id
 }
 
+/** Work's id in each window, looked up once. */
+const works = new WeakMap<Window, string>()
+
+/** What the engine's `method` answers in the Project "Work", run as the
+ * Person's `banda call`, from outside the Window. */
+export function call(window: Window, method: string, params?: object) {
+  if (!works.has(window)) works.set(window, projectId(window, "Work"))
+  const work = works.get(window)!
+  const args = params ? ["--params", JSON.stringify(params)] : []
+  return JSON.parse(window.banda("call", method, "--project", work, ...args)).ok
+}
+
+/** Work's Thread named `title`, as the engine lists it; none until it is
+ * listed. */
+export function threadNamed(window: Window, title: string) {
+  const { threads } = call(window, "agents.threads") as {
+    threads: {
+      id: string
+      title: string
+      latest: { turn: string; state: string }
+      later?: { someday?: boolean; woke?: { by: string }; woke_seen?: string }
+    }[]
+  }
+  return threads.find((thread) => thread.title === title)
+}
+
+export const sidebarOf = (page: Page) =>
+  page.getByRole("complementary", { name: "Sidebar" })
+/** The Later picker, Alt+Z's. */
+export const pickerOf = (page: Page) =>
+  page.getByRole("dialog").filter({ hasText: "Later ·" })
+export const toastsOf = (page: Page) =>
+  page.getByRole("region", { name: "Notifications" })
+
+/** The pointer leaves the Sidebar for the Strip: its list holds still
+ * under the pointer, and moves once it leaves. */
+export async function leaveSidebar(page: Page) {
+  const box = (await sidebarOf(page).boundingBox())!
+  await page.mouse.move(box.x + box.width + 200, box.y + box.height / 2)
+}
+
 /** The workspace on screen. */
 export const ON_SCREEN = '[role="group"]:not([aria-hidden="true"])'
 

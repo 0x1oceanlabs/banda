@@ -436,6 +436,10 @@
           "done": {
             "type": "boolean",
             "description": "it sleeps until its turn ends"
+          },
+          "someday": {
+            "type": "boolean",
+            "description": "it sleeps with no time, until something wakes it"
           }
         },
         "additionalProperties": false

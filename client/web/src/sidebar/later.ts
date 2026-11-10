@@ -8,7 +8,9 @@ import type { Lists } from "@banda/ui/pane"
 import { asleep } from "@banda/ui/status"
 
 /** When the first Thread of `lists` that sleeps at `now` wakes by its
- * time; none when none sleeps till a time. */
+ * time; none when none sleeps till a time. One until done and one put off
+ * Someday keep no time, so no clock waits for them (ADR 0098, decision
+ * 12). */
 export function nextWake(lists: Lists, now: number): number | undefined {
   let next: number | undefined
   for (const listed of Object.values(lists).flat()) {

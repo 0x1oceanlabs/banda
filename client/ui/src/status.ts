@@ -18,7 +18,8 @@ import type { Chime } from "./sound/families"
  *   have not seen it, or it woke from Later by itself;
  * - `open`: nothing runs in it and nothing calls;
  * - `working`: its Agent is at work;
- * - `later`: put off, it sleeps;
+ * - `later`: put off, it sleeps, until a time, until its turn is done or
+ *   Someday;
  * - `archived`: the Person put it away (ADR 0096).
  */
 export type Stand = "turn" | "open" | "working" | "later" | "archived"
@@ -51,7 +52,8 @@ export function asleep(listed: Listed, now: number): boolean {
 }
 
 /** When `listed` woke from Later by itself, while its Person has not seen
- * it; none otherwise. */
+ * it; none otherwise. `banda status` reads it alike (`woke_at` in the
+ * engine's counts.rs), so both count the same Threads. */
 export function wokeAt(listed: Listed, now: number): number | undefined {
   return listed.later?.wokeSeen ? undefined : wokeOf(listed.later, now)
 }
@@ -95,11 +97,6 @@ export function takes(count: Count, stand: Stand, mark: MarkState): boolean {
 /** Whether the Person may archive `listed`: not at work, not asking. */
 export function mayArchive({ mark }: Pick<Listed, "mark">): boolean {
   return !works(mark) && mark !== "asking"
-}
-
-/** Whether the Person may put off `listed`: it does not ask (ADR 0074). */
-export function mayPutOff({ mark }: Pick<Listed, "mark">): boolean {
-  return mark !== "asking"
 }
 
 /** The bar's Mark over every list at `now`: the loudest mark of what is

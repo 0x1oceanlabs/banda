@@ -40,8 +40,9 @@ export type Tone = "attention" | "destructive" | "added" | "plain" | "muted"
 
 /** What a card's status says. */
 export type Said =
-  /** Put off: when it wakes, or when its turn ends. */
-  | { kind: "later"; until?: number; byAgent: boolean }
+  /** Put off: when it wakes, when its turn ends, or Someday, with no
+   * time (ADR 0098, decision 12). */
+  | { kind: "later"; until?: number; someday?: true; byAgent: boolean }
   /** It woke by itself at `at`: what calls then, or the time it woke. */
   | { kind: "woke"; at: number; word?: string; tone: Tone }
   /** What its mark says, in its tone. */
@@ -105,7 +106,9 @@ function lineOf(line: readonly Part[], hide: readonly Part[], placed: Placed) {
 }
 
 /** What a Thread's status says where it stands: its Later, its waking, or
- * its mark. */
+ * its mark. One a call woke, early or as its turn ended, says that call,
+ * as any call does: only its time coming, or a waking that left nothing
+ * to call, reads as woke (ADR 0098, decision 11). */
 export function statusOf(
   listed: Listed,
   stand: Stand,
@@ -113,8 +116,14 @@ export function statusOf(
 ): Said {
   const { mark, later } = listed
   if (stand === "later")
-    return { kind: "later", until: later?.until, byAgent: !!later?.byAgent }
-  if (woke !== undefined)
+    return {
+      kind: "later",
+      until: later?.until,
+      ...(later?.someday ? { someday: true } : {}),
+      byAgent: !!later?.byAgent,
+    }
+  const byCall = later?.woke !== undefined && later.woke.by !== "time"
+  if (woke !== undefined && !(byCall && calls(mark)))
     return {
       kind: "woke",
       at: woke,

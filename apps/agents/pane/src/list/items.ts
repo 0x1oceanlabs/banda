@@ -32,7 +32,7 @@ import {
   type WindowApi,
 } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
-import { asleep, mayPutOff } from "@banda/ui/status"
+import { asleep } from "@banda/ui/status"
 import {
   AlarmClockIcon,
   CircleDotIcon,
@@ -284,23 +284,35 @@ function waking(window: WindowApi, at: At) {
     .catch((error: unknown) => toast.error(problem(error, "Wake now")))
 }
 
+/** Until when a Thread is put off: a time, its turn's end, or Someday,
+ * with no time, till something wakes it (ADR 0098, decision 12). */
+type Until = number | "done" | "someday"
+
 /**
- * Puts the Thread off till `until`, or till its turn ends with none (ADR
- * 0074). Put off, it is put away as an archived one is, its Panes closed;
- * a toast says till when, with Undo, which wakes it.
+ * Puts the Thread off till `until` (ADR 0074). One that asks may be put
+ * off too, by its Person: it waits with its question (ADR 0098, decision
+ * 11). Put off, it is put away as an archived one is, its Panes closed; a
+ * toast says till when, with Undo, which wakes it.
  */
-function putOff(window: WindowApi, at: At, until?: number, resume = false) {
+function putOff(window: WindowApi, at: At, until: Until, resume = false) {
   const thread = at.listed.id as ThreadId
-  const asked = until === undefined ? { thread } : { thread, until, resume }
+  const asked =
+    until === "done"
+      ? { thread }
+      : until === "someday"
+        ? { thread, someday: true }
+        : { thread, until, resume }
   reached(window, at, "Later")
     ?.command("agents.later", asked, at.project)
     .then(
       () => {
         window.run("pane.put-away", { project: at.project, item: thread })
         toast(
-          until === undefined
+          until === "done"
             ? "Later, until it's done"
-            : `Later, until ${clock(until)}`,
+            : until === "someday"
+              ? "Later, someday"
+              : `Later, until ${clock(until)}`,
           { action: { label: "Undo", onClick: () => waking(window, at) } }
         )
       },
@@ -308,8 +320,15 @@ function putOff(window: WindowApi, at: At, until?: number, resume = false) {
     )
 }
 
-/** Later…: till a time, or till its turn ends; asked for neither, the
- * Window's picker asks when, and wakes one that sleeps. */
+/** Until when `args` put a Thread off; none when they say no time. */
+function untilOf(args?: Args): Until | undefined {
+  if (typeof args?.until === "number") return args.until
+  if (args?.someday === true) return "someday"
+  return args?.done === true ? "done" : undefined
+}
+
+/** Later…: till a time, till its turn ends, or Someday; asked for none,
+ * the Window's picker asks when, and wakes one that sleeps. */
 const later: ItemAction = {
   id: "thread.later",
   section: "Threads",
@@ -319,6 +338,7 @@ const later: ItemAction = {
     until: { number: "when it wakes, in milliseconds since 1970" },
     resume: { flag: "with until, its failed turn goes again then" },
     done: { flag: "it sleeps until its turn ends" },
+    someday: { flag: "it sleeps with no time, until something wakes it" },
   }),
   group: "other",
   does: "later",
@@ -326,20 +346,12 @@ const later: ItemAction = {
   // The picker takes the focus.
   later: true,
   row: (item, at) =>
-    asleep(item, at.now)
-      ? null
-      : {
-          title: "Later…",
-          icon: AlarmClockIcon,
-          // One that asks is answered first.
-          ...(mayPutOff(item) ? {} : { off: true }),
-        },
+    asleep(item, at.now) ? null : { title: "Later…", icon: AlarmClockIcon },
   run: (window, args) => {
     const at = threadAt(window, args)
     if (!at) return
-    const until = typeof args?.until === "number" ? args.until : undefined
-    if (until !== undefined || args?.done === true)
-      putOff(window, at, until, args?.resume === true)
+    const until = untilOf(args)
+    if (until !== undefined) putOff(window, at, until, args?.resume === true)
     else
       window.run("sidebar.later-picker", {
         project: at.project,
