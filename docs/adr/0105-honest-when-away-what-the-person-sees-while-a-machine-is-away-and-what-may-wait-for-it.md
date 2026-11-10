@@ -93,6 +93,10 @@ For Roma, over the mock in Roma's
     marks. A message with images waits too: each image went to arc as it
     was added (`agents.attach`), so the waiting message keeps only their
     ids. A new Thread's first words stay in its composer, as H5b does.
+    Beyond the composer, another ADR may name an act the Person defers
+    in its own words, which then waits as this message does: ADR 0106
+    (stage 2) names closing a terminal Pane while its machine is away,
+    "Closes on arc once it is back".
   - _Other:_ let more acts wait; but a Stop or an Allow that lands late
     does what the Person no longer means.
 - **Q2. How does the Person choose to wait?**
@@ -141,7 +145,8 @@ For Roma, over the mock in Roma's
 
 ## The rule for H5e, once accepted
 
-- Only a message to a Thread waits (Q1).
+- Only a message to a Thread waits (Q1), and what another ADR names as
+  deferred by the Person in its own words (ADR 0106's terminal close).
 - Its CommandId is fixed when it is queued, and every send of it uses
   that one, so the host runs it once (ADR 0082, decision 4).
 - It carries `not_after` on its frame, in the host's time: this device's
