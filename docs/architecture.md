@@ -1243,6 +1243,13 @@ If Chat is removed, Agents still works through its own Thread.
   session and a process group of its own. While it runs, a close sends the
   group a hangup and a request to stop, then a kill a second later; a
   shell passes the hangup on to its jobs. A close ends every watch.
+- **It says how many of a Project's terminals run a program in front**
+  (`terminal.running`), and again as that changes: one the shell put in
+  front, as `vim` or `cargo build`, or the program a terminal was opened
+  with, until it ends. A shell that waits for what is typed runs none.
+  The count comes from the looks that name a shell's header, so it costs
+  no polling of its own. A machine's update waits while one runs, as it
+  waits for a Turn (ADR 0106, decision 4).
 - Its methods are the `methods!` table in `apps/terminal/engine/src/lib.rs`.
 - **Its Pane** (`apps/terminal/pane`) draws a terminal with Ghostty:
   T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,

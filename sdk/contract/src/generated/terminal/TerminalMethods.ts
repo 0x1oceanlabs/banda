@@ -6,6 +6,7 @@ import type { One } from "./One";
 import type { Open } from "./Open";
 import type { Piece } from "./Piece";
 import type { Resize } from "./Resize";
+import type { Running } from "./Running";
 import type { Servers } from "./Servers";
 import type { StopServer } from "./StopServer";
 import type { Write } from "./Write";
@@ -42,4 +43,10 @@ ports: StreamMethod<Nothing, Servers>,
 /**
  * Stops a server of the Project's, and what it started.
  */
-stop_server: CallMethod<StopServer, null>, };
+stop_server: CallMethod<StopServer, null>, 
+/**
+ * How many of the Project's terminals run a program in front,
+ * then that again each time it changes: a machine's update waits
+ * while one does (ADR 0106, decision 4).
+ */
+running: StreamMethod<Nothing, Running>, };

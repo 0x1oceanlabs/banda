@@ -108,6 +108,16 @@ impl World {
         self.call("terminal.open", open).await
     }
 
+    /// How many of `project`'s terminals run a program in front, as a
+    /// machine's update hears it while it waits (ADR 0106, decision 4).
+    pub async fn running(&self, project: ProjectId) -> Stream {
+        let person = Participant::Person(self.owner);
+        (self.kernel)
+            .stream(person, "terminal.running", Some(project), json!({}))
+            .await
+            .unwrap()
+    }
+
     /// `project`'s servers, as the bar's widget hears them (ADR 0044).
     pub async fn ports(&self, project: ProjectId) -> Stream {
         let person = Participant::Person(self.owner);

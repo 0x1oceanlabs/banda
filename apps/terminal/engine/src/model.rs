@@ -118,6 +118,17 @@ pub struct Title {
     pub home: Option<String>,
 }
 
+/// How many of a Project's terminals run a program in front: one their
+/// shell started, or the program a terminal was opened with, until it
+/// ends. A shell that waits for what is typed runs none. A machine's
+/// update waits while one does, as it waits for a Turn (ADR 0106,
+/// decision 4).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Running {
+    pub terminals: u32,
+}
+
 /// A Project's servers, in the order they came (ADR 0044, decision 4).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "terminal/")]

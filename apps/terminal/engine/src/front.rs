@@ -22,6 +22,8 @@ pub struct Front {
     shell: Option<u32>,
     home: Option<PathBuf>,
     seen: Option<(u32, Title)>,
+    /// The process group in front at the last look, if it could tell.
+    group: Option<u32>,
     reader: Reader,
 }
 
@@ -32,6 +34,7 @@ impl Front {
             shell,
             home: dirs::home_dir(),
             seen: None,
+            group: None,
             reader: Reader::new(),
         }
     }
@@ -40,7 +43,8 @@ impl Front {
     /// shell keeps its words and folder while it runs, so the system is
     /// asked only when another one comes to the front.
     pub fn look(&mut self) -> Option<Title> {
-        let group = self.terminal.front()?;
+        self.group = self.terminal.front();
+        let group = self.group?;
         if let Some((seen, title)) = &self.seen
             && *seen == group
             && Some(group) != self.shell
@@ -50,6 +54,14 @@ impl Front {
         let title = self.read(group)?;
         self.seen = Some((group, title.clone()));
         Some(title)
+    }
+
+    /// Whether, at the last look, a program the shell started was in
+    /// front: a group other than the shell's, as `vim` or `cargo build`
+    /// takes the terminal. Where it cannot tell, none is: an update waits
+    /// only for a program it saw.
+    pub fn program(&self) -> bool {
+        matches!((self.group, self.shell), (Some(group), Some(shell)) if group != shell)
     }
 
     /// What `process` runs and where.
@@ -213,5 +225,42 @@ mod tests {
         );
         assert_eq!(shown(Path::new("/home/romb"), home), "/home/romb");
         assert_eq!(shown(Path::new("/etc"), None), "/etc");
+    }
+
+    /// A terminal whose front is what the test says.
+    struct Fixed(std::sync::Mutex<Option<u32>>);
+
+    impl PtyControl for Fixed {
+        fn resize(&self, _: banda_kernel::PtySize) -> std::io::Result<()> {
+            Ok(())
+        }
+
+        fn front(&self) -> Option<u32> {
+            *self.0.lock().unwrap()
+        }
+    }
+
+    #[test]
+    fn only_a_group_other_than_the_shells_runs_a_program() {
+        // Past any process's number, so the system has nothing to read.
+        const SHELL: u32 = u32::MAX - 1;
+        const VIM: u32 = u32::MAX;
+        let terminal = Arc::new(Fixed(std::sync::Mutex::new(Some(SHELL))));
+        let in_front = |group| *terminal.0.lock().unwrap() = group;
+        let mut front = Front::new(terminal.clone(), Some(SHELL));
+        assert!(!front.program(), "before a look");
+        front.look();
+        assert!(!front.program(), "the shell");
+        in_front(Some(VIM));
+        front.look();
+        assert!(front.program(), "a program it started");
+        in_front(None);
+        front.look();
+        assert!(!front.program(), "it cannot tell");
+        // A shell whose group it does not know runs none it can tell.
+        let mut unknown = Front::new(terminal.clone(), None);
+        in_front(Some(VIM));
+        unknown.look();
+        assert!(!unknown.program(), "an unknown shell");
     }
 }
