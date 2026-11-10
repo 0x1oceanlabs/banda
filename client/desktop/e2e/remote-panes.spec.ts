@@ -5,9 +5,13 @@
  * shows the rest dimmed, "Not on arc yet" (decision 2); an act goes where
  * its values live, by one router, from a key, a menu or a Pane alike, and
  * one arc does not run says so in a toast, never a click that does
- * nothing (law 3). The same-path job runs this spec with arc in a mount
- * namespace of its own (ci.yml's `same-path`): the `new-pane` road. With
- * BANDA_E2E_SHOTS set to a folder, it leaves pictures of what it checks.
+ * nothing (law 3). Step 1a″: a Pane goes to its Project's machine by the
+ * directory this device keeps, never by a host its arrangement keeps, so
+ * one restored while arc is away says so, and none goes to this machine
+ * in arc's place (decision 1). The same-path job runs this spec with arc
+ * in a mount namespace of its own (ci.yml's `same-path`): the `new-pane`
+ * and `restore` roads. With BANDA_E2E_SHOTS set to a folder, it leaves
+ * pictures of what it checks.
  */
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
@@ -199,4 +203,44 @@ test("arc's Thread is archived on arc's engine from a key and from its Pane's me
       .getByRole("region", { name: "Notifications" })
       .getByText("There is no such Thread.")
   ).toHaveCount(0)
+})
+
+test("arc's Thread restored as the window starts again with arc away from the first moment says arc is away, by the directory alone: the arrangement names no machine", async () => {
+  // ssh gives up on a silent link in about 20 s, and comes back after its
+  // waits.
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  await onArc()
+  // The engine keeps the window's arrangement with no host in a Pane's
+  // args: which machine has the Project is this device's to keep.
+  expect(window!.banda("call", "workspaces.list")).not.toContain('"host"')
+
+  // arc in a black hole as the window starts again on what it left: it is
+  // never reached in this window's life.
+  const { dir } = window!
+  await window!.app.close()
+  arc!.blackhole(true)
+  window = await withArc(arc!, { dir })
+  const { page } = window
+  const thread = page.getByRole("region", { name: TITLE, exact: true })
+  const pill = thread.locator("[data-machine-pill] [role=status]")
+  await expect(pill).toHaveText("arc is away", { timeout: 60_000 })
+  // Its header and its Message box name arc, and Send waits for it.
+  await expect(thread.locator("header").first()).toContainText("arc")
+  await expect(
+    thread.getByRole("textbox", { name: /^Message to / })
+  ).toHaveAttribute("aria-placeholder", /^Write to .+ on arc\./)
+  await expect(
+    thread.getByRole("button", { name: "Send", exact: true })
+  ).toHaveAttribute("title", "arc is away. Send once it is back.")
+  // Never this machine's in arc's place, nor a Project no machine has.
+  await expect(
+    page.getByText("This window does not reach that machine")
+  ).toHaveCount(0)
+  await expect(page.getByText("There is no such Thread.")).toHaveCount(0)
+  await shot(page, "restored-away")
+
+  // Back, the same Pane shows arc's Thread.
+  arc!.blackhole(false)
+  await expect(pill).toHaveCount(0, { timeout: 90_000 })
+  await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()
 })
