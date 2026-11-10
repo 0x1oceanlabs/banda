@@ -258,10 +258,10 @@ function leave(): void {
 /** Main's services (ADR 0020): the engine and the look as children, the
  * settings, all three on the window's `banda` (program.ts), over them the
  * modules' own, the browser's and the notifications' (modules.ts), and
- * the road that answers what the modules' engine parts
- * ask (road.ts). Beside them, not under them, the other machines' engines
- * (hosts.ts): only the page reaches those. They start with the first
- * effect run, and stop when it is disposed. */
+ * the road that answers what the modules' engine parts ask (road.ts).
+ * Beside them, not under them, the other machines' engines (hosts.ts):
+ * only the page reaches those. They start with the first effect run, and
+ * stop when it is disposed. */
 const runtime = ManagedRuntime.make(
   roadLayer(modules.asked).pipe(
     Layer.provideMerge(modules.layer),

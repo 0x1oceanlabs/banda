@@ -2,9 +2,9 @@
  * A reply's media (ADR 0037, decision 8): its paths come from an Agent's
  * text, so the agents module's channel asks this machine's engine for a
  * token for an image, a video or a sound alone (`bytes.issue`, `media`),
- * in the Thread's Project, and gives the URL that names it. The engine
- * judges the file (platform/bytes); main reads none (ADR 0106, decision
- * 6).
+ * in the Thread's Project, and gives the token, which the page names
+ * with the one URL a Pane makes (`bytesUrl`). The engine judges the file
+ * (platform/bytes); main reads none (ADR 0106, decision 6).
  */
 import type { Engine as Client } from "@banda/contract"
 import { Engine, Look } from "@banda/desktop-kit"
@@ -40,7 +40,7 @@ const main = (issue: (path: string) => string | null) => {
 }
 
 it.effect(
-  "the media channel asks the engine for a picture's, a video's or a sound's token in the Thread's Project, and gives its URL; a refusal is none",
+  "the media channel asks the engine for a picture's, a video's or a sound's token in the Thread's Project, and gives it; a refusal is none",
   () => {
     const { asked, layer } = main((path) =>
       path.endsWith(".txt") ? null : "a5e"
@@ -48,8 +48,8 @@ it.effect(
     const [, media] = agentsDesktop.answers.media
     const ask = (path: string) => media(["p", path], {} as never)
     return Effect.gen(function* () {
-      expect(yield* ask("shot.png")).toBe("app://files/a5e")
-      expect(yield* ask("/elsewhere/clip.webm")).toBe("app://files/a5e")
+      expect(yield* ask("shot.png")).toBe("a5e")
+      expect(yield* ask("/elsewhere/clip.webm")).toBe("a5e")
       expect(yield* ask("notes.txt")).toBeNull()
       expect(asked).toEqual([
         ["bytes.issue", { path: "shot.png", use: "media" }, { project: "p" }],

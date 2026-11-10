@@ -202,16 +202,13 @@ it.effect("an engine that does not answer gives 502", () =>
   })
 )
 
-it("each host goes to its own route, over http for ws and https for wss", () => {
+it("each host goes to its own route on the engine, over http", () => {
   const ws = "ws://127.0.0.1:4321/ws"
   expect(relayedTo("app://files/ab-c_1", ws)?.href).toBe(
     "http://127.0.0.1:4321/b/ab-c_1"
   )
   expect(relayedTo("app://preview/ab", ws)?.href).toBe(
     "http://127.0.0.1:4321/p/ab"
-  )
-  expect(relayedTo("app://files/ab", "wss://[::1]:9/ws")?.href).toBe(
-    "https://[::1]:9/b/ab"
   )
   expect(relayedTo("app://banda/index.html", ws)).toBeNull()
 })

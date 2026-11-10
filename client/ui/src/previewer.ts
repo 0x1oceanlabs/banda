@@ -45,8 +45,9 @@ export type PreviewFile = {
   /**
    * Its bytes on the file host, `app://files` (ADR 0073, decision 5), which
    * answers a range as HTTP does: `<video>` seeks in it, and `read` asks
-   * it. Undefined while it is asked for; null when it is refused, or where
-   * no desktop serves files.
+   * it. Undefined while it is asked for; null when it is refused, where
+   * no desktop relays files, and for another machine's file until step
+   * 4c of ADR 0106.
    */
   url: string | null | undefined
 }

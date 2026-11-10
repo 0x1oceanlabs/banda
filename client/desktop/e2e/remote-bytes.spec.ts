@@ -147,7 +147,7 @@ test("bytes-here: a picture in this machine's reply is this machine's, through t
     .toBe(1)
 })
 
-test("bytes-here: Quick Look draws this machine's PDF from ranges and plays its video, seeking, through the relay", async () => {
+test("bytes-here: Quick Look draws this machine's PDF and plays its video, seeking, in ranges the engine cuts, through the relay", async () => {
   const { page, composer } = await openedHere()
   const row = await filesBeside(page, composer)
 
@@ -171,6 +171,13 @@ test("bytes-here: Quick Look draws this machine's PDF from ranges and plays its 
   await expect
     .poll(() => video.evaluate((video: HTMLVideoElement) => video.readyState))
     .toBeGreaterThanOrEqual(1)
+  // A range goes to the engine and comes back as it cut it: main passes
+  // the header on and serves nothing of its own.
+  const ranged = await video.evaluate(async (video: HTMLVideoElement) => {
+    const answer = await fetch(video.src, { headers: { range: "bytes=0-15" } })
+    return [answer.status, (await answer.arrayBuffer()).byteLength]
+  })
+  expect(ranged).toEqual([206, 16])
   // Seekable only as the engine answers ranges, through the relay.
   const seeked = await video.evaluate(
     (video: HTMLVideoElement) =>
