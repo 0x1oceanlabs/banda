@@ -1253,7 +1253,15 @@ impl Agents {
         }
         self.harness(&harness)?;
         call.command(move |tx| {
-            let thread = turn_of(tx, turn)?.thread;
+            let found = turn_of(tx, turn)?;
+            let thread = found.thread;
+            let turns = store::turns(tx.sql(), thread)?;
+            let at = rules::position(&turns, turn);
+            // A stale card must neither wake nor move a Thread whose
+            // stopped turn has already gone on.
+            if !rules::retry(found.state, &at, found.opener.by_itself())? {
+                return Ok(None);
+            }
             let was = (store::thread(tx.sql(), thread)?)
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?
                 .harness;
