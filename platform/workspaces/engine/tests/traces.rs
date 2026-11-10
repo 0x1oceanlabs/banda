@@ -583,9 +583,12 @@ fn arranged() -> Tracing {
     let mut t = Tracing::new(
         14,
         "arranged",
-        "Arranging by Project puts each Group, and each column in none, last on its \
-         Project's workspace, and one of no Project on a free one; one already there \
-         stays, and with `only` only that Project's move.",
+        "Arranging by Project puts each Group, and each column in none, on its Project's \
+         workspace, and one of no Project on a free one: one with no lead and no Pane an \
+         Agent opened into the own Group, first, a Group just after it in the order they \
+         stood, and one led by a Pane of a kind that `leads` (a Thread) last, as its \
+         lead's Project says, still filling the screen, as one an Agent opened; one \
+         already there stays, and with `only` only that Project's move.",
     );
     t.ok("open", shows(WORK, "terminal.terminal", 1));
     let first = t.list()[0].id.to_string();
@@ -597,16 +600,85 @@ fn arranged() -> Tracing {
         );
     }
     let projects = [WORK, HOME, FOURTH];
-    t.ok("arrange", json!({ "projects": projects, "only": HOME }));
+    // As a window sends them: the kinds that lead a Group, a Thread's.
+    let leads = ["agents.thread"];
+    t.ok(
+        "arrange",
+        json!({ "projects": projects, "leads": leads, "only": HOME }),
+    );
     assert_eq!(t.layout()[0], [vec![1], vec![3], vec![4], vec![5]]);
     assert_eq!(t.layout()[1], [vec![2]]);
-    // Two new workspaces in one go, each its own.
-    t.ok("arrange", json!({ "projects": projects }));
+    // Two new workspaces in one go, each its own, with its own Group.
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
     assert_eq!(t.layout()[0], [vec![3]]);
     assert_eq!(t.layout()[2], [vec![1], vec![4]]);
     assert_eq!(t.layout()[3], [vec![5]]);
+    assert_eq!(
+        t.grouping(),
+        [vec![0], vec![1], vec![2, 2], vec![3], vec![]]
+    );
     let ids: BTreeSet<_> = t.list().iter().map(|w| w.id).collect();
     assert_eq!(ids.len(), t.list().len());
+    // On the free one, WORK's Agent's Group, a Pane of HOME first in it,
+    // filling the screen; and a terminal of WORK in none.
+    let grouped = and(last.clone(), json!({ "grouped": true }));
+    let thread = t.opened(and(shows(WORK, "agents.thread", 6), grouped));
+    let left = json!({ "place": { "to": "beside", "pane": thread, "side": "left" } });
+    t.ok("open", and(shows(HOME, "browser.browser", 7), left));
+    let (browser, agent) = (t.column(0, 1), t.column(0, 2));
+    t.ok("regroup", json!({ "column": browser, "toward": "right" }));
+    t.ok("fill", json!({ "column": agent, "fill": true }));
+    t.ok(
+        "open",
+        and(shows(WORK, "terminal.terminal", 8), last.clone()),
+    );
+    t.ok(
+        "arrange",
+        json!({ "projects": projects, "leads": leads, "only": HOME }),
+    );
+    assert_eq!(t.layout()[0], [vec![3], vec![7], vec![6], vec![8]]);
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
+    assert_eq!(t.layout()[2], [vec![1], vec![4], vec![8], vec![7], vec![6]]);
+    assert_eq!(t.grouping()[2], [2, 2, 2, 3, 3]);
+    assert_eq!(t.list()[2].filled, t.list()[2].columns[3].group);
+    // Again, nothing moves.
+    let before = t.list().clone();
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
+    assert_eq!(*t.list(), before);
+    // Later, on the free one: two Groups the Person made of WORK's
+    // terminals and one in none; and, as a window kept them, a Group an
+    // Agent left with a Diff it opened, and a browser it opened in none.
+    for n in [9, 10, 11, 12] {
+        t.ok(
+            "open",
+            and(shows(WORK, "terminal.terminal", n), last.clone()),
+        );
+    }
+    let (nine, ten, eleven) = (t.column(0, 1), t.column(0, 2), t.column(0, 3));
+    t.ok("group", json!({ "column": nine }));
+    t.ok("regroup", json!({ "column": ten, "toward": "left" }));
+    t.ok("group", json!({ "column": eleven }));
+    let agents = |id: u32, kind: &str, n: u32| json!({ "id": kept(id), "project": WORK, "kind": kind, "args": { "n": n }, "by": AGENT });
+    let window = json!([{
+        "id": kept(1),
+        "columns": [
+            { "id": kept(2), "panes": [agents(3, "git.diff", 13)], "group": kept(4) },
+            { "id": kept(5), "panes": [agents(6, "browser.browser", 14)] },
+        ],
+    }]);
+    t.ok("take", json!({ "workspaces": window }));
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
+    // The one in none joins the own Group, the Person's Groups stand just
+    // after it as they stood, and what the Agent opened goes last.
+    let work: Vec<_> = [1, 4, 8, 12, 9, 10, 11, 7, 6, 13, 14]
+        .map(|n| vec![n])
+        .into();
+    assert_eq!(t.layout()[3], work);
+    assert_eq!(t.grouping()[3], [2, 2, 2, 2, 3, 3, 4, 5, 5, 6, 0]);
+    // Again, nothing moves.
+    let before = t.list().clone();
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
+    assert_eq!(*t.list(), before);
     t
 }
 

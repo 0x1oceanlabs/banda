@@ -206,12 +206,20 @@ day.
      A Pane of no Project goes to a free workspace.
    _Built_ in step 6, with decision 7: the engine's `workspaces.arrange`
    moves every Group, and every column in none, that stands off its
-   place, as its first Pane's Project says: last on that Project's
-   workspace, or, of no Project, on the top free one; with `only`, that
-   Project's alone, which the window sends when a Project of no Project
-   is made a Project's. `Ctrl+Z` does not undo it yet: the workspaces
-   have no undo. The sidebar's Flow menu offers it as well, in the row
-   and solo.
+   place, as its Agent's Thread's Project says, else its first Pane's,
+   as a Group moves (decision 6): to that Project's workspace, or, of no
+   Project, last on the top free one; with `only`, that Project's alone,
+   which the window sends when a Project of no Project is made a
+   Project's. On the Project's workspace, one with no Agent's Thread and
+   no Pane an Agent opened goes into the own Group, first, which it
+   starts when there is none (decision 4); the Groups the Person made
+   stand just after it, in the order they stood, and an Agent's goes
+   last. A Group keeps its `Alt+M` fill. A Project counts as one as it
+   does for a Pane that opens: another machine's too, and one whose
+   folder is missing; a draft in this machine's own ID, as a new Thread
+   in No Project starts, is of no Project. `Ctrl+Z` does not undo it
+   yet: the workspaces have no undo. The sidebar's Flow menu offers it as
+   well, in the row and solo.
 
 ## Consequences
 

@@ -10,9 +10,10 @@
 //! window's arrangement once, the workspaces set aside, the Agents' tools
 //! behind their walls, the arrangement's upgrades as it is read, and the
 //! events. So does what it knows of the kinds of Pane: its handler of
-//! `open` fills `grouped` from the kind when it is left out, and `apply`
-//! takes it as sent. A window sends it for each kind that opens grouped
-//! (`PaneKind.grouped`), so its copy of the model knows no kind.
+//! `open` fills `grouped` from the kind when it is left out, and that of
+//! `arrange` its `leads` from those kinds; `apply` takes both as sent. A
+//! window sends them by the kinds that open grouped (`PaneKind.grouped`),
+//! so its copy of the model knows no kind.
 
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
@@ -211,6 +212,13 @@ pub struct Arrange {
     #[serde(default)]
     #[ts(optional)]
     pub only: Option<ProjectId>,
+    /// The kinds of Pane that lead a Group, as an Agent's Thread does: the
+    /// Group is its lead's Project's, and one with none is the Person's
+    /// own (ADR 0102, decisions 4 and 6). Left out, those that open as a
+    /// Group of their own.
+    #[serde(default)]
+    #[ts(optional)]
+    pub leads: Option<Vec<String>>,
 }
 
 #[derive(Deserialize, TS)]
@@ -337,8 +345,12 @@ pub fn apply(
             model::tidy(list, keep, &projects);
         }
         "arrange" => {
-            let Arrange { projects, only } = read(list, seed, params)?;
-            model::arrange(list, &projects, only, seed);
+            let Arrange {
+                projects,
+                only,
+                leads,
+            } = read(list, seed, params)?;
+            model::arrange(list, &projects, only, &leads.unwrap_or_default(), seed);
         }
         "take" => {
             let Take { workspaces } = read(list, seed, params)?;

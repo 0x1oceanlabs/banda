@@ -11,4 +11,11 @@ projects?: Array<ProjectId>,
  * Only this Project's Panes move, as a Thread of no Project made a
  * Project's does (ADR 0102, decision 7). Left out, every Project's.
  */
-only?: ProjectId, };
+only?: ProjectId, 
+/**
+ * The kinds of Pane that lead a Group, as an Agent's Thread does: the
+ * Group is its lead's Project's, and one with none is the Person's
+ * own (ADR 0102, decisions 4 and 6). Left out, those that open as a
+ * Group of their own.
+ */
+leads?: Array<string>, };

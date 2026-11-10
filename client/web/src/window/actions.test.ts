@@ -780,29 +780,42 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
 })
 
-test("Arrange by Project names the Projects that have a workspace, and with one Project only it (ADR 0102, decisions 7 and 9)", () => {
+test("Arrange by Project names every Project its Panes are of, as a Pane opens, and with one Project only it (ADR 0102, decisions 7 and 9)", () => {
   const projects = [
     { id: "a", scratch: false },
     { id: "s", scratch: true },
   ] as unknown as ProjectSummary[]
-  const state = open(
-    start(),
-    "a",
-    { kind: "terminal.shell", args: {} },
-    {
-      place: "right",
-    }
-  )
-  const arranged = arranging(state, projects)
+  const right = { place: "right" } as const
+  // `far` is not in this machine's list: another machine's Project, or one
+  // whose folder is missing. It has a workspace of its own all the same.
+  let state = open(start(), "far", thread("t1"), right)
+  state = open(state, "a", { kind: "terminal.shell", args: {} }, right)
+  state = open(state, "s", thread("t2"), right)
+  // A draft in the machine's own ID, as a new Thread in No Project starts.
+  state = open(state, "m", thread("t3"), right)
+  const placing = placingOf("row", noProjectOf(projects, "m"))
+  const arranged = arranging(state, placing)
+  // A Group goes as its lead says: the kinds of Pane that open grouped.
+  const leads = ["agents.thread"]
   expect(arranged.command).toEqual({
     method: "workspaces.arrange",
-    params: { projects: ["a"] },
+    params: { projects: ["far", "a"], leads },
   })
   // The Pane in front goes along.
   expect(arranged.want).toBe(focused(state)?.id)
-  expect(arranging(state, projects, "a").command.params).toEqual({
-    projects: ["a"],
+  expect(arranging(state, placing, "a").command.params).toEqual({
+    projects: ["far", "a"],
+    leads,
     only: "a",
+  })
+  // What the Placing says is of no Project, as the machine's own, is not.
+  const none: Placing = {
+    ...placing,
+    scratch: (project) => project === "far" || placing.scratch(project),
+  }
+  expect(arranging(state, none).command.params).toEqual({
+    projects: ["a"],
+    leads,
   })
 })
 
