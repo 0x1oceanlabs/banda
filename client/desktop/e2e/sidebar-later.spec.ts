@@ -69,7 +69,7 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   await expect(question).toContainText("Allow Fake AI to run a command?")
   const sidebar = sidebarOf(page)
   const row = sidebar.getByRole("button", { name: /please ask first/ })
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText("Asks Run a check")
   await expect(markOf(page)).toHaveAccessibleName(/Asks you/)
 
   // Alt+Z opens the picker on it, as on any Thread: no refusal, a note
@@ -104,7 +104,9 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   // that (ADR 0099, decision 9); seen, it is the question that calls.
   await expect(row).toBeVisible({ timeout: 90_000 })
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText(
+    /Woke You put it off \d+[sm] ago · Run a check/
+  )
   await expect(markOf(page)).toHaveAccessibleName(/Woke/)
   await row.click()
   await expect(question).toContainText("Allow Fake AI to run a command?")
@@ -195,7 +197,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
   // It has left Later for the Inbox's Your turn.
   await expect(row).toBeHidden()
   await tab("Inbox").click()
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText("Asks Run a check")
   await expect(row).not.toContainText("someday")
   await expect(row.getByRole("img", { name: "Woke" })).toHaveCount(0)
   await expect(markOf(page)).toHaveAccessibleName(/Asks you/)

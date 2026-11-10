@@ -1,5 +1,4 @@
 import type { ProjectSummary } from "@banda/contract"
-import { clock } from "@banda/core/react"
 import type { Listed } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
@@ -13,11 +12,11 @@ const AT_1830 = new Date(2026, 10, 10, 18, 30).getTime()
 
 test("inbox zero says how many work and when the next wakes, what does not apply left out", () => {
   expect(zeroSays({ working: 7, next: AT_1830 }, NOW)).toBe(
-    `7 at work · next wakes at ${clock(AT_1830, NOW)}`
+    "7 at work · next wakes at 18:30"
   )
   expect(zeroSays({ working: 2 }, NOW)).toBe("2 at work")
   expect(zeroSays({ working: 0, next: AT_1830 }, NOW)).toBe(
-    `next wakes at ${clock(AT_1830, NOW)}`
+    "next wakes at 18:30"
   )
   expect(zeroSays({ working: 0 }, NOW)).toBe("No Agent works now")
 })

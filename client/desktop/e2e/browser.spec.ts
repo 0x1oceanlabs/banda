@@ -814,8 +814,7 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   expect(refused.content[0]!.text).toContain(
     `The Person stopped you on tab ${id}.`
   )
-  await expect(row).toContainText("Stopped on a tab: let it drive again")
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText("Asks Stopped on a tab: let it drive again")
 
   // Let drive again, it reads the tab once more, and its row is calm.
   await stopped.getByRole("button", { name: "Let drive again" }).click()
@@ -864,8 +863,7 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /hello/ })
-  await expect(row).toContainText(`Your turn in a tab: ${why}`)
-  await expect(row).toContainText("Asks you")
+  await expect(row).toContainText(`Asks Your turn in a tab: ${why}`)
   await page.screenshot({ path: "test-results/browser-handoff.png" })
   // Meanwhile the tab is the Person's.
   const refused = await agentCalls(window, "browser_snapshot", { tab })
