@@ -9,16 +9,17 @@
 //!   outbox hands it to the Harness ([`REPLY`], [`reply`]), keyed by the
 //!   Question, so it never waits behind the turn that asked;
 //! - a Question nobody can answer any more closes: its turn ended
-//!   ([`close_unanswered`]), the Harness took it back ([`withdrawn`]), or
-//!   its answer never reached the Harness ([`abandoned`]).
+//!   ([`close_unanswered`]), or for a sub-agent's, its sub-agent
+//!   ([`close_lane`]); the Harness took it back ([`withdrawn`]), or its
+//!   answer never reached the Harness ([`abandoned`]).
 //!
 //! A secret typed into a form goes to the Harness only: neither the log
 //! nor the outbox holds it, memory does.
 
 use crate::live::Live;
 use crate::model::{
-    Body, Choice, Fact, Field, FieldValue, Input, Item, ItemId, Mode, QuestionState, ThreadId,
-    ToolKind, TurnId, Values,
+    Body, Choice, Fact, Field, FieldValue, Input, Item, ItemId, Mode, QuestionState, SubagentId,
+    ThreadId, ToolKind, TurnId, Values,
 };
 use crate::{emit, store};
 use banda_kernel::{Effect, Error, Outcome, Participant, Refusal, Tx};
@@ -48,10 +49,16 @@ pub enum Asked {
 }
 
 /// A Question the Harness asks in `turn`, offering every choice it has,
-/// its "always" ones too (ADR 0003, decision 9). For a Harness with no
+/// its "always" ones too (ADR 0003, decision 9); `sub` is the sub-agent
+/// that asks, when it is not the Agent itself, whose Question is the
+/// Thread's all the same (ADR 0103, decision 8). For a Harness with no
 /// modes of its own, `by_mode` is the Thread's mode, and the engine
 /// answers where the mode allows the tool, as T3 Code does; never a form,
 /// which asks what only the Person knows.
+#[expect(
+    clippy::too_many_arguments,
+    reason = "a Question's parts, as the Harness asks it"
+)]
 pub fn ask(
     turn: TurnId,
     by_mode: Option<Mode>,
@@ -60,6 +67,7 @@ pub fn ask(
     choices: Vec<Choice>,
     form: Option<Vec<Field>>,
     plan: Option<String>,
+    sub: Option<SubagentId>,
 ) -> Result<Asked, String> {
     if form.is_none()
         && by_mode.is_some_and(|mode| allowed(mode, tool))
@@ -79,7 +87,7 @@ pub fn ask(
         choices: choices.clone(),
         form: form.clone(),
         plan: plan.clone(),
-        sub: None,
+        sub,
     };
     let body = Body::Question {
         title,
@@ -89,7 +97,7 @@ pub fn ask(
         state: QuestionState::Open,
         answer: None,
         values: None,
-        sub: None,
+        sub,
     };
     Ok(Asked::Open(Box::new((item, body, asked))))
 }
@@ -213,6 +221,21 @@ pub fn close_unanswered(
     turn: TurnId,
 ) -> Result<(), Error> {
     for item in store::open_questions(tx.sql(), turn)? {
+        shut(tx, author, thread, item)?;
+    }
+    Ok(())
+}
+
+/// Sub-agent `sub` of `thread` ended, which `author` brought about: the
+/// Questions it asked that never got an answer close, as a turn's do as
+/// it ends (ADR 0103, decision 8).
+pub fn close_lane(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    sub: SubagentId,
+) -> Result<(), Error> {
+    for item in store::lane_questions(tx.sql(), sub)? {
         shut(tx, author, thread, item)?;
     }
     Ok(())
@@ -418,7 +441,16 @@ mod tests {
         ];
         let turn = TurnId::new();
         let title = Some("Run it?".to_owned());
-        match ask(turn, None, ToolKind::Execute, title, choices, None, None) {
+        match ask(
+            turn,
+            None,
+            ToolKind::Execute,
+            title,
+            choices,
+            None,
+            None,
+            None,
+        ) {
             Ok(Asked::Open(opened)) => opened.1,
             _ => unreachable!("a Person answers without a mode"),
         }
@@ -462,6 +494,7 @@ mod tests {
             offered,
             form,
             None,
+            None,
         ) {
             Ok(Asked::ByMode(id)) => Some(id),
             _ => None,
@@ -488,6 +521,7 @@ mod tests {
                 ToolKind::Read,
                 None,
                 Vec::new(),
+                None,
                 None,
                 None
             )

@@ -57,6 +57,191 @@ pub enum Said {
     Runs(Running),
     /// A line for the Person, such as a warning.
     Notice(String),
+    /// The Agent started a sub-agent, here, after what it said before
+    /// (ADR 0103, decision 7). What hears it keeps the sub-agent's lane
+    /// and the entry where it shows, then tells `started` which lane it
+    /// is, of which turn.
+    Subagent {
+        announced: Announced,
+        started: StartedTx,
+    },
+}
+
+/// The lane a sub-agent's start was kept as.
+pub type StartedTx = oneshot::Sender<Subagent>;
+pub type StartedRx = oneshot::Receiver<Subagent>;
+
+/// A sub-agent as its parent announced it: its child session, as the
+/// Harness names it, the title and role its parent gave it, whether the
+/// Harness lets it be stopped alone, and how it stands, if it says.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Announced {
+    pub child: String,
+    pub title: Option<String>,
+    pub role: Option<String>,
+    /// The Harness lets a client stop it alone (`capabilities.cancel`).
+    pub cancel: bool,
+    pub state: Option<LaneState>,
+}
+
+/// What a Thread's sub-agents say, each by its child session as the
+/// Harness names it, in the order the Harness says it: on a channel of
+/// their own ([`Session::lanes`]), apart from the Thread's turns, so none
+/// of it opens a turn (ADR 0103, decision 8).
+pub enum LaneSaid {
+    /// A sub-agent was announced: by the Thread's own session, or by
+    /// another sub-agent's, `parent`. `started` hears which lane it is,
+    /// once what heard its start kept it: the turn that heard it, or its
+    /// parent's lane, which hears it first, as said in place. `held` keeps
+    /// its process from being let go as idle until its lane holds it.
+    Seen {
+        announced: Announced,
+        parent: Option<String>,
+        started: StartedRx,
+        held: Held,
+    },
+    /// What its parent changed of it: each field given replaces its own.
+    /// A title or role is none when not given, `Some(None)` when cleared.
+    Changed {
+        child: String,
+        title: Option<Option<String>>,
+        role: Option<Option<String>>,
+        cancel: Option<bool>,
+        state: Option<LaneState>,
+    },
+    /// What it said on its own session, as a turn hears it.
+    Said { child: String, said: Said },
+    /// The model and the role its session runs with, when it says them.
+    Runs {
+        child: String,
+        model: Option<String>,
+        role: Option<String>,
+    },
+    /// A message its parent sent it, `message`, all of it so far.
+    Brief {
+        child: String,
+        message: String,
+        text: String,
+    },
+    /// Its report to its parent, all of it so far, as [`report`] cleans it.
+    Report { child: String, text: String },
+}
+
+impl LaneSaid {
+    /// The child session it is of, as the Harness names it.
+    pub fn child(&self) -> &str {
+        match self {
+            LaneSaid::Seen { announced, .. } => &announced.child,
+            LaneSaid::Changed { child, .. }
+            | LaneSaid::Said { child, .. }
+            | LaneSaid::Runs { child, .. }
+            | LaneSaid::Brief { child, .. }
+            | LaneSaid::Report { child, .. } => child,
+        }
+    }
+}
+
+/// How a sub-agent's work stands, as its Harness says it (the RFD's
+/// states).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum LaneState {
+    Running,
+    /// It waits on its Person (`requires_action`).
+    Asks,
+    Idle(IdleWhy),
+    /// The Harness cannot say how it goes.
+    Unknown,
+    /// A state Banda does not know.
+    Other,
+}
+
+/// Why a sub-agent went idle, as its Harness says it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum IdleWhy {
+    EndTurn,
+    Cancelled,
+    /// Something failed, in the Harness's words, which may be none.
+    Error(String),
+    Refusal,
+    MaxTokens,
+    MaxTurnRequests,
+    /// It said no reason, or one Banda does not know.
+    Unsaid,
+}
+
+/// A sub-agent's state as its parent says it; a state cleared says none.
+pub(super) fn lane_state(state: MaybeUndefined<acp::StateUpdate>) -> Option<LaneState> {
+    Some(match state.take()? {
+        acp::StateUpdate::Running(_) => LaneState::Running,
+        acp::StateUpdate::RequiresAction(_) => LaneState::Asks,
+        acp::StateUpdate::Idle(idle) => LaneState::Idle(match idle.stop_reason {
+            Some(acp::IdleStopReason::EndTurn) => IdleWhy::EndTurn,
+            Some(acp::IdleStopReason::Cancelled) => IdleWhy::Cancelled,
+            Some(acp::IdleStopReason::Error(failed)) => IdleWhy::Error(
+                (failed.error)
+                    .map(|error| error.message.trim().to_owned())
+                    .unwrap_or_default(),
+            ),
+            Some(acp::IdleStopReason::Refusal) => IdleWhy::Refusal,
+            Some(acp::IdleStopReason::MaxTokens) => IdleWhy::MaxTokens,
+            Some(acp::IdleStopReason::MaxTurnRequests) => IdleWhy::MaxTurnRequests,
+            _ => IdleWhy::Unsaid,
+        }),
+        acp::StateUpdate::Unknown(_) => LaneState::Unknown,
+        _ => LaneState::Other,
+    })
+}
+
+/// Whether a sub-agent may be stopped alone, as a patch of its
+/// capabilities says, from `was`: omitted keeps it, `null` clears it, and
+/// an object says it.
+pub(super) fn cancel_of(
+    was: bool,
+    capabilities: &MaybeUndefined<acp::SubagentSessionCapabilities>,
+) -> bool {
+    match capabilities {
+        MaybeUndefined::Undefined => was,
+        MaybeUndefined::Null => false,
+        MaybeUndefined::Value(can) => can.cancel.is_some(),
+    }
+}
+
+/// The tag Claude Code puts before a sub-agent's report, naming the tools
+/// it used: its own, never the sub-agent's words.
+const TOOLS_TAG: (&str, &str) = (
+    "<tools-used-before-summary>",
+    "</tools-used-before-summary>",
+);
+/// How a background sub-agent's first `:reply` starts: Claude Code's
+/// receipt that it launched, not what it found.
+const RECEIPT: &str = "Async agent launched";
+
+/// A sub-agent's report as its Harness sends it, cleaned: Claude Code's
+/// tools tag cut, whether it is a block of its own or before a blank line
+/// (`docs/research/2026-11-10-sub-agents/recordings.md`). None for a
+/// receipt, or for nothing but the tag.
+pub(super) fn report(text: &str) -> Option<String> {
+    let (open, close) = TOOLS_TAG;
+    let trimmed = text.trim_start();
+    let words = match trimmed.strip_prefix(open) {
+        Some(tagged) => tagged.split_once(close).map_or(trimmed, |(_, after)| after),
+        None => trimmed,
+    };
+    let words = words.trim();
+    (!words.is_empty() && !words.starts_with(RECEIPT)).then(|| words.to_owned())
+}
+
+/// What a message's content says, its text blocks together.
+pub(super) fn text_of_blocks<'a>(
+    blocks: impl IntoIterator<Item = &'a acp::ContentBlock>,
+) -> String {
+    blocks
+        .into_iter()
+        .filter_map(|block| match block {
+            acp::ContentBlock::Text(text) => Some(text.text.as_str()),
+            _ => None,
+        })
+        .collect()
 }
 
 /// Tool content in flight. Image bytes stop here, before the Thread's
@@ -401,5 +586,39 @@ mod tests {
             .is_none()
         );
         assert!(tool_content(None, Some(json!({"other":{"content":[{"type":"image","mimeType":"image/png","data":"AA=="}]}}))).is_none());
+    }
+
+    #[test]
+    fn a_launch_receipt_is_no_report() {
+        // As `claude-nested.jsonl:28` has it, cut short.
+        let receipt = "Async agent launched successfully. (This tool result is internal metadata.)\nagentId: a7f20df87b6b088ad (internal ID - do not mention to user.)";
+        assert_eq!(report(receipt), None);
+        assert_eq!(
+            report("<tools-used-before-summary>Read</tools-used-before-summary>\n"),
+            None
+        );
+        assert_eq!(report("  "), None);
+        assert_eq!(
+            report("Async agents are fine"),
+            Some("Async agents are fine".to_owned())
+        );
+    }
+
+    #[test]
+    fn a_reports_tools_tag_is_stripped_as_a_block_or_a_prefix() {
+        // A block of its own, then the words (`claude-subagents.jsonl:57`).
+        let blocks = [
+            acp::ContentBlock::Text(acp::TextContent::new(
+                "<tools-used-before-summary>Read</tools-used-before-summary>\n",
+            )),
+            acp::ContentBlock::Text(acp::TextContent::new("banana")),
+        ];
+        assert_eq!(report(&text_of_blocks(&blocks)).as_deref(), Some("banana"));
+        // Both in one block, a blank line between (`claude-nested.jsonl:71`).
+        let one = "<tools-used-before-summary>Bash, Read</tools-used-before-summary>\n\ncherry";
+        assert_eq!(report(one).as_deref(), Some("cherry"));
+        // Words with no tag stay as they are, and a tag later on is theirs.
+        let plain = "It holds.\n<tools-used-before-summary>x</tools-used-before-summary>";
+        assert_eq!(report(plain).as_deref(), Some(plain));
     }
 }

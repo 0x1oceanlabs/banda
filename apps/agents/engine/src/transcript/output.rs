@@ -1,7 +1,7 @@
 //! What a Thread keeps of what a Harness says: a tool's content within
 //! bounds, what a command prints, and a reply's pieces gathered into items.
 
-use crate::model::{Body, Fact, ItemId, ToolContent, TurnId};
+use crate::model::{Body, Fact, ItemId, SubagentId, ToolContent, TurnId};
 
 /// The most of one command's output, one text or one diff (its texts
 /// before and after together) a Thread keeps, in bytes. The Thread keeps
@@ -94,19 +94,20 @@ impl Text {
         }
     }
 
-    pub fn grew(self, item: ItemId, turn: TurnId, text: String) -> Fact {
+    /// The fact of a piece of it, of the lane of `sub` when one says it.
+    pub fn grew(self, item: ItemId, turn: TurnId, text: String, sub: Option<SubagentId>) -> Fact {
         match self {
             Text::Reply => Fact::ReplyGrew {
                 item,
                 turn,
                 text,
-                sub: None,
+                sub,
             },
             Text::Thought => Fact::ThoughtGrew {
                 item,
                 turn,
                 text,
-                sub: None,
+                sub,
             },
         }
     }

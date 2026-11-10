@@ -37,8 +37,9 @@ use tokio::time::Instant;
 /// it ends, unless a tool call of it still runs or it asks a Person.
 pub const QUIET: Duration = Duration::from_secs(60);
 /// How long what the Agent does by itself waits for the turn that ran to
-/// be written as ended.
-const ENDING: Duration = Duration::from_secs(10);
+/// be written as ended; and a sub-agent's lane, for where its start was
+/// kept (`lanes.rs`).
+pub const ENDING: Duration = Duration::from_secs(10);
 
 /// Who hears a Thread's session between its turns.
 pub struct Listener {

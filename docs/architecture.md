@@ -899,6 +899,28 @@ If Chat is removed, Agents still works through its own Thread.
   a restart interrupts it (`opened`). A tool call that changes between
   turns belongs to the turn that ended, as when a command Claude Code sent
   to the background ends, and opens none.
+- **A Harness's sub-agents work in lanes of their Thread** (ADR 0103),
+  once the engine declares sub-agents to the Harnesses it starts (for now
+  with `BANDA_SUBAGENTS=1`). Each sub-agent says what it does on a child
+  session of its own, which the session's lanes channel carries apart from
+  its turns, so nothing a sub-agent says opens a turn (`lanes.rs`, one
+  task per lane, in the order the Harness said it). Its start is written
+  where its parent said it, after what came before: by the turn that
+  heard it, or by its parent's lane for a nested one, in the root's launch
+  turn; one child session is one lane (`agents_subagents`, by its
+  evidence), so a child announced again or replayed goes on in its own.
+  Its words are the lane's entries (`agents_items.sub`), written by a
+  Transcript of the lane, and never move the Thread; its Question is the
+  Thread's, which names the lane, is answered by the Thread's mode as it
+  asks, and closes as the lane ends, not with the turn. Its record changes
+  in the same write as its fact: `subagent.started`, `subagent.changed`
+  (only what changed) and `subagent.ended`, with its report, its last
+  words to its parent. A lane at work keeps its process and the machine
+  from going idle, and stops a folder moving; one Banda cut off as it let
+  the process go, or that was at work at a restart, ends Lost in words
+  that say why. As a Thread's next turn starts on another entry, its
+  lanes still at work in the old process are stopped, and the Questions
+  they wait on let go, before the old session closes.
 - **One Harness process per Project and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;
@@ -1379,7 +1401,14 @@ module reaches a Harness through an adapter:
   turn's route ends as its prompt's answer is dispatched, before any
   later frame of that connection is routed, and what listens between
   turns starts before the prompt goes, so what the Harness says right
-  after its answer is between turns.
+  after its answer is between turns. A sub-agent is mapped only as a
+  session someone hears announces it, to the Thread's session it is of,
+  its root: what its child session says, and what it asks, go to the
+  root's lanes channel, and its start also goes in place on the root's
+  route, or on its parent lane's for a nested one. A load's replay, or an
+  aside's session, maps none. A child stays mapped after it ends, as late
+  frames and a resumed child still come on it, until its root's session
+  closes.
 - **Capabilities.** The engine declares what the window can show (notices,
   options that are on or off, forms, and a command's output as it comes),
   and the adapter reads what the

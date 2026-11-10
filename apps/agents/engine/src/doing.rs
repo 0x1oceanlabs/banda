@@ -534,12 +534,31 @@ impl Doings {
 
     /// `turn` of `thread` does `now`, unless its Thread's next turn began
     /// already: one handed over still says what it heard before it ends.
+    /// When the Thread last stepped never goes back, as a sub-agent's words
+    /// may have moved it since ([`Doings::stepped`]).
     pub fn update(&self, project: ProjectId, thread: ThreadId, turn: TurnId, now: DoingNow) {
         self.projects
             .of(project)
             .send_if_modified(|all| match all.get_mut(&thread) {
                 Some((of, was)) if *of == turn => {
-                    *was = now;
+                    let stepped = was.stepped.max(now.stepped);
+                    *was = DoingNow { stepped, ..now };
+                    true
+                }
+                _ => false,
+            });
+    }
+
+    /// One of `thread`'s sub-agents said something at `at`: the Thread
+    /// stepped then, said at most once each [`EVERY`], while a turn of it
+    /// is at work. A sub-agent adds no doing of its own (ADR 0103,
+    /// decision 8).
+    pub fn stepped(&self, project: ProjectId, thread: ThreadId, at: i64) {
+        self.projects
+            .of(project)
+            .send_if_modified(|all| match all.get_mut(&thread) {
+                Some((_, now)) if now.stepped.is_none_or(|was| at >= was + EVERY) => {
+                    now.stepped = Some(at);
                     true
                 }
                 _ => false,
@@ -1064,5 +1083,34 @@ mod tests {
         assert_eq!(now(), Some((next, after.fold.now().clone())));
         drop(after);
         assert!(doings.now(project).is_empty());
+    }
+
+    #[test]
+    fn a_sub_agents_words_move_when_the_thread_stepped_once_a_second_and_never_back() {
+        let doings = Arc::new(Doings::default());
+        let (project, thread, turn) = (ProjectId::new(), ThreadId::new(), TurnId::new());
+        let stepped = || doings.now(project)[&thread].1.stepped.unwrap();
+        // No turn at work: nothing to move.
+        doings.stepped(project, thread, 5);
+        assert!(doings.now(project).is_empty());
+        let begun = DoingNow {
+            stepped: Some(1000),
+            ..DoingNow::default()
+        };
+        doings.set(project, thread, turn, begun.clone());
+        doings.stepped(project, thread, 1999);
+        assert_eq!(stepped(), 1000, "within a second of the last");
+        doings.stepped(project, thread, 2000);
+        assert_eq!(stepped(), 2000);
+        // The turn's own, said later from an older fold, keeps the newer.
+        let said = DoingNow {
+            doing: doing(DoingKind::Read, Some("a.ts"), 1500),
+            stepped: Some(1500),
+            ..DoingNow::default()
+        };
+        doings.update(project, thread, turn, said);
+        let now = &doings.now(project)[&thread].1;
+        assert_eq!(now.stepped, Some(2000));
+        assert_eq!(now.doing, doing(DoingKind::Read, Some("a.ts"), 1500));
     }
 }

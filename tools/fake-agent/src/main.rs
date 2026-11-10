@@ -102,7 +102,9 @@
 //! `FAKE_AGENT_NO_RESUME` set it offers only to load them, as an ACP agent
 //! with no resume. With `FAKE_AGENT_SESSIONS` naming a folder it keeps
 //! there the sub-agents `sub-agents load` announced, so that a load in a
-//! later process replays them.
+//! later process replays them. `FAKE_AGENT_OUTLIVES_BY` says how many
+//! milliseconds a sub-agent of `sub-agents outlive` goes on after its
+//! turn's answer.
 //!
 //! Each session has options as Claude Code's do: a `mode` with Claude
 //! Code's modes, a `model`, an `effort`, and `fast` and `brief`, on or off,

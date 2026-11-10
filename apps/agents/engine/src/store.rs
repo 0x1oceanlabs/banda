@@ -1826,7 +1826,6 @@ pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error
 }
 
 /// The Questions lane `sub` asked that still wait for an answer.
-#[cfg_attr(not(test), expect(dead_code, reason = "lanes end from ADR 0103's E1c"))]
 pub fn lane_questions(sql: &Connection, sub: SubagentId) -> Result<Vec<Item>, Error> {
     let mut statement = sql.prepare(&format!(
         "{ITEM} WHERE thread = ({LANES_THREAD}) AND {ASKED_BY} AND {OPEN_QUESTION} ORDER BY rowid"
@@ -2088,10 +2087,6 @@ fn read_lane(row: &Row<'_>) -> rusqlite::Result<Subagent> {
 }
 
 /// What [`insert_lane`] did.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
-)]
 #[derive(Debug, PartialEq)]
 pub enum Upserted {
     /// The lane is new, and kept.
@@ -2106,10 +2101,6 @@ pub enum Upserted {
 /// for that session already, as a child announced again, resumed or
 /// replayed goes on in it, answers that one and writes nothing (ADR 0103,
 /// decision 7).
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
-)]
 pub fn insert_lane(
     sql: &Connection,
     thread: ThreadId,
@@ -2156,10 +2147,6 @@ pub fn insert_lane(
 
 /// Keeps what `lane` is now, by its ID; its Thread, turn, parent and
 /// anchor stay. One that no longer works is no longer being stopped.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "lanes are written from ADR 0103's E1c")
-)]
 pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
     sql.execute(
         "UPDATE agents_subagents SET title = ?2, role = ?3, model = ?4, state = ?5, why = ?6,
@@ -2210,8 +2197,11 @@ pub fn children(sql: &Connection, sub: SubagentId) -> Result<Vec<Subagent>, Erro
 
 /// The states of a lane at work, as its row keeps them: it runs or asks.
 fn at_work() -> [String; 2] {
-    [SubagentState::Running, SubagentState::Asks].map(word)
+    AT_WORK.map(word)
 }
+
+/// The states of a lane at work, as [`SubagentState::works`] has them.
+const AT_WORK: [SubagentState; 2] = [SubagentState::Running, SubagentState::Asks];
 
 /// Whether a lane of the Thread is at work, and a direct one.
 pub fn lanes_at_work(sql: &Connection, thread: ThreadId) -> Result<Lanes, Error> {
@@ -2228,10 +2218,6 @@ pub fn lanes_at_work(sql: &Connection, thread: ThreadId) -> Result<Lanes, Error>
 }
 
 /// Whether a lane of any of the Project's Threads is at work.
-#[cfg_attr(
-    not(test),
-    expect(dead_code, reason = "lanes hold their host from ADR 0103's E1c")
-)]
 pub fn any_lane_at_work(sql: &Connection) -> Result<bool, Error> {
     let [running, asks] = at_work();
     Ok(sql.query_row(
@@ -2241,8 +2227,49 @@ pub fn any_lane_at_work(sql: &Connection) -> Result<bool, Error> {
     )?)
 }
 
+/// The Project's lanes at work, each with its Thread, in the order they
+/// started.
+pub fn every_lane_at_work(sql: &Connection) -> Result<Vec<(ThreadId, Subagent)>, Error> {
+    let [running, asks] = at_work();
+    let mut statement = sql.prepare(&format!("{LANE} WHERE state IN (?1, ?2) ORDER BY rowid"))?;
+    let rows = statement.query_map(params![running, asks], |row| {
+        Ok((row.get(13)?, read_lane(row)?))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Whether a Person asked lane `sub` to stop, while it works.
+pub fn stopped_by_person(sql: &Connection, sub: SubagentId) -> Result<bool, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT stopping = 'person' FROM agents_subagents WHERE id = ?1",
+            params![sub],
+            |row| row.get::<_, Option<bool>>(0),
+        )
+        .optional()?
+        .flatten()
+        .unwrap_or(false))
+}
+
+/// The words of lane `sub`'s last reply, if it replied.
+pub fn last_lane_reply(sql: &Connection, sub: SubagentId) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT json_extract(body, '$.text') FROM agents_items
+             WHERE sub = ?1 AND json_extract(body, '$.kind') = 'message'
+             ORDER BY rowid DESC LIMIT 1",
+            params![sub],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// The Thread's lane at work that started last, if one is.
+pub fn newest_lane_at_work(sql: &Connection, thread: ThreadId) -> Result<Option<Subagent>, Error> {
+    Ok(lanes_in(sql, thread, &AT_WORK)?.pop())
+}
+
 /// The Thread's lanes in any of `states`, in the order they started.
-#[cfg_attr(not(test), expect(dead_code, reason = "lanes end from ADR 0103's E1c"))]
 pub fn lanes_in(
     sql: &Connection,
     thread: ThreadId,
