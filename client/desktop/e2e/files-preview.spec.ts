@@ -5,6 +5,7 @@ import { crc32 } from "node:zlib"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { pdfOf } from "./pdf"
 import {
+  bytesUrl,
   firstThread,
   projectId,
   startWindow,
@@ -287,16 +288,7 @@ test("an HTML file runs in the sandbox host, where its script reaches neither Ba
   const project = join(dir, "root", "Work")
   put(project, "secret.txt", "the secret\n")
   // A real link to a file, as only Banda's page gets one.
-  const work = projectId(window, "Work")
-  const link = await page.evaluate(
-    ([project, path]) =>
-      (
-        window as unknown as {
-          banda: { files: { url: (p: string, f: string) => Promise<string> } }
-        }
-      ).banda.files.url(project, path),
-    [work, "secret.txt"]
-  )
+  const link = bytesUrl(window, projectId(window, "Work"), "secret.txt")
   expect(link).toMatch(/^app:\/\/files\//)
   put(
     project,

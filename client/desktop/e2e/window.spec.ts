@@ -15,6 +15,7 @@ import {
   agentAnswers,
   agentCalls,
   agentSays,
+  bytesUrl,
   clickNotice,
   countNotes,
   desktopOf,
@@ -7544,19 +7545,20 @@ test("a Pane gets a URL for any file the Person opens, served as what it is and 
     }
   ).ok.find((one) => one.folder === folder)!
   type Desktop = {
-    files: { url: (project: string, path: string) => Promise<string | null> }
     agents: { media: (project: string, path: string) => Promise<string | null> }
   }
-  const ask = (leaf: "files" | "agents", path: string) =>
-    page.evaluate(
-      ([leaf, project, path]) => {
-        const { banda } = globalThis as unknown as { banda: Desktop }
-        return leaf === "files"
-          ? banda.files.url(project, path)
-          : banda.agents.media(project, path)
-      },
-      [leaf, project.id, path] as const
-    )
+  // A Pane's URL from its session's engine, a reply's from the agents
+  // module's channel.
+  const ask = async (leaf: "files" | "agents", path: string) =>
+    leaf === "files"
+      ? bytesUrl(window, project.id, path)
+      : page.evaluate(
+          ([project, path]) => {
+            const { banda } = globalThis as unknown as { banda: Desktop }
+            return banda.agents.media(project, path)
+          },
+          [project.id, path] as const
+        )
   const served = (url: string) =>
     app.evaluate(async ({ net }, url) => {
       const response = await net.fetch(url)

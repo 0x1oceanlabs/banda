@@ -653,6 +653,37 @@ export async function openTerminal(page: Page): Promise<Locator> {
   return screen
 }
 
+/**
+ * The URL a Pane makes for the file at `path` in Project `project` for
+ * `use` (ADR 0106, decision 6): a token this machine's engine gives the
+ * Person (`bytes.issue`), on the sandbox host for a page and the byte
+ * host for the rest, which main relays to that engine. None where the
+ * engine refuses it.
+ */
+export function bytesUrl(
+  window: Window,
+  project: string,
+  path: string,
+  use: "file" | "media" | "page" = "file"
+): string | null {
+  try {
+    const params = JSON.stringify({ path, use })
+    const { ok } = JSON.parse(
+      window.banda(
+        "call",
+        "bytes.issue",
+        "--project",
+        project,
+        "--params",
+        params
+      )
+    ) as { ok: { token: string } }
+    return `app://${use === "page" ? "preview" : "files"}/${ok.token}`
+  } catch {
+    return null
+  }
+}
+
 /** The text of the file at `path`; none while it is not there. */
 export function read(path: string): string | undefined {
   try {

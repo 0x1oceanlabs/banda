@@ -1,201 +1,217 @@
-import {
-  mkdtemp,
-  mkdir,
-  rename,
-  rm,
-  symlink,
-  writeFile,
-} from "node:fs/promises"
-import { tmpdir } from "node:os"
-import { join } from "node:path"
-import type { Engine as Client } from "@banda/contract"
+/**
+ * The byte host's relay (ADR 0106, step 4b): `app://files/<token>` goes to
+ * the engine's `/b/<token>`, as the page asked it, and comes back as the
+ * engine answered. A fake engine stands in, and says what it heard.
+ */
+import { createServer, type IncomingHttpHeaders, type Server } from "node:http"
+import type { AddressInfo } from "node:net"
 import { afterEach, beforeEach, expect, it } from "@effect/vitest"
 import { Effect, Layer } from "effect"
 import { Engine } from "./engine"
-import { byteRange, FileHost, FileLinks, wholeIn } from "./files"
+import { relay, relayedTo } from "./files"
 
-let dir: string
+/** What the fake engine heard: each request's method, path and headers. */
+type Heard = { method: string; path: string; headers: IncomingHttpHeaders }
+
+let engine: Server
+let heard: Heard[]
+/** How the fake engine answers a path. */
+type Answer = (path: string) => {
+  status: number
+  headers: Record<string, string>
+  body: string[]
+}
+/** How it answers now; the bytes of a clip in a range, at first. */
+let answer: Answer
+
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "banda-files-"))
+  heard = []
+  answer = () => ({
+    status: 206,
+    headers: {
+      "content-type": "video/mp4",
+      "content-range": "bytes 3-6/10",
+      "content-length": "4",
+      "accept-ranges": "bytes",
+      "content-security-policy": "default-src 'none'; sandbox",
+      "access-control-allow-origin": "*",
+    },
+    body: ["34", "56"],
+  })
+  engine = createServer((request, response) => {
+    heard.push({
+      method: request.method!,
+      path: request.url!,
+      headers: request.headers,
+    })
+    const { status, headers, body } = answer(request.url!)
+    response.writeHead(status, headers)
+    // In pieces, as the engine reads a file a piece at a time.
+    for (const piece of body) response.write(piece)
+    response.end()
+  })
+  await new Promise<void>((done) => engine.listen(0, "127.0.0.1", done))
 })
 afterEach(async () => {
-  await rm(dir, { recursive: true, force: true })
+  await new Promise((done) => engine.close(done))
 })
 
-/** The engine, as far as the host asks it: one Project, `p`, in `dir`. */
-const engine = () =>
+/** Main's engine, at the fake's address, or at `port`. */
+const at = (port?: number) =>
   Layer.succeed(Engine)({
-    address: Effect.die("unused"),
-    client: Effect.succeed({
-      call: async () => [{ id: "p", folder: dir }],
-    } as unknown as Client),
+    address: Effect.sync(() => ({
+      url: `ws://127.0.0.1:${port ?? (engine.address() as AddressInfo).port}/ws`,
+      secret: "unused",
+    })),
+    client: Effect.die("unused"),
     door: Effect.die("unused"),
   })
 
-/** What `links` serves at `url`, with `range` if given. */
-const fetched = (links: FileLinks, url: string, range?: string) =>
-  links.serve(new Request(url, range ? { headers: { range } } : {}), 1)
-
-it.effect(
-  "the runtime signs media; the response is typed, streamed, and may be read in ranges",
-  () =>
-    Effect.gen(function* () {
-      const path = join(dir, "a clip.mp4")
-      yield* Effect.promise(() => writeFile(path, "0123456789"))
-      const files = yield* FileHost
-      const url = yield* files.issue(path, "media")
-      expect(url).toMatch(/^app:\/\/files\//)
-      const full = yield* files.serve(new Request(url!))
-      expect(full.status).toBe(200)
-      expect(full.headers.get("content-type")).toBe("video/mp4")
-      expect(full.headers.get("x-content-type-options")).toBe("nosniff")
-      expect(yield* Effect.promise(() => full.text())).toBe("0123456789")
-      const partial = yield* files.serve(
-        new Request(url!, { headers: { range: "bytes=3-6" } })
-      )
-      expect(partial.status).toBe(206)
-      expect(partial.headers.get("content-range")).toBe("bytes 3-6/10")
-      expect(yield* Effect.promise(() => partial.text())).toBe("3456")
-      const head = yield* files.serve(new Request(url!, { method: "HEAD" }))
-      expect(head.headers.get("content-length")).toBe("10")
-      expect(yield* Effect.promise(() => head.text())).toBe("")
-    }).pipe(Effect.provide(FileHost.layer))
-)
-
-it("serves any file, typed by its extension: text as plain text, what it does not know as bytes", async () => {
-  const links = new FileLinks()
-  const types = {
-    "notes.txt": "text/plain; charset=utf-8",
-    "main.rs": "text/plain; charset=utf-8",
-    "page.html": "text/plain; charset=utf-8",
-    "Read Me.MD": "text/plain; charset=utf-8",
-    "paper.pdf": "application/pdf",
-    "face.woff2": "font/woff2",
-    "shot.PNG": "image/png",
-    "data.bin": "application/octet-stream",
-    Makefile: "application/octet-stream",
-  }
-  for (const [name, type] of Object.entries(types)) {
-    await writeFile(join(dir, name), "<script>alert(1)</script>")
-    const response = await fetched(
-      links,
-      (await links.issue(join(dir, name), 0))!
+/** What main answers `url`, asked with `init`. */
+const relayed = (url: string, init?: RequestInit) =>
+  relay(new Request(url, init)).pipe(
+    Effect.flatMap((response) =>
+      Effect.promise(async () => ({
+        status: response.status,
+        headers: response.headers,
+        body: await response.text(),
+      }))
     )
-    expect(response.status, name).toBe(200)
-    expect(response.headers.get("content-type"), name).toBe(type)
-    expect(response.headers.get("x-content-type-options")).toBe("nosniff")
-    expect(response.headers.get("content-security-policy")).toBe(
-      "default-src 'none'; sandbox"
-    )
-    expect(await response.text()).toBe("<script>alert(1)</script>")
-  }
-})
-
-it("media alone is what a reply's links may ask for, and a link may not turn into another kind", async () => {
-  const links = new FileLinks()
-  await writeFile(join(dir, "secret.txt"), "secret")
-  await writeFile(join(dir, "image.png"), "image")
-  await symlink(join(dir, "secret.txt"), join(dir, "looks like.png"))
-  expect(await links.issue(join(dir, "secret.txt"), 0, "media")).toBeNull()
-  expect(await links.issue(join(dir, "looks like.png"), 0, "media")).toBeNull()
-  expect(await links.issue(join(dir, "image.png"), 0, "media")).toMatch(
-    /^app:\/\/files\//
   )
-  // A Pane the Person drives asks for any file: the link's target is served
-  // as what it is.
-  const url = (await links.issue(join(dir, "looks like.png"), 0))!
-  const response = await fetched(links, url)
-  expect(response.headers.get("content-type")).toBe("text/plain; charset=utf-8")
-  expect(await response.text()).toBe("secret")
-})
-
-it("refuses tampering, expiry, a different signer, missing files, folders and paths not local", async () => {
-  const links = new FileLinks()
-  const path = join(dir, "image.png")
-  await writeFile(path, "image")
-  const url = (await links.issue(path, 100))!
-  expect((await links.serve(new Request(url), 3600100)).status).toBe(404)
-  expect((await new FileLinks().serve(new Request(url), 100)).status).toBe(404)
-  expect((await links.serve(new Request(url + "x"), 100)).status).toBe(404)
-  expect(await links.issue(join(dir, "absent.png"), 100)).toBeNull()
-  expect(await links.issue("~/image.png", 100)).toBeNull()
-  expect(await links.issue("//server/image.png", 100)).toBeNull()
-  expect(await links.issue("image.png", 100)).toBeNull()
-  await mkdir(join(dir, "folder.png"))
-  expect(await links.issue(join(dir, "folder.png"), 100)).toBeNull()
-  expect(await links.issue(dir, 100)).toBeNull()
-})
-
-it("a replaced inode or a path redirected through a symlink does not use an old grant", async () => {
-  const links = new FileLinks()
-  for (const name of ["image.png", "notes.txt"]) {
-    const path = join(dir, name)
-    await writeFile(path, "original")
-    const url = (await links.issue(path, 0))!
-    expect((await fetched(links, url)).status).toBe(200)
-    await rename(path, join(dir, `original ${name}`))
-    await writeFile(path, "replacement")
-    expect((await fetched(links, url)).status).toBe(404)
-    await rm(path)
-    await symlink(join(dir, `original ${name}`), path)
-    expect((await fetched(links, url)).status).toBe(404)
-  }
-})
-
-it("any file is read in ranges; one past its end is refused with its size", async () => {
-  const links = new FileLinks()
-  const path = join(dir, "log.txt")
-  await writeFile(path, "0123456789")
-  const url = (await links.issue(path, 0))!
-  const tail = await fetched(links, url, "bytes=-4")
-  expect(tail.status).toBe(206)
-  expect(tail.headers.get("content-range")).toBe("bytes 6-9/10")
-  expect(tail.headers.get("content-length")).toBe("4")
-  expect(await tail.text()).toBe("6789")
-  const past = await fetched(links, url, "bytes=10-")
-  expect(past.status).toBe(416)
-  expect(past.headers.get("content-range")).toBe("bytes */10")
-})
-
-it("range bounds include suffixes and open ends, and refuse invalid or unsatisfiable ranges", () => {
-  expect(byteRange("bytes=2-", 10)).toEqual([2, 9])
-  expect(byteRange("bytes=-3", 10)).toEqual([7, 9])
-  expect(byteRange("bytes=2-100", 10)).toEqual([2, 9])
-  for (const range of [
-    "bytes=10-",
-    "bytes=-0",
-    "bytes=3-2",
-    "bytes=0-1,3-4",
-    "bytes=-",
-    "bytes=1e3-",
-  ])
-    expect(byteRange(range, 10)).toBeNull()
-  expect(byteRange("bytes=0-", 0)).toBeNull()
-})
 
 it.effect(
-  "a path starts at the Project's folder; an unknown Project, home, the network and a scheme get none",
+  "a file's URL goes to the engine's /b/ with its range, and comes back as the engine answered it",
   () =>
     Effect.gen(function* () {
-      yield* Effect.promise(() => writeFile(join(dir, "notes.md"), "# Notes"))
-      const url = yield* FileHost.url("p", "notes.md")
-      const response = yield* FileHost.use((host) =>
-        host.serve(new Request(url!))
+      const shown = yield* relayed("app://files/a1b2c3", {
+        headers: { range: "bytes=3-6" },
+      })
+      expect(heard).toHaveLength(1)
+      expect(heard[0]).toMatchObject({ method: "GET", path: "/b/a1b2c3" })
+      expect(heard[0]!.headers.range).toBe("bytes=3-6")
+      expect(shown.status).toBe(206)
+      expect(shown.body).toBe("3456")
+      expect(shown.headers.get("content-type")).toBe("video/mp4")
+      expect(shown.headers.get("content-range")).toBe("bytes 3-6/10")
+      expect(shown.headers.get("content-length")).toBe("4")
+      expect(shown.headers.get("content-security-policy")).toBe(
+        "default-src 'none'; sandbox"
       )
-      expect(yield* Effect.promise(() => response.text())).toBe("# Notes")
-      expect(yield* FileHost.url("p", join(dir, "notes.md"))).toMatch(
-        /^app:\/\/files\//
-      )
-      expect(yield* FileHost.url("p", "notes.md", "media")).toBeNull()
-      expect(yield* FileHost.url("other", "notes.md")).toBeNull()
-      for (const path of [
-        "",
-        "~/notes.md",
-        `file://${join(dir, "notes.md")}`,
-        "//server/notes.md",
-      ])
-        expect(yield* FileHost.url("p", path), path).toBeNull()
-      // One letter and a colon is a Windows drive, not a scheme.
-      expect(yield* wholeIn("p", "C:\\notes.md")).not.toBeNull()
-    }).pipe(Effect.provide(Layer.merge(FileHost.layer, engine())))
+      expect(shown.headers.get("access-control-allow-origin")).toBe("*")
+      // What the engine said of its connection is its own.
+      expect(shown.headers.get("connection")).toBeNull()
+
+      // A HEAD asks the length alone.
+      answer = () => ({
+        status: 200,
+        headers: { "content-type": "video/mp4", "content-length": "10" },
+        body: [],
+      })
+      const head = yield* relayed("app://files/a1b2c3", { method: "HEAD" })
+      expect(heard[1]).toMatchObject({ method: "HEAD", path: "/b/a1b2c3" })
+      expect(head.status).toBe(200)
+      expect(head.headers.get("content-length")).toBe("10")
+      expect(head.body).toBe("")
+    }).pipe(Effect.provide(at()))
 )
+
+it.effect(
+  "the engine's refusal comes back as it said it: a wrong or ended token is not found, a range past the end unmet",
+  () =>
+    Effect.gen(function* () {
+      answer = (path): ReturnType<Answer> =>
+        path.endsWith("/ended")
+          ? { status: 404, headers: {}, body: ["Not found"] }
+          : {
+              status: 416,
+              headers: { "content-range": "bytes */10" },
+              body: [],
+            }
+      const ended = yield* relayed("app://files/ended")
+      expect([ended.status, ended.body]).toEqual([404, "Not found"])
+      const past = yield* relayed("app://files/a1", {
+        headers: { range: "bytes=10-" },
+      })
+      expect(past.status).toBe(416)
+      expect(past.headers.get("content-range")).toBe("bytes */10")
+    }).pipe(Effect.provide(at()))
+)
+
+it.effect(
+  "a URL that names no token, and a method but GET and HEAD, are refused in main and never reach the engine",
+  () =>
+    Effect.gen(function* () {
+      for (const url of [
+        "app://files/",
+        "app://files/a/b",
+        "app://files/a?b=c",
+        "app://files/a#b",
+        "app://files/a.b",
+        "app://files/%2e%2e%2fws",
+        "app://banda/a1",
+        "app://visuals/a1",
+      ])
+        expect((yield* relayed(url)).status, url).toBe(404)
+      for (const method of ["POST", "PUT", "DELETE", "OPTIONS"])
+        expect(
+          (yield* relayed("app://files/a1", { method })).status,
+          method
+        ).toBe(405)
+      expect(heard).toEqual([])
+    }).pipe(Effect.provide(at()))
+)
+
+it.effect(
+  "main passes the range and what tells a frame, and nothing of its own: no cookie, no agent, no sign-in",
+  () =>
+    Effect.gen(function* () {
+      yield* relayed("app://files/a1", {
+        headers: {
+          range: "bytes=0-",
+          origin: "app://banda",
+          cookie: "session=1",
+          authorization: "Bearer secret",
+          "user-agent": "Banda",
+          "x-other": "yes",
+        },
+      })
+      // Node's own: where it goes, and how its connection is kept.
+      const { host, connection, ...passed } = heard[0]!.headers
+      expect(host).toMatch(/^127\.0\.0\.1:\d+$/)
+      expect(connection).toBeDefined()
+      expect(passed).toEqual({ range: "bytes=0-", origin: "app://banda" })
+    }).pipe(Effect.provide(at()))
+)
+
+it.effect("an engine that does not answer gives 502", () =>
+  Effect.gen(function* () {
+    // A port that listened a moment ago, and listens no more.
+    const port = yield* Effect.promise(
+      () =>
+        new Promise<number>((done) => {
+          const gone = createServer().listen(0, "127.0.0.1", () => {
+            const { port } = gone.address() as AddressInfo
+            gone.close(() => done(port))
+          })
+        })
+    )
+    const shown = yield* relayed("app://files/a1").pipe(
+      Effect.provide(at(port))
+    )
+    expect(shown.status).toBe(502)
+  })
+)
+
+it("each host goes to its own route, over http for ws and https for wss", () => {
+  const ws = "ws://127.0.0.1:4321/ws"
+  expect(relayedTo("app://files/ab-c_1", ws)?.href).toBe(
+    "http://127.0.0.1:4321/b/ab-c_1"
+  )
+  expect(relayedTo("app://preview/ab", ws)?.href).toBe(
+    "http://127.0.0.1:4321/p/ab"
+  )
+  expect(relayedTo("app://files/ab", "wss://[::1]:9/ws")?.href).toBe(
+    "https://[::1]:9/b/ab"
+  )
+  expect(relayedTo("app://banda/index.html", ws)).toBeNull()
+})

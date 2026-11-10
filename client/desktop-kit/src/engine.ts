@@ -19,7 +19,9 @@ export class Engine extends Context.Service<
   }
 >()("banda/Engine") {
   /** The folder of Project `project`, as the engine has it; none for one
-   * it does not know. */
+   * it does not know. Main reads no Project's path (ADR 0106, decision 6):
+   * the agents module's `paths` alone asks it, until the files module
+   * finds a reply's paths (step 3c), and this goes with it. */
   static readonly folderOf = (project: string) =>
     Effect.gen(function* () {
       const client = yield* Engine.use((engine) => engine.client)

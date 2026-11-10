@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "What a module's part in the window's main process may use of main (ADR 0028): its services, dialogs, errors, the bridge's answers and the byte host (ADR 0073).",
+  "description": "What a module's part in the window's main process may use of main (ADR 0028): its services, dialogs, errors, the bridge's answers and the byte host's relay to the engine (ADR 0073, ADR 0106).",
   "exports": {
     ".": "./src/index.ts"
   },

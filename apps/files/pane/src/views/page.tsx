@@ -1,13 +1,12 @@
 /**
  * Files' pages (ADR 0073, decisions 5 and 6): an HTML file or an SVG
- * document, in a frame of the sandbox host, `app://preview`. Its scripts
- * run there on an origin of no one's, with no Banda, no storage and
- * nothing from the network; its source is a toggle away.
+ * document, in a frame of the sandbox host, `app://preview`, by a token
+ * the engine of the Pane's session gives for a page (ADR 0106, decision
+ * 6). Its scripts run there on an origin of no one's, with no Banda, no
+ * storage and nothing from the network; its source is a toggle away.
  */
-import { useMemo } from "react"
 import { InHeader } from "@banda/ui/components/pane-header"
-import { filesHost } from "@banda/ui/desktop"
-import { useMinted } from "@banda/ui/hooks/use-file-url"
+import { useFileUrl } from "@banda/ui/hooks/use-file-url"
 import type { PreviewProps } from "@banda/ui/module"
 import { CodeIcon } from "lucide-react"
 import { Facts, Loading } from "../Facts"
@@ -16,13 +15,15 @@ import CodeView from "./code"
 import { useHeldUrl } from "./held"
 
 export default function PageView(props: PreviewProps) {
-  const { file, project, kept, keep } = props
+  const { file, engine, project, kept, keep } = props
   const source = kept.source === true
-  const mint = useMemo(() => {
-    const files = filesHost()
-    return files ? (path: string) => files.preview(project, path) : null
-  }, [project])
-  const minted = useMinted(mint, file.path, file.modified ?? undefined)
+  const minted = useFileUrl(
+    engine,
+    project,
+    file.path,
+    file.modified ?? undefined,
+    "page"
+  )
   const { url, broke } = useHeldUrl(minted, file)
   return (
     <>

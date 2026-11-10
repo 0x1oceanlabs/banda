@@ -13,8 +13,9 @@ import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
 import { MarkdownTasks, type Tick } from "@banda/ui/components/markdown-task"
 import { InHeader } from "@banda/ui/components/pane-header"
-import { fileMint } from "@banda/ui/hooks/use-file-url"
+import { useFileMint } from "@banda/ui/hooks/use-file-url"
 import type { PreviewProps } from "@banda/ui/module"
+import type { Engine } from "@banda/contract"
 import { CodeIcon, FileWarningIcon } from "lucide-react"
 import { Card, Loading } from "../Facts"
 import { HeaderButton } from "../HeaderButton"
@@ -24,7 +25,7 @@ import { Cut, TextOf, WrapButton } from "./code"
 import { Edited, EditButton, useEditing } from "./edit"
 
 export default function MarkdownView(props: PreviewProps) {
-  const { file, project, kept, keep } = props
+  const { file, engine, project, kept, keep } = props
   const edit = useEditing(props)
   const { read, text, tick } = edit
   const source = kept.source === true
@@ -71,6 +72,7 @@ export default function MarkdownView(props: PreviewProps) {
           <>
             <Cut drawn={drawn} />
             <Rendered
+              engine={engine}
               project={project}
               file={file.path}
               text={text}
@@ -85,12 +87,14 @@ export default function MarkdownView(props: PreviewProps) {
 }
 
 function Rendered({
+  engine,
   project,
   file,
   text,
   run,
   tick,
 }: {
+  engine: Engine
   project: string
   /** Its full path. */
   file: string
@@ -121,7 +125,13 @@ function Rendered({
           </p>
         )}
         <MarkdownTasks tick={ticks}>
-          <MarkdownIn project={project} file={file} text={body} run={run} />
+          <MarkdownIn
+            engine={engine}
+            project={project}
+            file={file}
+            text={body}
+            run={run}
+          />
         </MarkdownTasks>
       </div>
     </div>
@@ -129,16 +139,19 @@ function Rendered({
 }
 
 /** Markdown of a file, as a reply's is drawn: its pictures from the file
- * host, a relative one from the file's folder, or from `pictures` by
- * the name a link gives, as a notebook keeps its own; a web link in
- * Banda's browser, and with Ctrl or ⌘ outside it. */
+ * host by `engine`, the Pane's session, a relative one from the file's
+ * folder, or from `pictures` by the name a link gives, as a notebook
+ * keeps its own; a web link in Banda's browser, and with Ctrl or ⌘
+ * outside it. */
 export function MarkdownIn({
+  engine,
   project,
   file,
   text,
   run,
   pictures,
 }: {
+  engine: Engine
   project: string
   /** Its full path. */
   file: string
@@ -147,7 +160,7 @@ export function MarkdownIn({
   /** Pictures by the name a link gives them, as `attachment:dot.png`. */
   pictures?: Readonly<Record<string, string>>
 }) {
-  const mint = useMemo(() => fileMint(project), [project])
+  const mint = useFileMint(engine, project)
   const resolve = useCallback(
     (src: string) => {
       const own = pictures?.[src]

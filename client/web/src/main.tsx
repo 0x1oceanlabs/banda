@@ -1,4 +1,5 @@
 import "./renamed"
+import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
 import { readSignsFrom } from "@banda/ui/lib/signs"
 import { StrictMode } from "react"
@@ -39,6 +40,8 @@ const root = createRoot(document.getElementById("root")!, {
 if (host && engine) {
   watchProblems(engine)
   readSignsFrom(engine)
+  // Its files' bytes come through the desktop, which relays them to it.
+  relayBytesFrom(engine)
   void moveEnterKey(host).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)
