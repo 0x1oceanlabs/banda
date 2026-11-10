@@ -346,6 +346,34 @@ test("a new Thread on arc starts on arc's account, by arc's agents.toml, in a Pr
   )
   await shot(page, "new-thread-arc-account")
 
+  // A Pane opened on arc reads arc's list of Harnesses again, once the
+  // last read is 2 s old. Through that, and in a draft that has only just
+  // opened, every frame names the account and shows the mode.
+  await expect(draft.getByRole("button", { name: /^Mode: / })).toBeVisible()
+  const blinks = await draft.evaluateHandle((region) => {
+    const seen: string[] = []
+    new MutationObserver(() => {
+      if (document.querySelector('[aria-label="Message to the Agent"]'))
+        seen.push("no account")
+      if (!region.querySelector('[aria-label^="Mode: "]')) seen.push("no mode")
+    }).observe(document.body, {
+      subtree: true,
+      childList: true,
+      attributes: true,
+      attributeFilter: ["aria-label"],
+    })
+    return seen
+  })
+  await page.waitForTimeout(2_200)
+  await message("Work").focus()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Thread" })
+    .click()
+  await expect(message("Work")).toBeVisible()
+  expect(await blinks.jsonValue()).toEqual([])
+
   // arc's file changes, and the draft follows, as Settings on arc would.
   startsOnArc(arc!, "fake")
   await expect(message("Fake AI")).toBeVisible()
