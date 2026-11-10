@@ -56,6 +56,7 @@ export function ThreadRows({
   listed,
   where,
   later: given,
+  onAct,
 }: {
   project: ProjectId
   listed: Listed
@@ -64,6 +65,9 @@ export function ThreadRows({
   /** Runs an act once the menu has gone, as the field that takes the
    * focus must; a context menu's own, by default. */
   later?: (act: () => void) => void
+  /** Told of each act its Person takes from it, as the sidebar list draws
+   * an act on a card at once, even while it holds. */
+  onAct?: () => void
 }) {
   const keyFor = useKeyLabel()
   const projects = useContext(ProjectsContext)
@@ -81,7 +85,10 @@ export function ThreadRows({
   const drawn = ({ action, row }: Shown) => {
     // Where it opens a field, to one that takes it, as Rename….
     const from = "from" in action.args.properties && { from: where }
-    const act = () => run(action.id, { project, item: listed.id, ...from })
+    const act = () => {
+      onAct?.()
+      run(action.id, { project, item: listed.id, ...from })
+    }
     // A key of its own, or one the Person gave it.
     const key = keyFor(action.id)
     return (

@@ -18,6 +18,7 @@ import { ProjectMenu, type WithMenu } from "./ProjectMenu"
 import { ProjectsList } from "./ProjectsList"
 import { SectionView } from "./SectionView"
 import { PANEL, ShowTab, tabId, tabKey, Tabs } from "./Tabs"
+import { HoldingContext } from "./useHold"
 import { useOrdered } from "./useOrdered"
 import { ToldSomeday, useSidebarView } from "./useSidebarView"
 
@@ -70,7 +71,8 @@ export function Sidebar({
   // The other machines of `hosts.toml`, below this one's (ADR 0081): each
   // host's state by its name.
   const hosts = useHosts()
-  const { ordered, take, letGo } = useOrdered(projects, settings, view)
+  const ordering = useOrdered(projects, settings, view, isCurrent)
+  const { ordered, holds, list } = ordering
   // The Project whose trust a card by its row asks about (ADR 0083,
   // decision 5); taking it back needs no card, and says when it failed.
   const [trusting, setTrusting] = useState<Trusting>()
@@ -111,6 +113,7 @@ export function Sidebar({
           withMenu={withMenu}
           only={view.only}
           projects={projects}
+          holds={holds}
         />
       )
     )
@@ -133,8 +136,7 @@ export function Sidebar({
       <ShowTab value={view.show}>
         <aside
           aria-label="Sidebar"
-          onPointerEnter={take}
-          onPointerLeave={letGo}
+          data-sidebar=""
           onKeyDown={(event) => {
             // Not Esc in a menu it opened, drawn elsewhere in the page.
             const own = event.currentTarget.contains(event.target as Node)
@@ -157,60 +159,64 @@ export function Sidebar({
         >
           <Header only={view.only} projects={projects} />
           <Tabs tabs={ordered.tabs} tab={view.tab} />
-          {/* Where more Threads are below, the list fades out at its foot
-          instead of a line. */}
-          <ScrollArea
-            ref={scrollsIn}
-            className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
-          >
-            <div className="flex flex-col gap-1 px-1.5 pb-2">
-              {ordered.projects && (
-                <ProjectsList
-                  lines={ordered.projects.filter((line) => !line.host)}
-                  settings={settings}
-                  only={view.only}
-                  onPick={view.pick}
-                  withMenu={withMenu}
-                >
-                  {hosts.map((host) => {
-                    const lines = ordered.projects!.filter(
-                      (line) => line.host === host.name
-                    )
-                    return part(
-                      host,
-                      lines.length > 0 && (
-                        <HostLines lines={lines} settings={settings} />
+          {/* What is in the list holds it, and so does the trust card. */}
+          <HoldingContext value={ordering.holder}>
+            {/* Where more Threads are below, the list fades out at its foot
+            instead of a line. */}
+            <ScrollArea
+              ref={scrollsIn}
+              {...list}
+              className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
+            >
+              <div className="flex flex-col gap-1 px-1.5 pb-2">
+                {ordered.projects && (
+                  <ProjectsList
+                    lines={ordered.projects.filter((line) => !line.host)}
+                    settings={settings}
+                    only={view.only}
+                    onPick={view.pick}
+                    withMenu={withMenu}
+                  >
+                    {hosts.map((host) => {
+                      const lines = ordered.projects!.filter(
+                        (line) => line.host === host.name
                       )
-                    )
-                  })}
-                </ProjectsList>
-              )}
-              <div
-                role="tabpanel"
-                id={PANEL}
-                aria-labelledby={tabId(view.tab)}
-                className="flex flex-col gap-1"
-              >
-                {/* This machine's list, where inbox zero tells the view it
-                told of Someday. */}
-                <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
-                {/* Grouped by Project, each host's groups follow under its
-                label; grouped otherwise, its rows are among this machine's,
-                and its label shows only what is not as usual. */}
-                {settings.group.by === "project"
-                  ? hosts.map((host) => part(host, drawn(host.name)))
-                  : !ordered.projects &&
-                    hosts.filter(saysSomething).map((host) => part(host))}
+                      return part(
+                        host,
+                        lines.length > 0 && (
+                          <HostLines lines={lines} settings={settings} />
+                        )
+                      )
+                    })}
+                  </ProjectsList>
+                )}
+                <div
+                  role="tabpanel"
+                  id={PANEL}
+                  aria-labelledby={tabId(view.tab)}
+                  className="flex flex-col gap-1"
+                >
+                  {/* This machine's list, where inbox zero tells the view it
+                  told of Someday. */}
+                  <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
+                  {/* Grouped by Project, each host's groups follow under its
+                  label; grouped otherwise, its rows are among this machine's,
+                  and its label shows only what is not as usual. */}
+                  {settings.group.by === "project"
+                    ? hosts.map((host) => part(host, drawn(host.name)))
+                    : !ordered.projects &&
+                      hosts.filter(saysSomething).map((host) => part(host))}
+                </div>
               </div>
-            </div>
-          </ScrollArea>
-          <Foot />
-          <TrustCard
-            engine={engine}
-            projects={projects}
-            target={trusting}
-            onClose={() => setTrusting(undefined)}
-          />
+            </ScrollArea>
+            <Foot />
+            <TrustCard
+              engine={engine}
+              projects={projects}
+              target={trusting}
+              onClose={() => setTrusting(undefined)}
+            />
+          </HoldingContext>
         </aside>
       </ShowTab>
     </Dismiss>

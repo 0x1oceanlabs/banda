@@ -36,16 +36,26 @@ import { useLookSidebar } from "../look"
 import { itemActionOf } from "./items"
 import { type Preset, presets, whenOf } from "./later-time"
 
-/** A Thread whose Later is being picked, and what the picker stands by. */
+/** A Thread whose Later is being picked, what the picker stands by, and
+ * what is told as something is picked: the sidebar's card it was opened
+ * at hears that its Person put it off (ADR 0098, decision 6). */
 export type LaterTarget = {
   project: ProjectId
   listed: Listed
   anchor?: Element
+  onPicked?: () => void
 }
 
 /** The Thread the picker is open for; none while it is closed. */
 const picking = new Store<LaterTarget | undefined>(undefined)
 const now = (target: LaterTarget | undefined) => target
+const anchorOf = (target: LaterTarget | undefined) => target?.anchor
+
+/** What the picker stands by while it is open: the list holds still while
+ * that is one of its cards. */
+export function useLaterAnchor(): Element | undefined {
+  return useStore(picking, anchorOf)
+}
 
 /** Opens the picker for a Thread, by its row where `anchor` is given;
  * none closes it. */
@@ -199,6 +209,7 @@ export function LaterPicker() {
             key={`${target.project}:${target.listed.id}`}
             listed={target.listed}
             onPick={(picked) => {
+              target.onPicked?.()
               if (picked === "wake") onWake(target)
               else onLater(target, picked)
               onClose()

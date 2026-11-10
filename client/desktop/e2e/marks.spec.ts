@@ -270,7 +270,7 @@ test("the bar's Mark and each row draw ADR 0099's looks still, the loudest on th
   const first = threadNamed(window, "hello")!.id
   call(window, "agents.send", { thread: first, text: "fail now" })
   await expect
-    .poll(() => threadNamed(window, "hello")?.latest.state)
+    .poll(() => threadNamed(window, "hello")?.latest?.state)
     .toBe("failed")
   const failed = rowOf(page, "hello").getByRole("img", { name: "Failed" })
   await expect(failed).toHaveAttribute("data-look", "failed")
