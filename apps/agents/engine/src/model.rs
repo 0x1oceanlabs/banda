@@ -1353,6 +1353,12 @@ pub enum Fact {
     /// items. The Project's log keeps what they said.
     #[serde(rename = "thread.rewound")]
     ThreadRewound { thread: ThreadId, turn: TurnId },
+    /// The Person deleted the Thread, from Archive (ADR 0098, decision
+    /// 14): its turns, items and marks left the Project's tables, and
+    /// every list drops it. The Project's log keeps what it said, as after
+    /// a rewind, since the log is never rewritten (ADR 0002, decision 6).
+    #[serde(rename = "thread.deleted")]
+    ThreadDeleted { thread: ThreadId },
     /// The Person renamed the Thread (ADR 0077): `title` is its title now,
     /// `was` the one before.
     #[serde(rename = "thread.renamed")]

@@ -1599,6 +1599,32 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
     Ok(())
 }
 
+/// Takes `thread` out of the Project for good, as its Person deletes it
+/// (ADR 0098, decision 14): its turns, its items, its sub-agents' lanes,
+/// the notices left for its Agent, and the row with its marks and its
+/// Later. The images its
+/// messages and tools carried wait as a draft's do, from when they were
+/// added, so the sweep lets them go unless a fork's item shows them still.
+/// Another Thread's turn it asked or answered keeps naming it, as what
+/// happened there.
+pub fn delete_thread(sql: &Connection, thread: ThreadId) -> Result<(), Error> {
+    const ITEMS: &str = "SELECT id FROM agents_items WHERE thread = ?1";
+    sql.execute(
+        &format!("UPDATE agents_images SET item = NULL WHERE item IN ({ITEMS})"),
+        params![thread],
+    )?;
+    for each in [
+        "DELETE FROM agents_notices WHERE thread = ?1",
+        "DELETE FROM agents_items WHERE thread = ?1",
+        "DELETE FROM agents_subagents WHERE thread = ?1",
+        "DELETE FROM agents_turns WHERE thread = ?1",
+        "DELETE FROM agents_threads WHERE id = ?1",
+    ] {
+        sql.execute(each, params![thread])?;
+    }
+    Ok(())
+}
+
 /// Which turn an item belongs to, if any.
 pub fn set_item_turn(sql: &Connection, id: ItemId, turn: Option<TurnId>) -> Result<(), Error> {
     sql.execute(
@@ -3312,5 +3338,118 @@ mod tests {
             [call(ToolKind::Read)]
         );
         assert_eq!(edits(&kept.sql, to).unwrap().len(), 2);
+    }
+
+    #[test]
+    fn a_deleted_thread_takes_its_rows_and_leaves_its_images_to_the_sweep() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let author = Participant::Agent(agent);
+        let started = |title: &str| {
+            let summary = ThreadSummary {
+                id: ThreadId::new(),
+                harness: "fake".into(),
+                title: title.into(),
+                updated_at: 0,
+                was: None,
+            };
+            insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+            summary.id
+        };
+        let (gone, fork) = (started("Gone"), started("Gone fork"));
+        let image = || Image {
+            id: ImageId::new(),
+            mime: "image/png".into(),
+            name: None,
+            size: 8,
+        };
+        let (shot, shown) = (image(), image());
+        let said = |body: Body| Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 0,
+            body,
+        };
+        // Its message carries both images, and the fork's copy of it shows
+        // one of them still.
+        let message = said(Body::Message {
+            text: "Look".into(),
+            images: vec![shot.clone(), shown.clone()],
+            answers: false,
+        });
+        insert_item(&sql, gone, &message, None).unwrap();
+        for one in [&shot, &shown] {
+            attach_image(&sql, one, author, 0).unwrap();
+        }
+        carry_images(&sql, &[shot.clone(), shown.clone()], message.id).unwrap();
+        let copy = said(Body::Message {
+            text: "Look".into(),
+            images: vec![shown.clone()],
+            answers: false,
+        });
+        insert_item(&sql, fork, &copy, None).unwrap();
+        let turn = Turn {
+            id: TurnId::new(),
+            thread: gone,
+            agent,
+            message: message.id,
+            state: TurnState::Done,
+            opener: Opener::Person,
+            from_thread: None,
+            stopping: false,
+        };
+        insert_turn(&sql, &turn, author, 1, &Settings::default()).unwrap();
+        let notice = said(Body::Notice {
+            text: "Committed.".into(),
+        });
+        insert_item(&sql, gone, &notice, None).unwrap();
+        keep_notice(&sql, gone, notice.id).unwrap();
+        // A sub-agent's lane of the turn, and an entry of its own.
+        let lane = Subagent {
+            id: SubagentId::new(),
+            turn: turn.id,
+            parent: None,
+            title: "Read the settings".into(),
+            role: None,
+            model: None,
+            state: SubagentState::Done,
+            why: None,
+            can_stop: false,
+            started: 1,
+            ended: Some(2),
+            prompt: None,
+            report: None,
+        };
+        let anchor = said(Body::Subagent { subagent: lane.id });
+        insert_item(&sql, gone, &anchor, None).unwrap();
+        let child = json!({ "session": lane.id.to_string() });
+        insert_lane(&sql, gone, &lane, anchor.id, &child).unwrap();
+        let work = said(call(crate::model::ToolKind::Read));
+        insert_item(&sql, gone, &work, Some(lane.id)).unwrap();
+
+        delete_thread(&sql, gone).unwrap();
+        assert!(thread(&sql, gone).unwrap().is_none());
+        assert!(items(&sql, gone).unwrap().is_empty());
+        assert!(turns(&sql, gone).unwrap().is_empty());
+        assert!(subagents(&sql, gone).unwrap().is_empty());
+        assert!(lane_items(&sql, lane.id).unwrap().is_empty());
+        let notices: i64 = sql
+            .query_row("SELECT COUNT(*) FROM agents_notices", [], |row| row.get(0))
+            .unwrap();
+        assert_eq!(notices, 0);
+        assert_eq!(
+            threads(&sql, &AtWork::new())
+                .unwrap()
+                .iter()
+                .map(|t| t.thread.id)
+                .collect::<Vec<_>>(),
+            [fork],
+            "the other Thread stays"
+        );
+        assert_eq!(items(&sql, fork).unwrap().len(), 1);
+        // The sweep takes the image no item shows, and leaves the fork's.
+        assert_eq!(drop_unsent_images(&sql, 10).unwrap(), vec![shot.id]);
+        assert!(image_kind(&sql, shown.id).unwrap().is_some());
     }
 }

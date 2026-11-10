@@ -29,6 +29,7 @@ mod between;
 mod changes;
 pub mod chosen_modes;
 pub mod counts;
+mod deleting;
 mod doing;
 mod drive;
 mod effects;
@@ -520,6 +521,13 @@ banda_kernel::methods! {
         /// Brings an archived Thread back to its Person's list. One not
         /// archived stays as it is. Only a Person does.
         command unarchive(OneThread) -> (), Write;
+        /// Deletes a Thread for good, as its Person asks from Archive (ADR
+        /// 0098, decision 14): its messages, turns and marks leave the
+        /// Project, and every list drops it. The Project's log keeps what
+        /// it said, as after a rewind. A Thread not in Archive, one at
+        /// work, or one that asks, is refused. Only a Person deletes a
+        /// Thread.
+        command delete(OneThread) -> (), Manage;
         /// Moves the marks a window kept of this Project's Threads to
         /// their host, once, by ID: the turn of each it saw last, which
         /// moves seen forward only, and the Threads it showed archived,
@@ -1316,6 +1324,16 @@ impl Agents {
         let author = marks::person(&call)?;
         call.command(move |tx| marks::unarchive(tx, author, thread))
             .await
+    }
+
+    async fn delete(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        // The kernel refuses an Agent: deleting a Thread takes its Agent
+        // out of the Project, which only a Person manages.
+        let author = call.participant();
+        call.command(move |tx| deleting::delete(tx, author, thread))
+            .await?;
+        deleting::let_go(&self.live, call.project(), thread);
+        Ok(())
     }
 
     async fn import_marks(&self, call: Call, ask: ImportMarks) -> Result<Imported, Refusal> {

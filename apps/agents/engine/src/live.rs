@@ -242,6 +242,15 @@ impl Live {
         }
     }
 
+    /// Lets go of `thread`'s session in each process of `project`, as its
+    /// Person deleted the Thread: what its Harness says between turns then
+    /// has no Thread to go to.
+    pub async fn forget_thread(&self, project: ProjectId, thread: ThreadId) {
+        for (_, connection) in self.hosts.running(project).await {
+            connection.forget_thread(thread).await;
+        }
+    }
+
     /// The name of a Project's listener of the machine's accounts.
     pub const ACCOUNTS: &str = "accounts";
 

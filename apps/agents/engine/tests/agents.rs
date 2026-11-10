@@ -7067,16 +7067,25 @@ async fn a_person_archives_a_thread_and_brings_it_back_and_nothing_moves_in_the_
     assert_eq!(order(world.threads().await), before);
 }
 
+impl World {
+    /// `who` deletes `thread` for good.
+    async fn delete(
+        &self,
+        who: Participant,
+        thread: &Value,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        self.call(who, "agents.delete", json!({ "thread": thread }))
+            .await
+    }
+}
+
 #[tokio::test]
-async fn a_thread_at_work_or_that_asks_cannot_be_archived() {
+async fn a_thread_at_work_or_that_asks_cannot_be_archived_nor_deleted() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let person = world.person();
     let asks = world.send(None, "please ask first").await;
     world.until(&asks["thread"], asking).await;
-    let refused = world.archive(person, &asks["thread"], true).await;
-    assert_eq!(refused.unwrap_err().code, Code::Conflict);
-
     let works = world.send(None, "wait for me").await;
     let thread = &works["thread"];
     world
@@ -7084,10 +7093,136 @@ async fn a_thread_at_work_or_that_asks_cannot_be_archived() {
             state(v, &works["turn"]) == Some(TurnState::Running)
         })
         .await;
-    let refused = world.archive(person, thread, true).await;
-    assert_eq!(refused.unwrap_err().code, Code::Conflict);
+
+    // Each is refused, in words that say why.
+    for (each, why) in [(&asks["thread"], "answer it"), (thread, "at work")] {
+        let archived = world.archive(person, each, true).await.unwrap_err();
+        let deleted = world.delete(person, each).await.unwrap_err();
+        for refused in [archived, deleted] {
+            assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+            assert!(refused.message.contains(why), "{}", refused.message);
+        }
+    }
     assert!(world.listed(thread).await.archived.is_none());
     assert!(world.facts("thread.archived").await.is_empty());
+    assert!(world.facts("thread.deleted").await.is_empty());
+}
+
+#[tokio::test]
+async fn a_person_deletes_a_thread_and_it_leaves_every_list_and_the_project() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "hello").await;
+    let (other, theirs) = world.finish(None, "hi there").await;
+    let person = world.person();
+    world.archive(person, &thread, true).await.unwrap();
+
+    // Only a Person deletes a Thread: not its own Agent, nor another's.
+    for agent in [agent_of(&view), agent_of(&theirs)] {
+        let refused = world.delete(agent, &thread).await.unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+    }
+    assert!(world.listed(&thread).await.is_archived());
+    assert!(world.facts("thread.deleted").await.is_empty());
+
+    world.delete(person, &thread).await.unwrap();
+    let listed = |list: ThreadList| list.threads.iter().map(|t| json!(t.thread.id)).collect();
+    let ids: Vec<Value> = listed(world.threads().await);
+    assert_eq!(ids, std::slice::from_ref(&other));
+    // An Agent reads it gone in its `threads` too, and no one reads it.
+    let seen = world
+        .call(agent_of(&theirs), "agents.threads", json!({}))
+        .await
+        .unwrap();
+    let ids: Vec<Value> = listed(serde_json::from_value(seen).unwrap());
+    assert_eq!(ids, std::slice::from_ref(&other));
+    let gone = world
+        .call(person, "agents.thread", json!({ "thread": thread }))
+        .await
+        .unwrap_err();
+    assert_eq!(gone.code, Code::NotFound);
+
+    // One fact says so, of the Thread, by its Person; the log keeps what
+    // it said before, as after a rewind.
+    let deleted = world.facts("thread.deleted").await;
+    assert_eq!(deleted.len(), 1);
+    assert_eq!(deleted[0].payload, json!({ "thread": thread }));
+    assert_eq!(deleted[0].subject.as_deref(), thread.as_str());
+    assert_eq!(deleted[0].author, person);
+    let posted = world.facts("message.posted").await;
+    assert!(
+        posted
+            .iter()
+            .any(|e| e.subject.as_deref() == thread.as_str())
+    );
+
+    // Gone already, or never there, it is not found.
+    let again = world.delete(person, &thread).await.unwrap_err();
+    assert_eq!(again.code, Code::NotFound);
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    let refused = world.delete(person, &nowhere).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    assert_eq!(world.facts("thread.deleted").await.len(), 1);
+
+    // The other Thread goes on as before. Archived, and written to after,
+    // it left Archive, so a Delete chosen there is refused and keeps what
+    // came.
+    world.archive(person, &other, true).await.unwrap();
+    a_moment().await;
+    let (_, view) = world.finish(Some(&other), "still here?").await;
+    assert_eq!(view.turns.len(), 2);
+    let refused = world.delete(person, &other).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(
+        refused.message.contains("not in Archive"),
+        "{}",
+        refused.message
+    );
+    assert_eq!(world.facts("thread.deleted").await.len(), 1);
+    assert_eq!(world.thread(&other).await.turns.len(), 2);
+}
+
+#[tokio::test]
+async fn a_deleted_thread_takes_back_what_waits_in_it_and_the_thread_that_asked_hears_so() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let person = world.person();
+    let (a, asking) = world.finish(None, "hello").await;
+    let works = world.send(None, "wait for me").await;
+    let thread = &works["thread"];
+    world
+        .until(thread, |v| {
+            state(v, &works["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    let waiting = world.send(Some(thread), "and then this").await;
+
+    // Stopped, its queue is held, and A's Agent writes into it too.
+    world.on_turn("agents.stop", &works["turn"]).await.unwrap();
+    world
+        .until(thread, |v| {
+            state(v, &works["turn"]) == Some(TurnState::Stopped)
+        })
+        .await;
+    let asked = world
+        .write(agent_of(&asking), Some(thread), "count the files")
+        .await
+        .unwrap();
+    world.archive(person, thread, true).await.unwrap();
+
+    // Deleted from Archive, it goes with what waited in it.
+    world.delete(person, thread).await.unwrap();
+    let left = world.threads().await.threads;
+    assert!(left.iter().all(|t| json!(t.thread.id) != *thread));
+    for turn in [&waiting["turn"], &asked["turn"]] {
+        let gone = world.on_turn("agents.withdraw", turn).await;
+        assert_eq!(gone.unwrap_err().code, Code::NotFound);
+    }
+    // A hears back, as from a withdraw, and goes on (ADR 0019).
+    let view = world.until(&a, settled(2)).await;
+    let said = texts(&view);
+    let answer = "message: Its turn ended withdrawn.".to_owned();
+    assert!(said.contains(&answer), "{said:?}");
 }
 
 #[tokio::test]

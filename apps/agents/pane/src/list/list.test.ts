@@ -225,6 +225,21 @@ test("a Thread that goes back to before a message has the list read again", () =
   expect(applyThreads(one, back("t1"))).toBe(one)
 })
 
+test("a Thread its Person deleted leaves the list, wherever it stood (ADR 0098, decision 14)", () => {
+  const deleted = (thread: string) =>
+    event("thread.deleted", { thread }, { author: person, subject: thread })
+  const gone = deleted("t2")
+  const left = applyThreads(two, gone)
+  expect(left.threads.map((t) => t.id)).toEqual(["t1"])
+  expect(left.at).toBe(gone.seq)
+  // The list drops it by itself, with nothing to read again; one it does
+  // not have changes nothing.
+  expect(readsAgain(two, gone)).toBe(false)
+  expect(applyThreads(left, deleted("t2"))).toBe(left)
+  expect(applyThreads(one, deleted("t9"))).toBe(one)
+  expect(THREADS_FILTER.kinds).toContain("thread.deleted")
+})
+
 test("the Person's marks follow their facts, and move no Thread (ADR 0096)", () => {
   const mark = (kind: string, payload: object = {}) =>
     event(kind, { thread: "t1", ...payload }, { author: person, subject: "t1" })

@@ -194,8 +194,19 @@ impl World {
 
     /// The agents module says `kind` about turn `turn` of Thread `thread`.
     async fn say(&self, kind: &str, thread: &str, turn: &str) {
+        self.tell(json!({ "kind": kind, "thread": thread, "turn": turn }))
+            .await;
+    }
+
+    /// The agents module says `kind` about Thread `thread` as a whole, as
+    /// `thread.deleted` does: the fact names no turn.
+    async fn say_of_thread(&self, kind: &str, thread: &str) {
+        self.tell(json!({ "kind": kind, "thread": thread })).await;
+    }
+
+    /// The agents module writes `fact`, which names its kind and Thread.
+    async fn tell(&self, fact: Value) {
         let person = Participant::Person(self.owner);
-        let fact = json!({ "kind": kind, "thread": thread, "turn": turn });
         (self.kernel)
             .call(
                 person,
@@ -1992,6 +2003,28 @@ async fn a_turn_heard_begun_twice_is_let_go_once() {
     world.checkpoints(2).await;
     world.say("thread.rewound", &thread, &turn).await;
     world.checkpoints(0).await;
+}
+
+#[tokio::test]
+async fn a_deleted_thread_lets_go_of_every_checkpoint_of_its_own() {
+    let world = World::committed().await;
+    let id = || ProjectId::new().to_string();
+    let (thread, other) = (id(), id());
+    let (first, second, theirs) = (id(), id(), id());
+    for turn in [&first, &second] {
+        world.say("turn.started", &thread, turn).await;
+        world.say("turn.ended", &thread, turn).await;
+    }
+    world.say("turn.started", &other, &theirs).await;
+    world.checkpoints(5).await;
+    // Its Person deleted it: every turn of it goes, and another Thread's
+    // stays.
+    world.say_of_thread("thread.deleted", &thread).await;
+    let kept = world.checkpoints(1).await;
+    assert_eq!(
+        kept,
+        [format!("refs/banda/checkpoints/{other}/{theirs}/before")]
+    );
 }
 
 #[cfg(unix)]

@@ -38,6 +38,7 @@ export const THREADS_FILTER = {
     "turn.started",
     "turn.ended",
     "thread.rewound",
+    "thread.deleted",
     "thread.renamed",
     "question.asked",
     "question.answered",
@@ -87,11 +88,12 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
 
 /**
  * The list after one fact. A new Thread joins it at the top, and a Thread
- * that heard a message or ended a turn moves there. Each Thread keeps its
- * latest turn that began, how many lines its latest that ended changed,
- * its Questions that wait, the start of its latest message, its Later and
- * the Person's marks, as the engine reads them. A mark moves no Thread
- * (ADR 0096, decision 6). A list the fact
+ * that heard a message or ended a turn moves there; one its Person deleted
+ * leaves it (ADR 0098, decision 14). Each Thread keeps its latest turn
+ * that began, how many lines its latest that ended changed, its Questions
+ * that wait, the start of its latest message, its Later and the Person's
+ * marks, as the engine reads them. A mark moves no Thread (ADR 0096,
+ * decision 6). A list the fact
  * changed stands at the fact's place in the log, which a mark the Person
  * sent waits for (`./sent.ts`); one it left as it was stays where it was.
  */
@@ -219,6 +221,13 @@ function applied(state: ThreadList, event: Event): ThreadList {
     }
     case "thread.unarchived":
       return change(state, event, (thread) => without(thread, "archived"))
+    case "thread.deleted": {
+      const { thread: id } = fact.payload
+      const threads = state.threads.filter((thread) => thread.id !== id)
+      return threads.length === state.threads.length
+        ? state
+        : { ...state, threads }
+    }
     default:
       return state
   }
