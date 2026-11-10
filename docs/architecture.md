@@ -1914,9 +1914,10 @@ Main also relays `app://files/<machine>/<token>` and
 name, `<machine>` being this device's name for it in `hosts.toml`,
 through its forward as it listens now, so a link goes on working when
 ssh comes back on a new port (`client/desktop/src/bytes.ts`). Such a
-request waits while its machine is away, as a read may, until the page
-gives it up. Until the window half of step 4c, a session of another
-machine gets no URL. "Save a copy" is the device's `save_file`
+request waits while its machine is away, as a read may, and goes once
+it is back; it never has a refused machine tried again, which only the
+Person opening it does. Until the window half of step 4c, a session of
+another machine gets no URL. "Save a copy" is the device's `save_file`
 (`files.save` on the bridge): main shows the system's save dialog, then
 fetches the bytes by the same URL and writes them whole where the Person
 picked. It goes now or says why not, so a machine that is away is told
