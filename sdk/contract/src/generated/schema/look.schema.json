@@ -120,7 +120,7 @@
       ]
     },
     "Shape": {
-      "description": "The corners, five levels, each inside the one before (ADR 0080,\ndecision 6): a theme says two, the window's and a control's, and the\nrest follow. A tile's is the window's less the outer gap, a card's the\ntile's less its padding, a chip's 0.6 of a control's.",
+      "description": "The corners, five levels, each inside the one before (ADR 0080,\ndecision 6): a theme says two, the window's and a control's, and the\nrest follow. A tile's is the window's less the outer gap, a card's the\ntile's less its padding but never below a control's, a chip's 0.6 of a\ncontrol's.",
       "type": "object",
       "properties": {
         "window": {
