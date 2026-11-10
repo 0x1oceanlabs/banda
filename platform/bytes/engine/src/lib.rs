@@ -34,8 +34,9 @@ mod served;
 pub use kinds::{PAGE_CSP, Use};
 
 use banda_kernel::api::{self, Served};
+use banda_kernel::host::on_this_machine;
 use banda_kernel::{Call, Kind, Module, Participant, Reach, Refusal, Right};
-use file::{Identity, Unpinned, on_this_machine, pin, resolvable};
+use file::{Identity, Unpinned, pin, resolvable};
 use futures::future::BoxFuture;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;

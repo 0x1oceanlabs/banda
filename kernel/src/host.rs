@@ -1,9 +1,9 @@
 //! The host system's ways, where the engine needs them alike on each (ADR
 //! 0090, decision 3): the PATH a program is found on and how it is found,
 //! how a program the engine runs for itself starts, how two paths compare,
-//! which names a file cannot have, and how a file written whole is put in
-//! place. Unix's ways are the plain ones; Windows' differ, and are in
-//! `host/windows.rs`.
+//! which paths are on this machine's own disks, which names a file cannot
+//! have, and how a file written whole is put in place. Unix's ways are the
+//! plain ones; Windows' differ, and are in `host/windows.rs`.
 //!
 //! On Windows each program the engine starts, on its own or through a
 //! Project's environment, shares the engine's console, which was started
@@ -455,6 +455,30 @@ fn windows_refuses(name: &str) -> Option<&'static str> {
     device.then_some("On Windows a name cannot be one of its devices', as CON, NUL, COM1 or LPT1.")
 }
 
+/// Whether `path` names a file on this machine's own disks, so that a look
+/// at it stays on this machine (ADR 0090, decision 7): see
+/// [`on_this_machine_on`].
+pub fn on_this_machine(path: &Path) -> bool {
+    on_this_machine_on(cfg!(windows), path.as_os_str().as_encoded_bytes())
+}
+
+/// Whether `path` is whole and on this machine's own disks: on Windows on
+/// a drive, never a share or a device (`\\host\…`, `\\?\…`, `\\.\…`,
+/// `\??\…`), as a look at a share sends the Person's NTLM hash to its
+/// host, nor a file's stream (`x.bat::$DATA`), which opens as another kind
+/// of file. Elsewhere it starts at the root, and never at `//`.
+pub fn on_this_machine_on(windows: bool, path: &[u8]) -> bool {
+    if path.contains(&0) {
+        return false;
+    }
+    if windows {
+        matches!(path, [drive, b':', b'\\' | b'/', ..] if drive.is_ascii_alphabetic())
+            && !path[2..].contains(&b':')
+    } else {
+        path.starts_with(b"/") && !path.starts_with(b"//")
+    }
+}
+
 /// Puts `from` in place of `to`, a file or a folder, which it replaces
 /// when it is a file: one written whole beside it, put in place in one
 /// step ([`tried`]).
@@ -515,6 +539,40 @@ pub fn tried<T>(act: impl FnMut() -> io::Result<T>) -> io::Result<T> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn on_windows_a_path_is_on_this_machine_on_a_drive_only_never_a_share_a_device_or_a_stream() {
+        let windows = |path: &str| on_this_machine_on(true, path.as_bytes());
+        for path in ["C:\\Users\\Ro\\notes.md", "c:/Users/Ro/notes.md", "D:\\"] {
+            assert!(windows(path), "{path}");
+        }
+        for path in [
+            "\\\\attacker\\share\\x.png",
+            "//attacker/share/x.png",
+            "\\\\?\\C:\\x.exe",
+            "\\\\?\\UNC\\attacker\\share\\x",
+            "\\\\.\\pipe\\banda",
+            "\\??\\UNC\\attacker\\share\\x",
+            "\\Users\\Ro\\notes.md",
+            "C:notes.md",
+            "notes.md",
+            "C:\\x\\run.bat::$DATA",
+            "C:\\x\\notes.md:hidden",
+            "C:\\x\0.png",
+        ] {
+            assert!(!windows(path), "{path}");
+        }
+    }
+
+    #[test]
+    fn elsewhere_a_path_is_on_this_machine_from_the_root_never_from_two_slashes() {
+        let elsewhere = |path: &str| on_this_machine_on(false, path.as_bytes());
+        assert!(elsewhere("/home/ro/notes.md"));
+        assert!(elsewhere("/Users/ro/a:b.md"));
+        for path in ["//server/x", "notes.md", "~/notes.md", "/x\0"] {
+            assert!(!elsewhere(path), "{path}");
+        }
+    }
 
     #[test]
     fn a_path_is_within_a_folder_part_by_part() {
