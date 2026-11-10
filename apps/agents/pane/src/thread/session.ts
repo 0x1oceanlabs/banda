@@ -277,7 +277,9 @@ export function useThreadSession({
   // The messages that wait for the Thread's machine (ADR 0105), which
   // keep what the Pane shows before that machine answers, as after a
   // restart while it is away: its Harness's name (Q6, #956) and skills.
-  const { host } = args
+  // The machine is the one the directory says has its Project, by its
+  // hosts.toml name, as the queue keeps it (ADR 0106, decision 1).
+  const { host, shown } = usePlaced(project, args.host)
   const waitsHere = useWaiting(host, thread)
   const shows = waitsHere.find((wait) => wait.shows)?.shows
   const name = harnessName(harnesses, harness, shows?.to) || "the Agent"
@@ -497,10 +499,7 @@ export function useThreadSession({
   // minutes from now, unless the Person keeps it longer. A new Thread's
   // first words stay in its composer. It keeps what its Pane shows before
   // that machine answers: its Project, its title and its Harness's name
-  // (Q6). The machine that waits is the one the directory says has its
-  // Project, by its hosts.toml name, as the queue keeps it (ADR 0106,
-  // decision 1).
-  const { host, shown } = usePlaced(project, args.host)
+  // (Q6).
   const queued = useQueue()
   const later = thread !== null && waitsFor(shown, reach)
   const on = useSeenNamed(host)?.name
