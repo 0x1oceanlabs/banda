@@ -307,8 +307,8 @@ mod classes {
                 (
                     Device,
                     &[
-                        "theme", "mode", "radius", "hyprland", "colors", "tokens", "gaps", "desk",
-                        "tile", "focus", "bar", "drawer", "overview", "groups", "motion",
+                        "theme", "mode", "radius", "shape", "hyprland", "colors", "tokens", "gaps",
+                        "desk", "tile", "focus", "bar", "drawer", "overview", "groups", "motion",
                         "columns", "font", "sound",
                     ],
                 ),
