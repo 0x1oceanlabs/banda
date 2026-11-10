@@ -58,6 +58,7 @@ export const DOES = {
   "agents.unread": "act",
   "agents.archive": "act",
   "agents.unarchive": "act",
+  "agents.delete": "act",
   "agents.import_marks": "act",
   "agents.rename": "act",
   "agents.suggest_title": "act",
