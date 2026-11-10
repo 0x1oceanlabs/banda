@@ -22,24 +22,60 @@ export function groupState(
   return undefined
 }
 
-/** The colour a mark calls in: a question's, a failure's, done's green. */
+/** A colour of the theme a mark's Agent is drawn in, by its name. */
+export type MarkColor = "attention" | "destructive" | "added" | "woke" | "muted"
+
+/**
+ * The colour each look's Agent is drawn in (ADR 0099, decision 1): a
+ * question's, a failure's, done's green and woke's yellow, which call the
+ * Person, and offline muted, as it sleeps. The rest take the text's. The
+ * one list both a live mark (`toneOf`) and a still one (`stillMark`) read.
+ */
+const COLOR_OF: Partial<Record<MarkState, MarkColor>> = {
+  asking: "attention",
+  failed: "destructive",
+  done: "added",
+  woke: "woke",
+  offline: "muted",
+}
+
+/** Each colour as a class, written out whole so that Tailwind finds it. */
+const COLOR_CLASS: Record<MarkColor, string> = {
+  attention: "text-attention",
+  destructive: "text-destructive",
+  added: "text-added",
+  woke: "text-woke",
+  muted: "text-muted-foreground",
+}
+
+/** The colour a mark's look is drawn in, as a class: a call's, or
+ * offline's muted; none for the rest, which take the text's. */
 export function toneOf(mark: MarkState): string | undefined {
-  if (mark === "asking") return "text-attention"
-  if (mark === "failed" || mark === "offline") return "text-destructive"
-  if (mark === "done") return "text-added"
-  return undefined
+  const color = COLOR_OF[mark]
+  return color && COLOR_CLASS[color]
+}
+
+/** The class of the logo's hat: its look's colour, and at work a working
+ * Mark's blue (ADR 0107, decision 3). An Agent's tile alone at work is
+ * coloured by who draws it, a Thread's mark by its weight, the bar's
+ * counts grey. */
+function hatOf(mark: MarkState, variant: "logo" | "agent") {
+  const works = mark === "running" || mark === "thinking"
+  return variant === "logo" && works ? "text-mark-working" : toneOf(mark)
 }
 
 /** Plain words for each state, for a title or a screen reader. */
 export const MARK_WORDS: Record<MarkState, string> = {
   rest: "Nothing runs",
-  idle: "Waiting",
+  idle: "Open",
   thinking: "Thinking",
   running: "Working",
   asking: "Asks you",
   done: "Done",
   failed: "Failed",
   offline: "Offline",
+  woke: "Woke",
+  later: "Later",
 }
 
 export function BandaMark({
@@ -47,6 +83,7 @@ export function BandaMark({
   variant = "logo",
   playful = 30,
   news = true,
+  tone = true,
   label,
   className,
 }: {
@@ -60,6 +97,10 @@ export function BandaMark({
    * False for a mark drawn again for what already was, as a list opening.
    */
   news?: boolean
+  /** Whether its Agent takes its look's colour (`toneOf`); without, it is
+   * the text's, as the bar's counts are when their Person turns colour
+   * off. */
+  tone?: boolean
   /** Names the mark for a screen reader; without it the mark is decoration. */
   label?: string
   className?: string
@@ -89,7 +130,7 @@ export function BandaMark({
       ref={svg}
       viewBox={logo ? "0 0 100 100" : "48 -6 56 56"}
       data-slot="banda-mark"
-      data-state={state}
+      data-look={state}
       role={label ? "img" : undefined}
       aria-label={label}
       aria-hidden={label ? undefined : true}
@@ -137,16 +178,25 @@ export function BandaMark({
           />
         </>
       )}
-      <g data-zz fill="currentColor" fontWeight="700">
-        <text>z</text>
-        <text>z</text>
-        <text>z</text>
-      </g>
-      <g data-hat>
-        <g mask={`url(#${mask})`}>
-          <path data-body fill="currentColor" />
-          <path data-lit fill="var(--attention, #ff5a1f)" fillOpacity="0" />
-          <path data-alarm fill="var(--destructive, #e7000b)" fillOpacity="0" />
+      {/* The Agent: its hat and what it does take its look's colour,
+          and on the logo only they do; the two tiles under it stay the
+          text's (ADR 0099, decision 9). */}
+      <g
+        data-agent
+        fill="currentColor"
+        className={tone ? hatOf(state, variant) : undefined}
+      >
+        <g data-zz fontWeight="700">
+          <text>z</text>
+          <text>z</text>
+          <text>z</text>
+        </g>
+        <g data-hat>
+          <path data-body mask={`url(#${mask})`} />
+          <g data-bells opacity="0">
+            <path d={BELL} />
+            <path d={BELL} />
+          </g>
         </g>
       </g>
     </svg>
@@ -159,10 +209,12 @@ export function BandaMark({
 
 type Eye = "open" | "closed" | "happy" | "cross"
 
+/** How much of each shape: square, circle, triangle, octagon. Sums to 1. */
+type Weights = [number, number, number, number]
+
 /** One frame of the character. */
 type Pose = {
-  /** How much of each shape: square, circle, triangle. Sums to 1. */
-  w: [number, number, number]
+  w: Weights
   tx: number
   ty: number
   /** Degrees, on top of the hat's tilt. */
@@ -177,18 +229,16 @@ type Pose = {
   open: number
   big: number
   eye: Eye
-  /** How lit it is in `--attention`. */
-  lit: number
-  /** How red it is, in `--destructive`. */
-  alarm: number
   /** How much it snores. */
   zz: number
   /** How much the eyes show at all: 0 at rest. */
   eyes: number
+  /** How much its alarm clock's two bells show, woke's. */
+  bells: number
 }
 
 const BASE: Pose = {
-  w: [1, 0, 0],
+  w: [1, 0, 0, 0],
   tx: 0,
   ty: 0,
   rot: 0,
@@ -200,10 +250,9 @@ const BASE: Pose = {
   open: 1,
   big: 1,
   eye: "open",
-  lit: 0,
-  alarm: 0,
   zz: 0,
   eyes: 1,
+  bells: 0,
 }
 
 const TILT = -8
@@ -243,6 +292,15 @@ const SHAPES: {
     radius: 8.5,
     eyes: [6.5, 7],
   },
+  // A stop sign: eight corners on a circle, a flat side up.
+  {
+    corners: Array.from({ length: 8 }, (_, i): [number, number] => {
+      const a = (i / 8) * Math.PI * 2 + Math.PI / 8
+      return [18.6 * Math.cos(a), 18.6 * Math.sin(a)]
+    }),
+    radius: 4.2,
+    eyes: [-0.5, 8.2],
+  },
 ]
 
 const OUTLINES = SHAPES.map(({ corners, radius }) => {
@@ -270,18 +328,24 @@ const OUTLINES = SHAPES.map(({ corners, radius }) => {
 const SQUARE = 0
 const CIRCLE = 1
 const TRIANGLE = 2
+const OCTAGON = 3
 
-/** Each state's shape: calm, at work, or in need of the Person. */
+/** Each state's shape: calm, at work, asking the Person, or stopped. */
 const SHAPE_OF: Record<MarkState, number> = {
   rest: SQUARE,
   idle: SQUARE,
   done: SQUARE,
   offline: SQUARE,
+  woke: SQUARE,
+  later: SQUARE,
   thinking: CIRCLE,
   running: CIRCLE,
   asking: TRIANGLE,
-  failed: TRIANGLE,
+  failed: OCTAGON,
 }
+
+/** Woke's bell: a dome, drawn above the hat, one on each side. */
+const BELL = "M-7 1.5A7 7 0 0 1 7 1.5Z"
 
 const sin = Math.sin
 const PI = Math.PI
@@ -291,18 +355,14 @@ const ease = (t: number) =>
 const lerp = (a: number, b: number, m: number) => a + (b - a) * m
 const blink = (time: number, every = 3.7) => (time % every < 0.12 ? 0.08 : 1)
 
-function only(index: number): [number, number, number] {
-  const w: [number, number, number] = [0, 0, 0]
+function only(index: number): Weights {
+  const w: Weights = [0, 0, 0, 0]
   w[index] = 1
   return w
 }
 
-function between(
-  from: number,
-  to: number,
-  m: number
-): [number, number, number] {
-  const w: [number, number, number] = [0, 0, 0]
+function between(from: number, to: number, m: number): Weights {
+  const w: Weights = [0, 0, 0, 0]
   w[from] += 1 - m
   w[to] += m
   return w
@@ -334,6 +394,39 @@ type Context = { seed: number; look: [number, number] | null }
 /** A pose as a function of the seconds since it began and of the clock. */
 type Motion = (t: number, time: number, at: Context) => Pose
 
+/** Asleep, its eyes closed: later's still pose; offline's snores too. */
+const ASLEEP: Pose = { ...BASE, ty: 1.5, rot: 7, ey: 2.5, eye: "closed" }
+
+/**
+ * The still pose of each state, as `marks-final.html` draws them (ADR
+ * 0099, decision 8): for a Person who asked for less motion, a
+ * notification's icon, and the looks that have no motion yet.
+ */
+const STILL: Record<MarkState, Pose> = {
+  rest: { ...BASE, eyes: 0 },
+  idle: BASE,
+  thinking: { ...BASE, w: only(CIRCLE), ex: 2.6, ey: -3.2 },
+  running: { ...BASE, w: only(CIRCLE), ex: -2.6, ey: 2.6, open: 0.6 },
+  asking: { ...BASE, w: only(TRIANGLE), rot: -6, ex: -2.5, ey: 1.5, big: 1.12 },
+  done: { ...BASE, eye: "happy" },
+  // Upright, as a stop sign stands: the hat's tilt taken back.
+  failed: { ...BASE, w: only(OCTAGON), rot: -TILT, eye: "cross" },
+  // Both asleep, but only offline with zz, and Later with none (ADR
+  // 0099, decision 1).
+  offline: { ...ASLEEP, zz: 1 },
+  woke: { ...BASE, big: 1.12, bells: 1 },
+  later: ASLEEP,
+}
+
+/** The motions that hold one pose: drawn once, the clock stops for them. */
+const STANDING = new Set<Motion>()
+
+function standing(pose: Pose): Motion {
+  const motion: Motion = () => pose
+  STANDING.add(motion)
+  return motion
+}
+
 const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
   idle: (_t, time, at) => {
     const b = sin((2 * PI * (time + at.seed)) / 2.6)
@@ -355,7 +448,7 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
     const s = sin(time * 2.2)
     return {
       ...BASE,
-      w: [0.12 + 0.1 * s, 0.76, 0.12 - 0.1 * s],
+      w: [0.12 + 0.1 * s, 0.76, 0.12 - 0.1 * s, 0],
       ty: -3 + 1.5 * sin(time * 2.8),
       rot: -4 + 5 * sin(time * 1.4),
       ex: 2.6 + 0.8 * sin(time * 0.9),
@@ -394,7 +487,6 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
       ey: look[1],
       big: 1.12,
       open: blink(time, 4.3),
-      lit: 1,
     }
   },
   // Once: a flip, then it smiles until the state changes.
@@ -409,17 +501,18 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
       sy: 1 + 0.03 * b,
     }
   },
+  // The stop sign shakes as the triangle did, every 2 s, until the
+  // Mark's own rhythm comes (ADR 0099, decision 4).
   failed: (_t, time, at) => {
     const p = (time + at.seed) % 2
     const shake = p < 0.6 ? sin(time * 45) * 2.4 * (1 - p / 0.6) : 0
     return {
       ...BASE,
-      w: only(TRIANGLE),
+      w: only(OCTAGON),
       tx: shake,
       ty: 1,
-      rot: 4 + shake * 1.2,
+      rot: -TILT + shake * 1.2,
       eye: "cross",
-      alarm: 1,
     }
   },
   offline: (_t, time) => {
@@ -436,6 +529,10 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
       zz: 1,
     }
   },
+  // Still, until the Mark's motion comes (ADR 0099, decision 1): woke to
+  // stretch and ring, later to breathe in its sleep.
+  woke: standing(STILL.woke),
+  later: standing(STILL.later),
 }
 
 /** What the logo does when it wakes at rest: one of these, then still again. */
@@ -465,7 +562,7 @@ const TRICKS = {
         ...pose,
         ty: -24 * a,
         spin: 360 * ease(q),
-        w: [1 - a, a, 0],
+        w: [1 - a, a, 0, 0],
         sy: 1 + 0.06 * a,
       }
     }
@@ -532,7 +629,7 @@ const TRICK_LENGTH: Record<Trick, number> = {
 }
 const TRICK_NAMES = Object.keys(TRICK_LENGTH) as Trick[]
 
-const REST: Motion = () => ({ ...BASE, eyes: 0 })
+const REST = standing(STILL.rest)
 const WAKE: Motion = (t) => {
   const s = sin(PI * clamp(t / 0.45))
   return {
@@ -557,29 +654,13 @@ const LOOK: Motion = (_t, time, at) => {
   }
 }
 
-/** The still pose of each state, for a Person who asked for less motion. */
-const STILL: Record<MarkState, Pose> = {
-  rest: { ...BASE, eyes: 0 },
-  idle: BASE,
-  thinking: { ...BASE, w: only(CIRCLE), ex: 2.6, ey: -3.2 },
-  running: { ...BASE, w: only(CIRCLE), ex: -2.6, ey: 2.6, open: 0.6 },
-  asking: { ...BASE, w: only(TRIANGLE), rot: -6, big: 1.12, lit: 1 },
-  done: { ...BASE, eye: "happy" },
-  failed: { ...BASE, w: only(TRIANGLE), rot: 4, eye: "cross", alarm: 1 },
-  offline: {
-    ...BASE,
-    rot: 7,
-    ey: 2.5,
-    eye: "closed",
-  },
-}
-
 function mix(a: Pose, b: Pose, m: number): Pose {
   return {
     w: [
       lerp(a.w[0], b.w[0], m),
       lerp(a.w[1], b.w[1], m),
       lerp(a.w[2], b.w[2], m),
+      lerp(a.w[3], b.w[3], m),
     ],
     tx: lerp(a.tx, b.tx, m),
     ty: lerp(a.ty, b.ty, m),
@@ -592,10 +673,9 @@ function mix(a: Pose, b: Pose, m: number): Pose {
     open: lerp(a.open, b.open, m),
     big: lerp(a.big, b.big, m),
     eye: m < 0.5 ? a.eye : b.eye,
-    lit: lerp(a.lit, b.lit, m),
-    alarm: lerp(a.alarm, b.alarm, m),
     zz: lerp(a.zz, b.zz, m),
     eyes: lerp(a.eyes, b.eyes, m),
+    bells: lerp(a.bells, b.bells, m),
   }
 }
 
@@ -641,33 +721,68 @@ type Drawn = {
   glyph: string
   /** How much the eyes show at all. */
   shown: number
+  /** Where each of woke's two bells hangs, inside the hat's turn. */
+  bells: string[]
+}
+
+/** Where the bells hang while they do not show: nowhere. */
+const NO_BELLS: string[] = []
+
+/** One of the three z's it snores: where it stands, how big, how much it
+ * shows. */
+type Snore = { x: number; y: number; size: number; opacity: number }
+
+/** The snore still: three z's, each larger, stepping up from the hat's
+ * corner, inside a still mark's box (`STILL_BOX`). */
+const STILL_ZZ: readonly (readonly [x: number, y: number, size: number])[] = [
+  [95.5, 3, 6],
+  [98.5, -2.5, 8],
+  [102, -8, 9.5],
+]
+
+/** Where its three z's are, `amount` of them shown: on the clock, each
+ * rising from the hat's corner as it grows and fades; with no `time`,
+ * still. */
+function snoresOf(amount: number, time?: number): Snore[] {
+  if (time === undefined)
+    return STILL_ZZ.map(([x, y, size]) => ({ x, y, size, opacity: amount }))
+  return [0, 1, 2].map((i) => {
+    const phase = (time * 0.45 + i / 3) % 1
+    return {
+      x: 100 + phase * 12,
+      y: 4 - phase * 24,
+      size: 8 + phase * 8,
+      opacity: sin(PI * phase) * amount,
+    }
+  })
 }
 
 function drawnOf(p: Pose): Drawn {
-  const [a, b, c] = p.w
-  const [sq, ci, tr] = OUTLINES as [
-    (typeof OUTLINES)[0],
-    (typeof OUTLINES)[0],
-    (typeof OUTLINES)[0],
-  ]
+  // The outline and the eyes' place: each shape's, by how much of it.
+  // Plain loops, as it runs for each mark that moves, on every tick.
+  const { w } = p
   let d = ""
   for (let i = 0; i < POINTS; i++) {
-    const x = CX + a * sq.xs[i]! + b * ci.xs[i]! + c * tr.xs[i]!
-    const y = CY + a * sq.ys[i]! + b * ci.ys[i]! + c * tr.ys[i]!
+    let x = CX
+    let y = CY
+    for (let k = 0; k < w.length; k++) {
+      x += w[k]! * OUTLINES[k]!.xs[i]!
+      y += w[k]! * OUTLINES[k]!.ys[i]!
+    }
     d += `${i ? "L" : "M"}${f(x)} ${f(y)}`
   }
   d += "Z"
+  let eyeY = 0
+  let eyeGap = 0
+  for (let k = 0; k < w.length; k++) {
+    eyeY += w[k]! * SHAPES[k]!.eyes[0]
+    eyeGap += w[k]! * SHAPES[k]!.eyes[1]
+  }
   const transform = `translate(${f(p.tx)} ${f(p.ty)}) rotate(${f(TILT + p.rot)} 54 45) translate(76 45) scale(${f(p.sx)} ${f(p.sy)}) translate(-76 -45) rotate(${f(p.spin)} ${CX} ${CY})`
 
-  const [s0, s1, s2] = SHAPES as [
-    (typeof SHAPES)[0],
-    (typeof SHAPES)[0],
-    (typeof SHAPES)[0],
-  ]
   const ex = CX + p.ex
-  const ey = CY + a * s0.eyes[0] + b * s1.eyes[0] + c * s2.eyes[0] + p.ey
-  const gap =
-    (a * s0.eyes[1] + b * s1.eyes[1] + c * s2.eyes[1]) * Math.min(p.big, 1.06)
+  const ey = CY + eyeY + p.ey
+  const gap = eyeGap * Math.min(p.big, 1.06)
   const xs = [ex - gap, ex + gap]
   const shown = clamp(p.eyes)
   const round = p.eye === "open" || p.eye === "closed"
@@ -692,7 +807,16 @@ function drawnOf(p: Pose): Drawn {
               : `M${f(x - 3.6)} ${f(ey - 3.6)}L${f(x + 3.6)} ${f(ey + 3.6)}M${f(x + 3.6)} ${f(ey - 3.6)}L${f(x - 3.6)} ${f(ey + 3.6)}`
           )
           .join("")
-  return { d, transform, eyes, glyph, shown }
+  // They rise into place as they show; while they do not, nothing places
+  // them.
+  const bells =
+    p.bells > 0
+      ? [-1, 1].map(
+          (side) =>
+            `translate(${f(CX + side * 17)} ${f(CY - 25 - 4 * (1 - p.bells))}) rotate(${f(side * 38)})`
+        )
+      : NO_BELLS
+  return { d, transform, eyes, glyph, shown, bells }
 }
 
 /**
@@ -725,14 +849,29 @@ export function EmptyMark({ className }: { className?: string }) {
   )
 }
 
+/**
+ * How much a Thread's look that calls no one weighs, as a class (ADR 0099,
+ * decision 10): open the text's, work and sleep lighter, the more so on a
+ * light theme. A call's colour is on its Agent (`toneOf`), and wins.
+ */
+const WEIGHT_OF: Partial<Record<MarkState, string>> = {
+  idle: "text-mark-open",
+  thinking: "text-mark-working",
+  running: "text-mark-working",
+  later: "text-mark-later",
+}
+
 /** A Thread's mark, as the sidebar and the Banda menu show it, in its
- * colour. */
+ * colour or its weight: its `look` (`lookOf`), or, where none is given
+ * yet, its mark. */
 export function ThreadMark({
   listed,
+  look = listed.mark,
   news,
   className,
 }: {
   listed: Listed
+  look?: MarkState
   /** As `BandaMark`'s. */
   news?: boolean
   className?: string
@@ -740,21 +879,29 @@ export function ThreadMark({
   return (
     <BandaMark
       variant="agent"
-      state={listed.mark}
+      state={look}
       playful={0}
       news={news}
-      label={MARK_WORDS[listed.mark]}
-      className={cn("size-4 shrink-0", toneOf(listed.mark), className)}
+      label={MARK_WORDS[look]}
+      className={cn("size-4 shrink-0", WEIGHT_OF[look], className)}
     />
   )
 }
 
-/** The colours a still mark is drawn in, as CSS colours. */
-export type MarkColors = {
-  body: string
-  attention: string
-  destructive: string
-}
+/** The colours a still mark is drawn in, as CSS colours: the text's, and
+ * each `MarkColor` (ADR 0099, decision 1). */
+export type MarkColors = { body: string } & Record<MarkColor, string>
+
+/**
+ * A still mark's box: wide enough for woke's bells, the asks triangle's
+ * tip and offline's zz, as a live mark draws them over its own, with the
+ * hat about its middle.
+ */
+const STILL_BOX = { x: 40, y: -14, size: 68 }
+
+/** A still mark's size in pixels: two to each unit of its box, as a live
+ * mark's 56 drew in 112. */
+const STILL_PX = STILL_BOX.size * 2
 
 /**
  * The Agent's tile, still in `state`, as one SVG of its own: a picture of
@@ -763,6 +910,7 @@ export type MarkColors = {
 export function stillMark(state: MarkState, colors: MarkColors): string {
   const p = STILL[state]
   const drawn = drawnOf(p)
+  const fill = colors[COLOR_OF[state] ?? "body"]
   const eyes = drawn.eyes
     .filter((eye) => eye.rx > 0)
     .map(
@@ -773,19 +921,30 @@ export function stillMark(state: MarkState, colors: MarkColors): string {
   const glyph = drawn.glyph
     ? `<path d="${drawn.glyph}" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
     : ""
-  const fill = (color: string, opacity: number) =>
-    opacity > 0
-      ? `<path d="${drawn.d}" fill="${color}" fill-opacity="${f(opacity)}"/>`
+  const bells = drawn.bells
+    .map((at) => `<path d="${BELL}" transform="${at}"/>`)
+    .join("")
+  // Its zz stand beside the hat, not in its turn, as a live mark's do.
+  const snores =
+    p.zz > 0
+      ? snoresOf(p.zz)
+          .map(
+            ({ x, y, size, opacity }) =>
+              `<text x="${f(x)}" y="${f(y)}" font-size="${f(size)}" opacity="${f(opacity)}">z</text>`
+          )
+          .join("")
       : ""
+  const zz =
+    snores &&
+    `<g fill="${fill}" font-family="system-ui, sans-serif" font-weight="700">${snores}</g>`
+  const { x, y, size } = STILL_BOX
   return [
-    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="48 -6 56 56" width="112" height="112">`,
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x} ${y} ${size} ${size}" width="${STILL_PX}" height="${STILL_PX}">`,
     `<defs><mask id="m" maskUnits="userSpaceOnUse" x="-60" y="-90" width="260" height="260">`,
     `<rect x="-60" y="-90" width="260" height="260" fill="#fff"/>${eyes}${glyph}</mask></defs>`,
-    `<g transform="${drawn.transform}"><g mask="url(#m)">`,
-    fill(colors.body, 1),
-    fill(colors.attention, p.lit),
-    fill(colors.destructive, p.alarm),
-    `</g></g></svg>`,
+    `<g transform="${drawn.transform}" fill="${fill}">`,
+    `<path d="${drawn.d}" mask="url(#m)"/>${bells}`,
+    `</g>${zz}</svg>`,
   ].join("")
 }
 
@@ -796,11 +955,11 @@ export class Animator {
   private readonly logo: boolean
   private readonly hat: SVGGElement
   private readonly body: SVGPathElement
-  private readonly lit: SVGPathElement
-  private readonly alarm: SVGPathElement
   private readonly eyes: SVGEllipseElement[]
   private readonly glyph: SVGPathElement
   private readonly zz: SVGTextElement[]
+  private readonly bells: SVGGElement
+  private readonly bell: SVGPathElement[]
   private readonly seen: IntersectionObserver
 
   private state: MarkState = "rest"
@@ -831,11 +990,11 @@ export class Animator {
     this.logo = variant === "logo"
     this.hat = svg.querySelector("[data-hat]")!
     this.body = svg.querySelector("[data-body]")!
-    this.lit = svg.querySelector("[data-lit]")!
-    this.alarm = svg.querySelector("[data-alarm]")!
     this.eyes = [...svg.querySelectorAll<SVGEllipseElement>("[data-eye]")]
     this.glyph = svg.querySelector("[data-glyph]")!
     this.zz = [...svg.querySelectorAll<SVGTextElement>("[data-zz] text")]
+    this.bells = svg.querySelector("[data-bells]")!
+    this.bell = [...svg.querySelectorAll<SVGPathElement>("[data-bells] path")]
     this.seen = new IntersectionObserver(([entry]) => {
       this.visible = entry?.isIntersecting ?? true
       if (this.visible) wake()
@@ -952,7 +1111,7 @@ export class Animator {
     if (!this.visible) return false
     if (this.still()) {
       if (!this.settled) {
-        this.paint(STILL[this.state], time)
+        this.paint(STILL[this.state])
         this.settled = true
       }
       return false
@@ -971,7 +1130,8 @@ export class Animator {
         this.later(time)
       }
     }
-    if (this.motion === REST && time - this.fromAt > this.blend && this.settled)
+    const holds = STANDING.has(this.motion)
+    if (holds && time - this.fromAt > this.blend && this.settled)
       return this.sleep()
 
     this.context.look = this.looking()
@@ -980,7 +1140,7 @@ export class Animator {
     if (m < 1) pose = mix(this.from, pose, m)
     if (time < this.leap) pose = jumped(pose, hop(time, this.leap - LEAP, LEAP))
     this.paint(pose, time)
-    this.settled = this.motion === REST && m >= 1 && time >= this.leap
+    this.settled = holds && m >= 1 && time >= this.leap
     return this.settled ? this.sleep() : true
   }
 
@@ -1019,14 +1179,11 @@ export class Animator {
     return [(dx / d) * 3.6 * g, (dy / d) * 3 * g]
   }
 
-  private paint(p: Pose, time: number) {
+  /** Draws `p`: at `time` on the clock, or, with none, as a still pose. */
+  private paint(p: Pose, time?: number) {
     this.last = p
     const drawn = drawnOf(p)
     this.body.setAttribute("d", drawn.d)
-    this.lit.setAttribute("d", drawn.d)
-    this.lit.setAttribute("fill-opacity", f(p.lit))
-    this.alarm.setAttribute("d", drawn.d)
-    this.alarm.setAttribute("fill-opacity", f(p.alarm))
     this.hat.setAttribute("transform", drawn.transform)
     this.eyes.forEach((eye, i) => {
       const { cx, cy, rx, ry } = drawn.eyes[i]!
@@ -1042,12 +1199,18 @@ export class Animator {
     })
     this.glyph.setAttribute("d", drawn.glyph)
     if (drawn.glyph) this.glyph.setAttribute("stroke-opacity", f(drawn.shown))
+    const snores = snoresOf(p.zz, time)
     this.zz.forEach((z, i) => {
-      const phase = (time * 0.45 + i / 3) % 1
-      z.setAttribute("x", f(100 + phase * 12))
-      z.setAttribute("y", f(4 - phase * 24))
-      z.setAttribute("font-size", f(8 + phase * 8))
-      z.setAttribute("opacity", f(sin(PI * phase) * p.zz))
+      const { x, y, size, opacity } = snores[i]!
+      z.setAttribute("x", f(x))
+      z.setAttribute("y", f(y))
+      z.setAttribute("font-size", f(size))
+      z.setAttribute("opacity", f(opacity))
     })
+    this.bells.setAttribute("opacity", f(clamp(p.bells)))
+    if (p.bells > 0)
+      this.bell.forEach((bell, i) =>
+        bell.setAttribute("transform", drawn.bells[i]!)
+      )
   }
 }

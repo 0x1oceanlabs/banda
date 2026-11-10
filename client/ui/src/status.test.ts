@@ -1,6 +1,15 @@
 import { expect, test } from "vitest"
 import type { Listed } from "./pane"
-import { attentionOf, callsOf, mayArchive, type Stand, standOf } from "./status"
+import type { MarkState } from "./lib/mark-state"
+import {
+  attentionOf,
+  callsOf,
+  headerLookOf,
+  lookOf,
+  mayArchive,
+  type Stand,
+  standOf,
+} from "./status"
 
 const pane = { kind: "agents.thread", args: {} }
 
@@ -56,6 +65,63 @@ test.each<[string, Partial<Listed>, Stand]>([
   expect(standOf(thing(more), 100)).toBe(stand)
 })
 
+// One look for every reader (ADR 0099, decisions 1 and 12): where it
+// stands, its mark, and whether it woke from Later, and how.
+test.each<[string, Partial<Listed>, MarkState]>([
+  ["asks", { mark: "asking" }, "asking"],
+  ["failed", { mark: "failed" }, "failed"],
+  ["is done, unseen", { mark: "done" }, "done"],
+  ["is open, seen", {}, "idle"],
+  ["runs", { mark: "running" }, "running"],
+  ["thinks", { mark: "thinking" }, "thinking"],
+  ["is put off", { mark: "done", later: { at: 0, until: 1e3 } }, "later"],
+  ["is put off until done", { mark: "running", later: { at: 0 } }, "later"],
+  ["is archived", { archived: true }, "later"],
+  ["woke by its time", { later: { at: 0, until: 10 } }, "woke"],
+  [
+    "asked, and woke by its time",
+    { mark: "asking", later: { at: 0, until: 10 } },
+    "woke",
+  ],
+  [
+    "woke by its time, as the host says",
+    { mark: "failed", later: { at: 0, woke: { at: 10, by: "time" } } },
+    "woke",
+  ],
+  [
+    "was woken early by a question",
+    { mark: "asking", later: { at: 0, woke: { at: 10, by: "question" } } },
+    "asking",
+  ],
+  [
+    "was put off until done and is done",
+    { mark: "done", later: { at: 0, woke: { at: 10, by: "done" } } },
+    "done",
+  ],
+  [
+    "was put off until done and stopped",
+    { later: { at: 0, woke: { at: 10, by: "done" } } },
+    "woke",
+  ],
+  ["woke, seen", { later: { at: 0, until: 10, wokeSeen: true } }, "idle"],
+  [
+    "was woken by hand",
+    { later: { at: 0, woke: { at: 5, by: "woken" } } },
+    "idle",
+  ],
+])("a Thread that %s looks %s", (_, more, look) => {
+  expect(lookOf(thing(more), 100)).toEqual({ look })
+})
+
+test("a Pane's header takes the look, and one open and seen rests there", () => {
+  expect(headerLookOf(thing(), 100)).toBe("rest")
+  expect(headerLookOf(thing({ mark: "done" }), 100)).toBe("done")
+  expect(headerLookOf(thing({ later: { at: 0, until: 10 } }), 100)).toBe("woke")
+  expect(
+    headerLookOf(thing({ mark: "done", later: { at: 0, until: 1e3 } }), 100)
+  ).toBe("later")
+})
+
 test("work going on, or a question, cannot be archived", () => {
   expect(mayArchive(thing({ mark: "running" }))).toBe(false)
   expect(mayArchive(thing({ mark: "asking" }))).toBe(false)
@@ -78,10 +144,23 @@ test("the bar's Mark leaves out what is Later or archived", () => {
     ],
   }
   expect(attentionOf(lists, 100)).toEqual({ mark: "running", waiting: 0 })
+  // Back by its time, it shows that it woke, louder than work.
   expect(attentionOf(lists, 2e3), "the Later woke").toEqual({
-    mark: "failed",
+    mark: "woke",
     waiting: 1,
   })
+})
+
+test("the bar's Mark shows the loudest look: a failure over a Thread that woke", () => {
+  const lists = {
+    s: [
+      thing({ id: "a", later: { at: 0, until: 10 } }),
+      thing({ id: "b", mark: "done" }),
+    ],
+  }
+  expect(attentionOf(lists, 100)).toEqual({ mark: "woke", waiting: 2 })
+  const failing = { s: [...lists.s, thing({ id: "c", mark: "failed" })] }
+  expect(attentionOf(failing, 100)).toEqual({ mark: "failed", waiting: 3 })
 })
 
 test("waiting is the Person's turn: what asks, failed, is done, or woke", () => {

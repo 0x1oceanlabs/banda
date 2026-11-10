@@ -37,6 +37,7 @@
   --sidebar-border: oklch(0 0 0 / 8%);
   --sidebar-ring: #0b6fe0;
   --attention: #e5590a;
+  --woke: #f5c542;
   --working: oklch(0.6 0.15 255);
   --warning: #ca8a04;
   --added: oklch(0.527 0.137 150.069);
@@ -136,6 +137,7 @@
   --sidebar-border: oklch(1 0 0 / 8%);
   --sidebar-ring: #4ea3ff;
   --attention: #ff8a3d;
+  --woke: #f5c542;
   --working: oklch(0.72 0.13 255);
   --warning: #facc15;
   --added: oklch(0.723 0.192 149.579);
