@@ -324,12 +324,8 @@ impl Accounts {
                 name: way.name,
             })
             .collect();
-        if account.account.cli.is_some()
-            && self
-                .harnesses
-                .find(&harness)
-                .is_some_and(|h| h.harness() == "codex")
-        {
+        let entry = self.harnesses.find(&harness);
+        if account.account.cli.is_some() && entry.as_ref().is_some_and(|h| h.harness() == "codex") {
             ways.insert(
                 0,
                 AccountWay {
@@ -337,6 +333,9 @@ impl Accounts {
                     name: "ChatGPT (device code on another computer)".into(),
                 },
             );
+        }
+        if let Some(entry) = &entry {
+            ways.retain(|way| fits(entry, &way.id));
         }
         Ok(AccountStatus {
             harness,
@@ -505,6 +504,17 @@ impl Accounts {
     }
 }
 
+/// Whether the way `way` signs in an account of `harness`'s kind (ADR
+/// 0078, decision 1): an API key account of Claude Code signs in to
+/// Anthropic Console, and one of Codex takes its key (`api_key`), with no
+/// way of its Harness's; any other account every way.
+fn fits(harness: &Harness, way: &str) -> bool {
+    match harness.kind {
+        AccountKind::Api => harness.harness() == "claude" && way == "console-login",
+        AccountKind::Subscription | AccountKind::Gateway => true,
+    }
+}
+
 /// `url` as a gateway's address: an absolute http(s) URL with no
 /// credentials in it, which go in the key.
 fn gateway_url(url: &str) -> Result<String, Refusal> {
@@ -600,6 +610,39 @@ impl Host for Asker {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_api_key_account_signs_in_to_console_or_with_its_key_alone() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("harnesses.toml");
+        let text = concat!(
+            "[omarchy]\nenabled = false\n",
+            "[[harness]]\nid = \"claude\"\n[[harness]]\nid = \"codex\"\n",
+            "[[harness]]\nid = \"ca\"\nof = \"claude\"\nkind = \"api\"\n",
+            "[[harness]]\nid = \"xa\"\nof = \"codex\"\nkind = \"api\"\n",
+        );
+        std::fs::write(&file, text).unwrap();
+        let list = Harnesses::load(&file).unwrap();
+        let ways = |id: &str| {
+            let harness = list.find(id).unwrap();
+            [
+                "claude-ai-login",
+                "console-login",
+                "chat-gpt",
+                "device-code",
+            ]
+            .into_iter()
+            .filter(|way| fits(&harness, way))
+            .collect::<Vec<_>>()
+        };
+        assert_eq!(ways("ca"), ["console-login"]);
+        assert_eq!(ways("xa"), Vec::<&str>::new());
+        assert_eq!(
+            ways("claude").len(),
+            4,
+            "a subscription's are all its Harness's"
+        );
+    }
 
     /// Codex reads a key only from its input, on pipes: the Person's
     /// act's, which the environment starts so.
