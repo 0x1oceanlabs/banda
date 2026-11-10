@@ -13,7 +13,8 @@ export type AgentCounts = {
  */
 working: number, 
 /**
- * Every Thread that waits for its Person: `asking` and `done`.
+ * Every Thread that waits for its Person: `asking`, `done`, and
+ * what woke from Later by itself, unseen.
  */
 waiting: number, 
 /**

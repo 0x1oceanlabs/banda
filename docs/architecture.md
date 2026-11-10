@@ -101,16 +101,19 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   under a Later or archived is not counted. `working`, `waiting`,
   `asking` and `done` are the bar's counts of those names (`[bar]
   counts`): `asking` is what asks its Person or failed, `failed` is how
-  many of those failed, which turns it red, and `waiting` is `asking` and
-  `done`. `threads` are the rows of the panel, what waits first, the one
+  many of those failed, which turns it red, and `waiting` is `asking`,
+  `done`, and what woke from Later by itself while its Person has not
+  seen it wake, which has its own row `state`, `woke`, and no count of
+  its own. `threads` are the rows of the panel, what waits first, the one
   that waited longest first, then what works by when it began. Where it
   cannot read what the engine lists, as from an engine of another build,
   it leaves `agents` out rather than say nobody works. It starts no
   engine: with none, `{"running":false}` and what the machine is, exit 0.
   `--follow` prints the line again on each change, the current one first:
   it reads a Project's list again on each fact that may change it, and
-  the Projects every 2 s. It runs until its reader goes, or with
-  `--with-parent` until its stdin closes, as the window's children do:
+  the Projects every 2 s, and counts again as a Later's time comes. It
+  runs until its reader goes, or with `--with-parent` until its stdin
+  closes, as the window's children do:
   a bar that starts it so keeps stdin open (Quickshell's `Process`:
   `stdinEnabled`). With no engine, and once one goes, it says so and
   looks for one each second, so a widget keeps one process, shows no

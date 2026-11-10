@@ -2,22 +2,23 @@
 //! counts them (ADR 0035): worked out here for a bar with no window, the
 //! macOS menu bar and Omarchy's shell plugin, which read it from `banda
 //! status` (ADR 0086, decision 4). It takes the window's rule as it is, a
-//! Thread's mark (`markOf` in the agents Pane) and the bar's tally, which
-//! leaves out what is put away, asleep or archived (`tally` in the
-//! sidebar). `apps/agents/counted.json` holds the cases both are to give:
-//! this module's tests read it, and so does the window's (`counted.test.ts`
-//! in the agents Pane).
+//! Thread's mark (`markOf` in the agents Pane), where it stands (`standOf`
+//! in the window's `status.ts`, which counts one that woke from Later by
+//! itself) and the bar's tally, which leaves out what is put away, asleep
+//! or archived (`tally` in the sidebar). `apps/agents/counted.json` holds
+//! the cases both are to give: this module's tests read it, and so does
+//! the window's (`counted.test.ts` in the agents Pane).
 //! Pure: the caller brings the lists and the time.
 
 use crate::model::{ListedThread, ThreadId, TurnState};
-use crate::rules::later::asleep;
+use crate::rules::later::{asleep, woke_by_itself};
 use banda_kernel::ProjectId;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// What a Thread counts as: at work, or waiting for its Person, and for
 /// what. The words are the Mark's, but `working`, as the bar counts its
-/// `running`.
+/// `running`, and `woke`, which has no Mark of its own.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
@@ -31,6 +32,9 @@ pub enum CountedAs {
     Failed,
     /// Its latest turn ended well, and its Person has not seen it.
     Done,
+    /// It woke from Later by itself, its Person has not seen it wake, and
+    /// nothing else calls them: it only waits.
+    Woke,
 }
 
 impl CountedAs {
@@ -42,6 +46,8 @@ impl CountedAs {
 
 /// What `thread` counts as at `now`, or nothing: it rests, or its Person
 /// put it away, asleep under a Later or archived, which the bar leaves out.
+/// What it asks, its work and its latest turn come before a wake, as the
+/// window's `standOf` has them.
 pub fn counted(thread: &ListedThread, now: i64) -> Option<CountedAs> {
     let sleeps = (thread.later.as_ref()).is_some_and(|later| asleep(later, now));
     if sleeps || thread.is_archived() {
@@ -50,19 +56,32 @@ pub fn counted(thread: &ListedThread, now: i64) -> Option<CountedAs> {
     if !thread.asking.is_empty() {
         return Some(CountedAs::Asking);
     }
-    let latest = thread.latest.as_ref()?;
+    let woke = woke_at(thread, now).map(|_| CountedAs::Woke);
+    let Some(latest) = thread.latest.as_ref() else {
+        return woke;
+    };
     if latest.state == TurnState::Running {
         return Some(CountedAs::Working);
     }
     if thread.seen == Some(latest.turn) {
-        return None;
+        return woke;
     }
     match latest.state {
         TurnState::Done => Some(CountedAs::Done),
         TurnState::Failed | TurnState::Interrupted => Some(CountedAs::Failed),
-        // Its Person stopped it: nothing to tell them.
-        _ => None,
+        // Its Person stopped it: nothing to tell them of the turn.
+        _ => woke,
     }
+}
+
+/// When `thread` woke from its Later by itself, at `now`, while its
+/// Person has not seen it wake; none otherwise (`wokeAt` in the window).
+fn woke_at(thread: &ListedThread, now: i64) -> Option<i64> {
+    let later = thread.later.as_ref()?;
+    if later.woke_seen.is_some() || !woke_by_itself(later, now) {
+        return None;
+    }
+    later.woke.map_or(later.until, |woke| Some(woke.at))
 }
 
 /// One Thread the bar counts, as its panel lists it: a row opens it.
@@ -88,7 +107,8 @@ pub struct CountedThread {
 pub struct AgentCounts {
     /// Threads at work.
     pub working: u32,
-    /// Every Thread that waits for its Person: `asking` and `done`.
+    /// Every Thread that waits for its Person: `asking`, `done`, and
+    /// what woke from Later by itself, unseen.
     pub waiting: u32,
     /// Threads that ask their Person, or failed: they need an answer.
     pub asking: u32,
@@ -124,9 +144,11 @@ impl AgentCounts {
                 let Some(state) = counted(thread, now) else {
                     continue;
                 };
+                // One that woke changed as it woke, as the sidebar has it.
+                let changed = thread.thread.updated_at;
                 let since = match (state, &thread.latest) {
                     (CountedAs::Working, Some(latest)) => latest.began,
-                    _ => thread.thread.updated_at,
+                    _ => woke_at(thread, now).map_or(changed, |woke| woke.max(changed)),
                 };
                 let title = match thread.thread.title.as_str() {
                     "" => "New Thread",
@@ -177,7 +199,7 @@ pub fn wakes_next<'a>(
 
 /// The facts after which a Thread may count as something else, or its row
 /// say something else: a follower reads its Project's list again on them.
-pub const KINDS: [&str; 16] = [
+pub const KINDS: [&str; 17] = [
     "thread.started",
     "message.posted",
     "turn.started",
@@ -189,6 +211,7 @@ pub const KINDS: [&str; 16] = [
     "question.closed",
     "thread.later",
     "thread.woke",
+    "thread.woke_seen",
     "thread.seen",
     "thread.unseen",
     "thread.archived",
@@ -199,7 +222,9 @@ pub const KINDS: [&str; 16] = [
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::model::{Archived, Fact, LatestTurn, ThreadSummary, TurnId};
+    use crate::model::{
+        Archived, Fact, Later, LatestTurn, ThreadSummary, TurnId, Wake, Woke, WokeSeen,
+    };
     use banda_kernel::AgentId;
     use serde_json::json;
 
@@ -358,8 +383,77 @@ mod tests {
     }
 
     #[test]
+    fn a_thread_that_woke_by_itself_unseen_only_waits_from_when_it_woke() {
+        let later = |until, woke, woke_seen| Later {
+            at: 0,
+            by: banda_kernel::Participant::Agent(AgentId::new()),
+            until: Some(until),
+            someday: false,
+            woke,
+            resume: None,
+            woke_seen,
+        };
+        let put_off = |thread, later| ListedThread {
+            later: Some(later),
+            ..thread
+        };
+        let stopped = turn(thread("Woke", 100), TurnState::Stopped, 50);
+        let woke = put_off(stopped, later(900, None, None));
+        let seen = put_off(thread("Seen", 100), later(900, None, Some(WokeSeen::Seen)));
+        let by_hand = Woke {
+            at: 300,
+            by: Wake::Woken,
+        };
+        let woken = put_off(thread("Woken", 100), later(2_000, Some(by_hand), None));
+        let sleeps = put_off(thread("Sleeps", 100), later(2_000, None, None));
+        let done = turn(thread("Done", 500), TurnState::Done, 400);
+        assert_eq!(counted(&woke, 1_000), Some(CountedAs::Woke));
+        assert_eq!(counted(&woke, 899), None, "asleep still");
+        assert_eq!(counted(&seen, 1_000), None, "its Person saw it wake");
+        assert_eq!(counted(&woken, 1_000), None, "its Person woke it");
+        assert_eq!(counted(&sleeps, 1_000), None);
+        assert_eq!(
+            counted(&sleeps, 2_000),
+            Some(CountedAs::Woke),
+            "its time came"
+        );
+        let running = turn(woke.clone(), TurnState::Running, 950);
+        assert_eq!(counted(&running, 1_000), Some(CountedAs::Working));
+
+        let threads = [woke, seen, woken, sleeps, done];
+        let projects = [ProjectThreads {
+            project: ProjectId::new(),
+            name: "banda",
+            threads: &threads,
+        }];
+        let counts = AgentCounts::of(projects, 1_000);
+        let rows: Vec<_> = (counts.threads.iter())
+            .map(|row| (row.title.as_str(), row.state))
+            .collect();
+        assert_eq!(
+            rows,
+            [("Done", CountedAs::Done), ("Woke", CountedAs::Woke)],
+            "it waited from 900, when it woke, not from 100"
+        );
+        let AgentCounts {
+            working,
+            waiting,
+            asking,
+            failed,
+            done,
+            ..
+        } = counts;
+        assert_eq!(
+            [working, waiting, asking, failed, done],
+            [0, 2, 0, 0, 1],
+            "in waiting alone"
+        );
+        assert_eq!(json!(CountedAs::Woke), json!("woke"));
+    }
+
+    #[test]
     fn a_later_wakes_the_counts_by_its_time_alone() {
-        let later = |until: Option<i64>| crate::model::Later {
+        let later = |until: Option<i64>| Later {
             at: 0,
             by: banda_kernel::Participant::Agent(AgentId::new()),
             until,
