@@ -15,9 +15,10 @@ export const LIFE: Record<Chime, number> = {
 /** Sonner's kind of each call's toast, which colours its edge. */
 const KIND = { done: toast, asking: toast.warning, failed: toast.error }
 
-/** The Mark in a call's state, as a toast's icon. */
+/** The Mark in a call's state, as a toast's icon: the call is news, so
+ * done flips into it as the toast shows (ADR 0099, decision 4). */
 export const markOf = (chime: Chime) => (
-  <BandaMark variant="agent" state={chime} playful={0} />
+  <BandaMark variant="agent" state={chime} playful={0} news />
 )
 
 /**

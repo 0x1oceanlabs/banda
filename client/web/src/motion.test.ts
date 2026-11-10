@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import { bezierAt, Moving, springAt } from "./motion"
+import { bezierAt } from "@banda/ui/lib/ease"
+import { Moving, springAt } from "./motion"
 
 const niri = { dampingRatio: 1, stiffness: 800, epsilon: 0.0001 }
 
