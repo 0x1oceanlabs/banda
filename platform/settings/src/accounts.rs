@@ -254,7 +254,7 @@ mod tests {
         .unwrap();
         let view = accounts.connect(add("work", None)).unwrap();
         assert_eq!(view.harness, "claude");
-        let folder = accounts.owned.join("work");
+        let folder = dunce::canonicalize(accounts.owned.join("work")).unwrap();
         assert!(folder.is_dir());
         #[cfg(unix)]
         {
@@ -287,6 +287,7 @@ mod tests {
             .unwrap()
             .join(".local/state/omarchy/agents/accounts/claude/c2");
         std::fs::create_dir_all(&folder).unwrap();
+        let folder = dunce::canonicalize(folder).unwrap();
         let credentials = folder.join(".credentials.json");
         std::fs::write(&credentials, "not even JSON: never parsed here").unwrap();
         let profiles = accounts.profiles().unwrap();
