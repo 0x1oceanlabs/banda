@@ -119,6 +119,9 @@ pub struct Agents {
     /// The count each running turn holds one of: the engine's, which keeps
     /// its machine awake while it is above nothing (ADR 0097).
     working: Working,
+    /// Whether each Harness it starts is told it shows sub-agents (ADR
+    /// 0103, decision 7): off until the window draws them.
+    subagents: bool,
 }
 
 /// How an Agent reaches Banda from its session: the engine's own program
@@ -201,11 +204,18 @@ impl Agents {
             harnesses,
             config: None,
             modes: None,
-            live: Arc::new(Live::new(IDLE, between::QUIET, None, working.clone())),
+            live: Arc::new(Live::new(
+                IDLE,
+                between::QUIET,
+                None,
+                working.clone(),
+                false,
+            )),
             idle: IDLE,
             quiet: between::QUIET,
             pipe: None,
             working,
+            subagents: false,
         }
     }
 
@@ -256,12 +266,25 @@ impl Agents {
         Self { quiet, ..self }.live_again()
     }
 
+    /// Declares sub-agents to each Harness it starts, so the Harness says
+    /// each one's session apart from its parent's (ADR 0103, decision 7).
+    /// The engine does when `BANDA_SUBAGENTS=1` is set, until Banda always
+    /// declares them.
+    pub fn declaring_subagents(self) -> Self {
+        Self {
+            subagents: true,
+            ..self
+        }
+        .live_again()
+    }
+
     fn live_again(mut self) -> Self {
         self.live = Arc::new(Live::new(
             self.idle,
             self.quiet,
             self.pipe.clone(),
             self.working.clone(),
+            self.subagents,
         ));
         self
     }

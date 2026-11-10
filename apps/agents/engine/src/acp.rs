@@ -118,7 +118,7 @@ impl Host for Connection {
             environment,
             harness,
             handlers(routes.clone(), learned.clone()),
-            shows(),
+            shows(harness.subagents),
             move || ended.clear(),
         )
         .await?;
@@ -352,8 +352,10 @@ fn handlers(
         )
 }
 
-/// What the engine declares it can show.
-fn shows() -> acp::ClientCapabilities {
+/// What the engine declares it can show: sub-agents only when its engine
+/// declares them (ADR 0103, decision 7), else nothing of them, so the
+/// Harness falls back to the shape it has without.
+fn shows(subagents: bool) -> acp::ClientCapabilities {
     let options = acp::SessionConfigOptionsCapabilities::new()
         .boolean(acp::BooleanConfigOptionCapabilities::new());
     let forms = acp::ElicitationCapabilities::new().form(acp::ElicitationFormCapabilities::new());
@@ -366,6 +368,7 @@ fn shows() -> acp::ClientCapabilities {
                 .notices(acp::NoticeCapabilities::new())
                 .config_options(options),
         )
+        .subagents(subagents.then(acp::SubagentCapabilities::new))
         .meta(output)
 }
 

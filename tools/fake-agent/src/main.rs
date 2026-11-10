@@ -49,6 +49,13 @@
 //!   how the turn ended. `background detached` runs a command that ends
 //!   after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
+//! - `sub-agents`: starts a sub-agent that reads `a.txt`, as Claude Code's
+//!   Agent tool does: in a session of its own for a client that shows
+//!   sub-agents, else as a `think` call with its calls in the turn. The
+//!   words after it change that, and combine: `three`, `asks`, `form`,
+//!   `fails`, `nested`, `outlive`, `again`, `slow`, `codex`, `unknown`,
+//!   `refuses`, `load`, `late`, `background`, `edit` and `dies` (see
+//!   [`subagents`]).
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `walk`: reads `notes.md`, then edits `src/util.ts`, naming each file
 //!   and its line, a step each time a message is sent into its turn.
@@ -87,7 +94,11 @@
 //!
 //! Its sessions can be resumed or loaded after a restart, as a real
 //! Harness keeps them on disk. With `FAKE_AGENT_FORGETS` set it refuses
-//! both, as a Harness that lost them would.
+//! both, as a Harness that lost them would, and with
+//! `FAKE_AGENT_NO_RESUME` set it offers only to load them, as an ACP agent
+//! with no resume. With `FAKE_AGENT_SESSIONS` naming a folder it keeps
+//! there the sub-agents `sub-agents load` announced, so that a load in a
+//! later process replays them.
 //!
 //! Each session has options as Claude Code's do: a `mode` with Claude
 //! Code's modes, a `model`, an `effort`, and `fast` and `brief`, on or off,
@@ -114,6 +125,7 @@
 //! conversation instead: see [`replay`].
 
 mod replay;
+mod subagents;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -178,6 +190,8 @@ struct Fake {
     forms: Arc<AtomicBool>,
     /// The client takes what a command prints in pieces.
     output: Arc<AtomicBool>,
+    /// The client shows sub-agents, each in a session of its own.
+    subagents: Arc<AtomicBool>,
     /// The turn each session runs, by where a message sent into it goes.
     running: Arc<Mutex<HashMap<SessionId, mpsc::UnboundedSender<String>>>>,
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
@@ -460,23 +474,7 @@ async fn walk(
     if steered_on(fake, session, steered).await.is_none() {
         return Ok(StopReason::Cancelled);
     }
-    let util = folder.join("src/util.ts");
-    let old = std::fs::read_to_string(&util).ok();
-    let new = format!(
-        "{}export const three = 3\n",
-        old.clone().unwrap_or_default()
-    );
-    // Only in the session's folder: a session it resumed has none here.
-    if folder.is_absolute() {
-        let _ = std::fs::write(&util, &new);
-    }
-    let edit = ToolCall::new("walk-edit", "Edit src/util.ts")
-        .kind(ToolKind::Edit)
-        .status(ToolCallStatus::Completed)
-        .locations(vec![ToolCallLocation::new(util.clone()).line(2)])
-        .content(vec![ToolCallContent::Diff(
-            Diff::new(util, new).old_text(old),
-        )]);
+    let edit = util_edit("walk-edit", &folder, "export const three = 3", Some(2));
     say(cx, session, SessionUpdate::ToolCall(edit))?;
     if steered_on(fake, session, steered).await.is_none() {
         return Ok(StopReason::Cancelled);
@@ -487,6 +485,49 @@ async fn walk(
         SessionUpdate::AgentMessageChunk(text("I walked the files.")),
     )?;
     Ok(StopReason::EndTurn)
+}
+
+/// The call `id` that adds `added` as a line of `src/util.ts` in `folder`,
+/// and shows the change, named at `line`, else at the line it adds. It
+/// writes only in the session's folder: a session it resumed has none
+/// here.
+fn util_edit(
+    id: impl Into<String>,
+    folder: &std::path::Path,
+    added: &str,
+    line: Option<u32>,
+) -> ToolCall {
+    let util = folder.join("src/util.ts");
+    let old = std::fs::read_to_string(&util).ok();
+    let new = format!("{}{added}\n", old.clone().unwrap_or_default());
+    if folder.is_absolute() {
+        let _ = std::fs::write(&util, &new);
+    }
+    let line = line.unwrap_or_else(|| u32::try_from(new.lines().count()).unwrap_or(1));
+    ToolCall::new(id.into(), "Edit src/util.ts")
+        .kind(ToolKind::Edit)
+        .status(ToolCallStatus::Completed)
+        .locations(vec![ToolCallLocation::new(util.clone()).line(line)])
+        .content(vec![ToolCallContent::Diff(
+            Diff::new(util, new).old_text(old),
+        )])
+}
+
+/// Whether the client answers `question` with one of the options
+/// `allowing` names; a question it fails to answer allows nothing.
+async fn allowed(
+    cx: &ConnectionTo<Client>,
+    question: RequestPermissionRequest,
+    allowing: &[&str],
+) -> bool {
+    match cx.send_request(question).block_task().await {
+        Ok(answer) => matches!(
+            answer.outcome,
+            RequestPermissionOutcome::Selected(selected)
+                if allowing.contains(&selected.option_id.0.as_ref())
+        ),
+        Err(_) => false,
+    }
 }
 
 /// The kind of tool call `doing` names in `words`, and what it works on.
@@ -572,6 +613,13 @@ async fn turn(
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(&seen)))?;
     }
     let words = words_of(&prompt.prompt);
+    // Before the words its own words hold: `fails` holds `fail`.
+    if words.contains("sub-agents") {
+        if !fake.signed_in.load(Ordering::Relaxed) {
+            return Err(Error::auth_required());
+        }
+        return subagents::turn(&fake, &cx, &session, &words, then).await;
+    }
     if words.contains("crash") {
         std::process::exit(1);
     }
@@ -900,15 +948,7 @@ async fn turn(
                     ToolCallUpdate::new(tool, ToolCallUpdateFields::new().title("Run a check")),
                     options,
                 );
-                let allowed = match after.send_request(question).block_task().await {
-                    Ok(answer) => matches!(
-                        answer.outcome,
-                        RequestPermissionOutcome::Selected(selected)
-                            if selected.option_id.0.as_ref() == "allow"
-                    ),
-                    Err(_) => false,
-                };
-                let (status, reply) = if allowed {
+                let (status, reply) = if allowed(&after, question, &["allow"]).await {
                     (ToolCallStatus::Completed, "The check passed.")
                 } else {
                     (ToolCallStatus::Failed, "I did not run the check.")
@@ -1448,6 +1488,8 @@ async fn main() -> Result<(), Error> {
                     let elicitation = request.client_capabilities.elicitation.as_ref();
                     let forms = elicitation.is_some_and(|e| e.form.is_some());
                     fake.forms.store(forms, Ordering::Relaxed);
+                    let subagents = request.client_capabilities.subagents.is_some();
+                    fake.subagents.store(subagents, Ordering::Relaxed);
                     let meta = request.client_capabilities.meta.as_ref();
                     let output = meta.and_then(|m| m.get("terminal_output_delta"));
                     fake.output
@@ -1459,13 +1501,14 @@ async fn main() -> Result<(), Error> {
                     };
                     let images = std::env::var_os("FAKE_AGENT_NO_IMAGES").is_none();
                     let steers = std::env::var_os("FAKE_AGENT_NO_STEERING").is_none();
+                    let resumes = std::env::var_os("FAKE_AGENT_NO_RESUME").is_none();
                     let meta = json!({ "steering": { "supported": steers } });
                     let mut capabilities = AgentCapabilities::new()
                         .prompt_capabilities(PromptCapabilities::new().image(images))
                         .load_session(true)
                         .session_capabilities(
                             SessionCapabilities::new()
-                                .resume(SessionResumeCapabilities::new())
+                                .resume(resumes.then(SessionResumeCapabilities::new))
                                 .fork(SessionForkCapabilities::new())
                                 .close(SessionCloseCapabilities::new()),
                         );
@@ -1625,12 +1668,14 @@ async fn main() -> Result<(), Error> {
                 let fake = fake.clone();
                 async move |request: LoadSessionRequest,
                             responder: Responder<LoadSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     if forgets() {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
                     tell_shells(request.meta.as_ref());
                     fake.at_folder(request.session_id.clone(), request.cwd.clone());
+                    // As a load replays the conversation, before it answers.
+                    subagents::replay(&cx, &request.session_id)?;
                     let options = fake.options(&request.session_id);
                     responder.respond(LoadSessionResponse::new().config_options(options))
                 }
@@ -1714,6 +1759,7 @@ async fn main() -> Result<(), Error> {
                     let session = request.session_id;
                     fake.setups.lock().unwrap().remove(&session);
                     fake.kept.lock().unwrap().remove(&session);
+                    subagents::forget(&session);
                     fake.closed.fetch_add(1, Ordering::Relaxed);
                     responder.respond(CloseSessionResponse::new())
                 }
