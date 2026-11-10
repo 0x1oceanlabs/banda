@@ -6496,7 +6496,6 @@ async fn a_threads_process_runs_the_carried_adapter_on_the_node_found_with_the_p
 
 impl World {
     /// The payloads of `thread`'s facts of `kind`, the first first.
-    #[cfg(unix)]
     async fn events_of(&self, thread: &Value, kind: &str) -> Vec<Value> {
         let events = self.facts(kind).await.into_iter();
         let of = events.filter(|event| event.subject.as_deref() == thread.as_str());
