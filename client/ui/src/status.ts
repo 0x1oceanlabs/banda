@@ -70,6 +70,49 @@ export function standOf(listed: Listed, now: number): Stand {
     : "open"
 }
 
+/**
+ * What `listed`'s Mark shows at `now` (ADR 0099, decisions 1 and 12), the
+ * one place the sidebar, the bar, a Pane's header and the notifications
+ * take it from:
+ * - put off, it sleeps as `later`, and an archived one sleeps so too, as
+ *   the approved mocks draw the Archive's cards;
+ * - back from Later by itself, it rings as `woke` (`wokeRings`);
+ * - open, seen and done with, it is awake and looks around: `idle`;
+ * - else its mark says it: what asks, failed or is done, or what works.
+ *
+ * What a working one does joins it with ADR 0099's step 3.
+ */
+export function lookOf(listed: Listed, now: number): { look: MarkState } {
+  return { look: lookIn(listed, standOf(listed, now), now) }
+}
+
+/** What `listed`'s Mark shows on its Pane's header at `now`: its look,
+ * but open and seen it rests, as the logo does, so nothing moves there. */
+export function headerLookOf(listed: Listed, now: number): MarkState {
+  const { look } = lookOf(listed, now)
+  return look === "idle" ? "rest" : look
+}
+
+function lookIn(listed: Listed, stand: Stand, now: number): MarkState {
+  if (stand === "later" || stand === "archived") return "later"
+  if (stand === "turn" && wokeRings(listed, now)) return "woke"
+  if (stand === "open" && listed.mark === "rest") return "idle"
+  return listed.mark
+}
+
+/**
+ * Whether `listed` shows that it woke from Later at `now`: it woke by
+ * itself, as its time came, or it calls for nothing else. So one put off
+ * while it asked comes back as Woke with the same question (ADR 0098,
+ * decision 11), and one that a new question, a failure or its turn's end
+ * woke early shows that call.
+ */
+function wokeRings(listed: Listed, now: number): boolean {
+  if (wokeAt(listed, now) === undefined) return false
+  const by = listed.later?.woke?.by
+  return by === undefined || by === "time" || !calls(listed.mark)
+}
+
 /** Whether a Thread that stands at `stand` is put away, Later or
  * archived: what the bar's Mark, its counts and dots leave out. */
 export function isAway(stand: Stand): boolean {
@@ -99,18 +142,19 @@ export function mayArchive({ mark }: Pick<Listed, "mark">): boolean {
   return !works(mark) && mark !== "asking"
 }
 
-/** The bar's Mark over every list at `now`: the loudest mark of what is
- * not put away, and how many are the Person's turn. */
+/** The bar's Mark over every list at `now`: the loudest look of what is
+ * not put away, so a Thread that woke counts too (ADR 0099, decision 9),
+ * and how many are the Person's turn. */
 export function attentionOf(lists: Lists, now: number): Attention {
-  const marks: MarkState[] = []
+  const looks: MarkState[] = []
   let waiting = 0
   for (const listed of Object.values(lists).flat()) {
     const stand = standOf(listed, now)
     if (isAway(stand)) continue
-    marks.push(listed.mark)
+    looks.push(lookIn(listed, stand, now))
     if (stand === "turn") waiting++
   }
-  return { mark: loudest(marks), waiting }
+  return { mark: loudest(looks), waiting }
 }
 
 /** The things in the lists that call their Person now, each a Call (ADR

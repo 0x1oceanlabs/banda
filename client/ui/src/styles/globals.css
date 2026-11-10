@@ -60,6 +60,10 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-attention: var(--attention);
+  --color-woke: var(--woke);
+  --color-mark-open: var(--mark-open);
+  --color-mark-working: var(--mark-working);
+  --color-mark-later: var(--mark-later);
   --color-warning: var(--warning);
   --color-focus: var(--focus);
   --color-focus-inactive: var(--focus-inactive);
@@ -153,6 +157,22 @@
   --app-scrollbar-width: 6px;
   --app-scrollbar-thumb: var(--border);
   --app-scrollbar-thumb-hover: var(--muted-foreground);
+  /* The Mark's looks that do not call, as a Thread's mark draws them (ADR
+     0099, decision 10), worked out from the text's tokens: black on white
+     weighs more than white on dark, so on a light theme open is the text
+     at 80%, and sleep the muted text at 55%. Work is the Group plate's
+     blue, muted to about the weight of a grey (ADR 0107), at 80% here. */
+  --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --mark-working: color-mix(in oklab, var(--working) 80%, transparent);
+  --mark-later: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+}
+
+.dark {
+  /* On a dark one open is the text's own; work is the plate's blue at
+     60%, sleep the text at 55%. */
+  --mark-open: var(--foreground);
+  --mark-working: color-mix(in oklab, var(--working) 60%, transparent);
+  --mark-later: color-mix(in oklab, var(--foreground) 55%, transparent);
 }
 
 @layer base {

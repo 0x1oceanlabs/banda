@@ -76,7 +76,10 @@ export type Window = {
   app: ElectronApplication
   page: Page
   dir: string
-  /** The engine's pid, main's child named `banda`; none while it restarts. */
+  /** The engine's pid, main's child `banda start --with-parent`, which
+   * serves the engine for a checkout's window (engine.ts), and only
+   * follows it where it runs as a service; none while it restarts. Main's
+   * other `banda`, `look --follow`, is not it. */
   engine: () => number | undefined
   /** Runs the `banda` CLI on this window's folders; what it printed. */
   banda: (...args: string[]) => string
@@ -244,9 +247,11 @@ export async function startWindow({
     engine: () => {
       const main = String(app.process().pid)
       try {
-        const found = execFileSync("pgrep", ["-P", main, "-x", "banda"], {
-          encoding: "utf8",
-        })
+        const found = execFileSync(
+          "pgrep",
+          ["-P", main, "-f", "(^|/)banda start --with-parent$"],
+          { encoding: "utf8" }
+        )
         return Number(found.trim().split("\n").at(-1))
       } catch {
         return undefined
@@ -759,6 +764,13 @@ export const toastsOf = (page: Page) =>
 export async function leaveSidebar(page: Page) {
   const box = (await sidebarOf(page).boundingBox())!
   await page.mouse.move(box.x + box.width + 200, box.y + box.height / 2)
+}
+
+/** The Agent at work in Work's Thread named `title` ends its turn, done:
+ * its Person's word goes into the turn from outside the Window. */
+export function finish(window: Window, title: string) {
+  const thread = threadNamed(window, title)!.id
+  call(window, "agents.send", { thread, text: "go", steer: true })
 }
 
 /** The workspace on screen. */

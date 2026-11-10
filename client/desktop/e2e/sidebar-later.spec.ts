@@ -100,13 +100,15 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   await leaveSidebar(page)
 
   // Its time comes: it is the Person's turn again, Woke, with the same
-  // question.
+  // question. Its look is woke until it is seen, so the bar's Mark rings
+  // that (ADR 0099, decision 9); seen, it is the question that calls.
   await expect(row).toBeVisible({ timeout: 90_000 })
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
   await expect(row).toContainText("Asks you")
-  await expect(markOf(page)).toHaveAccessibleName(/Asks you/)
+  await expect(markOf(page)).toHaveAccessibleName(/Woke/)
   await row.click()
   await expect(question).toContainText("Allow Fake AI to run a command?")
+  await expect(markOf(page)).toHaveAccessibleName(/Asks you/)
   await question.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(thread.getByText("The check passed.")).toBeVisible()
 })

@@ -7,7 +7,7 @@ import { callsOf } from "@banda/ui/status"
 import { nextCall } from "../calls/sight"
 import { keysOf, order } from "./order"
 import type { Settings } from "./settings"
-import { type Counted, inOrder, tally } from "./tally"
+import { calm, type Counted, inOrder, tally } from "./tally"
 
 const one = (id: string, mark: MarkState, changed = 0): Listed => ({
   id,
@@ -39,6 +39,26 @@ test("each count takes its marks, the loudest shows, and a count of none is left
   ])
   const calm = { ["a" as ProjectId]: [one("run", "running")] }
   expect(tally(calm, ["asking", "done", "working"], 0)).toHaveLength(1)
+})
+
+test("a Thread that woke counts only in waiting, and rings there as the bar's Mark does (ADR 0099, decision 9)", () => {
+  const woke = {
+    ["a" as ProjectId]: [{ ...one("up", "rest"), later: { at: 0, until: 5 } }],
+  }
+  expect(tally(woke, ["asking", "done", "working"], 10)).toEqual([])
+  expect(tally(woke, ["waiting"], 10).map((c) => c.mark)).toEqual(["woke"])
+})
+
+test("the calm square is for when nothing waits and nothing works, not for when no count takes it", () => {
+  const withOne = (more: Partial<Listed>, mark: MarkState = "rest") => ({
+    ["a" as ProjectId]: [{ ...one("t", mark), ...more }],
+  })
+  expect(calm({}, 10)).toBe(true)
+  expect(calm(withOne({}), 10)).toBe(true)
+  expect(calm(withOne({ later: { at: 0, until: 5 } }), 10)).toBe(false)
+  expect(calm(withOne({}, "running"), 10)).toBe(false)
+  expect(calm(withOne({}, "done"), 10)).toBe(false)
+  expect(calm(withOne({ later: { at: 0, until: 50 } }, "done"), 10)).toBe(true)
 })
 
 test("waiting takes what asks and what is done, and archived Threads are not counted", () => {
