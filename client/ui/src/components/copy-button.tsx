@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react"
 import { CheckIcon, CopyIcon } from "lucide-react"
+import { copyText } from "../lib/clipboard"
 import { Button } from "./button"
 
 /** How long the check stays after a copy. */
@@ -35,9 +36,11 @@ function CopyButton({
       aria-label={label}
       title={title}
       className={className}
+      // The device's own clipboard, whichever machine the text came from
+      // (ADR 0106, decision 2).
       onClick={() => {
-        const copied = typeof text === "string" ? text : text()
-        void navigator.clipboard.writeText(copied).then(() => setCopied(true))
+        copyText(typeof text === "string" ? text : text())
+        setCopied(true)
       }}
     >
       {copied ? <CheckIcon /> : icon}

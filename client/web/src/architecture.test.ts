@@ -2473,7 +2473,6 @@ const REACHING: Record<string, { places: number; until: string }> = {
  */
 const DEVICE_HELPERS: Record<string, PastHandle[]> = {
   "client/ui/src/lib/clipboard.ts": ["navigator.clipboard"],
-  "client/ui/src/components/copy-button.tsx": ["navigator.clipboard"],
 }
 
 /** The steps of ADR 0106's plan. */
