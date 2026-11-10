@@ -224,14 +224,15 @@ test("arc's Thread restored as the window starts again with arc away from the fi
   const thread = page.getByRole("region", { name: TITLE, exact: true })
   const pill = thread.locator("[data-machine-pill] [role=status]")
   await expect(pill).toHaveText("arc is away", { timeout: 60_000 })
-  // Its header and its Message box name arc, and Send waits for it.
+  // Its header and its Message box name arc, and what is sent waits for
+  // arc, by the host's name as the directory keeps it (ADR 0105).
   await expect(thread.locator("header").first()).toContainText("arc")
   await expect(
     thread.getByRole("textbox", { name: /^Message to / })
   ).toHaveAttribute("aria-placeholder", /^Write to .+ on arc\./)
   await expect(
-    thread.getByRole("button", { name: "Send", exact: true })
-  ).toHaveAttribute("title", "arc is away. Send once it is back.")
+    thread.getByRole("button", { name: "Send when back" })
+  ).toHaveAttribute("title", /^Sends once arc is back, until /)
   // Never this machine's in arc's place, nor a Project no machine has.
   await expect(
     page.getByText("This window does not reach that machine")
