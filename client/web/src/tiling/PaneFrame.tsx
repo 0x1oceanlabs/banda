@@ -9,7 +9,7 @@ import {
   useState,
 } from "react"
 import { ProjectName } from "@banda/ui/components/project-sign"
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { MachineIcon } from "@banda/ui/components/machine-icon"
 import { seenNamed } from "@banda/ui/hooks/use-status"
@@ -206,8 +206,6 @@ export const PaneFrame = memo(function PaneFrame({
   alone = false,
 }: {
   entry: Entry
-  /** Unread: the Window's hosts give the Pane its session (`useReach`). */
-  engine: Engine
   modules: readonly string[]
   focused: boolean
   /** Looks selected while the overview owns the keys. */

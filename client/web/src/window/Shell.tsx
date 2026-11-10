@@ -857,7 +857,6 @@ export function Shell({
                     workspaces={workspaces}
                     covered={overview || drawerShown}
                     overview={overview}
-                    engine={engine}
                     modules={modules}
                     projectOf={projectOf}
                     shows={shows}
@@ -918,7 +917,6 @@ export function Shell({
                     entry={drawer}
                     shown={drawerShown}
                     height={drawerLook.height}
-                    engine={engine}
                     modules={modules}
                     shows={shows}
                     projectOf={projectOf}

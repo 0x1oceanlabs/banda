@@ -1,5 +1,5 @@
 import { memo, useLayoutEffect, useMemo, useRef } from "react"
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
@@ -20,7 +20,6 @@ export const Drawer = memo(function Drawer({
   entry,
   shown,
   height,
-  engine,
   modules,
   shows,
   projectOf,
@@ -34,7 +33,6 @@ export const Drawer = memo(function Drawer({
   shown: boolean
   /** How far down it drops: a share of the room under the bar. */
   height: number
-  engine: Engine
   modules: readonly string[]
   /** The Tiling's port: whether its Pane shows an Item. */
   shows: Shows
@@ -135,7 +133,6 @@ export const Drawer = memo(function Drawer({
       >
         <PaneFrame
           entry={entry}
-          engine={engine}
           modules={modules}
           focused={shown}
           marked={false}
