@@ -23,6 +23,7 @@ const BAR = { light: "rgba(0,0,0,.84)", dark: "rgba(255,255,255,.92)" }
 const ATTENTION = { light: "#e5590a", dark: "#ff8a3d" }
 const ADDED = "#15803d"
 const DESTRUCTIVE = "#e7000b"
+const WOKE = "#f5c542"
 
 const TILES =
   '<rect x="0" y="0" width="42" height="100" rx="15"/>' +
@@ -110,6 +111,7 @@ const ICONS = {
   "row-asking": row("ask", ATTENTION.light),
   "row-failed": row("failed", DESTRUCTIVE),
   "row-done": row("done", ADDED),
+  "row-woke": row("rest", WOKE),
 }
 
 const scratch = mkdtempSync(join(tmpdir(), "banda-menu-bar-"))

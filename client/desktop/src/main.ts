@@ -76,7 +76,9 @@ import { channel, configFolder, dataFolder, stateFolder } from "./channel"
 import {
   asksOnQuit,
   type Closing,
+  DOCK_SETTLES,
   dockShows,
+  dockStep,
   hidesOnClose,
   onDock,
   quitAsking,
@@ -357,7 +359,7 @@ async function ready(): Promise<void> {
     process.argv,
     process.platform === "darwin" && app.isHidden()
   )
-  if (hidden) app.dock?.hide()
+  if (hidden) void dockTo(false)
   listShortcut()
   followDevice()
   const listen = (now: LookValue) => {
@@ -804,23 +806,54 @@ function openMenu(route: unknown): string {
 function inFront(shown = window): BrowserWindow | null {
   if (!shown) return null
   if (shown === window) hiding = false
-  if (app.dock && !app.dock.isVisible())
-    void app.dock.show().then(() => app.focus({ steal: true }))
+  void dockTo(true)?.then(() => app.focus({ steal: true }))
   if (shown.isMinimized()) shown.restore()
   shown.show()
   shown.focus()
   return shown
 }
 
-/** On macOS the Dock shows Banda's icon only while a window shows (ADR
+/** On macOS the Dock shows Banda's icon only while a window is open (ADR
  * 0086, decision 4): with none, Banda lives in the menu bar. */
 function followDock(): void {
-  const shown = BrowserWindow.getAllWindows().some(
-    (one) => !one.isDestroyed() && one.isVisible()
-  )
-  const docked = dockShows(process.platform, shown)
-  if (docked === true) void app.dock?.show()
-  else if (docked === false) app.dock?.hide()
+  const windows = BrowserWindow.getAllWindows()
+    .filter((one) => !one.isDestroyed())
+    .map((one) => ({ visible: one.isVisible(), minimized: one.isMinimized() }))
+  const hidden = process.platform === "darwin" && app.isHidden()
+  const wanted = dockShows(process.platform, windows, hidden)
+  if (wanted !== null) void dockTo(wanted)
+}
+
+/** What the Dock's icon was last set to, shown as Banda starts, and when
+ * it last showed. */
+let docked = true
+let dockShownAt = 0
+/** A hide that waits for the Dock to settle after a show. */
+let dockLater: ReturnType<typeof setTimeout> | null = null
+
+/** Sets the Dock's icon as `wanted`, on macOS (closing.ts); the show,
+ * when it shows now. */
+function dockTo(wanted: boolean): Promise<void> | null {
+  const dock = app.dock
+  if (!dock) return null
+  if (dockLater) clearTimeout(dockLater)
+  dockLater = null
+  const now = Date.now()
+  switch (dockStep(wanted, docked, dockShownAt, now)) {
+    case "show":
+      docked = true
+      dockShownAt = now
+      return dock.show()
+    case "hide":
+      docked = false
+      dock.hide()
+      return null
+    case "later":
+      dockLater = setTimeout(followDock, DOCK_SETTLES - (now - dockShownAt))
+      return null
+    case null:
+      return null
+  }
 }
 
 /** Serves the built page; nothing outside its folder. */
@@ -1103,9 +1136,10 @@ function pageWindow(
   // The modules' parts hear of each window that shows the page.
   runtime.runSync(modules.opened(opened.webContents))
   if (shows) opened.once("ready-to-show", () => opened.show())
-  // The Dock's icon is there while a window shows, however it shows.
+  // The Dock's icon is there while a window is open, however it shows.
   opened.on("show", followDock)
   opened.on("hide", followDock)
+  opened.on("minimize", followDock)
   opened.on("closed", followDock)
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
@@ -1132,8 +1166,8 @@ function pageWindow(
 }
 
 /** The app menu, with its Quit (⌘Q); File's Close Window (⌘W); Edit; and
- * Window, whose Banda shows the main window hidden as it closed: ⌘Tab
- * back to Banda does not show it, as the Dock's icon does. */
+ * Window, whose Banda shows the main window, as the menu bar's Open Banda
+ * does. */
 function macMenu(): Menu {
   return Menu.buildFromTemplate([
     { role: "appMenu" },

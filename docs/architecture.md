@@ -1477,24 +1477,27 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   macOS the app stays, and its engine, a launchd job, outlives it
   (`client/desktop/src/closing.ts`): closing the main window hides it,
   its page left to call the Person and sound, and its Panes' own windows
-  close; the Dock's icon, or Window > Banda, shows it again. In the page
-  ⌘Q is Quit Banda's own key. The menu bar's Quit Banda, the app menu's
-  and the Dock's Quit, and ⌘Q where the page leaves the key (in a
-  terminal, over a dialog, with the window hidden), run `banda stop`,
-  which stops the engine where no Agent works; where some do, the page's
-  Quit Banda asks first while its window shows, or a system dialog does
-  when no window shows, the page crashed or loads, or the Person quits
-  again within 10 s. A logout, restart or shutdown quits without asking.
+  close; the menu bar's Open Banda or a row of its menu, or Banda opened
+  again, shows it. In the page ⌘Q is Quit Banda's own key. The menu
+  bar's Quit Banda, the app menu's and the Dock's Quit, and ⌘Q where the
+  page leaves the key (in a terminal, over a dialog, with the window
+  hidden), run `banda stop`, which stops the engine where no Agent
+  works; where some do, the page's Quit Banda asks first while its
+  window shows, or a system dialog does when no window shows, the page
+  crashed or loads, or the Person quits again within 10 s. A logout,
+  restart or shutdown quits without asking.
 - **On macOS Banda lives in the menu bar** (ADR 0086, decision 4; the
-  accepted mock, mac-menubar-v1). With no window shown, Banda.app keeps
+  accepted mock, mac-menubar-v1). With no window open, Banda.app keeps
   running with no Dock icon, only its icon in the menu bar: the Dock's
-  icon is there only while a window shows. The icon is Banda's mark, a
+  icon is there only while a window is open, shown or minimized, and
+  stays as it is while Banda is hidden (⌘H). The icon is Banda's mark, a
   template in the menu bar's own colour: its hat a square at rest, a
   circle while Agents work, a triangle lit in orange while one asks the
   Person or failed, happy eyes while what waits is done, asleep and dimmed
   while the engine does not answer; beside it one number, how many wait
   for the Person, else how many work. Its menu, a plain macOS menu built
-  again on each change, lists this Mac's Threads, what waits first, then
+  again as its items change, never while it is open, lists this Mac's
+  Threads, what waits first, then
   what works, each row opening its Thread in the window (the page's
   `pane.pick`); then Open Banda, the version, and Quit Banda (⌘Q while
   it is open). All of it comes from one child of main, `banda status
@@ -1504,7 +1507,9 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   Banda.app hidden, by its path (`open -g -j <app> --args --hidden`),
   which then shows no window and no Dock icon, only the menu bar's; it
   never opens an app that runs, nor one the Person quit or ended with
-  Force Quit, which leaves no crash dump newer than the app's lock, and
+  Force Quit, which leaves no crash dump newer than the app's lock and
+  than the engine's last look that saw it run (a page's or the GPU's
+  dump from before is not the app's), and
   stops trying after three opens with no app that ran five minutes
   (`engine/src/service/app.rs`). Linux and Windows have no menu bar icon
   yet (`hasMenuBar`). `banda look --follow --with-parent` stays the window's
