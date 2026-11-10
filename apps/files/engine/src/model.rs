@@ -215,6 +215,36 @@ pub struct Found {
     pub cut: bool,
 }
 
+/// What `files.locate` asks: the paths a reply or a terminal names, each
+/// as it was written, and where the Thread's tools worked.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct LocateAsk {
+    /// Paths as written: from the root, from home (`~/`), or relative.
+    /// Only the first 200 are looked at.
+    pub paths: Vec<String>,
+    /// The full paths the Thread's tools named, latest first: a relative
+    /// path is also tried at the root of the repository each one is in,
+    /// for the first 200 of them and at most 16 such folders.
+    #[serde(default)]
+    pub worked: Vec<String>,
+}
+
+/// A file a path names, as `files.locate` found it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "files/")]
+pub struct Located {
+    /// The path as it was asked.
+    pub asked: String,
+    /// Its full path.
+    pub file: String,
+    /// Its path from the Project's folder if it is in it, else from the
+    /// folder it was found in; its full path when there is none.
+    pub relative: String,
+    /// Whether it is in the Project's folder.
+    pub inside: bool,
+}
+
 /// What `files.watch` asks: the folders a Pane shows.
 #[derive(Clone, Debug, Default, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "files/")]

@@ -2,10 +2,11 @@
 //!
 //! The engine reads the disk and watches what is shown: one folder's
 //! names (`list`), what some paths are (`stat`), a file's text (`read`),
-//! fuzzy paths under a folder (`find`), and what changed in the folders a
-//! Pane shows (`watch`). For the previewers it lists what an archive
-//! holds (`archive`) and reads a workbook's sheet (`sheet`), and finds
-//! words in files (`search`). It writes a file's text only over the text
+//! fuzzy paths under a folder (`find`), the files the paths in a reply
+//! name (`locate`), and what changed in the folders a Pane shows
+//! (`watch`). For the previewers it lists what an archive holds
+//! (`archive`) and reads a workbook's sheet (`sheet`), and finds words in
+//! files (`search`). It writes a file's text only over the text
 //! it was read at (`write`), and makes, renames, moves, copies and sends
 //! to the system's Trash what is at a path (`make`, `rename`, `move`,
 //! `copy`, `trash`), each answering what undoes it; it lists the Trash,
@@ -29,6 +30,7 @@ mod beneath;
 mod find;
 mod info;
 mod list;
+mod locate;
 mod ops;
 mod places;
 mod read;
@@ -45,9 +47,9 @@ use banda_kernel::{
 };
 use model::{
     Archive, ArchiveAsk, CancelAsk, Counted, Done, FindAsk, Found, Info, InfoAsk, ItemsAsk, Job,
-    ListAsk, Listing, Locked, MakeAsk, Making, MoveAsk, Opened, OpenedAsk, Places, ReadAsk,
-    RecentAsk, RenameAsk, SearchAsk, Searched, Sheet, SheetAsk, SizeAsk, Stat, StatAsk, Step, Text,
-    Thumb, ThumbAsk, TrashAsk, Trashcan, WatchAsk, Watched, WriteAsk, Written,
+    ListAsk, Listing, LocateAsk, Located, Locked, MakeAsk, Making, MoveAsk, Opened, OpenedAsk,
+    Places, ReadAsk, RecentAsk, RenameAsk, SearchAsk, Searched, Sheet, SheetAsk, SizeAsk, Stat,
+    StatAsk, Step, Text, Thumb, ThumbAsk, TrashAsk, Trashcan, WatchAsk, Watched, WriteAsk, Written,
 };
 use serde_json::Value;
 use std::collections::HashMap;
@@ -140,6 +142,13 @@ banda_kernel::methods! {
         /// Fuzzy paths of the files under a folder, the Project's unless
         /// asked, leaving out what `.gitignore` does.
         call find(FindAsk) -> Found, Read;
+        /// The file each path in a reply or a terminal names, where there
+        /// is one, in their order: from the root or home as written; a
+        /// relative one from the Project's folder, then from the root of
+        /// the repository each file in `worked` is in. Only files of this
+        /// machine's own disks are looked at, never a share; an Agent's
+        /// call finds only what is in its Project's folder.
+        call locate(LocateAsk) -> Vec<Located>, Read;
         /// What changed in some folders, from now on: first that they are
         /// watched, then each folder whose names changed.
         stream watch(WatchAsk) -> Watched, Read;
@@ -593,6 +602,26 @@ impl Files {
                 paths: find::matching(&walked, &query, limit, &raised),
                 cut: walked.cut,
             }
+        })
+        .await
+    }
+
+    async fn locate(&self, call: Call, ask: LocateAsk) -> Result<Vec<Located>, Refusal> {
+        let folder = call.project().folder();
+        let home = dirs::home_dir();
+        let walled = call.wall().is_some();
+        reaching(&call, move || {
+            // An Agent looks only where its own reads reach, each path
+            // checked before it is looked at: the fence does not keep a
+            // stat out, and an answer filtered after the search would
+            // still tell what is outside.
+            let reaches = |path: &Path| !walled || Reach::resolve(&folder, path, true).is_ok();
+            let look = locate::Look {
+                folder: &folder,
+                home: home.as_deref(),
+                reaches: &reaches,
+            };
+            locate::located(&look, &ask.paths, &ask.worked)
         })
         .await
     }

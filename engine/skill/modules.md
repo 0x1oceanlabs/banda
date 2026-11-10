@@ -138,7 +138,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `files` (the Files).
 
-Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`, `thumb`, `info`, `size`.
+Its methods, `banda call files.<method>`: `list`, `stat`, `read`, `write`, `find`, `locate`, `watch`, `places`, `opened`, `recent`, `archive`, `sheet`, `make`, `rename`, `move`, `copy`, `cancel`, `trash`, `trashed`, `restore`, `delete`, `empty`, `search`, `thumb`, `info`, `size`.
 
 ## Git (`git`)
 

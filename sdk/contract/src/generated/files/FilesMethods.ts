@@ -16,6 +16,8 @@ import type { ItemsAsk } from "./ItemsAsk";
 import type { Job } from "./Job";
 import type { ListAsk } from "./ListAsk";
 import type { Listing } from "./Listing";
+import type { LocateAsk } from "./LocateAsk";
+import type { Located } from "./Located";
 import type { MakeAsk } from "./MakeAsk";
 import type { MoveAsk } from "./MoveAsk";
 import type { Opened } from "./Opened";
@@ -69,6 +71,15 @@ write: CommandMethod<WriteAsk, Written>,
  * asked, leaving out what `.gitignore` does.
  */
 find: CallMethod<FindAsk, Found>, 
+/**
+ * The file each path in a reply or a terminal names, where there
+ * is one, in their order: from the root or home as written; a
+ * relative one from the Project's folder, then from the root of
+ * the repository each file in `worked` is in. Only files of this
+ * machine's own disks are looked at, never a share; an Agent's
+ * call finds only what is in its Project's folder.
+ */
+locate: CallMethod<LocateAsk, Array<Located>>, 
 /**
  * What changed in some folders, from now on: first that they are
  * watched, then each folder whose names changed.

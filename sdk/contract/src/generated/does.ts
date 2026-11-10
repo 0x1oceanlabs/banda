@@ -79,6 +79,7 @@ export const DOES = {
   "files.read": "read",
   "files.write": "act",
   "files.find": "read",
+  "files.locate": "read",
   "files.watch": "read",
   "files.places": "read",
   "files.opened": "act",
