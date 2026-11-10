@@ -39,7 +39,9 @@ function CopyButton({
       // The device's own clipboard, whichever machine the text came from
       // (ADR 0106, decision 2).
       onClick={() => {
-        copyText(typeof text === "string" ? text : text())
+        const copied = typeof text === "string" ? text : text()
+        if (!copied) return
+        copyText(copied)
         setCopied(true)
       }}
     >
