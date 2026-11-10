@@ -4,7 +4,13 @@ import { afterEach, expect, test, vi } from "vitest"
 import { inWindow } from "../directory"
 import { FORGETTING, KeptHosts, reachWords } from "../hosts"
 import { away, desktop, live, project, Socket } from "../testing"
-import { HostsContext, type Reach, useEngineOf, useReach } from "./hosts"
+import {
+  HostsContext,
+  type Reach,
+  useEngineOf,
+  usePlaced,
+  useReach,
+} from "./hosts"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -125,10 +131,15 @@ test("a Pane restored while its machine is away reaches that machine by the dire
   hosts.follow()
   after.tell([away])
   let got: Reach | undefined
+  const placed: Record<string, ReturnType<typeof usePlaced>> = {}
   const Pane = () => {
     got = useReach("r1" as ProjectId, undefined)
+    placed.arc = usePlaced("r1" as ProjectId, undefined)
+    placed.mine = usePlaced("mine" as ProjectId, undefined)
+    placed.none = usePlaced("x" as ProjectId, undefined)
     return null
   }
+  hosts.ours([project("mine")])
   renderToStaticMarkup(
     <HostsContext value={hosts}>
       <Pane />
@@ -137,5 +148,12 @@ test("a Pane restored while its machine is away reaches that machine by the dire
   expect(got!.host).toBe("arc")
   expect(got!.engine).toBe(hosts.engine("arc"))
   expect(reachWords("arc", got!.shown, hosts.seen)).toBe("arc is away")
+  // What an App reads of it, the same machine and no engine; nothing for
+  // this machine's or for one no machine has.
+  expect(placed.arc!.host).toBe("arc")
+  expect(placed.arc!.shown).toBe(got!.shown)
+  expect(placed.arc).not.toHaveProperty("engine")
+  expect(placed.mine).toEqual({})
+  expect(placed.none).toEqual({})
   hosts.engine("arc").close()
 })

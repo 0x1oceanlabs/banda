@@ -2067,6 +2067,7 @@ const HOSTS_FOR_APPS = [
   "Unreachable",
   "heldWords",
   "useMachines",
+  "usePlaced",
   "useShownOf",
 ]
 
