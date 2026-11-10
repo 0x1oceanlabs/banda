@@ -22,7 +22,7 @@ import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { keysOf, order, useElsewhere } from "./order"
 import { markSaid } from "./card"
 import { Status } from "./CardStatus"
-import { type Counted, inOrder, type Tally, tally } from "./tally"
+import { calm, type Counted, inOrder, type Tally, tally } from "./tally"
 
 /** Each count's words, after its number. */
 const WORDS: Record<Count, string> = {
@@ -76,7 +76,7 @@ function Counts({ projects }: WidgetProps) {
     settings.show === "always" || (settings.show === "closed" && !sidebarShown)
   if (!shows) return null
   if (tallies.length === 0) {
-    if (settings.empty === "hide") return null
+    if (settings.empty === "hide" || !calm(lists, now)) return null
     // The calm square, where the counts come.
     return (
       <span className="flex h-6 items-center px-2">
@@ -122,6 +122,7 @@ function Counts({ projects }: WidgetProps) {
               variant="agent"
               state={t.mark}
               playful={0}
+              tone={settings.color}
               className="size-4"
             />
             <Number value={t.things.length} />

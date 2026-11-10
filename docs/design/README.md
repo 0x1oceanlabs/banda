@@ -99,7 +99,7 @@ the `banda` theme
 | `--attention` | `#ff8a3d` | `#e5590a` | asks: its mark, its time, "Asks you" |
 | `--destructive`, `--removed` | `oklch(0.704 0.191 22.2)` | `oklch(0.577 0.245 27.3)` | failed: its mark, its time, the "Failed" tag; −lines |
 | `--added` | `oklch(0.723 0.192 149.6)` | `oklch(0.527 0.137 150.1)` | done; +lines; a PR's ✓ |
-| `--woke` (kit) | `#f5c542` | `#f5c542` | woke from Later, plain, no outline ([0099] d1); not a token in the window yet |
+| `--woke` | `#f5c542` | `#f5c542` | woke from Later: its mark, plain, no outline ([0099] d1) |
 | `--working` | `oklch(0.72 0.13 255)` | `oklch(0.6 0.15 255)` | an Agent at work: a Group plate, and a working Mark muted ([0107]); never a row |
 | `--warning` | `oklch(0.8 0.15 80)` | `oklch(0.65 0.16 70)` | a limit that is near ([0024] d2) |
 | `--account-claude` | `#d97757` | `#c96442` | Claude's Emblem ([0093]) |

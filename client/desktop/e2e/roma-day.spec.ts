@@ -13,9 +13,10 @@
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
-  FREE,
   call,
+  FREE,
   countNotes,
+  finish,
   firstThread,
   fromLeft,
   layoutOf,
@@ -89,13 +90,6 @@ async function agents(window: Window, ...texts: string[]) {
   for (const text of texts.slice(1))
     threads.push(await startAgent(window, text))
   return threads
-}
-
-/** The Agent at work in the Thread named `title` ends its turn, done: its
- * Person's word goes into the turn from outside the Window. */
-function finish(window: Window, title: string) {
-  const thread = threadNamed(window, title)!.id
-  call(window, "agents.send", { thread, text: "go", steer: true })
 }
 
 /** Picks the Flow `name` in its menu, which Esc then closes. */

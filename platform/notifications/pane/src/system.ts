@@ -133,7 +133,7 @@ const icons = new Map<string, Promise<string | undefined>>()
  */
 export function iconOf(chime: Chime): Promise<string | undefined> {
   const colors = lookColors()
-  const key = `${chime}:${colors.body}:${colors.attention}:${colors.destructive}`
+  const key = [chime, ...Object.values(colors)].join(":")
   let icon = icons.get(key)
   if (!icon) {
     icon = drawn(stillMark(chime, colors))
@@ -150,6 +150,9 @@ function lookColors(): MarkColors {
     body: color("--foreground", "#1a1a1a"),
     attention: color("--attention", "#ff5a1f"),
     destructive: color("--destructive", "#e7000b"),
+    added: color("--added", "#16a34a"),
+    woke: color("--woke", "#f5c542"),
+    muted: color("--muted-foreground", "#71717a"),
   }
 }
 
@@ -159,10 +162,11 @@ async function drawn(svg: string): Promise<string | undefined> {
     const image = new Image()
     image.src = `data:image/svg+xml;charset=utf-8,${encodeURIComponent(svg)}`
     await image.decode()
+    // At the size the SVG says, so its mark draws as sharp as it was made.
     const canvas = document.createElement("canvas")
-    canvas.width = 112
-    canvas.height = 112
-    canvas.getContext("2d")?.drawImage(image, 0, 0, 112, 112)
+    canvas.width = image.naturalWidth || 136
+    canvas.height = image.naturalHeight || 136
+    canvas.getContext("2d")?.drawImage(image, 0, 0, canvas.width, canvas.height)
     return canvas.toDataURL("image/png")
   } catch {
     return undefined

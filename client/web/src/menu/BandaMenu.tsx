@@ -12,7 +12,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { MARK_WORDS } from "@banda/ui/components/banda-mark"
-import { calls } from "@banda/ui/status"
+import { calls, lookOf } from "@banda/ui/status"
 import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
@@ -854,10 +854,11 @@ function RowView({
         inside?.kind === "project"
           ? undefined
           : listing?.find((one) => one.id === row.project)
-      const waiting = calls(listed.mark) && MARK_WORDS[listed.mark]
+      const { look } = lookOf(listed, sources.now)
+      const waiting = (calls(look) || look === "woke") && MARK_WORDS[look]
       return (
         <>
-          <ThreadMark listed={listed} />
+          <ThreadMark listed={listed} look={look} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           <Detail>
             {there ? (
