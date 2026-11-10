@@ -1,8 +1,9 @@
 # scripts/check.sh's parts side by side on the runners on devbox
 # (ci/README.md), its `windows` part on GitHub's Windows runner, and the
-# fence's tests on GitHub's Ubuntu runner, as devbox's containers give no
-# user namespaces to make. One required status, `ci`, sums them up: a PR
-# that changes only docs passes it without running them.
+# fence's tests and the same-path test on GitHub's Ubuntu runner, as
+# devbox's containers give no user namespaces to make. One required
+# status, `ci`, sums them up: a PR that changes only docs passes it
+# without running them.
 #
 # A PR from a fork is not checked at all (ADR 0038, decision 4): `ci` fails
 # on it, so it cannot be merged as it is. Roma reads it and takes its
@@ -203,9 +204,75 @@ jobs:
       - run: cargo test -p banda-fence
       - run: cargo test -p banda --test fence
 
+  # The same-path test (client/desktop/e2e/same-path.spec.ts, ADR 0106):
+  # the fake machine "arc" runs in a mount namespace of its own, where the
+  # path of this machine's Project holds arc's files, so a window that
+  # reads this machine's file for arc's reads "mac" and fails. As `fence`,
+  # it runs on GitHub's Ubuntu VM, where the job may turn unprivileged user
+  # namespaces on for itself; devbox's window shards run the same spec with
+  # arc's files only in arc's own folders. BANDA_SAME_PATH=require fails
+  # the job where bwrap makes no namespace, rather than let it pass on
+  # arc's folders alone. More of the window's tests move here slice by
+  # slice.
+  same-path:
+    name: same path (two machines, one path)
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    env:
+      # As on devbox (ci/Dockerfile): no check reads the debug info.
+      CARGO_PROFILE_DEV_DEBUG: 0
+      BANDA_SAME_PATH: require
+    steps:
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # The Node ci/Dockerfile pins, and package.json's pnpm, as devbox has
+      # them.
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          # It would cache pnpm's store before pnpm is installed.
+          package-manager-cache: false
+      - run: npm install --global --silent "$(jq -r .packageManager package.json)"
+      - run: rustup toolchain install
+      # As `fence`: main's dependencies, saved by main's runs alone.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: linux-same-path
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+          cache-on-failure: true
+      # Electron's libraries are ci/Dockerfile's list.
+      - name: Unprivileged user namespaces, bwrap for arc's, and what Electron's Chromium loads
+        run: |
+          sudo sysctl -w kernel.apparmor_restrict_unprivileged_userns=0
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends bubblewrap \
+            libnss3 libatk-bridge2.0-0t64 libatk1.0-0t64 libcups2t64 libgbm1 libasound2t64 \
+            libgtk-3-0t64 libxss1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libpango-1.0-0 libcairo2 libdrm2 libxkbcommon0 libx11-xcb1 libxshmfence1
+      # Only the two programs the spec starts: the engine and the fake agent.
+      - run: cargo build --quiet -p banda -p banda-fake-agent
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @banda/desktop exec install-electron
+      - run: pnpm --filter @banda/desktop build
+      - run: pnpm --filter @banda/desktop exec playwright test same-path.spec.ts
+      - name: The window's traces
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: same-path-traces
+          path: client/desktop/test-results/
+          retention-days: 7
+
   ci:
     name: ci
-    needs: [changes, check, windows, fence]
+    needs: [changes, check, windows, fence, same-path]
     if: always()
     runs-on: devbox
     timeout-minutes: 5
@@ -217,8 +284,9 @@ jobs:
           exit 1
       - name: Every part passed or had nothing to check
         run: |
-          echo "changes=${{ needs.changes.result }} check=${{ needs.check.result }} windows=${{ needs.windows.result }} fence=${{ needs.fence.result }}"
+          echo "changes=${{ needs.changes.result }} check=${{ needs.check.result }} windows=${{ needs.windows.result }} fence=${{ needs.fence.result }} same-path=${{ needs.same-path.result }}"
           [[ "${{ needs.changes.result }}" == success ]]
           [[ "${{ needs.check.result }}" == success || "${{ needs.check.result }}" == skipped ]]
           [[ "${{ needs.windows.result }}" == success || "${{ needs.windows.result }}" == skipped ]]
           [[ "${{ needs.fence.result }}" == success || "${{ needs.fence.result }}" == skipped ]]
+          [[ "${{ needs.same-path.result }}" == success || "${{ needs.same-path.result }}" == skipped ]]
