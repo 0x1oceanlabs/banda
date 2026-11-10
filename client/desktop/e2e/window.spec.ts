@@ -223,6 +223,15 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
   await page.keyboard.press("Alt+Enter")
   await expect(drafts).toHaveCount(4)
   await expect(drafts.last()).toHaveAttribute("data-focused", "true")
+  // The sidebar's ✎ too, which names that key (ADR 0098, decision 19).
+  const pen = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: "New Thread", exact: true })
+  await expect(pen).toHaveAttribute("title", "New Thread (Alt+Return)")
+  await pen.click()
+  await pen.click()
+  await expect(drafts).toHaveCount(6)
+  await expect(drafts.last()).toHaveAttribute("data-focused", "true")
   await page.screenshot({ path: "test-results/2-many-new.png" })
 
   // An empty workspace's New Thread starts one there, not elsewhere.
@@ -7263,8 +7272,9 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await expect(scratch).toHaveAttribute("aria-current", "true")
   await expect(hello).not.toHaveAttribute("aria-current")
 
-  // The header's New Thread starts where the Person is: beside the
-  // Thread of no Project, on a free workspace, in No Project (ADR 0102).
+  // The header's ✎ starts where the Person is, as Alt+Enter does (ADR
+  // 0102): beside the Thread of no Project, on a free workspace, in No
+  // Project; beside the Thread of Work, in Work.
   const header = sidebar.getByRole("button", {
     name: "New Thread",
     exact: true,
@@ -7272,20 +7282,25 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await header.click()
   await startsIn("No Project")
   await expect(scratch).not.toHaveAttribute("aria-current")
+  await hello.click()
+  await header.click()
+  await startsIn("Work")
   await newProject(page, "lab")
   await startsIn("lab")
 
-  // Listed as places, a Project picked: the header's starts in it.
+  // Listed as places, a Project picked: ✎ starts in it, though the
+  // Person is in lab.
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
   const projects = sidebar.getByRole("group", { name: "Projects" })
   const lab = projects.getByRole("button", { name: /^lab/ })
-  await lab.click()
-  await expect(lab).toHaveAttribute("aria-pressed", "true")
+  const workLine = projects.getByRole("button", { name: /^Work/ })
+  await workLine.click()
+  await expect(workLine).toHaveAttribute("aria-pressed", "true")
   await header.click()
-  await startsIn("lab")
-  await lab.click()
-  await expect(lab).toHaveAttribute("aria-pressed", "false")
+  await startsIn("Work")
+  await workLine.click()
+  await expect(workLine).toHaveAttribute("aria-pressed", "false")
   // A Project's own, at its line, and its menu's.
   await projects.getByRole("button", { name: "New Thread in Work" }).click()
   await startsIn("Work")

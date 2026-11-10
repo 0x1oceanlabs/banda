@@ -1039,6 +1039,10 @@ test("one clash rule: an ID shows on the first machine that has it, this one wit
     expect(hosts.hostOf(id as ProjectId, "arc")).toBeUndefined()
   expect(hosts.hostOf("r1" as ProjectId, undefined)).toBe("arc")
   expect(hosts.hostOf("m9" as ProjectId, "devbox")).toBe("devbox")
+  // Its No Project too, where a Pane's host went unsaid, as a new Thread
+  // from ✎'s menu; arc's, this machine's ID, opens here.
+  expect(hosts.hostOf("m9" as ProjectId, undefined)).toBe("devbox")
+  expect(hosts.hostOf("m0" as ProjectId, undefined)).toBeUndefined()
 
   // This machine lets an ID go: arc's shows there from then on.
   hosts.ours([project("mine")], "m5" as ProjectId)
