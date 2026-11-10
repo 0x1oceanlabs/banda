@@ -7,13 +7,16 @@ import { Lost, Refused, Unreachable } from "@banda/contract"
  * A machine the Window does not reach is named (ADR 0095, decision 7), in
  * the words its pill says: "arc is away: Stop was not sent."; one that
  * went as the act was on its way, "arc went away; Stop may have gone
- * through." (ADR 0082, decision 16).
+ * through." (ADR 0082, decision 16). This machine's engine lost for a
+ * moment, as it restarts, says so the same way (ADR 0106, law 4).
  */
 export function problem(error: unknown, what?: string): string {
   if (error instanceof Refused) return error.refusal.message
   if (error instanceof Unreachable) return unreachable(error, what)
   if (error instanceof Lost)
-    return "Banda lost its engine for a moment. Try again."
+    return error.may_have_run
+      ? `Banda lost its engine for a moment; ${what ?? "it"} may have gone through.`
+      : "Banda lost its engine for a moment. Try again."
   return "Something went wrong. Try again."
 }
 
