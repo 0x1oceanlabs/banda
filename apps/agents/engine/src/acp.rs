@@ -252,6 +252,7 @@ fn handlers(
                 let question = Said::Asks {
                     call: call.clone(),
                     title: fields.title.clone(),
+                    command: command(fields),
                     tool: fields.kind.map(tool_kind),
                     offered: request.options.iter().map(offered).collect(),
                     form: None,
@@ -324,6 +325,7 @@ fn handlers(
                 let question = Said::Asks {
                     call: call.clone(),
                     title: Some(request.message.clone()),
+                    command: None,
                     tool: None,
                     offered: vec![choice(SUBMIT, "Submit", true), choice(SKIP, "Skip", false)],
                     form: Some(fields.clone()),

@@ -1298,6 +1298,39 @@ async fn turn(
         )?;
         return Ok(StopReason::EndTurn);
     }
+    if words.contains("command-permission") {
+        let question = RequestPermissionRequest::new(
+            session.clone(),
+            ToolCallUpdate::new(
+                "command-permission",
+                ToolCallUpdateFields::new()
+                    .title("Run command")
+                    .kind(ToolKind::Execute)
+                    .raw_input(
+                        serde_json::json!({ "command": "brew install --cask karabiner-elements" }),
+                    ),
+            ),
+            vec![
+                PermissionOption::new("allow", "Yes, proceed", PermissionOptionKind::AllowOnce),
+                PermissionOption::new(
+                    "reject",
+                    "No, and tell Codex what to do differently",
+                    PermissionOptionKind::RejectOnce,
+                ),
+            ],
+        );
+        let accepted = allowed(&cx, question, &["allow"]).await;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(if accepted {
+                "You allowed the fixture command."
+            } else {
+                "You declined the fixture command."
+            })),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("ask") {
         let tool = "check-1";
         say(

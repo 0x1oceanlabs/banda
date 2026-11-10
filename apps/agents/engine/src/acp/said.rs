@@ -42,6 +42,7 @@ pub enum Said {
     Asks {
         call: String,
         title: Option<String>,
+        command: Option<String>,
         /// What the tool call would do, if the Harness says here.
         tool: Option<ToolKind>,
         offered: Vec<Choice>,

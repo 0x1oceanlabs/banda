@@ -465,6 +465,7 @@ impl Transcript {
             Said::Asks {
                 call,
                 title,
+                command,
                 tool,
                 offered,
                 form,
@@ -485,7 +486,7 @@ impl Transcript {
                 };
                 let tool = tool.unwrap_or(ToolKind::Other);
                 let asked = questions::ask(
-                    self.turn, by_mode, tool, title, offered, form, plan, self.sub,
+                    self.turn, by_mode, tool, title, offered, form, plan, self.sub, command,
                 );
                 let (id, body, asked) = match asked {
                     Ok(questions::Asked::Open(opened)) => *opened,
