@@ -4,10 +4,10 @@
  * Dock icon, only its icon in the menu bar. The icon is Banda's mark,
  * whose hat says who works and who waits on this Mac, with one number
  * beside it: how many wait for the Person, else how many work. Its menu,
- * a plain macOS menu built again on each change, lists them, what waits
- * first, then what works, each row opening its Thread; then Open Banda,
- * the version and Quit Banda. Only this Mac's Threads: Quit stops only
- * its engine.
+ * a plain macOS menu built again as it changes (`menuSetter`), lists
+ * them, what waits first, then what works, each row opening its Thread;
+ * then Open Banda, the version and Quit Banda. Only this Mac's Threads:
+ * Quit stops only its engine.
  *
  * All of it comes from one line of `banda status --follow` (status.ts),
  * none while no line came or the follower died. This is the part that
@@ -95,6 +95,7 @@ const STATE_WORDS: Record<CountedAs, string> = {
   asking: "Asks you",
   failed: "Failed",
   done: "Done",
+  woke: "Woke",
 }
 
 /** The longest title a row shows whole. */
@@ -155,6 +156,42 @@ export function menuOf(
     { kind: "quit", label: "Quit Banda" }
   )
   return items
+}
+
+/**
+ * Sets the menu (`set`) as its items change, never while it is open, as
+ * setting one closes the one open: what came meanwhile is set as it
+ * closes. The same items again set nothing.
+ */
+export function menuSetter<T>(set: (items: T) => void) {
+  let last = ""
+  let open = false
+  let wanted: { items: T } | null = null
+  const settle = () => {
+    if (open || !wanted) return
+    const { items } = wanted
+    wanted = null
+    const said = JSON.stringify(items)
+    if (said === last) return
+    last = said
+    set(items)
+  }
+  return {
+    /** The menu's items now. */
+    items(items: T) {
+      wanted = { items }
+      settle()
+    },
+    /** The menu opened. */
+    opened() {
+      open = true
+    },
+    /** The menu closed. */
+    closed() {
+      open = false
+      settle()
+    },
+  }
 }
 
 /** A line `banda status` printed, as the status it says; none for one

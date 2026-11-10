@@ -4,7 +4,9 @@ import { TestClock } from "effect/testing"
 import {
   AGAIN,
   asksOnQuit,
+  DOCK_SETTLES,
   dockShows,
+  dockStep,
   hidesOnClose,
   onDock,
   quitAsking,
@@ -51,9 +53,30 @@ describe("on macOS, where Banda lives in the menu bar", () => {
     expect(onDock(macQuitting, false)).toBe(null)
   })
 
-  it("the Dock shows Banda's icon only while a window shows (ADR 0086, decision 4)", () => {
-    expect(dockShows("darwin", true)).toBe(true)
-    expect(dockShows("darwin", false)).toBe(false)
+  it("the Dock shows Banda's icon only while a window is open (ADR 0086, decision 4)", () => {
+    const shown = { visible: true, minimized: false }
+    const minimized = { visible: false, minimized: true }
+    const closed = { visible: false, minimized: false }
+    expect(dockShows("darwin", [shown], false)).toBe(true)
+    expect(dockShows("darwin", [closed, shown], false)).toBe(true)
+    // Minimized into the Dock, the window is still open.
+    expect(dockShows("darwin", [minimized], false)).toBe(true)
+    expect(dockShows("darwin", [closed, minimized], false)).toBe(true)
+    expect(dockShows("darwin", [closed], false)).toBe(false)
+    expect(dockShows("darwin", [], false)).toBe(false)
+    // Hidden by ⌘H, or opened so: the icon stays as it is.
+    expect(dockShows("darwin", [closed], true)).toBe(null)
+  })
+
+  it("the Dock's icon is shown once, and a hide right after a show waits", () => {
+    // As it is: nothing, never a show again, which takes the focus.
+    expect(dockStep(true, true, 0, 5_000)).toBe(null)
+    expect(dockStep(false, false, 0, 5_000)).toBe(null)
+    expect(dockStep(true, false, 0, 5_000)).toBe("show")
+    expect(dockStep(false, true, 0, 5_000)).toBe("hide")
+    // Electron ignores a hide within a second of a show.
+    expect(dockStep(false, true, 4_500, 5_000)).toBe("later")
+    expect(dockStep(false, true, 5_000 - DOCK_SETTLES, 5_000)).toBe("hide")
   })
 
   it("an app the engine opened, as it found none, shows no window: only the menu bar icon", () => {
@@ -72,7 +95,10 @@ describe("on Linux and Windows, as before", () => {
       expect(hidesOnClose(at)).toBe(false)
       expect(asksOnQuit(at, true)).toBe(false)
       expect(onDock(at, true)).toBe(null)
-      expect(dockShows(at.platform, false)).toBe(null)
+      expect(dockShows(at.platform, [], false)).toBe(null)
+      expect(
+        dockShows(at.platform, [{ visible: true, minimized: false }], false)
+      ).toBe(null)
     }
   })
 

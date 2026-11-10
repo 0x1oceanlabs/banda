@@ -2,10 +2,11 @@
  * Banda's icon in macOS's menu bar and its menu (ADR 0086, decision 4),
  * as menubar.ts says they are for each status: Electron's `Tray`, its
  * number as the title beside the icon, and a plain macOS menu built again
- * on each change. Its icons are drawn at 1x and 2x
- * (icons/menu-bar/draw.mjs), and copied beside main (build.mjs). A hat
- * that asks is drawn in colour, its tiles in the menu bar's own: light or
- * dark as the system is. macOS alone: main makes none elsewhere.
+ * as its items change, not while it is open (`menuSetter`). Its icons
+ * are drawn at 1x and 2x (icons/menu-bar/draw.mjs), and copied beside
+ * main (build.mjs). A hat that asks is drawn in colour, its tiles in the
+ * menu bar's own: light or dark as the system is. macOS alone: main makes
+ * none elsewhere.
  */
 import { join } from "node:path"
 import type { EngineStatus } from "@banda/contract"
@@ -23,6 +24,7 @@ import {
   type Item,
   lookOf,
   menuOf,
+  menuSetter,
   rowIconOf,
 } from "./menubar"
 
@@ -88,15 +90,22 @@ export function menuBar(name: string, version: string, does: MenuBarDoes) {
     }
   }
 
+  const menu = menuSetter((items: readonly Item[]) => {
+    if (tray.isDestroyed()) return
+    const made = Menu.buildFromTemplate(items.map(itemOf))
+    made.on("menu-will-show", menu.opened)
+    // Once the click it closed on has run, which comes next.
+    made.on("menu-will-close", () => setTimeout(menu.closed, 0))
+    tray.setContextMenu(made)
+  })
+
   const draw = () => {
     if (tray.isDestroyed()) return
     const look = lookOf(now)
     tray.setImage(image(iconOf(look.sign, dark())))
     tray.setTitle(look.count, { fontType: "monospacedDigit" })
     tray.setToolTip(`${name}: ${look.said}`)
-    tray.setContextMenu(
-      Menu.buildFromTemplate(menuOf(now, name, version).map(itemOf))
-    )
+    menu.items(menuOf(now, name, version))
   }
   draw()
   // The menu bar turns light or dark with the system.

@@ -358,7 +358,8 @@ starts at login too, later.
 - Decisions 3 and 4 on macOS, as step 7e built it (2026-11-10): Banda
   lives in the menu bar as the accepted mock draws it, from one child,
   `banda status --follow --with-parent`. The Dock's icon is there only
-  while a window shows; closing the last one leaves the menu bar icon.
+  while a window is open, shown or minimized; closing the last one
+  leaves the menu bar icon.
   Two things differ from the mock: the number beside the icon is in the
   menu bar's own colour, never orange, as a status item's title takes
   only a terminal's eight colours and the lit hat says it already; and a
@@ -371,7 +372,9 @@ starts at login too, later.
   mock had it. An engine with no app opens Banda.app hidden
   (`open -g -j <app> --args --hidden`), and a Force Quit counts as a
   quit, not a crash (Roma, 2026-11-10, #1038): the engine opens again
-  only an app that left a crash dump newer than its lock.
+  only an app that left a crash dump newer than its lock and than the
+  engine's last look that saw it run, as a page's or the GPU's dump
+  from earlier in the run is not the app's.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

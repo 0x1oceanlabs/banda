@@ -8,6 +8,7 @@ import {
   iconOf,
   lookOf,
   menuOf,
+  menuSetter,
   rowIconOf,
   shortOf,
   type Sign,
@@ -40,7 +41,7 @@ const running = (...threads: CountedThread[]): EngineStatus => {
       asking,
       failed: of("failed"),
       done: of("done"),
-      waiting: asking + of("done"),
+      waiting: asking + of("done") + of("woke"),
       threads,
     },
   }
@@ -140,7 +141,7 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
 
   it("has every icon it names drawn, at 1x and 2x (icons/menu-bar/draw.mjs)", () => {
     const signs: Sign[] = ["rest", "working", "asking", "done", "asleep"]
-    const states: CountedAs[] = ["working", "asking", "failed", "done"]
+    const states: CountedAs[] = ["working", "asking", "failed", "done", "woke"]
     const files = [
       ...signs.flatMap((sign) => [iconOf(sign, false), iconOf(sign, true)]),
       ...states.map(rowIconOf),
@@ -208,6 +209,15 @@ describe("its menu", () => {
     })
   })
 
+  it("lists one that woke from Later with those that wait, and counts it", () => {
+    const woke = running(thread("Renew the certs", "banda", "woke"))
+    expect(lookOf(woke)).toMatchObject({ count: "1" })
+    expect(menuOf(woke, "Banda", "0.4.0")[1]).toMatchObject({
+      kind: "thread",
+      sublabel: "banda · Woke",
+    })
+  })
+
   it("cuts a long title, so the menu stays narrow", () => {
     const long = "A".repeat(80)
     const [, row] = menuOf(
@@ -243,6 +253,47 @@ describe("its menu", () => {
   it("names a Dev by its number, a Stable whole", () => {
     expect(shortOf("0.4.0-dev.458")).toBe("dev.458")
     expect(shortOf("0.4.0")).toBe("0.4.0")
+  })
+})
+
+describe("setting its menu", () => {
+  it("sets it as its items change, and the same items again set nothing", () => {
+    const set: string[][] = []
+    const menu = menuSetter((items: string[]) => set.push(items))
+    menu.items(["Nothing runs"])
+    menu.items(["Nothing runs"])
+    menu.items(["Working", "Fix the login"])
+    expect(set).toEqual([["Nothing runs"], ["Working", "Fix the login"]])
+  })
+
+  it("never while it is open, as that closes it: the last items come as it closes", () => {
+    const set: string[][] = []
+    const menu = menuSetter((items: string[]) => set.push(items))
+    menu.items(["Working", "Fix the login"])
+    menu.opened()
+    menu.items(["Wait for you", "Fix the login"])
+    menu.items(["Wait for you", "Fix the login", "Working", "Docs"])
+    expect(set).toHaveLength(1)
+    menu.closed()
+    expect(set).toEqual([
+      ["Working", "Fix the login"],
+      ["Wait for you", "Fix the login", "Working", "Docs"],
+    ])
+    // Opened and closed with nothing new: nothing is set.
+    menu.opened()
+    menu.closed()
+    expect(set).toHaveLength(2)
+  })
+
+  it("sets nothing as it closes where the items came back to what it shows", () => {
+    const set: string[][] = []
+    const menu = menuSetter((items: string[]) => set.push(items))
+    menu.items(["Nothing runs"])
+    menu.opened()
+    menu.items(["Working", "Fix the login"])
+    menu.items(["Nothing runs"])
+    menu.closed()
+    expect(set).toEqual([["Nothing runs"]])
   })
 })
 

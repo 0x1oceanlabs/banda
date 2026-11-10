@@ -5,8 +5,8 @@
  * on. On macOS the engine is a launchd job, which outlives the app, and
  * the app lives in the menu bar (decision 4, menubar.ts): closing the
  * main window hides it, its page left alive to call the Person (ADR 0011)
- * and sound (ADR 0009), and the Dock's icon goes while no window shows
- * (`dockShows`); the menu bar's Open Banda, or Banda opened again, shows
+ * and sound (ADR 0009), and the Dock's icon goes while no window is
+ * open (`dockShows`); the menu bar's Open Banda, or Banda opened again, shows
  * it. A launch the engine made, as it found no app, shows no window
  * (`startsHidden`). A quit the app is asked for there, by the menu bar's
  * Quit Banda, the app menu's or the Dock's Quit, or by ⌘Q where the page
@@ -61,13 +61,43 @@ export function startsHidden(
   return platform === "darwin" && (args.includes(HIDDEN) || hidden)
 }
 
-/** Whether the Dock shows Banda's icon, as `shown` says a window shows:
- * on macOS only while one does; elsewhere there is no Dock (`null`). */
+/** A window, as the Dock counts it. */
+export type Counted = { readonly visible: boolean; readonly minimized: boolean }
+
+/**
+ * Whether the Dock shows Banda's icon: on macOS only while a window is
+ * open, shown or minimized into the Dock; with none, Banda lives in the
+ * menu bar. While the app is `hidden`, by ⌘H or as it opened so, the
+ * icon stays as it is (`null`), as off macOS, where there is no Dock.
+ */
 export function dockShows(
   platform: NodeJS.Platform,
-  shown: boolean
+  windows: readonly Counted[],
+  hidden: boolean
 ): boolean | null {
-  return platform === "darwin" ? shown : null
+  if (platform !== "darwin" || hidden) return null
+  return windows.some((one) => one.visible || one.minimized)
+}
+
+/** A little over the second after the Dock's icon shows in which
+ * Electron ignores hiding it. */
+export const DOCK_SETTLES = 1_100
+
+/**
+ * What sets the Dock's icon as `wanted`, as it was last set (`was`) and
+ * last shown (`shownAt`): a show, a hide, or nothing as it is so. A show
+ * is never repeated, as each takes Banda's focus away and back; a hide
+ * within `DOCK_SETTLES` of a show waits (`later`), or it would be lost.
+ */
+export function dockStep(
+  wanted: boolean,
+  was: boolean,
+  shownAt: number,
+  now: number
+): "show" | "hide" | "later" | null {
+  if (wanted === was) return null
+  if (wanted) return "show"
+  return now - shownAt < DOCK_SETTLES ? "later" : "hide"
 }
 
 /** What clicking the Dock's icon does: shows the window, hidden or not,

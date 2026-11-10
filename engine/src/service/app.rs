@@ -20,11 +20,13 @@
 //! and takes it away as it quits, as the Person quits it or logs out; a
 //! crash, or a kill, as a Force Quit is, leaves it naming a process that
 //! is gone. A crash also leaves a dump where Electron's crash reporter
-//! keeps them (`<state>/problems/crashes`); a kill leaves none. So the
-//! engine opens its app:
+//! keeps them (`<state>/problems/crashes`); a kill leaves none. The app's
+//! other processes, a page's or the GPU's, leave theirs there too as they
+//! crash, while the app goes on: only a dump written since the engine last
+//! saw the app run says the app crashed. So the engine opens its app:
 //!
 //! - when its lock names a process that is gone, and a dump newer than
-//!   the lock says it crashed;
+//!   the lock, and than the last look that saw it run, says it crashed;
 //! - when no app holds it and none has run in this engine's run: the
 //!   engine started with no app.
 //!
@@ -46,6 +48,7 @@ use banda_harnesses::carried::ELECTRON;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
+use std::sync::{Mutex, PoisonError};
 use std::time::{Duration, Instant, SystemTime};
 
 /// The system's own `open`, which only root changes.
@@ -72,13 +75,17 @@ const SETTLES: Duration = Duration::from_secs(5 * 60);
 /// The longest wait after an `open` that failed.
 const WAITS_AT_MOST: Duration = Duration::from_secs(10 * 60);
 
+/// How long before the app's process is gone its crash dump may be
+/// written: the app waits, still running, while the dump is written.
+const DUMPS_BEFORE: Duration = Duration::from_secs(2);
+
 /// The app, as its lock says.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Seen {
     /// It holds its lock: it runs.
     Runs,
-    /// Its lock names a process that is gone, which left a crash dump: it
-    /// crashed.
+    /// Its lock names a process that is gone, which left a crash dump
+    /// since it was last seen to run: it crashed.
     Crashed,
     /// No lock, or one naming a process that is gone with no dump: it
     /// quit, was ended with Force Quit, or has not run.
@@ -98,6 +105,8 @@ pub trait Desktop: Send + Sync {
 pub struct Mac {
     lock: PathBuf,
     crashes: PathBuf,
+    /// When a look last saw the app run.
+    ran: Mutex<Option<SystemTime>>,
 }
 
 impl Mac {
@@ -108,23 +117,42 @@ impl Mac {
         Mac {
             lock: places.state.join("window").join(LOCK),
             crashes: places.problems().join("crashes"),
+            ran: Mutex::new(None),
         }
     }
 
-    /// Whether the app left a crash dump since it took its lock.
+    /// Whether the app left a crash dump since it took its lock, and since
+    /// a look last saw it run: one written before is another process's,
+    /// which crashed while the app went on.
     fn dumped(&self) -> bool {
-        let taken = std::fs::symlink_metadata(&self.lock).and_then(|lock| lock.modified());
-        taken.is_ok_and(|taken| dump_since(&self.crashes, taken, 1))
+        let Ok(taken) = std::fs::symlink_metadata(&self.lock).and_then(|lock| lock.modified())
+        else {
+            return false;
+        };
+        let ran = *self.ran.lock().unwrap_or_else(PoisonError::into_inner);
+        dump_since(&self.crashes, since(taken, ran), 1)
     }
+}
+
+/// Since when a crash dump says the app crashed: since it took its lock
+/// (`taken`), and since a look last saw it run (`ran`), less the while its
+/// dump is written before it is gone.
+fn since(taken: SystemTime, ran: Option<SystemTime>) -> SystemTime {
+    ran.and_then(|ran| ran.checked_sub(DUMPS_BEFORE))
+        .map_or(taken, |ran| ran.max(taken))
 }
 
 impl Desktop for Mac {
     fn app(&self) -> Seen {
-        seen(
+        let now = seen(
             std::fs::read_link(&self.lock),
             crate::control::alive,
             || self.dumped(),
-        )
+        );
+        if now == Seen::Runs {
+            *self.ran.lock().unwrap_or_else(PoisonError::into_inner) = Some(SystemTime::now());
+        }
+        now
     }
 
     fn open(&self, app: &Path) -> Result<(), String> {
@@ -500,6 +528,24 @@ mod tests {
         assert_eq!(mac.app(), Seen::Quit);
         dump("this.dmp", taken + Duration::from_secs(5));
         assert_eq!(mac.app(), Seen::Crashed);
+        // A page's or the GPU's dump from before a look saw the app run is
+        // not the app's: it was ended later, as by Force Quit.
+        *mac.ran.lock().unwrap() = Some(taken + Duration::from_secs(60));
+        assert_eq!(mac.app(), Seen::Quit);
+        // One written as the app went, just before or after that look,
+        // is.
+        dump("went.dmp", taken + Duration::from_secs(59));
+        assert_eq!(mac.app(), Seen::Crashed);
+        std::fs::remove_file(completed.join("went.dmp")).unwrap();
+        dump("later.dmp", taken + Duration::from_secs(90));
+        assert_eq!(mac.app(), Seen::Crashed);
+        // A look that sees it run says when.
+        std::fs::remove_file(window.join(LOCK)).unwrap();
+        std::os::unix::fs::symlink(&own, window.join(LOCK)).unwrap();
+        *mac.ran.lock().unwrap() = None;
+        let before = SystemTime::now();
+        assert_eq!(mac.app(), Seen::Runs);
+        assert!(mac.ran.lock().unwrap().is_some_and(|ran| ran >= before));
         // A lock that is a plain file is held.
         std::fs::remove_file(window.join(LOCK)).unwrap();
         std::fs::write(window.join(LOCK), "").unwrap();
