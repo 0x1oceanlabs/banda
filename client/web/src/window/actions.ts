@@ -240,6 +240,25 @@ function movedTo(w: Workspaces, side: "first" | "last"): Step {
   return column && next !== w ? columnMoved(next, column.id) : undefined
 }
 
+/** Puts every Pane where the row would have opened it, or with `only`
+ * that Project's alone: last on its Project's workspace, one of no
+ * Project, or of none open, on a free one (ADR 0102, decisions 7 and 9). */
+export function arranging(
+  workspaces: Workspaces,
+  projects: readonly ProjectSummary[],
+  only?: ProjectId
+): Plan {
+  const homed = projects.filter((one) => !one.scratch).map((one) => one.id)
+  return {
+    command: {
+      method: "workspaces.arrange",
+      params: { projects: homed, ...(only !== undefined && { only }) },
+    },
+    // The Pane in front goes along to where it is put.
+    want: focused(workspaces)?.id,
+  }
+}
+
 /** Whether a Pane is the focused one of `workspaces`, by all its args. */
 export function focusedIn(workspaces: Workspaces) {
   const entry = focused(workspaces)
@@ -787,6 +806,12 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Solo, every Agent the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
     run: (shell) => writeFlow(shell, nextFlow(fileNow(AGENTS_FILE).flow)),
+  },
+  {
+    id: "workspaces.arrange",
+    section: "Workspaces",
+    title: "Arrange by Project",
+    run: (shell) => shell.change((w) => arranging(w, shell.projects())),
   },
   {
     // The sidebar's Flow menu: a pick of the three, where the key only

@@ -1,3 +1,4 @@
+import type { ProjectSummary } from "@banda/contract"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { takeLook } from "@banda/ui/lib/look"
@@ -27,6 +28,7 @@ import {
   type Shell,
   updating,
   windowApiOf,
+  arranging,
 } from "./actions"
 
 const thread = (id: string): PaneState => ({
@@ -408,4 +410,30 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
   }
   expect(sent("row")).toBeUndefined()
   expect(sent("free")).toBeDefined()
+})
+
+test("Arrange by Project names the Projects that have a workspace, and with one Project only it (ADR 0102, decisions 7 and 9)", () => {
+  const projects = [
+    { id: "a", scratch: false },
+    { id: "s", scratch: true },
+  ] as unknown as ProjectSummary[]
+  const state = open(
+    start(),
+    "a",
+    { kind: "terminal.shell", args: {} },
+    {
+      place: "right",
+    }
+  )
+  const arranged = arranging(state, projects)
+  expect(arranged.command).toEqual({
+    method: "workspaces.arrange",
+    params: { projects: ["a"] },
+  })
+  // The Pane in front goes along.
+  expect(arranged.want).toBe(focused(state)?.id)
+  expect(arranging(state, projects, "a").command.params).toEqual({
+    projects: ["a"],
+    only: "a",
+  })
 })

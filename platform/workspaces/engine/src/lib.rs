@@ -30,8 +30,8 @@ use banda_kernel::{
     Wall,
 };
 pub use commands::{
-    Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open, Regroup,
-    ShowAs, Size, Take, Tidy, Update,
+    Arrange, Fill, Height, Maximize, MoveColumn, MovePane, MoveWorkspace, OneColumn, OnePane, Open,
+    Regroup, ShowAs, Size, Take, Tidy, Update,
 };
 use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
 use schemars::JsonSchema;
@@ -107,6 +107,10 @@ banda_kernel::methods! {
         /// Lets every empty workspace go but the one the Person looks at
         /// and the last.
         command tidy(Tidy) -> Done, Write;
+        /// Puts every Pane where the row would have opened it: last on
+        /// its Project's workspace, or of no Project on a free one (ADR
+        /// 0102, decisions 7 and 9).
+        command arrange(Arrange) -> Done, Write;
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
         command take(Take) -> Done, Write;
@@ -626,6 +630,15 @@ impl Workspaces {
     async fn tidy(&self, call: Call, tidy: Tidy) -> Result<Done, Refusal> {
         change(&call, "tidied", None, Say::Whole, move |list, _, _| {
             model::tidy(list, tidy.keep, &tidy.projects);
+            Ok(())
+        })
+        .await
+        .map(|()| Done {})
+    }
+
+    async fn arrange(&self, call: Call, arrange: Arrange) -> Result<Done, Refusal> {
+        change(&call, "arranged", None, Say::Whole, move |list, _, seed| {
+            model::arrange(list, &arrange.projects, arrange.only, seed);
             Ok(())
         })
         .await

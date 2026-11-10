@@ -579,6 +579,37 @@ fn own_group() -> Tracing {
     t
 }
 
+fn arranged() -> Tracing {
+    let mut t = Tracing::new(
+        14,
+        "arranged",
+        "Arranging by Project puts each Group, and each column in none, last on its \
+         Project's workspace, and one of no Project on a free one; one already there \
+         stays, and with `only` only that Project's move.",
+    );
+    t.ok("open", shows(WORK, "terminal.terminal", 1));
+    let first = t.list()[0].id.to_string();
+    let last = json!({ "place": { "to": "column", "workspace": first, "index": 99 } });
+    for (project, n) in [(HOME, 2), (THIRD, 3), (WORK, 4), (FOURTH, 5)] {
+        t.ok(
+            "open",
+            and(shows(project, "terminal.terminal", n), last.clone()),
+        );
+    }
+    let projects = [WORK, HOME, FOURTH];
+    t.ok("arrange", json!({ "projects": projects, "only": HOME }));
+    assert_eq!(t.layout()[0], [vec![1], vec![3], vec![4], vec![5]]);
+    assert_eq!(t.layout()[1], [vec![2]]);
+    // Two new workspaces in one go, each its own.
+    t.ok("arrange", json!({ "projects": projects }));
+    assert_eq!(t.layout()[0], [vec![3]]);
+    assert_eq!(t.layout()[2], [vec![1], vec![4]]);
+    assert_eq!(t.layout()[3], [vec![5]]);
+    let ids: BTreeSet<_> = t.list().iter().map(|w| w.id).collect();
+    assert_eq!(ids.len(), t.list().len());
+    t
+}
+
 fn thread_groups() -> Tracing {
     let mut t = Tracing::new(
         6,
@@ -1047,6 +1078,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         ran_before(),
         update(),
         own_group(),
+        arranged(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

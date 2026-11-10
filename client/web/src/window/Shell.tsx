@@ -103,6 +103,7 @@ import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
 import { Peek, type Peeked } from "./Peek"
 import { Sheet, sheetsOf, useSheet } from "./Sheet"
+import { useMadeGoesHome } from "./made"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
 import {
@@ -289,6 +290,7 @@ export function Shell({
     projectsNow.current = projects
   }, [projects])
   const placing = useMemo(() => placingOf(flow, projects), [flow, projects])
+  useMadeGoesHome(projects, flow, change)
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
