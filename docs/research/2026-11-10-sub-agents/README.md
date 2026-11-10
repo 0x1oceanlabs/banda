@@ -1,9 +1,10 @@
 # Sub-agents and Crews: the research and the mocks
 
 Evidence for [ADR 0103](../../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md).
-Date: 2026-11-10, read against main at `26feb9be`. No paid session was
-run: what no recording shows is marked _inferred_, and step 0 of the
-ADR's plan records it. It is evidence, not a decision.
+Date: 2026-11-10, read against main at `26feb9be`. The first five notes
+ran no paid session: what no recording showed is marked _inferred_.
+Step 0 of the ADR's plan then recorded it, in `recordings.md`. It is
+evidence, not a decision.
 
 ## The notes
 
@@ -14,6 +15,7 @@ ADR's plan records it. It is evidence, not a decision.
 | [`landscape.md`](landscape.md) | How other products show sub-agents and parallel agents (T3 Code, OpenCode, Cursor, Amp, Zed, Conductor, Copilot, Devin, Factory and more): the patterns to take and those to avoid. |
 | [`banda-arch.md`](banda-arch.md) | What Banda receives today and how it draws it; what ACP's Subagent Sessions RFD offers; three ways to keep a sub-agent (an entry, a lane, a child Thread) and the recommended one, lanes; the contract sketch, the engine pieces and the plan. |
 | [`gaps.md`](gaps.md) | A check of the four notes before the mocks: where they disagree, one state table, what the Person can really do over ACP, work that outlives the turn, scale, depth, worktrees, tokens, and the questions put to Roma. |
+| [`recordings.md`](recordings.md) | Step 0: what real Claude Code and Codex runs with sub-agents and a workflow sent, as Banda is today and with the sub-agents capability declared; the stray replies refuted, and the fields step 3 needs. Its recordings are in `apps/agents/engine/tests/recordings/` and [`acp-with-subagents/`](acp-with-subagents/). |
 
 A sixth note, `banda-look.md`, on how Banda looks, became the design
 reference, [`docs/design/README.md`](../../design/README.md), with its kit
