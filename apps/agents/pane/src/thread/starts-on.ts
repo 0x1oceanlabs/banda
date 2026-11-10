@@ -151,6 +151,22 @@ export function startOf(
   return defaults && Object.values(defaults)[0]
 }
 
+const lastNamed = new WeakMap<Engine, Start>()
+
+/**
+ * `start` as `engine`'s machine names it now, or while a read is on its
+ * way or the machine is away, what it named last: every draft on that
+ * machine draws its account at once, and keeps it as the list of Harnesses
+ * is read again.
+ */
+export function lastStart(
+  engine: Engine,
+  start: Start | undefined
+): Start | undefined {
+  if (start) lastNamed.set(engine, start)
+  return start ?? lastNamed.get(engine)
+}
+
 /**
  * How many times `engine`'s machine has told its `agents.toml` while `on`:
  * first as it is, on every connection, then each time it reads otherwise,

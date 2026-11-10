@@ -48,6 +48,7 @@ import {
   useHarnesses,
 } from "../harnesses"
 import {
+  lastStart,
   startOf,
   useAgentsTold,
   useMachineStart,
@@ -293,7 +294,7 @@ export function useThreadSession({
   )
   const startsOn = useStartsOn(
     engine,
-    unplaced ? machineStart : startOf(everyDefaults)
+    lastStart(engine, unplaced ? machineStart : startOf(everyDefaults))
   )
   const harness =
     thread === null
@@ -806,9 +807,12 @@ function useHarnessDefaults(
   told: number
 ): Record<string, Defaults> | undefined {
   type Every = { at: number; each: Record<string, Defaults> }
+  // By their ids: the list read again as it was is the same source, and
+  // what it read stays drawn.
+  const ids = offered?.map((h) => h.id).join("\n") ?? ""
   const source = useMemo<Source<Every> | null>(() => {
-    const harnesses = offered?.map((h) => h.id) ?? []
-    return harnesses.length === 0
+    const harnesses = ids.split("\n")
+    return ids === ""
       ? null
       : {
           read: async () => {
@@ -828,7 +832,7 @@ function useHarnessDefaults(
           filter: OFFERED,
           apply: () => READ_AGAIN,
         }
-  }, [engine, project, offered])
+  }, [engine, project, ids])
   const live = useLive(engine, project, source, told)
   return live.state === "ready" ? live.view.each : undefined
 }
