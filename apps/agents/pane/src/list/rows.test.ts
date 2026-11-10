@@ -44,6 +44,27 @@ test("a Thread that asks says what it asks", () => {
   })
 })
 
+test("a Thread at work lists what it does, in the window's words (ADR 0099, decision 11)", () => {
+  const working = thread({
+    latest: { turn: "u1", state: "running", began: 3 },
+    doing: { what: "execute", title: "pnpm test", since: 4 },
+    stepped: 6,
+    compacting: true,
+    limit_until: 9000,
+  })
+  expect(listedOf(working, "Claude")).toMatchObject({
+    mark: "running",
+    began: 3,
+    doing: { what: "execute", title: "pnpm test", since: 4 },
+    stepped: 6,
+    compacting: true,
+    limitUntil: 9000,
+  })
+  const listed = listedOf(thread(), "Claude")
+  for (const field of ["doing", "stepped", "compacting", "limitUntil"])
+    expect(listed).not.toHaveProperty(field)
+})
+
 test("a failed Thread says why, or that it failed", () => {
   const failed = (reason?: string) =>
     thread({ latest: { turn: "u1", state: "failed", began: 3, reason } })

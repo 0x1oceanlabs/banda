@@ -1,7 +1,19 @@
-import type { Engine, ProjectId } from "@banda/contract"
-import type { ThreadList } from "@banda/contract/agents"
+import type { Engine, ProjectId, Refusal } from "@banda/contract"
+import type {
+  ListedThread,
+  ThreadList,
+  ThreadsDoing,
+} from "@banda/contract/agents"
 import { expect, test, vi } from "vitest"
-import { applyThreads, readsAgain, THREADS_FILTER, threadsSource } from "./list"
+import {
+  applyThreads,
+  type Doings,
+  hearDoing,
+  readsAgain,
+  THREADS_FILTER,
+  threadsSource,
+  withDoing,
+} from "./list"
 import { agent, event, person } from "../testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
@@ -348,4 +360,156 @@ test("the list's own read waits for no move of old marks: a Thread's writers and
   } finally {
     vi.unstubAllGlobals()
   }
+})
+
+/**
+ * An engine whose `agents.threads` lists `list` and counts each read, and
+ * whose `agents.doing` says what a test gives it: a reconnect hears the
+ * stream again, so its first piece then names all at work anew.
+ */
+function doingEngine(list: ThreadList) {
+  const reads: string[] = []
+  const heard: { project: string; method: string }[] = []
+  let say: (piece: ThreadsDoing) => void = () => {}
+  let end: (refusal?: Refusal) => void = () => {}
+  const engine = {
+    call: async (method: string) => {
+      reads.push(method)
+      return list
+    },
+    stream: (
+      project: string,
+      method: string,
+      _params: object,
+      onPiece: (piece: ThreadsDoing) => void,
+      onEnd: (refusal?: Refusal) => void
+    ) => {
+      heard.push({ project, method })
+      say = onPiece
+      end = onEnd
+      return () => {}
+    },
+  } as unknown as Engine
+  return {
+    engine,
+    reads,
+    heard,
+    say: (piece: ThreadsDoing) => say(piece),
+    end: (refusal?: Refusal) => end(refusal),
+  }
+}
+
+/** Two Threads at work, and one whose turn ended. */
+const atWork: ThreadList = {
+  at: 3,
+  threads: (["t1", "t2", "t3"] as const).map((id): ListedThread => ({
+    id,
+    agent: `a-${id}`,
+    harness: "fake",
+    title: id,
+    updated_at: 1,
+    asking: [],
+    latest: {
+      turn: `u-${id}`,
+      state: id === "t3" ? "done" : "running",
+      began: 1,
+    },
+  })),
+}
+
+/** What `list`'s Threads do as the window lists them, by Thread. */
+const doingOf = (threads: readonly ListedThread[]) =>
+  Object.fromEntries(
+    threads.map(({ id, doing, stepped, compacting, limit_until }) => [
+      id,
+      { doing, stepped, compacting, limit_until },
+    ])
+  )
+
+test("what a Thread at work does merges into the list as agents.doing says it, and the list is not read again (ADR 0099, decision 11)", async () => {
+  const project = "p1" as ProjectId
+  const { engine, reads, heard, say } = doingEngine(atWork)
+  const list = await threadsSource(engine, project).read()
+  let doings: Doings | undefined
+  hearDoing(engine, project, (now) => (doings = now))
+  expect(heard).toEqual([{ project, method: "agents.doing" }])
+  // Nothing said yet: the list stands as it was read.
+  expect(withDoing(list.threads, doings)).toBe(list.threads)
+
+  const execute = { what: "execute" as const, title: "pnpm test", since: 4 }
+  say({
+    all: true,
+    threads: [
+      { thread: "t1", doing: execute, stepped: 4 },
+      { thread: "t2", stepped: 2 },
+    ],
+  })
+  const first = withDoing(list.threads, doings)
+  expect(doingOf(first)).toEqual({
+    t1: { doing: execute, stepped: 4 },
+    t2: { stepped: 2 },
+    t3: {},
+  })
+
+  // A delta names only the Thread that changed; the others keep theirs.
+  const think = { what: "think" as const, since: 6 }
+  say({
+    all: false,
+    threads: [{ thread: "t1", doing: think, stepped: 6, compacting: true }],
+  })
+  const second = withDoing(list.threads, doings)
+  expect(doingOf(second)).toEqual({
+    t1: { doing: think, stepped: 6, compacting: true },
+    t2: { stepped: 2 },
+    t3: {},
+  })
+  expect(withDoing(second, doings), "said already: the same list").toBe(second)
+
+  // Its turn ended: it does nothing, and nothing of before stays.
+  say({ all: false, threads: [{ thread: "t1" }] })
+  const ended = withDoing(second, doings)
+  expect(doingOf(ended).t1).toEqual({})
+  expect(ended[0]).not.toHaveProperty("compacting")
+
+  expect(reads, "the stream never reads the list again").toEqual([
+    "agents.threads",
+  ])
+})
+
+test("a reconnect takes what agents.doing says anew: a Thread it no longer names does nothing", () => {
+  const { engine, say, end } = doingEngine(atWork)
+  let doings: Doings | undefined
+  hearDoing(engine, "p1" as ProjectId, (now) => (doings = now))
+  const limit = { what: "other" as const, since: 2 }
+  say({
+    all: true,
+    threads: [
+      { thread: "t1", doing: limit, stepped: 2, limit_until: 9000 },
+      { thread: "t2", stepped: 2 },
+    ],
+  })
+  // The connection broke and came back: the stream is heard from its
+  // start, which names every Thread at work.
+  say({ all: true, threads: [{ thread: "t2", stepped: 8 }] })
+  expect(doingOf(withDoing(atWork.threads, doings))).toEqual({
+    t1: {},
+    t2: { stepped: 8 },
+    t3: {},
+  })
+
+  // A Thread whose latest turn ended does nothing, whichever the window
+  // hears first: the stream's end of it or the list's.
+  say({ all: false, threads: [{ thread: "t3", stepped: 9 }] })
+  expect(doingOf(withDoing(atWork.threads, doings)).t3).toEqual({})
+
+  // An engine that ends the stream, or refuses it as an older one does,
+  // leaves no Thread known to do anything: not even what the list read.
+  const read = atWork.threads.map((thread) =>
+    thread.latest?.state === "running" ? { ...thread, stepped: 1 } : thread
+  )
+  end({ code: "invalid", message: 'There is no method "agents.doing".' })
+  expect(doingOf(withDoing(read, doings))).toEqual({ t1: {}, t2: {}, t3: {} })
+  expect(withDoing(read, undefined), "before the stream says anything").toBe(
+    read
+  )
 })

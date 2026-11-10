@@ -1,14 +1,18 @@
 /**
  * A Project's Threads, as the sidebar holds them: the list it read, then
- * each fact applied. Pure, so plain tests cover it.
+ * each fact applied, and what each one at work does as `agents.doing` says
+ * it. Pure, so plain tests cover it.
  */
 import type { Engine, Event, EventFilter, ProjectId } from "@banda/contract"
 import {
   decodeFact,
+  type DoingNow,
   type Fact,
   type ListedThread,
   type ThreadList,
+  type ThreadsDoing,
 } from "@banda/contract/agents"
+import { sameData } from "@banda/core/react"
 import { READ_AGAIN, type Source } from "@banda/ui/hooks/use-live"
 
 /** How much of a message the list keeps, as the engine does. */
@@ -255,4 +259,101 @@ function change(
   const moved = { ...changed, updated_at: event.at }
   const others = state.threads.filter((thread) => thread !== found)
   return { ...state, threads: [moved, ...others] }
+}
+
+/**
+ * What `agents.doing` said last of a Project's Threads at work (ADR 0099,
+ * decision 11), by Thread: what its running turn does, when it last said
+ * anything, whether its Harness compacts the context, and when a usage
+ * limit lets it go on.
+ */
+export type Doings = ReadonlyMap<string, DoingNow>
+
+/** No Thread is known to do anything. */
+const NOTHING_DOING: Doings = new Map()
+
+/** Every field of `DoingNow`, which the stream says of a Thread whole: one
+ * it gains is named here, or the types refuse it, so a Thread whose turn
+ * ended never keeps it. */
+const DOING = Object.keys({
+  doing: true,
+  stepped: true,
+  compacting: true,
+  limit_until: true,
+} satisfies Record<keyof DoingNow, true>) as (keyof DoingNow)[]
+
+/**
+ * What the Threads at work do after one piece of `agents.doing`. The
+ * first piece names all of them, again after each reconnect, so any other
+ * held is let go; each later one names only the Threads that changed, and
+ * a Thread whose turn ended with nothing but its ID.
+ */
+function heardDoing(held: Doings, piece: ThreadsDoing): Doings {
+  const next = new Map(piece.all ? [] : held)
+  for (const { thread, ...now } of piece.threads) {
+    if (DOING.every((key) => now[key] === undefined)) next.delete(thread)
+    else next.set(thread, now)
+  }
+  return next
+}
+
+/**
+ * Hears what `project`'s Threads at work do (`agents.doing`) on `engine`,
+ * the session of the machine whose Project it is, and tells `tell` all of
+ * it after each piece. A reconnect hears it again from its first piece.
+ * Once the engine refuses it, as one older than the stream does, or ends
+ * it, no Thread is known to do anything. Returns how to stop.
+ */
+export function hearDoing(
+  engine: Engine,
+  project: ProjectId,
+  tell: (doings: Doings) => void
+): () => void {
+  let held = NOTHING_DOING
+  return engine.stream(
+    project,
+    "agents.doing",
+    {},
+    (piece) => tell((held = heardDoing(held, piece))),
+    () => tell((held = NOTHING_DOING))
+  )
+}
+
+/**
+ * `threads` with what each one at work does, merged in as the stream says
+ * it, so the list is not read again for it: what `doings` holds once the
+ * stream said anything, else what the list read. Only a Thread whose
+ * latest turn runs does anything, as the stream may hear a turn end before
+ * or after the list does. The same list where nothing changed, and the
+ * same Thread where what it does is the same.
+ */
+export function withDoing(
+  threads: readonly ListedThread[],
+  doings: Doings | undefined
+): readonly ListedThread[] {
+  let changed = false
+  const merged = threads.map((thread) => {
+    const now =
+      thread.latest?.state !== "running"
+        ? undefined
+        : doings
+          ? doings.get(thread.id)
+          : thread
+    const next = doingIn(thread, now)
+    changed ||= next !== thread
+    return next
+  })
+  return changed ? merged : threads
+}
+
+/** `thread` doing `now`, and nothing more of `DoingNow`'s: the same
+ * Thread when it does that already. */
+function doingIn(thread: ListedThread, now: DoingNow = {}): ListedThread {
+  if (DOING.every((key) => sameData(thread[key], now[key]))) return thread
+  const next: Record<string, unknown> = { ...thread }
+  for (const key of DOING) {
+    if (now[key] === undefined) delete next[key]
+    else next[key] = now[key]
+  }
+  return next as ListedThread
 }

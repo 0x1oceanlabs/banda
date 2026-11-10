@@ -10,6 +10,7 @@
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
+import type { Doing } from "@banda/contract/agents"
 import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
@@ -234,6 +235,18 @@ export type Listed = {
   changed: number
   /** When the work that runs now began; a timer counts from it. */
   began?: number
+  /** What the work that runs now does, and since when (ADR 0099,
+   * decision 11): a tool call of its kind and what it works on, a
+   * thought, or its reply. None while none runs. */
+  doing?: Doing
+  /** When the work that runs now last said anything, in milliseconds
+   * since the epoch: long ago, it is stuck. */
+  stepped?: number
+  /** Its Harness compacts the context now. */
+  compacting?: true
+  /** When a usage limit the work that runs now waits on lets it go on,
+   * in milliseconds since the epoch. */
+  limitUntil?: number
   /**
    * What calls the Person, in a few words: what it asks, why it failed.
    * A toast or a system notification says it too.
