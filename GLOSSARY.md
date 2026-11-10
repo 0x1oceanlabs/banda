@@ -477,8 +477,11 @@ host that gave a Project away cannot keep writing it (ADR 0082, ADR
 0085).
 
 **Stale**:
-A host that stopped answering. Its rows dim and say "as of", reads come
-from the client's copy, and commands fail at once (ADR 0082).
+A host that stopped answering though its link looks up: two pings missed,
+or an act's ping unanswered in 3 seconds. The Person sees it as away: its
+rows dim, its label says once what they are "as of", reads wait for it,
+and acts fail at once (ADR 0082, decision 11 and its note; ADR 0106,
+law 4).
 
 **Visible queue**:
 Commands the Person chose to "send when back", shown with when they will

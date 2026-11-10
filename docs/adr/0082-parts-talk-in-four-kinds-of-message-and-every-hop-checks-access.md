@@ -370,6 +370,16 @@ Roma, 2026-11-06, among the vision's decisions:
       `pong`s, or when its path is lost, the host is **stale**: its rows
       dim and say "as of 14:02", queries answer from the client's cache,
       and commands fail fast.
+      _Noted 2026-11-10 by the two-machines slice H5c, with Roma's answers
+      Q7 and Q8, which the stage's short ADR will hold: the Person sees one
+      word, "away", for a stale host and one whose path is lost, so a host
+      shows live or away, not stale. "As of 14:02" goes once on the
+      machine's label, not on each row, and a stopped machine keeps its
+      rows, dim, the same. Until the client has a cache, a query waits for
+      the host to answer again. An act (ADR 0106, law 4) after 5 seconds
+      of quiet pings first, and with nothing heard in 3 seconds the host is
+      stale and the act fails. The `pong` carries only `time` for now. The
+      window pings only another machine's engine, never its own._
     - **Resume needs no state on the host**: a new `hello`, a
       `subscribe{after}` for each subscription, and each unanswered
       command sent again with its CommandId.
@@ -463,6 +473,8 @@ Roma, 2026-11-06, among the vision's decisions:
     - **The Inbox.** The client follows one `calls.inbox` per host and
       merges them. Each row keeps its host, so an answer goes back there.
       Each host shows as live, stale (with its "as of") or away.
+      _Noted 2026-11-10 by H5c (decision 11's note): live or away, with
+      its "as of"._
     - **Seen marks** come from the Person's document (Roma, 2026-11-06,
       the vision's decision 13). A host raises and clears its Calls from
       its own facts, and the client joins the seen marks to draw each

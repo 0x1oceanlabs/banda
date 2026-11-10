@@ -131,8 +131,8 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
   renderToStaticMarkup(
     createElement(HostsContext.Provider, { value: kept }, createElement(Reads))
   )
-  // A machine stopped holds no rows; one away holds them as they were.
-  expect(drawn.map((host) => host.name)).toEqual(["devbox", "lost"])
+  // A machine away or stopped holds its rows as they were (#989).
+  expect(drawn.map((host) => host.name)).toEqual(["devbox", "lost", "old"])
   // devbox lists "far" after the drawing: the key finds it, newest first.
   kept.projects("devbox", [project("far")])
   expect(keysOf(orderNow!(twoMachines, [project("a")], 0))).toEqual([

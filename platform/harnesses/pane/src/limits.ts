@@ -1,5 +1,6 @@
 import type { Limits, LimitWindow, UsageNow } from "@banda/contract/harnesses"
-import { DAY, HOUR, MINUTE, clock } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
+import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 
 /** A reset that passed is empty until the engine reads again. */
 export function usedOf(window: LimitWindow, now: number): number {

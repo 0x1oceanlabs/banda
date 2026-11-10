@@ -112,8 +112,8 @@ export const Watches = memo(function Watches({
 /**
  * One Watches for each other host that is live (ADR 0081, decision 4),
  * so what its engine's Apps list flows into the Window's stores under its
- * name. A host that goes away keeps what it listed last; one the Window
- * shows no rows of lets go of it.
+ * name. A host that goes away, answers nothing or is stopped keeps what
+ * it listed last; one the Window shows no rows of lets go of it.
  */
 function Elsewhere() {
   const hosts = useContext(HostsContext)

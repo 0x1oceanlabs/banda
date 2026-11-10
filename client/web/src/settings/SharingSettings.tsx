@@ -13,7 +13,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
-import { clock } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import type { SectionProps } from "./sections"
 import { Group, Rows } from "./SettingRow"
 

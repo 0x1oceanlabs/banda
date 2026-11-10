@@ -8,11 +8,13 @@ export { HereContext, useHere } from "./here"
 export {
   HostsContext,
   type Reach,
+  useAwayFor,
   useEngineOf,
   useHosts,
   useHostsBy,
   useMachinesOf,
   useNamedOf,
+  useNowOf,
   useOurs,
   usePaneOn,
   useReach,

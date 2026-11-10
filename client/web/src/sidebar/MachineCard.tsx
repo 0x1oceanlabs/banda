@@ -13,14 +13,13 @@ import {
   HoverCardTrigger,
 } from "@banda/ui/components/hover-card"
 import { MachineMark } from "@banda/ui/components/machine-icon"
-import { useNow } from "@banda/ui/hooks/use-now"
 import { useRead } from "@banda/ui/hooks/use-read"
 import {
   awakeWords,
-  awayFor,
   batteryWords,
   HostsContext,
   type Shown,
+  useAwayFor,
   useShownOf,
 } from "@banda/core/react"
 import { useTurnsOn } from "../calls/battery"
@@ -93,11 +92,11 @@ function Drawn({ shown }: { shown: Shown }) {
   )
   const naming = useRead(read)
   const turns = useTurnsOn(key)
-  const now = useNow(15_000, state.state === "away")
+  // By the Window's one clock, as the pill says it.
+  const away = useAwayFor(shown)
   const said = naming.state === "ready" ? naming.value : undefined
   const facts = said && factsWords([said.model, said.system])
   const build = buildWords(state)
-  const away = state.state === "away" && awayFor(shown.away, now)
   const words = live ? "live" : away ? `away · ${away}` : stateWords(state)
   const rows: [term: string, value: ReactNode][] = []
   if (facts) rows.push(["Machine", facts])

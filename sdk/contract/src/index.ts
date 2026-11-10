@@ -36,12 +36,14 @@ export type { WindowRequest } from "./generated/WindowRequest"
 export {
   Engine,
   Lost,
+  PING,
   PROTOCOL,
   Refused,
   Unreachable,
   type Address,
   type Answered,
   type CommandOptions,
+  type Ping,
   type Status,
 } from "./engine"
 export { newId } from "./ids"

@@ -1877,15 +1877,20 @@ function made(value: ts.Expression): ts.Expression {
     : value
 }
 
-/** Whether `value` makes an instance, an array or an object: itself, or
- * what a call it is takes, as `createContext(new Store(…))` does. */
+/** Whether `value` makes an instance, an array or an object: itself, by
+ * any call but a context's, as `tickingClock(1_000)` would make a store,
+ * or what a context takes, as `createContext(new Store(…))` does. */
 function makes(value: ts.Expression): boolean {
   const what = made(value)
+  if (ts.isCallExpression(what))
+    return ts.isIdentifier(what.expression) &&
+      what.expression.text === "createContext"
+      ? what.arguments.some(makes)
+      : true
   return (
     ts.isNewExpression(what) ||
     ts.isArrayLiteralExpression(what) ||
-    ts.isObjectLiteralExpression(what) ||
-    (ts.isCallExpression(what) && what.arguments.some(makes))
+    ts.isObjectLiteralExpression(what)
   )
 }
 

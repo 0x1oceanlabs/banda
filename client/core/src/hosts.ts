@@ -13,6 +13,7 @@
 import {
   type Address,
   Engine,
+  PING,
   type ProjectId,
   type ProjectSummary,
   type Status,
@@ -27,6 +28,7 @@ import {
 } from "@banda/contract/machines"
 import type { HostState } from "./device"
 import { paneHost, type PaneState, withHost } from "./pane"
+import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
 import type { Args } from "./run"
 import { type Readable, sameData, sameEach, Store } from "./store"
@@ -81,13 +83,23 @@ export type Shown = {
    * 2); as this device last saw it while it says nothing. */
   named: Named
   /** What the desktop says of it, but away through the tries after a
-   * loss, until it is live again or says otherwise. */
+   * loss, until it is live again or says otherwise; and away while its
+   * engine answers nothing (`stale`). */
   state: HostState
-  /** Since when it is away, in ms since the epoch: its rows stand still
-   * as they were then. */
+  /** Its engine answers nothing, though the desktop says it is live (ADR
+   * 0082, decision 11): it shows away, as one the desktop says is. */
+  stale?: true
+  /** Since when the Window does not reach it, in ms since the epoch: away,
+   * stopped, or starting again after either. Its rows stand still as they
+   * were as of then (`awaySince`). */
   away?: number
-  /** Its Projects while it is live or away, as its engine lists them,
-   * none archived; never one this machine, or a host before it, has. */
+  /** When the Window last heard its engine, in ms since the epoch, while
+   * it does not reach it: its rows are as of then. None where it never
+   * heard it. */
+  asOf?: number
+  /** Its Projects while the Window shows its rows (`holds`), as its
+   * engine lists them, none archived; never one this machine, or a host
+   * before it, has. */
   projects: readonly ProjectSummary[]
   /** Its Host scope's ID, where a Thread in its No Project starts, once
    * its engine said it, while the Window shows its rows; none while this
@@ -105,19 +117,23 @@ const NONE: readonly ProjectSummary[] = []
 const live = (shown: Shown) => shown.state.state === "live"
 
 /** Whether the Window shows a host's rows: while it is live, and as they
- * were while it is away. */
+ * were while it does not reach it (`Shown.away`): away, stopped, or
+ * starting again after either (ADR 0101, decision 7). */
 export function holds(shown: Shown): boolean {
-  return shown.state.state === "live" || shown.state.state === "away"
+  return shown.state.state === "live" || shown.away !== undefined
 }
 
-/** Host `now` as the Window shows it at `at`, after `was`. Another go
- * after a loss is still away; any other state but live drops its
+/** Host `now` as the Window shows it at `at`, after `was`, its engine
+ * last `heard` then. Away or stopped, its rows stay as they were, as of
+ * when it was last heard. Another go after a loss is still away; one after
+ * a stop starts, its rows kept. Any other state but live drops its
  * Projects. Before it said a name, it goes by the one `seen` remembers. */
 export function shownOf(
   was: Shown | undefined,
   now: HostState,
   at: number,
-  seen: (key: string) => Named = keyNamed
+  seen: (key: string) => Named = keyNamed,
+  heard?: number
 ): Shown {
   const kept = was?.projects ?? NONE
   const { name } = now
@@ -132,14 +148,51 @@ export function shownOf(
         ...(was?.power && { power: was.power }),
       }
     case "away":
-      return { name, named, state: now, away: was?.away ?? at, projects: kept }
+    case "stopped": {
+      const asOf = was?.asOf ?? heard
+      return {
+        name,
+        named,
+        state: now,
+        away: was?.away ?? at,
+        ...(asOf !== undefined && { asOf }),
+        projects: kept,
+      }
+    }
     case "connecting":
+      if (was?.state.state === "stopped") return { ...was, state: now }
       if (was?.away !== undefined) return was
       return { name, named, state: now, projects: NONE }
     default:
       return { name, named, state: now, projects: NONE }
   }
 }
+
+/** Since when a host the Window does not reach is out of reach, as its
+ * pill, its card and its rows count: when it was last heard, else when
+ * the Window found it so; none while the Window reaches it. */
+export const awaySince = (shown: Shown): number | undefined =>
+  shown.away === undefined ? undefined : (shown.asOf ?? shown.away)
+
+/** When the rows of a host the Window does not reach are from at `now`,
+ * as its label says it: "as of 14:02", the day too where it is not
+ * today's; none where it never heard it. By 24 hours, as its label has no
+ * room for more beside Start. */
+export const asOfWords = (shown: Shown, now?: number): string | undefined =>
+  shown.asOf === undefined ? undefined : `as of ${asOfClock(shown.asOf, now)}`
+
+const asOfClock = (at: number, now?: number) => clock(at, now, { hours: 24 })
+
+/** A host whose engine answers nothing, as its label's tooltip says why
+ * it is away at `now`: "arc has not answered since 14:02". */
+export const notAnswered = (
+  named: Named,
+  heard: number | undefined,
+  now?: number
+): string =>
+  heard === undefined
+    ? `${named.name} does not answer`
+    : `${named.name} has not answered since ${asOfClock(heard, now)}`
 
 /** The words for a live host of another build than this window's:
  * `dev.418 vs dev.421`, its own first. None for the same build. */
@@ -211,10 +264,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * hearing it; kept once that engine ended or refused it, so it is not
    * asked again until the host is live again. */
   readonly #powers = new Map<string, { engine: Engine; stop: () => void }>()
+  /** The hosts as the desktop told them last. */
+  #told: readonly HostState[] = []
 
   /** This machine and the hosts a new Thread starts on (`machinesOf`),
    * told again only as what they say changes. */
   readonly machines: Readable<readonly Machine[]> = this.#machines
+
+  /** The Window's one clock for the words of a host it does not reach
+   * (#988): each second while anything listens, so every pill, card and
+   * label says the same at once. */
+  readonly clock: Readable<number> = tickingClock(1_000)
 
   /** This machine's engine, its own Projects' session (`sessionOf`). */
   readonly #here: Engine | undefined
@@ -242,15 +302,18 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /**
    * Takes the hosts as the desktop tells them now, at `at`. A host live
    * again has its engine try at once, not after its wait. One not live,
-   * or gone from `hosts.toml`, has its engine away (`Engine.away`): a
-   * command to it fails at once, in the words of its pill, and one on its
-   * way fails as one that may have run, never to go later by itself (ADR
-   * 0082, decision 16).
+   * or gone from `hosts.toml`, has its engine away (`Engine.away`): an
+   * act to it fails at once, in the words of its pill, and one on its way
+   * fails as one that may have run, never to go later by itself (ADR 0082,
+   * decision 16; ADR 0106, law 4). One live whose engine answers nothing
+   * (stale) shows away, as of when it was last heard, and its engine stays
+   * open to hear it answer.
    */
   take(hosts: readonly HostState[], at = Date.now()): void {
+    this.#told = hosts
     const was = new Map(this.get().map((one) => [one.name, one]))
     const now = hosts.map((host) =>
-      shownOf(was.get(host.name), host, at, this.seen)
+      this.#shownNow(was.get(host.name), host, at)
     )
     for (const one of now) {
       if (!holds(one)) this.#listed.delete(one.name)
@@ -262,10 +325,29 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#shown.set(this.#placed(now))
     this.#hearPowers()
     for (const [name, engine] of this.#engines) {
-      const one = now.find((host) => host.name === name)
-      if (!one || !live(one)) engine.away(this.#unreachable(name))
+      const told = hosts.find((host) => host.name === name)
+      if (told?.state !== "live") engine.away(this.#unreachable(name))
       else if (was.get(name)?.state.state !== "live") engine.wake()
     }
+  }
+
+  /** Host `told` as the Window shows it at `at`, after `was`: as the
+   * desktop tells it, but away while its engine answers nothing. */
+  #shownNow(was: Shown | undefined, told: HostState, at: number): Shown {
+    const engine = this.#engines.get(told.name)
+    const heard = engine?.heard
+    if (told.state !== "live" || !engine?.stale)
+      return shownOf(was, told, at, this.seen, heard)
+    const { name, ssh, banda } = told
+    const why = notAnswered(was?.named ?? this.seen(name), heard)
+    const away: HostState = {
+      name,
+      ssh,
+      ...(banda !== undefined && { banda }),
+      state: "away",
+      why,
+    }
+    return { ...shownOf(was, away, at, this.seen, heard), stale: true }
   }
 
   /** Takes host `name`'s Projects, as its engine listed them, while the
@@ -303,11 +385,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     if (!engine) {
       engine = new Engine(
         async () => {
-          const one = this.get().find((host) => host.name === name)
-          if (!one || !live(one)) throw this.#unreachable(name)
+          const one = this.#told.find((host) => host.name === name)
+          if (one?.state !== "live") throw this.#unreachable(name)
           return this.#device.engine(name)
         },
-        { unreachable: () => this.#unreachable(name) }
+        {
+          unreachable: () => this.#unreachable(name),
+          // Another machine's engine is asked whether it still answers:
+          // stale, its host shows away until it answers again.
+          ping: PING,
+          onStale: () => this.take(this.#told),
+        }
       )
       this.#engines.set(name, engine)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
@@ -576,9 +664,10 @@ export function namedIn(
   return hosts.find((one) => one.name === host)?.named ?? seen(host)
 }
 
-/** How long a host has been away at `now`, since `since` (`Shown.away`),
- * as its label says it after "away": nothing under a minute, then
- * minutes, then hours. */
+/** How long a host has been away at `now`, since `since` (`awaySince`),
+ * as its pill and its card say it after "away": nothing under a minute,
+ * then minutes, then hours. Its label says instead what its rows are as
+ * of (`asOfWords`). */
 export function awayFor(
   since: number | undefined,
   now: number

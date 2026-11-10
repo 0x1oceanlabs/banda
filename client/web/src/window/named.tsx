@@ -8,7 +8,6 @@
  */
 import type { ProjectId } from "@banda/contract"
 import { MachineIcon, MachineMark } from "@banda/ui/components/machine-icon"
-import { useNow } from "@banda/ui/hooks/use-now"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { cn } from "@banda/ui/lib/utils"
 import { paneHost, type PaneState } from "@banda/ui/pane"
@@ -16,10 +15,10 @@ import type { Filler, HeaderProps } from "@banda/ui/slots"
 import { PlayIcon } from "lucide-react"
 import { useCallback, useContext } from "react"
 import {
-  awayFor,
   HostsContext,
   reachWords,
   type Shown,
+  useAwayFor,
   useHostsBy,
   useNamedOf,
 } from "@banda/core/react"
@@ -32,12 +31,12 @@ function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
 /**
  * The pill over the top of a Pane on host `shown` while the Pane cannot
  * reach it: its icon and the window's words for its state (`reachWords`).
- * Away, it says for how long after them, by the label's own clock and
- * rule, so the two say the same; a screen reader hears the state as it
- * changes, not each minute. Stopped, it has Start, which starts Banda
- * there: the Person's click alone, as no action does, so no Agent reaches
- * it. It takes the pointer only while it has Start, so it never blocks
- * the Pane under it otherwise.
+ * Away, it says for how long after them, by the Window's one clock
+ * (`useAwayFor`), so every pill and card says the same; a screen reader
+ * hears the state as it changes, not each minute. Stopped, it has Start,
+ * which starts Banda there: the Person's click alone, as no action does,
+ * so no Agent reaches it. It takes the pointer only while it has Start,
+ * so it never blocks the Pane under it otherwise.
  */
 export function MachinePill({
   shown,
@@ -46,11 +45,9 @@ export function MachinePill({
   shown: Shown
   onStart: () => void
 }) {
-  // It ticks only while away, as only then is `away` set.
-  const now = useNow(15_000, shown.away !== undefined)
+  const long = useAwayFor(shown)
   const words = reachWords(shown.name, shown, seenNamed)
   if (!words) return null
-  const long = awayFor(shown.away, now)
   const stopped = shown.state.state === "stopped"
   return (
     <p

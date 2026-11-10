@@ -21,7 +21,8 @@ import {
   think,
   thinkingNow,
 } from "@banda/ui/lib/naming"
-import { clock, problem } from "@banda/ui/lib/words"
+import { problem } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import {
   type Args,
   type ItemAction,

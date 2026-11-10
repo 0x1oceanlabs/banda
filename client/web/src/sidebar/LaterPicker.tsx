@@ -15,8 +15,8 @@ import {
   SuggestionDescription,
   SuggestionList,
 } from "@banda/ui/components/suggestions"
-import { Store, useRun, useStore } from "@banda/core/react"
-import { clock, left } from "@banda/ui/lib/words"
+import { clock, Store, useRun, useStore } from "@banda/core/react"
+import { left } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
 import { asleep, mayPutOff } from "@banda/ui/status"

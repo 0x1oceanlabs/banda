@@ -65,10 +65,17 @@ test("away, the pill has the machine's icon and says for how long, as its label 
   expect(later.markup).not.toContain("pointer-events-auto")
 })
 
-test("stopped, the pill has Start, and takes the pointer only then", () => {
+test("stopped, the pill has Start, and takes the pointer only then; it says no time, however long", () => {
   const stopped = pill(shown({ name: "arc", ssh: "arc", state: "stopped" }))
   expect(stopped.markup).toContain(ICON)
   expect(stopped.words).toBe("Banda is stopped on arc·Start")
+  const since = 10 * MINUTE
+  expect(
+    pill(
+      shown({ name: "arc", ssh: "arc", state: "stopped" }, since),
+      since + 5 * MINUTE
+    ).words
+  ).toBe("Banda is stopped on arc·Start")
   expect(stopped.markup).toMatch(/<button type="button"[^>]*>.*Start<\/button>/)
   expect(stopped.markup).toContain("pointer-events-auto")
 })

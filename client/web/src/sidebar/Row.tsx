@@ -47,7 +47,8 @@ export function Row({
   /** The other machine its Agent works on, after its Project, where no
    * label above names it (ADR 0095, decision 5); this machine never. */
   machine?: Named
-  /** When its host went away: its timer stands as it was then. */
+  /** When its host went away: its timer and how long ago stand as they
+   * were then. */
   stillAt?: number
   /** The Harness list its emblem is read from; none, the Harness's own. */
   harnesses?: readonly EmblemOf[]

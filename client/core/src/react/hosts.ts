@@ -7,6 +7,8 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { createContext, useCallback, useContext, useEffect } from "react"
 import {
+  awayFor,
+  awaySince,
   FORGETTING,
   type HostsDevice,
   KeptHosts,
@@ -16,7 +18,7 @@ import {
 } from "../hosts"
 import type { PaneState } from "../pane"
 import { sameData } from "../store"
-import { useStore } from "./store"
+import { useSelected, useStore } from "./store"
 
 /** No hosts, as where no Window follows the desktop's. */
 const NOWHERE: HostsDevice = {
@@ -171,3 +173,26 @@ const allMachines = (machines: readonly Machine[]) => machines
  * (`KeptHosts.machines`), drawn again as they change. */
 export const useMachinesOf = (hosts: KeptHosts): readonly Machine[] =>
   useStore(hosts.machines, allMachines)
+
+const still = () => () => undefined
+
+/** `select` of the Window's one clock (`KeptHosts.clock`), drawn again
+ * only as what it selects changes: words, not the time itself, which
+ * changes as it is read. While not `ticking`, it reads the clock as it is
+ * drawn. A `select` made once, not at each drawing, spares React a read. */
+export function useNowOf<S>(select: (now: number) => S, ticking = true): S {
+  const { clock } = useContext(HostsContext)
+  const read = useCallback(() => select(clock.get()), [clock, select])
+  return useSelected(ticking ? clock.subscribe : still, read)
+}
+
+/** How long host `shown` has been away, by the Window's one clock, as its
+ * pill and its card say it after "away" (`awayFor`), so both say the
+ * same; none while it is not away, as stopped says no time. */
+export function useAwayFor(shown: Shown): string | undefined {
+  const since = shown.state.state === "away" ? awaySince(shown) : undefined
+  return useNowOf(
+    useCallback((now: number) => awayFor(since, now), [since]),
+    since !== undefined
+  )
+}

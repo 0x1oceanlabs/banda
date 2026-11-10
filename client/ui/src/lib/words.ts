@@ -87,25 +87,6 @@ export function left(at: number, now = Date.now()): string {
   return `${Math.ceil(rest / DAY)}d`
 }
 
-/**
- * When `at` (ms since the epoch) was, as a clock reads it: the hour today,
- * the weekday too within a week, the date before that.
- */
-export function clock(at: number, now = Date.now()): string {
-  const when = new Date(at)
-  const today = new Date(now).toDateString() === when.toDateString()
-  const week = Math.abs(now - at) < 6 * DAY
-  return new Intl.DateTimeFormat(undefined, {
-    ...(today
-      ? {}
-      : week
-        ? { weekday: "short" }
-        : { month: "short", day: "numeric" }),
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(when)
-}
-
 /** `at` in full, for a tooltip. */
 export function fullDate(at: number): string {
   return new Intl.DateTimeFormat(undefined, {

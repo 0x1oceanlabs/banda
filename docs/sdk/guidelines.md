@@ -282,7 +282,8 @@ neither (borders.5, device.5).
   calls, a tree of at most 30 KB rendered in at most 5 ms at p95 (vision
   §5.7). *Check:* planned (V1).
 - **data.8 Show staleness.** Rows from a host that stopped answering dim
-  and say "as of"; commands fail at once (ADR 0082). *Check:* review.
+  and say "as of"; acts fail at once (ADR 0082; ADR 0106, law 4).
+  *Check:* review.
 
 ---
 

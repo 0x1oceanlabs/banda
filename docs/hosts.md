@@ -3,9 +3,12 @@
 Banda can reach the engine of another machine you reach over ssh, such as
 a devbox, beside this one's (ADR 0081, decision 4: the `ssh` route). The
 sidebar shows its Projects and Threads under its name, below this
-machine's, and its state in words while it is not live. Its row, the
-bar's counts, a toast, `Alt+U` and the Banda menu open its Thread on its
-engine: you read it and write to it there, as to one of this machine's.
+machine's, and its state in words while it is not live. Away or stopped,
+its rows stay as they were, dim, each with its own words, its timers
+standing, and its label says once what they are as of: "away · as of
+14:02", "stopped · as of 13:51". Its row, the bar's counts, a toast,
+`Alt+U` and the Banda menu open its Thread on its engine: you read it
+and write to it there, as to one of this machine's.
 A toast for its Thread names it after the title, and its Allow, Reject and
 Try again go to its engine too. While it is not live, they, the Thread
 menu's rename, Later, wake, mark and archive, and what its Thread sends,
@@ -16,6 +19,14 @@ on its way as it goes says so too ("arc went away; Stop may have gone
 through."), and is not sent again once it is back. Words the Banda menu
 starts a new Thread on it with are refused the same way, and wait in
 that Thread's composer for you to send.
+A machine whose link looks up but which answers nothing, as one asleep
+before ssh notices or an engine that hangs, is away too (ADR 0082,
+decision 11): the window pings its engine every 15 s, and two pings in a
+row that hear nothing make it away, as does a connection its engine
+never opens; an act after 5 s of quiet asks it first, and with no answer
+in 3 s it is away and the act says so at once. Its label's tooltip says
+"arc has not answered since 14:02", and its pill and its rows count from
+then. Anything it says brings it back, and what it wrote meanwhile shows.
 What would reach this machine's files waits for a later step: other
 Panes for its Projects say "Not on <name> yet"; in its replies a path or
 an image opens nothing, a code block has no Run, and a Visual shows only

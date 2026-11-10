@@ -1996,6 +1996,29 @@ async fn say(socket: &mut Socket, frame: Value) {
     socket.send(Message::text(frame.to_string())).await.unwrap();
 }
 
+#[tokio::test]
+async fn a_ping_is_answered_with_a_pong_and_the_host_s_time() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello).await;
+
+    let before = now_ms();
+    say(&mut socket, json!({ "type": "ping", "id": 7 })).await;
+    let pong = next(&mut socket).await;
+    let after = now_ms();
+    assert_eq!(pong["type"], "pong");
+    assert_eq!(pong["id"], 7, "the ping's own id");
+    let time = pong["time"].as_i64().expect("its time, in ms");
+    assert!(
+        (before..=after).contains(&time),
+        "this machine's time, {before} to {after}: {time}"
+    );
+}
+
 /// The frame that adds a note in `project` under `command`, after `wait`
 /// milliseconds.
 fn adding(id: u64, project: &ProjectSummary, command: CommandId, text: &str, wait: u64) -> Value {

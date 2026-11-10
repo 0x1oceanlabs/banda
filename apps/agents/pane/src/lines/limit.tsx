@@ -22,7 +22,8 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import { useFile } from "@banda/ui/lib/look"
-import { clock, left } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
+import { left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import {
   MoreHorizontalIcon,

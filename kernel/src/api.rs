@@ -40,6 +40,11 @@
 //!    is called and drawn by and then each change of it (ADR 0095),
 //!    `machine.power`, its battery and why it is held awake, and each change
 //!    of them (ADR 0097), or a module of the machine's.
+//! 5. `ping` is answered by `pong` with the same `id` and this machine's
+//!    time, in ms since the epoch: a client hears that the host still
+//!    answers, and how far its clock is from the host's (ADR 0082,
+//!    decision 11). An engine from before it answers `result` with
+//!    `invalid`, which says as much that it answers.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
@@ -48,7 +53,9 @@ use crate::cursors::Heard;
 use crate::events::{Event, EventFilter};
 use crate::kernel::Queue;
 use crate::module::Stream;
-use crate::{Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
+use crate::{
+    Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal, now_ms,
+};
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
@@ -123,6 +130,11 @@ pub enum ClientFrame {
         method: String,
         #[serde(default)]
         params: Value,
+    },
+    /// Asks whether the host still answers (ADR 0082, decision 11).
+    Ping {
+        #[ts(type = "number")]
+        id: u64,
     },
 }
 
@@ -203,6 +215,13 @@ pub enum EngineFrame {
     },
     Goodbye {
         reason: Refusal,
+    },
+    /// The answer to a `ping`: this machine's time, in ms since the epoch.
+    Pong {
+        #[ts(type = "number")]
+        id: u64,
+        #[ts(type = "number")]
+        time: i64,
     },
 }
 
@@ -547,6 +566,10 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                     task.abort();
                 }
                 let _ = out.send(result(id, Ok(Value::Null))).await;
+            }
+            ClientFrame::Ping { id } => {
+                let pong = EngineFrame::Pong { id, time: now_ms() };
+                let _ = out.send(pong.into()).await;
             }
         }
     }

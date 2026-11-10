@@ -5,7 +5,8 @@
 import { AlarmClockIcon } from "lucide-react"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
-import { ago, clock, left } from "@banda/ui/lib/words"
+import { ago, left } from "@banda/ui/lib/words"
+import { clock } from "@banda/core/react"
 import type { Said, Tone } from "./card"
 
 /** Each tone's colour. */
@@ -19,8 +20,9 @@ export const TONES: Readonly<Record<Tone, string>> = {
 
 /**
  * What a card's status says: what calls the Person, in its colour; the
- * running turn's timer, which stands at `stillAt` when it is given; how
- * long ago it last changed; when a put-off Thread wakes; or that it woke.
+ * running turn's timer; how long ago it last changed; when a put-off
+ * Thread wakes; or that it woke. Given `stillAt`, as of when its machine
+ * was last heard, the timer and how long ago stand as they were then.
  */
 export function Status({ said, stillAt }: { said: Said; stillAt?: number }) {
   switch (said.kind) {
@@ -31,7 +33,7 @@ export function Status({ said, stillAt }: { said: Said; stillAt?: number }) {
     case "ago":
       return (
         <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-          {ago(said.at)}
+          {ago(said.at, stillAt)}
         </span>
       )
     case "later":
