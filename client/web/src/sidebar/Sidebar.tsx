@@ -7,28 +7,30 @@ import { type Shown, useHosts } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
-import type { Section } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Dismiss } from "./open"
 import { TrustCard, type Trusting } from "../trust/TrustCard"
 import { Foot } from "./Foot"
 import { Header } from "./Header"
 import { HostLines, HostPart, saysSomething } from "./HostPart"
+import { regionsOf } from "./regions"
 import { ProjectMenu, type WithMenu } from "./ProjectMenu"
 import { ProjectsList } from "./ProjectsList"
 import { SectionView } from "./SectionView"
+import { PANEL, ShowTab, tabId, tabKey, Tabs } from "./Tabs"
 import { useOrdered } from "./useOrdered"
-import { useSidebarView } from "./useSidebarView"
+import { ToldSomeday, useSidebarView } from "./useSidebarView"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
- * every Thread of every Project, arranged as `sidebar.toml` says (ADR 0008).
- * The modules list what each Project has; the sidebar only arranges and
- * draws it. Its view menu writes the preset into the file, through the
- * desktop, and the new arrangement comes back with the look. What the
- * Person asks of it runs by the actions' ids (`useRun`, ADR 0087), as
- * their keys would: the Window hands it what it shows and how its area
- * stands, no verb.
+ * the Person's inbox of their Agents' work (ADR 0098), its tabs under the
+ * header, every Thread of every Project where it stands, arranged as
+ * `sidebar.toml` says (ADR 0008). The modules list what each Project has;
+ * the sidebar only arranges and draws it. Its view menu writes the preset
+ * into the file, through the desktop, and the new arrangement comes back
+ * with the look. What the Person asks of it runs by the actions' ids
+ * (`useRun`, ADR 0087), as their keys would: the Window hands it what it
+ * shows and how its area stands, no verb.
  */
 export function Sidebar({
   over,
@@ -62,15 +64,13 @@ export function Sidebar({
   strayed: ReadonlySet<string>
 }) {
   const settings = useLookSidebar()
-  const { only, toggled, more, folded, pick, toggle, toggleMore, fold } =
-    useSidebarView(settings.preset)
+  // The element the list scrolls in goes to its ScrollArea alone: else
+  // React's compiler reads the whole view as a ref.
+  const { scrollsIn, ...view } = useSidebarView(settings.preset)
   // The other machines of `hosts.toml`, below this one's (ADR 0081): each
   // host's state by its name.
   const hosts = useHosts()
-  const { arranged, updates, take, letGo } = useOrdered(projects, settings, {
-    only,
-    toggled,
-  })
+  const { ordered, take, letGo } = useOrdered(projects, settings, view)
   // The Project whose trust a card by its row asks about (ADR 0083,
   // decision 5); taking it back needs no card, and says when it failed.
   const [trusting, setTrusting] = useState<Trusting>()
@@ -91,134 +91,128 @@ export function Sidebar({
       {row}
     </ProjectMenu>
   )
-  const drawn = (section: Section) => (
-    <SectionView
-      key={section.key}
-      section={section}
-      settings={settings}
-      more={more.has(section.key)}
-      isCurrent={isCurrent}
-      strayed={strayed}
-      onToggle={() => toggle(section.key)}
-      onMore={() => toggleMore(section.key)}
-      engine={engine}
-      machine={machine}
-      withMenu={withMenu}
-    />
-  )
+  const regions = regionsOf(ordered.blocks)
+  // The regions of `host`, another machine, or this one's: grouped,
+  // another machine's groups follow under its label.
+  const drawn = (host?: string) => {
+    const held = regions.filter((region) => region.host === host)
+    return (
+      held.length > 0 && (
+        <SectionView
+          regions={held}
+          settings={settings}
+          named={host !== undefined}
+          isCurrent={isCurrent}
+          strayed={strayed}
+          onToggle={view.toggle}
+          onMore={view.toggleMore}
+          engine={engine}
+          machine={machine}
+          withMenu={withMenu}
+          only={view.only}
+          projects={projects}
+        />
+      )
+    )
+  }
   // Another host's label, with what it holds below it unless folded:
   // `held` only when it holds something, as there is nothing to fold else.
   const part = (host: Shown, held?: ReactNode) => (
     <HostPart
       key={host.name}
       host={host}
-      folded={folded.has(host.name)}
-      onFold={() => fold(host.name)}
+      folded={view.foldedHosts.has(host.name)}
+      onFold={() => view.foldHost(host.name)}
     >
       {held}
     </HostPart>
   )
-  const byProject = settings.group.by === "project"
-  const nothing =
-    arranged.sections.every((s) => s.rows.length === 0) &&
-    arranged.shelves.every((s) => s.rows.length === 0)
 
   return (
     <Dismiss value={onDismiss}>
-      <aside
-        aria-label="Sidebar"
-        onPointerEnter={take}
-        onPointerLeave={letGo}
-        onKeyDown={(event) => {
-          // Not Esc in a menu it opened, drawn elsewhere in the page.
-          if (
-            event.key === "Escape" &&
-            event.currentTarget.contains(event.target as Node)
-          )
-            onDismiss?.()
-        }}
-        className={cn(
-          // An area of the window: what changes in it lays out and paints
-          // nothing outside it (ADR 0088, decision 8).
-          "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) [contain:layout_paint_style] *:transition-opacity",
-          // Its panel stays, over the Strip; what is in it dims.
-          hiding && "*:opacity-40",
-          !over &&
-            "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
-        )}
-      >
-        <Header only={only} projects={projects} />
-        {updates > 0 && (
-          <button
-            type="button"
-            onClick={take}
-            className="absolute top-11 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs text-primary-foreground shadow-md"
-          >
-            ↑ {updates} {updates === 1 ? "update" : "updates"}
-          </button>
-        )}
-        {/* Where more Threads are below, the list fades out at its foot
+      <ShowTab value={view.show}>
+        <aside
+          aria-label="Sidebar"
+          onPointerEnter={take}
+          onPointerLeave={letGo}
+          onKeyDown={(event) => {
+            // Not Esc in a menu it opened, drawn elsewhere in the page.
+            const own = event.currentTarget.contains(event.target as Node)
+            if (event.key === "Escape" && own) onDismiss?.()
+            const tab = own ? tabKey(event.nativeEvent) : undefined
+            if (tab) {
+              event.preventDefault()
+              view.show(tab)
+            }
+          }}
+          className={cn(
+            // An area of the window: what changes in it lays out and paints
+            // nothing outside it (ADR 0088, decision 8).
+            "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) [contain:layout_paint_style] *:transition-opacity",
+            // Its panel stays, over the Strip; what is in it dims.
+            hiding && "*:opacity-40",
+            !over &&
+              "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
+          )}
+        >
+          <Header only={view.only} projects={projects} />
+          <Tabs tabs={ordered.tabs} tab={view.tab} />
+          {/* Where more Threads are below, the list fades out at its foot
           instead of a line. */}
-        <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
-          <div className="flex flex-col gap-1 px-1.5 pb-2">
-            {arranged.projects && (
-              <ProjectsList
-                lines={arranged.projects.filter((line) => !line.host)}
-                settings={settings}
-                only={only}
-                onPick={pick}
-                withMenu={withMenu}
-              >
-                {hosts.map((host) => {
-                  const lines = arranged.projects!.filter(
-                    (line) => line.host === host.name
-                  )
-                  return part(
-                    host,
-                    lines.length > 0 && (
-                      <HostLines lines={lines} settings={settings} />
+          <ScrollArea
+            ref={scrollsIn}
+            className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
+          >
+            <div className="flex flex-col gap-1 px-1.5 pb-2">
+              {ordered.projects && (
+                <ProjectsList
+                  lines={ordered.projects.filter((line) => !line.host)}
+                  settings={settings}
+                  only={view.only}
+                  onPick={view.pick}
+                  withMenu={withMenu}
+                >
+                  {hosts.map((host) => {
+                    const lines = ordered.projects!.filter(
+                      (line) => line.host === host.name
                     )
-                  )
-                })}
-              </ProjectsList>
-            )}
-            {nothing ? (
-              <p className="px-2 py-1 text-xs text-muted-foreground">
-                No Threads yet
-              </p>
-            ) : (
-              arranged.sections.filter((section) => !section.host).map(drawn)
-            )}
-            {/* Grouped by Project, each host's sections follow under its
-              label; grouped otherwise, its rows are among this machine's,
-              and its label shows only what is not as usual. */}
-            {byProject
-              ? hosts.map((host) => {
-                  const held = arranged.sections.filter(
-                    (section) => section.host === host.name
-                  )
-                  return part(
-                    host,
-                    !nothing && held.length > 0 && held.map(drawn)
-                  )
-                })
-              : !arranged.projects &&
-                hosts.filter(saysSomething).map((host) => part(host))}
-          </div>
-        </ScrollArea>
-        {arranged.shelves.length > 0 && (
-          <div className="max-h-[45%] overflow-y-auto px-1.5 py-1">
-            {arranged.shelves.map(drawn)}
-          </div>
-        )}
-        <Foot />
-        <TrustCard
-          engine={engine}
-          projects={projects}
-          target={trusting}
-          onClose={() => setTrusting(undefined)}
-        />
-      </aside>
+                    return part(
+                      host,
+                      lines.length > 0 && (
+                        <HostLines lines={lines} settings={settings} />
+                      )
+                    )
+                  })}
+                </ProjectsList>
+              )}
+              <div
+                role="tabpanel"
+                id={PANEL}
+                aria-labelledby={tabId(view.tab)}
+                className="flex flex-col gap-1"
+              >
+                {/* This machine's list, where inbox zero tells the view it
+                told of Someday. */}
+                <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
+                {/* Grouped by Project, each host's groups follow under its
+                label; grouped otherwise, its rows are among this machine's,
+                and its label shows only what is not as usual. */}
+                {settings.group.by === "project"
+                  ? hosts.map((host) => part(host, drawn(host.name)))
+                  : !ordered.projects &&
+                    hosts.filter(saysSomething).map((host) => part(host))}
+              </div>
+            </div>
+          </ScrollArea>
+          <Foot />
+          <TrustCard
+            engine={engine}
+            projects={projects}
+            target={trusting}
+            onClose={() => setTrusting(undefined)}
+          />
+        </aside>
+      </ShowTab>
     </Dismiss>
   )
 }

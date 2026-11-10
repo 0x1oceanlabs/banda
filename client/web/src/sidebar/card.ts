@@ -59,7 +59,7 @@ export type Note = { text: string; tone: Tone }
 
 export type Card = {
   lines: Line[]
-  /** Not the Person's turn and not at work: it steps back. */
+  /** Neither the Person's turn nor open: it steps back. */
   quiet: boolean
   status: Said
   note?: Note
@@ -82,7 +82,9 @@ export function cardOf(row: Row, settings: Settings, placed: Placed): Card {
     lines: (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
       lineOf(line, hide, placed)
     ),
-    quiet: stand !== "turn" && stand !== "working",
+    // Open is in the text's colour, and work is a grey shelf (ADR 0098,
+    // decision 3).
+    quiet: stand !== "turn" && stand !== "open",
     status: statusOf(listed, stand, woke),
     note: noteOf(listed),
   }

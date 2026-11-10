@@ -82,7 +82,7 @@ async function openedHere() {
   const { page } = window
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   // This machine's engine runs once the window's list is drawn.
-  await expect(sidebar.getByText("No Threads yet")).toBeVisible()
+  await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
   const project = JSON.parse(window.banda("project", "add", here)).ok
     .id as string
   window.banda(
