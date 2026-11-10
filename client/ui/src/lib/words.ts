@@ -31,17 +31,44 @@ export const MINUTE = 60_000
 export const HOUR = 60 * MINUTE
 export const DAY = 24 * HOUR
 
-/** How long ago `at` (ms since the epoch) was, in a few letters. */
-export function ago(at: number, now = Date.now()): string {
+/** A card's seconds go by tens of them; under the first ten, a moment
+ * just passed reads "now". */
+const TEN_SECONDS = 10_000
+
+/** A card's day past a week, and its month and year past this year's.
+ * Made once: a formatter with options is built anew on each call. */
+const THIS_YEAR = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  day: "numeric",
+})
+const OTHER_YEAR = new Intl.DateTimeFormat("en-US", {
+  month: "short",
+  year: "numeric",
+})
+
+/**
+ * How long ago `at` (ms since the epoch) was, short and still, as a card
+ * says it (ADR 0098, decision 8): "now", then by tens of seconds, minutes,
+ * hours and days, so a label changes seldom; past a week, the day, and its
+ * year when that was another: "40s", "14m", "2h", "3d", "Mar 3",
+ * "Mar 2025". In English, as all of Banda's words are.
+ */
+export function short(at: number, now = Date.now()): string {
   const passed = Math.max(0, now - at)
-  if (passed < MINUTE) return "now"
+  if (passed < TEN_SECONDS) return "now"
+  if (passed < MINUTE) return `${Math.floor(passed / TEN_SECONDS) * 10}s`
   if (passed < HOUR) return `${Math.floor(passed / MINUTE)}m`
   if (passed < DAY) return `${Math.floor(passed / HOUR)}h`
   if (passed < 7 * DAY) return `${Math.floor(passed / DAY)}d`
-  return new Date(at).toLocaleDateString(undefined, {
-    month: "short",
-    day: "numeric",
-  })
+  const thisYear = new Date(at).getFullYear() === new Date(now).getFullYear()
+  return (thisYear ? THIS_YEAR : OTHER_YEAR).format(at)
+}
+
+/** How long ago `at` (ms since the epoch) was, in a few letters: as
+ * `short` says it, but "now" for the whole first minute, where no one
+ * counts the seconds. */
+export function ago(at: number, now = Date.now()): string {
+  return now - at < MINUTE ? "now" : short(at, now)
 }
 
 /** How long until `at` (ms since the epoch), rounded up, in a few

@@ -264,6 +264,9 @@ export type Listed = {
    * neither works nor asks, and nothing happened in it since. Archive's
    * shelf holds it. */
   archived?: true
+  /** When its Person archived it, by its host's clock as `changed` is:
+   * the Archive counts from it (ADR 0098, decision 5). */
+  archivedAt?: number
   /** What a click on it opens. */
   pane: PaneState
   /** Its latest Later (ADR 0074): the sidebar puts it away while it
@@ -294,6 +297,8 @@ export type ListedLater = {
   at: number
   /** When it wakes; none: when its turn ends. */
   until?: number
+  /** Put off with no time: it sleeps until something wakes it (ADR 0098, decision 12). */
+  someday?: true
   /** Its own Agent put it off, not its Person. */
   byAgent?: boolean
   /** What woke it, and when: its time, or what came first. */

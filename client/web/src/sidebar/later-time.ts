@@ -39,8 +39,8 @@ const TODAY = new Set(["today", "сегодня"])
 const TOMORROW = new Set(["tomorrow", "tmr", "завтра"])
 const WEEK = new Set(["next week", "week", "через неделю", "неделя", "неделю"])
 
-/** The day `days` after `now`'s, at `hour:minute`. */
-function dayAt(now: number, days: number, hour: number, minute: number) {
+/** The day `days` after `now`'s, at `hour:minute`, by the local clock. */
+export function dayAt(now: number, days: number, hour: number, minute: number) {
   const at = new Date(now)
   at.setDate(at.getDate() + days)
   at.setHours(hour, minute, 0, 0)
