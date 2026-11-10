@@ -73,11 +73,12 @@ settings_reset: CallMethod<ResetSetting, string>,
 settings_rename: CallMethod<RenameSetting, string>, 
 /**
  * This machine's part of one of Banda's settings files, as a
- * window of another device shows it: its keys with their values
- * and where they come from, the file as the look resolves it,
- * what is wrong at those keys, and a `rev` that changes only as
- * they read otherwise. A file that holds nothing of the machine's
- * own is refused, as each window reads its own copy of it.
+ * window of another device shows it: where the file is on this
+ * machine, its keys with their values and where they come from,
+ * the file as the look resolves it, what is wrong at those keys,
+ * and a `rev` that changes only as they read otherwise. A file
+ * that holds nothing of the machine's own is refused, as each
+ * window reads its own copy of it.
  */
 settings_read: CallMethod<ReadSetting, SettingsRead>, 
 /**

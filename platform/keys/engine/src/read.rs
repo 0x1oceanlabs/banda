@@ -29,6 +29,11 @@ pub struct ReadSetting {
 pub struct SettingsRead {
     /// The file's name, as `agents.toml`.
     pub file: String,
+    /// Where the file is on this machine, there or not yet: its config
+    /// folder, which its system, its build and `BANDA_CONFIG` name, with
+    /// the file's name. A window of another device shows it in place of
+    /// opening the file, which it cannot.
+    pub path: String,
     /// The file as the look resolves it, for a file it resolves: the
     /// machine's keys as the file says them, the rest as Banda has them.
     /// None for a file the look only checks, as the Harness list.
@@ -79,6 +84,7 @@ fn read_of(config: &Path, file: &SettingsFile) -> SettingsRead {
     let digest = Sha256::digest(said.expect("settings are plain data"));
     SettingsRead {
         file: file.name.to_owned(),
+        path: config.join(file.name).display().to_string(),
         values: part.value,
         keyed: part.keyed,
         problems: part.problems,
@@ -196,6 +202,21 @@ mod tests {
         assert_eq!(read.values, None);
         assert!(read.keyed.is_empty());
         assert_eq!(read.problems.len(), 1, "{:?}", read.problems);
+    }
+
+    #[test]
+    fn a_read_says_where_its_file_is_there_or_not() {
+        // A Harness list with no problems and a file not written yet name
+        // their path nowhere else.
+        let config = config_with(&[("harnesses.toml", "[[harness]]\nid = \"claude\"\n")]);
+        for name in ["harnesses.toml", "machine.toml"] {
+            let read = read(config.path(), name).unwrap();
+            assert!(read.problems.is_empty(), "{name}: {:?}", read.problems);
+            let named = (read.keyed.values()).any(|setting| setting.from.path.is_some());
+            assert!(!named, "{name}");
+            let path = config.path().join(name).display().to_string();
+            assert_eq!(read.path, path, "{name}");
+        }
     }
 
     #[test]

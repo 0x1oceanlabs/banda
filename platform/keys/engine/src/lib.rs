@@ -497,11 +497,12 @@ banda_kernel::methods! {
         /// the key and for what it becomes.
         call settings_rename(RenameSetting) -> String, Write, tool "settings_rename";
         /// This machine's part of one of Banda's settings files, as a
-        /// window of another device shows it: its keys with their values
-        /// and where they come from, the file as the look resolves it,
-        /// what is wrong at those keys, and a `rev` that changes only as
-        /// they read otherwise. A file that holds nothing of the machine's
-        /// own is refused, as each window reads its own copy of it.
+        /// window of another device shows it: where the file is on this
+        /// machine, its keys with their values and where they come from,
+        /// the file as the look resolves it, what is wrong at those keys,
+        /// and a `rev` that changes only as they read otherwise. A file
+        /// that holds nothing of the machine's own is refused, as each
+        /// window reads its own copy of it.
         call settings_read(ReadSetting) -> SettingsRead, Read;
         /// Each settings file with a part that is this machine's own, with
         /// its `rev`: first as each is now, then each again as its part

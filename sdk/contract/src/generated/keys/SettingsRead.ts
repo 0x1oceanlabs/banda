@@ -12,6 +12,13 @@ export type SettingsRead = {
  */
 file: string, 
 /**
+ * Where the file is on this machine, there or not yet: its config
+ * folder, which its system, its build and `BANDA_CONFIG` name, with
+ * the file's name. A window of another device shows it in place of
+ * opening the file, which it cannot.
+ */
+path: string, 
+/**
  * The file as the look resolves it, for a file it resolves: the
  * machine's keys as the file says them, the rest as Banda has them.
  * None for a file the look only checks, as the Harness list.
