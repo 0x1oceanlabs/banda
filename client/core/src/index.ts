@@ -80,4 +80,4 @@ export {
 } from "./queue"
 export type { Args, Run } from "./run"
 export { type Readable, sameData, sameEach, Store } from "./store"
-export { clock } from "./time"
+export { clock, dayOf, WEEK } from "./time"

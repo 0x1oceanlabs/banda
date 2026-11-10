@@ -1,4 +1,5 @@
 /** Plain words a Pane shows. */
+import { dayOf } from "@banda/core"
 import { Lost, Refused, Unreachable } from "@banda/contract"
 
 /**
@@ -36,7 +37,39 @@ export const DAY = 24 * HOUR
 
 /** A card's seconds go by tens of them; under the first ten, a moment
  * just passed reads "now". */
-const TEN_SECONDS = 10_000
+export const TEN_SECONDS = 10_000
+
+/** The steps a card's time takes past "now" (ADR 0098, decision 8): under
+ * each bound it counts by `by`, in `unit`s, short by its letter, in full
+ * by its word. */
+const STEPS = [
+  { below: MINUTE, by: TEN_SECONDS, unit: 1_000, letter: "s", word: "second" },
+  { below: HOUR, by: MINUTE, unit: MINUTE, letter: "m", word: "minute" },
+  { below: DAY, by: HOUR, unit: HOUR, letter: "h", word: "hour" },
+  { below: 7 * DAY, by: DAY, unit: DAY, letter: "d", word: "day" },
+] as const
+
+/** How long ago a moment was, by a card's steps: "now" or a count of
+ * one step, each with when it next changes; past a week, a date. */
+export type Ago =
+  | { kind: "now"; next: number }
+  | { kind: "count"; count: number; letter: string; word: string; next: number }
+  | { kind: "date"; thisYear: boolean }
+
+/** How long ago `at` was at `now`, by a card's steps. A moment yet to
+ * come, by another machine's clock, is "now". */
+export function agoOf(at: number, now: number): Ago {
+  const passed = Math.max(0, now - at)
+  if (passed < TEN_SECONDS) return { kind: "now", next: at + TEN_SECONDS }
+  for (const { below, by, unit, letter, word } of STEPS)
+    if (passed < below) {
+      const steps = Math.floor(passed / by)
+      const next = at + (steps + 1) * by
+      return { kind: "count", count: (steps * by) / unit, letter, word, next }
+    }
+  const thisYear = new Date(at).getFullYear() === new Date(now).getFullYear()
+  return { kind: "date", thisYear }
+}
 
 /** A card's day past a week, and its month and year past this year's.
  * Made once: a formatter with options is built anew on each call. */
@@ -57,14 +90,33 @@ const OTHER_YEAR = new Intl.DateTimeFormat("en-US", {
  * "Mar 2025". In English, as all of Banda's words are.
  */
 export function short(at: number, now = Date.now()): string {
-  const passed = Math.max(0, now - at)
-  if (passed < TEN_SECONDS) return "now"
-  if (passed < MINUTE) return `${Math.floor(passed / TEN_SECONDS) * 10}s`
-  if (passed < HOUR) return `${Math.floor(passed / MINUTE)}m`
-  if (passed < DAY) return `${Math.floor(passed / HOUR)}h`
-  if (passed < 7 * DAY) return `${Math.floor(passed / DAY)}d`
-  const thisYear = new Date(at).getFullYear() === new Date(now).getFullYear()
-  return (thisYear ? THIS_YEAR : OTHER_YEAR).format(at)
+  const ago = agoOf(at, now)
+  switch (ago.kind) {
+    case "now":
+      return "now"
+    case "count":
+      return `${ago.count}${ago.letter}`
+    case "date":
+      return (ago.thisYear ? THIS_YEAR : OTHER_YEAR).format(at)
+  }
+}
+
+/**
+ * When the words `short(at, now)` says next change, after `now`: "now"
+ * for ten seconds, then each ten seconds, each minute, each hour and
+ * each day; past a week a date, which changes only as the year turns.
+ */
+export function nextShort(at: number, now: number): number | undefined {
+  const ago = agoOf(at, now)
+  switch (ago.kind) {
+    case "now":
+    case "count":
+      return ago.next
+    case "date":
+      return ago.thisYear
+        ? new Date(new Date(now).getFullYear() + 1, 0, 1).getTime()
+        : undefined
+  }
 }
 
 /** How long ago `at` (ms since the epoch) was, in a few letters: as
@@ -85,6 +137,32 @@ export function left(at: number, now = Date.now()): string {
   const hours = Math.ceil(rest / HOUR)
   if (hours < 24) return `${hours}h`
   return `${Math.ceil(rest / DAY)}d`
+}
+
+const WEEKDAY = new Intl.DateTimeFormat("en-US", { weekday: "short" })
+
+/** `at`'s hour and minute on 24 hours, with no leading zero: "18:30",
+ * "9:00". */
+export function hourOf(at: number): string {
+  const when = new Date(at)
+  return `${when.getHours()}:${String(when.getMinutes()).padStart(2, "0")}`
+}
+
+/** `at`'s day, past this week: "Mar 3". */
+export function monthDay(at: number): string {
+  return THIS_YEAR.format(at)
+}
+
+/**
+ * When something put off wakes, as a card says it (ADR 0098, decision 8):
+ * its hour today, "18:30"; its weekday too within the week, "Tue 9:00";
+ * further, its day, "Mar 3". On 24 hours and in English whatever the
+ * system's, so it stays as short as a card's right has room for.
+ */
+export function wakes(at: number, now = Date.now()): string {
+  const on = dayOf(at, now)
+  if (on === "date") return monthDay(at)
+  return on === "today" ? hourOf(at) : `${WEEKDAY.format(at)} ${hourOf(at)}`
 }
 
 /** `at` in full, for a tooltip. */
