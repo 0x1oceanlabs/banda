@@ -25,6 +25,7 @@ import type { LucideIcon } from "lucide-react"
 import { memo, useCallback, useSyncExternalStore } from "react"
 import { type Kinds, launcher } from "./launcher"
 import { machineHeader } from "./window/named"
+import { flowWidget } from "./bar/Flow"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -64,7 +65,8 @@ const opening = (id: string, title: string, shift: boolean) =>
 /** The window's own things, as a module of their own: the launcher, its
  * letters, the settings and their search (ADR 0016), another machine's
  * name in a Pane's header (ADR 0095, decision 7), and on the Bar the
- * sidebar list's counts and the Tiling's widgets (ADR 0087, decision 5). */
+ * sidebar list's counts, the Flow (ADR 0098, decision 20) and the
+ * Tiling's widgets (ADR 0087, decision 5). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -81,7 +83,7 @@ export const windowModule = defineModule({
   ],
   scopes: [LAUNCHER, SETTINGS],
   slots: [machineHeader],
-  bar: [countsWidget, ...tilingWidgets],
+  bar: [countsWidget, flowWidget, ...tilingWidgets],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]
