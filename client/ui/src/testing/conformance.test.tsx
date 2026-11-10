@@ -1,0 +1,155 @@
+// @vitest-environment happy-dom
+/**
+ * The kit holds what it says (ADR 0106, laws 4, 5 and 6): a kind that
+ * ends each act and leaves the pill to the Frame passes it, on arc's
+ * older build too, and one that hangs on an act without words, or draws
+ * arc's pill itself, does not.
+ */
+import { Lost, Unreachable } from "@banda/contract"
+import { MessageSquareIcon } from "lucide-react"
+import { type ComponentType, useEffect, useState } from "react"
+import { expect, test } from "vitest"
+import { definePane, type PaneProps } from "../pane"
+import { AWAY, conformance } from "./conformance"
+
+type None = { [key: string]: never }
+
+/** Sends a command, which ends at once while arc is away, and says what
+ * became of it: sent, not sent and why, as "Not sent: arc is away", which
+ * is no pill, or that it may have gone. */
+function Sends({ engine, project }: PaneProps<None>) {
+  const [said, say] = useState("")
+  const send = () =>
+    engine.command("projects.create", { name: "Kit" } as never, project).then(
+      () => say("Sent"),
+      (error: Error) =>
+        say(
+          error instanceof Unreachable && error.may_have_run
+            ? "It may have gone"
+            : `Not sent: ${error.message}`
+        )
+    )
+  return (
+    <div>
+      <button type="button" onClick={() => void send()}>
+        Send
+      </button>
+      <p>{said}</p>
+    </div>
+  )
+}
+
+/** Reads the Projects before it acts, as Commit reads first, and says
+ * nothing meanwhile: the read waits while arc is away, so the click
+ * would complete later by itself. */
+function Checks({ engine }: PaneProps<None>) {
+  const [said, say] = useState("")
+  const check = () =>
+    engine.call("projects.list", null as never).then(
+      () => say("Checked"),
+      () => say("Not checked")
+    )
+  return (
+    <div>
+      <button type="button" onClick={() => void check()}>
+        Check
+      </button>
+      <p>{said}</p>
+    </div>
+  )
+}
+
+/** Reads again what the link lost on its way: once arc is away the read
+ * waits, so the click would complete later by itself, the one in flight
+ * as arc went too. */
+function Retries({ engine }: PaneProps<None>) {
+  const [said, say] = useState("")
+  const check = (): Promise<void> =>
+    engine.call("projects.list", null as never).then(
+      () => say("Checked"),
+      (error: Error) => (error instanceof Lost ? check() : say("Not checked"))
+    )
+  return (
+    <div>
+      <button type="button" onClick={() => void check()}>
+        Check
+      </button>
+      <p>{said}</p>
+    </div>
+  )
+}
+
+/** Sends as `Sends` does, and says arc is away itself, a second pill. */
+function Tells(props: PaneProps<None>) {
+  const [away, setAway] = useState(false)
+  useEffect(() => {
+    const stop = props.engine.watch((status) =>
+      setAway(status.state === "away")
+    )
+    return () => void stop()
+  }, [props.engine])
+  return (
+    <div>
+      {away && <p>{AWAY}</p>}
+      <Sends {...props} />
+    </div>
+  )
+}
+
+/** Lists the Projects as it mounts, and drops what refuses it: on a
+ * build of arc without the method the Pane stays empty, and says
+ * nothing. */
+function Lists({ engine }: PaneProps<None>) {
+  const [listed, list] = useState(0)
+  useEffect(() => {
+    void engine
+      .call("projects.list", null as never)
+      .then((projects) => list(projects.length))
+  }, [engine])
+  return <p>{listed} Projects</p>
+}
+
+/** A kind of the kit's own that opens on another machine. */
+const kind = (id: string, Pane: ComponentType<PaneProps<None>>) =>
+  definePane<None>({
+    kind: id,
+    title: () => id,
+    icon: MessageSquareIcon,
+    elsewhere: true,
+    Pane,
+  })
+
+test("a kind whose acts end, and that leaves the pill to the Frame, conforms", async () => {
+  expect(await conformance({ kind: kind("kit.sends", Sends) })).toEqual([])
+})
+
+test("a kind that hangs on an act without words does not, and the kit says where", async () => {
+  expect(await conformance({ kind: kind("kit.checks", Checks) })).toEqual([
+    "kit.checks, away before an act, Check: projects.list still waits, and nothing says why",
+  ])
+})
+
+test("a kind that asks again what was in flight as arc went hangs too", async () => {
+  expect(await conformance({ kind: kind("kit.retries", Retries) })).toEqual([
+    "kit.retries, away before an act, Check: projects.list still waits, and nothing says why",
+    "kit.retries, away with an act in flight, Check: projects.list still waits, and nothing says why",
+  ])
+})
+
+test("a kind that draws its machine's pill itself draws a second", async () => {
+  expect(await conformance({ kind: kind("kit.tells", Tells) })).toEqual([
+    "kit.tells, away before an act, Send: says arc is away itself; the one pill is the Frame's",
+    "kit.tells, away with an act in flight, Send: says arc is away itself; the one pill is the Frame's",
+  ])
+})
+
+test("a kind that drops what an older build of arc refuses says nothing, and the kit says where", async () => {
+  expect(
+    await conformance({
+      kind: kind("kit.lists", Lists),
+      answers: (method) => (method === "projects.list" ? [] : null),
+    })
+  ).toEqual([
+    'kit.lists, arc lacks the method, as it mounts: leaves "There is no method "projects.list"." unhandled',
+  ])
+})
