@@ -98,9 +98,10 @@
  *   every import, the kit's helpers too, what it still reaches of the
  *   desktop's bridge, the clipboard, the browser's windows or an engine
  *   of its own, but through the device's own helpers, is listed by kind,
- *   each with the step that takes it, and the list only falls. And no App code asks where its Pane is (law 6):
- *   what reads a Pane's host, and each check of what it read, is counted
- *   by file, and the counts only fall.
+ *   each with the step that takes it, and the list only falls.
+ * - No App code asks where its Pane is (ADR 0106, law 6): what reads a
+ *   Pane's host, and each check of what it read, is counted by file, and
+ *   the counts only fall.
  */
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
@@ -2432,6 +2433,11 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * None joins the list, and a place that goes leaves it, as its step
  * lands. A kind that comes to say `elsewhere` reaches none, or says here
  * why with its step.
+ *
+ * The checker is a lint: it reads names as written, so what code reaches
+ * dynamically, by a computed name, a callback handed in from outside or
+ * a global another file set, it does not see. The same-path test and the
+ * kit catch what runs.
  */
 const REACHING: Record<string, { places: number; until: string }> = {
   "agents.thread: apps/agents/pane/src/thread/Thread.tsx: window.open": {
