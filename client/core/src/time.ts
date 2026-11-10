@@ -1,7 +1,16 @@
 /** Time as the Window reads it: its words, and a clock to draw by. */
 import type { Readable } from "./store"
 
-const WEEK = 6 * 24 * 60 * 60_000
+/** How far off `dayOf` still calls a day this week's. */
+export const WEEK = 6 * 24 * 60 * 60_000
+
+/** Which day `at` is on, from `now`'s: today, within the week, or
+ * further. */
+export function dayOf(at: number, now: number): "today" | "week" | "date" {
+  if (new Date(now).toDateString() === new Date(at).toDateString())
+    return "today"
+  return Math.abs(now - at) < WEEK ? "week" : "date"
+}
 
 /**
  * When `at` (ms since the epoch) was, as a clock reads it here: the hour
@@ -13,19 +22,17 @@ export function clock(
   now = Date.now(),
   { hours }: { hours?: 24 } = {}
 ): string {
-  const when = new Date(at)
-  const today = new Date(now).toDateString() === when.toDateString()
-  const week = Math.abs(now - at) < WEEK
+  const on = dayOf(at, now)
   return new Intl.DateTimeFormat(undefined, {
-    ...(today
+    ...(on === "today"
       ? {}
-      : week
+      : on === "week"
         ? { weekday: "short" }
         : { month: "short", day: "numeric" }),
     hour: "2-digit",
     minute: "2-digit",
     ...(hours === 24 && { hourCycle: "h23" }),
-  }).format(when)
+  }).format(at)
 }
 
 /**

@@ -39,8 +39,20 @@ const COLOR_OF: Partial<Record<MarkState, MarkColor>> = {
   offline: "muted",
 }
 
+/** The colour of a look that calls its Person (ADR 0099, decision 1),
+ * on a card's mark and its time alone (ADR 0098, decision 8); none for
+ * the rest. */
+export type CallColor = Exclude<MarkColor, "muted">
+
+/** The colour `look` calls its Person in; none for a look that calls no
+ * one, offline among them. */
+export function callColor(look: MarkState): CallColor | undefined {
+  const color = COLOR_OF[look]
+  return color === "muted" ? undefined : color
+}
+
 /** Each colour as a class, written out whole so that Tailwind finds it. */
-const COLOR_CLASS: Record<MarkColor, string> = {
+export const COLOR_CLASS: Readonly<Record<MarkColor, string>> = {
   attention: "text-attention",
   destructive: "text-destructive",
   added: "text-added",
@@ -704,6 +716,10 @@ let moved = -Infinity
 function onPointer(event: PointerEvent) {
   pointer = [event.clientX, event.clientY]
   moved = performance.now()
+  // Where each mark whose eyes follow stands is read here, as the pointer
+  // moves, and never in a tick, which reads no layout (ADR 0088, decision
+  // 9).
+  for (const mark of marks) mark.measure()
 }
 
 const lessMotion =
@@ -968,6 +984,8 @@ export class Animator {
   private playful = 30
   private visible = true
   private hovered = false
+  /** Where it stood as the pointer last moved, while its eyes follow. */
+  private box: DOMRect | undefined
   private motion: Motion = REST
   private began = 0
   private from: Pose = { ...BASE, eyes: 0 }
@@ -1164,12 +1182,25 @@ export class Animator {
     return false
   }
 
+  /** Whether its eyes follow the pointer. */
+  private follows() {
+    return this.hovered || this.state === "idle" || this.state === "asking"
+  }
+
+  /** Reads where it stands, if its eyes follow the pointer; as the
+   * pointer moves, not in a tick. */
+  measure() {
+    this.box =
+      this.visible && this.follows()
+        ? this.svg.getBoundingClientRect()
+        : undefined
+  }
+
   /** Where the eyes turn to follow the pointer, when they should. */
   private looking(): [number, number] | null {
-    const follows =
-      this.hovered || this.state === "idle" || this.state === "asking"
-    if (!follows || !pointer || performance.now() - moved > 2500) return null
-    const box = this.svg.getBoundingClientRect()
+    const { box } = this
+    if (!this.follows() || !box || !pointer) return null
+    if (performance.now() - moved > 2500) return null
     const x = box.left + box.width * (this.logo ? 0.76 : 0.5)
     const y = box.top + box.height * (this.logo ? 0.22 : 0.5)
     const dx = pointer[0] - x
