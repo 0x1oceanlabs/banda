@@ -19,8 +19,9 @@
 # accent: "orange" or "#e07a3f"; attention, Banda's signal colour, too.
 # [colors]
 
-# shadcn/ui's tokens over the derived ones, by their names without "--":
-# a palette name, another token's name, or any CSS colour.
+# The colour tokens over the derived ones, by their names without "--"
+# (the list: platform/theme/src/tokens.rs): a palette name, another
+# token's name, or a colour as it is, never var() or color-mix().
 # [tokens]
 
 # [gaps]

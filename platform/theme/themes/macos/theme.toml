@@ -1,7 +1,8 @@
 # macOS (ADR 0075, decisions 1 and 6): the Mac's own colours, its window,
 # label and separator colours and Apple's system colours for the
 # terminal, light and dark. The accent is the one set in System Settings,
-# which the window gives the page. The Mac's shape over Banda's: the
+# which the window reads ("system"), else Apple's blue, this theme's
+# `blue` (ADR 0075, decision 6). The Mac's shape over Banda's: the
 # system's font at 13, and a bar as tall as a window's title with its
 # toolbar, for the traffic lights. Buttons are the accent, as the Mac's
 # default buttons are.
@@ -15,7 +16,7 @@ sans = "-apple-system, BlinkMacSystemFont, \"SF Pro Text\", system-ui, sans-seri
 size = 13
 
 [colors]
-accent = "var(--system-accent)"
+accent = "system"
 selection = { light = "#b3d7ff", dark = "#3f638b" }
 muted = { light = "#a1a1a6", dark = "#636366" }
 background = { light = "#ffffff", dark = "#1e1e1e" }
@@ -47,3 +48,6 @@ primary-foreground = "#ffffff"
 border = { light = "oklch(0 0 0 / 10%)", dark = "oklch(1 0 0 / 10%)" }
 input = { light = "oklch(0 0 0 / 12%)", dark = "oklch(1 0 0 / 14%)" }
 sidebar-border = "border"
+# The sidebar's row under the pointer, as it was while the accent was a
+# CSS variable that could not be mixed: the sidebar's own colour.
+sidebar-accent = "sidebar"

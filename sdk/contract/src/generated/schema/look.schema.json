@@ -30,7 +30,7 @@
       "default": {}
     },
     "tokens": {
-      "description": "Tokens over the derived ones, by their names without `--`: a palette\nname, a token's name or any CSS colour.",
+      "description": "Colour tokens over the derived ones, by their names without `--`\n(`banda_theme::tokens::TOKENS`): a palette name, a token's name or\na colour as it is, never `var()` or `color-mix()`.",
       "type": "object",
       "additionalProperties": {
         "type": "string"

@@ -86,6 +86,7 @@ impl Machine {
                 // Banda glasses itself (ADR 0030, decision 1).
                 material: Material::Banda,
                 mac: false,
+                device: None,
             },
             _dir: dir,
         }
@@ -162,7 +163,7 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     assert_eq!(look.vars["--bar-height"], "36px");
     assert_eq!(look.vars["--focus-shadow-strength"], "0.25");
     assert_eq!(look.vars["--tile-dim"], "0");
-    // Banda's colours (ADR 0075, decision 4), as globals.css has them.
+    // Banda's colours (ADR 0075, decision 4).
     assert_eq!(color(&look, false, "--desk-solid"), "#f4f4f5");
     assert_eq!(color(&look, true, "--desk-solid"), "#111113");
     assert_eq!(color(&look, true, "--background"), "#19191c");
@@ -912,17 +913,25 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     assert!(look.vars["--font-family-sans"].starts_with("-apple-system"));
     assert_eq!(look.vars["--bar-height"], "38px");
     assert_eq!(look.vars["--gap-inner"], "8px");
-    // The accent is the system's, which the window sets (ADR 0075,
-    // decision 6); [colors] accent still wins.
-    assert_eq!(color(&look, false, "--focus"), "var(--system-accent)");
-    assert_eq!(color(&look, true, "--primary"), "var(--system-accent)");
+    // The accent is the system's, which the window writes for the look
+    // (ADR 0075, decision 6), else Apple's blue; [colors] accent still
+    // wins.
+    assert_eq!(color(&look, false, "--focus"), "#007aff");
+    assert_eq!(color(&look, true, "--primary"), "#0a84ff");
     assert_eq!(color(&look, true, "--desk-solid"), "#28282a");
+    let device = machine.places.config.join("device.json");
+    write(&device, r##"{"accent":"#e0478c"}"##);
+    machine.places.device = Some(device);
+    let look = machine.look();
+    assert_eq!(color(&look, false, "--focus"), "#e0478c");
+    assert_eq!(color(&look, true, "--sidebar-primary"), "#e0478c");
 
     machine.look_toml("[colors]\naccent = \"#e07a3f\"\n");
     assert_eq!(color(&machine.look(), false, "--focus"), "#e07a3f");
 
     // Anywhere else it is a theme to pick.
     machine.places.mac = false;
+    machine.places.device = None;
     machine.look_toml("theme = \"macos\"\n");
     assert_eq!(machine.look().vars["--bar-height"], "38px");
 }
@@ -986,7 +995,7 @@ card = { dark = "#101010" }
 }
 
 #[test]
-fn a_theme_of_only_seeds_works_out_the_rest() {
+fn a_theme_of_only_seeds_takes_the_rest_from_the_platform() {
     let machine = Machine::new(false);
     theme_toml(
         &machine,
@@ -996,14 +1005,34 @@ fn a_theme_of_only_seeds_works_out_the_rest() {
     machine.look_toml("theme = \"seeds\"\n");
     let look = machine.look();
     assert!(look.problems.is_empty(), "{:?}", look.problems);
-    // Each scheme is complete: the palette worked out, then its tokens.
-    for dark in [false, true] {
-        assert_eq!(color(&look, dark, "--primary"), "#e07a3f");
-        for var in ["--card", "--sidebar-accent", "--border", "--ansi-8"] {
+    // Each scheme is complete: the palette worked out, then its tokens,
+    // over Banda's own, this device's (ADR 0100, decision 2): the accent
+    // marks the focus, and the buttons take the text's colour as Banda's do.
+    for (dark, ink) in [(false, "#2b2620"), (true, "#ece4d8")] {
+        assert_eq!(color(&look, dark, "--focus"), "#e07a3f");
+        assert_eq!(color(&look, dark, "--primary"), ink);
+        for var in [
+            "--card",
+            "--sidebar-accent",
+            "--border",
+            "--ansi-8",
+            "--block",
+        ] {
             assert!(!color(&look, dark, var).is_empty(), "{var}");
         }
     }
     assert_eq!(color(&look, true, "--background"), "#1d1a16");
+    assert_eq!(color(&look, true, "--attention"), "#ff8a3d");
+
+    // Under Omarchy the platform is its current theme, of one scheme.
+    let machine = Machine::new(true);
+    theme_toml(&machine, "seeds", "[colors]\naccent = \"#e07a3f\"\n");
+    machine.look_toml("theme = \"seeds\"\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.mode, Shown::Dark);
+    assert_eq!(color(&look, true, "--background"), "#19251f");
+    assert_eq!(color(&look, true, "--primary"), "#e07a3f");
 }
 
 #[test]
@@ -1070,7 +1099,7 @@ fn a_theme_on_the_platform_takes_what_the_device_shows() {
 }
 
 #[test]
-fn a_base_that_is_not_there_is_named_and_the_theme_stands_alone() {
+fn a_base_that_is_not_there_is_named_and_the_theme_takes_the_platform() {
     let machine = Machine::new(false);
     theme_toml(
         &machine,
@@ -1082,9 +1111,65 @@ fn a_base_that_is_not_there_is_named_and_the_theme_stands_alone() {
     assert_eq!(look.problems.len(), 1, "{:?}", look.problems);
     let problem = &look.problems[0];
     assert!(problem.message.contains("no theme \"nope\""), "{problem}");
+    assert!(
+        problem.message.ends_with("extends \"platform\""),
+        "{problem}"
+    );
     assert_eq!(problem.line, Some(1));
     assert!(problem.path.ends_with("theme.toml"), "{problem}");
     assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--background"), "#ffffff");
+}
+
+#[test]
+fn a_theme_that_does_not_read_says_so_and_banda_shows() {
+    let machine = Machine::new(false);
+    machine.look_toml("theme = \"bent\"\n");
+    for (text, said) in [
+        ("[colors\naccent = \"#e07a3f\"\n", "unclosed table"),
+        ("names = \"bent\"\n", "unknown field"),
+    ] {
+        theme_toml(&machine, "bent", text);
+        let look = machine.look();
+        let messages: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+        assert_eq!(messages.len(), 2, "{messages:?}");
+        assert!(messages[0].contains(said), "{messages:?}");
+        assert_eq!(
+            messages[1],
+            "theme = \"bent\" does not read; Banda's own shows"
+        );
+        assert!(look.problems[0].left_out, "{messages:?}");
+        assert_eq!(color(&look, false, "--background"), "#ffffff");
+    }
+
+    // A token the list does not have, or that is not a value, is named
+    // and left out; the theme shows.
+    theme_toml(
+        &machine,
+        "bent",
+        "[tokens]\ncrad = \"#ffffff\"\ncard = \"color-mix(in oklab, red 10%, blue)\"\n",
+    );
+    let look = machine.look();
+    let messages: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert!(
+        messages[0].starts_with("tokens.card is a palette name"),
+        "{messages:?}"
+    );
+    assert_eq!(messages[1], "there is no token \"crad\"");
+    assert_eq!(look.sources[1].name.as_deref(), Some("bent-light"));
+    assert_eq!(color(&look, false, "--card"), "#ffffff");
+
+    // And so in look.toml.
+    machine.look_toml("theme = \"banda\"\n[tokens]\ncrad = \"#ffffff\"\ngap-inner = \"4px\"\n");
+    let look = machine.look();
+    let messages: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+    assert_eq!(messages.len(), 2, "{messages:?}");
+    assert_eq!(messages[0], "there is no token \"crad\"");
+    assert!(messages[1].contains("is a length"), "{messages:?}");
+    assert_eq!(look.problems[0].key.as_deref(), Some("tokens.crad"));
+    assert!(!look.schemes.light.as_ref().unwrap().contains_key("--crad"));
+    assert_eq!(look.vars["--gap-inner"], "8px");
 }
 
 #[test]

@@ -24,9 +24,9 @@ Every key, with its default:
   name = "Sea"
   extends = "banda"          # a theme's name, or "platform", this device's own
   [colors]                   # the palette, by Omarchy's names: the seeds
-  accent = "#2a9d8f"
+  accent = "#2a9d8f"         # or "system": the Mac's or Windows' accent
   background = { light = "#f7fbfb", dark = "#0e1a1c" }
-  [tokens]                   # a token: a palette name, a token's name or a CSS colour
+  [tokens]                   # a colour token: a palette name, a token's name or a colour
   card = { dark = "#101418" }
   [shape]                    # look.toml's radius, gaps, tile, focus and bar.height
   radius = 4
@@ -34,10 +34,16 @@ Every key, with its default:
   [glass]                    # as look.toml's [desk]
   ```
 
-  With no `extends` the theme stands alone: what it leaves out is worked
-  out from its colours. Omarchy's theme folders read as colours only
-  (their `colors.toml`), and an old folder's `banda.toml`, with the keys
-  of `look.toml`, still reads.
+  With no `extends` the theme extends `"platform"`, this device's own:
+  what it leaves out comes from there. Omarchy's theme folders read as
+  colours only (their `colors.toml`), and an old folder's `banda.toml`,
+  with the keys of `look.toml`, still reads.
+- The tokens are one list, `platform/theme/src/tokens.rs`, which Banda's
+  page and other clients are written from (`sdk/contract/src/generated/look/tokens.ts`
+  names each, its kind and group). A `[tokens]` key is one of its colours
+  by name; a value is a colour as it is: hex, `oklch(…)`, `rgb(…)` and
+  the like, or a name. `var()`, `color-mix()` and other expressions are
+  refused, as is a name that is no token.
 - `banda look themes` lists every theme there is, one JSON line each; a
   theme of light and dark as `<name>-light` and `<name>-dark`.
 - To make one, write `~/.config/banda/themes/<name>/theme.toml` and set

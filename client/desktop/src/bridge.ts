@@ -107,15 +107,6 @@ export const BRIDGE = bridge({
     current: invoke<[], number | null>(),
     listen: push<number | null>(),
   },
-  /**
-   * The accent set in the system's settings, as `#rrggbb` (ADR 0075,
-   * decision 6): macOS's and Windows', and `null` elsewhere. Told again
-   * when the Person changes it.
-   */
-  accent: {
-    current: invoke<[], string | null>(),
-    listen: push<string | null>(),
-  },
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BROWSER_BRIDGE,
   agents: AGENTS_BRIDGE,

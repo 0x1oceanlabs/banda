@@ -41,10 +41,18 @@ pub fn mix(from: &str, to: &str, amount: f64) -> Option<String> {
     ))
 }
 
-/// Whether a value can stand in CSS as a colour as it is: hex, a colour
-/// function, or a word such as `transparent`, or a palette's name such as
-/// `dark_background`, which a token names. The window's CSS decides the
-/// rest; this only keeps out what could break the declaration.
+/// The functions a colour may be written with: CSS's own colour
+/// functions, nothing that refers to another value or works one out.
+const COLOUR_FUNCTIONS: [&str; 10] = [
+    "rgb", "rgba", "hsl", "hsla", "hwb", "lab", "lch", "oklab", "oklch", "color",
+];
+
+/// Whether a value is a colour as it is, a value every client can draw
+/// (ADR 0080, decision 7): hex, a colour function of numbers, such as
+/// `oklch(0.6 0.2 250 / 50%)`, or one word, such as `transparent` or a
+/// palette's name such as `dark_background`, which a token names. Never
+/// `var()`, `color-mix()` or any other function, and nothing that could
+/// break the declaration it goes into.
 pub fn is_css_color(text: &str) -> bool {
     let text = text.trim();
     if text.is_empty() || text.len() > 200 {
@@ -53,13 +61,20 @@ pub fn is_css_color(text: &str) -> bool {
     if text.starts_with('#') {
         return is_hex(text);
     }
-    text.bytes().all(|b| {
-        b.is_ascii_alphanumeric()
-            || matches!(
-                b,
-                b'(' | b')' | b' ' | b',' | b'.' | b'%' | b'/' | b'-' | b'+' | b'_'
-            )
-    }) && text.bytes().filter(|&b| b == b'(').count() == text.bytes().filter(|&b| b == b')').count()
+    let word = |text: &str| {
+        !text.is_empty()
+            && text
+                .bytes()
+                .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'-' | b'_'))
+    };
+    let Some((function, rest)) = text.split_once('(') else {
+        return word(text);
+    };
+    let inside = rest.strip_suffix(')').unwrap_or("(");
+    COLOUR_FUNCTIONS.contains(&function.to_ascii_lowercase().as_str())
+        && inside.bytes().all(|b| {
+            b.is_ascii_alphanumeric() || matches!(b, b' ' | b',' | b'.' | b'%' | b'/' | b'-' | b'+')
+        })
 }
 
 #[cfg(test)]
@@ -87,7 +102,20 @@ mod tests {
         ] {
             assert!(is_css_color(ok), "{ok}");
         }
-        for bad in ["", "#zzz", "red; --x: 1", "url(x)}", "a{b}", "#12"] {
+        for bad in [
+            "",
+            "#zzz",
+            "red; --x: 1",
+            "url(x)}",
+            "a{b}",
+            "#12",
+            "var(--system-accent)",
+            "color-mix(in oklab, red 10%, blue)",
+            "url(x)",
+            "calc(1px)",
+            "rgb(var(--x))",
+            "light blue",
+        ] {
             assert!(!is_css_color(bad), "{bad}");
         }
     }

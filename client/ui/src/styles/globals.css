@@ -7,6 +7,10 @@
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
 @import "streamdown/styles.css";
 @import "katex/dist/katex.min.css";
+/* Banda's tokens before the first look comes, written from the token list
+   (platform/theme/src/tokens.rs, ADR 0080, decision 7). The look sets
+   each on the root as it resolves them. */
+@import "@banda/contract/tokens.css";
 
 @custom-variant dark (&:is(.dark *));
 /* A sidebar right on the desk, not a panel (ADR 0023); over the Strip, in a
@@ -99,163 +103,31 @@
   --font-mono: var(--font-family-mono);
 }
 
-:root {
-  --background: #ffffff;
-  --foreground: #18181b;
-  --card: #ffffff;
-  --card-foreground: #18181b;
-  --popover: #ffffff;
-  --popover-foreground: #18181b;
-  --primary: #18181b;
-  --primary-foreground: #fafafa;
-  --secondary: #f4f4f5;
-  --secondary-foreground: #18181b;
-  --muted: #f4f4f5;
-  --muted-foreground: #71717a;
-  --accent: #f4f4f5;
-  --accent-foreground: #18181b;
-  --destructive: oklch(0.577 0.245 27.325);
-  /* What waits for the Person, such as a Question: Banda's one signal colour. */
-  --attention: #e5590a;
-  /* An Agent at work, as its Group's plate shows it (ADR 0065). */
-  --working: oklch(0.6 0.15 255);
-  /* A Project's sign, when the Person picks a colour: a quiet palette with
-     none of the colours an Agent's state says (ADR 0070). */
-  --sign-violet: oklch(0.52 0.14 300);
-  --sign-magenta: oklch(0.52 0.14 340);
-  --sign-yellow: oklch(0.55 0.12 95);
-  --sign-teal: oklch(0.52 0.1 195);
-  --sign-sand: oklch(0.55 0.07 65);
-  --warning: oklch(0.65 0.16 70);
-  --added: oklch(0.527 0.137 150.069);
-  --removed: oklch(0.577 0.245 27.325);
-  --border: oklch(0 0 0 / 8%);
-  --input: oklch(0 0 0 / 12%);
-  --ring: #0b6fe0;
-  --chart-1: #0b6fe0;
-  --chart-2: #16a34a;
-  --chart-3: #ca8a04;
-  --chart-4: #c026d3;
-  --chart-5: #0891b2;
-  /* An account's emblem's colour (ADR 0093, decision 3): its Harness's
-     own, Claude's orange behind Claude's icons and the text's behind the
-     others, then violet, rose, green and graphite. Every two of one
-     Harness stay apart in normal sight and the three colour-blindnesses,
-     and each is at least 3.4:1 on the sidebar
-     (docs/research/2026-11-08-account-icon-colours.md). The fifth is the
-     Usage Pane's, which still colours the accounts by place (ADR 0055). */
-  --account-own: var(--foreground);
-  --account-claude: #c96442;
-  --account-1: #8557c8;
-  --account-2: #ad3272;
-  --account-3: #189a69;
-  --account-4: #424242;
-  --account-5: #eda100;
-  /* The system's accent, which the window sets on a Mac or Windows (ADR
-     0075, decision 6); Apple's blue elsewhere. The macos theme's accent. */
-  --system-accent: #007aff;
-  --radius: 0.4375rem;
-  --sidebar: #fafafa;
-  --sidebar-foreground: #18181b;
-  --sidebar-primary: #0b6fe0;
-  --sidebar-primary-foreground: #ffffff;
-  --sidebar-accent: #f0f0f2;
-  --sidebar-accent-foreground: #18181b;
-  --sidebar-border: oklch(0 0 0 / 8%);
-  --sidebar-ring: #0b6fe0;
-}
-
-.dark {
-  --background: #19191c;
-  --foreground: #ededef;
-  --card: #1f1f23;
-  --card-foreground: #ededef;
-  --popover: #202024;
-  --popover-foreground: #ededef;
-  --primary: #ededef;
-  --primary-foreground: #19191c;
-  --secondary: #27272a;
-  --secondary-foreground: #ededef;
-  --muted: #27272a;
-  --muted-foreground: #a1a1aa;
-  --accent: #27272a;
-  --accent-foreground: #ededef;
-  --destructive: oklch(0.704 0.191 22.216);
-  --attention: #ff8a3d;
-  --working: oklch(0.72 0.13 255);
-  --sign-violet: oklch(0.72 0.14 300);
-  --sign-magenta: oklch(0.72 0.14 340);
-  --sign-yellow: oklch(0.78 0.12 95);
-  --sign-teal: oklch(0.74 0.1 195);
-  --sign-sand: oklch(0.74 0.07 65);
-  --warning: oklch(0.8 0.15 80);
-  --added: oklch(0.723 0.192 149.579);
-  --removed: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 8%);
-  --input: oklch(1 0 0 / 12%);
-  --ring: #4ea3ff;
-  --chart-1: #4ea3ff;
-  --chart-2: #4ade80;
-  --chart-3: #facc15;
-  --chart-4: #e879f9;
-  --chart-5: #22d3ee;
-  --account-own: var(--foreground);
-  --account-claude: #d97757;
-  --account-1: #a072e6;
-  --account-2: #c54987;
-  --account-3: #15b77c;
-  --account-4: #b7b7b7;
-  --account-5: #c98500;
-  --system-accent: #0a84ff;
-  --sidebar: #202024;
-  --sidebar-foreground: #ededef;
-  --sidebar-primary: #4ea3ff;
-  --sidebar-primary-foreground: #19191c;
-  --sidebar-accent: #2a2a2e;
-  --sidebar-accent-foreground: #ededef;
-  --sidebar-border: oklch(1 0 0 / 8%);
-  --sidebar-ring: #4ea3ff;
-}
-
 /*
  * The tiles' look (ADR 0007): the gaps, the tiles' corners and borders,
  * and how the focused tile stands out, as Hyprland shows it: its border
- * takes the focus colour. These are Banda's defaults, in light and dark;
- * the look module sets them from look.toml. Components read these
+ * takes the focus colour. Those are tokens the look sets from the theme
+ * and look.toml, with Banda's own in tokens.css until it comes; here is
+ * what the page still works out of them. Components read these
  * variables, never constants of their own.
  */
 :root {
-  /* Between tiles, and between the tiles and the window's edge. */
-  --gap-inner: 8px;
-  --gap-outer: 8px;
-  /* The tile holds cards (xl), and the outer is never rounder than what
-     it holds, so the tile is the top step of shadcn's ladder. */
+  /* shadcn's radius, and the tile's, which the look sets too: the tile
+     holds cards (xl), and the outer is never rounder than what it holds,
+     so the tile is the top step of shadcn's ladder. Five levels come with
+     ADR 0100's step 3. */
+  --radius: 0.4375rem;
   --tile-radius: calc(var(--radius) * 1.4);
-  --tile-border: 1px;
-  /* The focused tile's border, and every other tile's. A theme's accent
-     takes --focus; without one it is the strongest colour there is. */
-  --focus: var(--primary);
-  --focus-inactive: var(--border);
-  /* niri's focus ring: the focused tile's frame grows this far out into
-     the gap, so nothing moves. It is drawn as one stroke over the border,
-     in its colour: one frame, and no seam where two would meet. None by
-     default; the border shows the focus. */
-  --focus-ring: 0px;
   /* [focus] shadow: the focused tile lifts a little off the desk, glass
      or not; with a hairline border, the outline and this show the focus
      (ADR 0075, decision 5). */
-  --focus-shadow-strength: 0.25;
   --focus-shadow:
     0 6px 16px -4px rgb(0 0 0 / var(--focus-shadow-strength)),
     0 1px 3px rgb(0 0 0 / calc(var(--focus-shadow-strength) * 0.5));
-  /* [tile] dim-inactive: a black veil over the tiles without the focus,
-     as Hyprland dims its windows. 0 is none. */
-  --tile-dim: 0;
   /* The three surfaces (ADR 0023): the desk, the sidebar's panel over
      it, and the tiles. Solid; html[data-glass] below makes the desk and
-     the panel glass, and the tiles only below [tile] opacity 1. */
-  --desk-opacity: 40%;
-  --tile-opacity: 100%;
+     the panel glass, and the tiles only below [tile] opacity 1. They
+     become tokens with the glass (ADR 0100, step 4). */
   /* A theme may name its solid desk (desk-solid, ADR 0075); else it is
      the background, a little greyed. */
   --desk: var(
@@ -271,16 +143,9 @@
   /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
      Solid, on glass too (ADR 0075, decision 3). */
   --floating: var(--popover);
-  /* [tile] shadow and [desk] sidebar-shadow: how dark, from 0 to 1. Only
-     glass casts them: a solid desk shows none. */
-  --tile-shadow-strength: 0;
-  --sidebar-shadow-strength: 0.45;
-  /* Banda's own glass (ADR 0023): the wallpaper the desktop serves, how
-     frosted it is, how vivid its colours stay, and a grain over it. */
+  /* Banda's own glass (ADR 0023): the wallpaper the desktop serves. Only
+     glass casts the shadows: a solid desk shows none. */
   --desk-wallpaper: none;
-  --desk-blur: 40px;
-  --desk-saturation: 1.4;
-  --desk-grain: 0.04;
   --tile-shadow: none;
   --panel-shadow: none;
   --bar-rule: transparent;
@@ -288,12 +153,6 @@
      past it, and scroll on under it. */
   --sidebar-width: 16rem;
   --sidebar-inset: 0px;
-  --bar-height: 2.25rem;
-  /* [font]: the two families, and the root's size that makes the usual
-     text (text-sm) 14px. Everything measured in rem grows with it. */
-  --font-family-sans: "Inter Variable", sans-serif;
-  --font-family-mono: "JetBrains Mono Variable", monospace;
-  --text-root: 16px;
   /* Scrollbars as T3 Code draws them: a thin thumb in the border's
      colour on no track, as the ScrollArea's. The terminal's too. */
   --app-scrollbar-width: 6px;
@@ -929,14 +788,11 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
 
 /*
  * The chat's values (ADR 0058): one set for every part of a Thread, and
- * for markdown wherever it shows. Its surfaces are mixed from the look's
- * ground and ink, so every theme has them.
+ * for markdown wherever it shows. Its surfaces, `--block` and `--raised`,
+ * are tokens the look mixes from the ground and the ink, so every theme
+ * has them.
  */
 :root {
-  /* A block: code, a table, a diagram, a card, a console. */
-  --block: color-mix(in srgb, var(--foreground) 3.5%, var(--background));
-  /* Raised over the ground: the Person's bubble, chips, insets. */
-  --raised: color-mix(in srgb, var(--foreground) 7%, var(--background));
   /* Prose, and the room beside it, for a narrow Pane. */
   --prose-size: 0.875rem;
   --prose-leading: 1.375rem;

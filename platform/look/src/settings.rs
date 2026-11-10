@@ -35,8 +35,9 @@ pub struct Settings {
     #[serde(default)]
     #[schemars(with = "BTreeMap<String, String>")]
     pub colors: BTreeMap<String, Spanned<String>>,
-    /// Tokens over the derived ones, by their names without `--`: a palette
-    /// name, a token's name or any CSS colour.
+    /// Colour tokens over the derived ones, by their names without `--`
+    /// (`banda_theme::tokens::TOKENS`): a palette name, a token's name or
+    /// a colour as it is, never `var()` or `color-mix()`.
     #[serde(default)]
     #[schemars(with = "BTreeMap<String, String>")]
     pub tokens: BTreeMap<String, Spanned<String>>,

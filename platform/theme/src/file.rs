@@ -10,6 +10,7 @@ use crate::Mode;
 use crate::color::{is_css_color, is_hex};
 use crate::palette::mixes;
 use crate::theme::Wrong;
+use crate::tokens;
 use serde::Deserialize;
 use serde::de::IgnoredAny;
 use std::collections::BTreeMap;
@@ -60,8 +61,10 @@ impl ThemeToml {
 }
 
 /// Reads `text`, the `theme.toml` at `path`. A colour or a token that does
-/// not read, or could break the CSS it goes into, is named in `wrong` and
-/// left out, and a colour the palette mixes that is not hex is named;
+/// not read, is not a value or could break the CSS it goes into, and a
+/// token the list does not have, are named in `wrong` and left out; a
+/// token's old name sets it and is named, and a colour the palette mixes
+/// that is not hex is named;
 /// TOML written wrong, or a key a `theme.toml` does not have, leaves the
 /// file out whole.
 pub fn read(path: &Path, text: &str, wrong: &mut Vec<Wrong>) -> Option<ThemeToml> {
@@ -82,6 +85,24 @@ pub fn read(path: &Path, text: &str, wrong: &mut Vec<Wrong>) -> Option<ThemeToml
                     into: &mut [BTreeMap<String, String>; 2]| {
         for (key, value) in values {
             let span = value.span();
+            // A token by its name now: one that is not, or that `[tokens]`
+            // does not set, is named and left out.
+            let key = if table == "tokens" {
+                match tokens::set_by(&key) {
+                    Ok((name, note)) => {
+                        if let Some(note) = note {
+                            wrong.push(Wrong::at(path, text, span.clone(), note));
+                        }
+                        name.to_owned()
+                    }
+                    Err(said) => {
+                        wrong.push(Wrong::at(path, text, span, said));
+                        continue;
+                    }
+                }
+            } else {
+                key
+            };
             let both = match value.into_inner() {
                 // Light and dark are inside: neither is a colour.
                 _ if table == "colors" && key == "mode" => None,
@@ -89,9 +110,18 @@ pub fn read(path: &Path, text: &str, wrong: &mut Vec<Wrong>) -> Option<ThemeToml
                 toml::Value::Table(sides) => sides_of(sides),
                 _ => None,
             };
+            // Only the accent may be the system's (ADR 0075, decision 6).
+            let system = |v: &String| table == "colors" && v.trim() == tokens::SYSTEM_ACCENT;
             match both {
+                Some(both) if both.iter().flatten().any(system) && key != "accent" => {
+                    let said = format!(
+                        "colors.{key} cannot be \"{}\": only the accent is the system's",
+                        tokens::SYSTEM_ACCENT
+                    );
+                    wrong.push(Wrong::at(path, text, span, said));
+                }
                 Some(both) if both.iter().flatten().all(|v| is_css_color(v)) => {
-                    let not_hex = both.iter().flatten().any(|v| !is_hex(v.trim()));
+                    let not_hex = (both.iter().flatten()).any(|v| !is_hex(v.trim()) && !system(v));
                     if table == "colors" && not_hex && mixes(&key) {
                         let said =
                             format!("colors.{key} is not hex, so colours mixed from it fall back");
@@ -184,6 +214,28 @@ mod tests {
         assert_eq!(wrong.len(), 2, "{wrong:?}");
         assert!(wrong[0].starts_with("colors.blue is not hex"), "{wrong:?}");
         assert!(wrong[1].starts_with("colors.mode"), "{wrong:?}");
+    }
+
+    #[test]
+    fn a_token_is_one_of_the_list_and_a_value() {
+        let (read, wrong) = read_text(
+            "[colors]\naccent = \"system\"\nblue = \"system\"\n[tokens]\ncrad = \"#fff\"\ngap-inner = \"8px\"\ncard = \"var(--muted)\"\nring = \"blue\"\n",
+        );
+        let read = read.unwrap();
+        assert_eq!(read.colors(Mode::Light)["accent"], "system");
+        assert!(!read.colors(Mode::Light).contains_key("blue"));
+        assert_eq!(read.tokens(Mode::Dark).keys().collect::<Vec<_>>(), ["ring"]);
+        // blue may not be the system's; crad is no token; gap-inner is a
+        // length; var() is no value. The accent being "system" is not hex
+        // and is not named.
+        assert_eq!(wrong.len(), 4, "{wrong:?}");
+        assert!(wrong[0].starts_with("colors.blue cannot be"), "{wrong:?}");
+        assert_eq!(
+            wrong[1],
+            "tokens.card is a palette name, a token's name or a CSS colour, or { light = …, dark = … }"
+        );
+        assert_eq!(wrong[2], "there is no token \"crad\"");
+        assert!(wrong[3].contains("is a length"), "{wrong:?}");
     }
 
     #[test]

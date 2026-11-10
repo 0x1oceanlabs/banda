@@ -19,7 +19,7 @@
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
  */
-import { existsSync } from "node:fs"
+import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -38,7 +38,12 @@ import {
   type WebContents,
 } from "electron"
 import type { Address } from "@banda/contract"
-import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
+import {
+  BANDA,
+  type Device,
+  type Look as LookValue,
+  WALLPAPER_URL,
+} from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
@@ -345,7 +350,7 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
 
 async function ready(): Promise<void> {
   listShortcut()
-  followAccent()
+  followDevice()
   const listen = (now: LookValue) => {
     // Native parts (scrollbars, menus) and the page's own
     // prefers-color-scheme follow the look's mode.
@@ -484,7 +489,6 @@ async function ready(): Promise<void> {
           ),
       ],
     },
-    accent: { current: [none, () => Effect.sync(accentOf)] },
     sidebar: {
       preset: [
         text,
@@ -819,8 +823,8 @@ const CLEAR = "#00000000"
 const OWN_FRAME = process.platform === "darwin"
 const BUTTONS = { x: 12, width: 54, height: 14 }
 const INSET = 2 * BUTTONS.x + BUTTONS.width
-/** Banda's bar's height before the first look comes (platform/look/src/lib.rs). */
-const BAR_HEIGHT = 36
+/** Banda's bar's height before the first look comes. */
+const BAR_HEIGHT = Number.parseFloat(BANDA.light["bar-height"])
 
 /** Where the window buttons sit, for a bar as high as the look says. */
 function buttonsAt(now: LookValue | null): { x: number; y: number } {
@@ -846,20 +850,32 @@ function accentOf(): string | null {
     : null
 }
 
-/** Tells every window the accent when the Person changes it. */
-function followAccent(): void {
-  const tell = () => {
+/** Writes what the system says of itself where the look reads it, its
+ * accent (ADR 0100, decision 1), now and each time the Person changes
+ * it: the look resolves the theme again, so the macos theme's focus,
+ * rings and buttons take the Person's colour (ADR 0075, decision 6). It
+ * is written before the look starts, so the first look has it too. */
+function followDevice(): void {
+  const file = join(state, "device.json")
+  const write = () => {
     const accent = accentOf()
-    for (const shown of [window, ...popped.values()])
-      tellPage(shown?.webContents, BRIDGE.accent.listen, accent)
+    const device: Device = accent ? { accent } : {}
+    try {
+      mkdirSync(state, { recursive: true })
+      writeFileSync(`${file}.new`, JSON.stringify(device))
+      renameSync(`${file}.new`, file)
+    } catch (error) {
+      console.error(`banda: ${file}: ${String(error)}`)
+    }
   }
+  write()
   if (process.platform === "darwin")
     systemPreferences.subscribeNotification(
       "AppleColorPreferencesChangedNotification",
-      tell
+      write
     )
   else if (process.platform === "win32")
-    systemPreferences.on("accent-color-changed", tell)
+    systemPreferences.on("accent-color-changed", write)
 }
 
 /** The look asks for the system's glass. */

@@ -1015,7 +1015,12 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
 
 /// The look's places, in this Banda's config folder.
 fn look_places() -> Result<banda_look::Places, Failure> {
-    Places::from_env().map(|places| banda_look::Places::from_env(places.config))
+    Places::from_env().map(|places| banda_look::Places {
+        // What the window writes of the system, for the theme (ADR 0100,
+        // decision 1).
+        device: Some(places.state.join("device.json")),
+        ..banda_look::Places::from_env(places.config)
+    })
 }
 
 /// Under an Agent's pass, a change to Banda's settings goes to the engine

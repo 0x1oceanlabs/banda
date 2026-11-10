@@ -1,9 +1,9 @@
 /**
  * The page's side of the look (ADR 0007, decision 11): it only applies
  * what `banda look` resolved. Every variable goes on the root element,
- * over the defaults in globals.css, and the `dark` class follows the
- * scheme that shows. Until the first look comes, and outside the desktop,
- * the defaults show in the system's light or dark.
+ * over Banda's own in tokens.css (ADR 0080, decision 7), and the `dark`
+ * class follows the scheme that shows. Until the first look comes, and
+ * outside the desktop, Banda's own show in the system's light or dark.
  */
 import {
   type Bar,
