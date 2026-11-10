@@ -160,7 +160,7 @@ export function Workspaces({
       frame,
       go: onGo,
       ...inStrip(workspaces.list[workspaces.current]?.id),
-      refuses: refusing(workspaces, strict),
+      ...refusing(workspaces, strict, projectOf),
     }
   })
   useMoving(root, carrying)

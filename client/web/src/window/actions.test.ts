@@ -18,6 +18,7 @@ import {
 } from "../tiling/model"
 import {
   ACTIONS,
+  bringing,
   closingShown,
   movesAway,
   noProjectOf,
@@ -31,6 +32,7 @@ import {
   pickOf,
   runAction,
   type Shell,
+  targetsOf,
   updating,
   windowApiOf,
   arranging,
@@ -40,6 +42,35 @@ const thread = (id: string): PaneState => ({
   kind: "agents.thread",
   args: { thread: id },
 })
+
+// What the toasts were told, as Sonner still shows them.
+const toasted = vi.hoisted(() => vi.fn())
+vi.mock("@banda/ui/components/sonner", async (actual) => {
+  const { toast } = await actual<typeof import("@banda/ui/components/sonner")>()
+  const told = (...args: Parameters<typeof toast>) => {
+    toasted(...args)
+    return toast(...args)
+  }
+  return { toast: Object.assign(told, toast) }
+})
+
+/** Projects by their ids and names, as the window lists them. */
+const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>
+  Object.entries(names).map(([id, name]) => ({
+    id,
+    name,
+    scratch: scratch.includes(id),
+  })) as unknown as ProjectSummary[]
+
+/** A lookup of `projects` by ID, as the window's. */
+const lookupOf = (projects: readonly ProjectSummary[]) => (id: string) =>
+  projects.find((one) => one.id === id)
+
+/** The Flow agents.toml says now. */
+const inFlow = (flow: Flow) =>
+  takeLook({
+    files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } },
+  } as unknown as Look)
 
 test("an archived Thread's Pane closes, and only its own", () => {
   const right = { place: "right" } as const
@@ -543,18 +574,161 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
     current: 0,
   }
   const sent = (flow: Flow) => {
-    takeLook({
-      files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } },
-    } as unknown as Look)
+    inFlow(flow)
     let step: unknown
     const shell = {
       change: (how: (w: Workspaces) => unknown) => (step = how(state)),
+      projectOf: lookupOf(projectsOf({ a: "Banda", b: "Brand" })),
     } as unknown as Shell
     runAction(shell, "pane.send-2")
     return step
   }
+  toasted.mockClear()
   expect(sent("row")).toBeUndefined()
+  // It says whose the workspace is, and where Banda's Panes go.
+  expect(toasted).toHaveBeenCalledWith("Workspace 2 is Brand's", {
+    id: expect.any(String),
+    description: "Banda's Panes go to its workspace, a free one or a new one.",
+  })
   expect(sent("free")).toBeDefined()
+  // The Pane menu greys out the same workspace, and shows whose each is.
+  inFlow("row")
+  const projects = projectsOf({ a: "Banda", b: "Brand" })
+  const projectOf = lookupOf(projects)
+  const at = { workspace: 0, column: 0, entry: 0 }
+  expect(targetsOf(state, at, projectOf)).toEqual([
+    { owner: projects[0], refused: false },
+    { owner: projects[1], refused: true },
+    { owner: undefined, refused: false },
+  ])
+  inFlow("free")
+  expect(targetsOf(state, at, projectOf).map((one) => one.refused)).toEqual([
+    false,
+    false,
+    false,
+  ])
+})
+
+test("a refused move names the workspace by its number before the move, though the free one it leaves goes (ADR 0102, decision 6)", () => {
+  inFlow("row")
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const one = (id: string, project: string, pane: PaneState = terminal) => ({
+    id: `${id}-c`,
+    active: 0,
+    entries: [{ id, project, pane }],
+  })
+  // Banda's, then a free one with only a Thread of no Project, on screen,
+  // then Brand's.
+  const state: Workspaces = {
+    list: [
+      { id: "mine", project: "a", focus: 0, columns: [one("e", "a")] },
+      { id: "free", focus: 0, columns: [one("t", "s", thread("t1"))] },
+      { id: "theirs", project: "b", focus: 0, columns: [one("f", "b")] },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 1,
+  }
+  const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
+  const shell = {
+    change: (how: (w: Workspaces) => unknown) =>
+      expect(how(state)).toBeUndefined(),
+    projectOf: lookupOf(projects),
+  } as unknown as Shell
+  for (const action of ["pane.send-3", "pane.move-down-or-to-workspace"]) {
+    toasted.mockClear()
+    runAction(shell, action)
+    expect(toasted).toHaveBeenCalledWith("Workspace 3 is Brand's", {
+      id: expect.any(String),
+      description:
+        "A Pane of no Project goes to a free workspace or a new one.",
+    })
+  }
+})
+
+test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Agent's Group, the whole Group (ADR 0102, decision 4)", () => {
+  inFlow("row")
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const column = (id: string, group: string, pane = terminal): Column => ({
+    id,
+    active: 0,
+    group,
+    entries: [{ id: `${id}-e`, project: "a", pane }],
+  })
+  const on = (focus: number): Workspaces => ({
+    list: [
+      {
+        id: "mine",
+        project: "a",
+        own: "own",
+        focus,
+        columns: [
+          column("x1", "own"),
+          column("x2", "own"),
+          column("t1", "agent", thread("t1")),
+        ],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  })
+  const sent = (state: Workspaces) => {
+    let step: unknown
+    const shell = {
+      change: (how: (w: Workspaces) => unknown) => (step = how(state)),
+      projectOf: () => undefined,
+    } as unknown as Shell
+    runAction(shell, "pane.send-2")
+    return step
+  }
+  expect(sent(on(1))).toMatchObject({
+    command: { method: "workspaces.move_pane", params: { pane: "x2-e" } },
+  })
+  expect(sent(on(2))).toMatchObject({
+    command: { method: "workspaces.move_group", params: { column: "t1" } },
+  })
+})
+
+test("Open beside brings a Thread onto a free workspace or its Project's, never onto another Project's in the row (ADR 0102, decision 6)", () => {
+  const pane = thread("t1")
+  const terminal = { kind: "terminal.terminal", args: {} }
+  const on = (project?: string): Workspaces => ({
+    list: [
+      {
+        id: "here",
+        focus: 0,
+        ...(project !== undefined && { project }),
+        columns: [
+          {
+            id: "c",
+            active: 0,
+            entries: [{ id: "e", project: project ?? "b", pane: terminal }],
+          },
+        ],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  })
+  const projects = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
+  const projectOf = lookupOf(projects)
+  const row = placingOf("row", noProjectOf(projects))
+  toasted.mockClear()
+  expect(bringing(on("b"), "a", pane, row, projectOf)).toBeUndefined()
+  expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
+    id: expect.any(String),
+    description: "Banda's Panes go to its workspace, a free one or a new one.",
+  })
+  expect(bringing(on(), "a", pane, row, projectOf)).toBeDefined()
+  expect(bringing(on("a"), "a", pane, row, projectOf)).toBeDefined()
+  // A Thread of no Project hears where it goes: a free workspace.
+  expect(bringing(on("b"), "s", pane, row, projectOf)).toBeUndefined()
+  expect(toasted).toHaveBeenLastCalledWith("Workspace 1 is Brand's", {
+    id: expect.any(String),
+    description: "A Pane of no Project goes to a free workspace or a new one.",
+  })
+  // In the Flow free, every workspace is free.
+  const free = placingOf("free", noProjectOf(projects))
+  expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
 })
 
 test("Arrange by Project names the Projects that have a workspace, and with one Project only it (ADR 0102, decisions 7 and 9)", () => {

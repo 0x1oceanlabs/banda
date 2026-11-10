@@ -1,9 +1,11 @@
-import type { ProjectId } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
 import {
   bring,
+  notesOf,
+  refusalOf,
   refusedTo,
   admits,
   carry,
@@ -34,6 +36,7 @@ import {
   inBar,
   start,
   step,
+  takesGroup,
   toEdge,
   SIZES,
   type Width,
@@ -746,4 +749,127 @@ test("a Pane moves to its Project's workspace or a free one, never another Proje
   // With its Group, it goes as the Agent's Thread, Project A's.
   expect([...refusedTo(state, "browser", true, lead)]).toEqual(["b"])
   expect([...refusedTo(state, "x", false, lead)]).toEqual(["a", "b"])
+})
+
+describe("sent by the keys, a Pane of the Project's own Group goes alone (ADR 0102, decision 4)", () => {
+  const column = (id: string, group?: string) => ({
+    id,
+    active: 0,
+    entries: [{ id, project: A, pane: terminal(id) }],
+    ...(group !== undefined && { group }),
+  })
+  /** On A's workspace: its own Group of two terminals, then an Agent's
+   * Group of a Thread and its Diff; the focus on column `focus`. */
+  const workspaces = (focus: number): Workspaces => ({
+    list: [
+      {
+        id: "a",
+        project: A,
+        own: "own",
+        focus,
+        columns: [
+          column("x1", "own"),
+          column("x2", "own"),
+          column("t1", "agent"),
+          column("d1", "agent"),
+        ],
+      },
+      { id: "bottom", focus: 0, columns: [] },
+    ],
+    current: 0,
+  })
+
+  test("the focused terminal leaves, and its own Group stays with the rest", () => {
+    const state = workspaces(1)
+    expect(takesGroup(current(state), current(state).columns[1])).toBe(false)
+    const sent = send(state, 1)
+    expect(columns(sent, 0)).toEqual([["x1"], ["t1"], ["d1"]])
+    expect(sent.list[0].own).toBe("own")
+    expect(sent.list[0].columns[0].group).toBe("own")
+    expect(columns(sent, 1)).toEqual([["x2"]])
+    expect(sent.list[1].columns[0].group).toBeUndefined()
+    expect(focusName(sent)).toBe("x2")
+  })
+
+  test("a Pane of an Agent's Group still takes the whole Group, as one window (ADR 0065)", () => {
+    const state = workspaces(2)
+    expect(takesGroup(current(state), current(state).columns[2])).toBe(true)
+    const sent = send(state, 1)
+    expect(columns(sent, 0)).toEqual([["x1"], ["x2"]])
+    expect(columns(sent, 1)).toEqual([["t1"], ["d1"]])
+  })
+})
+
+/** Projects by their IDs and names, as the window knows them. */
+const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>
+  Object.fromEntries(
+    Object.entries(names).map(([id, name]) => [
+      id,
+      { id, name, scratch: scratch.includes(id) } as unknown as ProjectSummary,
+    ])
+  )
+
+test("a refusal names whose workspace it is, and where the Pane can go (ADR 0102, decision 6)", () => {
+  const { a, b, s } = projectsOf({ a: "Banda", b: "Brand", s: "" }, ["s"])
+  const told = (said: Partial<Parameters<typeof refusalOf>[0]>) =>
+    refusalOf({ to: 1, owner: b, as: a, along: false, ...said })
+  expect(told({})).toEqual({
+    title: "Workspace 2 is Brand's",
+    description: "Banda's Panes go to its workspace, a free one or a new one.",
+  })
+  // Taken along by an Agent's Group of another Project, it hears that a
+  // drag takes it alone.
+  expect(told({ along: true }).description).toBe(
+    "It goes with its Group, which is Banda's. Drag it to move it alone."
+  )
+  expect(told({ as: s }).description).toBe(
+    "A Pane of no Project goes to a free workspace or a new one."
+  )
+  expect(told({ as: s, along: true }).description).toBe(
+    "It goes with its Group, which is of no Project. Drag it to move it alone."
+  )
+  // A name not known: another Project's.
+  expect(told({ owner: undefined, as: undefined })).toEqual({
+    title: "Workspace 2 is another Project's",
+    description:
+      "A Pane goes to its Project's workspace, a free one or a new one.",
+  })
+})
+
+test("a Pane carried over a workspace hears whose it is, or where it goes; over its own, nothing (ADR 0102, decision 6)", () => {
+  const one = (id: string, project: string) => ({
+    id,
+    active: 0,
+    entries: [{ id, project, pane: terminal(id) }],
+  })
+  const state: Workspaces = {
+    list: [
+      { id: "a", project: A, focus: 0, columns: [one("x1", A)] },
+      { id: "b", project: B, focus: 0, columns: [one("y1", B)] },
+      { id: "free", focus: 0, columns: [one("z1", B)] },
+      { id: "bottom", focus: 0, columns: [] },
+    ],
+    current: 2,
+  }
+  const projects = projectsOf({ [A]: "Banda", [B]: "Brand" })
+  const notes = (pane: string, refused: string[] = []) =>
+    notesOf(state, pane, new Set(refused), (project) => projects[project])
+  expect([...notesOf(state, "x1", new Set(["b"]), () => undefined)]).toEqual([
+    ["b", "Workspace 2 is another Project's"],
+    ["free", "To free workspace 3"],
+    ["bottom", "To a new workspace"],
+  ])
+  expect(Object.fromEntries(notes("x1", ["b"]))).toEqual({
+    b: "Workspace 2 is Brand's",
+    free: "To free workspace 3",
+    bottom: "To a new workspace",
+  })
+  expect(Object.fromEntries(notes("z1"))).toEqual({
+    a: "To Banda's workspace",
+    b: "To Brand's workspace",
+    bottom: "To a new workspace",
+  })
+  expect(notesOf(state, "z1", new Set(), () => undefined).get("a")).toBe(
+    "To its Project's workspace"
+  )
 })

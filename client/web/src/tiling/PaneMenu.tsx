@@ -1,5 +1,6 @@
 import { type ComponentType, useState } from "react"
 import { createPortal } from "react-dom"
+import type { ProjectSummary } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
 import { useAfterMenu } from "@banda/ui/components/context-menu"
 import {
@@ -9,6 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
 } from "@banda/ui/components/dropdown-menu"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { cn } from "@banda/ui/lib/utils"
 import {
   AppWindowIcon,
@@ -42,10 +44,12 @@ export type Stand = {
   /** A column stands on its left, on its right. */
   left: boolean
   right: boolean
-  /** Its workspace's number, from 1, of how many there are: the empty
-   * one at the bottom is the last. */
+  /** Its workspace's number, from 1. */
   workspace: number
-  workspaces: number
+  /** Each workspace, from the top, the empty one at the bottom last: its
+   * Project, if it is a Project's, and whether the keys refuse to move the
+   * Pane there (ADR 0102, decision 6). */
+  targets: readonly { owner?: ProjectSummary; refused: boolean }[]
   /** It is in a window of its own (ADR 0025, decision 9). */
   away: boolean
   /** The look's steps: `[columns] presets` and `heights`. */
@@ -134,7 +138,7 @@ export function PaneMenu({
   const [reaches, setReaches] = useState<DOMRect>()
   const alone = stand.panes === 1
   const stacked = stand.panes > 1 && !stand.deck
-  const own = stand.workspaces - 1
+  const own = stand.targets.length - 1
   return (
     <>
       <DropdownMenuGroup>
@@ -207,28 +211,39 @@ export function PaneMenu({
         disabled={alone && !stand.right}
         act={() => run("pane.consume-right")}
       />
-      {own > 0 && stand.workspaces <= 9 && (
+      {own > 0 && stand.targets.length <= 9 && (
         <div className="flex items-center gap-1.5 px-1.5 py-0.5 text-sm">
           <LayersIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex-1">To workspace</span>
-          {Array.from({ length: stand.workspaces }, (_, i) => i + 1).map(
-            (n) => (
+          {stand.targets.map(({ owner, refused }, i) => {
+            // A Project's shows its Sign, as the bar does, and one the Pane
+            // may not go to is greyed out.
+            const n = i + 1
+            const bottom = i === own
+            const action = `pane.send-${n}`
+            return (
               <DropdownMenuItem
                 key={n}
-                disabled={n === stand.workspace}
+                disabled={n === stand.workspace || refused}
                 aria-label={
-                  n === stand.workspaces
+                  bottom
                     ? "To a new workspace"
-                    : `To workspace ${n}`
+                    : `To workspace ${n}${owner ? `, ${owner.name}'s` : ""}`
                 }
-                title={keyOf(`pane.send-${n}`)}
+                title={owner ? keyOf(action, owner.name) : keyOf(action)}
                 className="min-w-6 justify-center px-1.5 tabular-nums"
-                onClick={() => run(`pane.send-${n}`)}
+                onClick={() => run(action)}
               >
-                {n === stand.workspaces ? <PlusIcon /> : n}
+                {bottom ? (
+                  <PlusIcon />
+                ) : owner ? (
+                  <ProjectSign project={owner} />
+                ) : (
+                  n
+                )}
               </DropdownMenuItem>
             )
-          )}
+          })}
         </div>
       )}
       {frame.popOut && (

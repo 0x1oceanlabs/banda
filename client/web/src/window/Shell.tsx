@@ -130,6 +130,7 @@ import {
   focusedIn,
   strayedIn,
   runAction,
+  targetsOf,
   updating,
   type Shell as Parts,
   windowApiOf,
@@ -293,6 +294,11 @@ export function Shell({
   useEffect(() => {
     projectsNow.current = projects
   }, [projects])
+  // Any Project by its ID, its folder missing or not, as the bar names it.
+  const projectOf = useCallback(
+    (id: ProjectId) => projects.find((project) => project.id === id),
+    [projects]
+  )
   useMadeGoesHome(projects, flow, change)
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
@@ -556,6 +562,7 @@ export function Shell({
       }),
     look: () => told,
     projects: () => open,
+    projectOf,
     toggleSidebar,
     showSidebar,
     toggleOverview,
@@ -712,7 +719,7 @@ export function Shell({
         case "thread":
           return change((w) =>
             row.beside
-              ? bringing(w, row.project, row.listed.pane)
+              ? bringing(w, row.project, row.listed.pane, placing, projectOf)
               : picking(w, row.project, row.listed.pane, placing)
           )
         case "action":
@@ -733,7 +740,7 @@ export function Shell({
           return row.row.run(parts)
       }
     },
-    [change, placing, newThreadIn, parts, here]
+    [change, placing, projectOf, newThreadIn, parts, here]
   )
 
   const frame: Frame = useMemo(
@@ -783,7 +790,7 @@ export function Shell({
           left: spot.column > 0,
           right: spot.column < workspace.columns.length - 1,
           workspace: spot.workspace + 1,
-          workspaces: state.list.length,
+          targets: targetsOf(state, spot, parts.projectOf),
           away: awayNow.current.has(entry),
           presets: look.presets,
           heights: look.heights,
@@ -810,11 +817,6 @@ export function Shell({
       }),
     [frame, parts]
   )
-  const projectOf = useCallback(
-    (id: ProjectId) => projects.find((project) => project.id === id),
-    [projects]
-  )
-
   return (
     <KeysInForce.Provider value={keys}>
       <Kept

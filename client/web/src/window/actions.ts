@@ -77,7 +77,8 @@ import {
   focusedColumn,
   isFree,
   movingAs,
-  REFUSED,
+  refusalOf,
+  refusedTo,
   admits,
   fresh,
   go,
@@ -92,8 +93,11 @@ import {
   share,
   shift,
   step,
+  takesGroup,
   toEdge,
   widen,
+  type Spot,
+  type Workspace,
   type Workspaces,
 } from "../tiling/model"
 
@@ -122,6 +126,9 @@ export type Shell = WindowApi & {
   pick: (project: ProjectId, pane: PaneState) => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
+  /** A Project by its ID, its folder missing or not, as the bar names it:
+   * `projects` has only the open ones. */
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** Closes every Pane that shows `item` of `project`, on any workspace:
    * it is put away, archived or put off (ADR 0069; ADR 0074). */
   putAway: (project: ProjectId, item: string) => void
@@ -289,35 +296,91 @@ export function strayedIn(
   )
 }
 
+/** In the row and solo, as agents.toml says now: a Project's workspace
+ * holds its Panes only (ADR 0102, decision 6). */
+const strictNow = () => fileNow(AGENTS_FILE).flow !== "free"
+
+/** The toast a refused move shows: one, however long the key is held. */
+const REFUSED = "workspace-refused"
+
+/** Says why a move onto workspace `to` was refused: whose it is, and where
+ * a Pane that moves as `as` can go, by `projectOf` (`refusalOf`). `to` is
+ * numbered as in `w`, before the move, as the bar shows it: a move lets
+ * an emptied free workspace above it go. */
+function sayRefused(
+  w: Workspaces,
+  to: Workspace,
+  as: ProjectId,
+  along: boolean,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
+) {
+  const { title, description } = refusalOf({
+    to: w.list.findIndex((one) => one.id === to.id),
+    owner: to.project === undefined ? undefined : projectOf(to.project),
+    as: projectOf(as),
+    along,
+  })
+  toast(title, { id: REFUSED, description })
+}
+
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
- * window (ADR 0065). */
-function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
+ * window (ADR 0065), but one of the Project's own Group goes alone
+ * (`takesGroup`). */
+function moving(
+  w: Workspaces,
+  how: (w: Workspaces) => Workspaces,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
+): Step {
   const { workspace, column } = focusedColumn(w)
   const entry = focused(w)
   const next = how(w)
   if (!entry || next === w) return undefined
-  const to = current(next).id
+  const to = current(next)
+  const whole = takesGroup(workspace, column)
   // Never onto another Project's workspace, in the row and solo (ADR
-  // 0102, decision 6): it says why, once however long the key is held.
-  const as = movingAs(w, entry.id, column?.group !== undefined, leads)
+  // 0102, decision 6): it says whose it is, and where the Pane can go.
+  const as = movingAs(w, entry.id, whole, leads)
   if (
-    to !== workspace.id &&
+    to.id !== workspace.id &&
     as !== undefined &&
-    !admits(current(next), as) &&
-    fileNow(AGENTS_FILE).flow !== "free"
+    !admits(to, as) &&
+    strictNow()
   ) {
-    toast(REFUSED, {
-      id: REFUSED,
-      description: "A Pane goes to its Project's workspace, or to a free one.",
-    })
+    // Taken along by its Group, it would go there alone, by a drag.
+    const along = as !== entry.project && admits(to, entry.project)
+    sayRefused(w, to, as, along, projectOf)
     return undefined
   }
-  if (column?.group !== undefined && to !== workspace.id) {
+  if (whole && to.id !== workspace.id) {
     const plan = columnMoved(next, column.id)
     return plan && { ...plan, want: entry.id }
   }
   return moved(next, entry.id)
+}
+
+/** Moves the focused Pane as `moving` does, where `how` puts it. */
+const moveFocused = (shell: Shell, how: (w: Workspaces) => Workspaces) =>
+  shell.change((w) => moving(w, how, shell.projectOf))
+
+/** Each workspace as the Pane menu's "To workspace" offers it to the
+ * Pane at `spot`, as `moving` would move it: its Project, and whether the
+ * keys refuse the move there (ADR 0102, decision 6). */
+export function targetsOf(
+  state: Workspaces,
+  spot: Spot,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
+): { owner?: ProjectSummary; refused: boolean }[] {
+  const workspace = state.list[spot.workspace]
+  const column = workspace.columns[spot.column]
+  const entry = column.entries[spot.entry].id
+  const refused = strictNow()
+    ? refusedTo(state, entry, takesGroup(workspace, column), leads)
+    : new Set<string>()
+  return state.list.map((w) => ({
+    owner: w.project === undefined ? undefined : projectOf(w.project),
+    refused: refused.has(w.id),
+  }))
 }
 
 /** Shows a Pane of a Project and focuses it, as `how` says; a new column
@@ -379,12 +442,21 @@ export function updating(
 }
 
 /** Shows a Pane here, right of the focused one, with its width; one
- * another workspace shows moves here. */
+ * another workspace shows moves here. Never onto another Project's
+ * workspace, in the row and solo, as `placing` says: as `Alt+Shift+N`, it
+ * says why, by `projectOf` (ADR 0102, decision 6). */
 export function bringing(
   workspaces: Workspaces,
   project: ProjectId,
-  pane: PaneState
+  pane: PaneState,
+  placing: Placing,
+  projectOf: (project: ProjectId) => ProjectSummary | undefined
 ): Step {
+  const workspace = current(workspaces)
+  if (placing.flow !== "free" && !admits(workspace, project)) {
+    sayRefused(workspaces, workspace, project, false, projectOf)
+    return undefined
+  }
   const next = bring(workspaces, project, pane, {
     place: "right",
     width: widthOf(pane),
@@ -679,8 +751,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: `Move the Pane ${direction}, or to the workspace ${PAST[direction]}`,
     keys: [{ code: ARROWS[direction], mod: true, shift: true }],
     whenHeld: `pane.move-${direction}`,
-    run: (shell: Shell) =>
-      shell.change((w) => moving(w, (w) => carry(w, direction))),
+    run: (shell: Shell) => moveFocused(shell, (w) => carry(w, direction)),
   })),
   {
     id: "column.wider",
@@ -891,14 +962,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Take the Pane into the column on the left, or out of its own",
     // As niri's Mod+[.
     keys: [{ code: "BracketLeft", mod: true }],
-    run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "left"))),
+    run: (shell) => moveFocused(shell, (w) => consume(w, "left")),
   },
   {
     id: "pane.consume-right",
     section: "Panes",
     title: "Take the Pane into the column on the right, or out of its own",
     keys: [{ code: "BracketRight", mod: true }],
-    run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "right"))),
+    run: (shell) => moveFocused(shell, (w) => consume(w, "right")),
   },
   {
     id: "column.maximize",
@@ -1372,8 +1443,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     family: "Move the Pane to a workspace",
     title: `Move the Pane to workspace ${n}`,
     keys: [{ code: `Digit${n}`, mod: true, shift: true }],
-    run: (shell: Shell) =>
-      shell.change((w) => moving(w, (w) => send(w, n - 1))),
+    run: (shell: Shell) => moveFocused(shell, (w) => send(w, n - 1)),
   })),
   // The launcher's letters (ADR 0025, decision 4).
   ...windowModule.actions,
