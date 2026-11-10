@@ -245,6 +245,12 @@ Machines) and `clip-notes.png`.
      away. Send once it is back." The other states take the same pill:
      "Banda is stopped on arc · Start", "arc runs another build · Update
      arc".
+     _Amended 2026-11-10 by
+     [ADR 0105](0105-honest-when-away-what-the-person-sees-while-a-machine-is-away-and-what-may-wait-for-it.md)
+     (proposed): in a started Thread, while the machine is away, stopped
+     or on another build, Send is not off. It reads "Send when back", the
+     message waits at the end of the Thread, and the pill adds
+     "· 1 waiting". A New Thread's Send stays off, and its draft stays._
    - A terminal on arc, once there is one, names the machine after its
      folder. A Pane that does not open there yet says "Not on arc yet"
      under the machine's icon.
