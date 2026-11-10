@@ -187,7 +187,7 @@ function Place({
       aria-label={name}
       onClick={onClick}
       className={cn(
-        "flex h-6 shrink-0 items-center gap-2 rounded-md text-xs text-muted-foreground outline-none hover:bg-foreground/7 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 [&_svg]:shrink-0",
+        "flex h-6 shrink-0 items-center gap-2 rounded-control text-xs text-muted-foreground outline-none hover:bg-foreground/7 hover:text-foreground focus-visible:ring-1 focus-visible:ring-ring [&_svg]:size-3.5 [&_svg]:shrink-0",
         folded ? "w-7 justify-center" : "w-full px-2",
         on && "bg-foreground/10 text-foreground"
       )}

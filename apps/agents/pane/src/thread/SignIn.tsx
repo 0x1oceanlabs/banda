@@ -261,7 +261,7 @@ function TerminalWay({
       )}
       {starting.problem && <Problem>{starting.problem}</Problem>}
       <div className="flex items-center gap-1.5">
-        <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs">
+        <code className="min-w-0 flex-1 truncate rounded-control bg-muted px-2 py-1 font-mono text-xs">
           {line}
         </code>
         <CopyButton text={line} label="Copy the command" />

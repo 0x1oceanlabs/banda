@@ -78,7 +78,7 @@ export function LimitCard({
     <div
       role="group"
       aria-label={title}
-      className="my-1 max-w-160 rounded-(--block-radius) border border-border bg-warning/5 px-3 pt-2.5 pb-3 text-sm"
+      className="my-1 max-w-160 rounded-card border border-border bg-warning/5 px-3 pt-2.5 pb-3 text-sm"
     >
       <div className="flex items-center gap-2 font-medium">
         <PauseMark />
@@ -213,7 +213,7 @@ function WayOn({
       <PopoverContent
         side="top"
         align="start"
-        className="w-80 gap-0 rounded-(--block-radius) p-1"
+        className="w-80 gap-0 rounded-card p-1"
       >
         <MoveConfirm
           move={move}

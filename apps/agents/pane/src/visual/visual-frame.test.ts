@@ -22,7 +22,7 @@ const TOKENS: Record<string, string> = {
   "--accent": "#bb9af7",
   "--chart-1": "#7aa2f7",
   "--chart-2": "#9ece6a",
-  "--radius": "0.625rem",
+  "--control-radius": "0.625rem",
 }
 const read = (token: string) => TOKENS[token] ?? ""
 
@@ -34,6 +34,7 @@ test("a Visual wears T3 Code's names in the look's colours", () => {
   expect(look.variables["--warning"]).toBe("#ff9e64")
   expect(look.variables["--info"]).toBe("#9ece6a")
   expect(look.variables["--chart-6"]).toBe("#7aa2f7")
+  expect(look.variables["--radius"]).toBe("0.625rem")
   expect(look.variables["--destructive-surface"]).toBe(
     "color-mix(in oklab, #f7768e 16%, transparent)"
   )
@@ -108,7 +109,7 @@ test("main's look for a page comes from the look's scheme asked, its vars and it
       light: { "--background": "white", "--added": "green" },
       dark: { "--background": "black" },
     },
-    vars: { "--radius": "4px", "--font-family-sans": "Inter" },
+    vars: { "--control-radius": "4px", "--font-family-sans": "Inter" },
   } as unknown as Look
   const dark = visualLookOf(look, true)
   expect(dark.variables["--background"]).toBe("black")

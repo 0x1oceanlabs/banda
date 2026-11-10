@@ -1428,7 +1428,7 @@ function ViewSwitch({
     <div
       role="radiogroup"
       aria-label="View"
-      className="flex shrink-0 items-center gap-px rounded-md p-px"
+      className="flex shrink-0 items-center gap-px rounded-control p-px"
     >
       {VIEWS.map((one) => (
         <Button

@@ -192,7 +192,7 @@ export default function FontView(props: PreviewProps) {
             <h3 className="text-xs font-medium text-muted-foreground">
               Characters
             </h3>
-            <div className="grid grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-px overflow-hidden rounded-block bg-border">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-px overflow-hidden rounded-card bg-border">
               {glyphs.slice(0, MOST_GLYPHS).map((char) => {
                 const code = `U+${char.toString(16).toUpperCase().padStart(4, "0")}`
                 return (

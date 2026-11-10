@@ -138,7 +138,7 @@ function Inside({
         onClick()
       }}
       className={cn(
-        "flex size-5 shrink-0 items-center justify-center rounded opacity-0 group-hover/extension:opacity-100 group-data-[highlighted]/extension:opacity-100 hover:bg-foreground/10 [&_svg]:size-3.5",
+        "flex size-5 shrink-0 items-center justify-center rounded-small opacity-0 group-hover/extension:opacity-100 group-data-[highlighted]/extension:opacity-100 hover:bg-foreground/10 [&_svg]:size-3.5",
         className
       )}
     >
@@ -181,7 +181,7 @@ function ActionIcon({ action, tab }: { action: Action; tab: number | null }) {
       {text && (
         <span
           style={{ background: color }}
-          className="absolute -right-1.5 -bottom-1 rounded-sm bg-primary px-0.5 text-[9px] leading-3 font-medium text-white"
+          className="absolute -right-1.5 -bottom-1 rounded-small bg-primary px-0.5 text-[9px] leading-3 font-medium text-white"
         >
           {text}
         </span>

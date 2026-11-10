@@ -290,7 +290,7 @@ function Tree({
               event.stopPropagation()
               toggle(row)
             }}
-            className="flex size-4 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:text-foreground"
+            className="flex size-4 shrink-0 items-center justify-center rounded-small text-muted-foreground hover:text-foreground"
           >
             <ChevronRightIcon
               className={cn(

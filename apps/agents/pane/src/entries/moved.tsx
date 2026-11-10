@@ -48,7 +48,7 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
             type="button"
             aria-expanded={open}
             onClick={() => setOpen(!open)}
-            className="inline-flex items-center gap-1.5 rounded-md px-2 py-0.5 whitespace-nowrap hover:bg-accent hover:text-foreground"
+            className="inline-flex items-center gap-1.5 rounded-control px-2 py-0.5 whitespace-nowrap hover:bg-accent hover:text-foreground"
           >
             {line}
           </button>
@@ -68,7 +68,7 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
         )}
       </div>
       {open && handed && (
-        <dl className="mx-auto mt-2 grid max-w-xl grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 rounded-lg border px-3 py-2 text-xs text-muted-foreground">
+        <dl className="mx-auto mt-2 grid max-w-xl grid-cols-[6rem_1fr] gap-x-2 gap-y-0.5 rounded-control border px-3 py-2 text-xs text-muted-foreground">
           <dt className="text-muted-foreground/70">Went</dt>
           <dd>
             {plural(handed.messages, "message", "messages")},{" "}

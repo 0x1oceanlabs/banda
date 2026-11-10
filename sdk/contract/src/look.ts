@@ -15,6 +15,7 @@ export type { Look } from "./generated/look/Look"
 export type { Device } from "./generated/look/Device"
 export {
   BANDA,
+  RENAMED,
   TOKENS,
   type Token,
   type TokenGroup,

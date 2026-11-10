@@ -14,7 +14,7 @@ const TOKENS = {
   "--normal-bg": "var(--color-popover)",
   "--normal-text": "var(--color-popover-foreground)",
   "--normal-border": "var(--color-border)",
-  "--border-radius": "var(--radius)",
+  "--border-radius": "var(--card-radius)",
 } as CSSProperties
 
 /** The edge says each toast's kind at a glance, as the Mark's colours do:

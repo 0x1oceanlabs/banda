@@ -215,7 +215,7 @@ export function Workspaces({
               // the Strip, from its screen to the whole of it, and rounds it
               // round the tiles, the outer gap between them.
               overview &&
-                "overflow-clip rounded-[calc(var(--tile-radius)+var(--gap-outer))] bg-desk glass:bg-transparent",
+                "overflow-clip rounded-window bg-desk glass:bg-transparent",
               // An empty one shows as its slim row in the overview alone.
               overview &&
                 workspace.columns.length === 0 &&

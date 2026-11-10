@@ -97,7 +97,7 @@ export function SharingSettings({ engine }: SectionProps) {
         </Rows>
       </Group>
       {shared?.never && (
-        <p className="rounded-lg border border-dashed px-4 py-2 text-xs text-muted-foreground">
+        <p className="rounded-control border border-dashed px-4 py-2 text-xs text-muted-foreground">
           {NEVER[shared.never]}
         </p>
       )}
@@ -123,7 +123,7 @@ function SentRow({ sent }: { sent: Sent }) {
         <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
           {sent.about}
         </span>
-        <span className="rounded-md border px-1.5 py-px text-[11px] text-muted-foreground">
+        <span className="rounded-control border px-1.5 py-px text-[11px] text-muted-foreground">
           {sent.sent === null ? "waiting" : `sent ${clock(sent.sent)}`}
         </span>
         <span className="w-12 text-right text-xs text-muted-foreground tabular-nums">
@@ -131,7 +131,7 @@ function SentRow({ sent }: { sent: Sent }) {
         </span>
       </button>
       {open && (
-        <pre className="mx-4 mb-3 overflow-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
+        <pre className="mx-4 mb-3 overflow-auto rounded-control bg-muted px-2.5 py-2 font-mono text-[11.5px] leading-relaxed whitespace-pre-wrap text-muted-foreground">
           {sent.json}
         </pre>
       )}

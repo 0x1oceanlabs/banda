@@ -12,7 +12,6 @@
 # theme = { light = "tokyo-night-light", dark = "forest-dusk" }
 
 # mode = "system"                    # "system", "light" or "dark"
-# radius = 7                         # every corner is a step of it; 0 squares all
 # hyprland = false                   # true takes Hyprland's rounding, border and gaps; theme "omarchy" does
 
 # Palette entries over the theme's, by name or hex. For example:
@@ -23,6 +22,17 @@
 # (the list: platform/theme/src/tokens.rs): a palette name, another
 # token's name, or a colour as it is, never var() or color-mix().
 # [tokens]
+
+# The corners, in pixels, from the theme (ADR 0080, decision 6). A theme
+# says two: the window's and a control's. A tile's is the window's less
+# the outer gap, a card's the tile's less 8, a chip's 0.6 of a control's;
+# none below 0. The old `radius` still reads, as `roundness` of it over
+# 7: `radius = 7` is the theme's own, `radius = 0` square.
+# [shape]
+# window = 30                        # the window, the desk
+# control = 10                       # a button, an input, a select
+# pill = false                       # true: controls and chips are pills
+# roundness = 1                      # times every corner: 0 square, 1.2 rounder
 
 # [gaps]
 # inner = 8                          # between tiles, in pixels
@@ -45,8 +55,9 @@
 # sidebar = "panel"                  # "panel" floats as glass; "desk" sits on it
 # sidebar-shadow = 0.45              # the panel's shadow: 0 none, 1 the darkest
 
+# A tile's corner is the window's less the outer gap; `radius` says
+# another: pixels, or a step of a control's ("sm" … "4xl").
 # [tile]
-# radius = "xl"                      # a step ("sm" … "4xl") or pixels
 # border = 1
 # opacity = 1                        # over a glass desk; 1 is solid
 # shadow = 0                         # over a glass desk: 0 none, 1 the darkest

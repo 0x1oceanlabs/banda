@@ -324,7 +324,7 @@ function Steps({
             key={step}
             aria-label={`${picture === "width" ? "Width" : "Height"} ${step}`}
             data-on={lit || undefined}
-            className="flex-1 flex-col gap-1 rounded-md border border-transparent py-1.5 text-xs text-muted-foreground data-on:border-border data-on:bg-muted data-on:text-foreground"
+            className="flex-1 flex-col gap-1 rounded-control border border-transparent py-1.5 text-xs text-muted-foreground data-on:border-border data-on:bg-muted data-on:text-foreground"
             onClick={() => choose(step)}
             disabled={passed}
             onPointerEnter={point && (() => point(seen))}
@@ -334,14 +334,14 @@ function Steps({
           >
             <span
               className={cn(
-                "flex rounded-[3px] border-[1.5px] border-muted-foreground/50 p-0.5",
+                "flex rounded-small border-[1.5px] border-muted-foreground/50 p-0.5",
                 picture === "width" ? "h-5 w-9" : "h-7 w-6 flex-col",
                 lit && "border-foreground/70"
               )}
             >
               <span
                 className={cn(
-                  "rounded-[1px] bg-muted-foreground/60",
+                  "rounded-small bg-muted-foreground/60",
                   lit && "bg-focus"
                 )}
                 style={

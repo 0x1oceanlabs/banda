@@ -79,7 +79,7 @@ export function Row({
       type={field ? undefined : "button"}
       aria-current={current ? "true" : undefined}
       className={cn(
-        "flex w-full min-w-0 flex-col gap-0.5 rounded-lg border border-transparent px-2 text-left transition-colors outline-none",
+        "flex w-full min-w-0 flex-col gap-0.5 rounded-control border border-transparent px-2 text-left transition-colors outline-none",
         "hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
         one ? "py-1" : "py-1.5",
         current && "border-border bg-tile shadow-xs hover:bg-tile"
@@ -113,7 +113,7 @@ export function Row({
   return (
     <div data-row className="group/row relative">
       {button}
-      <span className="absolute top-1 right-1 hidden items-center rounded-md bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex">
+      <span className="absolute top-1 right-1 hidden items-center rounded-control bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex">
         {action}
       </span>
     </div>

@@ -12,6 +12,7 @@
 /// <reference types="node" />
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, sep } from "node:path"
+import { TOKENS } from "@banda/contract/look"
 import ts from "typescript"
 
 /**
@@ -210,6 +211,41 @@ export function layoutMotion(source: string): string[] {
     )
       found.push(`@keyframes ${start[1]}`)
   }
+  return found
+}
+
+/** The corners a component may take: the five levels, as the token list
+ * has them (ADR 0080, decision 6), round, none, or its holder's. */
+const LEVELS = Object.entries(TOKENS)
+  .filter(([, { group }]) => group === "radius")
+  .map(([name]) => name.replace(/-radius$/, ""))
+const ROUNDING = new Set([...LEVELS, "full", "none", "[inherit]"])
+const CORNER = new RegExp(
+  `^(?:var\\(--(?:${LEVELS.join("|")})-radius\\)|0|9999px|50%|inherit)$`
+)
+
+/**
+ * Each corner `source`, a source file or a stylesheet, rounds by other
+ * than a level, once for each place it does: a Tailwind class that is no
+ * level (`rounded-md`, `rounded-[3px]`, `rounded-(--x)`, a bare
+ * `rounded`), a CSS `border-radius` of another value (px, `calc()`,
+ * `min()`), and a style's `borderRadius`. Comments are no place, so words
+ * such as "rounded up" are not taken for a class.
+ */
+export function corners(source: string): string[] {
+  const code = source
+    .replace(/\/\*[\s\S]*?\*\//g, "")
+    .replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
+  const found: string[] = []
+  for (const [match, value] of code.matchAll(
+    /(?<![\w./-])rounded(?:-(?:tl|tr|bl|br|ss|se|es|ee|[tblrse]))?(?:-(\w+|\[[^\]\s]*\]|\([^)\s]*\)))?(?![\w./-])/g
+  ))
+    if (value === undefined || !ROUNDING.has(value)) found.push(match)
+  for (const [match, value] of code.matchAll(
+    /(?<![\w-])border(?:-[a-z]+)*-radius\s*:\s*([^;{}"'`]+)/g
+  ))
+    if (!CORNER.test(value.trim())) found.push(match.trim())
+  for (const [match] of code.matchAll(/\bborderRadius\b/g)) found.push(match)
   return found
 }
 

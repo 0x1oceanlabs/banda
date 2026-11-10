@@ -231,7 +231,7 @@ export function HostLines({
     <div
       key={project.id}
       title={project.folder}
-      className="flex min-w-0 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-sm"
+      className="flex min-w-0 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-sm"
     >
       <ProjectSign project={project} />
       <span className="min-w-0 flex-1 truncate">{project.name}</span>

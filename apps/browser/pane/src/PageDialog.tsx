@@ -63,7 +63,7 @@ export function PageDialog({
         aria-modal={false}
         aria-labelledby={title}
         aria-describedby={message}
-        className="grid max-h-full w-full max-w-sm gap-4 overflow-y-auto rounded-xl border bg-popover p-5 text-sm text-popover-foreground shadow-xl"
+        className="grid max-h-full w-full max-w-sm gap-4 overflow-y-auto rounded-card border bg-popover p-5 text-sm text-popover-foreground shadow-xl"
         onSubmit={(event) => {
           event.preventDefault()
           void answer(true)

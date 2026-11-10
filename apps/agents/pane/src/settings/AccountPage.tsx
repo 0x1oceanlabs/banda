@@ -206,7 +206,7 @@ function Hero({
   }
   return (
     <div
-      className="flex items-center gap-3 rounded-xl p-4"
+      className="flex items-center gap-3 rounded-card p-4"
       style={{
         background: `color-mix(in srgb, ${emblemColour(harness)} 14%, transparent)`,
       }}

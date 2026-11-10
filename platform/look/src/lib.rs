@@ -971,21 +971,56 @@ fn problem_of(wrong: Wrong) -> Problem {
     }
 }
 
+/// A pill's corner: past half of any side, so its ends are round.
+const PILL: f64 = 9999.0;
+
+/// The room inside a tile, between its edge and a card in it, as the
+/// window lays them out (docs/design): a card's corner is the tile's
+/// less it, so the two are concentric.
+const PADDING: f64 = 8.0;
+
+/// The five corners (ADR 0080, decision 6), in pixels: the window's and
+/// a control's as the layers say them, times `[shape] roundness`; a
+/// tile's the window's less the outer gap, unless `[tile] radius` says
+/// it; a card's the tile's less its padding; a chip's 0.6 of a control's.
+/// None is below 0. With `[shape] pill`, controls and chips are pills.
+fn corners(all: &Settings) -> [(&'static str, f64); 5] {
+    let shape = &all.shape;
+    let roundness = shape.roundness.unwrap_or(1.0);
+    let window = shape.window.unwrap_or(0.0) * roundness;
+    let control = shape.control.unwrap_or(0.0) * roundness;
+    let tile = match all.tile.radius {
+        Some(Corner::Step(step)) => control * step.factor(),
+        Some(Corner::Pixels(px)) => px * roundness,
+        None => window - all.gaps.outer.unwrap_or(0.0),
+    }
+    .max(0.0);
+    let card = (tile - PADDING).max(0.0);
+    let (control, small) = if shape.pill == Some(true) {
+        (PILL, PILL)
+    } else {
+        (control, control * 0.6)
+    };
+    [
+        ("window-radius", window),
+        ("tile-radius", tile),
+        ("card-radius", card),
+        ("control-radius", control),
+        ("small-radius", small),
+    ]
+}
+
 /// The sizes as CSS variables, in pixels.
 fn vars(all: &Settings) -> BTreeMap<String, String> {
-    let radius = all.radius.unwrap_or(10.0);
-    let tile = match all.tile.radius.unwrap_or(Corner::Step(settings::Step::Xl)) {
-        Corner::Step(step) => radius * step.factor(),
-        Corner::Pixels(px) => px,
-    };
     let mut vars = BTreeMap::new();
     let mut put = |name: &str, value: Option<f64>, unit: &str| {
         if let Some(value) = value.filter(|v| v.is_finite() && *v >= 0.0) {
             vars.insert(format!("--{name}"), format!("{}{unit}", thousandths(value)));
         }
     };
-    put("radius", Some(radius), "px");
-    put("tile-radius", Some(tile), "px");
+    for (name, corner) in corners(all) {
+        put(name, Some(corner), "px");
+    }
     put("tile-border", all.tile.border, "px");
     put("gap-inner", all.gaps.inner, "px");
     put("gap-outer", all.gaps.outer, "px");

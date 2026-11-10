@@ -34,7 +34,7 @@ export function Card({
       role={region ? "region" : "group"}
       aria-label={label ?? title}
       className={cn(
-        "flex flex-col rounded-block border bg-block text-sm",
+        "flex flex-col rounded-card border bg-block text-sm",
         className
       )}
     >
@@ -76,7 +76,7 @@ export function Docked({
     <div
       role="group"
       aria-label={label}
-      className={cn("rounded-bubble border bg-block text-sm", className)}
+      className={cn("rounded-card border bg-block text-sm", className)}
       {...props}
     />
   )

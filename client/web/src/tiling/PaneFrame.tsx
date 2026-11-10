@@ -448,7 +448,7 @@ export const PaneFrame = memo(function PaneFrame({
               {mixed && !item && summary && (
                 <ProjectName
                   project={summary}
-                  className="shrink-0 gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground"
+                  className="shrink-0 gap-1 rounded-small bg-muted px-1.5 text-xs text-muted-foreground"
                 />
               )}
               {!item && <PaneSlot {...slot} at="project" />}
@@ -456,7 +456,7 @@ export const PaneFrame = memo(function PaneFrame({
                 <button
                   type="button"
                   title={keyFor("pane.zoom", "Back in its column")}
-                  className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  className="flex shrink-0 items-center gap-1 rounded-small bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
                   onClick={() => frame.run("pane.zoom")}
                 >
                   <Minimize2Icon className="size-3" />

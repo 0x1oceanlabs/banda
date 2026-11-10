@@ -203,7 +203,7 @@ export function ModelPicker({
       <PopoverContent
         side="top"
         align="end"
-        className="w-72 gap-0 rounded-(--block-radius) p-1"
+        className="w-72 gap-0 rounded-card p-1"
       >
         {out && !confirming && (
           <p className="px-2.5 pt-1.5 pb-1 text-xs text-warning">
@@ -441,7 +441,7 @@ function Row({
       type="button"
       role="option"
       aria-selected={on}
-      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent"
+      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent"
       onClick={onClick}
     >
       {logo}

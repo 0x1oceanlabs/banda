@@ -123,7 +123,7 @@ export function AccountLogin({
           </p>
           <pre
             aria-label="Sign-in output"
-            className="max-h-48 overflow-auto rounded-md border p-3 text-xs [overflow-wrap:anywhere] whitespace-pre-wrap select-text"
+            className="max-h-48 overflow-auto rounded-control border p-3 text-xs [overflow-wrap:anywhere] whitespace-pre-wrap select-text"
           >
             {output.text || "Waiting for the sign-in instructions…"}
           </pre>

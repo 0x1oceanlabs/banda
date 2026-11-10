@@ -76,7 +76,7 @@ export function SectionView({
         type="button"
         aria-expanded={!section.folded}
         className={cn(
-          "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          "flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
           project ? "font-medium text-foreground" : "text-muted-foreground"
         )}
         onClick={onToggle}
@@ -163,7 +163,7 @@ export function SectionView({
           {(hidden > 0 || more) && (
             <button
               type="button"
-              className="rounded-md px-2 py-1 text-left text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              className="rounded-control px-2 py-1 text-left text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
               onClick={onMore}
             >
               {more ? "Show fewer" : `Show ${hidden} more`}

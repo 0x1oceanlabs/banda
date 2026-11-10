@@ -77,7 +77,7 @@ export function DetailsRow({
     </>
   )
   const look = cn(
-    "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-foreground/80",
+    "flex w-full min-w-0 items-center gap-2 rounded-control px-2 text-[13px] font-medium text-foreground/80",
     wrap ? "min-h-8 py-1.5" : "h-8"
   )
   if (!props.onClick) return <div className={cn(look, className)}>{inner}</div>

@@ -5,10 +5,14 @@
 # `blue` (ADR 0075, decision 6). The Mac's shape over Banda's: the
 # system's font at 13, and a bar as tall as a window's title with its
 # toolbar, for the traffic lights. Buttons are the accent, as the Mac's
-# default buttons are.
+# default buttons are. The corners are the ones Banda had on the Mac, a
+# tile about 10 and a control 7, until Tahoe's are measured on a Mac (ADR
+# 0100, step 5).
 name = "macOS"
 
 [shape]
+window = 18
+control = 7
 bar.height = 38
 
 [font]

@@ -213,7 +213,7 @@ function Item({
       {...(folder ? drop : {})}
       style={{ left, width: FILM.item }}
       className={cn(
-        "absolute top-2 flex cursor-default flex-col items-center gap-1 rounded-lg p-1",
+        "absolute top-2 flex cursor-default flex-col items-center gap-1 rounded-control p-1",
         picked ? "bg-foreground/12" : "hover:bg-foreground/5",
         entry.ignored && "opacity-55",
         over && "bg-ring/20"
@@ -222,7 +222,7 @@ function Item({
       <div
         data-pulse={colour ? "" : undefined}
         style={{ ...pulseStyle(colour), ...PICTURE }}
-        className="flex items-center justify-center overflow-hidden rounded-md bg-foreground/6 text-muted-foreground"
+        className="flex items-center justify-center overflow-hidden rounded-control bg-foreground/6 text-muted-foreground"
       >
         {picture ? (
           <img

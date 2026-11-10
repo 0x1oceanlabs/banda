@@ -122,7 +122,7 @@ function Renamer({
       <div
         ref={holder}
         tabIndex={-1}
-        className="min-h-48 flex-1 overflow-hidden rounded-md border outline-none"
+        className="min-h-48 flex-1 overflow-hidden rounded-control border outline-none"
       >
         {review ? (
           <CodeDiff

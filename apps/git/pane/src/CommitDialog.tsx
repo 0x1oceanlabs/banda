@@ -89,7 +89,7 @@ export function CommitDialog({
         </DialogHeader>
         <ul
           aria-label="Files"
-          className="max-h-52 overflow-y-auto rounded-lg border font-mono text-xs"
+          className="max-h-52 overflow-y-auto rounded-control border font-mono text-xs"
         >
           {files.map((file) => {
             const takes = !out.has(file.path)

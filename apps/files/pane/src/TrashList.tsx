@@ -259,7 +259,7 @@ export function TrashList({
                   event.preventDefault()
                 }}
                 className={cn(
-                  "flex h-6 w-full items-center gap-2 rounded-md px-2 text-left text-xs outline-none hover:bg-foreground/7 focus-visible:ring-1 focus-visible:ring-ring",
+                  "flex h-6 w-full items-center gap-2 rounded-control px-2 text-left text-xs outline-none hover:bg-foreground/7 focus-visible:ring-1 focus-visible:ring-ring",
                   on && "bg-foreground/10"
                 )}
               >

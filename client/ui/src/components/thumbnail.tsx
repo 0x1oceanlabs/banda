@@ -26,7 +26,7 @@ function Thumbnail({
     props: mergeProps<"div">(
       {
         className: cn(
-          "group/thumbnail relative block shrink-0 overflow-hidden rounded-md bg-muted ring-1 ring-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
+          "group/thumbnail relative block shrink-0 overflow-hidden rounded-control bg-muted ring-1 ring-foreground/10 outline-none focus-visible:ring-2 focus-visible:ring-ring",
           SIZES[size],
           className
         ),

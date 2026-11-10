@@ -79,7 +79,7 @@ export function PathBar({
           aria-label="Filter"
           title={keyLabel(idOf("filter"), "Filter")}
           onClick={onFilter}
-          className="flex size-6 shrink-0 items-center justify-center rounded-md text-muted-foreground hover:bg-foreground/7 hover:text-foreground [&_svg]:size-3.5"
+          className="flex size-6 shrink-0 items-center justify-center rounded-control text-muted-foreground hover:bg-foreground/7 hover:text-foreground [&_svg]:size-3.5"
         >
           <SearchIcon />
         </button>
@@ -200,7 +200,7 @@ function CrumbButton({
       aria-label={label}
       aria-current={last ? "location" : undefined}
       className={cn(
-        "flex h-6 min-w-0 shrink items-center rounded-md px-1.5 text-xs text-muted-foreground hover:bg-foreground/7 hover:text-foreground",
+        "flex h-6 min-w-0 shrink items-center rounded-control px-1.5 text-xs text-muted-foreground hover:bg-foreground/7 hover:text-foreground",
         last && "shrink-0 text-foreground"
       )}
       {...rest}
@@ -331,7 +331,7 @@ function PathField({
           }
         }}
         className={cn(
-          "h-6 min-w-0 flex-1 rounded-md border bg-transparent px-2 font-mono text-xs outline-none focus:border-ring",
+          "h-6 min-w-0 flex-1 rounded-control border bg-transparent px-2 font-mono text-xs outline-none focus:border-ring",
           wrong && "border-destructive/60"
         )}
       />
@@ -339,7 +339,7 @@ function PathField({
         <div
           role="listbox"
           aria-label="Folders"
-          className="absolute top-7 right-0 left-0 z-20 rounded-lg bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+          className="absolute top-7 right-0 left-0 z-20 rounded-card bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
           onMouseDown={(event) => event.preventDefault()}
         >
           {wrong ? (
@@ -355,7 +355,7 @@ function PathField({
                   field.current?.focus()
                 }}
                 className={cn(
-                  "flex h-6 cursor-default items-center gap-2 rounded-md px-2 font-mono text-xs",
+                  "flex h-6 cursor-default items-center gap-2 rounded-control px-2 font-mono text-xs",
                   n === picked && "bg-foreground/8"
                 )}
               >

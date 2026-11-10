@@ -13,6 +13,13 @@
 # `extends` and the colours you change.
 name = "Banda"
 
+# Banda's shape is airy and round (ADR 0100, decisions 3 and 11): the
+# window 30, so a tile 22 inside the 8 of the outer gap, and a card 14
+# inside the tile's padding; a control 10, a chip 6.
+[shape]
+window = 30
+control = 10
+
 [colors]
 accent = { light = "#0b6fe0", dark = "#4ea3ff" }
 selection = { light = "#cfe1fb", dark = "#1e3a5f" }

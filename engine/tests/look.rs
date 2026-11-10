@@ -11,13 +11,17 @@ use std::time::Duration;
 #[test]
 fn look_prints_the_resolved_look_as_json() {
     let config = tempfile::tempdir().unwrap();
-    std::fs::write(config.path().join("look.toml"), "radius = 6\n").unwrap();
+    std::fs::write(
+        config.path().join("look.toml"),
+        "[shape]\nwindow = 20\ncontrol = 6\n[gaps]\nouter = 8\n",
+    )
+    .unwrap();
     let out = banda(config.path(), &["look"]);
     assert!(out.status.success());
     let look: serde_json::Value = serde_json::from_slice(&out.stdout).unwrap();
     assert_eq!(look["mode"], "system");
-    assert_eq!(look["vars"]["--radius"], "6px");
-    assert_eq!(look["vars"]["--tile-radius"], "8.4px");
+    assert_eq!(look["vars"]["--control-radius"], "6px");
+    assert_eq!(look["vars"]["--tile-radius"], "12px");
     assert!(look["schemes"]["light"]["--background"].is_string());
     assert!(look["schemes"]["dark"]["--background"].is_string());
 }

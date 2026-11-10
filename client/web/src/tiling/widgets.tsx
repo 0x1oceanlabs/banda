@@ -145,7 +145,7 @@ function WorkspaceList({
         ref={mark}
         aria-hidden
         hidden={style !== "numbers"}
-        className="pointer-events-none absolute top-1/2 left-[0.0625rem] -mt-3 size-6 rounded-md bg-muted"
+        className="pointer-events-none absolute top-1/2 left-[0.0625rem] -mt-3 size-6 rounded-control bg-muted"
       />
       {workspaces.map((w) => {
         const here = w.index === current
@@ -172,7 +172,7 @@ function WorkspaceList({
                   ? name
                   : `${whose}${keyFor(`workspace.go-${number}`, name)}`
             }
-            className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
+            className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-control text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
             onClick={() => onPick(w.index)}
           >
             {style === "dots" ? (
@@ -187,7 +187,7 @@ function WorkspaceList({
             ) : (
               <span
                 className={cn(
-                  "relative flex size-6 shrink-0 items-center justify-center rounded-md",
+                  "relative flex size-6 shrink-0 items-center justify-center rounded-control",
                   // Emptied: a free one goes once the Person leaves it; in
                   // the row and solo, a Project's keeps its place while its
                   // Project has Threads (ADR 0102, decision 2).

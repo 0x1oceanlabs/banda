@@ -70,7 +70,7 @@ const MODES: (Choice & { id: Mode; icon: LucideIcon; short?: string })[] = [
 
 /** A menu that floats as the chat's popups do (ADR 0058): a block's
  * corner over the menu's own fill, ring and shadow. */
-const MENU = "rounded-(--block-radius) shadow-md"
+const MENU = "rounded-card shadow-md"
 /** A row of such a menu: a button's corner, room around its words. */
 const ROW = "py-1.5 pl-2.5"
 

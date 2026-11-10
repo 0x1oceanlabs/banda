@@ -101,7 +101,7 @@ export function Title({
     <>
       <h2
         ref={anchor}
-        className="-ml-1 flex h-6 min-w-0 shrink items-center rounded-md pr-0.5 pl-1 font-medium text-muted-foreground transition-colors group-data-[selected=true]/tile:text-foreground group-data-[focused=true]/tile:hover:bg-foreground/6 data-open:bg-foreground/6"
+        className="-ml-1 flex h-6 min-w-0 shrink items-center rounded-control pr-0.5 pl-1 font-medium text-muted-foreground transition-colors group-data-[selected=true]/tile:text-foreground group-data-[focused=true]/tile:hover:bg-foreground/6 data-open:bg-foreground/6"
         data-open={open || undefined}
       >
         <span
@@ -251,7 +251,7 @@ export function TitleField({
   return (
     <span
       className={cn(
-        "relative flex h-6 min-w-40 flex-1 items-center rounded-md bg-background ring-1 ring-ring/60",
+        "relative flex h-6 min-w-40 flex-1 items-center rounded-control bg-background ring-1 ring-ring/60",
         className
       )}
     >
@@ -294,7 +294,7 @@ export function TitleField({
           aria-label="Suggest a title"
           title={keyFor(suggest.id, "Suggest a title")}
           className={cn(
-            "mr-0.5 flex size-5 shrink-0 items-center justify-center rounded-sm text-muted-foreground hover:bg-foreground/8 hover:text-foreground",
+            "mr-0.5 flex size-5 shrink-0 items-center justify-center rounded-small text-muted-foreground hover:bg-foreground/8 hover:text-foreground",
             thinking && "animate-pulse text-foreground"
           )}
           // The field keeps the focus, so it stays open.

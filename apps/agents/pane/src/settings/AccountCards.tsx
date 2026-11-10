@@ -53,7 +53,7 @@ export function HarnessGroup({
         {children}
         <button
           type="button"
-          className="flex min-h-20 items-center justify-center gap-1.5 rounded-xl border border-dashed text-sm text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-20 items-center justify-center gap-1.5 rounded-card border border-dashed text-sm text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onAdd}
         >
           <PlusIcon className="size-4" />
@@ -165,14 +165,14 @@ function Frame({
       role="group"
       aria-label={harness.name}
       className={cn(
-        "relative flex min-w-0 flex-col gap-2.5 rounded-xl border bg-card p-3 hover:border-foreground/30",
+        "relative flex min-w-0 flex-col gap-2.5 rounded-card border bg-card p-3 hover:border-foreground/30",
         dim && "opacity-70"
       )}
     >
       <button
         type="button"
         aria-label={`Open ${harness.name}`}
-        className="absolute inset-0 rounded-xl outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        className="absolute inset-0 rounded-card outline-none focus-visible:ring-2 focus-visible:ring-ring"
         onClick={onOpen}
       />
       <div className="flex min-w-0 items-center gap-2.5">
@@ -184,7 +184,7 @@ function Frame({
         {role && (
           <span
             className={cn(
-              "rounded-md bg-secondary px-1.5 py-0.5 text-[10px]",
+              "rounded-control bg-secondary px-1.5 py-0.5 text-[10px]",
               role === "Fallback" && "text-muted-foreground"
             )}
           >

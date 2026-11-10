@@ -280,7 +280,7 @@ function About({ update, working }: { update: Update; working: number }) {
           />
           <div className="px-3.5">
             <Notes notes={update.notes} />
-            <div className="mt-2.5 flex items-center gap-1.5 rounded-md bg-muted py-1 pr-1 pl-2.5">
+            <div className="mt-2.5 flex items-center gap-1.5 rounded-control bg-muted py-1 pr-1 pl-2.5">
               <code className="min-w-0 flex-1 truncate text-xs">
                 {update.command}
               </code>
@@ -317,7 +317,7 @@ function About({ update, working }: { update: Update; working: number }) {
             <p className="text-[11px] text-muted-foreground">{update.name}</p>
             <p className="mt-0.5 text-sm font-medium">Cannot update itself</p>
           </div>
-          <p className="mx-3.5 rounded-md bg-destructive/10 px-2.5 py-2 font-mono text-xs break-words text-destructive">
+          <p className="mx-3.5 rounded-control bg-destructive/10 px-2.5 py-2 font-mono text-xs break-words text-destructive">
             {update.reason}
           </p>
           <Foot>
@@ -421,7 +421,7 @@ function Meter({ share }: { share: number }) {
 /** That a restart stops the turns of the Threads that work, if any do. */
 function Warning({ words }: { words: string | undefined }) {
   return words ? (
-    <p className="mx-3.5 mt-2.5 flex gap-2 rounded-md bg-attention/10 px-2.5 py-2 text-xs text-attention">
+    <p className="mx-3.5 mt-2.5 flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-xs text-attention">
       <span
         aria-hidden
         data-update-breath

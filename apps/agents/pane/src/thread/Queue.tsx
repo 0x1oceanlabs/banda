@@ -202,7 +202,7 @@ function Action(props: React.ComponentProps<"button">) {
   return (
     <button
       type="button"
-      className="rounded-sm transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+      className="rounded-small transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
       {...props}
     />
   )
@@ -236,7 +236,7 @@ function EditWaiting({
         value={editing}
         autoFocus
         aria-label="Waiting message"
-        className="min-h-0 rounded-(--bubble-radius) border-border bg-block px-3.5 text-(length:--prose-size) leading-(--prose-leading) focus-visible:border-foreground/15 focus-visible:ring-0 md:text-(length:--prose-size) dark:bg-block"
+        className="min-h-0 rounded-card border-border bg-block px-3.5 text-(length:--prose-size) leading-(--prose-leading) focus-visible:border-foreground/15 focus-visible:ring-0 md:text-(length:--prose-size) dark:bg-block"
         onChange={(event) => setEditing(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {

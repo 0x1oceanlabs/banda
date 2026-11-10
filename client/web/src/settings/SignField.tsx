@@ -156,7 +156,7 @@ export function SignField({
         <div
           role="tablist"
           aria-label="Sign"
-          className="flex rounded-lg bg-muted p-0.5"
+          className="flex rounded-control bg-muted p-0.5"
         >
           {WAYS.map(({ way: one, title }) => (
             <button
@@ -166,7 +166,7 @@ export function SignField({
               aria-selected={way === one}
               onClick={() => setWay(one)}
               className={cn(
-                "flex-1 rounded-md py-1 text-xs text-muted-foreground",
+                "flex-1 rounded-control py-1 text-xs text-muted-foreground",
                 way === one && "bg-background text-foreground shadow-xs"
               )}
             >
@@ -332,7 +332,7 @@ function Cell({
       title={label}
       onClick={onClick}
       className={cn(
-        "flex aspect-square items-center justify-center rounded-md text-muted-foreground hover:bg-accent hover:text-foreground",
+        "flex aspect-square items-center justify-center rounded-control text-muted-foreground hover:bg-accent hover:text-foreground",
         on && "bg-accent text-foreground ring-1 ring-ring"
       )}
     >

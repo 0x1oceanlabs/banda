@@ -50,7 +50,7 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
   return (
     <ul
       aria-label="What waits"
-      className="flex flex-col rounded-lg py-1 ring-1 ring-border ring-inset"
+      className="flex flex-col rounded-control py-1 ring-1 ring-border ring-inset"
     >
       {waits.map(({ name, holds, kind }) => {
         const Icon = kind === "file" ? PlugIcon : FolderIcon

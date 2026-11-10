@@ -76,7 +76,7 @@ function List({
             type="button"
             aria-label={`Servers: ${words}`}
             title={words}
-            className="flex h-6 items-center gap-1 rounded-md px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
+            className="flex h-6 items-center gap-1 rounded-control px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
           />
         }
       >
@@ -150,7 +150,7 @@ function Row({
         aria-label={`Stop ${address(server.port)}`}
         title="Stop server"
         tabIndex={-1}
-        className="flex size-6 items-center justify-center rounded-md opacity-0 group-hover/dropdown-menu-item:opacity-100 group-focus/dropdown-menu-item:opacity-100 hover:bg-destructive/10"
+        className="flex size-6 items-center justify-center rounded-control opacity-0 group-hover/dropdown-menu-item:opacity-100 group-focus/dropdown-menu-item:opacity-100 hover:bg-destructive/10"
         onClick={(event) => {
           // The row opens what its square stops.
           event.stopPropagation()

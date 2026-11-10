@@ -90,6 +90,11 @@
   --gap-inner: 8px;
   --gap-outer: 8px;
   --bar-height: 36px;
+  --window-radius: 30px;
+  --tile-radius: 22px;
+  --card-radius: 14px;
+  --control-radius: 10px;
+  --small-radius: 6px;
   --font-family-sans: "Inter Variable", sans-serif;
   --font-family-mono: "JetBrains Mono Variable", monospace;
   --text-root: 16px;

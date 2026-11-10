@@ -11,7 +11,7 @@ function Diff({
     <figure
       data-slot="diff"
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-md border bg-block text-code text-foreground",
+        "flex min-w-0 flex-col overflow-hidden rounded-control border bg-block text-code text-foreground",
         className
       )}
       {...props}

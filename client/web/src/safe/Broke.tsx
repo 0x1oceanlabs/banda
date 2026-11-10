@@ -72,7 +72,7 @@ export function BrokeCard({
     <main className="grid h-dvh place-items-center p-6">
       <section
         aria-labelledby={title}
-        className="flex w-full max-w-md flex-col gap-2 rounded-lg border bg-popover p-5 text-popover-foreground shadow-lg"
+        className="flex w-full max-w-md flex-col gap-2 rounded-card border bg-popover p-5 text-popover-foreground shadow-lg"
       >
         {page && (
           <BandaMark
@@ -87,7 +87,7 @@ export function BrokeCard({
         </h1>
         <p className="text-sm text-muted-foreground">{text.body}</p>
         {page && (
-          <p className="truncate rounded-md bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground">
+          <p className="truncate rounded-control bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground">
             {broke.said}
           </p>
         )}

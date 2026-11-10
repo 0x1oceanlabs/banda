@@ -359,6 +359,10 @@ mod every_key {
         "look.toml:desk.wallpaper-dark",
         // None: the drawer's Thread starts on this computer's first Harness.
         "look.toml:drawer.harness",
+        // None: the old corner keys, read when a file still says them; the
+        // tile is the window's less the outer gap (ADR 0080, decision 6).
+        "look.toml:radius",
+        "look.toml:tile.radius",
         // None: a new Thread starts on the first account on, with no
         // fallback (ADR 0093, decision 7).
         "agents.toml:start.account",

@@ -98,7 +98,7 @@ export function AskToShare({ engine }: { engine: Engine }) {
             <Field
               key={key}
               orientation="horizontal"
-              className="rounded-lg border px-3 py-2.5"
+              className="rounded-control border px-3 py-2.5"
             >
               <Checkbox
                 id={`${id}-${key}`}
@@ -128,7 +128,7 @@ export function AskToShare({ engine }: { engine: Engine }) {
               (["exception", "day"] as const).map((event) => (
                 <pre
                   key={event}
-                  className="max-h-36 overflow-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
+                  className="max-h-36 overflow-auto rounded-control bg-muted px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
                 >
                   {JSON.stringify(example.value[event], null, 2)}
                 </pre>

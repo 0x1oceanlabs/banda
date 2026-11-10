@@ -186,13 +186,15 @@ Five levels ([0080] d6), each inside the one above it:
 - **Heights**: the bar 36 (macOS 38), a Pane header 40 in the kit, a
   control 28, an icon button 28 or 24 in a header, a menu's item 30, a
   sidebar row about 28, a card three lines.
-- **The shape is not shipped yet.** The window draws shadcn's ladder from
-  `radius = 7`: a tile about 10, a block 8.4, the bubble and the message
-  box 11.2 ([0075] d1, [`look.toml`](../../platform/look/look.toml)). The
-  five levels come with [0100]'s step 3, and Banda's shape against the
-  system's (take the system's, keep Banda's inside, or always Banda's) is
-  Roma's call after the theme sandbox: [0100] d11 is open. Mocks use the
-  kit's numbers.
+- **The window draws these levels** ([0100] step 3): tokens
+  `--window-radius` … `--small-radius`, classes `rounded-window` …
+  `rounded-small`, and a test refuses any other corner. A theme says
+  `window` and `control` in `[shape]`; the tile is the window less the
+  outer gap, the card the tile less 8, the small 0.6 of a control.
+  Omarchy takes Hyprland's rounding for the window's corner and a third
+  of it for a control's, so Hyprland square is Banda square ([0100] d11,
+  way A). shadcn's ladder lands on them: `sm` small, `md` and `lg`
+  control, `xl` and up card.
 
 ### Elevation
 
@@ -572,7 +574,6 @@ The kit draws where the ADRs go; the window is on its way there.
 
 | What | The kit | The window today |
 |---|---|---|
-| radii | 30 / 22 / 14 / 10 / 6 | shadcn's ladder from 7: tile ~10, block 8.4, bubble 11.2 ([0100] step 3; d11 open) |
 | a tile over glass | 95% | solid ([0075] d3) |
 | the Pane header | 40 px | 36 px (`pane-header.tsx`) |
 | the Mark | ADR 0099's seven looks, doings, satellites | the eight states before ADR 0099 |

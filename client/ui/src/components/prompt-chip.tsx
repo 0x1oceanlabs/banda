@@ -73,7 +73,7 @@ function removesChip(tr: Transaction): boolean {
 /** As inline code in a reply (ADR 0058, decision 1): a chip's corner, the
  * raised fill, and the weight of the text it sits in. */
 const CHIP =
-  "mx-px inline-flex items-baseline gap-1 rounded-sm bg-raised px-1 align-baseline [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-ring/50"
+  "mx-px inline-flex items-baseline gap-1 rounded-small bg-raised px-1 align-baseline [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-ring/50"
 
 /** A chip's icon, drawn as the window's other icons are. */
 function icon(paths: readonly string[]): SVGSVGElement {
