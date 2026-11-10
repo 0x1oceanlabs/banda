@@ -152,17 +152,17 @@ export function routeAct(
   if (asked !== undefined) {
     // The Pane's own Project, and Here's as a Pane's act comes again
     // through the window's run from the Pane in focus, is placed as the
-    // Pane is; so is one no machine the Window knows has that a Pane
-    // names, as its host has not listed it yet, which goes there, never
-    // to this machine. One another machine has is placed by the directory,
-    // so a Pane never lends its host to a third machine's Project. Args
-    // name no host: the directory places a Project by its ID alone.
+    // Pane is; a Pane's host counts only for a Project no machine the
+    // Window knows has, as its host has not listed it yet, which goes
+    // there, never to this machine (`KeptHosts.hostOf`). One another
+    // machine has is placed by the directory, so a Pane never lends its
+    // host to a third machine's Project. Args name no host: the directory
+    // places a Project by its ID alone.
     const by = "pane" in from ? from.pane : from.here
     const lends =
       typeof by === "object" &&
       "project" in by &&
-      (by.project === asked ||
-        (pane !== undefined && hosts.hostOf(asked) === null))
+      (by.project === asked || pane !== undefined)
     owner = lends ? { project: asked, pane: by.pane } : { project: asked }
     // A Pane of the window's or the device's, as the Sheet's, holds no
     // machine's values, so the Project it names is placed alone.
