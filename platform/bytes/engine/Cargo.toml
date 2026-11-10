@@ -12,7 +12,6 @@ async-trait.workspace = true
 axum.workspace = true
 banda-kernel = { path = "../../../kernel" }
 dunce.workspace = true
-file-id.workspace = true
 futures.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -21,6 +20,9 @@ ts-rs.workspace = true
 
 [target.'cfg(unix)'.dependencies]
 libc.workspace = true
+
+[target.'cfg(windows)'.dependencies]
+winapi-util.workspace = true
 
 [dev-dependencies]
 reqwest.workspace = true

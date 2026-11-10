@@ -2,7 +2,6 @@
 //! opened through no link and known by what it is on its disk, so a token
 //! never serves another file put in its place, nor one a link leads to.
 
-use file_id::FileId;
 use std::fs::File;
 use std::io;
 use std::path::Path;
@@ -50,13 +49,15 @@ pub fn on_this_machine_on(windows: bool, path: &[u8]) -> bool {
     }
 }
 
+/// What a file is on its disk, as the open file itself says: its device
+/// and inode, on Windows its volume's serial number and its file index.
+pub type Identity = (u64, u64);
+
 /// A file opened as a token serves it.
 pub struct Pinned {
     pub file: File,
     pub size: u64,
-    /// What it is on its disk: its device and inode, on Windows its volume
-    /// and file ID.
-    pub id: FileId,
+    pub id: Identity,
 }
 
 /// Why no file is served at a path.
@@ -82,22 +83,25 @@ impl From<io::Error> for Unpinned {
 
 /// The file at `path`, which is whole and its own real path: opened
 /// through no link, as no link is on the way to it and its last name is
-/// opened without following one, and a regular file.
+/// opened without following one, and a regular file. On Windows the open
+/// may follow a link put in its place; the file's ID, which the caller
+/// compares, is then another's.
 pub fn pin(path: &Path) -> Result<Pinned, Unpinned> {
     if dunce::canonicalize(path)? != path {
         return Err(Unpinned::Moved);
     }
-    // Windows opens no folder to read, so there a folder is told apart
-    // first.
-    if cfg!(not(unix)) && !std::fs::metadata(path)?.is_file() {
+    // Looked at before it is opened, as the window's host only looked: the
+    // open of a device acts on it, and Windows opens no folder to read.
+    if !std::fs::metadata(path)?.is_file() {
         return Err(Unpinned::NoFile);
     }
     let file = open(path)?;
+    // Looked at again as it is open, as that is the file served.
     let meta = file.metadata()?;
     if !meta.is_file() {
         return Err(Unpinned::NoFile);
     }
-    let id = identity(&meta, path)?;
+    let id = identity(&file, &meta)?;
     Ok(Pinned {
         file,
         size: meta.len(),
@@ -117,32 +121,29 @@ fn open(path: &Path) -> io::Result<File> {
         .open(path)
 }
 
-/// Opens `path` to read, sharing it with readers and writers but never
-/// with a rename or a delete: while it is open, no other file takes its
-/// path, so what its path is read as below is the file opened.
+/// Opens `path` to read, shared with readers, writers, a rename and a
+/// delete, as the window's host opened it, so a save over it or a
+/// checkout never fails while it is served. Windows may follow a link at
+/// its last name: the file's ID, read from the file opened, tells.
 #[cfg(not(unix))]
 fn open(path: &Path) -> io::Result<File> {
-    use std::os::windows::fs::OpenOptionsExt;
-    // FILE_SHARE_READ | FILE_SHARE_WRITE, without FILE_SHARE_DELETE.
-    const READ_AND_WRITE: u32 = 0x1 | 0x2;
-    File::options()
-        .read(true)
-        .share_mode(READ_AND_WRITE)
-        .open(path)
+    File::open(path)
 }
 
-/// What the file opened is on its disk, by the open file itself.
+/// What the file opened is on its disk.
 #[cfg(unix)]
-fn identity(meta: &std::fs::Metadata, _: &Path) -> io::Result<FileId> {
+fn identity(_: &File, meta: &std::fs::Metadata) -> io::Result<Identity> {
     use std::os::unix::fs::MetadataExt;
-    Ok(FileId::new_inode(meta.dev(), meta.ino()))
+    Ok((meta.dev(), meta.ino()))
 }
 
-/// What the file opened is on its disk, by its path: Rust's own reading
-/// of it is not stable on Windows, and the open file keeps its path.
+/// What the file opened is on its disk, read from the open file, never
+/// from its path again, which another file may take as it is read.
+/// Rust's own reading of it is not stable on Windows.
 #[cfg(not(unix))]
-fn identity(_: &std::fs::Metadata, path: &Path) -> io::Result<FileId> {
-    file_id::get_file_id(path)
+fn identity(file: &File, _: &std::fs::Metadata) -> io::Result<Identity> {
+    let info = winapi_util::file::information(file)?;
+    Ok((info.volume_serial_number(), info.file_index()))
 }
 
 #[cfg(test)]
@@ -245,9 +246,14 @@ mod tests {
         ));
         assert!(matches!(pin(&folder.join("b.txt")), Err(Unpinned::Moved)));
         assert!(pin(&folder.join("real/a.txt")).is_ok());
+        // Nor by the open itself, should a link take the file's place
+        // after it was looked at.
+        assert!(open(&folder.join("b.txt")).is_err());
     }
 
-    /// Without `O_NONBLOCK` the open would wait for a writer, for ever.
+    /// A pipe is refused before it is opened; and opened, should one take
+    /// a file's place after it was looked at, it is not waited on, as
+    /// without `O_NONBLOCK` its open would wait for a writer for ever.
     #[cfg(unix)]
     #[test]
     fn a_pipe_is_no_file_and_its_open_does_not_wait() {
@@ -260,5 +266,12 @@ mod tests {
             .unwrap();
         assert!(made.success());
         assert!(matches!(pin(&pipe), Err(Unpinned::NoFile)));
+        let (sent, opened) = std::sync::mpsc::channel();
+        std::thread::spawn(move || {
+            let opened = open(&pipe).and_then(|file| file.metadata());
+            sent.send(opened.map(|meta| meta.is_file())).ok();
+        });
+        let opened = opened.recv_timeout(std::time::Duration::from_secs(10));
+        assert!(!opened.expect("the open waited").unwrap(), "no file");
     }
 }

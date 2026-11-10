@@ -25,6 +25,7 @@ on:
       # cfg(windows) and cfg(not(unix)).
       - kernel/src/**
       - engine/src/**
+      - platform/bytes/engine/src/**
       - platform/environments/src/**
       - platform/git-cli/src/**
       - platform/harnesses/engine/src/**
