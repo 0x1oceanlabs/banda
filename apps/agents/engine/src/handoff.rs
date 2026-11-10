@@ -122,12 +122,14 @@ impl Line {
 }
 
 /// The lines of `items` that go: messages, tool calls, plans and
-/// Questions with their answers. Thoughts, notices, pages and issues do
-/// not.
+/// Questions with their answers. Thoughts, notices, dividers, pages and
+/// issues do not.
 fn lines(items: &[Item]) -> Vec<Line> {
     items.iter().filter_map(line).collect()
 }
 
+/// The line `item` gives, if it goes. Each kind of entry is decided here,
+/// so a new one does not compile until it is (ADR 0103, decision 10).
 fn line(item: &Item) -> Option<Line> {
     let person = matches!(item.author, Participant::Person(_));
     let (text, asked, replied, tool) = match &item.body {
@@ -175,7 +177,11 @@ fn line(item: &Item) -> Option<Line> {
                 false,
             )
         }
-        _ => return None,
+        Body::Thought { .. }
+        | Body::Notice { .. }
+        | Body::Moved { .. }
+        | Body::Visual { .. }
+        | Body::Issue { .. } => return None,
     };
     Some(Line {
         text,

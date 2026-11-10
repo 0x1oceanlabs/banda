@@ -3,6 +3,7 @@ import { useMemo } from "react"
 import type { Engine, Event, ProjectId } from "@banda/contract"
 import {
   decodeFact,
+  knownItem,
   type ThreadId,
   type WhySupervised,
 } from "@banda/contract/agents"
@@ -35,6 +36,27 @@ export function follow(state: Followed, event: Event): Followed {
     : next
 }
 
+/**
+ * The Thread `thread` of `project` as its engine has it now. Its entries of
+ * a kind this window does not know are left out, and named once in
+ * `window.log` (ADR 0103, decision 10): a newer engine wrote them.
+ */
+export async function readThread(
+  engine: Engine,
+  project: ProjectId,
+  thread: ThreadId
+): Promise<Followed> {
+  const view = await engine.call("agents.thread", { thread }, { project })
+  const unknown = new Set(
+    view.items.filter((item) => !knownItem(item)).map((item) => item.body.kind)
+  )
+  if (unknown.size > 0)
+    console.warn(
+      `agents: left out entries of kinds this window does not know: ${[...unknown].join(", ")}`
+    )
+  return fromView(view)
+}
+
 /** The Thread `thread` of `project`, live; none to follow without one. */
 export function useThread(
   engine: Engine,
@@ -46,10 +68,7 @@ export function useThread(
       thread === null
         ? null
         : {
-            read: async (): Promise<Followed> =>
-              fromView(
-                await engine.call("agents.thread", { thread }, { project })
-              ),
+            read: () => readThread(engine, project, thread),
             filter: { module: "agents", subject: thread },
             apply: follow,
           },
