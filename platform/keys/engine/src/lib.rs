@@ -339,8 +339,8 @@ pub struct KeysModule {
     /// The file that keeps the modes the Person chose for each Harness's
     /// new Threads in Settings; none in a test that gives none.
     modes: Option<PathBuf>,
-    /// Says something in the config folder changed, by hand or by a set,
-    /// once the module watches it.
+    /// Says something in the config folder changed: by a set at once, and
+    /// by hand once the module watches it.
     heard: Arc<watch::Sender<()>>,
 }
 
@@ -407,6 +407,7 @@ impl KeysModule {
         let why = banda_settings::only_the_person(&file, &key, Some(&value));
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::set(&self.config, &file, &key, &value).map_err(refused)?;
+        self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose(modes, &file, &key, Some(&value))
         })?;
@@ -418,6 +419,7 @@ impl KeysModule {
         let why = banda_settings::only_the_person(&file, &key, None);
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::reset(&self.config, &file, &key).map_err(refused)?;
+        self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose(modes, &file, &key, None)
         })?;
@@ -429,6 +431,7 @@ impl KeysModule {
         let why = banda_settings::only_the_person_renames(&file, &key, &to);
         may_change(call.participant(), &file, &key, why)?;
         banda_settings::rename(&self.config, &file, &key, &to).map_err(refused)?;
+        self.heard.send_replace(());
         self.keep_choice(call.participant(), |modes| {
             banda_settings::chose_renamed(modes, &file, &key, &to)
         })?;
@@ -546,10 +549,18 @@ impl Module for KeysModule {
         let mut watch = match project.watch([config]) {
             Ok(watch) => watch,
             Err(error) => {
-                tracing::warn!(%error, "the machine's settings are not followed");
+                tracing::warn!(%error, "the machine's settings are not followed as they are changed by hand");
                 return Ok(());
             }
         };
+        if let [folder, ..] = watch.limited() {
+            tracing::warn!(
+                folder = %folder.display(),
+                "the system had no watch left for the config folder, so the machine's \
+                 settings are not followed as they are changed by hand: raise inotify's \
+                 max_user_watches"
+            );
+        }
         let heard = self.heard.clone();
         tokio::spawn(async move {
             while watch.next().await.is_some() {

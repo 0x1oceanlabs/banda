@@ -97,18 +97,20 @@ async fn a_machine_s_settings_are_read_and_followed_through_its_engine() {
 
     // What is not the machine's changes, in its file on its line and in a
     // file of its own: nothing is said, and the next piece is the Harness
-    // list, written by hand.
+    // list, written by hand. It reads with no problem, so its text alone
+    // tells it changed.
     let enter = json!({ "file": "agents.toml", "key": "enter", "value": "\"queue\"" });
     call("keys.settings_set", enter).await.unwrap();
     by_hand(&config, "look.toml", "radius = 4\n");
-    by_hand(&config, "harnesses.toml", "[[harness]]\nid = \"x\"\n");
+    let harnesses = "[[harness]]\nid = \"claude\"\nenabled = false\n";
+    by_hand(&config, "harnesses.toml", harnesses);
     let now = next(&mut changed).await;
     assert_eq!(now.file, "harnesses.toml");
     let read = call("keys.settings_read", json!({ "file": "harnesses.toml" }))
         .await
         .unwrap();
     assert_eq!(read["rev"], json!(now.rev));
-    assert_eq!(read["problems"].as_array().map(Vec::len), Some(1), "{read}");
+    assert_eq!(read["problems"], json!([]), "{read}");
 
     let refused = call("keys.settings_read", json!({ "file": "look.toml" }))
         .await

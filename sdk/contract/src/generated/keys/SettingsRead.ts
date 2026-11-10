@@ -6,7 +6,11 @@ import type { JsonValue } from "../serde_json/JsonValue";
 /**
  * The machine's part of a settings file, as this machine has it now.
  */
-export type SettingsRead = { file: string, 
+export type SettingsRead = { 
+/**
+ * The file's name, as `agents.toml`.
+ */
+file: string, 
 /**
  * The file as the look resolves it, for a file it resolves: the
  * machine's keys as the file says them, the rest as Banda has them.
@@ -24,6 +28,8 @@ keyed: { [key in string]: Setting },
 problems: Array<Problem>, 
 /**
  * What tells this read from another: the same while the machine's
- * part reads the same, whatever else of the file changes.
+ * keys, their lines and what is wrong at them read the same, and
+ * for a file the look only checks, its text. A change of another
+ * key alone leaves it, unless the change moves the machine's lines.
  */
 rev: string, };

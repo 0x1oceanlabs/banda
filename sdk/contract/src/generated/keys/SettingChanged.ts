@@ -3,7 +3,11 @@
 /**
  * A settings file whose machine's part reads otherwise now.
  */
-export type SettingChanged = { file: string, 
+export type SettingChanged = { 
+/**
+ * The file's name, as `agents.toml`.
+ */
+file: string, 
 /**
  * Its read's `rev` now.
  */
