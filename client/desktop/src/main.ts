@@ -53,6 +53,7 @@ import {
   Look,
   none,
   pickFolder,
+  pickSave,
   Refused,
   serve,
   Settings,
@@ -66,7 +67,7 @@ import {
   poppedRoute,
 } from "@banda/core"
 import { BRIDGE } from "./bridge"
-import { relayed } from "./bytes"
+import { relayed, saveCopy } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
@@ -575,6 +576,13 @@ async function ready(): Promise<void> {
       drag: [
         Schema.Tuple([Schema.Array(Schema.String)]),
         ([paths], event) => Effect.promise(() => dragOut(event.sender, paths)),
+      ],
+      save: [
+        Schema.Tuple([Schema.String, Schema.String]),
+        ([url, name], event) =>
+          saveCopy(url, name, (offered) =>
+            pickSave(BrowserWindow.fromWebContents(event.sender), offered)
+          ),
       ],
     },
     edit: {

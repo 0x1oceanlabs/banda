@@ -6,9 +6,13 @@ import {
   realpathSync,
   renameSync,
   rmSync,
+  createWriteStream,
   writeFileSync,
 } from "node:fs"
+import { rename } from "node:fs/promises"
 import { dirname } from "node:path"
+import type { Readable } from "node:stream"
+import { pipeline } from "node:stream/promises"
 
 /** Writes whole or not at all, so the look's follower never reads half a
  * file; a file that is a link stays one, and its target changes. A new
@@ -40,6 +44,24 @@ export function writeWholeIf(
   }
   renameSync(next, target)
   return true
+}
+
+/** As `writeWhole`, from `bytes` as they come, so a file of any size is
+ * held by the disk and not in memory. If they break off, or the disk
+ * refuses them, nothing is left of them and `file` is as it was. */
+export async function writeWholeFrom(
+  file: string,
+  bytes: Readable
+): Promise<void> {
+  const target = existsSync(file) ? realpathSync(file) : file
+  const next = `${target}.${process.pid}.new`
+  try {
+    await pipeline(bytes, createWriteStream(next))
+    await rename(next, target)
+  } catch (error) {
+    rmSync(next, { force: true })
+    throw error
+  }
 }
 
 /** `file` with `change` made to its text; `template` when it is not there. */

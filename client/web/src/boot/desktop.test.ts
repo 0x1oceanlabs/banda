@@ -16,6 +16,14 @@ test("without the desktop each part does nothing, and the settings say why they 
   ])
 })
 
+test("the device says it can save a copy where the desktop does, and in a page of its own it cannot", () => {
+  vi.stubGlobal("window", {})
+  expect(device.has("save_file")).toBe(false)
+  expect(device.has("clipboard")).toBe(true)
+  vi.stubGlobal("window", { banda: {} })
+  expect(device.has("save_file")).toBe(true)
+})
+
 test("the Panes in windows of their own come now and as they change, and nothing after the stop", async () => {
   let answer: (ids: string[]) => void = () => undefined
   let tell: (ids: string[]) => void = () => undefined

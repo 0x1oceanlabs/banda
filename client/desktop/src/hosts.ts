@@ -1005,6 +1005,11 @@ export class Hosts extends Context.Service<
      * tries a refused one again at once; it fails for one refused, or not
      * in `hosts.toml`, or taken out of it meanwhile. */
     readonly address: (name: string) => Effect.Effect<Address, Refused>
+    /** Where host `name`'s engine listens now, through the forward; none
+     * while it is not live, and for one not in `hosts.toml`. For a gesture,
+     * which goes now or says why not (ADR 0106, law 4), where `address`
+     * would wait for the link. */
+    readonly addressNow: (name: string) => Effect.Effect<Address | undefined>
     /** Starts host `name` again at once when its engine is stopped there
      * or it is refused; it fails for one not in `hosts.toml`. */
     readonly start: (name: string) => Effect.Effect<void, Refused>
@@ -1272,6 +1277,8 @@ export class Hosts extends Context.Service<
                 message: `${name}: ${one.link.why}`,
               })
             }),
+          addressNow: (name: string) =>
+            Effect.map(keptOf(name), (one) => one?.address),
           start: (name: string) =>
             Effect.asVoid(wake(name, ["stopped", "refused"])),
           add: (machine) => change((text) => addOf(text, machine)),

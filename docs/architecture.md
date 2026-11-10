@@ -1907,8 +1907,20 @@ serves any file, typed by its extension: text as plain text, so an HTML
 file never runs, and what it does not know as bytes, each never sniffed
 and sandboxed. No frame shows the byte host. The page reads its ranges
 with `fetch`, as a PDF is read: the `app` scheme allows CORS, the engine
-answers any origin, and the page's `connect-src` names the host. Until
-step 4c, a session of another machine gets no URL.
+answers any origin, and the page's `connect-src` names the host.
+
+Main also relays `app://files/<machine>/<token>` and
+`app://preview/<machine>/<token>` to the engine of the machine they
+name, `<machine>` being this device's name for it in `hosts.toml`,
+through its forward as it listens now, so a link goes on working when
+ssh comes back on a new port (`client/desktop/src/bytes.ts`). Such a
+request waits while its machine is away, as a read may, until the page
+gives it up. Until the window half of step 4c, a session of another
+machine gets no URL. "Save a copy" is the device's `save_file`
+(`files.save` on the bridge): main shows the system's save dialog, then
+fetches the bytes by the same URL and writes them whole where the Person
+picked. It goes now or says why not, so a machine that is away is told
+at once.
 
 A page among the Person's files, HTML or an SVG document, is shown by
 the sandbox host, `app://preview` (ADR 0073, decision 5), by a token
