@@ -313,6 +313,71 @@ fn a_resend_with_its_command_id_answers_what_it_did() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// What the engine at `port` answers `GET path`, asked with `headers`:
+/// its status line, its headers, and what follows them.
+fn get(port: u64, path: &str, headers: &[&str]) -> (String, String, String) {
+    use std::io::Read;
+    let port = u16::try_from(port).unwrap();
+    let mut socket = std::net::TcpStream::connect(("127.0.0.1", port)).unwrap();
+    let more: String = headers
+        .iter()
+        .map(|header| format!("{header}\r\n"))
+        .collect();
+    let asked =
+        format!("GET {path} HTTP/1.1\r\nHost: 127.0.0.1\r\n{more}Connection: close\r\n\r\n");
+    socket.write_all(asked.as_bytes()).unwrap();
+    let mut answer = String::new();
+    socket.read_to_string(&mut answer).unwrap();
+    let (head, body) = answer.split_once("\r\n\r\n").unwrap();
+    let (status, head) = head.split_once("\r\n").unwrap_or((head, ""));
+    (status.to_owned(), head.to_lowercase(), body.to_owned())
+}
+
+/// Beside its API, the engine serves a file's bytes, and a page into a
+/// frame, by the token `bytes.issue` gave (ADR 0106, step 4a).
+#[test]
+fn the_engine_serves_a_files_bytes_and_a_page_by_the_token_it_gave() {
+    let places = Places::new();
+    let (mut engine, stdin, running) = places.serve();
+    let port = running["port"].as_u64().unwrap();
+    let project = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let folder = Path::new(text(&project["folder"]));
+    std::fs::write(folder.join("a.png"), "png").unwrap();
+    std::fs::write(folder.join("index.html"), "<p>hi</p>").unwrap();
+    let issue = |path: &str, used: &str| {
+        let params = json!({ "path": path, "use": used });
+        let issued = places.ok("bytes.issue", Some(text(&project["id"])), params);
+        text(&issued["token"]).to_owned()
+    };
+    let media = issue("a.png", "media");
+    let (status, _, body) = get(port, &format!("/b/{media}"), &[]);
+    assert_eq!((status.as_str(), body.as_str()), ("HTTP/1.1 200 OK", "png"));
+
+    // A frame's navigation, as Electron's handler hears it.
+    let frame = ["Upgrade-Insecure-Requests: 1"];
+    let page = issue("index.html", "page");
+    let (status, head, body) = get(port, &format!("/p/{page}"), &frame);
+    assert_eq!(
+        (status.as_str(), body.as_str()),
+        ("HTTP/1.1 200 OK", "<p>hi</p>")
+    );
+    assert!(
+        head.contains("content-security-policy: default-src 'none';"),
+        "{head}"
+    );
+    assert!(head.contains("sandbox allow-scripts"), "{head}");
+    let (status, _, _) = get(port, &format!("/p/{media}"), &frame);
+    assert_eq!(
+        status, "HTTP/1.1 404 Not Found",
+        "a file's token is no page's"
+    );
+    let (status, _, _) = get(port, &format!("/b/{}", "0".repeat(64)), &[]);
+    assert_eq!(status, "HTTP/1.1 404 Not Found", "a token never given");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 #[test]
 fn bad_params_are_refused_before_the_engine_is_reached() {
     let places = Places::new();

@@ -184,6 +184,12 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
 
+## Bytes (`bytes`)
+
+A file's bytes, and a page shown in a frame, served beside the engine's API by a token that lasts an hour (ADR 0106; ADR 0082, decision 13): bytes.issue gives a window the token for a file as the Person reads it, and an Agent none, /b/<token> serves the file in ranges, and /p/<token> a page into a frame alone, sandboxed. A token serves the one file it was given for, as it was then, and nothing a link leads to; it lives only in the engine's memory.
+
+Its methods, `banda call bytes.<method>`: `issue`.
+
 ## Harnesses (`harnesses`)
 
 The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals.

@@ -1,4 +1,5 @@
 //! The engine's API: JSON frames over one WebSocket (ADR 0001, decision 1).
+//! Beside it, a file's bytes and a page are served by token ([`bytes`]).
 //!
 //! 1. The client's first frame is `hello`, with the protocol version and a
 //!    token. The [`Identity`] port says which Participant the token names,
@@ -240,6 +241,56 @@ pub fn router(kernel: Arc<Kernel>, identity: impl Identity, engine: impl Into<St
             identity: Box::new(identity),
             engine: engine.into(),
         }))
+}
+
+/// Where a file's bytes are beside the API, by a token the bytes module
+/// gave (ADR 0106, step 4a): `/b/<token>`, read in ranges.
+pub const BYTES_PATH: &str = "/b/{token}";
+
+/// Where a page is beside the API, for a frame alone and sandboxed:
+/// `/p/<token>`.
+pub const PAGE_PATH: &str = "/p/{token}";
+
+/// Which of the routes beside the API a request came by.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Served {
+    /// `/b/<token>`: a file's bytes.
+    Bytes,
+    /// `/p/<token>`: a page, into a frame.
+    Page,
+}
+
+/// The bytes port (ADR 0082, decision 13; ADR 0106, step 4a): what answers
+/// the routes beside the API. The bytes module answers them. The token in
+/// the path is the capability, so neither route asks who calls, and the
+/// kernel only routes: it knows nothing of files.
+pub trait Bytes: Send + Sync + 'static {
+    /// The answer to `request`, which came by `served` with `token`, the
+    /// path's last part as it was sent.
+    fn serve(
+        &self,
+        served: Served,
+        token: String,
+        request: axum::extract::Request,
+    ) -> BoxFuture<'static, Response>;
+}
+
+/// The routes beside the API, `GET` and `HEAD` of `/b/<token>` and
+/// `/p/<token>`, which `bytes` answers; another method is refused with
+/// 405. The engine serves them with its [`router`].
+pub fn bytes(bytes: impl Bytes) -> Router {
+    let bytes: Arc<dyn Bytes> = Arc::new(bytes);
+    let by = |served: Served| {
+        let bytes = bytes.clone();
+        get(move |request: axum::extract::Request| {
+            let path = request.uri().path();
+            let token = path.rsplit('/').next().unwrap_or_default().to_owned();
+            bytes.serve(served, token, request)
+        })
+    };
+    Router::new()
+        .route(BYTES_PATH, by(Served::Bytes))
+        .route(PAGE_PATH, by(Served::Page))
 }
 
 async fn upgrade(

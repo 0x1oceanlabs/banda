@@ -201,6 +201,9 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         // 0083).
         .environment(environment)
         .passes(places.passes());
+    // The tokens the bytes module gives, which the engine serves beside
+    // its API (ADR 0106, step 4a).
+    let bytes = banda_bytes::Bytes::new();
     // Every engine part in the list of Apps (ADR 0062, decision 11).
     let host = HostContext {
         places: &places,
@@ -209,6 +212,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         kept: &kept,
         machine: &machine,
         working: &working,
+        bytes: &bytes,
     };
     let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {
@@ -224,7 +228,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         owner,
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
-    let app = api::router(kernel.clone(), identity, engine);
+    let app = api::router(kernel.clone(), identity, engine).merge(api::bytes(bytes));
     // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {

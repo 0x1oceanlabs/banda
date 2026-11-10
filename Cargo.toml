@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/workspaces/engine", "tools/fake-agent"]
+members = ["apps/agents/engine", "apps/browser/engine", "apps/files/engine", "apps/git/engine", "apps/pulls/engine", "apps/terminal/engine", "engine", "kernel", "platform/bytes/engine", "platform/environments", "platform/fence", "platform/git-cli", "platform/harnesses/engine", "platform/keys/engine", "platform/look", "platform/machines/engine", "platform/problems/engine", "platform/settings", "platform/sharing/engine", "platform/skill", "platform/theme", "platform/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -24,6 +24,10 @@ dirs = "6"
 dunce = "1.0.5"
 # Thumbnails are scaled with SIMD (ADR 0073, step F6).
 fast_image_resize = { version = "6.1.0", features = ["image"] }
+# A file known by its device and inode, on Windows by its volume and file
+# ID, so a token of the bytes module serves only the file it was given
+# for (ADR 0106, step 4a). notify brings it already.
+file-id = "0.2.3"
 flate2 = "1.1.10"
 futures = "0.3"
 getrandom = "0.4.3"
