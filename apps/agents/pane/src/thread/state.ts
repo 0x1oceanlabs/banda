@@ -409,6 +409,10 @@ function project(state: ThreadState, event: Event): ThreadState {
     case "thread.unarchived":
     case "marks.moved":
       return next
+    // A deleted Thread's Panes close as the Window puts it away; until
+    // then, what one shows stays as it was.
+    case "thread.deleted":
+      return next
     case "thread.rewound": {
       // The turn and every one after it leave, with their messages and
       // what the Agent wrote in them.

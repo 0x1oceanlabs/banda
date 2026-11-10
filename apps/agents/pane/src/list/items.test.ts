@@ -1,5 +1,5 @@
 import { beforeEach, expect, test, vi } from "vitest"
-import { type Engine, Lost, type ProjectId } from "@banda/contract"
+import { type Engine, Lost, type ProjectId, Refused } from "@banda/contract"
 import { type Here, Unreachable } from "@banda/core/react"
 import {
   cleanTitle,
@@ -445,6 +445,50 @@ test("an archive whose host is away is not sent, and keeps the Thread's Panes, w
   expect(ran).toEqual([])
 })
 
+test("Delete goes to the Thread's host for the Thread it names, and puts it away once the host took it", async () => {
+  const remove = action("agents.delete-thread")
+  expect(remove.row(listed(), AT)).toBeNull()
+  const at = { project: "s1", item: "t1" }
+  const { window, sent, ran } = fake(listed())
+  // Never the one in focus: a delete is never a guess.
+  remove.run(window)
+  remove.run(window, { project: "s1" })
+  expect(sent).toEqual([])
+  remove.run(window, at)
+  expect(sent).toEqual([["agents.delete", { thread: "t1" }]])
+  expect(ran).toEqual([])
+  await vi.waitFor(() => expect(ran).toEqual([["pane.put-away", at]]))
+  expect(said.errors).toEqual([])
+})
+
+test("a delete its host refuses keeps the Thread's Panes with a toast, and one whose host is away is not sent", async () => {
+  const at = { project: "s1", item: "t1" }
+  const refusal = { code: "conflict", message: "This Thread is at work." }
+  const refused = fake(listed(), new Refused(refusal as never))
+  action("agents.delete-thread").run(refused.window, at)
+  await vi.waitFor(() =>
+    expect(said.errors).toEqual(["This Thread is at work."])
+  )
+  expect(refused.ran).toEqual([])
+
+  said.errors = []
+  const { window, sent, ran, engineOf } = fake(listed())
+  Object.assign(engineOf(undefined), { status: { state: "lost" } })
+  action("agents.delete-thread").run(window, at)
+  await vi.waitFor(() => expect(said.errors).toHaveLength(1))
+  expect(sent).toEqual([])
+  expect(ran).toEqual([])
+})
+
+test("another host's Thread is deleted on its own engine", () => {
+  const item = listed({
+    pane: { kind: "agents.thread", args: { host: "arc" } },
+  })
+  const { window, asked } = fake(item)
+  action("agents.delete-thread").run(window, { project: "s1", item: "t1" })
+  expect(asked).toEqual([{ host: "arc", name: "agents.delete" }])
+})
+
 test("another host's Thread is archived on its own engine", () => {
   const item = listed({
     pane: { kind: "agents.thread", args: { host: "arc" } },
@@ -458,7 +502,7 @@ test("another host's Thread is archived on its own engine", () => {
   expect(asked).toEqual([{ host: "arc", name: "agents.archive" }])
 })
 
-test("another host's Thread the Window does not reach now is renamed, put off to Later, woken, marked and archived nowhere: each is refused at once, in that host's words, and its Panes stay", async () => {
+test("another host's Thread the Window does not reach now is renamed, put off to Later, woken, marked, archived and deleted nowhere: each is refused at once, in that host's words, and its Panes stay", async () => {
   const item = listed({
     seen: true,
     pane: { kind: "agents.thread", args: { host: "arc" } },
@@ -475,7 +519,8 @@ test("another host's Thread the Window does not reach now is renamed, put off to
   action("thread.wake").run(away, at)
   action("thread.unread").run(away, at)
   action("agents.archive-thread").run(away, { ...at, archived: true })
-  await vi.waitFor(() => expect(said.errors).toHaveLength(5))
+  action("agents.delete-thread").run(away, at)
+  await vi.waitFor(() => expect(said.errors).toHaveLength(6))
   // Each names the machine and what was not sent.
   expect(new Set(said.errors)).toEqual(
     new Set([
@@ -484,6 +529,7 @@ test("another host's Thread the Window does not reach now is renamed, put off to
       "arc is away: Wake now was not sent.",
       "arc is away: Mark as unread was not sent.",
       "arc is away: Archive was not sent.",
+      "arc is away: Delete was not sent.",
     ])
   )
   expect(asked).toEqual([])

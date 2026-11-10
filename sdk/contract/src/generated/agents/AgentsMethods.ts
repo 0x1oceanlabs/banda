@@ -300,6 +300,15 @@ archive: CommandMethod<OneThread, null>,
  */
 unarchive: CommandMethod<OneThread, null>, 
 /**
+ * Deletes a Thread for good, as its Person asks from Archive (ADR
+ * 0098, decision 14): its messages, turns and marks leave the
+ * Project, and every list drops it. The Project's log keeps what
+ * it said, as after a rewind. A Thread not in Archive, one at
+ * work, or one that asks, is refused. Only a Person deletes a
+ * Thread.
+ */
+delete: CommandMethod<OneThread, null>, 
+/**
  * Moves the marks a window kept of this Project's Threads to
  * their host, once, by ID: the turn of each it saw last, which
  * moves seen forward only, and the Threads it showed archived,

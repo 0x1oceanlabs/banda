@@ -3,13 +3,13 @@
  * 0087, decision 12): rename it, have its Harness's small model suggest a
  * title, give back the title it had before, mark it unread or read (ADR
  * 0077), make a Project of the No Project it is in (ADR 0046), put it off
- * and wake it (ADR 0074), and archive it as the sidebar list asks (ADR
- * 0096). The Window draws their rows in the Thread menu,
- * the Pane menu and the Banda menu, and runs them by id, as any action;
- * Threads does them, on the engine of the host that lists the Thread (ADR
- * 0081).
+ * and wake it (ADR 0074), archive it as the sidebar list asks (ADR 0096),
+ * and delete it for good (ADR 0098, decision 14). The Window draws their
+ * rows in the Thread menu, the Pane menu and the Banda menu, and runs them
+ * by id, as any action; Threads does them, on the engine of the host that
+ * lists the Thread (ADR 0081).
  */
-import type { Engine, ProjectId } from "@banda/contract"
+import { type Engine, newId, type ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
 import { toast } from "@banda/ui/components/sonner"
 import {
@@ -27,6 +27,7 @@ import {
   type ItemAction,
   itemArgs,
   itemOf,
+  takes,
   type WindowApi,
 } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
@@ -413,6 +414,48 @@ const archive: ItemAction = {
   },
 }
 
+/**
+ * Deletes the Thread for good, on its host (ADR 0098, decision 14): the
+ * Window's Delete… in Archive asks it so once its Person confirmed, and
+ * draws that row and that dialog, as only Threads knows the Thread's
+ * commands. It names its Thread, never the one in focus, as a delete is
+ * never a guess. It goes `once`, as a mark does: a host away is sent
+ * nothing, and a delete whose host goes on its way is not sent again once
+ * that host is back, so one said to have failed never lands later (ADR
+ * 0096, decision 8). Once the host took it, every Pane that shows the
+ * Thread closes, as nothing is left there to show; one the host refuses,
+ * as a Thread at work, keeps its Panes, and a toast says why.
+ */
+const remove: ItemAction = {
+  id: "agents.delete-thread",
+  section: "Threads",
+  title: "Delete a Thread on its host, for good",
+  unlisted: true,
+  args: takes(
+    {
+      project: "the Project of the Thread it deletes",
+      item: "the Thread's id in its Project",
+    },
+    ["project", "item"]
+  ),
+  group: "other",
+  does: "delete",
+  elsewhere: true,
+  row: () => null,
+  run: (window, args) => {
+    const at = typeof args?.item === "string" && threadAt(window, args)
+    if (!at) return
+    const { project } = at
+    const thread = at.listed.id as ThreadId
+    reached(window, at, "Delete")
+      ?.commandAt("agents.delete", { thread }, project, newId(), { once: true })
+      .then(
+        () => window.run("pane.put-away", { project, item: thread }),
+        (error: unknown) => toast.error(problem(error, "Delete"))
+      )
+  },
+}
+
 /** Threads' item actions, in the order the Thread menu lists their rows. */
 export const threadItems: readonly ItemAction[] = [
   rename,
@@ -423,4 +466,5 @@ export const threadItems: readonly ItemAction[] = [
   later,
   wake,
   archive,
+  remove,
 ]

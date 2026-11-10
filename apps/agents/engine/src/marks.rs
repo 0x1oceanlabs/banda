@@ -216,7 +216,7 @@ fn takes(sql: &Connection, thread: ThreadId, at: i64) -> Result<bool, Error> {
 }
 
 /// Whether `thread` works, and whether it asks its Person.
-fn state(sql: &Connection, thread: ThreadId) -> Result<(bool, bool), Error> {
+pub(crate) fn state(sql: &Connection, thread: ThreadId) -> Result<(bool, bool), Error> {
     Ok((
         store::running(sql, thread)?.is_some(),
         store::asks(sql, thread)?,

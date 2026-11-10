@@ -20,6 +20,7 @@ const ROOT: &str = "refs/banda/checkpoints";
 const STARTED: &str = "turn.started";
 const ENDED: &str = "turn.ended";
 const REWOUND: &str = "thread.rewound";
+const DELETED: &str = "thread.deleted";
 
 /// The name of git's listener of the turns, which the kernel keeps its
 /// place in the log by (ADR 0082, decision 6).
@@ -30,7 +31,12 @@ pub fn heard() -> EventFilter {
     EventFilter {
         module: Some("agents".into()),
         subject: None,
-        kinds: Some(vec![STARTED.into(), ENDED.into(), REWOUND.into()]),
+        kinds: Some(vec![
+            STARTED.into(),
+            ENDED.into(),
+            REWOUND.into(),
+            DELETED.into(),
+        ]),
     }
 }
 
@@ -170,6 +176,9 @@ fn all_but(left: &BTreeSet<Vec<u8>>) -> Vec<u8> {
 
 /// Lets go of the checkpoints of `turns` of `thread`.
 async fn forget(repo: &Repo, thread: &str, turns: &[&str]) -> Result<(), Refusal> {
+    if turns.is_empty() {
+        return Ok(());
+    }
     // A turn begun again after a restart is heard twice, and a ref
     // deleted twice fails the whole batch.
     let mut turns = turns.to_vec();
@@ -220,18 +229,18 @@ pub async fn follow(mut heard: Listener) {
 /// What one fact does to the checkpoints of its Thread; `late`, it was
 /// committed while git was not there to hear it.
 async fn on(project: &ModuleProject, event: &Event, late: bool) -> Result<(), Refusal> {
-    let (Some(thread), Some(turn)) = (&event.subject, event.payload["turn"].as_str()) else {
+    let Some(thread) = &event.subject else {
         return Ok(());
     };
     let Some(repo) = Repo::find(project).await? else {
         return Ok(());
     };
-    match event.kind.as_str() {
+    match (event.kind.as_str(), turn_of(event)) {
         // A turn run again after a restart keeps how it first began. One
         // that began while git was not there may have changed the tree
         // since, so it has none, as one that began before checkpoints were
         // kept.
-        STARTED if !late => {
+        (STARTED, Some(turn)) if !late => {
             let before = reference(thread, turn, When::Before)?;
             if find(&repo, &before).await?.is_none() {
                 capture(&repo, &before).await?;
@@ -240,7 +249,7 @@ async fn on(project: &ModuleProject, event: &Event, late: bool) -> Result<(), Re
         // A turn that began before checkpoints were kept has none, and one
         // heard ending again keeps how it first ended. One that ended while
         // git was not there, its start kept, gets its end as git is back.
-        ENDED => {
+        (ENDED, Some(turn)) => {
             let (before, after) = (
                 reference(thread, turn, When::Before)?,
                 reference(thread, turn, When::After)?,
@@ -251,25 +260,43 @@ async fn on(project: &ModuleProject, event: &Event, late: bool) -> Result<(), Re
         }
         // The turn and every turn after it left the Thread, and so do
         // their checkpoints.
-        REWOUND => {
-            let filter = EventFilter {
-                module: event.module.clone().into(),
-                subject: Some(thread.clone()),
-                kinds: Some(vec![STARTED.into()]),
-            };
-            let started = project.events_after(0, filter, usize::MAX).await?;
-            let turns: Vec<&str> = started
-                .iter()
-                .filter_map(|each| each.payload["turn"].as_str())
+        (REWOUND, Some(turn)) => {
+            let started = started(project, event, thread).await?;
+            let turns: Vec<&str> = (started.iter().filter_map(turn_of))
                 .skip_while(|each| *each != turn)
                 .collect();
-            if !turns.is_empty() {
-                forget(&repo, thread, &turns).await?;
-            }
+            forget(&repo, thread, &turns).await?;
+        }
+        // Its Person deleted the Thread (ADR 0098, decision 14): every
+        // turn of it left the Project, and so does every checkpoint.
+        (DELETED, _) => {
+            let started = started(project, event, thread).await?;
+            let turns: Vec<&str> = started.iter().filter_map(turn_of).collect();
+            forget(&repo, thread, &turns).await?;
         }
         _ => {}
     }
     Ok(())
+}
+
+/// The facts of each turn of `thread` that began, the first first, from
+/// the log `event` is in.
+async fn started(
+    project: &ModuleProject,
+    event: &Event,
+    thread: &str,
+) -> Result<Vec<Event>, Refusal> {
+    let filter = EventFilter {
+        module: event.module.clone().into(),
+        subject: Some(thread.to_owned()),
+        kinds: Some(vec![STARTED.into()]),
+    };
+    Ok(project.events_after(0, filter, usize::MAX).await?)
+}
+
+/// The turn a turn's fact names.
+fn turn_of(event: &Event) -> Option<&str> {
+    event.payload["turn"].as_str()
 }
 
 #[cfg(test)]

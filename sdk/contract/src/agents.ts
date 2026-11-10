@@ -123,6 +123,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.unarchived": true,
     "marks.moved": true,
     "thread.rewound": true,
+    "thread.deleted": true,
     "thread.renamed": true,
     "thread.switched": true,
     "thread.moved": true,
