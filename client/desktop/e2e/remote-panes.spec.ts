@@ -205,6 +205,17 @@ test("arc's Thread is archived on arc's engine from a key and from its Pane's me
   ).toHaveCount(0)
 })
 
+/** The window quit and started again on what it left, its storage too,
+ * a start that went well, as the test says (ADR 0039); arc is left as it
+ * is, so one held now is never reached in the new window's life. */
+async function again(): Promise<Page> {
+  const { dir, page } = window!
+  await page.evaluate(() => localStorage.removeItem("banda.starts"))
+  await window!.app.close()
+  window = await withArc(arc!, { dir })
+  return window.page
+}
+
 test("arc's Thread restored as the window starts again with arc away from the first moment says arc is away, by the directory alone: the arrangement names no machine", async () => {
   // ssh gives up on a silent link in about 20 s, and comes back after its
   // waits.
@@ -216,11 +227,8 @@ test("arc's Thread restored as the window starts again with arc away from the fi
 
   // arc in a black hole as the window starts again on what it left: it is
   // never reached in this window's life.
-  const { dir } = window!
-  await window!.app.close()
   arc!.blackhole(true)
-  window = await withArc(arc!, { dir })
-  const { page } = window
+  const page = await again()
   const thread = page.getByRole("region", { name: TITLE, exact: true })
   const pill = thread.locator("[data-machine-pill] [role=status]")
   await expect(pill).toHaveText("arc is away", { timeout: 60_000 })
@@ -244,4 +252,57 @@ test("arc's Thread restored as the window starts again with arc away from the fi
   arc!.blackhole(false)
   await expect(pill).toHaveCount(0, { timeout: 90_000 })
   await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()
+})
+
+test("what waits for arc still shows after a restart with arc held from the first moment, by the directory alone, and goes to arc once it is back (H5e-2)", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  await onArc()
+  expect(window!.banda("call", "workspaces.list")).not.toContain('"host"')
+  arc!.blackhole(true)
+  const held = window!.page.getByRole("region", { name: TITLE, exact: true })
+  await expect(held.locator("[data-machine-pill] [role=status]")).toHaveText(
+    "arc is away",
+    { timeout: 60_000 }
+  )
+  const words = "and run them again with 8 shards"
+  const box = held.getByRole("textbox", { name: "Message to Fake AI" })
+  await box.fill(words)
+  await box.press("Enter")
+  await expect(
+    held.getByRole("list", { name: "Waiting for arc" })
+  ).toContainText(words)
+
+  // Started again with arc held: its Pane knows arc only from the
+  // directory this device keeps, and the rest from what the message kept.
+  const page = await again()
+  const thread = page.getByRole("region", { name: TITLE, exact: true })
+  const waits = thread.getByRole("list", { name: "Waiting for arc" })
+  await expect(waits.getByRole("listitem")).toHaveCount(1)
+  await expect(waits).toContainText(words)
+  const pill = thread.locator("[data-machine-pill]")
+  await expect(pill).toHaveText("arc is away · 1 waiting", { timeout: 60_000 })
+  // "banda · arc · its title" in its header.
+  expect(await headerShows(thread)).toEqual([
+    "project",
+    "machine",
+    TITLE,
+    "buttons",
+  ])
+  await expect(thread.locator("header").first()).toContainText("banda")
+  await expect(thread.locator("header").first()).toContainText("arc")
+  await expect(
+    thread.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toHaveAttribute(
+    "aria-placeholder",
+    "Write to Fake AI on arc. @ files, / commands, $ skills"
+  )
+  await shot(page, "restored-away-waiting")
+
+  // Back, it goes to arc, once.
+  arc!.blackhole(false)
+  await expect(pill).toHaveCount(0, { timeout: 90_000 })
+  await expect(waits).toHaveCount(0, { timeout: 30_000 })
+  const answered = thread.getByText("The tests passed.")
+  await expect(answered).toHaveCount(1, { timeout: 30_000 })
+  await expect(thread.getByText(words, { exact: true })).toHaveCount(1)
 })
