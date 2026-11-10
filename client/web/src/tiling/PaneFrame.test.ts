@@ -1,5 +1,5 @@
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { KeptHosts, keyNamed } from "@banda/core/react"
+import { FORGETTING, KeptHosts } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import { type Frame, handleOf } from "./PaneFrame"
@@ -48,7 +48,7 @@ function paneOnOf() {
       engine: () => Promise.reject(new Error("not here")),
       start: () => undefined,
     },
-    { seen: keyNamed, follow: () => () => undefined }
+    FORGETTING
   )
   kept.ours([mine], "m0" as ProjectId)
   return (project: ProjectId, pane: PaneState) => kept.paneOn(project, pane)

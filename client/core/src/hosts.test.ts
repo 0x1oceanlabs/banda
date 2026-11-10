@@ -7,8 +7,8 @@ import {
   awakeWords,
   batteryWords,
   cleanPower,
+  FORGETTING,
   heldWords,
-  type HostsDevice,
   KeptHosts,
   keyNamed,
   machinesOf,
@@ -22,6 +22,7 @@ import {
   Unreachable,
 } from "./hosts"
 import type { Args } from "./run"
+import { away, desktop, live, project, Socket } from "./testing"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -29,59 +30,10 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-const project = (id: string, more: Partial<ProjectSummary> = {}) =>
-  ({
-    id,
-    name: id,
-    folder: `/${id}`,
-    pinned: false,
-    archived: false,
-    sees_others: false,
-    sign: { kind: "letters", text: "W", picked: false },
-    trusted: true,
-    scratch: false,
-    missing: false,
-    ...more,
-  }) satisfies ProjectSummary
-
 const own = { build: "def456", version: "0.1.0-dev.421" }
-const live: HostState = {
-  name: "arc",
-  ssh: "arc",
-  state: "live",
-  build: "abc123",
-  version: "0.1.0-dev.421",
-  own: { build: "abc123", version: "0.1.0-dev.421" },
-}
-const away: HostState = {
-  name: "arc",
-  ssh: "arc",
-  state: "away",
-  why: "ssh ended",
-}
 const connecting: HostState = { name: "arc", ssh: "arc", state: "connecting" }
 /** arc before its first welcome on this device: its key. */
 const unnamed = { name: "arc", icon: "desktop" }
-
-/** A desktop whose hosts the test tells, and whose engines it answers. */
-function desktop() {
-  let tell: (hosts: HostState[]) => void = () => undefined
-  const device = {
-    follow: (take: (hosts: HostState[]) => void) => {
-      tell = take
-      return () => undefined
-    },
-    engine: vi.fn(async (name: string) => ({
-      url: `ws://127.0.0.1:1/${name}`,
-      secret: "s3cr3t",
-    })),
-    start: vi.fn(),
-  } satisfies HostsDevice
-  return { device, tell: (hosts: HostState[]) => tell(hosts) }
-}
-
-/** A device that remembers no name: each host goes by its key. */
-const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
 
 test("a host that goes away stays away through the tries after, its rows standing as they were", () => {
   const first = shownOf(undefined, connecting, 0)
@@ -148,7 +100,7 @@ test("another build says both, the host's first", () => {
 test("a host's Projects are its engine's, none archived, and never one shown before it", () => {
   const warned = vi.spyOn(console, "warn").mockImplementation(() => undefined)
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   const devbox: HostState = { ...live, name: "devbox", ssh: "devbox" }
   tell([live, devbox])
@@ -190,37 +142,12 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   })
 })
 
-/** A WebSocket that only notes where it was opened to and what was sent
- * on it, and closes when the test says. */
-class Socket {
-  static opened: Socket[] = []
-  onopen?: () => void
-  onmessage?: (message: { data: string }) => void
-  onclose?: () => void
-  readonly url: string
-  readonly sent: { type: string; id: number; method?: string }[] = []
-  constructor(url: string) {
-    this.url = url
-    Socket.opened.push(this)
-  }
-  send(frame: string) {
-    this.sent.push(JSON.parse(frame))
-  }
-  close() {
-    this.onclose?.()
-  }
-  /** Says `frame` to the page. */
-  say(frame: object) {
-    this.onmessage?.({ data: JSON.stringify(frame) })
-  }
-}
-
 test("a host's engine asks the desktop where it listens on each connect, once the host is live", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([connecting])
   const engine = hosts.engine("arc")
@@ -256,7 +183,7 @@ test("an act goes to the session of the machine that owns its Project, and never
   Socket.opened = []
   const { device, tell } = desktop()
   const here = { here: true } as unknown as Engine
-  const hosts = new KeptHosts(device, forgetting, here)
+  const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.follow()
   const on = (host: string) => ({ args: { thread: "t1", host } })
   /** What an act on `project` is refused with, in words; none if sent. */
@@ -312,7 +239,7 @@ test("an act goes to the session of the machine that owns its Project, and never
   arc.close()
 
   // Outside a Window, with no engine of this machine's: none here either.
-  const none = new KeptHosts(device, forgetting)
+  const none = new KeptHosts(device, FORGETTING)
   expect(() => none.sessionOf("mine" as ProjectId)).toThrow(
     "This window has no engine of its own."
   )
@@ -323,7 +250,7 @@ test("an engine that said goodbye is made anew as its host is live again", async
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")
@@ -349,7 +276,7 @@ test("a host live again has its engine try at once, not after its wait", async (
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")
@@ -381,7 +308,7 @@ test("a host live again while its engine waits for it has that engine wait from 
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")
@@ -408,7 +335,7 @@ test("a host live again while its engine waits for it has that engine wait from 
 
 test("a pick of another host's Thread opens it on that host, never on this machine's engine with its Project", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   hosts.ours([project("mine")])
@@ -490,7 +417,7 @@ test("one clash rule: an ID shows on the first machine that has it, this one wit
   vi.spyOn(console, "warn").mockImplementation(() => undefined)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   const devbox: HostState = { ...live, name: "devbox", ssh: "devbox" }
   tell([live, devbox])
@@ -575,7 +502,7 @@ test("one clash rule: an ID shows on the first machine that has it, this one wit
 
 test("the Window's machines follow its hosts, told again only as they say something new; this machine's No Project is its own from a Pane on another host too", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   hosts.ours([project("mine")], "m0" as ProjectId)
   tell([live])
@@ -697,7 +624,7 @@ test("Send on a Pane on another host says what its pill says, and connects only 
 
 test("a Pane on another host runs none of the Window's actions on this machine's files, and its Items' on that host's alone", () => {
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   hosts.ours([project("mine")])
@@ -833,7 +760,7 @@ test("a live host says its battery on its engine's machine.power; away it says n
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   // Before its engine is made, nothing hears it.
@@ -898,7 +825,7 @@ test("an engine older than machine.power refuses it: no battery and nothing show
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")
@@ -932,7 +859,7 @@ test("a host's engine made anew after a goodbye has its battery heard on the new
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const hosts = new KeptHosts(device, forgetting)
+  const hosts = new KeptHosts(device, FORGETTING)
   hosts.follow()
   tell([live])
   const engine = hosts.engine("arc")

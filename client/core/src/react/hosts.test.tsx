@@ -1,8 +1,8 @@
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
-import type { HostState } from "../device"
-import { type HostsDevice, KeptHosts, keyNamed, reachWords } from "../hosts"
+import { FORGETTING, KeptHosts, reachWords } from "../hosts"
+import { away, desktop, live, project, Socket } from "../testing"
 import { HostsContext, type Reach, useEngineOf, useReach } from "./hosts"
 
 afterEach(() => {
@@ -10,79 +10,13 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-const project = (id: string) =>
-  ({
-    id,
-    name: id,
-    folder: `/${id}`,
-    pinned: false,
-    archived: false,
-    sees_others: false,
-    sign: { kind: "letters", text: "W", picked: false },
-    trusted: true,
-    scratch: false,
-    missing: false,
-  }) satisfies ProjectSummary
-
-const live: HostState = {
-  name: "arc",
-  ssh: "arc",
-  state: "live",
-  build: "abc123",
-  version: "0.1.0-dev.421",
-  own: { build: "abc123", version: "0.1.0-dev.421" },
-}
-const away: HostState = {
-  name: "arc",
-  ssh: "arc",
-  state: "away",
-  why: "ssh ended",
-}
-
-/** A desktop whose hosts the test tells, and whose engines it answers. */
-function desktop() {
-  let tell: (hosts: HostState[]) => void = () => undefined
-  const device = {
-    follow: (take: (hosts: HostState[]) => void) => {
-      tell = take
-      return () => undefined
-    },
-    engine: vi.fn(async (name: string) => ({
-      url: `ws://127.0.0.1:1/${name}`,
-      secret: "s3cr3t",
-    })),
-    start: vi.fn(),
-  } satisfies HostsDevice
-  return { device, tell: (hosts: HostState[]) => tell(hosts) }
-}
-
-/** A WebSocket that only notes where it was opened to, and closes when
- * the test says. */
-class Socket {
-  static opened: Socket[] = []
-  onclose?: () => void
-  readonly url: string
-  constructor(url: string) {
-    this.url = url
-    Socket.opened.push(this)
-  }
-  send() {}
-  close() {
-    this.onclose?.()
-  }
-}
-
 test("a Pane reaches the engine of the host its args name, else of the host listing its Project; this machine's wins a clash", async () => {
   vi.useFakeTimers()
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
   const here = { here: true } as unknown as Engine
-  const hosts = new KeptHosts(
-    device,
-    { seen: keyNamed, follow: () => () => undefined },
-    here
-  )
+  const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.follow()
   /** What a Pane of `project`, its args naming host `named`, reaches. */
   const reach = (project: string, named?: string) => {

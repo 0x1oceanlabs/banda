@@ -9,11 +9,10 @@ import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import {
+  FORGETTING,
   HostsContext,
   type HostState,
   KeptHosts,
-  keyNamed,
-  type Names,
   type Readable,
   Store,
 } from "@banda/core/react"
@@ -40,9 +39,6 @@ const lists = (project: string, ...listed: Listed[]): Readable<Lists> =>
 const markup = (node: ReactNode) =>
   renderToStaticMarkup(node).replace(/banda-mark-[\w-]+/g, "banda-mark-id")
 
-/** A device that remembers no name: each host goes by its key. */
-const forgetting: Names = { seen: keyNamed, follow: () => () => undefined }
-
 /** What the Slot draws with `props`, filled by the modules that run, with
  * what the Apps list as the Window gives it, `items`, and its hosts,
  * `hosts`. With no items given, it is drawn where the window gives none,
@@ -52,7 +48,7 @@ const drawn = (
   items?: Readable<Lists>,
   hosts = new KeptHosts(
     { follow: () => undefined, engine, start: () => {} },
-    forgetting
+    FORGETTING
   )
 ) => {
   const slot = (
@@ -176,7 +172,7 @@ test("a Pane that shows no Thread has nothing of Threads', and another machine's
       engine,
       start: () => {},
     },
-    forgetting
+    FORGETTING
   )
   hosts.follow()
   hosts.projects("arc", [remote])

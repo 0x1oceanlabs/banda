@@ -2,10 +2,10 @@ import type { ProjectId } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
 import {
+  FORGETTING,
   HostsContext,
   type HostState,
   KeptHosts,
-  keyNamed,
   type Shown,
   shownOf,
 } from "@banda/core/react"
@@ -119,7 +119,7 @@ test("the Window fills the pill of a Pane by the host its args name, as the Wind
       engine: () => Promise.reject(new Error("not here")),
       start: () => undefined,
     },
-    { seen: keyNamed, follow: () => () => undefined }
+    FORGETTING
   )
   kept.take([{ name: "arc", ssh: "arc", state: "stopped" }])
   const { Fill } = machineHeader
