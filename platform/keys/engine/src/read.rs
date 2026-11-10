@@ -27,6 +27,7 @@ pub struct ReadSetting {
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "keys/")]
 pub struct SettingsRead {
+    /// The file's name, as `agents.toml`.
     pub file: String,
     /// The file as the look resolves it, for a file it resolves: the
     /// machine's keys as the file says them, the rest as Banda has them.
@@ -40,7 +41,9 @@ pub struct SettingsRead {
     /// a whole.
     pub problems: Vec<Problem>,
     /// What tells this read from another: the same while the machine's
-    /// part reads the same, whatever else of the file changes.
+    /// keys, their lines and what is wrong at them read the same, and
+    /// for a file the look only checks, its text. A change of another
+    /// key alone leaves it, unless the change moves the machine's lines.
     pub rev: String,
 }
 
@@ -48,6 +51,7 @@ pub struct SettingsRead {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "keys/")]
 pub struct SettingChanged {
+    /// The file's name, as `agents.toml`.
     pub file: String,
     /// Its read's `rev` now.
     pub rev: String,
@@ -58,7 +62,7 @@ pub struct SettingChanged {
 pub fn read(config: &Path, name: &str) -> Result<SettingsRead, Refusal> {
     let Some(file) = banda_settings::file(name) else {
         return Err(Refusal::not_found(format!(
-            "Banda reads no file called {name}"
+            "{name} is not one of Banda's settings files"
         )));
     };
     if !file.has(Class::Machine) {
@@ -71,7 +75,7 @@ pub fn read(config: &Path, name: &str) -> Result<SettingsRead, Refusal> {
 
 fn read_of(config: &Path, file: &SettingsFile) -> SettingsRead {
     let part = file.part(&Places::at(config), Class::Machine);
-    let said = serde_json::to_vec(&(&part.value, &part.keyed, &part.problems));
+    let said = serde_json::to_vec(&(&part.value, &part.keyed, &part.problems, &part.text));
     let digest = Sha256::digest(said.expect("settings are plain data"));
     SettingsRead {
         file: file.name.to_owned(),
@@ -225,6 +229,20 @@ mod tests {
         )
         .unwrap();
         assert_ne!(rev(config.path()), before);
+    }
+
+    #[test]
+    fn a_harness_list_s_rev_changes_with_its_text() {
+        let one = "[[harness]]\nid = \"claude\"\n";
+        let config = config_with(&[("harnesses.toml", one)]);
+        let before = read(config.path(), "harnesses.toml").unwrap();
+        assert!(before.problems.is_empty(), "{:?}", before.problems);
+        let two = "[[harness]]\nid = \"claude\"\nenabled = false\n\n\
+                   [[harness]]\nid = \"codex\"\n";
+        std::fs::write(config.path().join("harnesses.toml"), two).unwrap();
+        let after = read(config.path(), "harnesses.toml").unwrap();
+        assert!(after.problems.is_empty(), "{:?}", after.problems);
+        assert_ne!(after.rev, before.rev, "the list it checks alone changed");
     }
 
     #[test]

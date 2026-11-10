@@ -36,7 +36,7 @@ pub struct SettingsFile {
     resolve: Option<Resolve>,
     /// Whose copy its keys are, but for those of `sections`.
     class: Class,
-    /// Its top-level keys whose copy is another's than the file's.
+    /// Its top-level keys of another class than the file's.
     sections: &'static [(&'static str, Class)],
 }
 
@@ -72,6 +72,10 @@ pub struct Part {
     pub keyed: Keyed,
     /// What is wrong in the file at those keys, or in the whole file.
     pub problems: Vec<Problem>,
+    /// For a file the look only checks, which has no value to tell one
+    /// read from another: its text with only the class's keys in it.
+    /// None for a file it resolves, or one that is not there.
+    pub text: Option<String>,
 }
 
 impl SettingsFile {
@@ -129,7 +133,7 @@ impl SettingsFile {
         self.class == class || self.sections.iter().any(|(_, each)| *each == class)
     }
 
-    /// The top-level keys whose copy is another's than the file's.
+    /// The top-level keys of another class than the file's.
     pub fn sections(&self) -> &'static [(&'static str, Class)] {
         self.sections
     }
@@ -199,14 +203,17 @@ impl SettingsFile {
             keyed::only(&text, kept).unwrap_or(text)
         });
         let mut problems = Vec::new();
-        let resolved = self.resolve_text(&path, text.as_deref(), &mut problems);
-        let (value, mut keyed) =
-            resolved.map_or((None, Keyed::new()), |(value, keyed)| (Some(value), keyed));
+        let (value, mut keyed, text) =
+            match self.resolve_text(&path, text.as_deref(), &mut problems) {
+                Some((value, keyed)) => (Some(value), keyed, None),
+                None => (None, Keyed::new(), text),
+            };
         keyed.retain(|key, _| kept(key));
         Part {
             value,
             keyed,
             problems,
+            text,
         }
     }
 
