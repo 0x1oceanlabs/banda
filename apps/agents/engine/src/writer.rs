@@ -13,7 +13,7 @@
 use crate::effects::{START, STOP, TurnEffect};
 use crate::model::{Fact, ItemId, Opener, Settings, ThreadId, TurnId, TurnState};
 use crate::rules::{self, Ending, Event, Step, Then, TurnFacts};
-use crate::{emit, questions, store};
+use crate::{changes, emit, questions, store};
 use banda_kernel::{AgentId, Error, Fence, Participant, Refusal, Tx};
 use rusqlite::Connection;
 
@@ -201,12 +201,21 @@ fn end(
         tx.now(),
     )?;
     store::touch_thread(tx.sql(), turn.thread, tx.now())?;
+    // What it changed in lines, with its sub-agents' edits so far, is
+    // counted once, as it ends, and kept with it, so the list says it and
+    // never reads its diffs again (ADR 0098, decision 8). An edit a
+    // sub-agent makes after the turn ended is not in it (ADR 0103, plan
+    // E3).
+    let (own, edits) = store::turn_calls(tx.sql(), turn.thread, turn.id)?;
+    let changed_lines = changes::lines_of(&own, &edits);
+    store::set_changed_lines(tx.sql(), turn.id, changed_lines)?;
     let ended = Fact::TurnEnded {
         turn: turn.id,
         state,
         reason: reason.clone(),
         failure,
         note: store::note(tx.sql(), turn.id)?,
+        changed_lines,
     };
     emit(tx, author, turn.thread, &ended)?;
     // The answer goes back by itself, as a message from this Thread's

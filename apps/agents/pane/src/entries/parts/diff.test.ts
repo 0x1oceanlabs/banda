@@ -1,5 +1,26 @@
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { expect, test } from "vitest"
 import { counts, type Line, lineDiff, parts } from "./diff"
+
+/** `apps/agents/changed-lines.json`: how many lines a change of a file
+ * added and removed. The engine's copy of the count, `counted()` in
+ * changes.rs for a Thread's card, reads the same cases. */
+const { cases, many } = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "../../../../changed-lines.json"),
+    "utf8"
+  )
+) as {
+  cases: {
+    case: string
+    before: string | null
+    after: string
+    added: number
+    removed: number
+  }[]
+  many: { case: string; lines: number; added: number; removed: number }
+}
 
 const show = (diff: Line[]) =>
   diff.map(({ kind, text }) =>
@@ -33,4 +54,28 @@ test("far from a change, unchanged lines become a gap", () => {
   expect(shown[0]).toEqual({ kind: "gap", lines: 8 })
   expect(shown.at(-1)).toEqual({ kind: "gap", lines: 7 })
   expect(shown).toHaveLength(8)
+})
+
+test("the shared cases are there", () => {
+  expect(cases.length).toBeGreaterThanOrEqual(8)
+})
+
+test.each(cases)(
+  "a change counts as the card counts it: $case",
+  ({ case: name, before, after, added, removed }) => {
+    expect(
+      counts(lineDiff(before ?? undefined, after)),
+      `"${name}": the Thread's diff and the card (changes.rs) count it differently`
+    ).toEqual({ added, removed })
+  }
+)
+
+test("a change counts as the card counts it: many lines", () => {
+  const before = Array.from({ length: many.lines }, (_, i) => `line ${i}`)
+  const after = before.map((line, i) => (i % 2 ? `changed ${i}` : line))
+  const diff = lineDiff(before.join("\n"), after.join("\n"))
+  expect(counts(diff), many.case).toEqual({
+    added: many.added,
+    removed: many.removed,
+  })
 })

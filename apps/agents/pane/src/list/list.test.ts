@@ -147,6 +147,26 @@ test("a Thread keeps its latest turn that began, and how it ended", () => {
   expect(failed.threads[0].updated_at).toBe(ended.at)
 })
 
+test("a Thread keeps how many lines its latest turn that ended changed, as that turn says it (ADR 0098, decision 8)", () => {
+  const ended = (turn: string, more = {}) =>
+    event("turn.ended", { turn, state: "done", ...more }, { subject: "t1" })
+  const lines = { added: 38, removed: 9 }
+  const edited = applyThreads(one, ended("u1", { changed_lines: lines }))
+  expect(edited.threads[0].changed_lines).toEqual(lines)
+
+  // A new turn running keeps the one before's; one taken back changes
+  // nothing.
+  const started = event("turn.started", { turn: "u2" }, { subject: "t1" })
+  const running = applyThreads(edited, started)
+  expect(running.threads[0].changed_lines).toEqual(lines)
+  const withdrawn = ended("u3", { state: "withdrawn" })
+  expect(applyThreads(running, withdrawn)).toBe(running)
+
+  // A turn that changed no line says none, not the one before's.
+  const answered = applyThreads(running, ended("u2"))
+  expect(answered.threads[0]).not.toHaveProperty("changed_lines")
+})
+
 test("a Thread's Questions ask until they are answered or closed", () => {
   const asked = (item: string) =>
     event(

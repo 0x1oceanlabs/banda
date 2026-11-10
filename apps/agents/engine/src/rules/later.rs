@@ -134,6 +134,7 @@ mod tests {
             reason: None,
             failure: None,
             note: None,
+            changed_lines: None,
         }
     }
 

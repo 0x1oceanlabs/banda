@@ -1,6 +1,7 @@
 //! The agents module's tables. Only this module writes them, and only
 //! through these functions.
 
+use crate::changes::ChangedLines;
 use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
@@ -251,6 +252,13 @@ CREATE INDEX agents_subagents_by_thread ON agents_subagents (thread);
 -- is the Thread's, NULL here, and names its lane in its body.
 ALTER TABLE agents_items ADD COLUMN sub TEXT;
 CREATE INDEX agents_items_by_sub ON agents_items (sub) WHERE sub IS NOT NULL;
+"#,
+    r#"
+-- How many lines each turn's tool calls changed, with its sub-agents'
+-- edits (ADR 0103, decision 8), as JSON, kept as it ends so the list says
+-- it without reading its diffs again (ADR 0098, decision 8). NULL when it
+-- changed none, and for turns that ended before.
+ALTER TABLE agents_turns ADD COLUMN changed_lines TEXT;
 "#,
 ];
 
@@ -797,6 +805,7 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
                 seen,
                 archived,
                 now: now.unwrap_or_default(),
+                changed_lines: last_changed_lines(sql, thread.id)?,
                 thread,
             })
         })
@@ -981,17 +990,50 @@ pub fn ended_turn(sql: &Connection, thread: ThreadId, turn: TurnId) -> Result<Op
         .optional()?)
 }
 
+/// The Thread's latest turn that ended, with `?1` the Thread and `?2` to
+/// `?4` bound to [`unended`]. One clause, so what the list says that turn
+/// changed and what a Person's seen names are always the same turn.
+const LATEST_ENDED: &str = "FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3, ?4)
+     ORDER BY rowid DESC LIMIT 1";
+
 /// The Thread's latest turn that ended, if one did.
 pub fn latest_ended(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
     let [queued, running, withdrawn] = unended();
     Ok(sql
         .query_row(
-            "SELECT id FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3, ?4)
-             ORDER BY rowid DESC LIMIT 1",
+            &format!("SELECT id {LATEST_ENDED}"),
             params![thread, queued, running, withdrawn],
             |row| row.get(0),
         )
         .optional()?)
+}
+
+/// Keeps how many lines `turn`'s tool calls changed, as it ends.
+pub fn set_changed_lines(
+    sql: &Connection,
+    turn: TurnId,
+    lines: Option<ChangedLines>,
+) -> Result<(), Error> {
+    let lines = lines.as_ref().map(json).transpose()?;
+    sql.execute(
+        "UPDATE agents_turns SET changed_lines = ?2 WHERE id = ?1",
+        params![turn, lines],
+    )?;
+    Ok(())
+}
+
+/// How many lines the Thread's latest turn that ended changed, if it
+/// changed any and was kept so: the same turn [`latest_ended`] names.
+fn last_changed_lines(sql: &Connection, thread: ThreadId) -> Result<Option<ChangedLines>, Error> {
+    let [queued, running, withdrawn] = unended();
+    Ok(sql
+        .query_row(
+            &format!("SELECT changed_lines {LATEST_ENDED}"),
+            params![thread, queued, running, withdrawn],
+            |row| maybe_column(row, 0),
+        )
+        .optional()?
+        .flatten())
 }
 
 /// The Thread's latest turn that began, and where it stands: one that
@@ -1443,9 +1485,11 @@ pub fn copy_turns(
     }
     let mut insert = sql.prepare(
         "INSERT INTO agents_turns (id, thread, agent, author, message, state, reason,
-             created_at, failure, settings, started_at, ended_at, opener, from_thread)
+             created_at, failure, settings, started_at, ended_at, opener, from_thread,
+             changed_lines)
          SELECT ?2, ?3, ?4, ?5, ?6, state, reason, created_at, failure, settings,
-             started_at, ended_at, opener, from_thread FROM agents_turns WHERE id = ?1",
+             started_at, ended_at, opener, from_thread, changed_lines
+         FROM agents_turns WHERE id = ?1",
     )?;
     for (id, author, message) in turns {
         let message = new_items.get(&message).copied().unwrap_or(message);
@@ -1635,17 +1679,41 @@ pub fn lane_items(sql: &Connection, sub: SubagentId) -> Result<Vec<Item>, Error>
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// A lane's call that edits, deletes or moves files: what of a lane's work
+/// its launch turn's changes count (ADR 0103, decision 8).
+const LANE_EDIT: &str = "sub IS NOT NULL AND json_extract(body, '$.kind') = 'tool'
+    AND json_extract(body, '$.tool') IN ('edit', 'delete', 'move')";
+
 /// The calls of the Thread's lanes that edit, delete or move files, in the
 /// order they came: what of their work its turns' changes count (ADR
 /// 0103, decision 8). A call's kind is set as it starts, so a window that
 /// follows the Thread's facts keeps the same ones.
 pub fn edits(sql: &Connection, thread: ThreadId) -> Result<Vec<Item>, Error> {
     let mut statement = sql.prepare(&format!(
-        "{ITEM} WHERE thread = ?1 AND sub IS NOT NULL AND json_extract(body, '$.kind') = 'tool'
-         AND json_extract(body, '$.tool') IN ('edit', 'delete', 'move') ORDER BY rowid"
+        "{ITEM} WHERE thread = ?1 AND {LANE_EDIT} ORDER BY rowid"
     ))?;
     let rows = statement.query_map(params![thread], read_item)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// What `thread`'s `turn` changed in files is in the diffs of these, each
+/// list in the order it came (`changes.rs`): the Agent's own tool calls of
+/// it, and the [`edits`] of its sub-agents, which count in the turn they
+/// started in.
+pub fn turn_calls(
+    sql: &Connection,
+    thread: ThreadId,
+    turn: TurnId,
+) -> Result<(Vec<Item>, Vec<Item>), Error> {
+    let of = |which: &str| -> Result<Vec<Item>, Error> {
+        let mut statement = sql.prepare(&format!(
+            "{ITEM} WHERE thread = ?1 AND turn = ?2 AND {which} ORDER BY rowid"
+        ))?;
+        let rows = statement.query_map(params![thread, turn], read_item)?;
+        Ok(rows.collect::<rusqlite::Result<_>>()?)
+    };
+    let own = of("sub IS NULL AND json_extract(body, '$.kind') = 'tool'")?;
+    Ok((own, of(LANE_EDIT)?))
 }
 
 /// An item that is a Question still waiting for an answer, with `?2`
@@ -2390,6 +2458,87 @@ mod tests {
             listed().asking[2].choices.is_empty(),
             "one with a form is answered in its Thread"
         );
+    }
+
+    #[test]
+    fn a_listed_thread_says_how_many_lines_its_latest_turn_that_ended_changed() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let author = Participant::Agent(agent);
+        let settings = Settings::default();
+        let summary = |title: &str| ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: title.to_owned(),
+            updated_at: 0,
+            was: None,
+        };
+        let (thread, fork) = (summary("Hello"), summary("Hello fork"));
+        insert_thread(&sql, &thread, agent, author, &settings).unwrap();
+        insert_thread(&sql, &fork, agent, author, &settings).unwrap();
+        let listed = |id: ThreadId| {
+            let all = threads(&sql, &AtWork::new()).unwrap();
+            all.into_iter().find(|t| t.thread.id == id).unwrap()
+        };
+        let mut at = 0;
+        let mut add = |state: TurnState| {
+            at += 1;
+            let turn = Turn {
+                id: TurnId::new(),
+                thread: thread.id,
+                agent,
+                message: ItemId::new(),
+                state,
+                opener: Opener::Person,
+                from_thread: None,
+                stopping: false,
+            };
+            insert_turn(&sql, &turn, author, at, &settings).unwrap();
+            turn.id
+        };
+        let lines = Some(ChangedLines {
+            added: 38,
+            removed: 9,
+        });
+        let first = add(TurnState::Running);
+        set_turn(&sql, first, TurnState::Done, None, None, 5).unwrap();
+        set_changed_lines(&sql, first, lines).unwrap();
+        assert_eq!(listed(thread.id).changed_lines, lines);
+
+        let second = add(TurnState::Running);
+        add(TurnState::Withdrawn);
+        assert_eq!(
+            listed(thread.id).changed_lines,
+            lines,
+            "the one before's, while another runs or was taken back"
+        );
+        copy_turns(&sql, (thread.id, agent), first, (fork.id, agent)).unwrap();
+        assert_eq!(listed(fork.id).changed_lines, lines, "a fork keeps it");
+        set_turn(&sql, second, TurnState::Stopped, None, None, 9).unwrap();
+        set_changed_lines(&sql, second, None).unwrap();
+        assert_eq!(listed(thread.id).changed_lines, None, "it changed none");
+    }
+
+    #[test]
+    fn a_turn_s_calls_are_its_own_tools_and_its_lanes_edits() {
+        use crate::model::ToolKind;
+        let kept = kept();
+        let (turn, _) = kept.turn("Fix it");
+        let (other, _) = kept.turn("And this");
+        let lane = kept.lane(turn, None);
+        let first = kept.put(Some(turn), call(ToolKind::Read), None);
+        kept.put(Some(turn), reply("Looking"), None);
+        let edited = kept.put(Some(turn), call(ToolKind::Edit), Some(lane.id));
+        kept.put(Some(turn), call(ToolKind::Read), Some(lane.id));
+        let later = kept.lane(other, None);
+        kept.put(Some(other), call(ToolKind::Edit), Some(later.id));
+        kept.put(Some(other), call(ToolKind::Edit), None);
+        kept.put(None, call(ToolKind::Edit), None);
+        let moved = kept.put(Some(turn), call(ToolKind::Move), Some(lane.id));
+        let last = kept.put(Some(turn), call(ToolKind::Edit), None);
+        let (own, edits) = turn_calls(&kept.sql, kept.thread, turn).unwrap();
+        assert_eq!(kept.ids(own), [first, last], "its own tool calls");
+        assert_eq!(kept.ids(edits), [edited, moved], "its lanes' edits");
     }
 
     #[test]

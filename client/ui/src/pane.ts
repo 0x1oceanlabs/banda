@@ -10,7 +10,7 @@
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
-import type { Doing } from "@banda/contract/agents"
+import type { ChangedLines, Doing } from "@banda/contract/agents"
 import { paneHost, type PaneState, type Place, withHost } from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
@@ -254,6 +254,10 @@ export type Listed = {
   /** When a usage limit the work that runs now waits on lets it go on,
    * in milliseconds since the epoch. */
   limitUntil?: number
+  /** How many lines its last work that ended added and removed in files,
+   * which its card shows as "+38 −9" (ADR 0098, decision 8). None when
+   * that work changed no line. */
+  changedLines?: ChangedLines
   /**
    * What calls the Person, in a few words: what it asks, why it failed.
    * A toast or a system notification says it too.

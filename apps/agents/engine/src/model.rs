@@ -1018,6 +1018,13 @@ pub struct ListedThread {
     /// change.
     #[serde(flatten)]
     pub now: crate::doing::DoingNow,
+    /// How many lines its latest turn that ended changed, with its
+    /// sub-agents' edits, kept as it ended: the card's "+38 −9" (ADR 0098,
+    /// decision 8). None when that turn changed no line, or ended before
+    /// turns kept it; while another runs, it is still the one before's.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub changed_lines: Option<crate::changes::ChangedLines>,
 }
 
 impl ListedThread {
@@ -1269,6 +1276,12 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         note: Option<String>,
+        /// How many lines its tool calls and its sub-agents' edits so far
+        /// changed, when they changed any (ADR 0098, decision 8). Older
+        /// logs leave it out.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        changed_lines: Option<crate::changes::ChangedLines>,
     },
     /// A message waits for a turn of its own: a failed turn's, tried
     /// again, or one that could not join the turn it was sent into.
