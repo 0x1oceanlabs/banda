@@ -157,7 +157,7 @@ export function Sidebar({
               "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
           )}
         >
-          <Header only={view.only} projects={projects} />
+          <Header engine={engine} only={view.only} projects={projects} />
           <Tabs tabs={ordered.tabs} tab={view.tab} />
           {/* What is in the list holds it, and so does the trust card. */}
           <HoldingContext value={ordering.holder}>

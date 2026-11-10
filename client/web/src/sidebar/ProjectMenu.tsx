@@ -62,7 +62,9 @@ export function ProjectMenu({
             {LOCATE}
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onClick={() => newThread(open, project.id)}>
+          <DropdownMenuItem
+            onClick={() => newThread(open, { project: project.id })}
+          >
             <SquarePenIcon />
             New Thread
           </DropdownMenuItem>

@@ -13,7 +13,9 @@ export function NewThreadIn({ project }: { project: ProjectSummary }) {
       aria-label={`New Thread in ${project.name}`}
       title="New Thread"
       className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100"
-      onClick={() => newThread(open, project.id, project.missing)}
+      onClick={() =>
+        newThread(open, { project: project.id, missing: project.missing })
+      }
     >
       <SquarePenIcon />
     </Button>

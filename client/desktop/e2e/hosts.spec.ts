@@ -23,7 +23,9 @@
  * this machine's. A new Thread's picker groups
  * the Projects by machine, in a popped-out Pane's window as in the
  * window; one moved from arc to this machine's Project never names arc,
- * not for a frame, and starts its Thread here. As a Mac, its `uname` says
+ * not for a frame, and starts its Thread here. The sidebar's ✎ menu
+ * starts one on arc by "on" and "in", and with arc's own Harnesses by
+ * "with" from arc's Thread. As a Mac, its `uname` says
  * Darwin, and the window finds its Banda in its Application Support; its
  * engine is this checkout's still, which serves for the follower, as a
  * Mac's does not
@@ -44,6 +46,7 @@
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
 import {
+  appendFileSync,
   mkdirSync,
   mkdtempSync,
   readdirSync,
@@ -1334,6 +1337,148 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   // Nor did any read for this machine's Project go to arc and fail there.
   expect(window.banda("problems")).toBe(problems.here)
   expect(arc.banda("problems")).toBe(problems.arc)
+})
+
+test("the sidebar's ✎ menu starts a Thread on arc: by \"on\" in arc's No Project, by \"in\" in arc's Project, and from arc's Thread with arc's other Harness, each on arc's engine (ADR 0098, decision 19)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  // A second Harness on arc alone, so "with" is seen to list arc's.
+  appendFileSync(
+    join(arc.dir, "config/harnesses.toml"),
+    `[[harness]]\nid = "other"\nname = "Other AI"\ncommand = ${JSON.stringify(agent)}\n`
+  )
+  const banda = await seed(arc)
+  window = await withArc(arc)
+  // This machine by a name of its own, as this box may be named arc too:
+  // the menu's two machines then read apart.
+  writeFileSync(
+    join(window.dir, "config/machine.toml"),
+    'name = "m1pro"\nicon = "laptop"\n'
+  )
+  const { app, page } = window
+  // At 1440×900, as Roma's pictures of the sidebar are.
+  if (shots) {
+    await app.evaluate(({ BrowserWindow }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(1440, 900)
+    )
+    await page.setViewportSize({ width: 1440, height: 900 })
+  }
+  const local = await work(window)
+  const sidebar = sidebarOf(page)
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  const pen = sidebar.getByRole("button", { name: "New Thread", exact: true })
+  const menu = page.getByRole("menu", { name: "New Thread" })
+  const on = menu.getByRole("group", { name: "on", exact: true })
+  const harnesses = menu.getByRole("group", { name: "with", exact: true })
+  const arcIn = menu.getByRole("group", { name: "arc", exact: true })
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  /** Writes `text` in the draft in focus, to `harness`, and sends it: its
+   * Thread shows the Agent's answer. */
+  const write = async (text: string, harness = "Fake AI") => {
+    const composer = draft.getByRole("textbox", {
+      name: `Message to ${harness}`,
+    })
+    await composer.fill(text)
+    await composer.press("Enter")
+    await expect(
+      page
+        .getByRole("region", { name: text, exact: true })
+        .getByText(`You said: ${text}`)
+    ).toBeVisible()
+  }
+  // A machine's scratch Projects: arc's, or the window's own.
+  const scratchOf = (machine: Pick<Arc, "banda">) =>
+    (
+      JSON.parse(machine.banda("call", "projects.list")) as {
+        ok: { id: string; scratch: boolean }[]
+      }
+    ).ok.filter((one) => one.scratch)
+
+  // In this machine's Thread a click starts here: "on" ticks this
+  // machine, not arc, and "with" lists this machine's one Harness. arc's
+  // part of "in" has its Project, then its No Project.
+  await sidebar.getByText("Sidebar for arc").click()
+  await expect(
+    page.getByRole("region", { name: "Sidebar for arc", exact: true })
+  ).toHaveAttribute("data-focused", "true")
+  await pen.click({ button: "right" })
+  await expect(on.getByRole("menuitem")).toHaveCount(2)
+  await expect(on.getByRole("menuitem").first()).toHaveAccessibleName("m1pro")
+  await expect(on.getByRole("menuitem").first()).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await expect(on.getByRole("menuitem").last()).toHaveAccessibleName("arc")
+  await expect(on.getByRole("menuitem").last()).not.toHaveAttribute(
+    "aria-current"
+  )
+  await expect(harnesses.getByRole("menuitem")).toHaveCount(1)
+  await expect(arcIn.getByRole("menuitem")).toHaveText([/banda/, /No Project/])
+  await shot(page, "sidebar-s9a-menu-machines")
+
+  // "on" arc: a draft in arc's No Project, whose first message makes its
+  // folder there and runs on arc's Agent.
+  await on.getByRole("menuitem").last().click()
+  await expect(menu).toBeHidden()
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project on arc" })
+  ).toBeVisible()
+  await write("Scratch from the pen")
+  await expect.poll(() => scratchOf(arc!).length).toBe(1)
+  await expect
+    .poll(() => states(arc!, scratchOf(arc!)[0]!.id))
+    .toEqual([["Scratch from the pen", "done"]])
+
+  // "in" arc's banda: a draft there, on arc's engine.
+  await pen.click({ button: "right" })
+  await arcIn.getByRole("menuitem", { name: /banda/ }).click()
+  await expect(
+    draft.getByRole("button", { name: "Project: banda on arc" })
+  ).toBeVisible()
+  await write("In banda from the pen")
+  await expect
+    .poll(() => states(arc!, banda))
+    .toContainEqual(["In banda from the pen", "done"])
+
+  // In arc's Thread a click starts on arc: "on" ticks arc, "in" its
+  // banda, and "with" lists arc's Harnesses, the first ticked. Other AI
+  // starts one in banda on arc, on arc's Other AI.
+  await arcOf(page).getByText("Bench window tests").click()
+  await expect(
+    page.getByRole("region", { name: "Bench window tests", exact: true })
+  ).toHaveAttribute("data-focused", "true")
+  await pen.click({ button: "right" })
+  await expect(on.getByRole("menuitem").last()).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await expect(on.getByRole("menuitem").first()).not.toHaveAttribute(
+    "aria-current"
+  )
+  await expect(arcIn.getByRole("menuitem", { name: /banda/ })).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await expect(harnesses.getByRole("menuitem")).toHaveCount(2)
+  await expect(
+    harnesses.getByRole("menuitem", { name: "Fake AI" })
+  ).toHaveAttribute("aria-current", "true")
+  await harnesses.getByRole("menuitem", { name: "Other AI" }).click()
+  await expect(
+    draft.getByRole("button", { name: "Project: banda on arc" })
+  ).toBeVisible()
+  await write("Other AI from the pen", "Other AI")
+  await expect
+    .poll(() => states(arc!, banda))
+    .toContainEqual(["Other AI from the pen", "done"])
+
+  // This machine's engine was sent none of them.
+  expect(threadsOf(window, local).map((one) => one.title)).toEqual([
+    "Sidebar for arc",
+  ])
+  expect(scratchOf(window)).toEqual([])
 })
 
 test("a popped-out Pane on arc picks from the window's machines: this machine's Projects first, then arc's under its name", async () => {
