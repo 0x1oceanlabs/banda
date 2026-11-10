@@ -5,7 +5,7 @@ import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
 import { callsOf } from "@banda/ui/status"
 import { nextCall } from "../calls/sight"
-import { keysOf, order } from "./order"
+import { order } from "./order"
 import type { Settings } from "./settings"
 import { calm, type Counted, inOrder, tally } from "./tally"
 
@@ -104,7 +104,7 @@ const project = (id: string): ProjectSummary => ({
   missing: false,
 })
 
-test("the list is what Alt+U walks from the top, as the Person arranges the sidebar", () => {
+test("the list is what Alt+U walks from the top: Your turn oldest first, however the Person arranges the sidebar (ADR 0098, decisions 3 and 7)", () => {
   // Project a changed last, though b's calls are the newer; an Agent
   // works in each.
   const day = {
@@ -123,9 +123,9 @@ test("the list is what Alt+U walks from the top, as the Person arranges the side
   const keys = (things: Counted[]) =>
     things.map((t) => `${t.project}:${t.listed.id}`)
   const listedIn = (settings: Settings) => {
-    const sidebar = keysOf(
-      order(day, [project("a"), project("b")], 0, { settings })
-    )
+    const sidebar = order(day, [project("a"), project("b")], 0, {
+      settings,
+    }).keys
     const listed = inOrder(tally(day, ["waiting", "working"], 0), sidebar)
     const waiting = keys(listed.waiting)
     const working = keys(listed.working)
@@ -139,30 +139,19 @@ test("the list is what Alt+U walks from the top, as the Person arranges the side
     expect(working).toEqual(sidebar.filter((key) => working.includes(key)))
     return { waiting, working }
   }
-  // The `inbox` preset: what waits first, the latest first, then what
-  // works.
-  expect(listedIn(DEFAULT_SIDEBAR)).toEqual({
-    waiting: ["b:broke", "b:new", "a:ask", "a:old"],
-    working: ["a:run", "b:build"],
-  })
-  // Sorted by title, the list is too.
-  expect(listedIn({ ...DEFAULT_SIDEBAR, sort: { by: "title" } })).toEqual({
-    waiting: ["a:ask", "b:broke", "b:new", "a:old"],
-    working: ["b:build", "a:run"],
-  })
-  // The `projects` preset: the Project that changed last first, and in
-  // each what waits, then what works.
+  // Each preset: what called first first, across Projects, then what
+  // works, by when it began.
   const projects: Settings = {
     ...DEFAULT_SIDEBAR,
-    group: {
-      ...DEFAULT_SIDEBAR.group,
-      by: "project",
-      states: ["active", "working", "later", "archived"],
-      bottom: [],
-    },
+    group: { ...DEFAULT_SIDEBAR.group, by: "project" },
   }
-  expect(listedIn(projects)).toEqual({
-    waiting: ["a:ask", "a:old", "b:broke", "b:new"],
-    working: ["a:run", "b:build"],
-  })
+  for (const settings of [
+    DEFAULT_SIDEBAR,
+    { ...DEFAULT_SIDEBAR, sort: { by: "title" as const } },
+    projects,
+  ])
+    expect(listedIn(settings)).toEqual({
+      waiting: ["a:old", "a:ask", "b:new", "b:broke"],
+      working: ["b:build", "a:run"],
+    })
 })

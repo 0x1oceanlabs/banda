@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
-import type { ProjectId } from "@banda/contract"
-import { type Run, useRun } from "@banda/core/react"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
+import { HereContext, type Run, useRun } from "@banda/core/react"
 import type { Row } from "./arrange"
 
 /**
@@ -33,6 +33,24 @@ export function useOpen(): Run {
 export function newThread(open: Run, project: ProjectId, missing = false) {
   if (missing) open("projects.locate", { project })
   else open("thread.new", { project })
+}
+
+/**
+ * How the sidebar's own buttons start a Thread: in `only`, the Project
+ * whose rows alone the list shows, or else where the Person is, as
+ * Alt+Enter starts one (`Here.starts`), read as it is pressed.
+ */
+export function useNewThread(
+  only: ProjectId | undefined,
+  projects: readonly ProjectSummary[]
+): () => void {
+  const open = useOpen()
+  const here = useContext(HereContext)
+  return () => {
+    const project = only ?? here.get().starts
+    const { missing } = projects.find((one) => one.id === project) ?? {}
+    newThread(open, project, missing)
+  }
 }
 
 /**

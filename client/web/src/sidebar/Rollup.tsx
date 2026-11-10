@@ -1,12 +1,15 @@
-import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
-import type { Section } from "./arrange"
+import {
+  BandaMark,
+  MARK_WORDS,
+  type MarkState,
+} from "@banda/ui/components/banda-mark"
 
 /** The loudest mark of a group, and how many in it need the Person. */
 export function Rollup({
   mark,
   waiting,
 }: {
-  mark: Section["mark"]
+  mark: MarkState
   waiting: number
 }) {
   return (

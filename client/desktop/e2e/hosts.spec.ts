@@ -1396,13 +1396,10 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   await expect(done("Sidebar for arc")).toBeVisible()
   await expect(done("Bench window tests")).toBeVisible()
 
-  // Alt+U goes down what calls as the sidebar lists it, by Project here:
-  // this machine's first, then arc's Thread, which opens read live from
-  // arc's engine.
-  await page.keyboard.press("Alt+U")
-  await expect(
-    page.getByRole("region", { name: "Sidebar for arc", exact: true })
-  ).toHaveAttribute("data-focused", "true")
+  // Alt+U goes down Your turn as the Inbox lists it, the oldest first
+  // whichever machine it is on (ADR 0098, S5b): arc's Thread, seeded
+  // before this one's, opens first, read live from arc's engine; then
+  // this machine's.
   await page.keyboard.press("Alt+U")
   const bench = page.getByRole("region", {
     name: "Bench window tests",
@@ -1410,6 +1407,10 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   })
   await expect(bench).toHaveAttribute("data-focused", "true")
   await expect(bench.getByText("You said: Bench window tests")).toBeVisible()
+  await page.keyboard.press("Alt+U")
+  await expect(
+    page.getByRole("region", { name: "Sidebar for arc", exact: true })
+  ).toHaveAttribute("data-focused", "true")
 
   // One there that finishes out of sight tells with a toast, whose button
   // opens it there too. Where the focus ends is not said: the toasts give
@@ -2362,8 +2363,8 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
   test.setTimeout(shots ? 300_000 : 120_000)
   arc = newArc()
   const banda = await seed(arc)
-  // Grouped by state, the newest that waits first, and the counts always
-  // on the bar, beside the sidebar list.
+  // The Inbox, Your turn oldest first (ADR 0098, decision 3), and the
+  // counts always on the bar, beside the sidebar list.
   window = await withArc(
     arc,
     program,
@@ -2381,14 +2382,14 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
   // arc's newest is done after this machine's.
   send(arc, banda, "Done on arc")
   await expect(done("Done on arc")).toBeVisible()
-  const titles = [/Done on arc/, /Sidebar for arc/, /Bench window tests/]
+  const titles = [/Bench window tests/, /Sidebar for arc/, /Done on arc/]
   await expect(
     sidebar.getByRole("button", {
       name: /Done on arc|Sidebar for arc|Bench window tests/,
     })
   ).toHaveText(titles)
 
-  // The counts list them in the sidebar list's order, arc's newest first.
+  // The counts list them in the sidebar list's order, arc's newest last.
   await expect(
     page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
   ).toHaveCount(0, { timeout: 30_000 })
@@ -2404,9 +2405,9 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
 
   // Alt+U walks them in that order too, arc's on arc's engine.
   for (const title of [
-    "Done on arc",
-    "Sidebar for arc",
     "Bench window tests",
+    "Sidebar for arc",
+    "Done on arc",
   ]) {
     await page.keyboard.press("Alt+U")
     const pane = page.getByRole("region", { name: title, exact: true })

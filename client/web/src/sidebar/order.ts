@@ -1,11 +1,13 @@
 /**
  * The one order of what calls (ADR 0079, decision 4; ADR 0087, decision
- * 8): the Person's arrangement of the sidebar. The sidebar list draws it,
- * the bar's counts list and `Alt+U` go by its rows' `project:thing` keys,
- * and only `order` works it out. The counts and Alt+U take it with no
- * filter nor fold, so it holds while the Sidebar is hidden, and only when
- * asked, on the key or as the counts' list opens. All three place the
- * other machines' Threads alike, by the one `elsewhereOf`.
+ * 8): the Person's sidebar, as the Inbox lays it out (ADR 0098). The
+ * sidebar list draws it, the bar's counts list and `Alt+U` go by its
+ * rows' `project:thing` keys, and only `order` works it out. Its keys are
+ * Your turn oldest first, then Open, then Working, whatever the list
+ * shows and however it is grouped, so the counts and Alt+U take them
+ * whole, while the Sidebar is hidden too, and only when asked, on the key
+ * or as the counts' list opens. All three place the other machines'
+ * Threads alike, by the one `elsewhereOf`.
  */
 import { useCallback, useContext } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
@@ -19,26 +21,31 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { type Arranged, arrange, type Elsewhere } from "./arrange"
-import { rowKey } from "./hold"
+import { arrange, type Elsewhere, type ProjectLine } from "./arrange"
+import { type Inbox, inboxOf, type InboxView } from "./inbox"
 import type { Settings } from "./settings"
 
 /** What of the order the sidebar list shows: one Project's rows alone,
- * as a click in the list of Projects asks, and the sections the Person
- * folded or opened, which the counts and Alt+U leave out to take it
- * whole; and the other machines' Projects, whose rows it places among
- * this one's, which they hand too. `settings` are the look's, as the
- * Person arranged the sidebar, unless a test hands its own. */
-export type View = {
+ * as a click in the list of Projects asks; the tab in view, a cut list
+ * whole, the groups the Person folded and when inbox zero last told of
+ * Someday, which the counts and Alt+U leave as they come, their keys the
+ * same whatever these say; and the other machines' Projects, whose rows
+ * it places among this one's, which they hand too. `settings` are the
+ * look's, as the Person arranged the sidebar, unless a test hands its
+ * own. */
+export type View = Partial<Omit<InboxView, "group">> & {
   settings?: Settings
   only?: ProjectId
-  toggled?: ReadonlySet<string>
   elsewhere?: readonly Elsewhere[]
 }
 
+/** The sidebar as it is drawn: the Inbox, and the list of Projects when
+ * the settings ask for it. */
+export type Ordered = Inbox & { projects?: ProjectLine[] }
+
 /**
- * The sidebar's arrangement of every Project's list, as the Person's
- * settings say, each Thread where it stands at `now`, the Later clock.
+ * The sidebar's Inbox of every Project's list, as the Person's settings
+ * say, each Thread where it stands at `now`, the Later clock.
  */
 export function order(
   lists: Lists,
@@ -47,11 +54,16 @@ export function order(
   {
     settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
     only,
-    toggled,
     elsewhere = [],
+    ...shown
   }: View = {}
-): Arranged {
-  return arrange(lists, projects, settings, now, only, toggled, elsewhere)
+): Ordered {
+  const arranged = arrange(lists, projects, settings, now, only, elsewhere)
+  const view = { tab: "inbox" as const, ...shown, group: arranged.group }
+  return {
+    ...inboxOf(arranged.rows, view, now),
+    ...(arranged.projects ? { projects: arranged.projects } : {}),
+  }
 }
 
 /** The other machines whose Projects the order places among this one's:
@@ -75,20 +87,12 @@ export function useOrderNow(): (
   lists: Lists,
   projects: readonly ProjectSummary[],
   now: number
-) => Arranged {
+) => Ordered {
   const kept = useContext(HostsContext)
   return useCallback(
     (lists, projects, now) =>
       order(lists, projects, now, { elsewhere: elsewhereOf(kept.get()) }),
     [kept]
-  )
-}
-
-/** The `project:thing` key of each row of `arranged`, top down, the
- * shelves' last. */
-export function keysOf({ sections, shelves }: Arranged): string[] {
-  return [...sections, ...shelves].flatMap((section) =>
-    section.rows.map(rowKey)
   )
 }
 

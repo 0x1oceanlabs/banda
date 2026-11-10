@@ -10,7 +10,7 @@ import { expect, test } from "vitest"
 import { nextCall } from "../calls/sight"
 import type { Elsewhere } from "./arrange"
 import { rowKey } from "./hold"
-import { byOrder, keysOf, order, useElsewhere, useOrderNow } from "./order"
+import { byOrder, order, useElsewhere, useOrderNow } from "./order"
 import type { Settings } from "./settings"
 import { inOrder, tally } from "./tally"
 
@@ -56,26 +56,30 @@ const byProject: Settings = {
   group: { ...DEFAULT_SIDEBAR.group, by: "project", bottom: [] },
 }
 
-test("the sidebar list draws the order the counts list and Alt+U go by, whatever it folds (ADR 0087, decision 8)", () => {
+test("the counts list and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
   const lists = {
     ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
     ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "running", 7)],
   }
   const projects = [project("a"), project("b")]
-  for (const settings of [DEFAULT_SIDEBAR, byProject]) {
-    const keys = keysOf(order(lists, projects, 0, { settings }))
-    // The sidebar list, a section folded: the same rows in the same order.
-    const drawn = order(lists, projects, 0, {
-      settings,
-      toggled: new Set(["a", "active"]),
-    })
-    expect(
-      [...drawn.sections, ...drawn.shelves].flatMap((s) => s.rows.map(rowKey))
-    ).toEqual(keys)
-    const waiting = keys.filter((key) => !key.endsWith(":run"))
-    expect(counted(lists, keys)).toEqual(waiting)
-    expect(walk(lists, keys)).toEqual(waiting)
-  }
+  const { keys } = order(lists, projects, 0)
+  expect(keys).toEqual(["a:old", "a:ask", "b:broke", "b:run"])
+  // Another tab, another arrangement, a group folded, a cut list whole,
+  // one Project alone in view: the same order.
+  for (const view of [
+    { settings: byProject },
+    { settings: byProject, folded: new Set(["project:a"]) },
+    { tab: "archive" as const, more: true },
+  ])
+    expect(order(lists, projects, 0, view).keys).toEqual(keys)
+  // The list draws the calls in that order.
+  const drawn = order(lists, projects, 0).blocks.flatMap((block) =>
+    block.kind === "rows" ? block.rows.map(({ row }) => rowKey(row)) : []
+  )
+  expect(drawn).toEqual(keys)
+  const waiting = keys.filter((key) => !key.endsWith(":run"))
+  expect(counted(lists, keys)).toEqual(waiting)
+  expect(walk(lists, keys)).toEqual(waiting)
 })
 
 /** This machine's "a", and "far" on another machine, each with one that
@@ -89,20 +93,29 @@ test("another machine's Threads stand in one place in the sidebar list, the coun
   // This pins the one order the three draw from; that each hands it the
   // same other machines, the test below and the architecture test pin.
   const elsewhere = [{ name: "devbox", projects: [project("far")] }]
-  // Grouped by state, the newest that waits first, wherever it is;
-  // grouped by Project, below this machine's, as its label stands.
-  const placed = [
-    [DEFAULT_SIDEBAR, ["far:there", "a:ask", "a:old"]],
-    [byProject, ["a:ask", "a:old", "far:there"]],
-  ] as const
-  for (const [settings, sidebar] of placed) {
-    const keys = keysOf(
-      order(twoMachines, [project("a")], 0, { settings, elsewhere })
-    )
-    expect(keys).toEqual(sidebar)
-    expect(counted(twoMachines, keys)).toEqual(sidebar)
-    expect(walk(twoMachines, keys)).toEqual(sidebar)
+  // What called first first, wherever it is, grouped by Project or not.
+  const placed = ["a:old", "a:ask", "far:there"]
+  for (const settings of [DEFAULT_SIDEBAR, byProject]) {
+    const { keys } = order(twoMachines, [project("a")], 0, {
+      settings,
+      elsewhere,
+    })
+    expect(keys).toEqual(placed)
+    expect(counted(twoMachines, keys)).toEqual(placed)
+    expect(walk(twoMachines, keys)).toEqual(placed)
   }
+  // Grouped by Project, the list draws the other machine's group with its
+  // name, apart from this one's.
+  const groups = order(twoMachines, [project("a")], 0, {
+    settings: byProject,
+    elsewhere,
+  }).blocks.flatMap((block) =>
+    block.kind === "group" ? [[block.key, block.host]] : []
+  )
+  expect(groups).toEqual([
+    ["project:a", undefined],
+    ["project:devbox/far", "devbox"],
+  ])
 })
 
 test("the counts and Alt+U take the other machines from the Window's hosts as the sidebar list does, Alt+U as they stand on the key", () => {
@@ -133,12 +146,12 @@ test("the counts and Alt+U take the other machines from the Window's hosts as th
   )
   // A machine away or stopped holds its rows as they were (#989).
   expect(drawn.map((host) => host.name)).toEqual(["devbox", "lost", "old"])
-  // devbox lists "far" after the drawing: the key finds it, newest first.
+  // devbox lists "far" after the drawing: the key finds it, in its place.
   kept.projects("devbox", [project("far")])
-  expect(keysOf(orderNow!(twoMachines, [project("a")], 0))).toEqual([
-    "far:there",
-    "a:ask",
+  expect(orderNow!(twoMachines, [project("a")], 0).keys).toEqual([
     "a:old",
+    "a:ask",
+    "far:there",
   ])
 })
 
