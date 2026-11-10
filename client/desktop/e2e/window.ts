@@ -64,6 +64,12 @@ export const inUnit = (
  * workers need it for their APIs. CI's containers cannot give it, so there
  * it runs without, as Playwright does unless asked.
  */
+/** agents.toml in the Flow `free`, for `startWindow`'s files: a new Pane
+ * opens right of the one in front, wherever it is, as the tests of the
+ * keys, the mouse and the overview were written for; the row's own rules
+ * have tests of their own (ADR 0102). */
+export const FREE = { "config/agents.toml": 'flow = "free"\n' }
+
 export const SANDBOXED = !process.env.CI
 
 export type Window = {

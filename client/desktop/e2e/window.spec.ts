@@ -19,6 +19,7 @@ import {
   countNotes,
   desktopOf,
   firstThread,
+  FREE,
   fromLeft,
   git,
   GLASS,
@@ -233,7 +234,7 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
 })
 
 test("a Pane moves to another workspace, and the overview shows them all", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   await firstThread(page)
   const draft = page.getByRole("region", { name: "New Thread" })
@@ -296,7 +297,10 @@ test("a Pane moves to another workspace, and the overview shows them all", async
 
 test("the bar's workspaces come and go on the look's motion, as numbers or dots", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
-  window = await startWindow({ look: `[motion.workspace]\n${slow}\n` })
+  window = await startWindow({
+    files: FREE,
+    look: `[motion.workspace]\n${slow}\n`,
+  })
   const { page } = window
   const { composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -378,7 +382,7 @@ test("the bar's workspaces come and go on the look's motion, as numbers or dots"
 })
 
 test("a sideways swipe moves the Strip and lands on a column; a scroll up and down leaves it be", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -609,7 +613,7 @@ test("a Person signs in in a terminal below the turn, and it goes again", async 
 })
 
 test("a Person works in a terminal in the Project, and closing it stops the shell", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page, dir } = window
   await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
@@ -2564,6 +2568,7 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
 test("what an Agent opens with no place goes into its Thread's Group as a Deck, marked, and moves neither the Thread nor the focus (ADR 0065, decision 7)", async () => {
   // A third each, so the three fit in view.
   window = await startWindow({
+    files: FREE,
     look: '[columns]\nmin = 10\ndefault = "1/3"\n',
   })
   const { page, dir } = window
@@ -2904,7 +2909,7 @@ test("a column alone fills its workspace, and a second halves it", async () => {
 
 test("niri's keys: a launcher's letters, heights, the Strip's edges, the room left, the middle and the zoom", async () => {
   // Narrow columns, so a third of this window is a third.
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -3188,7 +3193,7 @@ async function within(tile: Locator, x: number, y: number) {
 }
 
 test("the mouse moves Panes as niri's: a header, Alt and the left button, the bar's numbers", async () => {
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -3393,7 +3398,7 @@ test("the overview shows every column of a workspace, and a middle click or a cr
 
 test("in the overview a workspace's number carries it up or down, Esc puts it back, and a click goes there", async () => {
   // Small enough that every workspace shows at once.
-  window = await startWindow({ look: "[overview]\nzoom = 0.2\n" })
+  window = await startWindow({ files: FREE, look: "[overview]\nzoom = 0.2\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -3491,7 +3496,7 @@ test("the overview zooms out as far as [overview] zoom says", async () => {
 })
 
 test("the overview: the arrows and Enter, the window's keys, the drag", async () => {
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -3641,7 +3646,7 @@ test("Alt+[ takes a Pane into a column, Alt+T shows it as a Deck", async () => {
 })
 
 test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves whole", async () => {
-  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  window = await startWindow({ files: FREE, look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -3870,6 +3875,7 @@ async function stillShot(
 test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {
   // A third each, so the three fit in view; the handle, off by default.
   window = await startWindow({
+    files: FREE,
     look: '[columns]\nmin = 10\ndefault = "1/3"\n[groups]\nhandle = true\n',
   })
   const { page } = window
@@ -3933,6 +3939,7 @@ test("a Group's handle carries it, and a Pane dropped inside its end joins it", 
 test("Alt and a grouped Pane's header carry its whole Group, and a note says so", async () => {
   // A third each, so the three fit in view; no handle, as by default.
   window = await startWindow({
+    files: FREE,
     look: '[columns]\nmin = 10\ndefault = "1/3"\n',
   })
   const { page } = window
@@ -4030,6 +4037,7 @@ test("Alt and a grouped Pane's header carry its whole Group, and a note says so"
 test("a Thread picked in the sidebar comes to the Strip's left, beside it", async () => {
   // A third each, so four columns are wider than the screen.
   window = await startWindow({
+    files: FREE,
     look: '[columns]\nmin = 10\ndefault = "1/3"\n',
   })
   const { page } = window
@@ -4141,6 +4149,7 @@ test("a tab in a Deck's bar carries its Pane", async () => {
 test("columns grow and go to their new places on the look's motion", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
+    files: FREE,
     look: `[columns]\nalone = "1/2"\n[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
   })
   const { page } = window
@@ -4399,6 +4408,7 @@ test("the system's glass is its material, with Banda's grain over it", async () 
 
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
+    files: FREE,
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
   })
   const { page, dir } = window
@@ -6769,7 +6779,7 @@ test("a column moved along the Strip by Alt+Shift+Arrows stays in view", async (
 })
 
 test("Alt+Up and Down go on past a column's end to the workspace there, and with Shift take the Pane along", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   const { composer } = await firstThread(page)
   await composer.fill("hello")
@@ -6816,7 +6826,7 @@ test("Alt+Up and Down go on past a column's end to the workspace there, and with
 })
 
 test("Alt+Shift+PageUp and PageDown move the workspace on screen, never under the empty one", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
