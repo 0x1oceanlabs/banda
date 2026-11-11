@@ -365,10 +365,18 @@ test("quick-look: a file of arc's shows in Quick Look naming arc; a file gone fr
   // Gone on arc: arc's engine says so, whatever this machine has at that
   // path.
   rmSync(arc!.disk(who))
+  const since = arc!.asked().length
   await page.keyboard.press(QUICK_LOOK)
   const notes = page.getByRole("region", { name: "Notifications" })
   await expect(notes.getByText(`No such file: ${who}`)).toBeVisible()
   await expect(peek).toHaveCount(0)
+  // The check is one round trip to arc, whatever else arc is asked.
+  expect(
+    arc!
+      .asked()
+      .slice(since)
+      .flatMap(({ method }) => (method?.startsWith("files.") ? [method] : []))
+  ).toEqual(["files.stat"])
 
   // Away: refused at once in its pill's words, never shown later.
   arc!.blackhole(true)
