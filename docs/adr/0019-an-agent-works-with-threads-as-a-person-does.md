@@ -111,6 +111,9 @@ Roma asked for the simple version: "не хочется усложнять, чт
    notes keep how others did them, if the use shows they are needed.
    (Other Spaces' Panes: an Agent sees them when its Person lets it, ADR
    0032.)
+   _Amended 2026-11-11 by [ADR 0109](0109-banda-sets-no-limits-on-agents-and-a-person-s-stop-always-ends.md):
+   limits on depth or count and budgets are not coming; they are the
+   Harness's and the provider's._
 
 **Plan.** Each step is its own PR, and `scripts/check.sh` passes after
 each.
