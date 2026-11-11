@@ -5,6 +5,7 @@ import { crc32 } from "node:zlib"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { pdfOf } from "./pdf"
 import {
+  bandaMenu,
   bytesUrl,
   firstThread,
   projectId,
@@ -28,7 +29,7 @@ function put(folder: string, path: string, text: string | Buffer = "") {
 /** Opens the file the Banda menu finds for `words` in its Pane. */
 async function openFromMenu(page: Page, words: string, title: string) {
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await menu.getByRole("combobox", { name: "Search" }).fill(words)
   const files = menu.getByRole("group", { name: "Files" })
   await expect(files.getByRole("option").first()).toContainText(title)
@@ -192,14 +193,14 @@ test("Quick Look shows the row picked over the desk on Space, follows ↓ in the
   )
   await expect(page.locator("[data-column]")).toHaveCount(columns + 1)
 
-  // While it shows, the sidebar's Search opens the Banda menu: only the
-  // menu's key fills the desk.
+  // While it shows, the bar's logo opens the Banda menu: only the menu's
+  // key fills the desk.
   await row("a.ts").click()
   await page.keyboard.press("Space")
   await expect(peek).toHaveAttribute("aria-label", "Quick Look: a.ts")
   await page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /Search/ })
+    .getByRole("banner")
+    .getByRole("button", { name: /^Banda menu/ })
     .click()
   await expect(page.getByRole("dialog", { name: "Banda menu" })).toBeVisible()
   await expect(peek).not.toHaveAttribute("data-fill")

@@ -16,6 +16,7 @@ import {
   agentAnswers,
   agentCalls,
   agentSays,
+  bandaMenu,
   bytesUrl,
   clickNotice,
   countNotes,
@@ -4197,7 +4198,7 @@ async function freeThenRow(window: Window) {
 
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const run = async (action: RegExp) => {
-    await page.keyboard.press("Alt+Space")
+    await bandaMenu(page)
     await menu.getByRole("combobox", { name: "Search" }).fill("Arrange")
     await menu.getByRole("option", { name: action }).click()
     await expect(menu).toBeHidden()
@@ -4572,7 +4573,7 @@ test("in the row, the Pane menu greys out another Project's workspace, and Open 
   // workspace, and the toast says whose this one is.
   const banda = page.getByRole("dialog", { name: "Banda menu" })
   const search = banda.getByRole("combobox", { name: "Search" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("hello")
   await expect(banda.getByRole("option").first()).toContainText("hello")
   await search.press("Shift+Enter")
@@ -4902,7 +4903,7 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   const thinned = /(\/|,) 0\.1\)$/
   await expect.poll(fill).toMatch(thinned)
   // Menus stay solid over glass, with no blur under them (ADR 0075).
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await expect(menu).toHaveCSS("backdrop-filter", "none")
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
@@ -4920,7 +4921,7 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   await expect(root).not.toHaveAttribute("data-glass")
   // Solid, it is shadcn's own grey again.
   await expect.poll(fill).not.toMatch(thinned)
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await expect(menu).toHaveCSS("backdrop-filter", "none")
 })
 
@@ -5948,7 +5949,7 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
   await expect(composer).toHaveText("zq")
 
   // A terminal reads keys only in its own field, whichever way the menu
-  // was opened.
+  // or the sidebar's Search was opened.
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -5960,25 +5961,41 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  const typedAfter = async (open: () => Promise<void>, file: string) => {
+  // Each field it opens takes the keys, and Esc gives them back.
+  const typedAfter = async (
+    open: () => Promise<void>,
+    field: Locator,
+    file: string
+  ) => {
     await open()
-    await expect(menu).toBeVisible()
+    await expect(field).toBeFocused()
     await page.keyboard.press("Escape")
-    await expect(menu).toBeHidden()
+    await expect
+      .poll(() =>
+        page.evaluate(() => !!document.activeElement?.closest("[data-tile]"))
+      )
+      .toBe(true)
     await page.keyboard.type(`echo back > ${file}`)
     await page.keyboard.press("Enter")
     await expect
       .poll(() => read(join(dir, "root", "Work", file)))
       .toBe("back\n")
   }
-  await typedAfter(() => page.keyboard.press("Alt+Space"), "by-key.txt")
+  // Alt+Space and a click take the sidebar's Search (ADR 0098, decision
+  // 17); the bar's logo opens the menu.
+  const search = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("combobox", { name: "Search" })
+  await typedAfter(() => page.keyboard.press("Alt+Space"), search, "by-key.txt")
+  await typedAfter(() => search.click(), search, "by-search.txt")
   await typedAfter(
     () =>
       page
-        .getByRole("complementary", { name: "Sidebar" })
-        .getByRole("button", { name: /Search/ })
+        .getByRole("banner")
+        .getByRole("button", { name: /^Banda menu/ })
         .click(),
-    "by-search.txt"
+    menu.getByRole("combobox", { name: "Search" }),
+    "by-logo.txt"
   )
 })
 
@@ -5991,10 +6008,13 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await expect(thread).not.toHaveAccessibleName("New Thread")
   const hello = await ownTile(page, thread)
 
-  // The sidebar's field opens it, and Esc closes it.
+  // The bar's logo opens it, and Esc closes it.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await sidebar.screenshot({ path: "test-results/26-sidebar-search.png" })
-  await sidebar.getByRole("button", { name: /Search/ }).click()
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: /^Banda menu/ })
+    .click()
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await expect(
     menu.getByRole("group", { name: "Recent Threads" })
@@ -6002,9 +6022,9 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
-  // Alt+Space; the words find the Thread, and New Thread with them waits
-  // last.
-  await page.keyboard.press("Alt+Space")
+  // Alt+Space, from the sidebar's Search with nothing typed; the words
+  // find the Thread, and New Thread with them waits last.
+  await bandaMenu(page)
   const search = menu.getByRole("combobox", { name: "Search" })
   await search.fill("hel")
   await expect(menu.getByRole("option").first()).toContainText("hello")
@@ -6022,7 +6042,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   // A row that opens a Pane leaves the focus where that Pane puts it, in
   // its message box, once the menu has gone too: the menu gives the focus
   // back only where none is (#946).
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("hello")
   await expect(menu.getByRole("option").first()).toContainText("hello")
   await page.keyboard.press("Enter")
@@ -6224,7 +6244,7 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
 
   // Enter goes into a Project: its new Thread, then its Threads; Backspace
   // in the empty field comes back out.
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("work")
   await expect(menu.getByRole("option").first()).toContainText("Work")
   await search.press("Enter")
@@ -6265,7 +6285,7 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   // The sidebar's view: Group by, the one in force ticked; one picked
   // writes the file, and the list comes back grouped (ADR 0098, decision
   // 7).
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("view")
   await search.press("Enter")
   await expect(menu.getByRole("option", { name: /^None/ })).toBeVisible()
@@ -6329,7 +6349,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   // So does the Banda menu's, with the words typed.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("again")
   await menu.getByRole("option", { name: /New Thread: “again”/ }).click()
   await expect(menu).toBeHidden()
@@ -6591,7 +6611,7 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
   banda("project", "add", join(work, "cli"))
   await setInFront(page, false)
   await setInFront(page, true)
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill("cli")
   await expect(menu.getByRole("group", { name: "Projects" })).toContainText(
     "cli"
@@ -7115,14 +7135,13 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
     await expect(menu).toBeHidden()
   }
 
-  // Search: the Banda menu, at its root.
+  // Search searches in place: it takes the focus, and the sidebar stays
+  // (ADR 0098, decision 17).
   await over()
-  await sidebar.getByRole("button", { name: /Search/ }).click()
-  await expect(
-    menu.getByRole("group", { name: "Recent Threads" })
-  ).toBeVisible()
-  await expect(sidebar).toBeHidden()
-  await shut()
+  const search = sidebar.getByRole("combobox", { name: "Search" })
+  await search.click()
+  await expect(search).toBeFocused()
+  await expect(sidebar).toBeVisible()
 
   // ✎'s menu's Add Project…: the Banda menu, at Add Project.
   await addProject(page)
@@ -7180,14 +7199,14 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
       ;(style as HTMLStyleElement).disabled = !on
     }, on)
   const fading = page.locator("[role=dialog][data-closed]")
-  // The sidebar's Search opens the menu, and the sidebar goes.
+  // Alt+Space opens the menu, the sidebar hidden.
   const search = async () => {
+    await expect(sidebar).toBeHidden()
     await holding(true)
-    await sidebar.getByRole("button", { name: /Search/ }).click()
+    await page.keyboard.press("Alt+Space")
     await expect(
       page.getByRole("dialog", { name: "Banda menu" }).getByRole("combobox")
     ).toBeFocused()
-    await expect(sidebar).toBeHidden()
   }
   // Esc closes it, and the focus, which nothing else takes, is in it as it
   // fades.
@@ -7242,15 +7261,14 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
         })
     })
 
-  // Alt+A shows the sidebar again while the menu fades (#1065).
-  await page.keyboard.press("Alt+A")
-  await expect(sidebar).toBeVisible()
+  // Alt+A shows the sidebar while the menu fades (#1065).
   await search()
   await shut()
   await page.keyboard.press("Alt+A")
   await expect(sidebar).toBeVisible()
   await expect(fading).toHaveCount(1)
   await letGo()
+  await page.keyboard.press("Alt+A")
 
   // Alt+O opens the overview the same way, and the overview keeps the
   // focus, though the next frame's callbacks run only after Alt+O: Base

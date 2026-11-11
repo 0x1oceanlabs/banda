@@ -192,7 +192,7 @@ test("triage by keys, ↓ S ↓ Z Enter U: Tab goes into the list, the pick goes
   await picked(page, list, "call five")
 })
 
-test("Esc goes out one layer a press: the picker, the title's field, the sidebar over the Strip, then back to the Pane in focus; a field types the sidebar's letters (ADR 0098, S7b)", async () => {
+test("Esc goes out one layer a press: the picker, the title's field, the search, the sidebar over the Strip, then back to the Pane in focus; a field types the sidebar's letters (ADR 0098, S7b)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { app, page } = window
@@ -232,8 +232,19 @@ test("Esc goes out one layer a press: the picker, the title's field, the sidebar
   await expect(list).toBeFocused()
   await expect(sidebar).toBeVisible()
 
-  // 3 and 4, check mode and the search, come with their steps (S10b,
-  // S12a). 6, docked: back to the Pane in focus, the sidebar stays.
+  // 3, check mode, comes with its step (S10b). 4, the search: / opens
+  // it, and Esc ends it, the Inbox and the list's focus back (S12a).
+  await page.keyboard.press("/")
+  const search = sidebar.getByRole("combobox", { name: "Search" })
+  await expect(search).toBeFocused()
+  await page.keyboard.type("two")
+  await expect(tab("All")).toHaveAttribute("aria-selected", "true")
+  await page.keyboard.press("Escape")
+  await expect(search).toHaveValue("")
+  await expect(tab("Inbox")).toHaveAttribute("aria-selected", "true")
+  await expect(list).toBeFocused()
+
+  // 6, docked: back to the Pane in focus, the sidebar stays.
   await page.keyboard.press("Escape")
   await focusIs(page, "pane")
   await expect(sidebar).toBeVisible()
@@ -254,7 +265,7 @@ test("Esc goes out one layer a press: the picker, the title's field, the sidebar
   await focusIs(page, "pane")
 })
 
-test("the sidebar's keys are its own: a terminal and the menu's search type them, and Alt+S, Alt+Z, Alt+U and Alt+A work from anywhere, the list too (ADR 0098, S7b)", async () => {
+test("the sidebar's keys are its own: a terminal and its Search type them, and Alt+S, Alt+Z, Alt+U and Alt+A work from anywhere, the list too (ADR 0098, S7b)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -286,18 +297,18 @@ test("the sidebar's keys are its own: a terminal and the menu's search type them
   await page.keyboard.type("s")
   await expect(tab("Archive")).toHaveAccessibleName("Archive")
 
-  // / in the list opens the search, the Banda menu's for now, whose field
-  // types the letters.
+  // / in the list goes to the sidebar's Search, whose field types the
+  // letters and the digits (S12a).
   await list.focus()
   await page.keyboard.press("/")
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
-  const search = menu.getByRole("combobox", { name: "Search" })
+  const search = sidebar.getByRole("combobox", { name: "Search" })
   await expect(search).toBeFocused()
-  await page.keyboard.type("szu")
-  await expect(search).toHaveValue("szu")
+  await page.keyboard.type("szu 12")
+  await expect(search).toHaveValue("szu 12")
   await page.keyboard.press("Escape")
-  await expect(menu).toBeHidden()
-  expect(await focusOf(page)).not.toBe("body")
+  await expect(search).toHaveValue("")
+  await expect(list).toBeFocused()
+  await expect(tab("Inbox")).toHaveAttribute("aria-selected", "true")
   await expect(tab("Archive")).toHaveAccessibleName("Archive")
 
   // From the list, Alt+Z and Alt+S act on the Thread in focus, as they do

@@ -1524,6 +1524,68 @@ mod tests {
     }
 
     #[test]
+    fn search_takes_slash_and_zero_in_the_sidebar_s_table_and_alt_space_stays_the_menu_s() {
+        // Search in place (ADR 0098, decision 17): `/` takes the focus to it
+        // and `0` shows All, the sidebar's own keys, moved in its table.
+        // Alt+Space stays the Banda menu's, a key of the whole window,
+        // which the window sends to Search first while the sidebar shows
+        // (ADR 0017, decision 1, as amended): the key that moves the menu
+        // moves that too, and Search's own binds only in [binds.sidebar].
+        let mut manifests = manifests_of(actions());
+        manifests.scopes.push(Scope {
+            id: "sidebar".to_owned(),
+            title: "Sidebar".to_owned(),
+            field: false,
+            mod_held: false,
+        });
+        let action = |id: &str, code: &str, held: bool, scope: Option<&str>| Action {
+            id: id.to_owned(),
+            title: id.to_owned(),
+            section: "Sidebar".to_owned(),
+            keys: vec![Declared {
+                code: code.to_owned(),
+                held,
+                ..Declared::default()
+            }],
+            family: None,
+            unlisted: false,
+            scope: scope.map(str::to_owned),
+            args: None,
+            runs_as_person: None,
+        };
+        manifests.actions.extend([
+            action("menu.open", "Space", true, None),
+            action("sidebar.search", "Slash", false, Some("sidebar")),
+            action("sidebar.tab-all", "Digit0", false, Some("sidebar")),
+        ]);
+        let actions = in_force(&manifests, &Keys::default(), &mut Vec::new());
+        assert_eq!(texts(&actions, "menu.open"), ["Alt+Space"]);
+        assert_eq!(texts(&actions, "sidebar.search"), ["/"]);
+        assert_eq!(texts(&actions, "sidebar.tab-all"), ["0"]);
+        let mut problems = Vec::new();
+        let text = "[binds.sidebar]\n\"F\" = \"sidebar.search\"\n\"0\" = \"none\"\n\"A\" = \"sidebar.tab-all\"\n[binds]\n\"Alt+Shift+Space\" = \"menu.open\"\n\"Alt+/\" = \"sidebar.search\"\n";
+        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
+        let actions = in_force(&manifests, &keys, &mut problems);
+        assert_eq!(texts(&actions, "sidebar.search"), ["/", "F"]);
+        assert_eq!(texts(&actions, "sidebar.tab-all"), ["A"]);
+        assert_eq!(
+            texts(&actions, "menu.open"),
+            ["Alt+Space", "Alt+Shift+Space"]
+        );
+        let said: Vec<(Option<u32>, &str)> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [(
+                Some(7),
+                "Alt+/: sidebar.search works in [binds.sidebar]: bind it there"
+            )]
+        );
+    }
+
+    #[test]
     fn a_declared_key_gives_its_action_what_it_says() {
         let open = Action {
             id: "launcher.open".to_owned(),

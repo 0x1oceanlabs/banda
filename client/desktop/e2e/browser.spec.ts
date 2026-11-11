@@ -16,10 +16,12 @@ import {
   agentAnswers,
   agentCalls,
   agentSays,
+  bandaMenu,
   firstThread,
   GLASS,
   pressInPage,
   SANDBOXED,
+  sidebarOf,
   startWindow,
   textOf,
   wallpaper,
@@ -419,7 +421,7 @@ test("the Banda menu opens an address in a browser, and a file of the focused Pr
 
   // An address typed opens, after New Thread with the words.
   const site = address.replace("http://", "")
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill(site)
   await expect(menu.getByRole("option")).toHaveText([
     new RegExp(`New Thread: “${site}”`),
@@ -431,8 +433,12 @@ test("the Banda menu opens an address in a browser, and a file of the focused Pr
   await expect(page.getByRole("region", { name: "Alpha" })).toBeVisible()
 
   // Words would search the web. The page has the keys now, and Alt+Space
-  // is Banda's there too.
+  // is Banda's there too: the sidebar's Search, then the menu.
   await pressInPage(app, "Space", ["alt"])
+  await expect(
+    sidebarOf(page).getByRole("combobox", { name: "Search" })
+  ).toBeFocused()
+  await page.keyboard.press("Alt+Space")
   await search.fill("two words")
   await expect(
     menu.getByRole("option", { name: "Search the web: “two words”" })

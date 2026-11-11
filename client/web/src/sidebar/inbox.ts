@@ -16,9 +16,15 @@ import type { Row } from "./rows"
 import { itemKey, keyOf, rowKey } from "./hold"
 import { dayAt } from "./later-time"
 
-/** The tabs under the search, in their order, as `1`–`4` pick them. */
-export type Tab = "inbox" | "working" | "later" | "archive"
+/** The tabs under the search, in their order, as `1`–`4` pick them; and
+ * All, first while a search runs (decision 17), which `0` picks. */
+export type Tab = "all" | "inbox" | "working" | "later" | "archive"
 export const TABS: readonly Tab[] = ["inbox", "working", "later", "archive"]
+
+/** A place with nothing in it, which says what goes there (decision 25):
+ * a tab but the Inbox, whose is inbox zero; or a search that finds
+ * nothing. */
+export type EmptyAt = Exclude<Tab, "inbox" | "all"> | "search"
 
 /** What the list may be grouped by, when it is (decision 7). */
 type InboxGroup = Exclude<GroupBy, "none">
@@ -47,6 +53,10 @@ export type InboxView = {
   /** When inbox zero last said how many sleep until Someday, as this
    * device keeps it; it says so once a week (decision 12). */
   someday?: number
+  /** The words a search in place runs with (decision 17), whose rows
+   * are those it found: no inbox zero then, and a tab with none says
+   * so. */
+  search?: string
 }
 
 /** A row as its place draws it, with the moment its time counts from:
@@ -95,14 +105,16 @@ export type Block =
   | { kind: "more"; key: string; of: "children"; parent: string; count: number }
   /** Inbox zero, in words. */
   | ({ kind: "zero"; key: string } & Zero)
-  /** A tab with nothing in it, which says what goes there (decision 25). */
-  | { kind: "empty"; key: string; tab: Exclude<Tab, "inbox"> }
+  /** A place with nothing in it, which says what goes there (decision
+   * 25). */
+  | { kind: "empty"; key: string; tab: EmptyAt; words?: string }
 
 /** A tab's count, and whether it is the Person's turn there. */
 export type TabCount = { count: number; calls: boolean }
 
 export type Inbox = {
-  tabs: Record<Tab, TabCount>
+  /** Each tab's count; All's only while a search runs. */
+  tabs: Record<Exclude<Tab, "all">, TabCount> & { all?: TabCount }
   blocks: Block[]
   /** Set while nothing in the Inbox is the Person's. */
   zero?: Zero
@@ -219,13 +231,20 @@ export function inboxOf(
   const working = entries("working", oldest)
   const turn = view.order === "newest" ? [...calling].reverse() : calling
   const shown = view.open === false ? [] : open
-  const zeroed = turn.length + shown.length === 0
+  const { search } = view
+  const zeroed = search === undefined && turn.length + shown.length === 0
+  const all = view.tab === "all"
   // Later and the Archive are put in order only where they are read: the
   // Archive has no bound (ADR 0088, decision 7), and the tabs count them
   // by how many each holds.
-  const later = zeroed || view.tab === "later" ? entries("later", oldest) : []
-  const archived = view.tab === "archive" ? entries("archived", newest) : []
+  const later =
+    zeroed || all || view.tab === "later" ? entries("later", oldest) : []
+  const archived =
+    all || view.tab === "archive" ? entries("archived", newest) : []
   const zero = zeroed ? zeroOf(working.length, later, view, now) : undefined
+  // A tab where a search finds nothing says so, as the search's place.
+  const none = (tab: EmptyAt) =>
+    search === undefined ? empty(tab) : { ...empty("search"), words: search }
   const parts: Parts = {
     turn,
     open: shown,
@@ -245,28 +264,41 @@ export function inboxOf(
   }
   const blocks = ((): Block[] => {
     switch (view.tab) {
-      case "inbox":
-        return [
+      case "all": {
+        const found = allOf(
+          { turn, open, working, later, archived },
+          view.more === true
+        )
+        return found.length === 0 ? [none("search")] : found
+      }
+      case "inbox": {
+        const blocks = [
           ...(zero ? [{ kind: "zero" as const, key: "zero", ...zero }] : []),
           ...(group === "none"
             ? inbox(parts, view.more === true, folded)
             : grouped(parts, group, folded, now, rootOf)),
         ]
+        return blocks.length === 0 ? [none("search")] : blocks
+      }
       case "working":
-        if (working.length === 0) return [empty("working")]
+        if (working.length === 0) return [none("working")]
         return group === "none"
           ? workingOf("working", familiesOf(working), folded)
           : grouped({ working }, group, folded, now, rootOf)
       case "later":
-        return later.length === 0 ? [empty("later")] : laterOf(later, now)
+        return later.length === 0 ? [none("later")] : laterOf(later, now)
       case "archive":
         return archived.length === 0
-          ? [empty("archive")]
+          ? [none("archive")]
           : archiveOf(archived, view.more === true, now)
     }
   })()
   return {
     tabs: {
+      ...(search === undefined
+        ? {}
+        : // The Inbox's count says whose turn it is; All's only counts.
+          { all: { count: rows.length, calls: false } }),
       inbox: { count: turn.length + shown.length, calls: turn.length > 0 },
       working: { count: working.length, calls: false },
       later: { count: by.later.length, calls: false },
@@ -504,6 +536,30 @@ function partsOf(
   ]
 }
 
+/** All that a search found, under one head (decision 17): what calls,
+ * what is open, at work, put off and archived, each in its tab's order;
+ * the Archive's first few unless `whole`. None where it found none. */
+function allOf(
+  found: Record<"turn" | "open" | "working" | "later" | "archived", Entry[]>,
+  whole: boolean
+): Block[] {
+  const { archived } = found
+  const shown = whole ? archived : archived.slice(0, ARCHIVE_SHOWN)
+  const places = { ...found, archived: shown }
+  const blocks = (Object.keys(places) as Stand[]).flatMap((stand) =>
+    places[stand].length > 0
+      ? [cards(`all:${stand}`, stand, places[stand])]
+      : []
+  )
+  return blocks.length === 0
+    ? []
+    : [
+        head("all", "Titles"),
+        ...blocks,
+        ...more("archived", archived.length - shown.length),
+      ]
+}
+
 /** Later by when each wakes, under Today, Tomorrow, Later, Someday and
  * When done, by the local day. */
 function laterOf(later: readonly Entry[], now: number): Block[] {
@@ -563,6 +619,6 @@ function cards(key: string, stand: Stand, rows: Entry[]): Block {
   return { kind: "rows", key, stand, rows }
 }
 
-function empty(tab: Exclude<Tab, "inbox">): Block {
+function empty(tab: EmptyAt): Block {
   return { kind: "empty", key: `${tab}:empty`, tab }
 }

@@ -60,6 +60,7 @@ import { dirname, join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import type { Host } from "../src/bridge"
 import {
+  bandaMenu,
   headerShows,
   leaveSidebar,
   placeOf,
@@ -568,7 +569,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
 
   // The Banda menu finds arc by its name, and names it on its Threads.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await menu.getByRole("combobox", { name: "Search" }).fill("arc")
   const machines = menu
     .getByRole("group", { name: "Machines" })
@@ -1817,7 +1818,7 @@ test("with arc away, the Banda menu's words for a new Thread on arc are refused 
   // Its words are refused at once, in a toast that names arc, and wait in
   // the new Thread's composer for the Person to send.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await menu.getByRole("combobox", { name: "Search" }).fill("fix the tests")
   await menu
     .getByRole("option")
@@ -2793,7 +2794,7 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   // The Banda menu's Machine settings opens arc's row, where Test finds
   // arc, its system and its own name.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await menu.getByRole("combobox", { name: "Search" }).fill("arc")
   await menu
     .getByRole("group", { name: "Machines" })

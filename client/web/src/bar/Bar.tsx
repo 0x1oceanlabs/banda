@@ -123,9 +123,9 @@ export function Bar({
       )}
     >
       {/* The Mark stays at the left edge, as the Apple menu does, and
-        opens the Banda menu at its root, as the sidebar's Search does:
-        Alt+Space's own action would fill the desk with Quick Look's tile
-        where one shows. */}
+        opens the Banda menu at its root: Alt+Space's own action would
+        focus the sidebar's Search, or fill the desk with Quick Look's
+        tile where one shows. */}
       <Button
         variant="ghost"
         size="icon-sm"

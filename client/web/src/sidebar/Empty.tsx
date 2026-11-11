@@ -1,5 +1,6 @@
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
+import { holds, sameEach, useHereNamed, useHostsBy } from "@banda/core/react"
 import { BandaMark } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -15,7 +16,7 @@ import type { MarkState } from "@banda/ui/lib/mark-state"
 import { cn } from "@banda/ui/lib/utils"
 import { wakes } from "@banda/ui/lib/words"
 import { SquarePenIcon } from "lucide-react"
-import type { Block, Tab, Zero } from "./inbox"
+import type { Block, EmptyAt, Zero } from "./inbox"
 import { actionDoing, archiving } from "./items"
 import { useNewThread } from "./open"
 import { ShowTab } from "./Tabs"
@@ -36,10 +37,30 @@ export function zeroSays({ working, next }: Zero, now = Date.now()): string {
   return said.length > 0 ? said.join(" · ") : "No Agent works now"
 }
 
+/** `names` in words: "arc", "arc and mac", "arc, mac and pi". */
+const listed = (names: readonly string[]) =>
+  names.length < 2
+    ? (names[0] ?? "")
+    : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
+
+/** What a search that found nothing says (decision 25): the words it ran
+ * with, and where it looked, as `on` names the machines whose titles it
+ * searched; the messages come with S12c. */
+export function noneSays(
+  words: string,
+  on: readonly string[]
+): { big: string; small: string } {
+  return {
+    big: `No Thread matches “${words}”`,
+    small:
+      on.length > 0 ? `Searched titles on ${listed(on)}.` : "Searched titles.",
+  }
+}
+
 /** What a tab with nothing in it says (decision 25): what goes there,
  * and the key that puts it there, as the keys in force name it. */
 export function emptySays(
-  tab: Exclude<Tab, "inbox">,
+  tab: Exclude<EmptyAt, "search">,
   key?: string
 ): { big: string; small?: string } {
   switch (tab) {
@@ -80,15 +101,22 @@ export function EmptyPlace({
   return place.kind === "zero" ? (
     <InboxZero zero={place} />
   ) : (
-    <EmptyTab tab={place.tab} only={only} projects={projects} />
+    <EmptyTab
+      tab={place.tab}
+      words={place.words}
+      only={only}
+      projects={projects}
+    />
   )
 }
 
-/** The look each empty place's mark stands in, still. */
-const MARKS: Readonly<Record<Exclude<Tab, "inbox">, MarkState>> = {
+/** The look each empty place's mark stands in, still; a search's stands
+ * idle, until the Mark has a lens to look with. */
+const MARKS: Readonly<Record<EmptyAt, MarkState>> = {
   working: "later",
   later: "later",
   archive: "done",
+  search: "idle",
 }
 
 /**
@@ -135,23 +163,39 @@ export function InboxZero({ zero }: { zero: Zero }) {
   )
 }
 
+/** The machines a search looked on, by the names they say they have:
+ * this one, then each other whose rows the Window shows; none named
+ * where this one is the only one. */
+function useSearchedOn(): string[] {
+  const here = useHereNamed()?.name
+  const there = useHostsBy(
+    (hosts) => hosts.filter(holds).map((host) => host.named.name),
+    sameEach
+  )
+  if (there.length === 0) return []
+  return [...(here === undefined ? [] : [here]), ...there]
+}
+
 /**
- * A tab with nothing in it (ADR 0098, decision 25): what goes there, and
+ * A place with nothing in it (ADR 0098, decision 25): what goes there, and
  * one way to fill it; Working's starts a Thread as the header's New Thread
- * does.
+ * does. A search that found nothing names its `words`.
  */
 export function EmptyTab({
   tab,
+  words = "",
   only,
   projects,
 }: {
-  tab: Exclude<Tab, "inbox">
+  tab: EmptyAt
+  words?: string | undefined
   /** The Project whose rows alone the list shows, if one. */
   only: ProjectId | undefined
   projects: readonly ProjectSummary[]
 }) {
   const keyFor = useKeyLabel()
   const startThread = useNewThread(only, projects)
+  const on = useSearchedOn()
   // The key of whatever App puts a Thread off, and the list's Archive's.
   const action =
     tab === "later"
@@ -160,7 +204,8 @@ export function EmptyTab({
         ? archiving
         : undefined
   const key = action ? keyFor(action.id) : undefined
-  const { big, small } = emptySays(tab, key)
+  const { big, small } =
+    tab === "search" ? noneSays(words, on) : emptySays(tab, key)
   return (
     <Place
       mark={
@@ -169,7 +214,8 @@ export function EmptyTab({
           state={MARKS[tab]}
           playful={0}
           className={cn(
-            "size-10 text-muted-foreground opacity-55",
+            "size-10 text-muted-foreground",
+            tab === "search" ? "opacity-60" : "opacity-55",
             // Done leans, on a pivot left of its middle: back under the
             // words.
             MARKS[tab] === "done" && "translate-x-0.5"

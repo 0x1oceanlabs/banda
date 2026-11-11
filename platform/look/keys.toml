@@ -15,7 +15,9 @@
 # before the window's, and are bound in its own table, [binds.composer]:
 # a key there may be held with no mod, as Return, but not one its field
 # would type. The sidebar's, as S on the card picked, work while the
-# focus is in it, and are bound in [binds.sidebar].
+# focus is in it, and are bound in [binds.sidebar]. The Banda menu's key,
+# Alt+Space, goes to the sidebar's Search first while the sidebar shows;
+# pressed again there with nothing typed, it opens the menu.
 
 # The mod is held for every Banda key and the mouse's moves: Alt, or one
 # or two of Alt, Ctrl and Super (⌘ on a Mac), as Ctrl+Alt where your
