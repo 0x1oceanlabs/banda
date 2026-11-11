@@ -27,6 +27,7 @@ export function TerminalMenu({
   at,
   follow,
   inBanda,
+  opensHere,
   selectAll,
   type,
   paste,
@@ -35,6 +36,9 @@ export function TerminalMenu({
   follow: (target: Target, outside: boolean) => void
   /** Whether a link there opens in Banda's browser too. */
   inBanda: (target: Target) => boolean
+  /** Whether a link there opens from this device at all, which arc's
+   * `localhost` does not: it offers its address alone. */
+  opensHere: (target: Target) => boolean
   selectAll: () => void
   /** Types to the program, as a key would. */
   type: (data: string) => void
@@ -54,10 +58,12 @@ export function TerminalMenu({
               Open in Banda
             </DropdownMenuItem>
           )}
-          <DropdownMenuItem onClick={() => follow(link, true)}>
-            Open{" "}
-            {inBanda(link) ? outsideOf(link) : `in ${THIS_DEVICE}'s browser`}
-          </DropdownMenuItem>
+          {opensHere(link) && (
+            <DropdownMenuItem onClick={() => follow(link, true)}>
+              Open{" "}
+              {inBanda(link) ? outsideOf(link) : `in ${THIS_DEVICE}'s browser`}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem
             onClick={() => copy("link" in link ? link.link.url : link.file)}
           >

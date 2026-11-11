@@ -2511,8 +2511,6 @@ const REACHING: Record<string, { places: number; until: string }> = {
  */
 const DEVICE_HELPERS: Record<string, PastHandle[]> = {
   "client/ui/src/lib/clipboard.ts": ["navigator.clipboard"],
-  // Decision 3: a public page opens in this device's browser.
-  "client/ui/src/lib/links.ts": ["window.open"],
   // The terminal renderer's own copy and paste of the Person's selection
   // (decision 4): its only clipboard use, as no OSC 52 handler exists.
   "client/ghostty/src/t3/surface.ts": ["navigator.clipboard"],

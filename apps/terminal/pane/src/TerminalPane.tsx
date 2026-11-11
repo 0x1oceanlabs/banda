@@ -8,6 +8,7 @@ import {
 import {
   type CommandCall,
   type Engine,
+  type JsonValue,
   type MethodOf,
   newId,
   type Params,
@@ -22,6 +23,7 @@ import {
   type Title,
 } from "@banda/contract/terminal"
 import { type Clock, Surface } from "@banda/ghostty"
+import { usePlaced } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
 import { afterMoves, cancelFrame } from "@banda/ui/lib/frames"
 import { type Configure, onTileFocus, tileOf } from "@banda/ui/lib/tile"
@@ -29,7 +31,7 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { linkHint, openOutside, outsideClick } from "@banda/ui/lib/links"
+import { linkHint, outsideClick } from "@banda/ui/lib/links"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { KeyboardOffIcon, RotateCcwIcon, TerminalIcon } from "lucide-react"
@@ -149,33 +151,38 @@ function TerminalPane({
   // changes too often to keep in the layout.
   const titled = (title: Title) =>
     label?.({ title: title.program, detail: title.folder })
-  // Whether a link opens in Banda's browser, as the router says for the
-  // Pane's Project (ADR 0106, law 6): another machine's opens no page yet.
+  // Whether an action runs from this Pane, as the router says for its
+  // Project (ADR 0106, law 6); none does where no window runs them.
+  const can = (action: string, asked?: { [key: string]: JsonValue }) =>
+    run !== undefined && runs?.(action, asked).runs !== false
+  // Whether a link opens in Banda's browser: another machine's opens no
+  // page yet.
   const inBanda = (target: Target) =>
-    "file" in target ||
-    (run !== undefined &&
-      runs?.("browser.open", { address: target.link.url }).runs !== false)
+    "file" in target || can("browser.open", { address: target.link.url })
   // A link opens in Banda's browser, and with Ctrl outside it, as one in
   // a Thread: a page in this device's browser, a file in its app. Where
-  // Banda's browser cannot take it, a page goes to the device's. Where no
-  // window runs actions, a page opens outside and a path is no link.
+  // Banda's browser cannot take it, a page goes to the device's. Each goes
+  // through the router, so no link leaves this Pane past it.
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
       const action = outside ? "file.outside" : "file.open"
       run?.(action, { file: target.file, project, line: target.line ?? null })
     } else if (!outside && inBanda(target)) {
       run?.("browser.open", { address: target.link.url, project })
-    } else if (run) run("link.open", { url: target.link.url })
-    else openOutside(target.link.url)
+    } else run?.("link.open", { url: target.link.url })
+  }
+  // Why a page does not open on this device, as `localhost` on arc, which
+  // is arc's own; none where it does.
+  const whyNot = (target: Target) => {
+    if (!("link" in target)) return undefined
+    const opens = runs?.("link.open", { url: target.link.url })
+    return opens && !opens.runs ? opens.why : undefined
   }
   // Under the pointer, a page Banda's browser cannot take says where it
-  // opens, or whose it is, as `localhost` on arc.
+  // opens, or whose it is.
   const hinted = (target: Target | null) => {
     if (!target || !("link" in target) || inBanda(target)) return hintOf(target)
-    const opens = runs?.("link.open", { url: target.link.url })
-    return opens && !opens.runs
-      ? opens.why
-      : `Opens in ${THIS_DEVICE}'s browser`
+    return whyNot(target) ?? `Opens in ${THIS_DEVICE}'s browser`
   }
   if (args.terminal === null) return null
   return (
@@ -191,12 +198,10 @@ function TerminalPane({
       titled={titled}
       followed={followed}
       inBanda={inBanda}
+      opensHere={(target) => whyNot(target) === undefined}
       hinted={hinted}
-      files={
-        run !== undefined &&
-        runs?.("file.open", { file: "", project }).runs !== false
-      }
-      paste={run && (() => run("edit.paste"))}
+      files={can("file.open", { file: "", project })}
+      paste={can("edit.paste") ? () => run?.("edit.paste") : undefined}
       fresh={fresh}
       line={fresh ? (args.typed ?? null) : null}
       lineTyped={() => update({ ...args, typed: null })}
@@ -223,6 +228,7 @@ function Screen({
   titled,
   followed,
   inBanda,
+  opensHere,
   hinted,
   files,
   paste,
@@ -241,6 +247,8 @@ function Screen({
   followed: (target: Target, outside: boolean) => void
   /** Whether a link opens in Banda's browser too. */
   inBanda: (target: Target) => boolean
+  /** Whether a link opens from this device at all. */
+  opensHere: (target: Target) => boolean
   /** What a link says under the pointer. */
   hinted: (target: Target | null) => string
   /** Whether a path is a link: there is a window to open its file, and
@@ -273,18 +281,26 @@ function Screen({
   // A focus given while its Tile was hidden, which a hidden screen takes
   // not: it takes it as it shows.
   const owed = useRef(false)
-  const again = useRef<() => void>(() => {})
+  const again = useRef<(what: string) => void>(() => {})
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
   // What was typed while its machine was away, and the honest note.
   const [notSent, setNotSent] = useState<{ said: string; note: string }>()
+  // Its machine heard again, on the same connection or a new one, what was
+  // refused while away no longer stands, whatever the shell says next.
+  // Its owner's status is all a Pane reads of the link (ADR 0106, law 5).
+  const { shown } = usePlaced(project, undefined)
+  const reached = shown === undefined || shown.state.state === "live"
+  useEffect(() => {
+    if (reached) setNotSent(undefined)
+  }, [reached])
   const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
   // Its own zoom, kept till the window starts again; `terminal.toml`
   // keeps its size. Its actions take Ctrl+− from the program, as
   // Ghostty's and kitty's do, which readline would read as undo.
-  const { zoom, by, shown } = useZoom(terminal)
+  const { zoom, by, shown: zoomShown } = useZoom(terminal)
   // The newest `terminal.toml`, for a surface made, or a snapshot heard,
   // after it came.
   const writing = useFile(TERMINAL_FILE)
@@ -355,8 +371,11 @@ function Screen({
     typed.current = (data) => {
       if (running || parked) input.type(data)
     }
+    // Whatever the Pane now says of its shell, its machine, or the Person
+    // starting it again, has answered the key refused before.
     const told = (next: Now) => {
       running = next.is === "running"
+      setNotSent(undefined)
       setNow(next)
     }
     const fail = (error: unknown) => told({ is: "gone", why: words(error) })
@@ -371,8 +390,6 @@ function Screen({
         case "snapshot":
           followed = true
           parked = false
-          // It is in reach, so the key refused before no longer stands.
-          setNotSent(undefined)
           drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
           if (
@@ -403,6 +420,7 @@ function Screen({
       }
     }
     const follow = () => {
+      if (left) return
       stop = engine.stream(
         project,
         "terminal.watch",
@@ -427,13 +445,12 @@ function Screen({
         }
       )
     }
-    again.current = () => {
+    again.current = (what) => {
       stop()
       setProblem(undefined)
-      setNotSent(undefined)
       told({ is: "starting" })
       void start().then(follow, (error: unknown) =>
-        told({ is: "gone", why: words(error, "Start again") })
+        told({ is: "gone", why: words(error, what) })
       )
     }
     let sized = false
@@ -524,6 +541,7 @@ function Screen({
       if (!shell) return follow()
       void start().then(
         () => {
+          if (left) return
           const text = lineLeft.current
           lineLeft.current = null
           if (text) {
@@ -533,6 +551,7 @@ function Screen({
           follow()
         },
         (error: unknown) => {
+          if (left) return
           if (lineLeft.current) forget()
           lineLeft.current = null
           if (!(error instanceof Unreachable)) return fail(error)
@@ -592,55 +611,60 @@ function Screen({
 
   return (
     <div ref={scope} className="relative flex h-full min-h-0 flex-col">
-      <ContextMenu>
-        <ContextMenuTrigger
-          onContextMenu={(event) => {
-            if (event.defaultPrevented) event.preventBaseUIHandler()
-          }}
-          render={
-            <div
-              ref={mount}
-              role="region"
-              aria-label="Terminal screen"
-              data-state={now.is}
-              {...PROGRAM_KEYS}
-              // Its size is its Tile's, and nothing it draws reaches past
-              // it (ADR 0088, decision 8).
-              className="relative min-h-0 flex-1 overflow-hidden [contain:strict] [--app-scrollbar-width:8px]"
-            />
-          }
-        />
-        <TerminalMenu
-          at={menuAt}
-          follow={followed}
-          inBanda={inBanda}
-          selectAll={() => surface.current?.selectAll()}
-          type={(data) => typed.current(data)}
-          paste={
-            paste &&
-            (() => {
-              surface.current?.focus()
-              paste()
-            })
-          }
-        />
-      </ContextMenu>
-      <ZoomBadge zoom={shown} />
-      {notSent && (
-        <div
-          role="status"
-          title={notSent.note}
-          className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-xs whitespace-nowrap shadow-md"
-        >
-          <KeyboardOffIcon className="size-3.5 text-attention" />
-          <span>{notSent.said}</span>
-        </div>
-      )}
+      {/* The refused key's words sit in the screen's corner, so they never
+          cover the footer and its button. */}
+      <div className="relative flex min-h-0 flex-1 flex-col">
+        <ContextMenu>
+          <ContextMenuTrigger
+            onContextMenu={(event) => {
+              if (event.defaultPrevented) event.preventBaseUIHandler()
+            }}
+            render={
+              <div
+                ref={mount}
+                role="region"
+                aria-label="Terminal screen"
+                data-state={now.is}
+                {...PROGRAM_KEYS}
+                // Its size is its Tile's, and nothing it draws reaches past
+                // it (ADR 0088, decision 8).
+                className="relative min-h-0 flex-1 overflow-hidden [contain:strict] [--app-scrollbar-width:8px]"
+              />
+            }
+          />
+          <TerminalMenu
+            at={menuAt}
+            follow={followed}
+            inBanda={inBanda}
+            opensHere={opensHere}
+            selectAll={() => surface.current?.selectAll()}
+            type={(data) => typed.current(data)}
+            paste={
+              paste &&
+              (() => {
+                surface.current?.focus()
+                paste()
+              })
+            }
+          />
+        </ContextMenu>
+        {notSent && (
+          <div
+            role="status"
+            title={notSent.note}
+            className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-xs whitespace-nowrap shadow-md"
+          >
+            <KeyboardOffIcon className="size-3.5 text-attention" />
+            <span>{notSent.said}</span>
+          </div>
+        )}
+      </div>
+      <ZoomBadge zoom={zoomShown} />
       <Status
         now={now}
         said={said}
         shell={shell}
-        onAgain={() => again.current()}
+        onAgain={() => again.current(againWords(now))}
       />
     </div>
   )
@@ -682,12 +706,16 @@ function Status({
       {startable && (
         <Button variant="outline" size="xs" onClick={onAgain}>
           <RotateCcwIcon data-icon="inline-start" />
-          {now.is === "none" ? "Start a shell" : "Start again"}
+          {againWords(now)}
         </Button>
       )}
     </footer>
   )
 }
+
+/** The footer's button, and what a refusal of it says was not sent. */
+const againWords = (now: Now) =>
+  now.is === "none" ? "Start a shell" : "Start again"
 
 /** How a program ended, in words. */
 export function endWords(ended: Ended, shell: boolean): string {

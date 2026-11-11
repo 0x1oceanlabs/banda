@@ -97,7 +97,7 @@ test("arc's terminal opens on arc: hostname says arc, its header names arc, and 
   const tile = page.locator("section[data-tile]").filter({ has: screen })
   await expect(tile.locator("header").first()).toContainText("arc")
   await screen.click()
-  await run(page, "hostname > seen.txt; pwd > where.txt")
+  await run(page, "hostname; pwd; hostname > seen.txt; pwd > where.txt")
   await expect.poll(() => inFolder(folder, "seen.txt")).toBe("arc\n")
   await expect.poll(() => inFolder(folder, "where.txt")).toBe(`${folder}\n`)
   await shot(page, "terminal-arc")
@@ -141,7 +141,8 @@ test("a key while arc is away says it was not sent and goes nowhere; arc back, t
   const { page, composer, folder } = await onArc()
   const screen = await terminalOn(page, composer)
   await screen.click()
-  await run(page, "echo $$ > before.pid")
+  // A full screen, so the picture shows the prompt stays in view.
+  await run(page, "seq 1 200; echo $$; echo $$ > before.pid")
   await expect.poll(() => inFolder(folder, "before.pid")).toMatch(/^\d+\n$/)
   const pid = inFolder(folder, "before.pid")
 
@@ -172,12 +173,71 @@ test("a key while arc is away says it was not sent and goes nowhere; arc back, t
   await expect(foot).toHaveCount(0)
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
-  await run(page, "echo $$ > after.pid")
+  await run(page, "echo $$; echo $$ > after.pid")
   await expect.poll(() => inFolder(folder, "after.pid")).toBe(pid)
   await shot(page, "terminal-arc-back")
   // What was refused never lands by itself, and no pill is left.
   await page.waitForTimeout(1_000)
   expect(existsSync(arc!.disk(join(folder, "away.txt")))).toBe(false)
+})
+
+test("a key refused in a stall that ends on the same connection stops being said, and the shell takes the next key", async () => {
+  test.setTimeout(120_000)
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  // A key after a quiet spell pings first, and is refused in 3 s; a hole
+  // this short leaves ssh's connection standing, so no snapshot comes.
+  await page.waitForTimeout(5_500)
+  arc!.blackhole(true)
+  await expect.poll(() => arc!.applies()?.hole).toBe(true)
+  await run(page, "echo typed > stalled.txt")
+  const refused = screen
+    .locator("..")
+    .getByText("arc is away: your typing was not sent.")
+  await expect(refused).toBeVisible({ timeout: 10_000 })
+  arc!.blackhole(false)
+  await expect(refused).toHaveCount(0, { timeout: 15_000 })
+  await expect(pillOf(page, screen)).toHaveCount(0)
+  await screen.click()
+  await run(page, "hostname > next.txt")
+  await expect.poll(() => inFolder(folder, "next.txt")).toBe("arc\n")
+  expect(existsSync(arc!.disk(join(folder, "stalled.txt")))).toBe(false)
+})
+
+test("opened while arc is away and pressed on, arc back with no shell: the words go and Start a shell can be pressed", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  const { page, composer, folder } = await onArc()
+  arc!.blackhole(true)
+  await expect.poll(() => arc!.applies()?.hole).toBe(true)
+  await expect(
+    page.locator("[data-machine-pill] [role=status]").first()
+  ).toHaveText("arc is away", { timeout: 60_000 })
+  await composer.focus()
+  await page.keyboard.press("Control+Alt+Enter")
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(pillOf(page, screen)).toHaveText("arc is away", {
+    timeout: 60_000,
+  })
+  await screen.click()
+  await page.keyboard.press("KeyA")
+  const refused = screen
+    .locator("..")
+    .getByText("arc is away: your typing was not sent.")
+  await expect(refused).toBeVisible()
+
+  arc!.blackhole(false)
+  await expect(pillOf(page, screen)).toHaveCount(0, { timeout: 90_000 })
+  await expect(screen).toHaveAttribute("data-state", "none", {
+    timeout: 30_000,
+  })
+  await expect(refused).toHaveCount(0)
+  await shot(page, "terminal-no-shell")
+  await page.getByRole("button", { name: "Start a shell" }).click()
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await run(page, "hostname > started.txt")
+  await expect.poll(() => inFolder(folder, "started.txt")).toBe("arc\n")
 })
 
 test("a terminal restored while arc is held, then arc back: the same shell, and it takes the new size", async () => {
@@ -262,6 +322,15 @@ test("a public link opens in this device's browser; arc's localhost says it is a
 
   await canvas.hover({ position: { x: 24, y: row2Y } })
   await expect(canvas).toHaveAttribute("title", "localhost:3000 is arc's")
+  // The menu promises nothing it will refuse: the address, to copy.
+  await canvas.click({ button: "right", position: { x: 24, y: row2Y } })
+  await expect(
+    menu.getByRole("menuitem", { name: "Copy address" })
+  ).toBeVisible()
+  await expect(
+    menu.getByRole("menuitem", { name: /^Open in this / })
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
   await canvas.click({ position: { x: 24, y: row2Y } })
   const toast = page
     .getByRole("region", { name: "Notifications" })

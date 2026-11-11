@@ -33,6 +33,8 @@ const surfaces = vi.hoisted(() => {
     options: {
       onData: (data: string) => void
       onResize: (cols: number, rows: number) => void
+      onLinkActivate: (text: string, event: { ctrlKey: boolean }) => void
+      canActivateLink: (text: string) => boolean
     }
   }[] = []
   class Surface {
@@ -61,6 +63,16 @@ const surfaces = vi.hoisted(() => {
   return { made, Surface }
 })
 vi.mock("../../ghostty/src/index.ts", () => ({ Surface: surfaces.Surface }))
+
+/** The machine as the Window shows it to the Pane, which the Pane reads as
+ * its owner's status; none is this machine. */
+const placed = vi.hoisted(() => ({
+  now: {} as { shown?: { state: { state: string } } },
+}))
+vi.mock("../../core/src/react/index.ts", async (actual) => ({
+  ...(await actual<object>()),
+  usePlaced: () => placed.now,
+}))
 
 const AWAY = new Unreachable("arc", "arc is away")
 const settle = () => act(() => new Promise<void>((done) => setTimeout(done, 0)))
@@ -99,11 +111,16 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   document.body.innerHTML = ""
   surfaces.made.length = 0
+  placed.now = {}
 })
 
 /** The Pane mounted with `args` on `session`: `updated` hears each update,
  * which also draws it with the new args, as the window does. */
-async function mount(session: Engine, args: TerminalArgs) {
+async function mount(
+  session: Engine,
+  args: TerminalArgs,
+  handles: Partial<PaneProps<TerminalArgs>> = {}
+) {
   ;(
     globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
   ).IS_REACT_ACT_ENVIRONMENT = true
@@ -126,13 +143,13 @@ async function mount(session: Engine, args: TerminalArgs) {
           draw()
         }}
         close={() => {}}
-        {...({} as Partial<PaneProps<TerminalArgs>>)}
+        {...handles}
       />
     )
   await act(async () => draw())
   await settle()
   await settle()
-  return { updated, element }
+  return { updated, element, draw: () => act(async () => draw()) }
 }
 
 const NEW: TerminalArgs = {
@@ -238,4 +255,91 @@ test("a key while its machine is away says it was not sent, with the honest note
   expect(element.querySelector("[title]")?.getAttribute("title")).toBe(
     "What was typed before arc went away may still arrive once it is back."
   )
+})
+
+const REFUSED = "arc is away: your typing was not sent."
+
+test("a key refused in a stall stops being said once its machine is heard again, with no snapshot", async () => {
+  placed.now = { shown: { state: { state: "away" } } }
+  const { session } = engine(() => Promise.reject(AWAY))
+  const { element, draw } = await mount(session, { ...NEW, terminal: "kept" })
+  ;(session as unknown as { call: () => Promise<never> }).call = () =>
+    Promise.reject(AWAY)
+  await act(async () => surfaces.made[0]!.options.onData("x"))
+  await settle()
+  expect(element.textContent).toContain(REFUSED)
+  placed.now = { shown: { state: { state: "live" } } }
+  await draw()
+  await settle()
+  expect(element.textContent).not.toContain(REFUSED)
+})
+
+test("a key pressed while parked is no longer said once its machine answers there is no shell", async () => {
+  const { session, streams } = engine(() => Promise.reject(AWAY))
+  const { element } = await mount(session, NEW)
+  ;(session as unknown as { call: () => Promise<never> }).call = () =>
+    Promise.reject(AWAY)
+  await act(async () => surfaces.made[0]!.options.onData("x"))
+  await settle()
+  expect(element.textContent).toContain(REFUSED)
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "This terminal is gone" })
+  )
+  await settle()
+  expect(element.textContent).not.toContain(REFUSED)
+  expect(element.textContent).toContain("Start a shell")
+})
+
+test("Start a shell, refused, names what the Person pressed", async () => {
+  const { session, streams } = engine(() => Promise.reject(AWAY))
+  const { element } = await mount(session, NEW)
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "This terminal is gone" })
+  )
+  await settle()
+  await act(async () =>
+    [...element.querySelectorAll("button")]
+      .find((button) => button.textContent === "Start a shell")!
+      .click()
+  )
+  await settle()
+  expect(element.textContent).toContain("Start a shell was not sent.")
+})
+
+test("a Pane closed while its first open waits types no line and watches nothing", async () => {
+  let opened = () => {}
+  const { session, calls, streams } = engine(
+    () => new Promise((done) => (opened = () => done(null)))
+  )
+  await mount(session, { ...NEW, typed: "cargo test" })
+  await act(async () => root?.unmount())
+  root = undefined
+  await act(async () => opened())
+  await settle()
+  expect(calls.some(({ method }) => method === "terminal.write")).toBe(false)
+  expect(streams).toHaveLength(0)
+})
+
+test("a page link leaves the Pane only as the router's act, and with no window it opens nothing", async () => {
+  const opens = vi.spyOn(window, "open").mockReturnValue(null)
+  const run = vi.fn()
+  const { session } = engine(() => Promise.resolve(null))
+  await mount(
+    session,
+    { ...NEW, terminal: "kept" },
+    {
+      run,
+      runs: (what) =>
+        what === "link.open" ? { runs: true } : { runs: false, why: "no" },
+    }
+  )
+  const url = "https://example.test/"
+  surfaces.made[0]!.options.onLinkActivate(url, { ctrlKey: false })
+  expect(run.mock.calls).toEqual([["link.open", { url }]])
+  surfaces.made.length = 0
+  await act(async () => root?.unmount())
+  await mount(session, { ...NEW, terminal: "kept" })
+  surfaces.made[0]!.options.onLinkActivate(url, { ctrlKey: false })
+  expect(opens).not.toHaveBeenCalled()
+  opens.mockRestore()
 })

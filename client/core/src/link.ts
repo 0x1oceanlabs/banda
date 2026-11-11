@@ -18,19 +18,24 @@ export type Link = {
 /** The `Link` that `text` is, from machine `of` where that is another
  * machine; none where `text` is no http(s) address. */
 export function linkOf(text: string, of?: string): Link | undefined {
-  const url = parsed(text)
-  if (!url || !/^https?:$/.test(url.protocol)) return undefined
+  // The whole `//`, as `http:8080` parses too, as an address of no one's.
+  const url = /^https?:\/\//i.test(text) ? parsed(text) : undefined
+  if (!url) return undefined
   return { url: text, ...(of !== undefined && own(url) && { of }) }
 }
 
 /** Whether `url` names the computer it is opened on. */
 function own({ hostname }: URL): boolean {
+  // A last dot names the same place; `URL` keeps it.
+  const name = hostname.replace(/\.$/, "")
   return (
-    hostname === "localhost" ||
-    hostname.endsWith(".localhost") ||
-    hostname === "0.0.0.0" ||
-    hostname === "[::1]" ||
-    /^127(\.\d{1,3}){3}$/.test(hostname)
+    name === "localhost" ||
+    name.endsWith(".localhost") ||
+    name === "0.0.0.0" ||
+    name === "[::]" ||
+    name === "[::1]" ||
+    /^\[::ffff:7f[0-9a-f]{2}:/.test(name) ||
+    /^127(\.\d{1,3}){3}$/.test(name)
   )
 }
 

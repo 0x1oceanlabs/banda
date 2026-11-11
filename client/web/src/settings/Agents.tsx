@@ -5,7 +5,7 @@
  * Pane a sign-in opens, a terminal, over the window. The Harnesses are the
  * machine's (ADR 0040): they show before any Project.
  */
-import { useMemo, useState } from "react"
+import { useContext, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import {
   AgentsSettings,
@@ -19,11 +19,15 @@ import { shownProjects } from "@banda/ui/lib/projects"
 import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
-import { PaneMount } from "../tiling/mount"
+import { PaneMount, RoutingContext, routingOnly } from "../tiling/mount"
 import type { SectionProps } from "./sections"
 
 /** The Panes a sign-in opens: a terminal, and no other kind. */
 const kinds = terminal.panes
+
+/** The one act of the window's a sign-in's terminal runs: a link it prints
+ * opens in this device's browser, through the router as any Pane's. */
+const LINK_OPEN = "link.open"
 
 /** A machine's settings file, written through its engine as the Person
  * (ADR 0108, decision 1), which keeps the mode they choose for a Harness's
@@ -67,6 +71,16 @@ export function Agents({ engine, lit, run }: SectionProps) {
     () => (project === undefined ? undefined : { project }),
     [project]
   )
+  const routing = useContext(RoutingContext)
+  const signIn = useMemo(
+    () => ({
+      routing: routingOnly(routing, LINK_OPEN),
+      run: (action: string, args?: Parameters<NonNullable<typeof run>>[1]) => {
+        if (action === LINK_OPEN) run?.(action, args)
+      },
+    }),
+    [routing, run]
+  )
   if (listed.state === "loading") return <Spinner />
   const kind = pane && kinds.find((k) => k.kind === pane.kind)
   return (
@@ -90,22 +104,25 @@ export function Agents({ engine, lit, run }: SectionProps) {
               <DialogTitle>{kind.title(pane.args)}</DialogTitle>
               <div className="min-h-0 flex-1">
                 {/* This machine's terminal, in its Project, mounted as
-                    every Pane is (ADR 0106, decision 1); it runs none of
-                    the window's actions, as a dialog of the settings. */}
-                <PaneMount
-                  kind={kind}
-                  engine={engine}
-                  project={owner.project}
-                  pane={pane}
-                  owner={owner}
-                  focused
-                  handle={{
-                    open: setPane,
-                    update: (args) => setPane({ ...pane, args }),
-                    close,
-                  }}
-                  run={undefined}
-                />
+                    every Pane is (ADR 0106, decision 1); of the window's
+                    actions it runs only the link's, as a dialog of the
+                    settings. */}
+                <RoutingContext value={signIn.routing}>
+                  <PaneMount
+                    kind={kind}
+                    engine={engine}
+                    project={owner.project}
+                    pane={pane}
+                    owner={owner}
+                    focused
+                    handle={{
+                      open: setPane,
+                      update: (args) => setPane({ ...pane, args }),
+                      close,
+                    }}
+                    run={signIn.run}
+                  />
+                </RoutingContext>
               </div>
             </>
           )}
