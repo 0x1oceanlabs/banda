@@ -12,6 +12,7 @@ import {
   newId,
   type Params,
   type ProjectId,
+  Unreachable,
 } from "@banda/contract"
 import {
   type Ended,
@@ -28,13 +29,13 @@ import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { linkHint, outsideClick } from "@banda/ui/lib/links"
+import { linkHint, openOutside, outsideClick } from "@banda/ui/lib/links"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
-import { RotateCcwIcon, TerminalIcon } from "lucide-react"
+import { KeyboardOffIcon, RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
 import { outsideOf, type Target, targetOf } from "./links"
-import { type MenuAt, TerminalMenu } from "./TerminalMenu"
+import { type MenuAt, TerminalMenu, THIS_DEVICE } from "./TerminalMenu"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
@@ -70,8 +71,9 @@ export type TerminalArgs = {
    * only once the one before went through, as `a && b` does; then the
    * Pane closes. */
   done: Done[] | null
-  /** A line typed into the shell once it runs, and then forgotten, so a
-   * reload never types it again: a reply's Run (ADR 0063, decision 6). */
+  /** A line typed into the shell this Pane's first open starts, and then
+   * forgotten, so a reload or a reconnect never types it: a reply's Run
+   * (ADR 0063, decision 6; ADR 0106, decision 4). */
   typed?: string | null
 }
 
@@ -111,6 +113,9 @@ export const terminalPane = definePane<TerminalArgs>({
   icon: TerminalIcon,
   start: NEW_TERMINAL,
   letter: "T",
+  // The shell runs on its Project's machine and this device only draws
+  // it (ADR 0106, decision 4).
+  elsewhere: true,
   closed: ({ engine, project, args }) => {
     if (args.terminal === null) return
     engine
@@ -129,25 +134,48 @@ function TerminalPane({
   close,
   label,
   run,
+  runs,
 }: PaneProps<TerminalArgs>) {
   const [chosen] = useState(newId)
+  // The Pane that picks its shell's ID opened it just now. One that came
+  // with an ID, restored after a restart, types no line: only the shell
+  // its first open started takes one (ADR 0106, decision 4).
+  const fresh = args.terminal === chosen
   useEffect(() => {
     if (args.terminal === null) update({ ...args, terminal: chosen })
+    else if (args.typed && !fresh) update({ ...args, typed: null })
   })
   // Only a shell's: the engine follows what runs in front of a shell. It
   // changes too often to keep in the layout.
   const titled = (title: Title) =>
     label?.({ title: title.program, detail: title.folder })
+  // Whether a link opens in Banda's browser, as the router says for the
+  // Pane's Project (ADR 0106, law 6): another machine's opens no page yet.
+  const inBanda = (target: Target) =>
+    "file" in target ||
+    (run !== undefined &&
+      runs?.("browser.open", { address: target.link.url }).runs !== false)
   // A link opens in Banda's browser, and with Ctrl outside it, as one in
-  // a Thread: a page in the system's browser, a file in its app. Where no
+  // a Thread: a page in this device's browser, a file in its app. Where
+  // Banda's browser cannot take it, a page goes to the device's. Where no
   // window runs actions, a page opens outside and a path is no link.
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
       const action = outside ? "file.outside" : "file.open"
       run?.(action, { file: target.file, project, line: target.line ?? null })
-    } else if (outside || !run) {
-      window.open(target.page, "_blank", "noopener")
-    } else run("browser.open", { address: target.page, project })
+    } else if (!outside && inBanda(target)) {
+      run?.("browser.open", { address: target.link.url, project })
+    } else if (run) run("link.open", { url: target.link.url })
+    else openOutside(target.link.url)
+  }
+  // Under the pointer, a page Banda's browser cannot take says where it
+  // opens, or whose it is, as `localhost` on arc.
+  const hinted = (target: Target | null) => {
+    if (!target || !("link" in target) || inBanda(target)) return hintOf(target)
+    const opens = runs?.("link.open", { url: target.link.url })
+    return opens && !opens.runs
+      ? opens.why
+      : `Opens in ${THIS_DEVICE}'s browser`
   }
   if (args.terminal === null) return null
   return (
@@ -162,9 +190,15 @@ function TerminalPane({
       close={close}
       titled={titled}
       followed={followed}
-      files={run !== undefined}
+      inBanda={inBanda}
+      hinted={hinted}
+      files={
+        run !== undefined &&
+        runs?.("file.open", { file: "", project }).runs !== false
+      }
       paste={run && (() => run("edit.paste"))}
-      line={args.typed ?? null}
+      fresh={fresh}
+      line={fresh ? (args.typed ?? null) : null}
       lineTyped={() => update({ ...args, typed: null })}
     />
   )
@@ -175,6 +209,8 @@ type Now =
   | { is: "running" }
   | { is: "ended"; ended: Ended }
   | { is: "gone"; why: string }
+  /** A shell opened while its machine was away, which never started. */
+  | { is: "none" }
 
 function Screen({
   engine,
@@ -186,8 +222,11 @@ function Screen({
   close,
   titled,
   followed,
+  inBanda,
+  hinted,
   files,
   paste,
+  fresh,
   line,
   lineTyped,
 }: {
@@ -200,11 +239,19 @@ function Screen({
   close: () => void
   titled: (title: Title) => void
   followed: (target: Target, outside: boolean) => void
-  /** Whether a path is a link: there is a window to open its file. */
+  /** Whether a link opens in Banda's browser too. */
+  inBanda: (target: Target) => boolean
+  /** What a link says under the pointer. */
+  hinted: (target: Target | null) => string
+  /** Whether a path is a link: there is a window to open its file, and
+   * its machine's files are open to this device. */
   files: boolean
   /** Pastes into what has the focus; none where no window does. */
   paste?: () => void
-  /** A line to type once the program runs; `lineTyped` once it is. */
+  /** This Pane picked its shell's ID as it opened: no shell has it yet. */
+  fresh: boolean
+  /** A line to type into the shell the first open starts; `lineTyped`
+   * once it is, or once that open failed and it never will be. */
   line: string | null
   lineTyped: () => void
 }) {
@@ -212,12 +259,13 @@ function Screen({
   // Pane as it is now.
   const heardTitle = useEffectEvent(titled)
   const heardLink = useEffectEvent(followed)
+  const hint = useEffectEvent(hinted)
   // What runs in front, last heard: where the paths it prints start.
   const front = useRef<Title>(undefined)
   // Where a link goes, from where the program is now.
   const linked = useEffectEvent((text: string) => {
     const target = targetOf(text, front.current)
-    return target && ("page" in target || files) ? target : null
+    return target && ("link" in target || files) ? target : null
   })
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)
@@ -228,6 +276,8 @@ function Screen({
   const again = useRef<() => void>(() => {})
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
+  // What was typed while its machine was away, and the honest note.
+  const [notSent, setNotSent] = useState<{ said: string; note: string }>()
   const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
@@ -256,16 +306,11 @@ function Screen({
     return onTileFocus(element, take)
   }, [focused])
 
-  // Once only, and forgotten then: the Pane's args keep it till typed.
+  // The line waits for the first open: typed into the shell it started,
+  // or dropped if it failed, so a Run never lands later by itself, after
+  // a reconnect or a restart (ADR 0106, decision 4).
   const forget = useEffectEvent(lineTyped)
-  const lineSent = useRef(false)
-  useEffect(() => {
-    if (!line || lineSent.current || now.is !== "running") return
-    lineSent.current = true
-    typed.current(`${line}\r`)
-    forget()
-  }, [line, now])
-
+  const lineLeft = useRef(line)
   // Once only in this Pane; the command's ID keeps it once everywhere.
   const sent = useRef(false)
   useEffect(() => {
@@ -283,6 +328,12 @@ function Screen({
     if (!element) return
     let left = false
     let drawn: Surface | null = null
+    // The grid this Pane last measured, which goes to the program when the
+    // terminal says another: its size reached no one while away (#1224).
+    let measured: { cols: number; rows: number } | null = null
+    // The first open was refused as its machine is away. It watches for
+    // the shell all the same, a read that waits, and hears once it is back.
+    let parked = false
     let stop = () => {}
     let running = false
     // Set once the screen came, so a shell the engine lost starts again
@@ -290,11 +341,19 @@ function Screen({
     let followed = false
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { project })
-    const input = new Input(call, terminal, (error) =>
-      setProblem(words(error, "your typing"))
-    )
+    const input = new Input(call, terminal, (error) => {
+      const said = words(error, "your typing")
+      if (error instanceof Unreachable)
+        setNotSent({
+          said,
+          note: `What was typed before ${error.machine} went away may still arrive once it is back.`,
+        })
+      else setProblem(said)
+    })
+    // A key goes to a shell that runs, and to one its machine has parked,
+    // so a key there says it was not sent rather than vanish.
     typed.current = (data) => {
-      if (running) input.type(data)
+      if (running || parked) input.type(data)
     }
     const told = (next: Now) => {
       running = next.is === "running"
@@ -311,8 +370,17 @@ function Screen({
       switch (piece.kind) {
         case "snapshot":
           followed = true
+          parked = false
+          // It is in reach, so the key refused before no longer stands.
+          setNotSent(undefined)
           drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
+          if (
+            measured &&
+            (measured.cols !== piece.size.cols ||
+              measured.rows !== piece.size.rows)
+          )
+            input.resize(measured)
           told(
             piece.ended
               ? { is: "ended", ended: piece.ended }
@@ -347,6 +415,11 @@ function Screen({
             void start().then(follow, fail)
             return
           }
+          if (parked && fresh && refusal?.code === "not_found") {
+            parked = false
+            told({ is: "none" })
+            return
+          }
           told({
             is: "gone",
             why: refusal?.message ?? "This terminal was closed.",
@@ -357,8 +430,11 @@ function Screen({
     again.current = () => {
       stop()
       setProblem(undefined)
+      setNotSent(undefined)
       told({ is: "starting" })
-      void start().then(follow, fail)
+      void start().then(follow, (error: unknown) =>
+        told({ is: "gone", why: words(error, "Start again") })
+      )
     }
     let sized = false
     let settling: ReturnType<typeof setTimeout> | undefined
@@ -405,6 +481,7 @@ function Screen({
         cursor: cursorOf(writingNow.current),
         onData: (data) => typed.current(data),
         onResize: (cols, rows) => {
+          measured = { cols, rows }
           // The screen redraws at every size as a column grows; the shell
           // hears the first size at once, and then only where it settles.
           clearTimeout(settling)
@@ -424,7 +501,7 @@ function Screen({
           const target = linked(text)
           if (target) heardLink(target, outsideClick(event))
         },
-        linkTitle: (text) => hintOf(linked(text)),
+        linkTitle: (text) => hint(linked(text)),
         // The menu opens here, unless the program took the right click.
         onContextMenu: (event) => {
           const text = drawn?.linkTextAt(event.clientX, event.clientY)
@@ -444,8 +521,27 @@ function Screen({
       surface.current = made
       made.setVisible(!hidden)
       if (focusedNow.current) made.focus()
-      if (shell) void start().then(follow, fail)
-      else follow()
+      if (!shell) return follow()
+      void start().then(
+        () => {
+          const text = lineLeft.current
+          lineLeft.current = null
+          if (text) {
+            input.type(`${text}\r`)
+            forget()
+          }
+          follow()
+        },
+        (error: unknown) => {
+          if (lineLeft.current) forget()
+          lineLeft.current = null
+          if (!(error instanceof Unreachable)) return fail(error)
+          // Its machine is away: the pill says so, nothing here does. The
+          // shell, or that it has none, is heard once it is back.
+          parked = true
+          follow()
+        }
+      )
     })()
     let font = JSON.stringify(fontNow())
     refont.current = () => {
@@ -467,7 +563,7 @@ function Screen({
       drawn?.dispose()
       surface.current = null
     }
-  }, [engine, project, terminal, shell])
+  }, [engine, project, terminal, shell, fresh])
 
   // A change to `terminal.toml` reaches a screen already drawn: its font,
   // and its cursor, over what a program asked for. A new look with the
@@ -517,6 +613,7 @@ function Screen({
         <TerminalMenu
           at={menuAt}
           follow={followed}
+          inBanda={inBanda}
           selectAll={() => surface.current?.selectAll()}
           type={(data) => typed.current(data)}
           paste={
@@ -529,6 +626,16 @@ function Screen({
         />
       </ContextMenu>
       <ZoomBadge zoom={shown} />
+      {notSent && (
+        <div
+          role="status"
+          title={notSent.note}
+          className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-xs whitespace-nowrap shadow-md"
+        >
+          <KeyboardOffIcon className="size-3.5 text-attention" />
+          <span>{notSent.said}</span>
+        </div>
+      )}
       <Status
         now={now}
         said={said}
@@ -545,6 +652,7 @@ function statusOf(now: Now, problem: string | undefined, shell: boolean) {
   return [
     now.is === "ended" ? endWords(now.ended, shell) : undefined,
     now.is === "gone" ? now.why : undefined,
+    now.is === "none" ? "This terminal has no shell yet." : undefined,
     problem,
   ]
     .filter(Boolean)
@@ -563,7 +671,8 @@ function Status({
   onAgain: () => void
 }) {
   if (!said) return null
-  const startable = shell && (now.is === "ended" || now.is === "gone")
+  const startable =
+    shell && (now.is === "ended" || now.is === "gone" || now.is === "none")
   return (
     <footer
       role="status"
@@ -573,7 +682,7 @@ function Status({
       {startable && (
         <Button variant="outline" size="xs" onClick={onAgain}>
           <RotateCcwIcon data-icon="inline-start" />
-          Start again
+          {now.is === "none" ? "Start a shell" : "Start again"}
         </Button>
       )}
     </footer>
@@ -594,7 +703,7 @@ export function endWords(ended: Ended, shell: boolean): string {
 function hintOf(target: Target | null): string {
   if (!target) return ""
   return linkHint(
-    "page" in target ? target.page : target.file,
+    "link" in target ? target.link.url : target.file,
     outsideOf(target)
   )
 }

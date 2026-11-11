@@ -14,6 +14,10 @@ import { outsideOf, type Target } from "./links"
 /** Where the menu opened: the link there, and the text selected then. */
 export type MenuAt = { link: Target | null; selection: string }
 
+/** Where a link opens from this Pane, where Banda's browser cannot: in
+ * words for a row, as "in this Mac's browser". */
+export const THIS_DEVICE = mac ? "this Mac" : "this computer"
+
 /**
  * The terminal's menu, at a right click: the link there, then copy, paste,
  * select all and clear. A program that takes the mouse, as vim or htop,
@@ -22,12 +26,15 @@ export type MenuAt = { link: Target | null; selection: string }
 export function TerminalMenu({
   at,
   follow,
+  inBanda,
   selectAll,
   type,
   paste,
 }: {
   at: MenuAt
   follow: (target: Target, outside: boolean) => void
+  /** Whether a link there opens in Banda's browser too. */
+  inBanda: (target: Target) => boolean
   selectAll: () => void
   /** Types to the program, as a key would. */
   type: (data: string) => void
@@ -42,16 +49,19 @@ export function TerminalMenu({
     <ContextMenuContent aria-label="Terminal">
       {link && (
         <>
-          <DropdownMenuItem onClick={() => follow(link, false)}>
-            Open in Banda
-          </DropdownMenuItem>
+          {inBanda(link) && (
+            <DropdownMenuItem onClick={() => follow(link, false)}>
+              Open in Banda
+            </DropdownMenuItem>
+          )}
           <DropdownMenuItem onClick={() => follow(link, true)}>
-            Open {outsideOf(link)}
+            Open{" "}
+            {inBanda(link) ? outsideOf(link) : `in ${THIS_DEVICE}'s browser`}
           </DropdownMenuItem>
           <DropdownMenuItem
-            onClick={() => copy("page" in link ? link.page : link.file)}
+            onClick={() => copy("link" in link ? link.link.url : link.file)}
           >
-            {"page" in link ? "Copy address" : "Copy path"}
+            {"link" in link ? "Copy address" : "Copy path"}
           </DropdownMenuItem>
           <DropdownMenuSeparator />
         </>

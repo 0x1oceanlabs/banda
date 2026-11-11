@@ -2458,8 +2458,8 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * device (ADR 0106, law 1): the places `kindReaches` finds in all the
  * code the kind takes, through every import, by kind, file and what it
  * reaches, each with the step of ADR 0106's plan that takes it away. The
- * Thread, New Pane and the Diff open elsewhere today, and New Pane and
- * the Diff reach none, so only the Thread's places are here:
+ * Thread, the terminal, New Pane and the Diff open elsewhere today, and all
+ * but the Thread reach none, so only the Thread's places are here:
  *
  * - 3c: a reply's links, Open in, and an Issue's page and the text it
  *   copies, as the Thread's paths go through `files.locate` and its links
@@ -2511,6 +2511,11 @@ const REACHING: Record<string, { places: number; until: string }> = {
  */
 const DEVICE_HELPERS: Record<string, PastHandle[]> = {
   "client/ui/src/lib/clipboard.ts": ["navigator.clipboard"],
+  // Decision 3: a public page opens in this device's browser.
+  "client/ui/src/lib/links.ts": ["window.open"],
+  // The terminal renderer's own copy and paste of the Person's selection
+  // (decision 4): its only clipboard use, as no OSC 52 handler exists.
+  "client/ghostty/src/t3/surface.ts": ["navigator.clipboard"],
 }
 
 /** The steps of ADR 0106's plan. */
@@ -2552,13 +2557,19 @@ const reachingPast: Record<string, number> = {}
 for (const place of reached)
   reachingPast[reachKey(place)] = (reachingPast[reachKey(place)] ?? 0) + 1
 
-test("the kind checker finds the file of each kind of Pane, and the Thread and New Pane open elsewhere", () => {
+test("the kind checker finds the file of each kind of Pane, and the Thread, the terminal and New Pane open elsewhere", () => {
   expect(
     kinds.map(({ kind }) => kind).filter((kind) => !declared.has(kind))
   ).toEqual([])
   expect(
     kinds.filter((kind) => kind.elsewhere).map(({ kind }) => kind)
-  ).toEqual(expect.arrayContaining(["agents.thread", "window.launcher"]))
+  ).toEqual(
+    expect.arrayContaining([
+      "agents.thread",
+      "window.launcher",
+      "terminal.terminal",
+    ])
+  )
 })
 
 test("a kind that opens elsewhere reaches past its handles no more than the list holds", () => {
