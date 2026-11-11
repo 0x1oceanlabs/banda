@@ -97,7 +97,7 @@ function FindFiles({ words: typed, at, found }: FindProps) {
             { title: "Show in Files", run: show },
             {
               title: "Add to chat",
-              run: (window) => window.attach({ path: full }),
+              run: (window) => window.attach({ path: full, project }),
             },
             { title: "Copy path", run: () => copyText(full) },
           ],

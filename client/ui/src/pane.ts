@@ -11,7 +11,13 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { ChangedLines, Doing } from "@banda/contract/agents"
-import { type Device, paneHost, type PaneState, type Place } from "@banda/core"
+import {
+  type Device,
+  paneHost,
+  type PaneState,
+  type Place,
+  type ProjectFile,
+} from "@banda/core"
 import type { MarkState } from "./components/banda-mark"
 import type { Chip } from "./module"
 import type { Chime } from "./sound/families"
@@ -163,6 +169,10 @@ export type PaneProps<A> = {
    * whether a file is one of this computer's. None where no window gives
    * it. */
   device?: Device
+  /** The file at `path`, stamped with this Pane's Project (ADR 0106, law
+   * 2): what a file crosses a boundary as, to a drag, the clipboard, the
+   * Message box. None where no window gives it. */
+  file?: (path: string) => ProjectFile
   /**
    * Says the Pane has a composer, and how it takes what an App puts in a
    * message (`WindowApi.attach`); `null` takes it back. A Thread says so.

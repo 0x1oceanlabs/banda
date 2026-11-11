@@ -36,7 +36,8 @@ import {
   useState,
 } from "react"
 import { useDark } from "../hooks/use-dark"
-import { bringsFiles, droppedPaths } from "../lib/file-drag"
+import type { ProjectFile } from "@banda/core"
+import { bringsFiles, droppedFiles } from "../lib/file-drag"
 import { toast } from "./sonner"
 import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
 import {
@@ -217,7 +218,7 @@ export type FolderTreeProps = {
   /** Banda's files dropped on a folder of the tree, `""` its top, their
    * whole paths: copied when Alt (⌥) or Ctrl is held as they drop, else
    * moved. None: nothing drops on it. */
-  onDrop?: (paths: readonly string[], dir: string, copy: boolean) => void
+  onDrop?: (files: readonly ProjectFile[], dir: string, copy: boolean) => void
   /** What a screen reader calls it. */
   label: string
   className?: string
@@ -705,11 +706,11 @@ export function FolderTree({
       onDrop={(event) => {
         setDropping(null)
         if (!onDrop) return
-        const paths = droppedPaths(event.dataTransfer)
-        if (!paths) return
+        const files = droppedFiles(event.dataTransfer)
+        if (!files) return
         event.preventDefault()
         onDrop(
-          paths,
+          files,
           dropFolderAt(event.nativeEvent),
           event.altKey || event.ctrlKey
         )

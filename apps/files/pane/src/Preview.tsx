@@ -44,6 +44,7 @@ export function Preview({
   engine,
   project,
   run,
+  local,
   kept,
   keep,
   instead,
@@ -57,6 +58,7 @@ export function Preview({
   engine: Engine
   project: ProjectId
   run: PreviewProps["run"]
+  local?: PreviewProps["local"]
   kept: Kept
   keep: (kept: Kept) => void
   /** What shows where no previewer draws the file here; its facts when
@@ -108,6 +110,7 @@ export function Preview({
         engine,
         project,
         run,
+        local,
         kept,
         keep,
       })}
@@ -135,6 +138,7 @@ export function Look({
   project,
   path,
   run,
+  local,
   instead,
   after,
 }: {
@@ -142,6 +146,7 @@ export function Look({
   project: ProjectId
   path: string
   run: PreviewProps["run"]
+  local?: PreviewProps["local"]
   instead: ReactNode
   /** What shows under the file where it is drawn, as its info. */
   after?: ReactNode
@@ -171,6 +176,7 @@ export function Look({
       engine={engine}
       project={project}
       run={run}
+      local={local}
       kept={NOTHING_KEPT}
       keep={() => {}}
       instead={instead}

@@ -18,12 +18,15 @@ import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
+import { deviceFor, projectFile } from "@banda/core"
 import {
   HostsContext,
   useEngineOf,
   usePaneOn,
   useStore,
 } from "@banda/core/react"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
+import type { Chip } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
@@ -471,6 +474,7 @@ export function Shell({
   // The action context (ADR 0088, decision 7): made afresh with each
   // drawing, and held steady, so the keys' listener, the Tiles' frame and
   // the widgets that hold it are never made again.
+  const hostsNow = useContext(HostsContext)
   const parts = useSteady<Parts>({
     change,
     home,
@@ -588,22 +592,36 @@ export function Shell({
         .catch(() => undefined),
     run: (action, args) => runAction(parts, action, args),
     engine,
-    hosts: useContext(HostsContext),
+    hosts: hostsNow,
     sessionOf: engineOf,
-    waiting: useContext(HostsContext).waiting,
+    waiting: hostsNow.waiting,
     writeSetting: device.settings.set,
     attach: (chips) => {
+      const list: readonly Chip[] = Array.isArray(chips) ? chips : [chips]
       const at = focused(drawnNow())
-      const to = attachTo(at ? { id: at.id, project: at.project } : null)
-      if (!to) {
-        // One toast, however many files were added at once.
+      const project = list.find((chip) => chip.project)?.project ?? at?.project
+      if (!at || !project) {
         toast.warning("No Thread in this Project to add it to.", {
           id: "attach",
         })
         return
       }
+      const to = attachTo({ id: at.id, project: at.project }, project)
+      if (!to) {
+        // One toast, however many files were added at once. A file named
+        // from another machine says where it is; else no Thread of its
+        // Project is here to take it.
+        const why = deviceFor(hostsNow, () => false, THIS_COMPUTER).across(
+          projectFile(project, list[0]?.path ?? ""),
+          at.project
+        )
+        toast.warning(why ?? "No Thread in this Project to add it to.", {
+          id: "attach",
+        })
+        return
+      }
       change((w) => focusEntry(w, to.entry))
-      to.take(Array.isArray(chips) ? chips : [chips])
+      to.take(list)
     },
   })
   // A Thread that woke by itself is told of once (ADR 0074, decision 7).

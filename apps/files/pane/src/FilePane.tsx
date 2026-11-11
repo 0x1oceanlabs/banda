@@ -52,12 +52,14 @@ import {
   FolderDownIcon,
   SquareCodeIcon,
 } from "lucide-react"
+import type { DeviceFile } from "@banda/core"
 import { draftKey, draftOf, hearDrafts } from "./draft"
 import { Card, Facts, Gone, Loading } from "./Facts"
 import { HeaderButton } from "./HeaderButton"
 import { peeking } from "./peek"
 import { Preview, usePicked } from "./Preview"
 import { type Shown, useFile } from "./read"
+import { localOf } from "./where"
 import { showing, workedIn } from "./work"
 
 /** An Agent opens a file with any of these args, as each chooses only what
@@ -86,6 +88,9 @@ export const filePane = definePane<FileArgs>({
   icon: FileIcon,
   // One Pane per file: opened again, it goes to the line asked for.
   identity: (args) => args.path,
+  // A file of another machine, on that machine's engine; what draws it is
+  // a previewer that says `elsewhere` (ADR 0106, step 3b).
+  elsewhere: true,
   Pane: FilePane,
 })
 
@@ -125,9 +130,15 @@ function FilePane({
   close,
   focused,
   peek = false,
+  device,
+  file: stamp,
 }: PaneProps<FileArgs>) {
   const shown = useFile(engine, project, args.path)
   const file = shown.state === "file" ? shown : null
+  // Only a file this computer holds has a way out to its apps; another
+  // machine's has none (ADR 0106, decision 3).
+  const local = (whole: string) => localOf(device, stamp, whole)
+  const outside = file ? local(file.stat.path) : undefined
   // The path as the Person reads it: from the Project's folder when it is
   // inside, else whole.
   const path = file ? fromFolder(file.stat.path, file.root) : args.path
@@ -211,7 +222,7 @@ function FilePane({
       {file && !peek && file.stat.kind === "file" && (
         <OpenWith stat={file.stat} run={run} />
       )}
-      {file && <Outside path={file.stat.path} line={args.line ?? null} />}
+      {file && outside && <Outside path={outside} line={args.line ?? null} />}
       <Body
         shown={shown}
         path={path}
@@ -220,6 +231,7 @@ function FilePane({
         engine={engine}
         project={project}
         run={run}
+        local={local}
         kept={kept as Kept}
         keep={keep}
       />
@@ -305,7 +317,7 @@ function OpenWith({
 /** The header's way out of Banda: the file in the editor `files.toml`
  * names, at the line it opened at, or in its app when none is found; and
  * the file in its folder. */
-function Outside({ path, line }: { path: string; line: number | null }) {
+function Outside({ path, line }: { path: DeviceFile; line: number | null }) {
   const { editor } = useEditors()
   const at = line ? ` at line ${line}` : ""
   return (
@@ -347,6 +359,7 @@ function Body({
   engine,
   project,
   run,
+  local,
   kept,
   keep,
 }: {
@@ -355,7 +368,7 @@ function Body({
   peek: boolean
 } & Pick<
   Parameters<typeof Preview>[0],
-  "line" | "engine" | "project" | "run" | "kept" | "keep"
+  "line" | "engine" | "project" | "run" | "local" | "kept" | "keep"
 >) {
   switch (shown.state) {
     case "loading":
@@ -389,6 +402,7 @@ function Body({
       engine={engine}
       project={project}
       run={run}
+      local={local}
       kept={kept}
       keep={keep}
     />

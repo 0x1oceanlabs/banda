@@ -15,10 +15,10 @@ import { useHeldUrl } from "./held"
 /** What a player leaves out of its controls. */
 const QUIET = "nodownload noplaybackrate noremoteplayback"
 
-export function Video({ file }: PreviewProps) {
+export function Video({ file, local }: PreviewProps) {
   const { url, broke } = useHeldUrl(file.url, file)
   if (url === undefined) return <Loading />
-  if (url === null) return <Unplayable {...file} />
+  if (url === null) return <Unplayable file={file} local={local} />
   return (
     <div className="flex min-h-0 flex-1 items-center justify-center bg-black">
       <video
@@ -38,10 +38,10 @@ export function Video({ file }: PreviewProps) {
   )
 }
 
-export function Audio({ file }: PreviewProps) {
+export function Audio({ file, local }: PreviewProps) {
   const { url, broke } = useHeldUrl(file.url, file)
   if (url === undefined) return <Loading />
-  if (url === null) return <Unplayable {...file} />
+  if (url === null) return <Unplayable file={file} local={local} />
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
       <p className="max-w-full truncate text-sm text-muted-foreground">
@@ -62,18 +62,27 @@ export function Audio({ file }: PreviewProps) {
 }
 
 /** A file Chromium cannot play: its facts, and its app. */
-function Unplayable(file: PreviewProps["file"]) {
+function Unplayable({
+  file,
+  local,
+}: {
+  file: PreviewProps["file"]
+  local: PreviewProps["local"]
+}) {
+  const outside = local?.(file.path)
   return (
     <Facts stat={file} note="Banda cannot play this file.">
-      <Button
-        size="sm"
-        variant="outline"
-        className="mt-1"
-        onClick={() => openWithSystem(file.path)}
-      >
-        <AppWindowIcon />
-        Open in its app
-      </Button>
+      {outside && (
+        <Button
+          size="sm"
+          variant="outline"
+          className="mt-1"
+          onClick={() => openWithSystem(outside)}
+        >
+          <AppWindowIcon />
+          Open in its app
+        </Button>
+      )}
     </Facts>
   )
 }

@@ -3,9 +3,13 @@
  * editor at its line, in the system's file manager, or in the app the
  * system has for it. The editors are the desktop's to find; which one a
  * file opens in is `files.toml`'s `editor`, else the first found.
+ * Each takes a `DeviceFile`: only `device.local` gives one, so a file of
+ * another machine's can never open here at the path it has there (ADR
+ * 0106, decision 3).
  */
 import { useEffect, useState } from "react"
 import { FILES_FILE } from "@banda/contract/files"
+import type { DeviceFile } from "@banda/core"
 import { toast } from "../components/sonner"
 import { type Editor, filesHost } from "../desktop"
 import { isMac } from "./keys"
@@ -70,7 +74,7 @@ function said(error: unknown): string {
  * when no editor is found. A toast says what went wrong.
  */
 export async function openInEditor(
-  path: string,
+  path: DeviceFile,
   at: At = {},
   editor?: string
 ): Promise<void> {
@@ -87,15 +91,19 @@ export async function openInEditor(
 
 /** Shows the file at the whole `path` in its folder, in the system's file
  * manager. */
-export function reveal(path: string): void {
+export function reveal(path: DeviceFile): void {
   filesHost()?.show(path)
 }
 
 /** Opens the file at the whole `path` in the app the system has for it;
  * a program it only shows in its folder. */
-export function openWithSystem(path: string): void {
+export function openWithSystem(path: DeviceFile): void {
   filesHost()?.outside(path)
 }
+
+/** This computer, as a file held over another machine's Pane names it
+ * (ADR 0106, decision 3). */
+export const THIS_COMPUTER = isMac ? "this Mac" : "this machine"
 
 /** The system's file manager, as "Reveal in" names it. */
 export const FILE_MANAGER = isMac

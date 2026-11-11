@@ -7,6 +7,7 @@
  */
 import type { ComponentType } from "react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
+import type { DeviceFile } from "@banda/core"
 
 /** Bytes a kind of file holds at its start, as `%PDF-`: each character
  * one byte, from byte `at`. */
@@ -69,6 +70,9 @@ export type PreviewProps = {
   /** The engine, for what rides its API, as a file's text. */
   engine: Engine
   project: ProjectId
+  /** The file at `path` as this computer holds it, for what opens it
+   * outside Banda; none for another machine's (ADR 0106, decision 3). */
+  local?: (path: string) => DeviceFile | undefined
   /** Runs an action, as a Pane does; none where nothing runs one. */
   run?: (action: string, args?: { [key: string]: JsonValue }) => void
   /** What the view keeps with its Pane, as markdown its Source shown. */
@@ -87,6 +91,11 @@ export type Previewer = {
   priority: number
   /** Whether it draws in Quick Look's tile, edits, and finds in a file. */
   can: { quick: boolean; edit: boolean; find: boolean }
+  /** It draws a file of another machine too, through the Pane's session
+   * alone, reaching no device (ADR 0106, decision 2): a Pane of another
+   * machine is handed only these, and a file none of them draws shows
+   * its facts. */
+  elsewhere?: true
   /** Its view, imported as it is first needed. */
   load: () => Promise<{ default: ComponentType<PreviewProps> }>
 }

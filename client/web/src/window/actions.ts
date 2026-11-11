@@ -1421,7 +1421,9 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Add a file to a Thread's message",
     unlisted: true,
     run: (shell, args) =>
-      present(shell, args, (path) => shell.attach(chipOf(path, args ?? {}))),
+      present(shell, args, (path, project) =>
+        shell.attach(chipOf(path, args ?? {}, project))
+      ),
   },
   {
     // A Thread menu's "Show in folder", for a path in a reply.

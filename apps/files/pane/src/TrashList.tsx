@@ -8,6 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
+import type { DeviceFile } from "@banda/core"
 import type { Trashed } from "@banda/contract/files"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -54,10 +55,14 @@ export function TrashList({
   engine,
   project,
   home,
+  local,
 }: {
   engine: Engine
   project: ProjectId
   home: string | null
+  /** A whole path as this computer holds it; none for another machine's,
+   * whose Trash this computer's Finder cannot open. */
+  local: (whole: string) => DeviceFile | undefined
 }) {
   const [listed, setListed] = useState<Listed>({ state: "loading" })
   const [picked, setPicked] = useState<ReadonlySet<string>>(new Set())
@@ -98,6 +103,7 @@ export function TrashList({
       />
     )
   const items = listed.items
+  const trash = home ? local(`${home}/.Trash`) : undefined
   if (items === null)
     return (
       <Card
@@ -105,11 +111,11 @@ export function TrashList({
         title="Finder keeps the Trash"
         note="macOS lets no app list its Trash or put back from it: open it in Finder. What Files moves there goes back from Finder too."
       >
-        {home && (
+        {trash && (
           <Button
             size="sm"
             variant="outline"
-            onClick={() => openWithSystem(`${home}/.Trash`)}
+            onClick={() => openWithSystem(trash)}
           >
             Open the Trash in Finder
           </Button>

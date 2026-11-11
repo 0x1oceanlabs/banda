@@ -5,29 +5,38 @@
  * In Banda's desktop window main runs the drag (`files.drag`), and the
  * page notes which files they are, for the drop that brings them back
  * (`file-drag.ts`). Elsewhere the page runs it: it carries Banda's own
- * type, the whole paths as JSON, and the paths as plain text, a line
- * each, for anything else it lands on.
+ * type, each file with its Project as JSON (ADR 0106, decision 5), and
+ * the paths as plain text, a line each, for anything else it lands on.
  *
  * It reaches the desktop, as the readers of a drop do not (ADR 0106, step
  * 2a), so what a Pane of another machine draws never imports it.
  */
+import type { DeviceFile, ProjectFile } from "@banda/core"
 import { filesHost } from "../desktop"
 import { draggingOut, PATHS } from "./file-drag"
 
-/** Starts a drag of the files at the whole `paths`, as `event` starts:
- * main's, in Banda's desktop window, else the page's. */
-export function dragFiles(event: DragEvent, paths: readonly string[]): void {
+/** Starts a drag of `files`, as `event` starts: main's, in Banda's
+ * desktop window, for files this computer holds (`local`), else the
+ * page's, which carries them with their Project for what here can take
+ * them. */
+export function dragFiles(
+  event: DragEvent,
+  files: readonly ProjectFile[],
+  local: readonly DeviceFile[] | undefined
+): void {
   const host = filesHost()
-  if (host) {
+  if (host && local) {
     event.preventDefault()
-    draggingOut(paths)
-    host.drag(paths)
-  } else if (event.dataTransfer) carry(event.dataTransfer, paths)
+    draggingOut(files)
+    host.drag(local)
+  } else if (event.dataTransfer) carry(event.dataTransfer, files)
 }
 
-/** Puts the whole `paths` on a drag the page runs. */
-function carry(data: DataTransfer, paths: readonly string[]): void {
-  data.effectAllowed = "copy"
-  data.setData(PATHS, JSON.stringify(paths))
-  data.setData("text/plain", paths.join("\n"))
+/** Puts `files` on a drag the page runs. A drop on a folder moves them
+ * and a held key copies, so the drag allows both: Chromium calls off a
+ * drop whose effect the drag did not allow. */
+function carry(data: DataTransfer, files: readonly ProjectFile[]): void {
+  data.effectAllowed = "copyMove"
+  data.setData(PATHS, JSON.stringify(files))
+  data.setData("text/plain", files.map((file) => file.path).join("\n"))
 }

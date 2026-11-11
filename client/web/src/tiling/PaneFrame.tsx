@@ -135,9 +135,9 @@ type Handle = Pick<
  * opens, and its own args, name no host, as the directory says which
  * machine has each Project (ADR 0106, decision 1), whatever host its args
  * were handed (`paneOn`, `KeptHosts.paneOn`), so the arrangement keeps
- * none, and a Project no machine lists yet is taken as that host's; and it
- * takes nothing this machine attaches, as that names this machine's
- * files. */
+ * none, and a Project no machine lists yet is taken as that host's. What
+ * is attached goes to the composer of the file's own Project, on whatever
+ * machine it is (`attach.ts`). */
 export function handleOf(
   frame: Frame,
   entry: string,
@@ -153,10 +153,7 @@ export function handleOf(
     close: () => frame.close(entry),
     label: (label) => sayLabel(entry, label),
     // Its composer, the same between draws, so the Pane says it once.
-    composer:
-      host === undefined
-        ? (take) => sayComposer(entry, project, take)
-        : undefined,
+    composer: (take) => sayComposer(entry, project, take),
   }
 }
 
@@ -509,6 +506,7 @@ export const PaneFrame = memo(function PaneFrame({
                   project={entry.project}
                   pane={onHost}
                   owner={owner}
+                  elsewhere={there !== undefined}
                   focused={focused}
                   selected={selected}
                   handle={handle}
@@ -533,7 +531,7 @@ export const PaneFrame = memo(function PaneFrame({
 
 /** Why a Pane on another host shows nothing, under that host's icon: it
  * is not there yet, or that host is not known yet. */
-function Elsewhere({
+export function Elsewhere({
   machine,
   children,
 }: {

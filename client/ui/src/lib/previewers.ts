@@ -110,6 +110,16 @@ export function headLength(all: readonly Previewer[]): number {
   )
 }
 
+/** Those of `all` a Pane of another machine is handed (ADR 0106, decision
+ * 2): the ones that say `elsewhere`, as the rest would reach this
+ * device's disk for another machine's file. A file none of these draws
+ * shows its facts. */
+export function elsewherePreviewers(
+  all: readonly Previewer[]
+): readonly Previewer[] {
+  return all.filter((previewer) => previewer.elsewhere)
+}
+
 /** Every module's previewers, as the window gives them. */
 export const Previewers = createContext<readonly Previewer[]>([])
 

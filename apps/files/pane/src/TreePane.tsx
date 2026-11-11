@@ -41,6 +41,7 @@ import {
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import { FILES_FILE, type Making } from "@banda/contract/files"
+import type { DeviceFile, ProjectFile } from "@banda/core"
 import { Button } from "@banda/ui/components/button"
 import {
   ContextMenu,
@@ -136,7 +137,15 @@ import {
   VIEWS,
   viewOf,
 } from "./views"
-import { nameOf, parentOf, tilded, untilded, wholeOf, within } from "./where"
+import {
+  localOf,
+  nameOf,
+  parentOf,
+  tilded,
+  untilded,
+  wholeOf,
+  within,
+} from "./where"
 import { holding, moveFile, workedAt, workedIn } from "./work"
 import { peeked } from "./peek"
 import type { Undoable } from "./undo"
@@ -180,6 +189,9 @@ export const treePane = definePane<TreeArgs>({
   // One to go back to in a Project: the Banda menu's Files and "Show in
   // Files" find it again.
   identity: () => "files",
+  // Another machine's folders, on that machine's engine: every read and
+  // act here goes through the Pane's session (ADR 0106, step 3b).
+  elsewhere: true,
   Pane: TreePane,
 })
 
@@ -224,7 +236,7 @@ const PICTURED = 200
 const infoIn = (args: TreeArgs) => args.info ?? viewOf(args.view) === "columns"
 
 function TreePane(props: PaneProps<TreeArgs>) {
-  const { engine, project, args, update, label } = props
+  const { engine, project, args, update, label, device, file } = props
   const places = useRead(
     useCallback(
       () => engine.call("files.places", {}, { project }),
@@ -304,18 +316,27 @@ function TreePane(props: PaneProps<TreeArgs>) {
   // Each named in a Thread's message, a folder with its `/`.
   const attach = useCallback(
     (wholes: readonly string[]) => {
-      for (const file of wholes) props.run?.("file.attach", { file })
+      for (const file of wholes)
+        props.run?.("file.attach", { file, project })
     },
-    [props]
+    [props, project]
   )
   const pin = useCallback(
     (whole: string, on: boolean) =>
       props.run?.("files.pin", { dir: tilded(whole, home), pin: on }),
     [props, home]
   )
+  // Pins are this device's, in its files.toml, until 5b: another
+  // machine's Files shows that machine's places and none of these (ADR
+  // 0106, decision 5, call 9 A).
+  const here = localOf(device, file, dir || "/") !== undefined
   const pinned = useMemo(
-    () => finder.pinned.map((place) => untilded(place, home, "/")),
-    [finder.pinned, home]
+    () => (here ? finder.pinned.map((place) => untilded(place, home, "/")) : []),
+    [here, finder.pinned, home]
+  )
+  const local = useCallback(
+    (whole: string) => localOf(device, file, whole),
+    [device, file]
   )
 
   const shownList = useMemo(
@@ -349,7 +370,12 @@ function TreePane(props: PaneProps<TreeArgs>) {
       />
       <div className="flex min-w-0 flex-1 flex-col">
         {trash ? (
-          <TrashList engine={engine} project={project} home={home} />
+          <TrashList
+            engine={engine}
+            project={project}
+            home={home}
+            local={local}
+          />
         ) : recent ? (
           <>
             <div className="flex h-8 shrink-0 items-center border-b px-2.5 text-xs">
@@ -364,6 +390,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
                 onOpen={openFile}
                 onShow={(whole) => go(parentOf(whole) ?? "/", nameOf(whole))}
                 onAttach={(whole) => attach([whole])}
+                local={local}
               />
             </div>
           </>
@@ -382,7 +409,8 @@ function TreePane(props: PaneProps<TreeArgs>) {
             onGoTyped={goTyped}
             onOpenFile={openFile}
             onAttach={attach}
-            onPin={pin}
+            onPin={here ? pin : undefined}
+            local={local}
           />
         )}
       </div>
@@ -401,7 +429,10 @@ type FolderViewProps = PaneProps<TreeArgs> & {
   onGoTyped: (path: string) => Promise<string | null>
   onOpenFile: (whole: string) => void
   onAttach: (wholes: readonly string[]) => void
-  onPin: (whole: string, on: boolean) => void
+  /** None on another machine, whose pins wait for its settings (5b). */
+  onPin?: (whole: string, on: boolean) => void
+  /** A whole path as this computer holds it; none for another machine's. */
+  local: (whole: string) => DeviceFile | undefined
 }
 
 /** One folder: its path, its tree, and what the filter found in it. */
@@ -412,6 +443,8 @@ function FolderView({
   update,
   focused,
   run,
+  device,
+  file,
   home,
   projectTop,
   showing,
@@ -422,6 +455,7 @@ function FolderView({
   onOpenFile,
   onAttach,
   onPin,
+  local,
 }: FolderViewProps) {
   const dir = args.dir
   const keyLabel = useKeyLabel()
@@ -666,6 +700,19 @@ function FolderView({
     [run, dir, project]
   )
 
+  // A file held over this Pane from another machine is refused, in words
+  // that say where it is (ADR 0106, decision 3): only the machines count,
+  // the host alone judging whether two names are one file.
+  const refused = useCallback(
+    (files: readonly ProjectFile[]) => {
+      const why = files
+        .map((one) => device?.across(one, project))
+        .find((words) => words !== undefined)
+      if (why) toast.warning(why, { id: `across ${why}` })
+      return why !== undefined
+    },
+    [device, project]
+  )
   // What Files does with its rows (decision 10): each said in a toast with
   // Undo; a name taken where they go is asked about.
   const at = useMemo(() => ({ engine, project }), [engine, project])
@@ -785,14 +832,17 @@ function FolderView({
         }
         case "copy":
         case "cut":
-          if (rows.length > 0) keep(wholes, what === "cut")
+          if (rows.length > 0 && file)
+            keep(wholes.map(file), what === "cut")
           return
         case "paste": {
           const clip = kept()
-          if (!clip) return
-          void transfer(!clip.cut, clip.paths, folderOfRow(row ?? picked)).then(
-            (done) => done && !done.stopped && pasted(clip)
-          )
+          if (!clip || refused(clip.files)) return
+          void transfer(
+            !clip.cut,
+            clip.files.map((one) => one.path),
+            folderOfRow(row ?? picked)
+          ).then((done) => done && !done.stopped && pasted(clip))
           return
         }
         case "new-file":
@@ -807,7 +857,18 @@ function FolderView({
           return
       }
     },
-    [rowsFor, dir, at, transfer, picked, newItem, setRenaming, setSearching]
+    [
+      rowsFor,
+      dir,
+      at,
+      transfer,
+      picked,
+      newItem,
+      setRenaming,
+      setSearching,
+      file,
+      refused,
+    ]
   )
   /** What a row's menu offers, or the folder's, under the rows. */
   const offersOf = (row: string | null): Does[] => [
@@ -941,8 +1002,31 @@ function FolderView({
   // Rows dragged: into a Thread's composer as `@` chips, and out to other
   // apps as the files.
   const drag = useCallback(
-    (paths: string[], event: DragEvent) => dragFiles(event, paths.map(named)),
-    [named]
+    (paths: string[], event: DragEvent) => {
+      const wholes = paths.map(named)
+      if (!file) return
+      const locals = wholes.map(local)
+      dragFiles(
+        event,
+        wholes.map(file),
+        locals.every((one) => one !== undefined)
+          ? (locals as DeviceFile[])
+          : undefined
+      )
+    },
+    [named, file, local]
+  )
+  // Dropped here: refused from another machine, moved or copied else.
+  const drop = useCallback(
+    (dropped: readonly ProjectFile[], into: string, copy: boolean) => {
+      if (refused(dropped)) return
+      void transfer(
+        copy,
+        dropped.map((one) => one.path),
+        into
+      )
+    },
+    [refused, transfer]
   )
 
   // The tree takes the keys once it is drawn, in the Pane that has the
@@ -982,7 +1066,7 @@ function FolderView({
     onSelect: setPicked,
     onOpen: openRow,
     onDrag: drag,
-    onDrop: (dropped, into, copy) => void transfer(copy, dropped, into),
+    onDrop: drop,
     onRename,
   }
   // The info of the row picked, or of the folder with none; its picture
@@ -1004,6 +1088,7 @@ function FolderView({
       project={project}
       path={wholeOf(dir, row)}
       run={run}
+      local={local}
       instead={infoOf(row, "flex-1")}
       after={below}
     />
@@ -1168,9 +1253,7 @@ function FolderView({
               onOpen={openRow}
               onDrag={drag}
               onRename={onRename}
-              onDrop={(dropped, into, copy) =>
-                void transfer(copy, dropped, into)
-              }
+              onDrop={drop}
             />
           )}
         </ContextMenuTrigger>
@@ -1190,13 +1273,24 @@ function FolderView({
           {menu?.row != null && (
             <RowMenu
               whole={wholeOf(dir, menu.row)}
+              local={local(wholeOf(dir, menu.row))}
               folder={menu.row.endsWith("/")}
               top={projectTop}
               pinned={pinned.includes(wholeOf(dir, menu.row))}
               onOpen={() => openRow(menu.row ?? "")}
               onPeek={() => peek(menu.row ?? "")}
+              onShow={
+                local(wholeOf(dir, menu.row)) === undefined
+                  ? () => {
+                      const whole = wholeOf(dir, menu.row ?? "")
+                      onGo(parentOf(whole) ?? "/", nameOf(whole))
+                    }
+                  : undefined
+              }
               onAttach={() => onAttach(rowsFor(menu.row).map(named))}
-              onPin={(on) => onPin(wholeOf(dir, menu.row ?? ""), on)}
+              onPin={
+                onPin && ((on) => onPin(wholeOf(dir, menu.row ?? ""), on))
+              }
               acts={{
                 offers: offersOf(menu.row),
                 run: (what) => later(what, menu.row),

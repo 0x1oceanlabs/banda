@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { labelOf } from "../registry"
 import { gateOf, type Handle, PaneMount, usePaneHandles } from "../tiling/mount"
+import { Elsewhere } from "../tiling/PaneFrame"
 import { PaneSlot } from "../tiling/PaneSlot"
 import { opening, type Shell } from "./actions"
 import { usePeekEsc } from "./keys"
@@ -150,6 +151,8 @@ export function Peek({
               )}
               <PaneSlot project={project} pane={pane} at="project" />
             </PaneHeader>
+            {/* As a Frame's: arc going away shows on what it shows. */}
+            {there && <PaneSlot project={project} pane={pane} at="pill" />}
             {/* Its machine not known yet, it waits for it, in its words. */}
             {reach.engine ? (
               <FloatingPane
@@ -166,11 +169,15 @@ export function Peek({
                 peek
               />
             ) : (
-              <p className="p-4 text-sm text-muted-foreground">
+              <Elsewhere
+                machine={
+                  there ? (reach.shown?.named ?? seenNamed(there)) : undefined
+                }
+              >
                 {reach.host === null
                   ? UNKNOWN
                   : there && reachWords(there, reach.shown, seenNamed)}
-              </p>
+              </Elsewhere>
             )}
           </HeaderSlot>
         </TileHeader>
@@ -237,6 +244,7 @@ export function FloatingPane({
           project={project}
           pane={pane}
           owner={owner}
+          elsewhere={elsewhere}
           focused={focused}
           peek={peek}
           handle={handle}

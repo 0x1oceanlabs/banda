@@ -42,6 +42,7 @@ export const code = definePreviewer({
   },
   priority: 0,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/code"),
 })
 
@@ -52,6 +53,7 @@ export const markdown = definePreviewer({
   match: { extensions: ["md", "markdown"], mimes: ["text/markdown"] },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/markdown"),
 })
 
@@ -158,6 +160,7 @@ export const json = definePreviewer({
   },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/json"),
 })
 
@@ -168,6 +171,7 @@ export const notebook = definePreviewer({
   match: { extensions: ["ipynb"], mimes: ["application/x-ipynb+json"] },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/notebook"),
 })
 

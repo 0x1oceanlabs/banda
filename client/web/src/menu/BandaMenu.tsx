@@ -192,7 +192,14 @@ export const BandaMenu = memo(function BandaMenu({
     return {
       engine: session,
       project: where,
-      folder: projects.find((one) => one.id === where)?.folder,
+      // A Project of another machine is that machine's to name: its folder
+      // comes from its list, not this one's.
+      folder:
+        projects.find((one) => one.id === where)?.folder ??
+        hosts
+          .get()
+          .flatMap((one) => one.projects)
+          .find((one) => one.id === where)?.folder,
       entered: looking.entered !== undefined,
       ...(looking.only && { only: looking.only }),
     }

@@ -6,6 +6,7 @@ import {
   type PreviewProps,
 } from "../module"
 import {
+  elsewherePreviewers,
   extensionOf,
   headLength,
   matchOf,
@@ -188,4 +189,16 @@ test("a file of the same kind goes to the same view, which updates; one of anoth
   const other = previewOf(code, props("/a/notes.ts"))
   expect(other.type).not.toBe(first.type)
   expect(other.key).not.toBe(first.key)
+})
+
+test("a Pane of another machine is handed only the previewers that say `elsewhere` (ADR 0106, decision 2): a file none of them draws has no previewer, so shows its facts", () => {
+  const code = {
+    ...previewer("code", { extensions: ["ts"] }),
+    elsewhere: true as const,
+  }
+  const pdf = previewer("pdf", { extensions: ["pdf"] })
+  const handed = elsewherePreviewers([code, pdf])
+  expect(handed).toEqual([code])
+  expect(pickPreviewer(handed, { path: "/a.ts" })).toBe(code)
+  expect(pickPreviewer(handed, { path: "/a.pdf" })).toBeNull()
 })
