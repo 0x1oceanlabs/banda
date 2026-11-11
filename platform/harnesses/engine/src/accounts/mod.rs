@@ -170,6 +170,9 @@ impl Accounts {
             );
         }
         let reader = self.reader();
+        // Held weakly: a strong hold keeps the machine's Project, and its
+        // lock, open after the engine lets it go.
+        let project = project.downgrade();
         let read = move || {
             let reader = reader.clone();
             tokio::task::spawn_blocking(move || reader(0))
@@ -186,6 +189,9 @@ impl Accounts {
                     continue;
                 }
                 was = now;
+                let Some(project) = project.upgrade() else {
+                    return;
+                };
                 let owner = Participant::Person(project.owner());
                 let wrote = project
                     .write(move |tx| {
