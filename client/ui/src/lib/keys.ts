@@ -154,6 +154,7 @@ const NAMES: Record<string, string> = {
   Equal: "=",
   Backslash: "\\",
   IntlBackslash: "<",
+  ContextMenu: "Menu",
 }
 
 /** How a Mac writes a key that has a sign of its own. */

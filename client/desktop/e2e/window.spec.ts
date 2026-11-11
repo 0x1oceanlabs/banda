@@ -5469,7 +5469,7 @@ test("a Thread is archived from its row's menu, its Pane closes, and Alt+S bring
   await expect(row).toBeVisible()
 
   await row.click({ button: "right" })
-  await page.getByRole("menuitem", { name: /Archive thread/ }).click()
+  await page.getByRole("menuitem", { name: /^Archive/ }).click()
   // In the Archive, which its tab counts (ADR 0098, decision 2); its Pane
   // is put away.
   const archive = sidebar.getByRole("tab", { name: /^Archive/ })
@@ -5610,7 +5610,7 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   await expect(done).toBeHidden()
 
   // Archived on its host, and still after a reload.
-  await menu(/Archive thread/)
+  await menu(/^Archive/)
   await expect(archive).toHaveAccessibleName("Archive, 1")
   await expect(row).toBeHidden()
   await expect.poll(() => first().archived).toBeDefined()
@@ -5620,7 +5620,7 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   // Back, on its host too, and still after a reload.
   await archive.click()
   await shelf.getByRole("option", { name: /hello/ }).click({ button: "right" })
-  await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
+  await page.getByRole("menuitem", { name: /^Unarchive/ }).click()
   // Its ghost line stands in its slot till the pointer leaves the list.
   await leaveSidebar(page)
   await expect(shelf).toHaveCount(0)
@@ -5872,7 +5872,7 @@ test("the marks this window kept move to its host once, and its first list shows
   // still, move nothing again.
   await archive.click()
   await shelf.getByRole("option", { name: /hello/ }).click({ button: "right" })
-  await page.getByRole("menuitem", { name: /Unarchive thread/ }).click()
+  await page.getByRole("menuitem", { name: /^Unarchive/ }).click()
   // Its ghost line stands in its slot till the pointer leaves the list.
   await leaveSidebar(page)
   await expect(shelf).toHaveCount(0)

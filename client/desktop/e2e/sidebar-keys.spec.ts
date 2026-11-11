@@ -459,7 +459,7 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
   await page.keyboard.press("Tab")
   await expect(list).toBeFocused()
   await expect(list).toHaveAccessibleDescription(
-    "S archives, Z puts off, U marks unread."
+    "S archives, Z puts off, U marks unread. Shift+F10 for more."
   )
   await picked(page, list, "please ask first")
 

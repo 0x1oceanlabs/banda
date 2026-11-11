@@ -343,6 +343,11 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
     | "wake"
     | "archive"
     | "delete"
+    | "move"
+    | "stop"
+    | "fork"
+    | "copy"
+    | "make-project"
     | "unread"
     | "unseen"
   /** Where else its row is: the Pane menu, the Banda menu's Tab. Those
