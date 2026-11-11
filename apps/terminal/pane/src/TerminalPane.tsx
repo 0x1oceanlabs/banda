@@ -164,13 +164,17 @@ function TerminalPane({
   // page yet.
   const inBanda = (target: Target) =>
     "file" in target || can("browser.open", { address: target.link.url })
+  // Whether a file opens in its app here: only one this computer holds
+  // has one (ADR 0106, decision 3).
+  const inItsApp = (target: Target) =>
+    "file" in target && can("file.outside", { file: target.file, project })
   // A link opens in Banda's browser, and with Ctrl outside it, as one in
   // a Thread: a page in this device's browser, a file in its app. Where
   // Banda's browser cannot take it, a page goes to the device's. Each goes
   // through the router, so no link leaves this Pane past it.
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
-      const action = outside ? "file.outside" : "file.open"
+      const action = outside && inItsApp(target) ? "file.outside" : "file.open"
       run?.(action, { file: target.file, project, line: target.line ?? null })
     } else if (!outside && inBanda(target)) {
       run?.("browser.open", { address: target.link.url, project })
@@ -186,6 +190,8 @@ function TerminalPane({
   // Under the pointer, a page Banda's browser cannot take says where it
   // opens, or whose it is.
   const hinted = (target: Target | null) => {
+    if (target && "file" in target && !inItsApp(target))
+      return linkHint(target.file, null)
     if (!target || !("link" in target) || inBanda(target)) return hintOf(target)
     return whyNot(target) ?? `Opens in ${THIS_DEVICE}'s browser`
   }
@@ -203,7 +209,9 @@ function TerminalPane({
       titled={titled}
       followed={followed}
       inBanda={inBanda}
-      opensHere={(target) => whyNot(target) === undefined}
+      opensHere={(target) =>
+        "file" in target ? inItsApp(target) : whyNot(target) === undefined
+      }
       hinted={hinted}
       files={can("file.open", { file: "", project })}
       paste={can("edit.paste") ? () => run?.("edit.paste") : undefined}
