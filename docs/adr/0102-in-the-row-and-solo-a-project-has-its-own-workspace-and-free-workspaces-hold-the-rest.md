@@ -63,7 +63,10 @@ day.
    has no Threads says only that it is empty, as a free one does. In the
    Flow `free`, an emptied one goes once the Person leaves it, a
    Project's too. On one that holds Panes, or on the empty one at the
-   bottom, "Close the workspace" says in a toast why it stays.
+   bottom, "Close the workspace" says in a toast why it stays. An
+   archived Thread at rest counts as none: a Project with only those has
+   no Threads left, and if one comes back, its next Pane makes the
+   workspace again at the end.
 
 3. **Where a Pane opens, in this order:**
    1. A Pane an Agent opens goes into the Agent's Group, even when it is
