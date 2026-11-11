@@ -2006,7 +2006,12 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   `modules.ts` and the bridge's table name a module's package, and
   nothing more animates a size or a place (ADR 0088). Its tests find the
   Apps' and platform parts' folders by their `app.toml` through `parts`
-  (`@banda/ui/testing/architecture`), which fails when it finds none. Of
+  (`@banda/ui/testing/architecture`), which fails when it finds none. The
+  look check (`client/web/src/look.test.ts`) reads the same files that
+  draw, stylesheets too, with `look` (`@banda/ui/testing/look`): a
+  colour, corner, type size, shadow, layer or length off Banda UI is
+  refused, but for the cases its list holds by group, each with its rule
+  and its reason, a list that only falls (ADR 0113). Of
   ADR 0087's checks, three ratchets that only fall hold what the Tiling
   imports of the Window, the App strings in the Window, the Tiling and
   the sidebar list, and a line ceiling on the Window's root (decisions 1
