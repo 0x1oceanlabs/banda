@@ -23,7 +23,7 @@ import {
   shownOf,
   Unreachable,
 } from "./hosts"
-import { inWindow } from "./directory"
+import { inWindow, isPlaced } from "./directory"
 import type { Args } from "./run"
 import { clock } from "./time"
 import { away, desktop, live, project, Socket } from "./testing"
@@ -316,6 +316,20 @@ test("this machine's Projects are read again from its engine for one the Window 
   await expect(hosts.reread()).resolves.toBeUndefined()
   expect(hosts.hostOf(added)).toBeUndefined()
   expect(hosts.hostOf("m0" as ProjectId)).toBeUndefined()
+})
+
+test("an ID every object inherits is no place the device kept, and a kept place that names no machine is dropped, so neither reads as this machine", () => {
+  const here = { here: true } as unknown as Engine
+  const { device } = desktop()
+  const hosts = new KeptHosts(device, FORGETTING, here, {
+    directory: inWindow(),
+  })
+  hosts.ours([project("mine")], "m0" as ProjectId)
+  expect(hosts.hostOf("constructor" as ProjectId)).toBeNull()
+  expect(isPlaced({})).toBe(false)
+  expect(isPlaced({ host: "arc" })).toBe(true)
+  expect(isPlaced({ machine: "m1" })).toBe(true)
+  expect(isPlaced({ machine: 1 })).toBe(false)
 })
 
 test("the directory takes what a machine lists in one write, and writes nothing while the list says what it holds", () => {

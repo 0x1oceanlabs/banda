@@ -512,8 +512,9 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         host.projects.some((one) => one.id === project)
     )
     if (listing) return listing.name
-    const placed = this.#directory.read()[project]
-    if (placed) return this.#reached(placed)
+    // Its own keys alone: an ID as "constructor" is no place the device kept.
+    const kept = this.#directory.read()
+    if (Object.hasOwn(kept, project)) return this.#reached(kept[project]!)
     return named ?? null
   }
 

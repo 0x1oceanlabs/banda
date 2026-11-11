@@ -72,7 +72,7 @@ export type Route =
 /** What the router reads of the Window's hosts. */
 export type Hosts = Pick<
   KeptHosts,
-  "get" | "hostOf" | "seen" | "machines" | "modulesOf" | "reread"
+  "get" | "hostOf" | "seen" | "machines" | "modulesOf"
 >
 
 /** Where an owner's values are: this machine, a host by its key, or

@@ -174,9 +174,9 @@ export const BandaMenu = memo(function BandaMenu({
     try {
       session = hosts.sessionOf(where, undefined, { drawn: true })
     } catch {
-      // A host this window does not show, or a Project no machine it
-      // knows has: none of this machine's Projects is that one, so this
-      // machine's engine finds nothing.
+      // A host this window does not show, or a Project it has not placed
+      // yet: this machine's engine only reads here, and finds nothing of
+      // an ID it does not have.
     }
     return {
       engine: session,

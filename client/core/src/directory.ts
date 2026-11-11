@@ -31,13 +31,15 @@ export type DirectoryMemory = {
   putAll: (places: readonly (readonly [string, Placed])[]) => void
 }
 
-/** Whether a kept value is a place: anything else a device kept is
- * dropped as it is read. */
+/** Whether a kept value is a place, which names a machine one way or
+ * the other: anything else a device kept is dropped as it is read, as
+ * one naming none would read as this machine. */
 export function isPlaced(value: unknown): value is Placed {
   if (typeof value !== "object" || value === null || Array.isArray(value))
     return false
   const { machine, host } = value as Record<string, unknown>
   return (
+    (machine !== undefined || host !== undefined) &&
     (machine === undefined || typeof machine === "string") &&
     (host === undefined || typeof host === "string")
   )
