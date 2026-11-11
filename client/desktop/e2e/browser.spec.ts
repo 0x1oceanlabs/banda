@@ -807,7 +807,7 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   await expect(stopped).toContainText("Stopped hello")
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /hello/ })
+    .getByRole("option", { name: /hello/ })
   await expect(row).not.toContainText("Stopped on a tab")
   const refused = await agentCalls(window, "browser_snapshot", { tab: id })
   expect(refused.isError).toBe(true)
@@ -862,7 +862,7 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
   }
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /hello/ })
+    .getByRole("option", { name: /hello/ })
   await expect(row).toContainText(`Asks Your turn in a tab: ${why}`)
   await page.screenshot({ path: "test-results/browser-handoff.png" })
   // Meanwhile the tab is the Person's.
@@ -899,7 +899,7 @@ test("an Agent asks the Person before it uses a new site: once, always or never"
   await expect(thread.getByText("You said: hello")).toBeVisible()
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /hello/ })
+    .getByRole("option", { name: /hello/ })
   /** Opens a tab on the site `name`, which needs no yes, and reads it,
    * which does: the tab asks the Person, and the Thread's row with it. */
   const asking = async (name: string) => {

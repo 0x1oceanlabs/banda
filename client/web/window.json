@@ -661,6 +661,13 @@
       "unlisted": true
     },
     {
+      "id": "pane.beside",
+      "title": "Bring a Pane beside the one in focus",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "calls.answer",
       "title": "Go to what calls you",
       "section": "Threads",
@@ -1150,6 +1157,140 @@
       "unlisted": true
     },
     {
+      "id": "sidebar.open-picked",
+      "title": "Open the card picked, or go to where its unseen begins",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Enter"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.open-picked-beside",
+      "title": "Open the card picked beside the Pane in focus",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Enter",
+          "shift": true
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.archive-picked",
+      "title": "Archive the card picked, or bring it back",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyS"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.later-picked",
+      "title": "Put the card picked off till later",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyZ"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.unread-picked",
+      "title": "Mark the card picked as unread, or as read",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyU"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.rename-picked",
+      "title": "Rename the card picked",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "F2"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.suggest-title-picked",
+      "title": "Suggest a title for the card picked",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "F2",
+          "shift": true
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.search",
+      "title": "Search",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Slash"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.tab-inbox",
+      "title": "Show the Inbox",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Digit1"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.tab-working",
+      "title": "Show Working",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Digit2"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.tab-later",
+      "title": "Show Later",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Digit3"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.tab-archive",
+      "title": "Show the Archive",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Digit4"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
       "id": "workspace.go",
       "title": "Go to a workspace",
       "section": "Workspaces",
@@ -1522,6 +1663,10 @@
     {
       "id": "settings",
       "title": "Settings"
+    },
+    {
+      "id": "sidebar",
+      "title": "Sidebar"
     }
   ]
 }

@@ -336,7 +336,15 @@ export type ItemAction<Context = WindowApi> = Action<Context> & {
    * rename, and the Later's picker to put off: a stand-in for the intents
    * that take its place with B8 (#862), counted till then. The Banda
    * menu's recents count its rows by it. */
-  does?: "rename" | "suggest" | "later" | "wake" | "archive" | "delete"
+  does?:
+    | "rename"
+    | "suggest"
+    | "later"
+    | "wake"
+    | "archive"
+    | "delete"
+    | "unread"
+    | "unseen"
   /** Where else its row is: the Pane menu, the Banda menu's Tab. Those
    * leave out a row that is off. */
   offered?: readonly ("pane" | "menu")[]

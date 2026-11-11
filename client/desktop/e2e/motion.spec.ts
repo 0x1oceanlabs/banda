@@ -555,7 +555,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     .getByRole("region", { name: "New Thread" })
     .getByRole("textbox", { name: "Message to Fake AI" })
   const rowOf = (text: string) =>
-    sidebar.getByRole("button", { name: new RegExp(text) })
+    sidebar.getByRole("option", { name: new RegExp(text) })
   // Each answered while the Person looks at it: it calls no one.
   const hellos = Array.from({ length: 8 }, (_, i) => `hello ${i + 1}`)
   for (const [i, text] of hellos.entries()) {

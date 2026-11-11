@@ -1,25 +1,24 @@
 import { useContext, useRef } from "react"
-import { flushSync } from "react-dom"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
 import { CutTips } from "@banda/ui/components/fade-text"
 import { Separator } from "@banda/ui/components/separator"
-import { useEngineOf, useRun, useThisNamed } from "@banda/core/react"
+import { useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
 import { ChevronDownIcon, ChevronRightIcon, SquarePenIcon } from "lucide-react"
-import { type Act, actsOf } from "./acts"
+import { actsOf } from "./acts"
 import type { Row as Arranged } from "./arrange"
 import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
 import type { CardAct } from "./CardView"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
-import { archiving, itemActionOf } from "./items"
+import { itemActionOf } from "./items"
+import { keyId } from "./keys"
 import { EDGE } from "./MachineCard"
-import { pickLater } from "./LaterPicker"
 import { HerePart } from "./HostPart"
 import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
 import { NewThreadIn } from "./NewThreadIn"
@@ -28,9 +27,11 @@ import { Rollup } from "./Rollup"
 import type { WithMenu } from "./ProjectMenu"
 import { DENSITY, type Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
-import { putBack, toldArchived, type Undoable, undoOf } from "./undo"
+import { putBack } from "./undo"
+import { useActs } from "./useActs"
 import { HoldingContext } from "./useHold"
 import type { Holds } from "./useOrdered"
+import { PickContext, pickProps, pieceKey } from "./usePick"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /**
@@ -55,7 +56,6 @@ export function SectionView({
   isCurrent,
   strayed,
   onToggle,
-  onMore,
   engine,
   machine,
   withMenu,
@@ -73,8 +73,6 @@ export function SectionView({
   strayed: ReadonlySet<string>
   /** Folds or opens the group of that key. */
   onToggle: (key: string) => void
-  /** Shows a cut list whole. */
-  onMore: () => void
   engine: Engine
   /** This machine's No Project, once the engine named it. */
   machine?: ProjectId
@@ -88,6 +86,9 @@ export function SectionView({
   const run = useRun()
   const holding = useContext(HoldingContext)
   const dismiss = useContext(Dismiss)
+  const { picked, expand } = useContext(PickContext)
+  // Its regions are one machine's, whose stops' keys say it.
+  const host = regions[0]?.host
   // Grouped by Project, a header names each card's Project.
   const view: CardView = {
     density: DENSITY,
@@ -106,84 +107,46 @@ export function SectionView({
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
   useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
-  const engineOf = useEngineOf()
-  /** Whether the Window reaches `row`'s host: one it does not refuses an
-   * act at once, as its App says, and nothing is kept to undo. */
-  const reaches = (row: Arranged) => {
-    try {
-      engineOf(row.project.id, row.listed.pane)
-      return true
-    } catch {
-      return false
-    }
-  }
-  /**
-   * The Person's act on a card, by its button (decision 10): the Thread's
-   * App's, by its item actions (ADR 0087, decision 12), which the list
-   * draws at once, with what takes it back. Later opens the picker at the
-   * card, which then holds the list; Archive acts at once, and is told in
-   * the toast.
-   */
-  const onAct = (row: Arranged, act: Act, card: Element) => {
-    if (holding?.quiet()) return
-    const { listed } = row
-    const project = row.project.id
-    const undo = (): Undoable | undefined =>
-      reaches(row)
-        ? { project, listed, steps: undoOf(act, listed, Date.now()) }
-        : undefined
-    if (act === "later") {
-      pickLater({
-        project,
-        listed,
-        anchor: card,
-        onPicked: () => holding?.act(row, "pointer", undo()),
-      })
-      return
-    }
-    const done = undo()
-    holding?.act(row, "pointer", done)
-    const action = itemActionOf(listed, act === "wake" ? "wake" : "archive")
-    if (action)
-      run(action.id, {
-        project,
-        item: listed.id,
-        ...(act === "wake" ? {} : { archived: act === "archive" }),
-      })
-    if (act === "archive" && done) toldArchived(run, done)
-  }
-  /** A card's acts, each naming the key in force of what does it: its
-   * App's Later and Wake, the list's Archive. */
+  const actOn = useActs(holding)
+  /** A card's acts, each naming the key in force that does it on the
+   * pick: Z for Later, S for Archive and Unarchive; Wake, its App's. */
   const actsFor = (row: Arranged): CardAct[] =>
     actsOf(row.stand, row.listed).map((act) => ({
       act,
       key: keyFor(
-        act === "later" || act === "wake"
+        act === "wake"
           ? (itemActionOf(row.listed, act)?.id ?? "")
-          : archiving.id
+          : keyId(act === "later" ? "later" : "archive")
       ),
       // Wake stands where the time says who put it off (ADR 0074).
       ...(act === "wake" && row.listed.later?.byAgent
         ? { note: LATER_BY_AGENT }
         : {}),
-      run: (card) => onAct(row, act, card),
+      run: (card) => actOn(row, act, { card, by: "pointer" }),
     }))
 
-  const header = (group: GroupBlock, label: string) => {
+  const header = (group: GroupBlock, label: string, item: string) => {
     const { project } = group
     const Chevron = group.folded ? ChevronRightIcon : ChevronDownIcon
     // Another host's Project has no menu yet: each act would go to this
     // machine's engine.
     const mine = group.host === undefined
+    // Folded, it is a stop of the pick, which → or Enter unfolds.
+    const stop = group.folded ? pieceKey(host, item) : undefined
     const head = (
       <div className="group/head flex items-center">
         <button
           type="button"
           aria-expanded={!group.folded}
+          data-group={group.key}
+          {...(stop !== undefined && pickProps(stop, stop === picked))}
+          tabIndex={-1}
           className={cn(
-            "flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+            "flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 pt-2 pb-1 text-xs outline-none",
             project ? "font-medium text-foreground" : "text-muted-foreground"
           )}
+          // The focus stays where it was: on the list, or in a Pane.
+          onMouseDown={(event) => event.preventDefault()}
           onClick={() => onToggle(group.key)}
         >
           <Chevron className="size-3 shrink-0 text-muted-foreground" />
@@ -242,6 +205,7 @@ export function SectionView({
         now={holds.now}
         view={view}
         current={isCurrent(row.project.id, row.listed.pane)}
+        picked={item.key === picked}
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
@@ -270,7 +234,9 @@ export function SectionView({
                 {said && <span aria-hidden>·</span>}
                 <button
                   type="button"
-                  className="rounded-control px-0.5 text-foreground/85 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  tabIndex={-1}
+                  className="rounded-control px-0.5 text-foreground/85 outline-none hover:text-foreground"
+                  onMouseDown={(event) => event.preventDefault()}
                   onClick={() => putBack(run, undo)}
                 >
                   Undo
@@ -300,32 +266,32 @@ export function SectionView({
         )
       case "divider":
         return <Separator className="mx-2 my-1.5 w-auto!" />
-      case "more":
+      case "more": {
+        // A stop of the pick, which → or Enter opens, as a click does: the
+        // rest shows, and its first card is picked.
+        const stop = pieceKey(host, item.key)
         return (
           <button
             type="button"
-            className="w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-            onClick={(event) => {
-              // It goes as the rest shows: the focus goes on to the first
-              // card it showed, never to the page.
-              const last =
-                event.currentTarget.parentElement?.previousElementSibling
-              flushSync(onMore)
-              const card = last?.nextElementSibling?.querySelector("button")
-              if (card instanceof HTMLElement) card.focus()
-            }}
+            {...pickProps(stop, stop === picked)}
+            data-more=""
+            tabIndex={-1}
+            className="w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground"
+            onMouseDown={(event) => event.preventDefault()}
+            onClick={(event) => expand(event.currentTarget)}
           >
             {block.of === "working"
               ? `+ ${block.count} more`
               : `Show ${block.count} older`}
           </button>
         )
+      }
       case "zero":
         return <InboxZero zero={block} />
       case "empty":
         return <EmptyTab tab={block.tab} only={only} projects={projects} />
       case "group":
-        return header(block, item.place ?? "")
+        return header(block, item.place ?? "", item.key)
     }
   }
 

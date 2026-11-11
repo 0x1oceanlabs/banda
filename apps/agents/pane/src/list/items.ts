@@ -2,10 +2,11 @@
  * What the Person does to a Thread as one of the Items Threads lists (ADR
  * 0087, decision 12): rename it, have its Harness's small model suggest a
  * title, give back the title it had before, mark it unread or read (ADR
- * 0077), make a Project of the No Project it is in (ADR 0046), put it off
- * and wake it (ADR 0074), archive it as the sidebar list asks (ADR 0096),
- * delete it for good, and move it to another Project (ADR 0098, decision
- * 14). The Window draws their rows in the Thread menu, the Pane menu and
+ * 0077), go to where its unseen begins (ADR 0094), make a Project of the
+ * No Project it is in (ADR 0046), put it off and wake it (ADR 0074),
+ * archive it as the sidebar list asks (ADR 0096), delete it for good, and
+ * move it to another Project (ADR 0098, decision 14). The Window draws
+ * their rows in the Thread menu, the Pane menu and
  * the Banda menu, and runs them by id, as any action; Threads does them,
  * on the engine of the host that lists the Thread (ADR 0081).
  */
@@ -23,6 +24,7 @@ import {
 } from "@banda/ui/lib/naming"
 import { problem } from "@banda/ui/lib/words"
 import { clock } from "@banda/core/react"
+import { actOnTile } from "@banda/ui/hooks/use-scope"
 import {
   type Args,
   type ItemAction,
@@ -42,6 +44,7 @@ import {
   SparklesIcon,
   Undo2Icon,
 } from "lucide-react"
+import { THREAD } from "../scopes"
 import { actOf, mark } from "./sent"
 
 /** A Thread as an item action finds it: its Project, and how the lists
@@ -239,6 +242,7 @@ const unread: ItemAction = {
   keys: [{ code: "KeyU", mod: true, shift: true }],
   args: itemArgs(),
   group: "name",
+  does: "unread",
   row: (item) =>
     item.seen === undefined
       ? null
@@ -254,6 +258,21 @@ const unread: ItemAction = {
     const engine = reached(window, at, actOf({ seen }))
     if (engine) void mark(engine, at.project, thread, { seen })
   },
+}
+
+/** Takes the Person to where what they have not seen begins in the Thread
+ * in focus (ADR 0094, rule 3), as the sidebar's Enter does on the card
+ * already open: the Thread's Pane does it, by its scope. It has no row. */
+const unseen: ItemAction = {
+  id: "agents.thread.unseen",
+  section: "Threads",
+  title: "Go to where the unseen begins in the Thread you look at",
+  unlisted: true,
+  args: itemArgs(),
+  group: "other",
+  does: "unseen",
+  row: () => null,
+  run: (_, args) => void actOnTile(THREAD, "agents.thread.unseen", args),
 }
 
 /** "Make a Project from it…" for a Thread in No Project (ADR 0046): the
@@ -509,6 +528,7 @@ export const threadItems: readonly ItemAction[] = [
   suggest,
   previous,
   unread,
+  unseen,
   makeProject,
   later,
   wake,

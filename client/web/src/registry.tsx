@@ -31,6 +31,7 @@ import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
 import { countsWidget } from "./sidebar/Counts"
+import { SIDEBAR } from "./sidebar/keys"
 import type { Entry, Width } from "./tiling/model"
 import { tilingWidgets } from "./tiling/widgets"
 
@@ -43,6 +44,10 @@ const LAUNCHER: Scope = { id: "launcher", title: "Launcher", modHeld: true }
 
 /** The Settings Pane's scope: its search's key (ADR 0071, decision 1). */
 const SETTINGS: Scope = { id: "settings", title: "Settings" }
+
+/** The sidebar's scope (ADR 0098, decision 13): while the focus is in it,
+ * its plain keys act on the card picked (`window/actions.ts`). */
+const SIDEBAR_SCOPE: Scope = { id: SIDEBAR, title: "Sidebar" }
 
 /** The launcher's letters, each kind's that has one: in its place, and
  * with Shift beside it, the launcher staying. */
@@ -63,10 +68,10 @@ const opening = (id: string, title: string, shift: boolean) =>
   })
 
 /** The window's own things, as a module of their own: the launcher, its
- * letters, the settings and their search (ADR 0016), another machine's
- * name in a Pane's header (ADR 0095, decision 7), and on the Bar the
- * sidebar list's counts, the Flow (ADR 0098, decision 20) and the
- * Tiling's widgets (ADR 0087, decision 5). */
+ * letters, the settings and their search (ADR 0016), the sidebar's scope,
+ * another machine's name in a Pane's header (ADR 0095, decision 7), and on
+ * the Bar the sidebar list's counts, the Flow (ADR 0098, decision 20) and
+ * the Tiling's widgets (ADR 0087, decision 5). */
 export const windowModule = defineModule({
   id: "window",
   engine: false,
@@ -81,7 +86,7 @@ export const windowModule = defineModule({
       keys: [{ code: "Slash" }],
     }),
   ],
-  scopes: [LAUNCHER, SETTINGS],
+  scopes: [LAUNCHER, SETTINGS, SIDEBAR_SCOPE],
   slots: [machineHeader],
   bar: [countsWidget, flowWidget, ...tilingWidgets],
 })

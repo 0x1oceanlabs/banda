@@ -1,5 +1,5 @@
 import { createContext, type KeyboardEvent, useContext } from "react"
-import { FIELDS } from "@banda/ui/lib/keys"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import { STAND_WORDS } from "@banda/ui/status"
 import { ArchiveIcon } from "lucide-react"
@@ -31,27 +31,6 @@ export function tabName(tab: Tab, { count }: TabCount): string {
   return count > 0 ? `${TAB_WORDS[tab]}, ${count}` : TAB_WORDS[tab]
 }
 
-/** What a press shows: `1`–`4`, with no mod, the tabs in their order,
- * while the focus is in the sidebar and not in a field, which owns what is
- * typed; a press held down shows nothing more. */
-export function tabKey(event: {
-  code: string
-  altKey: boolean
-  ctrlKey: boolean
-  metaKey: boolean
-  shiftKey: boolean
-  repeat: boolean
-  isComposing?: boolean
-  target: EventTarget | null
-}): Tab | undefined {
-  const { altKey, ctrlKey, metaKey, shiftKey } = event
-  if (altKey || ctrlKey || metaKey || shiftKey) return undefined
-  if (event.repeat || event.isComposing) return undefined
-  if ((event.target as Element | null)?.closest?.(FIELDS)) return undefined
-  const digit = /^Digit([1-4])$/.exec(event.code)?.[1]
-  return digit ? TABS[Number(digit) - 1] : undefined
-}
-
 /** Where the arrows go along the tabs: the next or the one before, round
  * the ends, or the first or the last. */
 const STEPS: Readonly<Record<string, (at: number) => number>> = {
@@ -67,11 +46,11 @@ const STEPS: Readonly<Record<string, (at: number) => number>> = {
  * the Inbox's is in the attention colour while something is the Person's
  * turn, and the Archive's is in its tooltip. A switch draws the tab as it
  * is, with no motion, and the focus goes with it (`show`). One of them is
- * a Tab stop, the arrows go along them, and `1`–`4` show them from
- * anywhere in the sidebar (`tabKey`). At the sidebar's own width three
- * counts fit with every word whole, so the tabs are tight and a count
- * takes only its digits; a narrower sidebar cuts the words short, and the
- * Archive's icon always shows whole.
+ * a Tab stop, the arrows go along them, and their keys, `1`–`4`, show
+ * them from anywhere in the sidebar (`keys.ts`). At the sidebar's own
+ * width three counts fit with every word whole, so the tabs are tight and
+ * a count takes only its digits; a narrower sidebar cuts the words short,
+ * and the Archive's icon always shows whole.
  */
 export function Tabs({
   tabs,
@@ -81,6 +60,7 @@ export function Tabs({
   tab: Tab
 }) {
   const show = useContext(ShowTab)
+  const keyFor = useKeyLabel()
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = STEPS[event.key]
     if (!step) return
@@ -94,7 +74,7 @@ export function Tabs({
       className="flex items-center gap-0.5 px-1.5 pb-1.5"
       onKeyDown={onKeyDown}
     >
-      {TABS.map((one, index) => {
+      {TABS.map((one) => {
         const { count, calls } = tabs[one]
         const archive = one === "archive"
         const words =
@@ -111,7 +91,7 @@ export function Tabs({
             aria-controls={PANEL}
             aria-label={tabName(one, tabs[one])}
             tabIndex={one === tab ? 0 : -1}
-            title={`${words} (${index + 1})`}
+            title={keyFor(`sidebar.tab-${one}`, words)}
             onClick={() => show?.(one)}
             className={cn(
               "flex h-7 items-center gap-1 rounded-control px-1.5 text-[13px] whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",

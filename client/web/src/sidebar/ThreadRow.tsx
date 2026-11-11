@@ -28,7 +28,7 @@ import { HoldingContext, useHoldWhile } from "./useHold"
  * drawn. */
 type Placed = Omit<CardOf, "row" | "machine" | "away" | "stopped"> & {
   row: Row
-} & Pick<ComponentProps<typeof Card>, "current" | "acts">
+} & Pick<ComponentProps<typeof Card>, "current" | "picked" | "acts">
 
 /**
  * A Thread's card, the same on every machine (ADR 0098, decision 18),
@@ -84,6 +84,7 @@ export function ThreadRow({
       card={card}
       row={row}
       current={placed.current}
+      picked={placed.picked}
       acts={acts}
       harnesses={harnesses}
       field={field}

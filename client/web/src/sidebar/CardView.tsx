@@ -29,8 +29,10 @@ import {
 } from "./card"
 import { CardTime } from "./CardStatus"
 import { dueOf, useClock } from "./clock"
+import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
+import { pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
 const NO_ACTS: readonly CardAct[] = []
@@ -58,15 +60,19 @@ const ACT_LOOK: Readonly<Record<Act, { icon: LucideIcon; name: string }>> = {
  * (`card.ts`): one to three lines, each a left and a right, lines 2 and 3
  * under the title, past the mark. Colour is only on a call's mark and
  * time. It is drawn again only as one of its times changes (`clock.ts`).
- * A click opens the Pane it stands for, by `pane.pick`; a screen reader
- * hears it by `spokenOf`. Under the pointer, with the focus in it, or
- * always on a coarse pointer, its acts show at line 1's right, in the
- * time's place (decision 10).
+ * It is an option of the list, which keys pick (decision 13): it has no
+ * focus of its own, and its ring shows while the list has the focus and
+ * the last input was a key (`globals.css`). A click opens the Pane it
+ * stands for, by `pane.pick`; a screen reader hears it by `spokenOf`.
+ * Under the pointer, or always on a coarse pointer, its acts show at line
+ * 1's right, in the time's place (decision 10): no Tab stops, as keys and
+ * menu rows do the same.
  */
 export function Card({
   card,
   row,
   current,
+  picked = false,
   acts = NO_ACTS,
   field,
   harnesses = NO_HARNESSES,
@@ -77,10 +83,12 @@ export function Card({
   row: CardRow
   /** Its Thread is the open one. */
   current: boolean
+  /** The list's keys act on it. */
+  picked?: boolean
   /** What it offers under the pointer, Later first. */
   acts?: readonly CardAct[]
-  /** The field that names it, in its title's place (ADR 0077): the card
-   * is then no button. */
+  /** The field that names it, in its title's place (ADR 0077): a click
+   * on the card then opens nothing. */
   field?: ReactNode
   /** The Harness list its emblem is read from; none, the Harness's own. */
   harnesses?: readonly EmblemOf[]
@@ -91,17 +99,17 @@ export function Card({
   const one = card.lines.length === 1
   // One that left, or one being named, has none.
   const shown = card.gone || field ? NO_ACTS : acts
-  const Element = field ? "div" : "button"
   const drawn = (
-    <Element
-      type={field ? undefined : "button"}
+    <div
+      {...pickProps(keyOf(row.host, row.listed.id), picked)}
       aria-current={current ? "true" : undefined}
       aria-label={field ? undefined : spoken.name}
       aria-description={field ? undefined : spoken.description || undefined}
       data-tone={card.tone}
       data-card=""
+      data-went={card.gone ? "" : undefined}
       className={cn(
-        "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control px-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+        "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control px-2 text-left",
         // The hover's fill is a layer under the card that fades
         // (globals.css): at once in, over 100 ms out, by its opacity alone
         // (ADR 0088, decision 2); it stays while the pointer is on an act.
@@ -120,16 +128,18 @@ export function Card({
         field={field}
         harnesses={harnesses}
       />
-    </Element>
+    </div>
   )
   if (field || (shown.length === 0 && !card.gone)) return drawn
   return (
     <div data-row className="relative">
       {drawn}
       {shown.length > 0 && (
-        // Over line 1's right, whose cell keeps their room: a button holds
-        // no buttons.
+        // Over line 1's right, whose cell keeps their room: an option holds
+        // no buttons. Hidden from the keys and a screen reader, which have
+        // the pick's keys and the menu's rows; a click takes no focus.
         <span
+          aria-hidden
           data-acts=""
           className={cn(
             "absolute right-2 flex items-center gap-0.5",
@@ -147,7 +157,9 @@ export function Card({
                 aria-label={name}
                 title={note ? `${named} · ${note}` : named}
                 data-act={act}
+                tabIndex={-1}
                 className="size-5 text-muted-foreground"
+                onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) =>
                   run(
                     event.currentTarget.closest("[data-row]") ??
