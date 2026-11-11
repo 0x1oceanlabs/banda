@@ -1,6 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import { afterEach, expect, test, vi } from "vitest"
 import { FORGETTING, KeptHosts } from "./hosts"
+import { projectFile } from "./files"
 import { type Act, deviceFor, type From, routeAct } from "./route"
 import { away, desktop, live, project, Socket } from "./testing"
 
@@ -225,21 +226,39 @@ test("an App arc does not run, or the device's, is not on arc yet, and the toast
   hosts.engine("arc").close()
 })
 
+test("a file held over another machine's Project is refused in words that say where it is; one machine's two Projects go", async () => {
+  const { hosts } = await machines()
+  const device = deviceFor(hosts, () => true, "this Mac")
+  const mine = "mine" as ProjectId
+  const arcs = "r1" as ProjectId
+  // This computer's file over arc's tree.
+  expect(device.across(projectFile(mine, "/mine/a"), arcs)).toBe(
+    "That file is on this Mac. Files don't move between machines yet."
+  )
+  // arc's file over this machine's.
+  expect(device.across(projectFile(arcs, "/r1/a"), mine)).toBe(
+    "That file is on arc"
+  )
+  // Between two Projects on one machine it goes, as a whole path does.
+  expect(device.across(projectFile(arcs, "/r1/a"), arcs)).toBeUndefined()
+  hosts.engine("arc").close()
+})
+
 test("a Pane's device says a file is this computer's only where its Project is this machine's", async () => {
   const { hosts } = await machines()
   const has = () => true
   const here = deviceFor(hosts, has)
-  expect(here.local({ project: "mine" as ProjectId, path: "/mine/a" })).toBe(
+  expect(here.local(projectFile("mine" as ProjectId, "/mine/a"))).toBe(
     "/mine/a"
   )
   const there = deviceFor(hosts, has)
   expect(
-    there.local({ project: "r1" as ProjectId, path: "/r1/a" })
+    there.local(projectFile("r1" as ProjectId, "/r1/a"))
   ).toBeUndefined()
   // Unlisted on arc yet, it is no file of this computer's: a Project no
   // machine has is never placed here.
   expect(
-    there.local({ project: "s9" as ProjectId, path: "/s9/a" })
+    there.local(projectFile("s9" as ProjectId, "/s9/a"))
   ).toBeUndefined()
   expect(there.has("clipboard")).toBe(true)
   hosts.engine("arc").close()

@@ -15,6 +15,7 @@
  */
 import type { ProjectId } from "@banda/contract"
 import type { Cap } from "./device"
+import { type DeviceFile, deviceFile, type ProjectFile } from "./files"
 import { type KeptHosts, namedIn, UNKNOWN } from "./hosts"
 import { paneHost, type PaneState } from "./pane"
 import type { Args } from "./run"
@@ -230,20 +231,53 @@ export function routeAct(
  */
 export type Device = {
   has: (cap: Cap) => boolean
-  local: (file: { project: ProjectId; path: string }) => string | undefined
+  local: (file: ProjectFile) => DeviceFile | undefined
+  /**
+   * Why `file`, held over a Pane of `to`'s Project, cannot go there, in
+   * the Person's words, where the file is (ADR 0106, decision 3); none
+   * when one machine has both. Only the machines count: a drop between
+   * two Projects of one machine still goes.
+   */
+  across: (file: ProjectFile, to: ProjectId) => string | undefined
+}
+
+/** The words for a file on another machine than where it is held
+ * (`Device.across`): `name` is that machine's, none for the device's
+ * own. */
+export function fileIsOn(name: string | undefined, device: string): string {
+  return name === undefined
+    ? `That file is on ${device}. Files don't move between machines yet.`
+    : `That file is on ${name}`
 }
 
 /**
- * The device for a Pane, as `has` says what this device can do: a file is
- * this computer's only where the directory places its Project on this
- * machine, whichever machine's Pane asks.
+ * The device for a Pane, as `has` says what this device can do and
+ * `device` names this computer (`this Mac`): a file is this computer's
+ * only where the directory places its Project on this machine, whichever
+ * machine's Pane asks.
  */
-export function deviceFor(hosts: Hosts, has: (cap: Cap) => boolean): Device {
+export function deviceFor(
+  hosts: Hosts,
+  has: (cap: Cap) => boolean,
+  device = "this machine"
+): Device {
   return {
     has,
     local: (file) => {
       const where = whereOf(hosts, { project: file.project })
-      return where && "here" in where ? file.path : undefined
+      return where && "here" in where ? deviceFile(file.path) : undefined
+    },
+    across: (file, to) => {
+      const whose = whereOf(hosts, { project: file.project })
+      const its = whereOf(hosts, { project: to })
+      if (whose === undefined || its === undefined) return undefined
+      if ("nowhere" in whose) return whose.nowhere
+      if ("nowhere" in its) return its.nowhere
+      if (sameWhere(whose, its)) return undefined
+      return fileIsOn(
+        "host" in whose ? nameOf(hosts, whose.host) : undefined,
+        device
+      )
     },
   }
 }
