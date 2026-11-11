@@ -118,7 +118,9 @@ it("warns of programs in this machine's terminals too", () => {
 })
 
 it("says what a version waits for", () => {
-  expect(waitWords(0, 0)).toBeUndefined()
+  expect(waitWords(0, 0)).toBe("Restarts in a moment")
+  expect(waitWords(0)).toBe("Restarts once Threads and terminals are idle")
+  expect(waitWords(1)).toBe("Waits for a Thread to finish its turn")
   expect(waitWords(1, 0)).toBe("Waits for a Thread to finish its turn")
   expect(waitWords(3, 0)).toBe("Waits for 3 Threads to finish their turns")
   expect(waitWords(0, 1)).toBe("Waits for a program in a terminal to finish")

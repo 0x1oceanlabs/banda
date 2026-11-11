@@ -5,7 +5,7 @@
  * Project, only while a version is ready; no restart until every Project
  * answered, and none while one runs a program in front.
  */
-import type { Engine } from "@banda/contract"
+import { type Engine, Refused } from "@banda/contract"
 import type { Update } from "@banda/core"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
@@ -33,7 +33,10 @@ function engineOf(projects: string[], fails = false) {
   const session = {
     call: (method: string) => {
       if (method !== "projects.list") return Promise.resolve(null)
-      if (fails) return Promise.reject(new Error("away"))
+      if (fails)
+        return Promise.reject(
+          new Refused({ code: "internal", message: "no list" })
+        )
       return Promise.resolve(projects.map((id) => ({ id })))
     },
     stream: (
@@ -144,7 +147,7 @@ test("a stream its engine refuses counts as none, so an older engine holds no up
   expect(restart).toHaveBeenCalledTimes(1)
 })
 
-test("a list that cannot be read holds no update for ever", async () => {
+test("a list refused holds no update for ever", async () => {
   const { session } = engineOf(["p"], true)
   await mount(session)
   await pass(IDLE_FOR + 100)

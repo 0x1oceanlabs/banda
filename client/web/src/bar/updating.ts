@@ -85,12 +85,10 @@ export function workingWords(working: number, running = 0): string | undefined {
 }
 
 /** What a version that waits waits for, the Threads' turns and the
- * programs in this machine's terminals (ADR 0106, decision 4); none once
- * nothing holds it. */
-export function waitWords(
-  working: number,
-  running: number
-): string | undefined {
+ * programs in this machine's terminals (ADR 0106, decision 4): `running`
+ * is none until the terminals have answered, which the restart waits for
+ * too. */
+export function waitWords(working: number, running?: number): string {
   const turns =
     working === 1
       ? "a Thread to finish its turn"
@@ -99,8 +97,11 @@ export function waitWords(
     running === 1
       ? "a program in a terminal to finish"
       : `${running} programs in terminals to finish`
-  const what = [working > 0 && turns, running > 0 && programs].filter(Boolean)
-  return what.length > 0 ? `Waits for ${what.join(" and for ")}` : undefined
+  const what = [working > 0 && turns, running && programs].filter(Boolean)
+  if (what.length > 0) return `Waits for ${what.join(" and for ")}`
+  return running === undefined
+    ? "Restarts once Threads and terminals are idle"
+    : "Restarts in a moment"
 }
 
 /** What the popover says of a look while nothing new is known

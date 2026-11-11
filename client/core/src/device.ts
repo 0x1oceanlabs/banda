@@ -36,7 +36,8 @@ export type Update = { name: string; have: string; always: boolean } & (
       share: number
       notes: Note[]
       /** Banda restarts into it once it is down (`update.now`), and
-       * once no Thread works (ADR 0072, decision 3). */
+       * once no Thread works and no program runs in this machine's
+       * terminals (ADR 0072, decision 3; ADR 0106, decision 4). */
       restarts: boolean
       /** Bytes down, and of how many, when electron-updater says. */
       down?: number
