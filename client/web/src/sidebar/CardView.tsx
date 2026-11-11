@@ -26,10 +26,11 @@ const NO_HARNESSES: readonly EmblemOf[] = []
 /**
  * A sidebar card (ADR 0098, decisions 8 and 9), drawn from its model
  * (`card.ts`): one to three lines, each a left and a right, lines 2 and 3
- * under the title, past the mark. Colour is only on a call's mark and
- * time. It is drawn again only as one of its times changes (`clock.ts`).
- * A click opens the Pane it stands for, by `pane.pick`; a screen reader
- * hears it by `spokenOf`.
+ * under the title, past the mark. A child under its parent starts with ↳,
+ * and its lines go in by as much (decision 24). Colour is only on a
+ * call's mark and time. It is drawn again only as one of its times
+ * changes (`clock.ts`). A click opens the Pane it stands for, by
+ * `pane.pick`; a screen reader hears it by `spokenOf`.
  */
 export function Card({
   card,
@@ -58,6 +59,7 @@ export function Card({
   const now = useClock((at) => dueOf(timesOf(card), at))
   const spoken = spokenOf(card, now)
   const one = card.lines.length === 1
+  const under = card.child?.under === true
   // One that left, or one being named, has none.
   const acts = action !== undefined && !card.gone && !field
   const slot = (part: Slot, at: number) => (
@@ -112,9 +114,10 @@ export function Card({
             key={index}
             className={cn(
               "flex min-w-0 items-center gap-1.5",
-              first ? "min-h-5" : "min-h-4 pl-5.5"
+              first ? "min-h-5" : under ? "min-h-4 pl-9.5" : "min-h-4 pl-5.5"
             )}
           >
+            {first && under && <ChildArrow className="w-2.5" />}
             {line.left.map(slot)}
             {strayed && <Strayed />}
             {right && (
@@ -156,6 +159,22 @@ export function Card({
         </span>
       )}
     </div>
+  )
+}
+
+/** A child's ↳, muted, in a column of its own (decision 24); a screen
+ * reader hears who started it in the card's description. */
+export function ChildArrow({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "shrink-0 text-center text-xs text-muted-foreground",
+        className
+      )}
+    >
+      ↳
+    </span>
   )
 }
 
@@ -225,6 +244,14 @@ function Piece({
           project={slot.project}
           className="flex-1 text-xs text-muted-foreground"
         />
+      )
+    case "parent":
+      // ↳ where the Project's sign stands, then its parent's title.
+      return (
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+          <ChildArrow className="w-3.5" />
+          <span className="min-w-0 truncate">{slot.title}</span>
+        </span>
       )
     case "machine": {
       // A machine (ADR 0095, decision 5): its icon and name, small and

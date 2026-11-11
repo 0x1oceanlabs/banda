@@ -139,6 +139,33 @@ describe("slots, by place, density and group", () => {
     ])
   })
 
+  test("a child's line 3 says ↳ and its parent in the Project's place, grouped by Project too, where it keeps its three lines (ADR 0098, decision 24)", () => {
+    const child = { parent: "Ship the inbox" }
+    const asks = card(row("turn", { parent: "t0" }), { child })
+    expect(kinds(asks)).toEqual([
+      "mark title | time",
+      "says | ",
+      "parent | harness",
+    ])
+    expect(asks.lines[2]!.left).toEqual([
+      { kind: "parent", title: "Ship the inbox" },
+    ])
+    const grouped = card(row("turn", { parent: "t0" }), {
+      child,
+      view: { density: "auto", group: "project" },
+    })
+    expect(kinds(grouped)).toEqual(kinds(asks))
+    expect(linesOf("turn", { density: "auto", group: "project" }, child)).toBe(
+      3
+    )
+    // At work, it is a line under its parent.
+    const under = card(row("working", { mark: "running", parent: "t0" }), {
+      child: { ...child, under: true },
+    })
+    expect(kinds(under)).toEqual(["mark title | time"])
+    expect(under.child).toEqual({ parent: "Ship the inbox", under: true })
+  })
+
   test("one line: the mark and the title | the time; a working row on another machine shows the machine and the time", () => {
     expect(kinds(card(row("open", { mark: "idle" })))).toEqual([
       "mark title | time",
@@ -366,6 +393,18 @@ describe("spokenOf (spec §2.8)", () => {
     expect(spokenOf(failed, NOW).description).toBe(
       "Failed 3 tests fail. #1061 failed. banda. Claude Code"
     )
+  })
+
+  test("a child adds who started it, once, with line 3 or with none (ADR 0098, decision 24)", () => {
+    const child = { parent: "Ship the inbox" }
+    const asks = card(row("turn", { parent: "t0" }), { child })
+    expect(spokenOf(asks, NOW).description).toBe(
+      "Asks Which port? Claude Code. Started by Ship the inbox"
+    )
+    const under = card(row("working", { mark: "running", parent: "t0" }), {
+      child: { ...child, under: true },
+    })
+    expect(spokenOf(under, NOW).description).toBe("Started by Ship the inbox")
   })
 
   test("Woke says who put it off, in full, and just now in its first seconds", () => {

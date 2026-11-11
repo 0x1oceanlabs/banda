@@ -7,15 +7,20 @@
  * list holding still under the pointer (ADR 0098, S5c): what comes waits,
  * what leaves stays dimmed in its slot, and both land as the pointer
  * leaves, screenshot as a strip of three frames, `sidebar-s5c-*.png`.
+ * And a Thread an Agent started (ADR 0098, S14b): under its parent with ↳
+ * at work, past three "↳ + N more at work", and in Your turn by itself
+ * when it asks, screenshot dark and light as `sidebar-s14b-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
  * answered at once and, unseen, calls its Person.
  */
-import { writeFileSync } from "node:fs"
+import { copyFileSync, existsSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  agentCalls,
   call,
   firstThread,
   GLASS,
@@ -511,4 +516,127 @@ test("a Thread archived elsewhere while the list holds stays in its slot, dimmed
     await page.screenshot({ path: `test-results/sidebar-s5c-${mode}.png` })
     await strip(page, frames, `test-results/sidebar-s5c-${mode}-strip.png`)
   }
+})
+
+/** The window as it is now, dark and light on its glass, with no motion,
+ * as `sidebar-s14b-<name>-<mode>.png`; the pointer is away from the list. */
+async function s14bShots({ page, dir }: Window, name: string) {
+  const html = page.locator("html")
+  await page.mouse.move(1400, 450)
+  for (const mode of ["dark", "light"] as const) {
+    writeFileSync(
+      join(dir, "config/look.toml"),
+      `mode = "${mode}"\n${GLASS}[motion]\noff = true\n`
+    )
+    if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
+    else await expect(html).not.toHaveClass(/\bdark\b/)
+    await page.waitForTimeout(250)
+    await page.screenshot({
+      path: `test-results/sidebar-s14b-${name}-${mode}.png`,
+      animations: "disabled",
+    })
+  }
+}
+
+test("a Thread an Agent started sits under its parent with ↳, past three a parent shows how many more at work, and when it asks it goes to Your turn by itself, naming its parent (ADR 0098, S14b)", async () => {
+  test.setTimeout(300_000)
+  window = await startWindow()
+  const { page, dir } = window
+  await firstThread(page)
+  await wide(window)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const panel = sidebar.getByRole("tabpanel")
+  const shelf = placeOf(sidebar, "Working")
+  const cardOf = (title: string) =>
+    panel.getByRole("button", { name: new RegExp(`^${title},`) })
+
+  // The parent works until the test ends. Its Person names it anew: what
+  // its Agent writes names it, and so says "wait" no more. Its Agent's
+  // pass to `banda mcp` is kept, as the next session to open writes its
+  // own in its place.
+  const parent = "Ship the inbox sidebar"
+  await send(window, `${parent}, await review`)
+  const thread = idOf(window, `${parent}, await review`)
+  call(window, "agents.rename", { thread, title: parent })
+  await expect.poll(() => idOf(window, parent)).toBe(thread)
+  const pass = mkdtempSync(join(tmpdir(), "banda-parent-"))
+  await expect.poll(() => existsSync(join(dir, "mcp.json"))).toBe(true)
+  copyFileSync(join(dir, "mcp.json"), join(pass, "mcp.json"))
+  // One the Person started after it, which no Agent did.
+  await send(window, "Lint the repo, await")
+  /** The parent's Agent starts a Thread with `text`, as its Harness does
+   * through Banda's `send`, and waits until its turn runs. */
+  const start = async (text: string) => {
+    const sent = await agentCalls({ dir: pass }, "send", {
+      harness: "fake",
+      text,
+    })
+    expect(sent.isError).toBeFalsy()
+    await expect
+      .poll(() => {
+        const thread = threadNamed(window, text) as
+          { parent?: string; latest?: { state: string } } | undefined
+        return [thread?.parent, thread?.latest?.state]
+      })
+      .toEqual([idOf(window, parent), "running"])
+  }
+  const children = [
+    "Card row model, await checks",
+    "Fold tests, await CI",
+    "Empty places audit, await",
+  ]
+  for (const text of children) await start(text)
+  await leaveSidebar(page)
+
+  // At work, its children sit under it with ↳, by when each began, before
+  // the Thread the Person started after it; each says who started it.
+  await expect(shelf.first()).toContainText(/Working\s*· 5/)
+  await expect(shelf.locator("[data-row]")).toHaveText([
+    new RegExp(parent),
+    ...children.map((text) => new RegExp(`↳.*${text}`)),
+    /Lint the repo/,
+  ])
+  await expect(cardOf(parent)).not.toContainText("↳")
+  await expect(cardOf("Lint the repo")).not.toContainText("↳")
+  for (const text of children)
+    await expect(cardOf(text)).toHaveAccessibleDescription(
+      `Started by ${parent}`
+    )
+  await expect(cardOf(parent)).toHaveAccessibleName(/, Working, /)
+  await s14bShots(window, "children")
+
+  // Past three, the rest fold into one line, which unfolds on a click, the
+  // focus going on to the first it shows.
+  const more = ["Shots, await light", "Lift check, await"]
+  for (const text of more) await start(text)
+  await leaveSidebar(page)
+  const rest = shelf.getByRole("button", { name: "+ 2 more at work" })
+  await expect(rest).toBeVisible()
+  await expect(shelf.locator("[data-row]")).toHaveCount(5)
+  await s14bShots(window, "more")
+  await rest.click()
+  await expect(rest).toBeHidden()
+  await expect(shelf.locator("[data-row]")).toHaveText([
+    new RegExp(parent),
+    ...[...children, ...more].map((text) => new RegExp(`↳.*${text}`)),
+    /Lint the repo/,
+  ])
+  await expect(cardOf(more[0]!)).toBeFocused()
+  await expect(page.locator("body")).not.toBeFocused()
+  await cardOf(more[0]!).blur()
+
+  // One that asks goes to Your turn by itself, line 3 naming its parent;
+  // the parent keeps working, its own mark, none of its child's.
+  const asker = "Split Sidebar.tsx, ask first"
+  await start(asker)
+  await leaveSidebar(page)
+  const threads = placeOf(sidebar, "Threads")
+  const asks = threads.getByRole("button", { name: new RegExp(`^${asker},`) })
+  await expect(asks).toContainText("Asks Run a check")
+  await expect(asks.locator(":scope > span").nth(2)).toHaveText(
+    new RegExp(`^↳${parent}`)
+  )
+  await expect(shelf.getByText(asker)).toHaveCount(0)
+  await expect(cardOf(parent)).toHaveAccessibleName(/, Working, /)
+  await s14bShots(window, "asks")
 })

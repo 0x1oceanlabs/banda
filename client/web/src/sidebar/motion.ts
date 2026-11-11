@@ -95,13 +95,13 @@ export const MOST = 24
 
 /**
  * The items of `regions`, top down: each region's group header, then its
- * blocks, each part's cards one by one, each card of `lines(place)`
- * lines, by the place it is drawn in; a ghost or a dimmed card where
- * `ghosts` or `leaving` name it.
+ * blocks, each part's cards one by one, each card of as many lines as
+ * `lines` gives the place it is drawn in and its entry; a ghost or a
+ * dimmed card where `ghosts` or `leaving` name it.
  */
 export function itemsOf(
   regions: readonly Region[],
-  lines: (place: Stand) => number,
+  lines: (place: Stand, entry: Entry) => number,
   {
     ghosts,
     leaving,
@@ -131,7 +131,7 @@ export function itemsOf(
         const key = itemKey(entry.row)
         const ghost = ghosts?.get(key)
         const went = leaving?.get(key)
-        const count = lines(block.stand)
+        const count = lines(block.stand, entry)
         return {
           kind: "card",
           key,

@@ -10,7 +10,8 @@ import type { Listed, PaneState } from "@banda/ui/pane"
 import { AlarmClockIcon } from "lucide-react"
 import type { Row as Arranged } from "./rows"
 import { type CardView, linesOf } from "./card"
-import { EmptyTab, InboxZero } from "./Empty"
+import { ChildArrow } from "./CardView"
+import { EmptyPlace } from "./Empty"
 import { wentWords } from "./hold"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
@@ -26,18 +27,20 @@ import type { Holds } from "./useOrdered"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /**
- * The regions of the tab in view (ADR 0098, decisions 3–6), as one flat
- * list, keyed, its heads and headers among its cards: Your turn under its
- * head, Open under a hairline, the Working shelf in grey with "+ N more",
- * which opens in place; Later and the Archive by day; inbox zero and an
- * empty tab in words; and, grouped, each group under its header, which
- * folds it. A card keeps its node from one part to another, so its Mark
- * plays its change as news; the list moves as `motion.ts` plays it. While
- * the list holds, a card that left stays dimmed in its slot, saying where
- * it went, and one the Person's pointer took away stands as a ghost line.
- * What the Person does to a card from it, by its menu or its hover
- * actions, is their own act, which the list draws at once; for a moment
- * after one by key closed a slot, the hover actions take no click.
+ * The regions of the tab in view (ADR 0098, decisions 3–6 and 24), as one
+ * flat list, keyed, its heads and headers among its cards: Your turn under
+ * its head, Open under a hairline, the Working shelf in grey with "+ N
+ * more", which opens in place, each child at work under its parent with
+ * ↳, past three "↳ + N more at work"; Later and the Archive by day; inbox
+ * zero and an empty tab in words; and, grouped, each group under its
+ * header, which folds it. A card keeps its node from one part to another,
+ * so its Mark plays its change as news; the list moves as `motion.ts`
+ * plays it. While the list holds, a card that left stays dimmed in its
+ * slot, saying where it went, and one the Person's pointer took away
+ * stands as a ghost line. What the Person does to a card from it, by its
+ * menu or its hover actions, is their own act, which the list draws at
+ * once; for a moment after one by key closed a slot, the hover actions
+ * take no click.
  */
 export function SectionView({
   regions,
@@ -62,7 +65,8 @@ export function SectionView({
   /** The Threads that stand away from their Project's workspace (ADR
    * 0102, decision 6). */
   strayed: ReadonlySet<string>
-  /** Folds or opens the group of that key. */
+  /** Folds or opens the group of that key; or shows every child at work
+   * of the parent of that key. */
   onToggle: (key: string) => void
   /** Shows a cut list whole. */
   onMore: () => void
@@ -86,7 +90,11 @@ export function SectionView({
   // in the No Project group they share, still name theirs.
   const here = useThisNamed(settings.machines.thisToo)
   const label = !named && view.group === "project" ? here : undefined
-  const items = itemsOf(regions, (place) => linesOf(place, view), holds)
+  const items = itemsOf(
+    regions,
+    (place, { child }) => linesOf(place, view, child),
+    holds
+  )
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
@@ -138,7 +146,7 @@ export function SectionView({
     )
 
   const card = (item: Extract<Item, { kind: "card" }>) => {
-    const { row } = item.entry
+    const { row, child } = item.entry
     const went = item.ghost ?? item.went
     const said = went && wentWords(went, holds.now)
     const drawn = (
@@ -153,6 +161,7 @@ export function SectionView({
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
+        {...(child ? { child } : {})}
         {...(went ? { went } : { action: actionOf(row) })}
       />
     )
@@ -196,30 +205,40 @@ export function SectionView({
         )
       case "divider":
         return <Separator className="mx-2 my-1.5 w-auto!" />
-      case "more":
+      case "more": {
+        const children = block.of === "children"
         return (
           <button
             type="button"
-            className="w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            className={cn(
+              "w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
+              children && "flex items-center gap-1.5"
+            )}
             onClick={(event) => {
               // It goes as the rest shows: the focus goes on to the first
               // card it showed, never to the page.
               const last =
                 event.currentTarget.parentElement?.previousElementSibling
-              flushSync(onMore)
+              flushSync(children ? () => onToggle(block.parent) : onMore)
               const card = last?.nextElementSibling?.querySelector("button")
               if (card instanceof HTMLElement) card.focus()
             }}
           >
-            {block.of === "working"
-              ? `+ ${block.count} more`
-              : `Show ${block.count} older`}
+            {children ? (
+              <>
+                <ChildArrow className="w-2.5" />+ {block.count} more at work
+              </>
+            ) : block.of === "working" ? (
+              `+ ${block.count} more`
+            ) : (
+              `Show ${block.count} older`
+            )}
           </button>
         )
+      }
       case "zero":
-        return <InboxZero zero={block} />
       case "empty":
-        return <EmptyTab tab={block.tab} only={only} projects={projects} />
+        return <EmptyPlace place={block} only={only} projects={projects} />
       case "group": {
         const { project } = block
         const head = (

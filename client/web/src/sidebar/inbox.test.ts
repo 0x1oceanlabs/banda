@@ -8,6 +8,7 @@ import { rowsOf } from "./rows"
 import {
   ARCHIVE_SHOWN,
   type Block,
+  CHILDREN,
   type Inbox,
   inboxOf,
   type InboxView,
@@ -119,7 +120,7 @@ function line(block: Block): string {
     case "divider":
       return "---"
     case "rows":
-      return `${block.stand}: ${block.rows.map(({ row }) => row.listed.id).join(" ")}`
+      return `${block.stand}: ${block.rows.map(({ row, child }) => `${child?.under ? "↳" : ""}${row.listed.id}`).join(" ")}`
     case "more":
       return `+ ${block.count} ${block.of}`
     case "zero": {
@@ -659,4 +660,147 @@ test("an answer sends it to Working, last, by when its turn began", () => {
   expect(
     shape(inboxOf(rowsIn({ p1: [answered, busy] }), { tab: "inbox" }, NOW))
   ).toEqual(["zero: 2 at work", "# Working · 2", "working: busy asks"])
+})
+
+/** A Thread at work that began `minutes` ago, started by `parent`'s Agent
+ * when it names one. */
+const busy = (id: string, minutes: number, parent?: string) =>
+  listed(id, "running", ago(MINUTE), {
+    began: ago(minutes * MINUTE),
+    ...(parent ? { parent } : {}),
+  })
+
+test("at work, a child sits under its parent with ↳, not by when it began, and its own children under it; one whose parent does not work stands by itself (ADR 0098, decision 24)", () => {
+  const rows = rowsIn({
+    p1: [
+      busy("plan", 50),
+      busy("lint", 40),
+      // Began before its parent did not: it still goes under it.
+      busy("card", 30, "plan"),
+      busy("fold", 45, "plan"),
+      busy("deep", 10, "card"),
+      // Its parent asks: it works by itself, by when it began.
+      listed("asker", "asking", ago(MINUTE)),
+      busy("alone", 20, "asker"),
+      // Its parent was deleted: it lists as before.
+      busy("orphan", 35, "gone"),
+    ],
+  })
+  const inbox = inboxOf(rows, { tab: "working" }, NOW)
+  expect(shape(inbox)).toEqual([
+    "working: plan ↳fold ↳card ↳deep lint orphan alone",
+  ])
+  const entries = inbox.blocks.flatMap((block) =>
+    block.kind === "rows" ? block.rows : []
+  )
+  const childOf = (id: string) =>
+    entries.find(({ row }) => row.listed.id === id)?.child
+  expect(childOf("card")).toEqual({ parent: "plan", under: true })
+  expect(childOf("deep")).toEqual({ parent: "card", under: true })
+  // Standing by itself, it still names its parent, for its line 3.
+  expect(childOf("alone")).toEqual({ parent: "asker" })
+  expect(childOf("orphan")).toBeUndefined()
+  expect(childOf("plan")).toBeUndefined()
+  // Alt+U and the counts walk them as the list shows them.
+  expect(inbox.keys).toEqual([
+    "p1:asker",
+    "p1:plan",
+    "p1:fold",
+    "p1:card",
+    "p1:deep",
+    "p1:lint",
+    "p1:orphan",
+    "p1:alone",
+  ])
+})
+
+test("a child that asks or fails goes to Your turn by itself, by when it called, naming its parent (ADR 0098, decision 24)", () => {
+  const rows = rowsIn({
+    p1: [
+      busy("plan", 50),
+      listed("split", "asking", ago(3 * MINUTE), { parent: "plan" }),
+      listed("broke", "failed", ago(MINUTE), { parent: "plan" }),
+      listed("done", "done", ago(2 * MINUTE)),
+    ],
+  })
+  const inbox = inboxOf(rows, { tab: "inbox" }, NOW)
+  expect(shape(inbox)).toEqual([
+    "# Your turn · 3",
+    "turn: split done broke",
+    "# Working · 1",
+    "working: plan",
+  ])
+  const [, turn] = inbox.blocks
+  expect(turn?.kind === "rows" && turn.rows.map(({ child }) => child)).toEqual([
+    { parent: "plan" },
+    undefined,
+    { parent: "plan" },
+  ])
+})
+
+test("past three children at work, a parent shows how many more, which unfold on its own (ADR 0098, S14b)", () => {
+  const kids = Array.from({ length: CHILDREN + 4 }, (_, i) =>
+    busy(`c${i}`, 40 - i, "plan")
+  )
+  const rows = rowsIn({ p1: [busy("plan", 50), ...kids, busy("lint", 30)] })
+  const cut = inboxOf(rows, { tab: "working" }, NOW)
+  expect(shape(cut)).toEqual([
+    "working: plan ↳c0 ↳c1 ↳c2",
+    "+ 4 children",
+    "working: lint",
+  ])
+  expect(cut.blocks[1]).toEqual({
+    kind: "more",
+    key: ":plan:children",
+    of: "children",
+    parent: ":plan",
+    count: 4,
+  })
+  // Every child is still counted, and walked by Alt+U.
+  expect(cut.tabs.working.count).toBe(CHILDREN + 6)
+  expect(cut.keys).toHaveLength(CHILDREN + 6)
+  const all = inboxOf(rows, { tab: "working", folded: new Set([":plan"]) }, NOW)
+  expect(shape(all)).toEqual([
+    `working: plan ${kids.map(({ id }) => `↳${id}`).join(" ")} lint`,
+  ])
+})
+
+test("the shelf keeps a family whole: it cuts after six Threads that are no one's child at work, and counts the rest (ADR 0098, S14b)", () => {
+  const rows = rowsIn({
+    p1: [
+      ...Array.from({ length: SHELF + 1 }, (_, i) => busy(`w${i}`, 60 - i)),
+      busy("kid", 5, "w0"),
+      busy("late", 1, "w6"),
+    ],
+  })
+  expect(shape(inboxOf(rows, { tab: "inbox" }, NOW))).toEqual([
+    "zero: 9 at work",
+    "# Working · 9",
+    "working: w0 ↳kid w1 w2 w3 w4 w5",
+    "+ 2 working",
+  ])
+})
+
+test("grouped, a child goes in its parent's group, under it at work (ADR 0098, S14b)", () => {
+  const rows = rowsIn({
+    p1: [busy("plan", 50)],
+    // Started in Work by banda's Agent: it goes in banda's group.
+    p2: [
+      busy("tests", 40),
+      busy("card", 30, "plan"),
+      listed("split", "asking", ago(MINUTE), { parent: "plan" }),
+    ],
+  })
+  expect(shape(inboxOf(rows, { tab: "inbox", group: "project" }, NOW))).toEqual(
+    [
+      "[project:p1] 1 wait, 2 work",
+      "turn: split",
+      "working: plan ↳card",
+      "[project:p2] 0 wait, 1 work",
+      "working: tests",
+    ]
+  )
+  expect(
+    shape(inboxOf(rows, { tab: "working", group: "machine" }, NOW))
+  ).toEqual(["[machine:] 0 wait, 3 work", "working: plan ↳card tests"])
 })
