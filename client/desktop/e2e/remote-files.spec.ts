@@ -124,7 +124,9 @@ test("files: arc's tree lists arc's folder, its places are arc's, a file opens f
   // Show in Files stands in.
   await row("only-arc.txt").click({ button: "right" })
   const menu = page.getByRole("menu", { name: "Row" })
-  await expect(menu.getByRole("menuitem", { name: "Open" })).toBeVisible()
+  await expect(
+    menu.getByRole("menuitem", { name: /^Open(?! with| in)/ })
+  ).toBeVisible()
   await expect(
     menu.getByRole("menuitem", { name: "Show in Files" })
   ).toBeVisible()
@@ -222,7 +224,9 @@ test("a markdown of arc's is drawn, its picture as words until 4c, and a PDF sho
   })
   const { row } = await filesOf(page, composer)
   const notes = await opened(page, row("notes.md"), "notes.md", "Notes")
-  await expect(notes.getByRole("heading", { name: "Notes" })).toBeVisible()
+  await expect(
+    notes.getByRole("heading", { name: "Notes", exact: true })
+  ).toBeVisible()
   // Its picture is arc's bytes, which come with 4c: its words show.
   await expect(notes.getByText("the diagram")).toBeVisible()
   await expect(notes.getByRole("img", { name: "the diagram" })).toHaveCount(0)
