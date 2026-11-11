@@ -266,7 +266,7 @@ test("a file of this machine dropped on arc's tree is refused in words, and noth
     )
     await expect(toast).toBeVisible({ timeout: 2_000 })
   }).toPass({ timeout: 30_000 })
-  await shot(page, "files-drag-refused")
+  await shot(page, "files-drag-refused", { toasts: true })
   expect(existsSync(arc!.disk(join(there, "only-mac.txt")))).toBe(false)
   expect(existsSync(join(here, "only-mac.txt"))).toBe(true)
 })
