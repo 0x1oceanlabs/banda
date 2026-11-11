@@ -1,5 +1,6 @@
 /** The git module's window part (ADR 0034): the Diff, the rows of a
  * Thread's details card, and its two keys, as T3 Code's. */
+import type { ProjectId } from "@banda/contract"
 import { type Action, defineModule } from "@banda/ui/module"
 import { PICKER } from "./BranchPicker"
 import { diffOn, gitDetails } from "./Details"
@@ -7,16 +8,23 @@ import { diffPane } from "./DiffPane"
 import { keepWindow } from "./ended"
 
 /** T3 Code's Mod+D: the focused Pane's Project's Diff beside it, the one
- * shown if there is; on the Diff, it closes. Its Project is left to the
- * change, which finds the focused Pane where the last change left it, as
- * Mod+D pressed right after Alt+→. */
+ * shown if there is; on the Diff, it closes. A Pane that runs it names its
+ * own Project, whichever machine that is on (ADR 0106, law 3); from a key
+ * its Project is left to the change, which finds the focused Pane where
+ * the last change left it, as Mod+D pressed right after Alt+→. */
 const toggleDiff: Action = {
   id: "git.diff",
   title: "Show the Diff, or hide it",
   section: "Git",
   keys: [{ code: "KeyD", mod: true }],
-  run: (window) =>
-    window.open(diffOn(), undefined, { again: false, toggle: true }),
+  run: (window, args) =>
+    window.open(
+      diffOn(),
+      typeof args?.project === "string"
+        ? (args.project as ProjectId)
+        : undefined,
+      { again: false, toggle: true }
+    ),
 }
 
 /** T3 Code's Mod+Shift+G: the branch picker of the focused Thread's

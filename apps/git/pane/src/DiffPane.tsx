@@ -22,12 +22,14 @@ import {
   EmptyTitle,
 } from "@banda/ui/components/empty"
 import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
+import { MachineMark } from "@banda/ui/components/machine-icon"
 import { DETAILS_WIDE } from "@banda/ui/components/thread-details"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import { definePane, type PaneProps } from "@banda/ui/pane"
+import { useNamedOf } from "@banda/core/react"
 import { ChevronDownIcon, ChevronRightIcon, FileDiffIcon } from "lucide-react"
 import { Acts } from "./Acts"
 import { AT_ONCE, viewOf, type View } from "./diff"
@@ -72,6 +74,9 @@ export const diffPane = definePane<DiffArgs>({
   icon: FileDiffIcon,
   letter: "D",
   start: { scope: CHANGES, file: null },
+  // It reads and acts on its engine alone, so it opens on another
+  // machine's Project too (ADR 0106, decision 2).
+  elsewhere: true,
   header: false,
   // One Diff per Project: another scope is the same Pane.
   identity: () => "diff",
@@ -201,6 +206,9 @@ function DiffPane({
   const added = diff?.files.reduce((sum, file) => sum + file.added, 0) ?? 0
   const removed = diff?.files.reduce((sum, file) => sum + file.removed, 0) ?? 0
   const count = diff?.files.length ?? 0
+  // The frame names another machine in the header it draws; the Diff
+  // draws its own.
+  const machine = useNamedOf(project, undefined)
 
   return (
     <div ref={root} className="@container/diff flex h-full min-h-0 flex-col">
@@ -230,6 +238,7 @@ function DiffPane({
             <DiffCounts added={added} removed={removed} />
           </span>
         )}
+        {machine && <MachineMark named={machine} form="full" />}
         <DiffToolbar
           view={view}
           onView={set}

@@ -8,7 +8,8 @@
  * it does hangs without words, and the one pill is the Frame's. The kinds
  * listed in `PENDING` wait for the steps of ADR 0106's plan named beside
  * them; none joins the list, and a kind leaves it once it passes. A kind
- * that comes to open elsewhere passes as it does: the terminal, in 1b.
+ * that comes to open elsewhere passes as it does: the terminal, in 1b,
+ * the Diff, in 2a.
  */
 import type { JsonValue } from "@banda/contract"
 import type { AnyPaneKind } from "@banda/ui/module"
@@ -33,6 +34,19 @@ const PENDING: Record<string, string> = {
   "agents.thread": "0′, then its slices to 4d",
 }
 
+/** arc's git for the Diff: one file changed, read at its first event. */
+function diffAnswers(method: string): JsonValue | undefined {
+  if (method === "git.diff")
+    return {
+      at: 0,
+      files: [{ path: "a.txt", added: 1, removed: 1 }],
+      patch: "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n",
+      truncated: false,
+      base: { name: "main" },
+    }
+  return method === "git.commits" ? { commits: [] } : undefined
+}
+
 /**
  * What the kit is given of each kind, beside the kind: what its engine
  * part answers, its args, the gestures to play. By default a kind is
@@ -46,6 +60,13 @@ const GIVEN: Record<
 > = {
   // New Pane on arc, which runs every App: a click on each kind it offers.
   "window.launcher": { modules: ["agents", "terminal", "files", "git"] },
+  // The Diff on arc, on a change of one file: each of its buttons, Stage
+  // and Revert among them, but those that only read.
+  "git.diff": {
+    modules: ["git"],
+    answers: diffAnswers,
+    reads: ["Scope", "Base", "Refresh"],
+  },
 }
 
 /** Each kind as the Window mounts it: New Pane with the kinds the Window
@@ -86,7 +107,7 @@ test("each kind that opens elsewhere, but those waiting, passes the kit", async 
   for (const kind of elsewhere.filter((one) => !(one.kind in PENDING)))
     found.push(...(await conformance({ kind, ...GIVEN[kind.kind] })))
   expect(found).toEqual([])
-})
+}, 30_000)
 
 test("a kind that waits for the kit does not pass it yet, else it leaves the list", async () => {
   for (const kind of elsewhere.filter((one) => one.kind in PENDING))
