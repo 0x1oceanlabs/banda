@@ -6102,12 +6102,13 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   // no Pane has the focus (ADR 0087, decision 4).
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden()
-  // The workspace on screen: the others are drawn hidden. It says whose
-  // it is (ADR 0102, decision 2).
+  // The workspace on screen: the others are drawn hidden. An archived
+  // Thread counts as none, so it says only that it is empty (ADR 0102,
+  // decision 2).
   const tiling = page.getByRole("main")
   const empty = tiling
     .getByRole("paragraph")
-    .filter({ hasText: "Play's workspace is empty." })
+    .filter({ hasText: "This workspace is empty." })
   await expect(empty).toBeVisible()
 
   // Its own New Thread starts in Play, not in home.
@@ -6124,6 +6125,22 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
   await menu.getByRole("option", { name: /New Thread: “again”/ }).click()
   await expect(menu).toBeHidden()
   await expect(play.getByRole("button", { name: /again/ })).toBeVisible()
+})
+
+test("a Project's workspace goes once its last Thread is archived and the window has left it", async () => {
+  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  const { page } = window
+  const { play: thread } = await twoProjects(page)
+  await expect(thread.getByRole("img", { name: "Nothing runs" })).toBeVisible()
+  const plays = page
+    .getByRole("navigation", { name: "Workspaces" })
+    .locator('[title^="Play: "]')
+
+  await page.keyboard.press("Alt+S")
+  await expect(thread).toBeHidden()
+  await expect(plays).toHaveCount(1)
+  await page.keyboard.press("Alt+Digit1")
+  await expect(plays).toHaveCount(0)
 })
 
 test("an emptied Project's workspace says whose it is, its first terminal starts the own Group, and the Person closes it (ADR 0102)", async () => {

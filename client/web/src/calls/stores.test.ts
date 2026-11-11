@@ -11,6 +11,7 @@ import {
   listedIn,
   newStores,
   takeLists,
+  threadlessIn,
   workingHere,
   workingIn,
 } from "./stores"
@@ -250,6 +251,20 @@ test("the bar's Mark is every host's lists' loudest, and their turns in all, put
   dropHost(stores, "arc")
   expect(stores.calls.get().attention).toEqual({ mark: "rest", waiting: 0 })
   stop()
+})
+
+test("a Project with no Thread but archived ones at rest counts as having none", () => {
+  const archived = thread("gone", { archived: true })
+  const r = "r" as ProjectId
+  const s = "s" as ProjectId
+  expect(
+    threadlessIn({
+      [p]: [archived],
+      [q]: [archived, thread("kept")],
+      [r]: [],
+      [s]: [thread("works", { archived: true, mark: "running" })],
+    })
+  ).toEqual([p, r])
 })
 
 test("a host's Listed opens its Pane on that host, and each answer goes there, never to this machine's engine", () => {

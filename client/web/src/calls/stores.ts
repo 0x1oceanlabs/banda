@@ -23,7 +23,7 @@ import {
   QUIET,
   withHost,
 } from "@banda/ui/pane"
-import { attentionOf, callsOf } from "@banda/ui/status"
+import { attentionOf, callsOf, mayArchive } from "@banda/ui/status"
 import { nextWake, wakeAfter } from "../sidebar/later"
 
 /** What calls the Person now. */
@@ -246,12 +246,15 @@ export function workingHere(stores: Stores): number {
   return workingIn(ownLists(stores))
 }
 
-/** The Projects whose lists came and hold no Thread: their workspace, kept
- * while they had Threads, goes (ADR 0102, decision 2). A Project whose
- * lists have not come yet is in none of them. */
+/** The Projects whose lists came and hold no Thread but archived ones at
+ * rest: their workspace, kept while they had Threads, goes (ADR 0102,
+ * decision 2). A Project whose lists have not come yet is in none of
+ * them. */
 export function threadlessIn(lists: Lists): ProjectId[] {
   return Object.entries(lists)
-    .filter(([, listed]) => listed.length === 0)
+    .filter(([, listed]) =>
+      listed.every((one) => one.archived && mayArchive(one))
+    )
     .map(([project]) => project as ProjectId)
 }
 
