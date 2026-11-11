@@ -2074,7 +2074,9 @@ async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
 
 /// When `OTHER_OWNER` is not set, runs `test` again in a test binary of
 /// its own with it set, which must pass, and says it did; when it is set,
-/// says the test is to run here.
+/// says the test is to run here. Its git reads neither the machine's
+/// config nor the user's, either of which may trust every folder
+/// (`safe.directory = *`, as GitHub's runners have it).
 fn as_another_owner(test: &str) -> bool {
     if std::env::var_os(OTHER_OWNER).is_some() {
         return false;
@@ -2082,6 +2084,8 @@ fn as_another_owner(test: &str) -> bool {
     let ran = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", test, "--nocapture"])
         .env(OTHER_OWNER, "1")
+        .env("GIT_CONFIG_NOSYSTEM", "1")
+        .env("GIT_CONFIG_GLOBAL", std::path::Path::new("/dev/null"))
         .output()
         .unwrap();
     let said = String::from_utf8_lossy(&ran.stdout);
