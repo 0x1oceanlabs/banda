@@ -67,7 +67,10 @@ vi.mock("../../ghostty/src/index.ts", () => ({ Surface: surfaces.Surface }))
 /** The machine as the Window shows it to the Pane, which the Pane reads as
  * its owner's status; none is this machine. */
 const placed = vi.hoisted(() => ({
-  now: {} as { shown?: { state: { state: string } } },
+  now: {} as {
+    host?: string
+    shown?: { state: { state: string }; named: { name: string } }
+  },
 }))
 vi.mock("../../core/src/react/index.ts", async (actual) => ({
   ...(await actual<object>()),
@@ -102,8 +105,17 @@ function engine(open: () => Promise<null>) {
     },
     run: () => Promise.resolve(null),
     watch: () => () => {},
+    status: { state: "open", boot: "b1" },
   } as unknown as Engine
   return { session, calls, streams }
+}
+
+/** `session` as it answers once its engine restarted: another boot. */
+const restarted = (session: Engine) => {
+  ;(session as unknown as { status: object }).status = {
+    state: "open",
+    boot: "b2",
+  }
 }
 
 let root: ReturnType<typeof createRoot> | undefined
@@ -204,6 +216,87 @@ test("a Pane restored with a line it never typed drops it: the restart was not i
   expect(updated.at(-1)?.typed).toBeNull()
 })
 
+const SCREEN = {
+  kind: "snapshot",
+  history: "",
+  size: { cols: 80, rows: 24 },
+}
+
+test("a shell gone under another boot of its engine says Ended, starts nothing by itself, and New shell here starts one", async () => {
+  placed.now = {
+    host: "arc",
+    shown: { state: { state: "live" }, named: { name: "arc" } },
+  }
+  const { session, calls, streams } = engine(() => Promise.resolve(null))
+  const { element } = await mount(session, NEW)
+  await act(async () => streams[0]!.hear(SCREEN))
+  const opens = () =>
+    calls.filter(({ method }) => method === "terminal.open").length
+  expect(opens()).toBe(1)
+
+  restarted(session)
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(opens()).toBe(1)
+  expect(element.textContent).toContain("Ended: Banda restarted on arc")
+  const button = [...element.querySelectorAll("button")].find(
+    (one) => one.textContent === "New shell here"
+  )
+  expect(button).toBeDefined()
+
+  await act(async () => button!.click())
+  await settle()
+  expect(opens()).toBe(2)
+  await act(async () => streams[1]!.hear(SCREEN))
+  expect(element.textContent).not.toContain("Ended")
+})
+
+test("on this machine it says only that Banda restarted", async () => {
+  const { session, streams } = engine(() => Promise.resolve(null))
+  const { element } = await mount(session, NEW)
+  await act(async () => streams[0]!.hear(SCREEN))
+  restarted(session)
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(element.textContent).toContain("Ended: Banda restarted")
+  expect(element.textContent).not.toContain("Ended: Banda restarted on")
+})
+
+test("a shell gone under the same boot starts again by itself, as it was closed there", async () => {
+  const { session, calls, streams } = engine(() => Promise.resolve(null))
+  const { element } = await mount(session, NEW)
+  await act(async () => streams[0]!.hear(SCREEN))
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(calls.filter(({ method }) => method === "terminal.open")).toHaveLength(
+    2
+  )
+  expect(element.textContent).not.toContain("Ended")
+})
+
+test("a program gone under another boot says Ended too, and offers no shell", async () => {
+  const { session, streams } = engine(() => Promise.resolve(null))
+  const { element } = await mount(session, {
+    ...NEW,
+    terminal: "t",
+    shell: false,
+  })
+  await act(async () => streams[0]!.hear(SCREEN))
+  restarted(session)
+  await act(async () =>
+    streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(element.textContent).toContain("Ended: Banda restarted")
+  expect(element.querySelector("button")).toBeNull()
+})
+
 test("a Pane restored while its machine is away watches its shell and, on the answer that it is kept, sends its own size", async () => {
   const { session, calls, streams } = engine(() => Promise.reject(AWAY))
   await mount(session, { ...NEW, terminal: "kept" })
@@ -260,7 +353,10 @@ test("a key while its machine is away says it was not sent, with the honest note
 const REFUSED = "arc is away: your typing was not sent."
 
 test("a key refused in a stall stops being said once its machine is heard again, with no snapshot", async () => {
-  placed.now = { shown: { state: { state: "away" } } }
+  placed.now = {
+    host: "arc",
+    shown: { state: { state: "away" }, named: { name: "arc" } },
+  }
   const { session } = engine(() => Promise.reject(AWAY))
   const { element, draw } = await mount(session, { ...NEW, terminal: "kept" })
   ;(session as unknown as { call: () => Promise<never> }).call = () =>
@@ -268,7 +364,10 @@ test("a key refused in a stall stops being said once its machine is heard again,
   await act(async () => surfaces.made[0]!.options.onData("x"))
   await settle()
   expect(element.textContent).toContain(REFUSED)
-  placed.now = { shown: { state: { state: "live" } } }
+  placed.now = {
+    host: "arc",
+    shown: { state: { state: "live" }, named: { name: "arc" } },
+  }
   await draw()
   await settle()
   expect(element.textContent).not.toContain(REFUSED)
