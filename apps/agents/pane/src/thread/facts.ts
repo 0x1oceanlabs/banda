@@ -86,9 +86,19 @@ export function startedBy(fact: Fact, event: Event): Item | undefined {
       }
       return at(item, body, turn)
     }
+    case "subagent.messaged": {
+      const { item, turn, subagent, text } = fact.payload
+      return at(item, messagedBody(subagent, text), turn)
+    }
     default:
       return undefined
   }
+}
+
+/** What the Agent, or a sub-agent, wrote to sub-agent `subagent` after
+ * its brief; no words when the Harness gave none (ADR 0103, decision 25). */
+function messagedBody(subagent: string, text: string | undefined): Body {
+  return { kind: "messaged", subagent, ...(text !== undefined && { text }) }
 }
 
 /** The entry `fact` changes, by its ID, if it names one. */
@@ -101,6 +111,7 @@ export function namedBy(fact: Fact): string | undefined {
     case "plan.changed":
     case "question.answered":
     case "question.closed":
+    case "subagent.messaged":
       return fact.payload.item
     default:
       return undefined
@@ -165,6 +176,11 @@ function changedBody(body: Body, fact: Fact): Body {
         values: values ?? body.values,
       }
     }
+    // Given again, it holds all its words so far.
+    case "subagent.messaged":
+      return body.kind === "messaged" && body.text !== fact.payload.text
+        ? messagedBody(body.subagent, fact.payload.text)
+        : body
     default:
       return body
   }

@@ -1,6 +1,6 @@
-import { useState } from "react"
+import { Fragment, useState } from "react"
 import { GitForkIcon, PencilIcon } from "lucide-react"
-import type { Image, ListedThread } from "@banda/contract/agents"
+import type { Image, ListedThread, Subagent } from "@banda/contract/agents"
 import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
@@ -16,11 +16,13 @@ import {
 import { Emblem, emblemOf } from "@banda/ui/components/emblem"
 import { Markdown } from "@banda/ui/components/markdown"
 import { Message, MessageContent } from "@banda/ui/components/message"
+import { Satellite } from "@banda/ui/components/satellite"
 import { cn } from "@banda/ui/lib/utils"
 import { fullDate } from "@banda/ui/lib/words"
 import { clock } from "@banda/core/react"
 import { type ImageReader, MessageImages } from "./MessageImages"
-import { clamped } from "./messageText"
+import { clamped, piecesOf } from "./messageText"
+import { lookOf } from "../../thread/subagents"
 import { useMessageMenu } from "../../thread/ThreadMenu"
 import type { Listing } from "../../thread/state"
 
@@ -36,12 +38,16 @@ export const THREAD_ZOOM = "[zoom:var(--thread-zoom,1)]"
 export function PersonMessage({
   text,
   images,
+  about,
   at,
   reader,
   onEdit,
 }: {
   text: string
   images: Image[]
+  /** The Thread's sub-agents by their labels, each a chip where the
+   * message is about it (ADR 0103, decision 25). */
+  about?: ReadonlyMap<string, Subagent>
   at: number
   reader: ImageReader
   /** Takes the Thread back to before it, its text and images back in the
@@ -66,7 +72,7 @@ export function PersonMessage({
             <BubbleContent
               className={cn("whitespace-pre-wrap", clamp.className)}
             >
-              {text}
+              {about ? <Chipped text={text} about={about} /> : text}
             </BubbleContent>
           </Bubble>
         )}
@@ -89,6 +95,33 @@ export function PersonMessage({
       </MessageContent>
     </Message>
   )
+}
+
+/** A Person's message's text with a chip for each sub-agent it is about,
+ * as the composer showed it: its satellite, as it stands now, then its
+ * label. The bubble stays text, not an editor. */
+function Chipped({
+  text,
+  about,
+}: {
+  text: string
+  about: ReadonlyMap<string, Subagent>
+}) {
+  return piecesOf(text, about).map((piece, at) => {
+    if ("text" in piece) return <Fragment key={at}>{piece.text}</Fragment>
+    const lane = about.get(piece.about)!
+    return (
+      <span
+        key={at}
+        data-slot="subagent-chip"
+        title={piece.about}
+        className="mx-px inline-flex items-baseline gap-1 rounded-small bg-foreground/9 px-1 align-baseline"
+      >
+        <Satellite state={lookOf(lane)} size={8} className="self-center" />
+        {piece.about}
+      </span>
+    )
+  })
 }
 
 /** The pencil of a Person's message, which asks first, as T3 Code's. */

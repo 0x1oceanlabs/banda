@@ -40,11 +40,13 @@ export function knownOf(state: ThreadState) {
   }
 }
 
-/** The facts of one entry; `rows` the sub-agents' rows the Thread shows. */
+/** The facts of one entry; `rows` the sub-agents' rows the Thread shows,
+ * `about` what its messages say of sub-agents (ADR 0103, decision 25). */
 export function factsOf(
   { asks, thoughts, live, turns, firsts, turnState }: Known,
   writers: Listing,
-  rows: Map<SubagentId, SubagentRow> = new Map()
+  rows: Map<SubagentId, SubagentRow> = new Map(),
+  about: (item: Item) => Partial<EntryFacts> = () => ({})
 ): (item: Item) => EntryFacts {
   return (item) => ({
     // Only a call shows how its turn stands.
@@ -57,6 +59,7 @@ export function factsOf(
     edits: editAt(firsts, item),
     subagentRow:
       item.body.kind === "subagent" ? rows.get(item.body.subagent) : undefined,
+    ...about(item),
   })
 }
 

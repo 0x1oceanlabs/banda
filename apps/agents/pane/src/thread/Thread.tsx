@@ -29,7 +29,8 @@ import { type MenuAt, menuAt, ThreadMenu } from "./ThreadMenu"
 import { useThreadFiles } from "./ThreadFiles"
 import { type AnswerKeys, pressOf, QuestionDrawer } from "../asking/Questions"
 import { aboutOf, keyAnswer } from "../asking/asking"
-import { askerOf } from "./subagents"
+import { askerOf, byLabel } from "./subagents"
+import { tookAsk, useAskedAbout } from "./ask-about"
 import { OPEN_BESIDE } from "./beside"
 import { opensBeside } from "./SubagentPane"
 import { drafted } from "../composer/drafts"
@@ -214,6 +215,21 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   useEffect(() => {
     if (unsent) composer.current?.putBack(unsent.text, [])
   }, [unsent])
+  // Its sub-agents' labels, each a chip in a message that names it; and
+  // "Ask Claude about it" from one's Pane, which starts the message with
+  // its chip (ADR 0103, decision 25).
+  const subagents = state?.subagents
+  const labels = useMemo(
+    () => new Set(byLabel(subagents ?? []).keys()),
+    [subagents]
+  )
+  const askedAbout = useAskedAbout(project, thread)
+  const ready = state !== undefined
+  useEffect(() => {
+    if (askedAbout === undefined || thread === null || !ready) return
+    composer.current?.about(askedAbout)
+    tookAsk(project, thread, askedAbout)
+  }, [askedAbout, project, thread, ready])
   const findField = useRef<HTMLInputElement>(null)
   const dock = useRef<HTMLDivElement>(null)
   // Esc and Enter answer the Question that waits, from anywhere in the
@@ -693,6 +709,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           usage={state?.usage}
           commands={suggested(offer)}
           skills={offer.skills}
+          about={labels}
           images={images}
           dropping={dropping}
           onPlanMode={setPlan}

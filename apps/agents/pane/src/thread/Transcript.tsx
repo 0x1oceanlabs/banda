@@ -1,8 +1,8 @@
 /** A Thread's transcript: its entries and lines, in the scroller that
  * follows the live edge (ADR 0058, ADR 0091). A sub-agent's Pane draws its
  * lane with it (ADR 0103, decision 21). */
-import { useMemo, useRef } from "react"
-import type { Subagent, SubagentId } from "@banda/contract/agents"
+import { useCallback, useMemo, useRef } from "react"
+import type { Item, Subagent, SubagentId } from "@banda/contract/agents"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -27,12 +27,14 @@ import {
   type Waiting,
   working,
 } from "./state"
+import type { Asker } from "../entries/parts/Brief"
 import { Writer } from "../entries/parts/Messages"
-import type { SubagentRow } from "../entries/types"
+import { namesSubagent } from "../entries/parts/messageText"
+import type { EntryFacts, SubagentRow } from "../entries/types"
 import { modelNow } from "../composer/picker"
 import type { Lanes } from "./findIn"
 import type { Followed } from "./live-thread"
-import { byId, rowOf } from "./subagents"
+import { askerOf, byId, byLabel, rowOf } from "./subagents"
 import { laneTimeline, timeline } from "./timeline"
 import { factsOf, knownOf } from "./entry-facts"
 import { key, LineOf } from "../lines"
@@ -96,10 +98,12 @@ export function Transcript({
   /** The messages that wait for its machine, last (ADR 0105). */
   whenBack?: React.ReactNode
   /** A sub-agent's lane, read only in its own Pane, `state` holding it as
-   * one turn (ADR 0103, decision 21): its brief first, its lines with no
-   * clock, its own place to come back to, nothing to fork or edit, and
-   * the rows of the sub-agents it started, set to work by it, `short`. */
-  lane?: { id: SubagentId; brief: React.ReactNode }
+   * a turn for each time it was set to work (ADR 0103, decisions 21 and
+   * 25): its brief first, its lines with no clock, its own place to come
+   * back to, nothing to fork or edit, and the rows of the sub-agents it
+   * started, set to work by it, `short`. What its parent wrote to it
+   * after the brief shows under `wrote`'s words (decision 25). */
+  lane?: { id: SubagentId; brief: React.ReactNode; wrote?: Asker }
 }) {
   const { thread, reader, acts } = useThreadAround()
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
@@ -132,11 +136,30 @@ export function Transcript({
     () => rowsOf(state, lanes, short, now, top),
     [state, lanes, short, now, top]
   )
+  // The sub-agents a Person's message names as chips (ADR 0103, decision
+  // 25).
+  const about = useMemo(() => byLabel(state.subagents), [state.subagents])
+  // A message to a sub-agent after its brief: in its own Pane who wrote
+  // it, elsewhere the label of the one it went to.
+  const subagentFacts = useCallback(
+    (item: Item): Pick<EntryFacts, "about" | "to" | "wrote"> => {
+      const { body } = item
+      if (body.kind === "message")
+        return item.author.kind === "person" && namesSubagent(body.text)
+          ? { about }
+          : {}
+      if (body.kind !== "messaged") return {}
+      if (lane && body.subagent === lane.id) return { wrote: lane.wrote }
+      const to = askerOf(body.subagent, state.subagents)
+      return to === undefined ? {} : { to }
+    },
+    [about, lane, state.subagents]
+  )
   // What the Thread knows that its lines show (ADR 0091, decision 3).
   const known = useMemo(() => knownOf(state), [state])
   const of = useMemo(
-    () => factsOf(known, writers, rows),
-    [known, writers, rows]
+    () => factsOf(known, writers, rows, subagentFacts),
+    [known, writers, rows, subagentFacts]
   )
   const facts: LineFacts = {
     of,

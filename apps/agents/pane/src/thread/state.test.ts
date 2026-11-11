@@ -828,6 +828,29 @@ test("a sub-agent's entries stay out of the Thread, and its Question docks there
   expect(state.edits).toEqual([])
 })
 
+test("what the Agent writes to a sub-agent after its brief is a row where it wrote it; the lane's copy stays out", () => {
+  const messaged = (more: Record<string, unknown>) =>
+    event("subagent.messaged", { item: "w", turn: "u", subagent: "l", ...more })
+  const state = play(
+    ...begun(),
+    event("subagent.started", { item: "s", subagent: lane("l") }),
+    // Queued for it at work: a row with no words.
+    messaged({ item: "q" }),
+    messaged({ text: "Read it" }),
+    // Given again, it holds all its words so far.
+    messaged({ text: "Read it once more." }),
+    // The same words in the sub-agent's own lane.
+    messaged({ item: "x", sub: "l", text: "Read it once more." })
+  )
+  expect(state.items.map((item) => item.id)).toEqual(["m", "s", "q", "w"])
+  expect(state.items[2].body).toEqual({ kind: "messaged", subagent: "l" })
+  expect(state.items[3].body).toEqual({
+    kind: "messaged",
+    subagent: "l",
+    text: "Read it once more.",
+  })
+})
+
 test("a sub-agent's edits come for its turn's changes, and go with the turn", () => {
   const diff = { kind: "diff", path: "/a.md", old: "one\n", new: "two\n" }
   const ended = (subagent: string, turn: string) =>

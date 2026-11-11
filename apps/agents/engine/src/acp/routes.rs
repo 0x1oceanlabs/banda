@@ -40,6 +40,8 @@ pub(super) struct Child {
     pub(super) root: acp::SessionId,
     /// The Harness lets a client stop it alone.
     pub(super) cancel: bool,
+    /// The message its parent sent it first, its brief, once one came.
+    pub(super) brief: Option<String>,
 }
 
 /// A message between sessions, as far as it came.
@@ -190,6 +192,17 @@ impl Routes {
         self.children.lock().unwrap().insert(session, child);
     }
 
+    /// Whether message `id` to the known child `session` is its brief: the
+    /// first its parent sent it, which each later piece of it names again.
+    /// Any other is a message after it (ADR 0103, decision 25).
+    pub(super) fn briefs(&self, session: &acp::SessionId, id: &str) -> bool {
+        let mut children = self.children.lock().unwrap();
+        let Some(child) = children.get_mut(session) else {
+            return false;
+        };
+        child.brief.get_or_insert_with(|| id.to_owned()) == id
+    }
+
     /// Whether the known child `session` may be stopped alone now, as the
     /// patch of its capabilities says: omitted keeps it, `null` clears it,
     /// an object says it. `None` for a child it does not know.
@@ -291,7 +304,20 @@ mod tests {
         Child {
             root: root.clone(),
             cancel: false,
+            brief: None,
         }
+    }
+
+    #[test]
+    fn a_childs_first_message_is_its_brief_and_every_other_comes_after() {
+        let (routes, root) = (Routes::default(), acp::SessionId::new("root"));
+        let child = acp::SessionId::new("child");
+        assert!(!routes.briefs(&child, "first"), "a child it does not know");
+        routes.adopt(child.clone(), child_of(&root));
+        assert!(routes.briefs(&child, "first"));
+        assert!(routes.briefs(&child, "first"), "more of it");
+        assert!(!routes.briefs(&child, "then"));
+        assert!(routes.briefs(&child, "first"), "it stays its brief");
     }
 
     #[test]

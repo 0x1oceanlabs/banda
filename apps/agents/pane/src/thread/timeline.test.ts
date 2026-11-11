@@ -1,7 +1,8 @@
 import type { Event } from "@banda/contract"
-import type { TurnView } from "@banda/contract/agents"
+import type { Subagent, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { event, person } from "../testing"
+import { event, person, subagent } from "../testing"
+import { delegations, laneThread } from "./beside"
 import { apply, EMPTY, NOTHING, steerable } from "./state"
 import {
   awaiting,
@@ -782,4 +783,97 @@ test("a sub-agent's lane that ended folds as a turn does, with no line of how it
   expect(shape(timeline(stopped, "Claude"))).toContainEqual({
     fold: ["a", "b"],
   })
+})
+
+/** Sub-agent `l`'s lane as its Pane draws it (`laneThread`), its entries
+ * from `events`, as it stands in `state`. */
+function delegated(state: Subagent["state"], ...events: Event[]) {
+  const lane = subagent("l", {
+    state,
+    started: 0,
+    ...(state !== "running" && { ended: 999 }),
+  })
+  const { items } = play(...events)
+  const read = { at: 0, thread: "t", subagent: lane, items, subagents: [] }
+  return laneThread(EMPTY, read)
+}
+
+/** What its parent wrote to `l` after its brief, with `text` or none. */
+const wrote = (item: string, text?: string) =>
+  event("subagent.messaged", {
+    item,
+    turn: "u",
+    subagent: "l",
+    ...(text !== undefined && { text }),
+  })
+
+test("each message with words to a sub-agent after its brief starts a turn of its Pane, which folds only its own work", () => {
+  const work = [
+    ...ran("a", "read"),
+    reply("r1"),
+    wrote("w", "Read it once more."),
+    ...ran("b", "read"),
+    reply("r2"),
+  ]
+  const done = delegated("done", ...work)
+  // Both replies show; each fold holds its own work; "Claude wrote" stays
+  // between them.
+  expect(shape(laneTimeline(done))).toEqual([
+    { fold: ["a"] },
+    "r1",
+    "w",
+    { fold: ["b"] },
+    "r2",
+  ])
+  const [first, second] = done.turns
+  expect(done.turns).toHaveLength(2)
+  // The first ended with its last entry; the second is the sub-agent's.
+  expect(first).toMatchObject({ id: "u", message: "", state: "done" })
+  expect(first.ended).toBe(done.items.find((one) => one.id === "r1")?.at)
+  expect(second).toMatchObject({
+    id: "u:w",
+    message: "w",
+    state: "done",
+    ended: 999,
+  })
+  // The first turn's entries stay the objects they were; the second's
+  // carry its ID.
+  const { items } = play(...work)
+  const lane = subagent("l", { state: "done", started: 0, ended: 999 })
+  const again = delegations(lane, items)
+  expect(delegations(lane, items)).toBe(again)
+  expect(again.items[0]).toBe(items[0])
+  expect(again.items.map((one) => one.turn)).toEqual([
+    "u",
+    "u",
+    "u:w",
+    "u:w",
+    "u:w",
+  ])
+  // While it works again, its first delegation stays folded.
+  expect(shape(laneTimeline(delegated("running", ...work)))).toEqual([
+    { fold: ["a"] },
+    "r1",
+    "w",
+    "b",
+    "r2",
+  ])
+})
+
+test("a message with no words, queued for a sub-agent at work, starts no turn of its Pane", () => {
+  const lane = delegated(
+    "done",
+    ...ran("a", "read"),
+    reply("r1"),
+    wrote("q"),
+    ...ran("b", "read"),
+    reply("r2")
+  )
+  expect(lane.turns).toHaveLength(1)
+  expect(lane.turns[0]).toMatchObject({ id: "u", message: "", ended: 999 })
+  expect(shape(laneTimeline(lane))).toEqual([
+    { fold: ["a", "r1", "b"] },
+    "q",
+    "r2",
+  ])
 })
