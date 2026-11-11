@@ -64,6 +64,10 @@ settles.
      (for a width change, likewise after the pick); at most
      two `PaneFrame` renders per focus step; no frame where a page trails
      its tile.
+     _Amended 2026-11-11 by
+     [ADR 0117](0117-what-loops-forever-steps-twelve-times-a-second.md):
+     while only loops live, the window shows at most 20 frames a second,
+     and each loop is held and stepped._
    - Soft gates, timings: the main thread at most 4 ms per moving frame
      at p95; no task over 8.3 ms during a move that only translates;
      opening a Pane mounts in at most 50 ms with no long animation frame,
@@ -82,6 +86,9 @@ settles.
    shows its animation composited. Width, height, top, left, inset,
    margin, padding and grid tracks never animate, CSS transitions
    included. Today's cases are counted and only fall.
+   _Amended 2026-11-11 by
+   [ADR 0117](0117-what-loops-forever-steps-twelve-times-a-second.md): a loop, which steps 12 times a second, may animate any
+   property. Moves keep this rule._
 
 3. **One clock, and it goes quiet.**
    - `client/ui/src/lib/frames.ts` is the only continuous animation-frame
@@ -187,6 +194,9 @@ settles.
    and a translated gradient layer. ADR 0065 d6's three choices
    (`breath`, `line`, `sheen`) stay. The look may shift slightly, so a
    mockup comes first.
+   _Superseded 2026-11-11 by
+   [ADR 0117](0117-what-loops-forever-steps-twelve-times-a-second.md): the plate's breath is a loop, stepped 12 times a second,
+   and costs 12 paints a second as it is drawn now._
 
 10. **Banda owns its terminal renderer.** libghostty-vt gives terminal
     state and dirty rows, and no renderer. Each step comes only when the
@@ -277,6 +287,8 @@ posts its motion.spec numbers before and after. Ids are the research's §9.
    picked (P7). Gate, if the pick is B or C: no layouts in a width
    change; one fit per change.
 9. Working plates on the compositor, through a mockup (P8).
+   _Superseded 2026-11-11 by
+   [ADR 0117](0117-what-loops-forever-steps-twelve-times-a-second.md)._
 10. The motion driver for moves that still write every tick (P9), then
     the overview, through a mockup (P10).
 11. One WebGL2 context, only if step 6 misses its gate (P11); a worker
