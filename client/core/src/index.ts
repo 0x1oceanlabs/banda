@@ -16,6 +16,14 @@ export {
   poppedRoute,
 } from "./device"
 export { isPlaced, type Placed } from "./directory"
+export {
+  type DeviceFile,
+  deviceFile,
+  type MachineFile,
+  type ProjectFile,
+  projectFile,
+  readProjectFiles,
+} from "./files"
 export type { Here, HereStore } from "./here"
 export {
   agentsWork,
