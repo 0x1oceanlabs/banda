@@ -22,6 +22,7 @@ banda-terminal = { path = "../apps/terminal/engine" }
 banda-problems = { path = "../platform/problems/engine" }
 banda-keys = { path = "../platform/keys/engine" }
 banda-machines = { path = "../platform/machines/engine" }
+banda-updates = { path = "../platform/updates/engine" }
 banda-pulls = { path = "../apps/pulls/engine" }
 banda-sharing = { path = "../platform/sharing/engine" }
 banda-workspaces = { path = "../platform/workspaces/engine" }

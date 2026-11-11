@@ -25,6 +25,7 @@ use banda_problems::Problems;
 use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
+use banda_updates::Updates;
 use banda_workspaces::Workspaces;
 use banda_workspaces::placing::Flow;
 
@@ -180,6 +181,20 @@ mod build {
         } else {
             sharing
         }
+    }
+
+    /// This machine's own updates (ADR 0115): its engine's copies are in
+    /// the data folder's `engine/`, as the window keeps its own, and
+    /// machine.toml says whether it takes them.
+    pub fn updates(host: &HostContext<'_>) -> Updates {
+        let banda = banda_updates::Banda {
+            channel: channel(),
+            folder: crate::places::FOLDER,
+            version: banda_kernel::version().to_owned(),
+            program: std::env::current_exe().ok(),
+            engine: host.places.data.join("engine"),
+        };
+        Updates::new(banda, host.machine.updates())
     }
 
     /// The Pane kinds that open as a Group of their own, as the window

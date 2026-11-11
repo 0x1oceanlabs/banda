@@ -15,6 +15,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::io;
 use std::path::Path;
+use ts_rs::TS;
 
 /// Its name in the config folder.
 pub const NAME: &str = "machine.toml";
@@ -51,6 +52,25 @@ pub(crate) struct MachineFile {
     /// idle-sleep, Agents or none, so other machines reach it. One with
     /// no battery is always on power. Off by default.
     pub awake_plugged_in: Option<bool>,
+    /// Take Banda's updates: when-idle takes each new engine and restarts
+    /// on it once no Agent works here; ask takes it and waits for you to
+    /// restart; off takes none. when-idle by default.
+    pub updates: Option<TakeUpdates>,
+}
+
+/// Whether this machine takes Banda's updates by itself (ADR 0115,
+/// decision 3).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "machines/")]
+pub enum TakeUpdates {
+    /// Takes each new engine, and restarts on it once nothing runs.
+    #[default]
+    WhenIdle,
+    /// Takes each new engine, and waits for the Person to restart.
+    Ask,
+    /// Takes none.
+    Off,
 }
 
 /// What `machine.toml` says, over what Banda found.
@@ -62,6 +82,8 @@ pub(crate) struct Said {
     pub at_login: bool,
     /// When the machine stays awake.
     pub awake: Awake,
+    /// Whether it takes Banda's updates.
+    pub updates: TakeUpdates,
 }
 
 impl OneFile for MachineFile {
@@ -79,6 +101,7 @@ impl OneFile for MachineFile {
             start_at_login: Some(true),
             awake_while_working: Some(true),
             awake_plugged_in: Some(false),
+            updates: Some(TakeUpdates::WhenIdle),
         }
     }
 
@@ -89,6 +112,7 @@ impl OneFile for MachineFile {
             start_at_login: self.start_at_login.or(under.start_at_login),
             awake_while_working: self.awake_while_working.or(under.awake_while_working),
             awake_plugged_in: self.awake_plugged_in.or(under.awake_plugged_in),
+            updates: self.updates.or(under.updates),
         }
     }
 
@@ -150,6 +174,7 @@ pub(crate) fn said(path: &Path, held: Option<&[u8]>, found: &Named) -> Said {
         },
         at_login: at_login(&file),
         awake: awake(&file),
+        updates: file.updates.unwrap_or_default(),
     }
 }
 
