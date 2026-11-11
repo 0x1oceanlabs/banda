@@ -2621,6 +2621,41 @@ test("each of the device's own helpers still does what it is the device's for", 
 })
 
 /**
+ * The only places that stamp a file with its Project or its device (ADR
+ * 0106, decision 3). Elsewhere a path becomes one by being handed down:
+ * the Pane's `file`, the device's `local`. The Thread's links wait for 3c.
+ */
+const FILE_STAMPS: Record<string, string[]> = {
+  "client/web/src/tiling/mount.tsx": ["projectFile"],
+  "client/web/src/window/attach.ts": ["projectFile"],
+  "client/core/src/files.ts": ["deviceFile", "projectFile"],
+  "client/core/src/route.ts": ["deviceFile"],
+  "apps/agents/pane/src/thread/ThreadFiles.ts": ["deviceFile"],
+}
+
+test("a file is stamped with its Project or its device only in the places listed", () => {
+  const stamping: Record<string, string[]> = {}
+  const apps = readdirSync(join(root, "apps"))
+    .map((one) => join(root, "apps", one, "pane/src"))
+    .filter((folder) => existsSync(folder))
+  const parts = ["core", "ui", "web"].map((one) =>
+    join(root, "client", one, "src")
+  )
+  for (const file of [...apps, ...parts].flatMap((folder) =>
+    sources(folder, { tests: false })
+  )) {
+    const called = [
+      ...readFileSync(file, "utf8").matchAll(
+        /(?<![\w.])(projectFile|deviceFile)\(/g
+      ),
+    ].map((call) => call[1]!)
+    if (called.length)
+      stamping[relative(root, file)] = [...new Set(called)].sort()
+  }
+  expect(stamping).toEqual(FILE_STAMPS)
+})
+
+/**
  * Where App code asks where its Pane is (ADR 0106, law 6; `hostReads`), by
  * file: what reads its args' `host`, Here's Pane's or `paneHost`, and
  * each check of what they read. Today's counts, which only fall: the
