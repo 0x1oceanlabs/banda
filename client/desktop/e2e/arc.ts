@@ -38,6 +38,7 @@
 import { execFileSync, spawn } from "node:child_process"
 import { once } from "node:events"
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -338,6 +339,8 @@ export type Arc = {
   disk: (path: string) => string
   /** The environment of a program on arc. */
   env: NodeJS.ProcessEnv
+  /** Whether the fake Harness signed in on arc, with `account`. */
+  signedIn: () => boolean
   /** Where the fake ssh is, for the window's PATH. */
   bin: string
   /** Runs `banda` on arc; what it printed. */
@@ -369,7 +372,7 @@ export type Arc = {
 
 /** The machine "arc": its own folders and disk, the fake agent its
  * Harness, `latency` ms a round trip away. */
-export function newArc({ latency = 0 } = {}): Arc {
+export function newArc({ latency = 0, account = false } = {}): Arc {
   const dir = mkdtempSync(join(tmpdir(), "banda-arc-"))
   const at = (path: string) => join(dir, path)
   // A throwaway home that stands in for this machine's, and arc's own,
@@ -386,9 +389,15 @@ export function newArc({ latency = 0 } = {}): Arc {
   writeFileSync(at("arc/bin/hostname"), "#!/bin/sh\necho arc\n", {
     mode: 0o755,
   })
+  // With `account`, the fake Harness has one on arc, kept there, signed
+  // out, and a turn on arc needs its Person to sign in.
+  const signedIn = account
+    ? `FAKE_AGENT_HOME = ${JSON.stringify(at("arc/fake-home"))}, `
+    : ""
+  if (account) mkdirSync(at("arc/fake-home"))
   writeFileSync(
     at("config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\nenv = { FAKE_AGENT_MCP = ${JSON.stringify(at("mcp.json"))} }\n`
+    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\nenv = { ${signedIn}FAKE_AGENT_MCP = ${JSON.stringify(at("mcp.json"))} }\n`
   )
   writeFileSync(at("config/sharing.toml"), "problems = false\n")
   writeFileSync(at("config/machine.toml"), 'name = "arc"\nicon = "server"\n')
@@ -460,6 +469,7 @@ export function newArc({ latency = 0 } = {}): Arc {
       return samePath && !inside.startsWith("..") ? join(own, inside) : path
     },
     env,
+    signedIn: () => existsSync(at("arc/fake-home/signed-in")),
     bin: at("bin"),
     banda,
     start: async () => {
