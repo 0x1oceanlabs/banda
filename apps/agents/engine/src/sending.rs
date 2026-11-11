@@ -220,6 +220,14 @@ pub fn start(file: &Path, harness: &str) -> Start {
     start.unwrap_or_default()
 }
 
+/// The Flow the `agents.toml` at `file` says now, read when asked, as
+/// `start` is.
+pub fn flow(file: &Path) -> Flow {
+    (banda_look::file::read_at::<AgentsSettings>(file))
+        .and_then(|settings| settings.flow)
+        .unwrap_or_default()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

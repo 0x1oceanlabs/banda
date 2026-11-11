@@ -274,6 +274,13 @@ impl Call {
         &self.project
     }
 
+    /// Whether `project` of this machine is a scratch one, a Thread's in
+    /// No Project (ADR 0046); none when this machine does not know it.
+    pub async fn scratch(&self, project: ProjectId) -> Option<bool> {
+        let projects = self.projects.as_ref()?.read().await;
+        projects.get(&project).map(|entry| entry.scratch())
+    }
+
     /// This module in `project`, another open Project of this machine, for
     /// a call of their owner's that moves the module's own data there, as
     /// a Person moves a Thread to another Project (ADR 0098, decision 14).

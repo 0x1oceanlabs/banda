@@ -57,11 +57,15 @@ pub struct Open {
     #[serde(flatten)]
     #[ts(flatten)]
     pub shows: Shown,
-    /// Left out, a column on the right of the top workspace that shows a
-    /// Pane of its Project, or of the empty one at the bottom.
+    /// Left out, where the Flow says (ADR 0110).
     #[serde(default)]
     #[ts(optional)]
     pub place: Option<Place>,
+    /// The Pane it is opened from, the one in front, which the Flow places
+    /// it by. Left out, as from none.
+    #[serde(default)]
+    #[ts(optional)]
+    pub from: Option<PaneId>,
     /// The Pane it shows in place of, which leaves.
     #[serde(default)]
     #[ts(optional)]

@@ -123,6 +123,10 @@ struct PaneKind {
     /// ADR 0065, decision 7).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     grouped: bool,
+    /// It stands on its Project's workspace, as a Thread does
+    /// (`PaneKind.home`; ADR 0065, decision 9).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    home: bool,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -160,7 +164,17 @@ pub fn grouped_kinds() -> BTreeSet<String> {
     grouped_in(APPS)
 }
 
+/// The kinds of Pane that stand on their Project's workspace, as the
+/// window parts in the list of Apps say; read as `grouped_kinds` is.
+pub fn home_kinds() -> BTreeSet<String> {
+    kinds_in(APPS, |pane| pane.home)
+}
+
 fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
+    kinds_in(parts, |pane| pane.grouped)
+}
+
+fn kinds_in(parts: &[Part], wanted: impl Fn(&PaneKind) -> bool) -> BTreeSet<String> {
     let mut kinds = BTreeSet::new();
     for part in parts {
         let Some(window) = part.window else {
@@ -169,7 +183,7 @@ fn grouped_in(parts: &[Part]) -> BTreeSet<String> {
         match serde_json::from_str::<Window>(window) {
             Ok(window) => kinds.extend(
                 (window.panes.into_iter())
-                    .filter(|pane| pane.grouped)
+                    .filter(|pane| wanted(pane))
                     .map(|pane| pane.kind),
             ),
             Err(error) => tracing::error!(
@@ -392,6 +406,13 @@ mod tests {
             grouped_kinds(),
             BTreeSet::from(["agents.thread".to_owned()])
         );
+    }
+
+    /// What stands on its Project's workspace is what the window's code
+    /// says: a Thread's Pane alone (ADR 0065, decision 9).
+    #[test]
+    fn a_threads_pane_alone_stands_on_its_projects_workspace() {
+        assert_eq!(home_kinds(), BTreeSet::from(["agents.thread".to_owned()]));
     }
 
     /// A window part that does not read groups nothing, and the engine

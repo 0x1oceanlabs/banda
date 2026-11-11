@@ -7,6 +7,7 @@ use banda_kernel::{
 };
 use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
+use banda_workspaces::placing::Flow;
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
@@ -19,9 +20,20 @@ struct Machine {
 
 impl Machine {
     async fn open(root: &Path, owner: PersonId) -> Machine {
+        Machine::with(root, owner, Workspaces::new()).await
+    }
+
+    /// A machine whose Flow is the row (ADR 0110, decision 5).
+    async fn in_the_row(root: &Path, owner: PersonId) -> Machine {
+        Machine::with(root, owner, Workspaces::new().flow(|| Flow::Row)).await
+    }
+
+    async fn with(root: &Path, owner: PersonId, workspaces: Workspaces) -> Machine {
         // As the engine builds it, from the window parts (ADR 0065,
         // decision 7).
-        let workspaces = Workspaces::new().grouped_kinds(["agents.thread"]);
+        let workspaces = workspaces
+            .grouped_kinds(["agents.thread"])
+            .home_kinds(["agents.thread"]);
         let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
             .machine(root.join("state/machine"))
             .module(workspaces)
@@ -1048,7 +1060,7 @@ async fn a_thread_an_agent_opens_starts_a_group_of_its_own_never_in_its_threads(
 #[tokio::test]
 async fn what_an_agent_opens_with_its_thread_not_shown_goes_last_on_its_projects_workspace() {
     let root = tempfile::tempdir().unwrap();
-    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
@@ -1082,7 +1094,7 @@ async fn what_an_agent_opens_with_its_thread_not_shown_goes_last_on_its_projects
 #[tokio::test]
 async fn what_an_agent_opens_passes_a_free_workspace_with_its_projects_panes() {
     let root = tempfile::tempdir().unwrap();
-    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
     let work = machine.project("Work").await;
     let thread = Uuid::now_v7();
     let agent = agent_in(AgentId::new(), work, thread);
@@ -1108,6 +1120,63 @@ async fn what_an_agent_opens_passes_a_free_workspace_with_its_projects_panes() {
     assert_eq!(workspaces[0]["columns"].as_array().unwrap().len(), 1);
     assert_eq!(workspaces[1]["project"], json!(work));
     assert_eq!(workspaces[1]["columns"][0]["panes"][0]["id"], diff["pane"]);
+}
+
+#[tokio::test]
+async fn in_the_flow_free_what_an_agent_opens_makes_its_project_no_workspace() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    machine
+        .answer_from(CommandId::new(), agent, "workspaces.open_pane", changes())
+        .await
+        .unwrap();
+    let list = machine.opened().await;
+    assert!(list["workspaces"][0].get("project").is_none());
+}
+
+#[tokio::test]
+async fn in_the_row_a_pane_opened_with_no_place_goes_by_the_rule() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    // Into its Project's own Group, first on its workspace.
+    let open = |project, kind: &str, n, more: Value| {
+        let mut params = json!({ "project": project, "kind": kind, "args": { "n": n } });
+        params
+            .as_object_mut()
+            .unwrap()
+            .extend(more.as_object().unwrap().clone());
+        machine.command("workspaces.open", params)
+    };
+    let pane = open(work, "a.a", 1, json!({})).await.unwrap()["pane"].clone();
+    let list = machine.opened().await;
+    assert_eq!(list["workspaces"][0]["project"], json!(work));
+    assert!(group_of(&list, &pane).is_string());
+
+    // A place that is named still wins: this Pane starts a free workspace.
+    let free = json!({ "place": { "to": "free" } });
+    let loose = open(work, "a.a", 2, free).await.unwrap()["pane"].clone();
+    // From a Pane on a free workspace, right of it.
+    let from = json!({ "from": loose });
+    let beside = open(work, "a.a", 3, from).await.unwrap()["pane"].clone();
+    let list = machine.opened().await;
+    let columns = list["workspaces"][1]["columns"].as_array().unwrap();
+    assert_eq!(columns.len(), 2);
+    assert_eq!(columns[1]["panes"][0]["id"], beside);
+
+    // A Project of no name, a scratch one, makes no workspace its own.
+    let made = machine.command("projects.create", json!({ "scratch": true }));
+    let scratch: ProjectId = serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap();
+    let thread = json!({ "thread": Uuid::now_v7().to_string() });
+    let params = json!({ "project": scratch, "kind": "agents.thread", "args": thread });
+    machine.command("workspaces.open", params).await.unwrap();
+    let list = machine.opened().await;
+    let owners: Vec<_> = (list["workspaces"].as_array().unwrap().iter())
+        .filter(|workspace| workspace.get("project") == Some(&json!(scratch)))
+        .collect();
+    assert!(owners.is_empty());
 }
 
 #[tokio::test]

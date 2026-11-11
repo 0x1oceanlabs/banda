@@ -87,7 +87,7 @@ impl Entry {
         }
     }
 
-    fn scratch(&self) -> bool {
+    pub(crate) fn scratch(&self) -> bool {
         match self {
             Entry::Open(project) => project.scratch(),
             Entry::Missing { manifest, .. } => manifest.scratch,
