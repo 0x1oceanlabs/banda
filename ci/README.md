@@ -86,6 +86,8 @@ spec of `e2e/remote-*.spec.ts` each, which the part names as its step
 turns its road on: `remote-panes.spec.ts`, arc's Panes, New Pane on
 arc and an act arc does not run (step 1a), and arc's Thread restored as
 the window starts again while arc is away (step 1a″);
+`remote-terminal.spec.ts`, arc's terminal: keys, its size, a link, and a
+shell found again once arc is back (step 1b);
 `remote-bytes.spec.ts`, this machine's pictures, PDFs, videos and pages
 through the relay to its engine, beside arc's at the same path (step 4b).
 Here,

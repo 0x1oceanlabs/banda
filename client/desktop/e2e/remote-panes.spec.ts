@@ -105,19 +105,18 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   )
   // What opens on arc is live; the rest stays in view, dimmed, with why.
   const button = (name: string) => launcher.getByRole("button", { name })
-  await expect(button("Thread")).toBeEnabled()
-  for (const name of ["Terminal", "Files", "Browser"])
+  for (const name of ["Thread", "Terminal"])
+    await expect(button(name), name).toBeEnabled()
+  for (const name of ["Files", "Browser"])
     await expect(button(name), name).toBeDisabled()
   await expect(
     launcher.getByText("Not on arc yet", { exact: true })
   ).toBeVisible()
   await shot(page, "new-pane-arc")
   // A dimmed one's letter opens nothing.
-  await launcher.press("KeyT")
+  await launcher.press("KeyF")
   await expect(launcher).toBeVisible()
-  await expect(
-    page.getByRole("region", { name: "Terminal screen" })
-  ).toHaveCount(0)
+  await expect(page.getByRole("region", { name: "Files" })).toHaveCount(0)
 
   // arc away: the Frame's pill says so, and nothing is picked, its letters
   // neither.

@@ -380,6 +380,12 @@ export function newArc({ latency = 0 } = {}): Arc {
     mkdirSync(join(folder, "code"), { recursive: true })
   mkdirSync(at("config"), { recursive: true })
   mkdirSync(at("bin"))
+  // What arc's shell runs is arc's: `hostname` says so, as on a machine
+  // of that name. Its programs are found first through arc's own bin.
+  mkdirSync(at("arc/bin"), { recursive: true })
+  writeFileSync(at("arc/bin/hostname"), "#!/bin/sh\necho arc\n", {
+    mode: 0o755,
+  })
   writeFileSync(
     at("config/harnesses.toml"),
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\nenv = { FAKE_AGENT_MCP = ${JSON.stringify(at("mcp.json"))} }\n`
@@ -432,6 +438,7 @@ export function newArc({ latency = 0 } = {}): Arc {
   const env: NodeJS.ProcessEnv = {
     ...process.env,
     ...folders,
+    PATH: `${at("arc/bin")}:${process.env.PATH}`,
     BANDA_LOG: "warn",
     BANDA_FENCE: "off",
   }

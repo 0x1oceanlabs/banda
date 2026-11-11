@@ -263,7 +263,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @banda/desktop exec install-electron
       - run: pnpm --filter @banda/desktop build
-      - run: pnpm --filter @banda/desktop exec playwright test same-path.spec.ts remote-bytes.spec.ts remote-panes.spec.ts remote-git.spec.ts
+      - run: pnpm --filter @banda/desktop exec playwright test same-path.spec.ts remote-bytes.spec.ts remote-panes.spec.ts remote-git.spec.ts remote-terminal.spec.ts
       - name: The window's traces
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

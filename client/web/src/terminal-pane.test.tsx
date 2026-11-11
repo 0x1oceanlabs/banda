@@ -186,7 +186,9 @@ test("a Pane restored while its machine is away watches its shell and, on the an
     })
   )
   await settle()
-  expect(calls.filter(({ method }) => method === "terminal.resize").at(-1)).toEqual({
+  expect(
+    calls.filter(({ method }) => method === "terminal.resize").at(-1)
+  ).toEqual({
     method: "terminal.resize",
     params: { terminal: "kept", size: { cols: 100, rows: 40 } },
   })
@@ -205,12 +207,17 @@ test("a Pane opened while its machine is away, back with no shell, offers one an
 
 test("a key while its machine is away says it was not sent, with the honest note", async () => {
   const { session } = engine(() => Promise.reject(AWAY))
-  const { element } = await mount(session, { ...NEW, terminal: "kept" as never })
+  const { element } = await mount(session, {
+    ...NEW,
+    terminal: "kept" as never,
+  })
   ;(session as unknown as { call: () => Promise<never> }).call = () =>
     Promise.reject(AWAY)
   await act(async () => surfaces.made[0]!.options.onData("x"))
   await settle()
-  expect(element.textContent).toContain("arc is away: your typing was not sent.")
+  expect(element.textContent).toContain(
+    "arc is away: your typing was not sent."
+  )
   expect(element.querySelector("[title]")?.getAttribute("title")).toBe(
     "What was typed before arc went away may still arrive once it is back."
   )
