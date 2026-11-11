@@ -10,9 +10,10 @@ import { expect, test } from "vitest"
 
 const PANE = [
   // The look and the settings contract too: the module's own files come
-  // with the look, and it writes them (ADR 0016). The desktop bridge (ADR 0028), and the Harnesses' words,
-  // which its Threads run on (ADR 0040).
-  /^@banda\/contract(\/agents|\/harnesses|\/look|\/settings|\/bridge)?$/,
+  // with the look, and it writes them (ADR 0016). The desktop bridge (ADR 0028), the Harnesses' words,
+  // which its Threads run on (ADR 0040), and the files a reply's paths name
+  // (ADR 0106, step 3c).
+  /^@banda\/contract(\/agents|\/files|\/harnesses|\/look|\/settings|\/bridge)?$/,
   // The client's core, by the one door an App takes to it (ADR 0089).
   /^@banda\/core\/react$/,
   /^@banda\/ui\//,
