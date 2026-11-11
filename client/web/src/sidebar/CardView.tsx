@@ -1,15 +1,17 @@
 import { ThreadMark } from "@banda/ui/components/banda-mark"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
+import { FadeText } from "@banda/ui/components/fade-text"
 import { MachineMark } from "@banda/ui/components/machine-icon"
-import { ProjectName } from "@banda/ui/components/project-sign"
+import { ProjectSign } from "@banda/ui/components/project-sign"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
+import { projectLabel } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { short } from "@banda/ui/lib/words"
 import { DiamondIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
-import type { Row } from "./arrange"
 import {
   type CardModel,
+  type CardRow,
   saysWords,
   type Slot,
   spokenOf,
@@ -42,7 +44,7 @@ export function Card({
   card: CardModel
   /** The row it is drawn from: what it opens, and whose title a model
    * may be writing. */
-  row: Row
+  row: CardRow
   /** Its Thread is the open one. */
   current: boolean
   /** A button that shows while the pointer is over the card: its Later's
@@ -55,26 +57,11 @@ export function Card({
   harnesses?: readonly EmblemOf[]
 }) {
   const onOpen = useOpenRow(row)
-  const now = useClock((at) => dueOf(timesOf(card), at))
+  const now = useCardClock(card)
   const spoken = spokenOf(card, now)
   const one = card.lines.length === 1
   // One that left, or one being named, has none.
   const acts = action !== undefined && !card.gone && !field
-  const slot = (part: Slot, at: number) => (
-    <Fragment key={`${part.kind}${at}`}>
-      {part.kind === "title" && field ? (
-        field
-      ) : (
-        <Piece
-          slot={part}
-          card={card}
-          row={row}
-          now={now}
-          harnesses={harnesses}
-        />
-      )}
-    </Fragment>
-  )
   const Element = field ? "div" : "button"
   const drawn = (
     <Element
@@ -95,49 +82,14 @@ export function Card({
       )}
       onClick={field ? undefined : onOpen}
     >
-      {card.lines.map((line, index) => {
-        const first = index === 0
-        // Where a card that left went takes line 1's right.
-        const right =
-          first && card.gone
-            ? card.gone.words && (
-                <span className="shrink-0 text-xs text-muted-foreground">
-                  {card.gone.words}
-                </span>
-              )
-            : line.right.length > 0 && line.right.map(slot)
-        const strayed = first && card.strayed
-        return (
-          <span
-            key={index}
-            className={cn(
-              "flex min-w-0 items-center gap-1.5",
-              first ? "min-h-5" : "min-h-4 pl-5.5"
-            )}
-          >
-            {line.left.map(slot)}
-            {strayed && <Strayed />}
-            {right && (
-              <span
-                className={cn(
-                  "ml-auto flex shrink-0 items-center justify-end gap-1.5",
-                  // While the action shows, it stands in the right's
-                  // place, which hides under it whole.
-                  first &&
-                    acts &&
-                    "group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible",
-                  // The right keeps the room of that action, Wake's or
-                  // the Later clock's, so the mark stays in sight even by
-                  // a time as short as "2h".
-                  strayed && (card.stand === "later" ? "min-w-15" : "min-w-5")
-                )}
-              >
-                {right}
-              </span>
-            )}
-          </span>
-        )
-      })}
+      <CardLines
+        card={card}
+        row={row}
+        now={now}
+        acts={acts}
+        field={field}
+        harnesses={harnesses}
+      />
     </Element>
   )
   if (field || (!action && !card.gone)) return drawn
@@ -159,10 +111,111 @@ export function Card({
   )
 }
 
+/** The moment `card` is drawn as of: the list's clock (`clock.ts`), which
+ * draws it again only as one of its times changes. */
+export function useCardClock(card: CardModel): number {
+  return useClock((at) => dueOf(timesOf(card), at))
+}
+
+/**
+ * A card's lines (ADR 0098, decision 8), as the sidebar's card and the
+ * counts' list draw them: each a left and a right, lines 2 and 3 under the
+ * title, past the mark. Text that does not fit fades out at its end, and
+ * shows whole as the pointer rests on it (`FadeText`'s tooltip, where a
+ * `CutTips` holds it).
+ */
+export function CardLines({
+  card,
+  row,
+  now,
+  acts = false,
+  field,
+  harnesses = NO_HARNESSES,
+}: {
+  card: CardModel
+  row: CardRow
+  /** The moment it is drawn as of (`useCardClock`). */
+  now: number
+  /** Its action shows over line 1's right while the pointer is on it. */
+  acts?: boolean
+  /** The field that names it, in its title's place. */
+  field?: ReactNode
+  harnesses?: readonly EmblemOf[]
+}) {
+  const three = card.lines.length === 3
+  const slot = (part: Slot, at: number) => (
+    <Fragment key={`${part.kind}${at}`}>
+      {part.kind === "title" && field ? (
+        field
+      ) : (
+        <Piece
+          slot={part}
+          card={card}
+          row={row}
+          now={now}
+          harnesses={harnesses}
+        />
+      )}
+    </Fragment>
+  )
+  return card.lines.map((line, index) => {
+    const first = index === 0
+    // #1160's mark: at the start of line 3's right, else right after the
+    // title, never at line 1's right, under the card's action.
+    const strayed = card.strayed && index === (three ? 2 : 0)
+    // Where a card that left went takes line 1's right.
+    const right =
+      first && card.gone
+        ? card.gone.words && (
+            <span className="shrink-0 text-xs text-muted-foreground">
+              {card.gone.words}
+            </span>
+          )
+        : (strayed || line.right.length > 0) && (
+            <>
+              {strayed && three && <Strayed />}
+              {line.right.map(slot)}
+            </>
+          )
+    return (
+      <span
+        key={index}
+        className={cn(
+          "flex min-w-0 items-center gap-1.5",
+          first ? "min-h-5" : "min-h-4 pl-5.5"
+        )}
+      >
+        {line.left.map(slot)}
+        {strayed && !three && <Strayed />}
+        {right && (
+          <span
+            className={cn(
+              "ml-auto flex shrink-0 items-center justify-end gap-1.5",
+              // While the action shows, it stands in the right's place,
+              // which hides under it whole.
+              first &&
+                acts &&
+                "group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible",
+              // The right keeps the room of that action, Wake's or the
+              // Later clock's, so the mark after the title stays in sight
+              // even by a time as short as "2h".
+              first &&
+                strayed &&
+                (card.stand === "later" ? "min-w-15" : "min-w-5")
+            )}
+          >
+            {right}
+          </span>
+        )}
+      </span>
+    )
+  })
+}
+
 /** The mark of a Thread away from its Project's workspace (ADR 0102,
  * decision 6): a small diamond, as an arrow is the sign of a Pane in its
- * own window, right after the title, where the card's action never covers
- * it. A screen reader hears it in the card's description. */
+ * own window, where the card's action never covers it. A screen reader
+ * hears it in the card's description. */
 function Strayed() {
   return (
     <span title={STRAYED} className="shrink-0 text-muted-foreground">
@@ -180,7 +233,7 @@ function Piece({
 }: {
   slot: Slot
   card: CardModel
-  row: Row
+  row: CardRow
   now: number
   harnesses: readonly EmblemOf[]
 }) {
@@ -203,7 +256,10 @@ function Piece({
       const rest = saysWords(slot, (at) => short(at, card.away?.since ?? now))
       // What it says is never in a colour: a done note is never red.
       return (
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <FadeText
+          tip={[slot.word, rest].filter(Boolean).join(" ")}
+          className="flex-1 text-xs text-muted-foreground"
+        >
           {slot.word && (
             <span
               className={cn(
@@ -216,16 +272,18 @@ function Piece({
           )}
           {slot.word && rest && " "}
           {rest}
+        </FadeText>
+      )
+    }
+    case "project": {
+      const name = projectLabel(slot.project)
+      return (
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+          <ProjectSign project={slot.project} size={14} />
+          <FadeText tip={name}>{name}</FadeText>
         </span>
       )
     }
-    case "project":
-      return (
-        <ProjectName
-          project={slot.project}
-          className="flex-1 text-xs text-muted-foreground"
-        />
-      )
     case "machine": {
       // A machine (ADR 0095, decision 5): its icon and name, small and
       // muted, with no border; its icon alone where room is short or the
@@ -248,12 +306,13 @@ function Piece({
 
 /** The card's title, at 500 in Your turn, grey at work and dimmer put
  * away; while a model writes one, it shimmers (ADR 0077, decision 3). */
-function Title({ row, card }: { row: Row; card: CardModel }) {
+function Title({ row, card }: { row: CardRow; card: CardModel }) {
   const thinking = useThinking(row.project.id, row.listed.id)
   return (
-    <span
+    <FadeText
+      tip={thinking ? undefined : card.title}
       className={cn(
-        "min-w-0 truncate text-sm",
+        "text-sm",
         card.place === "turn" && "font-medium",
         card.quiet === "working"
           ? "text-foreground/45"
@@ -265,6 +324,6 @@ function Title({ row, card }: { row: Row; card: CardModel }) {
       <span data-shimmer={thinking || undefined}>
         {thinking ? THINKING : card.title}
       </span>
-    </span>
+    </FadeText>
   )
 }

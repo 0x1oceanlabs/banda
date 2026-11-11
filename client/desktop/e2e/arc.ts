@@ -563,14 +563,23 @@ export function put(folder: string, files: Record<string, string>) {
 }
 
 /** The window, its hosts.toml naming arc and the fake ssh first on its
- * PATH, its sidebar grouped by Project; in `dir`, a window's folder
- * before, it opens again on what that window left. */
-export const withArc = (arc: Arc, { dir }: { dir?: string } = {}) =>
+ * PATH, its sidebar grouped by Project unless `sidebar` says otherwise,
+ * with more `files`; in `dir`, a window's folder before, it opens again
+ * on what that window left. */
+export const withArc = (
+  arc: Arc,
+  {
+    dir,
+    sidebar = 'preset = "projects"\n',
+    files = {},
+  }: { dir?: string; sidebar?: string; files?: Record<string, string> } = {}
+) =>
   startWindow({
     look: 'mode = "dark"\n',
-    sidebar: 'preset = "projects"\n',
+    sidebar,
     files: {
       "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
+      ...files,
     },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
     dir,

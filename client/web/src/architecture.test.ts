@@ -126,9 +126,14 @@ import {
   workspaceResolver,
 } from "@banda/ui/testing/architecture"
 import ts from "typescript"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { modules } from "./modules"
 import { widgets, windowModule } from "./registry"
+
+// These tests read the page's code, and some parse it: a few seconds
+// each on CI while the other packages' tests run beside them, more than
+// vitest's 5 s.
+vi.setConfig({ testTimeout: 60_000 })
 
 const app = join(import.meta.dirname, "../..")
 const root = join(app, "..")
@@ -594,9 +599,7 @@ test("the sidebar list takes no more code than the list holds, and no Project's 
       ])
     )
   )
-  // Reading the types of all the sidebar imports takes some seconds, more
-  // while other tests run beside it.
-}, 60_000)
+})
 
 /**
  * A Project's pin is the Window's `projects.pin`, and the Flow the Person

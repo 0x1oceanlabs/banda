@@ -4,6 +4,7 @@ import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import type { Listed } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import type { ReactNode } from "react"
+import { CutTips } from "@banda/ui/components/fade-text"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import type { Row } from "./arrange"
@@ -196,9 +197,9 @@ test("this machine named too has no card, as it is here; alone, its name is the 
   )
 })
 
-test("a Thread away from its Project's workspace bears a small diamond right after its title, before its card's right parts, where its action never covers it (ADR 0102, decision 6)", () => {
-  for (const density of [1, 2, 3] as const)
-    for (const group of ["none", "project"] as const) {
+test("a Thread away from its Project's workspace bears a small diamond: right after its title on one or two lines, at the start of line 3's right on three, never at line 1's right, under its action (ADR 0102, decision 6; spec S6b)", () => {
+  for (const group of ["none", "project"] as const) {
+    for (const density of [1, 2] as const) {
       const html = drawn(rowOf("turn"), {
         view: { density, group },
         strayed: true,
@@ -212,6 +213,19 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
       // Later clock that shows over them, whatever its time.
       expect(html).toMatch(/class="ml-auto [^"]*min-w-5"><span data-time/)
     }
+    const three = drawn(rowOf("turn"), {
+      view: { density: 3, group },
+      strayed: true,
+    })
+    // Line 3's right starts with it, before the Harness's emblem; line
+    // 1's right keeps no room for it.
+    const third = three.lastIndexOf('class="ml-auto')
+    expect(three.indexOf("lucide-diamond")).toBeGreaterThan(third)
+    expect(three.slice(third)).toMatch(
+      /^class="ml-auto[^"]*"><span title="Away from its Project&#x27;s workspace"/
+    )
+    expect(three).not.toMatch(/min-w-(5|15)\b/)
+  }
   // In Later, as wide as its Wake.
   const later = drawn(
     rowOf("later", { mark: "idle", later: { at: NOW, until: NOW + HOUR } }),
@@ -221,8 +235,34 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   const plain = drawn(rowOf("turn"))
   expect(plain).not.toContain("lucide-diamond")
   expect(plain).not.toMatch(/min-w-(5|15)\b/)
-  // The title is only as wide as its words, so the mark follows them.
-  expect(plain).toMatch(/class="min-w-0 truncate text-sm[^"]*"><span>Bench/)
+})
+
+test('a card\'s text fades where it does not fit, never with "…"; the title is only as wide as its words, and inside the cut tooltip each text names itself whole (spec S6b)', () => {
+  const html = drawn(rowOf("turn"))
+  expect(html).not.toMatch(/truncate|ellipsis|…/)
+  // The title, what line 2 says, and the Project's name.
+  expect(html.match(/data-slot="fade-text"/g)).toHaveLength(3)
+  expect(html).toMatch(
+    /<span data-slot="fade-text" class="min-w-0 overflow-hidden whitespace-nowrap text-sm[^"]*"><span>Bench/
+  )
+  // Outside a CutTips, none is a tooltip's trigger.
+  expect(html).not.toContain("data-base-ui-tooltip-trigger")
+  const tipped = renderToStaticMarkup(
+    <CutTips edge="aside">
+      <Card
+        card={cardOf({
+          row: rowOf("turn"),
+          place: "turn",
+          at: NOW - 14 * MINUTE,
+          now: NOW,
+          view: { density: "auto", group: "none" },
+        })}
+        row={rowOf("turn")}
+        current={false}
+      />
+    </CutTips>
+  )
+  expect(tipped.match(/data-base-ui-tooltip-trigger/g)).toHaveLength(3)
 })
 
 test("a screen reader hears the diamond once, in the card's description (ADR 0102, decision 6)", () => {
@@ -249,7 +289,15 @@ test("while its action shows, line 1's right hides under it whole, and the diamo
   expect(html).toMatch(
     new RegExp(`class="ml-auto [^"]*${hides}[^"]*"><span data-time`)
   )
-  expect(html.indexOf("lucide-diamond")).toBeLessThan(html.indexOf(hides))
+  // On three lines it stands on line 3, under no action.
+  expect(html.indexOf("lucide-diamond")).toBeGreaterThan(html.indexOf(hides))
+  const two = drawn(
+    rowOf("turn"),
+    { strayed: true, view: { density: 2, group: "none" } },
+    false,
+    <button type="button">Later</button>
+  )
+  expect(two.indexOf("lucide-diamond")).toBeLessThan(two.indexOf(hides))
   // Line 3's right, under the action's line, keeps its own.
   expect(html.match(/:invisible/g)).toHaveLength(3)
   // With no action, and on one that left, it never hides.

@@ -507,8 +507,10 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   // Once the batch is over, the list plays nothing of its own and keeps no
   // card on its way out, whatever the Marks do: the Threads that work and
   // call still tell their news, so the window asks for no frame but
-  // theirs. The toasts leave first: Sonner asks for a frame as each goes,
-  // which is neither the list's nor a Mark's.
+  // theirs; a cut text's fade is no motion either, its timeline being the
+  // text's own scroll, which stands still (ADR 0098, S6b). The toasts
+  // leave first: Sonner asks for a frame as each goes, which is neither
+  // the list's nor a Mark's.
   await page.evaluate(() => (document.activeElement as HTMLElement).blur())
   await expect(toastsOf(page).getByRole("listitem")).toHaveCount(0, {
     timeout: 30_000,
@@ -520,7 +522,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     (one) =>
       one.getAnimations({ subtree: true }).filter((animation) => {
         const target = (animation.effect as KeyframeEffect | null)?.target
-        return !target?.closest("[data-slot=banda-mark]")
+        return !target?.closest("[data-slot=banda-mark], [data-slot=fade-text]")
       }).length
   )
   expect(own, "settled: the list's own animations").toBe(0)

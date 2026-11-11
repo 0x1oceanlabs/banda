@@ -3,6 +3,7 @@ import { flushSync } from "react-dom"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
+import { CutTips } from "@banda/ui/components/fade-text"
 import { Separator } from "@banda/ui/components/separator"
 import { useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
@@ -15,11 +16,12 @@ import {
   SquarePenIcon,
 } from "lucide-react"
 import type { Row as Arranged } from "./arrange"
-import { type CardView, linesOf } from "./card"
+import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
 import { itemActionOf } from "./items"
+import { EDGE } from "./MachineCard"
 import { pickLater } from "./LaterPicker"
 import { HerePart } from "./HostPart"
 import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
@@ -183,6 +185,9 @@ export function SectionView({
         variant="ghost"
         size="xs"
         className="h-5"
+        // It stands where the time says when it wakes, and says who put
+        // it off where its Agent did (ADR 0074).
+        title={row.listed.later?.byAgent ? LATER_BY_AGENT : undefined}
         onClick={() => wake(row)}
       >
         <AlarmClockIcon className="size-3.5" />
@@ -327,5 +332,10 @@ export function SectionView({
       })}
     </div>
   )
-  return label ? <HerePart named={label}>{shown}</HerePart> : shown
+  return (
+    // One tooltip shows any cut text whole, beside the sidebar.
+    <CutTips edge={EDGE}>
+      {label ? <HerePart named={label}>{shown}</HerePart> : shown}
+    </CutTips>
+  )
 }
