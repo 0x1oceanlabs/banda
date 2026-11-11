@@ -8,7 +8,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { DeviceFile } from "@banda/core"
+import type { DeviceFile } from "@banda/core/react"
 import type { Trashed } from "@banda/contract/files"
 import { Button } from "@banda/ui/components/button"
 import {

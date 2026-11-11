@@ -5,6 +5,9 @@
  * module: a Thread says it has a composer, as it says its label.
  */
 import type { JsonValue, ProjectId } from "@banda/contract"
+import { deviceFor, type Hosts, projectFile } from "@banda/core"
+import { toast } from "@banda/ui/components/sonner"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import type { Chip } from "@banda/ui/module"
 
 /** A Pane's composer, and the Project the Pane is in. */
@@ -65,6 +68,38 @@ export function attachTo(
   const entry = composerFor(focused, project, history, composers)
   const take = entry === null ? undefined : composers.get(entry)?.take
   return entry !== null && take ? { entry, take } : null
+}
+
+/**
+ * Puts `chips` in the Message box of a Thread of their Project (ADR 0106,
+ * laws 2 and 3), going to its entry with `go`. Nothing takes them, and
+ * one toast says so, however many were added at once: a file of another
+ * machine says where it is (#1445), any other that no Thread of its
+ * Project is here.
+ */
+export function attachChips(
+  chips: Chip | readonly Chip[],
+  focused: { id: string; project: ProjectId } | undefined,
+  hosts: Hosts,
+  go: (entry: string) => void
+): void {
+  const list: readonly Chip[] = Array.isArray(chips) ? chips : [chips]
+  const project = list.find((chip) => chip.project)?.project ?? focused?.project
+  const to = project && attachTo(focused ?? null, project)
+  if (to) {
+    go(to.entry)
+    return to.take(list)
+  }
+  const why =
+    focused && project && list[0]
+      ? deviceFor(hosts, () => false, THIS_COMPUTER).across(
+          projectFile(project, list[0].path),
+          focused.project
+        )
+      : undefined
+  toast.warning(why ?? "No Thread in this Project to add it to.", {
+    id: "attach",
+  })
 }
 
 /** The chip `file.attach`'s args name: the file at `path`, and the lines

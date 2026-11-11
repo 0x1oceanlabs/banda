@@ -2445,10 +2445,12 @@ const REACHING: Record<string, { places: number; until: string }> = {
     places: 1,
     until: "3c",
   },
-  "agents.thread: client/ui/src/lib/outside.ts: @banda/ui/desktop": {
+  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: window.open": {
     places: 1,
     until: "3c",
   },
+  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: navigator.clipboard":
+    { places: 1, until: "3c" },
   "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
     places: 1,
     until: "4c",
@@ -2467,6 +2469,13 @@ const DEVICE_HELPERS: Record<string, PastHandle[]> = {
   // The terminal renderer's own copy and paste of the Person's selection
   // (decision 4): its only clipboard use, as no OSC 52 handler exists.
   "client/ghostty/src/t3/surface.ts": ["navigator.clipboard"],
+  // Decision 3: a file this computer holds, as `device.local` gives it,
+  // opens in its apps; the rows draw only where that gives one, and the
+  // drag out of Banda only with one.
+  "client/ui/src/lib/outside.ts": ["@banda/ui/desktop"],
+  "client/ui/src/lib/file-drag.ts": ["@banda/ui/desktop"],
+  // Decision 3: a public page opens in this device's browser.
+  "client/ui/src/lib/links.ts": ["window.open"],
 }
 
 /** The steps of ADR 0106's plan. */
@@ -2488,17 +2497,43 @@ const declared = new Map(
 )
 const kinds = [...modules, windowModule].flatMap((module) => module.panes ?? [])
 const resolveImport = workspaceResolver(root)
-const reached = kinds
-  .filter((kind) => kind.elsewhere)
-  .flatMap(({ kind }) => {
-    const at = declared.get(kind)
-    return at
-      ? kindReaches(at.file, resolveImport, { name: at.name }).map((place) => ({
-          kind,
-          ...place,
-        }))
-      : []
-  })
+const previewersDeclared = new Map(
+  pageCode
+    .flatMap((folder) => sources(folder, { tests: false }))
+    .flatMap((file) =>
+      [
+        ...readFileSync(file, "utf8").matchAll(
+          /export const (\w+) = definePreviewer\(\{\s*id: "([^"]+)"/g
+        ),
+      ].map(([, name, id]) => [id, { file, name }] as const)
+    )
+)
+const previewers = [...modules, windowModule].flatMap(
+  (module) => module.previewers ?? []
+)
+/** What the checker walks: each kind that opens elsewhere, and each
+ * previewer that says so, which no kind imports (ADR 0106, decision 2). */
+const checked = [
+  ...kinds
+    .filter((kind) => kind.elsewhere)
+    .flatMap(({ kind }) => {
+      const at = declared.get(kind)
+      return at ? [{ kind, ...at }] : []
+    }),
+  ...previewers
+    .filter((previewer) => previewer.elsewhere)
+    .flatMap(({ id }) => {
+      const at = previewersDeclared.get(id)
+      return at ? [{ kind: id, ...at }] : []
+    }),
+]
+const reached = checked
+  .flatMap(({ kind, file, name }) =>
+    kindReaches(file, resolveImport, { name }).map((place) => ({
+      kind,
+      ...place,
+    }))
+  )
   .filter(
     (place) => !DEVICE_HELPERS[relative(root, place.file)]?.includes(place.what)
   )
@@ -2519,6 +2554,22 @@ test("the kind checker finds the file of each kind of Pane, and the Thread, the 
       "agents.thread",
       "window.launcher",
       "terminal.terminal",
+      "files.tree",
+      "files.file",
+    ])
+  )
+  // Previewers are in no kind's imports, so each is found by its own id.
+  expect(
+    previewers.map(({ id }) => id).filter((id) => !previewersDeclared.has(id))
+  ).toEqual([])
+  expect(
+    previewers.filter((one) => one.elsewhere).map(({ id }) => id)
+  ).toEqual(
+    expect.arrayContaining([
+      "files.code",
+      "files.markdown",
+      "files.json",
+      "files.notebook",
     ])
   )
 })
@@ -2563,10 +2614,11 @@ test("no OSC 52: nothing another machine prints reaches this device's clipboard,
 
 test("each of the device's own helpers still does what it is the device's for", () => {
   for (const [file, what] of Object.entries(DEVICE_HELPERS)) {
-    const does = pastHandles(readFileSync(join(root, file), "utf8"), file)
-    expect(new Set(does.map((place) => place.what)), file).toEqual(
-      new Set(what)
-    )
+    const source = readFileSync(join(root, file), "utf8")
+    const does: string[] = pastHandles(source, file).map(({ what }) => what)
+    if (imports(source).some((name) => /(^|\/)desktop$/.test(name)))
+      does.push("@banda/ui/desktop")
+    expect(new Set(does), file).toEqual(new Set(what))
   }
 })
 
@@ -2581,8 +2633,8 @@ test("each of the device's own helpers still does what it is the device's for", 
  * (`Listed.host`), with the directory (1a″).
  */
 const ASKING_WHERE: Record<string, number> = {
-  "apps/agents/pane/src/ThreadPane.tsx": 1,
-  "apps/agents/pane/src/thread/Thread.tsx": 18,
+  "apps/agents/pane/src/ThreadPane.tsx": 5,
+  "apps/agents/pane/src/thread/Thread.tsx": 20,
   "apps/agents/pane/src/thread/session.ts": 1,
 }
 

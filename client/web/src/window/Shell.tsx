@@ -17,15 +17,12 @@ import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
-import { deviceFor, projectFile } from "@banda/core"
 import {
   HostsContext,
   useEngineOf,
   usePaneOn,
   useStore,
 } from "@banda/core/react"
-import { THIS_COMPUTER } from "@banda/ui/lib/outside"
-import type { Chip } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
@@ -84,7 +81,7 @@ import { SaidRegion } from "../sidebar/SaidRegion"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
-import { attachTo, focusedOn } from "./attach"
+import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useNarrow } from "./narrow"
@@ -596,33 +593,10 @@ export function Shell({
     sessionOf: engineOf,
     waiting: hostsNow.waiting,
     writeSetting: device.settings.set,
-    attach: (chips) => {
-      const list: readonly Chip[] = Array.isArray(chips) ? chips : [chips]
-      const at = focused(drawnNow())
-      const project = list.find((chip) => chip.project)?.project ?? at?.project
-      if (!at || !project) {
-        toast.warning("No Thread in this Project to add it to.", {
-          id: "attach",
-        })
-        return
-      }
-      const to = attachTo({ id: at.id, project: at.project }, project)
-      if (!to) {
-        // One toast, however many files were added at once. A file named
-        // from another machine says where it is; else no Thread of its
-        // Project is here to take it.
-        const why = deviceFor(hostsNow, () => false, THIS_COMPUTER).across(
-          projectFile(project, list[0]?.path ?? ""),
-          at.project
-        )
-        toast.warning(why ?? "No Thread in this Project to add it to.", {
-          id: "attach",
-        })
-        return
-      }
-      change((w) => focusEntry(w, to.entry))
-      to.take(list)
-    },
+    attach: (chips) =>
+      attachChips(chips, focused(drawnNow()), hostsNow, (entry) =>
+        change((w) => focusEntry(w, entry))
+      ),
   })
   // A Thread that woke by itself is told of once (ADR 0074, decision 7).
   useWokeNote(stores, parts.run)

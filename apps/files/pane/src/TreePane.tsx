@@ -41,7 +41,7 @@ import {
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import { FILES_FILE, type Making } from "@banda/contract/files"
-import type { DeviceFile, ProjectFile } from "@banda/core"
+import type { DeviceFile, ProjectFile } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
 import {
   ContextMenu,

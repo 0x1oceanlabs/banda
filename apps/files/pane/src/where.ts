@@ -4,7 +4,7 @@
  * the bar with its Tab completion. Pure, so plain tests cover it.
  */
 import type { Entry } from "@banda/contract/files"
-import type { Device, DeviceFile, ProjectFile } from "@banda/core"
+import type { Device, DeviceFile, ProjectFile } from "@banda/core/react"
 import { isFolder } from "./tree"
 
 /** `path` with `~` for `home` and what is under it. */

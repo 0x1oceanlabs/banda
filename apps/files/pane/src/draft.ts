@@ -13,6 +13,7 @@
  */
 import type { Participant } from "@banda/contract"
 import type { Written } from "@banda/contract/files"
+import { Unreachable } from "@banda/contract"
 import { problem } from "@banda/ui/lib/words"
 
 /** How long typing rests before it is saved, in ms. */
@@ -62,6 +63,16 @@ export type Write = (text: string, base: string | null) => Promise<Written>
 /** The Person's text now, saved or not. */
 export function textOf(state: DraftState): string {
   return state.mine ?? state.held
+}
+
+/** Why a save failed, in the words the bar puts after "Not saved:". A
+ * machine that is away is named as its pill names it: the text stays,
+ * and goes with the next keystroke or Save once it is back (ADR 0106,
+ * decision 5). */
+function failedWords(error: unknown): string {
+  return error instanceof Unreachable && !error.may_have_run
+    ? error.message
+    : problem(error, "the save")
 }
 
 export class Draft {
@@ -218,7 +229,7 @@ export class Draft {
       },
       (error: unknown) => {
         this.#due = false
-        this.#set({ saving: false, failed: problem(error) })
+        this.#set({ saving: false, failed: failedWords(error) })
       }
     )
   }
