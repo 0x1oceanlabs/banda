@@ -28,7 +28,7 @@ type Props = {
   project: ProjectId
   item: ItemId
   issue: IssueBody
-  /** Opens a web address on this device, past the router. */
+  /** Opens a web address on this device, through the router. */
   openLink: (url: string) => void
 }
 
@@ -46,13 +46,14 @@ export function Issue(props: Props) {
  * 2). A comment is not filled in by its address: it waits to be pasted,
  * on this device's clipboard.
  */
-export function openToPaste(
+export async function openToPaste(
   url: string,
   body: string,
   comment_on: number | undefined,
   openLink: Props["openLink"]
 ) {
-  if (comment_on !== undefined) copyText(body)
+  // Before the browser takes the focus the copy needs.
+  if (comment_on !== undefined) await copyText(body)
   openLink(url)
 }
 
@@ -71,7 +72,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
         body,
         ...(comment_on !== undefined && { comment_on }),
       })
-      if (!sent.filed) openToPaste(sent.url, body, comment_on, openLink)
+      if (!sent.filed) await openToPaste(sent.url, body, comment_on, openLink)
       const state = sent.filed ? "sent" : "opened"
       const answer = { item, state, title, body, url: sent.url } as const
       await engine.command("agents.answer_issue", answer, project)

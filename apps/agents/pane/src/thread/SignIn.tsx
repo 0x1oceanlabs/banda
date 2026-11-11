@@ -139,6 +139,7 @@ export function Ways({
             turn={turn}
             project={terminalIn}
             open={open}
+            on={elsewhere?.on}
             busy={signing.busy}
             onSignIn={() => void signIn(way)}
           />
@@ -201,6 +202,7 @@ function TerminalWay({
   turn,
   project,
   open,
+  on,
   busy,
   onSignIn,
 }: {
@@ -212,6 +214,8 @@ function TerminalWay({
   /** The Project a terminal runs in, if one can. */
   project: ProjectId | undefined
   open: Open
+  /** The other machine this Harness is on, by name. */
+  on: string | undefined
   busy: boolean
   onSignIn: () => void
 }) {
@@ -246,6 +250,8 @@ function TerminalWay({
   }
   const line = commandLine(program)
   const what = `${way.name}${way.description ? ` (${way.description.trim()})` : ""}`
+  // The line is that machine's program and paths, so it runs nowhere else.
+  const where = on ? ` on ${on}` : ""
   return (
     <div className="flex flex-col gap-1.5">
       {project ? (
@@ -271,12 +277,12 @@ function TerminalWay({
             {turn
               ? "Once you signed in there, this turn goes again."
               : "Once you signed in there, check again."}{" "}
-            Or run it yourself, then say you signed in:
+            Or run it yourself{where}, then say you signed in:
           </span>
         </>
       ) : (
         <span className="text-xs text-muted-foreground">
-          {what}: run this in a terminal, sign in, then come back.
+          {what}: run this in a terminal{where}, sign in, then come back.
         </span>
       )}
       {starting.problem && <Problem>{starting.problem}</Problem>}

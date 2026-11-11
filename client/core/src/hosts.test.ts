@@ -1185,7 +1185,7 @@ test("what goes now or not at all reads the pill's words and its engine's connec
     )
   expect(words(away, "open")).toBe("arc is away")
   expect(words(undefined, "open")).toBe("Waiting for arc")
-  expect(words(live, "connecting")).toBe("Connecting to arc…")
+  expect(words(live, "connecting")).toBe("Connecting to arc")
   expect(words(live, "refused")).toBe("arc refused this window")
   expect(words(live, "open")).toBeUndefined()
 })

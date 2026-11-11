@@ -1029,7 +1029,7 @@ export function unreachedWords(
   const { name } = shown?.named ?? seen(host)
   return status === "refused"
     ? `${name} refused this window`
-    : `Connecting to ${name}…`
+    : `Connecting to ${name}`
 }
 
 /**
@@ -1043,7 +1043,10 @@ export function heldWords(
   seen: (key: string) => Named
 ): string | undefined {
   const words = unreachedWords(host, shown, status, seen)
-  return shown?.state.state === "away"
-    ? `${words}. Send once it is back.`
+  if (shown?.state.state === "away") return `${words}. Send once it is back.`
+  // Only here does it trail off: its engine is on the way and Send then
+  // goes, where a refused Run or Sign in has already stopped.
+  return shown?.state.state === "live" && status !== "refused" && words
+    ? `${words}…`
     : words
 }
