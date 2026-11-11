@@ -41,6 +41,7 @@ export function SignIn({
   harness,
   turn,
   open,
+  elsewhere,
   onSignedIn,
 }: {
   engine: Engine
@@ -48,6 +49,8 @@ export function SignIn({
   harness: string
   turn: TurnId
   open: Open
+  /** Where the Harness is on another machine (ADR 0106, decision 2). */
+  elsewhere?: Elsewhere
   onSignedIn: () => void
 }) {
   // Read once: a sign-in changes who, not the ways.
@@ -68,15 +71,22 @@ export function SignIn({
       ways={found.value.account.ways}
       turn={turn}
       open={open}
+      elsewhere={elsewhere}
       onSignedIn={onSignedIn}
     />
   )
 }
 
+/** A Harness on another machine, by that machine's name and its own. */
+export type Elsewhere = { on: string; name: string }
+
 /**
  * The ways a Harness offers to sign in, each with what it takes; `turn`
  * is the one that needed it, when a Thread asks. A way in a terminal runs
  * in one in `project`; with no Project, its line shows, to run by hand.
+ * `elsewhere`, the Harness is on another machine, whose terminal this
+ * device draws: a way that opens a browser would open it there, where no
+ * one sees it (#1240), so it says so, and not a button.
  */
 export function Ways({
   engine,
@@ -85,6 +95,7 @@ export function Ways({
   ways,
   turn,
   open,
+  elsewhere,
   onSignedIn,
 }: {
   engine: Engine
@@ -93,6 +104,7 @@ export function Ways({
   ways: SignInWay[]
   turn?: TurnId
   open: Open
+  elsewhere?: Elsewhere
   /** After a sign-in here, as a Thread tries its turn again. */
   onSignedIn?: () => void
 }) {
@@ -111,7 +123,9 @@ export function Ways({
     <div className="flex flex-col gap-2">
       {ways.length === 0 && (
         <span className="text-xs text-muted-foreground">
-          Sign in from a terminal, then try again.
+          {elsewhere
+            ? `Sign in to ${elsewhere.name} on ${elsewhere.on}, then try again.`
+            : "Sign in from a terminal, then try again."}
         </span>
       )}
       {ways.map((way) =>
@@ -128,7 +142,7 @@ export function Ways({
             busy={signing.busy}
             onSignIn={() => void signIn(way)}
           />
-        ) : (
+        ) : elsewhere ? null : (
           <Way
             key={way.id}
             way={way}
@@ -136,6 +150,12 @@ export function Ways({
             onSignIn={() => void signIn(way)}
           />
         )
+      )}
+      {elsewhere && ways.some((way) => !way.terminal) && (
+        <span className="text-xs text-muted-foreground">
+          {elsewhere.name} signs in on a web page in a browser on {elsewhere.on}
+          &apos;s own computer. Sign in on {elsewhere.on} for now.
+        </span>
       )}
       {signing.problem && <Problem>{signing.problem}</Problem>}
     </div>

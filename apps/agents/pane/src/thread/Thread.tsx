@@ -313,22 +313,19 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       ((until, resume) =>
         run("thread.later", { project, item: thread, until, resume })),
     accounts: run && (() => run("settings.open", { link: "agents" })),
-    signIn: (turn) =>
-      here ? (
-        <SignIn
-          engine={engine}
-          project={project}
-          harness={harness}
-          turn={turn.id}
-          open={open}
-          onSignedIn={() => retry(turn)}
-        />
-      ) : (
-        // Its terminal would run there, where no one sees it.
-        <p className="text-xs text-muted-foreground">
-          Sign in to {short} on {on}, then try again.
-        </p>
-      ),
+    signIn: (turn) => (
+      <SignIn
+        engine={engine}
+        project={project}
+        harness={harness}
+        turn={turn.id}
+        open={open}
+        elsewhere={on === undefined ? undefined : { on, name: short }}
+        onSignedIn={() => retry(turn)}
+      />
+    ),
+    // Through the router, to this device's browser (ADR 0106, law 2).
+    openLink: (url) => run?.("link.open", { url }),
   }
 
   return (

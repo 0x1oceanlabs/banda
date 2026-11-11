@@ -1409,9 +1409,9 @@ test("the Window asks an App's engine part by name no more than the list holds",
  * that goes leaves it.
  */
 const APP_RUNS = [
-  "apps/agents/pane/src/ThreadPane.tsx: terminal.run",
   "apps/agents/pane/src/thread/Thread.tsx: browser.open",
   "apps/agents/pane/src/thread/Thread.tsx: browser.open",
+  "apps/agents/pane/src/thread/run-line.ts: terminal.run",
   "apps/files/pane/src/views/markdown.tsx: browser.open",
   "apps/git/pane/src/index.ts: agents.thread.details",
   "apps/terminal/pane/src/Servers.tsx: browser.open",
@@ -2077,6 +2077,7 @@ const HOSTS_FOR_APPS = [
   "Machine",
   "Unreachable",
   "heldWords",
+  "unreachedWords",
   "useMachines",
   "useNamedOf",
   "usePlaced",
@@ -2472,9 +2473,8 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * Thread, the terminal, New Pane and the Diff open elsewhere today, and all
  * but the Thread reach none, so only the Thread's places are here:
  *
- * - 3c: a reply's links, Open in, and an Issue's page and the text it
- *   copies, as the Thread's paths go through `files.locate` and its links
- *   through the router to the device;
+ * - 3c: a reply's links and Open in, as the Thread's paths go through
+ *   `files.locate` and its links through the router to the device;
  * - 4c: its media, as arc's bytes come through arc's session;
  * - 4d: a Visual's links in a reply, as `visual/Frame.tsx`'s
  *   `window.open` becomes a `Link`.
@@ -2497,12 +2497,6 @@ const REACHING: Record<string, { places: number; until: string }> = {
     places: 1,
     until: "3c",
   },
-  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: window.open": {
-    places: 1,
-    until: "3c",
-  },
-  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: navigator.clipboard":
-    { places: 1, until: "3c" },
   "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
     places: 1,
     until: "4c",
@@ -2639,8 +2633,8 @@ test("each of the device's own helpers still does what it is the device's for", 
  * (`Listed.host`), with the directory (1a″).
  */
 const ASKING_WHERE: Record<string, number> = {
-  "apps/agents/pane/src/ThreadPane.tsx": 5,
-  "apps/agents/pane/src/thread/Thread.tsx": 19,
+  "apps/agents/pane/src/ThreadPane.tsx": 1,
+  "apps/agents/pane/src/thread/Thread.tsx": 18,
   "apps/agents/pane/src/thread/session.ts": 1,
 }
 

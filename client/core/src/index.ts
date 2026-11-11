@@ -45,6 +45,7 @@ export {
   type Shown,
   shownOf,
   UNKNOWN,
+  unreachedWords,
   Unreachable,
 } from "./hosts"
 export { KeptHere } from "./kept-here"

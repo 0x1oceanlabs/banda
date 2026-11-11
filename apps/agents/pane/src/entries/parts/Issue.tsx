@@ -18,6 +18,7 @@ import {
   TraceTitle,
 } from "@banda/ui/components/trace"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { copyText } from "@banda/ui/lib/clipboard"
 import { BugIcon, CheckIcon, XIcon } from "lucide-react"
 import { Card, CardBody } from "./Card"
 import type { IssueBody } from "../../thread/state"
@@ -27,6 +28,8 @@ type Props = {
   project: ProjectId
   item: ItemId
   issue: IssueBody
+  /** Opens a web address on this device, past the router. */
+  openLink: (url: string) => void
 }
 
 export function Issue(props: Props) {
@@ -37,7 +40,23 @@ export function Issue(props: Props) {
   )
 }
 
-function Draft({ engine, project, item, issue }: Props) {
+/**
+ * An issue `gh` did not file: GitHub's page, through the router to this
+ * device's browser, whichever machine's Thread drafted it (ADR 0106, law
+ * 2). A comment is not filled in by its address: it waits to be pasted,
+ * on this device's clipboard.
+ */
+export function openToPaste(
+  url: string,
+  body: string,
+  comment_on: number | undefined,
+  openLink: Props["openLink"]
+) {
+  if (comment_on !== undefined) copyText(body)
+  openLink(url)
+}
+
+function Draft({ engine, project, item, issue, openLink }: Props) {
   const { busy, problem, act } = useAct()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(issue.title)
@@ -52,12 +71,7 @@ function Draft({ engine, project, item, issue }: Props) {
         body,
         ...(comment_on !== undefined && { comment_on }),
       })
-      if (!sent.filed) {
-        // A comment is not filled in by its address: it waits to be pasted.
-        if (comment_on !== undefined)
-          await navigator.clipboard.writeText(body).catch(() => undefined)
-        window.open(sent.url, "_blank", "noopener")
-      }
+      if (!sent.filed) openToPaste(sent.url, body, comment_on, openLink)
       const state = sent.filed ? "sent" : "opened"
       const answer = { item, state, title, body, url: sent.url } as const
       await engine.command("agents.answer_issue", answer, project)

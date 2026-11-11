@@ -52,6 +52,8 @@ export type ThreadActs = {
   accounts?: () => void
   /** How its Person signs in again, below a turn that failed for that. */
   signIn: (turn: TurnView) => React.ReactNode
+  /** Opens a web address on this device, past the router (ADR 0106, law 2). */
+  openLink: (url: string) => void
 }
 
 export type ThreadAround = {
@@ -145,6 +147,7 @@ export function ThreadAroundProvider({
         : undefined,
       accounts: canSet ? () => latest.current.accounts?.() : undefined,
       signIn: (turn) => latest.current.signIn(turn),
+      openLink: (url) => latest.current.openLink(url),
     }),
     [canPutOff, canSet]
   )
