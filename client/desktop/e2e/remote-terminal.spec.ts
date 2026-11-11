@@ -5,7 +5,9 @@
  * and says so; the same shell comes back; a Pane restored while arc is
  * away finds its shell and gives it its size once arc is back; a public
  * link opens in this device's browser, and arc's own address says it is
- * arc's. The same-path job runs this spec with arc in a mount namespace of
+ * arc's. Banda restarted on arc says Ended, and starts no shell by itself
+ * (the `ended` road); and a program there holds no update here (the
+ * `update-wait` road). The same-path job runs this spec with arc in a mount namespace of
  * its own (ci.yml's `same-path`). With BANDA_E2E_SHOTS set to a folder, it
  * leaves pictures of what it checks.
  */
@@ -277,6 +279,79 @@ test("a terminal restored while arc is held, then arc back: the same shell, and 
   await expect
     .poll(() => Number(inFolder(folder, "after.cols")))
     .toBeLessThan(was)
+})
+
+test("Banda restarted on arc: the terminal says Ended, starts nothing by itself, and New shell here starts one on arc", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  await run(page, "sleep 600 & echo $$ > before.pid")
+  await expect.poll(() => inFolder(folder, "before.pid")).toMatch(/^\d+\n$/)
+  const pid = inFolder(folder, "before.pid")
+
+  arc!.banda("stop", "--force")
+  await stopArc!()
+  stopArc = await arc!.start()
+  await expect(screen).toHaveAttribute("data-state", "restarted", {
+    timeout: 90_000,
+  })
+  const foot = page
+    .locator("section[data-tile]")
+    .filter({ has: screen })
+    .getByRole("status")
+    .filter({ hasText: "Ended" })
+  await expect(foot).toContainText("Ended: Banda restarted on arc")
+  await shot(page, "ended-restarted")
+  // It says so and waits: a shell starts only as the Person asks.
+  await page.waitForTimeout(1_000)
+  await expect(screen).toHaveAttribute("data-state", "restarted")
+
+  await foot.getByRole("button", { name: "New shell here" }).click()
+  await expect(screen).toHaveAttribute("data-state", "running", {
+    timeout: 30_000,
+  })
+  await screen.click()
+  await run(page, "hostname > again.txt; echo $$ > after.pid")
+  await expect.poll(() => inFolder(folder, "again.txt")).toBe("arc\n")
+  await expect.poll(() => inFolder(folder, "after.pid")).toMatch(/^\d+\n$/)
+  expect(inFolder(folder, "after.pid")).not.toBe(pid)
+  await expect(foot).toHaveCount(0)
+})
+
+test("a program in arc's terminal does not hold this machine's update: its update waits only for this machine's", async () => {
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  await run(page, "echo on > front; sleep 600")
+  await expect.poll(() => inFolder(folder, "front")).toBe("on\n")
+  // Banda's update, as main would tell it: a version ready, and a window
+  // asked to restart once nothing works.
+  await window!.app.evaluate(({ BrowserWindow, ipcMain }) => {
+    const value = {
+      name: "Banda",
+      have: "0.2.0",
+      always: false,
+      state: "ready",
+      version: "0.3.0",
+      notes: [],
+      waits: true,
+    }
+    ipcMain.removeHandler("update.current")
+    ipcMain.handle("update.current", () => value)
+    const asked: string[] = []
+    ;(globalThis as { asked?: string[] }).asked = asked
+    ipcMain.removeAllListeners("update.restart")
+    ipcMain.on("update.restart", () => asked.push("restart"))
+    BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
+  })
+  await expect
+    .poll(
+      () =>
+        window!.app.evaluate(() => (globalThis as { asked?: string[] }).asked),
+      { timeout: 15_000 }
+    )
+    .toEqual(["restart"])
 })
 
 test("a public link opens in this device's browser; arc's localhost says it is arc's and offers its address to copy", async () => {
