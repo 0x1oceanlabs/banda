@@ -4,73 +4,59 @@
  * update waits for them as it does for the Threads. Each Project says its
  * own count, so the sum is held only while an update needs it.
  */
-import type { Engine, ProjectId } from "@banda/contract"
-import { onProjectsChanged } from "@banda/ui/lib/projects"
+import type { Engine, ProjectSummary } from "@banda/contract"
+import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useEffect, useState } from "react"
 
+const NONE: readonly ProjectSummary[] = []
+
 /** The sum over `engine`'s Projects, heard while `held`; none until every
- * Project answered, so nothing reads no answer as no program. A Project
- * whose engine has no such stream answers none: it runs no terminal the
- * update could stop. */
+ * Project answered, so nothing reads no answer as no program. A stream or
+ * a list refused, as by an older engine, counts as none: an update is not
+ * held for a count it can never hear. An engine out of reach refuses
+ * nothing, so its count stays unknown and "Restart now" is the way past. */
 export function useRunningHere(
   engine: Engine,
   held: boolean
 ): number | undefined {
+  const { listed } = useProjects(engine)
+  const projects =
+    listed.state === "ready"
+      ? listed.value
+      : listed.state === "refused"
+        ? NONE
+        : undefined
   const [running, setRunning] = useState<number>()
   useEffect(() => {
-    if (!held) return
-    let left = false
-    const counts = new Map<ProjectId, number | undefined>()
-    const stops = new Map<ProjectId, () => void>()
+    if (!held || !projects) return
+    const counts = new Map(
+      projects.map(({ id }) => [id, undefined as number | undefined])
+    )
     const tell = () => {
       const each = [...counts.values()]
       if (each.includes(undefined)) return
       setRunning(each.reduce<number>((all, one) => all + (one ?? 0), 0))
     }
-    const follow = (project: ProjectId) => {
-      counts.set(project, undefined)
-      const stop = engine.stream(
-        project,
+    const stops = projects.map(({ id }) =>
+      engine.stream(
+        id,
         "terminal.running",
         {},
         ({ terminals }) => {
-          counts.set(project, terminals)
+          counts.set(id, terminals)
           tell()
         },
         () => {
-          counts.set(project, 0)
+          counts.set(id, 0)
           tell()
         }
       )
-      stops.set(project, stop)
-    }
-    // A Project gone, or one added meanwhile, as the list says now.
-    const list = (projects: readonly { id: ProjectId }[]) => {
-      if (left) return
-      const listed = new Set(projects.map((one) => one.id))
-      for (const [project, stop] of stops)
-        if (!listed.has(project)) {
-          stop()
-          stops.delete(project)
-          counts.delete(project)
-        }
-      for (const { id } of projects) if (!stops.has(id)) follow(id)
-      tell()
-    }
-    // A list that cannot be read leaves what it had: an update must not
-    // wait for ever on an engine out of reach, which runs no terminal.
-    const read = () =>
-      void engine.call("projects.list", {}).then(list, () => {
-        if (!left) tell()
-      })
-    read()
-    const stopHearing = onProjectsChanged(read)
+    )
+    tell()
     return () => {
-      left = true
-      stopHearing()
-      for (const stop of stops.values()) stop()
+      for (const stop of stops) stop()
       setRunning(undefined)
     }
-  }, [engine, held])
+  }, [engine, held, projects])
   return running
 }

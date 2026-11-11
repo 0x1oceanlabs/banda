@@ -190,7 +190,7 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
 function About({
   update,
   working,
-  running = 0,
+  running,
 }: {
   update: Update
   working: number
@@ -248,7 +248,7 @@ function About({
             <Head
               update={update}
               to={update.version}
-              words={waitWords(working, running) ?? "Restarts in a moment"}
+              words={waitWords(working, running)}
             />
             <div className="px-3.5">
               <Notes notes={update.notes} />
