@@ -5,7 +5,7 @@
  * machine, and put their whole paths on the system's clipboard as text, a
  * line each, for anything else. One for the window.
  */
-import type { ProjectFile } from "@banda/core"
+import type { ProjectFile } from "@banda/core/react"
 import { copyText } from "@banda/ui/lib/clipboard"
 
 export type Clip = { files: readonly ProjectFile[]; cut: boolean }

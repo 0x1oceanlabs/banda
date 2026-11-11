@@ -17,7 +17,7 @@ import {
   useRef,
   useState,
 } from "react"
-import type { ProjectFile } from "@banda/core"
+import type { ProjectFile } from "@banda/core/react"
 import type { FolderTreeHandle, Mark } from "@banda/ui/components/file-tree"
 import { bringsFiles, droppedFiles } from "@banda/ui/lib/file-drag"
 import { cn } from "@banda/ui/lib/utils"

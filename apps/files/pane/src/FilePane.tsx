@@ -52,7 +52,7 @@ import {
   FolderDownIcon,
   SquareCodeIcon,
 } from "lucide-react"
-import type { DeviceFile } from "@banda/core"
+import type { DeviceFile } from "@banda/core/react"
 import { draftKey, draftOf, hearDrafts } from "./draft"
 import { Card, Facts, Gone, Loading } from "./Facts"
 import { HeaderButton } from "./HeaderButton"

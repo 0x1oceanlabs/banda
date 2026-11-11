@@ -6,7 +6,7 @@
 import { useLayoutEffect, useMemo } from "react"
 import type { FoundFile, Item } from "@banda/contract/agents"
 import type { FileAt, FilesHost } from "@banda/ui/components/markdown-file"
-import { deviceFile } from "@banda/core"
+import { deviceFile } from "@banda/core/react"
 import { openInEditor } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { type AgentsHost, agentsHost } from "../desktop"

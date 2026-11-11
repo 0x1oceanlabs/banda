@@ -6,7 +6,7 @@
  */
 import { useCallback, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { DeviceFile } from "@banda/core"
+import type { DeviceFile } from "@banda/core/react"
 import {
   ContextMenu,
   ContextMenuContent,

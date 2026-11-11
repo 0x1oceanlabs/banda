@@ -46,7 +46,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import type { ReactNode } from "react"
-import type { DeviceFile } from "@banda/core"
+import type { DeviceFile } from "@banda/core/react"
 import { type Does, idOf } from "./keys"
 import { nameOf, within } from "./where"
 

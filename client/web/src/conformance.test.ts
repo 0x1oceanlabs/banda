@@ -81,6 +81,27 @@ function diffAnswers(method: string): JsonValue | undefined {
   return method === "git.commits" ? { commits: [] } : undefined
 }
 
+/** What arc's engine answers Files on a folder with one file. */
+function filesAnswers(method: string): JsonValue | undefined {
+  if (method === "files.places")
+    return {
+      home: "/home/arc",
+      desktop: "/home/arc/Desktop",
+      downloads: "/home/arc/Downloads",
+    }
+  if (method === "files.stat")
+    return [{ path: "/w/a.txt", kind: "file", size: 1, modified: 1 }, null]
+  if (method === "files.list")
+    return {
+      dir: "/w",
+      inside: true,
+      entries: [{ name: "a.txt", kind: "file", size: 1, modified: 1 }],
+    }
+  if (method === "agents.threads") return { at: 0, threads: [] }
+  if (method === "projects.list" || method === "harnesses.list") return []
+  return undefined
+}
+
 /**
  * What the kit is given of each kind, beside the kind: what its engine
  * part answers, its args, the gestures to play. By default a kind is
@@ -131,6 +152,21 @@ const GIVEN: Record<
     gestures: {
       "a key typed": () => surfaces.made.at(-1)?.onData("ls"),
     },
+  },
+  // Files on arc: its buttons go to another folder, a read the pill says
+  // waits, and its acts are on its rows, the same-path road's (3b): the
+  // kit looks only, until it can tell a read from an act.
+  "files.tree": {
+    modules: ["files"],
+    args: { dir: "/w" },
+    answers: filesAnswers,
+    gestures: {},
+  },
+  "files.file": {
+    modules: ["files"],
+    args: { path: "/w/a.txt" },
+    answers: filesAnswers,
+    gestures: {},
   },
 }
 
