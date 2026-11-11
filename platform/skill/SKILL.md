@@ -226,7 +226,9 @@ Use the existing Agent pass. Do not drop `BANDA_TOKEN`, edit credentials,
 or prepare a connection script for the Person (ADR 0104).
 
 ```sh
-banda account list
+banda account list                        # one JSON object a line, with its role
+banda account list --of claude --enabled --field id
+banda account list --kind gateway | banda account status -
 banda account discover
 banda account connect claude --id claude-work --name Work --folder /absolute/profile
 banda account add codex --id codex-work --name Work
@@ -239,6 +241,14 @@ banda account fallback codex-work
 banda account fallback # clear it
 banda account remove codex-work
 ```
+
+Each command is a filter: stdout holds only its result, one JSON value a
+line, and nothing for a change that answers nothing. A refusal goes to
+stderr as `{"error": {"code", "message"}}` and exits 1. `list` narrows by
+`--of`, `--kind`, `--enabled`/`--disabled` and `--role default|fallback`;
+`--field` prints one field of each. `status`, `enable`, `disable` and
+`remove` take `-` for IDs on stdin, bare or as `list`'s lines: each is
+asked, and a refused one does not stop the rest.
 
 The folder is on the engine's machine. Discovery includes Omarchy's
 profiles, and does not prove they are signed in. Connecting preserves the

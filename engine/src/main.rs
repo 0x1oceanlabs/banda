@@ -18,7 +18,9 @@
 //!   `browser.toml`; `--follow` prints it again on each change. It needs
 //!   no engine: the look is this machine's.
 //! - `banda account` discovers, connects and manages Accounts through the
-//!   engine, with the caller's pass (ADR 0104).
+//!   engine, with the caller's pass (ADR 0104), as filters: the result
+//!   alone on stdout, a list one JSON object a line, IDs on stdin for `-`,
+//!   a refusal on stderr (ADR 0108, decision 3).
 //! - `banda machine` prints what this machine is called and drawn by, its
 //!   name and icon, as its engine says them to every window.
 //! - `banda --version` prints the version and the build id, by which the
@@ -44,6 +46,7 @@
 //! window's child off Linux; or once the Mac's job stops as the Person
 //! logs out at its screen (`control.rs`).
 
+mod account;
 mod apps;
 mod build_id;
 // macOS's engine stops what a crashed one left; Linux's unit does (ADR
@@ -222,13 +225,13 @@ enum Command {
     /// Connect and manage Accounts through the engine, as this caller.
     Account {
         #[command(subcommand)]
-        what: AccountCommand,
+        what: account::AccountCommand,
     },
     /// A gateway account's key, kept in this machine's keyring (ADR 0078,
     /// decision 1).
     Secret {
         #[command(subcommand)]
-        what: SecretCommand,
+        what: account::SecretCommand,
     },
     /// Banda's settings files in ~/.config/banda: look.toml, sidebar.toml
     /// and harnesses.toml. Agents and people edit them; this checks them
@@ -384,74 +387,6 @@ enum ThreadCommand {
 }
 
 #[derive(Subcommand)]
-enum AccountCommand {
-    /// List the registered Accounts as JSON.
-    List,
-    /// Find existing profile folders, including Omarchy's. Does not read credentials.
-    Discover,
-    /// Create an Account with a private folder of its own, ready for sign-in.
-    Add {
-        harness: String,
-        #[arg(long)]
-        id: String,
-        #[arg(long)]
-        name: Option<String>,
-    },
-    /// Add an Account that reaches its models through a gateway at `url`,
-    /// as OpenRouter: its key is read from stdin into the keyring.
-    Gateway {
-        harness: String,
-        #[arg(long)]
-        id: String,
-        #[arg(long)]
-        url: String,
-        #[arg(long)]
-        name: Option<String>,
-    },
-    /// Sign a Codex Account in with an OpenAI API key, read from stdin.
-    /// Codex keeps it; Banda does not.
-    ApiKey { id: String },
-    /// Connect an existing profile on the engine's machine, without copying credentials.
-    Connect {
-        harness: String,
-        #[arg(long)]
-        id: String,
-        #[arg(long)]
-        folder: PathBuf,
-        #[arg(long)]
-        name: Option<String>,
-    },
-    /// Ask the Harness whether this Account is signed in. Returns no credentials.
-    Status { id: String },
-    /// Start sign-in. The Person completes the browser step or supplies a code.
-    Login {
-        id: String,
-        #[arg(long)]
-        way: Option<String>,
-    },
-    /// Read sign-in progress and terminal output as JSON.
-    LoginStatus { login: String },
-    /// Send one line to the sign-in terminal (for example a confirmation code).
-    LoginInput { login: String, text: String },
-    /// Cancel a running sign-in.
-    LoginCancel { login: String },
-    /// Refresh after sign-in ends; use account status to confirm the identity.
-    LoginFinish { login: String },
-    /// Remove an Account; its Threads move to the default after their Turn.
-    Remove { id: String },
-    /// Change the display name; the ID stays.
-    Rename { id: String, name: String },
-    /// Offer the Account for new Threads.
-    Enable { id: String },
-    /// Stop offering the Account for new Threads. Running Turns continue.
-    Disable { id: String },
-    /// Choose the default for new Threads.
-    Default { id: String },
-    /// Choose the fallback for new Threads; without an ID, clear it.
-    Fallback { id: Option<String> },
-}
-
-#[derive(Subcommand)]
 enum LookCommand {
     /// Checks look.toml, sidebar.toml, a sidebar preset, browser.toml, a
     /// theme's theme.toml, banda.toml or colors.toml, or with no files every
@@ -546,7 +481,9 @@ fn file_names() -> clap::builder::PossibleValuesParser {
 
 /// Why the program did not do its job, and how it exits.
 pub enum Failure {
-    /// The engine, or the CLI before it, refused: JSON on stdout, exit 1.
+    /// The engine, or the CLI before it, refused: JSON on stdout, exit 1;
+    /// on stderr for a filter, whose stdout holds only its result (ADR
+    /// 0108, decision 3).
     Refused(Refusal),
     /// No engine answers, or this program could not do its part: plain
     /// words on stderr, exit 2.
@@ -582,10 +519,25 @@ impl Failure {
         }
     }
 
+    /// A refusal as the CLI prints it.
+    pub fn said(refusal: &Refusal) -> Value {
+        json!({ "error": refusal })
+    }
+
+    /// Ends the program.
     fn exit(self) -> ExitCode {
+        self.end(false)
+    }
+
+    /// Ends the program; a `filter`'s refusal goes to stderr.
+    fn end(self, filter: bool) -> ExitCode {
         match self {
+            Failure::Refused(refusal) if filter => {
+                eprintln!("{}", Failure::said(&refusal));
+                ExitCode::FAILURE
+            }
             Failure::Refused(refusal) => {
-                println!("{}", json!({ "error": refusal }));
+                println!("{}", Failure::said(&refusal));
                 ExitCode::FAILURE
             }
             Failure::Broken(words) => {
@@ -658,6 +610,12 @@ fn main() -> ExitCode {
     let job = matches!(cli.command, Command::Serve { job: true, .. });
     logging(serving.map(|places| places.logs().join("engine.log")), !job);
     let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
+    // `banda account` and `banda secret` keep stdout for results alone; the
+    // rest of `banda` follows as its own change (ADR 0108, decision 3).
+    let filter = matches!(
+        cli.command,
+        Command::Account { .. } | Command::Secret { .. }
+    );
     let done = match (cli.command, way.zip(starts)) {
         // It needs no places: its variables say where the engine is.
         (Command::Mcp, _) => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
@@ -672,7 +630,7 @@ fn main() -> ExitCode {
     };
     match done {
         Ok(()) => ExitCode::SUCCESS,
-        Err(failure) => failure.exit(),
+        Err(failure) => failure.end(filter),
     }
 }
 
@@ -825,8 +783,8 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             });
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
-        Command::Account { what } => account_command(&places, what).await,
-        Command::Secret { what } => secret_command(&places, what).await,
+        Command::Account { what } => account::account(&places, what).await,
+        Command::Secret { what } => account::secret(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
         Command::Update { check, follow } => update(&places, check, follow).await,
@@ -895,155 +853,6 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 .await
         }
     }
-}
-
-#[derive(Subcommand)]
-enum SecretCommand {
-    /// Print a gateway account's key, for its Harness: Claude Code's
-    /// apiKeyHelper and Codex's auth command run it. Only the Person and
-    /// that account's own Harness process get it.
-    Get { account: String },
-    /// Keep a new key for a gateway account, read from stdin. It may be a
-    /// reference instead: op://… for 1Password, pass:<name> for pass.
-    Set { account: String },
-}
-
-/// `banda secret`: the key printed as it is, or kept from stdin.
-async fn secret_command(places: &Places, what: SecretCommand) -> Result<(), Failure> {
-    match what {
-        SecretCommand::Get { account } => {
-            let key = Client::connect(places)
-                .await?
-                .call(
-                    "harnesses.secret",
-                    None,
-                    CommandId::new(),
-                    json!({ "harness": account }),
-                )
-                .await?;
-            println!("{}", key.as_str().unwrap_or_default());
-            Ok(())
-        }
-        SecretCommand::Set { account } => {
-            let key = read_key()?;
-            let params = json!({ "harness": account, "key": key });
-            print_call(places, "harnesses.set_key", None, CommandId::new(), params).await
-        }
-    }
-}
-
-/// A key from stdin: its first line, typed unseen at a terminal.
-fn read_key() -> Result<String, Failure> {
-    use std::io::{BufRead, IsTerminal, Write};
-    let stdin = std::io::stdin();
-    let mut line = String::new();
-    if stdin.is_terminal() {
-        eprint!("Key: ");
-        let _ = std::io::stderr().flush();
-        read_unseen(&stdin, &mut line)
-    } else {
-        stdin.lock().read_line(&mut line)
-    }
-    .map_err(Failure::broken)?;
-    let key = line.trim();
-    if key.is_empty() {
-        return Err(Failure::broken("No key was given on stdin."));
-    }
-    Ok(key.to_owned())
-}
-
-/// Reads a line typed at the terminal, with its echo off where it can be.
-fn read_unseen(stdin: &std::io::Stdin, line: &mut String) -> std::io::Result<usize> {
-    use std::io::BufRead;
-    #[cfg(unix)]
-    {
-        use rustix::termios::{LocalModes, OptionalActions, tcgetattr, tcsetattr};
-        if let Ok(was) = tcgetattr(stdin) {
-            let mut quiet = was.clone();
-            quiet.local_modes.remove(LocalModes::ECHO);
-            if tcsetattr(stdin, OptionalActions::Now, &quiet).is_ok() {
-                let read = stdin.lock().read_line(line);
-                let _ = tcsetattr(stdin, OptionalActions::Now, &was);
-                eprintln!();
-                return read;
-            }
-        }
-    }
-    stdin.lock().read_line(line)
-}
-
-/// Calls one method and prints its answer as `{"ok": …}`.
-async fn account_command(places: &Places, what: AccountCommand) -> Result<(), Failure> {
-    let (method, params) = match what {
-        AccountCommand::Gateway {
-            harness,
-            id,
-            url,
-            name,
-        } => (
-            "harnesses.add_gateway",
-            json!({ "harness": harness, "id": id, "url": url, "name": name, "key": read_key()? }),
-        ),
-        AccountCommand::ApiKey { id } => (
-            "harnesses.api_key",
-            json!({ "harness": id, "key": read_key()? }),
-        ),
-        AccountCommand::Remove { id } => ("harnesses.remove_account", json!({ "harness": id })),
-        AccountCommand::List => ("harnesses.list", json!({})),
-        AccountCommand::Discover => ("harnesses.account_profiles", json!({})),
-        AccountCommand::Add { harness, id, name } => (
-            "harnesses.connect_account",
-            json!({ "harness": harness, "id": id, "name": name }),
-        ),
-        AccountCommand::Connect {
-            harness,
-            id,
-            folder,
-            name,
-        } => (
-            "harnesses.connect_account",
-            json!({ "harness": harness, "id": id, "folder": folder, "name": name }),
-        ),
-        AccountCommand::Status { id } => ("harnesses.account_status", json!({ "harness": id })),
-        AccountCommand::Login { id, way } => (
-            "harnesses.login_account",
-            json!({"harness": id, "way": way}),
-        ),
-        AccountCommand::LoginStatus { login } => {
-            ("harnesses.login_status", json!({"login": login}))
-        }
-        AccountCommand::LoginInput { login, text } => (
-            "harnesses.login_input",
-            json!({"login": login, "text": format!("{text}\n")}),
-        ),
-        AccountCommand::LoginCancel { login } => {
-            ("harnesses.login_cancel", json!({"login": login}))
-        }
-        AccountCommand::LoginFinish { login } => {
-            ("harnesses.login_finish", json!({"login": login}))
-        }
-        AccountCommand::Rename { id, name } => (
-            "harnesses.update_account",
-            json!({ "harness": id, "name": name }),
-        ),
-        AccountCommand::Enable { id } => (
-            "harnesses.update_account",
-            json!({ "harness": id, "enabled": true }),
-        ),
-        AccountCommand::Disable { id } => (
-            "harnesses.update_account",
-            json!({ "harness": id, "enabled": false }),
-        ),
-        AccountCommand::Default { id } => (
-            "harnesses.set_start",
-            json!({ "role": "account", "harness": id }),
-        ),
-        AccountCommand::Fallback { id } => (
-            "harnesses.set_start",
-            json!({ "role": "fallback", "harness": id }),
-        ),
-    };
-    print_call(places, method, None, CommandId::new(), params).await
 }
 
 async fn print_call(

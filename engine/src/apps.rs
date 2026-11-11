@@ -601,6 +601,10 @@ mod tests {
     fn only_these_methods_a_pass_reaches_that_are_no_tools() {
         let marked = [
             (
+                "harnesses.accounts",
+                "an Agent's `banda account list` reads what `list` gives it as a tool",
+            ),
+            (
                 "harnesses.update_account",
                 "an Agent may rename an Account and turn it on or off (ADR 0104, decision 4)",
             ),

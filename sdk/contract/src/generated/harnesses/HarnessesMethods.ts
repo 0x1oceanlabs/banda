@@ -37,6 +37,8 @@ list: CallMethod<Nothing, Array<HarnessView>>,
  * each entry, the Harnesses they are accounts of with what a new
  * one is called, and the default and the fallback a new Thread
  * starts on. Read it again on a `list_changed` after its `at`.
+ * Any Agent's pass answers here, as `banda account list` is
+ * theirs too (ADR 0104, decision 4).
  */
 accounts: CallMethod<Nothing, AccountList>, 
 /**
