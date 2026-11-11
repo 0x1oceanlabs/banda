@@ -588,7 +588,8 @@ fn arranged() -> Tracing {
          Agent opened into the own Group, first, a Group just after it in the order they \
          stood, and one led by a Pane of a kind that `leads` (a Thread) last, as its \
          lead's Project says, still filling the screen, as one an Agent opened; one \
-         already there stays, and with `only` only that Project's move.",
+         already there stays, but for the Person's own column in none, which joins the \
+         own Group, and with `only` only that Project's move, and none already there.",
     );
     t.ok("open", shows(WORK, "terminal.terminal", 1));
     let first = t.list()[0].id.to_string();
@@ -675,6 +676,25 @@ fn arranged() -> Tracing {
         .into();
     assert_eq!(t.layout()[3], work);
     assert_eq!(t.grouping()[3], [2, 2, 2, 2, 3, 3, 4, 5, 5, 6, 0]);
+    // A terminal of WORK put in none on WORK's own workspace joins the
+    // own Group too; the browser the Agent opened there stays in none.
+    let own_row = json!({ "place": {
+        "to": "column", "workspace": t.workspace(3), "index": 99,
+    } });
+    t.ok("open", and(shows(WORK, "terminal.terminal", 15), own_row));
+    // Not when only WORK's are sent home, as a Project just made one is.
+    let before = t.list().clone();
+    t.ok(
+        "arrange",
+        json!({ "projects": projects, "leads": leads, "only": WORK }),
+    );
+    assert_eq!(*t.list(), before);
+    t.ok("arrange", json!({ "projects": projects, "leads": leads }));
+    let work: Vec<_> = [1, 4, 8, 12, 15, 9, 10, 11, 7, 6, 13, 14]
+        .map(|n| vec![n])
+        .into();
+    assert_eq!(t.layout()[3], work);
+    assert_eq!(t.grouping()[3], [2, 2, 2, 2, 2, 3, 3, 4, 5, 5, 6, 0]);
     // Again, nothing moves.
     let before = t.list().clone();
     t.ok("arrange", json!({ "projects": projects, "leads": leads }));

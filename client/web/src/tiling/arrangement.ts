@@ -946,8 +946,9 @@ type Moving = {
  * opened, or the Project's own Group. A column in none joins it, and a
  * Group becomes it or stands just after it, in the order they stood. Any
  * other goes last. A Group that filled the screen fills it there, when
- * none does. One already there stays; with `only`, only that Project's
- * move. */
+ * none does. One already there stays, but for the Person's own column in
+ * none, which joins the own Group; with `only`, only that Project's move, and
+ * none already there. */
 function arrange(
   list: Arrangement,
   projects: readonly string[],
@@ -969,22 +970,24 @@ function arrange(
         lead !== undefined || panes.some((pane) => pane.by !== undefined)
       const project = (lead ?? workspace.columns[c].panes[0]).project
       const home = projects.includes(project) ? project : undefined
-      if (
-        workspace.project === home ||
-        (only !== undefined && only !== project)
-      ) {
+      const group = workspace.columns[c].group
+      const wasOwn = group !== undefined && group === workspace.own
+      const own = home !== undefined && (wasOwn || !ofAnAgent)
+      // On its workspace, but for the Person's own column in none
+      // when the Person arranges.
+      const settled = group !== undefined || !own || only !== undefined
+      const there = workspace.project === home && settled
+      if (there || (only !== undefined && only !== project)) {
         c = end
         continue
       }
-      const group = workspace.columns[c].group
-      const wasOwn = group !== undefined && group === workspace.own
       const filled = group !== undefined && group === workspace.filled
       if (wasOwn) delete workspace.own
       if (filled) delete workspace.filled
       moving.push({
         home,
         columns: workspace.columns.splice(start, end - start),
-        own: home !== undefined && (wasOwn || !ofAnAgent),
+        own,
         filled,
       })
     }
