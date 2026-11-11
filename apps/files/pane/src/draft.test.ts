@@ -1,4 +1,4 @@
-import { Refused } from "@banda/contract"
+import { Refused, Unreachable } from "@banda/contract"
 import type { Written } from "@banda/contract/files"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import {
@@ -237,4 +237,26 @@ test("a failed save says why, and goes again when asked", async () => {
   await on.land()
   expect(on.state.text).toBe("two")
   expect(draft.state.failed).toBeNull()
+})
+
+test("a save that never left, as its machine is away, says so in the pill's words and keeps the text", async () => {
+  const write: Write = () =>
+    Promise.reject(new Unreachable("arc", "arc is away"))
+  const draft = new Draft({ write, changed: () => {} })
+  draft.read({ text: "one\n", hash: "#one\n" })
+  draft.type("one\ntwo")
+  await vi.advanceTimersByTimeAsync(WAIT)
+  expect(draft.state.failed).toBe("arc is away")
+  expect(draft.state.mine).toBe("one\ntwo")
+})
+
+test("a save that may have landed before its machine went does not say it stayed here", async () => {
+  const write: Write = () =>
+    Promise.reject(new Unreachable("arc", "arc is away").sent())
+  const draft = new Draft({ write, changed: () => {} })
+  draft.read({ text: "one\n", hash: "#one\n" })
+  draft.type("one\ntwo")
+  await vi.advanceTimersByTimeAsync(WAIT)
+  expect(draft.state.failed).not.toBe("arc is away")
+  expect(draft.state.mine).toBe("one\ntwo")
 })
