@@ -4,7 +4,7 @@ import type { MachineRows } from "@banda/contract/sidebar"
 import { thisNamed } from "@banda/core"
 import type { Stand } from "@banda/ui/status"
 import { expect, test } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { cardOf } from "./card"
 import { machineOnRow, type OnRow } from "./machine-on-row"
 

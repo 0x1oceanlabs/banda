@@ -17,7 +17,7 @@
  */
 import type { Stand } from "@banda/ui/status"
 import { wakes } from "@banda/ui/lib/words"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import type { Block, Entry } from "./inbox"
 
 /** A row's key: its Project's and its own, as Alt+U and the counts walk

@@ -10,7 +10,7 @@ import {
 } from "react"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { actionFor } from "../actions/actions"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import {
   type By,
   heldUntil,
@@ -81,14 +81,15 @@ export function useOwnKeys(current: Row | undefined, holding: Holding): void {
 
 /**
  * Whether the list holds still (ADR 0098, decision 6; `hold.ts`): while
- * the pointer is over its scroller, a popup anchored in it is open, for
- * 2 s after a list key while it has the focus, and in check mode
- * (`checking`, S10b); until 150 ms after the last of those ends, and not
- * once the window is blurred or hidden, until the pointer comes back over
- * the list. `list` goes on the scroller; `by` says how the Person last
- * acted in it, by a key or the pointer.
+ * the pointer is over its scroller, unless the Person turned that off
+ * (`still`, `[hold] still`), a popup anchored in it is open, for 2 s
+ * after a list key while it has the focus, and in check mode (`checking`,
+ * S10b); until 150 ms after the last of those ends, and not once the
+ * window is blurred or hidden, until the pointer comes back over the
+ * list. `list` goes on the scroller; `by` says how the Person last acted
+ * in it, by a key or the pointer.
  */
-export function useHold(checking = false) {
+export function useHold({ still = true, checking = false } = {}) {
   const holders = useRef<Holders>(NO_HOLDERS)
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined)
   const by = useRef<By>("pointer")
@@ -140,6 +141,10 @@ export function useHold(checking = false) {
   const picking = !!anchor?.closest(`[${LIST}]`)
   useEffect(() => (picking ? take() : undefined), [picking, take])
   useEffect(() => change({ checking }), [checking, change])
+  // Turned off, the pointer over the list holds it no more.
+  useEffect(() => {
+    if (!still) change({ pointer: false })
+  }, [still, change])
   const byNow = useCallback(() => by.current, [])
   return {
     holding,
@@ -148,9 +153,10 @@ export function useHold(checking = false) {
     /** What the list's scroller listens to. */
     list: {
       [LIST]: "",
-      onPointerEnter: () => change({ pointer: true, away: false }),
+      onPointerEnter: () => change({ pointer: still, away: false }),
       onPointerMove: () => {
-        if (!holders.current.pointer) change({ pointer: true, away: false })
+        const { pointer, away } = holders.current
+        if (pointer !== still || away) change({ pointer: still, away: false })
       },
       onPointerLeave: () => change({ pointer: false }),
       onPointerDownCapture: () => {

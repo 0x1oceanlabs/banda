@@ -294,7 +294,9 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   await expect(
     sidebar.getByRole("button", { name: "Settings" })
   ).toHaveAttribute("title", "Settings (Alt+,)")
-  await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
+  await expect(
+    sidebar.getByRole("button", { name: "View", exact: true })
+  ).toBeVisible()
   for (const gone of ["Every action and its key", /^Theme/, "Add Project"])
     await expect(sidebar.getByRole("button", { name: gone })).toHaveCount(0)
   // The pointer off the sidebar, for the picture of its foot at rest.

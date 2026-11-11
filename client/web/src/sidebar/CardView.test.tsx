@@ -6,7 +6,7 @@ import type { Stand } from "@banda/ui/status"
 import type { ReactNode } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { Card } from "./CardView"
 import { cardOf, type CardOf } from "./card"
 

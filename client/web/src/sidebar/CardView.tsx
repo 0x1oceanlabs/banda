@@ -7,7 +7,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { short } from "@banda/ui/lib/words"
 import { DiamondIcon } from "lucide-react"
 import { Fragment, type ReactNode } from "react"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import {
   type CardModel,
   saysWords,

@@ -132,15 +132,15 @@ export const device = {
     listen: (listener: (route: string) => void) =>
       desktop()?.menu.listen(listener),
   },
-  /** `sidebar.toml`, which the desktop writes (ADR 0008). */
+  /** `sidebar.toml` (ADR 0008), whose keys the settings write. */
   sidebar: {
-    /** Arranges the sidebar by the preset `name`: the desktop writes it
-     * into the file, and the arrangement comes back with the look. */
-    preset: (name: string): void => {
+    /** Opens the file in the Person's editor; nothing without the
+     * desktop. */
+    edit: (): void => {
       desktop()
-        ?.sidebar.preset(name)
+        ?.sidebar.edit()
         .catch((error: unknown) => {
-          console.error("banda: the sidebar's preset was not written", error)
+          console.error("banda: sidebar.toml did not open", error)
         })
     },
   },

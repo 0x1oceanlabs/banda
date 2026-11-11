@@ -1,7 +1,7 @@
 import { createContext, useContext } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { HereContext, type Run, useRun } from "@banda/core/react"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 
 /**
  * How the Sidebar shown over the Strip lets itself go, for its parts that

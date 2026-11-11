@@ -58,7 +58,7 @@ const sources: Sources = {
   lists,
   projects,
   actions,
-  presets: { names: ["inbox", "projects", "places"], current: "inbox" },
+  group: "none",
   theme: {
     now: { theme: "platform", label: "Banda", mode: "system", both: true },
     listed: [],
@@ -118,9 +118,9 @@ function nameOf(row: Choice): string {
       return ["ask:", row.words, row.project && `in ${row.project}`]
         .filter(Boolean)
         .join(" ")
-    case "preset":
+    case "group":
     case "look": {
-      const name = row.kind === "look" ? row.title : row.name
+      const name = row.kind === "look" ? row.title : row.group
       return row.current ? `${name} ✓` : name
     }
     case "item":
@@ -403,12 +403,18 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("the sidebar's view holds its presets, the one in force ticked", () => {
+  test("the sidebar's view groups the list by none, Project or Machine, the one in force ticked (ADR 0098, decision 7)", () => {
     expect(labels("view")[0]).toEqual(["Actions", ["Sidebar view"]])
     const views: Branch = { kind: "views", id: "views" }
     expect(labels("", "root", views)).toEqual([
-      ["", ["inbox ✓", "projects", "places"]],
+      ["", ["none ✓", "project", "machine"]],
     ])
+    expect(labels("", "root", views, { group: "machine" })).toEqual([
+      ["", ["none", "project", "machine ✓"]],
+    ])
+    // Found by its words, as the menu names it.
+    expect(labels("mach", "root", views)).toEqual([["", ["machine"]]])
+    expect(labels("group by", "root", views)[0]?.[1]).toHaveLength(3)
   })
 
   test("the theme holds its schemes, the one in force ticked, then Themes…", () => {

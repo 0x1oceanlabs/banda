@@ -28,8 +28,8 @@ import { ToldSomeday, useSidebarView } from "./useSidebarView"
  * the Person's inbox of their Agents' work (ADR 0098), its tabs under the
  * header, every Thread of every Project where it stands, arranged as
  * `sidebar.toml` says (ADR 0008). The modules list what each Project has;
- * the sidebar only arranges and draws it. Its view menu writes the preset
- * into the file, through the desktop, and the new arrangement comes back
+ * the sidebar only arranges and draws it. Its view menu writes the keys
+ * into the file, by the settings, and the new arrangement comes back
  * with the look. What the Person asks of it runs by the actions' ids
  * (`useRun`, ADR 0087), as their keys would: the Window hands it what it
  * shows and how its area stands, no verb.

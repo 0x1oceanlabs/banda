@@ -21,9 +21,15 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { arrange, type Elsewhere, type ProjectLine, type Row } from "./arrange"
 import { type Inbox, inboxOf, type InboxView } from "./inbox"
-import type { Settings } from "./settings"
+import {
+  type Elsewhere,
+  type ProjectLine,
+  projectLines,
+  type Row,
+  rowsOf,
+} from "./rows"
+import { groupOf, listsProjects, type Settings } from "./settings"
 
 /** What of the order the sidebar list shows: one Project's rows alone,
  * as a click in the list of Projects asks; the tab in view, a cut list
@@ -32,8 +38,10 @@ import type { Settings } from "./settings"
  * same whatever these say; and the other machines' Projects, whose rows
  * it places among this one's, which they hand too. `settings` are the
  * look's, as the Person arranged the sidebar, unless a test hands its
- * own. */
-export type View = Partial<Omit<InboxView, "group">> & {
+ * own: how the list is grouped, and what the Inbox shows in what order. */
+export type View = Partial<
+  Pick<InboxView, "tab" | "more" | "folded" | "someday">
+> & {
   settings?: Settings
   only?: ProjectId
   elsewhere?: readonly Elsewhere[]
@@ -58,12 +66,33 @@ export function order(
     ...shown
   }: View = {}
 ): Ordered {
-  const arranged = arrange(lists, projects, settings, now, only, elsewhere)
-  const view = { tab: "inbox" as const, ...shown, group: arranged.group }
+  const mine = rowsOf(lists, projects, now)
+  const others = elsewhere.map((host) => ({
+    ...host,
+    rows: rowsOf(lists, host.projects, now, host.name),
+  }))
+  const rows = [...mine, ...others.flatMap((host) => host.rows)].filter(
+    (row) => only === undefined || row.project.id === only
+  )
+  const view: InboxView = {
+    tab: "inbox",
+    group: groupOf(settings),
+    ...settings.inbox,
+    ...shown,
+  }
   return {
-    ...inboxOf(arranged.rows, view, now),
-    rows: arranged.rows,
-    ...(arranged.projects ? { projects: arranged.projects } : {}),
+    ...inboxOf(rows, view, now),
+    rows,
+    ...(listsProjects(settings)
+      ? {
+          projects: [
+            ...projectLines(mine, projects, settings),
+            ...others.flatMap((host) =>
+              projectLines(host.rows, host.projects, settings, host.name)
+            ),
+          ],
+        }
+      : {}),
   }
 }
 

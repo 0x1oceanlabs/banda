@@ -4,7 +4,7 @@ import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { expect, test } from "vitest"
-import { rowsOf } from "./arrange"
+import { rowsOf } from "./rows"
 import {
   ARCHIVE_SHOWN,
   type Block,
@@ -245,6 +245,16 @@ test.each<[string, InboxView, string[]]>([
     ],
   ],
   [
+    "Working by machine",
+    { tab: "working", group: "machine" },
+    [
+      "[machine:] 0 wait, 2 work",
+      "working: build tests",
+      "[machine:mac] 0 wait, 1 work",
+      "working: lint",
+    ],
+  ],
+  [
     "Later by the local day, Someday and When done last",
     { tab: "later" },
     LATER,
@@ -321,6 +331,60 @@ test("a folded group keeps its rollup and hides its rows", () => {
   })
   const none = blocks.find((block) => block.key === "project:none")
   expect(none).not.toHaveProperty("project")
+})
+
+test("grouped by machine, each machine is a header, this one's naming none, another's its name, and none names a Project", () => {
+  const blocks = inboxOf(ROWS, { tab: "inbox", group: "machine" }, NOW).blocks
+  const groups = blocks.filter((block) => block.kind === "group")
+  expect(groups.map((group) => [group.key, group.host])).toEqual([
+    ["machine:", undefined],
+    ["machine:mac", "mac"],
+  ])
+  for (const group of groups) expect(group).not.toHaveProperty("project")
+})
+
+test("a group's rollup says how many wait and how many work, and the loudest of what calls, folded or not: never a Thread at work's", () => {
+  const rollup = (lists: Lists, folded: boolean) => {
+    const rows = rowsIn(lists)
+    const view: InboxView = {
+      tab: "inbox",
+      group: "project",
+      folded: new Set(folded ? ["project:p1"] : []),
+    }
+    const [group] = inboxOf(rows, view, NOW).blocks
+    return group?.kind === "group"
+      ? [group.mark, group.waiting, group.working, group.folded]
+      : undefined
+  }
+  // Failed is louder than a question, and both than Done.
+  const calls = {
+    p1: [
+      listed("asks", "asking", ago(14 * MINUTE)),
+      listed("done", "done", ago(40 * MINUTE)),
+      listed("broke", "failed", ago(MINUTE)),
+      listed("build", "running", ago(MINUTE), { began: ago(30 * MINUTE) }),
+    ],
+  }
+  expect(rollup(calls, true)).toEqual(["failed", 3, 1, true])
+  expect(rollup(calls, false)).toEqual(["failed", 3, 1, false])
+  // One that woke rings as its card does.
+  const woke = {
+    p1: [
+      listed("done", "done", ago(40 * MINUTE)),
+      listed("woke", "rest", ago(5 * HOUR), {
+        later: { at: ago(5 * HOUR), until: ago(10 * MINUTE) },
+      }),
+    ],
+  }
+  expect(rollup(woke, true)).toEqual(["woke", 2, 0, true])
+  // What only works and is open calls no one: its mark rests.
+  const quiet = {
+    p1: [
+      listed("seen", "rest", ago(2 * HOUR)),
+      listed("build", "running", ago(MINUTE), { began: ago(30 * MINUTE) }),
+    ],
+  }
+  expect(rollup(quiet, true)).toEqual(["rest", 0, 1, true])
 })
 
 test("the shelf shows its first six, then how many more; asked, all of them", () => {

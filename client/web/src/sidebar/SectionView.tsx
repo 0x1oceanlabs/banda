@@ -1,33 +1,25 @@
 import { useContext, useRef } from "react"
 import { flushSync } from "react-dom"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
 import { Separator } from "@banda/ui/components/separator"
 import { useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
-import {
-  AlarmClockIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  SquarePenIcon,
-} from "lucide-react"
-import type { Row as Arranged } from "./arrange"
+import { AlarmClockIcon } from "lucide-react"
+import type { Row as Arranged } from "./rows"
 import { type CardView, linesOf } from "./card"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
-import { Dismiss, newThread } from "./open"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
 import { HerePart } from "./HostPart"
+import { GroupHeader } from "./GroupHeader"
 import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
-import { NewThreadIn } from "./NewThreadIn"
-import type { GroupBlock, Region } from "./regions"
-import { Rollup } from "./Rollup"
+import type { Region } from "./regions"
 import type { WithMenu } from "./ProjectMenu"
-import { DENSITY, type Settings } from "./settings"
+import { groupOf, type Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
 import { HoldingContext } from "./useHold"
 import type { Holds } from "./useOrdered"
@@ -86,14 +78,8 @@ export function SectionView({
   const keyFor = useKeyLabel()
   const run = useRun()
   const holding = useContext(HoldingContext)
-  const dismiss = useContext(Dismiss)
-  // Grouped by Project, a header names each card's Project.
-  const view: CardView = {
-    density: DENSITY,
-    group: regions.some((region) => region.group?.by === "project")
-      ? "project"
-      : "none",
-  }
+  // Grouped, a header names what each card then leaves out.
+  const view: CardView = { density: settings.card, group: groupOf(settings) }
   // Grouped by Project, this machine's groups stand under its own label,
   // as another's do, where the Person asked it named too (ADR 0095,
   // decision 4). The label names only this machine's cards: another's,
@@ -115,65 +101,6 @@ export function SectionView({
   }
   const laterKey = (listed: Listed) =>
     keyFor(itemActionOf(listed, "later")?.id ?? "")
-
-  const header = (group: GroupBlock, label: string) => {
-    const { project } = group
-    const Chevron = group.folded ? ChevronRightIcon : ChevronDownIcon
-    // Another host's Project has no menu yet: each act would go to this
-    // machine's engine.
-    const mine = group.host === undefined
-    const head = (
-      <div className="group/head flex items-center">
-        <button
-          type="button"
-          aria-expanded={!group.folded}
-          className={cn(
-            "flex min-w-0 flex-1 items-center gap-1.5 rounded-control px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-            project ? "font-medium text-foreground" : "text-muted-foreground"
-          )}
-          onClick={() => onToggle(group.key)}
-        >
-          <Chevron className="size-3 shrink-0 text-muted-foreground" />
-          {/* No Project's group has its dashed tile. */}
-          {group.by === "project" && <ProjectSign project={project} />}
-          <span className="min-w-0 truncate" title={project?.folder}>
-            {label}
-          </span>
-          {/* What waits for the Person, the loudest's mark while folded,
-            then how many work, in grey (decision 7). */}
-          <span className="ml-auto flex items-center gap-1.5 text-muted-foreground tabular-nums">
-            {settings.projects.rollup && (
-              <Rollup
-                mark={group.folded ? group.mark : "rest"}
-                waiting={group.waiting}
-              />
-            )}
-            {group.working > 0 && group.working}
-          </span>
-        </button>
-        {group.by === "project" && !project && mine && (
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="New Thread in No Project"
-            title="New Thread"
-            onClick={() => {
-              // It goes, as from any New Thread, though none starts before
-              // the engine names this machine.
-              dismiss?.()
-              if (machine) newThread(run, { project: machine })
-            }}
-          >
-            <SquarePenIcon />
-          </Button>
-        )}
-        {project && mine && settings.projects.newThread && (
-          <NewThreadIn project={project} />
-        )}
-      </div>
-    )
-    return project && mine ? withMenu(project, head) : head
-  }
 
   /** A card's hover action: Wake in Later, else its Later's clock, which
    * opens the picker at the card. */
@@ -293,8 +220,22 @@ export function SectionView({
         return <InboxZero zero={block} />
       case "empty":
         return <EmptyTab tab={block.tab} only={only} projects={projects} />
-      case "group":
-        return header(block, item.place ?? "")
+      case "group": {
+        const { project } = block
+        const head = (
+          <GroupHeader
+            group={block}
+            settings={settings}
+            {...(machine ? { machine } : {})}
+            onFold={() => onToggle(block.key)}
+          />
+        )
+        // Another machine's Project has no menu yet: each act would go to
+        // this machine's engine.
+        return project && block.host === undefined
+          ? withMenu(project, head)
+          : head
+      }
     }
   }
 

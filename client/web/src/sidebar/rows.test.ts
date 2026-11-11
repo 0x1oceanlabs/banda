@@ -2,8 +2,9 @@ import type { ProjectSummary } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { arrange, type Arranged } from "./arrange"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
+import { type Ordered, order } from "./order"
+import type { Elsewhere } from "./rows"
 import type { Settings } from "./settings"
 
 const project = (id: string, name: string, folder: string): ProjectSummary => ({
@@ -59,8 +60,28 @@ const archive = (lists: Lists, ids: readonly string[]): Lists =>
   )
 
 /** Each row's Thread and where it stands. */
-const ids = (arranged: Arranged) =>
-  arranged.rows.map((row) => [row.listed.id, row.stand])
+const ids = (ordered: Ordered) =>
+  ordered.rows.map((row) => [row.listed.id, row.stand])
+
+/** What the list is grouped by, as its first header says: none with no
+ * header. */
+const groupedBy = ({ blocks }: Ordered) =>
+  blocks.find((block) => block.kind === "group")?.by ?? "none"
+
+/** The sidebar's order of `held` with `settings`, as the list draws it. */
+const arrange = (
+  held: Lists,
+  all: readonly ProjectSummary[],
+  settings: Settings,
+  now: number,
+  only?: string,
+  elsewhere: readonly Elsewhere[] = []
+) =>
+  order(held, all, now, {
+    settings,
+    elsewhere,
+    ...(only === undefined ? {} : { only }),
+  })
 
 /** Banda's presets, as platform/look/sidebars/*.toml group the list. */
 const PRESETS = {
@@ -104,15 +125,40 @@ test("every Project's rows, each where it stands, the archived among them", () =
 })
 
 test("the list is grouped as `group` says, the preset's or the Person's, and one list under the list of Projects (ADR 0098, decision 7)", () => {
-  expect(of("inbox").group).toBe("none")
-  expect(of("places").group).toBe("none")
-  expect(of("projects").group).toBe("project")
+  expect(groupedBy(of("inbox"))).toBe("none")
+  expect(groupedBy(of("places"))).toBe("none")
+  expect(groupedBy(of("projects"))).toBe("project")
   // The Person's key wins over the preset's.
-  expect(of("projects", { group: "none" }).group).toBe("none")
-  expect(of("inbox", { group: "project" }).group).toBe("project")
-  // By machine waits for the view menu (step 8): one list until then.
-  expect(of("inbox", { group: "machine" }).group).toBe("none")
+  expect(groupedBy(of("projects", { group: "none" }))).toBe("none")
+  expect(groupedBy(of("inbox", { group: "project" }))).toBe("project")
+  expect(groupedBy(of("projects", { group: "machine" }))).toBe("machine")
+  // Under the list of Projects, the Threads stay one list.
+  expect(groupedBy(of("places", { group: "machine" }))).toBe("none")
   expect(of("inbox").projects).toBeUndefined()
+})
+
+test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+U keep theirs (ADR 0098, decision 3)", () => {
+  const shown = (ordered: Ordered) =>
+    ordered.blocks.flatMap((block) =>
+      block.kind === "rows"
+        ? [
+            `${block.stand}: ${block.rows.map(({ row }) => row.listed.id).join(" ")}`,
+          ]
+        : []
+    )
+  const inbox = of("inbox", {}, undefined, ["logo"])
+  expect(shown(inbox)).toEqual([
+    "turn: form migration letters",
+    "working: release headers",
+  ])
+  const newest = of(
+    "inbox",
+    { inbox: { order: "newest", open: true, working: false } },
+    undefined,
+    ["logo"]
+  )
+  expect(shown(newest)).toEqual(["turn: letters migration form"])
+  expect(newest.keys).toEqual(inbox.keys)
 })
 
 test("places: the Projects listed above, and a click on one shows its rows alone", () => {
