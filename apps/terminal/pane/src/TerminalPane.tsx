@@ -290,6 +290,12 @@ function Screen({
   // not: it takes it as it shows.
   const owed = useRef(false)
   const again = useRef<(what: string) => void>(() => {})
+  // The boot of the engine the screen came from. A shell gone under
+  // another boot went with that engine, and what ran in it with it, so
+  // the Pane says so rather than start another by itself (ADR 0106,
+  // decision 4). Kept here as a new engine may take the old one's place
+  // while the Pane stays.
+  const heardUnder = useRef<string>(undefined)
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
   // What was typed while its machine was away, and the honest note.
@@ -363,13 +369,9 @@ function Screen({
     let stop = () => {}
     let running = false
     // Set once the screen came, so a shell the engine lost starts again
-    // once, not over and over.
-    let followed = false
-    // The boot of the engine the screen came from. A shell gone under
-    // another boot went with that engine, and what ran in it with it, so
-    // the Pane says so rather than start another by itself (ADR 0106,
-    // decision 4).
-    let heardUnder: string | undefined
+    // once, not over and over. A Pane drawn again on a new engine, its
+    // last one having said goodbye, has had its screen.
+    let followed = heardUnder.current !== undefined
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { project })
     const input = new Input(call, terminal, (error) => {
@@ -405,7 +407,7 @@ function Screen({
         case "snapshot":
           followed = true
           parked = false
-          heardUnder = bootOf(engine)
+          heardUnder.current = bootOf(engine)
           drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
           if (
@@ -447,7 +449,7 @@ function Screen({
           if (
             refusal?.code === "not_found" &&
             followed &&
-            bootOf(engine) !== heardUnder
+            bootOf(engine) !== heardUnder.current
           ) {
             followed = false
             told({ is: "restarted" })
@@ -563,7 +565,10 @@ function Screen({
       surface.current = made
       made.setVisible(!hidden)
       if (focusedNow.current) made.focus()
-      if (!shell) return follow()
+      // A program is another Pane's to start; a shell that had a screen is
+      // looked for first, so a new boot is heard rather than answered with
+      // a new shell.
+      if (!shell || heardUnder.current !== undefined) return follow()
       void start().then(
         () => {
           if (left) return

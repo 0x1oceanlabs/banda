@@ -280,6 +280,50 @@ test("a shell gone under the same boot starts again by itself, as it was closed 
   expect(element.textContent).not.toContain("Ended")
 })
 
+test("on a new engine, its last having said goodbye, a shell gone under another boot says Ended and opens nothing", async () => {
+  const first = engine(() => Promise.resolve(null))
+  const handles: Partial<PaneProps<TerminalArgs>> = {}
+  const { element, draw } = await mount(first.session, NEW, handles)
+  await act(async () => first.streams[0]!.hear(SCREEN))
+  const next = engine(() => Promise.resolve(null))
+  restarted(next.session)
+  handles.engine = next.session
+  await draw()
+  await settle()
+  expect(next.calls.some(({ method }) => method === "terminal.open")).toBe(
+    false
+  )
+  await act(async () =>
+    next.streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(next.calls.some(({ method }) => method === "terminal.open")).toBe(
+    false
+  )
+  expect(element.textContent).toContain("Ended: Banda restarted")
+})
+
+test("on a new engine of the same boot, the shell it finds runs on, and one it lost starts again", async () => {
+  const first = engine(() => Promise.resolve(null))
+  const handles: Partial<PaneProps<TerminalArgs>> = {}
+  const { element, draw } = await mount(first.session, NEW, handles)
+  await act(async () => first.streams[0]!.hear(SCREEN))
+  const next = engine(() => Promise.resolve(null))
+  handles.engine = next.session
+  await draw()
+  await settle()
+  await act(async () => next.streams[0]!.hear(SCREEN))
+  expect(element.textContent).not.toContain("Ended")
+  await act(async () =>
+    next.streams[0]!.end({ code: "not_found", message: "No such terminal." })
+  )
+  await settle()
+  expect(
+    next.calls.filter(({ method }) => method === "terminal.open")
+  ).toHaveLength(1)
+  expect(element.textContent).not.toContain("Ended")
+})
+
 test("a program gone under another boot says Ended too, and offers no shell", async () => {
   const { session, streams } = engine(() => Promise.resolve(null))
   const { element } = await mount(session, {
