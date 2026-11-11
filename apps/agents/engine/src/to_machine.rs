@@ -161,7 +161,8 @@ pub struct Unpack {
     /// Whether the folder's work that was not committed was unpacked
     /// here before it (`git.unpack_folder`), which the line says too.
     #[serde(default)]
-    pub folder: bool,
+    #[ts(optional)]
+    pub folder: Option<bool>,
 }
 
 /// What `agents.unpack_thread` answers: the Thread that came.
@@ -707,7 +708,7 @@ pub async fn unpack(
                 Path::new(&from.folder),
             ),
             (on.as_deref().unwrap_or("this machine"), &here.folder()),
-            folder,
+            folder.unwrap_or(false),
             NOTICE,
         ),
         false => notice(&from.name, Path::new(&from.folder), &here.folder(), NOTICE),

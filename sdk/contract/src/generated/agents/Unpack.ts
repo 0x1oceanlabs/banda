@@ -14,4 +14,4 @@ from?: string, on?: string,
  * Whether the folder's work that was not committed was unpacked
  * here before it (`git.unpack_folder`), which the line says too.
  */
-folder: boolean, };
+folder?: boolean, };
