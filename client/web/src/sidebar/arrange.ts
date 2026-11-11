@@ -15,7 +15,7 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { type Stand, standOf, wokeAt } from "@banda/ui/status"
-import type { Settings } from "./settings"
+import { groupOf, listsProjects, type Settings } from "./settings"
 
 /** One row: what a module listed, the Project it is in, where it stands
  * (`status.ts`), when it woke from a Later while its Person has not seen
@@ -64,9 +64,7 @@ export type Arranged = {
   /** Every row, this machine's and the other machines'. */
   rows: Row[]
   /** What the list is grouped by: each Project under its header, or one
-   * list. The presets' `group.by = "state"` is one list now, as the tabs
-   * and the Inbox's parts stand in for its sections (ADR 0098, decisions
-   * 2 and 7). */
+   * list (`groupOf`). */
   group: "none" | "project"
 }
 
@@ -119,7 +117,7 @@ export function arrange(
     (row) => only === undefined || row.project.id === only
   )
   return {
-    ...(settings.projects.list
+    ...(listsProjects(settings)
       ? {
           projects: [
             ...projectLines(all, namedIn(projects), settings),
@@ -132,7 +130,7 @@ export function arrange(
         }
       : {}),
     rows,
-    group: settings.group.by === "project" ? "project" : "none",
+    group: groupOf(settings),
   }
 }
 

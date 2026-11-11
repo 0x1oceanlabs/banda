@@ -290,8 +290,8 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
     .poll(() => textOf(join(dir, "config/sidebar.toml")))
     .toContain('preset = "projects"')
   // Each key says what it does.
-  await expect(settings.locator('[data-key="group.by"]')).toContainText(
-    "What makes a section"
+  await expect(settings.locator('[data-key="group"]')).toContainText(
+    "How the list is grouped"
   )
 
   await sections.getByRole("button", { name: /Sounds/ }).click()

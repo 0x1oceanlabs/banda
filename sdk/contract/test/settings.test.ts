@@ -33,10 +33,27 @@ test("each key of a file is a row, from its schema", () => {
   )
 })
 
-test("a list of states is some of them, and every file has rows", () => {
-  const states = rowsOf("sidebar.toml").find((r) => r.key === "group.states")!
-  expect(states.control.kind).toBe("many")
+test("a list of counts is some of them, and every file has rows", () => {
+  const counts = rowsOf("sidebar.toml").find((r) => r.key === "bar.counts")!
+  expect(counts.control.kind).toBe("many")
   for (const file of Object.keys(SCHEMAS)) expect(rowsOf(file)).not.toEqual([])
+})
+
+test("the sidebar's view is a choice of groups and of a card's lines, and switches for the Inbox's parts (ADR 0098)", () => {
+  const rows = rowsOf("sidebar.toml")
+  const control = (key: string) => rows.find((r) => r.key === key)?.control
+  const values = (key: string) => {
+    const at = control(key)
+    return at?.kind === "choice" ? at.options.map((o) => o.value) : at
+  }
+  expect(values("group")).toEqual(["none", "project", "machine"])
+  expect(values("card")).toEqual(["auto", 3, 2, 1])
+  expect(values("inbox.order")).toEqual(["oldest", "newest"])
+  for (const key of ["inbox.open", "inbox.working", "hold.still"])
+    expect(control(key)).toEqual({ kind: "switch" })
+  // What ADR 0098 put out of use is no row.
+  for (const gone of ["group.by", "row.lines", "projects.list"])
+    expect(control(gone)).toBeUndefined()
 })
 
 test("how another machine shows on rows is one of three, and naming this one a switch", () => {

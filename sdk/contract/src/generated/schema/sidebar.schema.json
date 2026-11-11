@@ -10,8 +10,23 @@
       "x-class": "shared"
     },
     "group": {
-      "description": "How Threads fall into sections.",
-      "$ref": "#/$defs/GroupSettings",
+      "description": "How the list is grouped: one list, each Project under its header,\nor each machine.",
+      "$ref": "#/$defs/GroupBy",
+      "x-class": "shared"
+    },
+    "card": {
+      "description": "How many lines a card has: by where it stands, or 3, 2 or 1\neverywhere.",
+      "$ref": "#/$defs/Card",
+      "x-class": "shared"
+    },
+    "inbox": {
+      "description": "What the Inbox shows, and in what order.",
+      "$ref": "#/$defs/InboxSettings",
+      "x-class": "shared"
+    },
+    "hold": {
+      "description": "How the list keeps still.",
+      "$ref": "#/$defs/HoldSettings",
       "x-class": "shared"
     },
     "sort": {
@@ -20,13 +35,8 @@
       "x-class": "shared"
     },
     "projects": {
-      "description": "The Projects above the Threads. `[spaces]` before ADR 0069 (grace).",
+      "description": "The Projects in the list. `[spaces]` before ADR 0069 (grace).",
       "$ref": "#/$defs/ProjectsSettings",
-      "x-class": "shared"
-    },
-    "row": {
-      "description": "What a Thread's row shows.",
-      "$ref": "#/$defs/RowSettings",
       "x-class": "shared"
     },
     "bar": {
@@ -47,104 +57,77 @@
   },
   "additionalProperties": false,
   "$defs": {
-    "GroupSettings": {
-      "type": "object",
-      "properties": {
-        "by": {
-          "description": "What makes a section: a Thread's state, its Project, or nothing.",
-          "$ref": "#/$defs/GroupBy"
-        },
-        "states": {
-          "description": "The sections by state, in this order.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/State"
-          }
-        },
-        "bottom": {
-          "description": "Shelves at the bottom, each with its count.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/State"
-          }
-        },
-        "folded": {
-          "description": "Sections, shelves or Projects (by name) that start folded.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "limit": {
-          "description": "Rows a section shows before \"Show more\"; 0 shows all.",
-          "type": "integer",
-          "format": "uint32",
-          "minimum": 0
-        },
-        "empty": {
-          "description": "What an empty section does.",
-          "$ref": "#/$defs/Empty"
-        }
-      },
-      "additionalProperties": false
-    },
     "GroupBy": {
+      "description": "How the list is grouped (ADR 0098, decision 7).",
       "oneOf": [
-        {
-          "description": "Sections by what each Thread's mark says.",
-          "type": "string",
-          "const": "state"
-        },
-        {
-          "description": "Each Project a section of its own. `space` before ADR 0069 (grace).",
-          "type": "string",
-          "const": "project"
-        },
         {
           "description": "One list.",
           "type": "string",
           "const": "none"
+        },
+        {
+          "description": "Each Project under its header.",
+          "type": "string",
+          "const": "project"
+        },
+        {
+          "description": "Each machine under its header.",
+          "type": "string",
+          "const": "machine"
         }
       ]
     },
-    "State": {
-      "description": "A Thread's mark as the sidebar sees it.",
+    "Card": {
+      "description": "How many lines a card has: \"auto\", by where it stands, or 3, 2 or 1 everywhere.",
+      "enum": [
+        "auto",
+        3,
+        2,
+        1
+      ]
+    },
+    "InboxSettings": {
+      "type": "object",
+      "properties": {
+        "order": {
+          "description": "Your turn's order: the oldest call first, or the newest.",
+          "$ref": "#/$defs/InboxOrder"
+        },
+        "open": {
+          "description": "Open in the Inbox: Threads seen, with no turn running.",
+          "type": "boolean"
+        },
+        "working": {
+          "description": "The Working shelf in the Inbox, under Open.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "InboxOrder": {
+      "description": "Your turn's order in the Inbox (ADR 0098, decision 3).",
       "oneOf": [
         {
-          "description": "Neither at work nor archived: it asks, it failed, it finished, or\nthe Person has it in hand.",
+          "description": "The one that waited longest first: no one waits forever.",
           "type": "string",
-          "const": "active"
+          "const": "oldest"
         },
         {
-          "description": "Its Agent is at work.",
+          "description": "The latest call first.",
           "type": "string",
-          "const": "working"
-        },
-        {
-          "description": "Put away until a time, or until its turn ends (ADR 0074).\n`snoozed` before ADR 0098 (grace).",
-          "type": "string",
-          "const": "later"
-        },
-        {
-          "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.\n`settled` before ADR 0069 (grace).",
-          "type": "string",
-          "const": "archived"
+          "const": "newest"
         }
       ]
     },
-    "Empty": {
-      "oneOf": [
-        {
-          "description": "Left out.",
-          "type": "string",
-          "const": "hide"
-        },
-        {
-          "description": "Shown with its title.",
-          "type": "string",
-          "const": "show"
+    "HoldSettings": {
+      "type": "object",
+      "properties": {
+        "still": {
+          "description": "The order keeps still under the pointer: what is new takes its\nplace when the pointer leaves.",
+          "type": "boolean"
         }
-      ]
+      },
+      "additionalProperties": false
     },
     "SortSettings": {
       "type": "object",
@@ -178,12 +161,8 @@
     "ProjectsSettings": {
       "type": "object",
       "properties": {
-        "list": {
-          "description": "A list of Projects above the Threads.",
-          "type": "boolean"
-        },
         "order": {
-          "description": "The order of that list.",
+          "description": "The order of the Projects.",
           "$ref": "#/$defs/ProjectOrder"
         },
         "rollup": {
@@ -208,87 +187,6 @@
           "description": "By name, A to Z.",
           "type": "string",
           "const": "name"
-        }
-      ]
-    },
-    "RowSettings": {
-      "type": "object",
-      "properties": {
-        "lines": {
-          "description": "1, 2 or 3: one of Banda's layouts.",
-          "type": "integer",
-          "format": "uint8",
-          "minimum": 1,
-          "maximum": 3
-        },
-        "hide": {
-          "description": "Parts the layout leaves out.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Part"
-          }
-        },
-        "line1": {
-          "description": "The first line of a layout of your own, which replaces the lines'.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Part"
-          }
-        },
-        "line2": {
-          "description": "Its second line.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Part"
-          }
-        },
-        "line3": {
-          "description": "Its third line.",
-          "type": "array",
-          "items": {
-            "$ref": "#/$defs/Part"
-          }
-        }
-      },
-      "additionalProperties": false
-    },
-    "Part": {
-      "description": "A part of a row; `~` pushes the rest of its line to the right.",
-      "oneOf": [
-        {
-          "description": "The Thread's mark.",
-          "type": "string",
-          "const": "mark"
-        },
-        {
-          "description": "Its title.",
-          "type": "string",
-          "const": "title"
-        },
-        {
-          "description": "Its Project. `space` before ADR 0069 (grace).",
-          "type": "string",
-          "const": "project"
-        },
-        {
-          "description": "Its Harness.",
-          "type": "string",
-          "const": "harness"
-        },
-        {
-          "description": "What it does now, and when it last changed.",
-          "type": "string",
-          "const": "status"
-        },
-        {
-          "description": "The last thing said.",
-          "type": "string",
-          "const": "note"
-        },
-        {
-          "description": "Pushes the rest of the line to the right.",
-          "type": "string",
-          "const": "~"
         }
       ]
     },

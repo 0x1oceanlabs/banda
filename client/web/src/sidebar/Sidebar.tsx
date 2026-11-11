@@ -17,6 +17,7 @@ import { regionsOf } from "./regions"
 import { ProjectMenu, type WithMenu } from "./ProjectMenu"
 import { ProjectsList } from "./ProjectsList"
 import { SectionView } from "./SectionView"
+import { groupOf } from "./settings"
 import { PANEL, ShowTab, tabId, tabKey, Tabs } from "./Tabs"
 import { HoldingContext } from "./useHold"
 import { useOrdered } from "./useOrdered"
@@ -202,7 +203,7 @@ export function Sidebar({
                   {/* Grouped by Project, each host's groups follow under its
                   label; grouped otherwise, its rows are among this machine's,
                   and its label shows only what is not as usual. */}
-                  {settings.group.by === "project"
+                  {groupOf(settings) === "project"
                     ? hosts.map((host) => part(host, drawn(host.name)))
                     : !ordered.projects &&
                       hosts.filter(saysSomething).map((host) => part(host))}

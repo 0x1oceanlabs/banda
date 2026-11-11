@@ -141,10 +141,7 @@ test("the list is what Alt+U walks from the top: Your turn oldest first, however
   }
   // Each preset: what called first first, across Projects, then what
   // works, by when it began.
-  const projects: Settings = {
-    ...DEFAULT_SIDEBAR,
-    group: { ...DEFAULT_SIDEBAR.group, by: "project" },
-  }
+  const projects: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
   for (const settings of [
     DEFAULT_SIDEBAR,
     { ...DEFAULT_SIDEBAR, sort: { by: "title" as const } },

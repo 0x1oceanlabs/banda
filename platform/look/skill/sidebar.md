@@ -1,14 +1,15 @@
 ---
 name: sidebar
-description: Arrange Banda's sidebar - group, sort, fold, rows of one to three lines, presets - in ~/.config/banda/sidebar.toml.
+description: Arrange Banda's sidebar - group by Project or machine, a card's lines, the Inbox's order and parts, presets - in ~/.config/banda/sidebar.toml.
 ---
 
 # The sidebar
 
-`~/.config/banda/sidebar.toml` arranges the sidebar: how Threads are
-grouped and sorted, and what a row shows. Its keys lie over the preset it
-names, and the preset's over Banda's defaults. The Person's keys always
-win, so switching the preset never undoes them.
+`~/.config/banda/sidebar.toml` arranges the sidebar, the Person's inbox
+of their Agents' work (ADR 0098): how the list is grouped, how many
+lines a card has, and what the Inbox shows. Its keys lie over the preset
+it names, and the preset's over Banda's defaults. The Person's keys
+always win, so switching the preset never undoes them.
 
 The view menu in the sidebar's header switches the preset: it writes
 `preset = "…"` into this file and keeps everything else. If the file is
@@ -16,42 +17,34 @@ not there yet, it starts as this template:
 
 <!-- include ../sidebar.toml -->
 
-## States
+## The view
 
-Where a Thread stands, as the sidebar sees it:
+- `group`: `"none"`, one list (the default); `"project"`, each Project
+  under its header; `"machine"`, each machine under its header.
+- `card`: a card's lines. `"auto"` (the default) follows where it
+  stands: three in Your turn, two there when grouped by Project, one for
+  the rest. `3`, `2` or `1` is as many everywhere.
+- `[inbox]`: `order` is Your turn's, `"oldest"` first (the default, so
+  no one waits forever) or `"newest"`. Alt+U walks the oldest first
+  whatever it says. `open = false` leaves Open out of the Inbox, and
+  `working = false` its Working shelf.
+- `[hold]` `still = false` lets the list move under the pointer; by
+  default its order keeps still there, and what is new takes its place
+  when the pointer leaves.
 
-- `active`: neither at work nor archived. It asks, it failed, it finished,
-  or the Person has it in hand; its mark says which. Its section has no
-  heading.
-- `working`: its Agent is at work.
-- `later`: put away until a time, or until its turn ends, from its row's
-  clock, its menu or with Alt+Z (ADR 0074). It comes back then, or as soon
-  as it asks, fails or hears from its Person. A Thread that asks cannot be
-  put off.
-- `archived`: put away. Only the Person archives a Thread, from its row's
-  menu (a right click) or with Alt+S, and the Panes that show it close.
-  Anything new in it brings it back, as a reply brings a letter back in
-  Gmail. Its old name, `settled`, still reads as it.
-
-A state named in neither `states` nor `bottom` goes to the last section,
-so no Thread is ever hidden. `later` alone gets a shelf of its own above
-Archive, so a Later always puts its Thread away.
+The window draws `card`, `[inbox]`, `[hold]` and `group = "machine"`
+from ADR 0098's step 8 on, with the view menu that writes them. Until
+then they are read and checked, and change nothing on screen.
 
 ## Presets
 
-Banda's own:
+Banda's own, kept so a file that names one still reads:
 
-- `inbox`: as T3 Code's sidebar, one list, what waits for the Person
-  first; below, the shelves "Working", then "Later" and "Archive",
-  folded. It is the defaults.
-- `projects`: each Project a section.
-- `places`: a list of Projects above, a click shows one's Threads; below,
-  every Thread by need, the archived ones folded.
-
-However it is arranged, a card's lines follow where it stands (ADR 0098,
-decision 9): three in Your turn, two there when grouped by Project, one
-for the rest. The `[row]` keys no longer lay a card out, and a preset's
-`lines` is not read.
+- `inbox`: one list. It is the defaults.
+- `projects`: `group = "project"`.
+- `places`: `group = "project"` too. Until the list of Projects goes
+  (ADR 0098, decision 16), the window shows that list above, and the
+  Threads as one list.
 
 A preset of the Person's own is `~/.config/banda/sidebars/<name>.toml`,
 with the keys of `sidebar.toml` except `preset`. The view menu lists it.
@@ -59,11 +52,21 @@ Behind Banda's fence the settings folder is read-only to you: write the
 preset in your Project, and give your Person the line that copies it
 there.
 
-Names from before ADR 0069 still read, for one stable release: the
-preset `spaces`, `by = "space"`, the table `[spaces]`, the part
-`"space"` and the state `"settled"`. `banda look check` says each one's
-name now; write that one.
 A file named as one of Banda's presets wins over it.
+
+## Keys no longer used
+
+ADR 0098 put these out of use: `[group]` and its keys (`by`, `states`,
+`bottom`, `folded`, `limit`, `empty`), `[row]` and its keys (`lines`,
+`hide`, `line1`–`line3`), and `[projects]` `list`. A file that still
+says one is told so at its line; the key is left out and the rest of the
+file holds. Take the line out, and write `group` or `card` instead where
+one says the same.
+
+Names from before ADR 0069 still read, for one stable release: the
+preset `spaces` and the table `[spaces]`; and from before ADR 0098 the
+table `[snooze]`. `banda look check` says each one's name now; write
+that one.
 
 ## Machines
 
@@ -79,13 +82,12 @@ nothing is named, and these keys change nothing.
 
 ## Asked for, and what to set
 
-- "Group my Threads by Project": `[group]` `by = "project"`.
-- "One line per Thread", "Hide the Harness": not yet. `[row]` is no
-  longer read; a key for a card's lines, `card = 1 | 2 | 3`, comes later
-  (ADR 0098, decision 9). Tell your Person so, and write no `[row]`.
-- "The working Threads in the list, not on a shelf": `[group]`
-  `states = ["working", "active"]` and `bottom = ["archived"]`.
-- "Show the archived Threads open": `[group]` `folded = []`.
+- "Group my Threads by Project": `group = "project"`.
+- "Group them by machine": `group = "machine"`.
+- "One line per Thread": `card = 1`.
+- "The newest call first": `[inbox]` `order = "newest"`.
+- "Only what is my turn in the Inbox": `[inbox]` `open = false` and
+  `working = false`.
 - "Only the other machine's icon on its rows": `[machines]` `rows = "icon"`.
 - "Name this machine too": `[machines]` `this-too = true`.
 - "The Later picker offers half an hour and Friday afternoon": `[later]`

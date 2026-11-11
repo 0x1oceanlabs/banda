@@ -1,7 +1,8 @@
-//! How the sidebar arranges its Threads (ADR 0008): the Person's
-//! `~/.config/banda/sidebar.toml`, over the preset it names, over Banda's
-//! defaults. A preset is a file with the same keys: Banda's own ship in
-//! this crate, and the Person's are `~/.config/banda/sidebars/<name>.toml`.
+//! How the sidebar arranges its Threads (ADR 0008, as ADR 0098 amends
+//! it): the Person's `~/.config/banda/sidebar.toml`, over the preset it
+//! names, over Banda's defaults. A preset is a file with the same keys:
+//! Banda's own ship in this crate, and the Person's are
+//! `~/.config/banda/sidebars/<name>.toml`.
 //!
 //! It is this machine's, as the look is, so `banda look` resolves it
 //! with the look, watches its files with the look's, and names its
@@ -9,45 +10,86 @@
 
 use crate::Places;
 use crate::Problem;
-use crate::keyed::{self, Keyed, Layer, Renamed};
+use crate::keyed::{self, Keyed, Layer, Renamed, Retired};
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Path, PathBuf};
 use toml::Spanned;
 use ts_rs::TS;
 
-/// A Thread's mark as the sidebar sees it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "sidebar/")]
-pub enum State {
-    /// Neither at work nor archived: it asks, it failed, it finished, or
-    /// the Person has it in hand.
-    Active,
-    /// Its Agent is at work.
-    Working,
-    /// Put away until a time, or until its turn ends (ADR 0074).
-    /// `snoozed` before ADR 0098 (grace).
-    #[serde(alias = "snoozed")]
-    Later,
-    /// Put away by the Person, until something new happens in it
-    /// (ADR 0069). Its name was `settled`, which still reads as it.
-    /// `settled` before ADR 0069 (grace).
-    #[serde(alias = "settled")]
-    Archived,
-}
-
+/// How the list is grouped (ADR 0098, decision 7).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum GroupBy {
-    /// Sections by what each Thread's mark says.
-    State,
-    /// Each Project a section of its own. `space` before ADR 0069 (grace).
-    #[serde(alias = "space")]
-    Project,
     /// One list.
     None,
+    /// Each Project under its header.
+    Project,
+    /// Each machine under its header.
+    Machine,
+}
+
+/// How many lines a card has (ADR 0098, decision 9).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, TS)]
+#[ts(export, export_to = "sidebar/", type = "\"auto\" | 3 | 2 | 1")]
+pub enum Card {
+    /// By where it stands: three in Your turn, two there when grouped by
+    /// Project, one for the rest.
+    Auto,
+    /// As many everywhere: 3, 2 or 1.
+    Lines(u8),
+}
+
+impl TryFrom<toml::Value> for Card {
+    type Error = String;
+
+    fn try_from(value: toml::Value) -> Result<Card, String> {
+        match value {
+            toml::Value::String(word) if word == "auto" => Ok(Card::Auto),
+            toml::Value::Integer(lines @ 1..=3) => Ok(Card::Lines(lines as u8)),
+            value => Err(format!("card is \"auto\", 3, 2 or 1, not {value}")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Card {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Card, D::Error> {
+        crate::sound::from_toml(deserializer)
+    }
+}
+
+impl Serialize for Card {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Card::Auto => serializer.serialize_str("auto"),
+            Card::Lines(lines) => serializer.serialize_u8(*lines),
+        }
+    }
+}
+
+impl JsonSchema for Card {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Card".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "description": "How many lines a card has: \"auto\", by where it stands, or 3, 2 or 1 everywhere.",
+            "enum": ["auto", 3, 2, 1],
+        })
+    }
+}
+
+/// Your turn's order in the Inbox (ADR 0098, decision 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "sidebar/")]
+pub enum InboxOrder {
+    /// The one that waited longest first: no one waits forever.
+    Oldest,
+    /// The latest call first.
+    Newest,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
@@ -70,39 +112,6 @@ pub enum ProjectOrder {
     Changed,
     /// By name, A to Z.
     Name,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "sidebar/")]
-pub enum Empty {
-    /// Left out.
-    Hide,
-    /// Shown with its title.
-    Show,
-}
-
-/// A part of a row; `~` pushes the rest of its line to the right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "sidebar/")]
-pub enum Part {
-    /// The Thread's mark.
-    Mark,
-    /// Its title.
-    Title,
-    /// Its Project. `space` before ADR 0069 (grace).
-    #[serde(alias = "space")]
-    Project,
-    /// Its Harness.
-    Harness,
-    /// What it does now, and when it last changed.
-    Status,
-    /// The last thing said.
-    Note,
-    /// Pushes the rest of the line to the right.
-    #[serde(rename = "~")]
-    Push,
 }
 
 /// When the bar's middle shows the sidebar's counts.
@@ -166,18 +175,24 @@ pub struct SidebarSettings {
     /// Banda's inbox, projects or places, or one of yours in sidebars/.
     #[schemars(with = "Option<String>")]
     pub preset: Option<Spanned<String>>,
-    /// How Threads fall into sections.
+    /// How the list is grouped: one list, each Project under its header,
+    /// or each machine.
+    pub group: Option<GroupBy>,
+    /// How many lines a card has: by where it stands, or 3, 2 or 1
+    /// everywhere.
+    pub card: Option<Card>,
+    /// What the Inbox shows, and in what order.
     #[serde(default)]
-    pub group: GroupSettings,
+    pub inbox: InboxSettings,
+    /// How the list keeps still.
+    #[serde(default)]
+    pub hold: HoldSettings,
     /// Their order in a section.
     #[serde(default)]
     pub sort: SortSettings,
-    /// The Projects above the Threads. `[spaces]` before ADR 0069 (grace).
+    /// The Projects in the list. `[spaces]` before ADR 0069 (grace).
     #[serde(default, alias = "spaces")]
     pub projects: ProjectsSettings,
-    /// What a Thread's row shows.
-    #[serde(default)]
-    pub row: RowSettings,
     /// The counts in the bar's middle: who waits for you, who works.
     #[serde(default)]
     pub bar: BarSettings,
@@ -188,6 +203,25 @@ pub struct SidebarSettings {
     /// (ADR 0095).
     #[serde(default)]
     pub machines: MachinesSettings,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct InboxSettings {
+    /// Your turn's order: the oldest call first, or the newest.
+    pub order: Option<InboxOrder>,
+    /// Open in the Inbox: Threads seen, with no turn running.
+    pub open: Option<bool>,
+    /// The Working shelf in the Inbox, under Open.
+    pub working: Option<bool>,
+}
+
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct HoldSettings {
+    /// The order keeps still under the pointer: what is new takes its
+    /// place when the pointer leaves.
+    pub still: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -213,23 +247,6 @@ pub struct LaterSettings {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct GroupSettings {
-    /// What makes a section: a Thread's state, its Project, or nothing.
-    pub by: Option<GroupBy>,
-    /// The sections by state, in this order.
-    pub states: Option<Vec<State>>,
-    /// Shelves at the bottom, each with its count.
-    pub bottom: Option<Vec<State>>,
-    /// Sections, shelves or Projects (by name) that start folded.
-    pub folded: Option<Vec<String>>,
-    /// Rows a section shows before "Show more"; 0 shows all.
-    pub limit: Option<u32>,
-    /// What an empty section does.
-    pub empty: Option<Empty>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SortSettings {
     /// What comes first in a section.
     pub by: Option<SortBy>,
@@ -238,30 +255,12 @@ pub struct SortSettings {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ProjectsSettings {
-    /// A list of Projects above the Threads.
-    pub list: Option<bool>,
-    /// The order of that list.
+    /// The order of the Projects.
     pub order: Option<ProjectOrder>,
     /// A Project shows its loudest mark and how many need you.
     pub rollup: Option<bool>,
     /// Each Project offers a new Thread in it.
     pub new_thread: Option<bool>,
-}
-
-#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
-#[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct RowSettings {
-    /// 1, 2 or 3: one of Banda's layouts.
-    #[schemars(with = "Option<u8>", range(min = 1, max = 3))]
-    pub lines: Option<Spanned<u8>>,
-    /// Parts the layout leaves out.
-    pub hide: Option<Vec<Part>>,
-    /// The first line of a layout of your own, which replaces the lines'.
-    pub line1: Option<Vec<Part>>,
-    /// Its second line.
-    pub line2: Option<Vec<Part>>,
-    /// Its third line.
-    pub line3: Option<Vec<Part>>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -291,13 +290,35 @@ pub struct Sidebar {
     pub preset: String,
     /// Every preset there is: Banda's, then the Person's.
     pub presets: Vec<Preset>,
-    pub group: Group,
+    pub group: GroupBy,
+    pub card: Card,
+    pub inbox: Inbox,
+    pub hold: Hold,
     pub sort: Sort,
     pub projects: Projects,
-    pub row: Row,
     pub bar: BarCounts,
     pub later: Later,
     pub machines: Machines,
+}
+
+/// What the Inbox shows, and in what order (ADR 0098, decision 3).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "sidebar/")]
+pub struct Inbox {
+    /// Your turn's order.
+    pub order: InboxOrder,
+    /// Open shows, under Your turn.
+    pub open: bool,
+    /// The Working shelf shows, under Open.
+    pub working: bool,
+}
+
+/// How the list keeps still (ADR 0098, decision 6).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "sidebar/")]
+pub struct Hold {
+    /// The order keeps still under the pointer.
+    pub still: bool,
 }
 
 /// How the window names the machines (ADR 0095): with no other machine
@@ -344,21 +365,6 @@ pub enum PresetOrigin {
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "sidebar/")]
-pub struct Group {
-    pub by: GroupBy,
-    /// The sections, in this order.
-    pub states: Vec<State>,
-    /// Shelves at the bottom, each with its count.
-    pub bottom: Vec<State>,
-    /// Sections, shelves or Projects (by name) that start folded.
-    pub folded: Vec<String>,
-    /// Rows a section shows before "Show more"; 0 shows all.
-    pub limit: u32,
-    pub empty: Empty,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "sidebar/")]
 pub struct Sort {
     pub by: SortBy,
 }
@@ -367,26 +373,11 @@ pub struct Sort {
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "sidebar/")]
 pub struct Projects {
-    /// A list of Projects above the Threads, as Herdr's.
-    pub list: bool,
     pub order: ProjectOrder,
     /// A Project shows its loudest mark and how many need the Person.
     pub rollup: bool,
     /// Each Project offers a new Thread in it.
     pub new_thread: bool,
-}
-
-#[derive(Clone, Debug, PartialEq, Serialize, TS)]
-#[ts(export, export_to = "sidebar/")]
-pub struct Row {
-    /// 1, 2 or 3: one of the built-in layouts.
-    pub lines: u8,
-    /// Parts left out of the layout.
-    pub hide: Vec<Part>,
-    /// A layout of the Person's own, line by line; it replaces `lines`'.
-    #[ts(optional)]
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub layout: Option<Vec<Vec<Part>>>,
 }
 
 /// The counts in the bar's middle, as the window draws them.
@@ -402,27 +393,38 @@ pub struct BarCounts {
 }
 
 /// What a sidebar file may still say as before ADR 0069 (grace): the
-/// table `[spaces]`, the preset `spaces`, `by` and a row's part `space`,
-/// and the archive's state `settled`; and as before ADR 0098, decision 28:
-/// the table `[snooze]` and the state `snoozed`.
+/// table `[spaces]` and the preset `spaces`; and as before ADR 0098,
+/// decision 28: the table `[snooze]`.
 const RENAMED: &[Renamed] = &[
     Renamed::key("", "snooze", "later"),
-    Renamed::value("group.states", "snoozed", "later"),
-    Renamed::value("group.bottom", "snoozed", "later"),
-    Renamed::value("group.folded", "snoozed", "later"),
     Renamed::key("", "spaces", "projects"),
     Renamed::value("preset", "spaces", "projects"),
-    Renamed::value("group.by", "space", "project"),
-    Renamed::value("group.states", "settled", "archived"),
-    Renamed::value("group.bottom", "settled", "archived"),
-    Renamed::value("group.folded", "settled", "archived"),
-    Renamed::value("row.hide", "space", "project"),
-    Renamed::value("row.line1", "space", "project"),
-    Renamed::value("row.line2", "space", "project"),
-    Renamed::value("row.line3", "space", "project"),
 ];
 
-/// Banda's presets: files in this crate, so they are examples too.
+/// What ADR 0098 put out of use: the presets' sections and rows, and the
+/// list of Projects (decisions 7, 9 and 16). A file that still says them
+/// is told so, and the rest of it holds.
+const RETIRED: &[Retired] = &[
+    Retired {
+        at: "group",
+        table: true,
+        says: "[group] is no longer used: group = \"none\", \"project\" or \"machine\" groups the list",
+    },
+    Retired {
+        at: "row",
+        table: true,
+        says: "[row] is no longer used: card = \"auto\", 3, 2 or 1 says a card's lines",
+    },
+    Retired {
+        at: "projects.list",
+        table: false,
+        says: "projects.list is no longer used",
+    },
+];
+
+/// Banda's presets: files in this crate, kept so a file that names one
+/// still reads (ADR 0098): `inbox` is one list, `projects` and `places`
+/// group by Project.
 pub const BUILT_IN: [(&str, &str); 3] = [
     ("inbox", include_str!("../sidebars/inbox.toml")),
     ("projects", include_str!("../sidebars/projects.toml")),
@@ -433,45 +435,28 @@ pub const BUILT_IN: [(&str, &str); 3] = [
 /// preset, and every other key with its default, commented out.
 pub const TEMPLATE: &str = include_str!("../sidebar.toml");
 
-/// `bottom` with the Later shelf, when neither it nor `states` names
-/// it: above Archive's, or last. A Later always puts its Thread away
-/// (ADR 0074), where a state named nowhere would go to the last section.
-fn with_later(mut bottom: Vec<State>, states: &[State]) -> Vec<State> {
-    if !bottom.contains(&State::Later) && !states.contains(&State::Later) {
-        let at = bottom.iter().position(|state| *state == State::Archived);
-        bottom.insert(at.unwrap_or(bottom.len()), State::Later);
-    }
-    bottom
-}
-
 impl SidebarSettings {
     /// `self` laid over `under`: what `self` says wins, key by key.
     pub fn over(self, under: SidebarSettings) -> SidebarSettings {
         SidebarSettings {
             preset: self.preset.or(under.preset),
-            group: GroupSettings {
-                by: self.group.by.or(under.group.by),
-                states: self.group.states.or(under.group.states),
-                bottom: self.group.bottom.or(under.group.bottom),
-                folded: self.group.folded.or(under.group.folded),
-                limit: self.group.limit.or(under.group.limit),
-                empty: self.group.empty.or(under.group.empty),
+            group: self.group.or(under.group),
+            card: self.card.or(under.card),
+            inbox: InboxSettings {
+                order: self.inbox.order.or(under.inbox.order),
+                open: self.inbox.open.or(under.inbox.open),
+                working: self.inbox.working.or(under.inbox.working),
+            },
+            hold: HoldSettings {
+                still: self.hold.still.or(under.hold.still),
             },
             sort: SortSettings {
                 by: self.sort.by.or(under.sort.by),
             },
             projects: ProjectsSettings {
-                list: self.projects.list.or(under.projects.list),
                 order: self.projects.order.or(under.projects.order),
                 rollup: self.projects.rollup.or(under.projects.rollup),
                 new_thread: self.projects.new_thread.or(under.projects.new_thread),
-            },
-            row: RowSettings {
-                lines: self.row.lines.or(under.row.lines),
-                hide: self.row.hide.or(under.row.hide),
-                line1: self.row.line1.or(under.row.line1),
-                line2: self.row.line2.or(under.row.line2),
-                line3: self.row.line3.or(under.row.line3),
             },
             bar: BarSettings {
                 show: self.bar.show.or(under.bar.show),
@@ -490,33 +475,25 @@ impl SidebarSettings {
         }
     }
 
-    /// Banda's defaults: the bottom layer, the `inbox` preset's order.
+    /// Banda's defaults: the bottom layer, the `inbox` preset's.
     pub fn defaults() -> SidebarSettings {
         SidebarSettings {
             preset: None,
-            group: GroupSettings {
-                by: Some(GroupBy::State),
-                states: Some(vec![State::Active]),
-                bottom: Some(vec![State::Working, State::Later, State::Archived]),
-                folded: Some(vec!["later".to_owned(), "archived".to_owned()]),
-                limit: Some(10),
-                empty: Some(Empty::Hide),
+            group: Some(GroupBy::None),
+            card: Some(Card::Auto),
+            inbox: InboxSettings {
+                order: Some(InboxOrder::Oldest),
+                open: Some(true),
+                working: Some(true),
             },
+            hold: HoldSettings { still: Some(true) },
             sort: SortSettings {
                 by: Some(SortBy::Attention),
             },
             projects: ProjectsSettings {
-                list: Some(false),
                 order: Some(ProjectOrder::Changed),
                 rollup: Some(true),
                 new_thread: Some(true),
-            },
-            row: RowSettings {
-                lines: Some(Spanned::new(0..0, 3)),
-                hide: Some(Vec::new()),
-                line1: None,
-                line2: None,
-                line3: None,
             },
             bar: BarSettings {
                 show: Some(BarShow::Closed),
@@ -542,41 +519,27 @@ impl SidebarSettings {
     /// The arrangement, from a layer over the defaults.
     fn arranged(self, file: &Path, preset: String, presets: Vec<Preset>) -> Sidebar {
         let all = self.over(SidebarSettings::defaults());
-        let layout: Vec<Vec<Part>> = [all.row.line1, all.row.line2, all.row.line3]
-            .into_iter()
-            .flatten()
-            .collect();
         Sidebar {
             file: file.display().to_string(),
             preset,
             presets,
-            group: Group {
-                by: all.group.by.unwrap_or(GroupBy::State),
-                bottom: with_later(
-                    all.group.bottom.unwrap_or_default(),
-                    all.group.states.as_deref().unwrap_or_default(),
-                ),
-                states: all.group.states.unwrap_or_default(),
-                // Names, not states: an old one reads as its name now.
-                folded: (all.group.folded.unwrap_or_default().into_iter())
-                    .map(|name| Renamed::now_of(RENAMED, "group.folded", name))
-                    .collect(),
-                limit: all.group.limit.unwrap_or(10),
-                empty: all.group.empty.unwrap_or(Empty::Hide),
+            group: all.group.unwrap_or(GroupBy::None),
+            card: all.card.unwrap_or(Card::Auto),
+            inbox: Inbox {
+                order: all.inbox.order.unwrap_or(InboxOrder::Oldest),
+                open: all.inbox.open.unwrap_or(true),
+                working: all.inbox.working.unwrap_or(true),
+            },
+            hold: Hold {
+                still: all.hold.still.unwrap_or(true),
             },
             sort: Sort {
                 by: all.sort.by.unwrap_or(SortBy::Attention),
             },
             projects: Projects {
-                list: all.projects.list.unwrap_or(false),
                 order: all.projects.order.unwrap_or(ProjectOrder::Changed),
                 rollup: all.projects.rollup.unwrap_or(true),
                 new_thread: all.projects.new_thread.unwrap_or(true),
-            },
-            row: Row {
-                lines: all.row.lines.map_or(3, Spanned::into_inner),
-                hide: all.row.hide.unwrap_or_default(),
-                layout: (!layout.is_empty()).then_some(layout),
             },
             bar: BarCounts {
                 show: all.bar.show.unwrap_or(BarShow::Closed),
@@ -599,7 +562,8 @@ impl SidebarSettings {
 }
 
 /// Reads a `sidebar.toml`, or a preset file when `preset`, and checks what
-/// TOML alone does not, as [`crate::read`] reads a file.
+/// TOML alone does not, as [`crate::read`] reads a file. A key ADR 0098
+/// put out of use is named and left out.
 pub fn read_sidebar(
     path: &Path,
     text: &str,
@@ -607,7 +571,8 @@ pub fn read_sidebar(
     problems: &mut Vec<Problem>,
 ) -> Option<SidebarSettings> {
     crate::say_renamed(path, text, RENAMED, problems);
-    let mut settings: SidebarSettings = crate::read(path, text, problems)?;
+    let kept = crate::say_retired(path, text, RETIRED, problems);
+    let mut settings: SidebarSettings = crate::read(path, &kept, problems)?;
     if preset && let Some(named) = settings.preset.take() {
         problems.push(Problem::at(
             path,
@@ -615,17 +580,6 @@ pub fn read_sidebar(
             Some(named.span()),
             "a preset cannot name another preset",
         ));
-    }
-    if let Some(lines) = &settings.row.lines
-        && !(1..=3).contains(lines.get_ref())
-    {
-        problems.push(Problem::at(
-            path,
-            text,
-            Some(lines.span()),
-            "row.lines is 1, 2 or 3",
-        ));
-        settings.row.lines = None;
     }
     if let Some(presets) = &mut settings.later.presets {
         let (kept, unread): (Vec<_>, Vec<_>) = std::mem::take(presets)
@@ -804,19 +758,37 @@ mod tests {
         (sidebar, problems)
     }
 
+    /// The sidebar `text`, as `sidebar.toml`, resolves to.
+    fn with(text: &str) -> (Sidebar, Vec<Problem>) {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(dir.path().join("sidebar.toml"), text).unwrap();
+        resolved(dir.path())
+    }
+
+    /// Each problem's line and what it says.
+    fn said(problems: &[Problem]) -> Vec<(u32, &str)> {
+        (problems.iter())
+            .map(|p| (p.line.unwrap(), p.message.as_str()))
+            .collect()
+    }
+
     #[test]
     fn no_file_is_the_inbox() {
         let dir = tempfile::tempdir().unwrap();
         let (sidebar, problems) = resolved(dir.path());
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.preset, "inbox");
-        assert_eq!(sidebar.group.states, vec![State::Active]);
+        assert_eq!(sidebar.group, GroupBy::None);
+        assert_eq!(sidebar.card, Card::Auto);
         assert_eq!(
-            sidebar.group.bottom,
-            vec![State::Working, State::Later, State::Archived]
+            sidebar.inbox,
+            Inbox {
+                order: InboxOrder::Oldest,
+                open: true,
+                working: true
+            }
         );
-        assert_eq!(sidebar.group.folded, ["later", "archived"]);
-        assert_eq!(sidebar.row.lines, 3);
+        assert!(sidebar.hold.still);
         assert_eq!(sidebar.bar.show, BarShow::Closed);
         assert_eq!(
             sidebar.bar.counts,
@@ -828,19 +800,112 @@ mod tests {
         assert_eq!(names, ["inbox", "projects", "places"]);
     }
 
+    /// ADR 0098, "What it amends": a file that names a preset still reads.
+    #[test]
+    fn each_preset_reads_as_a_group() {
+        for (preset, group) in [
+            ("inbox", GroupBy::None),
+            ("projects", GroupBy::Project),
+            ("places", GroupBy::Project),
+        ] {
+            let (sidebar, problems) = with(&format!("preset = \"{preset}\"\n"));
+            assert!(problems.is_empty(), "{preset}: {problems:?}");
+            assert_eq!(sidebar.preset, preset);
+            assert_eq!(sidebar.group, group, "{preset}");
+            assert_eq!(sidebar.card, Card::Auto, "{preset}");
+        }
+    }
+
     #[test]
     fn the_persons_keys_win_over_the_preset() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "preset = \"projects\"\n[row]\nlines = 2\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) = with("preset = \"projects\"\ncard = 2\n");
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.preset, "projects");
-        assert_eq!(sidebar.group.by, GroupBy::Project, "from the preset");
-        assert_eq!(sidebar.row.lines, 2, "the Person's key");
+        assert_eq!(sidebar.group, GroupBy::Project, "from the preset");
+        assert_eq!(sidebar.card, Card::Lines(2), "the Person's key");
+        let (sidebar, _) = with("preset = \"projects\"\ngroup = \"none\"\n");
+        assert_eq!(sidebar.group, GroupBy::None);
+    }
+
+    #[test]
+    fn the_view_s_keys_are_the_person_s_to_change() {
+        let (sidebar, problems) = with(
+            "group = \"machine\"\ncard = 1\n\
+             [inbox]\norder = \"newest\"\nopen = false\nworking = false\n\
+             [hold]\nstill = false\n",
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(sidebar.group, GroupBy::Machine);
+        assert_eq!(sidebar.card, Card::Lines(1));
+        assert_eq!(
+            sidebar.inbox,
+            Inbox {
+                order: InboxOrder::Newest,
+                open: false,
+                working: false
+            }
+        );
+        assert!(!sidebar.hold.still);
+    }
+
+    #[test]
+    fn keys_out_of_use_are_named_and_the_rest_holds() {
+        let (sidebar, problems) = with(
+            "preset = \"projects\"\n\
+             [group]\nby = \"none\"\nstates = [\"active\", \"settled\"]\nlimit = 0\n\
+             [projects]\nlist = true\norder = \"name\"\n\
+             [row]\nlines = 1\nhide = [\"harness\"]\nline1 = [\"mark\"]\n\
+             [machines]\nrows = \"icon\"\n",
+        );
+        assert_eq!(
+            said(&problems),
+            [
+                (
+                    2,
+                    "[group] is no longer used: group = \"none\", \"project\" or \"machine\" \
+                     groups the list"
+                ),
+                (7, "projects.list is no longer used"),
+                (
+                    9,
+                    "[row] is no longer used: card = \"auto\", 3, 2 or 1 says a card's lines"
+                ),
+            ]
+        );
+        assert_eq!(problems[0].column, Some(2), "at the table's name");
+        assert!(problems.iter().all(|p| !p.left_out), "{problems:?}");
+        assert_eq!(sidebar.group, GroupBy::Project, "the preset's, not by");
+        assert_eq!(sidebar.card, Card::Auto, "not lines");
+        assert_eq!(sidebar.projects.order, ProjectOrder::Name);
+        assert_eq!(sidebar.machines.rows, MachineRows::Icon);
+    }
+
+    #[test]
+    fn keys_out_of_use_are_named_however_they_are_written() {
+        let (sidebar, problems) = with(
+            "row.lines = 2\nprojects = { list = true, order = \"name\" }\n\
+             group = { by = \"project\" }\n",
+        );
+        let keys: Vec<_> = (problems.iter())
+            .map(|p| (p.line.unwrap(), p.key.as_deref().unwrap()))
+            .collect();
+        assert_eq!(keys, [(1, "row"), (2, "projects.list"), (3, "group")]);
+        assert_eq!(sidebar.projects.order, ProjectOrder::Name, "beside it");
+        assert_eq!(sidebar.group, GroupBy::None);
+    }
+
+    #[test]
+    fn a_preset_of_ones_own_is_told_of_its_keys_out_of_use_too() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::create_dir(dir.path().join("sidebars")).unwrap();
+        let flat = dir.path().join("sidebars/flat.toml");
+        std::fs::write(&flat, "group = \"none\"\n[row]\nlines = 1\n").unwrap();
+        std::fs::write(dir.path().join("sidebar.toml"), "preset = \"flat\"\n").unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert_eq!(sidebar.group, GroupBy::None);
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert_eq!(problems[0].path, flat.display().to_string());
+        assert_eq!(problems[0].line, Some(2));
     }
 
     #[test]
@@ -848,12 +913,7 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let (sidebar, _) = resolved(dir.path());
         assert_eq!(sidebar.later.presets, crate::later::PRESETS);
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "[later]\npresets = [\"30m\", \"someday\", \"fri 14\"]\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) = with("[later]\npresets = [\"30m\", \"someday\", \"fri 14\"]\n");
         assert_eq!(sidebar.later.presets, ["30m", "fri 14"]);
         let said: Vec<_> = problems.iter().map(|p| p.message.as_str()).collect();
         assert!(
@@ -863,98 +923,31 @@ mod tests {
     }
 
     #[test]
-    fn the_later_shelf_shows_where_the_persons_keys_name_it_nowhere() {
-        let dir = tempfile::tempdir().unwrap();
-        let write = |group: &str| {
-            std::fs::write(
-                dir.path().join("sidebar.toml"),
-                format!("[group]\n{group}\n"),
-            )
-            .unwrap();
-            resolved(dir.path()).0.group
-        };
-        let older = write("bottom = [\"working\", \"archived\"]");
-        assert_eq!(
-            older.bottom,
-            [State::Working, State::Later, State::Archived]
-        );
-        let none = write("bottom = []");
-        assert_eq!(none.bottom, [State::Later]);
-        let named = write("states = [\"active\", \"later\"]\nbottom = []");
-        assert!(named.bottom.is_empty(), "a section of its own");
-    }
-
-    #[test]
     fn names_before_adr_0069_read_as_now_and_each_says_its_name_now() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "preset = \"spaces\"\n\
-             [group]\nby = \"space\"\nstates = [\"active\", \"settled\"]\n\
-             folded = [\"settled\", \"banda\"]\n\
-             [spaces]\nlist = true # the list above\n\
-             [row]\nhide = [\"space\"]\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) =
+            with("preset = \"spaces\"\n[spaces]\norder = \"name\" # by name\n");
         assert_eq!(sidebar.preset, "projects");
-        assert_eq!(sidebar.group.by, GroupBy::Project);
-        assert_eq!(sidebar.group.states, [State::Active, State::Archived]);
-        assert_eq!(sidebar.group.folded, ["archived", "banda"]);
-        assert!(sidebar.projects.list);
-        assert_eq!(sidebar.row.hide, [Part::Project]);
-        let said: Vec<_> = (problems.iter())
-            .map(|p| (p.line.unwrap(), p.message.as_str()))
-            .collect();
+        assert_eq!(sidebar.projects.order, ProjectOrder::Name);
         assert_eq!(
-            said,
+            said(&problems),
             [
                 (1, "\"spaces\" is called \"projects\" now"),
-                (3, "\"space\" is called \"project\" now"),
-                (4, "\"settled\" is called \"archived\" now"),
-                (5, "\"settled\" is called \"archived\" now"),
-                (6, "spaces is called projects now"),
-                (9, "\"space\" is called \"project\" now"),
+                (2, "spaces is called projects now"),
             ]
         );
     }
 
     #[test]
     fn names_before_adr_0098_read_as_now_and_each_says_its_name_now() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "[group]\nstates = [\"active\", \"snoozed\"]\n\
-             folded = [\"snoozed\"]\n\
-             [snooze]\npresets = [\"30m\"]\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
-        assert_eq!(sidebar.group.states, [State::Active, State::Later]);
-        assert_eq!(sidebar.group.folded, ["later"]);
+        let (sidebar, problems) = with("[snooze]\npresets = [\"30m\"]\n");
         assert_eq!(sidebar.later.presets, ["30m"]);
-        let said: Vec<_> = (problems.iter())
-            .map(|p| (p.line.unwrap(), p.message.as_str()))
-            .collect();
-        assert_eq!(
-            said,
-            [
-                (2, "\"snoozed\" is called \"later\" now"),
-                (3, "\"snoozed\" is called \"later\" now"),
-                (4, "snooze is called later now"),
-            ]
-        );
+        assert_eq!(said(&problems), [(1, "snooze is called later now")]);
     }
 
     #[test]
     fn the_bar_s_counts_are_the_person_s_to_change() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "[bar]\nshow = \"always\"\ncounts = [\"waiting\", \"working\"]\nwords = true\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) =
+            with("[bar]\nshow = \"always\"\ncounts = [\"waiting\", \"working\"]\nwords = true\n");
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.bar.show, BarShow::Always);
         assert_eq!(sidebar.bar.counts, [Count::Waiting, Count::Working]);
@@ -965,13 +958,8 @@ mod tests {
 
     #[test]
     fn how_the_machines_are_named_is_the_person_s_to_change() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "preset = \"projects\"\n[machines]\nrows = \"icon\"\nthis-too = true\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) =
+            with("preset = \"projects\"\n[machines]\nrows = \"icon\"\nthis-too = true\n");
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.machines.rows, MachineRows::Icon);
         assert!(sidebar.machines.this_too);
@@ -979,13 +967,7 @@ mod tests {
 
     #[test]
     fn a_way_to_show_a_machine_that_is_none_is_named_at_its_line() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(
-            dir.path().join("sidebar.toml"),
-            "[machines]\nrows = \"chip\"\nthis-too = true\n",
-        )
-        .unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) = with("[machines]\nrows = \"chip\"\nthis-too = true\n");
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].message.contains("chip"), "{problems:?}");
         assert_eq!(problems[0].line, Some(2));
@@ -999,22 +981,15 @@ mod tests {
         std::fs::create_dir(dir.path().join("sidebars")).unwrap();
         std::fs::write(
             dir.path().join("sidebars/focus.toml"),
-            "preset = \"places\"\n[sort]\nby = \"title\"\n[row]\nline1 = [\"mark\", \"title\", \"~\", \"status\"]\n",
+            "preset = \"places\"\ncard = 1\n[sort]\nby = \"title\"\n",
         )
         .unwrap();
         std::fs::write(dir.path().join("sidebar.toml"), "preset = \"focus\"\n").unwrap();
         let (sidebar, problems) = resolved(dir.path());
         assert_eq!(sidebar.preset, "focus");
         assert_eq!(sidebar.sort.by, SortBy::Title);
-        assert_eq!(
-            sidebar.row.layout,
-            Some(vec![vec![
-                Part::Mark,
-                Part::Title,
-                Part::Push,
-                Part::Status
-            ]])
-        );
+        assert_eq!(sidebar.card, Card::Lines(1));
+        assert_eq!(sidebar.group, GroupBy::None, "not places'");
         assert_eq!(sidebar.presets.last().unwrap().origin, PresetOrigin::Yours);
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert!(problems[0].message.contains("cannot name another"));
@@ -1023,9 +998,7 @@ mod tests {
 
     #[test]
     fn an_unknown_preset_is_named_and_the_inbox_shows() {
-        let dir = tempfile::tempdir().unwrap();
-        std::fs::write(dir.path().join("sidebar.toml"), "preset = \"nope\"\n").unwrap();
-        let (sidebar, problems) = resolved(dir.path());
+        let (sidebar, problems) = with("preset = \"nope\"\n");
         assert_eq!(sidebar.preset, "inbox");
         assert_eq!(problems.len(), 1);
         assert!(problems[0].message.contains("no preset \"nope\""));
@@ -1035,20 +1008,58 @@ mod tests {
 
     #[test]
     fn a_wrong_key_is_named_where_it_is() {
-        let dir = tempfile::tempdir().unwrap();
-        let file = dir.path().join("sidebar.toml");
-        std::fs::write(&file, "[row]\nlines = 5\n").unwrap();
-        let (sidebar, problems) = resolved(dir.path());
-        assert_eq!(sidebar.row.lines, 3, "left out");
-        assert_eq!(problems[0].line, Some(2));
+        let (sidebar, problems) = with("group = \"project\"\ncard = 5\n");
+        assert_eq!(sidebar.card, Card::Auto, "left out");
+        assert_eq!(sidebar.group, GroupBy::Project, "the rest holds");
+        assert_eq!((problems[0].line, problems[0].column), (Some(2), Some(8)));
+        assert!(problems[0].message.contains("not 5"), "{problems:?}");
 
-        std::fs::write(&file, "[group]\nby = \"colour\"\n").unwrap();
-        let (_, problems) = resolved(dir.path());
+        let (_, problems) = with("group = \"colour\"\n");
         assert!(problems[0].message.contains("colour"), "{problems:?}");
 
-        std::fs::write(&file, "[row]\nlinez = 2\n").unwrap();
-        let (_, problems) = resolved(dir.path());
-        assert!(problems[0].message.contains("linez"), "{problems:?}");
+        let (_, problems) = with("[inbox]\nordr = \"newest\"\n");
+        assert!(problems[0].message.contains("ordr"), "{problems:?}");
+    }
+
+    /// The settings Pane draws a row of each key from the schema: the keys
+    /// of ADR 0098, and none it put out of use.
+    #[test]
+    fn the_schema_has_the_view_s_keys_and_none_out_of_use() {
+        let file = crate::FILES.iter().find(|f| f.name == "sidebar.toml");
+        let schema = serde_json::to_value(file.unwrap().schema()).unwrap();
+        let def = |name: &str| &schema["$defs"][name];
+        let consts = |name: &str| -> Vec<String> {
+            (def(name)["oneOf"].as_array().unwrap().iter())
+                .map(|way| way["const"].as_str().unwrap().to_owned())
+                .collect()
+        };
+        let keys = |at: &serde_json::Value| -> Vec<String> {
+            let mut keys: Vec<_> = at["properties"]
+                .as_object()
+                .unwrap()
+                .keys()
+                .cloned()
+                .collect();
+            keys.sort();
+            keys
+        };
+        assert_eq!(
+            keys(&schema),
+            [
+                "bar", "card", "group", "hold", "inbox", "later", "machines", "preset", "projects",
+                "sort"
+            ]
+        );
+        assert_eq!(schema["properties"]["group"]["$ref"], "#/$defs/GroupBy");
+        assert_eq!(consts("GroupBy"), ["none", "project", "machine"]);
+        assert_eq!(def("Card")["enum"], serde_json::json!(["auto", 3, 2, 1]));
+        assert_eq!(keys(def("InboxSettings")), ["open", "order", "working"]);
+        assert_eq!(consts("InboxOrder"), ["oldest", "newest"]);
+        assert_eq!(keys(def("HoldSettings")), ["still"]);
+        assert_eq!(
+            keys(def("ProjectsSettings")),
+            ["new-thread", "order", "rollup"]
+        );
     }
 
     #[test]
@@ -1078,13 +1089,13 @@ mod tests {
         }
         let uncommented: String = TEMPLATE
             .lines()
-            .filter(|line| !line.starts_with("# line"))
             .map(|line| key(line).unwrap_or(line))
             .collect::<Vec<_>>()
             .join("\n");
         let mut problems = Vec::new();
         let settings = read_sidebar(Path::new("t"), &uncommented, false, &mut problems)
             .unwrap_or_else(|| panic!("{problems:?}\n{uncommented}"));
+        assert!(problems.is_empty(), "{problems:?}\n{uncommented}");
         let file = Path::new("f");
         let template = settings.arranged(file, "inbox".into(), Vec::new());
         let defaults = SidebarSettings::default().arranged(file, "inbox".into(), Vec::new());

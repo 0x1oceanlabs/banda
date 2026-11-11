@@ -766,7 +766,7 @@ fn each_key_says_where_its_value_comes_from() {
     assert_eq!(keys["tile.border"].from.line, Some(5));
     assert_eq!(keys["tile.dim-inactive"].from.layer, "hyprland");
     assert_eq!(keys["bar.height"].from.layer, "defaults");
-    assert!(look.settings["sidebar.toml"].contains_key("group.by"));
+    assert!(look.settings["sidebar.toml"].contains_key("group"));
 }
 
 // Its `gsettings` is a `sh` script.

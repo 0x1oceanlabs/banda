@@ -62,33 +62,26 @@ const archive = (lists: Lists, ids: readonly string[]): Lists =>
 const ids = (arranged: Arranged) =>
   arranged.rows.map((row) => [row.listed.id, row.stand])
 
-/** Keys over others, as `banda look` lays them (platform/look/src/sidebar.rs). */
-type Keys = { [Group in keyof Settings]?: Partial<Settings[Group]> }
-const over = (base: Settings, keys: Keys = {}): Settings => ({
-  group: { ...base.group, ...keys.group },
-  sort: { ...base.sort, ...keys.sort },
-  projects: { ...base.projects, ...keys.projects },
-  machines: { ...base.machines, ...keys.machines },
-})
-
-/** Banda's presets, as platform/look/sidebars/*.toml set them. */
+/** Banda's presets, as platform/look/sidebars/*.toml group the list. */
 const PRESETS = {
-  inbox: {},
-  projects: {
-    group: { by: "project", bottom: [] },
-  },
-  places: {
-    group: { bottom: [] },
-    projects: { list: true },
-  },
-} satisfies Record<string, Keys>
+  inbox: "none",
+  projects: "project",
+  places: "project",
+} satisfies Record<string, Settings["group"]>
 type Preset = keyof typeof PRESETS
-const resolve = (preset: Preset, keys?: Keys) =>
-  over(over(DEFAULT_SIDEBAR, PRESETS[preset]), keys)
+
+/** What `banda look` gives for `preset`, the Person's `keys` over it
+ * (platform/look/src/sidebar.rs, whose tests lay the layers). */
+const resolve = (preset: Preset, keys: Partial<Settings> = {}): Settings => ({
+  ...DEFAULT_SIDEBAR,
+  preset,
+  group: PRESETS[preset],
+  ...keys,
+})
 
 const of = (
   preset: Preset,
-  keys?: Keys,
+  keys?: Partial<Settings>,
   only?: string,
   archived: readonly string[] = []
 ) =>
@@ -110,12 +103,15 @@ test("every Project's rows, each where it stands, the archived among them", () =
   ])
 })
 
-test("the presets read as the Inbox's groups: each Project under its header, or one list, as `state` reads now (ADR 0098, decision 7)", () => {
+test("the list is grouped as `group` says, the preset's or the Person's, and one list under the list of Projects (ADR 0098, decision 7)", () => {
   expect(of("inbox").group).toBe("none")
   expect(of("places").group).toBe("none")
   expect(of("projects").group).toBe("project")
-  // The Person's keys win over the preset.
-  expect(of("projects", { group: { by: "none" } }).group).toBe("none")
+  // The Person's key wins over the preset's.
+  expect(of("projects", { group: "none" }).group).toBe("none")
+  expect(of("inbox", { group: "project" }).group).toBe("project")
+  // By machine waits for the view menu (step 8): one list until then.
+  expect(of("inbox", { group: "machine" }).group).toBe("none")
   expect(of("inbox").projects).toBeUndefined()
 })
 
@@ -142,7 +138,7 @@ test("scratch Threads are rows as others are, and stay out of the list of Projec
   const scratch = { ...project("scratch", "", "/scratch"), scratch: true }
   const allProjects = [...projects, scratch]
   const allLists = { ...lists, scratch: [listed("loose", "rest", 7)] }
-  const settings = over(resolve("inbox"), { projects: { list: true } })
+  const settings = resolve("places")
   const result = arrange(allLists, allProjects, settings, NOW)
   expect(result.projects?.some((line) => line.project.scratch)).toBe(false)
   expect(ids(result)).toContainEqual(["loose", "open"])
