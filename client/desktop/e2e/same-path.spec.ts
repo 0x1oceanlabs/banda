@@ -18,11 +18,11 @@
  * answer until ssh gives up, and is never left hanging. What a gesture
  * asks arc is counted on its link, one call a gesture.
  */
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, rmSync, writeFileSync } from "node:fs"
 import { connect } from "node:net"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { type Arc, newArc, put, withArc } from "./arc"
+import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
 import { agentSays, git, read, type Window } from "./window"
 
 let window: Window | undefined
@@ -52,7 +52,10 @@ const arcOf = (page: Page) =>
  * link that goes leaves it working. Each Project's folder, as its machine
  * names it.
  */
-async function opened({ latency = 40 } = {}) {
+async function opened({
+  latency = 40,
+  files = {},
+}: { latency?: number; files?: Record<string, string> } = {}) {
   arc = newArc({ latency })
   stopArc = await arc.start()
   const there = join(arc.code.arc, "Same")
@@ -61,6 +64,7 @@ async function opened({ latency = 40 } = {}) {
     "who.txt": "arc\n",
     "only-arc.txt": "arc\n",
     "notes.md": "arc\n",
+    ...files,
   })
   put(here, {
     "who.txt": "mac\n",
@@ -302,7 +306,9 @@ test("arc's Diff shows arc's change to who.txt, not this machine's at the same p
   await expect(diff.getByText("mac changed")).toHaveCount(0)
 })
 
-test.fixme("step 3a: Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
+test.fixme("step 3b: Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
+  // Quick open on arc's Project: this window's list of Projects names no
+  // folder of arc's, so the Files rows are not there before 3b.
   const { page, composer } = await opened()
   await composer.focus()
   await page.keyboard.press("Alt+Space")
@@ -319,6 +325,70 @@ test.fixme("step 3a: Quick Look on arc's file from the Banda menu shows arc's wh
   await expect(peek).toHaveAttribute("aria-label", "Quick Look: who.txt")
   await expect(peek.getByText("arc", { exact: true })).toBeVisible()
   await expect(peek.getByText("mac", { exact: true })).toHaveCount(0)
+})
+
+/** A key that shows arc's `file` in Quick Look, as a line of keys.toml
+ * says, the file and its Project named: on arc, no gesture reaches the
+ * action yet, Files' tree and reply paths coming with 3b and 3c. */
+const QUICK_LOOK = "Control+Alt+KeyH"
+
+async function bindQuickLook(file: string, project: string) {
+  writeFileSync(
+    join(window!.dir, "config/keys.toml"),
+    `[binds]\n"Ctrl+Alt+H" = { action = "file.peek", args = { file = ${JSON.stringify(file)}, project = ${JSON.stringify(project)} } }\n`
+  )
+}
+
+test("quick-look: a file of arc's shows in Quick Look naming arc; a file gone from arc, or arc away, is refused at once", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  const { page, composer, project, there } = await opened()
+  const who = `${there}/who.txt`
+  await bindQuickLook(who, project)
+  await composer.focus()
+  const peek = page.locator("[data-peek]")
+  // The key takes as keys.toml is read, a moment after it is written.
+  await expect(async () => {
+    await page.keyboard.press(QUICK_LOOK)
+    await expect(peek).toBeVisible({ timeout: 2_000 })
+  }).toPass({ timeout: 30_000 })
+  await expect(peek).toHaveAttribute("aria-label", "Quick Look: who.txt")
+  // Its header names arc, as an arc Pane's does.
+  const header = peek.locator("header").first()
+  await expect(header.getByText("arc", { exact: true })).toBeVisible()
+  await expect(header.locator('[data-machine-icon="server"]')).toBeVisible()
+  // What draws a file there comes with arc's Files (3b).
+  await expect(peek.getByText("Not on arc yet")).toBeVisible()
+  await shot(page, "quick-look-arc")
+  await page.keyboard.press("Escape")
+  await expect(peek).toHaveCount(0)
+
+  // Gone on arc: arc's engine says so, whatever this machine has at that
+  // path.
+  rmSync(arc!.disk(who))
+  await page.keyboard.press(QUICK_LOOK)
+  const notes = page.getByRole("region", { name: "Notifications" })
+  await expect(notes.getByText(`No such file: ${who}`)).toBeVisible()
+  await expect(peek).toHaveCount(0)
+
+  // Away: refused at once in its pill's words, never shown later.
+  arc!.blackhole(true)
+  await expect(arcOf(page).getByText(/^away/)).toBeVisible({ timeout: 60_000 })
+  await page.keyboard.press(QUICK_LOOK)
+  await expect(notes.getByText("arc is away")).toBeVisible()
+  await expect(peek).toHaveCount(0)
+})
+
+test("signs: arc's Project shows its own picture, read from arc's engine, in arc's part of the sidebar", async () => {
+  const { page } = await opened({
+    files: {
+      "same.svg":
+        '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 8 8"><rect width="8" height="8" fill="#2563eb"/></svg>',
+    },
+  })
+  const picture = arcOf(page).locator('[data-sign="picture"] img')
+  await expect(picture).toBeVisible()
+  await expect(picture).toHaveAttribute("src", /^data:image\/svg/)
+  await shot(page, "arc-sign")
 })
 
 /** arc's Files on "Same", from the Banda menu in arc's Thread; the Pane. */
