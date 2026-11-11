@@ -316,8 +316,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
   // Each named in a Thread's message, a folder with its `/`.
   const attach = useCallback(
     (wholes: readonly string[]) => {
-      for (const file of wholes)
-        props.run?.("file.attach", { file, project })
+      for (const file of wholes) props.run?.("file.attach", { file, project })
     },
     [props, project]
   )
@@ -331,7 +330,8 @@ function TreePane(props: PaneProps<TreeArgs>) {
   // 0106, decision 5, call 9 A).
   const here = localOf(device, file, dir || "/") !== undefined
   const pinned = useMemo(
-    () => (here ? finder.pinned.map((place) => untilded(place, home, "/")) : []),
+    () =>
+      here ? finder.pinned.map((place) => untilded(place, home, "/")) : [],
     [here, finder.pinned, home]
   )
   const local = useCallback(
@@ -832,8 +832,7 @@ function FolderView({
         }
         case "copy":
         case "cut":
-          if (rows.length > 0 && file)
-            keep(wholes.map(file), what === "cut")
+          if (rows.length > 0 && file) keep(wholes.map(file), what === "cut")
           return
         case "paste": {
           const clip = kept()
@@ -1288,9 +1287,7 @@ function FolderView({
                   : undefined
               }
               onAttach={() => onAttach(rowsFor(menu.row).map(named))}
-              onPin={
-                onPin && ((on) => onPin(wholeOf(dir, menu.row ?? ""), on))
-              }
+              onPin={onPin && ((on) => onPin(wholeOf(dir, menu.row ?? ""), on))}
               acts={{
                 offers: offersOf(menu.row),
                 run: (what) => later(what, menu.row),

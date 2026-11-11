@@ -13,7 +13,12 @@ const composers = new Map([
 
 test("what is attached goes to the focused Pane's composer, when it has one", () => {
   expect(
-    composerFor({ id: "thread-b", project: work }, work, ["thread-a"], composers)
+    composerFor(
+      { id: "thread-b", project: work },
+      work,
+      ["thread-a"],
+      composers
+    )
   ).toBe("thread-b")
 })
 
@@ -83,7 +88,10 @@ test("with no Pane focused, nothing takes it", () => {
 
 test("file.attach's args name a file, or some of its lines with what is said of them", () => {
   expect(chipOf("/w/a.ts", {})).toEqual({ path: "/w/a.ts" })
-  expect(chipOf("/w/a.ts", {}, work)).toEqual({ path: "/w/a.ts", project: work })
+  expect(chipOf("/w/a.ts", {}, work)).toEqual({
+    path: "/w/a.ts",
+    project: work,
+  })
   expect(
     chipOf("/w/a.ts", { from: 14, to: 12, comment: " Why twice? ", text: "x" })
   ).toEqual({

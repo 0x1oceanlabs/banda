@@ -252,14 +252,10 @@ test("a Pane's device says a file is this computer's only where its Project is t
     "/mine/a"
   )
   const there = deviceFor(hosts, has)
-  expect(
-    there.local(projectFile("r1" as ProjectId, "/r1/a"))
-  ).toBeUndefined()
+  expect(there.local(projectFile("r1" as ProjectId, "/r1/a"))).toBeUndefined()
   // Unlisted on arc yet, it is no file of this computer's: a Project no
   // machine has is never placed here.
-  expect(
-    there.local(projectFile("s9" as ProjectId, "/s9/a"))
-  ).toBeUndefined()
+  expect(there.local(projectFile("s9" as ProjectId, "/s9/a"))).toBeUndefined()
   expect(there.has("clipboard")).toBe(true)
   hosts.engine("arc").close()
 })
