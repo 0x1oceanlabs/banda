@@ -1114,8 +1114,9 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
     "aria-placeholder",
     "Write to Fake AI on arc. @ files, / commands, $ skills"
   )
+  // Its phrase names the account; the Project's button names arc.
   await expect(
-    draft.getByText("Write to Fake AI on arc", { exact: true })
+    draft.getByRole("button", { name: "Account: Fake AI" })
   ).toBeVisible()
   await shot(page, "step4c-2-on-arc")
   // Sent, it is arc's Thread, on arc's Agent, and none of this machine's.
