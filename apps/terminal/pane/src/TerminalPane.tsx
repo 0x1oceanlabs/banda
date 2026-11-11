@@ -218,8 +218,9 @@ type Now =
   | { is: "starting" }
   | { is: "running" }
   | { is: "ended"; ended: Ended }
-  /** Its engine restarted while the shell ran, which ended it: its screen
-   * stays as it was, and the foot says why. */
+  /** Its engine restarted while the shell ran, which ended it: the screen
+   * it drew stays, when the Pane stayed on that engine, and the foot says
+   * why. */
   | { is: "restarted" }
   | { is: "gone"; why: string }
   /** A shell opened while its machine was away, which never started. */
@@ -694,7 +695,11 @@ function Screen({
         now={now}
         said={said}
         shell={shell}
-        onAgain={() => again.current(againWords(now))}
+        onAgain={() => {
+          // The button goes as the state changes, and the keys with it.
+          surface.current?.focus()
+          again.current(againWords(now))
+        }}
       />
     </div>
   )
@@ -772,7 +777,7 @@ const againWords = (now: Now) =>
 
 /** That Banda restarted where the terminal ran: on `machine`, or with none
  * on this one. */
-export const restartedWords = (machine: string | undefined) =>
+const restartedWords = (machine: string | undefined) =>
   machine ? `Ended: Banda restarted on ${machine}` : "Ended: Banda restarted"
 
 /** How a program ended, in words. */
