@@ -89,11 +89,11 @@ export type Look = { look: MarkState; doing?: MarkDoing }
  * - back from Later by itself, it rings as `woke` (`wokeRings`);
  * - open, seen and done with, it is awake and looks around: `idle`;
  * - else its mark says it: what asks, failed or is done, or what works,
- *   with what it does (`doingOf`).
+ *   with what it does (`doesOf`).
  */
 export function lookOf(listed: Listed, now: number): Look {
   const look = lookIn(listed, standOf(listed, now), now)
-  return works(look) ? { look, doing: doingOf(listed, now) } : { look }
+  return works(look) ? { look, doing: doesOf(listed, now).doing } : { look }
 }
 
 /** What `listed`'s Mark shows on its Pane's header at `now`: its look,
@@ -123,18 +123,45 @@ const DOES: Readonly<Record<DoingKind, MarkDoing>> = {
 }
 
 /**
- * What working `listed`'s Agent does at `now`, as its Mark draws it, the
- * first that holds, in the order its card's line 2 says them (spec §2.6):
- * it waits on a usage limit; it said nothing for `STUCK`, by when its
- * turn last said anything (`stepped`); it compacts the context; else
- * what its turn does now, or, with nothing said yet, the calm series.
+ * What a working Thread's Agent does (ADR 0099, decision 2): `doing`, as
+ * its Mark draws it; and for its card's words (spec §2.6), the kind of
+ * what its turn does and what on, or, `at`, until when a usage limit
+ * holds it or since when it said nothing.
  */
-export function doingOf(listed: Listed, now: number): MarkDoing {
-  if (listed.limitUntil !== undefined) return "limit"
-  if (listed.stepped !== undefined && now - listed.stepped >= STUCK)
-    return "stuck"
-  if (listed.compacting) return "compacting"
-  return listed.doing ? DOES[listed.doing.what] : "other"
+export type Does = {
+  doing: MarkDoing
+  kind?: DoingKind
+  on?: string
+  at?: number
+}
+
+/**
+ * What working `listed`'s Agent does at `now`, the first that holds, in
+ * the order its card's line 2 says them (spec §2.6): it waits on a usage
+ * limit; it said nothing for `STUCK`, by when its turn last said anything
+ * (`stepped`); it compacts the context; else what its turn does now, or,
+ * with nothing said yet, the calm series.
+ */
+export function doesOf(listed: Listed, now: number): Does {
+  const { limitUntil, stepped, doing } = listed
+  if (limitUntil !== undefined) return { doing: "limit", at: limitUntil }
+  if (stepped !== undefined && now - stepped >= STUCK)
+    return { doing: "stuck", at: stepped }
+  if (listed.compacting) return { doing: "compacting" }
+  if (!doing) return { doing: "other" }
+  return {
+    doing: DOES[doing.what],
+    kind: doing.what,
+    ...(doing.title ? { on: doing.title } : {}),
+  }
+}
+
+/** Whether `a` and `b` say the same: a card's words change only as what
+ * its Agent does, or what on, does. */
+export function sameDoes(a: Does, b: Does): boolean {
+  return (
+    a.doing === b.doing && a.kind === b.kind && a.on === b.on && a.at === b.at
+  )
 }
 
 /** When the first Thread of `lists` at work that says nothing gets stuck,
@@ -155,25 +182,28 @@ export function nextStuck(lists: Lists, now: number): number | undefined {
 export const HOLD = 1500
 
 /** What a working Mark shows its Agent doing, and since when it shows it,
- * by the clock it is read by. */
-export type Held = { doing: MarkDoing | undefined; since: number }
+ * by the clock it is read by: as the Mark draws it, or as its card says
+ * it too (`Does`). */
+export type Held<T = MarkDoing | undefined> = { doing: T; since: number }
 
 /**
  * What a working Mark shows at `now`, after it showed `prev`, as its Agent
  * now does `next` (ADR 0099, decision 2): the same as before until that
  * showed `HOLD`, then `next`, so each doing holds at least that long, and
- * one shorter that another replaced is never shown. The same doing again
- * changes nothing. A first, with nothing shown before, shows at once. Its
- * caller asks again at `since + HOLD` while `next` waits. Pure, for the
- * Mark and its card's words alike, which then never disagree.
+ * one shorter that another replaced is never shown. The same doing again,
+ * by `same`, changes nothing. A first, with nothing shown before, shows
+ * at once. Its caller asks again at `since + HOLD` while `next` waits.
+ * Pure: a card holds its words and its Mark by it (`sameDoes`), which
+ * then never disagree.
  */
-export function heldDoing(
-  prev: Held | undefined,
-  next: MarkDoing | undefined,
-  now: number
-): Held {
+export function heldDoing<T = MarkDoing | undefined>(
+  prev: Held<T> | undefined,
+  next: T,
+  now: number,
+  same: (a: T, b: T) => boolean = Object.is
+): Held<T> {
   if (prev === undefined) return { doing: next, since: now }
-  if (prev.doing === next || now - prev.since < HOLD) return prev
+  if (same(prev.doing, next) || now - prev.since < HOLD) return prev
   return { doing: next, since: now }
 }
 

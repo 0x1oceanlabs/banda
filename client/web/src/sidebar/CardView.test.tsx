@@ -1,9 +1,12 @@
+// @vitest-environment happy-dom
 import type { ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import type { Listed } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { CutTips } from "@banda/ui/components/fade-text"
+import { act } from "react"
+import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import type { Row } from "./arrange"
@@ -65,27 +68,29 @@ const rowOf = (
 
 /** The card of `row`, drawn in its own place, as the sidebar draws it,
  * with `acts`. */
-const drawn = (
+const cardElement = (
   row: Row,
   more: Partial<Omit<CardOf, "row">> = {},
   current = false,
   acts?: readonly CardAct[]
-) =>
-  renderToStaticMarkup(
-    <Card
-      card={cardOf({
-        row,
-        place: row.stand,
-        at: row.listed.changed,
-        now: NOW,
-        view: { density: "auto", group: "none" },
-        ...more,
-      })}
-      row={row}
-      current={current}
-      acts={acts}
-    />
-  )
+) => (
+  <Card
+    card={cardOf({
+      row,
+      place: row.stand,
+      at: row.listed.changed,
+      now: Date.now(),
+      view: { density: "auto", group: "none" },
+      ...more,
+    })}
+    row={row}
+    current={current}
+    acts={acts}
+  />
+)
+
+const drawn = (...of: Parameters<typeof cardElement>) =>
+  renderToStaticMarkup(cardElement(...of))
 
 /** The classes of the first element `html` has with `attribute`. */
 const classOf = (html: string, attribute: string) =>
@@ -135,6 +140,67 @@ test("a screen reader hears the card by spokenOf", () => {
   expect(html).toContain(
     'aria-description="Asks Which port for the dev server? banda. Claude Code"'
   )
+})
+
+test("a working card's line 2 says what its Agent does, muted as its time; at the limit, line 1's right says when it goes on", () => {
+  const two = { view: { density: 2, group: "none" } } as const
+  const runs = drawn(
+    rowOf("working", {
+      mark: "working",
+      doing: { what: "execute", title: "pnpm test", since: NOW },
+      stepped: NOW,
+    }),
+    two
+  )
+  expect(runs).toMatch(/text-muted-foreground\/60">pnpm test<\/span>/)
+  expect(runs).toContain('aria-description="pnpm test"')
+  const limited = drawn(
+    rowOf("working", {
+      mark: "working",
+      limitUntil: new Date(2026, 10, 10, 16, 0).getTime(),
+    }),
+    two
+  )
+  expect(limited).toMatch(/data-time=""[^>]*>16:00</)
+  expect(limited).toContain(">Usage limit · goes on at 16:00</span>")
+})
+
+// ADR 0099, decision 2: the words hold as the Mark does, by one hold.
+test("a working card's words and its Mark change together, each doing held 1.5 s", async () => {
+  Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
+  const host = document.body.appendChild(document.createElement("div"))
+  const live = createRoot(host)
+  const draw = (what: "execute" | "read", title: string) =>
+    act(() =>
+      live.render(
+        cardElement(
+          rowOf("working", {
+            mark: "working",
+            doing: { what, title, since: Date.now() },
+            stepped: Date.now(),
+          }),
+          { view: { density: 2, group: "none" } }
+        )
+      )
+    )
+  // Line 2's words.
+  const words = () => host.querySelector("[data-card] > span:nth-child(2)")
+  const doing = () =>
+    host.querySelector("svg[data-look]")?.getAttribute("data-doing")
+  await draw("execute", "pnpm test")
+  expect(words()?.textContent).toBe("pnpm test")
+  expect(doing()).toBe("execute")
+  await act(() => vi.advanceTimersByTime(300))
+  await draw("read", "card.ts")
+  expect(words()?.textContent).toBe("pnpm test")
+  expect(doing()).toBe("execute")
+  await act(() => vi.advanceTimersByTime(1199))
+  expect(words()?.textContent).toBe("pnpm test")
+  await act(() => vi.advanceTimersByTime(1))
+  expect(words()?.textContent).toBe("Reads card.ts")
+  expect(doing()).toBe("read")
+  act(() => live.unmount())
+  host.remove()
 })
 
 test("one that left while the list held says where it went in its time's place, with no action", () => {

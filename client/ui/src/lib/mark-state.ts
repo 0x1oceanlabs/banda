@@ -70,7 +70,7 @@ export function works(state: MarkState): boolean {
 
 /**
  * What a working mark shows its Agent doing (ADR 0099, decision 2), read
- * from its Thread's events (`doingOf` in status.ts): what its turn does,
+ * from its Thread's events (`doesOf` in status.ts): what its turn does,
  * by the kind of its tool call, a thought or the reply, a deletion and a
  * move drawn as an edit; else a calm series of those (`other`), as the
  * logo at work shows too. Above all that: it compacts the context, it has

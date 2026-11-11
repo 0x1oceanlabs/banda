@@ -4,12 +4,15 @@ import type { MarkDoing, MarkState } from "./lib/mark-state"
 import {
   attentionOf,
   callsOf,
+  type Does,
+  doesOf,
   type Held,
   heldDoing,
   headerLookOf,
   lookOf,
   mayArchive,
   nextStuck,
+  sameDoes,
   type Stand,
   standOf,
 } from "./status"
@@ -206,6 +209,45 @@ test("a doing holds 1.5 s, and one replaced within it is skipped", () => {
   expect(held).toEqual({ doing: "fetch", since: 3000 })
   // The same doing again changes nothing.
   expect(heldDoing(held, "fetch", 9000)).toBe(held)
+})
+
+// What a card says of it: the kind of what its turn does and what on, or
+// when its limit lets it go on and since when it said nothing.
+test("what a working Thread does, as its card says it", () => {
+  const does = (more: Partial<Listed>) =>
+    doesOf(thing({ mark: "working", ...more }), 3 * MIN)
+  expect(does({})).toEqual({ doing: "other" })
+  expect(
+    does({ doing: { what: "delete", title: "x.ts", since: 0 }, stepped: MIN })
+  ).toEqual({ doing: "edit", kind: "delete", on: "x.ts" })
+  expect(does({ doing: { what: "think", since: 0 } })).toEqual({
+    doing: "think",
+    kind: "think",
+  })
+  expect(does({ compacting: true })).toEqual({ doing: "compacting" })
+  expect(does({ stepped: 0 })).toEqual({ doing: "stuck", at: 0 })
+  expect(does({ limitUntil: 9 * MIN, stepped: 0 })).toEqual({
+    doing: "limit",
+    at: 9 * MIN,
+  })
+})
+
+// A card's words hold as its Mark does, and change as what it works on
+// does too: another command is held as another kind would be.
+test("a card's doing holds 1.5 s by its kind and what it works on", () => {
+  const runs = (on: string): Does => ({ doing: "execute", kind: "execute", on })
+  let held: Held<Does> | undefined
+  const at = (next: Does, now: number) =>
+    (held = heldDoing(held, next, now, sameDoes)).doing.on
+  expect(at(runs("pnpm test"), 0)).toBe("pnpm test")
+  expect(at(runs("cargo build"), 300)).toBe("pnpm test")
+  expect(at(runs("cargo build"), 1500)).toBe("cargo build")
+  // The same, made anew, changes nothing.
+  const same = held
+  expect(heldDoing(same, runs("cargo build"), 9000, sameDoes)).toBe(same)
+  expect(sameDoes({ doing: "stuck", at: 0 }, { doing: "stuck", at: MIN })).toBe(
+    false
+  )
 })
 
 test("a Pane's header takes the look, and one open and seen rests there", () => {
