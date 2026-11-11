@@ -68,9 +68,11 @@ with good UX and UI".
    - no key reached this machine's Panes in the last 10 minutes, so it
      never restarts under the Person's hands.
    - **On every machine, by default.** A server's and a desktop's alike
-     (ADR 0086, decision 6). `machine.toml`'s `[updates] restart = "idle"`
+     (ADR 0086, decision 6). `machine.toml`'s `updates = "when-idle"`
      says so; `"ask"` waits for the Person, `"off"` and `BANDA_UPDATES=off`
-     take nothing at all.
+     take nothing at all. One flat key, as the file's others are: its
+     reader names any key it does not know, so a table would be a second
+     shape for one choice.
    - **Restart now** warns while Agents work, in the words of Quit, and
      restarts anyway once the Person confirms.
    - A restart ends the Terminals, as it does today; keeping them stays
@@ -165,8 +167,8 @@ Each step is its own PR, and Banda keeps updating after each.
 | 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner): done |
 | 1b | The bundle carries a pinned Node, as Windows' app does |
 | 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build |
-| 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet |
-| 4 | The restart once nothing runs, Restart now, `machine.toml`'s `[updates]` |
+| 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet (#1541): built |
+| 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart |
 | 5 | The desktop part: `update.ts` moved, the app swap asked of the engine part; the window stops no engine to update |
 | 6 | The widget over every machine, as the chosen mock |
 | 7 | Install Banda on another machine from Add → Connect |
