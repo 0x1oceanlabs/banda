@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import { deviceFile, projectFile, type ProjectId } from "@banda/core"
+import type { ProjectId } from "@banda/contract"
+import { deviceFile, projectFile } from "@banda/core"
 import { editorsOf, openInEditor, openWithSystem, reveal } from "./outside"
 
 const zed = { id: "zed", name: "Zed" }
