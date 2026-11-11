@@ -4,7 +4,7 @@ import { type Listed, NO_REASON } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { describe, expect, test } from "vitest"
-import { placedOf, type Row } from "./arrange"
+import type { Row } from "./arrange"
 import {
   agoSaid,
   type CardModel,
@@ -13,10 +13,10 @@ import {
   type CardView,
   linesOf,
   spokenOf,
-  timeAt,
   timeOf,
   timesOf,
 } from "./card"
+import { atOf } from "./inbox"
 
 /** Tuesday, 10 November 2026, 15:00 by the local clock. */
 const NOW = new Date(2026, 10, 10, 15, 0).getTime()
@@ -295,17 +295,24 @@ describe("tones: colour only on the mark and on a call's time", () => {
       }
   })
 
-  test("the counts' list takes the same time and colour", () => {
-    expect(timeAt(placedOf(listed(), NOW), "asking")).toEqual({
+  test("the counts' list draws the one-line card, with its machine's icon, its time and its colour (#1067)", () => {
+    const ONE: CardView = { density: 1, group: "none" }
+    const asking = row("turn")
+    const here = card(asking, { at: atOf(asking), view: ONE })
+    expect(kinds(here)).toEqual(["mark title | time"])
+    expect(here.time).toEqual({
       kind: "ago",
       at: NOW - 14 * MINUTE,
       tone: "attention",
     })
-    const working = listed({ mark: "running", began: NOW - HOUR })
-    expect(timeAt(placedOf(working, NOW), "running")).toEqual({
-      kind: "ago",
-      at: NOW - HOUR,
-    })
+    const working = row(
+      "working",
+      { mark: "running", began: NOW - HOUR },
+      "arc"
+    )
+    const there = card(working, { at: atOf(working), machine: arc, view: ONE })
+    expect(kinds(there)).toEqual(["mark title | machine time"])
+    expect(there.time).toEqual({ kind: "ago", at: NOW - HOUR })
   })
 })
 
@@ -408,6 +415,25 @@ describe("spokenOf (spec §2.8)", () => {
       "Fix the form, Later, someday"
     )
     expect(later({ at: NOW })).toBe("Fix the form, Later, when it's done")
+    // Put off by its Agent, it says so (ADR 0074).
+    expect(later({ at: NOW, byAgent: true })).toBe(
+      "Fix the form, Later by its Agent, when it's done"
+    )
+    expect(later({ at: NOW, until: at, byAgent: true })).toBe(
+      "Fix the form, Later by its Agent, wakes at 18:30"
+    )
+    // Woke, it is no longer Later's: line 2 says who put it off.
+    expect(
+      card(
+        row("turn", {
+          later: {
+            at: NOW - HOUR,
+            byAgent: true,
+            woke: { at: NOW, by: "time" },
+          },
+        })
+      ).byAgent
+    ).toBeUndefined()
   })
 
   test("its time in full, by the steps the card's takes", () => {

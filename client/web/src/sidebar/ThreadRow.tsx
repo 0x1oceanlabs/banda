@@ -1,56 +1,56 @@
 import {
   type ComponentProps,
   type ReactNode,
-  useCallback,
   useContext,
   useEffect,
   useState,
 } from "react"
 import type { Engine } from "@banda/contract"
-import type { MachineRows, Machines } from "@banda/contract/sidebar"
+import type { Machines } from "@banda/contract/sidebar"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import {
-  awaySince,
-  namedIn,
-  sameData,
-  type Shown,
-  useHostsBy,
-  useThisNamed,
-} from "@banda/core/react"
+import { HostsContext } from "@banda/core/react"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
-import { seenNamed } from "@banda/ui/hooks/use-status"
 import { stopNaming, useNaming } from "@banda/ui/lib/naming"
 import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
+import type { Row } from "./arrange"
 import { Card } from "./CardView"
-import { cardOf, type CardOf } from "./card"
-import { machineOnRow } from "./machine-on-row"
+import type { CardOf } from "./card"
+import { useCard } from "./useCard"
 import { HoldingContext, useHoldWhile } from "./useHold"
 
 /** Where a Thread's card is drawn, and how: what its card is made of but
- * its machine, which is read here, and how it is drawn. */
-type Placed = Omit<CardOf, "machine" | "away"> &
-  Pick<ComponentProps<typeof Card>, "current" | "action">
+ * its machine, which `useCard` reads, the sidebar's row, and how it is
+ * drawn. */
+type Placed = Omit<CardOf, "row" | "machine" | "away" | "stopped"> & {
+  row: Row
+} & Pick<ComponentProps<typeof Card>, "current" | "action">
 
 /**
- * A Thread's card, with the Thread menu a right click opens (ADR 0077,
- * decision 5); its Rename… opens the field in the card itself. Another
- * host's has neither yet (`ElsewhereRow`), nor has one that left the tab
- * while the list held. The menu, while open, and the field hold the list
- * still, and what its Person does from the menu is their own act, which
- * the list draws at once where it takes the card elsewhere (ADR 0098,
- * decision 6).
+ * A Thread's card, the same on every machine (ADR 0098, decision 18),
+ * named as `[machines]` asks (`useCard`): another machine's dims, where
+ * no label above names it, while the Window does not reach it, its time
+ * standing as of when it was last heard, and has its Harness's emblem
+ * from that machine's engine. This machine's has the Thread menu a right click opens (ADR 0077, decision
+ * 5), whose Rename… opens the field in the card itself, and its hover
+ * action; another machine's has neither yet, nor has one that left the
+ * tab while the list held. The menu, while open, and the field hold the
+ * list still, and what its Person does from the menu is their own act,
+ * which the list draws at once where it takes the card elsewhere (ADR
+ * 0098, decision 6).
  */
 export function ThreadRow({
   engine,
   named,
   machines,
+  action,
   ...placed
 }: Placed & {
+  /** This machine's engine. */
   engine: Engine
   /** A label above names its machine. */
   named: boolean
@@ -59,8 +59,13 @@ export function ThreadRow({
 }) {
   const { row, went } = placed
   const project = row.project.id
+  const mine = row.host === undefined
   const naming = useNaming(project, row.listed.id, "row")
-  const harnesses = useHarnesses(engine)
+  const kept = useContext(HostsContext)
+  const harnesses = useHarnesses(
+    row.host === undefined ? engine : kept.engine(row.host)
+  )
+  const card = useCard(placed, { named, machines })
   const [menu, setMenu] = useState(false)
   // A card that left takes its menu and its field with it, which say
   // nothing as it goes: the half-typed title is not kept, and neither
@@ -73,24 +78,23 @@ export function ThreadRow({
   }, [left, renaming])
   useHoldWhile((menu || renaming) && !left)
   const holding = useContext(HoldingContext)
-  // This machine, where the Person asked it named as the others are.
-  const here = machineOnRow(useThisNamed(machines.thisToo), {
-    rows: machines.rows,
-    labelled: named,
-  })
-  if (row.host !== undefined)
-    return <ElsewhereRow {...placed} named={named} rows={machines.rows} />
-  const card = cardOf({ ...placed, ...(here ? { machine: here } : {}) })
   const drawn = (field?: ReactNode) => (
     <Card
       card={card}
       row={row}
       current={placed.current}
-      action={placed.action}
+      action={mine ? action : undefined}
       harnesses={harnesses}
       field={field}
     />
   )
+  // Away from it, another machine's card dims where no label above does.
+  if (!mine)
+    return !named && card.away ? (
+      <div className="opacity-45">{drawn()}</div>
+    ) : (
+      drawn()
+    )
   if (left) return drawn()
   if (naming)
     return drawn(
@@ -114,66 +118,4 @@ export function ThreadRow({
       </ContextMenuContent>
     </ContextMenu>
   )
-}
-
-/**
- * Another host's Thread (ADR 0081): shown as this machine's are, and a
- * click opens it there, as the directory places its Project; with no menu
- * or put off yet, as the card's would go to this machine's engine. Where
- * no label above names its host, the card does; away or stopped, it dims
- * with its own words, its time standing as of when it was last heard.
- */
-function ElsewhereRow({
-  named,
-  rows,
-  ...placed
-}: Placed & {
-  /** A label above names its host. */
-  named: boolean
-  /** How another machine shows on its rows. */
-  rows: MachineRows
-}) {
-  const { there, away, stopped } = useElsewhere(placed.row.host)
-  const machine = machineOnRow(there, { rows, labelled: named })
-  const card = cardOf({
-    ...placed,
-    ...(machine ? { machine } : {}),
-    ...(away === undefined ? {} : { away }),
-    ...(stopped ? { stopped } : {}),
-  })
-  const drawn = <Card card={card} row={placed.row} current={placed.current} />
-  return !named && away !== undefined ? (
-    <div className="opacity-45">{drawn}</div>
-  ) : (
-    drawn
-  )
-}
-
-/** Another host's name and icon; as of when it was last heard, while the
- * Window does not reach it, away or stopped; and that it is stopped. */
-function useElsewhere(host: string | undefined) {
-  const machineOf = useCallback(
-    (hosts: readonly Shown[]) =>
-      host === undefined ? undefined : namedIn(hosts, host, seenNamed),
-    [host]
-  )
-  const there = useHostsBy(machineOf, sameData)
-  const shownOf = useCallback(
-    (hosts: readonly Shown[]) => hosts.find((one) => one.name === host),
-    [host]
-  )
-  const awayOf = useCallback(
-    (hosts: readonly Shown[]) => {
-      const one = shownOf(hosts)
-      return one && awaySince(one)
-    },
-    [shownOf]
-  )
-  const stoppedOf = useCallback(
-    (hosts: readonly Shown[]) => shownOf(hosts)?.state.state === "stopped",
-    [shownOf]
-  )
-  const away = useHostsBy(awayOf)
-  const stopped = useHostsBy(stoppedOf)
-  return { there, away, stopped }
 }

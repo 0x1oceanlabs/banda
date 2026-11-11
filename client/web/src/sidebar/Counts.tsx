@@ -1,6 +1,10 @@
 import type { ProjectSummary } from "@banda/contract"
-import type { Count } from "@banda/contract/sidebar"
-import { BandaMark, type MarkState } from "@banda/ui/components/banda-mark"
+import type { Count, Machines } from "@banda/contract/sidebar"
+import {
+  BandaMark,
+  type MarkState,
+  toneOf,
+} from "@banda/ui/components/banda-mark"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -10,21 +14,31 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { ProjectSign } from "@banda/ui/components/project-sign"
-import { type Here, useHere, useRun } from "@banda/core/react"
+import { CutTips } from "@banda/ui/components/fade-text"
+import { type Here, useHere } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
 import type { Lists } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
-import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
 import { order, useElsewhere } from "./order"
-import { lookOf } from "@banda/ui/status"
 import { placedOf } from "./arrange"
-import { timeAt } from "./card"
-import { TimeNow } from "./CardStatus"
-import { calm, type Counted, inOrder, type Tally, tally } from "./tally"
+import { type CardRow, type CardView, spokenOf } from "./card"
+import { CardLines, useCardClock } from "./CardView"
+import { rowKey } from "./hold"
+import { atOf } from "./inbox"
+import { EDGE } from "./MachineCard"
+import { useOpenRow } from "./open"
+import {
+  calm,
+  type Counted,
+  countedKey,
+  inOrder,
+  type Tally,
+  tally,
+} from "./tally"
+import { useCard } from "./useCard"
 
 /** Each count's words, after its number. */
 const WORDS: Record<Count, string> = {
@@ -153,9 +167,14 @@ export const countsWidget: Widget = {
   compact: true,
 }
 
+/** The counts' list's view: one line, the card of a place it is drawn
+ * outside of (ADR 0098, decision 27). */
+const ONE_LINE: CardView = { density: 1, group: "none" }
+
 /** What the counts count, drawn only while the list is open, in the
- * sidebar's order, which is worked out only then. */
-function List({
+ * sidebar's order, which is worked out only then; one tooltip shows any
+ * cut text whole, beside the menu. */
+export function List({
   tallies,
   lists,
   now,
@@ -166,47 +185,81 @@ function List({
   now: number
   projects: readonly ProjectSummary[]
 }) {
-  const run = useRun()
-  // Another machine's Threads stand where the sidebar list places them.
+  // Another machine's Threads stand where the sidebar list places them,
+  // and are named as its cards name them.
   const elsewhere = useElsewhere()
-  const { keys } = order(lists, projects, now, { elsewhere })
+  const { machines } = useLookSidebar()
+  const { keys, rows } = order(lists, projects, now, { elsewhere })
   const { waiting, working } = inOrder(tallies, keys)
-  const named = new Map(projects.map((project) => [project.id, project]))
-  const rows = (things: Counted[]) =>
-    things.map(({ project, listed }) => {
-      const where = named.get(project)
-      // Its mark's look, and its time from its place's moment in that
-      // look's colour, as its card has them.
-      const { look } = lookOf(listed, now)
-      return (
-        <DropdownMenuItem
-          key={listed.id}
-          className="gap-2 py-1.5"
-          onClick={() => run("pane.pick", { project, pane: listed.pane })}
-        >
-          <ThreadMark listed={listed} look={look} />
-          <span className="min-w-0 flex-1 truncate">{listed.title}</span>
-          {where && <ProjectSign project={where} />}
-          <TimeNow time={timeAt(placedOf(listed, now), look)} />
-        </DropdownMenuItem>
-      )
-    })
+  const rowOf = new Map(rows.map((row) => [rowKey(row), row]))
+  // Each that a count counts stands here, as many rows as the bar says:
+  // one whose Project the sidebar does not know too, with no Project part.
+  const cards = (things: Counted[]) =>
+    things.map((thing) => (
+      <Item
+        key={countedKey(thing)}
+        row={rowOf.get(countedKey(thing)) ?? unlistedOf(thing, now)}
+        now={now}
+        machines={machines}
+      />
+    ))
   return (
-    <>
+    <CutTips edge={EDGE}>
       {waiting.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel>Wait for you</DropdownMenuLabel>
-          {rows(waiting)}
+          {cards(waiting)}
         </DropdownMenuGroup>
       )}
       {waiting.length > 0 && working.length > 0 && <DropdownMenuSeparator />}
       {working.length > 0 && (
         <DropdownMenuGroup>
           <DropdownMenuLabel>Working</DropdownMenuLabel>
-          {rows(working)}
+          {cards(working)}
         </DropdownMenuGroup>
       )}
-    </>
+    </CutTips>
+  )
+}
+
+/** The row of a counted Thread whose Project the sidebar does not know:
+ * that Project by its id alone, and where the Thread stands at `now`. */
+const unlistedOf = ({ project, listed }: Counted, now: number): CardRow => ({
+  project: { id: project },
+  ...placedOf(listed, now),
+})
+
+/**
+ * A Thread in the counts' list, as a one-line card, the sidebar's own (ADR
+ * 0098, decision 27; #1067): its mark, its title, its machine's icon as
+ * `machines` names it on a card, and its time. A click goes to its
+ * Thread, as the card's does; a screen reader hears it by `spokenOf`.
+ */
+function Item({
+  row,
+  now,
+  machines,
+}: {
+  row: CardRow
+  now: number
+  machines: Machines
+}) {
+  const card = useCard(
+    { row, place: row.stand, at: atOf(row), now, view: ONE_LINE },
+    { named: false, machines }
+  )
+  const at = useCardClock(card)
+  const spoken = spokenOf(card, at)
+  const onOpen = useOpenRow(row)
+  return (
+    <DropdownMenuItem
+      aria-label={spoken.name}
+      aria-description={spoken.description || undefined}
+      className="flex-col items-stretch gap-0.5 px-2 py-1"
+      onClick={onOpen}
+    >
+      <CardLines card={card} row={row} now={at} />
+    </DropdownMenuItem>
   )
 }
 

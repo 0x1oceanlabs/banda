@@ -14,6 +14,7 @@ import {
 } from "@banda/ui/components/hover-card"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { useRead } from "@banda/ui/hooks/use-read"
+import { beside } from "@banda/ui/lib/beside"
 import {
   awakeWords,
   batteryWords,
@@ -24,6 +25,10 @@ import {
 } from "@banda/core/react"
 import { useTurnsOn } from "../calls/battery"
 import { buildWords, factsWords, stateWords } from "../settings/machines"
+
+/** What a card's popups stand beside: the sidebar, or the menu it is
+ * drawn in, as the counts' list. */
+export const EDGE = 'aside[data-sidebar], [role="menu"]'
 
 /** `children`, the machine `host`'s label or mark, with its card as the
  * pointer rests on it. */
@@ -39,18 +44,10 @@ export function MachineCard({
 }) {
   const trigger = useRef<HTMLSpanElement>(null)
   // Beside the sidebar, level with what it is of, so it covers no row.
-  const beside = useCallback(() => {
-    const at = trigger.current
-    if (!at) return null
-    const edge = at.closest('aside[aria-label="Sidebar"]') ?? at
-    return {
-      getBoundingClientRect: () => {
-        const { top, height } = at.getBoundingClientRect()
-        const { right } = edge.getBoundingClientRect()
-        return DOMRect.fromRect({ x: right, y: top, width: 0, height })
-      },
-    }
-  }, [])
+  const anchor = useCallback(
+    () => trigger.current && beside(trigger.current, EDGE),
+    []
+  )
   return (
     <HoverCard>
       <HoverCardTrigger
@@ -62,7 +59,7 @@ export function MachineCard({
         {children}
       </HoverCardTrigger>
       <HoverCardContent
-        anchor={beside}
+        anchor={anchor}
         side="right"
         align="start"
         alignOffset={-10}

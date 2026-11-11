@@ -763,15 +763,19 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
 /* With no motion, `[motion] off` or reduced motion, the sidebar and the
    toasts jump (ADR 0098, S5c): Sonner heeds the system's wish, not
    `[motion] off`. The sidebar is the aside, as the root's own
-   `data-sidebar` says how it is drawn. */
-html[data-still] :is(aside[data-sidebar], [data-sonner-toaster]) *,
+   `data-sidebar` says how it is drawn. A fade is no motion: its timeline
+   is the text's own scroll, which stands still. */
+html[data-still]
+  :is(aside[data-sidebar], [data-sonner-toaster])
+  *:not([data-slot="fade-text"]),
 html[data-still] aside[data-sidebar] *::before,
 html[data-still] [data-sonner-toast] {
   transition: none !important;
   animation: none !important;
 }
 @media (prefers-reduced-motion: reduce) {
-  :is(aside[data-sidebar], [data-sonner-toaster]) *,
+  :is(aside[data-sidebar], [data-sonner-toaster])
+    *:not([data-slot="fade-text"]),
   aside[data-sidebar] *::before,
   [data-sonner-toast] {
     transition: none !important;
@@ -885,6 +889,28 @@ html[data-still] :is([data-slot="satellite"], [data-sat-motion]) {
       linear-gradient(#000 0 0) top / 100% 1.25rem no-repeat,
       linear-gradient(to right, #000 calc(100% - 5rem), transparent) bottom /
         100% 1.25rem no-repeat;
+  }
+}
+
+/*
+ * Text that fades out at its end where it does not fit, never "…" (ADR
+ * 0098, decision 8; `fade-text.tsx`): the text is its own scroll box,
+ * whose timeline is live only while it holds more than it shows, and that
+ * timeline alone puts the mask on. Text that fits has none; nothing
+ * measures it, and it plays nothing as time goes.
+ */
+[data-slot="fade-text"] {
+  animation: fade-text 1ms both;
+  animation-timeline: scroll(self inline);
+}
+@keyframes fade-text {
+  from,
+  to {
+    mask-image: linear-gradient(
+      to right,
+      #000 calc(100% - 1.75rem),
+      transparent
+    );
   }
 }
 

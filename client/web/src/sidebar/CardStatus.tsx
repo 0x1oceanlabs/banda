@@ -10,7 +10,6 @@ import { COLOR_CLASS } from "@banda/ui/components/banda-mark"
 import { cn } from "@banda/ui/lib/utils"
 import { short, wakes } from "@banda/ui/lib/words"
 import type { Quiet, Time, Tone } from "./card"
-import { nextOf, useClock } from "./clock"
 
 /** Each call's colour, as the Mark's; woke's yellow darker on a light
  * theme, where it is small text. */
@@ -68,11 +67,4 @@ export function CardTime({
       {timeWords(time, now)}
     </span>
   )
-}
-
-/** A time with its own place on the list's clock, where no card draws
- * it, as in the counts' list. */
-export function TimeNow({ time }: { time: Time }) {
-  const now = useClock((at) => nextOf(time, at))
-  return <CardTime time={time} now={now} />
 }

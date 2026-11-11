@@ -16,9 +16,8 @@ import { projectLabel } from "@banda/ui/lib/projects"
 import { dayOf } from "@banda/core"
 import { agoOf, hourOf } from "@banda/ui/lib/words"
 import { lookOf, type Stand, STAND_WORDS } from "@banda/ui/status"
-import type { Placed, Row } from "./arrange"
+import type { Row } from "./arrange"
 import { type Went, wentWords } from "./hold"
-import { atOf } from "./inbox"
 import type { OnRow } from "./machine-on-row"
 
 /** How many lines a card draws (decision 9): by where it is, or as many
@@ -98,11 +97,21 @@ export type CardModel = {
   /** It stands on a free workspace, away from its Project's (ADR 0102,
    * decision 6). */
   strayed?: true
+  /** Its Agent put it off, as it stands in Later (ADR 0074, decision
+   * 10). */
+  byAgent?: true
+}
+
+/** The row a card is drawn from: the sidebar's, or, in the counts' list,
+ * a Thread whose Project the sidebar does not know, by that Project's id
+ * alone, whose card has no Project part. */
+export type CardRow = Omit<Row, "project"> & {
+  project: ProjectSummary | Pick<ProjectSummary, "id">
 }
 
 /** What a card is made from. */
 export type CardOf = {
-  row: Row
+  row: CardRow
   /** The place it is drawn in. */
   place: Stand
   /** When its time counts from there (`inbox.ts`, §2.5). */
@@ -168,7 +177,7 @@ export function cardOf(input: CardOf): CardModel {
   if (count >= 3)
     lines.push({
       left:
-        view.group === "project"
+        view.group === "project" || !("name" in row.project)
           ? []
           : [{ kind: "project", project: row.project }],
       right: [
@@ -211,13 +220,16 @@ export function cardOf(input: CardOf): CardModel {
           },
         }),
     ...(strayed ? { strayed: true as const } : {}),
+    ...(stand === "later" && listed.later?.byAgent
+      ? { byAgent: true as const }
+      : {}),
   }
 }
 
 /** `machine`'s slot on `row`'s card: by its name too where `named`, unless
  * it shows by its icon `alone`. */
 function machineSlot(
-  { host }: Row,
+  { host }: Pick<Row, "host">,
   { alone, ...machine }: OnRow,
   named: boolean
 ): Slot {
@@ -236,7 +248,7 @@ function machineSlot(
  * working card's own words come with ADR 0099's step 3, and Done's first
  * sentence of the last reply, where no note is, with its own PR.
  */
-function saysOf({ listed }: Row, word: Word | undefined): Says {
+function saysOf({ listed }: Pick<Row, "listed">, word: Word | undefined): Says {
   const { calls, said, later } = listed
   switch (word) {
     case "Asks":
@@ -293,12 +305,6 @@ export function timeOf(
   return { kind: "ago", at, ...(tone ? { tone } : {}) }
 }
 
-/** The time `placed`'s card says, where no card draws it, as in the
- * counts' list: from its place's moment, in the colour of `look`. */
-export function timeAt(placed: Placed, look: MarkState): Time {
-  return timeOf(placed, atOf(placed), callColor(look))
-}
-
 /** Every time `card` says that changes as time goes by: its own and when
  * it was put off, unless they stand as of when its machine was last
  * heard; and how long that has been. */
@@ -320,6 +326,11 @@ export type Spoken = { name: string; description: string }
  * decision 6): its diamond's tooltip, and to a screen reader. */
 export const STRAYED = "Away from its Project's workspace"
 
+/** What a card in Later says of a Thread its Agent put off (ADR 0074:
+ * "the Agent's own snooze shows as the Agent's"), to a screen reader and
+ * on its Wake. */
+export const LATER_BY_AGENT = "Later by its Agent"
+
 /** Each place's word, where no call says one. */
 const STAND_SAID: Readonly<Record<Stand, string>> = {
   ...STAND_WORDS,
@@ -327,15 +338,20 @@ const STAND_SAID: Readonly<Record<Stand, string>> = {
 }
 
 /**
- * How `card` is said at `now` (§2.8): its name is its title, its word and
- * its time in full ("14 minutes", never "14m", which a reader may say as
- * metres); its description, what its other lines say, each `·` a full
- * stop, ✓ "passed" and ✗ "failed"; then that it strayed from its
- * Project's workspace, that its machine is away, and where it went if it
- * left the tab.
+ * How `card` is said at `now` (§2.8): its name is its title, its word,
+ * "Later by its Agent" where its Agent put it off, and its time in full
+ * ("14 minutes", never "14m", which a reader may say as metres); its
+ * description, what its other lines say, each `·` a full stop, ✓
+ * "passed" and ✗ "failed"; then that it strayed from its Project's
+ * workspace, that its machine is away, and where it went if it left the
+ * tab.
  */
 export function spokenOf(card: CardModel, now: number): Spoken {
-  const word = card.tone ? WORDS[card.tone] : STAND_SAID[card.stand]
+  const word = card.tone
+    ? WORDS[card.tone]
+    : card.byAgent
+      ? LATER_BY_AGENT
+      : STAND_SAID[card.stand]
   const at = card.away?.since ?? now
   const name = [card.title, word, timeSaid(card.time, at)].join(", ")
   const said = card.lines.flatMap((line) =>
