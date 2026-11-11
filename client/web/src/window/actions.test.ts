@@ -1247,7 +1247,7 @@ test("a file act checks the file on its Project's machine and carries the Projec
 
   stat.mockClear()
   await done("file.attach", { file: "/r1/a.ts", project: R1 })
-  expect(attach).toHaveBeenCalledWith({ path: "/r1/a.ts" })
+  expect(attach).toHaveBeenCalledWith({ path: "/r1/a.ts", project: R1 })
 
   // A file gone on its machine says so, and nothing is done.
   stat.mockClear()
