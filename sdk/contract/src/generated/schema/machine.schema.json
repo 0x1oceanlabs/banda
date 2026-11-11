@@ -29,6 +29,11 @@
       "description": "Stay awake while plugged in: on power, this machine does not\nidle-sleep, Agents or none, so other machines reach it. One with\nno battery is always on power. Off by default.",
       "type": "boolean",
       "x-class": "machine"
+    },
+    "updates": {
+      "description": "Take Banda's updates: when-idle takes each new engine and restarts\non it once no Agent works here; ask takes it and waits for you to\nrestart; off takes none. when-idle by default.",
+      "$ref": "#/$defs/TakeUpdates",
+      "x-class": "machine"
     }
   },
   "additionalProperties": false,
@@ -85,6 +90,26 @@
           "description": "A tablet: `tablet`.",
           "type": "string",
           "const": "tablet"
+        }
+      ]
+    },
+    "TakeUpdates": {
+      "description": "Whether this machine takes Banda's updates by itself (ADR 0115,\ndecision 3).",
+      "oneOf": [
+        {
+          "description": "Takes each new engine, and restarts on it once nothing runs.",
+          "type": "string",
+          "const": "when-idle"
+        },
+        {
+          "description": "Takes each new engine, and waits for the Person to restart.",
+          "type": "string",
+          "const": "ask"
+        },
+        {
+          "description": "Takes none.",
+          "type": "string",
+          "const": "off"
         }
       ]
     }

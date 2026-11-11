@@ -172,6 +172,8 @@ export const DOES = {
   "sharing.state": "read",
   "sharing.new_id": "act",
   "sharing.example": "read",
+  "updates.check": "act",
+  "updates.state": "read",
   "workspaces.list": "read",
   "workspaces.open": "act",
   "workspaces.close": "act",

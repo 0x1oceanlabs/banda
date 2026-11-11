@@ -159,6 +159,17 @@ enum Command {
         #[command(subcommand)]
         what: ProjectCommand,
     },
+    /// This machine's updates (ADR 0115): what it runs, the newest its
+    /// channel has, what it takes and what is ready, as one JSON line.
+    Update {
+        /// Looks at the channel now, and takes the newest engine when it is
+        /// newer, then says what it found.
+        #[arg(long, conflicts_with = "follow")]
+        check: bool,
+        /// Prints a line again on each change, the current one first.
+        #[arg(long)]
+        follow: bool,
+    },
     /// Prints what this machine is called and drawn by, as every window
     /// shows it: its name, a tab, and its icon. machine.toml in
     /// ~/.config/banda names it; Settings → Machines writes that.
@@ -816,6 +827,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Secret { what } => secret_command(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
+        Command::Update { check, follow } => update(&places, check, follow).await,
         Command::Thread { what } => {
             let (method, project, params) = match what {
                 ThreadCommand::Later {
@@ -1045,6 +1057,39 @@ async fn print_call(
         .await?;
     println!("{}", json!({ "ok": answer }));
     Ok(())
+}
+
+/// `banda update`: the updates module's state, looked at now with
+/// `check`, or each change of it with `follow`.
+async fn update(places: &Places, check: bool, follow: bool) -> Result<(), Failure> {
+    let mut client = Client::connect(places).await?;
+    if check {
+        let found = client
+            .call("updates.check", None, CommandId::new(), json!({}))
+            .await?;
+        println!("{found}");
+        return Ok(());
+    }
+    let stream = client.stream("updates.state").await?;
+    loop {
+        match client.heard().await? {
+            banda_kernel::api::EngineFrame::Piece { stream: of, data } if of == stream => {
+                println!("{data}");
+                if !follow {
+                    return Ok(());
+                }
+            }
+            banda_kernel::api::EngineFrame::Result {
+                id,
+                error: Some(refusal),
+                ..
+            } if id == stream => return Err(Failure::Refused(refusal)),
+            banda_kernel::api::EngineFrame::Ended { stream: of } if of == stream => {
+                return Ok(());
+            }
+            _ => {}
+        }
+    }
 }
 
 /// `banda machine`: what the engine said, as it said welcome, its machine

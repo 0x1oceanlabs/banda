@@ -30,3 +30,8 @@
 # Agents or none, so other machines reach it. One with no battery is
 # always on power.
 # awake-plugged-in = false
+
+# Take Banda's updates: when-idle takes each new engine and restarts on
+# it once no Agent works here and no terminal is open; ask takes it and
+# waits for you to restart; off takes none.
+# updates = "when-idle"

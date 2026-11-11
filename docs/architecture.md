@@ -1555,6 +1555,26 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   engine where it was packed, and a Problem says why. A `banda` that a
   package manager owns, as the AUR's, says so in `package-type` beside it
   and runs where it was put; a checkout's runs where cargo built it.
+- **The engine updates itself** (ADR 0115), with or without a window:
+  the machine-scope module `updates` (`platform/updates/engine`) looks
+  at its channel's releases a minute after the engine starts, then
+  hourly, and on `updates.check` (`banda update --check`). Banda Dev
+  reads every Dev, Banda only a Stable, by the window's rules
+  (`releases.ts`, ported in `feed.rs`). A release carries an engine feed,
+  `<dev|latest>-engine-<linux|mac>.yml`, naming one bundle,
+  `<folder>-<version>-engine-<os>-<arch>.tar.gz`, with its size and
+  SHA-512. The module downloads the newest above the running and the
+  ready one, following GitHub's one redirect only to its storage hosts
+  (the HTTPS client follows none), checks size and hash, unpacks it into
+  `<data>/engine/.<version>.new/`, runs its `banda --version`, which must
+  say that version, writes `version`, and renames it into
+  `<data>/engine/<version>/`, the window's layout. The two newest copies
+  stay, and the running one. It takes nothing for Banda Local, where
+  `package-type` sits beside the program, with `BANDA_UPDATES=off`, or
+  with `updates = "off"` in machine.toml (default `when-idle`). The
+  stream `updates.state` says what it runs, the newest found, a take's
+  progress, what is ready and why not (`banda update --follow`).
+  Restarting on a ready copy is ADR 0115's step 4; until then it waits.
 - **What still runs from inside the AppImage** is Electron's, and, for an
   engine that is the window's child, the Node the ACP adapters run on,
   the window's Electron. An engine started as the session's service from

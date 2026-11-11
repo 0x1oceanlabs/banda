@@ -13,6 +13,7 @@ import type { KeysMethods } from "./keys/KeysMethods"
 import type { MachinesMethods } from "./machines/MachinesMethods"
 import type { ProblemsMethods } from "./problems/ProblemsMethods"
 import type { SharingMethods } from "./sharing/SharingMethods"
+import type { UpdatesMethods } from "./updates/UpdatesMethods"
 import type { WorkspacesMethods } from "./workspaces/WorkspacesMethods"
 
 /** A part's methods under its prefix: `send` becomes `agents.send`. */
@@ -36,4 +37,5 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"machines", MachinesMethods> &
   Prefixed<"problems", ProblemsMethods> &
   Prefixed<"sharing", SharingMethods> &
+  Prefixed<"updates", UpdatesMethods> &
   Prefixed<"workspaces", WorkspacesMethods>

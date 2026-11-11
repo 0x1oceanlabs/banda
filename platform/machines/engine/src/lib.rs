@@ -34,6 +34,7 @@ use ts_rs::TS;
 
 pub use about::{About, about};
 pub use awake::Awake;
+pub use file::TakeUpdates;
 pub use found::found;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016).
@@ -54,6 +55,8 @@ struct Held {
     at_login: watch::Sender<bool>,
     /// When the machine stays awake, as the file says.
     awake: watch::Sender<Awake>,
+    /// Whether it takes Banda's updates, as the file says.
+    updates: watch::Sender<TakeUpdates>,
     /// The file as last read, none while it is not there: what it holds,
     /// not its time, tells a change, as the look's files do, so a change
     /// of another file of the folder logs nothing again.
@@ -74,6 +77,7 @@ impl Machine {
             now: watch::Sender::new(said.named),
             at_login: watch::Sender::new(said.at_login),
             awake: watch::Sender::new(said.awake),
+            updates: watch::Sender::new(said.updates),
             read: Mutex::new(held),
         }))
     }
@@ -95,6 +99,12 @@ impl Machine {
     /// and while it is on power, as `machine.toml` says (ADR 0097).
     pub fn awake(&self) -> watch::Receiver<Awake> {
         self.0.awake.subscribe()
+    }
+
+    /// Whether this machine takes Banda's updates, kept current (ADR 0115,
+    /// decision 3): the updates module reads it before each look.
+    pub fn updates(&self) -> watch::Receiver<TakeUpdates> {
+        self.0.updates.subscribe()
     }
 
     fn now(&self) -> Named {
@@ -125,6 +135,11 @@ impl Machine {
         self.0.awake.send_if_modified(|awake| {
             let changed = *awake != said.awake;
             *awake = said.awake;
+            changed
+        });
+        self.0.updates.send_if_modified(|updates| {
+            let changed = *updates != said.updates;
+            *updates = said.updates;
             changed
         });
     }

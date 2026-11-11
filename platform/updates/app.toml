@@ -1,0 +1,14 @@
+# The updates module, as it declares itself (ADR 0022). What its code
+# says, its methods, its code declares; this holds the rest.
+id = "updates"
+kind = "platform"
+name = "Updates"
+about = "Each machine updates its own Banda (ADR 0115): its engine looks at its channel's releases a minute after it starts, then hourly, takes the newest engine alone, checks it, and puts it beside the running one in its data folder, keeping two. It says what it found and took on the stream updates.state. It takes nothing from a checkout's build, where a package manager owns Banda, with BANDA_UPDATES=off, or where machine.toml says updates = \"off\". Restarting on the new engine is a later step."
+version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
+from-banda = true
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

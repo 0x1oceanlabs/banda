@@ -369,6 +369,7 @@ mod classes {
                     "start-at-login",
                     "awake-while-working",
                     "awake-plugged-in",
+                    "updates",
                 ],
             )],
         ),

@@ -273,6 +273,12 @@ Its settings: `sharing.toml`.
 
 Its methods, `banda call sharing.<method>`: `state`, `new_id`, `example`.
 
+## Updates (`updates`)
+
+Each machine updates its own Banda (ADR 0115): its engine looks at its channel's releases a minute after it starts, then hourly, takes the newest engine alone, checks it, and puts it beside the running one in its data folder, keeping two. It says what it found and took on the stream updates.state. It takes nothing from a checkout's build, where a package manager owns Banda, with BANDA_UPDATES=off, or where machine.toml says updates = "off". Restarting on the new engine is a later step.
+
+Its methods, `banda call updates.<method>`: `check`, `state`.
+
 ## Workspaces (`workspaces`)
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
