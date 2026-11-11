@@ -24,6 +24,7 @@ import {
 } from "lucide-react"
 import { labelOf } from "../registry"
 import { gateOf, type Handle, PaneMount, usePaneHandles } from "../tiling/mount"
+import { PaneSlot } from "../tiling/PaneSlot"
 import { opening, type Shell } from "./actions"
 import { usePeekEsc } from "./keys"
 
@@ -59,8 +60,8 @@ export function usePeek() {
  * a deep shadow, and a blur of what is under it. Its Open makes it a Pane
  * of the workspace; ⌥Space, or its button, has it fill the desk. Its Pane
  * is drawn from its owner's session, as a Frame's is, on the machine its
- * Project is on, and its acts go through the one router (ADR 0106,
- * decision 1).
+ * Project is on, its acts go through the one router, and its header names
+ * that machine as a Frame's does (ADR 0106, decision 1).
  */
 export function Peek({
   peek,
@@ -147,6 +148,7 @@ export function Peek({
                   {detail}
                 </span>
               )}
+              <PaneSlot project={project} pane={pane} at="project" />
             </PaneHeader>
             {/* Its machine not known yet, it waits for it, in its words. */}
             {reach.engine ? (

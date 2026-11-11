@@ -37,7 +37,7 @@ import { chipOf } from "./attach"
 import { device } from "../boot"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
-import { actAs, type Routing } from "../tiling/mount"
+import { actAs, refused, type Routing } from "../tiling/mount"
 import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
 import {
@@ -766,11 +766,51 @@ export function closingShown(
 /** What a file action takes. */
 const FILE = "the file's absolute path"
 
+/** A toast of why a file act was not done, in its machine's words. */
+function gone(failure: unknown) {
+  refused(failure instanceof Error ? failure.message : String(failure))
+}
+
 /**
- * Does `then` with the file `args` name, if it is there still; a toast
+ * Does `then` with the file `args` name and its Project's ID, if the
+ * file is there still, as the machine of that Project says (ADR 0106,
+ * law 1): a toast says when it has gone since its link was drawn (ADR
+ * 0063, decision 2). Where the args name no Project, it is the one the
+ * Person is in. Part of the act, so while that machine is away the act
+ * is refused whole and never done later by itself (law 4).
+ */
+function present(
+  shell: Pick<Shell, "here" | "sessionOf">,
+  args: Args | undefined,
+  then: (file: string, project: ProjectId) => void
+) {
+  const file = args?.file
+  if (typeof file !== "string") return
+  const here = shell.here.get()
+  const project =
+    typeof args?.project === "string"
+      ? (args.project as ProjectId)
+      : here.project
+  const host = here.pane?.project === project ? here.pane.host : undefined
+  let session: Engine
+  try {
+    session = shell.sessionOf(project, host ? { args: { host } } : undefined)
+  } catch (failure) {
+    return gone(failure)
+  }
+  session
+    .call("files.stat", { paths: [file] }, { project, once: true })
+    .then(([stat]) => {
+      if (stat) then(file, project)
+      else toast.warning(`No such file: ${file}`)
+    }, gone)
+}
+
+/** Does `then` with the device file `args` name, if it is there still,
+ * for what reaches this device's disk alone (`ON_THIS_DISK`); a toast
  * says when it has gone since its link was drawn (ADR 0063, decision 2).
  */
-function present(args: Args | undefined, then: (file: string) => void) {
+function presentHere(args: Args | undefined, then: (file: string) => void) {
   const file = args?.file
   if (typeof file !== "string") return
   void device.files.exists(file)?.then((there) => {
@@ -1327,10 +1367,10 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Open a file in Banda",
     unlisted: true,
     run: (shell, args) =>
-      present(args, (file) =>
+      present(shell, args, (file, project) =>
         shell.run("files.open", {
           file,
-          project: args?.project ?? null,
+          project,
           line: args?.line ?? null,
         })
       ),
@@ -1344,8 +1384,8 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Quick Look at a file",
     unlisted: true,
     run: (shell, args) =>
-      present(args, (file) =>
-        shell.run("files.peek", { file, project: args?.project ?? null })
+      present(shell, args, (file, project) =>
+        shell.run("files.peek", { file, project })
       ),
   },
   {
@@ -1356,7 +1396,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Open a file in its app",
     unlisted: true,
-    run: (_, args) => present(args, device.files.outside),
+    run: (_, args) => presentHere(args, device.files.outside),
   },
   {
     // Files' "Add to chat" and a reply's "Add to message": the file named
@@ -1366,6 +1406,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     args: takes(
       {
         file: "the file's absolute path; a folder's ends with /",
+        project: "the Project it is in",
         from: { number: "the first line commented on, from 1" },
         to: { number: "the last line commented on" },
         comment: "what the Person says of those lines",
@@ -1379,7 +1420,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Add a file to a Thread's message",
     unlisted: true,
     run: (shell, args) =>
-      present(args, (path) => shell.attach(chipOf(path, args ?? {}))),
+      present(shell, args, (path) => shell.attach(chipOf(path, args ?? {}))),
   },
   {
     // A Thread menu's "Show in folder", for a path in a reply.
@@ -1389,7 +1430,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Show a file in its folder",
     unlisted: true,
-    run: (_, args) => present(args, device.files.show),
+    run: (_, args) => presentHere(args, device.files.show),
   },
   {
     // The menu's Paste, as a terminal's: the focused field takes it.
@@ -1624,10 +1665,18 @@ export const ACTIONS: readonly Action<Shell>[] = [
 /**
  * The window's own acts on a file, by the word their ids start with, as
  * Show in folder and Quick Look: a file is a value of a Project, the one
- * the Person is in where its args name none, and is this device's to
- * reach only where that Project is this machine's (ADR 0106, law 3).
+ * the Person is in where its args name none (ADR 0106, law 3). Files' on
+ * its machine, it is reached through that machine's engine, as Quick Look;
+ * else it is this device's alone (`ON_THIS_DISK`).
  */
 const ON_FILES = "file"
+
+/** The acts on a file of this device's disk, which another machine's
+ * Project never has: its app here, its folder here (ADR 0106, law 3). */
+const ON_THIS_DISK: ReadonlySet<string> = new Set([
+  "file.outside",
+  "file.folder",
+])
 
 /**
  * The window's own acts on a web address: a value of the Pane's Project,
@@ -1668,7 +1717,10 @@ export function actOf(action: Action<Shell>): Act {
           ? linkRefused(args.url, machine)
           : undefined,
     }
-  if (owner === ON_FILES) return { title, at: "device", here: true }
+  if (owner === ON_FILES)
+    return ON_THIS_DISK.has(id)
+      ? { title, at: "device", here: true }
+      : { title, at: "owner", app: "files", here: true }
   return { title, at: ON_THIS_MACHINE.has(owner) ? "device" : "window" }
 }
 

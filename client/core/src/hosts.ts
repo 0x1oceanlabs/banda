@@ -411,7 +411,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   projects(name: string, listed: readonly ProjectSummary[]): void {
     const host = this.get().find((one) => one.name === name)
     if (!host || !holds(host)) return
-    this.#listed.set(name, listed.map(drawnHere))
+    this.#listed.set(name, listed)
     this.#shown.set(this.#placed(this.get()))
   }
 
@@ -799,15 +799,6 @@ export const UNKNOWN = "This window does not reach that machine"
  * does not know. The contract's, handed on with the hosts, so an App
  * takes it from where it takes them. */
 export { Unreachable }
-
-/** A host's Project as this Window draws it: a picture sign shows its
- * first letter, as only that host's engine reads its picture. */
-function drawnHere(project: ProjectSummary): ProjectSummary {
-  const { sign, name } = project
-  if (sign.kind !== "picture") return project
-  const text = [...name][0]?.toUpperCase() ?? ""
-  return { ...project, sign: { ...sign, kind: "letters", text } }
-}
 
 /** The names of the hosts that are live now. */
 export const liveIn = (hosts: readonly Shown[]): string[] =>

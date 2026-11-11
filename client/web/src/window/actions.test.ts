@@ -2,6 +2,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
+import { toast } from "@banda/ui/components/sonner"
 import { takeLook } from "@banda/ui/lib/look"
 import { onProjectsChanged } from "@banda/ui/lib/projects"
 import type { Action, Args } from "@banda/ui/module"
@@ -1091,4 +1092,131 @@ test("a key in a Pane acts on the machine Here says, an old arrangement's host w
       { id: expect.any(String) }
     )
   )
+})
+
+test("a file act checks the file on its Project's machine and carries the Project; what reaches this device's disk stays refused there (ADR 0106, law 1 and law 3)", async () => {
+  // The file's stat, as arc's engine answers it.
+  const stat = vi.fn(async (): Promise<unknown[]> => [{ path: "/r1/a.ts" }])
+  const session = { call: stat }
+  const sessionOf = vi.fn(() => session)
+  const run = vi.fn()
+  const attach = vi.fn()
+  const shell = shellOf({
+    hosts: arcHosts(["agents", "files"]),
+    run,
+    attach,
+    sessionOf,
+    here: { get: () => ({ project: R1 }) },
+  })
+  const done = async (id: string, args: Args) => {
+    runAction(shell, id, args)
+    await vi.waitFor(() => expect(stat).toHaveBeenCalled())
+    await stat.mock.results[0]!.value
+    await Promise.resolve()
+  }
+  await done("file.peek", { file: "/r1/a.ts", project: R1 })
+  expect(sessionOf).toHaveBeenCalledWith(R1, undefined)
+  // Part of the act: refused whole while its machine is away, never done
+  // later by itself.
+  expect(stat).toHaveBeenCalledWith(
+    "files.stat",
+    { paths: ["/r1/a.ts"] },
+    { project: R1, once: true }
+  )
+  expect(run).toHaveBeenCalledWith("files.peek", {
+    file: "/r1/a.ts",
+    project: R1,
+  })
+
+  stat.mockClear()
+  run.mockClear()
+  await done("file.open", { file: "/r1/a.ts", project: R1, line: 3 })
+  expect(run).toHaveBeenCalledWith("files.open", {
+    file: "/r1/a.ts",
+    project: R1,
+    line: 3,
+  })
+
+  stat.mockClear()
+  await done("file.attach", { file: "/r1/a.ts", project: R1 })
+  expect(attach).toHaveBeenCalledWith({ path: "/r1/a.ts" })
+
+  // A file gone on its machine says so, and nothing is done.
+  stat.mockClear()
+  run.mockClear()
+  toasted.mockClear()
+  stat.mockResolvedValueOnce([null])
+  const warned = vi.spyOn(toast, "warning")
+  await done("file.peek", { file: "/r1/gone.ts", project: R1 })
+  expect(run).not.toHaveBeenCalled()
+  expect(warned).toHaveBeenCalledWith("No such file: /r1/gone.ts")
+  warned.mockRestore()
+
+  // That Project's machine away: refused at once, in its pill's words.
+  stat.mockClear()
+  run.mockClear()
+  toasted.mockClear()
+  sessionOf.mockImplementationOnce(() => {
+    throw new Error("arc is away")
+  })
+  runAction(shell, "file.peek", { file: "/r1/a.ts", project: R1 })
+  expect(stat).not.toHaveBeenCalled()
+  expect(run).not.toHaveBeenCalled()
+  expect(toasted).toHaveBeenCalledWith("arc is away", {
+    id: expect.any(String),
+  })
+
+  // The answer lost on its way, likewise: the act is not done later.
+  toasted.mockClear()
+  stat.mockRejectedValueOnce(new Error("arc went away"))
+  runAction(shell, "file.peek", { file: "/r1/a.ts", project: R1 })
+  await vi.waitFor(() =>
+    expect(toasted).toHaveBeenCalledWith("arc went away", {
+      id: expect.any(String),
+    })
+  )
+  expect(run).not.toHaveBeenCalled()
+
+  // Its machine does not run Files: said, not asked.
+  toasted.mockClear()
+  stat.mockClear()
+  const without = shellOf({
+    hosts: arcHosts(["agents"]),
+    sessionOf,
+    here: { get: () => ({ project: R1 }) },
+  })
+  runAction(without, "file.peek", { file: "/r1/a.ts", project: R1 })
+  expect(stat).not.toHaveBeenCalled()
+  expect(toasted).toHaveBeenCalledWith("Not on arc yet: Quick Look at a file", {
+    id: expect.any(String),
+  })
+
+  // A file of this device's disk: not on arc, with no asking at all.
+  for (const id of ["file.outside", "file.folder"]) {
+    toasted.mockClear()
+    runAction(shell, id, { file: "/r1/a.ts", project: R1 })
+    expect(toasted, id).toHaveBeenCalledWith(
+      expect.stringMatching(/^Not on arc yet: /),
+      { id: expect.any(String) }
+    )
+  }
+})
+
+test("a file attached from a Pane carries the Pane's Project through the router (ADR 0106, law 3)", () => {
+  const ran = vi.fn()
+  const { run } = handlesOf(
+    arcHosts(["agents", "files"]),
+    ROUTING,
+    ON_ARC,
+    ran,
+    {
+      kind: "agents.thread",
+      args: { thread: "t1", host: "arc" },
+    }
+  )
+  run!("file.attach", { file: "/r1/a.ts" })
+  expect(ran).toHaveBeenCalledWith("file.attach", {
+    file: "/r1/a.ts",
+    project: R1,
+  })
 })
