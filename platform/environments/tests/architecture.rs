@@ -27,7 +27,13 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 15] = [
+const ON_THE_HOST: [(&str, usize, &str); 16] = [
+    (
+        "platform/updates/engine/src/take.rs",
+        1,
+        "runs a new copy of the engine it took, by its own path, with --version, to check it says \
+         the version its feed named before it goes into place (ADR 0115, decision 5)",
+    ),
     (
         "kernel/src/host.rs",
         1,
