@@ -1,14 +1,15 @@
-# scripts/check.sh's parts side by side on the runners on devbox
-# (ci/README.md), its `windows` part on GitHub's Windows runner, and the
-# fence's tests and the same-path test on GitHub's Ubuntu runner, as
-# devbox's containers give no user namespaces to make. One required
-# status, `ci`, sums them up: a PR that changes only docs passes it
-# without running them.
+# scripts/check.sh's parts side by side on GitHub's own runners, free for
+# a public repository (ci/README.md): Ubuntu for `rust ts` and the window's
+# shards, Windows for its `windows` part, and Ubuntu again for the fence's
+# tests and the same-path test, which turn user namespaces on for
+# themselves. One required status, `ci`, sums them up: a PR that changes
+# only docs passes it without running them.
 #
 # A PR from a fork is not checked at all (ADR 0038, decision 4): `ci` fails
 # on it, so it cannot be merged as it is. Roma reads it and takes its
-# commits to a branch here, where CI runs. A fork can rewrite this file, so
-# ci/job-started.sh on the runner is what keeps its code off devbox.
+# commits to a branch here, where CI runs. Each job is a VM of its own that
+# GitHub throws away, so nothing a run leaves reaches the next but the
+# caches main's runs save.
 name: ci
 
 on:
@@ -37,7 +38,7 @@ jobs:
     if: >-
       github.event_name != 'pull_request' ||
       github.event.pull_request.head.repo.full_name == github.repository
-    runs-on: devbox
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
@@ -62,7 +63,7 @@ jobs:
     name: check
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: devbox
+    runs-on: ubuntu-24.04
     timeout-minutes: 45
     strategy:
       # Every part reports, so a red run shows all it broke.
@@ -77,16 +78,58 @@ jobs:
           - { parts: window, shard: 2/4 }
           - { parts: window, shard: 3/4 }
           - { parts: window, shard: 4/4 }
+    permissions:
+      contents: read
     env:
       BANDA_E2E_SHARD: ${{ matrix.shard }}
+      # As ci/Dockerfile had it: no check reads the debug info.
+      CARGO_PROFILE_DEV_DEBUG: 0
     steps:
-      - uses: actions/checkout@v5
-      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
-        run: ci/target.sh && rustup toolchain install
+      - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
+        with:
+          persist-credentials: false
+      # The Node ci/Dockerfile pins, and package.json's pnpm.
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          # It would cache pnpm's store before pnpm is installed.
+          package-manager-cache: false
+      - run: npm install --global --silent "$(jq -r .packageManager package.json)"
+      # pnpm's store and Electron's download, by the lockfile: a new lock
+      # saves a new entry once, which every part then reads.
+      - id: paths
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4.3.0
+        with:
+          path: |
+            ${{ steps.paths.outputs.store }}
+            ~/.cache/electron
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+      - run: rustup toolchain install
+      # The dependencies main's last `rust ts` built, which every Linux part
+      # reads: it builds the most of them, and only it saves, from main.
+      - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
+        with:
+          shared-key: linux
+          save-if: ${{ github.ref == 'refs/heads/main' && matrix.parts == 'rust ts' }}
+          cache-on-failure: true
+      # Electron's libraries and font are ci/Dockerfile's list.
+      - name: What Electron's Chromium loads
+        if: matrix.parts == 'window'
+        run: |
+          sudo apt-get update -q
+          sudo apt-get install -y --no-install-recommends \
+            libnss3 libatk-bridge2.0-0t64 libatk1.0-0t64 libcups2t64 libgbm1 libasound2t64 \
+            libgtk-3-0t64 libxss1 libxcomposite1 libxdamage1 libxfixes3 libxrandr2 \
+            libpango-1.0-0 libcairo2 libdrm2 libxkbcommon0 libx11-xcb1 libxshmfence1 \
+            fonts-dejavu-core
       - run: scripts/check.sh ${{ matrix.parts }}
       - name: The window's traces
         if: failure() && matrix.parts == 'window'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: window-traces-${{ strategy.job-index }}
           path: client/desktop/test-results/
@@ -95,7 +138,7 @@ jobs:
       # decision 13); the job's summary has them as tables.
       - name: The motion numbers
         if: always() && matrix.parts == 'window'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: motion-${{ strategy.job-index }}
           path: client/desktop/test-results/motion.*
@@ -104,8 +147,8 @@ jobs:
 
   # The workspace for Windows, its lints and its tests' build (ADR 0090,
   # decision 9), on GitHub's own runner, free for a public repository, whose
-  # Visual Studio has Microsoft's CRT and SDK: devbox's image has no
-  # cargo-xwin yet. The tests run in windows.yml.
+  # Visual Studio has Microsoft's CRT and SDK. The tests run in
+  # windows.yml.
   #
   # It gates merges once it has passed on main, which main's run leaves an
   # artifact to say. Until then a failure only warns and the part stays
@@ -122,7 +165,7 @@ jobs:
       contents: read
       actions: read
     env:
-      # As on devbox (ci/Dockerfile): no check reads the debug info.
+      # As `check`: no check reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
       - uses: actions/checkout@v5
@@ -165,11 +208,9 @@ jobs:
           path: windows-passed
           retention-days: 90
 
-  # The fence's tests make user, mount and PID namespaces, which devbox's
-  # containers refuse, so there they skip, each saying why. GitHub's Ubuntu
-  # runner is a VM of the job's own, free for a public repository: Ubuntu
-  # keeps unprivileged user namespaces off behind AppArmor, and the job
-  # turns them on for itself. Here every test runs: one that would skip,
+  # The fence's tests make user, mount and PID namespaces, which Ubuntu
+  # keeps off behind AppArmor, so in `check` they skip, each saying why.
+  # This job turns them on for itself, as its runner is a VM of its own. Here every test runs: one that would skip,
   # for want of namespaces, Landlock or bwrap, fails the part.
   fence:
     name: fence (Linux namespaces)
@@ -180,7 +221,7 @@ jobs:
     permissions:
       contents: read
     env:
-      # As on devbox (ci/Dockerfile): no test reads the debug info.
+      # As `check`: no test reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
       BANDA_FENCE_TESTS: all
     steps:
@@ -188,11 +229,11 @@ jobs:
         with:
           persist-credentials: false
       - run: rustup toolchain install
-      # As `windows`: main's dependencies, saved by main's runs alone.
+      # `check`'s cache: main's `rust ts` saves it, a superset of these.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: linux-fence
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: linux
+          save-if: false
           cache-on-failure: true
       - name: Unprivileged user namespaces, bwrap for the test of one inside the fence, and ssh with a drop-in of root's
         run: |
@@ -209,8 +250,8 @@ jobs:
   # path of this machine's Project holds arc's files, so a window that
   # reads this machine's file for arc's reads "mac" and fails. As `fence`,
   # it runs on GitHub's Ubuntu VM, where the job may turn unprivileged user
-  # namespaces on for itself; devbox's window shards run the same spec with
-  # arc's files only in arc's own folders. BANDA_SAME_PATH=require fails
+  # namespaces on for itself; `check`'s window shards, which leave them
+  # off, run the same spec with arc's files only in arc's own folders. BANDA_SAME_PATH=require fails
   # the job where bwrap makes no namespace, rather than let it pass on
   # arc's folders alone. More of the window's tests move here slice by
   # slice: each road's spec, `remote-*.spec.ts`, joins the list as its
@@ -224,15 +265,15 @@ jobs:
     permissions:
       contents: read
     env:
-      # As on devbox (ci/Dockerfile): no check reads the debug info.
+      # As `check`: no check reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
       BANDA_SAME_PATH: require
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
-      # The Node ci/Dockerfile pins, and package.json's pnpm, as devbox has
-      # them.
+      # The Node ci/Dockerfile pins, and package.json's pnpm, as `check`
+      # has them.
       - id: node
         run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
       - uses: actions/setup-node@a0853c24544627f65ddf259abe73b1d18a591444 # v5.0.0
@@ -242,11 +283,11 @@ jobs:
           package-manager-cache: false
       - run: npm install --global --silent "$(jq -r .packageManager package.json)"
       - run: rustup toolchain install
-      # As `fence`: main's dependencies, saved by main's runs alone.
+      # `check`'s cache: main's `rust ts` saves it, a superset of these.
       - uses: Swatinem/rust-cache@d1527c8f67ef9af357290475d4af4b0fab8f12e0 # v2.9.3
         with:
-          shared-key: linux-same-path
-          save-if: ${{ github.ref == 'refs/heads/main' }}
+          shared-key: linux
+          save-if: false
           cache-on-failure: true
       # Electron's libraries and font are ci/Dockerfile's list.
       - name: Unprivileged user namespaces, bwrap for arc's, and what Electron's Chromium loads
@@ -276,7 +317,7 @@ jobs:
     name: ci
     needs: [changes, check, windows, fence, same-path]
     if: always()
-    runs-on: devbox
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     steps:
       - name: A fork's PR is not checked here

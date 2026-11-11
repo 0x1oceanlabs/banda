@@ -1,10 +1,21 @@
-# CI runners on devbox
+# CI
 
 `.github/workflows/ci.yml` runs `scripts/check.sh`'s parts side by side
 (`rust ts` in one job, as `ts` reads the checkpoints `rust` writes, and
-`window` in another) on self-hosted GitHub Actions runners labelled
-`devbox`. One status, `ci`, sums them up. A PR that changes only Markdown
-or `docs/` passes it without running them.
+`window` in four shards) on GitHub's own `ubuntu-24.04` runners, free for
+a public repository. One status, `ci`, sums them up. A PR that changes
+only Markdown or `docs/` passes it without running them.
+
+Each job is a VM of its own, 4 CPUs and 16 GB, which GitHub throws away
+after it. What a run builds on is only the caches main's runs save
+(below): main's `rust ts` saves the dependencies every Linux part reads,
+and each part keeps pnpm's store and Electron's download by the
+lockfile. `ci/Dockerfile` still pins the Node the jobs install, and
+`release.yml`'s pack still runs on devbox's runners (below) until it
+moves too.
+
+How long it took, on devbox and here, is in
+`docs/research/2026-11-11-ci-devbox-to-github.md`.
 
 ## Windows
 
@@ -23,15 +34,13 @@ builds it, and on every push to main; `ci` waits for it.
   run on main leaves a new one.
 - With no cache, as on a PR before main has saved one, `check.sh windows`
   took 4 to 5.5 minutes on `windows-2025`, and the whole job 4.5 to 6
-  (2026-11-07). `ci` waits for the slower of it and devbox's parts. Only
+  (2026-11-07). `ci` waits for the slower of it and the other parts. Only
   main's runs save the cache, so a warm run's time shows after main's
   first.
-- `ci/Dockerfile` has cargo-xwin and clang, so the part can move to devbox
-  once its image is rebuilt (below): `runs-on: devbox` and `ci/target.sh`,
-  as `check` has them. cargo-xwin fetches Microsoft's CRT and SDK into the
-  volume on its first run, 1.2 GB. From Linux on a laptop's 20 threads it
-  took 3 minutes with an empty `target/`, 65 s after a change to the
-  kernel and 26 s with nothing changed (2026-11-07).
+- From Linux, cargo-xwin builds the same (`scripts/check.sh windows`); it
+  fetches Microsoft's CRT and SDK on its first run, 1.2 GB. On a laptop's
+  20 threads it took 3 minutes with an empty `target/`, 65 s after a
+  change to the kernel and 26 s with nothing changed (2026-11-07).
 - `.github/workflows/windows.yml` runs the tests on `windows-2025`, on each
   push to main, on PRs that touch Windows code, and by hand
   (`gh workflow run windows --ref <branch>`). It is not a merge gate, and
@@ -49,8 +58,8 @@ builds it, and on every push to main; `ci` waits for it.
 ## The fence's tests
 
 The fence's tests (`platform/fence`, `engine/tests/fence.rs`) make user,
-mount and PID namespaces, which the runners' containers do not give a job:
-on devbox they skip, each saying why. `ci`'s `fence` part runs them on
+mount and PID namespaces, which Ubuntu keeps off behind AppArmor: in
+`check` they skip, each saying why. `ci`'s `fence` part runs them on
 GitHub's `ubuntu-24.04` runner, a VM of the job's own, free for a public
 repository. Ubuntu keeps unprivileged user namespaces off there behind
 AppArmor, so the job turns them on for itself, installs bubblewrap, and
@@ -72,7 +81,7 @@ two machines. A window that reads its own file for arc's then reads "mac"
 and fails. Its link is 40 ms away a round trip, and can go into a black
 hole, which drops what it carries with no reset.
 
-devbox's containers give no user namespaces, so there the window shards
+`check` leaves user namespaces off, so there the window shards
 run the spec with arc's files only in arc's own folders: a window that
 asks this machine's engine for them finds nothing, but a whole path read
 from this machine's disk still finds arc's file. `ci`'s `same-path` part
@@ -96,8 +105,8 @@ cut off (step 2a);
 through the relay to its engine, beside arc's at the same path (step 4b).
 Here,
 outside CI, the spec requires the namespace where `unshare -Ur true`
-works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as devbox
-does.
+works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as
+`check`'s shards do.
 
 ## The themes' shots
 
@@ -137,8 +146,10 @@ runner, free for a public repository. It is not a merge gate.
 GitHub keeps 10 GB of Actions caches for the repository, and past that
 deletes those used least lately, main's too. The tests'
 `Swatinem/rust-cache` entries (`macos-test`, `windows-test`,
-`windows-check`, `linux-fence`, `linux-same-path`) are saved only from
-main (`save-if`), and a PR's run reads main's.
+`windows-check`, and `linux`, which `check`'s `rust ts` saves and every
+Linux part reads) are saved only from main (`save-if`), and a PR's run
+reads main's. pnpm's store and Electron's download are one entry per
+lockfile (`pnpm-…`), which the first run on a new lock saves.
 
 `.github/workflows/cache-prune.yml` runs each day and keeps, of each
 family of keys, the newest entry main saved; it deletes the rest, main's
@@ -182,9 +193,10 @@ as a tag stays (ADR 0092):
 
 It says `devbox builds no tag` and ends 1 there.
 
-## Where they run
+## devbox's runners
 
-The runners are containers on the rootless Docker engine of devbox's OS user
+Only `release.yml`'s Linux pack and its `which Banda` still run on devbox,
+until they move to GitHub's runners too. The runners are containers on the rootless Docker engine of devbox's OS user
 `banda-ci`: no sudo, no `docker` group, no login shell, home `0750`. A PR's
 code, an Agent's too, reaches only what that user can reach: not root's
 engine, not the operator's, not the operator's home. No job needs a
