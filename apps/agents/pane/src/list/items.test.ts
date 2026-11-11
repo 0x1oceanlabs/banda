@@ -14,6 +14,13 @@ const said = vi.hoisted(() => ({
   toasts: [] as { words: string; undo?: () => void }[],
   errors: [] as string[],
 }))
+const copied = vi.hoisted(() => ({ texts: [] as string[] }))
+vi.mock("@banda/ui/lib/clipboard", () => ({
+  copyText: (text: string) => {
+    copied.texts.push(text)
+    return Promise.resolve()
+  },
+}))
 vi.mock("@banda/ui/components/sonner", () => ({
   toast: Object.assign(
     (words: string, more?: { action?: { onClick: () => void } }) =>
@@ -38,10 +45,11 @@ const listed = (more: Partial<Listed> = {}): Listed => ({
 /**
  * A Window whose lists hold `item` in Project s1, in focus, and whose
  * engines answer as an engine does: `agents.rename` names it,
- * `agents.suggest_title` suggests `title`. What each engine was asked, by
- * its host, it keeps, and what the Window was asked to run.
+ * `agents.suggest_title` suggests `title`, `agents.fork` makes t2, and
+ * `agents.thread` reads `view`. What each engine was asked, by its host,
+ * it keeps, and what the Window was asked to run.
  */
-function fake(item: Listed, title: string | Error = "") {
+function fake(item: Listed, title: string | Error = "", view?: unknown) {
   const named: (string | null)[] = []
   const asked: { host: string | undefined; name: string }[] = []
   const sent: [string, unknown][] = []
@@ -54,6 +62,8 @@ function fake(item: Listed, title: string | Error = "") {
         named.push(args.title ?? null)
         return Promise.resolve()
       }
+      if (name === "agents.fork")
+        return Promise.resolve({ thread: "t2", title: "fork" })
       return title instanceof Error
         ? Promise.reject(title)
         : Promise.resolve(title)
@@ -69,6 +79,7 @@ function fake(item: Listed, title: string | Error = "") {
       status: { state: "open" },
       watch: () => () => undefined,
       command: asks,
+      call: () => Promise.resolve(view),
       // As the engine sends a command `once`: refused at once while it is
       // not open, and never sent.
       commandAt: (
@@ -112,6 +123,7 @@ const AT = { now: 0, archived: false }
 beforeEach(() => {
   said.toasts = []
   said.errors = []
+  copied.texts = []
   stopNaming()
 })
 
@@ -594,4 +606,89 @@ test("another host's Thread the Window does not reach now is renamed, put off to
   )
   expect(asked).toEqual([])
   expect(ran).toEqual([])
+})
+
+/** A turn of t1, as `agents.thread` reads it: what it may do now. */
+const turnOf = (id: string, state: string, can: { stop?: true; fork?: true }) =>
+  ({ id, state, can: { stop: false, fork: false, ...can } }) as never
+
+test("the card's Stop, Fork and Copy have no row of their own: the Window draws them (ADR 0098, decision 14)", () => {
+  for (const id of [
+    "agents.stop-thread",
+    "agents.fork-thread",
+    "agents.copy-thread",
+  ])
+    expect(action(id).row(listed(), AT)).toBeNull()
+})
+
+test("Stop stops the turn that runs, on the Thread's host; one that ended has nothing to stop", async () => {
+  const at = { project: "s1", item: "t1" }
+  const turns = [
+    turnOf("u1", "done", {}),
+    turnOf("u2", "running", { stop: true }),
+    turnOf("u3", "queued", { stop: true }),
+  ]
+  const { window, sent } = fake(listed(), "", { items: [], turns })
+  action("agents.stop-thread").run(window, at)
+  await vi.waitFor(() =>
+    expect(sent).toEqual([["agents.stop", { turn: "u2" }]])
+  )
+  const ended = fake(listed(), "", {
+    items: [],
+    turns: [turnOf("u1", "done", {})],
+  })
+  action("agents.stop-thread").run(ended.window, at)
+  await new Promise((done) => setTimeout(done, 0))
+  expect(ended.sent).toEqual([])
+  expect(said.errors).toEqual([])
+})
+
+test("Fork forks at its last turn that may, and opens the fork; with none, a toast says so", async () => {
+  const at = { project: "s1", item: "t1" }
+  const thread = listed({ harness: "claude" })
+  const turns = [
+    turnOf("u1", "done", { fork: true }),
+    turnOf("u2", "done", { fork: true }),
+    turnOf("u3", "failed", {}),
+  ]
+  const { window, sent, ran } = fake(thread, "", { items: [], turns })
+  action("agents.fork-thread").run(window, at)
+  await vi.waitFor(() =>
+    expect(ran).toEqual([
+      ["agents.show", { project: "s1", thread: "t2", harness: "claude" }],
+    ])
+  )
+  expect(sent).toEqual([["agents.fork", { turn: "u2" }]])
+  const none = fake(thread, "", {
+    items: [],
+    turns: [turnOf("u3", "failed", {})],
+  })
+  action("agents.fork-thread").run(none.window, at)
+  await vi.waitFor(() =>
+    expect(said.toasts.map(({ words }) => words)).toEqual([
+      "Nothing to fork yet",
+    ])
+  )
+  expect(none.sent).toEqual([])
+})
+
+test("Copy as Markdown puts what was said in the Thread on the clipboard", async () => {
+  const items = [
+    {
+      author: { kind: "person", id: "p" },
+      body: { kind: "message", text: "hello" },
+    },
+    {
+      author: { kind: "agent", id: "a1" },
+      body: { kind: "message", text: "**hi**" },
+    },
+  ]
+  const thread = listed({ agent: "a1", by: "Claude Code" })
+  const { window } = fake(thread, "", { items, turns: [] })
+  action("agents.copy-thread").run(window, { project: "s1", item: "t1" })
+  await vi.waitFor(() =>
+    expect(copied.texts).toEqual([
+      "# посмотри шапку pane\n\n## You\n\nhello\n\n## Claude Code\n\n**hi**\n",
+    ])
+  )
 })

@@ -11,7 +11,11 @@
  * a ghost line in its slot until the pointer leaves and the toast that
  * takes it back, Later's picker at the card, an asking card's Later
  * alone; each place's card at rest and under the pointer, the ghost line
- * and the toast, as `sidebar-s7a-*.png`.
+ * and the toast, as `sidebar-s7a-*.png`. And a card's menu (ADR 0098,
+ * S10a): a right click opens it at the pointer, Shift+F10 and the Menu
+ * key at the card picked; Delete… is the Archive's alone and asks first,
+ * Cancel in focus; the menu on a done, a working and an archived card and
+ * the question, dark and light, as `sidebar-s10a-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -749,5 +753,171 @@ test("each place's card at rest and under the pointer, a ghost line and the toas
     await expect(ghost).toHaveCount(0)
     await toastsOf(page).getByRole("button", { name: "Undo" }).click()
     await expect(rowsNamed(panel, title)).toHaveCount(1)
+  }
+})
+
+/** The card of the Thread `title` in `scope`: its name starts with it. */
+const cardOf = (scope: Locator, title: string) =>
+  scope.getByRole("option", { name: new RegExp(`^${title},`) })
+
+/** The question Delete asks for the Thread `title`. */
+const askOf = (page: Page, title: string) =>
+  page.getByRole("alertdialog", { name: `Delete “${title}”?` })
+
+test("a card's menu: a right click opens it at the pointer, Shift+F10 and the Menu key at the card picked; Delete is the Archive's alone, asks first with Cancel in focus, and deletes (ADR 0098, S10a)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await send(window, "Bench the window tests")
+  await send(window, "Review the sidebar spec")
+  await send(window, "Old notes")
+  call(window, "agents.archive", { thread: idOf(window, "Old notes") })
+  await send(window, "Older notes")
+  call(window, "agents.archive", { thread: idOf(window, "Older notes") })
+  const sidebar = sidebarOf(page)
+  const list = sidebar.getByRole("listbox")
+  const tab = (name: string) =>
+    sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
+  const menu = page.getByRole("menu", { name: "Thread menu" })
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
+  await landed(sidebar, ["Bench the window tests", "Review the sidebar spec"])
+
+  // A right click: the menu at the pointer, the list holding still; no
+  // Delete… outside the Archive.
+  const bench = cardOf(list, "Bench the window tests")
+  const at = (await bench.boundingBox())!
+  await bench.click({ button: "right", position: { x: 120, y: 10 } })
+  await expect(menu).toBeVisible()
+  const shown = (await menu.boundingBox())!
+  expect(Math.abs(shown.x - (at.x + 120))).toBeLessThanOrEqual(8)
+  await expect(menu.getByRole("menuitem", { name: /^Archive/ })).toBeVisible()
+  await expect(menu.getByRole("menuitem", { name: /^Delete/ })).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
+  // Shift+F10 on the pick: the menu at its card, under its left edge, the
+  // focus in it; Esc gives the focus back to the list.
+  await tab("Inbox").focus()
+  await page.keyboard.press("Tab")
+  await expect(list).toBeFocused()
+  await page.keyboard.press("ArrowDown")
+  await expect(cardOf(list, "Review the sidebar spec")).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  const review = (await cardOf(list, "Review the sidebar spec").boundingBox())!
+  await page.keyboard.press("Shift+F10")
+  await expect(menu).toBeVisible()
+  const keyed = (await menu.boundingBox())!
+  expect(keyed.x).toBeGreaterThanOrEqual(review.x)
+  expect(keyed.x).toBeLessThanOrEqual(review.x + 24)
+  expect(Math.abs(keyed.y - (review.y + review.height))).toBeLessThanOrEqual(8)
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+  await expect(list).toBeFocused()
+  // And the Menu key; its rows are the pick's.
+  await page.keyboard.press("ContextMenu")
+  await expect(menu).toBeVisible()
+  await expect(menu.getByRole("menuitem").first()).toHaveText(/^Open/)
+  await page.keyboard.press("Escape")
+  await expect(list).toBeFocused()
+
+  // Delete outside the Archive does nothing.
+  await page.keyboard.press("Delete")
+  await expect(page.getByRole("alertdialog")).toHaveCount(0)
+  await expect(cardOf(list, "Review the sidebar spec")).toBeVisible()
+
+  // In the Archive, Delete asks first, Cancel in focus; Cancel keeps it,
+  // and the focus goes back to the list.
+  await page.keyboard.press("4")
+  await expect(tab("Archive")).toHaveAttribute("aria-selected", "true")
+  await expect(list).toBeFocused()
+  await page.keyboard.press("Home")
+  const first = (await list
+    .locator('[aria-selected="true"]')
+    .getAttribute("aria-label"))!.split(",")[0]
+  await page.keyboard.press("Delete")
+  const ask = askOf(page, first)
+  await expect(ask).toBeVisible()
+  await expect(ask).toContainText(
+    "Its messages and its worktree go. This can't be undone."
+  )
+  await expect(ask.getByRole("button", { name: "Cancel" })).toBeFocused()
+  await page.keyboard.press("Enter")
+  await expect(ask).toBeHidden()
+  await expect(list).toBeFocused()
+  expect(idOf(window, first)).toBeDefined()
+
+  // Through the menu's Delete…, last on its own: Delete deletes it.
+  const other = first === "Old notes" ? "Older notes" : "Old notes"
+  await cardOf(list, other).click({ button: "right" })
+  const rows = menu.getByRole("menuitem")
+  await expect(rows.last()).toHaveText(/^Delete…\s*Delete$/)
+  await expect(menu.getByRole("menuitem", { name: /^Unarchive/ })).toBeVisible()
+  await rows.last().click()
+  await askOf(page, other).getByRole("button", { name: "Delete" }).click()
+  await expect(askOf(page, other)).toBeHidden()
+  await expect.poll(() => idOf(window, other)).toBeUndefined()
+  await leaveSidebar(page)
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+  await expect(cardOf(list, other)).toHaveCount(0)
+})
+
+test("the card's menu on a done, a working and an archived card, and Delete's question, dark and light (ADR 0098, S10a)", async () => {
+  test.setTimeout(300_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await send(window, "Bench the window tests")
+  await send(window, "Review the sidebar spec")
+  await send(window, "wait for the build")
+  await send(window, "Old notes")
+  call(window, "agents.archive", { thread: idOf(window, "Old notes") })
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  const tab = (name: string) =>
+    sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
+  const menu = page.getByRole("menu", { name: "Thread menu" })
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+  await leaveSidebar(page)
+
+  const places = [
+    ["done", "Inbox", "Bench the window tests"],
+    ["working", "Working", "wait for the build"],
+    ["archived", "Archive", "Old notes"],
+  ] as const
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    for (const [place, name, title] of places) {
+      await tab(name).click()
+      const row = rowsNamed(panel, title)
+      await expect(row).toHaveCount(1)
+      await row.click({ button: "right", position: { x: 120, y: 12 } })
+      await expect(menu).toBeVisible()
+      // Whole, past its fade in.
+      await page.waitForTimeout(250)
+      await page.screenshot({
+        path: `test-results/sidebar-s10a-menu-${place}-${mode}.png`,
+        animations: "disabled",
+      })
+      await page.keyboard.press("Escape")
+      await expect(menu).toBeHidden()
+    }
+    // Delete's question, over the Archive.
+    await rowsNamed(panel, "Old notes").click({ button: "right" })
+    await menu.getByRole("menuitem", { name: /^Delete…/ }).click()
+    const ask = askOf(page, "Old notes")
+    await expect(ask.getByRole("button", { name: "Cancel" })).toBeFocused()
+    await page.waitForTimeout(250)
+    await page.screenshot({
+      path: `test-results/sidebar-s10a-delete-${mode}.png`,
+      animations: "disabled",
+    })
+    await page.keyboard.press("Escape")
+    await expect(ask).toBeHidden()
+    await leaveSidebar(page)
   }
 })

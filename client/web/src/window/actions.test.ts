@@ -831,10 +831,25 @@ test("the sidebar's keys are its scope's, none held with a mod, and pane.beside 
       expect([key.alt, key.ctrl, key.super, key.mod]).toEqual(
         Array(4).fill(undefined)
       )
-  // Undo alone holds Ctrl, ⌘ on a Mac, as a field's own does (§2.7).
+  // Undo holds Ctrl, ⌘ on a Mac, as a field's own does, and so does
+  // Delete's Ctrl+Backspace, ⌘⌫ (§2.7); no other.
   expect(
     keys.filter(({ keys: bound = [] }) => bound.some((key) => key.primary))
-  ).toEqual([expect.objectContaining({ id: "sidebar.undo" })])
+  ).toEqual([
+    expect.objectContaining({ id: "sidebar.undo" }),
+    expect.objectContaining({ id: "sidebar.delete-picked" }),
+  ])
+  // The card's menu, by Shift+F10 or the Menu key, and Delete, in the
+  // Archive (ADR 0098, decision 14).
+  const keysOf = (id: string) => keys.find((key) => key.id === id)?.keys
+  expect(keysOf("sidebar.menu-picked")).toEqual([
+    { code: "F10", shift: true },
+    { code: "ContextMenu" },
+  ])
+  expect(keysOf("sidebar.delete-picked")).toEqual([
+    { code: "Delete" },
+    { code: "Backspace", primary: true },
+  ])
 
   // Open beside, by its key: the Sheet goes, and the Pane comes onto a
   // workspace as the menu's row brings it; without a Pane, nothing.

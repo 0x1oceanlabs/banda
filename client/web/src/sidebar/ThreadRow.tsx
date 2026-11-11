@@ -3,25 +3,19 @@ import {
   type ReactNode,
   useContext,
   useEffect,
-  useState,
 } from "react"
 import type { Engine } from "@banda/contract"
 import type { Machines } from "@banda/contract/sidebar"
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuTrigger,
-} from "@banda/ui/components/context-menu"
 import { HostsContext } from "@banda/core/react"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { stopNaming, useNaming } from "@banda/ui/lib/naming"
-import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import type { Row } from "./arrange"
+import { CardMenu } from "./CardMenu"
 import { Card } from "./CardView"
 import type { CardOf } from "./card"
 import { useCard } from "./useCard"
-import { HoldingContext, useHoldWhile } from "./useHold"
+import { useHoldWhile } from "./useHold"
 
 /** Where a Thread's card is drawn, and how: what its card is made of but
  * its machine, which `useCard` reads, the sidebar's row, and how it is
@@ -35,14 +29,14 @@ type Placed = Omit<CardOf, "row" | "machine" | "away" | "stopped"> & {
  * named as `[machines]` asks (`useCard`): another machine's dims, where
  * no label above names it, while the Window does not reach it, its time
  * standing as of when it was last heard, and has its Harness's emblem
- * from that machine's engine. This machine's has the Thread menu a right
- * click opens (ADR 0077, decision 5), whose Rename… opens the field in
- * the card itself. Every card has its acts under the pointer (ADR 0098,
- * decision 10), which go to its host's engine; another machine's has no
- * menu yet, and one that left the tab while the list held has neither.
- * The menu, while open, and the field hold the list still, and what its
- * Person does from the menu is their own act, which the list draws at
- * once where it takes the card elsewhere (ADR 0098, decision 6).
+ * from that machine's engine. This machine's has its menu (`CardMenu`,
+ * ADR 0098, decision 14), whose Rename… opens the field in the card
+ * itself. Every card has its acts under the pointer (ADR 0098, decision
+ * 10), which go to its host's engine; another machine's has no menu yet,
+ * and one that left the tab while the list held has neither. The menu,
+ * while open, and the field hold the list still, and what its Person does
+ * from the menu is their own act, which the list draws at once where it
+ * takes the card elsewhere (ADR 0098, decision 6).
  */
 export function ThreadRow({
   engine,
@@ -67,18 +61,15 @@ export function ThreadRow({
     row.host === undefined ? engine : kept.engine(row.host)
   )
   const card = useCard(placed, { named, machines })
-  const [menu, setMenu] = useState(false)
   // A card that left takes its menu and its field with it, which say
   // nothing as it goes: the half-typed title is not kept, and neither
   // holds the list any more.
   const left = went !== undefined
-  if (menu && left) setMenu(false)
   const renaming = naming !== null
   useEffect(() => {
     if (left && renaming) stopNaming()
   }, [left, renaming])
-  useHoldWhile((menu || renaming) && !left)
-  const holding = useContext(HoldingContext)
+  useHoldWhile(renaming && !left)
   const drawn = (field?: ReactNode) => (
     <Card
       card={card}
@@ -107,17 +98,5 @@ export function ThreadRow({
         className="-my-0.5 -ml-1.5 h-6 text-sm"
       />
     )
-  return (
-    <ContextMenu onOpenChange={setMenu}>
-      <ContextMenuTrigger>{drawn()}</ContextMenuTrigger>
-      <ContextMenuContent aria-label="Thread menu" className="min-w-60">
-        <ThreadRows
-          project={project}
-          listed={row.listed}
-          where="row"
-          onAct={() => holding?.act(row)}
-        />
-      </ContextMenuContent>
-    </ContextMenu>
-  )
+  return <CardMenu row={row}>{drawn()}</CardMenu>
 }

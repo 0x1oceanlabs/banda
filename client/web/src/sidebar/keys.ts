@@ -4,7 +4,8 @@
  * window matches them, `keys.toml` moves them in `[binds.sidebar]`, and
  * the key sheet lists them. They hold no mod, so they work only while the
  * focus is in the sidebar, and a field there types them; Undo holds Ctrl,
- * or ⌘ on a Mac, as a field's own does. The acts on the pick work while
+ * or ⌘ on a Mac, as a field's own does, and so does Delete's second key,
+ * Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick work while
  * the focus is in the list; Undo, `/` and the tabs' digits anywhere in
  * the sidebar. The arrows, Home, End, the pages and Esc are
  * the list's own, as a list's are. Pure, so plain tests cover it.
@@ -25,6 +26,8 @@ export type Does =
   | "undo"
   | "rename"
   | "suggest"
+  | "menu"
+  | "delete"
   | "search"
   | `tab-${Tab}`
 
@@ -93,6 +96,18 @@ export const SIDEBAR_KEYS: readonly {
     keys: [{ code: "F2", shift: true }],
   },
   {
+    does: "menu",
+    id: "sidebar.menu-picked",
+    title: "Open the menu of the card picked",
+    keys: [{ code: "F10", shift: true }, { code: "ContextMenu" }],
+  },
+  {
+    does: "delete",
+    id: "sidebar.delete-picked",
+    title: "Delete the card picked in the Archive, after a confirmation",
+    keys: [{ code: "Delete" }, { code: "Backspace", primary: true }],
+  },
+  {
     does: "search",
     id: "sidebar.search",
     title: "Search",
@@ -114,6 +129,7 @@ export const ONCE: ReadonlySet<Does> = new Set([
   "unread",
   "rename",
   "suggest",
+  "delete",
 ])
 
 /** The tab a key of the sidebar shows, if it shows one. */
@@ -134,8 +150,8 @@ const HINTED: readonly (readonly [Does, string])[] = [
 ]
 
 /** The hint the list is described by (spec §2.8), with the keys in force
- * as `label` reads them: "S archives, Z puts off, U marks unread."; none
- * where none is bound. */
+ * as `label` reads them: "S archives, Z puts off, U marks unread. Shift+F10
+ * for more."; none where none is bound. */
 export function hintOf(
   label: (action: string) => string | undefined
 ): string | undefined {
@@ -143,5 +159,10 @@ export function hintOf(
     const key = label(keyId(does))
     return key ? [`${key} ${words}`] : []
   })
-  return said.length > 0 ? `${said.join(", ")}.` : undefined
+  const menu = label(keyId("menu"))
+  return (
+    [said.length > 0 && `${said.join(", ")}.`, menu && `${menu} for more.`]
+      .filter(Boolean)
+      .join(" ") || undefined
+  )
 }

@@ -14,6 +14,8 @@ import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
 import { FIELDS } from "@banda/ui/lib/keys"
 import { focusedTile, type PaneState } from "@banda/ui/pane"
 import { actsOf } from "./acts"
+import type { Row } from "./arrange"
+import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
 import { itemKey, keyOf } from "./hold"
 import type { Tab } from "./inbox"
 import { refused } from "./items"
@@ -47,7 +49,8 @@ function toPane() {
  * anywhere in it but in a field, which keeps its own; the rest on the
  * pick (`usePick`), while the list itself has the focus, and an act on a
  * card not again as its key is held. Undo takes back the newest act kept,
- * and the pick goes back to its card. A tab shown by its key is said
+ * and the pick goes back to its card. Delete's question is the list's own
+ * popup, kept here as `deleting`. A tab shown by its key is said
  * aloud, and so is inbox zero, when the Person's act brought it (`said`).
  * `aside` goes on the aside, with `onKeyDown`, its Esc: a popup and the
  * title's field take theirs first; then the sidebar over the Strip goes,
@@ -89,6 +92,8 @@ export function useSidebarKeys(
   const openIt = useOpen()
   const run = useRun()
   const keyLabel = useKeyLabel()
+  // The card whose Thread Delete asks about.
+  const [deleting, setDeleting] = useState<Row>()
 
   // Inbox zero, as the Person's own act brings it, is said once.
   const zero = ordered.zero
@@ -104,11 +109,13 @@ export function useSidebarKeys(
    * focus, or, on the one already open, goes to where its unseen begins;
    * Shift+Enter opens it beside; S archives it, or brings it back in the
    * Archive; Z puts it off, at the card; U marks it unread or read; F2
-   * renames it in place, and Shift+F2 asks a title. An act that takes the
-   * card out of the tab hands the pick on in the keydown. S on a card that
-   * asks or works says why not, in a toast, and the pick stays; U on one
-   * that asks does nothing, as a question waits until it is answered; a
-   * card that left the tab while the list held only opens.
+   * renames it in place, and Shift+F2 asks a title; Shift+F10 opens its
+   * menu at the card; Delete, in the Archive alone, asks whether to delete
+   * it. An act that takes the card out of the tab hands the pick on in the
+   * keydown. S on a card that asks or works says why not, in a toast, and
+   * the pick stays; U on one that asks does nothing, as a question waits
+   * until it is answered; a card that left the tab while the list held
+   * only opens.
    */
   const onPick = (does: Does) => {
     const at = picking.at()
@@ -158,6 +165,11 @@ export function useSidebarKeys(
         return
       case "suggest":
         return doing(row, "suggest")
+      case "menu":
+        return openCardMenu(at)
+      case "delete":
+        if (row.stand === "archived") setDeleting(row)
+        return
     }
   }
 
@@ -200,6 +212,7 @@ export function useSidebarKeys(
   return {
     aside,
     picking,
+    deleting: { row: deleting, ask: setDeleting },
     onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
       // Not Esc in a menu it opened, drawn elsewhere in the page.
       const own = event.currentTarget.contains(event.target as Node)
@@ -221,44 +234,51 @@ let hinted = false
  * The tab in view as one list (ADR 0098, decision 13): one Tab stop, a
  * `listbox` that keeps the focus while the keys move its pick, which its
  * items read (`PickContext`). As it first takes the focus in a window, it
- * is described by the hint of its keys in force, once (spec §2.8).
+ * is described by the hint of its keys in force, once (spec §2.8). Its
+ * cards' menus ask Delete's question as its keys do (`AskDelete`).
  */
 export function PickList({
   tab,
   picking,
+  deleting,
   children,
 }: {
   tab: Tab
   picking: ReturnType<typeof usePick>
+  deleting: Deleting
   children: ReactNode
 }) {
   const hint = hintOf(useKeyLabel())
   const [hinting, setHinting] = useState(!hinted)
   const { onBlur, ...list } = picking.list
   return (
-    <div role="tabpanel" id={PANEL} aria-labelledby={tabId(tab)}>
-      {hinting && hint && (
-        <p id={HINT} hidden>
-          {hint}
-        </p>
-      )}
-      <div
-        role="listbox"
-        aria-labelledby={tabId(tab)}
-        aria-describedby={hinting && hint ? HINT : undefined}
-        tabIndex={0}
-        {...list}
-        onBlur={(event) => {
-          onBlur(event)
-          hinted = true
-          setHinting(false)
-        }}
-        className="flex flex-col gap-1 outline-none"
-      >
-        <PickContext value={{ picked: picking.picked, expand: picking.expand }}>
-          {children}
-        </PickContext>
+    <AskDelete value={deleting.ask}>
+      <div role="tabpanel" id={PANEL} aria-labelledby={tabId(tab)}>
+        {hinting && hint && (
+          <p id={HINT} hidden>
+            {hint}
+          </p>
+        )}
+        <div
+          role="listbox"
+          aria-labelledby={tabId(tab)}
+          aria-describedby={hinting && hint ? HINT : undefined}
+          tabIndex={0}
+          {...list}
+          onBlur={(event) => {
+            onBlur(event)
+            hinted = true
+            setHinting(false)
+          }}
+          className="flex flex-col gap-1 outline-none"
+        >
+          <PickContext
+            value={{ picked: picking.picked, expand: picking.expand }}
+          >
+            {children}
+          </PickContext>
+        </div>
       </div>
-    </div>
+    </AskDelete>
   )
 }

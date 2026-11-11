@@ -1248,6 +1248,36 @@
       "scope": "sidebar"
     },
     {
+      "id": "sidebar.menu-picked",
+      "title": "Open the menu of the card picked",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "F10",
+          "shift": true
+        },
+        {
+          "code": "ContextMenu"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.delete-picked",
+      "title": "Delete the card picked in the Archive, after a confirmation",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "Delete"
+        },
+        {
+          "code": "Backspace",
+          "primary": true
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
       "id": "sidebar.search",
       "title": "Search",
       "section": "Sidebar",

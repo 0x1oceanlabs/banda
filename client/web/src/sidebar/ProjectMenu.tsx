@@ -23,10 +23,12 @@ import { LOCATE } from "../menu/menu"
 import { newThread, useOpen } from "./open"
 import { useHoldWhile } from "./useHold"
 
-/** A Project's row with its right-click menu around it. */
+/** A Project's row with its right-click menu around it, which takes
+ * `className` as the row's place in its line. */
 export type WithMenu = (
   project: ProjectSummary,
-  row: ReactElement
+  row: ReactElement,
+  className?: string
 ) => ReactElement
 
 /** A Project's right-click menu, in T3 Code's words (ADR 0026, decision
@@ -35,9 +37,12 @@ export function ProjectMenu({
   project,
   onTrust,
   onStopTrusting,
+  className,
   children,
 }: {
   project: ProjectSummary
+  /** Its row's place in its line. */
+  className?: string
   /** Asks on a card by `row` whether to trust the Project. */
   onTrust: (project: ProjectId, row: Element) => void
   onStopTrusting: (project: ProjectId) => void
@@ -52,7 +57,9 @@ export function ProjectMenu({
   useHoldWhile(shown)
   return (
     <ContextMenu onOpenChange={setShown}>
-      <ContextMenuTrigger ref={row}>{children}</ContextMenuTrigger>
+      <ContextMenuTrigger ref={row} className={className}>
+        {children}
+      </ContextMenuTrigger>
       <ContextMenuContent>
         {project.missing ? (
           <DropdownMenuItem

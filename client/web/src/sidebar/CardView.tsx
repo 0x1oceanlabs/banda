@@ -16,7 +16,13 @@ import {
   type LucideIcon,
   Undo2Icon,
 } from "lucide-react"
-import { type CSSProperties, Fragment, type ReactNode } from "react"
+import {
+  createContext,
+  type CSSProperties,
+  Fragment,
+  type ReactNode,
+  useContext,
+} from "react"
 import { type Act, actsWidth } from "./acts"
 import {
   type CardModel,
@@ -32,6 +38,7 @@ import { dueOf, useClock } from "./clock"
 import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
+import type { WithMenu } from "./ProjectMenu"
 import { pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
@@ -47,8 +54,15 @@ export type CardAct = {
   run: (card: Element) => void
 }
 
-/** Each act's icon and name (ADR 0098, decision 10). */
-const ACT_LOOK: Readonly<Record<Act, { icon: LucideIcon; name: string }>> = {
+/** The Project's menu its sign on a card's line 3 has (ADR 0098, decision
+ * 14), this machine's alone; none outside the sidebar's list. */
+export const SignMenu = createContext<WithMenu | undefined>(undefined)
+
+/** Each act's icon and name (ADR 0098, decision 10), on the card and in
+ * its menu. */
+export const ACT_LOOK: Readonly<
+  Record<Act, { icon: LucideIcon; name: string }>
+> = {
   later: { icon: ClockIcon, name: "Later" },
   archive: { icon: CheckIcon, name: "Archive" },
   wake: { icon: Undo2Icon, name: "Wake" },
@@ -308,6 +322,7 @@ function Piece({
   now: number
   harnesses: readonly EmblemOf[]
 }) {
+  const signMenu = useContext(SignMenu)
   switch (slot.kind) {
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
@@ -348,12 +363,16 @@ function Piece({
     }
     case "project": {
       const name = projectLabel(slot.project)
-      return (
+      const sign = (
         <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
           <ProjectSign project={slot.project} size={14} />
           <FadeText tip={name}>{name}</FadeText>
         </span>
       )
+      // This machine's has the Project's menu (ADR 0098, decision 14).
+      return signMenu && row.host === undefined
+        ? signMenu(slot.project, sign, "flex min-w-0 flex-1")
+        : sign
     }
     case "machine": {
       // A machine (ADR 0095, decision 5): its icon and name, small and

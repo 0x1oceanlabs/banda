@@ -47,7 +47,7 @@ pub struct KeysSettings {
     /// Pane. A key is Alt, Ctrl, Super (⌘ on a Mac) and Shift, any of them,
     /// then a letter, a digit, F1 to F24, Left, Right, Up, Down, Return,
     /// Space, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp,
-    /// PageDown or one of [ ] , . / ; ' - = ` \. An action keeps the
+    /// PageDown, Menu or one of [ ] , . / ; ' - = ` \. An action keeps the
     /// window's own keys besides. A line may give the action what it
     /// takes: `{ action = "browser.open", args = { address = "…" } }`.
     #[schemars(with = "Option<BTreeMap<String, Bound>>")]
@@ -282,6 +282,7 @@ const NAMED: &[(&str, &[&str])] = &[
     ("End", &["End"]),
     ("PageUp", &["PageUp"]),
     ("PageDown", &["PageDown"]),
+    ("ContextMenu", &["Menu", "ContextMenu"]),
     ("BracketLeft", &["["]),
     ("BracketRight", &["]"]),
     ("Comma", &[","]),
@@ -1401,6 +1402,76 @@ mod tests {
                 Some(7),
                 "Alt+E: sidebar.archive-picked works in [binds.sidebar]: bind it there"
             )]
+        );
+    }
+
+    #[test]
+    fn the_card_s_menu_and_delete_take_their_keys_in_the_sidebar_s_table() {
+        // The card's menu and Delete in the Archive (ADR 0098, decision 14):
+        // Shift+F10 and the Menu key, written Menu; Delete and Ctrl+Backspace,
+        // ⌘⌫ on a Mac. Each moves, or goes, as the sidebar's other keys do.
+        let mut manifests = manifests_of(actions());
+        manifests.scopes.push(Scope {
+            id: "sidebar".to_owned(),
+            title: "Sidebar".to_owned(),
+            field: false,
+            mod_held: false,
+        });
+        let declared = |code: &str, shift: bool, primary: bool| Declared {
+            code: code.to_owned(),
+            shift,
+            primary,
+            ..Declared::default()
+        };
+        for (id, keys) in [
+            (
+                "sidebar.menu-picked",
+                vec![
+                    declared("F10", true, false),
+                    declared("ContextMenu", false, false),
+                ],
+            ),
+            (
+                "sidebar.delete-picked",
+                vec![
+                    declared("Delete", false, false),
+                    declared("Backspace", false, true),
+                ],
+            ),
+        ] {
+            manifests.actions.push(Action {
+                id: id.to_owned(),
+                title: id.to_owned(),
+                section: "Sidebar".to_owned(),
+                keys,
+                family: None,
+                unlisted: false,
+                scope: Some("sidebar".to_owned()),
+                args: None,
+                runs_as_person: None,
+            });
+        }
+        let actions = in_force(&manifests, &Keys::default(), &mut Vec::new());
+        assert_eq!(
+            texts(&actions, "sidebar.menu-picked"),
+            ["Shift+F10", "Menu"]
+        );
+        assert_eq!(
+            texts(&actions, "sidebar.delete-picked"),
+            ["Delete", "Ctrl+Backspace"]
+        );
+        let mut problems = Vec::new();
+        let text = "[binds.sidebar]\n\"Menu\" = \"none\"\n\"Shift+M\" = \"sidebar.menu-picked\"\n\"Backspace\" = \"sidebar.delete-picked\"\n";
+        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
+        let actions = in_force(&manifests, &keys, &mut problems);
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(
+            texts(&actions, "sidebar.menu-picked"),
+            ["Shift+F10", "Shift+M"]
+        );
+        assert_eq!(
+            texts(&actions, "sidebar.delete-picked"),
+            ["Delete", "Ctrl+Backspace", "Backspace"]
         );
     }
 

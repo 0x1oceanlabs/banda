@@ -14,6 +14,7 @@ import { Foot } from "./Foot"
 import { Header } from "./Header"
 import { HostLines, HostPart, saysSomething } from "./HostPart"
 import { regionsOf } from "./regions"
+import { DeleteDialog } from "./CardMenu"
 import { ProjectMenu, type WithMenu } from "./ProjectMenu"
 import { ProjectsList } from "./ProjectsList"
 import { SectionView } from "./SectionView"
@@ -93,9 +94,10 @@ export function Sidebar({
     )
   }
   // A Project's row, wherever it shows, has its right-click menu.
-  const withMenu: WithMenu = (project, row) => (
+  const withMenu: WithMenu = (project, row, className) => (
     <ProjectMenu
       project={project}
+      className={className}
       onTrust={onTrust}
       onStopTrusting={onStopTrusting}
     >
@@ -190,7 +192,11 @@ export function Sidebar({
                     })}
                   </ProjectsList>
                 )}
-                <PickList tab={view.tab} picking={keys.picking}>
+                <PickList
+                  tab={view.tab}
+                  picking={keys.picking}
+                  deleting={keys.deleting}
+                >
                   {/* This machine's list, where inbox zero tells the view it
                   told of Someday. */}
                   <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
@@ -211,6 +217,7 @@ export function Sidebar({
               target={trusting}
               onClose={() => setTrusting(undefined)}
             />
+            <DeleteDialog deleting={keys.deleting} />
           </HoldingContext>
         </aside>
       </ShowTab>
