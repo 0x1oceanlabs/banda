@@ -6,7 +6,9 @@
  * Undo; Quick open finds arc's files; a markdown draws, its picture as
  * words; a file of another machine held over arc's tree is refused in
  * words; a comment on some lines goes into an arc Thread's Message box; and
- * an edit while arc is away keeps its text and says why. The same-path job
+ * an edit while arc is away keeps its text and says why. A path in arc's
+ * reply is found by arc and opens arc's file, and its links go through the
+ * router (step 3c, the `paths` road). The same-path job
  * runs this spec with arc in a mount namespace of its own (ci.yml's
  * `same-path`). With BANDA_E2E_SHOTS set to a folder, it leaves pictures
  * of what it checks.
@@ -415,7 +417,7 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
   // A line in the reply: one only arc has, one only this machine has, one
   // neither has, one each has, and a link to a line.
   await composer.fill(
-    "See `src/long.ts:12`, `only-mac.txt`, `gone.txt`, also src/util.ts in prose, and [the notes](notes.md#L2)."
+    "See `src/long.ts:12`, `only-mac.txt:1`, `gone.txt:1`, also src/util.ts in prose, and [the notes](notes.md#L2)."
   )
   await composer.press("Enter")
   const chip = pathOf(thread, "code")
@@ -427,6 +429,8 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
     `${long}:12\nClick to open in Banda`
   )
   await expect(chip.locator("[data-folder]")).toHaveText("src/")
+  // Dragged out, its file:// URL would name this machine's file.
+  await expect(chip).toHaveAttribute("draggable", "false")
   // A file only this machine has is no link, however the two share a path.
   const reply = thread.locator("[data-quotable]").last()
   await expect(reply.getByText("only-mac.txt")).toBeVisible()
@@ -448,7 +452,8 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
     "export const line12 = 12"
   )
   await expect(file.locator("[data-machine-icon]").first()).toBeVisible()
-  // The lit line fades, so this picture comes at once.
+  // The picture comes at once, as the file has just opened at its line
+  // (its band does not stay yet, #1487).
   await shot(page, "path-in-arc-reply", { toasts: true })
 
   // Ctrl+click: another machine's file has no app here, so it opens in
@@ -513,6 +518,15 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
   await composer.press("Enter")
   const site = thread.getByRole("link", { name: "the site" })
   await expect(site).toHaveAttribute("title", /\nOpens in /)
+  // The browser module does not run on arc, so the menu opens it here.
+  const menu = page.getByRole("menu", { name: "Thread" })
+  await site.click({ button: "right" })
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    /^Open in this .+'s browser$/,
+    "Copy address",
+  ])
+  await shot(page, "link-menu-on-arc", { toasts: true })
+  await page.keyboard.press("Escape")
   await site.click()
   await expect.poll(opens).toEqual(["https://example.com/page"])
 
@@ -520,8 +534,9 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
   await expect(server).toHaveAttribute("title", "localhost:3000 is arc's")
   // The menu promises nothing it will refuse: the address, to copy.
   await server.click({ button: "right" })
-  const menu = page.getByRole("menu", { name: "Thread" })
   await expect(menu.getByRole("menuitem")).toHaveText(["Copy address"])
+  await expect(menu.getByRole("separator")).toHaveCount(0)
+  await shot(page, "localhost-menu-on-arc", { toasts: true })
   await page.keyboard.press("Escape")
   await server.click()
   const toast = page
@@ -530,5 +545,6 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
     .filter({ hasText: "localhost:3000 is arc's" })
   await expect(toast).toBeVisible()
   await expect(toast).toContainText("It opens here once port forwarding comes.")
+  await shot(page, "localhost-on-arc-refused", { toasts: true })
   expect(await opens()).toEqual(["https://example.com/page"])
 })
