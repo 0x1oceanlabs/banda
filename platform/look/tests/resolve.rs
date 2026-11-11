@@ -139,6 +139,14 @@ fn write(path: &Path, text: &str) {
     fs::write(path, text).unwrap();
 }
 
+/// A picture of one colour at `path`, which the resolver measures.
+fn picture(path: &Path, rgb: [u8; 3]) {
+    fs::create_dir_all(path.parent().unwrap()).unwrap();
+    image::RgbImage::from_pixel(8, 8, image::Rgb(rgb))
+        .save(path)
+        .unwrap();
+}
+
 fn color<'a>(look: &'a Look, dark: bool, var: &str) -> &'a str {
     let scheme = if dark {
         &look.schemes.dark
@@ -1072,7 +1080,8 @@ opacity = 0.5
 border = { light = "#0000001f" }
 "##,
     );
-    write(&machine.places.config.join("wall.png"), "a picture");
+    // A light wallpaper, which a light theme's desk reads over as it is.
+    picture(&machine.places.config.join("wall.png"), [235, 235, 235]);
     machine.look_toml("theme = \"sea\"\n[desk]\nglass = false\nwallpaper = \"wall.png\"\n");
     let solid = machine.look();
     assert!(solid.problems.is_empty(), "{:?}", solid.problems);
@@ -1092,11 +1101,17 @@ border = { light = "#0000001f" }
     let light = look.schemes.light_glass.as_ref().unwrap();
     let dark = look.schemes.dark_glass.as_ref().unwrap();
     // The theme's `[glass] opacity`: the desk half solid, the tiles
-    // solid, the panel halfway.
+    // solid, the panel halfway. The dark desk is denser over the light
+    // wallpaper, for its text to read (ADR 0111).
     assert_eq!(look.vars["--desk-opacity"], "50%");
     assert_eq!(light["--desk"], "rgb(255 255 255 / 0.5)");
     assert_eq!(light["--tile"], "rgb(255 255 255)");
-    assert!(dark["--panel"].ends_with(" / 0.75)"), "{}", dark["--panel"]);
+    assert!(
+        light["--panel"].ends_with(" / 0.75)"),
+        "{}",
+        light["--panel"]
+    );
+    assert_ne!(dark["--desk"], "rgb(14 26 28 / 0.5)");
     // ADR 0036's: the fills, lines and quiet text are the text, thinned,
     // but where the theme corrects one.
     assert!(dark["--muted"].ends_with(" / 0.1)"), "{}", dark["--muted"]);
@@ -1120,6 +1135,46 @@ border = { light = "#0000001f" }
             .any(|p| p.message.contains("blurr") && p.line.is_some()),
         "{problems:?}"
     );
+}
+
+/// Over Banda's glass, the desk is as dense as its text needs over the
+/// wallpaper, the dark one for the dark scheme (ADR 0111).
+#[test]
+fn the_desk_is_as_dense_as_its_text_needs_over_the_wallpaper() {
+    let machine = Machine::new(false);
+    let walls = machine.places.config.join("walls");
+    let desk = |look: &Look, dark: bool| {
+        let schemes = &look.schemes;
+        let scheme = if dark {
+            &schemes.dark_glass
+        } else {
+            &schemes.light_glass
+        };
+        scheme.as_ref().unwrap()["--desk"].clone()
+    };
+    // Black: Banda's dark desk keeps its tint; the light one is as dense
+    // as the worst backdrops would make it, black among them.
+    picture(&walls.join("black.png"), [0, 0, 0]);
+    machine.look_toml("[desk]\nwallpaper = \"walls/black.png\"\n");
+    let black = machine.look();
+    assert!(black.problems.is_empty(), "{:?}", black.problems);
+    assert_eq!(desk(&black, true), "rgb(25 25 28 / 0.4)");
+    assert_eq!(desk(&black, false), "rgb(255 255 255 / 0.571)");
+    // A picture the resolver does not read: both as dense as that.
+    write(&walls.join("night.jxl"), "a picture");
+    machine.look_toml("[desk]\nwallpaper = \"walls/night.jxl\"\n");
+    let unread = machine.look();
+    assert_eq!(desk(&unread, true), "rgb(25 25 28 / 0.673)");
+    assert_eq!(desk(&unread, false), desk(&black, false));
+    // White by day and black by night: each scheme over its own, both as
+    // clear as the theme says.
+    picture(&walls.join("white.png"), [255, 255, 255]);
+    machine.look_toml(
+        "[desk]\nwallpaper = \"walls/white.png\"\nwallpaper-dark = \"walls/black.png\"\n",
+    );
+    let both = machine.look();
+    assert_eq!(desk(&both, false), "rgb(255 255 255 / 0.4)");
+    assert_eq!(desk(&both, true), "rgb(25 25 28 / 0.4)");
 }
 
 #[test]
