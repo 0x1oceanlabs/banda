@@ -1,0 +1,1090 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <style>
+      :root,
+      [data-theme="dark"] {
+        color-scheme: dark;
+        --background: #19191c;
+        --foreground: #ededef;
+        --popover: #202024;
+        --primary: #ededef;
+        --primary-foreground: #19191c;
+        --muted-foreground: #a1a1aa;
+        --border: oklch(1 0 0/8%);
+        --desk-solid: #111113;
+        --ring: #4ea3ff;
+        --attention: #ff8a3d;
+        --added: oklch(0.723 0.192 149.6);
+        --warning: oklch(0.8 0.15 80);
+        --account-claude: #d97757;
+        --effort-top: #e879f9;
+        --sign-violet: oklch(0.72 0.14 300);
+        --sign-teal: oklch(0.74 0.1 195);
+        --sign-magenta: oklch(0.72 0.14 340);
+        --mark-open: var(--foreground);
+        --window-line: rgb(255 255 255/0.12);
+        --shadow: rgb(0 0 0/0.45);
+      }
+      [data-theme="light"] {
+        color-scheme: light;
+        --background: #fff;
+        --foreground: #18181b;
+        --popover: #fff;
+        --primary: #18181b;
+        --primary-foreground: #fafafa;
+        --muted-foreground: #71717a;
+        --border: oklch(0 0 0/8%);
+        --desk-solid: #f4f4f5;
+        --ring: #0b6fe0;
+        --attention: #e5590a;
+        --added: oklch(0.527 0.137 150);
+        --warning: oklch(0.65 0.16 70);
+        --account-claude: #c96442;
+        --effort-top: #c026d3;
+        --sign-violet: oklch(0.52 0.14 300);
+        --sign-teal: oklch(0.52 0.1 195);
+        --sign-magenta: oklch(0.52 0.14 340);
+        --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
+        --window-line: rgb(0 0 0/0.12);
+        --shadow: rgb(0 0 0/0.18);
+      }
+      :root,
+      [data-theme] {
+        --block: color-mix(in srgb, var(--foreground) 3.5%, var(--background));
+        --raised: color-mix(in srgb, var(--foreground) 7%, var(--background));
+        --hover: color-mix(in oklab, var(--foreground) 5%, transparent);
+        --effort: color-mix(in oklab, var(--foreground) 70%, transparent);
+        --font:
+          "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui,
+          sans-serif;
+      }
+      *,
+      ::before,
+      ::after {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        background: none;
+        color: var(--foreground);
+        font: 14px/20px var(--font);
+        -webkit-font-smoothing: antialiased;
+      }
+      button {
+        font: inherit;
+        color: inherit;
+        background: none;
+        border: 0;
+        padding: 0;
+        cursor: pointer;
+      }
+      svg {
+        flex: none;
+        display: inline-block;
+        vertical-align: middle;
+      }
+      .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .em {
+        width: 15px;
+        height: 15px;
+      }
+      .find .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .work .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .dh .em {
+        width: 14px;
+        height: 14px;
+      }
+      .win {
+        border-radius: 30px;
+        background: var(--desk-solid);
+        box-shadow: 0 0 0 1px var(--window-line);
+        padding: 14px 16px 16px;
+      }
+      .bar {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 8px;
+        padding: 0 4px 12px;
+      }
+      .seg {
+        display: inline-grid;
+        grid-auto-flow: column;
+        gap: 2px;
+        padding: 2px;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--foreground) 6%, transparent);
+      }
+      .seg button {
+        height: 26px;
+        padding: 0 10px;
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .seg button.on {
+        background: var(--background);
+        color: var(--foreground);
+        font-weight: 500;
+        box-shadow: 0 0 0 1px var(--border);
+      }
+      .chk {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        cursor: pointer;
+        user-select: none;
+      }
+      .hint {
+        margin-left: auto;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .stage {
+        display: flex;
+        justify-content: center;
+      }
+      .tile {
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 600px;
+        border-radius: 22px;
+        background: var(--background);
+        box-shadow:
+          inset 0 0 0 1px var(--ring),
+          0 6px 16px -4px rgb(0 0 0/0.22);
+      }
+      .narrow .tile {
+        width: 420px;
+      }
+      .head {
+        height: 40px;
+        flex: none;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 0 14px;
+        white-space: nowrap;
+      }
+      .head .ic {
+        width: 16px;
+        height: 16px;
+        color: var(--muted-foreground);
+      }
+      .title {
+        font-weight: 500;
+      }
+      .space {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .sign {
+        --s: var(--muted-foreground);
+        display: inline-grid;
+        place-items: center;
+        flex: none;
+        width: 15px;
+        height: 15px;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 700;
+        line-height: 1;
+        color: var(--s);
+        background: color-mix(in oklab, var(--s) 16%, transparent);
+      }
+      .sign.v {
+        --s: var(--sign-violet);
+      }
+      .sign.t {
+        --s: var(--sign-teal);
+      }
+      .sign.m {
+        --s: var(--sign-magenta);
+      }
+      .sign.none {
+        background: none;
+        box-shadow: inset 0 0 0 1px var(--muted-foreground);
+      }
+      .body {
+        flex: 1;
+        min-height: 0;
+        display: flex;
+        flex-direction: column;
+        position: relative;
+      }
+      .start {
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        align-items: center;
+        gap: 18px;
+        padding: 24px;
+        transition: opacity 0.15s;
+      }
+      .to {
+        position: relative;
+        display: flex;
+        flex-wrap: wrap;
+        justify-content: center;
+        align-items: center;
+        gap: 2px 4px;
+        font-size: 18px;
+        line-height: 28px;
+        font-weight: 500;
+        color: var(--muted-foreground);
+      }
+      .pick {
+        display: inline-flex;
+        align-items: center;
+        gap: 7px;
+        height: 32px;
+        padding: 0 8px;
+        border-radius: 10px;
+        color: var(--foreground);
+      }
+      .pick:hover,
+      .pick.open {
+        background: var(--raised);
+      }
+      .pick .em {
+        width: 18px;
+        height: 18px;
+      }
+      .pick .sign {
+        width: 18px;
+        height: 18px;
+        font-size: 10px;
+        border-radius: 5px;
+      }
+      .chev {
+        width: 14px;
+        height: 14px;
+        color: var(--muted-foreground);
+      }
+      .why {
+        margin-top: -10px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        text-align: center;
+      }
+      .recent {
+        width: 100%;
+        max-width: 420px;
+        display: flex;
+        flex-direction: column;
+        gap: 1px;
+      }
+      .recent-h {
+        display: flex;
+        justify-content: space-between;
+        padding: 0 8px 4px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 4px 8px;
+        border-radius: 10px;
+        white-space: nowrap;
+      }
+      .row:hover {
+        background: var(--hover);
+      }
+      .row .t {
+        flex: 1;
+        min-width: 0;
+        overflow: hidden;
+        color: color-mix(in oklab, var(--foreground) 85%, transparent);
+        mask-image: linear-gradient(
+          to right,
+          #000 calc(100% - 1.75rem),
+          transparent
+        );
+      }
+      .time {
+        flex: none;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+      .chat {
+        flex: 1;
+        overflow: hidden;
+        max-width: 768px;
+        width: 100%;
+        margin: 0 auto;
+        padding: 16px;
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+      .you {
+        align-self: flex-end;
+        max-width: 80%;
+        padding: 8px 14px;
+        border-radius: 14px;
+        background: var(--raised);
+      }
+      .work {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        color: var(--muted-foreground);
+      }
+      .add {
+        color: var(--added);
+        font-size: 12px;
+      }
+      .del {
+        color: oklch(0.7 0.19 22);
+        font-size: 12px;
+      }
+      .prose code {
+        font-family: ui-monospace, monospace;
+        font-size: 12.5px;
+        padding: 1px 5px;
+        border-radius: 6px;
+        background: var(--raised);
+      }
+      .wrap {
+        position: relative;
+        flex: none;
+        width: 100%;
+        max-width: 768px;
+        margin: 0 auto;
+        padding: 0 16px 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+      }
+      .box {
+        display: flex;
+        flex-direction: column;
+        border-radius: 14px;
+        background: var(--block);
+        box-shadow: inset 0 0 0 1px var(--border);
+      }
+      [data-theme="light"] .box {
+        background: var(--background);
+        box-shadow:
+          0 0 0 1px rgb(0 0 0/0.04),
+          0 2px 8px rgb(0 0 0/0.04),
+          0 4px 40px 8px rgb(0 0 0/0.024);
+      }
+      .text {
+        min-height: 44px;
+        padding: 12px 14px 6px;
+        line-height: 22px;
+        color: var(--muted-foreground);
+        outline: none;
+      }
+      .text:not(:empty) {
+        color: var(--foreground);
+      }
+      .text:empty::before {
+        content: attr(data-ph);
+      }
+      .brow {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        padding: 4px 8px 8px;
+      }
+      .sp {
+        flex: 1;
+      }
+      .ctl {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 8px;
+        border-radius: 10px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        white-space: nowrap;
+      }
+      .ctl:hover,
+      .ctl.open {
+        background: var(--raised);
+        color: var(--foreground);
+      }
+      .ctl .em,
+      .ctl .ic {
+        width: 14px;
+        height: 14px;
+      }
+      .eff {
+        color: var(--effort);
+      }
+      .eff.top {
+        color: var(--effort-top);
+      }
+      .warn {
+        color: var(--warning);
+      }
+      .send {
+        display: grid;
+        place-items: center;
+        width: 28px;
+        height: 28px;
+        margin-left: 4px;
+        border-radius: 50%;
+        background: color-mix(in oklab, var(--foreground) 10%, transparent);
+        color: var(--muted-foreground);
+      }
+      .send.ready {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .send .ic {
+        width: 16px;
+        height: 16px;
+      }
+      .docked {
+        border-radius: 14px;
+        background: var(--block);
+        box-shadow: inset 0 0 0 1px var(--border);
+        padding: 12px 14px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .dh {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        font-weight: 600;
+      }
+      .dfoot {
+        display: flex;
+        justify-content: flex-end;
+        gap: 6px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 10px;
+        border-radius: 10px;
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .btn.ghost {
+        color: var(--muted-foreground);
+      }
+      .btn.ghost:hover {
+        background: var(--hover);
+        color: var(--foreground);
+      }
+      .btn.prim {
+        background: var(--primary);
+        color: var(--primary-foreground);
+      }
+      .kbd {
+        display: inline-flex;
+        align-items: center;
+        height: 18px;
+        padding: 0 4px;
+        border-radius: 5px;
+        font-size: 11px;
+        box-shadow: inset 0 0 0 1px
+          color-mix(in oklab, currentColor 30%, transparent);
+      }
+      .menu {
+        position: absolute;
+        z-index: 5;
+        width: 340px;
+        max-width: calc(100% - 16px);
+        padding: 4px;
+        border-radius: 14px;
+        background: var(--popover);
+        box-shadow:
+          0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent),
+          0 16px 40px -12px var(--shadow);
+        font-size: 13px;
+        display: none;
+      }
+      .menu.show {
+        display: block;
+      }
+      .menu.down {
+        top: calc(100% + 6px);
+        left: 50%;
+        translate: -50% 0;
+      }
+      .menu.up {
+        bottom: calc(100% - 4px);
+        right: 16px;
+      }
+      .mh {
+        display: flex;
+        justify-content: space-between;
+        padding: 8px 8px 4px;
+        font-size: 11px;
+        font-weight: 500;
+        color: var(--muted-foreground);
+      }
+      .mh span + span {
+        font-weight: 400;
+      }
+      .opt {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+        min-height: 30px;
+        padding: 4px 8px;
+        border-radius: 10px;
+        text-align: left;
+      }
+      .opt:hover {
+        background: color-mix(in oklab, var(--foreground) 8%, var(--popover));
+      }
+      .om {
+        flex: 1;
+        min-width: 0;
+        display: flex;
+        align-items: baseline;
+        gap: 8px;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .on {
+        font-weight: 500;
+        flex: none;
+      }
+      .oa {
+        min-width: 0;
+        overflow: hidden;
+        color: var(--muted-foreground);
+        font-size: 12px;
+      }
+      .oe {
+        flex: none;
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        font-variant-numeric: tabular-nums;
+      }
+      .opt .em,
+      .opt .ic {
+        width: 15px;
+        height: 15px;
+      }
+      .opt.out .on,
+      .opt.out .em {
+        opacity: 0.5;
+      }
+      .check {
+        width: 15px;
+        height: 15px;
+        color: var(--foreground);
+        visibility: hidden;
+      }
+      .opt.sel .check {
+        visibility: visible;
+      }
+      .mq {
+        padding: 4px 8px 6px 33px;
+        font-size: 11.5px;
+        line-height: 16px;
+        color: var(--muted-foreground);
+      }
+      .msep {
+        height: 1px;
+        margin: 4px 6px;
+        background: var(--border);
+      }
+      .find {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 32px;
+        padding: 0 8px;
+        margin-bottom: 2px;
+        border-bottom: 1px solid var(--border);
+        color: var(--muted-foreground);
+      }
+      .find input {
+        flex: 1;
+        font: inherit;
+        color: var(--foreground);
+        background: none;
+        border: 0;
+        outline: none;
+      }
+      .eseg {
+        display: grid;
+        grid-auto-flow: column;
+        grid-auto-columns: 1fr;
+        gap: 2px;
+        margin: 2px 8px 6px;
+        padding: 2px;
+        border-radius: 10px;
+        background: color-mix(in oklab, var(--foreground) 6%, var(--popover));
+      }
+      .eseg button {
+        height: 26px;
+        border-radius: 8px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .eseg button.on {
+        background: var(--popover);
+        color: var(--foreground);
+        font-weight: 500;
+        box-shadow:
+          0 0 0 1px var(--border),
+          0 1px 2px rgb(0 0 0/0.12);
+      }
+      .eseg button.top {
+        color: var(--effort-top);
+      }
+      .sw {
+        width: 28px;
+        height: 16px;
+        border-radius: 8px;
+        background: color-mix(in oklab, var(--foreground) 16%, transparent);
+        position: relative;
+        flex: none;
+        transition: background 0.15s;
+      }
+      .sw::after {
+        content: "";
+        position: absolute;
+        top: 2px;
+        left: 2px;
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: var(--popover);
+        box-shadow: 0 1px 2px rgb(0 0 0/0.3);
+        transition: left 0.15s;
+      }
+      .sw.on {
+        background: var(--foreground);
+      }
+      .sw.on::after {
+        left: 14px;
+      }
+      .ring {
+        width: 12px;
+        height: 12px;
+        border-radius: 50%;
+        background: conic-gradient(
+          currentColor calc(var(--p) * 3.6deg),
+          color-mix(in oklab, currentColor 22%, transparent) 0
+        );
+        -webkit-mask: radial-gradient(circle, transparent 3.4px, #000 3.9px);
+        mask: radial-gradient(circle, transparent 3.4px, #000 3.9px);
+      }
+      .notes {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        padding: 14px 8px 0;
+        font-size: 12.5px;
+        line-height: 18px;
+        color: var(--muted-foreground);
+      }
+      .notes b {
+        font-weight: 500;
+        color: var(--foreground);
+      }
+      .narrow .wide {
+        display: none;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="win" id="root">
+      <div class="bar">
+        <div class="seg" id="mode">
+          <button data-v="new" class="on">New Thread</button
+          ><button data-v="started">Started</button>
+        </div>
+        <div class="seg" id="width">
+          <button data-v="wide" class="on">Wide</button
+          ><button data-v="narrow">Narrow</button>
+        </div>
+        <label class="chk"
+          ><input type="checkbox" id="outbox" /> Personal is out</label
+        >
+        <span class="hint">Click anything</span>
+      </div>
+      <div class="stage">
+        <section class="tile">
+          <div class="head" id="head"></div>
+          <div class="body" id="body"></div>
+          <div class="wrap" id="wrap">
+            <div id="docked"></div>
+            <div class="box">
+              <div
+                class="text"
+                id="text"
+                contenteditable="true"
+                data-ph=""
+              ></div>
+              <div class="brow">
+                <button class="ctl" style="padding: 0 7px">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                  >
+                    <path d="M5 12h14" />
+                    <path d="M12 5v14" />
+                  </svg>
+                </button>
+                <span class="sp"></span>
+                <button class="ctl" title="How freely it acts">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"
+                    /></svg
+                  ><span class="wide">Full access</span>
+                </button>
+                <button class="ctl" id="whoBtn" data-menu="whoUp"></button>
+                <button class="ctl" id="howBtn" data-menu="how"></button>
+                <button class="send" id="send">
+                  <svg
+                    class="ic"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="m5 12 7-7 7 7" />
+                    <path d="M12 19V5" />
+                  </svg>
+                </button>
+              </div>
+            </div>
+            <div class="menu up" id="how"></div>
+            <div class="menu up" id="whoUp"></div>
+          </div>
+        </section>
+      </div>
+      <div class="notes" id="notes"></div>
+    </div>
+    <script>
+      const $ = (s) => document.querySelector(s)
+      const CL =
+        '<svg class="em" viewBox="2.143 -1.857 13.714 13.714" fill="currentColor" style="color:COLOR"><g shape-rendering="crispEdges"><rect x="3" y="0" width="12" height="2"/><rect x="3" y="2" width="2" height="2"/><rect x="6" y="2" width="6" height="2"/><rect x="13" y="2" width="2" height="2"/><rect x="1" y="4" width="16" height="2"/><rect x="3" y="6" width="12" height="2"/><rect x="4" y="8" width="1" height="2"/><rect x="6" y="8" width="1" height="2"/><rect x="11" y="8" width="1" height="2"/><rect x="13" y="8" width="1" height="2"/></g></svg>'
+      const CX =
+        '<svg class="em" viewBox="0 0 24 24" style="color:var(--foreground)"><circle cx="12" cy="12" r="10" fill="currentColor"/><path d="m7.5 9 3 3-3 3M12.5 15.5h4" fill="none" stroke="var(--background)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg>'
+      const ic = (d, c = "ic") =>
+        `<svg class="${c}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${d}</svg>`
+      const CHEV = ic('<path d="m6 9 6 6 6-6"/>', "chev"),
+        CHECK = ic('<path d="M20 6 9 17l-5-5"/>', "check")
+      const ACC = {
+        personal: {
+          h: "claude",
+          name: "Personal",
+          plan: "Max 20x",
+          tag: "default",
+          color: "var(--account-claude)",
+          used: 34,
+        },
+        work: {
+          h: "claude",
+          name: "Work",
+          plan: "Max 5x",
+          tag: "fallback",
+          color: "#6aa8ff",
+          used: 86,
+        },
+        team: {
+          h: "claude",
+          name: "Team",
+          plan: "Team",
+          color: "#5fc58a",
+          back: "14:00",
+        },
+        codex: { h: "codex", name: "Codex", plan: "Plus", used: 12 },
+      }
+      const em = (k) =>
+        ACC[k].h === "codex" ? CX : CL.replace("COLOR", ACC[k].color)
+      const MODELS = [
+        ["Opus 5.5", "Most capable"],
+        ["Sonnet 5.5", "Fast, for every day"],
+        ["Haiku 5.5", "Fastest"],
+      ]
+      const LEVELS = ["Low", "Medium", "High", "Ultracode"]
+      const PROJ = [
+        ["none", "No Project", "its own folder"],
+        ["v", "banda", "~/code/banda"],
+        ["t", "Work", "~/work"],
+      ]
+      const S = {
+        mode: "new",
+        width: "wide",
+        out: false,
+        acc: "personal",
+        proj: "banda",
+        model: 0,
+        effort: 2,
+        fast: false,
+        open: null,
+        handoff: false,
+        waits: null,
+      }
+      const isOut = (k) => k === "team" || (k === "personal" && S.out)
+      const ring = (a) => {
+        const w = a.used >= 80
+        return `<span class="ring ${w ? "warn" : ""}" style="--p:${a.used}"></span><span class="${w ? "warn" : ""}">${a.used}%</span>`
+      }
+      const accEnd = (k) => {
+        const a = ACC[k]
+        if (isOut(k)) return `back at ${k === "personal" ? "14:00" : a.back}`
+        return ring(a)
+      }
+      function accOpt(k) {
+        const a = ACC[k]
+        return `<button class="opt ${isOut(k) ? "out" : ""} ${S.acc === k ? "sel" : ""}" data-acc="${k}">${em(k)}<span class="om"><span class="on">${a.name}</span><span class="oa">${[a.plan, a.tag].filter(Boolean).join(" · ")}</span></span><span class="oe">${accEnd(k)}${CHECK}</span></button>`
+      }
+      function whoMenu(started) {
+        const claude = ["personal", "work", "team"].map(accOpt).join("")
+        if (!started)
+          return `<div class="find">${ic('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>')}<input placeholder="Find an account or agent"></div><div class="mh"><span>Claude Code</span></div>${claude}<div class="mh"><span>Codex</span></div>${accOpt("codex")}<div class="msep"></div><button class="opt">${ic('<circle cx="12" cy="12" r="3"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/>')}<span class="om"><span class="on" style="font-weight:400">Accounts in Settings…</span></span></button>`
+        const same = ACC[S.acc].h === "codex" ? accOpt("codex") : claude
+        const other =
+          ACC[S.acc].h === "codex" ? accOpt("personal") : accOpt("codex")
+        return `<div class="mh"><span>${ACC[S.acc].h === "codex" ? "Codex" : "Claude Code"}</span><span>Ctrl+Shift+↑↓</span></div>${same}<div class="mq">Goes on in the same session.</div><div class="msep"></div><div class="mh"><span>Hand off to another agent</span></div>${other}<div class="mq">Reads this Thread's history and goes on from here.</div>`
+      }
+      function whereMenu() {
+        return `<div class="find">${ic('<circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/>')}<input placeholder="Find a Project"></div>${PROJ.map(([c, n, a]) => `<button class="opt ${S.proj === n ? "sel" : ""}" data-proj="${n}"><span class="sign ${c}">${c === "none" ? "" : n[0].toUpperCase()}</span><span class="om"><span class="on">${n}</span><span class="oa">${a}</span></span><span class="oe">${CHECK}</span></button>`).join("")}<div class="mh"><span>mac</span><span>away</span></div><button class="opt ${S.proj === "site" ? "sel" : ""}" data-proj="site"><span class="sign m">S</span><span class="om"><span class="on">site</span><span class="oa">~/Sites/site</span></span><span class="oe">${CHECK}</span></button><div class="msep"></div><button class="opt">${ic('<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M12 12v6M9 15h6"/>')}<span class="om"><span class="on" style="font-weight:400">Add Project…</span></span></button>`
+      }
+      function howMenu() {
+        if (ACC[S.acc].h === "codex")
+          return `<div class="mh"><span>Model</span></div><div class="mq" style="padding-left:8px">Codex says its models once it has run a Thread. This one starts on Codex's default.</div>`
+        const changed = S.model !== 0 || S.effort !== 2 || S.fast
+        return `<div class="mh"><span>Model</span></div>${MODELS.map(([n, a], i) => `<button class="opt ${S.model === i ? "sel" : ""}" data-model="${i}"><span class="om"><span class="on">${n}</span><span class="oa">${a}</span></span><span class="oe">${CHECK}</span></button>`).join("")}<div class="mh"><span>Effort</span></div><div class="eseg">${LEVELS.map((l, i) => `<button data-eff="${i}" class="${S.effort === i ? "on" : ""} ${i === 3 ? "top" : ""}">${l}</button>`).join("")}</div><button class="opt" data-fast>${ic('<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>')}<span class="om"><span class="on" style="font-weight:400">Fast mode</span><span class="oa">faster output</span></span><span class="sw ${S.fast ? "on" : ""}"></span></button>${changed ? `<div class="msep"></div><button class="opt" data-reset>${ic('<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>')}<span class="om"><span class="on" style="font-weight:400">Back to Claude Code's defaults</span></span></button>` : ""}`
+      }
+      const RECENT = `<div class="recent"><div class="recent-h"><span>Recent in banda</span><span>All 24</span></div>
+<div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--attention)"><path d="M8 1.5 15 14.5H1z"/><ellipse cx="6" cy="10" rx="1" ry="1.5" fill="var(--background)"/><ellipse cx="10" cy="10" rx="1" ry="1.5" fill="var(--background)"/></svg><span class="t">Move sidebar settings to sidebar.toml</span><span class="time">14m</span></div>
+<div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--added)"><rect x="1.5" y="2" width="13" height="12" rx="4"/><ellipse cx="6" cy="7.5" rx="1" ry="1.5" fill="var(--background)"/><ellipse cx="10" cy="7.5" rx="1" ry="1.5" fill="var(--background)"/></svg><span class="t">Fix blank window on reload</span><span class="time">9m</span></div>
+<div class="row"><svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--mark-open)"><rect x="1.5" y="2" width="13" height="12" rx="4"/><ellipse cx="6" cy="7.5" rx="1" ry="1.5" fill="var(--background)"/><ellipse cx="10" cy="7.5" rx="1" ry="1.5" fill="var(--background)"/></svg><span class="t">Refactor the message box into modules</span><span class="time">2h</span></div></div>`
+      const CHAT = `<div class="chat"><div class="you">The window goes blank after a reload. Find why and fix it.</div><div class="work">${ic('<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5M2 12l10 5 10-5"/>')}Read 4 files, ran 2 commands, edited 1 file <span class="add">+18</span><span class="del">−4</span></div><div class="prose">The renderer was killed with SIGKILL and the window never reloaded it. It reloads now, and keeps <code>chromium.log</code>.</div></div>`
+      const sign = (n) => {
+        const p = PROJ.find((x) => x[1] === n)
+        return n === "site"
+          ? '<span class="sign m">S</span>'
+          : `<span class="sign ${p[0]}">${p[0] === "none" ? "" : n[0].toUpperCase()}</span>`
+      }
+      function draw() {
+        const started = S.mode === "started",
+          a = ACC[S.acc],
+          codex = a.h === "codex"
+        $("#root").classList.toggle("narrow", S.width === "narrow")
+        $("#head").innerHTML = started
+          ? `<svg width="16" height="16" viewBox="0 0 16 16" fill="currentColor" style="color:var(--added)"><rect x="1.5" y="2" width="13" height="12" rx="4"/></svg><span class="space">${sign(S.proj)}${S.proj}</span><span class="title">Fix blank window on reload</span>`
+          : `${ic('<path d="M22 17a2 2 0 0 1-2 2H6.8a2 2 0 0 0-1.4.6l-2.2 2.2A.7.7 0 0 1 2 21.3V5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2z"/>')}<span class="title">New Thread</span>`
+        const who = codex ? "Codex" : `Claude · ${a.name}`
+        const why = S.waits
+          ? `<div class="why">${ACC[S.waits].name} is out until 14:00: this Thread waits and starts then.</div>`
+          : S.out && S.acc === "work"
+            ? `<div class="why">Personal is out of its limit until 14:00, so this starts on Work.</div>`
+            : ""
+        $("#body").innerHTML = started
+          ? CHAT
+          : `<div class="start"><div class="to">Write to <button class="pick ${S.open === "whoDown" ? "open" : ""}" data-menu="whoDown">${em(S.acc)}${who}${CHEV}</button> in <button class="pick ${S.open === "where" ? "open" : ""}" data-menu="where">${sign(S.proj)}${S.proj}${CHEV}</button><div class="menu down ${S.open === "whoDown" ? "show" : ""}">${whoMenu(false)}</div><div class="menu down ${S.open === "where" ? "show" : ""}">${whereMenu()}</div></div>${why}${S.proj === "No Project" ? "" : RECENT.replace(/banda/, S.proj)}</div>`
+        const wb = $("#whoBtn")
+        wb.style.display = started ? "" : "none"
+        wb.title = `${a.name} · ${a.plan}`
+        wb.innerHTML =
+          em(S.acc) +
+          (a.used >= 80 && !isOut(S.acc)
+            ? ` <span class="warn">${a.used}%</span>`
+            : "")
+        wb.classList.toggle("open", S.open === "whoUp")
+        const hb = $("#howBtn")
+        hb.classList.toggle("open", S.open === "how")
+        hb.innerHTML = codex
+          ? "Codex"
+          : `${MODELS[S.model][0]}${S.width === "narrow" ? "" : ` <span class="eff ${S.effort === 3 ? "top" : ""}">${LEVELS[S.effort]}</span>`}${S.fast ? " " + ic('<path d="M4 14a1 1 0 0 1-.78-1.63l9.9-10.2a.5.5 0 0 1 .86.46l-1.92 6.02A1 1 0 0 0 13 10h7a1 1 0 0 1 .78 1.63l-9.9 10.2a.5.5 0 0 1-.86-.46l1.92-6.02A1 1 0 0 0 11 14z"/>') : ""}`
+        $("#how").innerHTML = howMenu()
+        $("#how").classList.toggle("show", S.open === "how")
+        $("#whoUp").innerHTML = whoMenu(true)
+        $("#whoUp").classList.toggle("show", S.open === "whoUp")
+        $("#whoUp").style.right = S.width === "narrow" ? "16px" : "90px"
+        $("#text").dataset.ph = started
+          ? `Write to ${codex ? "Codex" : "Claude"}. @ files, / commands, $ skills`
+          : "Describe the work. @ files, / commands, $ skills"
+        $("#docked").innerHTML = S.handoff
+          ? `<div class="docked"><div class="dh">${em(S.handoff)}Hand this Thread to ${ACC[S.handoff].name === "Personal" ? "Claude" : "Codex"}?</div><div style="color:var(--muted-foreground)">It reads this Thread's history and goes on from here, in a session of its own.</div><div class="dfoot"><button class="btn ghost" data-stay>Stay <span class="kbd">Esc</span></button><button class="btn prim" data-handoff>Hand off <span class="kbd">⏎</span></button></div></div>`
+          : ""
+        $("#send").classList.toggle(
+          "ready",
+          $("#text").textContent.trim() !== ""
+        )
+        $("#notes").innerHTML = started
+          ? `<div><b>Начатый Thread:</b> фразы нет, «кто» встал в ряд перед «как», одной иконкой: имя аккаунта в подсказке и в меню. Другой аккаунт Claude — один клик, сессия та же; Codex — через вопрос над полем.</div><div>Попробуй: выбери <b>Work</b> — рядом с иконкой появится 86% жёлтым; выбери <b>Codex</b> — над полем встанет вопрос.</div>`
+          : `<div><b>Новый Thread:</b> «кто» и «где» во фразе, в ряду поля только «как». Попробуй: <b>Personal is out</b> сверху, <b>Codex</b> во фразе (модели пропадут), <b>Team</b> (Thread подождёт сброса), <b>No Project</b> (списка нет).</div><div>Наберёшь текст и нажмёшь ↑ — фраза погаснет, Thread начнётся на месте.</div>`
+      }
+      document.addEventListener("click", (e) => {
+        const t = e.target
+        const seg = t.closest(".seg button")
+        if (seg) {
+          const g = seg.parentElement.id
+          S[g === "mode" ? "mode" : "width"] = seg.dataset.v
+          seg.parentElement
+            .querySelectorAll("button")
+            .forEach((b) => b.classList.toggle("on", b === seg))
+          S.open = null
+          S.handoff = false
+          draw()
+          return
+        }
+        const m = t.closest("[data-menu]")
+        if (m) {
+          S.open = S.open === m.dataset.menu ? null : m.dataset.menu
+          draw()
+          return
+        }
+        const acc = t.closest("[data-acc]")
+        if (acc) {
+          const k = acc.dataset.acc
+          if (S.mode === "started" && ACC[k].h !== ACC[S.acc].h) {
+            S.handoff = k
+            S.open = null
+            draw()
+            return
+          }
+          S.acc = k
+          S.waits = isOut(k) ? k : null
+          S.open = null
+          draw()
+          return
+        }
+        const pr = t.closest("[data-proj]")
+        if (pr) {
+          S.proj = pr.dataset.proj
+          S.open = null
+          draw()
+          return
+        }
+        const mo = t.closest("[data-model]")
+        if (mo) {
+          S.model = +mo.dataset.model
+          draw()
+          return
+        }
+        const ef = t.closest("[data-eff]")
+        if (ef) {
+          S.effort = +ef.dataset.eff
+          draw()
+          return
+        }
+        if (t.closest("[data-fast]")) {
+          S.fast = !S.fast
+          draw()
+          return
+        }
+        if (t.closest("[data-reset]")) {
+          S.model = 0
+          S.effort = 2
+          S.fast = false
+          draw()
+          return
+        }
+        if (t.closest("[data-stay]")) {
+          S.handoff = false
+          draw()
+          return
+        }
+        if (t.closest("[data-handoff]")) {
+          S.acc = S.handoff
+          S.handoff = false
+          draw()
+          return
+        }
+        if (
+          t.closest("#send") &&
+          $("#text").textContent.trim() &&
+          S.mode === "new"
+        ) {
+          const st = document.querySelector(".start")
+          st.style.opacity = 0
+          setTimeout(() => {
+            S.mode = "started"
+            document
+              .querySelectorAll("#mode button")
+              .forEach((b) =>
+                b.classList.toggle("on", b.dataset.v === "started")
+              )
+            $("#text").textContent = ""
+            draw()
+          }, 150)
+          return
+        }
+        if (!t.closest(".menu") && S.open) {
+          S.open = null
+          draw()
+        }
+      })
+      $("#outbox").addEventListener("change", (e) => {
+        S.out = e.target.checked
+        if (S.mode === "new" && (S.acc === "personal" || S.acc === "work"))
+          S.acc = S.out ? "work" : "personal"
+        S.waits = null
+        draw()
+      })
+      $("#text").addEventListener("input", () =>
+        $("#send").classList.toggle(
+          "ready",
+          $("#text").textContent.trim() !== ""
+        )
+      )
+      document.addEventListener("keydown", (e) => {
+        if (e.key === "Escape") {
+          S.open = null
+          S.handoff = false
+          draw()
+        }
+      })
+      if (matchMedia("(prefers-color-scheme: light)").matches)
+        document.documentElement.setAttribute("data-theme", "light")
+      draw()
+    </script>
+  </body>
+</html>
