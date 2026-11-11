@@ -5,6 +5,7 @@
  * something else took, one in a field or on a control, and any while a
  * dialog or a menu is open over it, are left where they were.
  */
+import { useEffect, useEffectEvent } from "react"
 
 /** What takes keys of its own. */
 const OWN_KEYS = [
@@ -56,4 +57,51 @@ export function typed(event: KeyboardEvent, box: Element): string | undefined {
     return undefined
   if (event.key.length !== 1 || !stray(event, box)) return undefined
   return event.key
+}
+
+/**
+ * While `focused`, what is typed or pasted outside a field in the Pane
+ * the `box` is in: each key goes to `onKey` first, then a stray one's
+ * text to `add`; a stray paste to `onPaste`, and its text to `add`
+ * unless `onPaste` took it.
+ */
+export function useStray(
+  box: React.RefObject<Element | null>,
+  focused: boolean,
+  {
+    add,
+    onKey,
+    onPaste,
+  }: {
+    add: (text: string) => void
+    onKey: (event: KeyboardEvent) => void
+    onPaste: (event: ClipboardEvent) => boolean
+  }
+) {
+  const keyed = useEffectEvent((event: KeyboardEvent) => {
+    const at = box.current
+    if (!at) return
+    onKey(event)
+    const text = typed(event, at)
+    if (text === undefined) return
+    event.preventDefault()
+    add(text)
+  })
+  const pasted = useEffectEvent((event: ClipboardEvent) => {
+    const at = box.current
+    if (!at || !stray(event, at) || onPaste(event)) return
+    const text = event.clipboardData?.getData("text/plain")
+    if (!text) return
+    event.preventDefault()
+    add(text)
+  })
+  useEffect(() => {
+    if (!focused) return
+    window.addEventListener("keydown", keyed)
+    window.addEventListener("paste", pasted)
+    return () => {
+      window.removeEventListener("keydown", keyed)
+      window.removeEventListener("paste", pasted)
+    }
+  }, [focused])
 }

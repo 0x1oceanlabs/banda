@@ -1,63 +1,41 @@
 import {
   useEffect,
-  useEffectEvent,
   useImperativeHandle,
   useMemo,
   useRef,
   useState,
 } from "react"
-import type {
-  Enter,
-  Image,
-  Skill,
-  TurnView,
-  Usage,
-} from "@banda/contract/agents"
+import type { Image, Skill, TurnView, Usage } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
-import {
-  PromptEditor,
-  type PromptEditorHandle,
-  type Typing,
-} from "@banda/ui/components/prompt-editor"
-import { RingMeter } from "@banda/ui/components/ring-meter"
-import { quoted } from "@banda/ui/lib/prompt"
-import { cn } from "@banda/ui/lib/utils"
-import { Spinner } from "@banda/ui/components/spinner"
-import { useNow } from "@banda/ui/hooks/use-now"
-import {
-  ArrowUpIcon,
-  ClockIcon,
-  CornerUpRightIcon,
-  MessageSquareIcon,
-  PlusIcon,
-  ListPlusIcon,
-  SquareIcon,
-  XIcon,
-} from "lucide-react"
 import {
   ContextMenu,
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
-import { AttachmentList, type Attachments } from "./Attachments"
 import {
-  type Comment,
-  commentAt,
-  commentLabel,
-  commentStart,
-  withComments,
-} from "./comments"
-import { ComposerMenu } from "./ComposerMenu"
-import { useDraft, useDraftComments } from "./drafts"
-import { keyFor, steers, useEnterKey } from "./enter-key"
-import { recall } from "./history"
-import { imagesAmong } from "./images"
-import { placeholder as says } from "./placeholder"
-import { ownCommand, type Suggested } from "./slash"
-import { type FindFiles, useFileMenu } from "./FileMenu"
-import { useSkillMenu, useSlashMenu } from "./SlashMenu"
-import { stray, typed } from "./stray"
+  PromptEditor,
+  type PromptEditorHandle,
+} from "@banda/ui/components/prompt-editor"
 import { useScope } from "@banda/ui/hooks/use-scope"
+import { quoted } from "@banda/ui/lib/prompt"
+import { PlusIcon } from "lucide-react"
 import { COMPOSER } from "../scopes"
+import { AttachmentList, type Attachments } from "./Attachments"
+import { CommentList } from "./CommentList"
+import type { Comment } from "./comments"
+import { ComposerMenu } from "./ComposerMenu"
+import { ContextUsed } from "./ContextUsed"
+import { useDraft, useDraftComments } from "./drafts"
+import { steers, useEnterKey } from "./enter-key"
+import type { FindFiles } from "./FileMenu"
+import { FOOTER_CONTROL, FOOTER_ICON } from "./footer"
+import { recall } from "./history"
+import { useIntake } from "./intake"
+import { LONGEST, measure, sendable } from "./message"
+import { placeholder as says } from "./placeholder"
+import { SendButton } from "./SendButton"
+import { ownCommand, type Suggested } from "./slash"
+import { useStray } from "./stray"
+import { useSuggestions } from "./suggestions"
 
 /**
  * Where a Person writes to the Agent: the text, with the slash commands
@@ -173,22 +151,35 @@ export function Composer({
   const enter = useEnterKey()
   const field = useRef<PromptEditorHandle>(null)
   const files = useRef<HTMLInputElement>(null)
+  const form = useRef<HTMLFormElement>(null)
   useEffect(() => {
     if (focused) field.current?.focus()
   }, [focused])
-  // Files dropped or pasted join the message: images as images, any other
-  // kept in the Project and named in the text, in turn, as `@` names a file.
-  const take = async (given: File[], at: "caret" | "end") => {
-    const pictures = imagesAmong(given)
-    if (pictures.length > 0) images.add(pictures)
-    for (const file of given) {
-      if (pictures.includes(file)) continue
-      const path = await keep(file)
-      if (path) field.current?.point(path, at)
-    }
-  }
+
+  const intake = useIntake({ field, images, keep, text })
+  // While its Pane is the one in use, what is typed or pasted in it
+  // outside a field comes here.
+  useStray(form, focused, {
+    add: (typed) => field.current?.add(typed),
+    onKey: intake.heardKey,
+    onPaste: (event) => intake.takePaste(event, "end"),
+  })
+  const suggestions = useSuggestions({
+    field,
+    text,
+    name,
+    commands,
+    skills,
+    findFiles,
+    onPlanMode,
+  })
+  const skillNames = useMemo(
+    () => new Set(skills.map((skill) => skill.name)),
+    [skills]
+  )
+
   useImperativeHandle(ref, () => ({
-    take: (given) => void take(given, "end"),
+    take: (given) => void intake.take(given, "end"),
     // A line apart from what is written after it, which would else run on
     // in it.
     quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
@@ -199,149 +190,13 @@ export function Composer({
       field.current?.add(text && back ? `\n${back}` : back)
     },
   }))
-  // Whether the paste coming is Mod+Shift+V's, which pastes a long text as
-  // text: the last key pressed says.
-  const asText = useRef(false)
-  /** Takes from a paste what is not text for the box: files, and a text
-   * too long for it, kept as a file; whether it took any. */
-  const takePaste = (event: ClipboardEvent, at: "caret" | "end") => {
-    const data = event.clipboardData
-    if (!data) return false
-    const pasted = data.getData("text/plain")
-    // It holds for this paste alone.
-    const asIs = asText.current
-    asText.current = false
-    if (data.files.length > 0) void take([...data.files], at)
-    else if (!asIs && long(pasted)) {
-      const name = `pasted-text-${(text.match(PASTED)?.length ?? 0) + 1}.txt`
-      const file = new File([pasted], name, { type: "text/plain" })
-      void take([file], at)
-    } else return false
-    event.preventDefault()
-    return true
-  }
-  const takePasteLater = useEffectEvent(takePaste)
-  // While its Pane is the one in use, what is typed or pasted in it
-  // outside a field comes here.
-  const form = useRef<HTMLFormElement>(null)
-  useEffect(() => {
-    const box = form.current
-    if (!focused || !box) return
-    const onKey = (event: KeyboardEvent) => {
-      const mod = event.ctrlKey || event.metaKey
-      asText.current = mod && event.shiftKey && event.code === "KeyV"
-      const text = typed(event, box)
-      if (text === undefined) return
-      event.preventDefault()
-      field.current?.add(text)
-    }
-    const onPaste = (event: ClipboardEvent) => {
-      if (!stray(event, box) || takePasteLater(event, "end")) return
-      const text = event.clipboardData?.getData("text/plain")
-      if (!text) return
-      event.preventDefault()
-      field.current?.add(text)
-    }
-    window.addEventListener("keydown", onKey)
-    window.addEventListener("paste", onPaste)
-    return () => {
-      window.removeEventListener("keydown", onKey)
-      window.removeEventListener("paste", onPaste)
-    }
-  }, [focused])
 
-  // The word being typed that asks for suggestions: `/`, `@` or `$`.
-  const [typing, setTyping] = useState<Typing>()
-  const skillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.name)),
-    [skills]
+  const { message, written, over } = measure(
+    text,
+    comments,
+    images.adding.length
   )
-  const pick = (command: Suggested) => {
-    if (command.planMode === undefined) {
-      field.current?.complete(`/${command.name} `)
-    } else {
-      onPlanMode(command.planMode)
-      field.current?.complete("")
-    }
-  }
-  const slash = useSlashMenu({
-    text,
-    word: typing?.trigger === "/" ? typing.word : undefined,
-    commands,
-    name,
-    onPick: pick,
-  })
-  const skillMenu = useSkillMenu({
-    text,
-    word: typing?.trigger === "$" ? typing.word : undefined,
-    skills,
-    onPick: (skill) =>
-      field.current?.complete({ chip: "skill", value: skill.name }),
-  })
-  const fileMenu = useFileMenu({
-    text,
-    word: typing?.trigger === "@" ? typing.word : undefined,
-    findFiles,
-    onPick: (path) => field.current?.complete({ chip: "file", value: path }),
-  })
-
-  // At most one is open, for the word being typed.
-  const menus = [slash, fileMenu, skillMenu]
-  // The composer's keys (ADR 0071, decision 1). A key its suggestions or
-  // its text take, as Enter in code, stays theirs.
-  const owned = (event: KeyboardEvent) =>
-    menus.some((menu) => menu.onKeyDown(event)) ||
-    (field.current?.textKey(event) ?? false)
-  const recalled = (up: boolean) => {
-    // Within a message of more lines, the caret moves first.
-    if (!(field.current?.atEdge(up) ?? true)) return false
-    const step = recall(history(), back, text, up, onEditLast !== undefined)
-    if (!step) return false
-    if (step === "edit") onEditLast?.()
-    else {
-      setText(step.text)
-      setBack(step.back)
-    }
-    return true
-  }
-  const scope = useScope(
-    COMPOSER,
-    {
-      "agents.composer.send": () => {
-        void send(steers(enter, false))
-        return true
-      },
-      "agents.composer.send-other": () => {
-        void send(steers(enter, true))
-        return true
-      },
-      "agents.composer.newline": () => {
-        field.current?.newLine()
-        return true
-      },
-      "agents.composer.back": () => recalled(true),
-      "agents.composer.forward": () => recalled(false),
-      "agents.composer.plan": () => {
-        if (plan === undefined) return false
-        onPlanMode(!plan)
-        return true
-      },
-    },
-    { owns: owned }
-  )
-
-  // The message as it goes: the text, then the comments.
-  const message = withComments(text, comments)
-  const trimmed = message.trim().length
-  const written = trimmed > 0 || images.adding.length > 0
-  // How far past the longest message a Harness takes it is, if it is.
-  const over = trimmed - LONGEST
-  const ready = sendable({
-    written,
-    over,
-    busy: busy || images.busy,
-    held,
-  })
+  const ready = sendable({ written, over, busy: busy || images.busy, held })
   const send = async (steer: boolean) => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
@@ -365,8 +220,50 @@ export function Composer({
     }
   }
 
-  const look =
-    PRIMARY[!steering ? "send" : steers(enter, false) ? "steer" : "queue"]
+  const recalled = (up: boolean) => {
+    // Within a message of more lines, the caret moves first.
+    if (!(field.current?.atEdge(up) ?? true)) return false
+    const step = recall(history(), back, text, up, onEditLast !== undefined)
+    if (!step) return false
+    if (step === "edit") onEditLast?.()
+    else {
+      setText(step.text)
+      setBack(step.back)
+    }
+    return true
+  }
+  // The composer's keys (ADR 0071, decision 1). A key its suggestions or
+  // its text take, as Enter in code, stays theirs.
+  const scope = useScope(
+    COMPOSER,
+    {
+      "agents.composer.send": () => {
+        void send(steers(enter, false))
+        return true
+      },
+      "agents.composer.send-other": () => {
+        void send(steers(enter, true))
+        return true
+      },
+      "agents.composer.newline": () => {
+        field.current?.newLine()
+        return true
+      },
+      "agents.composer.back": () => recalled(true),
+      "agents.composer.forward": () => recalled(false),
+      "agents.composer.plan": () => {
+        if (plan === undefined) return false
+        onPlanMode(!plan)
+        return true
+      },
+    },
+    {
+      owns: (event) =>
+        suggestions.onKeyDown(event) ||
+        (field.current?.textKey(event) ?? false),
+    }
+  )
+
   return (
     <form
       ref={form}
@@ -381,9 +278,7 @@ export function Composer({
           {images.problem}
         </p>
       )}
-      {slash.menu}
-      {fileMenu.menu}
-      {skillMenu.menu}
+      {suggestions.menu}
       <input
         ref={files}
         type="file"
@@ -392,7 +287,7 @@ export function Composer({
         aria-label="Files to add"
         onChange={(event) => {
           // As when dropped: images as images, any other file named.
-          void take([...(event.target.files ?? [])], "caret")
+          void intake.take([...(event.target.files ?? [])], "caret")
           event.target.value = ""
         }}
       />
@@ -431,20 +326,18 @@ export function Composer({
                 skills={skillNames}
                 attributes={{
                   "aria-label": `Message to ${name}`,
-                  ...Object.assign({}, ...menus.map((menu) => menu.field)),
+                  ...suggestions.field,
                 }}
                 className="max-h-48 px-3.5 pt-3 pb-1.5"
-                onTyping={setTyping}
+                onTyping={suggestions.onTyping}
                 onChange={(value) => {
                   setText(value)
                   setBack(0)
                 }}
-                onPaste={(event) => takePaste(event, "caret")}
+                onPaste={(event) => intake.takePaste(event, "caret")}
                 // Its suggestions' own keys; the rest are the composer's
                 // actions, which its scope runs (`keys`).
-                onKeyDown={(event) => {
-                  menus.some((menu) => menu.onKeyDown(event))
-                }}
+                onKeyDown={suggestions.onKeyDown}
               />
             </div>
           </ContextMenuTrigger>
@@ -454,7 +347,7 @@ export function Composer({
               paste &&
               ((plain) => {
                 // As Ctrl+Shift+V: long text stays text, not a file.
-                asText.current = plain
+                intake.pasteAsText(plain)
                 paste(plain)
               })
             }
@@ -490,39 +383,19 @@ export function Composer({
             {children}
           </div>
           {usage && <ContextUsed usage={usage} />}
-          {working && !written ? (
-            <Button
-              size="icon-sm"
-              className="ml-1 rounded-full"
-              aria-label="Stop"
-              onClick={() => onStop(working)}
-            >
-              <SquareIcon className="size-2.5 fill-current" />
-            </Button>
-          ) : whenBack !== undefined ? (
-            <SendWhenBack title={whenBack} disabled={!ready} busy={busy} />
-          ) : (
-            <Button
-              type="submit"
-              size="icon-sm"
-              // With nothing to send it is not faded but quiet (ADR 0031).
-              // Held, it still takes the pointer, so its tooltip says why.
-              className={cn(
-                "ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100",
-                held !== undefined && "disabled:pointer-events-auto"
-              )}
-              aria-label={look.label}
-              title={held ?? look.title?.(name, enter)}
-              disabled={!ready}
-              onClick={(event) => {
-                // Ctrl (⌘ on a Mac) does the other thing, as with Enter.
-                event.preventDefault()
-                void send(steers(enter, event.ctrlKey || event.metaKey))
-              }}
-            >
-              {busy ? <Spinner /> : look.icon}
-            </Button>
-          )}
+          <SendButton
+            name={name}
+            enter={enter}
+            steering={steering}
+            working={working}
+            written={written}
+            ready={ready}
+            busy={busy}
+            held={held}
+            whenBack={whenBack}
+            onStop={onStop}
+            onSend={(steer) => void send(steer)}
+          />
         </div>
       </div>
       {over > 0 && (
@@ -534,34 +407,6 @@ export function Composer({
         </p>
       )}
     </form>
-  )
-}
-
-/** Send while the message would wait for its machine (ADR 0105, Q2),
- * its tooltip saying until when, drawn again each second so it says the
- * time it would. Quiet with nothing to send, as Send is, it still takes
- * the pointer, so its tooltip shows. */
-function SendWhenBack({
-  title,
-  disabled,
-  busy,
-}: {
-  title: (now: number) => string
-  disabled: boolean
-  busy: boolean
-}) {
-  const now = useNow(1_000)
-  return (
-    <Button
-      type="submit"
-      size="sm"
-      className="ml-1 gap-1.5 rounded-full pr-3 pl-2.5 text-xs font-medium hover:bg-primary/90 disabled:pointer-events-auto disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
-      title={title(now)}
-      disabled={disabled}
-    >
-      {busy ? <Spinner /> : <ClockIcon />}
-      Send when back
-    </Button>
   )
 }
 
@@ -578,159 +423,4 @@ export type ComposerHandle = {
   /** Puts a message back, after what is written, the caret at its end:
    * its text, and the images it carried (ADR 0027, decision 1). */
   putBack: (text: string, images: Image[]) => void
-}
-
-/** The comments on files' lines the message carries, each a chip with
- * its file, its lines and the start of its words, to take out. */
-function CommentList({
-  comments,
-  onRemove,
-}: {
-  comments: readonly Comment[]
-  onRemove: (id: string) => void
-}) {
-  return (
-    <ul aria-label="Comments" className="flex flex-wrap gap-1.5 px-3.5 pt-3">
-      {comments.map((one) => {
-        const start = commentStart(one.comment)
-        return (
-          <li
-            key={one.id}
-            data-comment
-            title={`${commentAt(one)}${one.comment ? `: ${one.comment}` : ""}`}
-            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-control bg-raised pr-0.5 pl-1.5 text-xs"
-          >
-            <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
-            <span className="shrink-0 font-mono text-[11px]">
-              {commentLabel(one)}
-            </span>
-            {start && (
-              <span className="min-w-0 truncate text-muted-foreground">
-                {start}
-              </span>
-            )}
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              className="size-5 shrink-0 text-muted-foreground"
-              aria-label={`Remove the comment on ${commentLabel(one)}`}
-              onClick={() => onRemove(one.id)}
-            >
-              <XIcon />
-            </Button>
-          </li>
-        )
-      })}
-    </ul>
-  )
-}
-
-/** A control in the composer's footer (ADR 0058, decision 8): 28px with a
- * button's corner, its words meta-sized, muted until hovered or open;
- * its hover the raised fill, which shows on the composer's block. For a
- * ghost `Button` of size `sm`. */
-export const FOOTER_CONTROL =
-  "h-7 gap-1.5 rounded-control px-2 text-xs font-normal text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised"
-
-/** {@link FOOTER_CONTROL} with only an icon, for a ghost `Button` of size
- * `icon-sm`. */
-export const FOOTER_ICON =
-  "rounded-control text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-3.5"
-
-/** A pasted text this long or longer is kept as a file, as in T3 Code. */
-const LONG_PASTE = 32 * 1024
-/** A long text kept as a file, as the message names it. */
-const PASTED = /pasted-text-\d+\.txt/g
-
-/** Whether a pasted text is {@link LONG_PASTE} bytes or more: a character
- * is one byte or more, and at most three. */
-function long(text: string): boolean {
-  if (text.length * 3 < LONG_PASTE) return false
-  return text.length >= LONG_PASTE || new Blob([text]).size >= LONG_PASTE
-}
-
-/** The longest message a Harness takes, as in T3 Code. */
-const LONGEST = 120_000
-
-/**
- * Whether Enter and Send send the message now: something is `written`, no
- * longer than a Harness takes (`over` it by none), with nothing on its way
- * (`busy`); never while Send is `held`, when the machine it goes to cannot
- * be reached, and the message waits as the draft.
- */
-export function sendable({
-  written,
-  over,
-  busy,
-  held,
-}: {
-  written: boolean
-  over: number
-  busy: boolean
-  held?: string
-}): boolean {
-  return written && over <= 0 && !busy && held === undefined
-}
-
-/** What the primary button does with a message, and says so. */
-const PRIMARY: Record<
-  "send" | Enter,
-  {
-    label: string
-    icon: React.ReactNode
-    title?: (name: string, enter: Enter) => string
-  }
-> = {
-  send: { label: "Send", icon: <ArrowUpIcon /> },
-  steer: {
-    label: "Steer",
-    icon: <CornerUpRightIcon />,
-    title: (name, enter) =>
-      `Steer: ${name} reads it as it works. ${keyFor(enter, "queue")} or Ctrl+click queues it.`,
-  },
-  queue: {
-    label: "Queue",
-    icon: <ListPlusIcon />,
-    title: (name, enter) =>
-      `Queue it: it goes once ${name} is done. ${keyFor(enter, "steer")} or Ctrl+click sends it now.`,
-  },
-}
-
-/** From this share of its context used, how full it is shows. */
-const HALF_FULL = 50
-
-/** From this share of its context used, an Agent is near the point where
- * its Harness compacts or stops: the share shows as a warning. */
-const NEARLY_FULL = 80
-
-/** How full the Agent's context is, from half full: a ring, and the
- * share; what it cost so far on hover, when the Harness says. */
-function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
-  const share = size > 0 ? Math.round((used / size) * 100) : 0
-  if (share < HALF_FULL) return null
-  const tokens = new Intl.NumberFormat("en", { notation: "compact" })
-  const spent =
-    cost &&
-    new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: cost.currency,
-    }).format(cost.amount)
-  const words =
-    `${share}% of the context used: ${tokens.format(used)} of ${tokens.format(size)} tokens` +
-    (spent ? `. ${spent} so far.` : ".")
-  return (
-    <span
-      title={words}
-      data-full={share >= NEARLY_FULL || undefined}
-      className="flex h-7 shrink-0 items-center gap-1.5 px-1.5 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
-    >
-      <RingMeter
-        className="size-3.5"
-        value={share}
-        aria-label="Context used"
-        getAriaValueText={() => words}
-      />
-      {share}%
-    </span>
-  )
 }
