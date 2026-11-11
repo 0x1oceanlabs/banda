@@ -40,7 +40,8 @@ function diffAnswers(method: string): JsonValue | undefined {
     return {
       at: 0,
       files: [{ path: "a.txt", added: 1, removed: 1 }],
-      patch: "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n",
+      patch:
+        "diff --git a/a.txt b/a.txt\n--- a/a.txt\n+++ b/a.txt\n@@ -1 +1 @@\n-one\n+two\n",
       truncated: false,
       base: { name: "main" },
     }
