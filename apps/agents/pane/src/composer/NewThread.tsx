@@ -148,6 +148,7 @@ export function NewThreadBar({
   disabled,
   onProject,
   onAddProject,
+  phrase,
 }: {
   engine: Engine
   project: ProjectId
@@ -159,6 +160,8 @@ export function NewThreadBar({
   onProject: (project: ProjectId, same: boolean) => void
   /** Opens "Add Project" in the Banda menu (ADR 0026), from the Project list. */
   onAddProject?: () => void
+  /** It is the "where" of a new Thread's phrase (ADR 0114, decision 1). */
+  phrase?: boolean
 }) {
   const projects = useShownProjects(engine)
   const said = useMachine(engine)
@@ -180,12 +183,19 @@ export function NewThreadBar({
   const named = mine?.named ?? seen
   const { unlabelled, labelled, on } = useMemo(() => menuOf(groups), [groups])
   return (
-    // In meta words, its icon in line with the composer's text above it.
-    <div className="flex min-w-0 items-center gap-0.5 px-2.5 text-muted-foreground">
+    // In meta words, its icon in line with the composer's text above it;
+    // in the phrase, a word of it.
+    <div
+      className={
+        phrase
+          ? "contents"
+          : "flex min-w-0 items-center gap-0.5 px-2.5 text-muted-foreground"
+      }
+    >
       {machine && (
         <Pick
           what="Project"
-          icon={<ProjectSign project={picked} size={14} />}
+          icon={<ProjectSign project={picked} size={phrase ? 16 : 14} />}
           value={picked ? project : machine}
           choices={unlabelled}
           groups={labelled}
@@ -199,6 +209,7 @@ export function NewThreadBar({
             }
           }
           disabled={disabled}
+          phrase={phrase}
           onChange={(id) => onProject(id as ProjectId, on.get(id) === host)}
           more={
             onAddProject && {

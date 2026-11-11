@@ -9,14 +9,6 @@ import {
 } from "@banda/ui/components/context-menu"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { ProjectId } from "@banda/contract"
-import {
-  Empty,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@banda/ui/components/empty"
-import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { harnessTitle, useAccounts, useHarnesses } from "../harnesses"
 import { Spinner } from "@banda/ui/components/spinner"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
@@ -28,7 +20,6 @@ import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
 import type { Chip } from "@banda/ui/module"
 import { paneOf, type PaneProps } from "@banda/ui/pane"
-import { BotIcon } from "lucide-react"
 import { threadPaneOf } from "../list/rows"
 import { suggested } from "../composer/slash"
 import { type Comment, isComment } from "../composer/comments"
@@ -49,9 +40,10 @@ import { FindBar, useFound } from "./Find"
 import { visualPane } from "../visual/VisualPane"
 import { ModelPicker } from "../composer/ModelPicker"
 import { Handoff, WhoPicker } from "../composer/WhoPicker"
-import { whoOf } from "../composer/who"
+import { startGroupsOf, whoOf } from "../composer/who"
+import { Start } from "./Start"
 import { type Move, movesOf, stepped } from "./moves"
-import { useLimitsNow } from "./starts-on"
+import { startsOnWords, useLimitsNow, useStartsOn } from "./starts-on"
 import { pickedOf } from "../composer/picker"
 import { ModeMenu } from "../settings/ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
@@ -130,8 +122,6 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     settings,
     offer,
     configure,
-    starts,
-    startsOut,
     startOn,
     plan,
     setPlan,
@@ -185,6 +175,22 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     [moves, accounts, limits, warn]
   )
   const [handoff, setHandoff] = useState<Move>()
+  // A new Thread's "who", in its phrase: every account, by Harness (ADR
+  // 0114, decision 2), and why it starts where it does.
+  const startGroups = useMemo(
+    () =>
+      thread === null
+        ? startGroupsOf(
+            movesOf(harnesses, harness, [], limits, now),
+            (of) => harnessTitle(accounts, of),
+            accounts,
+            limits,
+            warn
+          )
+        : [],
+    [thread, harnesses, harness, limits, now, accounts, warn]
+  )
+  const startsOnNow = useStartsOn(engine)
   const pickWho = (move: Move) => {
     if (move.same || !who?.confirm) moveTo(move.harness.id)
     else setHandoff(move)
@@ -461,10 +467,36 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           )}
           {thread === null ? (
             <Start
-              harness={harness}
-              name={name}
-              on={on}
-              harnesses={harnesses}
+              now={harnesses.find((one) => one.id === harness)}
+              groups={startGroups}
+              engine={engine}
+              // Its Project, and the machine it starts on: another
+              // machine's opens it there, on its engine (ADR 0095,
+              // decision 7). A Project is added on this machine only.
+              where={
+                <NewThreadBar
+                  engine={engine}
+                  project={project}
+                  host={host}
+                  disabled={sending}
+                  phrase
+                  onProject={(other, same) =>
+                    open(
+                      paneOf(threadPane, movedArgs(args, harness, same)),
+                      "instead",
+                      other
+                    )
+                  }
+                  onAddProject={
+                    here && run ? () => run("project.add") : undefined
+                  }
+                />
+              }
+              why={
+                startsOnNow && startsOnNow.id === harness
+                  ? startsOnWords(startsOnNow, harnesses)
+                  : undefined
+              }
               // Full access never asks; a No Space draft's mode is the
               // engine's, which is Full access where the fence holds
               // whole (ADR 0083).
@@ -472,6 +504,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 settings?.mode !== "full_access" &&
                 !(unplaced && holdsWhole(fence))
               }
+              project={project}
+              disabled={sending}
+              onWho={(account) => startOn(account)}
+              onOpen={(pane) => open(pane, "instead")}
             />
           ) : live.state !== "ready" && waitsHere.length > 0 && on ? (
             // What waits for its machine shows before the Thread can (ADR
@@ -677,34 +713,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 picked={picked}
                 disabled={acting}
                 onChange={configure}
-                starts={starts}
-                out={startsOut}
-                onStart={startOn}
                 harnesses={harnesses}
               />
             </>
           )}
         </Composer>
-        {/* A new Thread's Project, bare under the card, and the machine it
-          starts on: another machine's opens it there, on its engine (ADR
-          0095, decision 7). Its Harness is chosen with the model. A Project
-          is added on this machine only. */}
-        {thread === null && (
-          <NewThreadBar
-            engine={engine}
-            project={project}
-            host={host}
-            disabled={sending}
-            onProject={(other, same) =>
-              open(
-                paneOf(threadPane, movedArgs(args, harness, same)),
-                "instead",
-                other
-              )
-            }
-            onAddProject={here && run ? () => run("project.add") : undefined}
-          />
-        )}
       </div>
     </div>
   )
@@ -715,49 +728,5 @@ export function Centered({ children }: { children: React.ReactNode }) {
     <div className="flex h-full items-center justify-center p-6">
       {children}
     </div>
-  )
-}
-
-/** A Thread not yet started: whom it writes to, by its account's emblem,
- * and on which machine when it is another's (ADR 0095, decision 7), and
- * one quiet line (ADR 0058), where its mode asks at all. */
-function Start({
-  harness,
-  name,
-  on,
-  asks,
-  harnesses,
-}: {
-  harness: string
-  name: string
-  /** The other machine it writes to, by its name. */
-  on?: string
-  asks: boolean
-  harnesses: readonly EmblemOf[]
-}) {
-  return (
-    <Empty className="h-full">
-      <EmptyHeader className="gap-1">
-        <EmptyMedia className="mb-2">
-          {harness ? (
-            <Emblem
-              of={emblemOf(harnesses, harness, name)}
-              className="size-6"
-            />
-          ) : (
-            <BotIcon className="size-6 text-muted-foreground" />
-          )}
-        </EmptyMedia>
-        <EmptyTitle>
-          Write to {name}
-          {on !== undefined && ` on ${on}`}
-        </EmptyTitle>
-        {asks && (
-          <EmptyDescription>
-            It asks you before anything that needs your yes.
-          </EmptyDescription>
-        )}
-      </EmptyHeader>
-    </Empty>
   )
 }

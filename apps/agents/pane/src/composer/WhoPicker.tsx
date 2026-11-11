@@ -83,7 +83,7 @@ export function WhoPicker({
   )
 }
 
-function Heading({ children }: { children: React.ReactNode }) {
+export function Heading({ children }: { children: React.ReactNode }) {
   return (
     <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-muted-foreground">
       {children}
@@ -99,7 +99,13 @@ function Note({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Row({ row, onPick }: { row: WhoRow; onPick: (row: WhoRow) => void }) {
+export function Row({
+  row,
+  onPick,
+}: {
+  row: WhoRow
+  onPick: (row: WhoRow) => void
+}) {
   const { move, about, used, warns, out, idle } = row
   return (
     <button

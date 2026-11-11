@@ -1,7 +1,7 @@
 import { describe, expect, test } from "vitest"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
 import type { Move, Moves } from "../thread/moves"
-import { whoOf } from "./who"
+import { startGroupsOf, whoOf } from "./who"
 
 const entry = (id: string, harness: string): HarnessView => ({
   id,
@@ -107,5 +107,38 @@ describe("whoOf", () => {
     expect(
       whoOf(moves([move("work", "claude")], []), undefined, [], 80)
     ).toBeUndefined()
+  })
+})
+
+describe("startGroupsOf", () => {
+  test("every account under its Harness, an out one still to choose", () => {
+    const groups = startGroupsOf(
+      {
+        same: [
+          move("personal", "claude", { on: true }),
+          move("team", "claude", { out: { until: 5_000 } }),
+        ],
+        others: [move("codex", "codex")],
+      },
+      (harness) => (harness === "claude" ? "Claude Code" : "Codex"),
+      { default: "personal" },
+      [],
+      80
+    )
+    expect(
+      groups.map((group) => [
+        group.title,
+        group.rows.map((row) => [row.move.harness.id, row.idle]),
+      ])
+    ).toEqual([
+      [
+        "Claude Code",
+        [
+          ["personal", true],
+          ["team", false],
+        ],
+      ],
+      ["Codex", [["codex", false]]],
+    ])
   })
 })

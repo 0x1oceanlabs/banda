@@ -329,6 +329,11 @@ export type ChoiceGroup = {
   choices: Choice[]
 }
 
+/** A word of a new Thread's phrase that picks (ADR 0114, decision 1): the
+ * phrase's size, in the foreground, its fill on hover and while open. */
+export const PHRASE_WORD =
+  "h-8 gap-2 rounded-control px-2 text-lg font-medium text-foreground hover:bg-raised aria-expanded:bg-raised dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-4.5"
+
 /** One of a few choices, as a menu that opens above the message box. */
 export function Pick({
   what,
@@ -340,6 +345,7 @@ export function Pick({
   disabled,
   onChange,
   more,
+  phrase,
 }: {
   what: string
   icon?: React.ReactNode
@@ -354,6 +360,9 @@ export function Pick({
   onChange: (id: string) => void
   /** One more row after the choices, which does rather than picks. */
   more?: { title: string; icon: React.ReactNode; run: () => void }
+  /** It is a word of a new Thread's phrase (ADR 0114, decision 1): as
+   * large as the phrase, and its menu opens below. */
+  phrase?: boolean
 }) {
   const now = nameOf(
     [...choices, ...groups.flatMap((group) => group.choices)],
@@ -367,8 +376,8 @@ export function Pick({
           <Button
             type="button"
             variant="ghost"
-            size="xs"
-            className="font-normal"
+            size={phrase ? "default" : "xs"}
+            className={phrase ? PHRASE_WORD : "font-normal"}
             aria-label={`${what}: ${now}${after ? ` ${after.words}` : ""}`}
           />
         }
@@ -378,7 +387,10 @@ export function Pick({
         {after?.mark}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" className={cn("w-auto min-w-48", MENU)}>
+      <DropdownMenuContent
+        side={phrase ? "bottom" : "top"}
+        className={cn("w-auto min-w-48", MENU)}
+      >
         {/* Beside groups, the first choices go with no heading, as this
             machine's Projects have no label beside another's: one would
             read as theirs. They keep the name for those who hear it. */}

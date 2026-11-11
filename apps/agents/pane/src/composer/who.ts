@@ -76,3 +76,38 @@ export function whoOf(
     confirm: moves.confirm,
   }
 }
+
+/** One Harness's accounts in a new Thread's "who": `Claude Code`'s. */
+export type WhoGroup = { title: string; rows: WhoRow[] }
+
+/** A new Thread's "who" (ADR 0114, decision 2): every account on, under
+ * its Harness's title, each where its Harness's first one stands; the one
+ * it starts on ticked. Unlike a move, an out account can be chosen: its
+ * first turn meets its limit's card. */
+export function startGroupsOf(
+  moves: Pick<Moves, "same" | "others">,
+  titleOf: (harness: string) => string,
+  roles: Pick<AccountList, "default" | "fallback"> | undefined,
+  limits: readonly Limits[],
+  warn: number
+): WhoGroup[] {
+  const who = whoOf(
+    { ...moves, confirm: false, title: "" },
+    roles,
+    limits,
+    warn
+  )
+  const rows = who ? [...who.same, ...who.others] : []
+  const groups = new Map<string, WhoRow[]>()
+  for (const row of rows) {
+    const harness = row.move.harness.harness
+    groups.set(harness, [
+      ...(groups.get(harness) ?? []),
+      { ...row, idle: row.move.on },
+    ])
+  }
+  return [...groups].map(([harness, rows]) => ({
+    title: titleOf(harness),
+    rows,
+  }))
+}
