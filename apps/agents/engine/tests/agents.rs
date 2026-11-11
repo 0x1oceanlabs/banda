@@ -11449,3 +11449,183 @@ async fn a_thread_whose_sub_agent_asks_after_its_turn_stays_until_it_is_answered
     assert!(asked(&moved).is_none(), "answered where it was asked");
     assert_eq!(moved.subagents, view.subagents);
 }
+
+/// Carries `thread` from `from` to `to` as a window does (ADR 0116,
+/// decision 4): packed there, read in pieces, each kept here. It answers
+/// what `pack_thread` did.
+async fn carry(from: &World, to: &World, thread: &Value) -> Value {
+    let person = from.person();
+    let packed = from
+        .call(person, "agents.pack_thread", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    let mut at = 0;
+    loop {
+        let ask = json!({ "move": packed["move"], "at": at });
+        let piece = from.call(person, "agents.packed", ask).await.unwrap();
+        let data = piece["data"].as_str().unwrap();
+        let take = json!({ "move": packed["move"], "at": at, "data": data });
+        to.call(person, "agents.take_piece", take).await.unwrap();
+        at += BASE64.decode(data).unwrap().len();
+        if piece["more"] == json!(false) {
+            break;
+        }
+    }
+    assert_eq!(json!(at), packed["size"], "every byte was carried");
+    packed
+}
+
+#[tokio::test]
+async fn a_window_carries_a_thread_to_another_project_whole_and_its_session_goes_on_there() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, home_folder) = work.beside("Home").await;
+    let work_folder = work.folder().await;
+    let person = work.person();
+    let shot = work
+        .attach(person, "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    let sent = work.send_images("what is this", &[&shot]).await;
+    let thread = sent["thread"].clone();
+    work.ended(&sent).await;
+    let (_, (session, _)) = ask_session(&work, Some(&thread)).await;
+    let listed = work.listed(&thread).await;
+    let before = work.thread(&thread).await;
+
+    let packed = carry(&work, &home, &thread).await;
+    // Packed and carried, it is still where it was, and not yet there.
+    assert!(work.lists(&thread).await && !home.lists(&thread).await);
+    let unpack = json!({ "move": packed["move"], "sha256": packed["sha256"] });
+    let came = home
+        .call(person, "agents.unpack_thread", unpack)
+        .await
+        .unwrap();
+    assert_eq!(came["thread"], thread);
+    let leave = json!({ "move": packed["move"], "project": home.project });
+    work.call(person, "agents.leave_thread", leave)
+        .await
+        .unwrap();
+
+    // It left, and is there whole, and says it came.
+    assert!(!work.lists(&thread).await);
+    let left = work.facts("thread.left").await;
+    assert_eq!(
+        left.iter().map(|e| &e.payload).collect::<Vec<_>>(),
+        [&json!({ "thread": thread, "to": home.project })]
+    );
+    let there = home.listed(&thread).await;
+    assert_eq!(there.thread, listed.thread, "the same Thread, at its place");
+    let view = home.thread(&thread).await;
+    assert_eq!(view.turns, before.turns);
+    assert_eq!(view.items[..before.items.len()], before.items[..]);
+    assert_eq!(
+        texts(&view)[before.items.len()..],
+        [format!(
+            "notice: Moved here from “Work”. Its Agent works in {} from now on; what it \
+             changed in {} stays there.",
+            home_folder.display(),
+            work_folder.display()
+        )]
+    );
+    let read = home
+        .call(person, "agents.image", json!({ "image": shot["id"] }))
+        .await
+        .unwrap();
+    assert_eq!(BASE64.decode(read["data"].as_str().unwrap()).unwrap(), PNG);
+    let (_, (again, _)) = ask_session(&home, Some(&thread)).await;
+    assert_eq!(again, session, "the same session");
+
+    // The move left its artefact in neither Project's data: only how the
+    // Thread came, there, until the day's sweep.
+    fn files(folder: &Path, within: bool, found: &mut Vec<String>) {
+        for entry in std::fs::read_dir(folder).into_iter().flatten().flatten() {
+            let (path, name) = (entry.path(), entry.file_name());
+            if path.is_symlink() {
+                continue;
+            }
+            if path.is_dir() {
+                files(&path, within || name == "moves", found);
+            } else if within {
+                found.push(name.to_string_lossy().into_owned());
+            }
+        }
+    }
+    let mut found = Vec::new();
+    files(root.path(), false, &mut found);
+    assert_eq!(found, ["came.json"]);
+}
+
+#[tokio::test]
+async fn a_thread_that_went_on_as_it_was_carried_stays_and_its_copy_is_given_back() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, _) = work.finish(None, "hello").await;
+
+    let packed = carry(&work, &home, &thread).await;
+    let unpack = json!({ "move": packed["move"], "sha256": packed["sha256"] });
+    home.call(person, "agents.unpack_thread", unpack)
+        .await
+        .unwrap();
+    // It went on where it was before it left.
+    work.finish(Some(&thread), "one more").await;
+    let leave = json!({ "move": packed["move"], "project": home.project });
+    let refused = work
+        .call(person, "agents.leave_thread", leave)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(work.lists(&thread).await && home.lists(&thread).await);
+
+    let back = json!({ "move": packed["move"] });
+    home.call(person, "agents.give_back", back.clone())
+        .await
+        .unwrap();
+    assert!(work.lists(&thread).await && !home.lists(&thread).await);
+    // Given back again, there is nothing to do.
+    home.call(person, "agents.give_back", back).await.unwrap();
+}
+
+#[tokio::test]
+async fn only_a_person_carries_a_thread_and_only_whole_and_in_order() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, view) = work.finish(None, "hello").await;
+
+    let agent = agent_of(&view);
+    let refused = work
+        .call(agent, "agents.pack_thread", json!({ "thread": thread }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+
+    let packed = carry(&work, &home, &thread).await;
+    // A piece that is not the next one is refused; one kept already is not.
+    let skips = json!({ "move": packed["move"], "at": 1u64 << 40, "data": "aGk=" });
+    let refused = home
+        .call(person, "agents.take_piece", skips)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    let again = json!({ "move": packed["move"], "at": 0, "data": "" });
+    home.call(person, "agents.take_piece", again).await.unwrap();
+    // Another hash is not the Thread that was packed.
+    let other = json!({ "move": packed["move"], "sha256": "00" });
+    let refused = home
+        .call(person, "agents.unpack_thread", other)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(!home.lists(&thread).await);
+    // No move is no path.
+    let nowhere = json!({ "move": "../x", "at": 0 });
+    let refused = work
+        .call(person, "agents.packed", nowhere)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid, "{refused:?}");
+}

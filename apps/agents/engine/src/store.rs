@@ -14,8 +14,8 @@ use crate::rules::Lanes;
 use crate::search;
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
-use serde::Serialize;
 use serde::de::DeserializeOwned;
+use serde::{Deserialize, Serialize};
 use std::collections::{HashMap, HashSet};
 use std::path::Path;
 
@@ -2363,7 +2363,113 @@ struct TableRows {
     rows: Vec<Vec<rusqlite::types::Value>>,
 }
 
+/// A Thread's rows as another machine's engine reads them (ADR 0116,
+/// decision 4): each table by its name, its columns, and each value by
+/// its kind, a blob in base64.
+#[derive(Serialize, Deserialize)]
+struct CarriedTable {
+    table: String,
+    columns: Vec<String>,
+    rows: Vec<Vec<CarriedValue>>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum CarriedValue {
+    Null,
+    Integer(i64),
+    Real(f64),
+    Text(String),
+    Blob(String),
+}
+
+impl Serialize for ThreadRows {
+    fn serialize<S: serde::Serializer>(&self, to: S) -> Result<S::Ok, S::Error> {
+        use base64::Engine as _;
+        use rusqlite::types::Value;
+        let carried = |value: &Value| match value {
+            Value::Null => CarriedValue::Null,
+            Value::Integer(n) => CarriedValue::Integer(*n),
+            Value::Real(n) => CarriedValue::Real(*n),
+            Value::Text(text) => CarriedValue::Text(text.clone()),
+            Value::Blob(bytes) => {
+                CarriedValue::Blob(base64::engine::general_purpose::STANDARD.encode(bytes))
+            }
+        };
+        let tables: Vec<CarriedTable> = (self.0.iter())
+            .map(|table| CarriedTable {
+                table: table.table.to_owned(),
+                columns: table.columns.clone(),
+                rows: (table.rows.iter())
+                    .map(|row| row.iter().map(carried).collect())
+                    .collect(),
+            })
+            .collect();
+        tables.serialize(to)
+    }
+}
+
+impl<'de> Deserialize<'de> for ThreadRows {
+    /// Only the tables a Thread has here, in their order: rows of any
+    /// other shape are no Thread this engine keeps.
+    fn deserialize<D: serde::Deserializer<'de>>(from: D) -> Result<Self, D::Error> {
+        use base64::Engine as _;
+        use rusqlite::types::Value;
+        use serde::de::Error as _;
+        let carried = Vec::<CarriedTable>::deserialize(from)?;
+        if carried.len() != THREAD_TABLES.len() {
+            return Err(D::Error::custom("not a Thread's tables"));
+        }
+        let mut tables = Vec::with_capacity(carried.len());
+        for (carried, (table, _)) in carried.into_iter().zip(THREAD_TABLES) {
+            if carried.table != table {
+                return Err(D::Error::custom("not a Thread's tables"));
+            }
+            let width = carried.columns.len();
+            let mut rows = Vec::with_capacity(carried.rows.len());
+            for row in carried.rows {
+                if row.len() != width {
+                    return Err(D::Error::custom("a row of another width"));
+                }
+                let row = row.into_iter().map(|value| {
+                    Ok(match value {
+                        CarriedValue::Null => Value::Null,
+                        CarriedValue::Integer(n) => Value::Integer(n),
+                        CarriedValue::Real(n) => Value::Real(n),
+                        CarriedValue::Text(text) => Value::Text(text),
+                        CarriedValue::Blob(text) => Value::Blob(
+                            (base64::engine::general_purpose::STANDARD.decode(text))
+                                .map_err(D::Error::custom)?,
+                        ),
+                    })
+                });
+                rows.push(row.collect::<Result<Vec<_>, D::Error>>()?);
+            }
+            tables.push(TableRows {
+                table,
+                columns: carried.columns,
+                rows,
+            });
+        }
+        Ok(ThreadRows(tables))
+    }
+}
+
 impl ThreadRows {
+    /// The tables a Thread's rows are in here and each one's columns, in
+    /// their order: two engines that say the same keep a Thread the same
+    /// way, so one's rows go into the other's store (ADR 0116, decision
+    /// 3).
+    pub fn shape(sql: &Connection) -> Result<Vec<(String, Vec<String>)>, Error> {
+        let mut shape = Vec::with_capacity(THREAD_TABLES.len());
+        for (table, _) in THREAD_TABLES {
+            let statement = sql.prepare(&format!("SELECT * FROM {table} LIMIT 0"))?;
+            let columns = statement.column_names().map(str::to_owned).collect();
+            shape.push((table.to_owned(), columns));
+        }
+        Ok(shape)
+    }
+
     /// `thread`'s rows, or none for a Thread there is not.
     pub fn read(sql: &Connection, thread: ThreadId) -> Result<Option<ThreadRows>, Error> {
         let mut tables = Vec::with_capacity(THREAD_TABLES.len());
@@ -2516,7 +2622,7 @@ fn beneath(folder: &Path) -> [String; 2] {
 /// Project's store as the Thread moves there: with the item that carries
 /// it when that is one of the Thread's. A fork's items name their
 /// source's images, whose items stay the source's (ADR 0027).
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct ImageRow {
     pub image: Image,
     author: String,

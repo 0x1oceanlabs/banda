@@ -43,7 +43,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 
 Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field), `thread` (the Thread), `subagent` (the Sub-agent), `visual` (the Visual preview).
 
-Its methods, `banda call agents.<method>`: `threads`, `thread`, `subagent`, `defaults`, `accounts`, `changes`, `search`, `write`, `touching`, `doing`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `later`, `wake`, `see_woke`, `read`, `unread`, `archive`, `unarchive`, `delete`, `import_marks`, `rename`, `suggest_title`, `switch`, `go_on`, `move_thread`.
+Its methods, `banda call agents.<method>`: `threads`, `thread`, `subagent`, `defaults`, `accounts`, `changes`, `search`, `write`, `touching`, `doing`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `later`, `wake`, `see_woke`, `read`, `unread`, `archive`, `unarchive`, `delete`, `import_marks`, `rename`, `suggest_title`, `switch`, `go_on`, `move_thread`, `pack_thread`, `packed`, `take_piece`, `unpack_thread`, `leave_thread`, `give_back`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

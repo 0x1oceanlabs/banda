@@ -22,14 +22,19 @@ import type { Imported } from "./Imported";
 import type { Keep } from "./Keep";
 import type { Kept } from "./Kept";
 import type { LaterAsk } from "./LaterAsk";
+import type { Leave } from "./Leave";
 import type { MoveThread } from "./MoveThread";
 import type { Notify } from "./Notify";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
+import type { OneMove } from "./OneMove";
 import type { OneSubagent } from "./OneSubagent";
 import type { OneThread } from "./OneThread";
 import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
+import type { Packed } from "./Packed";
+import type { Piece } from "./Piece";
+import type { PieceAsk } from "./PieceAsk";
 import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
 import type { ReadAsk } from "./ReadAsk";
@@ -42,11 +47,14 @@ import type { ShowVisual } from "./ShowVisual";
 import type { Since } from "./Since";
 import type { SubagentView } from "./SubagentView";
 import type { Switch } from "./Switch";
+import type { TakePiece } from "./TakePiece";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
 import type { ThreadsDoing } from "./ThreadsDoing";
 import type { Touching } from "./Touching";
 import type { TurnChanges } from "./TurnChanges";
+import type { Unpack } from "./Unpack";
+import type { Unpacked } from "./Unpacked";
 import type { VisualPage } from "./VisualPage";
 import type { WakeAsk } from "./WakeAsk";
 import type { WriteAsk } from "./WriteAsk";
@@ -369,4 +377,45 @@ go_on: CommandMethod<GoOn, Sent | null>,
  * Project of No project. Only a Person moves a Thread (ADR 0098,
  * decision 14).
  */
-move_thread: CommandMethod<MoveThread, null>, };
+move_thread: CommandMethod<MoveThread, null>, 
+/**
+ * Packs a Thread at rest into one artefact in this Project's
+ * data, for a Project on another machine (ADR 0116): its rows
+ * and the files they name, as `move_thread` takes them. It
+ * answers the move, and its artefact's size and SHA-256. The
+ * Thread stays here until `leave_thread`. Only a Person packs.
+ */
+pack_thread: CommandMethod<OneThread, Packed>, 
+/**
+ * A piece of a packed move's artefact from byte `at`, 512 KiB at
+ * most, in base64, and whether more comes after it. Only a
+ * Person reads it.
+ */
+packed: CallMethod<PieceAsk, Piece>, 
+/**
+ * Keeps a piece of a move's artefact, carried from another
+ * machine, in this Project's data: the next one, or one kept
+ * already. Only a Person carries one.
+ */
+take_piece: CommandMethod<TakePiece, null>, 
+/**
+ * Unpacks a move's artefact, once every piece is here and its
+ * SHA-256 is the one it was packed with, into this Project: the
+ * Thread whole, with the line that says where it came from. An
+ * engine that keeps a Thread another way refuses, and so does a
+ * Project that has the Thread already and went on with it.
+ */
+unpack_thread: CommandMethod<Unpack, Unpacked>, 
+/**
+ * Takes a packed Thread out of this Project, for the `project`
+ * it was unpacked in, if it is still as it was packed and at
+ * rest; else it stays, and `give_back` there takes its copy out.
+ */
+leave_thread: CommandMethod<Leave, null>, 
+/**
+ * Takes the copy a move unpacked here back out, as the Thread
+ * stayed where it was: only while nothing went on with it here.
+ * Asked only once `leave_thread` refused: after a Thread left,
+ * its copy here is the Thread.
+ */
+give_back: CommandMethod<OneMove, null>, };
