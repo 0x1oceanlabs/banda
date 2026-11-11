@@ -1,7 +1,9 @@
 import { Fragment, useImperativeHandle, useRef, useState } from "react"
 import type { Choice, ToolKind } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
+import { Satellite } from "@banda/ui/components/satellite"
 import { FIELDS } from "@banda/ui/lib/keys"
+import { short } from "@banda/ui/lib/words"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -132,11 +134,13 @@ function FoldedLine({ folded }: { folded: Folded }) {
  * command it is about in mono, and its answers with their keys. Esc says
  * no and Enter gives the main answer from anywhere in the Pane, by way of
  * `keys`; 1–9 pick a choice from within the drawer. A form asks one field
- * at a time. It folds to one line and opens again.
+ * at a time. It folds to one line and opens again. A sub-agent's names who
+ * asks: "Reviewer asks · 2m" (ADR 0103, decision 28).
  */
 export function QuestionDrawer({
   item,
   about,
+  asker,
   name,
   answering,
   onAnswer,
@@ -145,6 +149,8 @@ export function QuestionDrawer({
   item: Asked
   /** The kind of tool call it asks about, if any. */
   about?: ToolKind
+  /** What names the sub-agent that asks; none for the Agent's own. */
+  asker?: string
   /** The Agent's Harness, as the words say who asks. */
   name: string
   answering: boolean
@@ -179,10 +185,19 @@ export function QuestionDrawer({
       onKeyDown={pick}
     >
       <div className="flex h-6 items-center gap-2">
-        <span className="flex shrink-0 items-center gap-1.5 text-xs text-attention">
-          <span aria-hidden className="size-1.5 rounded-full bg-attention" />
-          Needs you
-        </span>
+        {asker ? (
+          <span className="flex min-w-0 items-center gap-1.5 text-meta font-semibold text-attention">
+            <span aria-hidden className="flex shrink-0">
+              <Satellite state="asks" size={10} />
+            </span>
+            <span className="truncate">{`${asker} asks · ${short(item.at)}`}</span>
+          </span>
+        ) : (
+          <span className="flex shrink-0 items-center gap-1.5 text-xs text-attention">
+            <span aria-hidden className="size-1.5 rounded-full bg-attention" />
+            Needs you
+          </span>
+        )}
         {folded && <span className="min-w-0 truncate font-[550]">{words}</span>}
         <Button
           size="icon-xs"
@@ -198,9 +213,11 @@ export function QuestionDrawer({
       </div>
       {!folded && (
         <>
-          <p className="mt-0.5 text-[0.90625rem]/5 font-[550] wrap-break-word">
-            {words}
-          </p>
+          {!(asker && detail === words) && (
+            <p className="mt-0.5 text-[0.90625rem]/5 font-[550] wrap-break-word">
+              {words}
+            </p>
+          )}
           {detail && (
             <pre className="mt-2 max-h-32 overflow-auto rounded-control bg-raised px-3 py-2 font-mono text-code break-all whitespace-pre-wrap">
               {detail}

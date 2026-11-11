@@ -10,9 +10,11 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   agentAnswers,
+  desktopOf,
   FREE,
   firstThread,
   plateOf,
+  setInFront,
   startWindow,
   type Window,
 } from "./window"
@@ -124,6 +126,52 @@ test("sub-agents show as rows where they started, grouped, and settle into one l
   await expect(explore).toContainText("src/rows.ts reads them.")
   await expect(explore.getByRole("img", { name: "Done" })).toBeVisible()
   await expect(explore).toHaveAttribute("aria-expanded", "true")
+})
+
+test("a sub-agent's question docks, names who asks, and its answer reaches it; its row turns to a triangle and back", async () => {
+  window = await startWindow({ look: LOOK })
+  const { thread, composer } = await firstThread(window.page)
+  await composer.fill("sub-agents three asks")
+  await composer.press("Enter")
+  const question = thread.getByRole("group", { name: "pnpm vitest" })
+  // Who asks, in place of the dot and "Needs you", and what it would run,
+  // once, in mono.
+  const who = question.getByText(/^Reviewer asks · (now|\d+s)$/)
+  await expect(who).toBeVisible()
+  await expect(who.locator("..")).toHaveClass(/text-attention/)
+  await expect(question.getByText("Needs you")).toBeHidden()
+  await expect(question.locator("pre")).toHaveText("pnpm vitest")
+  await expect(question.locator("p")).toHaveCount(0)
+  // Its row, a triangle, says so too.
+  const reviewer = thread.getByRole("button", { name: "Reviewer" })
+  await expect(reviewer.getByRole("img", { name: "Asks" })).toBeVisible()
+  await shots(window, "asks")
+  // The answer goes to it: it runs on and the three end.
+  await question.getByRole("button", { name: /^Yes/ }).click()
+  await expect(question).toBeHidden()
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  const ran = thread.getByRole("button", { name: /^Ran 3 sub-agents/ })
+  await ran.click()
+  await expect(reviewer.getByRole("img", { name: "Asks" })).toBeHidden()
+  await expect(reviewer.getByRole("img", { name: "Done" })).toBeVisible()
+  await shots(window, "answered")
+})
+
+test("the notice of a sub-agent's question says who asks", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { composer } = await firstThread(page)
+  await composer.fill("sub-agents three asks")
+  // The window is behind as it comes: seen, it would be told in no notice.
+  await setInFront(page, false)
+  await composer.press("Enter")
+  await expect.poll(async () => (await desktopOf(app)).shown.length).toBe(1)
+  expect((await desktopOf(app)).shown[0]).toMatchObject({
+    title: "Reviewer asks · sub-agents three asks",
+    body: "pnpm vitest",
+    answer: "Answer",
+    lasts: true,
+  })
 })
 
 test("a row opens in place and nothing above it moves", async () => {

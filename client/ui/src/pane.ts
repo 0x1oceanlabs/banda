@@ -306,6 +306,9 @@ export type Listed = {
    * A toast or a system notification says it too.
    */
   calls?: string
+  /** What names the sub-agent whose Question calls, its first one's (ADR
+   * 0103, decision 33); none for the Agent's own. */
+  asker?: string
   /** What it was last asked to do; its first line shows when nothing calls. */
   said?: string
   /** Who does the work: a Harness's name. */
@@ -406,6 +409,8 @@ export type Call = {
   title: string
   /** What it said, in a line: what it asks, why it failed, its task. */
   detail?: string
+  /** What names the sub-agent that asks (`Listed.asker`). */
+  asker?: string
   /** What answering the call opens. */
   pane: PaneState
   /** The other machine it is on, by its key in `hosts.toml`, as the Window

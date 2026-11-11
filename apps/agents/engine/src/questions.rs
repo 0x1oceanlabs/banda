@@ -51,8 +51,9 @@ pub enum Asked {
 /// A Question the Harness asks in `turn`, offering every choice it has,
 /// its "always" ones too (ADR 0003, decision 9); `sub` is the sub-agent
 /// that asks, when it is not the Agent itself, whose Question is the
-/// Thread's all the same (ADR 0103, decision 8). For a Harness with no
-/// modes of its own, `by_mode` is the Thread's mode, and the engine
+/// Thread's all the same (ADR 0103, decision 8), and `asker` what names
+/// it, which its fact keeps for its notice (decision 33). For a Harness
+/// with no modes of its own, `by_mode` is the Thread's mode, and the engine
 /// answers where the mode allows the tool, as T3 Code does; never a form,
 /// which asks what only the Person knows.
 #[expect(
@@ -68,6 +69,7 @@ pub fn ask(
     form: Option<Vec<Field>>,
     plan: Option<String>,
     sub: Option<SubagentId>,
+    asker: Option<String>,
 ) -> Result<Asked, String> {
     if form.is_none()
         && by_mode.is_some_and(|mode| allowed(mode, tool))
@@ -88,6 +90,7 @@ pub fn ask(
         form: form.clone(),
         plan: plan.clone(),
         sub,
+        asker,
     };
     let body = Body::Question {
         title,
@@ -450,6 +453,7 @@ mod tests {
             None,
             None,
             None,
+            None,
         ) {
             Ok(Asked::Open(opened)) => opened.1,
             _ => unreachable!("a Person answers without a mode"),
@@ -495,6 +499,7 @@ mod tests {
             form,
             None,
             None,
+            None,
         ) {
             Ok(Asked::ByMode(id)) => Some(id),
             _ => None,
@@ -521,6 +526,7 @@ mod tests {
                 ToolKind::Read,
                 None,
                 Vec::new(),
+                None,
                 None,
                 None,
                 None

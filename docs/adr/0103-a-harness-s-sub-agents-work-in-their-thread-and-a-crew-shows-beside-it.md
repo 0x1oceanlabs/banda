@@ -813,6 +813,11 @@ sub-agents and the Crew `audit-routes`:
       line 2 "Asks · Reviewer: allow pnpm vitest sidebar?".
     - An answer that holds for the session says so under the answers:
       "Allow for this Thread" covers Claude and all its sub-agents.
+    - _Amended 2026-11-11, during step 1:_ the note under the answers is
+      left out. A child's always answer (`claude-lanes.jsonl:174-175`) held
+      neither for the next sub-agent (201-202) nor for Claude (211);
+      whether it holds for that same sub-agent's next command is
+      unrecorded, so nothing sure can be said under the answers.
     - _Amended 2026-11-10, before step 1:_
       - **A message says no only to the Agent's own Question.** The dock
         shows the Agent's own open Question before a sub-agent's. With

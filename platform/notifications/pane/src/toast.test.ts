@@ -26,6 +26,16 @@ test("a thing's new call replaces its toast, which lasts as long as the call is 
   })
 })
 
+test("the toast says who asks", () => {
+  expect(
+    toldOfCall({ ...call("asking", "May I?"), asker: "Reviewer" }, true)
+  ).toMatchObject({ title: "Reviewer asks · slow hello", body: "May I?" })
+  expect(toldOfCall(call("asking", "May I?"), true)).toMatchObject({
+    title: "slow hello",
+    body: "Asks you · May I?",
+  })
+})
+
 test("a call's toast says what calls, unless detail is off, and goes there", () => {
   expect(toldOfCall(call("asking", "May I?"), true)).toEqual({
     key: "s:t1",

@@ -170,13 +170,17 @@ function applied(state: ThreadList, event: Event): ThreadList {
       return change(state, event, (thread) => ({ ...thread, title, was }))
     }
     case "question.asked": {
-      const { item, title, choices, form, plan } = fact.payload
+      const { item, title, choices, form, plan, asker } = fact.payload
       // A click answers one with no form and no plan, as the engine lists
-      // it (ADR 0056, decision 3).
-      const asking =
-        form === undefined && plan === undefined && choices.length > 0
-          ? { item, title, choices }
-          : { item, title }
+      // it (ADR 0056, decision 3); a sub-agent's says who asks.
+      const asking = {
+        item,
+        title,
+        ...(form === undefined && plan === undefined && choices.length > 0
+          ? { choices }
+          : {}),
+        ...(asker ? { asker } : {}),
+      }
       return change(state, event, (thread) =>
         thread.asking.some((asking) => asking.item === item)
           ? thread

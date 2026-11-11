@@ -38,6 +38,7 @@ import { type MenuAt, menuAt, ThreadMenu } from "./ThreadMenu"
 import { useThreadFiles } from "./ThreadFiles"
 import { type AnswerKeys, pressOf, QuestionDrawer } from "../asking/Questions"
 import { aboutOf, keyAnswer } from "../asking/asking"
+import { askerOf } from "./subagents"
 import { drafted } from "../composer/drafts"
 import { ThreadDetails, useWide } from "./Details"
 import { PlanReady } from "../entries/parts/ProposedPlan"
@@ -569,6 +570,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             key={asking.id}
             item={asking}
             about={state && aboutOf(state.items, asking)}
+            asker={state && askerOf(asking.body.sub, state.subagents)}
             name={name}
             answering={acting}
             onAnswer={(choice, values) => answer(asking.id, choice, values)}

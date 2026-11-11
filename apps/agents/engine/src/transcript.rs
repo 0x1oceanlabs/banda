@@ -474,7 +474,17 @@ impl Transcript {
                 self.close().await?;
                 let known = self.tools.get(&call);
                 let tool = tool.or(known.map(|shown| shown.kind));
-                let title = title.or_else(|| known.map(|shown| shown.title.clone()));
+                let shown = known.map(|shown| shown.title.clone());
+                // A sub-agent's permission says what its call says, as its
+                // row does: Codex titles every one "Run command" (ADR 0103,
+                // decision 28). The Agent's own keep the Harness's words.
+                let called = shown.clone().filter(|said| {
+                    self.sub.is_some()
+                        && form.is_none()
+                        && plan.is_none()
+                        && !said.trim().is_empty()
+                });
+                let title = called.or(title).or(shown);
                 let by_mode = match self.sub {
                     // The Agent's own keep their turn's mode.
                     None => (!self.running.native).then_some(self.settings.mode),
@@ -484,8 +494,16 @@ impl Transcript {
                     Some(_) => Some(self.mode_now().await?),
                 };
                 let tool = tool.unwrap_or(ToolKind::Other);
+                let asker = match self.sub {
+                    Some(sub) => self
+                        .project
+                        .read(move |sql| store::lane_label(sql, sub))
+                        .await
+                        .map_err(plain)?,
+                    None => None,
+                };
                 let asked = questions::ask(
-                    self.turn, by_mode, tool, title, offered, form, plan, self.sub,
+                    self.turn, by_mode, tool, title, offered, form, plan, self.sub, asker,
                 );
                 let (id, body, asked) = match asked {
                     Ok(questions::Asked::Open(opened)) => *opened,

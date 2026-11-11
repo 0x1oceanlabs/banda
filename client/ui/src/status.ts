@@ -174,6 +174,7 @@ export function callsOf(lists: Lists, now = Date.now()): Call[] {
           chime,
           title: thing.title,
           ...(detail ? { detail } : {}),
+          ...(thing.asker ? { asker: thing.asker } : {}),
           pane: thing.pane,
           ...(thing.host !== undefined && { host: thing.host }),
           since: thing.changed,

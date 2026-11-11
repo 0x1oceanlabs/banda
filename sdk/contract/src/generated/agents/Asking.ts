@@ -10,4 +10,9 @@ export type Asking = { item: ItemId, title: string,
  * Its choices, when a click on one answers it: no form to fill in
  * and no plan to read (ADR 0056, decision 3).
  */
-choices?: Array<Choice>, };
+choices?: Array<Choice>, 
+/**
+ * What names the sub-agent that asks (ADR 0103, decision 28); none
+ * for the Agent's own.
+ */
+asker?: string, };

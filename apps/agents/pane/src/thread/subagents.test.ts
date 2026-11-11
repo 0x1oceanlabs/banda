@@ -1,4 +1,6 @@
 import type { Item, Subagent, ToolKind } from "@banda/contract/agents"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { expect, test } from "vitest"
 import { agent, subagent } from "../testing"
 import {
@@ -64,6 +66,33 @@ test("a sub-agent's label is its role unless it is general-purpose; then, and fo
     "Read a.txt",
     "Read a",
   ])
+})
+
+/** `apps/agents/subagent-labels.json`: what names a sub-agent, which the
+ * engine's label gives too. */
+const LABELS: {
+  cases: {
+    case: string
+    role: string | null
+    title: string
+    id: string
+    siblings: string[]
+    label: string
+  }[]
+} = JSON.parse(
+  readFileSync(
+    join(import.meta.dirname, "../../../subagent-labels.json"),
+    "utf8"
+  )
+)
+
+test("a sub-agent is named as the shared cases say", () => {
+  expect(LABELS.cases.length).toBeGreaterThanOrEqual(8)
+  for (const { case: said, role, title, id, siblings, label } of LABELS.cases) {
+    const named = (id: string) =>
+      lane(id, { title, ...(role === null ? {} : { role }) })
+    expect(labelOf(named(id), siblings.map(named)), said).toBe(label)
+  }
 })
 
 test("a Codex fallback title is Agent N, by its number among its siblings in the order they started", () => {

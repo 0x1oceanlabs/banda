@@ -37,6 +37,28 @@ test("a notice names the Thread and says what it said; one that waits stays", ()
   expect(done).toMatchObject({ body: "Done", answer: "Open", lasts: false })
 })
 
+test("a sub-agent's question is titled Reviewer asks · ‹Thread›, and says what it asks alone", () => {
+  const asks = {
+    ...heard("Tests", "asking", "pnpm vitest"),
+    asker: "Reviewer",
+  }
+  expect(noticeOf(asks, true)).toMatchObject({
+    title: "Reviewer asks · Tests",
+    body: "pnpm vitest",
+    answer: "Answer",
+    lasts: true,
+  })
+  expect(noticeOf(asks, true, "banda").title).toBe(
+    "Reviewer asks · Tests · banda"
+  )
+  // Detail off says no more than today's word; without an asker, the
+  // words are today's.
+  expect(noticeOf(asks, false).body).toBe("Asks you")
+  expect(noticeOf(heard("Tests", "asking", "pnpm vitest"), true)).toMatchObject(
+    { title: "Tests", body: "Asks you · pnpm vitest" }
+  )
+})
+
 test("many calls at once make one notice that names them all", () => {
   const calls = [heard("A", "done"), heard("B", "failed"), heard("C", "done")]
   expect(summaryOf(calls)).toEqual({

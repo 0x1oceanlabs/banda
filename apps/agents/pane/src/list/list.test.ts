@@ -236,6 +236,22 @@ test("a Thread's Questions ask until they are answered or closed", () => {
   expect(settled.threads[0].asking).toEqual([])
   expect(applyThreads(settled, closed)).toBe(settled)
 
+  // A sub-agent's keeps who asks; the Agent's own says no one.
+  const reviewer = event(
+    "question.asked",
+    {
+      item: "q3",
+      turn: "u1",
+      title: "pnpm vitest",
+      choices: [],
+      asker: "Reviewer",
+    },
+    { subject: "t1" }
+  )
+  expect(applyThreads(settled, reviewer).threads[0].asking).toEqual([
+    { item: "q3", title: "pnpm vitest", asker: "Reviewer" },
+  ])
+
   // A click answers one with choices and no form: the list keeps them.
   const allow = { id: "allow", name: "Allow", allows: true, always: false }
   const choosing = event(

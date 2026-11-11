@@ -1183,6 +1183,11 @@ pub struct Asking {
     /// and no plan to read (ADR 0056, decision 3).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub choices: Vec<Choice>,
+    /// What names the sub-agent that asks (ADR 0103, decision 28); none
+    /// for the Agent's own.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub asker: Option<String>,
 }
 
 /// A Thread's latest turn that began, and where it stands: it runs, or how
@@ -1489,9 +1494,9 @@ pub enum Fact {
     /// How full the Agent's context in the Thread is now.
     #[serde(rename = "thread.used")]
     ThreadUsed { thread: ThreadId, usage: Usage },
-    /// A Question, the Agent's own or a sub-agent's, `sub`. A
-    /// sub-agent's is the Thread's entry all the same, in its launch turn
-    /// (ADR 0103, decision 8).
+    /// A Question, the Agent's own or a sub-agent's, `sub`, which `asker`
+    /// names as it asks. A sub-agent's is the Thread's entry all the same,
+    /// in its launch turn (ADR 0103, decisions 8 and 28).
     #[serde(rename = "question.asked")]
     QuestionAsked {
         item: ItemId,
@@ -1507,6 +1512,9 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sub: Option<SubagentId>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        asker: Option<String>,
     },
     #[serde(rename = "question.answered")]
     QuestionAnswered {
