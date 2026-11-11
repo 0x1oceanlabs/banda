@@ -1,6 +1,6 @@
 import { fileURLToPath } from "node:url"
 import { expect, test } from "vitest"
-import { type Kind, look, makesNames, refusal } from "./look"
+import { type Kind, kitSheets, look, makesNames, refusal } from "./look"
 
 /** What `look` finds of `kind` in `source`. */
 const of = (kind: Kind, source: string, names = false) =>
@@ -15,12 +15,12 @@ test("each case comes with its kind, its rule and what to write instead", () => 
       rule: "design.10",
       what: "text-[11px]",
       instead:
-        "is off the scale: write `text-meta`, or add a level to the theme",
+        "is off the scale: write `text-small` inside a key, a tag, a count on an icon or a menu's label, else `text-meta`, or add a level to the theme",
     },
     expect.objectContaining({ kind: "length", rule: "design.13" }),
   ])
   expect(refusal(look(`<a className="text-[11px]" />`)[0])).toBe(
-    "design.10: text-[11px] is off the scale: write `text-meta`, or add a level to the theme"
+    "design.10: text-[11px] is off the scale: write `text-small` inside a key, a tag, a count on an icon or a menu's label, else `text-meta`, or add a level to the theme"
   )
   expect(
     look(`<a className="z-50 shadow-md bg-white rounded-md" />`).map(
@@ -67,6 +67,7 @@ test("the check sees a colour literal, and not a token, tokens mixed or a colour
         `.e { mask: linear-gradient(#000 0 0); fill: color(srgb 1 1 1) }\n` +
         `const f = rgb(token(name)), g = \`rgb(\${r}, \${g}, \${b})\`, h = "oklch(from var(--primary) 0.93 c h)"\n` +
         `const i = color("--foreground"), j = theme.red, k = "&#123;", l = { color: currentColor }\n` +
+        `.m[data-color="violet"], .n[data-tone='red'] { color: var(--x) }\n` +
         `// #fff in a comment, and bg-white too`
     )
   ).toEqual([
@@ -130,7 +131,10 @@ test("the check sees a size as a number, and not a level, a colour or a size wor
   ])
   const instead = (source: string) => look(source)[0].instead
   expect(instead(`"text-[13px]"`)).toContain("`text-ui`")
-  expect(instead(`"text-[40px]"`)).toContain("`text-heading`")
+  expect(instead(`"text-[11.5px]"`)).toContain("`text-meta`")
+  expect(instead(`"text-[10.5px]"`)).toContain("`text-small`")
+  expect(instead(`"text-[20px]"`)).toContain("`text-heading`")
+  expect(instead(`"text-[40px]"`)).toContain("`text-figure`")
   expect(instead(`"text-[12.5px]"`)).not.toContain("`text-code`")
   expect(instead(`"text-(length:--prose-size)"`)).toContain("`text-prose`")
 })
@@ -145,6 +149,7 @@ test("Tailwind's size names are refused but text-xs and text-sm, until step 1b",
   expect(look(`"text-base"`)[0].instead).toBe(
     "is Tailwind's size name: write `text-title`, or add a level to the theme"
   )
+  expect(look(`"text-4xl"`)[0].instead).toContain("`text-heading`")
 })
 
 test("Banda UI's names are read where they are made, and the refusals name them", () => {
@@ -155,10 +160,13 @@ test("Banda UI's names are read where they are made, and the refusals name them"
   expect(look(`"text-[length:var(--x)]"`)[0].instead).toContain("`text-meta`")
 })
 
-test("only @banda/ui's stylesheets make names", () => {
+test("only @banda/ui's stylesheets and the kit's make names", () => {
   const styles = fileURLToPath(new URL("../styles/", import.meta.url))
   expect(makesNames(`${styles}globals.css`)).toBe(true)
   expect(makesNames(`${styles}tokens.test.ts`)).toBe(false)
+  const kit = kitSheets()
+  expect(kit.map((file) => file.split("/").pop())).toContain("kit.css")
+  expect(kit.every(makesNames)).toBe(true)
   expect(makesNames(fileURLToPath(new URL("./look.ts", import.meta.url)))).toBe(
     false
   )

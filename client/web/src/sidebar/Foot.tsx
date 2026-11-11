@@ -65,7 +65,7 @@ const FADES = "transition-opacity duration-(--dur-fast) ease-(--ease)"
 
 /** The popover's rows, as the prototype draws them. */
 const ROW =
-  "flex h-8 items-center rounded-control px-1 text-left text-[13px] hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
+  "flex h-8 items-center rounded-control px-1 text-left text-ui hover:bg-accent focus-visible:bg-accent focus-visible:outline-none"
 
 /**
  * Quiet's bell (ADR 0098, decision 21): crossed while it is on, the one
@@ -107,7 +107,7 @@ function QuietBell() {
       </PopoverTrigger>
       <PopoverContent side="top" align="start" className="w-64 gap-0.5 p-2">
         <div className="px-1 pb-1">
-          <PopoverTitle className="text-[13px]">{words}</PopoverTitle>
+          <PopoverTitle className="text-ui">{words}</PopoverTitle>
           <PopoverDescription>
             No sounds, no notifications, marks do not call. The inbox still
             fills.

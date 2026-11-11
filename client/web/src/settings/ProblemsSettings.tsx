@@ -163,7 +163,7 @@ function ProblemRow({
       {open && (
         <div className="flex flex-col gap-2 pr-3 pb-3 pl-7">
           {problem.frames.length > 0 && (
-            <ol className="rounded-control bg-muted px-2.5 py-2 font-mono text-[11.5px] leading-relaxed text-muted-foreground">
+            <ol className="rounded-control bg-muted px-2.5 py-2 font-mono text-meta leading-relaxed text-muted-foreground">
               {problem.frames.map((frame, n) => (
                 <li key={n} className={cn(n === 0 && "text-foreground")}>
                   {frame.file}

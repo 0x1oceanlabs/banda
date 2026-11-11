@@ -233,7 +233,7 @@ export function SignField({
                 on={isPicked("emoji", emoji)}
                 onClick={() => onPick({ emoji })}
               >
-                <span className="text-base">{emoji}</span>
+                <span className="text-title">{emoji}</span>
               </Cell>
             ))}
           </Grid>

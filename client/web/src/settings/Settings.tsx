@@ -155,7 +155,7 @@ export function Settings({
               aria-label="Search settings"
             />
             <InputGroupAddon align="inline-end">
-              <kbd className="text-[10px]">/</kbd>
+              <kbd className="text-small">/</kbd>
             </InputGroupAddon>
           </InputGroup>
           <div className="flex gap-0.5 overflow-x-auto @3xl:flex-col">
@@ -175,7 +175,7 @@ export function Settings({
                 <span className="sr-only flex-1 @3xl:not-sr-only">
                   {s.title}
                 </span>
-                <span className="hidden font-mono text-[10px] opacity-70 @3xl:inline">
+                <span className="hidden font-mono text-meta opacity-70 @3xl:inline">
                   {ownFile(s)}
                 </span>
               </button>
@@ -237,7 +237,7 @@ export function Settings({
                 <>
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h1 className="text-xl font-semibold">{section.title}</h1>
+                      <h1 className="text-heading font-semibold">{section.title}</h1>
                       <p className="text-sm text-muted-foreground">
                         {section.about}
                       </p>

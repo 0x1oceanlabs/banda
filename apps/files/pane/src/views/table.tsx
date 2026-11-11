@@ -326,7 +326,7 @@ export function Table({
         <div
           role="rowheader"
           style={{ width: numbers }}
-          className="sticky left-0 shrink-0 self-stretch bg-background pr-2 text-right leading-[26px] text-muted-foreground tabular-nums"
+          className="sticky left-0 flex shrink-0 items-center justify-end self-stretch bg-background pr-2 text-muted-foreground tabular-nums"
         >
           {index + 1}
         </div>

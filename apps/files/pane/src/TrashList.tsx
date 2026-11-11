@@ -275,7 +275,7 @@ export function TrashList({
                 <span className="min-w-0 flex-1 truncate text-muted-foreground">
                   {tilded(item.from, home)}
                 </span>
-                <span className="shrink-0 text-[10.5px] text-muted-foreground tabular-nums">
+                <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
                   {clock(item.when)}
                 </span>
               </button>

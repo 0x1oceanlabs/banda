@@ -181,7 +181,7 @@ function ActionIcon({ action, tab }: { action: Action; tab: number | null }) {
       {text && (
         <span
           style={{ background: color }}
-          className="absolute -right-1.5 -bottom-1 rounded-small bg-primary px-0.5 text-[9px] leading-3 font-medium text-white"
+          className="absolute -right-1.5 -bottom-1 rounded-small bg-primary px-0.5 text-small leading-3 font-medium text-white"
         >
           {text}
         </span>

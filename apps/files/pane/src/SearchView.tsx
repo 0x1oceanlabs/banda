@@ -176,7 +176,7 @@ export function SearchView({
       {query && (
         <div
           role="status"
-          className="flex h-6 shrink-0 items-center px-2.5 text-[10.5px] text-muted-foreground"
+          className="flex h-6 shrink-0 items-center px-2.5 text-meta text-muted-foreground"
         >
           {refused ??
             (shown.done
@@ -239,12 +239,12 @@ export function SearchView({
                 <span className="min-w-0 truncate">
                   {row.path.split("/").at(-1)}
                 </span>
-                <span className="min-w-0 truncate text-[10.5px] text-muted-foreground">
+                <span className="min-w-0 truncate text-meta text-muted-foreground">
                   {row.path.includes("/")
                     ? row.path.slice(0, row.path.lastIndexOf("/"))
                     : ""}
                 </span>
-                <span className="ml-auto shrink-0 rounded-full bg-foreground/8 px-1.5 text-[10px] text-muted-foreground tabular-nums">
+                <span className="ml-auto shrink-0 rounded-full bg-foreground/8 px-1.5 text-small text-muted-foreground tabular-nums">
                   {row.count}
                   {row.more && "+"}
                 </span>
@@ -255,7 +255,7 @@ export function SearchView({
               {...common}
               key={`l:${row.path}:${row.matched.line}`}
               aria-label={`${row.path}:${row.matched.line}`}
-              className={cn(common.className, "pl-7 font-mono text-[11px]")}
+              className={cn(common.className, "pl-7 font-mono text-meta")}
             >
               <span className="w-8 shrink-0 text-right text-muted-foreground tabular-nums">
                 {row.matched.line}

@@ -52,8 +52,8 @@ export const Heading = Node.create({
 })
 
 const HEADING = [
-  "text-xl font-semibold",
-  "text-lg font-semibold",
+  "text-heading font-semibold",
+  "text-title font-semibold",
   "font-semibold",
 ]
 

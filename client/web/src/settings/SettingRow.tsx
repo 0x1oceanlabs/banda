@@ -188,7 +188,7 @@ function Origin({ from, file }: { from?: From; file: string }) {
         ? "from Hyprland"
         : `from the ${from.layer}`
   return (
-    <span className="font-mono text-[11px] font-normal text-muted-foreground">
+    <span className="font-mono text-meta font-normal text-muted-foreground">
       {words}
     </span>
   )

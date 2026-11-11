@@ -396,7 +396,7 @@ function Picking({
           </Suggestion>
         ))}
       </SuggestionList>
-      <div className="flex gap-2 px-1.5 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">
+      <div className="flex gap-2 px-1.5 pt-1.5 pb-0.5 text-small text-muted-foreground">
         <span>↑↓ Enter</span>
         <span>Esc</span>
       </div>

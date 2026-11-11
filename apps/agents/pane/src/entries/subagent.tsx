@@ -91,13 +91,13 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
             </span>
           )}
           {said.failed && (
-            <span className="shrink-0 rounded-control bg-destructive/12 px-1.5 text-[11px] leading-[18px] font-medium text-destructive">
+            <span className="shrink-0 rounded-control bg-destructive/12 px-1.5 py-0.5 text-small font-medium text-destructive">
               Failed
             </span>
           )}
           <span
             className={cn(
-              "min-w-0 flex-1 basis-0 text-[13px]",
+              "min-w-0 flex-1 basis-0 text-ui",
               FADES,
               !said.failed && "ml-1.5",
               tone.now
@@ -217,7 +217,7 @@ function Brief({ asker, text }: { asker: string; text: string }) {
   return (
     <div
       data-clamp-scope
-      className="flex min-w-0 items-end gap-2 text-[13px] leading-5"
+      className="flex min-w-0 items-end gap-2 text-ui"
     >
       <p
         data-clamped={all ? undefined : "brief"}

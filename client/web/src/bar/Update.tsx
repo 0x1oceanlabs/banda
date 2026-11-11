@@ -137,7 +137,7 @@ export function UpdateWidget({
         >
           <UpdateIcon update={drawn} />
           {pill && (
-            <span className="font-mono text-[11.5px] tracking-tight">
+            <span className="font-mono text-small tracking-tight">
               {pill}
             </span>
           )}
@@ -337,7 +337,7 @@ function About({
       return (
         <>
           <div className="px-3.5 pt-3 pb-2.5">
-            <p className="text-[11px] text-muted-foreground">{update.name}</p>
+            <p className="text-meta text-muted-foreground">{update.name}</p>
             <p className="mt-0.5 text-sm font-medium">Cannot update itself</p>
           </div>
           <p className="mx-3.5 rounded-control bg-destructive/10 px-2.5 py-2 font-mono text-xs break-words text-destructive">
@@ -357,7 +357,7 @@ function About({
       return (
         <>
           <div className="px-3.5 pt-3 pb-1">
-            <p className="text-[11px] text-muted-foreground">{update.name}</p>
+            <p className="text-meta text-muted-foreground">{update.name}</p>
             <p className="mt-0.5 font-mono text-sm font-medium">
               {shortOf(update.have)}
             </p>
@@ -394,12 +394,12 @@ function Head({
 }) {
   return (
     <div className="px-3.5 pt-3 pb-2.5">
-      <p className="flex justify-between text-[11px] text-muted-foreground tabular-nums">
+      <p className="flex justify-between text-meta text-muted-foreground tabular-nums">
         <span>{update.name}</span>
         {corner}
       </p>
       <p className="mt-0.5 flex items-baseline gap-1.5 font-mono">
-        <span className="text-[13px] text-muted-foreground">
+        <span className="text-ui text-muted-foreground">
           {shortOf(from)}
         </span>
         <span aria-hidden className="text-muted-foreground">
@@ -514,7 +514,7 @@ function Notes({ notes }: { notes: readonly Note[] }) {
     <div className="mt-2.5 max-h-48 overflow-y-auto border-t pt-2">
       {listed.map((group) => (
         <section key={group.title} className="mt-1 first:mt-0">
-          <h4 className="mb-1 text-[10.5px] font-medium tracking-wider text-muted-foreground uppercase">
+          <h4 className="mb-1 text-small font-medium tracking-wider text-muted-foreground uppercase">
             {group.title}
           </h4>
           <ul className="flex flex-col gap-1">
@@ -524,7 +524,7 @@ function Notes({ notes }: { notes: readonly Note[] }) {
                 className="flex gap-2 text-xs leading-snug"
                 title={line.version}
               >
-                <span className="w-16 shrink-0 truncate pt-px font-mono text-[11px] text-muted-foreground">
+                <span className="w-16 shrink-0 truncate pt-px font-mono text-meta text-muted-foreground">
                   {line.scope ?? shortOf(line.version)}
                 </span>
                 <span className="min-w-0">{line.text}</span>

@@ -385,7 +385,7 @@ const CSS = `${BASE_CSS}
   border-bottom-color: transparent !important;
   align-items: center !important;
   font-family: var(--font-sans) !important;
-  font-size: 12px !important;
+  font-size: var(--meta-size) !important;
   line-height: 1 !important;
   height: 32px !important;
   min-height: 32px !important;
@@ -405,7 +405,7 @@ const CSS = `${BASE_CSS}
 [data-diffs-header] [data-additions-count],
 [data-diffs-header] [data-deletions-count] {
   font-family: var(--font-mono) !important;
-  font-size: 11px !important;
+  font-size: var(--meta-size) !important;
   font-variant-numeric: tabular-nums;
   line-height: 1 !important;
 }
@@ -423,7 +423,7 @@ const CSS = `${BASE_CSS}
 :is([data-separator="line-info"], [data-separator="line-info-basic"]) [data-expand-button] {
   color: color-mix(in srgb, var(--ink) 50%, var(--code)) !important;
   font-family: var(--font-sans) !important;
-  font-size: 11px !important;
+  font-size: var(--meta-size) !important;
   text-decoration: none !important;
 }
 :is([data-separator="line-info"], [data-separator="line-info-basic"])[data-expand-index]

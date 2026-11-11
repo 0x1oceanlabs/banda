@@ -169,7 +169,7 @@ export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
       <Separator className="my-1" />
       <button
         type="button"
-        className="flex h-8 items-center gap-2 rounded-control px-1 text-left text-[13px] text-foreground/85 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
+        className="flex h-8 items-center gap-2 rounded-control px-1 text-left text-ui text-foreground/85 outline-none hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring/50"
         onClick={() => device.sidebar.edit()}
       >
         <FileCogIcon className="size-4 text-muted-foreground" />
@@ -184,7 +184,7 @@ export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
 function Line({ label, children }: { label: string; children: ReactNode }) {
   return (
     <div className="flex min-h-8 items-center justify-between gap-3 px-1">
-      <span className="text-[13px] text-foreground/85">{label}</span>
+      <span className="text-ui text-foreground/85">{label}</span>
       {children}
     </div>
   )

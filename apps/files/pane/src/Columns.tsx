@@ -176,7 +176,7 @@ function Column({
         <Spinner className="m-2 size-3.5 text-muted-foreground" />
       ) : (
         items.length === 0 && (
-          <p className="px-2 py-1.5 text-[11px] text-muted-foreground">Empty</p>
+          <p className="px-2 py-1.5 text-meta text-muted-foreground">Empty</p>
         )
       )}
     </div>

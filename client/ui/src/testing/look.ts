@@ -15,8 +15,9 @@
  *
  * Banda UI's names are read where they are made: the corner levels from
  * the theme's tokens, the type levels and the layers from `@banda/ui`'s
- * `@theme`. Allowed by rule, so never a case: a custom property defined
- * in `@banda/ui`'s stylesheets (`makesNames`), as `--tile-shadow` is;
+ * `@theme`, each level's size from the theme's tokens. Allowed by rule,
+ * so never a case: a custom property defined in `@banda/ui`'s stylesheets
+ * or the design kit's (`makesNames`), as `--tile-shadow` is;
  * tokens mixed (`color-mix()` over `var(--…)` and `transparent`), a colour
  * worked out from a token (`oklch(from var(--…) …)`) or from data
  * (`rgb(${…})`); a ring, an inset line with no blur in a token's colour; a
@@ -29,9 +30,9 @@
  * in it with it.
  */
 /// <reference types="node" />
-import { readFileSync } from "node:fs"
+import { readdirSync, readFileSync } from "node:fs"
 import { fileURLToPath } from "node:url"
-import { TOKENS } from "@banda/contract/look"
+import { BANDA, TOKENS } from "@banda/contract/look"
 
 /** What a case draws with. */
 export type Kind = "colour" | "corner" | "type" | "shadow" | "layer" | "length"
@@ -60,11 +61,27 @@ export interface Case {
 
 /** `@banda/ui`'s stylesheets, where Banda UI makes its names. */
 const STYLES = new URL("../styles/", import.meta.url)
+/** The design kit, whose stylesheets draw the mocks (docs/design/kit). */
+const KIT = new URL("../../../../docs/design/kit/", import.meta.url)
 
-/** Whether `file` is one of `@banda/ui`'s stylesheets, where a custom
- * property defined is a name Banda UI makes, not a case. */
+/** Whether `file` is one of `@banda/ui`'s stylesheets or the kit's, where
+ * a custom property defined is a name, not a case: Banda UI makes its
+ * names in the one, and the other copies the theme's tokens, which a test
+ * holds to the theme's values (`look.test.ts`). */
 export function makesNames(file: string): boolean {
-  return file.startsWith(fileURLToPath(STYLES)) && file.endsWith(".css")
+  return (
+    [STYLES, KIT].some((folder) => file.startsWith(fileURLToPath(folder))) &&
+    file.endsWith(".css")
+  )
+}
+
+/** The kit's stylesheets, which the check reads beside the files that
+ * draw (ADR 0113, step 2): a mock draws with Banda UI as the Window does. */
+export function kitSheets(): string[] {
+  const folder = fileURLToPath(KIT)
+  return readdirSync(folder)
+    .filter((name) => name.endsWith(".css"))
+    .map((name) => `${folder}${name}`)
 }
 
 /** What `code` says once its comments are taken out. A `/*` in a string
@@ -215,7 +232,8 @@ function coloursIn(code: string, free: (at: number) => boolean): string[] {
   for (const match of code.matchAll(HEX)) add(match.index, match[0])
   for (const match of code.matchAll(FUNCTION))
     add(match.index, call(code, match.index))
-  for (const match of code.matchAll(/(["'`])([a-z]+)\1/g))
+  // A word in an attribute selector's quotes is a value, not a colour.
+  for (const match of code.matchAll(/(?<!\[[\w-]+[~|^$*]?=)(["'`])([a-z]+)\1/g))
     if (NAMED.has(match[2])) add(match.index + 1, match[2])
   for (const match of code.matchAll(DECLARED)) {
     const value = match.index + match[0].indexOf(match[1])
@@ -270,31 +288,35 @@ function corners(code: string): string[] {
 
 // Type (decision 3).
 
+/** Tailwind's own size names, which `@theme` maps onto the levels for
+ * what comes as it is (decision 8); `xs` and `sm` stay allowed in Banda's
+ * code until step 1b (ADR 0113) renames them to `text-meta` and `text-ui`. */
+const TAILWIND = new Set(
+  "xs sm base lg xl 2xl 3xl 4xl 5xl 6xl 7xl 8xl 9xl".split(" ")
+)
+const REFUSED = [...TAILWIND].filter((name) => name !== "xs" && name !== "sm")
 /** Banda's type levels, each with its value, as `@theme` makes them. */
-const TYPE = named("text")
+const TYPE = named("text").filter(([name]) => !TAILWIND.has(name))
+/** The pixels a size is, a literal or a token's as Banda's own theme has
+ * it (`var(--meta-size)`). */
+function pixelsOf(size: string): number | undefined {
+  const token = /^var\(--([\w-]+)\)$/.exec(size)?.[1]
+  const value =
+    token === undefined
+      ? size
+      : (BANDA.light as Readonly<Record<string, string>>)[token]
+  const [, number, unit] = /^([\d.]+)(px|rem)$/.exec(value ?? "") ?? []
+  return number ? px(number, unit) : undefined
+}
 /** The levels a literal size is written as instead, by their size in px;
- * code's level is for code alone, so it is offered for no other size. */
+ * code's and prose's are for code and replies alone, so they are offered
+ * for no other size. */
 const SCALE = TYPE.flatMap(([name, value]) => {
-  const [, number, unit] = /^([\d.]+)(px|rem)$/.exec(value) ?? []
-  return number && name !== "code"
-    ? [[`text-${name}`, px(number, unit)] as const]
+  const pixels = pixelsOf(value)
+  return pixels !== undefined && name !== "code" && name !== "prose"
+    ? [[`text-${name}`, pixels] as const]
     : []
 })
-/** Tailwind's own sizes, in px; `xs` and `sm` stay allowed until step 1b
- * (ADR 0113) renames them to `text-meta` and `text-ui`. */
-const TAILWIND_SIZES: Record<string, number> = {
-  base: 16,
-  lg: 18,
-  xl: 20,
-  "2xl": 24,
-  "3xl": 30,
-  "4xl": 36,
-  "5xl": 48,
-  "6xl": 60,
-  "7xl": 72,
-  "8xl": 96,
-  "9xl": 128,
-}
 
 /** A length or a number, alone: `11px`, `0.8rem`, `1.5`. */
 const LITERAL = /^-?[\d.]+(?:px|rem|em|pt|%)?$/
@@ -311,14 +333,17 @@ function levelOf(size: string): string | undefined {
   const [, number, unit] = /^([\d.]+)(px|rem)$/.exec(size) ?? []
   if (!number || SCALE.length === 0) return undefined
   const pixels = px(number, unit)
+  const off = (level: (typeof SCALE)[number]) => Math.abs(level[1] - pixels)
   return SCALE.reduce((best, level) =>
-    Math.abs(level[1] - pixels) <= Math.abs(best[1] - pixels) ? level : best
+    off(level) < off(best) || (off(level) === off(best) && level[1] > best[1])
+      ? level
+      : best
   )[0]
 }
 
 const TEXT_ARBITRARY = new RegExp(`${START}text-(${ARBITRARY})(?![\\w.-])`, "g")
 const TEXT_NAMED = new RegExp(
-  `${START}text-(${Object.keys(TAILWIND_SIZES).join("|")})(?![\\w.-])`,
+  `${START}text-(${REFUSED.join("|")})(?![\\w.-])`,
   "g"
 )
 const LEADING = new RegExp(`${START}leading-\\[([^\\]\\s]*)\\]`, "g")
@@ -329,11 +354,16 @@ function typeIn(code: string): Case[] {
   const cases: Case[] = []
   const size = (what: string, value: string, off = "is off the scale") => {
     const level = levelOf(value)
+    // The small level is only for small things (Roma's answer, Q1).
+    const write =
+      level === "text-small"
+        ? "write `text-small` inside a key, a tag, a count on an icon or a menu's label, else `text-meta`"
+        : `write \`${level}\``
     cases.push(
       found(
         "type",
         what,
-        level && `${off}: write \`${level}\`, or add a level to the theme`
+        level && `${off}: ${write}, or add a level to the theme`
       )
     )
   }
@@ -349,7 +379,7 @@ function typeIn(code: string): Case[] {
       size(match, inner)
   }
   for (const [match, name] of code.matchAll(TEXT_NAMED))
-    size(match, `${TAILWIND_SIZES[name]}px`, "is Tailwind's size name")
+    size(match, THEME.get(`text-${name}`) ?? "", "is Tailwind's size name")
   for (const [match, value] of code.matchAll(LEADING))
     if (LITERAL.test(value))
       cases.push(

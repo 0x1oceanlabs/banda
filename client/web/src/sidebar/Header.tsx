@@ -11,7 +11,7 @@ function MenuKey() {
   const key = useKeyOf()("menu.open")
   if (!key) return null
   return (
-    <Kbd className="h-4.5 px-0.5 text-[10px]">{keyCaps(key).join(" ")}</Kbd>
+    <Kbd className="h-4.5 px-0.5">{keyCaps(key).join(" ")}</Kbd>
   )
 }
 
@@ -39,7 +39,7 @@ export function Header({
       <button
         type="button"
         onClick={() => open("menu.at")}
-        className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-control border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-control border bg-background/60 px-2 text-ui text-muted-foreground hover:bg-accent hover:text-accent-foreground"
       >
         <SearchIcon className="size-3.5 shrink-0" />
         <span className="min-w-0 flex-1 truncate text-left">Search</span>

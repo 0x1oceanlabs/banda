@@ -1387,7 +1387,7 @@ function FolderView({
             className="h-6 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
           />
           {found && found.paths.length >= MATCHES && (
-            <span className="shrink-0 text-[10.5px] text-muted-foreground">
+            <span className="shrink-0 text-meta text-muted-foreground">
               first {MATCHES}
             </span>
           )}
@@ -1423,7 +1423,7 @@ function FolderView({
         <div
           role="status"
           aria-label="Follow"
-          className="flex h-6 shrink-0 items-center gap-1.5 border-t px-2.5 text-[10.5px] text-muted-foreground"
+          className="flex h-6 shrink-0 items-center gap-1.5 border-t px-2.5 text-meta text-muted-foreground"
         >
           <span
             className="flex items-center gap-1.5"
@@ -1450,7 +1450,7 @@ function FolderView({
       {folder.limit && !noLimit && (
         <div
           role="status"
-          className="flex shrink-0 items-start gap-1 border-t px-2.5 py-1.5 text-[11px] text-muted-foreground"
+          className="flex shrink-0 items-start gap-1 border-t px-2.5 py-1.5 text-meta text-muted-foreground"
         >
           <p className="min-w-0 flex-1">
             The system watches no more folders, so some changes here go unseen.

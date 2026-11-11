@@ -699,7 +699,7 @@ function Menu({
           aria-expanded
           aria-controls="banda-menu-list"
           aria-activedescendant={current && optionId(current)}
-          className="h-11 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
+          className="h-11 min-w-0 flex-1 bg-transparent text-title outline-none placeholder:text-muted-foreground"
         />
       </div>
       {(said || asked?.line) && (
@@ -717,7 +717,7 @@ function Menu({
       )}
       {asked && (
         <div className="flex flex-col gap-1 px-3.5 pt-3">
-          <h3 className="text-[15px] font-semibold">{ASK}</h3>
+          <h3 className="text-title font-semibold">{ASK}</h3>
           <p className="mb-1 text-xs text-muted-foreground">{ASK_ABOUT}</p>
           <Waits waits={asked.waits} />
         </div>

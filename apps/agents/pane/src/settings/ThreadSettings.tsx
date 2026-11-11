@@ -332,7 +332,7 @@ export type ChoiceGroup = {
 /** A word of a new Thread's phrase that picks (ADR 0114, decision 1): the
  * phrase's size, in the foreground, its fill on hover and while open. */
 export const PHRASE_WORD =
-  "h-8 gap-2 rounded-control px-2 text-lg font-medium text-foreground hover:bg-raised aria-expanded:bg-raised dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-4.5"
+  "h-8 gap-2 rounded-control px-2 text-heading font-medium text-foreground hover:bg-raised aria-expanded:bg-raised dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-4.5"
 
 /** One of a few choices, as a menu that opens above the message box. */
 export function Pick({

@@ -222,7 +222,7 @@ export function SectionView({
                 aria-hidden
                 tabIndex={-1}
                 data-done-all=""
-                className="ml-auto flex items-center gap-1 self-center rounded-small bg-foreground/7 px-1.5 text-[11px] font-normal text-muted-foreground outline-none hover:text-foreground"
+                className="ml-auto flex items-center gap-1 self-center rounded-small bg-foreground/7 px-1.5 text-meta font-normal text-muted-foreground outline-none hover:text-foreground"
                 onMouseDown={(event) => event.preventDefault()}
                 onClick={(event) =>
                   actOnSet(done, "archive", {

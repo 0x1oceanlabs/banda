@@ -851,7 +851,7 @@ function Cursor({ at, title }: { at: Point; title: string }) {
         strokeWidth={1.6}
         className="-mt-[3px] -ml-[3px] size-[18px] drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.3)]"
       />
-      <span className="mt-3 -ml-1 max-w-40 truncate rounded-control bg-primary px-1.5 py-px text-[10.5px] font-semibold text-primary-foreground">
+      <span className="mt-3 -ml-1 max-w-40 truncate rounded-control bg-primary px-1.5 py-px text-small font-semibold text-primary-foreground">
         {title}
       </span>
     </div>

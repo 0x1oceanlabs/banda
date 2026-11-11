@@ -63,7 +63,7 @@ export function Start({
   const recent = useRecent(engine, project)
   return (
     <div className="flex h-full flex-col items-center justify-center gap-4 p-6">
-      <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-lg font-medium text-muted-foreground">
+      <div className="flex flex-wrap items-center justify-center gap-x-1 gap-y-0.5 text-heading font-medium text-muted-foreground">
         <span>Write to</span>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger

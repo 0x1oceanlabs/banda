@@ -236,7 +236,7 @@ export function EditWaiting({
         value={editing}
         autoFocus
         aria-label="Waiting message"
-        className="min-h-0 rounded-card border-border bg-block px-3.5 text-(length:--prose-size) leading-(--prose-leading) focus-visible:border-foreground/15 focus-visible:ring-0 md:text-(length:--prose-size) dark:bg-block"
+        className="min-h-0 rounded-card border-border bg-block px-3.5 text-prose focus-visible:border-foreground/15 focus-visible:ring-0 md:text-prose dark:bg-block"
         onChange={(event) => setEditing(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {

@@ -151,7 +151,7 @@ export function Bar({
         {waiting > 1 && (
           <span
             aria-hidden
-            className="absolute -right-0.5 -bottom-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-attention px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums"
+            className="absolute -right-0.5 -bottom-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-attention px-0.5 text-small leading-none font-semibold text-white tabular-nums"
           >
             {waiting > 9 ? "9+" : waiting}
           </span>

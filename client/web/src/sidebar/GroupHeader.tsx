@@ -77,7 +77,7 @@ export function GroupHeader({
       data-clicked={clicked ? "" : undefined}
       onPointerLeave={() => setClicked(false)}
       className={cn(
-        "relative isolate flex h-7 items-center gap-1.5 rounded-control px-2 text-[13px]",
+        "relative isolate flex h-7 items-center gap-1.5 rounded-control px-2 text-ui",
         // The hover's fill, as a card's: at once in, over 100 ms out
         // (`globals.css`, by plain :hover, as the cards' acts).
         "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit)"

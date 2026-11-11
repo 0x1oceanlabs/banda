@@ -244,7 +244,7 @@ function Item({
           onDone={onRenamed}
         />
       ) : (
-        <span className="max-w-full truncate text-[10.5px] text-muted-foreground">
+        <span className="max-w-full truncate text-meta text-muted-foreground">
           {rowName(row)}
         </span>
       )}

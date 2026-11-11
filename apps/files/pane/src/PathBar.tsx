@@ -362,7 +362,7 @@ function PathField({
                 <FolderIcon className="size-3.5 shrink-0 text-muted-foreground" />
                 <span className="truncate">{name}</span>
                 {n === picked && (
-                  <span className="ml-auto font-sans text-[10.5px] text-muted-foreground">
+                  <span className="ml-auto font-sans text-small text-muted-foreground">
                     Tab
                   </span>
                 )}

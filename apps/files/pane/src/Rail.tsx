@@ -154,7 +154,7 @@ function Section({
       {folded ? (
         !first && <div className="my-1.5 h-px w-5 shrink-0 bg-border" />
       ) : (
-        <div className="truncate px-2 pt-2 pb-0.5 text-[10.5px] font-medium text-muted-foreground/80">
+        <div className="truncate px-2 pt-2 pb-0.5 text-meta font-medium text-muted-foreground/80">
           {name || " "}
         </div>
       )}
