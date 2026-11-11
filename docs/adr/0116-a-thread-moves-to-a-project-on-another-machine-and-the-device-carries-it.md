@@ -179,8 +179,8 @@ goes on."
      mostly the diff, and the branch's commits that were never pushed.
      The window carries it in pieces as it carries the Thread
      (`packed` and `take_piece`, which name the part).
-   - **Unpack.** `git.unpack_folder{move}` on the other machine, after
-     the Thread arrived, fetches the bundle into
+   - **Unpack.** `git.unpack_folder{move}` on the other machine, before
+     the Thread is unpacked there, fetches the bundle into
      `refs/banda/moves/<thread>`, then puts its folder as the old one
      was: the same branch at the same commit, the snapshot's changes not
      committed. The ref stays until the Thread is deleted.
@@ -243,6 +243,27 @@ Each step is its own PR.
    there, Codex's handoff, and the notice with both machines.
 5. **The window:** the submenu by machine (on #1531), the dialog with its message box,
    the toast with Cancel, the Pane that follows the Thread, the refusals.
+
+## As built
+
+- **Step 4, the folder first.** The window unpacks the folder's work
+  before the Thread, and tells `unpack_thread` it did (`folder`): what
+  refuses a folder, a branch that went another way or commits it lacks,
+  refuses the move before the Thread arrives, and the Thread's line says
+  only what happened. A Thread that then does not arrive leaves the other
+  folder on the Thread's branch with its changes, and nothing lost.
+- **Step 4, the machines' names.** No engine knows another's name, and a
+  module does not know its own: the window gives `unpack_thread` both
+  (`from`, `on`) and `leave_thread` the other's (`machine`), for the
+  Thread's line and the facts `thread.left` and `thread.arrived`.
+- **Step 4, another machine.** A Thread comes from another machine when
+  the Project it comes from is none of this engine's. Only then is its
+  Person this machine's, its account this machine's to choose, and a
+  session that did not come along handed its history.
+- **Step 4, the account there.** The entry of the same ID, if its
+  sessions live where the Thread's did; else the Harness itself, if it is
+  on; else its first account that is. `pack_thread` answers the account
+  the Thread ran on, so the window asks before it carries.
 
 ## Roma's calls (2026-11-11)
 

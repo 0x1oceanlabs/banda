@@ -1121,6 +1121,19 @@ impl Harnesses {
         }
     }
 
+    /// The entry that is on whose sessions live in `sessions`
+    /// ([`Harness::sessions`]), for a Thread that comes from another
+    /// machine, where its account had another ID (ADR 0116, decision 5):
+    /// the Harness itself before an account of it, then as the file lists
+    /// them.
+    pub fn keeping(&self, sessions: &str) -> Option<Harness> {
+        let list = self.now();
+        let on = |h: &&Harness| h.enabled && h.retired.is_none() && h.sessions() == sessions;
+        (list.iter().filter(on).find(|h| h.of.is_none()))
+            .or_else(|| list.iter().find(on))
+            .cloned()
+    }
+
     /// Removed Accounts keep their source metadata for old sessions.
     pub fn retired(&self) -> Vec<Harness> {
         self.now()

@@ -112,10 +112,10 @@ pub async fn move_thread(
     let said = notice(&here.name(), &here.folder(), &there.folder(), NOTICE);
     let home = here.id();
     let arrived = there
-        .write(move |tx| arrive(tx, author, thread, &came, &images, home, &said))
+        .write(move |tx| arrive(tx, author, thread, &came, &images, (home, None), &said))
         .await?;
     let left = call
-        .command(move |tx| leave(tx, author, thread, &rows, project))
+        .command(move |tx| leave(tx, author, thread, &rows, (project, None)))
         .await;
     match &left {
         // It is here no more, so nothing of it goes on here by itself.
@@ -267,7 +267,7 @@ pub(crate) fn arrive(
     thread: ThreadId,
     rows: &ThreadRows,
     images: &[ImageRow],
-    from: ProjectId,
+    (from, machine): (ProjectId, Option<String>),
     said: &str,
 ) -> Result<ThreadRows, Error> {
     if let Some(came) = already(tx.sql(), thread, rows)? {
@@ -278,7 +278,12 @@ pub(crate) fn arrive(
     // decision 17).
     search::index_thread(tx.sql(), thread)?;
     store::keep_images(tx.sql(), images)?;
-    emit(tx, author, thread, &Fact::ThreadArrived { thread, from })?;
+    let arrived = Fact::ThreadArrived {
+        thread,
+        from,
+        machine,
+    };
+    emit(tx, author, thread, &arrived)?;
     notices::post(tx, author, thread, said)?;
     ThreadRows::read(tx.sql(), thread)?.ok_or_else(|| Refusal::internal().into())
 }
@@ -291,7 +296,7 @@ pub(crate) fn leave(
     author: Participant,
     thread: ThreadId,
     rows: &ThreadRows,
-    to: ProjectId,
+    (to, machine): (ProjectId, Option<String>),
 ) -> Result<(), Error> {
     if ThreadRows::read(tx.sql(), thread)?.as_ref() != Some(rows) {
         let changed = "The Thread changed as it moved, and stays here: move it again.";
@@ -299,7 +304,12 @@ pub(crate) fn leave(
     }
     may_move(stands(tx.sql(), thread)?)?;
     store::forget_thread(tx.sql(), thread, tx.now())?;
-    emit(tx, author, thread, &Fact::ThreadLeft { thread, to })
+    let left = Fact::ThreadLeft {
+        thread,
+        to,
+        machine,
+    };
+    emit(tx, author, thread, &left)
 }
 
 /// Takes the copy of `thread` back out of `there`, as it stayed `here`:
@@ -320,7 +330,7 @@ async fn take_back(
         return;
     }
     let taken = there
-        .write(move |tx| leave(tx, author, thread, &arrived, home))
+        .write(move |tx| leave(tx, author, thread, &arrived, (home, None)))
         .await;
     if let Err(error) = taken {
         tracing::warn!(%error, "a Thread that did not move is in both Projects");

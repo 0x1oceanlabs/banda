@@ -4,4 +4,14 @@
  * What `agents.unpack_thread` is asked: the move, and the SHA-256 its
  * artefact was packed with.
  */
-export type Unpack = { move: string, sha256: string, };
+export type Unpack = { move: string, sha256: string, 
+/**
+ * The name of the machine it comes from, and of this one, as the
+ * window shows them: what the Thread's line says of its move.
+ */
+from?: string, on?: string, 
+/**
+ * Whether the folder's work that was not committed was unpacked
+ * here before it (`git.unpack_folder`), which the line says too.
+ */
+folder: boolean, };

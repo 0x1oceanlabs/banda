@@ -5,4 +5,9 @@ import type { ProjectId } from "../ProjectId";
  * What `agents.leave_thread` is asked: the move, and the Project the
  * Thread went to, as its machine names it.
  */
-export type Leave = { move: string, project: ProjectId, };
+export type Leave = { move: string, project: ProjectId, 
+/**
+ * The name of the machine that Project is on, as the window shows
+ * it.
+ */
+machine?: string, };

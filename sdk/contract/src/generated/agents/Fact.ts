@@ -84,7 +84,17 @@ resume?: TurnId, } } | { "kind": "thread.woke", "payload": { thread: ThreadId, b
  * fact may be written late, as the engine starts. Older facts
  * have none, and woke at their own moment.
  */
-at?: number, } } | { "kind": "thread.woke_seen", "payload": { thread: ThreadId, seen: WokeSeen, } } | { "kind": "thread.seen", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.unseen", "payload": { thread: ThreadId, } } | { "kind": "thread.archived", "payload": { thread: ThreadId, } } | { "kind": "thread.unarchived", "payload": { thread: ThreadId, } } | { "kind": "marks.moved", "payload": Record<symbol, never> } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.deleted", "payload": { thread: ThreadId, } } | { "kind": "thread.renamed", "payload": { thread: ThreadId, title: string, was: string, } } | { "kind": "thread.switched", "payload": { thread: ThreadId, harness: string, was: string, } } | { "kind": "thread.left", "payload": { thread: ThreadId, to: ProjectId, } } | { "kind": "thread.arrived", "payload": { thread: ThreadId, from: ProjectId, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, supervised?: WhySupervised, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, 
+at?: number, } } | { "kind": "thread.woke_seen", "payload": { thread: ThreadId, seen: WokeSeen, } } | { "kind": "thread.seen", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.unseen", "payload": { thread: ThreadId, } } | { "kind": "thread.archived", "payload": { thread: ThreadId, } } | { "kind": "thread.unarchived", "payload": { thread: ThreadId, } } | { "kind": "marks.moved", "payload": Record<symbol, never> } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.deleted", "payload": { thread: ThreadId, } } | { "kind": "thread.renamed", "payload": { thread: ThreadId, title: string, was: string, } } | { "kind": "thread.switched", "payload": { thread: ThreadId, harness: string, was: string, } } | { "kind": "thread.left", "payload": { thread: ThreadId, to: ProjectId, 
+/**
+ * The machine `to` is on, by its name, when it is another (ADR
+ * 0116).
+ */
+machine?: string, } } | { "kind": "thread.arrived", "payload": { thread: ThreadId, from: ProjectId, 
+/**
+ * The machine `from` is on, by its name, when it is another (ADR
+ * 0116).
+ */
+machine?: string, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, supervised?: WhySupervised, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, 
 /**
  * The sub-agent whose lane it is of, when it is not the Agent's
  * own; so for each fact below that names `sub`.

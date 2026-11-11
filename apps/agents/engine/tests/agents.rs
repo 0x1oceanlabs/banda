@@ -7395,6 +7395,13 @@ async fn a_turn_that_waits_on_its_usage_limit_says_until_when_and_does_not_fail(
 /// `claude-b`, which share their sessions, and one of another Harness.
 #[cfg(unix)]
 fn two_claude_accounts(cli: &Path) -> Agents {
+    claude_accounts(cli, &["claude-a", "claude-b"])
+}
+
+/// The fake agent as accounts of Claude Code, each named by its ID, which
+/// share their sessions, and one of another Harness, `other`.
+#[cfg(unix)]
+fn claude_accounts(cli: &Path, accounts: &[&str]) -> Agents {
     let entry = |id: &str, cli: Option<Cli>| Harness {
         id: id.into(),
         name: id.into(),
@@ -7425,11 +7432,9 @@ fn two_claude_accounts(cli: &Path) -> Agents {
             minimum: None,
         })
     };
-    Agents::new(Harnesses::new(vec![
-        entry("claude-a", claude()),
-        entry("claude-b", claude()),
-        entry("other", None),
-    ]))
+    let mut list: Vec<Harness> = (accounts.iter()).map(|id| entry(id, claude())).collect();
+    list.push(entry("other", None));
+    Agents::new(Harnesses::new(list))
 }
 
 // Its CLI is a `sh` script that runs by its exec bit.
@@ -11490,7 +11495,9 @@ async fn carry(from: &World, to: &World, thread: &Value) -> Value {
         let piece = from.call(person, "agents.packed", ask).await.unwrap();
         let data = piece["data"].as_str().unwrap();
         let take = json!({ "move": packed["move"], "at": at, "data": data });
-        to.call(person, "agents.take_piece", take).await.unwrap();
+        to.call(to.person(), "agents.take_piece", take)
+            .await
+            .unwrap();
         at += BASE64.decode(data).unwrap().len();
         if piece["more"] == json!(false) {
             break;
@@ -11706,4 +11713,164 @@ async fn a_window_carries_the_bundle_of_a_folders_work_beside_its_thread() {
         .unwrap();
     assert!(!bundle.exists() && !artefact.exists());
     assert!(carried.is_file(), "the Git App's to unpack and take away");
+}
+
+/// Carries `thread` from `from` to `to`, another machine's Project, and
+/// unpacks it there, named as a window names the two; then it leaves.
+#[cfg(unix)]
+async fn move_across(
+    from: &World,
+    to: &World,
+    thread: &Value,
+) -> Result<Value, banda_kernel::Refusal> {
+    let packed = carry(from, to, thread).await;
+    let unpack = json!({
+        "move": packed["move"], "sha256": packed["sha256"], "from": "m1pro", "on": "devbox",
+    });
+    to.call(to.person(), "agents.unpack_thread", unpack).await?;
+    let leave = json!({ "move": packed["move"], "project": to.project, "machine": "devbox" });
+    from.call(from.person(), "agents.leave_thread", leave)
+        .await
+        .unwrap();
+    Ok(packed)
+}
+
+// Its CLI is a `sh` script that runs by its exec bit.
+#[cfg(unix)]
+#[tokio::test]
+async fn a_thread_from_another_machine_runs_on_that_machines_account_and_is_handed_its_history() {
+    let (mac, box_, bin) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let cli = fake_cli(bin.path());
+    // Two machines: two engines, each its own Person, and the other
+    // machine's Claude Code account has another ID.
+    let m1pro = World::new_on(mac.path(), two_claude_accounts(&cli), "claude-a").await;
+    let devbox = World::new_on(
+        box_.path(),
+        claude_accounts(&cli, &["claude-b"]),
+        "claude-b",
+    )
+    .await;
+    assert_ne!(m1pro.person(), devbox.person());
+    let (thread, (there, _)) = ask_session(&m1pro, None).await;
+
+    let packed = move_across(&m1pro, &devbox, &thread).await.unwrap();
+    let ran = json!({ "entry": "claude-a", "sessions": "claude", "name": "claude-a" });
+    assert_eq!(packed["harness"], ran, "what the window asks devbox for");
+
+    // It left for devbox, and came from m1pro.
+    let left = m1pro.facts("thread.left").await;
+    assert_eq!(
+        left.iter().map(|e| &e.payload).collect::<Vec<_>>(),
+        [&json!({ "thread": thread, "to": devbox.project, "machine": "devbox" })]
+    );
+    let arrived = devbox.facts("thread.arrived").await;
+    assert_eq!(
+        arrived.iter().map(|e| &e.payload).collect::<Vec<_>>(),
+        [&json!({ "thread": thread, "from": m1pro.project, "machine": "m1pro" })]
+    );
+    // What its Person wrote there is this machine's Person's here, it
+    // runs on this machine's account, and its line names both machines.
+    let view = devbox.thread(&thread).await;
+    assert_eq!(view.items[0].author, devbox.person());
+    assert_eq!(devbox.listed(&thread).await.thread.harness, "claude-b");
+    let said = texts(&view).into_iter().last().unwrap();
+    assert!(
+        said.starts_with("notice: Moved here from “Work” on m1pro. Its Agent works in "),
+        "{said}"
+    );
+    assert!(said.contains(" on devbox from now on"), "{said}");
+    assert!(
+        said.ends_with("what it changed there stays on m1pro."),
+        "{said}"
+    );
+
+    // Its session stayed on m1pro, so its next turn opens one here and
+    // reads the Thread's history; the turn after reads nothing more.
+    let (here, read) = ask_read(&devbox, &thread).await;
+    assert_ne!(here, there, "a session of this machine's");
+    assert!(read.contains("ran on claude-a until now"), "{read}");
+    assert!(read.contains("[Person] which session\n"), "{read}");
+    // After the history, the line of its move, and then the message.
+    let (history, rest) = read.split_once("</history>\n\n").unwrap();
+    assert!(!history.contains("Moved here"), "{read}");
+    assert!(rest.contains("Moved here from “Work” on m1pro."), "{read}");
+    assert!(read.ends_with("what did you read"), "{read}");
+    let (again, read) = ask_read(&devbox, &thread).await;
+    assert_eq!((again, read.as_str()), (here, "what did you read"));
+    let view = devbox.thread(&thread).await;
+    let moved: Vec<_> = texts(&view)
+        .into_iter()
+        .filter(|text| text.starts_with("moved: "))
+        .collect();
+    assert_eq!(moved.len(), 1, "{moved:?}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_machine_with_no_such_harness_takes_no_thread_and_it_stays_where_it_was() {
+    let (mac, box_, bin) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let cli = fake_cli(bin.path());
+    let m1pro = World::new_on(mac.path(), two_claude_accounts(&cli), "claude-a").await;
+    let devbox = World::new(box_.path()).await;
+    let (thread, _) = m1pro.finish(None, "hello").await;
+
+    let packed = carry(&m1pro, &devbox, &thread).await;
+    let unpack = json!({ "move": packed["move"], "sha256": packed["sha256"], "on": "devbox" });
+    let refused = devbox
+        .call(devbox.person(), "agents.unpack_thread", unpack)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert_eq!(
+        refused.message,
+        "devbox has no claude-a: add it there, or move the Thread to another Harness first."
+    );
+    assert!(m1pro.lists(&thread).await && !devbox.lists(&thread).await);
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_thread_whose_session_came_along_goes_on_with_it_on_the_other_machines_account() {
+    let (mac, box_, bin) = (
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+        tempfile::tempdir().unwrap(),
+    );
+    let cli = fake_cli(bin.path());
+    let m1pro = World::new_on(mac.path(), two_claude_accounts(&cli), "claude-a").await;
+    let devbox = World::new_on(
+        box_.path(),
+        claude_accounts(&cli, &["claude-b"]),
+        "claude-b",
+    )
+    .await;
+    let (thread, (there, _)) = ask_session(&m1pro, None).await;
+    // Its session is kept in the Project's data, as Claude Code's is.
+    let opened = m1pro.kernel.project(m1pro.project).await.unwrap();
+    let sessions = opened.data().join("sessions/claude");
+    std::fs::create_dir_all(&sessions).unwrap();
+    std::fs::write(sessions.join(format!("{there}.jsonl")), "{}\n").unwrap();
+
+    move_across(&m1pro, &devbox, &thread).await.unwrap();
+
+    // The same session, on this machine's account, with no history handed.
+    assert_eq!(devbox.listed(&thread).await.thread.harness, "claude-b");
+    let (here, read) = ask_read(&devbox, &thread).await;
+    assert_eq!(here, there, "the same session");
+    assert!(!read.contains("<history>"), "{read}");
+    assert!(read.contains("Moved here from “Work” on m1pro."), "{read}");
+    let view = devbox.thread(&thread).await;
+    let moved: Vec<_> = texts(&view)
+        .into_iter()
+        .filter(|text| text.starts_with("moved: "))
+        .collect();
+    assert_eq!(moved, ["moved: claude-a → claude-b Same"]);
 }

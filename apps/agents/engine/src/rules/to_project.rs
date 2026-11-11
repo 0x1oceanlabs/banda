@@ -87,6 +87,40 @@ pub fn notice(from: &str, from_folder: &Path, to_folder: &Path, most: usize) -> 
     format!("Moved here from {from}. Its Agent works in this Project's folder from now on.")
 }
 
+/// The line a Thread shows that came from another machine (ADR 0116,
+/// decision 6), which its Agent reads before its next message: where it
+/// came from, where it works now, and whether the folder's work that was
+/// not committed came with it. It names the folders while the line stays
+/// within `most` characters.
+pub fn notice_across(
+    (from, from_machine, from_folder): (&str, &str, &Path),
+    (to_machine, to_folder): (&str, &Path),
+    folder: bool,
+    most: usize,
+) -> String {
+    let from = match from {
+        "" => "No project".to_owned(),
+        name => format!("“{name}”"),
+    };
+    let came = format!("Moved here from {from} on {from_machine}.");
+    let work = match folder {
+        true => format!(
+            "what was not committed there came with it, but for ignored files, which stay              on {from_machine}"
+        ),
+        false => format!("what it changed there stays on {from_machine}"),
+    };
+    let named = format!(
+        "{came} Its Agent works in {} on {to_machine} from now on, not in {}; {work}.",
+        to_folder.display(),
+        from_folder.display()
+    );
+    let plain = !named.contains(['\n', '\r']);
+    if plain && named.chars().count() <= most {
+        return named;
+    }
+    format!("{came} Its Agent works in this Project's folder on {to_machine} from now on; {work}.")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
