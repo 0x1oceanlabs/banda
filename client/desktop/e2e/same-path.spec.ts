@@ -257,7 +257,7 @@ async function terminalOn(page: Page, composer: Locator) {
   return screen
 }
 
-test.fixme("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", async () => {
+test("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", async () => {
   const { page, composer, there, here } = await opened()
   await terminalOn(page, composer)
   await page.keyboard.type("cat who.txt > seen.txt")
