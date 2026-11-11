@@ -48,6 +48,7 @@ export function linksOf(
     title: (address) =>
       inBanda(address)
         ? linkHint(address)
-        : (refused(address) ?? `${address}\nOpens in ${THIS_COMPUTER}'s browser`),
+        : (refused(address) ??
+          `${address}\nOpens in ${THIS_COMPUTER}'s browser`),
   }
 }

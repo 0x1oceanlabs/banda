@@ -210,4 +210,3 @@ export const AGENTS_FILE: ModuleFile<Agents> = {
   name: "agents.toml",
   before: DEFAULT_AGENTS,
 }
-
