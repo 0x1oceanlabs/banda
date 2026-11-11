@@ -48,20 +48,26 @@ held by a machine:
 
 So the drift is where nothing holds it. Measured on main at
 `8e112dfef`, over the 584 files the corner check reads, comments
-stripped:
+stripped, and counted again by step 1's check on `121ac5258`, over the
+599 files it reads:
 
 | Kind | Cases | Files | Mostly |
 |---|---|---|---|
-| type | 91 | 48 | `text-[11px]`, `text-[10.5px]`, `text-[13px]`; `font-size` as numbers |
+| type | 109 | 61 | `text-[11px]`, `text-[10.5px]`, `text-[13px]`; `font-size` as numbers; `text-base`, `text-lg` |
 | layers | 55 | 40 | `z-10`, `z-50`, `z-20`, `z-1`, `z-30`, `z-40` |
-| colours | 54 | 24 | masks' `#000`, a copied palette, `bg-white`, `bg-black/10`, fallback copies of tokens |
-| shadows | 43 | 37 | `shadow-md`, `shadow-sm`, `shadow-lg`, `shadow-xs`, five drawn by hand |
-| lengths | 27 | 10 | `pb-[5px]`, `mt-[22px]`, `gap-[7px]`: off the 4 px grid |
-| corners | 9 | 4 | already listed, each with its reason |
+| colours | 56 | 24 | masks' `#000`, a copied palette, `bg-white`, `bg-black/10`, fallback copies of tokens |
+| shadows | 45 | 37 | `shadow-md`, `shadow-sm`, `shadow-lg`, `shadow-xs`, seven drawn by hand |
+| lengths | 28 | 9 | `pb-[5px]`, `mt-[22px]`, `gap-[7px]`: off the 4 px grid |
+| corners | 9 | 3 | already listed, each with its reason |
 
-Of the 91 type cases, 56 (in 38 files) are sizes from 9 to 11.5 px: keys,
+_Step 1's check is the record. The first count missed a PDF's two
+system colours, a Question's 14.5 px and a slider's two shadows, and
+left out Tailwind's size names other than `text-xs` and `text-sm` (16);
+main gained a 13 px since._
+
+Of the 109 type cases, 56 (in 38 files) are sizes from 9 to 11.5 px: keys,
 tags, counts on icons, captions in Files' lists, menus' labels, the
-limits' notes. 11 (in 9 files) are 13 px. A px size also ignores the
+limits' notes. 12 (in 10 files) are 13 px. A px size also ignores the
 theme's font size: the `macos` theme's 13 scales every `rem` level, and
 leaves a `text-[13px]` at 13.
 
@@ -240,7 +246,7 @@ name for each.
       - `design.9` **Corners take the five levels** (ADR 0080, decision
         6). *Check:* today (the corner check, which joins).
       - `design.10` **Type takes the scale,** by the level's name; no
-        size as a number. *Check:* today; Tailwind's own size names
+        size as a number. *Check:* today; `text-xs` and `text-sm`
         after step 1b.
       - `design.11` **A shadow is an elevation:** `float`, `lift`, or
         the Window's own; most things have none. *Check:* today.
@@ -286,7 +292,7 @@ name for each.
 What step 1's list holds, by group. "Stays" is a reason that holds;
 the rest leave with the step named.
 
-**Colours, 54 (`design.4`)**
+**Colours, 56 (`design.4`)**
 - Stays, 26: masks and probes, where black and white say what shows or
   read a colour back, not a colour seen (14: the Mark's mask in
   `banda-mark.tsx`, a Project's Sign's cut, a fade's mask in
@@ -298,34 +304,44 @@ the rest leave with the step named.
   notebook's), `scrim` (6: a dialog, the Drawer, the Overview's lifted
   tile, a tile out of focus, a web page's veil, a video), the glass's
   edge (2).
-- Drift, step 4, 16: fallback copies of tokens in the notifications
+- Drift, step 4, 18: fallback copies of tokens in the notifications
   module (6); `text-white` on two counts; hover fills of
   `black/[3.5%]` and `white/8` (4); PDF find highlights in `rgb()` (2);
-  `bg-amber-500/10` in a notebook; the terminal renderer's default
-  selection, which the `selection` token has.
+  a PDF's text layer's selection and caret in the system's colours,
+  `AccentColor` and `CanvasText` (2); `bg-amber-500/10` in a notebook;
+  the terminal renderer's default selection, which the `selection` token
+  has.
 
-**Type, 91 (`design.10`)**, all step 2: 56 at 9 to 11.5 px; 11 at 13 px;
-4 at 12.5; 2 at 15 (the Banda menu); 1 at 0.8rem (a small button's); 2
-figures at 40 and 28 (the Usage Pane); 2 line heights in px; 2 prose
-sizes by `var()`; 11 sizes as numbers in stylesheets and styles
-(streamdown's headings, footnotes, code and table cells in `globals.css`,
-the diff's header in `code-diff.tsx`, Mermaid's size). A font file's specimen
-(Files' font view) will stay: it shows the font at sizes of its own.
+**Type, 109 (`design.10`)**, all step 2 but 3: 56 at 9 to 11.5 px; 12 at
+13 px; 4 at 12.5; 1 at 14.5 (a Question's title); 2 at 15 (the Banda
+menu); 1 at 0.8rem (a small button's); 2 figures at 40 and 28 (the Usage
+Pane); 2 line heights in px; 2 prose sizes by `var()`; 11 sizes as
+numbers in stylesheets and styles (streamdown's headings, footnotes, code
+and table cells in `globals.css`, the diff's header in `code-diff.tsx`,
+Mermaid's size); 13 of Tailwind's other size names (`text-base` in
+shadcn's inputs, fields, cards and dialogs; `text-lg` and `text-xl`, the
+Settings page's title and the message box's headings), which step 2
+clears. A font file's specimen (Files' font view, 3) stays: it shows the
+font at sizes of its own.
 
-**Shadows, 43 (`design.11`)**, all step 3: 8 in the Top layer's
-components, which become `float`; 17 on a Pane's floating parts and
-dialogs, which become `float`; 2 on what the Person carries, which
-become `lift`; 13 on what does not float (a sidebar card, the Projects
-list, the Overview's tiles, a thumbnail, a switch's thumb), which lose
-it or float; 3 of their own (the browser's inset glow and cursor
-shadow, a PDF page's lift).
+**Shadows, 45 (`design.11`)**, all step 3: 9 in the Top layer's
+components (menus, a popover, a select, the suggestions, a chart's
+tooltip, the browser's titles), which become `float`; 18 on a Pane's or
+the Window's floating parts and dialogs, which become `float`; 4 on what
+the Person carries (a Pane being moved, a widget dragged on the Bar, a
+workspace lifted in the Overview, a Peek), which become `lift`; 11 on
+what does not float (a picked segment, a sidebar card, the Projects
+list, the Overview's labels, a thumbnail, a Group's handle, a machine's
+pill, a switch's and a slider's thumb), which lose it or float; 3 of
+their own (the browser's inset glow and cursor shadow, a PDF page's
+lift).
 
 **Layers, 55 (`design.12`)**, step 5: 16 at the Top layer's 50 (shadcn's
 menus, dialogs and popovers, a carried Pane); 6 for the Window's areas
 (20, 30, 40); 33 inside a Pane or a component (1, 2, 10, 20).
 
-**Lengths, 27 (`design.13`)**, step 5: 17 in the Usage Pane, the limits'
-widget and the spend card; 3 in the browser; 7 elsewhere.
+**Lengths, 28 (`design.13`)**, step 5: 17 in the Usage Pane, the limits'
+widget and the spend card; 3 in the browser; 8 elsewhere.
 
 **Corners, 9 (`design.9`)**: as listed today, all stay.
 
@@ -429,7 +445,8 @@ on and off, and has no auto-merge.
    guidelines and `skill-apps.md`.
    - 1b. `text-xs` and `text-sm` (453 uses, 150 files) renamed to
      `text-meta` and `text-ui` by a script, at a time when few branches
-     are open. Then the check refuses Tailwind's size names.
+     are open. Then the check refuses them too, as it does Tailwind's
+     other size names from step 1.
 2. **Type onto the scale,** with Roma's answers. The scale into the
    theme's tokens. The kit onto the same levels; it joins the check,
    with a test that its values are the theme's. Tailwind's other sizes
@@ -441,7 +458,7 @@ on and off, and has no auto-merge.
    edge. Mermaid's error drawn as Banda's own block, since streamdown
    draws it in its own reds. Tailwind's palette cleared.
 5. **Layers and lengths.** The named layers, with ADR 0110 step 3; each
-   Tile isolates. The 27 lengths onto steps. Shots where something
+   Tile isolates. The 28 lengths onto steps. Shots where something
    moves.
 6. **The catalogue page,** shot by `themes.spec.ts`.
 

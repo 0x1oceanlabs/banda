@@ -59,6 +59,18 @@ would pick. Take its pictures with `node docs/design/kit/shot.mjs`, at
 1440 and 728 wide, in light and with the glass off, and look at each
 before Roma does. Build it once Roma has chosen, then try it as below.
 
+## Draw with Banda UI
+
+Whatever you draw, in the Window or an App, takes its colour, corner, type
+size, shadow, layer and lengths from Banda UI: the theme's tokens and the
+classes `@banda/ui` names on them ([the Banda look](docs/design/README.md),
+[the guidelines' §5](docs/sdk/guidelines.md#5-design)). A value it lacks
+becomes a token, never a number in the code. The look check refuses the
+rest; a case it must allow goes in its list with its reason, and the list
+only falls
+([ADR 0113](docs/adr/0113-banda-ui-is-one-vocabulary-the-window-and-every-app-draw-with.md);
+the check is `client/web/src/look.test.ts`).
+
 ## See what you changed
 
 A change that shows in the window, you try in the window before its PR:

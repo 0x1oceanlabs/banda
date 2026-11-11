@@ -301,8 +301,10 @@ neither (borders.5, device.5).
   waits for the Person, `--destructive` is a failure, `--warning` a limit
   coming near, `--added` and `--removed` are line counts (ADR 0058, ADR
   0024). An App never picks a hue to decorate or brand. *Check:* review.
-- **design.4 Tokens only,** from the look (ADR 0080 d7): no hex, rgb,
-  oklch or `color-mix` in App code. *Check:* planned (a lint).
+- **design.4 Colours are tokens,** or tokens mixed (ADR 0080 d7, ADR
+  0113 d6): no hex, `rgb()`, `oklch()`, named colour or palette name. A
+  token thinned (`bg-foreground/10`) or `color-mix()` over `var(--…)` and
+  `transparent` follows every theme. *Check:* today (the look check).
 - **design.5 The Bar draws text and small icons,** no boxes or pills
   (ADR 0024 d2), and is quiet while nothing happens. *Check:* review.
 - **design.6 Banda draws the Pane header** from your manifest, and Banda's
@@ -313,6 +315,21 @@ neither (borders.5, device.5).
 - **design.8 In Banda's own repository, a visible change to the Window
   goes to the maintainers as a before and after mockup first.** An App
   from elsewhere shows its Person instead. *Check:* practice.
+- **design.9 Corners take the five levels** (ADR 0080 d6): `rounded-small`,
+  `-control`, `-card`, `-tile`, `-window`, round or none. *Check:* today
+  (the look check, which the corner check joined).
+- **design.10 Type takes the scale,** by the level's name (`text-meta`,
+  `text-ui`, `text-prose`, …; ADR 0113 d3); no size as a number. *Check:*
+  today; `text-xs` and `text-sm` after ADR 0113's step 1b.
+- **design.11 A shadow is an elevation:** `float`, `lift`, or the
+  Window's own (ADR 0113 d4); most things have none. *Check:* today.
+- **design.12 A layer is named;** a Pane's stay inside its Tile (ADR 0113
+  d5). *Check:* today.
+- **design.13 Lengths are Tailwind's steps or tokens,** no literal off
+  the 4 px grid (ADR 0113 d7). *Check:* today.
+- **design.14 A value the vocabulary lacks becomes a named step,** never
+  a number: a token in the theme if a theme may change it, else a name in
+  `@banda/ui` (ADR 0113 d2). *Check:* review; the check finds the number.
 
 ---
 
@@ -498,14 +515,19 @@ the calls part reads no page and, of the Tiling, imports only its model
 stay memoized (decision 7), only the listed files configure a Tile, and
 a Pane's props carry no state of its Tile (decision 4); motion.spec's
 budget for a hidden Tile's draws, 0, blocks in record mode too.
+The look check (`client/web/src/look.test.ts`, ADR 0113) holds §5's
+`design.4` and `design.9` to `design.13` over every file the Window and
+the Panes draw with, stylesheets too: what is off Banda UI is listed by
+group, each with its rule and why it stays or the step that moves it, a
+list that only falls.
 
 **Planned,** each an allowlist whose count only falls:
 
 1. **The borders test,** one shared test for every App (replacing the
    copies per App): imports outside the allowlist; calls to another App's
    methods not listed in `calls`; `requestAnimationFrame`, `localStorage`,
-   `window.banda`; a module-level variable holding a `WindowApi`; colour
-   literals. Each case is a line naming its rule id and why.
+   `window.banda`; a module-level variable holding a `WindowApi`. Each
+   case is a line naming its rule id and why.
 2. **The rest of the Window and Tiling ratchets** (ADR 0087): no
    `Listed`, no Thread imports; the Window's root's ceiling down to 400
    lines.
@@ -657,7 +679,7 @@ code:
 
 - **These bind now:** borders.2 to borders.7, borders.9 to borders.11,
   give.1 to give.3, give.6 and give.7, here.1 to here.6, data.1 to
-  data.4, data.6 and data.8, design.1 and design.3 to design.8, motion.1
+  data.4, data.6 and data.8, design.1 and design.3 to design.14, motion.1
   to motion.8, device.2 to device.5, trust.1, trust.3 to trust.8, and the
   words.
 - **These bind after their step:** give.4 (B7); give.5 (B4i); motion.4's

@@ -122,12 +122,24 @@ act reads `window.here.get()` as it runs.
 - `design.1` Draw only with the catalogue.
 - `design.2` No colours or functions in a Tree's props.
 - `design.3` Colour means state, one meaning per colour.
-- `design.4` Tokens only, never colour literals.
+- `design.4` Colours are tokens, or tokens mixed: no hex, `rgb()`,
+  `oklch()`, named colour or palette name.
 - `design.5` The Bar draws text and small icons, quietly.
 - `design.6` Banda draws the Pane header from your manifest.
 - `design.7` Menus are Banda's, each row an action with its key.
 - `design.8` is a rule of Banda's own repository; for your App, show
   your Person a visible change before you make it.
+- `design.9` Corners take the five levels: `rounded-small` to
+  `rounded-window`, round or none.
+- `design.10` Type takes the scale, by the level's name (`text-meta`,
+  `text-ui`, …); no size as a number.
+- `design.11` A shadow is an elevation: `float`, `lift`, or the Window's
+  own; most things have none.
+- `design.12` A layer is named; a Pane's stay inside its Tile.
+- `design.13` Lengths are Tailwind's steps or tokens, no literal off the
+  4 px grid.
+- `design.14` A value the vocabulary lacks becomes a named step, never a
+  number.
 
 ## Motion
 
