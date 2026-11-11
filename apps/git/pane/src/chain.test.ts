@@ -206,6 +206,13 @@ test("Check knows a commit by its head, and a commit & push by both", async () =
     message: "Committed, but Push has not gone through yet.",
   })
 
+  // Nothing committed, though nothing is ahead either: not gone through.
+  const none = await cutOff("cp-none", "commit_push", { ahead: 0 })
+  await check(none.engine, "cp-none")
+  expect(runOf("cp-none")).toMatchObject({
+    message: "Commit & push has not gone through yet.",
+  })
+
   const four = await cutOff("cp-went", "commit_push", { head: "b2", ahead: 0 })
   await check(four.engine, "cp-went")
   expect(runOf("cp-went")).toMatchObject({
@@ -231,9 +238,12 @@ test("Check while arc is still away is refused at once, and stays to press again
 })
 
 test("only a run cut off on its way offers Check", async () => {
-  const { engine, streams } = fakeEngine()
+  // Its git is known, so what keeps Check away is that it was refused.
+  const { engine, streams } = fakeEngine({ "git.status": STATUS })
+  hearStatus(engine, "refused-no-check" as ProjectId, () => {})
+  ;(streams[0]!.onPiece as (status: Status) => void)(STATUS)
   await run(engine, "refused-no-check", null, "push")
-  streams[0]!.onEnd({ code: "conflict", message: "Pull first." })
+  streams.at(-1)!.onEnd({ code: "conflict", message: "Pull first." })
   expect(runOf("refused-no-check")).toEqual({
     is: "failed",
     message: "Pull first.",
