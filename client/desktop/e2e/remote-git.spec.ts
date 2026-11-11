@@ -218,7 +218,9 @@ test("a push cut off on its way says it may have gone through, and Check reads a
   const push = details.getByRole("button", { name: "Push" }).first()
   await expect(push).toBeVisible()
   await push.click()
-  await expect(details.getByRole("status")).toContainText(/Pushing|Running/)
+  await expect(
+    details.getByRole("status").filter({ hasText: "Running pre-push…" })
+  ).toBeVisible()
 
   // The link goes as the push runs; arc's git goes on by itself.
   arc!.blackhole(true)
