@@ -88,6 +88,7 @@ pub const WINDOWS: &[(&str, &str)] = &[
         "notifications",
         include_str!("../../../platform/notifications/window.json"),
     ),
+    ("clock", include_str!("../../../apps/clock/window.json")),
     ("window", include_str!("../../../client/web/window.json")),
 ];
 

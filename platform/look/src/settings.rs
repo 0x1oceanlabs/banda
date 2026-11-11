@@ -275,6 +275,7 @@ pub const BAR_RIGHT: &[&str] = &[
     "terminal.ports",
     "harnesses.limits",
     "notifications.recent",
+    "clock.now",
 ];
 
 pub(crate) fn owned(ids: &[&str]) -> Vec<String> {

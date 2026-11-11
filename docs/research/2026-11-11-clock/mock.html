@@ -1,0 +1,194 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Clock: the time, the date and a month on the Bar</title>
+<link rel="stylesheet" href="../../design/kit/kit.css" />
+<style>
+  /* Only the page's own layout; everything Banda is in kit.css. */
+  body { margin: 0; }
+  .page { max-width: 1384px; margin: 0 auto; padding: 28px 28px 64px; display: grid; gap: 40px; }
+  .page > header h1 { margin: 0 0 6px; font-size: 20px; font-weight: 600; }
+  .note { margin: 0 0 12px; color: var(--muted-foreground); font-size: 13px; line-height: 1.55; max-width: 76ch; }
+  section h2 { margin: 0 0 4px; font-size: 16px; font-weight: 600; display: flex; gap: 10px; align-items: baseline; }
+  .pick { font-size: 12px; font-weight: 500; color: var(--foreground); padding: 1px 8px; border-radius: var(--r-round); box-shadow: inset 0 0 0 1px var(--border); }
+  .stage { position: relative; height: 470px; display: flex; }
+  .stage .b-window { flex: 1; }
+  .work { flex: 1; padding: 8px; display: flex; min-height: 0; }
+  .work .b-tile { flex: 1; }
+  .lines { padding: 6px 18px; font-family: var(--font-mono); font-size: var(--text-code); line-height: 1.7; color: var(--muted-foreground); white-space: pre; overflow: hidden; }
+
+  /* The clock on the Bar: words in the bar's muted text, the time in the text's own. */
+  .clock { gap: 8px; }
+  .clock .t { color: var(--foreground); }
+  .clock.is-open { background: var(--hover); color: var(--foreground); }
+
+  /* The month, in the Top layer under the clock. */
+  .month { position: absolute; top: 42px; width: 268px; padding: 10px 10px 8px; z-index: 5; }
+  .month.at-right { right: 8px; }
+  .month.at-center { left: 50%; translate: -50% 0; }
+  .m-head { display: flex; align-items: center; gap: 2px; padding: 0 2px 6px 6px; }
+  .m-head .m-title { font-weight: 600; font-size: 13px; margin-right: auto; }
+  .m-head .b-ib { width: 26px; height: 26px; }
+  .flip { transform: scaleX(-1); }
+  .m-today { font-size: var(--text-meta); color: var(--muted-foreground); padding: 0 8px; height: 26px; display: inline-flex; align-items: center; border-radius: var(--r-item); }
+  .grid { display: grid; grid-template-columns: 22px repeat(7, 1fr); row-gap: 1px; text-align: center; font-variant-numeric: tabular-nums; }
+  .grid span { height: 30px; display: grid; place-items: center; font-size: 12.5px; border-radius: var(--r-item); }
+  .grid .dow { height: 22px; font-size: 11px; color: var(--muted-foreground); }
+  .grid .wk { font-size: 10.5px; color: var(--muted-foreground); opacity: .7; }
+  .grid .out { color: var(--muted-foreground); opacity: .55; }
+  .grid .day:hover { background: var(--hover); }
+  /* Today: on a faint fill, as the current workspace. No accent, no colour: today calls for nothing. */
+  .grid .now { background: color-mix(in oklab, var(--foreground) 12%, var(--floating)); font-weight: 600; }
+  .m-foot { margin-top: 6px; padding: 8px 8px 2px; border-top: 1px solid var(--border); font-size: var(--text-meta); color: var(--muted-foreground); display: flex; gap: 6px; }
+  .m-foot b { color: var(--foreground); font-weight: 500; }
+  .m-foot .r { margin-left: auto; }
+
+  .questions { display: grid; gap: 10px; font-size: 13px; line-height: 1.55; max-width: 86ch; }
+  .questions div { padding: 10px 14px; border-radius: var(--r-card); background: var(--block); box-shadow: inset 0 0 0 1px var(--border); }
+  .questions b { font-weight: 600; }
+</style>
+</head>
+<body class="b-kit">
+<div class="page">
+
+<header>
+  <h1>Clock: время, дата и месяц на Баре</h1>
+  <p class="note">Отдельный App <code>clock</code> (<code>apps/clock/</code>): свой <code>app.toml</code>, своя оконная часть <code>@banda/clock-pane</code> с одним Widget'ом на Баре и одним Action. Без части на движке: время и календарь — это часы и календарь устройства, данных и таблиц у App нет, возможностей (capabilities) он не просит. Как и любой Widget, стоит там, куда его ставит <code>look.toml [bar]</code>, — Alt+перетащить, или убрать совсем.</p>
+  <p class="note">Сценарий везде один: среда, 11 ноября 2026, 14:32, полноэкранный Banda без системной панели. Клик по часам открывает месяц; ‹ › листают, «Today» возвращает. Минуты тикают раз в минуту, секунд нет: «на поверхности тикает одни часы» (README, п. 9).</p>
+</header>
+
+<!-- ───────────── A ───────────── -->
+<section id="a">
+  <h2>A. Справа, в конце Бара: дата и время <span class="pick">Мой выбор</span></h2>
+  <p class="note">«Wed 11 Nov  14:32» после колокольчика, где их ждёт глаз по Omarchy и macOS. Дата — приглушённым текстом Бара, время — цветом текста. Видно всё сразу, без клика; клик — месяц.</p>
+  <div class="stage">
+    <div class="b-window">
+      <header class="b-bar">
+        <button class="b-bar-logo"><span data-mark="working" data-doing="execute" data-logo data-size="20"></span></button>
+        <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+        <button class="b-widget"><i data-icon="columns-3"></i></button>
+        <div class="b-bar-right">
+          <span class="b-widget"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+          <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+          <span class="b-widget"><i data-icon="bell"></i></span>
+          <button class="b-widget clock is-open" title="Wednesday, 11 November 2026"><span>Wed 11 Nov</span><span class="t">14:32</span></button>
+        </div>
+      </header>
+      <div class="work">
+        <section class="b-tile is-focused">
+          <div class="b-pane-head"><i data-icon="square-terminal"></i><span class="b-pane-title">pnpm vitest</span><span class="b-pane-detail">~/code/banda</span></div>
+          <div class="lines"> ✓ client/web/src/bar/placed.test.ts (14 tests) 31ms
+ ✓ client/web/src/registry.test.ts (9 tests) 12ms
+ ✓ apps/clock/pane/src/month.test.ts (11 tests) 8ms
+
+ Test Files  3 passed (3)
+      Tests  34 passed (34)</div>
+        </section>
+      </div>
+    </div>
+    <div class="b-menu month at-right" data-month></div>
+  </div>
+</section>
+
+<!-- ───────────── B ───────────── -->
+<section id="b">
+  <h2>B. Посередине Бара: только время</h2>
+  <p class="note">«14:32» в центре, как часы Omarchy и iPhone. Дата — в подсказке и в месяце. Но середина Бара — место счётчиков сайдбара, когда он скрыт (ADR 0035): там они встанут рядом, и середина станет шумнее.</p>
+  <div class="stage">
+    <div class="b-window">
+      <header class="b-bar">
+        <button class="b-bar-logo"><span data-mark="working" data-doing="execute" data-logo data-size="20"></span></button>
+        <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+        <button class="b-widget"><i data-icon="columns-3"></i></button>
+        <div class="b-bar-center"><button class="b-widget clock is-open" title="Wednesday, 11 November 2026"><span class="t">14:32</span></button></div>
+        <div class="b-bar-right">
+          <span class="b-widget"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+          <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+          <span class="b-widget"><i data-icon="bell"></i></span>
+        </div>
+      </header>
+      <div class="work">
+        <section class="b-tile is-focused">
+          <div class="b-pane-head"><i data-icon="square-terminal"></i><span class="b-pane-title">pnpm vitest</span><span class="b-pane-detail">~/code/banda</span></div>
+          <div class="lines"> ✓ client/web/src/bar/placed.test.ts (14 tests) 31ms
+ ✓ client/web/src/registry.test.ts (9 tests) 12ms
+ ✓ apps/clock/pane/src/month.test.ts (11 tests) 8ms</div>
+        </section>
+      </div>
+    </div>
+    <div class="b-menu month at-center" data-month></div>
+  </div>
+</section>
+
+<!-- ───────────── C ───────────── -->
+<section id="c">
+  <h2>C. Справа: только время</h2>
+  <p class="note">«14:32» в конце Бара, самое тихое. Дату видно только в подсказке и по клику — а именно её в полноэкранном режиме и не хватает.</p>
+  <div class="stage">
+    <div class="b-window">
+      <header class="b-bar">
+        <button class="b-bar-logo"><span data-mark="working" data-doing="execute" data-logo data-size="20"></span></button>
+        <nav class="b-ws"><button class="is-current">1</button><button>2</button><button>3</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+        <button class="b-widget"><i data-icon="columns-3"></i></button>
+        <div class="b-bar-right">
+          <span class="b-widget"><i data-icon="globe"></i>:5173 <span class="b-faint">+1</span></span>
+          <span class="b-widget"><span class="b-ring" style="--share:.62"></span></span>
+          <span class="b-widget"><i data-icon="bell"></i></span>
+          <button class="b-widget clock is-open" title="Wednesday, 11 November 2026"><span class="t">14:32</span></button>
+        </div>
+      </header>
+      <div class="work">
+        <section class="b-tile is-focused">
+          <div class="b-pane-head"><i data-icon="square-terminal"></i><span class="b-pane-title">pnpm vitest</span><span class="b-pane-detail">~/code/banda</span></div>
+          <div class="lines"> ✓ apps/clock/pane/src/month.test.ts (11 tests) 8ms</div>
+        </section>
+      </div>
+    </div>
+    <div class="b-menu month at-right" data-month></div>
+  </div>
+</section>
+
+<section id="q">
+  <h2>Вопросы</h2>
+  <div class="questions">
+    <div><b>1. Где и что на Баре?</b> A, B или C. <i>Мой выбор: A</i> — дата видна без клика, а не хватает именно её.</div>
+    <div><b>2. Всегда или только в полноэкранном режиме?</b> <i>Мой выбор: всегда</i> — App не знает, на весь ли экран окно (это не в Here), и прятать его — новая работа окна. Кому мешает, убирает из <code>[bar]</code>. «Только на весь экран» — позже, если захочешь.</div>
+    <div><b>3. Язык дат.</b> Как весь интерфейс, по-английски («Wed 11 Nov»), или по языку системы («ср, 11 нояб.»)? <i>Мой выбор: по системе</i> — через <code>Intl</code>: оттуда же 24 часа и неделя с понедельника.</div>
+    <div><b>4. События календаря (Google, CalDAV).</b> Не в этот раз: нужна часть на движке, сеть и вход в аккаунт. Сейчас — только месяц и номер недели.</div>
+  </div>
+</section>
+
+</div>
+<script src="../../design/kit/icons.js"></script>
+<script src="../../design/kit/mark.js"></script>
+<script>
+  // The month of 11 November 2026, weeks from Monday, with their ISO numbers.
+  const head = '<div class="m-head"><span class="m-title">November 2026</span>' +
+    '<button class="b-ib" title="Previous month"><i data-icon="chevron-right" data-size="15" class="flip"></i></button>' +
+    '<button class="b-ib" title="Next month"><i data-icon="chevron-right" data-size="15"></i></button></div>'
+  const dows = ["Mo", "Tu", "We", "Th", "Fr", "Sa", "Su"]
+  let cells = '<span class="dow"></span>' + dows.map((d) => `<span class="dow">${d}</span>`).join("")
+  // 1 November 2026 is a Sunday: the first week starts on 26 October.
+  const start = new Date(2026, 9, 26)
+  for (let w = 0; w < 6; w++) {
+    const monday = new Date(start); monday.setDate(start.getDate() + w * 7)
+    const thursday = new Date(monday); thursday.setDate(monday.getDate() + 3)
+    const jan4 = new Date(thursday.getFullYear(), 0, 4)
+    const week = 1 + Math.round(((thursday - jan4) / 864e5 - 3 + ((jan4.getDay() + 6) % 7)) / 7)
+    cells += `<span class="wk">${week}</span>`
+    for (let d = 0; d < 7; d++) {
+      const day = new Date(monday); day.setDate(monday.getDate() + d)
+      const out = day.getMonth() !== 10
+      const now = !out && day.getDate() === 11
+      cells += `<span class="day${out ? " out" : ""}${now ? " now" : ""}">${day.getDate()}</span>`
+    }
+  }
+  const foot = '<div class="m-foot"><b>Wednesday, 11 November</b><span class="r">week 46</span></div>'
+  for (const el of document.querySelectorAll("[data-month]"))
+    el.innerHTML = head + `<div class="grid">${cells}</div>` + foot
+  BandaIcons.scan(); BandaMark.scan()
+</script>
+</body>
+</html>

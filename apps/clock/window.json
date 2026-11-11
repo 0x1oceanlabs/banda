@@ -1,0 +1,12 @@
+{
+  "panes": [],
+  "actions": [],
+  "sources": [],
+  "watches": 0,
+  "bar": [
+    {
+      "id": "clock.now",
+      "about": "The day and the time, by this device's clock and language; a click shows the month, with its weeks' numbers."
+    }
+  ]
+}

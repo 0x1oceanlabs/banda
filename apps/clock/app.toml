@@ -1,0 +1,15 @@
+# The clock App, as it declares itself (ADR 0022). It has no engine part:
+# its window part shows the day and the time on the bar, by this device's
+# clock and language, and the month a click shows.
+id = "clock"
+kind = "app"
+name = "Clock"
+about = "The day and the time on the bar, by this device's clock and language, for when the system's own bar is hidden, as in full screen; a click shows the month, with its weeks' numbers."
+version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
+from-banda = true
+settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing.
+[needs]
