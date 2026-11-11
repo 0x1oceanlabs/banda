@@ -11,7 +11,10 @@ Each job is a VM of its own, 4 CPUs and 16 GB, which GitHub throws away
 after it. What a run builds on is only the caches main's runs save
 (below): main's `rust ts` saves the dependencies every Linux part reads,
 and each part keeps pnpm's store and Electron's download by the
-lockfile. `ci/Dockerfile` still pins the Node the jobs install, and
+lockfile. The Ubuntu packages a part needs, `ci/apt.sh` installs: only
+those the runner's image lacks (the window's libraries it has), and,
+when Ubuntu's mirrors fail, bubblewrap from Debian's archive by a pinned
+hash. `ci/Dockerfile` still pins the Node the jobs install, and
 `release.yml`'s pack still runs on devbox's runners (below) until it
 moves too.
 
