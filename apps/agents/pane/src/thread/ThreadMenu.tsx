@@ -299,6 +299,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
     }
     case "link": {
       const inBanda = acts.inBanda(at.address)
+      const outside = acts.opensHere(at.address)
       return (
         <>
           {inBanda && (
@@ -309,7 +310,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
               Open in Banda
             </DropdownMenuItem>
           )}
-          {acts.opensHere(at.address) && (
+          {outside && (
             <DropdownMenuItem onClick={item(() => acts.open(at.address, true))}>
               <ExternalLinkIcon />
               {inBanda
@@ -320,7 +321,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
               )}
             </DropdownMenuItem>
           )}
-          <DropdownMenuSeparator />
+          {(inBanda || outside) && <DropdownMenuSeparator />}
           <DropdownMenuItem onClick={() => copy(at.address)}>
             <CopyIcon />
             Copy address
