@@ -244,3 +244,36 @@ test("a Pane's device says a file is this computer's only where its Project is t
   expect(there.has("clipboard")).toBe(true)
   hosts.engine("arc").close()
 })
+
+test("a link of another machine's Project opens from the device, and its own address is refused with what to copy", async () => {
+  const { hosts } = await machines()
+  const link: Act = {
+    title: "Open a link",
+    at: "owner",
+    here: true,
+    refuses: (args, machine) =>
+      args?.url === "http://localhost:3000/"
+        ? {
+            why: `localhost:3000 is ${machine}'s`,
+            offer: { about: "Later.", copy: "http://localhost:3000/" },
+          }
+        : undefined,
+  }
+  expect(routeAct(hosts, link, onArc, { url: "https://a.example/" })).toEqual({
+    runs: true,
+    args: { url: "https://a.example/", project: "r1" },
+    host: "arc",
+  })
+  expect(
+    routeAct(hosts, link, onArc, { url: "http://localhost:3000/" })
+  ).toEqual({
+    runs: false,
+    why: "localhost:3000 is arc's",
+    said: "localhost:3000 is arc's",
+    offer: { about: "Later.", copy: "http://localhost:3000/" },
+  })
+  // Here, every address is this machine's own and opens.
+  expect(
+    routeAct(hosts, link, onMine, { url: "http://localhost:3000/" }).runs
+  ).toBe(true)
+})
