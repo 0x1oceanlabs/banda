@@ -14,6 +14,7 @@ import { MarkdownMedia } from "@banda/ui/components/markdown-media"
 import { MarkdownTasks, type Tick } from "@banda/ui/components/markdown-task"
 import { InHeader } from "@banda/ui/components/pane-header"
 import { useFileMint } from "@banda/ui/hooks/use-file-url"
+import { openOutside } from "@banda/ui/lib/links"
 import type { PreviewProps } from "@banda/ui/module"
 import type { Engine } from "@banda/contract"
 import { CodeIcon, FileWarningIcon } from "lucide-react"
@@ -172,7 +173,7 @@ export function MarkdownIn({
   )
   const open = useCallback(
     (address: string, outside: boolean) => {
-      if (outside) window.open(address, "_blank", "noopener,noreferrer")
+      if (outside) openOutside(address)
       else run?.("browser.open", { address, project })
     },
     [run, project]

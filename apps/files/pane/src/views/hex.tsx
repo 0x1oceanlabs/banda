@@ -77,7 +77,7 @@ function usePages(file: PreviewProps["file"], read: PreviewProps["read"]) {
   return { byte, want }
 }
 
-export default function HexView({ file, read, mode }: PreviewProps) {
+export default function HexView({ file, read, mode, local }: PreviewProps) {
   const size = file.size ?? 0
   const rows = Math.ceil(size / ROW)
   const digits = offsetDigits(size)
@@ -167,6 +167,7 @@ export default function HexView({ file, read, mode }: PreviewProps) {
     >
       <HexFacts
         file={file}
+        local={local}
         marked={marked}
         byte={marked === null ? undefined : byte(marked)}
       />
@@ -252,13 +253,16 @@ export default function HexView({ file, read, mode }: PreviewProps) {
  * is. */
 function HexFacts({
   file,
+  local,
   marked,
   byte,
 }: {
   file: PreviewProps["file"]
+  local: PreviewProps["local"]
   marked: number | null
   byte: number | undefined
 }) {
+  const outside = local?.(file.path)
   const kind = kindWords({ path: file.path, kind: "file", mime: file.mime })
   const facts = [
     kind,
@@ -283,15 +287,17 @@ function HexFacts({
           {byte !== undefined && ` = ${hexOf(byte)}`}
         </span>
       )}
-      <Button
-        size="xs"
-        variant="ghost"
-        className="shrink-0 text-muted-foreground"
-        onClick={() => openWithSystem(file.path)}
-      >
-        <AppWindowIcon />
-        Open in its app
-      </Button>
+      {outside && (
+        <Button
+          size="xs"
+          variant="ghost"
+          className="shrink-0 text-muted-foreground"
+          onClick={() => openWithSystem(outside)}
+        >
+          <AppWindowIcon />
+          Open in its app
+        </Button>
+      )}
     </div>
   )
 }

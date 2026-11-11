@@ -19,3 +19,10 @@ export function linkHint(
 ): string {
   return `${shown}\nClick to open in Banda · Ctrl+click to open ${outside}`
 }
+
+/** Opens a page in this device's browser, the device's own act (ADR 0106,
+ * decision 3): main hands an http(s) address to the system, and nothing
+ * else leaves the page. */
+export function openOutside(url: string): void {
+  window.open(url, "_blank", "noopener")
+}

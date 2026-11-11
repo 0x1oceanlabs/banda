@@ -4,6 +4,7 @@
  * the bar with its Tab completion. Pure, so plain tests cover it.
  */
 import type { Entry } from "@banda/contract/files"
+import type { Device, DeviceFile, ProjectFile } from "@banda/core"
 import { isFolder } from "./tree"
 
 /** `path` with `~` for `home` and what is under it. */
@@ -151,4 +152,17 @@ export function completed(typed: string, names: readonly string[]): string {
   }
   const { start } = typedParts(typed)
   return shared.length > start.length ? `${folder}${shared}` : typed
+}
+
+/**
+ * The file at `whole` as this computer holds it, none for another
+ * machine's: what opens it outside Banda takes only this (ADR 0106,
+ * decision 3).
+ */
+export function localOf(
+  device: Device | undefined,
+  file: ((path: string) => ProjectFile) | undefined,
+  whole: string
+): DeviceFile | undefined {
+  return device && file ? device.local(file(whole)) : undefined
 }

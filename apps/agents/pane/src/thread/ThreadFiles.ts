@@ -6,6 +6,7 @@
 import { useLayoutEffect, useMemo } from "react"
 import type { FoundFile, Item } from "@banda/contract/agents"
 import type { FileAt, FilesHost } from "@banda/ui/components/markdown-file"
+import { deviceFile } from "@banda/core"
 import { openInEditor } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { type AgentsHost, agentsHost } from "../desktop"
@@ -84,7 +85,9 @@ class ThreadFiles implements FilesHost {
   /** Opens it at its line in the editor `files.toml` names, or the first
    * found; in its app when none is. */
   edit(at: FileAt): void {
-    void openInEditor(at.file, at)
+    // This machine's alone until step 3c names a reply's paths as a
+    // session's (ADR 0106).
+    void openInEditor(deviceFile(at.file), at)
   }
 
   /** Shows the file in its folder, in the system's file manager. */

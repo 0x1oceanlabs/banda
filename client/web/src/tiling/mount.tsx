@@ -25,6 +25,7 @@ import {
   type KeptHosts,
   type Owner,
   type Refused,
+  projectFile,
   type Route,
   routeAct,
   UNKNOWN,
@@ -38,6 +39,8 @@ import {
 } from "@banda/ui/components/empty"
 import { toast } from "@banda/ui/components/sonner"
 import { copyText } from "@banda/ui/lib/clipboard"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
+import { elsewherePreviewers, Previewers, usePreviewers } from "@banda/ui/lib/previewers"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import type { AnyPaneKind, Args } from "@banda/ui/module"
 import type { PaneProps, PaneState, Runs } from "@banda/ui/pane"
@@ -52,7 +55,7 @@ export type Handle = Pick<
 
 /** What a Pane runs, asks and holds of the device, as `handlesOf` gives
  * it. */
-export type Handles = Pick<PaneProps<Args>, "run" | "runs" | "device">
+export type Handles = Pick<PaneProps<Args>, "run" | "runs" | "device" | "file">
 
 /** One of the window's acts as the router weighs it (`Act`), and whether
  * it takes the arg `name`, as its schema says. */
@@ -171,7 +174,18 @@ export function handlesOf(
     const route = routeAct(hosts, act, from, args)
     return route.runs ? { runs: true } : { runs: false, why: route.why }
   }
-  return { run: routed, runs, device: deviceFor(hosts, routing.has) }
+  // Only a Pane of a Project stamps its files, from its own binding (law
+  // 2): the Sheet's, of no Project, names none.
+  const stamp =
+    project === undefined
+      ? {}
+      : { file: (path: string) => projectFile(project, path) }
+  return {
+    run: routed,
+    runs,
+    device: deviceFor(hosts, routing.has, THIS_COMPUTER),
+    ...stamp,
+  }
 }
 
 /** The handles of a Pane whose values are `owner`'s (`handlesOf`): the
@@ -247,6 +261,7 @@ export function PaneMount({
   project,
   pane,
   owner,
+  elsewhere = false,
   focused,
   selected,
   peek,
@@ -258,6 +273,9 @@ export function PaneMount({
   project: ProjectId
   pane: PaneState
   owner: Owner
+  /** The Pane's values are another machine's: it is handed only the
+   * previewers that say `elsewhere` (ADR 0106, decision 2). */
+  elsewhere?: boolean
   focused: boolean
   selected?: boolean
   peek?: boolean
@@ -265,19 +283,26 @@ export function PaneMount({
   run: ((action: string, args?: Args) => void) | undefined
 }) {
   const handles = usePaneHandles(owner, run, pane)
+  const all = usePreviewers()
+  const previewers = useMemo(
+    () => (elsewhere ? elsewherePreviewers(all) : all),
+    [all, elsewhere]
+  )
   return (
     <Broken close={handle.close}>
       <KindsContext value={KINDS}>
-        <kind.Pane
-          engine={engine}
-          project={project}
-          args={pane.args}
-          focused={focused}
-          selected={selected}
-          {...(peek && { peek })}
-          {...handle}
-          {...handles}
-        />
+        <Previewers value={previewers}>
+          <kind.Pane
+            engine={engine}
+            project={project}
+            args={pane.args}
+            focused={focused}
+            selected={selected}
+            {...(peek && { peek })}
+            {...handle}
+            {...handles}
+          />
+        </Previewers>
       </KindsContext>
     </Broken>
   )

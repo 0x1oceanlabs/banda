@@ -46,6 +46,10 @@ export type Thing = { project: ProjectId; about: string }
 export type Chip = {
   /** The file's whole path; a folder's ends with `/`. */
   path: string
+  /** The Project the file is in: what names it to the Message box of a
+   * Thread on the same machine (ADR 0106, laws 2 and 3). None for a file
+   * no Project has, which only a Message box in focus takes. */
+  project?: ProjectId
   /** The lines it is about, the first and the last, from 1. */
   lines?: readonly [from: number, to: number]
   /** What the Person says of them. */

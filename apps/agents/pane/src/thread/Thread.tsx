@@ -15,7 +15,8 @@ import { ZoomBadge } from "@banda/ui/components/zoom-badge"
 import { useZoom, zoomHandlers } from "@banda/ui/hooks/use-zoom"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { THREAD } from "../scopes"
-import { carries, droppedPaths } from "@banda/ui/lib/file-drag"
+import { toast } from "@banda/ui/components/sonner"
+import { carries, droppedFiles } from "@banda/ui/lib/file-drag"
 import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { fromFolder } from "@banda/ui/lib/paths"
 import type { Chip } from "@banda/ui/module"
@@ -411,12 +412,16 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       // text; files from another app are kept, as below. Another host's
       // Thread takes no path of this machine's.
       onDropCapture={(event) => {
-        const paths = droppedPaths(event.dataTransfer)
-        if (!paths) return
+        const dropped = droppedFiles(event.dataTransfer)
+        if (!dropped) return
         event.preventDefault()
         event.stopPropagation()
         setDropping(false)
-        if (here) void point(paths)
+        const why = dropped
+          .map((file) => props.device?.across(file, project))
+          .find((words) => words !== undefined)
+        if (why) toast.warning(why, { id: `across ${why}` })
+        else void point(dropped.map((file) => file.path))
       }}
       onDrop={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return

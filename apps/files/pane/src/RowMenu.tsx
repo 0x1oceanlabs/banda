@@ -46,6 +46,7 @@ import {
   Trash2Icon,
 } from "lucide-react"
 import type { ReactNode } from "react"
+import type { DeviceFile } from "@banda/core"
 import { type Does, idOf } from "./keys"
 import { nameOf, within } from "./where"
 
@@ -111,6 +112,7 @@ export function MakeItems({ acts }: { acts: Acts }) {
 
 export function RowMenu({
   whole,
+  local,
   folder,
   top,
   pinned,
@@ -123,6 +125,10 @@ export function RowMenu({
 }: {
   /** The row's whole path. */
   whole: string
+  /** The row as this computer holds it; none for another machine's,
+   * whose rows have no way out to this computer's apps (ADR 0106,
+   * decision 3). */
+  local?: DeviceFile
   folder: boolean
   /** The Project's folder, whole: a path in it copies from it. */
   top: string | null
@@ -163,13 +169,13 @@ export function RowMenu({
           Show in Files
         </DropdownMenuItem>
       )}
-      {editor && (
-        <DropdownMenuItem onClick={() => void openInEditor(whole)}>
+      {local && editor && (
+        <DropdownMenuItem onClick={() => void openInEditor(local)}>
           <SquareCodeIcon />
           Open in {editor.name}
         </DropdownMenuItem>
       )}
-      {others.length > 0 && (
+      {local && others.length > 0 && (
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>
             <SquareCodeIcon />
@@ -179,7 +185,7 @@ export function RowMenu({
             {others.map((other) => (
               <DropdownMenuItem
                 key={other.id}
-                onClick={() => void openInEditor(whole, {}, other.id)}
+                onClick={() => void openInEditor(local, {}, other.id)}
               >
                 {other.name}
               </DropdownMenuItem>
@@ -187,16 +193,18 @@ export function RowMenu({
           </DropdownMenuSubContent>
         </DropdownMenuSub>
       )}
-      {!folder && (
-        <DropdownMenuItem onClick={() => openWithSystem(whole)}>
+      {local && !folder && (
+        <DropdownMenuItem onClick={() => openWithSystem(local)}>
           <AppWindowIcon />
           Open with the system
         </DropdownMenuItem>
       )}
-      <DropdownMenuItem onClick={() => reveal(whole)}>
-        <FolderDownIcon />
-        Reveal in {FILE_MANAGER}
-      </DropdownMenuItem>
+      {local && (
+        <DropdownMenuItem onClick={() => reveal(local)}>
+          <FolderDownIcon />
+          Reveal in {FILE_MANAGER}
+        </DropdownMenuItem>
+      )}
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={onAttach}>
         <AtSignIcon />

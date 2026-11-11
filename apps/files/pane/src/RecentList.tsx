@@ -6,6 +6,7 @@
  */
 import { useCallback, useRef, useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
+import type { DeviceFile } from "@banda/core"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -27,6 +28,7 @@ export function RecentList({
   engine,
   project,
   home,
+  local,
   top,
   onOpen,
   onShow,
@@ -35,6 +37,8 @@ export function RecentList({
   engine: Engine
   project: ProjectId
   home: string | null
+  /** A whole path as this computer holds it; none for another machine's. */
+  local: (whole: string) => DeviceFile | undefined
   /** The Project's folder, whole, as the engine found it. */
   top: string | null
   onOpen: (path: string) => void
@@ -133,6 +137,7 @@ export function RecentList({
         {menu && (
           <RowMenu
             whole={menu}
+            local={local(menu)}
             folder={false}
             top={top}
             onOpen={() => onOpen(menu)}

@@ -39,28 +39,30 @@ export function focusedOn(entry: string): void {
 }
 
 /**
- * The entry whose composer takes what is attached: the focused Pane's, if
- * it has one; else the one that had the focus last in the focused Pane's
- * Project; none else, or with no Pane focused.
+ * The entry whose composer takes what is attached of `project`, on its
+ * own machine alone (ADR 0106, laws 2 and 3): the focused Pane's, if it
+ * has one in that Project; else the one that had the focus last in that
+ * Project; none else, or with no Pane focused. A Project's path means
+ * nothing in another's Message box, whatever Pane has the focus.
  */
 export function composerFor(
   focused: { id: string; project: ProjectId } | null,
+  project: ProjectId,
   history: readonly string[],
   composers: ReadonlyMap<string, Pick<Composer, "project">>
 ): string | null {
   if (!focused) return null
-  if (composers.has(focused.id)) return focused.id
-  return (
-    history.find((id) => composers.get(id)?.project === focused.project) ?? null
-  )
+  if (composers.get(focused.id)?.project === project) return focused.id
+  return history.find((id) => composers.get(id)?.project === project) ?? null
 }
 
-/** Where `chips` go, for the focused Pane: its entry and how its
- * composer takes them; none when no Thread takes them. */
+/** Where chips of `project` go, for the focused Pane: its entry and how
+ * its composer takes them; none when no Thread of that Project does. */
 export function attachTo(
-  focused: { id: string; project: ProjectId } | null
+  focused: { id: string; project: ProjectId } | null,
+  project: ProjectId
 ): { entry: string; take: Composer["take"] } | null {
-  const entry = composerFor(focused, history, composers)
+  const entry = composerFor(focused, project, history, composers)
   const take = entry === null ? undefined : composers.get(entry)?.take
   return entry !== null && take ? { entry, take } : null
 }
@@ -70,7 +72,8 @@ export function attachTo(
  * given. */
 export function chipOf(
   path: string,
-  args: { readonly [key: string]: JsonValue }
+  args: { readonly [key: string]: JsonValue },
+  project?: ProjectId
 ): Chip {
   const { from, to, comment, text } = args
   const lines =
@@ -79,6 +82,7 @@ export function chipOf(
       : undefined
   return {
     path,
+    ...(project !== undefined && { project }),
     ...(lines && { lines }),
     ...(typeof comment === "string" && comment.trim()
       ? { comment: comment.trim() }

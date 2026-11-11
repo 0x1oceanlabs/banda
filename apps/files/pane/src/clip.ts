@@ -1,19 +1,21 @@
 /**
  * Files' own clipboard of paths (ADR 0073, decision 10): Ctrl+C and
- * Ctrl+X on rows keep their whole paths here, for Ctrl+V to copy or move
- * into another folder, and put them on the system's clipboard as text, a
+ * Ctrl+X on rows keep their files here, each with its Project (ADR 0106,
+ * decision 5), for Ctrl+V to copy or move into another folder of the same
+ * machine, and put their whole paths on the system's clipboard as text, a
  * line each, for anything else. One for the window.
  */
+import type { ProjectFile } from "@banda/core"
 import { copyText } from "@banda/ui/lib/clipboard"
 
-export type Clip = { paths: readonly string[]; cut: boolean }
+export type Clip = { files: readonly ProjectFile[]; cut: boolean }
 
 let clip: Clip | null = null
 
-/** Keeps `paths` to paste, cut or copied. */
-export function keep(paths: readonly string[], cut: boolean): void {
-  clip = { paths, cut }
-  copyText(paths.join("\n"))
+/** Keeps `files` to paste, cut or copied. */
+export function keep(files: readonly ProjectFile[], cut: boolean): void {
+  clip = { files, cut }
+  copyText(files.map((file) => file.path).join("\n"))
 }
 
 /** What waits to be pasted. */

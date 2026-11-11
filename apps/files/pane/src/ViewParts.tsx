@@ -17,8 +17,9 @@ import {
   useRef,
   useState,
 } from "react"
+import type { ProjectFile } from "@banda/core"
 import type { FolderTreeHandle, Mark } from "@banda/ui/components/file-tree"
-import { bringsFiles, droppedPaths } from "@banda/ui/lib/file-drag"
+import { bringsFiles, droppedFiles } from "@banda/ui/lib/file-drag"
 import { cn } from "@banda/ui/lib/utils"
 import { ARROWS, moved, parentRow, type View } from "./views"
 import "./views.css"
@@ -30,8 +31,9 @@ export type ViewEvents = {
   onOpen: (row: string) => void
   onDrag: (rows: string[], event: DragEvent) => void
   /** Banda's files dropped in a folder, `""` the top: copied with Alt
-   * (⌥) or Ctrl held. */
-  onDrop: (paths: readonly string[], into: string, copy: boolean) => void
+   * (⌥) or Ctrl held. Each names its Project: one of another machine's
+   * is refused, in words that say where it is. */
+  onDrop: (files: readonly ProjectFile[], into: string, copy: boolean) => void
   /** A row renamed in place: whether its Pane renamed it. */
   onRename: (from: string, to: string) => Promise<boolean>
 }
@@ -138,11 +140,11 @@ export function useDrop(
       },
       onDrop: (event) => {
         setOver(false)
-        const paths = droppedPaths(event.dataTransfer)
-        if (!paths) return
+        const files = droppedFiles(event.dataTransfer)
+        if (!files) return
         event.preventDefault()
         event.stopPropagation()
-        onDrop(paths, into, event.altKey || event.ctrlKey)
+        onDrop(files, into, event.altKey || event.ctrlKey)
       },
     },
   ]
