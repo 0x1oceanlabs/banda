@@ -962,31 +962,51 @@ function accentOf(): string | null {
     : null
 }
 
-/** Writes what the system says of itself where the look reads it, its
- * accent (ADR 0100, decision 1), now and each time the Person changes
- * it: the look resolves the theme again, so the macos theme's focus,
- * rings and buttons take the Person's colour (ADR 0075, decision 6). It
- * is written before the look starts, so the first look has it too. */
+/** Writes what the system says of itself where the look reads it, now
+ * and each time the Person changes it: its accent (ADR 0100, decision 1),
+ * so the macos theme's focus, rings and buttons take the Person's colour
+ * (ADR 0075, decision 6); and whether it reduces transparency or raises
+ * contrast, which turns glass off while it does (ADR 0100, decision 4).
+ * The look resolves the theme again on each change, so only a change is
+ * written: the window's own mode changes `nativeTheme` too. It is written
+ * before the look starts, so the first look has it too. */
 function followDevice(): void {
   const file = join(state, "device.json")
+  let written = ""
   const write = () => {
     const accent = accentOf()
-    const device: Device = accent ? { accent } : {}
+    const device: Device = {
+      ...(accent && { accent }),
+      reduce_transparency: nativeTheme.prefersReducedTransparency,
+      // Windows' high contrast forces its own colours.
+      high_contrast:
+        nativeTheme.shouldUseHighContrastColors ||
+        nativeTheme.inForcedColorsMode,
+    }
+    const text = JSON.stringify(device)
+    if (text === written) return
     try {
       mkdirSync(state, { recursive: true })
-      writeFileSync(`${file}.new`, JSON.stringify(device))
+      writeFileSync(`${file}.new`, text)
       renameSync(`${file}.new`, file)
+      written = text
     } catch (error) {
       console.error(`banda: ${file}: ${String(error)}`)
     }
   }
   write()
-  if (process.platform === "darwin")
+  nativeTheme.on("updated", write)
+  if (process.platform === "darwin") {
     systemPreferences.subscribeNotification(
       "AppleColorPreferencesChangedNotification",
       write
     )
-  else if (process.platform === "win32")
+    // Reduce transparency and increase contrast, in Accessibility.
+    systemPreferences.subscribeWorkspaceNotification(
+      "NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification",
+      write
+    )
+  } else if (process.platform === "win32")
     systemPreferences.on("accent-color-changed", write)
 }
 

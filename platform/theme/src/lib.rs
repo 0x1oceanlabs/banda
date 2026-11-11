@@ -55,9 +55,23 @@ pub struct Device {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub accent: Option<String>,
+    /// The system reduces transparency, as its accessibility settings
+    /// say: glass is off while it does (ADR 0100, decision 4).
+    #[serde(default)]
+    pub reduce_transparency: bool,
+    /// The system raises contrast, or forces its own colours: glass is
+    /// off while it does (ADR 0100, decision 4).
+    #[serde(default)]
+    pub high_contrast: bool,
 }
 
 impl Device {
+    /// Whether the system asks for no glass: it reduces transparency or
+    /// raises contrast.
+    pub fn plain(&self) -> bool {
+        self.reduce_transparency || self.high_contrast
+    }
+
     /// The device's file at `path`; a file that is not there, or does not
     /// read, says nothing. The window writes it, not the Person.
     pub fn read(path: &std::path::Path) -> Device {

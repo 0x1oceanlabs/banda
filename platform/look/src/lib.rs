@@ -662,8 +662,16 @@ pub fn resolve(
     } else {
         (None, None)
     };
-    let glass =
-        wanted && (material == Material::System || wallpaper.is_some() || wallpaper_dark.is_some());
+    // What the device says of itself: the system's accent (ADR 0100,
+    // decision 1), and whether it reduces transparency or raises contrast,
+    // which turns glass off while it does (ADR 0100, decision 4).
+    let device = places.device.as_ref().map_or_else(Device::default, |path| {
+        watched.push(path.clone());
+        Device::read(path)
+    });
+    let glass = wanted
+        && !device.plain()
+        && (material == Material::System || wallpaper.is_some() || wallpaper_dark.is_some());
     // Hyprland's settings are the omarchy theme's shape (ADR 0075, decision
     // 3), and the glass changes the background, never the shape: Hyprland's
     // gaps hold, glass or not.
@@ -691,12 +699,6 @@ pub fn resolve(
     keyed_layers.push(keyed::Layer::new("file", &mine, mine_file.as_ref()));
     let all = mine.clone().over(layers);
 
-    // What the device says of itself: the system's accent (ADR 0100,
-    // decision 1).
-    let device = places.device.as_ref().map_or_else(Device::default, |path| {
-        watched.push(path.clone());
-        Device::read(path)
-    });
     // How solid the desk and the tiles are over glass, when it is.
     let over = glass.then(|| {
         let desk = share(all.desk.opacity, material.tint());

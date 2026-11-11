@@ -90,6 +90,22 @@ outside CI, the spec requires the namespace where `unshare -Ur true`
 works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as devbox
 does.
 
+## The themes' shots
+
+`client/desktop/e2e/themes.spec.ts` shoots each built-in theme in all
+four, light and dark, solid and over glass, and compares each shot with
+the one kept in `client/desktop/e2e/shots/` (ADR 0100, decision 4). The
+glass is made of `e2e/backdrop.png`, white, mid grey and black side by
+side, not a real wallpaper. Fonts and their rendering differ machine to
+machine, so the shots are the window shards' own: only in CI does the
+spec compare, and elsewhere it puts each look in `test-results/themes/`
+for eyes.
+
+A change that means to show fails the spec, and its shard uploads what
+it shot. `scripts/bless-shots.sh <run id>` keeps those shots in
+`e2e/shots/`; look at them before you commit them. A new look, with no
+shot yet, goes the same way.
+
 ## macOS
 
 `.github/workflows/macos.yml` runs the Rust tests on GitHub's `macos-15`
