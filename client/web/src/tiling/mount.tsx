@@ -24,6 +24,7 @@ import {
   type Hosts,
   type KeptHosts,
   type Owner,
+  type Refused,
   type Route,
   routeAct,
   UNKNOWN,
@@ -36,6 +37,7 @@ import {
   EmptyDescription,
 } from "@banda/ui/components/empty"
 import { toast } from "@banda/ui/components/sonner"
+import { copyText } from "@banda/ui/lib/clipboard"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import type { AnyPaneKind, Args } from "@banda/ui/module"
 import type { PaneProps, PaneState, Runs } from "@banda/ui/pane"
@@ -74,9 +76,16 @@ export const RoutingContext = createContext<Routing>({
 })
 
 /** Says why an act did not run, in a toast, once while it shows: "Not on
- * arc yet: Open in a browser" (ADR 0106, law 3). */
-export function refused(said: string): void {
-  toast(said, { id: `refused ${said}` })
+ * arc yet: Open in a browser" (ADR 0106, law 3), with a Copy where it
+ * offers one. */
+export function refused({ said, offer }: Refused): void {
+  toast(said, {
+    id: `refused ${said}`,
+    ...(offer && {
+      description: offer.about,
+      action: { label: "Copy", onClick: () => void copyText(offer.copy) },
+    }),
+  })
 }
 
 /**
@@ -93,10 +102,10 @@ export function actAs(
 ): void {
   const first = route()
   if (first.runs) return run(first.args)
-  if (first.why !== UNKNOWN) return refused(first.said)
+  if (first.why !== UNKNOWN) return refused(first)
   void hosts.reread().then(() => {
     const again = route()
-    if (!again.runs) return refused(again.said)
+    if (!again.runs) return refused(again)
     // The rest of the window hears of the Project too.
     projectsChanged()
     run(again.args)

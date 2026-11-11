@@ -52,6 +52,13 @@ export type Act = {
   /** Where its args name no Project, it acts in the one the Person is in
    * (ADR 0087, decision 4), as an App's acts do. */
   here?: true
+  /** Why it does not run on another machine `machine` for these `args`,
+   * though nothing else stops it: a `localhost` link of arc's. None where
+   * it runs. */
+  refuses?: (
+    args: Args | undefined,
+    machine: string
+  ) => Pick<Refused, "why" | "offer"> | undefined
 }
 
 /**
@@ -66,8 +73,16 @@ export type From = { pane: Owner } | { here: Owner }
  * on host `host` or on this machine; or it does not, and why, in the
  * Person's words, short (`why`) and as a toast says it (`said`). */
 export type Route =
-  | { runs: true; args: Args | undefined; host?: string }
-  | { runs: false; why: string; said: string }
+  { runs: true; args: Args | undefined; host?: string } | Refused
+
+/** An act that does not run, and why: short (`why`), and as a toast says
+ * it (`said`), with text the Person may want to copy (`offer`). */
+export type Refused = {
+  runs: false
+  why: string
+  said: string
+  offer?: { about: string; copy: string }
+}
 
 /** What the router reads of the Window's hosts. */
 export type Hosts = Pick<
@@ -112,11 +127,11 @@ const sameWhere = (a: Where, b: Where) =>
 const nameOf = (hosts: Hosts, host: string) =>
   namedIn(hosts.get(), host, hosts.seen).name
 
-const refused = (why: string, said = why): Route => ({
-  runs: false,
-  why,
-  said,
-})
+const refused = (
+  why: string,
+  said = why,
+  offer?: Refused["offer"]
+): Refused => ({ runs: false, why, said, ...(offer && { offer }) })
 
 /**
  * Where `act`, asked `from` a Pane or where the Person is, runs with
@@ -136,7 +151,8 @@ const refused = (why: string, said = why): Route => ({
  *   machine's welcome does not list: "Not on arc yet: Open in a browser".
  *   An App's act there runs, while that machine is away too: its own acts
  *   fail at once then, in the words of its pill (ADR 0106, law 4), as a
- *   Pane it opens shows that pill.
+ *   Pane it opens shows that pill. One whose args do not fit that machine
+ *   says so (`Act.refuses`), as a `localhost` link of arc's.
  */
 export function routeAct(
   hosts: Hosts,
@@ -199,6 +215,8 @@ export function routeAct(
     const why = `Not on ${nameOf(hosts, host)} yet`
     return refused(why, `${why}: ${act.title}`)
   }
+  const no = act.refuses?.(runWith, nameOf(hosts, host))
+  if (no) return refused(no.why, no.why, no.offer)
   return { runs: true, args: runWith, host }
 }
 

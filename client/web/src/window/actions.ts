@@ -14,11 +14,14 @@ import {
   type From,
   type Hosts,
   type KeptHosts,
+  linkOf,
+  linkRefused,
   routeAct,
 } from "@banda/core"
 import { useState } from "react"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
+import { openOutside } from "@banda/ui/lib/links"
 import { updateProject } from "@banda/ui/lib/projects"
 import {
   type Action,
@@ -1123,6 +1126,21 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       }),
   },
   {
+    // A web address from a Pane opens in this device's browser, and one
+    // of another machine's own computer says it is that machine's (ADR
+    // 0106, decision 3). It takes its address from a Pane alone: it
+    // declares no `args`, so no line of keys.toml, the Person's or an
+    // Agent's, can name one (ADR 0071, decision 3).
+    id: "link.open",
+    section: "Panes",
+    title: "Open a link",
+    unlisted: true,
+    run: (_shell, args = {}) => {
+      const link = typeof args.url === "string" ? linkOf(args.url) : undefined
+      if (link) openOutside(link.url)
+    },
+  },
+  {
     // What an App asks once an Item is put away, as a Thread put off.
     id: "pane.put-away",
     args: takes(
@@ -1611,6 +1629,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
 const ON_FILES = "file"
 
 /**
+ * The window's own acts on a web address: a value of the Pane's Project,
+ * so the router weighs it there, and it runs in this window, on this
+ * device's browser, on any machine's Project, but for an address of that
+ * machine's own (`linkRefused`, ADR 0106, decision 3).
+ */
+const ON_LINKS = "link"
+
+/**
  * The window's own acts on this machine's engine, by the word their ids
  * start with: its Projects', as Add Project and Pin, and its Problems'.
  * One that names another machine's Project does not go there; one that
@@ -1631,6 +1657,16 @@ export function actOf(action: Action<Shell>): Act {
   const of = moduleAct(id)
   if (of) return { title, ...of }
   const owner = id.split(".", 1)[0]!
+  if (owner === ON_LINKS)
+    return {
+      title,
+      at: "owner",
+      here: true,
+      refuses: (args, machine) =>
+        typeof args?.url === "string"
+          ? linkRefused(args.url, machine)
+          : undefined,
+    }
   if (owner === ON_FILES) return { title, at: "device", here: true }
   return { title, at: ON_THIS_MACHINE.has(owner) ? "device" : "window" }
 }
