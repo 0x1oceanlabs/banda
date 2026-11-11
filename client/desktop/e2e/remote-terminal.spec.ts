@@ -7,9 +7,9 @@
  * link opens in this device's browser, and arc's own address says it is
  * arc's. Banda restarted on arc says Ended, and starts no shell by itself
  * (the `ended` road); and a program there holds no update here (the
- * `update-wait` road). The same-path job runs this spec with arc in a mount namespace of
- * its own (ci.yml's `same-path`). With BANDA_E2E_SHOTS set to a folder, it
- * leaves pictures of what it checks.
+ * `update-wait` road). The same-path job runs this spec with arc in a
+ * mount namespace of its own (ci.yml's `same-path`). With BANDA_E2E_SHOTS
+ * set to a folder, it leaves pictures of what it checks.
  */
 import { existsSync } from "node:fs"
 import { join } from "node:path"
@@ -317,7 +317,7 @@ test("Banda restarted on arc: the terminal says Ended, starts nothing by itself,
   await expect(screen).toHaveAttribute("data-state", "running", {
     timeout: 30_000,
   })
-  await screen.click()
+  // The keys go to the new shell at once, with no click on it first.
   await run(page, "hostname > again.txt; echo $$ > after.pid")
   await expect.poll(() => inFolder(folder, "again.txt")).toBe("arc\n")
   await expect.poll(() => inFolder(folder, "after.pid")).toMatch(/^\d+\n$/)
