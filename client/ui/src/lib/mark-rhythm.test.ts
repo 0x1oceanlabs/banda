@@ -4,6 +4,8 @@ import { expect, test } from "vitest"
 import {
   BEZIER,
   CALL,
+  callLeft,
+  CALLS,
   eased,
   type Ease,
   type Loop,
@@ -63,6 +65,39 @@ test("a call moves in its first 0.7 s, then the mark is still until the next", (
     expect(valueAt(loop, 1), name).toEqual(valueAt(loop, CALL - 0.01))
     expect(valueAt(loop, 0.1), name).not.toEqual(valueAt(loop, 1))
   }
+})
+
+// ADR 0099, decision 5: the open Thread's mark plays none of its calls,
+// and stops at the end of the call it is in, not mid-hop.
+test("a call's end: a look's call loops come to rest by it, the next begins a period on", () => {
+  // Asks hops in its first 0.65 s, failed shakes in its first 0.6 s.
+  expect(callLeft("asking", 0.2)).toBeCloseTo(0.45, 3)
+  expect(callLeft("asking", 0.66)).toBe(0)
+  expect(callLeft("asking", 2)).toBe(0)
+  expect(callLeft("failed", CALL + 0.1)).toBeCloseTo(0.5, 3)
+  // Woke rings, then looks round, at rest only from 3.4 s.
+  expect(callLeft("woke", 1)).toBeCloseTo(2.4, 3)
+  expect(callLeft("woke", 3.5)).toBe(0)
+  // A look that calls no one is never in a call.
+  for (const look of ["idle", "done", "later", "read"] as const)
+    expect(callLeft(look, 0.1), look).toBe(0)
+  for (const [look, names] of Object.entries(LOOPED))
+    for (const name of names.filter((name) => CALLS.has(name))) {
+      const loop = LOOPS[name]
+      // From its end to the next call, every call loop of it is still.
+      const end = 0.1 + callLeft(look as keyof typeof LOOPED, 0.1)
+      for (const at of [end, (end + CALL) / 2, CALL - 0.001])
+        expect(valueAt(loop, at), `${look} ${name} ${at}`).toEqual(
+          loop.keys.at(-1)![1]
+        )
+    }
+  // Every call is in the asking, failed and woke looks alone.
+  expect(
+    Object.entries(LOOPED)
+      .filter(([, names]) => names.some((name) => CALLS.has(name)))
+      .map(([look]) => look)
+      .sort()
+  ).toEqual(["asking", "failed", "woke"])
 })
 
 test("one Thread keeps one rhythm, and each Thread its own", () => {
@@ -156,6 +191,20 @@ function generated(): string {
           `${mark}[data-loop="${look}"] .${group} {`,
           `animation-name: ${animation};`,
           `animation-duration: ${period}s;`,
+          "}"
+        )
+    }
+  // The open Thread's mark plays none of its calls (ADR 0099, decision 5):
+  // their groups stand still, and its other loops play on.
+  for (const [look, names] of Object.entries(LOOPED))
+    for (const name of names.filter((name) => CALLS.has(name))) {
+      const { part } = LOOPS[name]
+      for (const group of part === "look"
+        ? ["mark-look", "mark-unlook"]
+        : [`mark-${part}`])
+        lines.push(
+          `${mark}[data-loop="${look}"][data-calm] .${group} {`,
+          "animation-name: none;",
           "}"
         )
     }

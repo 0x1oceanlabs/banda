@@ -9,6 +9,7 @@ import {
 } from "react"
 import type { ProjectId } from "@banda/contract"
 import { useRun } from "@banda/core/react"
+import { glanceAt } from "@banda/ui/components/banda-mark"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
 import { FIELDS } from "@banda/ui/lib/keys"
@@ -253,7 +254,15 @@ export function PickList({
   const { onBlur, ...list } = picking.list
   return (
     <AskDelete value={deleting.ask}>
-      <div role="tabpanel" id={PANEL} aria-labelledby={tabId(tab)}>
+      <div
+        role="tabpanel"
+        id={PANEL}
+        aria-labelledby={tabId(tab)}
+        // The awake Mark of the card under the pointer glances at it (ADR
+        // 0099, M4).
+        onPointerMove={(event) => glanceAt(event.nativeEvent)}
+        onPointerLeave={() => glanceAt(null)}
+      >
         {hinting && hint && (
           <p id={HINT} hidden>
             {hint}

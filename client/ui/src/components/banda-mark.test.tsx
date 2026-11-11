@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
-import { LOOPED, LOOPS } from "../lib/mark-rhythm"
+import { callLeft, LOOPED, LOOPS, phaseOf } from "../lib/mark-rhythm"
 import { shownOf } from "../lib/mark-state"
 import type { Listed } from "../pane"
 import {
@@ -396,6 +396,8 @@ function svg(): {
       getAnimations: () => animations,
       addEventListener: () => {},
       removeEventListener: () => {},
+      // A card's mark, 16 px, at the list's top left.
+      getBoundingClientRect: () => ({ left: 0, top: 0, width: 16, height: 16 }),
     }
   }
   const element = {
@@ -497,11 +499,12 @@ async function motion({ reduced = false, still = false } = {}) {
       disconnect() {}
     }
   )
-  const { Animator } = await import("./banda-mark")
+  const { Animator, glanceAt } = await import("./banda-mark")
   return {
     Animator,
     /** A mark of `variant` on `drawn`, first drawn in `state`, and at
-     * work doing `doing`, `held` already or not, on the beat of `beat`. */
+     * work doing `doing`, `held` already or not, on the beat of `beat`;
+     * `current`, the open Thread's. */
     mark(
       drawn: ReturnType<typeof svg>,
       state: MarkState,
@@ -512,16 +515,29 @@ async function motion({ reduced = false, still = false } = {}) {
         playful = 0,
         doing = undefined as MarkDoing | undefined,
         held = false,
+        current = false,
       } = {}
     ) {
       const mark = new Animator(drawn.svg, variant as "agent" | "logo")
-      mark.set({ state, doing, held, playful, news, beat })
+      mark.set({ state, doing, held, playful, news, beat, current })
       return {
         mark,
-        set: (state: MarkState, doing?: MarkDoing) =>
-          mark.set({ state, doing, held, playful, news, beat }),
+        set: (state: MarkState, doing?: MarkDoing, open = current) =>
+          mark.set({ state, doing, held, playful, news, beat, current: open }),
       }
     },
+    /** The pointer moves to `x`, `y` over the card of the mark `drawn`,
+     * or over none, as the list's listener hears it. */
+    point(drawn: ReturnType<typeof svg> | null, x = 0, y = 0) {
+      const row = drawn && { querySelector: () => drawn.svg }
+      glanceAt({
+        target: { closest: () => row },
+        clientX: x,
+        clientY: y,
+      } as unknown as PointerEvent)
+    },
+    /** The pointer leaves the list. */
+    leave: () => glanceAt(null),
     /** Whether the clock asked for a tick. */
     ticking: () => asked.length > 0,
     /** Runs the ticks asked for, a frame apart, at most `most` of them:
@@ -848,4 +864,143 @@ test("the logo at rest sets its timer once, however often another mark ticks", a
   expect(timers).not.toHaveBeenCalled()
   mark.dispose()
   logo.dispose()
+})
+
+/** Where `beat`'s rhythm is now, in seconds, as a mark's motion reads it. */
+const rhythmOf = (beat: string) =>
+  phaseOf(beat, (performance.now() + performance.timeOrigin) / 1000)
+
+/** Where `drawn`'s hat stands, by its outermost turn, at each tick of a
+ * glance at the pointer over its card, which moves for `ms` and stops. */
+function glancedStands(
+  time: Awaited<ReturnType<typeof motion>>,
+  drawn: ReturnType<typeof svg>,
+  ms: number
+) {
+  const stands = new Set<string>()
+  const start = performance.now()
+  while (performance.now() - start < ms || time.ticking()) {
+    if (performance.now() - start < ms) time.point(drawn, 300, 8)
+    time.run(1)
+    stands.add(drawn.attributes("[data-move]").transform!)
+  }
+  return stands
+}
+
+// ADR 0099, decision 5: the open Thread's mark is the same mark without
+// its call. marks.css stills its call's groups (`data-calm`), as
+// mark-rhythm.test.ts writes it, and the clock draws none of it either.
+test("the open Thread's mark plays none of its calls, and its other loops on", async () => {
+  const css = readFileSync(
+    new URL("../styles/marks.css", import.meta.url),
+    "utf8"
+  )
+  const calm = (look: string, group: string) =>
+    `[data-slot="banda-mark"][data-loop="${look}"][data-calm] .${group} {\n  animation-name: none;\n}`
+  expect(css).toContain(calm("asking", "mark-move"))
+  expect(css).not.toContain(calm("asking", "mark-lid"))
+  for (const group of ["mark-move", "mark-turn", "mark-bell", "mark-look"])
+    expect(css).toContain(calm("woke", group))
+  expect(css).not.toContain(calm("woke", "mark-lid"))
+
+  const time = await motion()
+  const open = svg()
+  time.mark(open, "asking", { current: true, beat: "open" })
+  expect(open.attributes()["data-loop"]).toBe("asking")
+  expect(open.attributes()["data-calm"]).toBe("")
+  const other = svg()
+  time.mark(other, "asking", { beat: "other" })
+  expect(other.attributes()["data-calm"]).toBeUndefined()
+  // Drawn on the clock, as while it glances, over a whole call and more:
+  // the open one stands where it stands, and the other hops.
+  expect(glancedStands(time, open, 4600)).toEqual(
+    new Set(["translate(0.00 0.00)"])
+  )
+  expect(glancedStands(time, other, 4600).size).toBeGreaterThan(1)
+})
+
+test("a mark opened mid-hop stops at the end of the call it is in, and one opened between calls at once", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "asking")
+  // Into a hop.
+  while (callLeft("asking", rhythmOf("t")) < 0.3) vi.advanceTimersByTime(50)
+  const left = callLeft("asking", rhythmOf("t")) * 1000
+  set("asking", undefined, true)
+  expect(drawn.attributes()["data-calm"]).toBeUndefined()
+  vi.advanceTimersByTime(left - 20)
+  expect(drawn.attributes()["data-calm"]).toBeUndefined()
+  vi.advanceTimersByTime(40)
+  expect(drawn.attributes()["data-calm"]).toBe("")
+  expect(time.ticking()).toBe(false)
+  // Another Thread opened, between calls: it calls again at once, its
+  // loops started over on its rhythm.
+  set("asking", undefined, false)
+  expect(drawn.attributes()["data-calm"]).toBeUndefined()
+  expect(drawn.animations[0]!.currentTime).toBe(0)
+  // Opened again before its next call, it is calm at once; and a new look
+  // it takes while open is calm from the first, as woke's arrival.
+  set("asking", undefined, true)
+  expect(drawn.attributes()["data-calm"]).toBe("")
+  set("later", undefined, true)
+  set("woke", undefined, true)
+  time.run(1000)
+  expect(drawn.attributes()["data-loop"]).toBe("woke")
+  expect(drawn.attributes()["data-calm"]).toBe("")
+})
+
+// ADR 0099, decision 6: as the pointer passes a card, its mark's eyes turn
+// to it, if awake, on the window's clock, never a loop of its own; 2.5 s
+// after the pointer stops, the clock stops and marks.css has it again.
+test("an awake mark glances at the pointer over its card until 2.5 s after it stops; one asleep or at work does not", async () => {
+  const time = await motion()
+  const open = svg()
+  time.mark(open, "idle", { beat: "a" })
+  const eye = () => Number(open.attributes("[data-eye]", 1).cx)
+  const before = eye()
+  expect(time.ticking()).toBe(false)
+  // Far to its right: its eyes turn as far as they go.
+  const start = performance.now()
+  time.point(open, 300, 8)
+  expect(time.ticking()).toBe(true)
+  time.run(30)
+  expect(open.attributes()["data-news"]).toBe("glance")
+  expect(eye()).toBeCloseTo(before + 3.6, 1)
+  time.run(1000)
+  // Within a frame.
+  expect(Math.abs(performance.now() - start - 2500)).toBeLessThanOrEqual(16)
+  expect(open.attributes()["data-news"]).toBeUndefined()
+  expect(open.attributes()["data-loop"]).toBe("idle")
+  expect(eye()).toBe(before)
+
+  // Asleep, or at work minding its own, it does not.
+  for (const state of ["later", "offline", "working"] as const) {
+    const drawn = svg()
+    time.mark(drawn, state, { beat: state })
+    time.point(drawn, 300, 8)
+    expect(time.ticking(), state).toBe(false)
+  }
+
+  // Off its card, or out of the list, its eyes turn back at once.
+  const done = svg()
+  time.mark(done, "done", { beat: "d" })
+  time.point(done, 300, 8)
+  time.run(30)
+  time.point(open, 300, 8)
+  time.run(1)
+  expect(done.attributes()["data-news"]).toBe("glance")
+  time.leave()
+  expect(time.run(1000)).toBeLessThan(25)
+  expect(done.attributes()["data-news"]).toBeUndefined()
+  expect(open.attributes()["data-news"]).toBeUndefined()
+})
+
+test("with no motion, or less, asked for, no mark glances", async () => {
+  for (const asked of [{ still: true }, { reduced: true }]) {
+    const time = await motion(asked)
+    const drawn = svg()
+    time.mark(drawn, "asking")
+    time.point(drawn, 300, 8)
+    expect(time.ticking(), JSON.stringify(asked)).toBe(false)
+  }
 })
