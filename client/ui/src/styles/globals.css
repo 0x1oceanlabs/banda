@@ -11,7 +11,8 @@
    (platform/theme/src/tokens.rs, ADR 0080, decision 7). The look sets
    each on the root as it resolves them. */
 @import "@banda/contract/tokens.css";
-/* The Mark's loops, on the compositor (ADR 0099, decision 4). */
+/* The Mark's loops (ADR 0099, decision 4), stepped 12 times a second (ADR
+   0117). */
 @import "./marks.css";
 
 @custom-variant dark (&:is(.dark *));

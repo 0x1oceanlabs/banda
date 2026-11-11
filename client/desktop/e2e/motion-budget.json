@@ -257,14 +257,14 @@
     {
       "measure": "marks.paints.perSecond",
       "gate": "soft",
-      "budget": 0,
-      "note": "the window's paints while the Marks only live: none where the compositor runs their loops"
+      "budget": 120,
+      "note": "the window's paints while the Marks only live: each of the 12 steps a second paints the marks it moves, 110 a second at 1 and 1.6 (ADR 0117)"
     },
     {
-      "measure": "marks.compositor.failed",
+      "measure": "marks.viz.perSecond",
       "gate": "hard",
-      "budget": 0,
-      "note": "the Marks' loops the compositor does not run, in a trace of the sidebar hidden and shown (ADR 0099, step 1): at a zoom of 1 the test fails on any, as marks.spec does for woke's; at another, as at 1.6, Chromium may run an SVG's on the main thread, and it is only told"
+      "budget": 20,
+      "note": "the frames the window showed while the Marks only live: their loops step 12 times a second, all at once, not on every refresh of the screen, and the two Threads that ask draw their clocks once a second; 15 at 1 and 1.6 (ADR 0117, decision 6); motion.spec fails over it"
     }
   ],
   "recorded": {

@@ -1,9 +1,10 @@
 /*
  * The Mark's rhythm (ADR 0099, decision 4): what each look does over and
  * over, its first two layers, as keyframes on the groups of the mark's SVG
- * (banda-mark.tsx). They move by `transform` and `opacity` alone, so they
- * play on the compositor and cost the main thread nothing while a mark
- * only lives (ADR 0088, decision 9). The third layer, news, plays on the
+ * (banda-mark.tsx). They play forever, so the window holds them and steps
+ * them 12 times a second, all at once (client/ui/src/lib/loops.ts, ADR
+ * 0117): a window where marks only live draws 12 frames a second, not one
+ * on every refresh of the screen. The third layer, news, plays on the
  * window's clock for as long as it lasts, with these off (`data-news`).
  *
  * Each mark keeps its Thread's rhythm: `--mark-phase`, a negative delay,

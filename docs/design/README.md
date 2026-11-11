@@ -237,6 +237,11 @@ something ([0099] d4):
   has one (d8), and the colours and the ladder stay.
 - **Satellites never move on their own**; a change blends in 0.45 s, or
   leaps in 0.6 s to a new shape ([0103] d12).
+- **What loops forever steps 12 times a second**: a mark's loops and
+  calls, a plate's breath, a spinner, a shimmer. All step at once, so the
+  window draws 12 frames a second while something loops, not one on every
+  refresh of the screen. What ends, news, moves, hovers, plays at the
+  screen's rate ([0117] d1–d3). A big mark's motion shows its steps.
 
 ## Surfaces
 
@@ -719,3 +724,4 @@ kit's own demos. Each is a JPEG at quality 85.
 [0103]: ../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md
 [0107]: ../adr/0107-a-working-mark-takes-the-group-plate-s-blue-muted.md
 [0111]: ../adr/0111-the-desk-s-density-is-measured-over-the-wallpaper-banda-draws.md
+[0117]: ../adr/0117-what-loops-forever-steps-twelve-times-a-second.md

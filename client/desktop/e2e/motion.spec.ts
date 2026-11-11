@@ -8,7 +8,9 @@
  * then the sidebar list as an Agent's day moves it, and the window once
  * its batch is over. The browser's page shows in every phase but the
  * last: the Marks, which only live, as their Threads take the Tiling over
- * (ADR 0099, decision 4).
+ * (ADR 0099, decision 4). Their loops step 12 times a second (ADR 0117):
+ * it fails where the window shows more than 20 frames a second for them,
+ * or where one in view is not held and stepped.
  *
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
@@ -42,9 +44,9 @@ import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import { install, read, reset } from "./motion-probe"
 import { perSecondOf, report, type Phase } from "./motion-report"
+import { STEPS_AT_LEAST, STEPS_AT_MOST, steppedOf } from "./loops"
 import {
   animationsOf,
-  compositedOf,
   MARKS,
   startTrace,
   stopTrace,
@@ -532,7 +534,8 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   // day above is cleared from: 5 Open and 2 Asks cards in the Inbox, 3 on
   // Later's tab, and the bar's Mark asking, all in Work, the Project the
   // terminals opened in. Between news a Mark asks for no tick: its loops
-  // play as CSS, on the compositor (ADR 0099, decision 4). Each Thread
+  // play as CSS (ADR 0099, decision 4), held and stepped 12 times a second
+  // (ADR 0117). Each Thread
   // starts as the Person starts one: the first from the New Thread Work
   // opened with, beside the terminals since, the rest from Alt+Enter's.
   for (let i = 5; i <= 10; i++) finish(window, `wait ${i}`)
@@ -621,66 +624,54 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     phases.marks.counted.callbacks,
     `marks: animation frames${asked.map((stack) => `\n-- asked for at:\n${stack}`).join("")}`
   ).toBe(0)
-  // The compositor's verdict on their loops, from a trace of their own:
-  // hidden and shown, the sidebar's Marks begin theirs again. Beside the
-  // two that ask, a Thread at work, one done that the Person did not see
-  // and one that failed, so the loops move every part a row's mark has.
-  // Woke's bells ring on the bar's Mark, and marks.spec traces them there.
-  if (traced) {
-    await expect(
-      (await startAgent(page, "wait done")).getByText("Waiting.")
-    ).toBeVisible()
-    await expect(
-      (await startAgent(page, "wait on")).getByText("Waiting.")
-    ).toBeVisible()
-    finish(window, "wait done")
-    call(window, "agents.send", {
-      thread: threadNamed(window, "hello 1")!.id,
-      text: "fail now",
-    })
-    const looks = ["asking", "failed", "done", "running"] as const
-    for (const [text, name] of [
-      ["wait on", "Working"],
-      ["wait done", "Done"],
-      ["hello 1", "Failed"],
-    ] as const)
-      await expect(rowOf(text).getByRole("img", { name })).toBeVisible()
-    await leaveSidebar(page)
-    await page.evaluate(() => (document.activeElement as HTMLElement).blur())
-    await expect(page.locator("[data-news]")).toHaveCount(0)
-    await startTrace(cdp, "marks: compositor")
-    await page.waitForTimeout(300)
-    await page.keyboard.press("Alt+KeyA")
-    await expect(sidebar).toBeHidden()
-    await page.waitForTimeout(300)
-    await page.keyboard.press("Alt+KeyA")
-    await expect(sidebar).toBeVisible()
-    await page.waitForTimeout(1000)
-    const events = await stopTrace(
-      cdp,
-      "marks: compositor",
-      keep ? test.info().outputPath("marks-compositor.trace.json") : undefined
-    )
-    const compositor = compositedOf(events, pids.window, "mark-")
-    phases.marks.compositor = compositor
-    // Loops that began where nothing of their mark was drawn, as the
-    // sidebar hid and showed, and paused within 0.1 s: not counted.
-    test.info().annotations.push({
-      type: "marks: brief",
-      description: `${compositor.brief} of ${compositor.animations} loops undrawn, paused within 0.1 s, not counted`,
-    })
+  // The frames the window showed for them (ADR 0117, decision 6): their
+  // loops step 12 times a second, all at once, not on every refresh of
+  // the screen. Beside them, the two Threads that ask each draw their
+  // clock once a second, and a little more draws: 15 a second here.
+  const shown = phases.marks.trace?.viz?.perSecond
+  if (traced)
+    expect(shown, "marks: the frames shown a second").toBeLessThanOrEqual(20)
+  // Their loops, held and stepped. Beside the two that ask, a Thread at
+  // work, one done that the Person did not see and one that failed, so the
+  // loops move every part a row's mark has. Woke's bells ring on the bar's
+  // Mark, and marks.spec looks at them there.
+  await expect(
+    (await startAgent(page, "wait done")).getByText("Waiting.")
+  ).toBeVisible()
+  await expect(
+    (await startAgent(page, "wait on")).getByText("Waiting.")
+  ).toBeVisible()
+  finish(window, "wait done")
+  call(window, "agents.send", {
+    thread: threadNamed(window, "hello 1")!.id,
+    text: "fail now",
+  })
+  const looks = ["asking", "failed", "done", "running"] as const
+  for (const [text, name] of [
+    ["wait on", "Working"],
+    ["wait done", "Done"],
+    ["hello 1", "Failed"],
+  ] as const)
+    await expect(rowOf(text).getByRole("img", { name })).toBeVisible()
+  await leaveSidebar(page)
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+  await expect(page.locator("[data-news]")).toHaveCount(0)
+  const stepped = await steppedOf(sidebar)
+  phases.marks.stepped = stepped
+  expect(
+    stepped.map((loop) => loop.name),
+    "marks: the Marks' loops in view"
+  ).toEqual(expect.arrayContaining(animationsOf(looks)))
+  for (const loop of stepped) {
+    expect(loop.held, `marks: ${loop.name} held`).toBe(true)
     expect(
-      compositor.names,
-      "marks: the Marks' loops the trace saw begin"
-    ).toEqual(expect.arrayContaining(animationsOf(looks)))
-    // The gate (ADR 0099, step 1): at a scale of 1 the compositor runs
-    // every loop. At another, Chromium may run an SVG's on the main
-    // thread, and the report tells which.
-    if (scale === 1)
-      expect(
-        compositor.failed,
-        "marks: loops the compositor does not run"
-      ).toEqual([])
+      loop.steps,
+      `marks: ${loop.name}'s steps a second`
+    ).toBeGreaterThanOrEqual(STEPS_AT_LEAST)
+    expect(
+      loop.steps,
+      `marks: ${loop.name}'s steps a second`
+    ).toBeLessThanOrEqual(STEPS_AT_MOST)
   }
 
   report(scale, versions, phases)

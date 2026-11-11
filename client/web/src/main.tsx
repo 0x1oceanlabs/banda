@@ -10,6 +10,7 @@ import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
 import { HostsContext, KeptHosts, onDevice, poppedOf } from "@banda/core/react"
+import { stepLoops } from "@banda/ui/lib/loops"
 import { moveEnterKey } from "./enter-key"
 import { followFrame } from "./frame"
 import { followLook } from "./look"
@@ -23,6 +24,9 @@ const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
 followLook(host)
 followFrame(host)
+// What loops forever steps 12 times a second, rather than keep the window
+// drawing on every refresh of the screen (ADR 0117).
+stepLoops(document)
 const engine = host && new Engine(() => host.engine())
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */

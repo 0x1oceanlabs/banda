@@ -11,6 +11,7 @@
  */
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react"
 import type { GroupState } from "@banda/ui/components/banda-mark"
+import { startAt } from "@banda/ui/lib/loops"
 import { arrivals, LONG_AGO, type Seen, spans } from "./plates"
 
 export function usePlates(
@@ -36,10 +37,9 @@ export function usePlates(
       const came = seen.current.get(plate.dataset.groupPlate ?? "")
       const at = came?.state === "working" ? 0 : (came?.at ?? LONG_AGO)
       for (const animation of plate.getAnimations?.() ?? []) {
-        // Its colour's crossfade runs from the change, as CSS has it.
-        if (animation instanceof CSSAnimation && animation.startTime !== at) {
-          animation.startTime = at
-        }
+        // Its colour's crossfade runs from the change, as CSS has it; the
+        // breath at work is a loop, held and stepped (ADR 0117).
+        if (animation instanceof CSSAnimation) startAt(animation, at)
       }
     }
     // Each piece's width changes as its column grows or shrinks, with no
