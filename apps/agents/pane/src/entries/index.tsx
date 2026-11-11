@@ -8,6 +8,7 @@ import type { Body } from "@banda/contract/agents"
 import { CallEntry } from "./call"
 import { IssueEntry } from "./issue"
 import { MessageEntry } from "./message"
+import { MessagedEntry } from "./messaged"
 import { MovedEntry } from "./moved"
 import { NoticeEntry } from "./notice"
 import { PlanEntry } from "./plan"
@@ -28,6 +29,7 @@ const VIEWS: { [K in Body["kind"]]: EntryView<K> } = {
   issue: IssueEntry,
   visual: VisualEntry,
   subagent: SubagentEntry,
+  messaged: MessagedEntry,
 }
 
 /** One entry, drawn by its kind; drawn again only when it or what its

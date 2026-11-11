@@ -378,7 +378,7 @@ fn in_thread(
                 running(known)
             })))
         }
-        now => said(now),
+        now => said_in(routes, session, now),
     };
     // What it has used may come between turns: the next turn
     // writes what it last said.
@@ -408,7 +408,7 @@ fn in_lane(routes: &Routes, session: &acp::SessionId, update: acp::SessionUpdate
             LaneSaid::Runs { child, model, role }
         }
         acp::SessionUpdate::UsageUpdate(_) => return,
-        now => match said(now) {
+        now => match said_in(routes, session, now) {
             Some(said) => LaneSaid::Said { child, said },
             None => return,
         },
@@ -460,6 +460,7 @@ fn announced(
     let child = Child {
         root: root.clone(),
         cancel,
+        brief: None,
     };
     routes.adopt(session, child);
     let (started, heard) = oneshot::channel();
@@ -526,16 +527,53 @@ fn told(routes: &Routes, on: &acp::SessionId, id: &str, message: Message) {
     if sender.as_ref() != Some(on) {
         return;
     }
-    if let Some(to) = recipient.filter(|to| to != on)
-        && let Some(lane) = routes.lane_of(&to)
-    {
-        let (child, message) = (to.0.to_string(), id.to_owned());
+    let Some(to) = recipient.filter(|to| to != on) else {
+        return;
+    };
+    let Some(lane) = routes.lane_of(&to) else {
+        return;
+    };
+    let (child, message) = (to.0.to_string(), id.to_owned());
+    if routes.briefs(&to, id) {
         let _ = lane.send(LaneSaid::Brief {
             child,
             message,
             text,
         });
+        return;
     }
+    // A message after its brief, as Claude's SendMessage to one it
+    // resumes: where its parent speaks, and in its own lane (ADR 0103,
+    // decision 25).
+    let messaged = || Said::Messaged {
+        child: child.clone(),
+        message: message.clone(),
+        text: Some(text.clone()),
+    };
+    if let Some(parent) = routes.of(on) {
+        parent.send(messaged());
+    }
+    let said = messaged();
+    let _ = lane.send(LaneSaid::Said { child, said });
+}
+
+/// What a session says, as the module hears it: a call that queued a
+/// message for a sub-agent of the same Thread, which Claude Code sends
+/// with no words to one at work, shows that it went to it (ADR 0103,
+/// decision 25); the rest as [`said`] has it.
+fn said_in(routes: &Routes, session: &acp::SessionId, update: acp::SessionUpdate) -> Option<Said> {
+    if let acp::SessionUpdate::ToolCall(call) = &update
+        && let Some(child) = queued_for(call)
+        && let Some(to) = routes.child(&acp::SessionId::new(child.as_str()))
+        && routes.announce(session) == Some(to.root)
+    {
+        return Some(Said::Messaged {
+            child,
+            message: call.tool_call_id.0.to_string(),
+            text: None,
+        });
+    }
+    said(update)
 }
 
 /// What the engine declares it can show, sub-agents among it (ADR 0103,

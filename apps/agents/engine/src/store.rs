@@ -1560,6 +1560,7 @@ pub fn copy_turns(
 fn lanes_named(mut body: Body, lane_of: impl Fn(SubagentId) -> Option<SubagentId>) -> Body {
     match &mut body {
         Body::Subagent { subagent: lane }
+        | Body::Messaged { subagent: lane, .. }
         | Body::Question {
             sub: Some(lane), ..
         } => {
@@ -1737,6 +1738,8 @@ pub fn put(
     match (&mut stored.body, &item.body) {
         (Body::Message { text, .. }, Body::Message { text: more, .. })
         | (Body::Thought { text }, Body::Thought { text: more }) => text.push_str(more),
+        // A message to a sub-agent is all of it so far.
+        (Body::Messaged { text, .. }, Body::Messaged { text: now, .. }) => text.clone_from(now),
         _ => return Err(Refusal::conflict(format!("Item {} is written already.", item.id)).into()),
     }
     set_body(sql, item.id, &stored.body)
@@ -2175,6 +2178,22 @@ pub fn insert_lane(
         ],
     )?;
     Ok(Upserted::New)
+}
+
+/// The lane `thread` keeps for the Harness's child session `evidence`,
+/// as [`insert_lane`] kept it; none for a child it does not know.
+pub fn lane_of_child(
+    sql: &Connection,
+    thread: ThreadId,
+    evidence: &impl Serialize,
+) -> Result<Option<SubagentId>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT id FROM agents_subagents WHERE thread = ?1 AND evidence = ?2",
+            params![thread, json(evidence)?],
+            |row| row.get(0),
+        )
+        .optional()?)
 }
 
 /// Keeps what `lane` is now, by its ID; its Thread, turn, parent and

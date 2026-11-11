@@ -20,14 +20,36 @@ import type { EditorState, Transaction } from "@tiptap/pm/state"
  * delimiter, which is not part of it, then a space or the line's end. */
 const ENDS = String.raw`(?=[.,;:!?)\]*~\`]*(?:\s|$))`
 
-/** The names of the skills a Harness has, which are chips in its text. */
-export type Skills = ReadonlySet<string>
-export const NO_SKILLS: Skills = new Set()
+/** What chips in a text point at besides files: the skills a Harness
+ * has, by their names, and the sub-agents of its Thread, by their labels. */
+export type Known = {
+  skills?: ReadonlySet<string>
+  subagents?: ReadonlySet<string>
+}
+export const NOTHING_KNOWN: Known = {}
 
 /** What a chip points at, and how each kind is written and read: `read`
  * finds the space before it and what it points at, which `known` says is
- * a chip. */
+ * a chip. A sub-agent's comes first, so a file or a skill in its label
+ * stays in it. */
 export const KINDS = {
+  subagent: {
+    /** Words the Agent reads as they are (ADR 0103, decision 25). */
+    write: (label: string) => `(about sub-agent '${label}')`,
+    /** Its label is read up to the `')` that closes it, as a label may
+     * hold an apostrophe. */
+    read: new RegExp(
+      String.raw`(^|\s)\(about sub-agent '((?:(?!'\)).)+)'\)` + ENDS,
+      "g"
+    ),
+    /** Only a sub-agent of the Thread is a chip. */
+    known: (label: string, known: Known) =>
+      known.subagents?.has(label) ?? false,
+    label: (label: string) => label,
+    /** A satellite at work, a dot, filled. */
+    icon: ["M12 7a5 5 0 1 0 0 10a5 5 0 1 0 0-10"],
+    filled: true,
+  },
   file: {
     write: (path: string) => `@${path}`,
     /** `@` at a word's start, then a path with a folder or an extension
@@ -51,7 +73,7 @@ export const KINDS = {
      * such as `$5` stays text. */
     read: new RegExp(String.raw`(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)` + ENDS, "g"),
     /** Only a skill the Harness has is a chip. */
-    known: (name: string, skills: Skills) => skills.has(name),
+    known: (name: string, known: Known) => known.skills?.has(name) ?? false,
     label: (name: string) => name,
     /** lucide's box, as T3 Code draws a skill. */
     icon: [
@@ -90,15 +112,15 @@ export function chip(kind: ChipKind, value: string): JSONContent {
 }
 
 /** The document that shows `text`: a paragraph for each line, styled as
- * its markdown says, what it points at as chips: a file, and one of
- * `skills`. */
-export function docOf(text: string, skills: Skills = NO_SKILLS): JSONContent {
+ * its markdown says, what it points at as chips: a file, and a skill or a
+ * sub-agent `known` has. */
+export function docOf(text: string, known: Known = NOTHING_KNOWN): JSONContent {
   const lines = text.split("\n")
   const content: JSONContent[] = []
   for (let at = 0; at < lines.length; at += 1) {
     const open = openingFence(lines[at])
     if (!open) {
-      content.push(blockOf(lines[at], skills))
+      content.push(blockOf(lines[at], known))
       continue
     }
     // A fence's lines are code, as they are, to the line that closes it
@@ -141,7 +163,7 @@ const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+|$)/
 const CHECK = /^\[([ xX])\]([ \t]+|$)/
 
 /** The block a line is, from how it starts. */
-function blockOf(line: string, skills: Skills): JSONContent {
+function blockOf(line: string, known: Known): JSONContent {
   if (RULE.test(line)) return { type: "rule", attrs: { source: line } }
   const heading = HEADING.exec(line)
   if (heading)
@@ -149,7 +171,7 @@ function blockOf(line: string, skills: Skills): JSONContent {
       "heading",
       { level: heading[1].length, space: heading[2] },
       line.slice(heading[0].length),
-      skills
+      known
     )
   const quote = QUOTE.exec(line)
   if (quote)
@@ -157,7 +179,7 @@ function blockOf(line: string, skills: Skills): JSONContent {
       "quote",
       { prefix: quote[0] },
       line.slice(quote[0].length),
-      skills
+      known
     )
   const item = ITEM.exec(line)
   if (item) {
@@ -175,10 +197,10 @@ function blockOf(line: string, skills: Skills): JSONContent {
         checkSpace: check?.[2] ?? "",
       },
       rest.slice(check?.[0].length ?? 0),
-      skills
+      known
     )
   }
-  return textblock("paragraph", {}, line, skills)
+  return textblock("paragraph", {}, line, known)
 }
 
 /** A block of `type` holding `text`, styled unless it is code. */
@@ -186,9 +208,9 @@ function textblock(
   type: string,
   attrs: Record<string, unknown>,
   text: string,
-  skills: Skills
+  known: Known
 ): JSONContent {
-  const content = inline(text, skills)
+  const content = inline(text, known)
   return {
     type,
     ...(Object.keys(attrs).length > 0 && { attrs }),
@@ -199,7 +221,7 @@ function textblock(
 /** A line's text and chips, styled. Each kind of chip stands in as a
  * character the line has not got while the styles are read, so a chip in
  * code stays its text and a style around a chip takes it in. */
-function inline(line: string, skills: Skills): JSONContent[] {
+function inline(line: string, known: Known): JSONContent[] {
   // Each kind's stand, and what its chips point at, in turn.
   const stands = new Map<string, { kind: ChipKind; values: string[] }>()
   let shown = line
@@ -212,7 +234,7 @@ function inline(line: string, skills: Skills): JSONContent[] {
     shown = shown.replace(
       KINDS[kind].read,
       (whole, space: string, value: string) => {
-        if (!KINDS[kind].known(value, skills)) return whole
+        if (!KINDS[kind].known(value, known)) return whole
         values.push(value)
         return space + at
       }
@@ -378,36 +400,51 @@ function same(a: StyledMark, b: StyledMark) {
   )
 }
 
-/** What makes the text's skills chips as `skills` says them: a skill's
- * name written as text is a chip, and the chip of one not in them is its
- * text, as T3 Code does; the text stays the same, the caret where it was.
- * Nothing if nothing changes. */
+/** The kinds of chips that come and go as a Harness says its skills and
+ * a Thread its sub-agents. */
+const SAID = ["subagent", "skill"] as const
+
+/** What makes the text's skills and sub-agents chips as `known` says
+ * them: a skill's name, or a sub-agent's words, written as text is a
+ * chip, and the chip of one not in it is its text, as T3 Code does; the
+ * text stays the same, the caret where it was. Nothing if nothing
+ * changes. */
 export function rechip(
   state: EditorState,
-  skills: Skills
+  known: Known
 ): Transaction | undefined {
   const { tr, schema } = state
   state.doc.descendants((node, pos) => {
     if (node.type.spec.code) return false
-    const { kind, value } = node.attrs
+    const { value } = node.attrs
+    const kind = SAID.find((one) => one === node.attrs.kind)
     if (
       node.type.name === "chip" &&
-      kind === "skill" &&
-      !KINDS.skill.known(value, skills)
+      kind !== undefined &&
+      !KINDS[kind].known(value, known)
     ) {
       const at = tr.mapping.map(pos)
-      const text = schema.text(KINDS.skill.write(value), node.marks)
+      const text = schema.text(KINDS[kind].write(value), node.marks)
       tr.replaceWith(at, at + node.nodeSize, text)
     }
     if (!node.isText || node.marks.some(isCode)) return
-    for (const found of (node.text ?? "").matchAll(KINDS.skill.read)) {
-      const [whole, space, name] = found
-      if (!KINDS.skill.known(name, skills)) continue
-      const from = pos + found.index + space.length
-      const made = schema.nodeFromJSON(chip("skill", name)).mark(node.marks)
-      const to = pos + found.index + whole.length
-      tr.replaceWith(tr.mapping.map(from), tr.mapping.map(to), made)
-    }
+    // A sub-agent's words take what is in them first.
+    const taken: [number, number][] = []
+    for (const kind of SAID)
+      for (const found of (node.text ?? "").matchAll(KINDS[kind].read)) {
+        const [whole, space, name] = found
+        const from = found.index + space.length
+        const to = found.index + whole.length
+        if (!KINDS[kind].known(name, known)) continue
+        if (taken.some(([start, end]) => from < end && to > start)) continue
+        taken.push([from, to])
+        const made = schema.nodeFromJSON(chip(kind, name)).mark(node.marks)
+        tr.replaceWith(
+          tr.mapping.map(pos + from),
+          tr.mapping.map(pos + to),
+          made
+        )
+      }
   })
   if (!tr.docChanged) return undefined
   return tr.setMeta("addToHistory", false).setMeta("preventUpdate", true)

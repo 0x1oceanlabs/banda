@@ -149,6 +149,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "subagent.started": true,
     "subagent.changed": true,
     "subagent.ended": true,
+    "subagent.messaged": true,
     "visual.shown": true,
     "issue.drafted": true,
     "issue.answered": true,
@@ -169,6 +170,7 @@ export const BODY_KINDS: ReadonlySet<Body["kind"]> = new Set(
     issue: true,
     visual: true,
     subagent: true,
+    messaged: true,
   } satisfies Record<Body["kind"], true>) as Body["kind"][]
 )
 

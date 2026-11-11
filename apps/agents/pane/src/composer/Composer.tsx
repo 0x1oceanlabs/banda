@@ -70,6 +70,7 @@ export function Composer({
   usage,
   commands,
   skills,
+  about,
   images,
   dropping,
   onPlanMode,
@@ -120,6 +121,9 @@ export function Composer({
   /** The skills a message can name anywhere with `$`, suggested as their
    * names are typed. */
   skills: Skill[]
+  /** The labels of the Thread's sub-agents a message may be about, each a
+   * chip in it (ADR 0103, decision 25). */
+  about?: ReadonlySet<string>
   /** The images the message carries. */
   images: Attachments
   /** Images are dragged over the Pane, to drop them here. */
@@ -173,9 +177,12 @@ export function Composer({
     findFiles,
     onPlanMode,
   })
-  const skillNames = useMemo(
-    () => new Set(skills.map((skill) => skill.name)),
-    [skills]
+  const known = useMemo(
+    () => ({
+      skills: new Set(skills.map((skill) => skill.name)),
+      subagents: about,
+    }),
+    [skills, about]
   )
 
   useImperativeHandle(ref, () => ({
@@ -184,6 +191,7 @@ export function Composer({
     // in it.
     quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
     point: (path) => field.current?.point(path, "caret"),
+    about: (label) => field.current?.about(label),
     comment: (added) => setComments((all) => [...all, ...added]),
     putBack: (back, carried) => {
       images.putBack(carried)
@@ -323,7 +331,7 @@ export function Composer({
                   placeholder ??
                   says(name, steering, skills.length > 0, machine)
                 }
-                skills={skillNames}
+                known={known}
                 attributes={{
                   "aria-label": `Message to ${name}`,
                   ...suggestions.field,
@@ -418,6 +426,9 @@ export type ComposerHandle = {
   quote: (text: string) => void
   /** Names the file at `path` in the message, as `@` does, at the caret. */
   point: (path: string) => void
+  /** Starts the message about the sub-agent `label`, with its chip, and
+   * takes the focus (ADR 0103, decision 25). */
+  about: (label: string) => void
   /** Puts comments on files' lines in the message, after those there. */
   comment: (comments: Comment[]) => void
   /** Puts a message back, after what is written, the caret at its end:

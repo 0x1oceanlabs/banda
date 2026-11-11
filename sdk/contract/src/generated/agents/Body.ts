@@ -64,4 +64,4 @@ comment_on?: number, state: IssueState,
 /**
  * Where it went, once it did.
  */
-url?: string, } | { "kind": "subagent", subagent: SubagentId, };
+url?: string, } | { "kind": "subagent", subagent: SubagentId, } | { "kind": "messaged", subagent: SubagentId, text?: string, };

@@ -30,10 +30,10 @@ import {
   CHIP_MARK,
   type ChipKind,
   docOf,
+  type Known,
   KINDS,
-  NO_SKILLS,
+  NOTHING_KNOWN,
   rechip,
-  type Skills,
   textOf,
   type Typing,
   typingIn,
@@ -61,6 +61,10 @@ export type PromptEditorHandle = {
   /** Puts a chip for the file at `path` at the caret, or at the end, as a
    * word of its own, and takes the focus. */
   point(path: string, at: "caret" | "end"): void
+  /** Puts a chip for the sub-agent `label` at the start, unless one is in
+   * the text already, the caret after it and a space; what is written
+   * stays after it. Takes the focus. */
+  about(label: string): void
   /** Puts `text` on lines of its own after the caret's line, or in place
    * of it if it is empty; the caret goes to their end, and takes the
    * focus. */
@@ -80,8 +84,9 @@ type PromptEditorProps = {
   value: string
   /** The text changed, as typed. */
   onChange: (value: string) => void
-  /** The names of the skills `$` names, each a chip in the text. */
-  skills?: Skills
+  /** The skills `$` names and the sub-agents a message is about, each a
+   * chip in the text. */
+  known?: Known
   /** The word being typed that asks for suggestions, as the caret moves:
    * `/` at a line's start, or `@` or `$` at a word's. */
   onTyping?: (typing: Typing | undefined) => void
@@ -108,7 +113,7 @@ type PromptEditorProps = {
 function PromptEditor({
   value,
   onChange,
-  skills: known = NO_SKILLS,
+  known = NOTHING_KNOWN,
   onTyping,
   onKeyDown,
   onPaste,
@@ -206,8 +211,8 @@ function PromptEditor({
     view.dispatch(tr)
   }, [editor, value])
 
-  // Skills the Harness says after the text was written make chips of
-  // their names in it, and one it no longer has is text again.
+  // Skills the Harness says, and sub-agents the Thread has, after the
+  // text was written make chips in it, and one gone is text again.
   React.useEffect(() => {
     const tr = rechip(editor.state, known)
     if (tr) editor.view.dispatch(tr)
@@ -264,6 +269,11 @@ function PromptEditor({
         if (inCode(state)) return put(view, KINDS.file.write(path), "caret")
         const { from, to } = state.selection
         view.dispatch(putChip(state.tr, from, to, "file", path))
+        view.focus()
+      },
+      about(label) {
+        const { view } = editor
+        view.dispatch(aboutFirst(view.state, label).scrollIntoView())
         view.focus()
       },
       putLines(text) {
@@ -352,17 +362,47 @@ function putChip(
   return tr.setSelection(TextSelection.create(tr.doc, after + 1))
 }
 
+/** A chip for the sub-agent `label` at the start of the text, or on a
+ * line of its own before code or a rule there; or the one in it already.
+ * The caret goes after it and the space after it. */
+function aboutFirst(state: EditorState, label: string): Transaction {
+  const { tr } = state
+  let there: number | undefined
+  state.doc.descendants((node, pos) => {
+    if (
+      node.type.name === "chip" &&
+      node.attrs.kind === "subagent" &&
+      node.attrs.value === label
+    )
+      there ??= pos
+    return there === undefined
+  })
+  if (there !== undefined) {
+    const after = there + 1
+    const spaced = /^\s/.test(
+      tr.doc.textBetween(after, tr.doc.resolve(after).end())
+    )
+    return tr.setSelection(
+      TextSelection.create(tr.doc, after + (spaced ? 1 : 0))
+    )
+  }
+  const first = state.doc.firstChild
+  if (!first?.isTextblock || first.type.spec.code)
+    tr.insert(0, state.schema.nodes.paragraph.create())
+  return putChip(tr, 1, 1, "subagent", label)
+}
+
 /** Puts `text` at the caret, or at the end, as pasted text is read, or as
  * it is in code, and takes the focus. */
 function put(
   view: EditorView,
   text: string,
   at: "caret" | "end",
-  skills = NO_SKILLS
+  known = NOTHING_KNOWN
 ) {
   if (at === "end") toEnd(view)
   if (inCode(view.state)) view.dispatch(view.state.tr.insertText(text))
-  else paste(view, text, skills)
+  else paste(view, text, known)
   view.focus()
 }
 
@@ -372,18 +412,18 @@ function toEnd(view: EditorView) {
 
 /** `text` as the lines it makes, open at their ends to join the line it
  * goes into. */
-function sliceOf(view: EditorView, text: string, skills = NO_SKILLS) {
-  const doc = view.state.schema.nodeFromJSON(docOf(text, skills))
+function sliceOf(view: EditorView, text: string, known = NOTHING_KNOWN) {
+  const doc = view.state.schema.nodeFromJSON(docOf(text, known))
   return Slice.maxOpen(doc.content)
 }
 
 /** Puts `text` where the caret is; on a line of its own, its first line
  * keeps what it is, such as an item of a list. */
-function paste(view: EditorView, text: string, skills: Skills) {
+function paste(view: EditorView, text: string, known: Known) {
   const { state } = view
   const { $from, empty } = state.selection
   const line = $from.parent
-  const slice = sliceOf(view, text, skills)
+  const slice = sliceOf(view, text, known)
   const tr = state.tr
   if (empty && blank(line)) putOwnLines(tr, slice.content)
   else tr.replaceSelection(slice)

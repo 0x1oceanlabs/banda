@@ -5,6 +5,7 @@ import { expect, test } from "vitest"
 import { agent, subagent } from "../testing"
 import {
   byId,
+  byLabel,
   childrenOf,
   direct,
   groupOf,
@@ -13,6 +14,7 @@ import {
   groupWords,
   labelOf,
   lanesOf,
+  messagedWords,
   nowOf,
   nowWords,
   plus,
@@ -352,4 +354,32 @@ test("after the turn it says who goes on, for one and for several", () => {
     words: "2 sub-agents at work",
     then: "Codex goes on when they end",
   })
+})
+
+test("a message to a sub-agent says whom by its label, and its first line when the Harness gave words", () => {
+  expect(
+    messagedWords("Reviewer", "**Skip** card.ts: it goes away.\nThen go on.")
+  ).toEqual({
+    verb: "Messaged",
+    subject: "Reviewer",
+    first: "Skip card.ts: it goes away.",
+  })
+  // Queued for one at work, it has no words, and none are made up.
+  expect(messagedWords("Reviewer", undefined)).toEqual({
+    verb: "Messaged",
+    subject: "Reviewer",
+  })
+  // The Harness's own ID for it never shows.
+  expect(messagedWords(undefined, "Read it once more.").subject).toBe(
+    "a sub-agent"
+  )
+})
+
+test("a message's chips find the Thread's sub-agents by their labels, the later of two alike", () => {
+  const first = lane("a", { role: "Explore", turn: "u" })
+  const second = lane("b", { role: "Explore", turn: "v" })
+  const general = lane("c", { role: "general-purpose", title: "Fix the dots" })
+  const labels = byLabel([first, second, general])
+  expect([...labels.keys()]).toEqual(["Explore", "Fix the dots"])
+  expect(labels.get("Explore")).toBe(second)
 })

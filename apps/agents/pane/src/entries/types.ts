@@ -8,6 +8,7 @@ import type {
 } from "@banda/contract/agents"
 import type { ComponentType } from "react"
 import type { RowSaid } from "../thread/subagents"
+import type { Asker } from "./parts/Brief"
 
 /** An entry whose body is of kind `K`. */
 export type EntryOf<K extends Body["kind"]> = Item & {
@@ -35,6 +36,15 @@ export type EntryFacts = {
   /** The sub-agent an anchor names, as its row shows it; none for any
    * other entry, or one the Thread no longer has. */
   subagentRow?: SubagentRow
+  /** A Person's message's sub-agents by their labels, for the chips that
+   * name them (ADR 0103, decision 25); none for one that names none. */
+  about?: ReadonlyMap<string, Subagent>
+  /** What was written to a sub-agent after its brief, where it was sent:
+   * the label of the one it went to, if the Thread still has it. */
+  to?: string
+  /** The same in that sub-agent's own Pane: who wrote it, over its
+   * bubble. */
+  wrote?: Asker
 }
 
 /** A sub-agent where it started (ADR 0103, decision 15): the same object

@@ -28,6 +28,10 @@ export const ENTRY_KINDS: Record<Body["kind"], Rules> = {
   // A sub-agent's row, where it started: it stays out of its turn's fold,
   // as a Visual does, since it may outlive it (ADR 0103, decision 15).
   subagent: { stays: true },
+  // A message to a sub-agent after its brief: in its own Pane a bubble,
+  // which a lane's fold would hide; where it was sent, a row beside the
+  // sub-agents' (ADR 0103, decision 25).
+  messaged: { stays: true },
 }
 
 export const isWorkKind = (kind: Body["kind"]): boolean =>

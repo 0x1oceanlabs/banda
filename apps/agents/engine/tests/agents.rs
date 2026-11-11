@@ -455,6 +455,14 @@ fn entries(items: &[Item]) -> Vec<String> {
             Body::Visual { title, height, .. } => format!("visual: {title} ({height}px)"),
             Body::Issue { title, state, .. } => format!("issue: {title} ({state:?})"),
             Body::Subagent { subagent } => format!("sub-agent: {subagent}"),
+            Body::Messaged {
+                subagent,
+                text: Some(text),
+            } => format!("messaged {subagent}: {text}"),
+            Body::Messaged {
+                subagent,
+                text: None,
+            } => format!("messaged {subagent}"),
         })
         .collect()
 }
@@ -3909,6 +3917,10 @@ enum Step {
     /// Stops the latest turn if it still runs after that many seconds, as
     /// a Codex can keep waiting.
     StopThreadAfter(u64),
+    /// Once a sub-agent of the Thread works and has had a moment to start
+    /// what it runs, sends this into the running turn, as Ask Claude about
+    /// it does ([`about`]).
+    SteerWhileLanesWork(&'static str),
 }
 
 /// A recording of sub-agents: its file in `tests/recordings`, its
@@ -3922,7 +3934,7 @@ struct SubAgents {
 
 /// What the real Harnesses are asked to do with sub-agents, as Banda
 /// declares them (ADR 0103, Plan step 1, item 10).
-const DECLARED: [&SubAgents; 2] = [&CLAUDE_LANES, &CODEX_LANES];
+const DECLARED: [&SubAgents; 3] = [&CLAUDE_LANES, &CODEX_LANES, &CLAUDE_MESSAGE];
 
 /// Claude Code's sub-agents in lanes: three at once in the foreground; one
 /// in the background; one that starts its own; one whose command asks and
@@ -3993,6 +4005,47 @@ const CLAUDE_LANES: SubAgents = SubAgents {
             goes_on: false,
             always: false,
             steps: &[Step::StopThreadWhileLanesWork(3)],
+        },
+    ],
+};
+
+/// Claude Code goes on with its sub-agents by SendMessage, as Ask Claude
+/// about it has it do (ADR 0103, decision 25): one in the background, told
+/// more by a message steered into the turn as it works; and one in the
+/// foreground, told more in a turn of its own once it is done.
+const CLAUDE_MESSAGE: SubAgents = SubAgents {
+    file: "claude-message",
+    harness: "claude",
+    threads: &[
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "Call the Agent tool once with run_in_background true and model haiku: it \
+                     runs `python3 -c \"import time; time.sleep(30)\"` with Bash, then reads \
+                     a.txt and answers with its first line only. Answer `started` at once; \
+                     when it is done, answer with what it said, and nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[Step::SteerWhileLanesWork(
+                "{about} Use SendMessage to tell it to read b.txt too and answer with both \
+                     first lines, comma-separated. When it is done, answer with what it said, \
+                     and nothing else.",
+            )],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &[
+                "Call the Agent tool once with run_in_background false and model haiku: it \
+                     reads a.txt and answers with its first line only. Then answer with what \
+                     it said, and nothing else.",
+                "{about} Use SendMessage to have it read c.txt too and answer with that \
+                     file's first line only. When it is done, answer with what it said, and \
+                     nothing else.",
+            ],
+            goes_on: false,
+            always: false,
+            steps: &[],
         },
     ],
 };
@@ -4243,8 +4296,8 @@ impl World {
             let thread = &sent["thread"];
             let mut always = asked.always;
             for (n, text) in rest.iter().enumerate() {
-                self.answering(thread, limit, n + 1, &mut always).await;
-                self.send(Some(thread), text).await;
+                let view = self.answering(thread, limit, n + 1, &mut always).await;
+                self.send(Some(thread), &about(text, &view)).await;
             }
             let turns = asked.sends.len();
             for step in asked.steps {
@@ -4286,6 +4339,13 @@ impl World {
                 // What a sub-agent that outlives the Stop does comes after
                 // it: it sleeps for a minute at most.
                 tokio::time::sleep(patience(limit, 75)).await;
+            }
+            Step::SteerWhileLanesWork(text) => {
+                let working = |v: &ThreadView| v.subagents.iter().any(|lane| lane.state.works());
+                let view = self.until_within(limit, thread, working).await;
+                tokio::time::sleep(patience(limit, 5)).await;
+                let sent = self.send(Some(thread), &about(text, &view)).await;
+                self.on_turn("agents.steer", &sent["turn"]).await.unwrap();
             }
             Step::StopThreadAfter(secs) => {
                 // Not cut short for a replay: its turn ends as recorded, and
@@ -4344,6 +4404,22 @@ impl World {
                 .unwrap();
         }
     }
+}
+
+/// `text` with its `{about}` written as Ask Claude about it writes it for
+/// the Thread's first sub-agent in `view`, "(about sub-agent 'Reviewer')"
+/// (ADR 0103, decision 25): its role, or its title for Claude's
+/// `general-purpose`, as `lanes::label` names it.
+fn about(text: &str, view: &ThreadView) -> String {
+    let Some(lane) = view.subagents.first() else {
+        return text.to_owned();
+    };
+    let role = lane
+        .role
+        .as_deref()
+        .filter(|role| *role != "general-purpose");
+    let label = role.unwrap_or(&lane.title);
+    text.replace("{about}", &format!("(about sub-agent '{label}')"))
 }
 
 /// How long a replay waits for each step.
@@ -5105,6 +5181,131 @@ async fn the_threads_stop_stops_claude_and_its_foreground_sub_agents() {
             .subagent_until(lane, |own| entries(&own.items) == failed)
             .await;
     }
+}
+
+/// The messages to sub-agent `lane` in `items`, each with its words, if
+/// any (ADR 0103, decision 25).
+fn messaged(items: &[Item], lane: &Subagent) -> Vec<Option<String>> {
+    (items.iter())
+        .filter_map(|item| match &item.body {
+            Body::Messaged { subagent, text } if *subagent == lane.id => Some(text.clone()),
+            _ => None,
+        })
+        .collect()
+}
+
+/// Where the first of `lines` that starts with `start` is.
+fn at(lines: &[String], start: &str) -> usize {
+    (lines.iter().position(|line| line.starts_with(start)))
+        .unwrap_or_else(|| panic!("no line starts with {start:?}: {lines:#?}"))
+}
+
+/// Claude Code's SendMessage to a sub-agent at work, as Ask Claude about
+/// it has it steered into the running turn, is queued: it comes as a call
+/// with no words, which the Thread shows as "Messaged" with none, where
+/// it came; the sub-agent shows no message, as none came to the client,
+/// and its report says what it was told all the same (ADR 0103, decision
+/// 25).
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_message_to_a_sub_agent_at_work_shows_as_messaged_with_no_words() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_MESSAGE).await;
+    let view = &views[0];
+    let [lane] = &view.subagents[..] else {
+        panic!("one sub-agent: {:?}", view.subagents)
+    };
+    assert_eq!(messaged(&view.items, lane), [None], "no words");
+    let lines = texts(view);
+    let asked = at(
+        &lines,
+        "message: (about sub-agent 'Sleep then read first line') ",
+    );
+    let went = at(&lines, &format!("messaged {}", lane.id));
+    let said = at(&lines, "message: I've sent the sub-agent the follow-up");
+    assert!(asked < went && went < said, "where it came: {lines:#?}");
+    assert_eq!(
+        (lane.state, lane.report.as_deref()),
+        (SubagentState::Done, Some("alpha, bravo"))
+    );
+    let prompt = lane.prompt.as_deref().unwrap_or_default();
+    assert!(
+        prompt.starts_with("Use Bash to run: "),
+        "its brief: {prompt}"
+    );
+    let own = world.subagent(lane).await;
+    assert!(messaged(&own.items, lane).is_empty(), "no later brief");
+    assert_eq!(
+        entries(&own.items),
+        [
+            "tool: python3 -c \"import time; time.sleep(30)\" (Done)",
+            "tool: Read a.txt (1 - 1) (Done)",
+            "tool: Read b.txt (1 - 1) (Done)",
+            "message: alpha, bravo",
+        ]
+    );
+}
+
+/// Claude Code's SendMessage to a sub-agent that is done resumes it: the
+/// message comes, with its words, from the parent's session to the
+/// sub-agent's. The Thread shows "Messaged" with them, where it came, and
+/// the sub-agent its parent's words where they came among its work, after
+/// what it did first and before what they asked; its brief stays its first
+/// (ADR 0103, decision 25).
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_message_to_a_sub_agent_that_is_done_shows_in_both_with_its_words() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_MESSAGE).await;
+    let view = &views[1];
+    let [lane] = &view.subagents[..] else {
+        panic!("one sub-agent: {:?}", view.subagents)
+    };
+    let words = messaged(&view.items, lane);
+    let [Some(text)] = &words[..] else {
+        panic!("one message with words: {words:?}")
+    };
+    assert!(text.starts_with("Read the file c.txt in "), "{text}");
+    let lines = texts(view);
+    let asked = at(
+        &lines,
+        "message: (about sub-agent 'Read first line of a.txt') ",
+    );
+    let loaded = at(&lines, "tool: ToolSearch (Done)");
+    let went = at(
+        &lines,
+        &format!("messaged {}: Read the file c.txt", lane.id),
+    );
+    let said = at(&lines, "message: I've sent the request to the sub-agent");
+    assert!(asked < loaded && loaded < went && went < said, "{lines:#?}");
+    assert_eq!(
+        (lane.state, lane.report.as_deref()),
+        (SubagentState::Done, Some("charlie"))
+    );
+    let prompt = lane.prompt.as_deref().unwrap_or_default();
+    assert!(
+        prompt.starts_with("Read the file a.txt in "),
+        "its brief: {prompt}"
+    );
+    let own = world.subagent(lane).await;
+    assert_eq!(messaged(&own.items, lane), words, "the same words");
+    let wrote = format!("messaged {}: {text}", lane.id);
+    assert_eq!(
+        entries(&own.items),
+        [
+            "tool: Read a.txt (1 - 1) (Done)",
+            "message: alpha",
+            &wrote,
+            "tool: Read c.txt (1 - 1) (Done)",
+            "message: charlie",
+        ]
+    );
 }
 
 /// Codex's sub-agents are lanes named from their tasks, each with its own
@@ -8806,7 +9007,8 @@ fn told(facts: &[(String, Value)], lane: &Subagent) -> Vec<String> {
     let id = json!(lane.id);
     let of = |fact: &Value| fact["subagent"] == id || fact["subagent"]["id"] == id;
     (facts.iter())
-        .filter(|(_, fact)| of(fact))
+        // A message to it is an entry, not its record (ADR 0103, decision 25).
+        .filter(|(kind, fact)| of(fact) && kind != "subagent.messaged")
         .map(|(kind, fact)| match kind.as_str() {
             "subagent.started" => "started".to_owned(),
             "subagent.changed" => {
@@ -9418,9 +9620,10 @@ async fn a_failed_sub_agent_leaves_the_listed_thread_as_it_was() {
     assert!(after.asking.is_empty() && listed.asking.is_empty());
 }
 
-/// A sub-agent its Harness announces again, as Claude's SendMessage does,
-/// goes on in its lane: one row, one entry, one start, and working again
-/// once it ended (ADR 0103, decision 7).
+/// A sub-agent its Harness resumes, as Claude's SendMessage does, goes on
+/// in its lane: one row, one entry, one start, and working again once it
+/// ended (ADR 0103, decision 7). What its parent sent it shows where its
+/// parent sent it, and among its work, with its words (decision 25).
 #[tokio::test]
 async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
     let root = tempfile::tempdir().unwrap();
@@ -9432,6 +9635,10 @@ async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
         .filter(|line| line.starts_with("sub-agent: "))
         .count();
     assert_eq!(anchors, 1);
+    assert_eq!(
+        messaged(&view.items, lane),
+        [Some("Read it once more.".to_owned())]
+    );
     assert_eq!(
         world.told_ended(lane, 2).await,
         [
@@ -9455,11 +9662,13 @@ async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
         (SubagentState::Done, Some("alpha"))
     );
     let own = world.subagent(lane).await;
+    let wrote = format!("messaged {}: Read it once more.", lane.id);
     assert_eq!(
         entries(&own.items),
         [
             "tool: Read a.txt (Done)",
             "message: alpha",
+            &wrote,
             "message: alpha"
         ]
     );
@@ -9469,6 +9678,25 @@ async fn a_sub_agent_announced_again_goes_on_in_its_lane() {
         }))
         .unwrap();
     assert_eq!(rows, 1);
+}
+
+/// A message queued for a sub-agent at work, as Claude's SendMessage is,
+/// shows as one with no words where its parent sent it, in place of the
+/// call, and nothing in the sub-agent's own lane (ADR 0103, decision 25).
+#[tokio::test]
+async fn a_message_queued_for_a_sub_agent_at_work_shows_with_no_words() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, view) = world.lanes_end(None, "sub-agents queued", 1).await;
+    let lane = &view.subagents[0];
+    assert_eq!(messaged(&view.items, lane), [None]);
+    assert!(
+        !texts(&view).iter().any(|line| line.contains("SendMessage")),
+        "no call: {:#?}",
+        texts(&view)
+    );
+    let own = world.subagent(lane).await;
+    assert!(messaged(&own.items, lane).is_empty());
 }
 
 /// A call of a sub-agent's that ends after it went idle is still written

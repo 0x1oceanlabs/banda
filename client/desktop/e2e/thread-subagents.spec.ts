@@ -528,3 +528,93 @@ test("a Codex sub-agent with no name opens beside by its number, its answer retu
     /^Done · 6 Luna · \d+s · Returned its answer to Fake AI$/
   )
 })
+
+test("Ask about it starts the Thread's message with the sub-agent's chip, and its bubble shows it sent", async () => {
+  window = await startWindow({
+    look: LOOK,
+    env: { FAKE_AGENT_OUTLIVES_BY: "8000" },
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents outlive")
+  await composer.press("Enter")
+  const row = thread.getByRole("button", { name: "Read a.txt one line" })
+  await expect(row.getByRole("img", { name: "Working" })).toBeVisible()
+  await openBeside(thread, "Read a.txt one line")
+  const beside = besidePane(page)
+  // At the status bar's end, by the Thread's Harness, as it works.
+  const ask = beside.status.getByRole("button", {
+    name: "Ask Fake AI about it",
+  })
+  await expect(ask).toBeVisible()
+  // What is written already stays, after the chip.
+  await composer.fill("why so slow?")
+  await ask.click()
+  await expect(composer).toBeFocused()
+  const chip = composer.locator("[data-chip=subagent]")
+  await expect(chip).toHaveCount(1)
+  await expect(chip).toHaveText("Read a.txt one line")
+  await expect(composer).toHaveText("Read a.txt one line why so slow?")
+  // The caret is after the chip and its space: typing goes there.
+  await page.keyboard.type("tell me ")
+  await expect(composer).toHaveText("Read a.txt one line tell me why so slow?")
+  // Asked again, the chip is there already.
+  await ask.click()
+  await expect(composer).toBeFocused()
+  await expect(chip).toHaveCount(1)
+  await composer.press("Enter")
+  // Sent, the bubble shows the chip, not the words that stand for it.
+  const sent = thread.locator("[data-slot=subagent-chip]")
+  await expect(sent).toHaveText("Read a.txt one line")
+  await expect(sent.getByRole("img")).toBeVisible()
+  await expect(thread).not.toContainText("(about sub-agent")
+  await expect(composer.locator("[data-chip]")).toHaveCount(0)
+  // Done, it is offered still.
+  await expect(beside.status).toHaveAttribute("aria-label", /^Done/, {
+    timeout: 20_000,
+  })
+  await expect(ask).toBeVisible()
+})
+
+test("what the Agent writes to a sub-agent after its brief is a row in the Thread and a bubble in its Pane", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents again")
+  await composer.press("Enter")
+  // Where the Agent sent it: "Messaged", its label, then its words.
+  const messaged = thread.locator("[data-slot=messaged]")
+  await expect(messaged).toHaveText(
+    /^Messaged Read a\.txt one line\s*· Read it once more\.$/
+  )
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await openBeside(thread, "Read a.txt one line")
+  const beside = besidePane(page)
+  // Its first brief stays the brief; what came after is a bubble of its
+  // own, among its work.
+  await expect(beside.brief).toContainText("Fake AI asked")
+  const wrote = beside.pane.locator("[data-slot=subagent-wrote]")
+  await expect(wrote).toContainText("Fake AI wrote")
+  await expect(wrote).toContainText("Read it once more.")
+  await expect(beside.pane.locator("[data-slot=messaged]")).toHaveCount(0)
+  // Each time it was set to work folds its own work: both its replies show.
+  const replies = beside.pane.getByText("alpha", { exact: true })
+  await expect(replies).toHaveCount(2)
+  await expect(replies.first()).toBeVisible()
+})
+
+test("a message queued for a sub-agent at work is a row with no words", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents queued")
+  await composer.press("Enter")
+  const messaged = thread.locator("[data-slot=messaged]")
+  await expect(messaged).toHaveText("Messaged Read a.txt one line")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await openBeside(thread, "Read a.txt one line")
+  // Its words never came: no bubble in its Pane.
+  const beside = besidePane(page)
+  await expect(beside.brief).toBeVisible()
+  await expect(beside.pane.locator("[data-slot=subagent-wrote]")).toHaveCount(0)
+})

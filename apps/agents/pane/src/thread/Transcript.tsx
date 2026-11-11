@@ -35,12 +35,14 @@ import {
   writerOf,
   writing,
 } from "./state"
+import type { Asker } from "../entries/parts/Brief"
 import { Writer } from "../entries/parts/Messages"
-import type { SubagentRow } from "../entries/types"
+import { namesSubagent } from "../entries/parts/messageText"
+import type { EntryFacts, SubagentRow } from "../entries/types"
 import { modelNow } from "../composer/picker"
 import type { Lanes } from "./findIn"
 import type { Followed } from "./live-thread"
-import { byId, rowOf } from "./subagents"
+import { askerOf, byId, byLabel, rowOf } from "./subagents"
 import { awaiting, laneTimeline, thoughtTimes, timeline } from "./timeline"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
@@ -103,10 +105,12 @@ export function Transcript({
   /** The messages that wait for its machine, last (ADR 0105). */
   whenBack?: React.ReactNode
   /** A sub-agent's lane, read only in its own Pane, `state` holding it as
-   * one turn (ADR 0103, decision 21): its brief first, its lines with no
-   * clock, its own place to come back to, nothing to fork or edit, and
-   * the rows of the sub-agents it started, set to work by it, `short`. */
-  lane?: { id: SubagentId; brief: React.ReactNode }
+   * a turn for each time it was set to work (ADR 0103, decisions 21 and
+   * 25): its brief first, its lines with no clock, its own place to come
+   * back to, nothing to fork or edit, and the rows of the sub-agents it
+   * started, set to work by it, `short`. What its parent wrote to it
+   * after the brief shows under `wrote`'s words (decision 25). */
+  lane?: { id: SubagentId; brief: React.ReactNode; wrote?: Asker }
 }) {
   const { thread, reader, acts } = useThreadAround()
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
@@ -146,6 +150,24 @@ export function Transcript({
     () => new Map(state.turns.map((one) => [one.id, one])),
     [state.turns]
   )
+  // The sub-agents a Person's message names as chips (ADR 0103, decision
+  // 25).
+  const about = useMemo(() => byLabel(state.subagents), [state.subagents])
+  // A message to a sub-agent after its brief: in its own Pane who wrote
+  // it, elsewhere the label of the one it went to.
+  const subagentFacts = (
+    item: Item
+  ): Pick<EntryFacts, "about" | "to" | "wrote"> => {
+    const { body } = item
+    if (body.kind === "message")
+      return item.author.kind === "person" && namesSubagent(body.text)
+        ? { about }
+        : {}
+    if (body.kind !== "messaged") return {}
+    if (lane && body.subagent === lane.id) return { wrote: lane.wrote }
+    const to = askerOf(body.subagent, state.subagents)
+    return to === undefined ? {} : { to }
+  }
   // What the Thread knows that its lines show (ADR 0091, decision 3).
   const turnState = (id: string | undefined) =>
     id === undefined ? undefined : turns.get(id)?.state
@@ -162,6 +184,7 @@ export function Transcript({
         item.body.kind === "subagent"
           ? rows.get(item.body.subagent)
           : undefined,
+      ...subagentFacts(item),
     }),
     turnState,
     finding,

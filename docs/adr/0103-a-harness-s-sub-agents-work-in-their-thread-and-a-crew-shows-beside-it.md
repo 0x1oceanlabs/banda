@@ -689,9 +689,12 @@ sub-agents and the Crew `audit-routes`:
       - **Codex's sub-agent has no "Codex asked" bubble.** Codex sends
         its child no brief the client sees (`codex-lanes.jsonl`), so
         the Pane opens on its work.
-      - **"Claude wrote" waits for "Ask Claude about it".** The engine
-        keeps only a lane's first brief, and Claude's SendMessage is
-        not recorded with the declaration yet.
+      - **"Claude wrote" comes with "Ask Claude about it"** (decision
+        25, amended in step 2). The first brief stays the prompt, "Claude
+        asked"; each later message with words is a bubble of its own
+        where it came, "Claude wrote", or "Reviewer wrote" for a nested
+        one. A message queued for a sub-agent at work has no words, so it
+        has no bubble.
       - **The screen on top comes after.** The window has no outcome
         yet for "no room for a Group". Until then, a narrow window
         scrolls to the Pane as it does to any Pane in a Group.
@@ -812,6 +815,31 @@ sub-agents and the Crew `audit-routes`:
     and reaches Claude as "(about sub-agent 'Reviewer')". Claude's
     SendMessage shows as a work row, "Messaged Reviewer". The Harness's
     agent id never shows. For Codex: Ask Codex about it.
+    - _Amended 2026-11-11, during step 2:_ Claude Code's SendMessage has
+      two shapes (`claude-message.jsonl`, `recordings.md` Part D).
+      - **To a sub-agent that is done, it resumes it, with words.** The
+        child runs again, and a `session_message` from parent to child
+        brings the words, under an ID of its own (127–129). Every message
+        after the first, the brief, is "Messaged Reviewer" and its first
+        line, muted, where it came in the parent's turn, and "Claude
+        wrote" in the sub-agent's Pane.
+      - **To a sub-agent at work, it is queued, with no words.** It is a
+        SendMessage call, done as it comes, whose result names the child
+        by `pin.id` (48). The words never reach the client, so the row is
+        "Messaged Reviewer" with no words, and the Pane has no "Claude
+        wrote". Banda makes up none.
+      - **Claude may name the child's ID in its own reply** (134–139).
+        That is Claude's text, shown as written; Banda's own words never
+        name it.
+      - **The chip writes "(about sub-agent '‹label›')"**, by its label
+        (decision 17), and reads back as a chip only for a label of one
+        of the Thread's sub-agents, up to the `')` that closes it, as a
+        label may hold an apostrophe. In the composer its dot is muted
+        and still; in the sent bubble it is the sub-agent's satellite as
+        it stands.
+      - **Ask Codex about it is built; Codex's "Messaged" row is not.**
+        No recording shows Codex's `send_input` or `followup_task`
+        through ACP yet.
 26. **No pause, restart or skip of a Crew's agents.** A Lost Crew, or
     agents failed at a usage limit ("Failed · Usage limit · ask Claude
     to go on after 15:00"), get one action, **Ask Claude to go on**,

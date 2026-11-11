@@ -619,3 +619,65 @@ answered `allow-with-updates` at 175) holds for neither of the others asked
 next. A new sub-agent asks again for the same command (201–202), and so
 does Claude itself (211), each offered the same choice. Whether it holds
 for that same sub-agent's next command is unrecorded: it ran one.
+
+## Part D: Claude's SendMessage to a sub-agent
+
+`claude-message.jsonl` in `apps/agents/engine/tests/recordings/`, made by
+`record_the_real_harnesses_with_sub_agents` (its `CLAUDE_MESSAGE` script)
+with the declaration on and the engine writing lanes (Banda at `a658dc63`),
+`claude-agent-acp` 0.99.1 and Haiku 5.5 at low effort. The Person's words
+start "(about sub-agent '‹title›')", as "Ask Claude about it" writes them
+(ADR 0103, decision 25). `N` below is line N of that file. The replay
+tests beside the recorder play it through the engine with the fake agent.
+
+| File | Lines, bytes | What was asked |
+|---|---|---|
+| `claude-message.jsonl` | 170, 80 KB | Full access: one sub-agent in the background that sleeps 30 seconds, then reads a.txt (15); while it works, a steer asks Claude to SendMessage it to read b.txt too (44). Then one in the foreground that reads a.txt (93); once it is done, a new prompt asks Claude to SendMessage it to read c.txt (117) |
+
+Costs, as Claude Code says them: about $0.016 for the whole file (80, 170).
+
+**Limits:**
+
+- One kept run, at low effort.
+- The file has no times, as the engine's recorder writes none.
+- Codex is not recorded: its `send_input` and `followup_task` are still
+  unseen through ACP.
+
+### What Banda got
+
+**SendMessage comes in two shapes, by whether the sub-agent is at work.**
+
+- **At work, the message is queued** (48): one `tool_call` on the parent's
+  stream, `SendMessage` by its `_meta.claudeCode.toolName`, `rawInput: {}`,
+  already `completed`. Its result is JSON: `success`, "Message queued for
+  delivery to a055c6515dd9ad058 at its next tool round.", and `pin.id`, the
+  child's session. The words Claude sent never come: no `session_message`,
+  on either stream. The child then reads b.txt (71) and answers "alpha,
+  bravo" (75), so the words did reach it.
+- **Done, it is resumed** (127–129): `subagent_update` `running` for the
+  child on the parent's stream (127), then a `session_message` from parent
+  to child, seen from both (128, 129), with a `messageId` of its own,
+  `toolu_01HmGRun8qM2AYfHD3BcStiU`, not the brief's
+  (`toolu_011NZu3ZwTRXx3NbmixGstnf`, 100–101). Its words are Claude's own,
+  "Read the file c.txt in …", not the Person's. The child reads c.txt
+  (130–132), says "charlie" (147) and goes `idle` (148), with no `:reply`.
+- **Claude loads the tool first** in the second case: a `ToolSearch` for
+  `select:SendMessage` (119–124), a row of its own before the message.
+- **Claude may name the child's id in its reply**: "I've sent the request
+  to the sub-agent (`a8d582d460a89aa43`)" (134–139). That is Claude's text.
+- **Claude answers before the child does** in both, then once more by
+  itself: "alpha, bravo" (78) after `idle` (76), and "The sub-agent
+  replied: **charlie**" (164–168) after the prompt's answer (162).
+
+### What it settled
+
+- **A child's first `session_message` is its brief; any later one from
+  its parent is a message to it.** The engine keeps the first as the
+  sub-agent's prompt and writes each later one as a `messaged` entry, a
+  "Messaged ‹label›" row where the parent sent it and a "Claude wrote"
+  bubble in the sub-agent's own Pane, where it came.
+- **A queued message has no words.** The engine names the child from the
+  call's `pin.id`, or the id after "delivery to", and writes a `messaged`
+  entry with no text: a "Messaged ‹label›" row with no words, and no
+  bubble. A SendMessage call that names no child of the Thread stays the
+  call it is.

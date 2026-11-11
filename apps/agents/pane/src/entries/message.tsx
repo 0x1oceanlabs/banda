@@ -9,6 +9,7 @@ export function MessageEntry({
   writer,
   forks,
   edits,
+  about,
 }: EntryProps<"message">) {
   const { reader, acts } = useThreadAround()
   const body = item.body
@@ -17,6 +18,7 @@ export function MessageEntry({
       onEdit={edits && (() => acts.rewind(edits, item))}
       text={body.text}
       images={body.images}
+      about={about}
       at={item.at}
       reader={reader}
     />

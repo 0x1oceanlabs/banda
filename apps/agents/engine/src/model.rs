@@ -699,6 +699,18 @@ pub enum Body {
     Subagent {
         subagent: SubagentId,
     },
+    /// A message its parent sent sub-agent `subagent` after its brief, as
+    /// Claude's SendMessage does (ADR 0103, decision 25): where its parent
+    /// sent it, the Thread's turn or its parent's lane, and in its own
+    /// lane, where it came among its work. `text` is the message's words,
+    /// none when the Harness did not send them, as for one queued for a
+    /// sub-agent at work.
+    Messaged {
+        subagent: SubagentId,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+    },
 }
 
 /// How a Thread went on as it moved (ADR 0078).
@@ -1613,6 +1625,22 @@ pub enum Fact {
         /// When it ended, in milliseconds since the epoch.
         #[ts(type = "number")]
         ended: i64,
+    },
+    /// A sub-agent's parent sent it a message after its brief (ADR 0103,
+    /// decision 25): `item` shows it where its parent sent it, or, with
+    /// `sub` naming it, in the sub-agent's own lane. Given again for the
+    /// same `item`, its `text` is all of it so far.
+    #[serde(rename = "subagent.messaged")]
+    SubagentMessaged {
+        item: ItemId,
+        turn: TurnId,
+        subagent: SubagentId,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        text: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        sub: Option<SubagentId>,
     },
     /// The Agent showed its Person a Visual (ADR 0037).
     #[serde(rename = "visual.shown")]

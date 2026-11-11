@@ -17,10 +17,11 @@
 //!
 //! Each word after `sub-agents` changes that, and they combine. All but
 //! `three`, `codex` and `load` act on the last sub-agent started. Without the
-//! client showing sub-agents, `outlive`, `later`, `again`, `codex`,
-//! `unnamed`, `unknown`, `refuses`, `load`, `background`, `reworded` and
-//! `early` change nothing, and the rest come on the parent's session: `asks`
-//! asks as the parent itself does, as Claude Code's adapter asks today.
+//! client showing sub-agents, `outlive`, `later`, `again`, `queued`,
+//! `codex`, `unnamed`, `unknown`, `refuses`, `load`, `background`,
+//! `reworded` and `early` change nothing, and the rest come on the
+//! parent's session: `asks` asks as the parent itself does, as Claude
+//! Code's adapter asks today.
 //!
 //! - `three`: three at once, an Explore, a general-purpose and a
 //!   Reviewer, which end in the order 3, 1, 2.
@@ -38,8 +39,15 @@
 //! - `later`: the parent starts it only as long after its answer as
 //!   `outlive` works on, by itself, as Claude Code goes on with what a
 //!   background task found; it works and ends then.
-//! - `again`: once it is idle, the parent announces it again and sends
-//!   it more, as Claude Code's SendMessage does: it works and goes idle.
+//! - `again`: once it is idle, the parent resumes it and sends it more,
+//!   "Read it once more.", as Claude Code's SendMessage does
+//!   (`claude-message.jsonl`, lines 127–129): it says it runs again, then
+//!   the message under an ID of its own; it replies and goes idle, with no
+//!   report. As Codex, it is announced again, with no message.
+//! - `queued`: while it works, the parent's SendMessage to it is queued,
+//!   as Claude Code's is for a sub-agent at work (`claude-message.jsonl`,
+//!   line 48): a call with no input, done as it comes, whose result names
+//!   it. Its words never come.
 //! - `slow`: its command works until its own session is cancelled, or the
 //!   parent's. It goes idle cancelled, and only then does its call fail.
 //! - `codex`: as Codex says sub-agents: each session is
@@ -120,6 +128,9 @@ const THREE: [Brief; 3] = [
     },
 ];
 
+/// What `again` tells a sub-agent once it is done.
+const AGAIN: &str = "Read it once more.";
+
 /// The sub-agent a `nested` one starts.
 const NESTED: Brief = Brief {
     role: "Explore",
@@ -131,10 +142,11 @@ const NESTED: Brief = Brief {
 
 /// The words that change nothing for a client that does not show
 /// sub-agents: what they change, Claude Code's old shape has no frame of.
-const APART_ONLY: [&str; 11] = [
+const APART_ONLY: [&str; 12] = [
     "outlive",
     "later",
     "again",
+    "queued",
     "codex",
     "unnamed",
     "unknown",
@@ -403,10 +415,16 @@ impl Parent {
             .capabilities(self.can(sub))
             .state(StateUpdate::Running(RunningStateUpdate::new()));
         self.of(sub, announced)?;
+        self.message(sub, message, prompt)
+    }
+
+    /// `sub`'s parent sends it `words` as `message`, seen from both
+    /// sessions.
+    fn message(&self, sub: &Sub, message: &str, words: &str) -> Result<(), Error> {
         let sent = SessionMessage::new(MessageId::new(message))
             .sender_session_id(sub.parent.clone())
             .recipient_session_id(sub.session.clone())
-            .content(vec![ContentBlock::Text(TextContent::new(prompt))]);
+            .content(vec![ContentBlock::Text(TextContent::new(words))]);
         let out = sent.clone().recipient_message_id(MessageId::new(message));
         self.says(&sub.parent, SessionUpdate::SessionMessage(out))?;
         let came = sent.sender_message_id(MessageId::new(message));
@@ -598,6 +616,9 @@ impl Parent {
     /// What `sub` does, from its model on, as the words say; how it ended.
     async fn work(&self, sub: &Sub) -> Result<Ended, Error> {
         self.begin(sub)?;
+        if self.on(sub, "queued") {
+            self.queued(sub)?;
+        }
         if self.on(sub, "edit") {
             self.edit(sub)?;
         }
@@ -824,20 +845,47 @@ impl Parent {
         self.says(self.its(sub), SessionUpdate::ToolCallUpdate(failed))
     }
 
-    /// `again`: once `sub` is idle, its parent announces it again and
-    /// sends it more, as Claude Code's SendMessage; it replies, goes idle
-    /// and reports.
+    /// `again`: once `sub` is idle, its parent resumes it and sends it
+    /// more, as Claude Code's SendMessage does (`claude-message.jsonl`,
+    /// lines 127–129): it says it runs again, and nothing more of it, then
+    /// the message under an ID of its own, seen from both sessions. It
+    /// replies and goes idle, and no report comes of it, as none did
+    /// there. As Codex, it is announced again, with no message.
     fn again(&self, sub: &Sub) -> Result<(), Error> {
         let message = format!("{}-again", sub.launch);
-        self.announce(sub, &message, "Read it once more.")?;
-        let answer = sub.brief.answer;
-        self.replies(sub, answer, format!("msg-{}-again", sub.n))?;
-        self.idle(sub, IdleStopReason::EndTurn)?;
-        self.no_stop(sub)?;
-        match self.codex {
-            true => Ok(()),
-            false => self.report(sub, &message, &tag("Read", &format!("\n\n{answer}"))),
+        if self.codex {
+            self.announce(sub, &message, AGAIN)?;
+        } else {
+            self.state(sub, StateUpdate::Running(RunningStateUpdate::new()))?;
+            self.message(sub, &message, AGAIN)?;
         }
+        self.replies(sub, sub.brief.answer, format!("msg-{}-again", sub.n))?;
+        self.idle(sub, IdleStopReason::EndTurn)?;
+        self.no_stop(sub)
+    }
+
+    /// `queued`: while `sub` works, its parent's SendMessage to it is
+    /// queued, as Claude Code's is for a sub-agent at work
+    /// (`claude-message.jsonl`, line 48): a call with no input, done as it
+    /// comes, whose result names `sub`. Its words never come.
+    fn queued(&self, sub: &Sub) -> Result<(), Error> {
+        let id = &sub.session.0;
+        let result = json!({
+            "success": true,
+            "message": format!(
+                "Message queued for delivery to {id} at its next tool round. If it finishes first, it is resumed with the message and notifies again, so wait for that notification before resending."
+            ),
+            "pin": { "id": id, "name": id, "ref": format!("{:06x}", sub.n) },
+        })
+        .to_string();
+        let call = ToolCall::new(format!("{}-queued", sub.launch), "SendMessage")
+            .kind(ToolKind::Other)
+            .status(ToolCallStatus::Completed)
+            .raw_input(json!({}))
+            .content(vec![result.clone().into()])
+            .raw_output(json!([{ "type": "text", "text": result }]))
+            .meta(claude(json!({ "toolName": "SendMessage" })));
+        self.says(&sub.parent, SessionUpdate::ToolCall(call))
     }
 
     /// `load`: saves `sub` as its turn's session announced it, and how it

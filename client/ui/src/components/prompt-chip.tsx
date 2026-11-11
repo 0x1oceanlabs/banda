@@ -50,7 +50,7 @@ export const Chip = Node.create({
       dom.dataset.value = value
       dom.title = value
       dom.className = CHIP
-      dom.append(icon(kind.icon), kind.label(value))
+      dom.append(icon(kind.icon, "filled" in kind), kind.label(value))
       return { dom }
     }
   },
@@ -75,8 +75,9 @@ function removesChip(tr: Transaction): boolean {
 const CHIP =
   "mx-px inline-flex items-baseline gap-1 rounded-small bg-raised px-1 align-baseline [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-ring/50"
 
-/** A chip's icon, drawn as the window's other icons are. */
-function icon(paths: readonly string[]): SVGSVGElement {
+/** A chip's icon, drawn as the window's other icons are; `filled`, as a
+ * satellite is. */
+function icon(paths: readonly string[], filled: boolean): SVGSVGElement {
   const svg = document.createElementNS(SVG, "svg")
   for (const [name, value] of Object.entries({
     viewBox: "0 0 24 24",
@@ -92,6 +93,7 @@ function icon(paths: readonly string[]): SVGSVGElement {
   for (const d of paths) {
     const path = document.createElementNS(SVG, "path")
     path.setAttribute("d", d)
+    if (filled) path.setAttribute("fill", "currentColor")
     svg.append(path)
   }
   return svg

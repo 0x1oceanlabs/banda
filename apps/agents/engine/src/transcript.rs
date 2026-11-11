@@ -253,6 +253,9 @@ pub struct Transcript {
     asked: HashMap<String, ItemId>,
     /// The item that shows the Agent's plan for this turn, once it made one.
     plan: Option<ItemId>,
+    /// The messages to its sub-agents after their briefs, by the Harness's
+    /// IDs for them: the item that shows each, and its words so far.
+    messages: HashMap<String, (ItemId, Option<String>)>,
     /// The Harness's ID for the message it says now, when it gives one.
     message: Option<String>,
     due: Option<Instant>,
@@ -298,6 +301,7 @@ impl Transcript {
             tools: HashMap::new(),
             asked: HashMap::new(),
             plan: None,
+            messages: HashMap::new(),
             message: None,
             due: None,
             resets: None,
@@ -339,6 +343,7 @@ impl Transcript {
             tools: HashMap::new(),
             asked: HashMap::new(),
             plan: None,
+            messages: HashMap::new(),
             message: None,
             due: None,
             resets: None,
@@ -621,7 +626,52 @@ impl Transcript {
                 let _ = started.send(kept);
                 Ok(())
             }
+            Said::Messaged {
+                child,
+                message,
+                text,
+            } => {
+                self.close().await?;
+                self.messaged(child, message, text).await
+            }
         }
+    }
+
+    /// Writes a message to sub-agent `child` after its brief, `message`,
+    /// with its words so far (ADR 0103, decision 25): where its parent
+    /// sent it, that it went; in its own lane, what it said. The same
+    /// message again is the same entry, with its words now. One to a child
+    /// the Thread keeps no lane for shows nothing.
+    async fn messaged(
+        &mut self,
+        child: String,
+        message: String,
+        text: Option<String>,
+    ) -> Result<(), String> {
+        let item = match self.messages.get(&message) {
+            Some((_, said)) if *said == text => return Ok(()),
+            Some((item, _)) => *item,
+            None => ItemId::new(),
+        };
+        let thread = self.thread;
+        let to = self
+            .project
+            .read(move |sql| store::lane_of_child(sql, thread, &child))
+            .await
+            .map_err(plain)?;
+        let Some(subagent) = to else {
+            return Ok(());
+        };
+        self.messages.insert(message, (item, text.clone()));
+        let fact = Fact::SubagentMessaged {
+            item,
+            turn: self.turn,
+            subagent,
+            text: text.clone(),
+            sub: self.sub,
+        };
+        self.put(item, Body::Messaged { subagent, text }, fact, None)
+            .await
     }
 
     /// The mode a sub-agent's Question is answered by as it asks: the
