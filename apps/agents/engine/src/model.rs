@@ -1398,12 +1398,28 @@ pub enum Fact {
     /// `to` (ADR 0098, decision 14): it is not here any more. This
     /// Project's log keeps what it said here.
     #[serde(rename = "thread.left")]
-    ThreadLeft { thread: ThreadId, to: ProjectId },
+    ThreadLeft {
+        thread: ThreadId,
+        to: ProjectId,
+        /// The machine `to` is on, by its name, when it is another (ADR
+        /// 0116).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
+    },
     /// The Thread came here, whole, from another Project of this machine,
     /// `from`: its turns, items and marks as they were there. A list reads
     /// itself again, as only the engine knows all of it.
     #[serde(rename = "thread.arrived")]
-    ThreadArrived { thread: ThreadId, from: ProjectId },
+    ThreadArrived {
+        thread: ThreadId,
+        from: ProjectId,
+        /// The machine `from` is on, by its name, when it is another (ADR
+        /// 0116).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        machine: Option<String>,
+    },
     /// The Thread's settings changed, by a Person or by the Harness; or
     /// by Banda, which started it Supervised, as `supervised` says why.
     #[serde(rename = "thread.configured")]

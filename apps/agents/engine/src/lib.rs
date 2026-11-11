@@ -598,7 +598,9 @@ banda_kernel::methods! {
         /// data, for a Project on another machine (ADR 0116): its rows
         /// and the files they name, as `move_thread` takes them. It
         /// answers the move, and its artefact's size and SHA-256. The
-        /// Thread stays here until `leave_thread`. Only a Person packs.
+        /// Thread stays here until `leave_thread`. It answers the account
+        /// the Thread runs on too, for the window to ask the other
+        /// machine for one of that Harness. Only a Person packs.
         command pack_thread(OneThread) -> Packed, Write;
         /// A piece of one of a packed move's files from byte `at`, 512 KiB
         /// at most, in base64, and whether more comes after it: the
@@ -615,11 +617,20 @@ banda_kernel::methods! {
         /// SHA-256 is the one it was packed with, into this Project: the
         /// Thread whole, with the line that says where it came from. An
         /// engine that keeps a Thread another way refuses, and so does a
-        /// Project that has the Thread already and went on with it.
+        /// Project that has the Thread already and went on with it. From
+        /// another machine, `from` and `on` name the two in that line,
+        /// and `folder` says its folder's work was unpacked here first;
+        /// what its Person wrote is this machine's Person's; it runs on
+        /// the account of the same ID and Harness here, else on one of
+        /// that Harness that is on, and a machine with none refuses; a
+        /// session that came along, as Claude Code's, goes on, and one
+        /// that stayed there, as Codex's, hands its next turn the
+        /// Thread's history (ADR 0116, decision 5).
         command unpack_thread(Unpack) -> Unpacked, Write;
         /// Takes a packed Thread out of this Project, for the `project`
         /// it was unpacked in, if it is still as it was packed and at
         /// rest; else it stays, and `give_back` there takes its copy out.
+        /// `machine` names the machine it went to.
         command leave_thread(Leave) -> (), Write;
         /// Takes the copy a move unpacked here back out, as the Thread
         /// stayed where it was: only while nothing went on with it here.
@@ -1531,7 +1542,7 @@ impl Agents {
         call: Call,
         OneThread { thread }: OneThread,
     ) -> Result<Packed, Refusal> {
-        to_machine::pack(&self.live, &call, thread).await
+        to_machine::pack(&self.live, &self.harnesses, &call, thread).await
     }
 
     async fn packed(&self, call: Call, ask: PieceAsk) -> Result<Piece, Refusal> {
@@ -1543,7 +1554,7 @@ impl Agents {
     }
 
     async fn unpack_thread(&self, call: Call, ask: Unpack) -> Result<Unpacked, Refusal> {
-        to_machine::unpack(&self.live, &call, ask).await
+        to_machine::unpack(&self.live, &self.harnesses, &call, ask).await
     }
 
     async fn leave_thread(&self, call: Call, ask: Leave) -> Result<(), Refusal> {

@@ -24,18 +24,23 @@
 //! artefact holds the whole conversation, and takes it across the wall
 //! between Projects and machines.
 
+use crate::effects::Arrived;
+use crate::handoff;
 use crate::images::blocking;
 use crate::kept;
 use crate::live::{Hold, Live};
+use crate::model::Moved;
 use crate::model::{Fact, ThreadId, VERSION};
 use crate::notices::NOTICE;
-use crate::rules::to_project::{may_go_to, notice};
+use crate::rules::to_project::{may_go_to, notice, notice_across};
 use crate::store::{self, ImageRow, ThreadRows};
 use crate::to_project::{self, Files, Leaving};
 use crate::{BASE64, emit};
+use banda_harnesses::{Harnesses, claude_sessions};
 use banda_kernel::{Call, Error, ProjectId, Refusal};
 use base64::Engine as _;
 use serde::{Deserialize, Serialize};
+use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::fs::{self, File};
 use std::io::{self, Read, Seek, SeekFrom, Write};
@@ -61,6 +66,23 @@ pub struct Packed {
     #[ts(type = "number")]
     pub size: u64,
     pub sha256: String,
+    /// The account it runs on here, for the window to ask the other
+    /// machine for one of the same Harness before it carries anything.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub harness: Option<Ran>,
+}
+
+/// The account a Thread runs on, as its machine has it: the entry's ID,
+/// where its sessions live, which another machine's account of the same
+/// Harness shares (`claude`, or a Codex Harness's ID), and the Harness's
+/// name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Ran {
+    pub entry: String,
+    pub sessions: String,
+    pub name: String,
 }
 
 /// Which of a move's files a piece is of: the Thread's artefact, or the
@@ -128,6 +150,18 @@ pub struct Unpack {
     #[serde(rename = "move")]
     pub id: String,
     pub sha256: String,
+    /// The name of the machine it comes from, and of this one, as the
+    /// window shows them: what the Thread's line says of its move.
+    #[serde(default)]
+    #[ts(optional)]
+    pub from: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pub on: Option<String>,
+    /// Whether the folder's work that was not committed was unpacked
+    /// here before it (`git.unpack_folder`), which the line says too.
+    #[serde(default)]
+    pub folder: bool,
 }
 
 /// What `agents.unpack_thread` answers: the Thread that came.
@@ -145,6 +179,11 @@ pub struct Leave {
     #[serde(rename = "move")]
     pub id: String,
     pub project: ProjectId,
+    /// The name of the machine that Project is on, as the window shows
+    /// it.
+    #[serde(default)]
+    #[ts(optional)]
+    pub machine: Option<String>,
 }
 
 /// What `agents.give_back` is asked: the move whose copy goes.
@@ -169,6 +208,9 @@ struct Carried {
     images: Vec<ImageRow>,
     files: Files,
     earlier: Option<String>,
+    /// The account it ran on there.
+    #[serde(default)]
+    ran: Option<Ran>,
 }
 
 /// The Project a Thread comes from, as its machine has it.
@@ -237,14 +279,48 @@ fn no_move() -> Refusal {
     Refusal::not_found("There is no such move: pack the Thread again.")
 }
 
+/// A machine's name as a window gave it: one short line, or none.
+fn machine(name: Option<String>) -> Option<String> {
+    let name = name?.trim().to_owned();
+    let short = !name.is_empty() && name.chars().count() <= 32;
+    (short && !name.chars().any(char::is_control)).then_some(name)
+}
+
+/// The account entry `id` is, as another machine reads it.
+fn ran(harnesses: &Harnesses, id: &str) -> Ran {
+    let Some(entry) = harnesses.find(id) else {
+        return Ran {
+            entry: id.to_owned(),
+            sessions: id.to_owned(),
+            name: id.to_owned(),
+        };
+    };
+    let of = (entry.of.as_deref()).and_then(|of| harnesses.find(of));
+    Ran {
+        entry: entry.id.clone(),
+        sessions: entry.sessions().to_owned(),
+        name: of.map_or_else(|| entry.name.clone(), |of| of.name),
+    }
+}
+
 /// Packs `thread`, at rest, into an artefact in this Project's data.
-pub async fn pack(live: &Live, call: &Call, thread: ThreadId) -> Result<Packed, Refusal> {
+pub async fn pack(
+    live: &Live,
+    harnesses: &Harnesses,
+    call: &Call,
+    thread: ThreadId,
+) -> Result<Packed, Refusal> {
     person_only(call)?;
     let here = call.project();
     let _held = live.hold(thread, Hold::Moving).map_err(Hold::refused)?;
-    let (leaving, shape) = here
-        .read(move |sql| Ok((to_project::leaving(sql, thread)?, ThreadRows::shape(sql)?)))
+    let (leaving, shape, on) = here
+        .read(move |sql| {
+            let leaving = to_project::leaving(sql, thread)?;
+            let on = store::thread(sql, thread)?.map(|found| found.harness);
+            Ok((leaving, ThreadRows::shape(sql)?, on))
+        })
         .await?;
+    let ran = on.filter(|id| !id.is_empty()).map(|id| ran(harnesses, &id));
     let Leaving {
         rows,
         images,
@@ -266,6 +342,7 @@ pub async fn pack(live: &Live, call: &Call, thread: ThreadId) -> Result<Packed, 
         images,
         files,
         earlier,
+        ran: ran.clone(),
     };
     let (data, id) = (here.data().to_owned(), Uuid::new_v4());
     let (size, sha256) = blocking(move || write_artefact(&data, id, &carried))
@@ -276,7 +353,112 @@ pub async fn pack(live: &Live, call: &Call, thread: ThreadId) -> Result<Packed, 
         thread,
         size,
         sha256,
+        harness: ran,
     })
+}
+
+/// What a Thread from another machine goes on with here, written with
+/// its rows: the account it came from and the one it runs on now, and the
+/// Harness whose history it is handed, when its session stayed there.
+struct Pending {
+    from: String,
+    to: String,
+    hand: Option<String>,
+}
+
+/// `rows`, a Thread's that ran on `ran` on another machine, as it goes on
+/// here (ADR 0116, decision 5), on `here`'s name for a refusal: on the
+/// account of the same ID and Harness, else on one of that Harness that
+/// is on; its session the same where `carried` says it came along, as
+/// Claude Code's, and none where it stayed there, as Codex's, whose
+/// history its next turn is handed.
+fn settled(
+    harnesses: &Harnesses,
+    mut rows: ThreadRows,
+    ran: &Ran,
+    carried: &dyn Fn(&str) -> bool,
+    here: &str,
+) -> Result<(ThreadRows, Option<Pending>), Refusal> {
+    let entry = match harnesses.get(&ran.entry) {
+        Ok(same) if same.sessions() == ran.sessions => same,
+        _ => harnesses.keeping(&ran.sessions).ok_or_else(|| {
+            Refusal::conflict(format!(
+                "{here} has no {}: add it there, or move the Thread to another Harness first.",
+                ran.name
+            ))
+        })?,
+    };
+    if entry.id != ran.entry {
+        rows = rows.with_own("harness", entry.id.clone());
+    }
+    let session = |evidence: &Value| {
+        evidence
+            .get("session")
+            .and_then(Value::as_str)
+            .map(str::to_owned)
+    };
+    let mut hand = false;
+    let evidence = rows.own("evidence").map(serde_json::from_str::<Value>);
+    if let Some(Ok(mut evidence)) = evidence {
+        if session(&evidence).is_some_and(|id| carried(&id)) {
+            // An account of another ID here goes on with it as its own.
+            if evidence.get("harness").and_then(Value::as_str) == Some(&ran.entry) {
+                evidence["harness"] = entry.id.clone().into();
+            }
+            rows = rows.with_own("evidence", evidence.to_string());
+        } else {
+            rows = rows.with_own_or_none("evidence", None);
+            hand = true;
+        }
+    }
+    // The sessions of the Harnesses it ran on before: only those that
+    // came, each the account's here that keeps its Harness's sessions.
+    let earlier = rows.own("sessions").map(serde_json::from_str::<Value>);
+    if let Some(Ok(Value::Object(earlier))) = earlier {
+        let came = earlier.into_iter().filter_map(|(sessions, mut evidence)| {
+            session(&evidence).filter(|id| carried(id))?;
+            if let Some(keeps) = harnesses.keeping(&sessions) {
+                evidence["harness"] = keeps.id.into();
+            }
+            Some((sessions, evidence))
+        });
+        rows = rows.with_own("sessions", Value::Object(came.collect()).to_string());
+    }
+    let pending = (hand || entry.id != ran.entry).then(|| Pending {
+        from: ran.entry.clone(),
+        to: entry.id,
+        hand: hand.then(|| ran.name.clone()),
+    });
+    Ok((rows, pending))
+}
+
+/// Writes what `pending` says a Thread's next turn starts with: its
+/// history, when it is handed any, and its divider.
+fn arrive_there(
+    tx: &mut banda_kernel::Tx<'_>,
+    thread: ThreadId,
+    pending: Pending,
+) -> Result<String, Error> {
+    let history = match &pending.hand {
+        Some(name) => handoff::handoff(thread, name, &store::items(tx.sql(), thread)?),
+        None => None,
+    };
+    let how = match (&pending.hand, &history) {
+        (None, _) => Moved::Same,
+        (Some(_), history) => Moved::Handoff {
+            handed: history
+                .as_ref()
+                .map(|h| h.handed.clone())
+                .unwrap_or_default(),
+        },
+    };
+    let arrived = Arrived {
+        shown: false,
+        history: history.map(|h| h.text),
+        divider: (pending.from, pending.to, how),
+    };
+    store::set_arrival(tx.sql(), thread, Some(&arrived))?;
+    Ok(serde_json::to_string(&arrived)?)
 }
 
 /// Writes `carried` and its files as move `id`'s artefact beneath `data`,
@@ -434,9 +616,17 @@ pub async fn take_piece(
 /// Thread whole, as it comes from another Project.
 pub async fn unpack(
     live: &Live,
+    harnesses: &Harnesses,
     call: &Call,
-    Unpack { id, sha256 }: Unpack,
+    ask: Unpack,
 ) -> Result<Unpacked, Refusal> {
+    let Unpack {
+        id,
+        sha256,
+        from: from_machine,
+        on,
+        folder,
+    } = ask;
     person_only(call)?;
     let here = call.project();
     may_go_to(here.scratch())?;
@@ -459,6 +649,7 @@ pub async fn unpack(
         images,
         files,
         earlier,
+        ran,
     } = carried;
     let ours = here.read(ThreadRows::shape).await?;
     if version != VERSION || shape != ours {
@@ -473,11 +664,33 @@ pub async fn unpack(
     if let Some(earlier) = earlier {
         came = came.with_own("sessions", earlier);
     }
+    let (staged, data) = (staging(here.data(), id), here.data().to_owned());
+    let copied = staged.join("data");
+    // From a Project that is none of this machine's, it comes from
+    // another machine: its Person is this one's here, and its account and
+    // session are this machine's to say.
+    let elsewhere = from.project != here.id() && call.other(from.project).await.is_err();
+    let (from_machine, on) = (machine(from_machine), machine(on));
+    let mut images = images;
+    let mut pending = None;
+    if elsewhere {
+        came = came.persons_as(author)?;
+        images = (images.into_iter())
+            .map(|image| image.persons_as(author))
+            .collect::<Result<_, _>>()?;
+        if let Some(ran) = &ran {
+            let sessions = claude_sessions(&copied);
+            let carried = |session: &str| {
+                banda_kernel::plain_name(session) == Some(session)
+                    && sessions.join(format!("{session}.jsonl")).is_file()
+            };
+            let here = on.as_deref().unwrap_or("This machine");
+            (came, pending) = settled(harnesses, came, ran, &carried, here)?;
+        }
+    }
     let found = came.clone();
     here.read(move |sql| to_project::already(sql, thread, &found))
         .await?;
-    let (staged, data) = (staging(here.data(), id), here.data().to_owned());
-    let copied = staged.join("data");
     blocking(move || {
         if copied.is_dir() {
             to_project::copy_files(&copied, &data, &files)?;
@@ -486,14 +699,37 @@ pub async fn unpack(
     })
     .await
     .map_err(to_project::apart)?;
-    let said = notice(&from.name, Path::new(&from.folder), &here.folder(), NOTICE);
-    let home = from.project;
+    let said = match elsewhere {
+        true => notice_across(
+            (
+                &from.name,
+                from_machine.as_deref().unwrap_or("another machine"),
+                Path::new(&from.folder),
+            ),
+            (on.as_deref().unwrap_or("this machine"), &here.folder()),
+            folder,
+            NOTICE,
+        ),
+        false => notice(&from.name, Path::new(&from.folder), &here.folder(), NOTICE),
+    };
+    let home = (from.project, from_machine.filter(|_| elsewhere));
     let written = came.clone();
-    call.command(move |tx| to_project::arrive(tx, author, thread, &written, &images, home, &said))
+    let arrival = call
+        .command(move |tx| {
+            to_project::arrive(tx, author, thread, &written, &images, home, &said)?;
+            pending
+                .map(|pending| arrive_there(tx, thread, pending))
+                .transpose()
+        })
         .await?;
+    // As it came, with what its next turn starts with: its copy is given
+    // back only while it is still so.
+    if let Some(arrival) = arrival {
+        came = came.with_own("arrival", arrival);
+    }
     let kept = Came {
         thread,
-        from: home,
+        from: from.project,
         rows: came,
     };
     let data = here.data().to_owned();
@@ -550,7 +786,13 @@ fn open_artefact(data: &Path, id: Uuid, sha: &str) -> io::Result<Carried> {
 
 /// Takes the Thread packed as move `id` out of this Project, for the
 /// `project` it went to, if it is still as it was packed and at rest.
-pub async fn leave(live: &Live, call: &Call, Leave { id, project }: Leave) -> Result<(), Refusal> {
+pub async fn leave(live: &Live, call: &Call, ask: Leave) -> Result<(), Refusal> {
+    let Leave {
+        id,
+        project,
+        machine: to,
+    } = ask;
+    let to = (project, machine(to));
     person_only(call)?;
     let here = call.project();
     let (author, id) = (call.participant(), named(&id)?);
@@ -564,7 +806,7 @@ pub async fn leave(live: &Live, call: &Call, Leave { id, project }: Leave) -> Re
     .map_err(|_| no_move())?;
     let (thread, rows) = (carried.thread, carried.rows);
     let _held = live.hold(thread, Hold::Moving).map_err(Hold::refused)?;
-    call.command(move |tx| to_project::leave(tx, author, thread, &rows, project))
+    call.command(move |tx| to_project::leave(tx, author, thread, &rows, to))
         .await?;
     live.forget_thread(here.id(), thread).await;
     let path = artefact(here.data(), id);
@@ -608,7 +850,12 @@ pub async fn give_back(live: &Live, call: &Call, OneMove { id }: OneMove) -> Res
             Some(_) => {}
         }
         store::forget_thread(tx.sql(), thread, tx.now())?;
-        emit(tx, author, thread, &Fact::ThreadLeft { thread, to: from })
+        let left = Fact::ThreadLeft {
+            thread,
+            to: from,
+            machine: None,
+        };
+        emit(tx, author, thread, &left)
     })
     .await?;
     live.forget_thread(here.id(), thread).await;

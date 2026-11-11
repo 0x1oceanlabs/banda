@@ -2575,14 +2575,53 @@ impl ThreadRows {
     }
 
     /// These rows, the Thread's own row's `column` `text` instead.
-    pub fn with_own(mut self, column: &str, text: String) -> ThreadRows {
+    pub fn with_own(self, column: &str, text: String) -> ThreadRows {
+        self.with_own_or_none(column, Some(text))
+    }
+
+    /// These rows, the Thread's own row's `column` `text` instead, or
+    /// nothing.
+    pub fn with_own_or_none(mut self, column: &str, text: Option<String>) -> ThreadRows {
+        use rusqlite::types::Value;
         if let Some(own) = self.0.first_mut()
             && let Some(at) = own.columns.iter().position(|named| named == column)
             && let Some(row) = own.rows.first_mut()
         {
-            row[at] = rusqlite::types::Value::Text(text);
+            row[at] = text.map_or(Value::Null, Value::Text);
         }
         self
+    }
+
+    /// The text of the Thread's own row's `column`, if it has one.
+    pub fn own(&self, column: &str) -> Option<&str> {
+        let own = self.0.first()?;
+        let at = own.columns.iter().position(|named| named == column)?;
+        match own.rows.first()?.get(at)? {
+            rusqlite::types::Value::Text(text) => Some(text),
+            _ => None,
+        }
+    }
+
+    /// These rows, all a Person wrote or asked in them `person`'s
+    /// instead: each machine is its own Person, so a Thread that comes
+    /// from another is this one's here (ADR 0116, decision 5). What an
+    /// Agent wrote stays its own.
+    pub fn persons_as(mut self, person: Participant) -> Result<ThreadRows, Error> {
+        use rusqlite::types::Value;
+        let here = json(&person)?;
+        for table in &mut self.0 {
+            let Some(at) = table.columns.iter().position(|named| named == "author") else {
+                continue;
+            };
+            for row in &mut table.rows {
+                if let Some(Value::Text(author)) = row.get_mut(at)
+                    && matches!(serde_json::from_str(author), Ok(Participant::Person(_)))
+                {
+                    author.clone_from(&here);
+                }
+            }
+        }
+        Ok(self)
     }
 
     /// The text of each message its Person wrote in these rows.
@@ -2628,6 +2667,20 @@ pub struct ImageRow {
     author: String,
     added_at: i64,
     item: Option<ItemId>,
+}
+
+impl ImageRow {
+    /// This image, a Person's `person`'s instead, as
+    /// [`ThreadRows::persons_as`] has a Thread's rows.
+    pub fn persons_as(mut self, person: Participant) -> Result<ImageRow, Error> {
+        if matches!(
+            serde_json::from_str(&self.author),
+            Ok(Participant::Person(_))
+        ) {
+            self.author = json(&person)?;
+        }
+        Ok(self)
+    }
 }
 
 /// The images `thread`'s items name, as [`drop_unsent_images`] reads

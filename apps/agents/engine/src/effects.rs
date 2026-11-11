@@ -742,13 +742,15 @@ async fn work(
 
 /// What a turn on a Thread that moved before it starts with (ADR 0078).
 #[derive(Clone, Serialize, Deserialize)]
-struct Arrived {
+pub(crate) struct Arrived {
     /// The divider was written already, even if its prompt failed.
-    shown: bool,
-    /// The history it reads before the message, from another Harness.
-    history: Option<String>,
+    pub(crate) shown: bool,
+    /// The history it reads before the message, from another Harness, or
+    /// from its own on another machine, whose session stayed there (ADR
+    /// 0116, decision 5).
+    pub(crate) history: Option<String>,
     /// The Thread's divider: from, to, and how.
-    divider: (String, String, crate::model::Moved),
+    pub(crate) divider: (String, String, crate::model::Moved),
 }
 
 /// Readies `turn`, the first of its Thread on `harness` since it ran on
