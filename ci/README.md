@@ -2,7 +2,8 @@
 
 `.github/workflows/ci.yml` runs `scripts/check.sh`'s parts side by side
 (`rust ts` in one job, as `ts` reads the checkpoints `rust` writes, and
-`window` in four shards) on GitHub's own `ubuntu-24.04` runners, free for
+`window` in nine shards: six for most of its specs, three for those
+that start arc, a second engine, whose tests are slow) on GitHub's own `ubuntu-24.04` runners, free for
 a public repository. One status, `ci`, sums them up. A PR that changes
 only Markdown or `docs/` passes it without running them.
 

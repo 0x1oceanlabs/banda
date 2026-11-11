@@ -115,9 +115,27 @@ window() {
   # The window starts the engine and the fake agent from target/debug.
   cargo build --workspace --quiet
   packages
-  # BANDA_E2E_SHARD (1/4, …) runs one part of the tests: CI splits them
-  # over runners, as one at a time they took 19 minutes.
-  pnpm --filter @banda/desktop --silent e2e ${BANDA_E2E_SHARD:+--shard="$BANDA_E2E_SHARD"}
+  # BANDA_E2E_SPECS picks the specs: `arc` those that name arc, the
+  # second engine they start (e2e/arc.ts, hosts.spec.ts), each test some
+  # 10 seconds; `rest` the others; unset, all. BANDA_E2E_SHARD (1/6, …) runs one part of them.
+  # CI splits each over runners, as one at a time they took 40 minutes,
+  # and Playwright's shards count tests, not their time.
+  local specs=()
+  case "${BANDA_E2E_SPECS:-}" in
+    "") ;;
+    arc | rest)
+      local spec
+      for spec in client/desktop/e2e/*.spec.ts; do
+        if grep -qw arc "$spec"; then
+          [[ $BANDA_E2E_SPECS == arc ]] && specs+=("e2e/$(basename "$spec")")
+        else
+          [[ $BANDA_E2E_SPECS == rest ]] && specs+=("e2e/$(basename "$spec")")
+        fi
+      done
+      ;;
+    *) echo "check.sh: BANDA_E2E_SPECS is arc, rest or unset, not $BANDA_E2E_SPECS" >&2; return 2 ;;
+  esac
+  pnpm --filter @banda/desktop --silent e2e ${BANDA_E2E_SHARD:+--shard="$BANDA_E2E_SHARD"} "${specs[@]}"
 }
 
 # The workspace for Windows, with its lints as errors as rust has them, and
