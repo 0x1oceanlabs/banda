@@ -6,8 +6,10 @@
  * time starting again, and its Undo takes all of them back. The window
  * keeps the last 20 acts for 10 minutes, and `Ctrl+Z` in the sidebar
  * takes back the newest, then the one before (spec §2.7, S7c); there is
- * no redo. What is put back is the Thread's mark and its Later, never its
- * Panes: one brought back from the Archive opens none (#1069).
+ * no redo. An act on several cards at once is one act (S10b): one Undo
+ * takes it all back, and its toast says what it left, still selected.
+ * What is put back is the Thread's mark and its Later, never its Panes:
+ * one brought back from the Archive opens none (#1069).
  */
 import type { ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
@@ -80,8 +82,8 @@ export const KEPT = 20
 export const KEPT_FOR = 10 * 60_000
 
 /** The acts `Ctrl+Z` takes back, the newest last, each with when it was
- * done. */
-let kept: readonly { done: Undoable; at: number }[] = []
+ * done: one on several cards at once takes each back. */
+let kept: readonly { done: readonly Undoable[]; at: number }[] = []
 
 /** The archives the toast shows tells of, the first first. */
 let told: readonly Undoable[] = []
@@ -90,32 +92,38 @@ const forget = () => {
   told = []
 }
 
-/** Keeps `done` for `Ctrl+Z`, done at `now`: the oldest of more than 20
- * goes. */
-export function keep(done: Undoable, now = Date.now()): void {
+/** Keeps `done`, one act on one card or several, for `Ctrl+Z`, done at
+ * `now`: the oldest of more than 20 goes. */
+export function keep(done: readonly Undoable[], now = Date.now()): void {
+  if (done.length === 0) return
   kept = [...kept, { done, at: now }].slice(-KEPT)
 }
 
 /** Runs `done`'s steps, by its Thread's App's item actions: taken back,
- * `Ctrl+Z` no longer takes it back. */
+ * `Ctrl+Z` no longer takes it back, and an act on several cards takes
+ * back the rest. */
 function runSteps(run: Run, done: Undoable): void {
   const { project, listed, steps } = done
-  kept = kept.filter((one) => one.done !== done)
+  kept = kept.flatMap((one) => {
+    const rest = one.done.filter((other) => other !== done)
+    return rest.length === 0 ? [] : [{ ...one, done: rest }]
+  })
   for (const { does, args } of steps) {
     const action = itemActionOf(listed, does)
     if (action) run(action.id, { project, item: listed.id, ...args })
   }
 }
 
-/** The toast, telling of `archives`; none takes it away. */
-function tell(run: Run, archives: readonly Undoable[]): void {
+/** The toast, telling of `archives`, and of what the last act left, as
+ * "1 asks you, still selected"; none takes it away. */
+function tell(run: Run, archives: readonly Undoable[], left?: string): void {
   told = archives
   if (archives.length === 0) {
     toast.dismiss(UNDO_TOAST)
     return
   }
   const count = archives.length > 1 ? ` ${archives.length}` : ""
-  toast(`Archived${count}`, {
+  toast([`Archived${count}`, left].filter(Boolean).join(" · "), {
     id: UNDO_TOAST,
     duration: LASTS,
     action: {
@@ -131,10 +139,14 @@ function tell(run: Run, archives: readonly Undoable[]): void {
   })
 }
 
-/** Tells of an archive in the toast, whose Undo then takes it back with
- * the others it tells of. */
-export function toldArchived(run: Run, done: Undoable): void {
-  tell(run, [...told, done])
+/** Tells of archives in the toast, whose Undo then takes them back with
+ * the others it tells of, and of what the act left, `left`. */
+export function toldArchived(
+  run: Run,
+  done: readonly Undoable[],
+  left?: string
+): void {
+  tell(run, [...told, ...done], left)
 }
 
 /** Puts back what `done` changed, as a ghost line's Undo does: the toast
@@ -149,10 +161,14 @@ export function putBack(run: Run, done: Undoable): void {
 }
 
 /** Takes back the newest act kept that is not 10 minutes old at `now`, as
- * `Ctrl+Z` does, and says which; none where none is kept. */
-export function undoLast(run: Run, now = Date.now()): Undoable | undefined {
+ * `Ctrl+Z` does, on every card it was on, and says which; none where none
+ * is kept. */
+export function undoLast(
+  run: Run,
+  now = Date.now()
+): readonly Undoable[] | undefined {
   kept = kept.filter(({ at }) => now - at < KEPT_FOR)
   const done = kept.at(-1)?.done
-  if (done) putBack(run, done)
+  for (const one of done ?? []) putBack(run, one)
   return done
 }

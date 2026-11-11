@@ -871,7 +871,78 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
+/* Several at once (ADR 0098, decision 15; spec §2.7): a card checked
+   has the accent's tint while the list has the focus, grey else, as a
+   list shows a selection it does not have the focus for; a check takes
+   its mark's place, the two cross-fading. No colour moves. Under the
+   pointer, Your turn's head offers "Archive N done", as a card offers
+   its acts. The selection's bar comes over the foot with its opacity and
+   a 4 px rise, and goes with its opacity. */
+[role="listbox"] [data-card][data-checked] {
+  background: color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+[role="listbox"]:focus [data-card][data-checked] {
+  background: color-mix(in oklab, var(--ring) 22%, transparent);
+}
+[data-mark-face] {
+  transition: opacity var(--dur-fast) var(--ease);
+}
+[data-check] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-fast) var(--ease),
+    visibility 0s var(--dur-fast);
+}
+[data-checked] [data-mark-face] {
+  opacity: 0;
+}
+[data-checked] [data-check] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+[data-done-all] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-out) var(--ease-exit),
+    visibility 0s var(--dur-out);
+}
+[data-sidebar-list]:not([data-calm]) [data-block]:hover [data-done-all] {
+  opacity: 1;
+  visibility: visible;
+  transition: opacity var(--dur-fast) var(--ease);
+}
+[data-bulk] {
+  opacity: 0;
+  visibility: hidden;
+  translate: 0 4px;
+  transition:
+    opacity var(--dur-fast) var(--ease-exit),
+    visibility 0s var(--dur-fast),
+    translate 0s var(--dur-fast);
+}
+[data-bulk][data-shown] {
+  opacity: 1;
+  visibility: visible;
+  translate: none;
+  transition:
+    opacity var(--dur) var(--ease),
+    translate var(--dur) var(--ease);
+}
+@media (forced-colors: active) {
+  [role="listbox"] [data-card][data-checked] {
+    background: Highlight;
+    color: HighlightText;
+    forced-color-adjust: none;
+  }
+}
 @media (pointer: coarse) {
+  [data-done-all] {
+    opacity: 1;
+    visibility: visible;
+  }
   [data-acts] {
     opacity: 1;
     visibility: visible;

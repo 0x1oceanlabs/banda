@@ -6,9 +6,10 @@ import { useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
+import { CheckIcon } from "lucide-react"
 import { actsOf } from "./acts"
 import type { Row as Arranged } from "./rows"
-import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
+import { type CardView, callWordOf, LATER_BY_AGENT, linesOf } from "./card"
 import { type CardAct, ChildArrow, SignMenu } from "./CardView"
 import { EmptyPlace } from "./Empty"
 import { wentWords } from "./hold"
@@ -23,11 +24,14 @@ import type { WithMenu } from "./ProjectMenu"
 import { groupOf, type Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
 import { putBack } from "./undo"
-import { useActs } from "./useActs"
+import { useActs, useSetActs } from "./useActs"
 import { HoldingContext } from "./useHold"
 import type { Holds } from "./useOrdered"
 import { PickContext, pickProps, pieceKey } from "./usePick"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+
+/** Your turn's head's key (`inbox.ts`). */
+const TURN_HEAD = "turn:head"
 
 /**
  * The regions of the tab in view (ADR 0098, decisions 3–6 and 24), as one
@@ -44,6 +48,8 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
  * the Person does to a card from it, by its menu or its acts (ADR 0098,
  * decision 10), is their own act, which the list draws at once; for a
  * moment after one by key closed a slot, the acts take no click.
+ * Under the pointer, Your turn's head offers to archive every card there
+ * that is done (decision 15).
  */
 export function SectionView({
   regions,
@@ -82,7 +88,9 @@ export function SectionView({
   const keyFor = useKeyLabel()
   const run = useRun()
   const holding = useContext(HoldingContext)
-  const { picked, expand } = useContext(PickContext)
+  const { picked, expand, checked } = useContext(PickContext)
+  // In check mode an option says whether it is checked; a piece never is.
+  const checking = checked.size > 0
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
   // Grouped, a header names what each card then leaves out.
@@ -103,6 +111,18 @@ export function SectionView({
   const look = useLook((one) => one.vars, undefined)
   useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
   const actOn = useActs(holding)
+  const actOnSet = useSetActs(holding)
+  // Your turn's cards that are done, as drawn: not one that asks, failed
+  // or woke, nor one that left while the list held.
+  const done = items.flatMap((item) =>
+    item.kind === "card" &&
+    item.stand === "turn" &&
+    !item.ghost &&
+    !item.went &&
+    callWordOf(item.entry.row.listed, holds.now) === "Done"
+      ? [item.entry.row]
+      : []
+  )
   /** A card's acts, each naming the key in force that does it on the
    * pick: Z for Later, S for Archive and Unarchive; Wake, its App's. */
   const actsFor = (row: Arranged): CardAct[] =>
@@ -135,6 +155,7 @@ export function SectionView({
         view={view}
         current={isCurrent(row.project.id, row.listed.pane)}
         picked={item.key === picked}
+        {...(checking ? { checked: checked.has(item.key) } : {})}
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
@@ -182,7 +203,10 @@ export function SectionView({
   const piece = (item: Extract<Item, { kind: "piece" }>) => {
     const block = item.piece
     switch (block.kind) {
-      case "head":
+      case "head": {
+        // Under the pointer, Your turn's head archives what is done there,
+        // in one act; it has no key, and is hidden as the cards' acts are.
+        const turn = block.key === TURN_HEAD && done.length > 0
         return (
           <div
             data-block={block.key}
@@ -192,8 +216,28 @@ export function SectionView({
             {block.count !== undefined && (
               <span className="font-normal tabular-nums">· {block.count}</span>
             )}
+            {turn && (
+              <button
+                type="button"
+                aria-hidden
+                tabIndex={-1}
+                data-done-all=""
+                className="ml-auto flex items-center gap-1 self-center rounded-small bg-foreground/7 px-1.5 text-[11px] font-normal text-muted-foreground outline-none hover:text-foreground"
+                onMouseDown={(event) => event.preventDefault()}
+                onClick={(event) =>
+                  actOnSet(done, "archive", {
+                    anchor: event.currentTarget,
+                    by: "pointer",
+                  })
+                }
+              >
+                <CheckIcon className="size-3" />
+                Archive {done.length} done
+              </button>
+            )}
           </div>
         )
+      }
       case "divider":
         return <Separator className="mx-2 my-1.5 w-auto!" />
       case "more": {
@@ -205,7 +249,7 @@ export function SectionView({
         return (
           <button
             type="button"
-            {...pickProps(stop, stop === picked)}
+            {...pickProps(stop, stop === picked, checking ? false : undefined)}
             data-more=""
             data-unfold={children ? block.parent : undefined}
             tabIndex={-1}
@@ -240,7 +284,9 @@ export function SectionView({
             group={block}
             settings={settings}
             {...(machine ? { machine } : {})}
-            {...(stop !== undefined ? { stop, picked: stop === picked } : {})}
+            {...(stop !== undefined
+              ? { stop, picked: stop === picked, checking }
+              : {})}
             onFold={() => onToggle(block.key)}
           />
         )

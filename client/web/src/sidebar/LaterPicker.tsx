@@ -5,9 +5,10 @@
  * one that sleeps, or Someday, with no time (ADR 0098, decision 12); ↑ ↓
  * and Enter pick. Its first line follows where the Thread stands, so Z
  * then Enter does what is most likely. A Thread that asks may be put off
- * too: it waits with its question (decision 11). It is the sidebar
- * list's, and what is picked, the Thread's App does, by its item actions
- * (ADR 0087, decision 12).
+ * too: it waits with its question (decision 11). Several Threads take one
+ * time (decision 15): Wake now only if all of them sleep, When it's done
+ * only if all of them work. It is the sidebar list's, and what is picked,
+ * each Thread's App does, by its item actions (ADR 0087, decision 12).
  */
 import type { ProjectId } from "@banda/contract"
 import { works } from "@banda/ui/components/banda-mark"
@@ -36,12 +37,15 @@ import { useLookSidebar } from "../look"
 import { itemActionOf } from "./items"
 import { type Preset, presets, whenOf } from "./later-time"
 
-/** A Thread whose Later is being picked, what the picker stands by, and
- * what is told as something is picked: the sidebar's card it was opened
- * at hears that its Person put it off (ADR 0098, decision 6). */
+/** A Thread whose Later is being picked. */
+export type LaterThread = { project: ProjectId; listed: Listed }
+
+/** The Threads whose Later is being picked, one or several, what the
+ * picker stands by, and what is told as something is picked: the
+ * sidebar's cards it was opened for hear that their Person put them off
+ * (ADR 0098, decision 6). */
 export type LaterTarget = {
-  project: ProjectId
-  listed: Listed
+  targets: readonly LaterThread[]
   anchor?: Element
   onPicked?: () => void
 }
@@ -65,9 +69,10 @@ const back: { to: Element | null; outside: boolean } = {
   outside: false,
 }
 
-/** Opens the picker for a Thread, by its row where `anchor` is given;
- * none closes it. */
+/** Opens the picker for its Threads, by a row where `anchor` is given;
+ * none, or no Thread, closes it. */
 export function pickLater(target: LaterTarget | undefined): void {
+  if (target?.targets.length === 0) target = undefined
   if (target && !picking.get()) {
     back.to = document.activeElement
     back.outside = false
@@ -108,9 +113,10 @@ const ICONS: Readonly<Record<NonNullable<Choice["icon"]>, ReactNode>> = {
   limit: <HourglassIcon />,
 }
 
-/** What the picker reads a Thread's lines from. */
+/** What the picker reads its lines from. */
 type Reading = {
-  listed: Listed
+  /** The Threads it picks for, one or several. */
+  targets: readonly Listed[]
   now: number
   /** What the field reads as a time; none while it reads none. */
   typed?: number
@@ -120,24 +126,28 @@ type Reading = {
   resets?: number
 }
 
+/** What `listed` sleeps until at `now` with no time: Someday, or its
+ * turn's end; none awake or till a time. */
+function sleepsTill(listed: Listed, now: number) {
+  if (!asleep(listed, now)) return undefined
+  if (listed.later?.someday) return "someday"
+  return listed.later?.until === undefined ? "done" : undefined
+}
+
 /**
- * The picker's lines for `listed` at `now`, in order: what was typed;
- * then what its state makes likeliest, so Enter alone picks it: Wake now
- * for one that sleeps, the limit's reset for one held by it, the end of
- * its turn for one at work; then the presets; and last, set apart,
- * Someday. What it already sleeps until is not offered again.
+ * The picker's lines for its `targets` at `now`, in order: what was
+ * typed; then what their state makes likeliest, so Enter alone picks it:
+ * Wake now where all of them sleep, the limit's reset for one held by it,
+ * the end of their turn where all of them work; then the presets; and
+ * last, set apart, Someday. What they all already sleep until is not
+ * offered again.
  */
 export function choicesOf(reading: Reading): Choice[] {
-  const { listed, now, typed, resets } = reading
-  const sleeping = asleep(listed, now)
-  // What it sleeps until now, if it has no time: not offered again.
-  const already = !sleeping
-    ? undefined
-    : listed.later?.someday
-      ? "someday"
-      : listed.later?.until === undefined
-        ? "done"
-        : undefined
+  const { targets, now, typed, resets } = reading
+  const sleeping = targets.every((one) => asleep(one, now))
+  const tills = new Set(targets.map((one) => sleepsTill(one, now)))
+  // What they all sleep until now, if it has no time: not offered again.
+  const [already] = tills.size === 1 ? tills : []
   const choices: Choice[] = []
   if (typed !== undefined)
     choices.push({
@@ -155,7 +165,7 @@ export function choicesOf(reading: Reading): Choice[] {
       picks: { until: resets, resume: true },
       icon: "limit",
     })
-  if (works(listed.mark) && already !== "done")
+  if (targets.every((one) => works(one.mark)) && already !== "done")
     choices.push({
       label: "When it's done",
       note: "the turn ends",
@@ -190,15 +200,15 @@ const TOP = {
     }),
 }
 
-/** The picker, open for the Thread `pickLater` asked for: what is picked
- * runs its App's Later, or its wake, by the Window's `run`. */
+/** The picker, open for the Threads `pickLater` asked for: what is picked
+ * runs each one's App's Later, or its wake, by the Window's `run`. */
 export function LaterPicker() {
   const run = useRun()
   const target = useStore(picking, now)
   const onClose = () => pickLater(undefined)
   // Its App's, by what each does: the picker names none of its actions.
   const onLater = (
-    { project, listed }: LaterTarget,
+    { project, listed }: LaterThread,
     picked: Exclude<Picked, "wake">
   ) => {
     const action = itemActionOf(listed, "later")
@@ -210,7 +220,7 @@ export function LaterPicker() {
           : { until: picked.until, ...(picked.resume ? { resume: true } : {}) }
     if (action) run(action.id, { project, item: listed.id, ...when })
   }
-  const onWake = ({ project, listed }: LaterTarget) => {
+  const onWake = ({ project, listed }: LaterThread) => {
     const action = itemActionOf(listed, "wake")
     if (action) run(action.id, { project, item: listed.id })
   }
@@ -232,12 +242,15 @@ export function LaterPicker() {
           className="w-72 gap-0 p-1.5"
         >
           <Picking
-            key={`${target.project}:${target.listed.id}`}
-            listed={target.listed}
+            key={target.targets
+              .map(({ project, listed }) => `${project}:${listed.id}`)
+              .join(" ")}
+            targets={target.targets.map((one) => one.listed)}
             onPick={(picked) => {
               target.onPicked?.()
-              if (picked === "wake") onWake(target)
-              else onLater(target, picked)
+              for (const one of target.targets)
+                if (picked === "wake") onWake(one)
+                else onLater(one, picked)
               onClose()
             }}
           />
@@ -256,14 +269,14 @@ export function passedAt({ picks }: Choice, now: number): number | undefined {
     : undefined
 }
 
-/** The picker's lines, for one Thread. What is picked goes back by one
- * prop, not by a Later's and a wake's: the sidebar list takes no Thread's
- * verb as a prop (ADR 0087, B4e). */
+/** The picker's lines, for one Thread or several. What is picked goes
+ * back by one prop, not by a Later's and a wake's: the sidebar list takes
+ * no Thread's verb as a prop (ADR 0087, B4e). */
 function Picking({
-  listed,
+  targets,
   onPick,
 }: {
-  listed: Listed
+  targets: readonly Listed[]
   onPick: (picked: Picked) => void
 }) {
   const id = useId()
@@ -280,7 +293,9 @@ function Picking({
   const typed = text.trim() ? whenOf(text, now) : undefined
   // A Thread its usage limit holds will offer the reset first once the
   // list says when (`limitUntil`, E1b): `resets` is left out till then.
-  const choices = choicesOf({ listed, now, typed, presets: listedPresets })
+  const choices = choicesOf({ targets, now, typed, presets: listedPresets })
+  const [one] = targets
+  const asking = targets.filter((each) => each.mark === "asking").length
   // The icons' column, only where the list's own lines have one, so the
   // words start at the field's edge else; a time being typed moves none.
   const iconed = choices.some((one) => one.icon && one.icon !== "typed")
@@ -298,11 +313,20 @@ function Picking({
   return (
     <>
       <div className="truncate px-1.5 pt-0.5 pb-1.5 text-xs text-muted-foreground">
-        Later · <span className="text-foreground/80">{listed.title}</span>
+        Later ·{" "}
+        <span className="text-foreground/80">
+          {targets.length === 1 && one
+            ? one.title
+            : `${targets.length} Threads`}
+        </span>
       </div>
-      {listed.mark === "asking" && (
+      {asking > 0 && (
         <p className="px-1.5 pb-1.5 text-xs text-muted-foreground">
-          It waits with its question
+          {targets.length === 1
+            ? "It waits with its question"
+            : asking === targets.length
+              ? "They wait with their questions"
+              : "Those that ask wait with their questions"}
         </p>
       )}
       <Input

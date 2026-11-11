@@ -210,7 +210,7 @@ export function Sidebar({
                 </PickList>
               </div>
             </ScrollArea>
-            <Foot />
+            <Foot bulk={keys.bulk} />
             <TrustCard
               engine={engine}
               projects={projects}

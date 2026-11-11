@@ -17,14 +17,14 @@ const thread = (more: Partial<Listed> = {}): Listed => ({
   ...more,
 })
 
-/** Each line's label, as the picker lists them for `listed`, with Banda's
- * own presets but two. */
+/** Each line's label, as the picker lists them for `listed`, one Thread
+ * or several, with Banda's own presets but two. */
 const labels = (
-  listed: Listed,
+  listed: Listed | Listed[],
   more: { typed?: number; resets?: number } = {}
 ) =>
   choicesOf({
-    listed,
+    targets: [listed].flat(),
     now: NOW,
     presets: presets(["1h", "tomorrow 9:00"], NOW),
     ...more,
@@ -32,7 +32,7 @@ const labels = (
 
 test("a Thread that asks may be put off: the presets, then Someday, set apart (ADR 0098, decision 11)", () => {
   const choices = choicesOf({
-    listed: thread({ mark: "asking" }),
+    targets: [thread({ mark: "asking" })],
     now: NOW,
     presets: presets(["1h"], NOW),
   })
@@ -92,10 +92,23 @@ test("what a Thread already sleeps until is not offered again", () => {
   ])
 })
 
+test("several Threads take one time: Wake now only if all of them sleep, When it's done only if all of them work (ADR 0098, decision 15)", () => {
+  const sleeping = thread({ later: { at: 0, until: NOW + 2 * HOUR } })
+  const working = thread({ mark: "working" })
+  expect(labels([sleeping, sleeping])[0]).toBe("Wake now")
+  expect(labels([sleeping, thread()])[0]).toBe("In 1 hour")
+  expect(labels([working, working])[0]).toBe("When it's done")
+  expect(labels([working, thread()])[0]).toBe("In 1 hour")
+  // Someday is left out only where all of them sleep till Someday.
+  const someday = thread({ later: { at: 0, someday: true } })
+  expect(labels([someday, someday])).not.toContain("Someday")
+  expect(labels([someday, sleeping])).toContain("Someday")
+})
+
 test("at its usage limit, the reset comes first, and its turn goes again then (ADR 0074, decision 8)", () => {
   const resets = NOW + 30 * MINUTE
   const choices = choicesOf({
-    listed: thread({ mark: "failed" }),
+    targets: [thread({ mark: "failed" })],
     now: NOW,
     presets: [],
     resets,

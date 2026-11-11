@@ -120,14 +120,14 @@ afterEach(() => {
 
 test("an archive is told in the one toast, which more archives add to; its Undo takes them all back (spec §2.6)", () => {
   const run = vi.fn()
-  toldArchived(run, archived("t1"))
+  toldArchived(run, [archived("t1")])
   expect(toasts.shown).toHaveBeenLastCalledWith(
     "Archived",
     expect.objectContaining({ id: UNDO_TOAST, duration: 6000 })
   )
   expect(lastToast().action.label).toBe("Undo")
-  toldArchived(run, archived("t2"))
-  toldArchived(run, archived("t3"))
+  toldArchived(run, [archived("t2")])
+  toldArchived(run, [archived("t3")])
   expect(toasts.shown).toHaveBeenLastCalledWith(
     "Archived 3",
     expect.objectContaining({ id: UNDO_TOAST })
@@ -140,16 +140,16 @@ test("an archive is told in the one toast, which more archives add to; its Undo 
     ])
   )
   // Taken back, the next archive starts a toast of its own.
-  toldArchived(run, archived("t4"))
+  toldArchived(run, [archived("t4")])
   expect(toasts.shown).toHaveBeenLastCalledWith("Archived", expect.anything())
 })
 
 test("a toast that went tells of no archive: the next one starts again at one", () => {
   const run = vi.fn()
-  toldArchived(run, archived("t1"))
-  toldArchived(run, archived("t2"))
+  toldArchived(run, [archived("t1")])
+  toldArchived(run, [archived("t2")])
   lastToast().onAutoClose()
-  toldArchived(run, archived("t3"))
+  toldArchived(run, [archived("t3")])
   expect(toasts.shown).toHaveBeenLastCalledWith("Archived", expect.anything())
 })
 
@@ -157,8 +157,8 @@ test("a ghost line's Undo takes back its own act, and the toast no longer tells 
   const run = vi.fn()
   const one = archived("t1")
   const two = archived("t2")
-  toldArchived(run, one)
-  toldArchived(run, two)
+  toldArchived(run, [one])
+  toldArchived(run, [two])
   putBack(run, two)
   expect(run).toHaveBeenCalledWith("agents.archive", {
     project: S1,
@@ -176,7 +176,7 @@ test("a ghost line's Undo takes back its own act, and the toast no longer tells 
     archived: false,
   })
   // The last one taken back by its ghost line takes the toast away.
-  toldArchived(run, one)
+  toldArchived(run, [one])
   putBack(run, one)
   expect(toasts.dismiss).toHaveBeenCalledWith(UNDO_TOAST)
 })
@@ -205,7 +205,7 @@ const brought = (run: ReturnType<typeof vi.fn>) =>
 test("Ctrl+Z takes back the newest act kept, then the one before: 20 of them, each for 10 minutes, and no more (spec §2.7)", () => {
   const run = vi.fn()
   const acts = Array.from({ length: 21 }, (_, at) => archived(`t${at + 1}`))
-  acts.forEach((done, at) => keep(done, NOW + at))
+  acts.forEach((done, at) => keep([done], NOW + at))
   // The newest first; the first of 21 was not kept.
   while (undoLast(run, NOW + 100));
   expect(brought(run)).toEqual(
@@ -218,9 +218,9 @@ test("Ctrl+Z takes back the newest act kept, then the one before: 20 of them, ea
 
   // Ten minutes after it, an act is kept no more.
   run.mockClear()
-  keep(archived("old"), NOW)
-  keep(archived("new"), NOW + 1000)
-  expect(undoLast(run, NOW + KEPT_FOR)?.listed.id).toBe("new")
+  keep([archived("old")], NOW)
+  keep([archived("new")], NOW + 1000)
+  expect(undoLast(run, NOW + KEPT_FOR)?.[0]?.listed.id).toBe("new")
   expect(undoLast(run, NOW + KEPT_FOR)).toBeUndefined()
   expect(brought(run)).toEqual(["new"])
 })
@@ -229,15 +229,46 @@ test("an act taken back by its toast or its ghost line is kept no more, and one 
   const run = vi.fn()
   const [one, two, three] = ["t1", "t2", "t3"].map(archived)
   for (const done of [one!, two!, three!]) {
-    keep(done, NOW)
-    toldArchived(run, done)
+    keep([done], NOW)
+    toldArchived(run, [done])
   }
   // Ctrl+Z: the newest, and the toast tells of the other two.
-  expect(undoLast(run, NOW)).toBe(three)
+  expect(undoLast(run, NOW)).toEqual([three])
   expect(toasts.shown).toHaveBeenLastCalledWith("Archived 2", expect.anything())
   // The ghost line's Undo takes back the second; the toast's the first.
   putBack(run, two!)
   lastToast().action.onClick()
   expect(brought(run)).toEqual(["t3", "t2", "t1"])
+  expect(undoLast(run, NOW)).toBeUndefined()
+})
+
+test("an act on several cards at once is one: one Ctrl+Z takes it all back, and its toast says what it left, still selected (spec S10b)", () => {
+  const run = vi.fn()
+  const set = ["t1", "t2", "t3"].map(archived)
+  keep([archived("before")], NOW)
+  keep(set, NOW)
+  toldArchived(run, set, "1 asks you, still selected")
+  expect(toasts.shown).toHaveBeenLastCalledWith(
+    "Archived 3 · 1 asks you, still selected",
+    expect.objectContaining({ id: UNDO_TOAST })
+  )
+  // One Ctrl+Z, the whole set, and the toast goes with it.
+  expect(undoLast(run, NOW)).toEqual(set)
+  expect(brought(run)).toEqual(["t1", "t2", "t3"])
+  expect(toasts.dismiss).toHaveBeenCalledWith(UNDO_TOAST)
+  // The next takes back the act before it.
+  run.mockClear()
+  expect(undoLast(run, NOW)?.map((one) => one.listed.id)).toEqual(["before"])
+
+  // A ghost line's Undo takes one card of the set back; Ctrl+Z, the rest.
+  run.mockClear()
+  const again = ["t4", "t5"].map(archived)
+  keep(again, NOW)
+  putBack(run, again[0]!)
+  expect(undoLast(run, NOW)).toEqual([again[1]])
+  expect(brought(run)).toEqual(["t4", "t5"])
+  expect(undoLast(run, NOW)).toBeUndefined()
+  // Nothing done is nothing kept.
+  keep([], NOW)
   expect(undoLast(run, NOW)).toBeUndefined()
 })
