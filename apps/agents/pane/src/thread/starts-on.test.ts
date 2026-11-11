@@ -2,7 +2,14 @@ import { expect, test } from "vitest"
 import type { Defaults } from "@banda/contract/agents"
 import type { Engine } from "@banda/contract"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
-import { lastStart, outOf, startOf, startsOn, startsOnWords } from "./starts-on"
+import {
+  lastStart,
+  outOf,
+  readAsTold,
+  startOf,
+  startsOn,
+  startsOnWords,
+} from "./starts-on"
 
 const NOW = 1_000_000
 const signedIn = new Map([
@@ -134,4 +141,51 @@ test("while its machine has not answered, a draft keeps what that machine named 
   // What it names now wins, naming none too.
   expect(lastStart(arc, {})).toEqual({})
   expect(lastStart(arc, undefined)).toEqual({})
+})
+
+const reader = (...revs: string[]) => {
+  const ask = () => Promise.resolve({ rev: revs.shift() ?? "gone" })
+  return { ask, left: () => revs.length }
+}
+const never = () => false
+const noWait = () => Promise.resolve()
+
+test("a read that says what the machine told is taken at once", async () => {
+  const { ask, left } = reader("told", "later")
+  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "told" })
+  expect(left()).toBe(1)
+})
+
+test("with nothing told yet a read is taken as it is", async () => {
+  const { ask, left } = reader("first", "later")
+  expect(await readAsTold(ask, undefined, never, noWait)).toEqual({
+    rev: "first",
+  })
+  expect(left()).toBe(1)
+})
+
+test("a read ahead of the machine asks again till it says what the machine told", async () => {
+  // The file read otherwise, then read as it did: a tell never comes for that.
+  const { ask, left } = reader("ahead", "ahead", "told")
+  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "told" })
+  expect(left()).toBe(0)
+})
+
+test("a machine that never says what was read ahead does not keep a draft asking", async () => {
+  let asked = 0
+  const ask = () => {
+    asked += 1
+    return Promise.resolve({ rev: "ahead" })
+  }
+  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "ahead" })
+  expect(asked).toBe(30)
+})
+
+test("a read answers none once the draft that asked has gone", async () => {
+  let gone = false
+  const ask = () => {
+    gone = true
+    return Promise.resolve({ rev: "ahead" })
+  }
+  expect(await readAsTold(ask, "told", () => gone, noWait)).toBeUndefined()
 })
