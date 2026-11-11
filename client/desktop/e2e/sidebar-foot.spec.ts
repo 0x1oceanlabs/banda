@@ -13,17 +13,24 @@
  * the list (decision 20, S9b). The foot keeps Settings and View, each
  * tooltip with its key; the key sheet and the theme went to the Banda
  * menu, which the bar's logo opens now, not the sidebar, and Add Project
- * to ✎'s menu (decision 21, S9c). Pictures for Roma, dark and light, with
- * glass and without, at 1440×900: `test-results/sidebar-s9a-*.png`,
- * `test-results/sidebar-s9b-*.png` and `test-results/sidebar-s9c-*.png`.
+ * to ✎'s menu (decision 21, S9c). Quiet's bell is the foot's third: on
+ * for 30 minutes, nothing calls, and both bells are crossed (S9d).
+ * Pictures for Roma, dark and light, with glass and without, at 1440×900:
+ * `test-results/sidebar-s9a-*.png`, `test-results/sidebar-s9b-*.png`,
+ * `test-results/sidebar-s9c-*.png` and `test-results/sidebar-s9d-*.png`.
  */
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import {
+  countNotes,
+  desktopOf,
   firstThread,
   GLASS,
   newProject,
+  placeOf,
+  sendAndLeave,
+  setInFront,
   startWindow,
   wallpaper,
   type Window,
@@ -389,4 +396,127 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toMatch(/^theme = "platform"$/m)
+})
+
+// ADR 0098, decision 21; ADR 0099, decision 7 (S9d): Quiet. The foot's
+// bell turns it on for 30 minutes: a Thread that finishes out of sight
+// makes no sound and no toast, nor, the window behind, a notice on the
+// desktop, and still lands in Your turn. The foot's bell and the logo's
+// small one are crossed. Turned off, nothing is played back.
+test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast and no notice, and still lands in Your turn; both bells are crossed", async () => {
+  window = await startWindow({ look: `mode = "dark"\n${STILL}` })
+  await wide(window)
+  const { app, page } = window
+  const html = page.locator("html")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const logo = page
+    .getByRole("banner")
+    .getByRole("button", { name: /^Banda menu/ })
+  const { composer } = await firstThread(page)
+  const notes = await countNotes(page)
+
+  // The bell, uncrossed, its tooltip with its key in force.
+  const bell = sidebar.getByRole("button", { name: /^Quiet/ })
+  await expect(bell).toHaveAccessibleName("Quiet")
+  await expect(bell).toHaveAttribute("title", "Quiet · Alt+Q")
+  await expect(bell.locator("svg").first()).toHaveCSS("opacity", "1")
+  await expect(bell.locator("svg").last()).toHaveCSS("opacity", "0")
+  await expect(logo.locator("[data-quiet]")).toHaveCount(0)
+
+  // Its popover, in the prototype's words.
+  await bell.click()
+  const popover = page.getByRole("dialog", { name: "Quiet" })
+  await expect(popover).toContainText(
+    "No sounds, no notifications, marks do not call. The inbox still fills."
+  )
+  await expect(popover.getByRole("button")).toHaveText([
+    "30 minutes",
+    "1 hour",
+    /^Until (tomorrow )?9:00$/,
+    "Until I turn it off",
+  ])
+  await shots(window, "s9d-popover")
+
+  // On for 30 minutes: both bells crossed, the page says so.
+  const picked = Date.now()
+  await popover.getByRole("button", { name: "30 minutes" }).click()
+  await expect(popover).toBeHidden()
+  await expect(bell).toHaveAttribute("data-quiet", "")
+  await expect(bell).toHaveAccessibleName(/^Quiet until \d{1,2}:\d\d$/)
+  await expect(bell).toHaveAttribute(
+    "title",
+    /^Quiet until \d{1,2}:\d\d · Alt\+Q$/
+  )
+  await expect(bell.locator("svg").first()).toHaveCSS("opacity", "0")
+  await expect(bell.locator("svg").last()).toHaveCSS("opacity", "1")
+  await expect(html).toHaveAttribute("data-quiet", "")
+  await expect(logo).toHaveAccessibleName(/ · Quiet on$/)
+  await expect(logo.locator("svg[data-quiet]")).toBeVisible()
+  const until = Number(
+    await page.evaluate(() => localStorage.getItem("banda.quiet"))
+  )
+  expect(until - picked).toBeGreaterThan(29 * 60_000)
+  expect(until - picked).toBeLessThan(31 * 60_000)
+
+  // A Thread that ends while the Person is in another: no sound, no
+  // toast, and it lands in Your turn all the same. The pointer leaves the
+  // sidebar, which holds its list still under it.
+  await page.mouse.move(900, 450)
+  await sendAndLeave(page, composer, "slow hello")
+  const card = sidebar.getByRole("option", { name: /slow hello/ })
+  await expect(card.getByRole("img", { name: "Done" })).toBeVisible()
+  await expect(placeOf(sidebar, "Threads")).toHaveText([
+    /^Your turn/,
+    /slow hello/,
+  ])
+  await page.waitForTimeout(500)
+  expect(await notes()).toBe(0)
+  const toasts = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+  await expect(toasts).toHaveCount(0)
+
+  // One that ends with the window behind: no notice on the desktop.
+  const draft = page.getByRole("region", { name: "New Thread" })
+  const again = draft.getByRole("textbox", { name: /^Message to/ })
+  await again.fill("slow again")
+  await again.press("Enter")
+  await expect(draft).toBeHidden()
+  await setInFront(page, false)
+  await expect(
+    sidebar
+      .getByRole("option", { name: /slow again/ })
+      .getByRole("img", { name: "Done" })
+  ).toBeVisible()
+  await page.waitForTimeout(500)
+  expect((await desktopOf(app)).shown).toEqual([])
+  expect(await notes()).toBe(0)
+  await setInFront(page, true)
+
+  // The foot and the logo while Quiet, the pointer off the sidebar.
+  await page.mouse.move(900, 450)
+  await shots(window, "s9d-quiet")
+
+  // Turned off, both bells are whole again, and nothing is played back.
+  await bell.click()
+  await popover.getByRole("button", { name: "Turn off" }).click()
+  await expect(bell).toHaveAccessibleName("Quiet")
+  await expect(bell).not.toHaveAttribute("data-quiet")
+  await expect(html).not.toHaveAttribute("data-quiet")
+  await expect(logo.locator("[data-quiet]")).toHaveCount(0)
+  await expect(logo).not.toHaveAccessibleName(/Quiet/)
+  await page.waitForTimeout(500)
+  expect(await notes()).toBe(0)
+  await expect(toasts).toHaveCount(0)
+  expect((await desktopOf(app)).shown).toEqual([])
+  expect(
+    await page.evaluate(() => localStorage.getItem("banda.quiet"))
+  ).toBeNull()
+
+  // Alt+Q turns it on until turned off, and off.
+  await page.keyboard.press("Alt+KeyQ")
+  await expect(bell).toHaveAccessibleName("Quiet on")
+  await expect(logo.locator("svg[data-quiet]")).toBeVisible()
+  await page.keyboard.press("Alt+KeyQ")
+  await expect(bell).toHaveAccessibleName("Quiet")
 })

@@ -51,18 +51,24 @@ const NOTHING: Telling = { sound: false, toast: false, system: false }
 /** Where the window tells of something it tells of at all. */
 export type Place = { toast: boolean; system: boolean }
 
+/** What keeps the window quiet now: Banda's own Quiet (ADR 0098, decision
+ * 21), and the desktop's Do Not Disturb, which `[notify] quiet` follows
+ * unless told never. */
+export type Quiet = { banda: boolean; desktop: boolean }
+
 /**
  * Where to tell of something, from where the Person looks: nowhere while
- * they look at it, or while the desktop is quiet; once, in one place,
- * otherwise. A call's and a Problem's alike (ADR 0039).
+ * they look at it, while Banda's Quiet is on, or while the desktop is
+ * quiet; once, in one place, otherwise. A call's and a Problem's alike
+ * (ADR 0039).
  */
 export function placeOf(
   sight: Sight,
   settings: Notify,
-  desktopQuiet: boolean
+  quiet: Quiet
 ): Place | null {
-  if (sight === "looking") return null
-  if (desktopQuiet && settings.quiet === "desktop") return null
+  if (sight === "looking" || quiet.banda) return null
+  if (quiet.desktop && settings.quiet === "desktop") return null
   const system =
     settings.system === "always" ||
     (settings.system === "away" && sight === "away")
@@ -82,10 +88,10 @@ export function tell(
   chime: Chime,
   sight: Sight,
   settings: Notify,
-  desktopQuiet: boolean,
+  quiet: Quiet,
   desktopSounds = false
 ): Telling {
-  const place = placeOf(sight, settings, desktopQuiet)
+  const place = placeOf(sight, settings, quiet)
   if (!place) return NOTHING
   const notifies = settings[chime]
   const system = notifies && place.system

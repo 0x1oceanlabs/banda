@@ -31,6 +31,7 @@ import { useWidgets } from "../bar/Widgets"
 import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
+import { quiet } from "../calls/quiet"
 import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
 import {
   followCalls,
@@ -542,6 +543,7 @@ export function Shell({
         if (entry) setReveal({ entry, how: "left" })
       }),
     look: () => told,
+    quiet: quiet.on,
     projects: () => open,
     projectOf,
     placing: () => placing,

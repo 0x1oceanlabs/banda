@@ -31,6 +31,10 @@ test("each key of a file is a row, from its schema", () => {
   expect(rows.some((r) => r.key === "motion.strip.spring.damping-ratio")).toBe(
     true
   )
+  // A key Rust names in its own words: the desktop's Do Not Disturb, apart
+  // from Banda's Quiet (ADR 0098, decision 21).
+  expect(row("notify.quiet").title).toBe("Do Not Disturb")
+  expect(row("notify.quiet").about).toContain("Banda's own Quiet")
 })
 
 test("a list of counts is some of them, and every file has rows", () => {

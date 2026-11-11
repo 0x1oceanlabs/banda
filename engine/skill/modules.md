@@ -358,6 +358,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Quit Banda (`banda.quit`), Ctrl+Q
 - Banda's own keys, until keys.toml changes (`keys.reset`), Ctrl+Alt+Shift+K
 - Show or hide the sidebar (`sidebar.toggle`), Alt+A
+- Turn Quiet on or off (`quiet.toggle`), Alt+Q
 - Open the card picked, or go to where its unseen begins (`sidebar.open-picked`), Return, `[binds.sidebar]`
 - Open the card picked beside the Pane in focus (`sidebar.open-picked-beside`), Shift+Return, `[binds.sidebar]`
 - Archive the card picked, or bring it back (`sidebar.archive-picked`), S, `[binds.sidebar]`

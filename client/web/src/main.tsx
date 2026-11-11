@@ -12,6 +12,7 @@ import "@banda/ui/globals.css"
 import { HostsContext, KeptHosts, onDevice, poppedOf } from "@banda/core/react"
 import { stepLoops } from "@banda/ui/lib/loops"
 import { moveEnterKey } from "./enter-key"
+import { quiet } from "./calls/quiet"
 import { followFrame } from "./frame"
 import { followLook } from "./look"
 import { keepProblem, watchProblems } from "./problems/keep"
@@ -27,6 +28,9 @@ followFrame(host)
 // What loops forever steps 12 times a second, rather than keep the window
 // drawing on every refresh of the screen (ADR 0117).
 stepLoops(document)
+// Quiet, as this machine keeps it, in every window on it (ADR 0098,
+// decision 21).
+quiet.follow({ root: document.documentElement, events: window })
 const engine = host && new Engine(() => host.engine())
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */

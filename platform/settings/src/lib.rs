@@ -473,6 +473,34 @@ mod keys_in_force {
         // The reset is no mod's.
         assert_eq!(keys_of("keys.reset"), ["Ctrl+Alt+Shift+K"]);
     }
+
+    /// Quiet (ADR 0098, decision 21) takes Alt+Q, which was free: it
+    /// moves with the mod, and Quit keeps Ctrl+Q.
+    #[test]
+    fn quiet_is_alt_q() {
+        let keys_of = |held: Mod, id: &str| {
+            let (force, problems) = keys_with(held);
+            assert!(problems.is_empty(), "{held:?}: {problems:?}");
+            force
+                .into_iter()
+                .find(|(each, _)| each == id)
+                .map(|(_, keys)| keys)
+                .unwrap_or_default()
+        };
+        assert_eq!(keys_of(mods(true, false, false), "quiet.toggle"), ["Alt+Q"]);
+        assert_eq!(
+            keys_of(mods(true, true, false), "quiet.toggle"),
+            ["Ctrl+Alt+Q"]
+        );
+        assert_eq!(keys_of(mods(true, false, false), "banda.quit"), ["Ctrl+Q"]);
+        let (force, _) = keys_with(mods(true, false, false));
+        let taking: Vec<_> = force
+            .iter()
+            .filter(|(_, keys)| keys.iter().any(|key| key == "Alt+Q"))
+            .map(|(id, _)| id.as_str())
+            .collect();
+        assert_eq!(taking, ["quiet.toggle"]);
+    }
 }
 
 #[cfg(test)]

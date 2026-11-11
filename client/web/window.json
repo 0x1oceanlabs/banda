@@ -1150,6 +1150,17 @@
       ]
     },
     {
+      "id": "quiet.toggle",
+      "title": "Turn Quiet on or off",
+      "section": "Threads",
+      "keys": [
+        {
+          "code": "KeyQ",
+          "mod": true
+        }
+      ]
+    },
+    {
       "id": "sidebar.show",
       "title": "Show the sidebar",
       "section": "Threads",

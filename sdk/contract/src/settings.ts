@@ -98,7 +98,9 @@ export function rowsOf(file: string): Row[] {
         file,
         key: path.join("."),
         group: prefix.join("."),
-        title: titleOf(name),
+        // Its own words where Rust gives them, as `notify.quiet`'s "Do Not
+        // Disturb", apart from Banda's Quiet.
+        title: property.title ?? titleOf(name),
         about: oneLine(property.description ?? resolved.description ?? ""),
         control: controlOf(schema, resolved),
       })

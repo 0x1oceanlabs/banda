@@ -54,7 +54,10 @@ pub struct NotifySettings {
     pub window: Option<Toasts>,
     /// What the Thread said, in the words; false shows only its title.
     pub detail: Option<bool>,
-    /// Whose quiet Banda keeps.
+    /// Whether the desktop's Do Not Disturb keeps Banda quiet too: no
+    /// toast, no notice and no sound while it is on. Banda's own Quiet,
+    /// the bell at the sidebar's foot, is apart from it.
+    #[schemars(title = "Do Not Disturb")]
     pub quiet: Option<Quiet>,
     /// Whether a Thread that finished tells you.
     pub done: Option<bool>,
