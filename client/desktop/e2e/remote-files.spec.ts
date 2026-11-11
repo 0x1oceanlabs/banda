@@ -448,7 +448,8 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
     "export const line12 = 12"
   )
   await expect(file.locator("[data-machine-icon]").first()).toBeVisible()
-  await shot(page, "path-in-arc-reply")
+  // The lit line fades, so this picture comes at once.
+  await shot(page, "path-in-arc-reply", { toasts: true })
 
   // Ctrl+click: another machine's file has no app here, so it opens in
   // Banda too.

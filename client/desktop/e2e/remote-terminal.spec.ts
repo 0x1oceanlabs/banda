@@ -385,7 +385,11 @@ test("paths: a path arc's terminal prints opens arc's file at its line; Ctrl and
     "title",
     `${join(folder, "src/a.ts")}\nClick to open in Banda`
   )
-  await shot(page, "path-in-arc-terminal")
+  const box = await canvas.boundingBox()
+  await shot(page, "path-in-arc-terminal", {
+    at: { x: box!.x + at.x, y: box!.y + at.y },
+    toasts: true,
+  })
   await canvas.click({ button: "right", position: at })
   const menu = page.getByRole("menu", { name: "Terminal" })
   await expect(
