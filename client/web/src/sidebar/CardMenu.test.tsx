@@ -40,7 +40,7 @@ test("an asking card keeps Archive, which S's toast refuses, but no Mark as unre
 })
 
 test("a working card: Later…, Later — when done and Stop, in Archive's place; it neither forks nor moves", () => {
-  expect(entriesOf("working", { mark: "running" }, MOVES)).toEqual([
+  expect(entriesOf("working", { mark: "working" }, MOVES)).toEqual([
     ["open", "beside"],
     ["later", "done", "stop"],
     ["rename"],
@@ -54,7 +54,7 @@ test("in Later, Wake now, then Later… for another time", () => {
     "later",
   ])
   // Put off at work, it neither forks nor moves.
-  expect(entriesOf("later", { mark: "running" }, MOVES)[2]).toEqual(["rename"])
+  expect(entriesOf("later", { mark: "working" }, MOVES)[2]).toEqual(["rename"])
 })
 
 test("in the Archive: Unarchive, and Delete… last, on its own", () => {

@@ -71,7 +71,7 @@ test("a tab shown by its key says how many it holds", () => {
 })
 
 test("a call comes as its work ends, as it asks another way, and as it wakes by itself; not by the Person's Unread or Unarchive, nor from a list just come", () => {
-  const working = thread("a", { mark: "running" })
+  const working = thread("a", { mark: "working" })
   expect(between([working], [thread("a")])).toEqual(a("Done"))
   expect(between([working], [thread("a", { mark: "asking" })])).toEqual(
     a("Asks")

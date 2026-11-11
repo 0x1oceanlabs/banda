@@ -327,7 +327,9 @@ function Piece({
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
       // decisions 1 and 10; ADR 0107 for a working one's muted blue).
-      return <ThreadMark listed={row.listed} look={slot.look} />
+      return (
+        <ThreadMark listed={row.listed} look={slot.look} doing={slot.doing} />
+      )
     case "title":
       return <Title row={row} card={card} />
     case "time":

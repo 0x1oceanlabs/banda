@@ -19,7 +19,7 @@ const one = (id: string, mark: MarkState, changed = 0): Listed => ({
 
 const lists = {
   ["a" as ProjectId]: [
-    one("run", "running", 5),
+    one("run", "working", 5),
     one("ask", "asking", 3),
     one("old", "done", 1),
   ],
@@ -35,9 +35,9 @@ test("each count takes its marks, the loudest shows, and a count of none is left
   expect(counts.map((c) => [c.count, c.mark, c.things.length])).toEqual([
     ["asking", "failed", 2],
     ["done", "done", 2],
-    ["working", "running", 1],
+    ["working", "working", 1],
   ])
-  const calm = { ["a" as ProjectId]: [one("run", "running")] }
+  const calm = { ["a" as ProjectId]: [one("run", "working")] }
   expect(tally(calm, ["asking", "done", "working"], 0)).toHaveLength(1)
 })
 
@@ -56,7 +56,7 @@ test("the calm square is for when nothing waits and nothing works, not for when 
   expect(calm({}, 10)).toBe(true)
   expect(calm(withOne({}), 10)).toBe(true)
   expect(calm(withOne({ later: { at: 0, until: 5 } }), 10)).toBe(false)
-  expect(calm(withOne({}, "running"), 10)).toBe(false)
+  expect(calm(withOne({}, "working"), 10)).toBe(false)
   expect(calm(withOne({}, "done"), 10)).toBe(false)
   expect(calm(withOne({ later: { at: 0, until: 50 } }, "done"), 10)).toBe(true)
 })
@@ -109,14 +109,14 @@ test("the list is what Alt+U walks from the top: Your turn oldest first, however
   // works in each.
   const day = {
     ["a" as ProjectId]: [
-      one("run", "running", 7),
+      one("run", "working", 7),
       one("ask", "asking", 3),
       one("old", "done", 1),
     ],
     ["b" as ProjectId]: [
       one("new", "done", 4),
       one("broke", "failed", 6),
-      one("build", "running", 2),
+      one("build", "working", 2),
       one("quiet", "rest"),
     ],
   }

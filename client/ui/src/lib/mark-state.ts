@@ -23,10 +23,8 @@ export type MarkState =
   | "rest"
   /** A Thread with no turn running, open: awake, looks around. */
   | "idle"
-  /** The Agent thinks before it acts. */
-  | "thinking"
-  /** A turn runs. */
-  | "running"
+  /** A turn runs: a circle that shows what its Agent does (`MarkDoing`). */
+  | "working"
   /** A Question waits for the Person. A triangle in `--attention`. */
   | "asking"
   /** A turn ended well and the Person has not looked yet. In `--added`. */
@@ -44,13 +42,12 @@ export type MarkState =
 /** Which state the logo shows when several are true at once (ADR 0099,
  * decision 9): offline › failed › asking › woke › done › working › rest. */
 export const MARK_ORDER: Record<MarkState, number> = {
-  offline: 9,
-  failed: 8,
-  asking: 7,
-  woke: 6,
-  done: 5,
-  running: 4,
-  thinking: 3,
+  offline: 8,
+  failed: 7,
+  asking: 6,
+  woke: 5,
+  done: 4,
+  working: 3,
   idle: 2,
   later: 1,
   rest: 0,
@@ -68,5 +65,36 @@ export function loudest(states: Iterable<MarkState>): MarkState {
 
 /** A state of an Agent at work. */
 export function works(state: MarkState): boolean {
-  return state === "running" || state === "thinking"
+  return state === "working"
+}
+
+/**
+ * What a working mark shows its Agent doing (ADR 0099, decision 2), read
+ * from its Thread's events (`doingOf` in status.ts): what its turn does,
+ * by the kind of its tool call, a thought or the reply, a deletion and a
+ * move drawn as an edit; else a calm series of those (`other`), as the
+ * logo at work shows too. Above all that: it compacts the context, it has
+ * said nothing for 3 minutes (`stuck`), or it waits on a usage limit.
+ */
+export type MarkDoing =
+  | "think"
+  | "read"
+  | "search"
+  | "edit"
+  | "execute"
+  | "fetch"
+  | "reply"
+  | "other"
+  | "compacting"
+  | "stuck"
+  | "limit"
+
+/** What a mark draws: its look, or for one at work, what its Agent does;
+ * one with nothing said yet does the calm series. Its motion is keyed by
+ * it (`LOOPED` in mark-rhythm.ts). */
+export type Shown = Exclude<MarkState, "working"> | MarkDoing
+
+/** What a mark in `look`, its Agent doing `doing`, draws. */
+export function shownOf(look: MarkState, doing?: MarkDoing): Shown {
+  return look === "working" ? (doing ?? "other") : look
 }

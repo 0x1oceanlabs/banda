@@ -293,7 +293,7 @@ test("Threads acts on its own Items alone", () => {
 })
 
 test("Later with a time puts it off at once, puts the Thread away, and Undo wakes it", async () => {
-  const { window, sent, ran } = fake(listed({ mark: "running" }))
+  const { window, sent, ran } = fake(listed({ mark: "working" }))
   const at = { project: "s1", item: "t1" }
   action("thread.later").run(window, { ...at, until: 5_000, resume: true })
   await vi.waitFor(() => expect(said.toasts).toHaveLength(1))
@@ -307,7 +307,7 @@ test("Later with a time puts it off at once, puts the Thread away, and Undo wake
 })
 
 test("Later till its turn ends sends no time", async () => {
-  const { window, sent } = fake(listed({ mark: "running" }))
+  const { window, sent } = fake(listed({ mark: "working" }))
   action("thread.later").run(window, { project: "s1", item: "t1", done: true })
   await vi.waitFor(() =>
     expect(said.toasts.map((toast) => toast.words)).toEqual([

@@ -7,10 +7,11 @@
  * maximized, the workspaces stepped, and the overview opened and closed;
  * then the sidebar list as an Agent's day moves it, and the window once
  * its batch is over. The browser's page shows in every phase but the
- * last: the Marks, which only live, as their Threads take the Tiling over
- * (ADR 0099, decision 4). Their loops step 12 times a second (ADR 0117):
- * it fails where the window shows more than 20 frames a second for them,
- * or where one in view is not held and stepped.
+ * last two: the Marks, which only live, as their Threads take the Tiling
+ * over (ADR 0099, decision 4), and ten Agents at work, each Mark showing
+ * what its Agent does (ADR 0099, step 3). Their loops step 12 times a
+ * second (ADR 0117): it fails where the window shows more than 20 frames
+ * a second for them, or where one in view is not held and stepped.
  *
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
@@ -41,6 +42,7 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
+import type { Shown } from "@banda/ui/lib/mark-state"
 import { expect, test } from "@playwright/test"
 import { install, read, reset } from "./motion-probe"
 import { perSecondOf, report, type Phase } from "./motion-report"
@@ -626,13 +628,43 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     phases.marks.counted.callbacks,
     `marks: animation frames${asked.map((stack) => `\n-- asked for at:\n${stack}`).join("")}`
   ).toBe(0)
-  // The frames the window showed for them (ADR 0117, decision 6): their
-  // loops step 12 times a second, all at once, not on every refresh of
-  // the screen. Beside them, the two Threads that ask each draw their
-  // clock once a second, and a little more draws: 15 a second here.
-  const shown = phases.marks.trace?.viz?.perSecond
-  if (traced)
-    expect(shown, "marks: the frames shown a second").toBeLessThanOrEqual(20)
+  /** The phase `name`'s Marks in view, held and stepped (ADR 0117): their
+   * loops are `looks`', and each steps 6 to 13 times a second. */
+  const stepsOf = async (name: "marks" | "agents", looks: Shown[]) => {
+    await leaveSidebar(page)
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+    await expect(page.locator("[data-news]")).toHaveCount(0)
+    const stepped = await steppedOf(sidebar)
+    phases[name]!.stepped = stepped
+    expect(
+      stepped.map((loop) => loop.name),
+      `${name}: the Marks' loops in view`
+    ).toEqual(expect.arrayContaining(animationsOf(looks)))
+    for (const loop of stepped) {
+      expect(loop.held, `${name}: ${loop.name} held`).toBe(true)
+      expect(
+        loop.steps,
+        `${name}: ${loop.name}'s steps a second`
+      ).toBeGreaterThanOrEqual(STEPS_AT_LEAST)
+      expect(
+        loop.steps,
+        `${name}: ${loop.name}'s steps a second`
+      ).toBeLessThanOrEqual(STEPS_AT_MOST)
+    }
+  }
+  /** The frames the window showed for the phase `name`'s Marks (ADR 0117,
+   * decision 6): their loops step 12 times a second, all at once, not on
+   * every refresh of the screen. Beside them, the two Threads that ask
+   * each draw their clock once a second, and a little more draws: 15 a
+   * second here. */
+  const framesOf = (name: "marks" | "agents") => {
+    if (traced)
+      expect(
+        phases[name]!.trace?.viz?.perSecond,
+        `${name}: the frames shown a second`
+      ).toBeLessThanOrEqual(20)
+  }
+  framesOf("marks")
   // Their loops, held and stepped. Beside the two that ask, a Thread at
   // work, one done that the Person did not see and one that failed, so the
   // loops move every part a row's mark has. Woke's bells ring on the bar's
@@ -648,33 +680,70 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     thread: threadNamed(window, "hello 1")!.id,
     text: "fail now",
   })
-  const looks = ["asking", "failed", "done", "running"] as const
   for (const [text, name] of [
     ["wait on", "Working"],
     ["wait done", "Done"],
     ["hello 1", "Failed"],
   ] as const)
     await expect(rowOf(text).getByRole("img", { name })).toBeVisible()
+  // The one at work's doing moves on as its Agent does, so its loops are
+  // held and stepped here, but named in the agents phase, where each doing
+  // stays.
+  await stepsOf("marks", ["asking", "failed", "done"])
+
+  // Ten more Threads at work, each doing a thing of its own, as the engine
+  // says it (ADR 0099, step 3), started from outside the window, all on
+  // Working's tab: a working phase, nothing moving but the Marks, which
+  // show what each does by their loops alone. ADR 0088's working allowance
+  // is two ticks a second (decision 1); between news a working Mark asks
+  // for none.
+  const doings = [
+    ["think", "doing think about it"],
+    ["read", "doing read card.ts"],
+    ["search", "doing search standOf"],
+    ["edit", "doing edit status.ts"],
+    ["execute", "doing execute pnpm test"],
+    ["fetch", "doing fetch docs.rs"],
+    ["reply", "doing reply Here it is"],
+    ["other", "doing other Skill"],
+    ["compacting", "doing compact"],
+    ["limit", "limit wait"],
+  ] as const
+  for (const [, text] of doings)
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+  const tab = (name: RegExp) => sidebar.getByRole("tab", { name })
+  await tab(/^Working/).click()
+  for (const [doing, text] of doings)
+    await expect(
+      rowOf(text).getByRole("img", { name: "Working" })
+    ).toHaveAttribute("data-doing", doing, { timeout: 15_000 })
   await leaveSidebar(page)
   await page.evaluate(() => (document.activeElement as HTMLElement).blur())
   await expect(page.locator("[data-news]")).toHaveCount(0)
-  const stepped = await steppedOf(sidebar)
-  phases.marks.stepped = stepped
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(reset, false)
+        await page.waitForTimeout(HELD_HIDDEN_MS + 200)
+        return (await page.evaluate(read)).callbacks
+      },
+      {
+        message: "agents: a window with no animation frame, settling",
+        timeout: 20_000,
+        intervals: [0],
+      }
+    )
+    .toBe(0)
+  await measureStill("agents", { ms: 5000, browser: false })
   expect(
-    stepped.map((loop) => loop.name),
-    "marks: the Marks' loops in view"
-  ).toEqual(expect.arrayContaining(animationsOf(looks)))
-  for (const loop of stepped) {
-    expect(loop.held, `marks: ${loop.name} held`).toBe(true)
-    expect(
-      loop.steps,
-      `marks: ${loop.name}'s steps a second`
-    ).toBeGreaterThanOrEqual(STEPS_AT_LEAST)
-    expect(
-      loop.steps,
-      `marks: ${loop.name}'s steps a second`
-    ).toBeLessThanOrEqual(STEPS_AT_MOST)
-  }
+    phases.agents.counted.callbacks / phases.agents.seconds,
+    `agents: animation frames a second${phases.agents.counted.stacks.map((stack) => `\n-- asked for at:\n${stack}`).join("")}`
+  ).toBeLessThanOrEqual(2)
+  framesOf("agents")
+  await stepsOf(
+    "agents",
+    doings.map(([doing]) => doing)
+  )
 
   report(scale, versions, phases)
 })

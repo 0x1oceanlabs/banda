@@ -623,7 +623,7 @@ function Driving({
       {driver.at && <Cursor at={driver.at} title={title} />}
       <Pill label={`${title} drives this tab`} className="pl-2 ring-border">
         <BandaMark
-          state={thread?.mark ?? "running"}
+          state={thread?.mark ?? "working"}
           variant="agent"
           playful={0}
           className="size-4"

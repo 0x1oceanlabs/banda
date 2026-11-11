@@ -69,7 +69,7 @@ const one = (id: string, more: Partial<Listed>): Listed => ({
 const lists: Lists = {
   ["work" as ProjectId]: [
     one("Sidebar for arc", { calls: "The rows are cards now" }),
-    one("Bench window tests", { mark: "running", began: NOW - 2 * MINUTE }),
+    one("Bench window tests", { mark: "working", began: NOW - 2 * MINUTE }),
   ],
   ["far" as ProjectId]: [one("Done on arc", { changed: NOW - 3 * MINUTE })],
 }

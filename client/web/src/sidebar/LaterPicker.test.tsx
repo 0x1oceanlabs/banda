@@ -48,7 +48,7 @@ test("a Thread that asks may be put off: the presets, then Someday, set apart (A
 
 test("the first line follows where the Thread stands, so Enter alone picks it", () => {
   expect(labels(thread())).toEqual(["In 1 hour", "Tomorrow", "Someday"])
-  expect(labels(thread({ mark: "running" }))).toEqual([
+  expect(labels(thread({ mark: "working" }))).toEqual([
     "When it's done",
     "In 1 hour",
     "Tomorrow",
@@ -75,7 +75,7 @@ test("the first line follows where the Thread stands, so Enter alone picks it", 
 test("what a Thread already sleeps until is not offered again", () => {
   const someday = thread({ later: { at: 0, someday: true } })
   expect(labels(someday)).toEqual(["Wake now", "In 1 hour", "Tomorrow"])
-  const whenDone = thread({ mark: "running", later: { at: 0 } })
+  const whenDone = thread({ mark: "working", later: { at: 0 } })
   expect(labels(whenDone)).toEqual([
     "Wake now",
     "In 1 hour",
@@ -83,7 +83,7 @@ test("what a Thread already sleeps until is not offered again", () => {
     "Someday",
   ])
   // Someday, at work: it may sleep until its turn ends instead.
-  const working = thread({ mark: "running", later: { at: 0, someday: true } })
+  const working = thread({ mark: "working", later: { at: 0, someday: true } })
   expect(labels(working)).toEqual([
     "Wake now",
     "When it's done",

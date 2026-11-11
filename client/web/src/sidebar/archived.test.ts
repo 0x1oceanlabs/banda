@@ -17,7 +17,7 @@ test("Alt+S archives a row, brings back an archived one, and leaves one at work"
     p: [
       listed("done", { id: "a" }),
       listed("rest", { id: "b", archived: true }),
-      listed("running", { id: "c" }),
+      listed("working", { id: "c" }),
     ],
   }
   expect(toggled(lists, "p" as never, "a")).toBe(true)

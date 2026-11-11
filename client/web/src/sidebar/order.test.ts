@@ -56,7 +56,7 @@ const byProject: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
 test("the counts list and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
   const lists = {
     ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
-    ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "running", 7)],
+    ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "working", 7)],
   }
   const projects = [project("a"), project("b")]
   const { keys } = order(lists, projects, 0)

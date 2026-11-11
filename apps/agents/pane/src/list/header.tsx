@@ -1,12 +1,13 @@
 /**
  * What Threads shows of a Thread in the Tiling's Slot `pane.header` (ADR
- * 0062, decision 17): its Mark in its look (ADR 0099, decision 12), in
- * its Pane's header in the icon's place, faint while it rests; and on its
- * tile in the Overview, at a size to read, with what it asks while it
- * calls, unless it rests and does not call. The Slot gives the Pane alone:
- * Threads finds the Thread its Pane shows in what it lists itself (#943).
+ * 0062, decision 17): its Mark in its look (ADR 0099, decision 12), and
+ * at work what its Agent does, in its Pane's header in the icon's place,
+ * faint while it rests; and on its tile in the Overview, at a size to
+ * read, with what it asks while it calls, unless it rests and does not
+ * call. The Slot gives the Pane alone: Threads finds the Thread its Pane
+ * shows in what it lists itself (#943).
  */
-import { ThreadMark } from "@banda/ui/components/banda-mark"
+import { ThreadMark, works } from "@banda/ui/components/banda-mark"
 import { useItem } from "@banda/ui/hooks/use-item"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { Listed, PaneState } from "@banda/ui/pane"
@@ -30,26 +31,34 @@ function ThreadHeader(props: HeaderProps) {
   // As Threads lists it; none where the window gives no Items, as a
   // popped-out Pane's window does not.
   const listed = useItem(props.project, threadOf(props.pane))
-  const later = isThread(listed) ? listed.later : undefined
-  const now = useNow(30_000, later?.until !== undefined && !later.woke)
-  if (!isThread(listed)) return null
-  const look = headerLookOf(listed, now)
+  const thread = isThread(listed) ? listed : undefined
+  const later = thread?.later
+  // It looks again as a Later's time may come, and at work, as its Agent
+  // may say nothing for long enough to show it stuck.
+  const now = useNow(
+    30_000,
+    (later?.until !== undefined && !later.woke) ||
+      (thread !== undefined && works(thread.mark))
+  )
+  if (!thread) return null
+  const look = headerLookOf(thread, now)
+  const rests = look.look === "rest"
   switch (props.at) {
     case "start":
       return (
         <ThreadMark
-          listed={listed}
-          look={look}
-          className={look === "rest" ? "opacity-40" : undefined}
+          listed={thread}
+          {...look}
+          className={rests ? "opacity-40" : undefined}
         />
       )
     case "overview":
-      if (!props.calling && look === "rest") return null
+      if (!props.calling && rests) return null
       return (
         <>
-          <ThreadMark listed={listed} look={look} className="size-3.5" />
-          {props.calling && listed.calls && (
-            <span className="min-w-0 truncate">{listed.calls}</span>
+          <ThreadMark listed={thread} {...look} className="size-3.5" />
+          {props.calling && thread.calls && (
+            <span className="min-w-0 truncate">{thread.calls}</span>
           )}
         </>
       )

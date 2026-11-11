@@ -26,7 +26,7 @@
  *   loops' steps (ADR 0117).
  */
 import { writeFileSync } from "node:fs"
-import type { MarkState } from "@banda/ui/lib/mark-state"
+import type { Shown } from "@banda/ui/lib/mark-state"
 import { LOOPED, LOOPS } from "@banda/ui/lib/mark-rhythm"
 import type { CDPSession } from "@playwright/test"
 
@@ -379,9 +379,10 @@ export function summarise(
   }
 }
 
-/** The CSS animations marks.css plays for `looks`, by their names: each
- * loop's, and for eyes that look about, the body's that moves back. */
-export function animationsOf(looks: readonly MarkState[]): string[] {
+/** The CSS animations marks.css plays for `looks`, a working Mark's by
+ * what its Agent does, by their names: each loop's, and for eyes that
+ * look about, the body's that moves back. */
+export function animationsOf(looks: readonly Shown[]): string[] {
   const names = looks.flatMap((look) =>
     (LOOPED[look] ?? []).flatMap((name) =>
       LOOPS[name].part === "look"

@@ -148,7 +148,7 @@ test("one that left while the list held says where it went in its time's place, 
 })
 
 test("its machine away, its time stands as it was then", () => {
-  const html = drawn(rowOf("working", { mark: "running" }, "arc"), {
+  const html = drawn(rowOf("working", { mark: "working" }, "arc"), {
     machine: arc,
     at: NOW - 30 * MINUTE,
     away: NOW - 12 * MINUTE,

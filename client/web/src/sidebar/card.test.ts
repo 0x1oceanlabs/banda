@@ -143,12 +143,12 @@ describe("slots, by place, density and group", () => {
     expect(kinds(card(row("open", { mark: "idle" })))).toEqual([
       "mark title | time",
     ])
-    const working = card(row("working", { mark: "running" }, "arc"), {
+    const working = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
     })
     expect(kinds(working)).toEqual(["mark title | machine time"])
     // This machine's names none.
-    expect(kinds(card(row("working", { mark: "running" })))).toEqual([
+    expect(kinds(card(row("working", { mark: "working" })))).toEqual([
       "mark title | time",
     ])
   })
@@ -162,7 +162,7 @@ describe("slots, by place, density and group", () => {
       named: true,
     })
     expect(
-      kinds(card(row("working", { mark: "running" }), { machine: mac }))
+      kinds(card(row("working", { mark: "working" }), { machine: mac }))
     ).toEqual(["mark title | machine time"])
     const alone = card(row("turn", {}, "arc"), {
       machine: { ...arc, alone: true },
@@ -276,7 +276,7 @@ describe("tones: colour only on the mark and on a call's time", () => {
       undefined,
       { kind: "ago", at: NOW - 14 * MINUTE },
     ])
-    const working = card(row("working", { mark: "running" }))
+    const working = card(row("working", { mark: "working" }))
     expect([working.tone, working.quiet]).toEqual([undefined, "working"])
     const archived = card(row("archived", { mark: "rest", archived: true }))
     expect([archived.tone, archived.quiet]).toEqual([undefined, "archived"])
@@ -307,7 +307,7 @@ describe("tones: colour only on the mark and on a call's time", () => {
     })
     const working = row(
       "working",
-      { mark: "running", began: NOW - HOUR },
+      { mark: "working", began: NOW - HOUR },
       "arc"
     )
     const there = card(working, { at: atOf(working), machine: arc, view: ONE })
@@ -344,7 +344,7 @@ describe("times (spec §2.5)", () => {
       })
     )
     expect(timesOf(woke)).toEqual([woke.time, { kind: "ago", at: NOW - HOUR }])
-    const away = card(row("working", { mark: "running" }, "arc"), {
+    const away = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
       away: NOW - 12 * MINUTE,
     })
@@ -359,7 +359,7 @@ describe("spokenOf (spec §2.8)", () => {
       name: "Fix the form, Asks, 14 minutes",
       description: "Asks Which port? banda. arc. Claude Code",
     })
-    const working = card(row("working", { mark: "running" }, "arc"), {
+    const working = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
       at: NOW - 2 * HOUR,
     })
@@ -464,7 +464,7 @@ describe("spokenOf (spec §2.8)", () => {
   })
 
   test("an away machine adds itself, and its time stands as it went; one that strayed or left adds that", () => {
-    const away = card(row("working", { mark: "running" }, "arc"), {
+    const away = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
       at: NOW - 30 * MINUTE,
       away: NOW - 12 * MINUTE,
@@ -473,7 +473,7 @@ describe("spokenOf (spec §2.8)", () => {
       name: "Fix the form, Working, 18 minutes",
       description: "arc. arc is away, 12 minutes",
     })
-    const stopped = card(row("working", { mark: "running" }, "arc"), {
+    const stopped = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
       away: NOW - 12 * MINUTE,
       stopped: true,
