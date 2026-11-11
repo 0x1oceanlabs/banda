@@ -74,6 +74,7 @@ export const DEFAULT_BAR: Bar = {
     "terminal.ports",
     "harnesses.limits",
     "notifications.recent",
+    "clock.now",
   ],
 }
 

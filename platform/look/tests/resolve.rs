@@ -524,7 +524,8 @@ fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
             "workspaces.aside",
             "terminal.ports",
             "harnesses.limits",
-            "notifications.recent"
+            "notifications.recent",
+            "clock.now"
         ]
     );
 
