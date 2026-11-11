@@ -449,8 +449,14 @@ round trip.
      and cursor are this device's `terminal.toml` (ADR 0101, decision 3).
    - **A key goes now or never** (call 2 A), law 4 applied. Once Banda
      knows arc is away no key goes, and the terminal says so in ADR 0105's
-     words: "arc is away: your typing was not sent." Whether a key after a
-     quiet spell waits for H5c's ping first is #1223, decided in step 1b.
+     words: "arc is away: your typing was not sent." _Amended 2026-11-11,
+     at step 1b (#1223):_ a key pings first after a quiet spell, as every
+     act does (ADR 0105, decision 5). That costs the first key after 5 s
+     of quiet one round trip more (over the fake arc, echo in 127 ms
+     against 43 ms at 40 ms a round trip, 348 ms against 154 ms at 150),
+     and the keys after it none, while a key typed into a link already
+     dead is refused in 3 seconds rather than kept in ssh's socket, so
+     the honest note below is about the last few seconds only.
    - **That is said honestly** (Roma, Q3 A). Bytes ssh had already written
      stay in the system's socket, which sends them again until TCP gives
      up, often a minute or more, so a key typed just before Banda knew may
