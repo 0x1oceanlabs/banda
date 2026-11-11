@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-11
 ---
 
@@ -108,8 +108,8 @@ name for each.
    | `text-ui` | 14/20 | rows, work lines, menus, controls |
    | `text-code` | 12.5/20 | code, diffs, commands, paths |
    | `text-meta` | 12/16 | times, counts, captions, small buttons |
-   | `text-small` | 11/14 | **Roma's call, Q1:** a key, a tag, a count on an icon, a menu's label |
-   | `text-figure` | 28/32 | **Roma's call, Q3:** the one number a Pane is about |
+   | `text-small` | 11/14 | **Roma's answer, Q1:** a key, a tag, a count on an icon, a menu's label |
+   | `text-figure` | 28/32 | **Roma's answer, Q3:** the one number a Pane is about |
 
    A line height may change by Tailwind's names (`leading-none` in a
    badge), not by a number. A size does not change. Weights and letter
@@ -334,6 +334,8 @@ the corners' 9.
 
 ## Roma's calls
 
+Roma answered on 2026-11-11: A to all three ("as you recommend").
+
 **Q1. The small sizes, 9 to 11.5 px (56 uses in 38 files).**
 - A. One more level, `text-small` at 11/14, only inside small things: a
   key, a tag, a count on an icon, and a menu's label (the reference
@@ -343,7 +345,7 @@ the corners' 9.
   go up to meta, 12/16.
 - B. All up to meta, 12/16. The count on the logo grows from a 14 px
   dot to 16.
-- **I recommend A.** It keeps the look Roma liked in the mocks, and puts
+- **Answer: A.** It keeps the look Roma liked in the mocks, and puts
   one floor, 11, where there are five sizes today. Captions are meta.
 
 **Q2. 13 px (11 uses in 9 files: the sidebar's search and tabs, a
@@ -354,7 +356,7 @@ Pane's tabs and lists, the machine picker, the update card).**
   14 in step 2.
 - B. A `compact` level at 13/18 for controls, tabs and menus, as the kit
   draws them. Then the window's buttons and menus move from 14 to 13.
-- **I recommend A.** 13 beside 14 and 12 is three sizes in two pixels.
+- **Answer: A.** 13 beside 14 and 12 is three sizes in two pixels.
   If Roma wants the whole look denser, the `banda` theme's font size
   goes to 13, as `macos`'s is, and every level scales together.
 
@@ -364,7 +366,7 @@ box's headings at 20 and 18, the Usage Pane's figures at 40 and 28.**
   figures onto one level, `text-figure` at 28/32, only for the one
   number a Pane is about.
 - B. Everything onto 18, figures too.
-- **I recommend A.** A Usage Pane reads by its number; one size for it,
+- **Answer: A.** A Usage Pane reads by its number; one size for it,
   and nowhere else.
 
 ## Rejected
