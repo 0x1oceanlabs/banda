@@ -7,11 +7,26 @@
  * Ghostty's, which needs a canvas, and is a stand-in here.
  */
 import { type Engine, type ProjectId, Unreachable } from "@banda/contract"
-import type { PaneProps } from "@banda/ui/pane"
+import type { PaneKind, PaneProps } from "@banda/ui/pane"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { afterEach, expect, test, vi } from "vitest"
-import { terminalPane, type TerminalArgs } from "@banda/terminal-pane"
+import { modules } from "./modules"
+
+/** The terminal's args, as its Pane keeps them (`TerminalArgs`). */
+type TerminalArgs = {
+  terminal: string | null
+  title: string
+  shell: boolean
+  done: null
+  typed?: string | null
+}
+
+const terminalPane = modules
+  .flatMap((module) => module.panes ?? [])
+  .find(
+    (kind) => kind.kind === "terminal.terminal"
+  ) as unknown as PaneKind<TerminalArgs>
 
 const surfaces = vi.hoisted(() => {
   const made: {
@@ -165,7 +180,7 @@ test("a Pane restored with a line it never typed drops it: the restart was not i
   const { session, calls } = engine(() => Promise.resolve(null))
   const { updated } = await mount(session, {
     ...NEW,
-    terminal: "kept" as never,
+    terminal: "kept",
     typed: "cargo test",
   })
   expect(calls.some(({ method }) => method === "terminal.write")).toBe(false)
@@ -174,7 +189,7 @@ test("a Pane restored with a line it never typed drops it: the restart was not i
 
 test("a Pane restored while its machine is away watches its shell and, on the answer that it is kept, sends its own size", async () => {
   const { session, calls, streams } = engine(() => Promise.reject(AWAY))
-  await mount(session, { ...NEW, terminal: "kept" as never })
+  await mount(session, { ...NEW, terminal: "kept" })
   const sizes = () => calls.filter(({ method }) => method === "terminal.resize")
   // Its first size, refused for all it reached.
   await act(async () => surfaces.made[0]!.options.onResize(100, 40))
