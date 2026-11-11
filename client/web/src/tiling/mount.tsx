@@ -139,7 +139,9 @@ export function actAs(
  *   one in focus. One the window lacks goes to its `run`, which says so;
  * - `runs` asks the router whether an action, or a Pane it opens, runs
  *   from it;
- * - `device` is this device, which can do what `routing` says.
+ * - `device` is this device, which can do what `routing` says;
+ * - `file` stamps a path with the Pane's Project, as a file crossing a
+ *   boundary must carry it.
  */
 export function handlesOf(
   hosts: Hosts & Pick<KeptHosts, "reread">,

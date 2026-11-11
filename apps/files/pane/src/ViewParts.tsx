@@ -19,7 +19,11 @@ import {
 } from "react"
 import type { ProjectFile } from "@banda/core/react"
 import type { FolderTreeHandle, Mark } from "@banda/ui/components/file-tree"
-import { bringsFiles, droppedFiles } from "@banda/ui/lib/file-drag"
+import {
+  bringsFiles,
+  dropEffectOf,
+  droppedFiles,
+} from "@banda/ui/lib/file-drag"
 import { cn } from "@banda/ui/lib/utils"
 import { ARROWS, moved, parentRow, type View } from "./views"
 import "./views.css"
@@ -129,8 +133,10 @@ export function useDrop(
         if (!bringsFiles(event.dataTransfer)) return
         event.preventDefault()
         event.stopPropagation()
-        const copy = event.altKey || event.ctrlKey
-        event.dataTransfer.dropEffect = copy ? "copy" : "move"
+        event.dataTransfer.dropEffect = dropEffectOf(
+          event.dataTransfer,
+          event.altKey || event.ctrlKey
+        )
         setOver(true)
       },
       onDragLeave: (event) => {

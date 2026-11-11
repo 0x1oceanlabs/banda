@@ -65,6 +65,7 @@ export {
   type Act,
   type Device,
   deviceFor,
+  fileAcross,
   type From,
   type Hosts,
   type Owner,

@@ -5,7 +5,7 @@
  * module: a Thread says it has a composer, as it says its label.
  */
 import type { JsonValue, ProjectId } from "@banda/contract"
-import { deviceFor, type Hosts, projectFile } from "@banda/core"
+import { fileAcross, type Hosts, projectFile } from "@banda/core"
 import { toast } from "@banda/ui/components/sonner"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import type { Chip } from "@banda/ui/module"
@@ -92,9 +92,11 @@ export function attachChips(
   }
   const why =
     focused && project && list[0]
-      ? deviceFor(hosts, () => false, THIS_COMPUTER).across(
+      ? fileAcross(
+          hosts,
           projectFile(project, list[0].path),
-          focused.project
+          focused.project,
+          THIS_COMPUTER
         )
       : undefined
   toast.warning(why ?? "No Thread in this Project to add it to.", {

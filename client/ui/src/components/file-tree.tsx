@@ -37,7 +37,7 @@ import {
 } from "react"
 import { useDark } from "../hooks/use-dark"
 import type { ProjectFile } from "@banda/core"
-import { bringsFiles, droppedFiles } from "../lib/file-drag"
+import { bringsFiles, dropEffectOf, droppedFiles } from "../lib/file-drag"
 import { toast } from "./sonner"
 import { holding, pulseCSS, type RowMark, rowMarkOf } from "../lib/tree-marks"
 import {
@@ -215,9 +215,9 @@ export type FolderTreeProps = {
   /** A row renamed in place, from its path to its new one: whether its
    * holder renamed it; else it goes back. None: no row is renamed. */
   onRename?: (from: string, to: string) => Promise<boolean>
-  /** Banda's files dropped on a folder of the tree, `""` its top, their
-   * whole paths: copied when Alt (⌥) or Ctrl is held as they drop, else
-   * moved. None: nothing drops on it. */
+  /** Banda's files dropped on a folder of the tree, `""` its top, each
+   * with its Project: copied when Alt (⌥) or Ctrl is held as they drop,
+   * else moved. None: nothing drops on it. */
   onDrop?: (files: readonly ProjectFile[], dir: string, copy: boolean) => void
   /** What a screen reader calls it. */
   label: string
@@ -694,8 +694,10 @@ export function FolderTree({
       onDragOver={(event) => {
         if (!onDrop || !bringsFiles(event.dataTransfer)) return
         event.preventDefault()
-        const copy = event.altKey || event.ctrlKey
-        event.dataTransfer.dropEffect = copy ? "copy" : "move"
+        event.dataTransfer.dropEffect = dropEffectOf(
+          event.dataTransfer,
+          event.altKey || event.ctrlKey
+        )
         setDropping(dropFolderAt(event.nativeEvent))
       }}
       onDragLeave={(event) => {

@@ -8,13 +8,16 @@
  * 8).
  */
 import { useCallback, useMemo } from "react"
+import { linkRefused, usePlaced } from "@banda/core/react"
 import { Markdown } from "@banda/ui/components/markdown"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
 import { MarkdownTasks, type Tick } from "@banda/ui/components/markdown-task"
 import { InHeader } from "@banda/ui/components/pane-header"
+import { toast } from "@banda/ui/components/sonner"
 import { useFileMint } from "@banda/ui/hooks/use-file-url"
-import { openOutside } from "@banda/ui/lib/links"
+import { copyText } from "@banda/ui/lib/clipboard"
+import { linkHint, openOutside } from "@banda/ui/lib/links"
 import type { PreviewProps } from "@banda/ui/module"
 import type { Engine } from "@banda/contract"
 import { CodeIcon, FileWarningIcon } from "lucide-react"
@@ -171,16 +174,41 @@ export function MarkdownIn({
     },
     [mint, file, pictures]
   )
+  // Banda's browser runs on this machine alone, so a link in another
+  // machine's file opens in this device's browser, and an address of that
+  // machine's own says whose it is (ADR 0106, decision 3).
+  const { host, shown } = usePlaced(project, undefined)
+  const machine = host && (shown?.named.name ?? host)
   const open = useCallback(
     (address: string, outside: boolean) => {
-      if (outside) openOutside(address)
-      else run?.("browser.open", { address, project })
+      if (!machine && !outside) {
+        run?.("browser.open", { address, project })
+        return
+      }
+      const refused = machine ? linkRefused(address, machine) : undefined
+      if (!refused) return openOutside(address)
+      toast.warning(refused.why, {
+        id: `link ${address}`,
+        description: refused.offer.about,
+        action: {
+          label: "Copy",
+          onClick: () => copyText(refused.offer.copy),
+        },
+      })
     },
-    [run, project]
+    [run, project, machine]
+  )
+  const hint = useCallback(
+    (address: string) =>
+      machine
+        ? (linkRefused(address, machine)?.why ??
+          `${address}\nOpens in this computer's browser`)
+        : linkHint(address),
+    [machine]
   )
   return (
     <MarkdownMedia resolve={resolve}>
-      <MarkdownLinks open={open}>
+      <MarkdownLinks open={open} hint={hint}>
         <Markdown>{text}</Markdown>
       </MarkdownLinks>
     </MarkdownMedia>

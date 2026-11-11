@@ -6,6 +6,7 @@ import {
   editorsOn,
   firstThread,
   openedIn,
+  projectId,
   startWindow,
   type Window,
 } from "./window"
@@ -17,19 +18,22 @@ test.afterEach(async () => {
 })
 
 /** Drops on `box` what a drag brings: files by their names, as main's
- * drag brings them back, or whole paths in Banda's own type, as the
- * page's drag carries them. */
+ * drag brings them back, or files with their Project in Banda's own
+ * type, as the page's drag carries them. */
 async function dropOn(
   box: Locator,
-  { files = [], paths }: { files?: string[]; paths?: string[] }
+  {
+    files = [],
+    carried,
+  }: { files?: string[]; carried?: { project: string; path: string }[] }
 ) {
   await box.evaluate(
-    (element, { files, paths }) => {
+    (element, { files, carried }) => {
       const data = new DataTransfer()
       for (const name of files) data.items.add(new File(["x"], name))
-      if (paths) {
-        data.setData("application/x-banda-paths", JSON.stringify(paths))
-        data.setData("text/plain", paths.join("\n"))
+      if (carried) {
+        data.setData("application/x-banda-paths", JSON.stringify(carried))
+        data.setData("text/plain", carried.map((c) => c.path).join("\n"))
       }
       for (const type of ["dragenter", "dragover", "drop"])
         element.dispatchEvent(
@@ -40,7 +44,7 @@ async function dropOn(
           })
         )
     },
-    { files, paths }
+    { files, carried }
   )
 }
 
@@ -259,7 +263,14 @@ test("a row goes into a Thread's message by its menu or a drag, opens in an edit
   await expect(chips.nth(1)).toHaveAttribute("data-value", "src/main.ts")
   // A drag the page runs, as outside Banda's window, carries Banda's own
   // type, which the composer names too.
-  await dropOn(composer, { paths: [join(project, "src/util.ts")] })
+  await dropOn(composer, {
+    carried: [
+      {
+        project: projectId(window, "Work"),
+        path: join(project, "src/util.ts"),
+      },
+    ],
+  })
   await expect(chips).toHaveCount(3)
   await expect(chips.nth(2)).toHaveAttribute("data-value", "src/util.ts")
   await expect(composer).not.toContainText(project)
