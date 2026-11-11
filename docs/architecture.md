@@ -1027,9 +1027,10 @@ If Chat is removed, Agents still works through its own Thread.
     `harnesses.toml` says only how the Harnesses start (ADR 0040). Which
     account a new Thread starts on, `[start]`'s `account` and `fallback`,
     is each machine's own: the window asks the Thread's machine for them
-    (`agents.defaults` in a Project, `keys.settings_read` in No Project),
-    and reads again as `keys.settings_changed` tells it the file changed
-    (ADR 0106, step 5a).
+    (`agents.defaults` first in a Project, `keys.settings_read` for every
+    draft), reads again as `keys.settings_changed` tells it the file
+    changed, and asks till a read says the `rev` told last, as a read can
+    run ahead of the tell (ADR 0106, step 5a).
 - **Accounts has one lifecycle owner**, `platform/harnesses/engine/src/accounts`.
   Its `Accounts` service owns profile discovery and connection, duplicate
   folder checks, the provider process pool, bounded sign-in sessions and

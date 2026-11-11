@@ -167,22 +167,27 @@ export function lastStart(
   return start ?? lastNamed.get(engine)
 }
 
+/** How many times a machine has told its `agents.toml`, and the `rev` it
+ * told last: none before the first. */
+export type AgentsTold = { count: number; rev?: string }
+
 /**
- * How many times `engine`'s machine has told its `agents.toml` while `on`:
- * first as it is, on every connection, then each time it reads otherwise,
- * by hand or from Settings. What reads the file on that machine reads it
- * again on each.
+ * What `engine`'s machine has told of its `agents.toml` while `on`: first
+ * as it is, on every connection, then each time it reads otherwise, by hand
+ * or from Settings. What reads the file on that machine reads it again on
+ * each.
  */
-export function useAgentsTold(engine: Engine, on: boolean): number {
-  const [told, setTold] = useState(0)
+export function useAgentsTold(engine: Engine, on: boolean): AgentsTold {
+  const [told, setTold] = useState<AgentsTold>({ count: 0 })
   useEffect(() => {
     if (!on) return
     return engine.stream(
       undefined,
       "keys.settings_changed",
       {},
-      ({ file }) => {
-        if (file === AGENTS_FILE.name) setTold((told) => told + 1)
+      ({ file, rev }) => {
+        if (file === AGENTS_FILE.name)
+          setTold(({ count }) => ({ count: count + 1, rev }))
       },
       () => {}
     )
@@ -190,16 +195,49 @@ export function useAgentsTold(engine: Engine, on: boolean): number {
   return told
 }
 
+/** How long a read that ran ahead of the machine waits to ask again. */
+const AHEAD_WAIT = 100
+/** How many times it asks: a file changed with no one to hear it stays
+ * ahead, so a draft does not go on asking about it. */
+const AHEAD_TRIES = 30
+
 /**
- * `engine`'s machine's `[start]`, read while `on`, again as it is `told`,
- * for a draft in No Project: `agents.defaults` answers only in a Project,
- * and it has none yet. None till the machine answers; an engine older than
- * the read names no account.
+ * What `ask` answers as of `rev`, the machine's last word on its file,
+ * asked again till it says that (none: nothing was told yet, so it is
+ * taken at once). A read can run ahead of the machine: the file changed,
+ * and the machine says so only once its watcher is quiet. When the file
+ * goes on to read as it did before, the machine has nothing to say, and
+ * what was read ahead would stay; when it stays changed, a next tell is on
+ * its way, and the caller asks anew with it. None if `stopped` first.
+ */
+export async function readAsTold<T extends { rev: string }>(
+  ask: () => Promise<T>,
+  rev: string | undefined,
+  stopped: () => boolean = () => false,
+  wait: () => Promise<void> = () =>
+    new Promise((done) => setTimeout(done, AHEAD_WAIT))
+): Promise<T | undefined> {
+  for (let tries = 1; ; tries++) {
+    const answer = await ask()
+    if (stopped()) return undefined
+    if (rev === undefined || answer.rev === rev || tries === AHEAD_TRIES)
+      return answer
+    await wait()
+    if (stopped()) return undefined
+  }
+}
+
+/**
+ * `engine`'s machine's `[start]`, read while `on`, again as it is `told`;
+ * for a draft in a Project this is what follows the file, and in No
+ * Project, which has no Project to ask `agents.defaults`, it is the only
+ * word. None till the machine answers; an engine older than the read names
+ * no account.
  */
 export function useMachineStart(
   engine: Engine,
   on: boolean,
-  told: number
+  told: AgentsTold
 ): Start | undefined {
   const [read, setRead] = useState<{ engine: Engine; start: Start }>()
   useEffect(() => {
@@ -208,8 +246,14 @@ export function useMachineStart(
     const take = (start: Start) => {
       if (!stopped) setRead({ engine, start })
     }
-    engine.call("keys.settings_read", { file: AGENTS_FILE.name }).then(
-      ({ values }) => take((values ?? {}) as Start),
+    readAsTold(
+      () => engine.call("keys.settings_read", { file: AGENTS_FILE.name }),
+      told.rev,
+      () => stopped
+    ).then(
+      (answer) => {
+        if (answer) take((answer.values ?? {}) as Start)
+      },
       (error: unknown) => {
         // A connection that broke tells the file again as it comes back.
         if (error instanceof Refused) take({})

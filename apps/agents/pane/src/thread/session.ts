@@ -285,16 +285,12 @@ export function useThreadSession({
     engine,
     project,
     thread === null && machine && !unplaced ? offered : null,
-    told
+    told.count
   )
-  const machineStart = useMachineStart(
-    engine,
-    thread === null && unplaced,
-    told
-  )
+  const machineStart = useMachineStart(engine, thread === null, told)
   const startsOn = useStartsOn(
     engine,
-    lastStart(engine, unplaced ? machineStart : startOf(everyDefaults))
+    lastStart(engine, machineStart ?? startOf(everyDefaults))
   )
   const harness =
     thread === null
