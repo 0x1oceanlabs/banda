@@ -112,12 +112,16 @@ export function startsOnWords(
 }
 
 const NO_LIMITS: Limits[] = []
+/** The engine's `[limits] warn` before it has said: its default. */
+const WARN = 80
 
 /** The machine's limits as last read, read again as they change, and the
  * minute they hold at: each minute, as a reset passes. */
 export function useLimitsNow(engine: Engine): {
   limits: readonly Limits[]
   now: number
+  /** The share spent from which a use warns, in percent: `[limits] warn`. */
+  warn: number
 } {
   const source = useMemo<Source<LimitsNow>>(
     () => ({
@@ -130,7 +134,8 @@ export function useLimitsNow(engine: Engine): {
   const now = useNow(MINUTE)
   const live = useMachineLive(engine, source, now)
   const limits = live.state === "ready" ? live.view.limits : NO_LIMITS
-  return { limits, now }
+  const warn = live.state === "ready" ? live.view.warn : WARN
+  return { limits, now, warn }
 }
 
 /** How many times a machine has told its `agents.toml`, and the `rev` it
