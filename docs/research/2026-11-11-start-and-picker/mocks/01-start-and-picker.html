@@ -1,0 +1,387 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A new Thread, the model and the agent</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<style>
+  /* Only this page's layout lives here; every Banda part is in kit.css. */
+  body { margin: 0; }
+  .b-kit { --font-sans: "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif; }
+  .pg-screen { min-height: 100vh; padding: 28px; }
+  .pg-window { flex: 1; padding-bottom: 28px; }
+
+  .pg-head { display: flex; flex-direction: column; gap: 6px; padding: 14px 24px 2px; }
+  .pg-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .pg-lead { margin: 0; max-width: 100ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pg-lead kbd { font: 500 11px var(--font-sans); padding: 1px 5px; border-radius: 5px; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
+  .pg-toc { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 0 -9px; }
+  .pg-toc a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted-foreground); text-decoration: none; white-space: nowrap; }
+  .pg-toc a:hover { background: var(--hover); color: var(--foreground); }
+  .pg-toc a b { font-weight: 600; color: var(--foreground); }
+
+  .pg-sec { padding: 30px 16px 14px; }
+  .pg-sec-head { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 14px; }
+  .pg-sec-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .pg-id { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+  .pg-note { margin: 0; max-width: 104ch; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-note b { font-weight: 500; color: var(--foreground); }
+  .pg-pick { margin: 2px 0 0; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-pick b { font-weight: 600; color: var(--foreground); }
+  .pg-cap { padding: 0 8px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-cap b { font-weight: 500; color: var(--foreground); }
+  .pg-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pg-fig > .b-tile { flex: none; }
+  .pg-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .pg-a { display: grid; grid-template-columns: 256px minmax(0, 1fr) 280px; gap: 8px; align-items: stretch; }
+  .pg-a > .b-sidebar { width: auto; }
+  .pg-notes { display: flex; flex-direction: column; gap: 14px; min-width: 0; padding: 4px 0 0 18px; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-notes h3 { margin: 0 0 -8px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--foreground); }
+  .pg-notes b { font-weight: 500; color: var(--foreground); }
+  .pg-qs { margin: 0; padding: 0 8px 0 28px; display: flex; flex-direction: column; gap: 10px; max-width: 104ch; font-size: 13.5px; line-height: 20px; }
+  .pg-qs li::marker { color: var(--muted-foreground); }
+  .pg-qs span { color: var(--muted-foreground); }
+  .pg-qs b { font-weight: 600; }
+  @media (max-width: 1100px) {
+    .pg-a { grid-template-columns: minmax(0, 1fr); }
+    .pg-a > .b-sidebar { display: none; }
+    .pg-notes { padding-left: 8px; }
+    .pg-two { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  /* A Thread tile of a fixed height, for the figures. */
+  .x-tile { height: 640px; }
+  .x-tile.is-short { height: 700px; }
+  .x-tile .b-thread { position: relative; }
+  .x-foot { flex: none; }
+
+  /* The new Thread's start: whom, where, and what was done there last. */
+  .x-start { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; padding: 24px; }
+  .x-to { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 4px; font-size: 18px; line-height: 28px; font-weight: 500; letter-spacing: -0.008em; color: var(--muted-foreground); }
+  .x-to-pick { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 8px; border-radius: var(--r-control); color: var(--foreground); }
+  .x-to-pick:hover, .x-to-pick.is-open { background: var(--raised); }
+  .x-to-pick .b-emblem { width: 18px; height: 18px; }
+  .x-to-pick .b-sign { width: 18px; height: 18px; font-size: 10px; border-radius: 5px; }
+  .x-to-pick .x-chev { width: 14px; height: 14px; color: var(--muted-foreground); }
+  .x-recent { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 1px; }
+  .x-recent-h { display: flex; justify-content: space-between; padding: 0 8px 4px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .x-recent .b-row .b-title { color: color-mix(in oklab, var(--foreground) 85%, transparent); }
+  .x-limit-note { font-size: var(--text-meta); color: var(--muted-foreground); text-align: center; }
+
+  /* The picker: one popover, one level (no view to go back from). */
+  .x-pop { position: absolute; z-index: 5; width: 360px; padding: 4px; max-height: none; }
+  .x-pop .b-menu-label { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 4px; }
+  .x-pop .b-menu-label .b-key { font-weight: 400; }
+  .x-opt { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 4px 8px; border-radius: var(--r-item); }
+  .x-opt:hover, .x-opt.is-hl { background: color-mix(in oklab, var(--foreground) 8%, var(--floating)); }
+  .x-opt-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; }
+  .x-opt-name { font-weight: 500; flex: none; }
+  .x-opt-about { min-width: 0; overflow: hidden; color: var(--muted-foreground); font-size: var(--text-meta); }
+  .x-opt-end { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .x-opt .b-icon.x-check { width: 15px; height: 15px; color: var(--foreground); }
+  .x-opt.is-out .x-opt-name, .x-opt.is-out .b-emblem { opacity: 0.5; }
+  .x-opt .b-emblem { width: 15px; height: 15px; flex: none; }
+  .x-tag { font-size: 11px; color: var(--muted-foreground); }
+  .x-warn { color: var(--warning); }
+  .x-slot { width: 15px; flex: none; display: grid; place-items: center; }
+
+  /* Effort: the levels side by side, the chosen one raised. */
+  .x-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; margin: 2px 8px 6px; padding: 2px; border-radius: var(--r-control); background: color-mix(in oklab, var(--foreground) 6%, var(--floating)); }
+  .x-seg button { height: 26px; border-radius: 8px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .x-seg button.is-on { background: var(--floating); color: var(--foreground); font-weight: 500; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.12); }
+  .x-seg button.is-top { color: var(--effort-top); }
+  .x-switch { width: 28px; height: 16px; border-radius: 8px; background: color-mix(in oklab, var(--foreground) 16%, transparent); position: relative; flex: none; }
+  .x-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--floating); box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); }
+  .x-switch.is-on { background: var(--foreground); }
+  .x-switch.is-on::after { left: 14px; }
+  .x-hint { padding: 2px 8px 6px 33px; font-size: 11.5px; line-height: 16px; color: var(--muted-foreground); }
+
+  /* The account's own colour on its emblem (ADR 0093 d3). */
+  .x-blue .b-emblem { color: #6aa8ff !important; }
+  .x-green .b-emblem { color: #5fc58a !important; }
+
+  /* The hand-off asked first: docked on the box, as a decision is. */
+  .x-docked-head { font-size: var(--text-meta); font-weight: 600; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
+
+  /* The trigger as it is today, open. */
+  .b-ctl.is-open { background: var(--raised); color: var(--foreground); }
+  /* Today's picker, drawn as the window has it, for comparison. */
+  .x-now { width: 290px; }
+  .x-now-top { display: flex; align-items: center; justify-content: center; gap: 6px; height: 34px; font-size: 13px; }
+  .x-slider { position: relative; height: 22px; margin: 4px 10px 2px; border-radius: 11px; background: color-mix(in oklab, var(--foreground) 10%, transparent); }
+  .x-slider::before { content: ""; position: absolute; inset: 0 auto 0 0; width: 40%; border-radius: 11px; background: var(--ring); opacity: .55; }
+  .x-slider::after { content: ""; position: absolute; top: 1px; left: calc(40% - 11px); width: 20px; height: 20px; border-radius: 50%; background: var(--floating); box-shadow: 0 0 0 1px var(--border); }
+  .x-slider-ends { display: flex; justify-content: space-between; padding: 2px 10px 6px; font-size: 11px; color: var(--muted-foreground); }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen pg-screen">
+  <div class="b-window pg-window" id="win">
+
+    <header class="b-bar">
+      <button class="b-bar-logo"><span data-mark="open" data-logo data-size="20"></span></button>
+      <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget" title="Claude: session 34% spent"><span class="b-ring" style="--share:.34"></span></span>
+        <span class="b-widget"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="pg-head">
+      <h1>Новый Thread, модель и агент</h1>
+      <p class="pg-lead">Поле ввода остаётся как есть: та же карточка, тот же ряд, одна кнопка модели. Доводим то, что за ней, и пустой экран нового Thread. Проект banda, у Claude Code три аккаунта (Personal, Work, Team), у Codex один. <kbd>t</kbd> светлая тема, <kbd>g</kbd> стекло.</p>
+      <nav class="pg-toc">
+        <a href="#a"><b>A</b>Новый Thread</a>
+        <a href="#b"><b>B</b>Кнопка модели: всё на одном уровне</a>
+        <a href="#c"><b>C</b>Начатый Thread: аккаунт и другой агент</a>
+        <a href="#d"><b>D</b>Другие варианты</a>
+        <a href="#q"><b>?</b>Вопросы</a>
+      </nav>
+    </div>
+
+    <!-- ============================== A ============================== -->
+    <section class="pg-sec" id="a">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">A</span>Новый Thread: кому и где, одной фразой</h2>
+        <p class="pg-note">Поле ввода на своём месте внизу, ничего не прыгает после первого сообщения. Пустая середина перестаёт повторять подсказку из поля и отвечает на два вопроса нового Thread: <b>кому</b> пишем и <b>где</b>. Под фразой — последние Thread этого проекта: часто нужно не начать новый, а вернуться в старый.</p>
+        <p class="pg-pick"><b>Мой выбор.</b> Решение принимается там, куда смотришь, а поле ввода не меняется.</p>
+      </div>
+      <div class="pg-a">
+        <aside class="b-sidebar">
+          <div class="b-sb-head">
+            <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+            <button class="b-ib"><i data-icon="square-pen"></i></button>
+          </div>
+          <div class="b-tabs" role="tablist">
+            <button class="b-tab is-current">Inbox <span class="b-n is-turn">2</span></button>
+            <button class="b-tab">Working <span class="b-n">1</span></button>
+            <button class="b-tab">Later</button>
+            <button class="b-tab b-end"><i data-icon="archive"></i></button>
+          </div>
+          <div class="b-list">
+            <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+            <div class="b-card" data-look="asks">
+              <div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">14m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Keep the old [row] keys as aliases?</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-card" data-look="done">
+              <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-section"><span>Working · 1</span></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="think"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+          </div>
+          <div class="b-sb-foot">
+            <button class="b-ib"><i data-icon="settings"></i></button>
+            <button class="b-ib"><i data-icon="list-filter"></i></button>
+            <span class="b-machines"><span class="b-dot"></span>arc · mac</span>
+          </div>
+        </aside>
+
+        <section class="b-tile is-focused x-tile">
+          <div class="b-pane-head b-bare">
+            <i data-icon="message-square"></i>
+            <span class="b-pane-title">New Thread</span>
+            <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+          </div>
+          <div class="x-start" data-start="a"></div>
+          <div class="b-composer-wrap x-foot" data-box="new"></div>
+        </section>
+
+        <div class="pg-notes">
+          <h3>Что здесь</h3>
+          <div><b>«Write to ◆ Claude · Personal in B banda»</b>: обе части — кнопки. Аккаунт открывает тот же список, что и кнопка модели (B), проект — список проектов с машинами, как сейчас под полем.</div>
+          <div>Строка проекта <b>под полем уходит</b>: она переехала во фразу. Под полем больше ничего нет.</div>
+          <div><b>Recent in banda</b>: последние три Thread проекта, клик открывает Thread вместо нового. Без проекта (No Project) списка нет.</div>
+          <div>Если аккаунт по умолчанию <b>кончился</b>, фраза сразу называет запасной, а строка под ней говорит почему: «Personal is out until 14:00, so this starts on Work» (ADR 0093, d7).</div>
+          <div>Подсказка в поле больше не повторяет «Write to Claude»: «Describe the work. @ files, / commands, $ skills».</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== B ============================== -->
+    <section class="pg-sec" id="b">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">B</span>Кнопка модели: всё на одном уровне</h2>
+        <p class="pg-note">Кнопка в ряду та же: эмблема аккаунта, модель, усилие. Меняется то, что она открывает. Сейчас это слайдер, а модели спрятаны за стрелкой на втором уровне. Станет один список сверху вниз: <b>модель → усилие → Fast → аккаунт</b>. Всё видно сразу, всё в один клик, без «назад».</p>
+        <p class="pg-pick"><b>Мой выбор.</b> Самое частое (модель и усилие) сверху, ближе к курсору; аккаунт ниже, его меняют реже.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="b-thread"></div>
+            <div class="b-composer-wrap x-foot" data-box="new-open" style="position:relative"></div>
+          </section>
+          <div class="pg-cap"><b>Станет.</b> Новый Thread: под Fast все аккаунты всех агентов, по агентам, у каждого сколько лимита потрачено. Выбор аккаунта Codex меняет и список моделей.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="b-thread"></div>
+            <div class="b-composer-wrap x-foot" data-box="now-open" style="position:relative"></div>
+          </section>
+          <div class="pg-cap"><b>Сейчас.</b> Открывается слайдер усилия; модели за «Opus 5.5 ›», агент выбирается там же, среди моделей; аккаунтов в новом Thread нет вовсе.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== C ============================== -->
+    <section class="pg-sec" id="c">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">C</span>Начатый Thread: другой аккаунт и другой агент</h2>
+        <p class="pg-note">Тот же список. Другой аккаунт Claude — один клик, сессия та же (ADR 0078, d4). Другой агент — под заголовком <b>Hand off</b>, и перед переходом над полем ввода встаёт короткий вопрос, что уйдёт вместе с Thread (d5). Раз на Thread, как и сейчас.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><span data-mark="done"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title">Fix blank window on reload</span></div>
+            <div class="b-thread"><div class="b-chat" data-chat></div></div>
+            <div class="b-composer-wrap x-foot" data-box="started-open" style="position:relative"></div>
+          </section>
+          <div class="pg-cap">Аккаунт, у которого кончился лимит, приглушён и говорит, когда вернётся; почти кончившийся показывает процент жёлтым. Клавиши <b>Ctrl+Shift+↑/↓</b> подписаны у заголовка.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><span data-mark="done"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title">Fix blank window on reload</span></div>
+            <div class="b-thread"><div class="b-chat" data-chat></div></div>
+            <div class="b-composer-wrap x-foot" data-box="handoff"></div>
+          </section>
+          <div class="pg-cap">После клика по Codex. Как любое решение, вопрос пристыкован к полю ввода: <b>⏎</b> передаёт, <b>Esc</b> оставляет на Claude.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== D ============================== -->
+    <section class="pg-sec" id="d">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">D</span>Другие варианты</h2>
+        <p class="pg-note"><b>D1</b>: поле ввода в центре пустого Thread, как у ChatGPT и Codex, и уезжает вниз после первого сообщения. Сильный акцент «пиши здесь», но поле прыгает, а ты сказал, что оно нравится на своём месте. <b>D2</b>: две кнопки вместо одной — «кто» (эмблема аккаунта) и «как» (модель и усилие). Каждое меню короче, но ряд становится плотнее, а на 728 им тесно.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="x-start" data-start="d1"></div>
+          </section>
+          <div class="pg-cap"><b>D1.</b> Поле в центре.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-short">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="b-thread"></div>
+            <div class="b-composer-wrap x-foot" data-box="split-open" style="position:relative"></div>
+          </section>
+          <div class="pg-cap"><b>D2.</b> Две кнопки, открыта «кто».</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== ? ============================== -->
+    <section class="pg-sec" id="q">
+      <div class="pg-sec-head"><h2><span class="pg-id">?</span>Вопросы</h2></div>
+      <ol class="pg-qs">
+        <li><b>Пустой экран:</b> фраза «Write to … in …» с последними Thread (A) или поле в центре (D1)? <span>Мой выбор: A.</span></li>
+        <li><b>Кнопка модели:</b> одна, с одним плоским списком (B), или две (D2)? <span>Мой выбор: одна (B).</span></li>
+        <li><b>Усилие:</b> уровни рядом, кнопками (B), или слайдер, как сейчас? <span>Мой выбор: кнопки — видно все уровни и их имена, один клик.</span></li>
+        <li><b>Recent в новом Thread:</b> три последних, или не нужно, раз есть сайдбар? <span>Мой выбор: три — сайдбар бывает скрыт или показывает Inbox, а не проект.</span></li>
+      </ol>
+      <p class="pg-note" style="padding:12px 8px 0">Перенос выбора проекта из-под поля в середину меняет ADR 0031, d6, поэтому перед сборкой нужен новый ADR. Всё на макете уже отдаёт движок: аккаунты, по умолчанию и запасной (AccountList), лимиты с временем сброса (LimitsNow), модели и уровни усилия (offer Harness).</p>
+    </section>
+  </div>
+</div>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script>
+  const $$ = (s) => [...document.querySelectorAll(s)]
+  const em = (k, cls = '') => `<span class="${cls}" style="display:contents"><span data-emblem="${k}"></span></span>`
+
+  // ---- the box: exactly today's
+  const box = ({ text = 'Write to Claude. @ files, / commands, $ skills', model = 'Opus 5.5', effort = 'High', emblem = 'claude', open = false, split = false, pop = '' } = {}) => `
+    ${pop}
+    <div class="b-composer">
+      <div class="b-composer-text is-empty">${text}</div>
+      <div class="b-composer-row">
+        <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+        <span class="b-spacer"></span>
+        <button class="b-ctl"><i data-icon="shield"></i>Full access</button>
+        ${split
+          ? `<button class="b-ctl ${open ? 'is-open' : ''}"><span data-emblem="${emblem}"></span>Personal</button><button class="b-ctl">${model} <span class="b-effort">${effort}</span></button>`
+          : `<button class="b-ctl ${open ? 'is-open' : ''}"><span data-emblem="${emblem}"></span>${model} <span class="b-effort">${effort}</span></button>`}
+        <button class="b-send is-empty"><i data-icon="arrow-up"></i></button>
+      </div>
+    </div>`
+
+  // ---- the picker's parts
+  const label = (t, end = '') => `<div class="b-menu-label"><span>${t}</span>${end ? `<span class="b-key">${end}</span>` : ''}</div>`
+  const model = (name, about, on) => `<div class="x-opt ${on ? 'is-hl' : ''}"><span class="x-opt-main"><span class="x-opt-name">${name}</span><span class="x-opt-about">${about}</span></span>${on ? '<i data-icon="check" class="x-check"></i>' : ''}</div>`
+  const acct = ({ k = 'claude', tint = '', name, plan = '', end = '', tag = '', on = false, out = false }) =>
+    `<div class="x-opt ${out ? 'is-out' : ''} ${tint}">${em(k)}<span class="x-opt-main"><span class="x-opt-name">${name}</span><span class="x-opt-about">${[plan, tag].filter(Boolean).join(' · ')}</span></span><span class="x-opt-end">${end}${on ? '<i data-icon="check" class="x-check"></i>' : ''}</span></div>`
+  const ring = (share, warn) => `<span class="b-ring" style="--share:${share / 100};width:12px;height:12px;-webkit-mask:radial-gradient(circle,transparent 3.4px,#000 3.9px);mask:radial-gradient(circle,transparent 3.4px,#000 3.9px)${warn ? ';color:var(--warning)' : ''}"></span><span class="${warn ? 'x-warn' : ''}">${share}%</span>`
+  const effort = (on = 'High') => `${label('Effort')}<div class="x-seg">${['Low', 'Medium', 'High', 'Ultracode'].map((l) => `<button class="${l === on ? 'is-on' : ''} ${l === 'Ultracode' ? 'is-top' : ''}">${l}</button>`).join('')}</div>`
+  const fast = `<div class="x-opt"><span class="x-slot"><i data-icon="zap" data-size="15"></i></span><span class="x-opt-main"><span class="x-opt-name" style="font-weight:400">Fast mode</span><span class="x-opt-about">faster output</span></span><span class="x-switch"></span></div>`
+  const sep = '<div class="b-menu-sep"></div>'
+  const models = `${label('Model')}${model('Opus 5.5', 'Most capable', true)}${model('Sonnet 5.5', 'Fast, for every day')}${model('Haiku 5.5', 'Fastest')}`
+  const claudeAccts = (hl) =>
+    acct({ name: 'Personal', plan: 'Max 20x', tag: 'default', end: ring(34), on: hl === 'Personal' }) +
+    acct({ tint: 'x-blue', name: 'Work', plan: 'Max 5x', tag: 'fallback', end: ring(86, true) }) +
+    acct({ tint: 'x-green', name: 'Team', plan: 'Team', end: 'back at 14:00', out: true })
+  const pop = (inner, right = 8, bottom = 'calc(100% - 4px)') => `<div class="b-menu x-pop" style="right:${right}px;bottom:${bottom}">${inner}</div>`
+
+  const newPop = pop(models + effort() + fast + sep + label('Claude Code') + claudeAccts('Personal') + label('Codex') + acct({ k: 'codex', name: 'Codex', plan: 'Plus', end: ring(12) }) + sep + `<div class="x-opt"><span class="x-slot"><i data-icon="plus" data-size="15"></i></span><span class="x-opt-main"><span class="x-opt-name" style="font-weight:400">Add an account…</span></span></div>`, 44)
+  const startedPop = pop(models + effort() + fast + sep + label('Claude Code account', 'Ctrl+Shift+↑↓') + claudeAccts('Personal') + label('Hand off to another agent') + acct({ k: 'codex', name: 'Codex', plan: 'Plus', end: ring(12) }), 44)
+  const nowPop = pop(`<div class="x-now"><div class="x-now-top"><i data-icon="zap" data-size="14" style="color:var(--muted-foreground);margin-right:auto;margin-left:8px"></i><span data-emblem="claude"></span>Opus 5.5 <span style="color:var(--muted-foreground)">High</span><i data-icon="chevron-right" data-size="14"></i><span style="margin-right:auto"></span></div><div class="x-slider"></div><div class="x-slider-ends"><span>Low</span><span>Max</span></div></div>`, 44)
+  const splitPop = pop(label('Claude Code') + claudeAccts('Personal') + label('Codex') + acct({ k: 'codex', name: 'Codex', plan: 'Plus', end: ring(12) }), 120)
+
+  const handoff = `<div class="b-docked">
+      <div class="x-docked-head">${em('codex')}Hand this Thread to Codex?</div>
+      <div style="color:var(--muted-foreground)">Codex reads this Thread's history and goes on from here, in a session of its own.</div>
+      <div class="b-docked-foot"><button class="b-btn is-ghost">Stay on Claude <span class="b-kbd">Esc</span></button><button class="b-btn is-primary">Hand off <span class="b-kbd" style="background:transparent;color:inherit;box-shadow:inset 0 0 0 1px color-mix(in oklab,currentColor 30%,transparent)">⏎</span></button></div>
+    </div>`
+
+  const boxes = {
+    'new': box({ text: 'Describe the work. @ files, / commands, $ skills' }),
+    'new-open': box({ text: 'Describe the work. @ files, / commands, $ skills', open: true, pop: newPop }),
+    'now-open': box({ text: 'Describe the work. @ files, / commands, $ skills', open: true, pop: nowPop }),
+    'started-open': box({ text: 'Write to Claude. @ files, / commands, $ skills', open: true, pop: startedPop }),
+    'handoff': handoff + box(),
+    'split-open': box({ split: true, open: true, pop: splitPop }),
+  }
+  $$('[data-box]').forEach((n) => { n.innerHTML = boxes[n.dataset.box] })
+
+  // ---- the start
+  const to = `<div class="x-to">Write to <button class="x-to-pick">${em('claude')}Claude · Personal<i data-icon="chevron-down" class="x-chev"></i></button> in <button class="x-to-pick"><span class="b-sign" data-color="violet">B</span>banda<i data-icon="chevron-down" class="x-chev"></i></button></div>`
+  const recent = `<div class="x-recent"><div class="x-recent-h"><span>Recent in banda</span><span>All 24</span></div>
+      <div class="b-row"><div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">14m</span></div></div>
+      <div class="b-row"><div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div></div>
+      <div class="b-row"><div class="b-line"><span data-mark="open" data-seed="4"></span><span class="b-title b-fade">Refactor the message box into modules</span><span class="b-time">2h</span></div></div>
+    </div>`
+  $$('[data-start="a"]').forEach((n) => { n.innerHTML = to + recent })
+  $$('[data-start="d1"]').forEach((n) => { n.innerHTML = to + `<div class="b-composer-wrap" style="padding:0">${box({ text: 'Describe the work. @ files, / commands, $ skills' })}</div>` })
+
+  // ---- a little of the Thread above the box
+  $$('[data-chat]').forEach((n) => { n.innerHTML = `<div class="b-you">The window goes blank after a reload. Find why and fix it.</div>
+      <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, ran 2 commands, edited 1 file</span><span class="b-diff"><span class="is-add">+18</span><span class="is-del">−4</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+      <div class="b-prose"><p>The renderer was killed with SIGKILL and the window never reloaded it. It reloads now, and keeps <code>chromium.log</code>.</p></div>` })
+
+  BandaIcons.scan(); BandaMark.scan()
+
+  const win = document.getElementById('win'), root = document.documentElement
+  const apply = () => {
+    if (location.hash.includes('light')) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+    if (location.hash.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>

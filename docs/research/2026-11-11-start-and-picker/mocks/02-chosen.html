@@ -1,0 +1,414 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A new Thread, who and how: the chosen design</title>
+<link rel="stylesheet" href="../../../design/kit/kit.css" />
+<style>
+  body { margin: 0; }
+  .b-kit { --font-sans: "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif; }
+  .pg-screen { min-height: 100vh; padding: 28px; }
+  .pg-window { flex: 1; padding-bottom: 28px; }
+  .pg-head { display: flex; flex-direction: column; gap: 6px; padding: 14px 24px 2px; }
+  .pg-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .pg-lead { margin: 0; max-width: 100ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pg-lead b { font-weight: 500; color: var(--foreground); }
+  .pg-toc { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 0 -9px; }
+  .pg-toc a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted-foreground); text-decoration: none; white-space: nowrap; }
+  .pg-toc a b { font-weight: 600; color: var(--foreground); }
+  .pg-sec { padding: 30px 16px 14px; }
+  .pg-sec-head { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 14px; }
+  .pg-sec-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .pg-id { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+  .pg-note { margin: 0; max-width: 104ch; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-note b { font-weight: 500; color: var(--foreground); }
+  .pg-cap { padding: 0 8px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-cap b { font-weight: 500; color: var(--foreground); }
+  .pg-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pg-fig > .b-tile { flex: none; }
+  .pg-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .pg-a { display: grid; grid-template-columns: 256px minmax(0, 1fr) 280px; gap: 8px; align-items: stretch; }
+  .pg-a > .b-sidebar { width: auto; }
+  .pg-notes { display: flex; flex-direction: column; gap: 12px; min-width: 0; padding: 4px 0 0 18px; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-notes h3 { margin: 0 0 -6px; font-size: 12px; line-height: 16px; font-weight: 600; color: var(--foreground); }
+  .pg-notes b { font-weight: 500; color: var(--foreground); }
+  .pg-qs { margin: 0; padding: 0 8px 0 28px; display: flex; flex-direction: column; gap: 10px; max-width: 104ch; font-size: 13.5px; line-height: 20px; }
+  .pg-qs span { color: var(--muted-foreground); }
+  .pg-qs b { font-weight: 600; }
+  .pg-rows { display: flex; flex-direction: column; gap: 14px; max-width: 760px; padding: 0 8px; }
+  .pg-row-cap { font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); padding: 0 2px 6px; }
+  .pg-row-cap b { font-weight: 500; color: var(--foreground); }
+  @media (max-width: 1100px) {
+    .pg-a { grid-template-columns: minmax(0, 1fr); }
+    .pg-a > .b-sidebar { display: none; }
+    .pg-notes { padding-left: 8px; }
+    .pg-two { grid-template-columns: minmax(0, 1fr); }
+  }
+
+  .x-tile { height: 640px; }
+  .x-tile.is-tall { height: 700px; }
+  .x-foot { flex: none; position: relative; }
+
+  /* The start: whom, where, and what was done there last. */
+  .x-start { flex: 1; min-height: 0; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; padding: 24px; }
+  .x-to-wrap { position: relative; }
+  .x-to { display: flex; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 4px; font-size: 18px; line-height: 28px; font-weight: 500; letter-spacing: -0.008em; color: var(--muted-foreground); }
+  .x-to-pick { display: inline-flex; align-items: center; gap: 7px; height: 32px; padding: 0 8px; border-radius: var(--r-control); color: var(--foreground); }
+  .x-to-pick:hover, .x-to-pick.is-open { background: var(--raised); }
+  .x-to-pick .b-emblem { width: 18px; height: 18px; }
+  .x-to-pick .b-sign { width: 18px; height: 18px; font-size: 10px; border-radius: 5px; }
+  .x-to-pick .x-chev { width: 14px; height: 14px; color: var(--muted-foreground); }
+  .x-to-pick .x-on { font-size: 18px; color: var(--muted-foreground); font-weight: 500; }
+  .x-why { margin-top: -10px; font-size: var(--text-meta); color: var(--muted-foreground); text-align: center; }
+  .x-recent { width: 100%; max-width: 420px; display: flex; flex-direction: column; gap: 1px; }
+  .x-recent-h { display: flex; justify-content: space-between; padding: 0 8px 4px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .x-recent .b-row .b-title { color: color-mix(in oklab, var(--foreground) 85%, transparent); }
+  .x-recent .b-row .x-key { display: none; }
+  .x-recent .b-row.is-hl { background: var(--hover); }
+  .x-recent .b-row.is-hl .b-time { display: none; }
+  .x-recent .b-row.is-hl .x-key { display: inline-flex; }
+
+  /* Menus. */
+  .x-pop { position: absolute; z-index: 5; width: 340px; padding: 4px; }
+  .x-pop.is-down { top: calc(100% + 6px); left: 50%; translate: -50% 0; }
+  .x-pop .b-menu-label { display: flex; align-items: center; justify-content: space-between; padding: 8px 8px 4px; }
+  .x-pop .b-menu-label .b-key { font-weight: 400; margin-left: auto; }
+  .x-opt { display: flex; align-items: center; gap: 10px; min-height: 30px; padding: 4px 8px; border-radius: var(--r-item); }
+  .x-opt.is-hl { background: color-mix(in oklab, var(--foreground) 8%, var(--floating)); }
+  .x-opt-main { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 8px; white-space: nowrap; overflow: hidden; }
+  .x-opt-name { font-weight: 500; flex: none; }
+  .x-opt-about { min-width: 0; overflow: hidden; color: var(--muted-foreground); font-size: var(--text-meta); }
+  .x-opt-end { flex: none; display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .x-opt .b-icon.x-check { width: 15px; height: 15px; color: var(--foreground); }
+  .x-opt.is-out .x-opt-name, .x-opt.is-out .b-emblem { opacity: 0.5; }
+  .x-opt .b-emblem { width: 15px; height: 15px; flex: none; }
+  .x-opt .b-sign { width: 15px; height: 15px; }
+  .x-slot { width: 15px; flex: none; display: grid; place-items: center; color: var(--muted-foreground); }
+  .x-warn { color: var(--warning); }
+  .x-find { display: flex; align-items: center; gap: 8px; height: 32px; padding: 0 8px; margin-bottom: 2px; border-bottom: 1px solid var(--border); color: var(--muted-foreground); font-size: 13px; }
+  .x-find .b-icon { width: 14px; height: 14px; }
+  .x-quiet { padding: 4px 8px 6px; font-size: 11.5px; line-height: 16px; color: var(--muted-foreground); }
+  .x-seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 2px; margin: 2px 8px 6px; padding: 2px; border-radius: var(--r-control); background: color-mix(in oklab, var(--foreground) 6%, var(--floating)); }
+  .x-seg button { height: 26px; border-radius: 8px; font-size: var(--text-meta); color: var(--muted-foreground); }
+  .x-seg button.is-on { background: var(--floating); color: var(--foreground); font-weight: 500; box-shadow: 0 0 0 1px var(--border), 0 1px 2px rgb(0 0 0 / 0.12); }
+  .x-seg button.is-top { color: var(--effort-top); }
+  .x-switch { width: 28px; height: 16px; border-radius: 8px; background: color-mix(in oklab, var(--foreground) 16%, transparent); position: relative; flex: none; }
+  .x-switch::after { content: ""; position: absolute; top: 2px; left: 2px; width: 12px; height: 12px; border-radius: 50%; background: var(--floating); box-shadow: 0 1px 2px rgb(0 0 0 / 0.3); }
+  .x-blue .b-emblem { color: #6aa8ff !important; }
+  .x-green .b-emblem { color: #5fc58a !important; }
+  .x-docked-head { font-size: var(--text-meta); font-weight: 600; color: var(--foreground); display: flex; align-items: center; gap: 6px; }
+  .b-ctl.is-open { background: var(--raised); color: var(--foreground); }
+  .b-ctl .b-emblem { width: 14px; height: 14px; }
+  /* A box alone, for the states strip. */
+  .x-solo-tile { padding: 12px; flex: none; }
+  .x-solo { padding: 0; max-width: none; margin: 0; }
+  .x-solo-tile.is-narrow { max-width: 420px; }
+  .b-send.is-stop { background: var(--raised); color: var(--foreground); }
+  .b-send.is-stop .b-icon { display: none; }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen pg-screen">
+  <div class="b-window pg-window" id="win">
+
+    <header class="b-bar">
+      <button class="b-bar-logo"><span data-mark="open" data-logo data-size="20"></span></button>
+      <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button><i data-icon="plus" data-size="14"></i></button></nav>
+      <button class="b-widget"><i data-icon="columns-3"></i></button>
+      <div class="b-bar-right">
+        <span class="b-widget"><span class="b-ring" style="--share:.34"></span></span>
+        <span class="b-widget"><i data-icon="bell"></i></span>
+      </div>
+    </header>
+
+    <div class="pg-head">
+      <h1>Новый Thread: кто, где и как</h1>
+      <p class="pg-lead">Выбрано: стартовый экран <b>A</b> и <b>две кнопки</b> в поле ввода. Правило одно: каждый выбор виден один раз, там, куда смотришь. В новом Thread «кто» и «где» стоят во фразе посередине, а в ряду поля только «как». Когда Thread начат, фраза уходит, и «кто» встаёт кнопкой в ряд. Проект banda; у Claude Code три аккаунта (Personal, Work, Team), у Codex один.</p>
+      <nav class="pg-toc">
+        <a href="#a"><b>A</b>Новый Thread</a>
+        <a href="#b"><b>B</b>«Кто» и «где»</a>
+        <a href="#c"><b>C</b>«Как»</a>
+        <a href="#d"><b>D</b>Начатый Thread</a>
+        <a href="#e"><b>E</b>Состояния и узкая ширина</a>
+        <a href="#q"><b>?</b>Вопросы</a>
+      </nav>
+    </div>
+
+    <!-- ============================== A ============================== -->
+    <section class="pg-sec" id="a">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">A</span>Новый Thread</h2>
+        <p class="pg-note">Фокус сразу в поле ввода: можно просто писать, по умолчанию всё уже выбрано. Фраза отвечает на «кому» и «где», и обе её части — кнопки. Под ней три последних Thread проекта; <b>Tab</b> из пустого поля уходит в этот список, <b>↓/↑</b> ходят по нему, <b>⏎</b> открывает.</p>
+      </div>
+      <div class="pg-a">
+        <aside class="b-sidebar">
+          <div class="b-sb-head">
+            <button class="b-search"><i data-icon="search"></i>Search<span class="b-key">Alt Space</span></button>
+            <button class="b-ib"><i data-icon="square-pen"></i></button>
+          </div>
+          <div class="b-tabs" role="tablist">
+            <button class="b-tab is-current">Inbox <span class="b-n is-turn">2</span></button>
+            <button class="b-tab">Working <span class="b-n">1</span></button>
+            <button class="b-tab">Later</button>
+            <button class="b-tab b-end"><i data-icon="archive"></i></button>
+          </div>
+          <div class="b-list">
+            <div class="b-section"><span>Your turn</span><span class="b-hint">oldest first</span></div>
+            <div class="b-card" data-look="asks">
+              <div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">14m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Asks</span>Keep the old [row] keys as aliases?</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-card" data-look="done">
+              <div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div>
+              <div class="b-line"><span class="b-say b-fade"><span class="b-word">Done</span>Reloads after a renderer SIGKILL</span></div>
+              <div class="b-line"><span class="b-where"><span class="b-sign" data-color="violet">B</span><span class="b-fade">banda</span></span><span data-emblem="claude"></span></div>
+            </div>
+            <div class="b-section"><span>Working · 1</span></div>
+            <div class="b-row is-working"><div class="b-line"><span data-mark="working" data-doing="think"></span><span class="b-title b-fade">Landing page: pricing section</span><span class="b-time">12m</span></div></div>
+          </div>
+          <div class="b-sb-foot">
+            <button class="b-ib"><i data-icon="settings"></i></button>
+            <button class="b-ib"><i data-icon="list-filter"></i></button>
+            <span class="b-machines"><span class="b-dot"></span>arc · mac</span>
+          </div>
+        </aside>
+        <section class="b-tile is-focused x-tile">
+          <div class="b-pane-head b-bare">
+            <i data-icon="message-square"></i><span class="b-pane-title">New Thread</span>
+            <div class="b-capsule"><button class="b-ib is-xs"><i data-icon="layout-panel-left"></i></button><button class="b-ib is-xs"><i data-icon="x"></i></button></div>
+          </div>
+          <div class="x-start" data-start="plain"></div>
+          <div class="b-composer-wrap x-foot" data-box="new"></div>
+        </section>
+        <div class="pg-notes">
+          <h3>Что здесь</h3>
+          <div><b>Фраза</b> — единственное место выбора агента и проекта в новом Thread. Строка проекта под полем ввода уходит.</div>
+          <div><b>В ряду поля</b> только то, что меняют на ходу: режим (щит) и «как» — модель и усилие. Эмблемы в ряду нет: она во фразе, крупно.</div>
+          <div><b>Recent in banda</b>: три последних Thread проекта, их метка и время. «All 24» открывает проект в сайдбаре. Без проекта (No Project) списка нет, фраза одна.</div>
+          <div><b>Подсказка поля</b>: «Describe the work. @ files, / commands, $ skills». «Write to Claude» не повторяется.</div>
+          <div><b>Первое сообщение</b>: фраза и список гаснут (150 мс), Thread начинается на месте, поле не двигается.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== B ============================== -->
+    <section class="pg-sec" id="b">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">B</span>«Кто» и «где»: меню фразы</h2>
+        <p class="pg-note">Меню открываются <b>вниз</b>, под фразой, и не закрывают поле ввода. В обоих сверху поиск: начни печатать — список сужается. <b>Ctrl+Shift+A</b> открывает «кто», <b>Ctrl+Shift+P</b> — «где»; клавиши новые, их надо сверить со списком клавиш (ADR 0071).</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-tall">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="x-start" data-start="who"></div>
+            <div class="b-composer-wrap x-foot" data-box="new"></div>
+          </section>
+          <div class="pg-cap"><b>Кто.</b> Аккаунты по агентам: тариф, «default» и «fallback», сколько лимита потрачено. Почти кончившийся — процент жёлтым; кончившийся приглушён и пишет, когда вернётся (можно ли его выбрать — вопрос 4). Внизу — в Settings → Agents.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile is-tall">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="x-start" data-start="where"></div>
+            <div class="b-composer-wrap x-foot" data-box="new"></div>
+          </section>
+          <div class="pg-cap"><b>Где.</b> Сначала No Project, затем проекты этой машины, затем других машин под их именем, как в сайдбаре. Отошедшая машина — «away», но выбрать можно: Thread подождёт её. Внизу — Add Project.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== C ============================== -->
+    <section class="pg-sec" id="c">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">C</span>«Как»: модель, усилие, Fast</h2>
+        <p class="pg-note">Одна кнопка «Opus 5.5 High» в ряду, одно меню без второго уровня: модели с короткими описаниями, усилие кнопками, Fast переключателем. Если что-то изменено, внизу «Back to Claude Code's defaults». Fast и уровни показываются, только если агент их предлагает.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="x-start" data-start="plain-dim"></div>
+            <div class="b-composer-wrap x-foot" data-box="how-open"></div>
+          </section>
+          <div class="pg-cap"><b>Claude.</b> Выбранная модель с галочкой; верхний уровень усилия — пурпурный, как сейчас в кнопке.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile">
+            <div class="b-pane-head b-bare"><i data-icon="message-square"></i><span class="b-pane-title">New Thread</span></div>
+            <div class="x-start" data-start="codex"></div>
+            <div class="b-composer-wrap x-foot" data-box="codex-open"></div>
+          </section>
+          <div class="pg-cap"><b>Агент ещё не назвал модели</b> (у него не было ни одного Thread): кнопка называет агента, как сейчас в коде, а меню объясняет, почему моделей нет.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== D ============================== -->
+    <section class="pg-sec" id="d">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">D</span>Начатый Thread: «кто» в ряду</h2>
+        <p class="pg-note">Фразы больше нет, и «кто» встаёт в ряд перед «как»: эмблема и имя аккаунта. Другой аккаунт Claude — один клик, сессия та же (ADR 0078, d4); <b>Ctrl+Shift+↑/↓</b> делают то же без меню. Другой агент — «Hand off», и над полем встаёт вопрос (d5).</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile x-tile">
+            <div class="b-pane-head b-bare"><span data-mark="done"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title">Fix blank window on reload</span></div>
+            <div class="b-thread"><div class="b-chat" data-chat></div></div>
+            <div class="b-composer-wrap x-foot" data-box="started-who"></div>
+          </section>
+          <div class="pg-cap"><b>Кто, открыто.</b> Сверху аккаунты этого агента, ниже другие агенты.</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile x-tile">
+            <div class="b-pane-head b-bare"><span data-mark="done"></span><span class="b-space"><span class="b-sign" data-color="violet">B</span>banda</span><span class="b-pane-title">Fix blank window on reload</span></div>
+            <div class="b-thread"><div class="b-chat" data-chat></div></div>
+            <div class="b-composer-wrap x-foot" data-box="handoff"></div>
+          </section>
+          <div class="pg-cap"><b>После клика по Codex.</b> <b>⏎</b> передаёт, <b>Esc</b> оставляет на Claude. Спрашивает раз на Thread, как сейчас.</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== E ============================== -->
+    <section class="pg-sec" id="e">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">E</span>Состояния и узкая ширина</h2>
+        <p class="pg-note">Ряд поля в каждом случае. Цвет только там, где нужен человек: жёлтый — лимит близко, больше ничего не красится.</p>
+      </div>
+      <div class="pg-rows">
+        <div><div class="pg-row-cap"><b>Новый Thread, аккаунт по умолчанию кончился.</b> Фраза уже называет запасной, строка под ней говорит почему (ADR 0093, d7).</div>
+          <section class="b-tile" style="height:250px"><div class="x-start" data-start="fallback" style="padding:18px"></div></section></div>
+        <div><div class="pg-row-cap"><b>Начатый Thread.</b> Кто + как.</div><section class="b-tile x-solo-tile"><div class="b-composer-wrap x-solo" data-box="started"></div></section></div>
+        <div><div class="pg-row-cap"><b>Лимит близко</b> (от порога <code>[limits] warn</code>, по умолчанию 80%). Процент жёлтым прямо в кнопке «кто».</div><section class="b-tile x-solo-tile"><div class="b-composer-wrap x-solo" data-box="near"></div></section></div>
+        <div><div class="pg-row-cap"><b>Агент работает.</b> Кнопки те же, вместо Send — Stop, подсказка «Steer this thread…».</div><section class="b-tile x-solo-tile"><div class="b-composer-wrap x-solo" data-box="working"></div></section></div>
+        <div><div class="pg-row-cap"><b>Узкая панель (меньше 480 px).</b> «Кто» сжимается до эмблемы, режим — до щита, «как» — до модели; усилие остаётся в подсказке.</div><section class="b-tile x-solo-tile is-narrow"><div class="b-composer-wrap x-solo" data-box="narrow"></div></section></div>
+      </div>
+    </section>
+
+    <!-- ============================== ? ============================== -->
+    <section class="pg-sec" id="q">
+      <div class="pg-sec-head"><h2><span class="pg-id">?</span>Вопросы</h2></div>
+      <ol class="pg-qs">
+        <li><b>«Кто» в новом Thread только во фразе</b>, без кнопки в ряду (A)? Или и там и там? <span>Мой выбор: только во фразе — без дублей.</span></li>
+        <li><b>Клавиши Ctrl+Shift+A и Ctrl+Shift+P</b> для меню «кто» и «где»? <span>Мой выбор: да, если свободны; проверю по списку клавиш.</span></li>
+        <li><b>Процент лимита в кнопке «кто»</b> от порога warn? <span>Мой выбор: да — это единственное, что стоит заметить заранее.</span></li>
+        <li><b>Кончившийся аккаунт можно выбрать</b>, и Thread ждёт сброса? <span>Мой выбор: да, с подписью «starts at 14:00».</span></li>
+      </ol>
+      <p class="pg-note" style="padding:12px 8px 0">Перед сборкой — новый ADR: он меняет ADR 0031 d3 и d6 (ряд поля и строка под ним) и описание кнопки модели. Всё нарисованное движок уже отдаёт: AccountList (default, fallback), LimitsNow (used, resets_at), модели и уровни из offer Harness.</p>
+    </section>
+  </div>
+</div>
+
+<script src="../../../design/kit/icons.js"></script>
+<script src="../../../design/kit/mark.js"></script>
+<script>
+  const $$ = (s) => [...document.querySelectorAll(s)]
+  const em = (k, cls = '') => `<span class="${cls}" style="display:contents"><span data-emblem="${k}"></span></span>`
+  const ring = (share, warn) => `<span class="b-ring" style="--share:${share / 100};width:12px;height:12px;-webkit-mask:radial-gradient(circle,transparent 3.4px,#000 3.9px);mask:radial-gradient(circle,transparent 3.4px,#000 3.9px)${warn ? ';color:var(--warning)' : ''}"></span><span class="${warn ? 'x-warn' : ''}">${share}%</span>`
+
+  // ---- the box
+  const NEW_TEXT = 'Describe the work. @ files, / commands, $ skills'
+  const box = ({ text = NEW_TEXT, who = null, how = 'Opus 5.5 <span class="b-effort">High</span>', open = '', pop = '', send = 'is-empty', mode = '<i data-icon="shield"></i>Full access', docked = '' } = {}) => `
+    ${pop}${docked}
+    <div class="b-composer">
+      <div class="b-composer-text ${text.startsWith('Steer') || text === NEW_TEXT || text.startsWith('Write') ? 'is-empty' : ''}">${text}</div>
+      <div class="b-composer-row">
+        <button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button>
+        <span class="b-spacer"></span>
+        <button class="b-ctl">${mode}</button>
+        ${who ? `<button class="b-ctl ${open === 'who' ? 'is-open' : ''} ${who.tint || ''}">${em(who.k || 'claude')}${who.name || ''}</button>` : ''}
+        <button class="b-ctl ${open === 'how' ? 'is-open' : ''}">${how}</button>
+        <button class="b-send ${send}"><i data-icon="arrow-up"></i></button>
+      </div>
+    </div>`
+
+  // ---- menu parts
+  const label = (t, end = '') => `<div class="b-menu-label"><span>${t}</span>${end ? `<span class="b-key">${end}</span>` : ''}</div>`
+  const opt = ({ lead = '', name, about = '', end = '', on = false, hl = false, out = false, tint = '' }) =>
+    `<div class="x-opt ${hl ? 'is-hl' : ''} ${out ? 'is-out' : ''} ${tint}">${lead}<span class="x-opt-main"><span class="x-opt-name">${name}</span><span class="x-opt-about">${about}</span></span><span class="x-opt-end">${end}${on ? '<i data-icon="check" class="x-check"></i>' : ''}</span></div>`
+  const sep = '<div class="b-menu-sep"></div>'
+  const find = (t) => `<div class="x-find"><i data-icon="search"></i>${t}</div>`
+  const plain = (icon, name) => `<div class="x-opt"><span class="x-slot"><i data-icon="${icon}" data-size="15"></i></span><span class="x-opt-main"><span class="x-opt-name" style="font-weight:400">${name}</span></span></div>`
+  const claude = (hl) =>
+    opt({ lead: em('claude'), name: 'Personal', about: 'Max 20x · default', end: ring(34), on: true, hl: hl === 'Personal' }) +
+    opt({ lead: em('claude'), tint: 'x-blue', name: 'Work', about: 'Max 5x · fallback', end: ring(86, true) }) +
+    opt({ lead: em('claude'), tint: 'x-green', name: 'Team', about: 'Team', end: 'back at 14:00', out: true })
+  const codex = opt({ lead: em('codex'), name: 'Codex', about: 'Plus', end: ring(12) })
+  const pop = (inner, style) => `<div class="b-menu x-pop" style="${style}">${inner}</div>`
+
+  const whoMenu = pop(find('Find an account or agent') + label('Claude Code') + claude('Personal') + label('Codex') + codex + sep + plain('settings', 'Accounts in Settings…'), '')
+  const whereMenu = pop(find('Find a Project') +
+    opt({ lead: '<span class="b-sign is-none"></span>', name: 'No Project', about: 'its own folder' }) +
+    opt({ lead: '<span class="b-sign" data-color="violet">B</span>', name: 'banda', about: '~/code/banda', on: true, hl: true }) +
+    opt({ lead: '<span class="b-sign" data-color="teal">W</span>', name: 'Work', about: '~/work' }) +
+    label('<span style="display:inline-flex;align-items:center;gap:6px"><i data-icon="laptop" data-size="13"></i>mac</span>', 'away') +
+    opt({ lead: '<span class="b-sign" data-color="magenta">S</span>', name: 'site', about: '~/Sites/site' }) +
+    sep + plain('file-plus', 'Add Project…'), '')
+  const howMenu = pop(label('Model') +
+    opt({ name: 'Opus 5.5', about: 'Most capable', on: true, hl: true }) + opt({ name: 'Sonnet 5.5', about: 'Fast, for every day' }) + opt({ name: 'Haiku 5.5', about: 'Fastest' }) +
+    label('Effort') + `<div class="x-seg">${['Low', 'Medium', 'High', 'Ultracode'].map((l) => `<button class="${l === 'High' ? 'is-on' : ''} ${l === 'Ultracode' ? 'is-top' : ''}">${l}</button>`).join('')}</div>` +
+    `<div class="x-opt"><span class="x-slot"><i data-icon="zap" data-size="15"></i></span><span class="x-opt-main"><span class="x-opt-name" style="font-weight:400">Fast mode</span><span class="x-opt-about">faster output</span></span><span class="x-switch"></span></div>` +
+    sep + plain('rotate-ccw', 'Back to Claude Code\'s defaults'), 'right:44px;bottom:calc(100% - 4px)')
+  const codexMenu = pop(label('Model') + `<div class="x-quiet">Codex says its models once it has run a Thread. This one starts on Codex's default.</div>`, 'right:44px;bottom:calc(100% - 4px);width:300px')
+  const startedWho = pop(label('Claude Code', 'Ctrl+Shift+↑↓') + claude('Personal') + `<div class="x-quiet" style="padding-left:33px">Goes on in the same session.</div>` + sep + label('Hand off to another agent') + codex + `<div class="x-quiet" style="padding-left:33px">Reads this Thread's history and goes on from here.</div>`, 'right:150px;bottom:calc(100% - 4px)')
+  const handoff = `<div class="b-docked">
+      <div class="x-docked-head">${em('codex')}Hand this Thread to Codex?</div>
+      <div style="color:var(--muted-foreground)">Codex reads this Thread's history and goes on from here, in a session of its own.</div>
+      <div class="b-docked-foot"><button class="b-btn is-ghost">Stay on Claude <span class="b-kbd">Esc</span></button><button class="b-btn is-primary">Hand off <span class="b-kbd" style="background:transparent;color:inherit;box-shadow:inset 0 0 0 1px color-mix(in oklab,currentColor 30%,transparent)">⏎</span></button></div>
+    </div>`
+
+  const WHO = { name: 'Personal' }
+  const boxes = {
+    'new': box(),
+    'how-open': box({ open: 'how', pop: howMenu }),
+    'codex-open': box({ open: 'how', how: 'Codex', pop: codexMenu }),
+    'started': box({ text: 'Write to Claude. @ files, / commands, $ skills', who: WHO }),
+    'started-who': box({ text: 'Write to Claude. @ files, / commands, $ skills', who: WHO, open: 'who', pop: startedWho }),
+    'handoff': box({ text: 'Write to Claude. @ files, / commands, $ skills', who: WHO, docked: handoff }),
+    'near': box({ text: 'Write to Claude. @ files, / commands, $ skills', who: { tint: 'x-blue', name: `Work <span class="x-warn">86%</span>` } }),
+    'working': box({ text: 'Steer this thread…', who: WHO, send: 'is-stop' }),
+    'narrow': box({ text: 'Write to Claude…', who: { name: '' }, mode: '<i data-icon="shield"></i>', how: 'Opus 5.5' }),
+  }
+  $$('[data-box]').forEach((n) => { n.innerHTML = boxes[n.dataset.box] })
+
+  // ---- the start
+  const to = ({ who = 'Claude · Personal', k = 'claude', tint = '', open = '', menu = '' } = {}) =>
+    `<div class="x-to-wrap"><div class="x-to">Write to <button class="x-to-pick ${open === 'who' ? 'is-open' : ''} ${tint}">${em(k)}${who}<i data-icon="chevron-down" class="x-chev"></i></button> in <button class="x-to-pick ${open === 'where' ? 'is-open' : ''}"><span class="b-sign" data-color="violet">B</span>banda<i data-icon="chevron-down" class="x-chev"></i></button></div>${menu}</div>`
+  const recent = (hl) => `<div class="x-recent"><div class="x-recent-h"><span>Recent in banda</span><span>All 24</span></div>
+      <div class="b-row ${hl ? 'is-hl' : ''}"><div class="b-line"><span data-mark="asks" data-calls="false"></span><span class="b-title b-fade">Move sidebar settings to sidebar.toml</span><span class="b-time">14m</span><span class="b-kbd x-key">⏎</span></div></div>
+      <div class="b-row"><div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div></div>
+      <div class="b-row"><div class="b-line"><span data-mark="open" data-seed="4"></span><span class="b-title b-fade">Refactor the message box into modules</span><span class="b-time">2h</span></div></div>
+    </div>`
+  const starts = {
+    'plain': to() + recent(),
+    'plain-dim': to() + recent(),
+    'who': `<div style="flex:1;max-height:110px"></div>` + to({ open: 'who', menu: whoMenu.replace('class="b-menu x-pop"', 'class="b-menu x-pop is-down"') }) + `<div style="flex:3"></div>`,
+    'where': `<div style="flex:1;max-height:110px"></div>` + to({ open: 'where', menu: whereMenu.replace('class="b-menu x-pop"', 'class="b-menu x-pop is-down"') }) + `<div style="flex:3"></div>`,
+    'codex': to({ who: 'Codex', k: 'codex' }) + `<div class="x-recent"><div class="x-recent-h"><span>Recent in banda</span><span>All 24</span></div><div class="b-row"><div class="b-line"><span data-mark="done"></span><span class="b-title b-fade">Fix blank window on reload</span><span class="b-time">9m</span></div></div></div>`,
+    'fallback': to({ who: 'Claude · Work', tint: 'x-blue' }) + `<div class="x-why">Personal is out of its limit until 14:00, so this starts on Work.</div>`,
+  }
+  $$('[data-start]').forEach((n) => { n.innerHTML = starts[n.dataset.start] })
+  $$('[data-start="who"], [data-start="where"]').forEach((n) => { n.style.justifyContent = 'flex-start' })
+
+  $$('[data-chat]').forEach((n) => { n.innerHTML = `<div class="b-you">The window goes blank after a reload. Find why and fix it.</div>
+      <div class="b-trace"><button class="b-tl"><i data-icon="layers"></i><span class="b-tl-text">Read 4 files, ran 2 commands, edited 1 file</span><span class="b-diff"><span class="is-add">+18</span><span class="is-del">−4</span></span><i data-icon="chevron-right" class="b-chev"></i></button></div>
+      <div class="b-prose"><p>The renderer was killed with SIGKILL and the window never reloaded it. It reloads now, and keeps <code>chromium.log</code>.</p></div>` })
+
+  BandaIcons.scan(); BandaMark.scan()
+
+  const win = document.getElementById('win'), root = document.documentElement
+  const apply = () => {
+    if (location.hash.includes('light')) root.setAttribute('data-theme', 'light'); else root.removeAttribute('data-theme')
+    if (location.hash.includes('solid')) win.setAttribute('data-glass', 'off'); else win.removeAttribute('data-glass')
+  }
+  apply(); addEventListener('hashchange', apply)
+  addEventListener('keydown', (e) => {
+    if (e.key === 't') location.hash = location.hash.includes('light') ? location.hash.replace('light', '') : location.hash + 'light'
+    if (e.key === 'g') location.hash = location.hash.includes('solid') ? location.hash.replace('solid', '') : location.hash + 'solid'
+  })
+</script>
+</body>
+</html>

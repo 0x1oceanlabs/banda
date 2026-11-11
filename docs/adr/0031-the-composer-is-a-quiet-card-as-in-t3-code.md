@@ -61,6 +61,10 @@ round too; the card is as wide as the messages, centred.
    Claude's Ultracode is a switch in the model picker, not in the mode
    menu, and when it is on the label names Ultracode in that magenta,
    `--effort-top`._
+   _Amended 2026-11-11 by [ADR 0114](0114-a-new-thread-says-whom-it-writes-to-and-where-and-the-message-box-says-who-and-how.md): the
+   row holds "who", the account's emblem, before "how", the model picker,
+   once the Thread has started; the moves leave the model picker; its
+   list is a menu of starred models, and "All models" opens a window._
 4. **Only what is on shows.** Plan is not a button: `/plan` and `/default`
    switch it, and Shift+Tab, as before. While it is on, a quiet "Plan"
    sits beside `+`, and a click turns it off. The context ring shows from
@@ -75,6 +79,9 @@ round too; the card is as wide as the messages, centred.
    every Harness's, each under its logo and name, and choosing one starts
    the Thread on that Harness with that model. A Harness that has not run
    in the Space yet is one row of its own, until it says its models.
+   _Amended 2026-11-11 by [ADR 0114](0114-a-new-thread-says-whom-it-writes-to-and-where-and-the-message-box-says-who-and-how.md): no row
+   under the card. A new Thread is the phrase "Write to [who] in [where]",
+   and the Harness is chosen with the account._
 7. **The messages fade out at both ends**, under the header and above the
    composer, while there is more that way (shadcn's `scroll-fade`, a mask,
    so it works on glass too); at the end, the last line is not faded.
