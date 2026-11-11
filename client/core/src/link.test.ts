@@ -2,7 +2,9 @@ import { expect, test } from "vitest"
 import { linkOf, linkRefused } from "./link"
 
 test("only http(s) makes a Link: file: and app: never reach the device", () => {
-  expect(linkOf("https://github.com/a")).toEqual({ url: "https://github.com/a" })
+  expect(linkOf("https://github.com/a")).toEqual({
+    url: "https://github.com/a",
+  })
   expect(linkOf("HTTP://localhost:3000/")).toEqual({
     url: "HTTP://localhost:3000/",
   })
