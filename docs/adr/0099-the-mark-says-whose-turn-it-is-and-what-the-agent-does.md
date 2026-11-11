@@ -90,6 +90,9 @@ light theme and the rhythm table).
    s, sleep 4.2 s. A change of look blends in 0.45 s; a change of shape
    leaps, 0.6 s. A mark drawn for the first time starts in its state, as
    if it had been there: no news on the first draw.
+   _Amended 2026-11-11 by
+   [ADR 0117](0117-what-loops-forever-steps-twelve-times-a-second.md): the loops, calls with them, are drawn 12 times a second;
+   the rhythm stands._
 5. **The open Thread's mark does not call**: it keeps its look and shape
    still, since the Person already looks at it.
 6. **Awake marks glance at the pointer** as it passes their card. Asleep
