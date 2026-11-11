@@ -265,6 +265,25 @@
       "gate": "hard",
       "budget": 20,
       "note": "the frames the window showed while the Marks only live: their loops step 12 times a second, all at once, not on every refresh of the screen, and the two Threads that ask draw their clocks once a second; 15 at 1 and 1.6 (ADR 0117, decision 6); motion.spec fails over it"
+    },
+    {
+      "measure": "agents.ticks.callbacksPerSecond",
+      "gate": "hard",
+      "budget": 2,
+      "note": "eleven Threads at work on Working's tab, ten of them each showing a doing of its own, as their loops play: a working phase, nothing moving, allows about two ticks a second (ADR 0088, decision 1); a Mark between news asks for none (ADR 0099, step 3)",
+      "blocks": true
+    },
+    {
+      "measure": "agents.paints.perSecond",
+      "gate": "soft",
+      "budget": 200,
+      "note": "the window's paints a second while eleven working Marks only live, ten of them showing what their Agent does: each of the 12 steps a second paints the marks it moves, as the marks phase's; 178 at 1 and 181 at 1.6 on arc, 2026-11-12 (ADR 0117)"
+    },
+    {
+      "measure": "agents.viz.perSecond",
+      "gate": "hard",
+      "budget": 20,
+      "note": "the frames the window showed while eleven working Marks only live, ten of them showing what their Agent does: their loops step 12 times a second, all at once, as the marks phase's (ADR 0117, decision 6); motion.spec fails over it"
     }
   ],
   "recorded": {

@@ -6,9 +6,16 @@
  * Later clock, so plain tests cover it.
  */
 import type { ProjectId } from "@banda/contract"
+import type { DoingKind } from "@banda/contract/agents"
 import type { Count } from "@banda/contract/sidebar"
-import { loudest, type MarkState, works } from "./lib/mark-state"
+import {
+  loudest,
+  type MarkDoing,
+  type MarkState,
+  works,
+} from "./lib/mark-state"
 import { sleeps, wokeOf } from "./lib/later"
+import { MINUTE } from "./lib/words"
 import type { Attention, Call, Listed, Lists } from "./pane"
 import type { Chime } from "./sound/families"
 
@@ -70,27 +77,104 @@ export function standOf(listed: Listed, now: number): Stand {
     : "open"
 }
 
+/** A Mark's look, and for one at work what its Agent does. */
+export type Look = { look: MarkState; doing?: MarkDoing }
+
 /**
- * What `listed`'s Mark shows at `now` (ADR 0099, decisions 1 and 12), the
- * one place the sidebar, the bar, a Pane's header and the notifications
- * take it from:
+ * What `listed`'s Mark shows at `now` (ADR 0099, decisions 1, 2 and 12),
+ * the one place the sidebar, the bar, a Pane's header and the
+ * notifications take it from:
  * - put off, it sleeps as `later`, and an archived one sleeps so too, as
  *   the approved mocks draw the Archive's cards;
  * - back from Later by itself, it rings as `woke` (`wokeRings`);
  * - open, seen and done with, it is awake and looks around: `idle`;
- * - else its mark says it: what asks, failed or is done, or what works.
- *
- * What a working one does joins it with ADR 0099's step 3.
+ * - else its mark says it: what asks, failed or is done, or what works,
+ *   with what it does (`doingOf`).
  */
-export function lookOf(listed: Listed, now: number): { look: MarkState } {
-  return { look: lookIn(listed, standOf(listed, now), now) }
+export function lookOf(listed: Listed, now: number): Look {
+  const look = lookIn(listed, standOf(listed, now), now)
+  return works(look) ? { look, doing: doingOf(listed, now) } : { look }
 }
 
 /** What `listed`'s Mark shows on its Pane's header at `now`: its look,
  * but open and seen it rests, as the logo does, so nothing moves there. */
-export function headerLookOf(listed: Listed, now: number): MarkState {
-  const { look } = lookOf(listed, now)
-  return look === "idle" ? "rest" : look
+export function headerLookOf(listed: Listed, now: number): Look {
+  const shown = lookOf(listed, now)
+  return shown.look === "idle" ? { look: "rest" } : shown
+}
+
+/** How long a working Thread says nothing before its Mark shows it stuck
+ * (ADR 0099, decision 2), in ms. */
+export const STUCK = 3 * MINUTE
+
+/** How a working Mark draws each kind of what its turn does: a deletion
+ * and a move as an edit, as `marks-final.html` draws them. */
+const DOES: Readonly<Record<DoingKind, MarkDoing>> = {
+  read: "read",
+  edit: "edit",
+  delete: "edit",
+  move: "edit",
+  search: "search",
+  execute: "execute",
+  think: "think",
+  fetch: "fetch",
+  other: "other",
+  reply: "reply",
+}
+
+/**
+ * What working `listed`'s Agent does at `now`, as its Mark draws it, the
+ * first that holds, in the order its card's line 2 says them (spec §2.6):
+ * it waits on a usage limit; it said nothing for `STUCK`, by when its
+ * turn last said anything (`stepped`); it compacts the context; else
+ * what its turn does now, or, with nothing said yet, the calm series.
+ */
+export function doingOf(listed: Listed, now: number): MarkDoing {
+  if (listed.limitUntil !== undefined) return "limit"
+  if (listed.stepped !== undefined && now - listed.stepped >= STUCK)
+    return "stuck"
+  if (listed.compacting) return "compacting"
+  return listed.doing ? DOES[listed.doing.what] : "other"
+}
+
+/** When the first Thread of `lists` at work that says nothing gets stuck,
+ * after `now`: the moment the clock that reads them moves to next, so one
+ * timer serves every Mark (ADR 0099, decision 2). None when none would. */
+export function nextStuck(lists: Lists, now: number): number | undefined {
+  let next: number | undefined
+  for (const listed of Object.values(lists).flat()) {
+    if (!works(listed.mark) || listed.stepped === undefined) continue
+    const at = listed.stepped + STUCK
+    if (at > now) next = Math.min(next ?? at, at)
+  }
+  return next
+}
+
+/** How long a working Mark shows what its Agent does, at least (ADR 0099,
+ * decision 2), in ms. */
+export const HOLD = 1500
+
+/** What a working Mark shows its Agent doing, and since when it shows it,
+ * by the clock it is read by. */
+export type Held = { doing: MarkDoing | undefined; since: number }
+
+/**
+ * What a working Mark shows at `now`, after it showed `prev`, as its Agent
+ * now does `next` (ADR 0099, decision 2): the same as before until that
+ * showed `HOLD`, then `next`, so each doing holds at least that long, and
+ * one shorter that another replaced is never shown. The same doing again
+ * changes nothing. A first, with nothing shown before, shows at once. Its
+ * caller asks again at `since + HOLD` while `next` waits. Pure, for the
+ * Mark and its card's words alike, which then never disagree.
+ */
+export function heldDoing(
+  prev: Held | undefined,
+  next: MarkDoing | undefined,
+  now: number
+): Held {
+  if (prev === undefined) return { doing: next, since: now }
+  if (prev.doing === next || now - prev.since < HOLD) return prev
+  return { doing: next, since: now }
 }
 
 function lookIn(listed: Listed, stand: Stand, now: number): MarkState {

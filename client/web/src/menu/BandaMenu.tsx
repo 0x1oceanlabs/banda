@@ -877,11 +877,11 @@ function RowView({
         inside?.kind === "project"
           ? undefined
           : listing?.find((one) => one.id === row.project)
-      const { look } = lookOf(listed, sources.now)
+      const { look, doing } = lookOf(listed, sources.now)
       const waiting = (calls(look) || look === "woke") && MARK_WORDS[look]
       return (
         <>
-          <ThreadMark listed={listed} look={look} />
+          <ThreadMark listed={listed} look={look} doing={doing} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           <Detail>
             {there ? (

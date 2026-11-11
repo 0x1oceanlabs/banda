@@ -4,6 +4,7 @@ import {
   BandaMark,
   type MarkState,
   toneOf,
+  works,
 } from "@banda/ui/components/banda-mark"
 import {
   DropdownMenu,
@@ -51,7 +52,7 @@ const WORDS: Record<Count, string> = {
 /** A count's colour, by its loudest mark: work is muted; what calls is in
  * its colour, or the text's. */
 function colourOf(mark: MarkState, color: boolean): string {
-  if (mark === "running" || mark === "thinking") return "text-muted-foreground"
+  if (works(mark)) return "text-muted-foreground"
   return (color && toneOf(mark)) || "text-foreground"
 }
 

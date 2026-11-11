@@ -67,7 +67,7 @@ const LISTS: Lists = {
       later: { at: ago(5 * HOUR), until: ago(10 * MINUTE) },
     }),
     listed("seen", "rest", ago(2 * HOUR)),
-    listed("build", "running", ago(MINUTE), { began: ago(30 * MINUTE) }),
+    listed("build", "working", ago(MINUTE), { began: ago(30 * MINUTE) }),
     listed("nap", "rest", ago(HOUR), {
       later: { at: ago(HOUR), until: on(0, 18, 30) },
     }),
@@ -79,12 +79,12 @@ const LISTS: Lists = {
   p2: [
     listed("invoices", "failed", ago(4 * MINUTE)),
     listed("font", "rest", ago(20 * MINUTE)),
-    listed("tests", "running", ago(MINUTE), { began: ago(5 * MINUTE) }),
+    listed("tests", "working", ago(MINUTE), { began: ago(5 * MINUTE) }),
     listed("trip", "rest", ago(2 * HOUR), {
       later: { at: ago(2 * HOUR), until: on(1, 9) },
     }),
     // Put off until its turn ends, while it still works.
-    listed("report", "running", ago(MINUTE), {
+    listed("report", "working", ago(MINUTE), {
       began: ago(HOUR),
       later: { at: ago(HOUR) },
     }),
@@ -96,7 +96,7 @@ const LISTS: Lists = {
   p3: [listed("jot", "done", ago(HOUR))],
   p9: [
     listed("ship", "asking", ago(30 * MINUTE)),
-    listed("lint", "running", ago(MINUTE), { began: ago(HOUR) }),
+    listed("lint", "working", ago(MINUTE), { began: ago(HOUR) }),
   ],
 }
 
@@ -326,7 +326,7 @@ test("a folded group keeps its rollup and hides its rows", () => {
 test("the shelf shows its first six, then how many more; asked, all of them", () => {
   const busy = rowsIn({
     p1: Array.from({ length: SHELF + 2 }, (_, i) =>
-      listed(`w${i}`, "running", ago(MINUTE), { began: ago((10 - i) * MINUTE) })
+      listed(`w${i}`, "working", ago(MINUTE), { began: ago((10 - i) * MINUTE) })
     ),
   })
   expect(shape(inboxOf(busy, { tab: "inbox" }, NOW))).toEqual([
@@ -377,10 +377,10 @@ test("a tab with nothing says so; the Inbox with nothing is inbox zero", () => {
 test("inbox zero says how many work and when the next wakes by its time", () => {
   const calm = rowsIn({
     p1: [
-      listed("build", "running", ago(MINUTE), { began: ago(HOUR) }),
+      listed("build", "working", ago(MINUTE), { began: ago(HOUR) }),
       listed("old", "rest", ago(HOUR), { archived: true }),
       // Put off until done: it wakes by no time.
-      listed("report", "running", ago(MINUTE), { later: { at: ago(HOUR) } }),
+      listed("report", "working", ago(MINUTE), { later: { at: ago(HOUR) } }),
       listed("trip", "rest", ago(HOUR), {
         later: { at: ago(HOUR), until: on(1, 9) },
       }),
@@ -587,11 +587,11 @@ test("unread puts it back in Your turn at its call's own time", () => {
 
 test("an answer sends it to Working, last, by when its turn began", () => {
   const asking = listed("asks", "asking", ago(10 * MINUTE))
-  const busy = listed("busy", "running", ago(MINUTE), { began: ago(HOUR) })
+  const busy = listed("busy", "working", ago(MINUTE), { began: ago(HOUR) })
   expect(
     shape(inboxOf(rowsIn({ p1: [asking, busy] }), { tab: "inbox" }, NOW))
   ).toEqual(["# Your turn · 1", "turn: asks", "# Working · 1", "working: busy"])
-  const answered = { ...asking, mark: "running" as const, began: NOW }
+  const answered = { ...asking, mark: "working" as const, began: NOW }
   expect(
     shape(inboxOf(rowsIn({ p1: [answered, busy] }), { tab: "inbox" }, NOW))
   ).toEqual(["zero: 2 at work", "# Working · 2", "working: busy asks"])

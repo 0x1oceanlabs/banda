@@ -10,7 +10,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
-import type { MarkState } from "@banda/ui/lib/mark-state"
+import type { MarkDoing, MarkState } from "@banda/ui/lib/mark-state"
 import { type Listed, NO_REASON } from "@banda/ui/pane"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { dayOf } from "@banda/core"
@@ -56,7 +56,7 @@ export type PutOff = { at: number; byAgent: boolean }
 /** What a slot of a card draws. The title and the time are the card's
  * own; the rest carry what they draw. */
 export type Slot =
-  | { kind: "mark"; look: MarkState }
+  | { kind: "mark"; look: MarkState; doing?: MarkDoing }
   | { kind: "title" }
   | { kind: "time" }
   /** Line 2: a word and what it says, or who put it off and when. */
@@ -162,7 +162,8 @@ export function cardOf(input: CardOf): CardModel {
   const { row, place, at, now, view, machine, away, stopped, went, strayed } =
     input
   const { listed, stand } = row
-  const { look } = lookOf(listed, now)
+  const shown = lookOf(listed, now)
+  const { look } = shown
   const tone = callColor(look)
   const count = linesOf(place, view)
   // The machine stands on line 3; with none, on line 1's right, by its
@@ -170,7 +171,7 @@ export function cardOf(input: CardOf): CardModel {
   const on = view.group === "machine" ? undefined : machine
   const lines: Line[] = [
     {
-      left: [{ kind: "mark", look }, { kind: "title" }],
+      left: [{ kind: "mark", ...shown }, { kind: "title" }],
       right: [
         ...(on && count < 3 ? [machineSlot(row, on, false)] : []),
         { kind: "time" },

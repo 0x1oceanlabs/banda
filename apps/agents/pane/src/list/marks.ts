@@ -17,7 +17,7 @@ export function markOf(thread: ListedThread): MarkState {
   if (thread.asking.length > 0) return "asking"
   const { latest } = thread
   if (!latest) return "rest"
-  if (latest.state === "running") return "running"
+  if (latest.state === "running") return "working"
   if (thread.seen === latest.turn) return "rest"
   switch (latest.state) {
     case "done":

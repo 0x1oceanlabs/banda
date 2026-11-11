@@ -8,18 +8,20 @@
  * motion asked for, each is its still pose, so the pictures it takes, in
  * dark and light, show the look and nothing between.
  *
- * Later is only on the sheet: the sidebar's rows draw their mark until its
- * card comes (ADR 0098, S6a), and the bar's Mark leaves out what is put
- * off. Plain tests cover it (client/ui/src/status.test.ts).
+ * Later is only on the sheet: a Thread put off sleeps on Later's tab, out
+ * of this test's way, and the bar's Mark leaves out what is put off. Plain
+ * tests cover its look (client/ui/src/status.test.ts).
  *
  * Then the Mark lives (ADR 0099, decision 4): each look's loops play as
  * CSS on its SVG's groups, and news, a look that changes, plays on the
  * window's clock while `data-news` says which, then hands the look back to
  * the loops. Woke arrives asleep, stretches, then rings, and its loops are
  * held and stepped 12 times a second (ADR 0117). A mark drawn for the
- * first time plays no
- * news, and `[motion] off` stills every loop. Last, the looks the window
- * draws live are recorded, beside the approved mock's when it is given.
+ * first time plays no news, and `[motion] off` stills every loop. A
+ * working Mark shows what its Agent does, and stuck once it says nothing
+ * for three minutes (ADR 0099, step 3). Last, the looks the window draws
+ * live are recorded, beside the approved mock's when it is given, and
+ * each doing laid out.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -140,7 +142,7 @@ const LOOKS: readonly (readonly [MarkState, string, string?])[] = [
   ["idle", "Open", "--mark-open"],
   ["later", "Later", "--mark-later"],
   ["offline", "Offline"],
-  ["running", "Working", "--mark-working"],
+  ["working", "Working", "--mark-working"],
 ]
 
 /**
@@ -252,7 +254,7 @@ test("the bar's Mark and each row draw ADR 0099's looks still, the loudest on th
   ).toBeVisible()
   const on = await startAgent(page, "wait on")
   await expect(on.getByText("Waiting.")).toBeVisible()
-  await expect(logo).toHaveAttribute("data-look", "running")
+  await expect(logo).toHaveAttribute("data-look", "working")
 
   // At work: the logo's hat and a Thread's mark in the muted blue (ADR
   // 0107), and the row's own words as they were.
@@ -368,23 +370,26 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   await expect(
     (await startAgent(page, "wait on")).getByText("Waiting.")
   ).toBeVisible()
-  await expect(logo).toHaveAttribute("data-look", "running")
+  await expect(logo).toHaveAttribute("data-look", "working")
   // At work, its loops play as CSS, from where its rhythm is: a negative
-  // delay, the same for every loop of it.
-  await expect(logo).toHaveAttribute("data-loop", "running")
-  // Its eyes read, in the eyes' two groups, the body held back; its four
-  // lids half shut on the way back; it swells as it works.
+  // delay, the same for every loop of it. The bar's Mark shows no one
+  // Agent's doing: it plays the calm series of them, as marks-final.html's
+  // `other` does, reading, replying, then a glance up, by one loop to a
+  // part: the eyes, in their two groups, the body held back; the four
+  // lids; its size and its lean.
+  await expect(logo).toHaveAttribute("data-loop", "other")
   await expect
     .poll(() => loopsOf(logo))
     .toEqual([
-      "mark-scan",
-      "mark-scan",
-      "mark-scan-back",
-      "mark-scan-lid",
-      "mark-scan-lid",
-      "mark-scan-lid",
-      "mark-scan-lid",
-      "mark-work",
+      "mark-series-lid",
+      "mark-series-lid",
+      "mark-series-lid",
+      "mark-series-lid",
+      "mark-series-look",
+      "mark-series-look",
+      "mark-series-look-back",
+      "mark-series-size",
+      "mark-series-turn",
     ])
   expect(
     await logo.evaluate((svg) => svg.style.getPropertyValue("--mark-phase"))
@@ -403,9 +408,8 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   // off, it leaves the bar's Mark, which works again; then it arrives
   // asleep, stretches and rings, and its loops take over. Asleep lasts a
   // second, so the recorder catches it, not a poll of the attribute. Its
-  // loops are held and stepped (ADR 0117): its bells ring on the bar's
-  // Mark alone, until the rows draw their look (ADR 0098, S6a), so
-  // motion.spec's look at the rows has them not.
+  // loops are held and stepped (ADR 0117), as motion.spec's in the rows
+  // are: no Thread wakes there.
   await watchNews(logo)
   const done = threadNamed(window, "wait done")!.id
   call(window, "agents.later", { thread: done, until: Date.now() + 3000 })
@@ -499,12 +503,80 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
     .toEqual(expect.arrayContaining(["mark-blink", "mark-hop"]))
 })
 
+// ADR 0099, step 3: a working Mark shows what its Agent does, as the
+// engine says it, each doing for at least 1.5 s; and stuck once its Agent
+// has said nothing for three minutes, as the list's one clock wakes for it.
+test("a working Mark shows what its Agent does, and stuck once it says nothing for three minutes (ADR 0099, step 3)", async () => {
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { page } = window
+  await firstThread(page)
+  // The page's clock is moved on by hand later, its timers made anew.
+  await page.clock.install()
+  await page.reload()
+  const sidebar = sidebarOf(page)
+  await expect(sidebar).toBeVisible()
+
+  // A command runs: the eyes are a prompt, its cursor blinking, on its
+  // card and on its Pane's header alike. It starts from the New Thread
+  // Work opened with, which the page kept.
+  const composer = page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("doing execute pnpm test")
+  await composer.press("Enter")
+  const runs = page.getByRole("region", {
+    name: "doing execute pnpm test",
+    exact: true,
+  })
+  const mark = rowOf(page, "doing execute pnpm test").getByRole("img", {
+    name: "Working",
+  })
+  await expect(mark).toHaveAttribute("data-doing", "execute")
+  await expect(mark).toHaveAttribute("data-loop", "execute")
+  await expect.poll(() => loopsOf(mark)).toEqual(["mark-cursor"])
+  // Its Tile is its region; its header's mark comes first in it.
+  const header = runs.getByRole("img", { name: "Working" }).first()
+  await expect(header).toHaveAttribute("data-doing", "execute")
+  // It reads a file next: its eyes scan.
+  const thread = threadNamed(window, "doing execute pnpm test")!.id
+  call(window, "agents.send", {
+    thread,
+    text: "doing read card.ts",
+    steer: true,
+  })
+  await expect(mark).toHaveAttribute("data-doing", "read")
+  await expect(mark).toHaveAttribute("data-loop", "read")
+
+  // An Agent that says nothing: at first the calm series, then, three
+  // minutes on, stuck, its eyes half closed. The other one, silent as
+  // long, is stuck too. The page's clock stays ahead of the engine's from
+  // here, so what either says next is three minutes old to it.
+  call(window, "agents.send", {
+    harness: "fake",
+    text: "silent 200",
+    settings: null,
+  })
+  const silent = rowOf(page, "silent 200").getByRole("img", {
+    name: "Working",
+  })
+  await expect(silent).toHaveAttribute("data-doing", "other")
+  await page.clock.fastForward("02:30")
+  await expect(silent).toHaveAttribute("data-doing", "other")
+  await page.clock.fastForward("00:40")
+  await expect(silent).toHaveAttribute("data-doing", "stuck")
+  await expect(silent).toHaveAttribute("data-loop", "stuck")
+  await expect
+    .poll(() => loopsOf(silent))
+    .toEqual(expect.arrayContaining(["mark-drift", "mark-drowse"]))
+  await expect(mark).toHaveAttribute("data-doing", "stuck")
+  await expect(header).toHaveAttribute("data-doing", "stuck")
+})
+
 // The looks the window draws live, recorded at 1440x900 by the machine's
 // ffmpeg, where it has one, as test-results/sidebar-m1b-looks.webm: each
 // in turn on the bar's Mark, the quietest first, as the rows keep theirs.
-// Open and Later are not drawn live yet: the rows draw their mark until
-// their card comes (ADR 0098, S6a), and the bar's Mark leaves out what is
-// put off. With BANDA_MARKS_MOCK naming marks-final.html, the approved
+// Open and Later are left out: the bar's Mark rests while a Thread is
+// open, and leaves out what is put off. With BANDA_MARKS_MOCK naming marks-final.html, the approved
 // mock plays in a window of its own over the same seconds, recorded beside
 // it as test-results/sidebar-m1b-looks-mock.webm, to show the look did not
 // shift.
@@ -568,7 +640,7 @@ test("the looks the window draws live, recorded beside the approved mock's (ADR 
       (await startAgent(page, "wait on")).getByText("Waiting.")
     ).toBeVisible()
     await leaveSidebar(page)
-    await expect(logo).toHaveAttribute("data-loop", "running")
+    await expect(logo).toHaveAttribute("data-loop", "other")
     await hold()
     finish(window, "wait done")
     await expect(logo).toHaveAttribute("data-loop", "done")
@@ -601,6 +673,198 @@ test("the looks the window draws live, recorded beside the approved mock's (ADR 
 
     // Every recording stops before any is encoded, so none goes on
     // through another's encoding.
+    const stopped = await Promise.allSettled(
+      recordings.map((recording) => recording.stop())
+    )
+    for (const one of stopped) if (one.status === "rejected") throw one.reason
+    for (const recording of recordings) await recording.encode()
+  } finally {
+    await Promise.all(recordings.map((recording) => recording.discard()))
+  }
+})
+
+/** Each doing a working Mark shows (ADR 0099, step 3), in the order
+ * marks-final.html lays them out: its name there, what the Mark does, and
+ * the message that sets the fake Agent doing it. Stuck is any Agent that
+ * says nothing for three minutes. */
+const DOINGS = [
+  ["think", "Thinks", "eyes up, a slow sway", "doing think about it"],
+  ["read", "Reads", "the eyes scan", "doing read card.ts"],
+  ["search", "Searches", "a lens sweeps", "doing search standOf"],
+  ["edit", "Edits", "tilts with each stroke", "doing edit status.ts"],
+  [
+    "execute",
+    "Terminal",
+    ">_, the cursor at 530 ms",
+    "doing execute pnpm test",
+  ],
+  ["fetch", "On the web", "a dot goes out and back", "doing fetch docs.rs"],
+  ["reply", "Writes to you", "types", "doing reply Here it is"],
+  ["compacting", "Compacts", "squeezes", "doing compact"],
+  ["other", "Other", "a series of the above", "doing other Skill"],
+  ["stuck", "Stuck?", "half-closed eyes", "silent 600"],
+  ["limit", "Waits for the limit", "dozes, sand drips", "limit wait"],
+] as const
+
+// Each doing as the window draws it live, recorded at 1440x900 as
+// test-results/sidebar-m3a-doings.webm: dark, then light, then three
+// minutes on, as every Agent that said nothing is stuck, light, then dark.
+// The sidebar shows the Threads' cards at their own size; beside it, each
+// card's mark again at 96 px, cloned as it stands with its loops, which
+// marks.css plays alike, in marks-final.html's order and names. A picture
+// ends each part, as test-results/sidebar-m3a-doings[-stuck]-<mode>.png.
+// With BANDA_MARKS_MOCK naming marks-final.html, its doings play in a
+// window of their own over the same seconds, as
+// test-results/sidebar-m3a-doings-mock.webm.
+test("each doing the window draws live, recorded in dark and light, laid out as the approved mock's (ADR 0099, step 3)", async () => {
+  test.setTimeout(150_000)
+  const size = { width: 1440, height: 900 }
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { app, page, dir } = window
+  await app.evaluate(
+    ({ BrowserWindow }, { width, height }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(width, height),
+    size
+  )
+  await page.setViewportSize(size)
+  await firstThread(page)
+  // Stuck comes by the page's clock, moved on by hand.
+  await page.clock.install()
+  await page.reload()
+  await expect(sidebarOf(page)).toBeVisible()
+  for (const [, , , text] of DOINGS)
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+  // Working's tab lists them all, where the Inbox's shelf shows six.
+  const sidebar = sidebarOf(page)
+  await sidebar.getByRole("tab", { name: /^Working/ }).click()
+  await expect(sidebar.getByRole("tabpanel").locator("[data-row]")).toHaveCount(
+    DOINGS.length
+  )
+  const markOf = (text: string) =>
+    rowOf(page, text).getByRole("img", { name: "Working" })
+  for (const [doing, , , text] of DOINGS) {
+    const mark = markOf(text)
+    await expect(mark).toHaveAttribute(
+      "data-doing",
+      doing === "stuck" ? "other" : doing,
+      { timeout: 15_000 }
+    )
+    await mark.evaluate(
+      (svg, doing) => svg.setAttribute("data-m3a", doing),
+      doing
+    )
+  }
+  await leaveSidebar(page)
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+  await expect(page.locator("[data-news]")).toHaveCount(0)
+
+  /** Clones the marks `data-m3a` names into their places on the sheet. */
+  const clone = (doings: readonly string[]) =>
+    page.evaluate((doings) => {
+      for (const doing of doings) {
+        const svg = document.querySelector(`aside [data-m3a="${doing}"]`)!
+        const copy = svg.cloneNode(true) as SVGSVGElement
+        copy.removeAttribute("data-paused")
+        copy.removeAttribute("data-m3a")
+        copy.style.width = copy.style.height = "96px"
+        // Its masks' ids its own, so it draws by none of the card's.
+        for (const one of copy.querySelectorAll("[id]")) {
+          const id = one.id
+          one.id = `${id}-m3a`
+          for (const user of copy.querySelectorAll(`[mask="url(#${id})"]`))
+            user.setAttribute("mask", `url(#${id}-m3a)`)
+        }
+        document.getElementById(`m3a-${doing}`)!.replaceChildren(copy)
+      }
+    }, doings)
+  // The sheet, right of the sidebar, in the theme's own colours.
+  await page.evaluate((doings) => {
+    const left = document.querySelector("aside")!.getBoundingClientRect().right
+    const sheet = document.body.appendChild(document.createElement("div"))
+    sheet.style.cssText = `position:fixed;top:0;bottom:0;right:0;left:${left + 16}px;z-index:2147483647;display:grid;grid-template-columns:repeat(4,1fr);align-content:center;gap:28px 16px;padding:24px;background:var(--background);color:var(--foreground);font:13px system-ui`
+    for (const [doing, name, does] of doings) {
+      const figure = sheet.appendChild(document.createElement("figure"))
+      figure.style.cssText =
+        "margin:0;display:flex;flex-direction:column;align-items:center;gap:6px"
+      const place = figure.appendChild(document.createElement("div"))
+      place.id = `m3a-${doing}`
+      place.style.cssText =
+        "width:96px;height:96px;display:grid;place-items:center;color:var(--muted-foreground)"
+      place.textContent = "3 min on"
+      const named = figure.appendChild(document.createElement("strong"))
+      named.textContent = name
+      const said = figure.appendChild(document.createElement("span"))
+      said.style.color = "var(--muted-foreground)"
+      said.textContent = does
+    }
+  }, DOINGS)
+  await clone(DOINGS.flatMap(([doing]) => (doing === "stuck" ? [] : [doing])))
+
+  const mock = process.env.BANDA_MARKS_MOCK
+  const [beside] = mock
+    ? await Promise.all([
+        app.waitForEvent("window"),
+        app.evaluate(
+          ({ BrowserWindow }, { file, width, height }) => {
+            const shown = new BrowserWindow({
+              width,
+              height,
+              show: false,
+              focusable: false,
+            })
+            shown.showInactive()
+            void shown.loadFile(file)
+          },
+          { file: mock, ...size }
+        ),
+      ])
+    : []
+  if (beside) {
+    await beside.setViewportSize(size)
+    // Its doings: the two groups at work, at the top.
+    await beside.evaluate(() =>
+      [...document.querySelectorAll("#set .group h2")]
+        .find((heading) => heading.textContent === "Работает")!
+        .scrollIntoView({ block: "start" })
+    )
+  }
+  const mode = async (to: "dark" | "light") => {
+    writeFileSync(join(dir, "config/look.toml"), `mode = "${to}"\n`)
+    if (to === "dark") await expect(page.locator("html")).toHaveClass(/dark/)
+    else await expect(page.locator("html")).not.toHaveClass(/dark/)
+  }
+  const hold = (ms: number) => page.waitForTimeout(ms)
+  const picture = (name: string) =>
+    page.screenshot({ path: `test-results/sidebar-m3a-${name}.png` })
+  const recordings: Recording[] = []
+  try {
+    for (const [shown, name] of [
+      [page, "doings"] as const,
+      ...(beside ? [[beside, "doings-mock"] as const] : []),
+    ])
+      recordings.push(
+        await record(shown, `test-results/sidebar-m3a-${name}.webm`, size)
+      )
+    await hold(6000)
+    await picture("doings-dark")
+    await mode("light")
+    await hold(6000)
+    await picture("doings-light")
+    // Three minutes on, every Agent that said nothing is stuck.
+    await page.clock.fastForward("03:10")
+    await expect(markOf("silent 600")).toHaveAttribute("data-doing", "stuck")
+    await expect(page.locator("aside [data-news]")).toHaveCount(0, {
+      timeout: 5000,
+    })
+    await markOf("silent 600").evaluate((svg) =>
+      svg.setAttribute("data-m3a", "stuck")
+    )
+    await clone(["stuck"])
+    await hold(5000)
+    await picture("doings-stuck-light")
+    await mode("dark")
+    await hold(5000)
+    await picture("doings-stuck-dark")
     const stopped = await Promise.allSettled(
       recordings.map((recording) => recording.stop())
     )

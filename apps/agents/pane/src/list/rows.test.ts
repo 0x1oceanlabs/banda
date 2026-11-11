@@ -71,7 +71,7 @@ test("a Thread at work lists what it does, in the window's words (ADR 0099, deci
     limit_until: 9000,
   })
   expect(listedOf(working, "Claude")).toMatchObject({
-    mark: "running",
+    mark: "working",
     began: 3,
     doing: { what: "execute", title: "pnpm test", since: 4 },
     stepped: 6,

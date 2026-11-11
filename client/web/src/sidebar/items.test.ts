@@ -121,7 +121,7 @@ test("Archive asks the Item's App to archive it on its host, in one command; an 
 })
 
 test("a Thread at work is not archived", () => {
-  const working = thread({ id: "t2", mark: "running" })
+  const working = thread({ id: "t2", mark: "working" })
   const { shell, ran } = fake(working)
   archiving.run(shell)
   expect(ran).toEqual([])
@@ -143,7 +143,7 @@ test("S on a card that asks or works says why, with the key in force that puts i
   const asks = { stand: "turn" as const, listed: thread({ mark: "asking" }) }
   const works = {
     stand: "working" as const,
-    listed: thread({ mark: "running" }),
+    listed: thread({ mark: "working" }),
   }
   const said = (why: ReturnType<typeof refusalOf>) =>
     why && `${why.title} ${why.description}`

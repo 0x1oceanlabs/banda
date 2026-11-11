@@ -20,7 +20,7 @@ const ended = (state: TurnView["state"]) =>
 
 test("a Thread asks, works, fails, finishes or rests", () => {
   expect(markOf(thread())).toBe("rest")
-  expect(markOf(ended("running"))).toBe("running")
+  expect(markOf(ended("running"))).toBe("working")
   expect(markOf(ended("done"))).toBe("done")
   expect(markOf(ended("failed"))).toBe("failed")
   expect(markOf(ended("interrupted"))).toBe("failed")

@@ -42,13 +42,13 @@ test("lists said again keep each Listed, and each list, that did not change", ()
   expect(keptLists(was, again)).toBe(was)
 
   const changed = keptLists(was, {
-    [p]: [thread("a"), thread("b", { mark: "running" })],
+    [p]: [thread("a"), thread("b", { mark: "working" })],
     [q]: [thread("c")],
   })
   expect(changed).not.toBe(was)
   expect(changed[p][0]).toBe(was[p][0])
   expect(changed[p][1]).not.toBe(was[p][1])
-  expect(changed[p][1].mark).toBe("running")
+  expect(changed[p][1].mark).toBe("working")
   expect(changed[q]).toBe(was[q])
 
   // In a new order, each keeps its object, and the list is new.
@@ -146,8 +146,8 @@ test("what watches the lists hears them change, and a Later wake, not a mark", (
 
 test("what the bar reads of the lists: who works, and a Pane's own", () => {
   const lists: Lists = {
-    [p]: [thread("a", { mark: "running" }), thread("b", { mark: "asking" })],
-    [q]: [thread("c", { mark: "thinking" }), thread("d", { mark: "done" })],
+    [p]: [thread("a", { mark: "working" }), thread("b", { mark: "asking" })],
+    [q]: [thread("c", { mark: "working" }), thread("d", { mark: "done" })],
   }
   expect(workingIn(lists)).toBe(2)
 
@@ -167,8 +167,8 @@ test("each host's lists are kept apart, and the items hold them all, this machin
   const stores = newStores(0)
   const heard = vi.fn()
   stores.items.subscribe(heard)
-  takeLists(stores, { [p]: [thread("a", { mark: "running" })] })
-  takeLists(stores, { [r]: [thread("b", { mark: "running" })] }, "arc")
+  takeLists(stores, { [p]: [thread("a", { mark: "working" })] })
+  takeLists(stores, { [r]: [thread("b", { mark: "working" })] }, "arc")
   expect(heard).toHaveBeenCalledTimes(2)
   expect(Object.keys(stores.items.get())).toEqual([p, r])
 
@@ -177,12 +177,12 @@ test("each host's lists are kept apart, and the items hold them all, this machin
   takeLists(stores, { [r]: [thread("b", { mark: "done" })] }, "arc")
   expect(heard).toHaveBeenCalledTimes(3)
   expect(stores.items.get()[p]).toBe(before)
-  takeLists(stores, { [p]: [thread("a", { mark: "running" })] })
+  takeLists(stores, { [p]: [thread("a", { mark: "working" })] })
   expect(heard).toHaveBeenCalledTimes(3)
 
   // Only this machine's Agents are what Quit and a restart stop.
   expect(workingIn(stores.items.get())).toBe(1)
-  takeLists(stores, { [r]: [thread("b", { mark: "running" })] }, "arc")
+  takeLists(stores, { [r]: [thread("b", { mark: "working" })] }, "arc")
   expect(workingIn(stores.items.get())).toBe(2)
   expect(workingHere(stores)).toBe(1)
 
@@ -262,7 +262,7 @@ test("a Project with no Thread but archived ones at rest counts as having none",
       [p]: [archived],
       [q]: [archived, thread("kept")],
       [r]: [],
-      [s]: [thread("works", { archived: true, mark: "running" })],
+      [s]: [thread("works", { archived: true, mark: "working" })],
     })
   ).toEqual([p, r])
 })

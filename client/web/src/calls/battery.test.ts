@@ -59,8 +59,8 @@ test("a machine's running Turns are those at work and those that wait on the Per
   expect(
     turnsIn({
       [p]: [
-        thread("a", "running"),
-        thread("b", "thinking"),
+        thread("a", "working"),
+        thread("b", "working"),
         thread("c", "asking"),
         thread("d", "done"),
         thread("e", "idle"),
@@ -138,7 +138,7 @@ test("Settings and the hover count a machine's Turns only where the window holds
   expect(turnsOn(stores, "m1pro")).toBe(0)
   takeLists(stores, {}, "m1pro")
   expect(turnsSaid(stores, "m1pro")).toBe(0)
-  takeLists(stores, { [q]: [thread("a", "running")] }, "m1pro")
+  takeLists(stores, { [q]: [thread("a", "working")] }, "m1pro")
   expect(turnsSaid(stores, "m1pro")).toBe(1)
 })
 
@@ -173,15 +173,15 @@ test("the window warns as a machine's battery or its lists change, by its toast,
   // Low, nobody at work: nothing.
   expect(said).toEqual([])
   // Its Agents start: the lists say so, on that machine.
-  takeLists(stores, { [p]: [thread("a", "running")] })
+  takeLists(stores, { [p]: [thread("a", "working")] })
   expect(said).toEqual([])
-  takeLists(stores, { [q]: [thread("a", "running")] }, "m1pro")
+  takeLists(stores, { [q]: [thread("a", "working")] }, "m1pro")
   expect(said).toEqual(["show battery:m1pro m1pro: 12%, on battery"])
   // Lower, it says nothing more.
   hosts.set([m1pro({ percent: 11 })])
   takeLists(
     stores,
-    { [q]: [thread("a", "running"), thread("b", "asking")] },
+    { [q]: [thread("a", "working"), thread("b", "asking")] },
     "m1pro"
   )
   expect(said).toHaveLength(1)

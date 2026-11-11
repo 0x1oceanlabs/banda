@@ -13,8 +13,7 @@ test("each place offers d10's acts, Later first (ADR 0098, decision 10)", () => 
   expect(acts("turn", "idle")).toEqual(["later", "archive"])
   expect(acts("open", "idle")).toEqual(["later", "archive"])
   // At work: Later, whose picker offers "When it's done" first.
-  expect(acts("working", "running")).toEqual(["later"])
-  expect(acts("working", "thinking")).toEqual(["later"])
+  expect(acts("working", "working")).toEqual(["later"])
   expect(acts("later", "idle")).toEqual(["wake"])
   expect(acts("later", "asking")).toEqual(["wake"])
   expect(acts("archived", "idle")).toEqual(["unarchive"])
