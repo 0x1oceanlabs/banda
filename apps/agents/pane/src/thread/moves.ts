@@ -26,9 +26,15 @@ export type Move = {
   out?: { until?: number; window?: string }
 }
 
-/** Where a started Thread may move, and whether a move to another
- * Harness asks first: until its first handoff (ADR 0078, decision 5). */
-export type Moves = { same: Move[]; others: Move[]; confirm: boolean }
+/** Where a started Thread may move, whether a move to another Harness
+ * asks first: until its first handoff (ADR 0078, decision 5), and what
+ * its Harness's accounts are grouped under: `Claude Code`. */
+export type Moves = {
+  same: Move[]
+  others: Move[]
+  confirm: boolean
+  title: string
+}
 
 /** The moves of a Thread on `current`, which ran on the entries `ran`:
  * its Harness's accounts first, then the other Harnesses' entries, each

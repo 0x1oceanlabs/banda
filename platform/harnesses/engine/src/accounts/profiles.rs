@@ -1,7 +1,9 @@
 //! Profile discovery, identity and creation. The store persists only the
 //! connection this service validated; it never decides account policy.
+use super::answer::{fresh, roles, title};
 use super::{
-    AccountProfile, AccountStore, ConnectAccount, ConnectedAccount, SetStart, UpdateAccount,
+    AccountProfile, AccountStore, ConnectAccount, ConnectedAccount, SetStart, StartRole,
+    UpdateAccount,
 };
 use crate::model::{AccountKind, HarnessView};
 use crate::{Harness, Harnesses};
@@ -34,13 +36,43 @@ impl Profiles {
         self.listed(&change.harness)
     }
 
-    /// Chooses the account a new Thread starts on, or takes it back.
+    /// Chooses the account of `start.role`, or takes it back. An account
+    /// that is off takes no role, and the default is not its own fallback.
     pub fn set_start(&self, start: SetStart) -> Result<(), Refusal> {
         let _writing = self.lock()?;
         if let Some(id) = &start.harness {
-            self.listed(id)?;
+            let account = self.listed(id)?;
+            if !account.enabled {
+                return Err(Refusal::invalid(format!(
+                    "{} is turned off: enable it first.",
+                    account.name
+                )));
+            }
+            if start.role == StartRole::Fallback && self.default().as_deref() == Some(id.as_str()) {
+                return Err(Refusal::invalid(format!(
+                    "{} is the default: a fallback is another account.",
+                    account.name
+                )));
+            }
         }
         self.store.set_start(start.role, start.harness.as_deref())
+    }
+
+    /// The account a new Thread starts on, by the answer's rule: the one
+    /// `[start]` names while it is on, else the first one on.
+    fn default(&self) -> Option<String> {
+        let (account, fallback) = self.store.start();
+        roles(
+            &self.harnesses.views(),
+            account.as_deref(),
+            fallback.as_deref(),
+        )
+        .0
+    }
+
+    /// Where the Accounts are written.
+    pub fn store(&self) -> Arc<dyn AccountStore> {
+        self.store.clone()
     }
 
     fn lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, Refusal> {
@@ -76,14 +108,8 @@ impl Profiles {
                 .ok_or_else(|| Refusal::conflict("The Account's removal destination is missing."));
         }
         let (default, fallback) = self.store.selection()?;
-        let to = default
-            .or_else(|| {
-                self.harnesses
-                    .views()
-                    .into_iter()
-                    .find(|h| h.enabled)
-                    .map(|h| h.id)
-            })
+        let to = roles(&self.harnesses.views(), default.as_deref(), None)
+            .0
             .ok_or_else(|| Refusal::conflict("Choose a default Account first."))?;
         if expected.is_some_and(|was| was != to) {
             return Err(Refusal::conflict(
@@ -179,30 +205,6 @@ pub(super) fn variable(harness: &str) -> Option<(&'static str, &'static str)> {
         "codex" => Some(("CODEX_HOME", ".codex")),
         _ => None,
     }
-}
-
-/// What a new account is called and coloured beside `theirs`, the entries
-/// of its Harness, as the window's `newAccountOf`: `C4` beside C1 to C3,
-/// else `Claude Code 2`; and the colour its accounts use least, written
-/// with it so it repaints none of them (ADR 0093, decision 3).
-fn fresh(program: &str, theirs: &[HarnessView]) -> (String, u8) {
-    // A name that ends in a number: what goes before it, and the number.
-    let numbered = |name: &str| -> Option<(String, u64)> {
-        let prefix = name.trim_end_matches(|c: char| c.is_ascii_digit());
-        Some((prefix.to_owned(), name[prefix.len()..].parse().ok()?))
-    };
-    let numbered: Option<Vec<_>> = theirs.iter().map(|h| numbered(&h.name)).collect();
-    let name = match numbered.as_deref() {
-        Some(all @ [(prefix, _), ..]) if all.iter().all(|(p, _)| p == prefix) => {
-            let next = all.iter().map(|(_, n)| n + 1).max().unwrap_or(1);
-            format!("{prefix}{next}")
-        }
-        _ => format!("{program} {}", theirs.len() + 1),
-    };
-    let colour = (1..=crate::list::COLOURS as u8)
-        .min_by_key(|colour| theirs.iter().filter(|h| h.colour == *colour).count())
-        .unwrap_or(1);
-    (name, colour)
 }
 
 /// Both automatic discovery and the connect picker use the same XDG rule.
@@ -313,11 +315,9 @@ impl Profiles {
         if self.harnesses.find(&account.id).is_some() {
             return Err(Refusal::conflict("That Account ID is already registered."));
         }
-        let theirs: Vec<_> = (self.harnesses.views().into_iter())
-            .filter(|h| h.harness == harness.id)
-            .collect();
-        let program = crate::list::program(&harness.id).unwrap_or(&harness.name);
-        let (default_name, default_colour) = fresh(program, &theirs);
+        let views = self.harnesses.views();
+        let theirs: Vec<_> = (views.iter()).filter(|h| h.harness == harness.id).collect();
+        let (default_name, default_colour) = fresh(&title(&views, &harness.id), &theirs);
         let name = account.name.unwrap_or(default_name);
         let colour = account.colour.unwrap_or(default_colour);
         check_colour(colour)?;

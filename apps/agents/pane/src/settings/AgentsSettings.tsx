@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from "react"
+import { useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import { AGENTS_FILE } from "@banda/contract/agents"
 import type { HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -36,11 +35,8 @@ import {
 } from "@banda/ui/components/select"
 import { Input } from "@banda/ui/components/input"
 import { Spinner } from "@banda/ui/components/spinner"
-import { takeHarnesses } from "@banda/ui/hooks/use-harnesses"
-import { useInFront } from "@banda/ui/hooks/use-in-front"
+import { useAccountList } from "@banda/ui/hooks/use-harnesses"
 import { useWrite } from "@banda/ui/hooks/use-write"
-import { useFile } from "@banda/ui/lib/look"
-import { problem } from "@banda/ui/lib/words"
 import { PlusIcon } from "lucide-react"
 import {
   type StartsOn,
@@ -97,10 +93,10 @@ type Adding = { of?: { harness: string; name: string } }
  * cards by Harness, each Harness ending with an Add card. A card opens the
  * account's page, and so does a link that names its entry. The Harnesses
  * and their accounts are the machine's module `harnesses` (ADR 0040), so
- * they show with no Project. What a message written while an Agent works
- * does is `agents.toml`'s, drawn from its schema under these. The engine
- * reads `harnesses.toml` again once it changed, so the list is asked again
- * after each change, and when the window comes to the front.
+ * they show with no Project, as that machine says them and as it tells
+ * they changed, by hand too (ADR 0108, decision 4). What a message written
+ * while an Agent works does is `agents.toml`'s, drawn from its schema under
+ * these.
  */
 export function AgentsSettings({
   lit,
@@ -110,45 +106,22 @@ export function AgentsSettings({
   lit?: string
 }) {
   const { engine } = props
-  const [list, setList] = useState<HarnessView[] | { refused: string }>()
-  const readList = useCallback(
-    () =>
-      void engine.call("harnesses.list", {}).then(
-        (list) => {
-          setList(list)
-          takeHarnesses(engine, list)
-        },
-        (error: unknown) => setList({ refused: problem(error) })
-      ),
-    [engine]
-  )
-  // Read as the window comes to the front, for the Person's own edits.
-  const front = useInFront()
-  useEffect(() => {
-    if (front) readList()
-  }, [front, readList])
+  const live = useAccountList(engine)
   // A new link opens its entry's page.
   const [opened, setOpened] = useState({ lit, id: lit })
   if (opened.lit !== lit) setOpened({ lit, id: lit })
   const open = (id: string | undefined) => setOpened({ lit, id })
   const [adding, setAdding] = useState<Adding>()
-  const start = useFile(AGENTS_FILE)
-  const starts = useStartsOn(engine, start)
-  const { fallback } = start
+  const starts = useStartsOn(engine)
   const { limits, now } = useLimitsNow(engine)
   const uses = useUses(engine)
-  if (list === undefined) return <Spinner />
-  if ("refused" in list) return <Problem>{list.refused}</Problem>
+  if (live.state === "loading") return <Spinner />
+  if (live.state === "refused") return <Problem>{live.refusal.message}</Problem>
+  const answer = live.view
+  const list = answer.accounts
   const on = list.filter((one) => one.enabled)
-  const roles: Roles = {
-    default: starts?.default,
-    fallback: on.some(
-      (one) => one.id === fallback && one.id !== starts?.default
-    )
-      ? fallback
-      : undefined,
-  }
-  const groups = groupsOf(list)
+  const roles: Roles = { default: answer.default, fallback: answer.fallback }
+  const groups = groupsOf(answer)
   const shown = list.find((one) => one.id === opened.id)
   const of = (one: HarnessView) =>
     groups.find((group) => group.harness === one.harness)!.name
@@ -164,16 +137,15 @@ export function AgentsSettings({
         use={uses?.get(shown.id)}
         roles={roles}
         onBack={() => open(undefined)}
-        onWritten={readList}
       />
     )
   return (
     <div className="flex flex-col gap-5">
-      {on.length > 0 && (
+      {answer.default !== undefined && (
         <StartAccounts
           starts={starts}
           on={on}
-          fallback={roles.fallback}
+          chosen={{ ...roles, default: answer.default }}
           engine={engine}
         />
       )}
@@ -209,9 +181,8 @@ export function AgentsSettings({
         <AccountSetup
           engine={engine}
           base={list.find((one) => one.harness === adding.of!.harness)!}
-          taken={list}
+          answer={answer}
           onClose={() => setAdding(undefined)}
-          onAdded={readList}
         />
       ) : (
         <AddEntry
@@ -219,7 +190,6 @@ export function AgentsSettings({
           taken={list}
           adding={adding}
           onClose={() => setAdding(undefined)}
-          onAdded={readList}
         />
       )}
     </div>
@@ -231,20 +201,20 @@ const NO_FALLBACK = "none"
 
 /**
  * Where a new Thread starts (ADR 0093, decision 7): the default account,
- * and the fallback it starts on while the default is out, of any Harness;
- * `agents.toml`'s `start.account` and `start.fallback`. Under them, where
- * new Threads start now, while the default is out.
+ * and the fallback it starts on while the default is out, of any Harness,
+ * as the machine names them. Under them, where new Threads start now,
+ * while the default is out.
  */
 function StartAccounts({
   starts,
   on,
-  fallback,
+  chosen,
   engine,
 }: {
   starts: StartsOn | undefined
   /** The entries that are on. */
   on: readonly HarnessView[]
-  fallback: string | undefined
+  chosen: { default: string; fallback?: string }
   engine: Engine
 }) {
   const { refused, write } = useWrite()
@@ -262,7 +232,7 @@ function StartAccounts({
         <Row title="Default" about="Where a new Thread starts.">
           <AccountSelect
             label="Default account"
-            value={starts?.default ?? on[0]!.id}
+            value={chosen.default}
             accounts={on}
             onChange={(id) => write(pickStart(engine, "account", id))}
           />
@@ -273,8 +243,8 @@ function StartAccounts({
         >
           <AccountSelect
             label="Fallback account"
-            value={fallback ?? NO_FALLBACK}
-            accounts={on.filter((one) => one.id !== starts?.default)}
+            value={chosen.fallback ?? NO_FALLBACK}
+            accounts={on.filter((one) => one.id !== chosen.default)}
             none="None"
             onChange={(id) =>
               write(
@@ -347,13 +317,11 @@ function AddEntry({
   taken,
   adding,
   onClose,
-  onAdded,
 }: {
   file: SettingsFile
   taken: HarnessView[]
   adding: Adding | undefined
   onClose: () => void
-  onAdded: () => void
 }) {
   const of = adding?.of
   const [name, setName] = useState("")
@@ -374,12 +342,7 @@ function AddEntry({
     setLine("")
     onClose()
   }
-  const { refused, write } = useWrite({
-    onWritten: () => {
-      close()
-      onAdded()
-    },
-  })
+  const { refused, write } = useWrite({ onWritten: close })
   const add = () => {
     if (!ready) return
     const named = `name = ${tomlOf(name.trim())}`

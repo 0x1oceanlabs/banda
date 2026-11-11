@@ -79,6 +79,12 @@ pub trait AccountStore: Send + Sync {
     fn set_start(&self, _role: StartRole, _harness: Option<&str>) -> Result<(), Refusal> {
         Err(Refusal::conflict("Changing an Account is not configured."))
     }
+    /// The accounts `agents.toml`'s `[start]` names, the default's and the
+    /// fallback's, as they are written: none when it names none, or does
+    /// not read.
+    fn start(&self) -> (Option<String>, Option<String>) {
+        self.selection().unwrap_or_default()
+    }
 }
 
 /// A validated connection prepared by Accounts for the settings writer.

@@ -6,7 +6,7 @@
  * Banda never takes one by itself (decision 7).
  */
 import { useState } from "react"
-import { AGENTS_FILE, type TurnView } from "@banda/contract/agents"
+import type { TurnView } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -21,7 +21,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@banda/ui/components/popover"
-import { useFile } from "@banda/ui/lib/look"
 import { clock } from "@banda/core/react"
 import { left } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
@@ -31,7 +30,7 @@ import {
   SettingsIcon,
   WorkflowIcon,
 } from "lucide-react"
-import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
+import { useAccounts, useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { MoveConfirm } from "../composer/Moves"
 import { harnessName } from "../harnesses"
 import { useThreadAround } from "../thread/context"
@@ -56,8 +55,9 @@ export function LimitCard({
   busy: boolean
   now: number
 }) {
-  const { acts } = useThreadAround()
-  const { fallback } = useFile(AGENTS_FILE)
+  const { acts, engine } = useThreadAround()
+  // The fallback of the Thread's machine, not of the device that draws it.
+  const fallback = useAccounts(engine)?.fallback
   const here = moves?.same.find((move) => move.on)
   const account = here?.harness.name ?? "This account"
   const all = moves ? waysOn(moves.same, moves.others, fallback) : []

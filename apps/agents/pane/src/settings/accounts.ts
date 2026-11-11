@@ -8,6 +8,7 @@ import type { Engine } from "@banda/contract"
 import type { AccountUse } from "@banda/contract/agents"
 import type {
   AccountKind,
+  AccountList,
   HarnessView,
   Limits,
   LimitWindow,
@@ -80,38 +81,15 @@ export function useUses(engine: Engine): Map<string, Use> | undefined {
 }
 
 /** The entries by Harness, each Harness where its first entry stands,
- * with the name its group shows. */
+ * with the name its group shows, as their machine says it. */
 export function groupsOf(
-  list: readonly HarnessView[]
+  answer: Pick<AccountList, "accounts" | "harnesses">
 ): { harness: string; name: string; accounts: HarnessView[] }[] {
-  return groupedByHarness(list).map(([harness, accounts]) => ({
+  return groupedByHarness(answer.accounts).map(([harness, accounts]) => ({
     harness,
     accounts,
-    name: harnessTitle(accounts, harness),
+    name: harnessTitle(answer, harness),
   }))
-}
-
-/** What a new account of `harness` is called and coloured, after the
- * ones it has: `C4` beside C1 to C3, else `Claude Code 2`; the colour of
- * the four its accounts use least, so no two share one while they can.
- * It is written with the account; the engine's `looks()` gives those that
- * name none the colours left, by the same rule, and its `fresh()` names
- * and colours an account added without a name, from the CLI, alike. */
-export function newAccountOf(
-  harness: string,
-  taken: readonly HarnessView[]
-): { name: string; colour: number } {
-  const theirs = taken.filter((one) => one.harness === harness)
-  const numbered = theirs.map((one) => one.name.match(/^(.*?)(\d+)$/))
-  const prefix = numbered[0]?.[1]
-  const name =
-    prefix !== undefined && numbered.every((one) => one?.[1] === prefix)
-      ? `${prefix}${Math.max(...numbered.map((one) => Number(one![2]))) + 1}`
-      : `${harnessTitle(taken, harness)} ${theirs.length + 1}`
-  const uses = [1, 2, 3, 4].map(
-    (colour) => theirs.filter((one) => one.colour === colour).length
-  )
-  return { name, colour: uses.indexOf(Math.min(...uses)) + 1 }
 }
 
 /** The first of `id`, `id-2`, `id-3`… that no entry has. */

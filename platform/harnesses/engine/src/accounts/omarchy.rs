@@ -27,6 +27,11 @@ struct Account {
 }
 
 impl Omarchy {
+    /// The folder its accounts are listed in.
+    pub(crate) fn folder(&self) -> &Path {
+        &self.state
+    }
+
     #[cfg(test)]
     pub(crate) fn fixture(home: PathBuf, state: PathBuf) -> Self {
         Self {

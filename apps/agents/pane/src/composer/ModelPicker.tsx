@@ -30,9 +30,8 @@ import {
   resetOf,
   type Picked,
 } from "./picker"
-import { harnessTitle } from "../harnesses"
 import { choose, chosen } from "../thread/state"
-import type { Move } from "../thread/moves"
+import type { Move, Moves } from "../thread/moves"
 import { MoveConfirm, MoveList } from "./Moves"
 import { FOOTER_CONTROL } from "./Composer"
 
@@ -80,7 +79,7 @@ export function ModelPicker({
   onStart?: (harness: string, settings?: Settings) => void
   /** A started Thread's moves, and whether a move to another Harness
    * asks first: once per Thread. */
-  moves?: { same: Move[]; others: Move[]; confirm: boolean }
+  moves?: Moves
   /** Moves the Thread. */
   onMove?: (move: Move) => void
 }) {
@@ -137,10 +136,7 @@ export function ModelPicker({
     <MoveList
       same={moves.same}
       others={moves.others}
-      harnessName={harnessTitle(
-        harnesses,
-        emblemOf(harnesses, harness).harness
-      )}
+      harnessName={moves.title}
       onPick={moveTo}
     />
   )

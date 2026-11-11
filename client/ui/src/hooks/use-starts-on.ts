@@ -5,9 +5,10 @@
  * for one they did not.
  */
 import { useEffect, useMemo, useState } from "react"
-import { type Engine, Refused } from "@banda/contract"
-import { AGENTS_FILE, type Agents, type Defaults } from "@banda/contract/agents"
+import type { Engine } from "@banda/contract"
+import { AGENTS_FILE } from "@banda/contract/agents"
 import type {
+  AccountList,
   HarnessView,
   Limits,
   LimitsNow,
@@ -15,20 +16,16 @@ import type {
 } from "@banda/contract/harnesses"
 import { clock } from "@banda/core/react"
 import { MINUTE } from "../lib/words"
-import { useAccount, useHarnesses } from "./use-harnesses"
+import { useAccount, useAccounts } from "./use-harnesses"
 import { READ_AGAIN, useMachineLive, type Source } from "./use-live"
 import { useNow } from "./use-now"
-
-/** The accounts a machine starts a new Thread on, its `agents.toml`'s
- * `[start]`: each machine has its own (ADR 0106, decision 7). */
-export type Start = Pick<Agents, "account" | "fallback">
 
 /** Where a new Thread starts, and why. */
 export type StartsOn = {
   /** The entry it starts on. */
   id: string
-  /** The default it would start on: `agents.toml`'s `start.account`, else
-   * the first entry on. */
+  /** The default it would start on, as its machine names it (ADR 0108,
+   * decision 4). */
   default: string
   /** The default is out: a limit window of it spent, till `until` when
    * every spent window says when it resets. */
@@ -60,19 +57,18 @@ export function outOf(
 }
 
 /**
- * Where a new Thread starts among `harnesses`, as `agents` says and the
- * `limits` last read: none while no entry is on. A fallback that is off,
- * gone, the default itself or out too is no fallback.
+ * Where a new Thread starts among `list`'s entries, by the default and the
+ * fallback its machine names, as the `limits` last read: none while it
+ * names no default. A fallback with no sign-in confirmed, or out too, is
+ * no fallback.
  */
 export function startsOn(
-  harnesses: readonly HarnessView[],
-  agents: Start,
+  list: Pick<AccountList, "accounts" | "default" | "fallback">,
   limits: readonly Limits[],
   now: number,
   signedIn: ReadonlyMap<string, boolean | undefined> = new Map()
 ): StartsOn | undefined {
-  const on = harnesses.filter((h) => h.enabled)
-  const first = on.find((h) => h.id === agents.account) ?? on[0]
+  const first = list.accounts.find((h) => h.id === list.default)
   if (!first) return undefined
   const of = (id: string) => limits.find((l) => l.harness === id)
   const spent = outOf(of(first.id), now)
@@ -82,7 +78,7 @@ export function startsOn(
       : spent
   const base = { id: first.id, default: first.id, out, fallback: false }
   if (!out) return base
-  const fallback = on.find((h) => h.id === agents.fallback && h !== first)
+  const fallback = list.accounts.find((h) => h.id === list.fallback)
   if (
     !fallback ||
     signedIn.get(fallback.id) !== true ||
@@ -137,31 +133,6 @@ export function useLimitsNow(engine: Engine): {
   return { limits, now }
 }
 
-/** The accounts a draft in a Project starts by, from what `agents.defaults`
- * said for each Harness, which names the same ones in each; none till it
- * said. */
-export function startOf(
-  defaults: Record<string, Defaults> | undefined
-): Start | undefined {
-  return defaults && Object.values(defaults)[0]
-}
-
-const lastNamed = new WeakMap<Engine, Start>()
-
-/**
- * `start` as `engine`'s machine names it now, or while a read is on its
- * way or the machine is away, what it named last: every draft on that
- * machine draws its account at once, and keeps it as the list of Harnesses
- * is read again.
- */
-export function lastStart(
-  engine: Engine,
-  start: Start | undefined
-): Start | undefined {
-  if (start) lastNamed.set(engine, start)
-  return start ?? lastNamed.get(engine)
-}
-
 /** How many times a machine has told its `agents.toml`, and the `rev` it
  * told last: none before the first. */
 export type AgentsTold = { count: number; rev?: string }
@@ -190,128 +161,35 @@ export function useAgentsTold(engine: Engine, on: boolean): AgentsTold {
   return told
 }
 
-/** How long a read that ran ahead of the machine waits to ask again. */
-const AHEAD_WAIT = 100
-/** How many times it asks: a file changed with no one to hear it stays
- * ahead, so a draft does not go on asking about it. */
-const AHEAD_TRIES = 30
-
-/**
- * What `ask` answers as of `rev`, the machine's last word on its file,
- * asked again till it says that (none: nothing was told yet, so it is
- * taken at once). A read can run ahead of the machine: the file changed,
- * and the machine says so only once its watcher is quiet. When the file
- * goes on to read as it did before, the machine has nothing to say, and
- * what was read ahead would stay; when it stays changed, a next tell is on
- * its way, and the caller asks anew with it. None if `stopped` first.
- */
-export async function readAsTold<T extends { rev: string }>(
-  ask: () => Promise<T>,
-  rev: string | undefined,
-  stopped: () => boolean = () => false,
-  wait: () => Promise<void> = () =>
-    new Promise((done) => setTimeout(done, AHEAD_WAIT))
-): Promise<T | undefined> {
-  for (let tries = 1; ; tries++) {
-    const answer = await ask()
-    if (stopped()) return undefined
-    if (rev === undefined || answer.rev === rev || tries === AHEAD_TRIES)
-      return answer
-    await wait()
-    if (stopped()) return undefined
-  }
-}
-
-/**
- * `engine`'s machine's `[start]`, read while `on`, again as it is `told`;
- * for a draft in a Project this is what follows the file, and in No
- * Project, which has no Project to ask `agents.defaults`, it is the only
- * word. None till the machine answers; an engine older than the read names
- * no account.
- */
-export function useMachineStart(
-  engine: Engine,
-  on: boolean,
-  told: AgentsTold
-): Start | undefined {
-  const [read, setRead] = useState<{ engine: Engine; start: Start }>()
-  useEffect(() => {
-    if (!on) return
-    let stopped = false
-    const take = (start: Start) => {
-      if (!stopped) setRead({ engine, start })
-    }
-    readAsTold(
-      () => engine.call("keys.settings_read", { file: AGENTS_FILE.name }),
-      told.rev,
-      () => stopped
-    ).then(
-      (answer) => {
-        if (answer) take((answer.values ?? {}) as Start)
-      },
-      (error: unknown) => {
-        // A connection that broke tells the file again as it comes back.
-        if (error instanceof Refused) take({})
-      }
-    )
-    return () => {
-      stopped = true
-    }
-  }, [engine, on, told])
-  return read?.engine === engine ? read.start : undefined
-}
-
-/** Where a new Thread starts now, as {@link startsOn} says: the Harness
- * list and the limits of `engine`'s machine, and that machine's `start`;
- * none till `start` is known, so a Thread never starts on the first account
- * by being quicker than its machine's answer. */
-export function useStartsOn(
-  engine: Engine,
-  start: Start | undefined
-): StartsOn | undefined {
-  const harnesses = useHarnesses(engine)
-  const known = start !== undefined
-  const { account, fallback } = start ?? {}
+/** Where a new Thread starts now on `engine`'s machine, as {@link
+ * startsOn} says from that machine's list and limits; none till the list is
+ * read, so a Thread never starts on the first account by being quicker
+ * than its machine's answer. */
+export function useStartsOn(engine: Engine): StartsOn | undefined {
+  const list = useAccounts(engine)
   const { limits, now } = useLimitsNow(engine)
-  const first =
-    harnesses.find((one) => one.enabled && one.id === account) ??
-    harnesses.find((one) => one.enabled)
-  const spare = harnesses.find(
-    (one) => one.enabled && one.id === fallback && one.id !== first?.id
-  )
-  const primary = useAccount(engine, first?.id)
-  const secondary = useAccount(engine, spare?.id)
+  const primary = useAccount(engine, list?.default)
+  const secondary = useAccount(engine, list?.fallback)
   const signedIn = useMemo(
     () =>
       new Map([
         [
-          first?.id ?? "",
+          list?.default ?? "",
           primary.state === "ready"
             ? primary.view.account.signed_in_as?.signed_in
             : undefined,
         ],
         [
-          spare?.id ?? "",
+          list?.fallback ?? "",
           secondary.state === "ready"
             ? secondary.view.account.signed_in_as?.signed_in
             : undefined,
         ],
       ]),
-    [first?.id, spare?.id, primary, secondary]
+    [list?.default, list?.fallback, primary, secondary]
   )
   return useMemo(
-    () =>
-      known
-        ? startsOn(harnesses, { account, fallback }, limits, now, signedIn)
-        : undefined,
-    [known, harnesses, account, fallback, limits, now, signedIn]
+    () => list && startsOn(list, limits, now, signedIn),
+    [list, limits, now, signedIn]
   )
-}
-
-/** Where a new Thread starts on `engine`'s machine, as that machine's own
- * `agents.toml` says and follows it; none till it answers. */
-export function useMachineStartsOn(engine: Engine): StartsOn | undefined {
-  const told = useAgentsTold(engine, true)
-  const start = useMachineStart(engine, true, told)
-  return useStartsOn(engine, lastStart(engine, start))
 }

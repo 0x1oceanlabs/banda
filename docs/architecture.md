@@ -1026,11 +1026,9 @@ If Chat is removed, Agents still works through its own Thread.
     which writes it through the engine as the Person (ADR 0083):
     `harnesses.toml` says only how the Harnesses start (ADR 0040). Which
     account a new Thread starts on, `[start]`'s `account` and `fallback`,
-    is each machine's own: the window asks the Thread's machine for them
-    (`agents.defaults` first in a Project, `keys.settings_read` for every
-    draft), reads again as `keys.settings_changed` tells it the file
-    changed, and asks till a read says the `rev` told last, as a read can
-    run ahead of the tell (ADR 0106, step 5a).
+    is each machine's own (ADR 0106, step 5a): the window takes the default
+    and the fallback from that machine's `harnesses.accounts`, which names
+    them (ADR 0108, decision 4).
 - **Accounts has one lifecycle owner**, `platform/harnesses/engine/src/accounts`.
   Its `Accounts` service owns profile discovery and connection, duplicate
   folder checks, the provider process pool, bounded sign-in sessions and
@@ -1219,6 +1217,17 @@ If Chat is removed, Agents still works through its own Thread.
   before making one. `harnesses.list`, `harnesses.account` (with the
   machine's log position it is current at), `harnesses.sign_in {harness,
   way}` and `harnesses.sign_out`. It owns `harnesses.toml`.
+- **A machine says what its Accounts are in one answer** (ADR 0108,
+  decision 4): `harnesses.accounts` gives each entry, the Harnesses they
+  are accounts of with their title and what a new one is called, and the
+  default and the fallback, by the rule that an account that is off takes
+  no role and the fallback is never the default. It follows the folders
+  the list is made from and writes `harnesses.list_changed` each time the
+  answer reads otherwise, whoever changed it: a command, `banda`, or a
+  hand in the file. The window keeps one answer per engine
+  (`useAccountList`), read again on that fact and kept as of while the
+  machine is away; it works out none of it. A rename is a `list_changed`
+  and never an `account_changed`, which ends processes.
 - **An Account changes through one door, on its own machine** (ADR 0108).
   `harnesses.connect_account`, `update_account` (a name, an emblem, whether
   it is offered) and `set_start` (the default and the fallback) are

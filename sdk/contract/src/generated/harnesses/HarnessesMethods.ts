@@ -3,6 +3,7 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { AccountKey } from "./AccountKey";
+import type { AccountList } from "./AccountList";
 import type { AccountProfile } from "./AccountProfile";
 import type { AccountStatus } from "./AccountStatus";
 import type { Accounted } from "./Accounted";
@@ -30,6 +31,13 @@ export type HarnessesMethods = {
  * The Harnesses this computer can start.
  */
 list: CallMethod<Nothing, Array<HarnessView>>, 
+/**
+ * The machine's Accounts in one answer (ADR 0108, decision 4):
+ * each entry, the Harnesses they are accounts of with what a new
+ * one is called, and the default and the fallback a new Thread
+ * starts on. Read it again on a `list_changed` after its `at`.
+ */
+accounts: CallMethod<Nothing, AccountList>, 
 /**
  * Profile folders on this machine. A discovered folder is not proof
  * of sign-in; no credentials are returned (ADR 0104).

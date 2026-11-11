@@ -77,6 +77,9 @@ pub struct Client {
     /// What it said its machine is called and drawn by; none from an
     /// engine that names it nothing.
     named: Option<banda_kernel::Named>,
+    /// The log its machine's modules are followed by; none while no module
+    /// is.
+    machine: Option<ProjectId>,
 }
 
 impl Client {
@@ -124,6 +127,7 @@ impl Client {
             next_id: 1,
             fence: None,
             named: None,
+            machine: None,
         };
         client
             .send(&ClientFrame::Hello {
@@ -132,9 +136,15 @@ impl Client {
             })
             .await?;
         match client.receive().await? {
-            EngineFrame::Welcome { fence, named, .. } => {
+            EngineFrame::Welcome {
+                fence,
+                named,
+                machine,
+                ..
+            } => {
                 client.fence = fence;
                 client.named = named;
+                client.machine = machine;
                 Ok(client)
             }
             EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
@@ -152,6 +162,12 @@ impl Client {
     /// welcome.
     pub fn named(&self) -> Option<&banda_kernel::Named> {
         self.named.as_ref()
+    }
+
+    /// The log the engine's machine modules are followed by, as it said
+    /// welcome.
+    pub fn machine(&self) -> Option<ProjectId> {
+        self.machine
     }
 
     /// Returns once the engine closed the connection, or it broke.

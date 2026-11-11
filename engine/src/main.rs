@@ -173,11 +173,15 @@ enum Command {
         #[command(subcommand)]
         what: ThreadCommand,
     },
-    /// Prints a Project's events, one JSON object per line.
+    /// Prints a Project's events, one JSON object per line; with
+    /// `--machine`, those of the machine's modules, as `harnesses`'.
     Follow {
         // `--space` before ADR 0069 (grace).
-        #[arg(long, alias = "space")]
-        project: ProjectId,
+        #[arg(long, alias = "space", required_unless_present = "machine")]
+        project: Option<ProjectId>,
+        /// The machine's own log, instead of a Project's.
+        #[arg(long, conflicts_with = "project")]
+        machine: bool,
         /// Starts after this position in the Project's log.
         #[arg(long, default_value_t = 0)]
         after: i64,
@@ -850,6 +854,8 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Fence { .. } => unreachable!("the fence runs before anything else"),
         Command::Follow {
             project,
+            // Said by the absence of `project`.
+            machine: _,
             after,
             module,
             subject,
@@ -861,8 +867,16 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 subject,
                 kinds,
             };
-            Client::connect(&places)
-                .await?
+            let mut client = Client::connect(&places).await?;
+            let project = match project {
+                Some(project) => project,
+                None => client.machine().ok_or_else(|| {
+                    Failure::Refused(Refusal::not_found(
+                        "This engine runs no machine module, so its machine has no log.",
+                    ))
+                })?,
+            };
+            client
                 .follow(project, after, filter, |event| println!("{}", json!(event)))
                 .await
         }

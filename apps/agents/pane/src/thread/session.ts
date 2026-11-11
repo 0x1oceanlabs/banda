@@ -47,13 +47,7 @@ import {
   harnessShort,
   useHarnesses,
 } from "../harnesses"
-import {
-  lastStart,
-  startOf,
-  useAgentsTold,
-  useMachineStart,
-  useStartsOn,
-} from "./starts-on"
+import { useAgentsTold, useStartsOn } from "./starts-on"
 import { useThread } from "./live-thread"
 import { settledTurn } from "../list/marks"
 import { useImageReader } from "../entries/parts/MessageImages"
@@ -276,7 +270,8 @@ export function useThreadSession({
   // (ADR 0093, decision 7).
   const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
   // Where it starts is its machine's to say, through that machine's
-  // engine, and follows its agents.toml (ADR 0106, step 5a).
+  // engine (ADR 0106, step 5a; ADR 0108, decision 4); its model and mode
+  // follow that machine's agents.toml.
   const told = useAgentsTold(engine, thread === null)
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's; each Harness's, as the model
@@ -287,11 +282,7 @@ export function useThreadSession({
     thread === null && machine && !unplaced ? offered : null,
     told.count
   )
-  const machineStart = useMachineStart(engine, thread === null, told)
-  const startsOn = useStartsOn(
-    engine,
-    lastStart(engine, machineStart ?? startOf(everyDefaults))
-  )
+  const startsOn = useStartsOn(engine)
   const harness =
     thread === null
       ? args.harness || startsOn?.id || ""
@@ -500,7 +491,7 @@ export function useThreadSession({
   const took = useRef<string>(undefined)
   useEffect(() => {
     if (thread !== null || !args.ask) return
-    if ((unplaced ? !machineStart : !defaults) && !out) return
+    if ((unplaced ? !startsOn : !defaults) && !out) return
     const { ask, ...rest } = args
     update(rest)
     // Once, though the Pane is drawn again before its args lose them.
