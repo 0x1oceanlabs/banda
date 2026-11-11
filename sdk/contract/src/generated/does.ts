@@ -134,6 +134,8 @@ export const DOES = {
   "harnesses.list": "read",
   "harnesses.account_profiles": "read",
   "harnesses.connect_account": "act",
+  "harnesses.update_account": "act",
+  "harnesses.set_start": "act",
   "harnesses.account": "read",
   "harnesses.account_status": "read",
   "harnesses.login_account": "act",

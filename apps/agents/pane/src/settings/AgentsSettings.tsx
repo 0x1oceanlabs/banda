@@ -173,7 +173,7 @@ export function AgentsSettings({
           starts={starts}
           on={on}
           fallback={roles.fallback}
-          file={props.agents}
+          engine={engine}
         />
       )}
       {groups.map(({ harness, name, accounts }) => (
@@ -207,7 +207,6 @@ export function AgentsSettings({
       {adding?.of && ["claude", "codex"].includes(adding.of.harness) ? (
         <AccountSetup
           engine={engine}
-          file={props.harnesses}
           base={list.find((one) => one.harness === adding.of!.harness)!}
           taken={list}
           onClose={() => setAdding(undefined)}
@@ -239,13 +238,13 @@ function StartAccounts({
   starts,
   on,
   fallback,
-  file,
+  engine,
 }: {
   starts: StartsOn | undefined
   /** The entries that are on. */
   on: readonly HarnessView[]
   fallback: string | undefined
-  file: SettingsFile
+  engine: Engine
 }) {
   const { refused, write } = useWrite()
   const now = starts && startsOnWords(starts, on)
@@ -264,7 +263,7 @@ function StartAccounts({
             label="Default account"
             value={starts?.default ?? on[0]!.id}
             accounts={on}
-            onChange={(id) => write(pickStart(file, "start.account", id))}
+            onChange={(id) => write(pickStart(engine, "account", id))}
           />
         </Row>
         <Row
@@ -279,8 +278,8 @@ function StartAccounts({
             onChange={(id) =>
               write(
                 pickStart(
-                  file,
-                  "start.fallback",
+                  engine,
+                  "fallback",
                   id === NO_FALLBACK ? undefined : id
                 )
               )

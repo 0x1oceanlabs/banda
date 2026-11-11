@@ -20,6 +20,11 @@ const RUNS: [&str; 9] = [
     "id", "command", "args", "env", "cli", "of", "carried", "record", "retired",
 ];
 
+/// The keys of a `[[harness]]` entry that say how an Account shows and
+/// whether it is offered: they change through `harnesses`' commands, the
+/// one door to an Account (ADR 0108, decision 1).
+const ACCOUNT: [&str; 4] = ["name", "icon", "colour", "enabled"];
+
 /// Why only the Person changes `key` (dotted, as `banda settings set` takes
 /// it) in the file called `name`, to `value` when it is set; `None` when
 /// an Agent may change it. A key that does not read as one is refused too.
@@ -64,8 +69,12 @@ fn only_the_person_at(name: &str, parts: &[&str], value: Option<&str>) -> Option
         ("harnesses.toml", ["harness"]) => Some(RUNS_WORDS),
         ("harnesses.toml", ["harness", _]) if value.is_none() || names(&RUNS) => Some(RUNS_WORDS),
         ("harnesses.toml", ["harness", _, leaf, ..]) if RUNS.contains(leaf) => Some(RUNS_WORDS),
+        ("harnesses.toml", ["harness", _]) if names(&ACCOUNT) => Some(ACCOUNT_WORDS),
+        ("harnesses.toml", ["harness", _, leaf, ..]) if ACCOUNT.contains(leaf) => {
+            Some(ACCOUNT_WORDS)
+        }
         ("agents.toml", ["start"]) => Some(MODE_WORDS),
-        ("agents.toml", ["start", "account" | "fallback"]) => None,
+        ("agents.toml", ["start", "account" | "fallback"]) => Some(ACCOUNT_WORDS),
         ("agents.toml", ["start", _]) if value.is_none() || names(&["mode"]) => Some(MODE_WORDS),
         ("agents.toml", ["start", _, "mode"]) => Some(MODE_WORDS),
         ("browser.toml", ["agents", ..]) => Some(BROWSER_WORDS),
@@ -147,6 +156,9 @@ const NO_KEY: &str = "That is not a key as Banda's settings write them, as tile.
 const RUNS_WORDS: &str = "Only your Person changes which program a Harness runs, with what, and \
                           where Banda writes for it. Give them the line, to set it themselves.";
 
+const ACCOUNT_WORDS: &str = "An Account is changed with banda account, as anyone changes it: \
+                             rename, enable, disable, default, fallback.";
+
 const MODE_WORDS: &str = "Only your Person chooses how freely a new Thread's Agent acts. Give \
                           them the line, to set it themselves.";
 
@@ -217,13 +229,20 @@ mod tests {
             ("machine.toml", "awake-while-working", Some("false")),
             ("machine.toml", "awake-plugged-in", Some("true")),
             ("look.toml", "tile..border", Some("2")),
+            ("harnesses.toml", "harness.claude.name", Some("\"Claude\"")),
+            ("harnesses.toml", "harness.claude.enabled", Some("false")),
+            ("harnesses.toml", "harness.gemini", Some("{ name = \"G\" }")),
+            ("agents.toml", "start.account", Some("\"work\"")),
+            ("agents.toml", "start.fallback", None),
         ] {
             assert!(only_the_person(name, key, value).is_some(), "{name} {key}");
         }
         for (name, key, value) in [
-            ("harnesses.toml", "harness.claude.name", Some("\"Claude\"")),
-            ("harnesses.toml", "harness.claude.enabled", Some("false")),
-            ("harnesses.toml", "harness.gemini", Some("{ name = \"G\" }")),
+            (
+                "harnesses.toml",
+                "harness.gemini.url",
+                Some("\"https://g\""),
+            ),
             ("agents.toml", "start.claude.model", Some("\"opus\"")),
             ("agents.toml", "enter", Some("\"queue\"")),
             ("look.toml", "tile.border", Some("2")),

@@ -333,6 +333,51 @@ fn get(port: u64, path: &str, headers: &[&str]) -> (String, String, String) {
     (status.to_owned(), head.to_lowercase(), body.to_owned())
 }
 
+/// An Account is its machine's (ADR 0108, decisions 1 and 2): two engines
+/// can each have one with the same ID, and what one is asked changes that
+/// machine's files, and the other's stay as they were.
+#[test]
+fn a_change_to_an_account_stays_on_its_machine() {
+    let (here, there) = (Places::new(), Places::new());
+    let (mut one, one_in, _) = here.serve();
+    let (mut other, other_in, _) = there.serve();
+    for places in [&here, &there] {
+        let claude = json!({ "file": "harnesses.toml", "key": "harness.claude", "value": "{ name = \"Claude Code\" }" });
+        places.ok("keys.settings_set", None, claude);
+        let work = json!({ "harness": "claude", "id": "work", "name": "Work" });
+        let added = places.ok("harnesses.connect_account", None, work);
+        assert_eq!(added["id"], "work");
+    }
+    let harnesses =
+        |places: &Places| std::fs::read_to_string(places.config.join("harnesses.toml")).unwrap();
+    let agents = |places: &Places| {
+        std::fs::read_to_string(places.config.join("agents.toml")).unwrap_or_default()
+    };
+    let (files, starts) = (harnesses(&here), agents(&here));
+
+    let renamed = there.ok(
+        "harnesses.update_account",
+        None,
+        json!({ "harness": "work", "name": "Client" }),
+    );
+    assert_eq!(renamed["name"], "Client");
+    there.ok(
+        "harnesses.set_start",
+        None,
+        json!({ "role": "account", "harness": "work" }),
+    );
+
+    assert!(harnesses(&there).contains("Client"));
+    assert!(agents(&there).contains("account = \"work\""));
+    assert_eq!(harnesses(&here), files, "the other machine's list stays");
+    assert_eq!(agents(&here), starts, "the other machine's start stays");
+
+    for (engine, stdin) in [(&mut one, one_in), (&mut other, other_in)] {
+        drop(stdin);
+        engine.wait().unwrap();
+    }
+}
+
 /// Beside its API, the engine serves a file's bytes, and a page into a
 /// frame, by the token `bytes.issue` gave (ADR 0106, step 4a).
 #[test]

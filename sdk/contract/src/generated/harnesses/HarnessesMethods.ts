@@ -20,7 +20,9 @@ import type { LoginInput } from "./LoginInput";
 import type { LoginStatus } from "./LoginStatus";
 import type { OneHarness } from "./OneHarness";
 import type { RemoveAccount } from "./RemoveAccount";
+import type { SetStart } from "./SetStart";
 import type { SignIn } from "./SignIn";
+import type { UpdateAccount } from "./UpdateAccount";
 import type { UsageNow } from "./UsageNow";
 
 export type HarnessesMethods = { 
@@ -37,7 +39,20 @@ account_profiles: CallMethod<Nothing, Array<AccountProfile>>,
  * Connects a profile or creates an empty Account folder, without
  * changing what the registered Harness runs (ADR 0104).
  */
-connect_account: CallMethod<ConnectAccount, HarnessView>, 
+connect_account: CommandMethod<ConnectAccount, HarnessView>, 
+/**
+ * Changes an entry's name, emblem, or whether it is offered; what
+ * it runs stays the Person's (ADR 0108, decision 1). Any Agent's
+ * pass answers here, as `banda account` is theirs too (ADR 0104,
+ * decision 4).
+ */
+update_account: CommandMethod<UpdateAccount, HarnessView>, 
+/**
+ * Chooses the account a new Thread starts on, or the one it starts
+ * on while that one is out of its limits (ADR 0108, decision 1).
+ * Any Agent's pass answers here (ADR 0104, decision 4).
+ */
+set_start: CommandMethod<SetStart, null>, 
 /**
  * A Harness as it says: its program, who is signed in, how to sign
  * in, at the machine's log's position it is current at.

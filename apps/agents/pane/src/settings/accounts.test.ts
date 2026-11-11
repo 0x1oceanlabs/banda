@@ -1,4 +1,5 @@
 import { expect, test } from "vitest"
+import type { Engine } from "@banda/contract"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
 import { DAY, HOUR } from "@banda/ui/lib/words"
 import {
@@ -118,22 +119,20 @@ test("its Threads and its last use, in words", () => {
   expect(lastWords(now - 30 * DAY, now)).toMatch(/^Used Oct 12$/)
 })
 
-test("the default and the fallback go in agents.toml's [start], by the entry's ID", async () => {
-  const said: string[] = []
-  const file = {
-    set: (key: string, value: string) => {
-      said.push(`${key} = ${value}`)
-      return Promise.resolve([])
+test("the default and the fallback are chosen through the engine it is handed", async () => {
+  const asked: unknown[] = []
+  const engine = {
+    command: (method: string, params: unknown) => {
+      asked.push([method, params])
+      return Promise.resolve(null)
     },
-    reset: (key: string) => {
-      said.push(`${key} out`)
-      return Promise.resolve([])
-    },
-    reveal: () => {},
-  }
-  await pickStart(file, "start.account", "work")
-  await pickStart(file, "start.fallback", undefined)
-  expect(said).toEqual(['start.account = "work"', "start.fallback out"])
+  } as unknown as Engine
+  expect(await pickStart(engine, "account", "work")).toEqual([])
+  await pickStart(engine, "fallback", undefined)
+  expect(asked).toEqual([
+    ["harnesses.set_start", { role: "account", harness: "work" }],
+    ["harnesses.set_start", { role: "fallback" }],
+  ])
 })
 
 test("a new account is named and coloured after the ones of its Harness", () => {
