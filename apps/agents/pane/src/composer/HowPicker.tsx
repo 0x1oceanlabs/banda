@@ -362,6 +362,8 @@ function ModelRow({
         }
         aria-pressed={starred}
         tabIndex={-1}
+        // The focus stays on the row, for the arrows to go on from.
+        onPointerDown={(event) => event.preventDefault()}
         className={cn(
           "mx-1 grid size-5.5 shrink-0 place-items-center rounded-small text-muted-foreground/55 hover:bg-foreground/10 hover:text-foreground",
           starred && "text-muted-foreground",
