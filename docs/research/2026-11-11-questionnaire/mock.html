@@ -1,0 +1,368 @@
+<!doctype html>
+<!-- prettier-ignore -->
+<html lang="ru">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>A Question that asks for a form: the questionnaire</title>
+<link rel="stylesheet" href="../../design/kit/kit.css" />
+<style>
+  /* Only this page's layout and the questionnaire's new parts; every Banda part is in kit.css. */
+  body { margin: 0; }
+  .b-kit { --font-sans: "Inter Variable", Inter, "Adwaita Sans", ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif; }
+  .pg-screen { min-height: 100vh; padding: 28px; }
+  .pg-window { flex: 1; padding-bottom: 28px; }
+  .pg-head { display: flex; flex-direction: column; gap: 6px; padding: 14px 24px 2px; }
+  .pg-head h1 { margin: 0; font-size: 20px; line-height: 28px; font-weight: 600; letter-spacing: -0.012em; }
+  .pg-lead { margin: 0; max-width: 104ch; font-size: 13.5px; line-height: 20px; color: var(--muted-foreground); }
+  .pg-lead b { font-weight: 500; color: var(--foreground); }
+  .pg-toc { display: flex; flex-wrap: wrap; gap: 2px; margin: 6px 0 0 -9px; }
+  .pg-toc a { display: inline-flex; align-items: center; gap: 7px; height: 26px; padding: 0 9px; border-radius: var(--r-control); font-size: 12.5px; color: var(--muted-foreground); text-decoration: none; white-space: nowrap; }
+  .pg-toc a:hover { background: var(--hover); color: var(--foreground); }
+  .pg-toc a b { font-weight: 600; color: var(--foreground); }
+  .pg-sec { padding: 30px 16px 14px; }
+  .pg-sec-head { display: flex; flex-direction: column; gap: 4px; padding: 0 8px 14px; }
+  .pg-sec-head h2 { margin: 0; display: flex; align-items: baseline; gap: 10px; font-size: 15px; line-height: 22px; font-weight: 600; }
+  .pg-id { font-size: 13px; font-weight: 600; color: var(--muted-foreground); }
+  .pg-note { margin: 0; max-width: 110ch; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-note b { font-weight: 500; color: var(--foreground); }
+  .pg-pick { margin: 2px 0 0; font-size: 13px; line-height: 19px; color: var(--muted-foreground); }
+  .pg-pick b { font-weight: 600; color: var(--foreground); }
+  .pg-cap { padding: 0 8px; font-size: 12.5px; line-height: 18px; color: var(--muted-foreground); }
+  .pg-cap b { font-weight: 500; color: var(--foreground); }
+  .pg-fig { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+  .pg-two { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; align-items: start; }
+  .pg-one { max-width: 760px; }
+  @media (max-width: 1000px) { .pg-two { grid-template-columns: minmax(0, 1fr); } .pg-screen { padding: 8px; } }
+  .pg-tile { flex: none; padding-top: 14px; }
+  .pg-tile .b-composer-wrap { padding-top: 0; }
+  .pg-qs { margin: 0; padding: 0 0 0 18px; font-size: 13px; line-height: 20px; color: var(--muted-foreground); max-width: 110ch; }
+  .pg-qs b { font-weight: 500; color: var(--foreground); }
+
+  /* ---- The questionnaire: new parts, built from shadcn's Questionnaire and the kit's docked card ---- */
+  .q-head { display: flex; align-items: center; gap: 8px; min-height: 20px; }
+  .q-head .b-docked-head { display: inline-flex; align-items: center; gap: 6px; }
+  .q-head .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--attention); }
+  .q-head .q-fold { margin-left: auto; margin-right: -6px; }
+  .q-title { font-size: 14.5px; line-height: 20px; font-weight: 550; }
+  .q-about { margin-top: -4px; font-size: var(--text-meta); line-height: 16px; color: var(--muted-foreground); }
+  /* QuestionnaireProgress, as the questions' headers: a tab each, a tick once answered */
+  .q-steps { display: flex; flex-wrap: wrap; gap: 2px; margin: 0 0 -2px -8px; }
+  .q-step { display: inline-flex; align-items: center; gap: 5px; height: 24px; padding: 0 8px; border-radius: var(--r-small); font-size: var(--text-meta); color: var(--muted-foreground); white-space: nowrap; }
+  .q-step .b-icon { width: 12px; height: 12px; }
+  .q-step.is-done { color: var(--foreground); }
+  .q-step.is-done .b-icon { color: var(--added); }
+  .q-step.is-current { background: var(--raised); color: var(--foreground); font-weight: 500; }
+  .q-step .n { font-variant-numeric: tabular-nums; opacity: .7; }
+  /* the plain progress of shadcn: "Question 2 of 3" and a bar */
+  .q-bar { display: flex; align-items: center; gap: 10px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .q-bar i { flex: 1; height: 3px; border-radius: 3px; background: var(--raised); position: relative; overflow: hidden; }
+  .q-bar i::after { content: ""; position: absolute; inset: 0 auto 0 0; width: var(--at); background: var(--foreground); opacity: .55; border-radius: inherit; }
+  /* QuestionnaireChoices: rows; the picked one takes the selection, as a list does */
+  .q-list { display: flex; flex-direction: column; gap: 4px; }
+  .q-row { display: flex; align-items: flex-start; gap: 10px; min-height: 36px; padding: 7px 10px; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px var(--border); font-size: var(--text-ui); line-height: 20px; text-align: left; }
+  .q-row:hover { background: var(--hover); }
+  .q-row .b-kbd { margin-top: 0; flex: none; }
+  .q-row .q-mark { flex: none; display: grid; place-items: center; width: 16px; height: 16px; margin-top: 2px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--input); }
+  .q-row .q-mark.is-box { border-radius: 4px; }
+  .q-row .q-text { display: flex; flex-direction: column; min-width: 0; flex: 1; }
+  .q-row .q-text small { font-size: var(--text-meta); line-height: 16px; color: var(--muted-foreground); }
+  .q-row.is-on { background: color-mix(in oklab, var(--selection) 55%, transparent); box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--ring) 45%, transparent); }
+  .q-row.is-on .q-mark { background: var(--ring); box-shadow: none; color: #fff; }
+  .q-row.is-on .q-mark .b-icon { width: 11px; height: 11px; }
+  .q-row.is-focus { box-shadow: inset 0 0 0 1px var(--ring), 0 0 0 2px color-mix(in oklab, var(--ring) 25%, transparent); }
+  .q-row .q-go { margin-left: auto; align-self: center; font-size: 12px; color: var(--muted-foreground); }
+  /* QuestionnaireInput: the last row of the same list */
+  .q-row.is-input { padding: 4px 6px 4px 10px; align-items: center; }
+  .q-row.is-input .q-field { flex: 1; min-width: 0; height: 26px; display: flex; align-items: center; color: var(--muted-foreground); }
+  .q-row.is-input.is-typing { box-shadow: inset 0 0 0 1px var(--ring), 0 0 0 2px color-mix(in oklab, var(--ring) 25%, transparent); }
+  .q-row.is-input.is-typing .q-field { color: var(--foreground); }
+  .q-caret { display: inline-block; width: 1px; height: 16px; margin-left: 1px; background: var(--foreground); vertical-align: -3px; }
+  /* a separate box under the list, as the variant without the row */
+  .q-box { display: flex; flex-direction: column; gap: 6px; }
+  .q-box label { font-size: var(--text-meta); color: var(--muted-foreground); }
+  .q-input { height: 32px; padding: 0 10px; display: flex; align-items: center; border-radius: var(--r-control); box-shadow: inset 0 0 0 1px var(--input); font-size: var(--text-ui); color: var(--muted-foreground); }
+  /* QuestionnaireActions */
+  .q-foot { display: flex; align-items: center; gap: 6px; margin-top: 2px; }
+  .q-foot .b-spacer { flex: 1; }
+  .q-foot .b-btn .b-kbd { height: 16px; min-width: 16px; padding: 0 3px; font-size: 10.5px; background: none; color: inherit; opacity: .7; box-shadow: inset 0 0 0 1px currentColor; }
+  .q-foot .b-btn.is-primary .b-kbd { box-shadow: inset 0 0 0 1px color-mix(in oklab, currentColor 35%, transparent); }
+  .q-foot .q-count { font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+  .q-btn-off { opacity: .45; }
+  /* the option's preview, beside the list (Claude Code's `preview`) */
+  .q-split { display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr); gap: 10px; align-items: stretch; }
+  .q-preview { border-radius: var(--r-control); background: var(--raised); padding: 10px 12px; font-family: var(--font-mono); font-size: var(--text-code); line-height: 19px; white-space: pre; overflow: hidden; color: var(--foreground); }
+  .q-preview .c { color: var(--muted-foreground); }
+  @container composer (max-width: 560px) { .q-split { grid-template-columns: minmax(0, 1fr); } }
+  /* the review step */
+  .q-review { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; column-gap: 14px; row-gap: 2px; align-items: center; font-size: var(--text-ui); line-height: 20px; }
+  .q-review dt { color: var(--muted-foreground); font-size: var(--text-meta); }
+  .q-review dd { margin: 0; min-width: 0; overflow: hidden; text-overflow: clip; white-space: nowrap; }
+  .q-review dd em { font-style: normal; color: var(--muted-foreground); }
+  .q-review .b-btn { justify-self: end; }
+  /* the old drawer's look, for section 0 */
+  .old-legend { font-size: var(--text-meta); font-weight: 500; }
+  .old-radio { display: flex; align-items: center; gap: 10px; font-size: var(--text-ui); line-height: 24px; }
+  .old-radio .q-mark { width: 16px; height: 16px; border-radius: 50%; box-shadow: inset 0 0 0 1px var(--input); }
+  .old-radio .b-kbd { margin-left: auto; }
+  .old-radio.is-on .q-mark { box-shadow: inset 0 0 0 5px var(--foreground); }
+  .old-bad { padding: 6px 8px; box-shadow: 0 0 0 2px color-mix(in oklab, var(--destructive) 55%, transparent); border-radius: var(--r-control); }
+  /* the answered line in the Thread */
+  .q-dl { display: grid; grid-template-columns: auto minmax(0, 1fr); column-gap: 14px; row-gap: 3px; margin: 2px 0 0 25px; font-size: 12px; line-height: 18px; color: var(--muted-foreground); }
+  .q-dl dd { margin: 0; color: var(--foreground); }
+</style>
+</head>
+<body class="b-kit" id="kit">
+<div class="b-screen pg-screen">
+  <div class="b-window pg-window" id="win">
+
+    <header class="b-bar">
+      <button class="b-bar-logo" title="Sidebar · Alt+A"><span data-mark="asks" data-logo data-size="20"></span></button>
+      <nav class="b-ws" aria-label="Workspaces"><button class="is-current">1</button><button>2</button><button>3</button></nav>
+      <div class="b-bar-right"><span class="b-widget" title="Notifications"><i data-icon="bell"></i></span></div>
+    </header>
+
+    <div class="pg-head">
+      <h1>Вопрос с формой: AskUserQuestion как questionnaire</h1>
+      <p class="pg-lead">Ишью <b>#1513</b>. Claude Code спрашивает через AskUserQuestion: до 4 вопросов, у каждого короткий <b>header</b> (≤12 символов), 2–4 варианта с описанием и, иногда, <b>preview</b>, плюс свой ответ «Other». Адаптер отдаёт свой ответ отдельным полем формы, и мы рисуем его отдельной страницей. Здесь — как сделать по образцу shadcn <b>Questionnaire</b> (август 2026: Progress, Item, Choices + Input в одном списке, Previous / Skip / Next / Submit, клавиши), в стиле Banda: карточка пристыкована к composer, оранжевая только шапка, выбранная строка — цвет выделения. Thread «Move sidebar settings to sidebar.toml», Claude Code.</p>
+      <nav class="pg-toc">
+        <a href="#now"><b>0</b>Сейчас</a>
+        <a href="#a"><b>A</b>Один вопрос</a>
+        <a href="#b"><b>B</b>Несколько вопросов</a>
+        <a href="#c"><b>C</b>Несколько ответов</a>
+        <a href="#d"><b>D</b>Preview</a>
+        <a href="#e"><b>E</b>Отвечено</a>
+        <a href="#q"><b>?</b>Вопросы</a>
+      </nav>
+    </div>
+
+    <!-- ============================== 0 ============================== -->
+    <section class="pg-sec" id="now">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">0</span>Сейчас: свой ответ — второй страницей</h2>
+        <p class="pg-note">Один вопрос, а страниц две. На первой — варианты. «Next» ведёт на вторую: пустое поле «Other» без вопроса над ним, похоже на новый вопрос. При трёх вопросах — шесть страниц.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="old1"></section>
+          <div class="pg-cap"><b>1 of 2</b> — варианты</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="old2"></section>
+          <div class="pg-cap"><b>2 of 2</b> — «Other» отдельно от своего вопроса</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== A ============================== -->
+    <section class="pg-sec" id="a">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">A</span>Один вопрос — одна карточка</h2>
+        <p class="pg-note">Нет «1 of 1» и нет Next. Варианты — строки с номером; <b>1–3 или клик отвечает сразу</b>, как в самом Claude Code. Свой ответ — последняя строка того же списка: <b>4</b> или клик ставит в неё курсор, ⏎ отправляет. <b>Esc</b> — Skip: Harness получает отказ, как сейчас.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="a1"></section>
+          <div class="pg-cap"><b>A1</b> · свой ответ — строка-поле в списке (как QuestionnaireInput в QuestionnaireChoices)</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="a1t"></section>
+          <div class="pg-cap"><b>A1, пишет своё</b> · строка — поле, у кнопки ⏎ появляется Submit</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="a2"></section>
+          <div class="pg-cap"><b>A2</b> · поле под списком, всегда видно, с Submit</div>
+        </div>
+        <div class="pg-fig" style="align-self:center">
+          <p class="pg-pick"><b>Мой выбор: A1.</b> Свой ответ стоит там, где его ищут — среди вариантов, с номером, как в TUI Claude Code и в shadcn. В A2 поле выглядит обязательным и тянет Submit, хотя чаще отвечают цифрой.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== B ============================== -->
+    <section class="pg-sec" id="b">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">B</span>Несколько вопросов — по одному на шаг</h2>
+        <p class="pg-note">Три вопроса — три шага, никогда не шесть. Выбор цифрой отмечает строку и <b>сам переходит дальше</b>; Previous и ⏎ Next остаются. Последний шаг — <b>Submit</b>. Esc — Skip всей формы.</p>
+      </div>
+      <div class="pg-two">
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="b1"></section>
+          <div class="pg-cap"><b>B1</b> · шаги — header'ы вопросов, отвеченные с галкой; по ним можно вернуться</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="b2"></section>
+          <div class="pg-cap"><b>B2</b> · QuestionnaireProgress как в shadcn: «Question 2 of 3» и полоса</div>
+        </div>
+        <div class="pg-fig">
+          <section class="b-tile pg-tile" data-tile="b3"></section>
+          <div class="pg-cap"><b>B1 + Review</b> · последний шаг перед Submit: все ответы, Change у каждого</div>
+        </div>
+        <div class="pg-fig" style="align-self:center">
+          <p class="pg-pick"><b>Мой выбор: B1, без отдельного Review.</b> Claude даёт header ровно для таких вкладок: видно, сколько вопросов и что уже отвечено, и вернуться можно одним кликом — поэтому Review лишний: Submit на последнем вопросе, а шаги наверху и есть сводка.</p>
+        </div>
+      </div>
+    </section>
+
+    <!-- ============================== C ============================== -->
+    <section class="pg-sec" id="c">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">C</span>Несколько ответов (multiSelect)</h2>
+        <p class="pg-note">Квадратные отметки; цифра переключает, а не отвечает. Свой ответ — ещё одна отметка: написал — отмечено, стёр — снято. ⏎ — Next (или Submit на последнем шаге), пока ничего не выбрано — неактивна.</p>
+      </div>
+      <div class="pg-one">
+        <section class="b-tile pg-tile" data-tile="c1"></section>
+      </div>
+    </section>
+
+    <!-- ============================== D ============================== -->
+    <section class="pg-sec" id="d">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">D</span>Preview варианта</h2>
+        <p class="pg-note">Claude Code может приложить к варианту preview — макет, код. Адаптер кладёт его в <b>_meta</b> варианта. Показываем справа от списка тот вариант, что в фокусе или под мышью; в узком Pane — под списком. В shadcn этого нет, это наше. Сейчас мы preview не показываем вовсе — <b>later</b>, если решим.</p>
+      </div>
+      <div class="pg-one" style="max-width: 900px">
+        <section class="b-tile pg-tile" data-tile="d1"></section>
+      </div>
+    </section>
+
+    <!-- ============================== E ============================== -->
+    <section class="pg-sec" id="e">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">E</span>Отвечено: одна строка в Thread</h2>
+        <p class="pg-note">Как сейчас: одна строка, раскрывается в ответы по header'ам. Новое — свой ответ показан своими словами, с пометкой «own»; в свёрнутой строке — коротко.</p>
+      </div>
+      <div class="pg-one">
+        <section class="b-tile pg-tile" style="padding-bottom:14px">
+          <div class="b-thread"><div class="b-chat">
+            <div class="b-trace">
+              <button class="b-tl is-open"><i data-icon="check"></i><span class="b-tl-text">Answered 3 questions: Keep as aliases, next release, unit tests and a migration test</span><i data-icon="chevron-right" class="b-chev"></i></button>
+              <dl class="q-dl">
+                <dt>Old keys</dt><dd>Keep them as aliases for one release</dd>
+                <dt>Removal</dt><dd>In the next minor release</dd>
+                <dt>Tests</dt><dd>Unit tests · <span class="b-muted">own:</span> a test that loads a 0.9 sidebar.toml</dd>
+              </dl>
+            </div>
+          </div></div>
+        </section>
+      </div>
+    </section>
+
+    <!-- ============================== ? ============================== -->
+    <section class="pg-sec" id="q">
+      <div class="pg-sec-head">
+        <h2><span class="pg-id">?</span>Вопросы</h2>
+      </div>
+      <ol class="pg-qs">
+        <li><b>Свой ответ: A1 или A2?</b> Мой выбор — A1, строка-поле в списке.</li>
+        <li><b>Один вопрос, один выбор: отвечать сразу по цифре?</b> Мой выбор — да, как в Claude Code; ошибка дешёвая, Агент переспросит.</li>
+        <li><b>Шаги: B1 (header'ы) или B2 (полоса)?</b> Мой выбор — B1.</li>
+        <li><b>Review перед Submit?</b> Мой выбор — нет: шаги B1 и есть сводка.</li>
+        <li><b>Preview (D) — сейчас или later?</b> Мой выбор — later, отдельной ишью: сначала починить «Other».</li>
+        <li><b>Компонент:</b> берём shadcn Questionnaire (Base UI) в <code class="b-code-inline">client/ui</code> и стилизуем под kit, а QuestionForm строим на нём — для всех форм Harness'а, не только Claude Code. Пару «вопрос + свой ответ» склеивает engine по ключу <code class="b-code-inline">_custom</code>, а не по заголовку «Other».</li>
+      </ol>
+    </section>
+
+  </div>
+</div>
+
+<script src="../../design/kit/icons.js"></script>
+<script src="../../design/kit/mark.js"></script>
+<script>
+(() => {
+  const kbd = (k) => `<span class="b-kbd">${k}</span>`
+  const head = `<div class="q-head"><span class="b-docked-head"><span class="dot"></span>Asks you · 2m</span><button class="b-ib is-xs q-fold" title="Fold the question"><i data-icon="chevron-down"></i></button></div>`
+  const chat = (say) => `<div class="b-thread"><div class="b-chat">
+      <div class="b-prose"><p>${say}</p></div>
+      <div class="b-trace"><div class="b-tl" style="color:var(--attention)"><i data-icon="shield"></i><span class="b-tl-text">Waiting for you: Old [row] keys</span></div></div>
+    </div></div>`
+  const composer = `<div class="b-composer"><div class="b-composer-text is-empty">Write to Claude Code. @ files, / commands, $ skills</div>
+      <div class="b-composer-row"><button class="b-ib" style="width:28px;height:28px"><i data-icon="plus" data-size="14"></i></button><span class="b-spacer"></span>
+      <button class="b-ctl"><i data-icon="shield"></i></button><button class="b-ctl"><span data-emblem="claude"></span>Opus 5.5 <span class="b-effort">High</span></button>
+      <button class="b-send is-empty"><i data-icon="arrow-up"></i></button></div></div>`
+  const tile = (say, docked) => chat(say) + `<div class="b-composer-wrap"><div class="b-docked">${head}${docked}</div>${composer}</div>`
+  const say = "Moved <code>[row]</code>, <code>[bar]</code> and <code>[later]</code> into <code>sidebar.toml</code>. Before I touch the old keys:"
+
+  const row = (n, name, about, opts = {}) => `<button class="q-row${opts.on ? " is-on" : ""}${opts.focus ? " is-focus" : ""}">
+      <span class="q-mark${opts.box ? " is-box" : ""}">${opts.on ? '<i data-icon="check"></i>' : ""}</span>
+      <span class="q-text"><span>${name}</span>${about ? `<small>${about}</small>` : ""}</span>${kbd(n)}</button>`
+  const other = (n, text, typing, box) => `<div class="q-row is-input${typing ? " is-typing" : ""}${box ? " is-on" : ""}">
+      <span class="q-mark${box ? " is-box" : ""}">${box ? '<i data-icon="check"></i>' : ""}</span>
+      <span class="q-field">${typing ? `${text}<span class="q-caret"></span>` : text}</span>${typing ? "" : kbd(n)}</div>`
+  const foot = (left, right) => `<div class="q-foot">${left}<span class="b-spacer"></span>${right}</div>`
+  const skip = `<button class="b-btn is-outline is-sm">Skip ${kbd("Esc")}</button>`
+  const btn = (name, k, primary, off) => `<button class="b-btn is-sm ${primary ? "is-primary" : "is-ghost"}${off ? " q-btn-off" : ""}">${name}${k ? " " + kbd(k) : ""}</button>`
+
+  const q1 = `<div class="q-title">Keep the old [row] keys as aliases for one release, or drop them now?</div>`
+  const q1rows = (on) => `<div class="q-list">
+      ${row(1, "Keep them as aliases for one release", "People's files keep working; a notice says to move", { on: on === 1 })}
+      ${row(2, "Drop them now", "Simpler code; a file with [row] loses those settings", { on: on === 2 })}
+      ${row(3, "Migrate the files on start", "Rewrites a Person's sidebar.toml once", { on: on === 3 })}`
+
+  const steps = (at, done) => `<div class="q-steps">${["Old keys", "Removal", "Tests"].map((h, i) =>
+      `<span class="q-step${i === at ? " is-current" : ""}${done.includes(i) ? " is-done" : ""}">${done.includes(i) ? '<i data-icon="check"></i>' : `<span class="n">${i + 1}</span>`}${h}</span>`).join("")}</div>`
+
+  const tiles = {
+    old1: tile(say, `<div class="q-title">Keep the old [row] keys as aliases for one release, or drop them now?</div>
+      <div class="old-legend">Old keys</div>
+      <div class="old-radio is-on"><span class="q-mark"></span>Keep them as aliases for one release${kbd(1)}</div>
+      <div class="old-radio"><span class="q-mark"></span>Drop them now${kbd(2)}</div>
+      <div class="old-radio"><span class="q-mark"></span>Migrate the files on start${kbd(3)}</div>
+      ${foot(`<button class="b-btn is-outline is-sm">Decline ${kbd("Esc")}</button>`, `<span class="q-count">1 of 2</span>${btn("Next", "⏎", true)}`)}`),
+    old2: tile(say, `<div class="q-title">Keep the old [row] keys as aliases for one release, or drop them now?</div>
+      <div class="q-box old-bad"><span class="old-legend">Other</span><div class="q-input"></div>
+      <span class="q-about" style="margin:0">Type your own answer, or add a note to the option you chose above (optional).</span></div>
+      ${foot(`<button class="b-btn is-outline is-sm">Decline ${kbd("Esc")}</button>`, `<span class="q-count">2 of 2</span>${btn("Previous")}${btn("Submit", "⏎", true)}`)}`),
+    a1: tile(say, `${q1}${q1rows(0)}${other(4, "Something else…")}</div>${foot(skip, "")}`),
+    a1t: tile(say, `${q1}${q1rows(0)}${other(4, "Keep them, but only read them, never write", true)}</div>${foot(skip, btn("Submit", "⏎", true))}`),
+    a2: tile(say, `${q1}${q1rows(0)}</div>
+      <div class="q-box"><label>Or say it in your own words</label><div class="q-input">Something else…</div></div>
+      ${foot(skip, btn("Submit", "⏎", true, true))}`),
+    b1: tile(say, `${steps(1, [0])}<div class="q-title">When should the aliases go?</div><div class="q-list">
+      ${row(1, "In the next minor release", "", { focus: true })}
+      ${row(2, "When no Person's file has them", "Needs a count from the settings Pane")}
+      ${row(3, "Never", "")}
+      ${other(4, "Something else…")}</div>
+      ${foot(skip, `${btn("Previous")}${btn("Next", "⏎", true, true)}`)}`),
+    b2: tile(say, `<div class="q-bar">Question 2 of 3<i style="--at:50%"></i></div><div class="q-title">When should the aliases go?</div><div class="q-list">
+      ${row(1, "In the next minor release", "", { focus: true })}
+      ${row(2, "When no Person's file has them", "Needs a count from the settings Pane")}
+      ${row(3, "Never", "")}
+      ${other(4, "Something else…")}</div>
+      ${foot(skip, `${btn("Previous")}${btn("Next", "⏎", true, true)}`)}`),
+    b3: tile(say, `<div class="q-steps">${["Old keys", "Removal", "Tests"].map((h) => `<span class="q-step is-done"><i data-icon="check"></i>${h}</span>`).join("")}<span class="q-step is-current">Review</span></div>
+      <dl class="q-review">
+        <dt>Old keys</dt><dd>Keep them as aliases for one release</dd><button class="b-btn is-ghost is-sm">Change</button>
+        <dt>Removal</dt><dd>In the next minor release</dd><button class="b-btn is-ghost is-sm">Change</button>
+        <dt>Tests</dt><dd>Unit tests, <em>own:</em> a test that loads a 0.9 sidebar.toml</dd><button class="b-btn is-ghost is-sm">Change</button>
+      </dl>
+      ${foot(skip, `${btn("Previous")}${btn("Submit", "⏎", true)}`)}`),
+    c1: tile(say, `${steps(2, [0, 1])}<div class="q-title">Which tests should cover the move?</div><div class="q-about">Pick any.</div><div class="q-list">
+      ${row(1, "Unit tests for settings.ts", "", { box: true, on: true })}
+      ${row(2, "An e2e test of the settings Pane", "Slower; starts a window", { box: true })}
+      ${row(3, "None for now", "", { box: true })}
+      ${other(4, "a test that loads a 0.9 sidebar.toml", true, true)}</div>
+      ${foot(skip, `<span class="q-count">2 chosen</span>${btn("Previous")}${btn("Submit", "⏎", true)}`)}`),
+    d1: tile(say, `${q1}<div class="q-split"><div class="q-list">
+      ${row(1, "Keep them as aliases for one release", "", { focus: true })}
+      ${row(2, "Drop them now", "")}
+      ${row(3, "Migrate the files on start", "")}
+      ${other(4, "Something else…")}</div>
+      <div class="q-preview"><span class="c"># sidebar.toml, as read</span>
+[card]
+lines = 3
+
+<span class="c"># still read, once, with a notice:</span>
+[row]          <span class="c">→ [card]</span>
+height = 28    <span class="c">→ lines</span></div></div>
+      ${foot(skip, "")}`),
+  }
+  for (const el of document.querySelectorAll("[data-tile]")) el.innerHTML = tiles[el.dataset.tile]
+  BandaIcons.scan(); BandaMark.scan()
+  const h = location.hash
+  if (h.includes("light")) document.documentElement.dataset.theme = "light"
+  if (h.includes("solid")) document.querySelectorAll(".b-window").forEach((w) => (w.dataset.glass = "off"))
+})()
+</script>
+</body>
+</html>
