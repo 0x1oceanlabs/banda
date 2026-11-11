@@ -268,9 +268,9 @@ test("step 1b: arc's terminal runs on arc, where `cat who.txt` prints arc", asyn
   expect(existsSync(join(here, "seen.txt"))).toBe(false)
 })
 
-test.fixme("step 1c: Run on a line in arc's reply runs it in arc's terminal", async () => {
+test("Run on a line in arc's reply runs it in arc's terminal", async () => {
   const { page, thread, composer, there, here } = await opened()
-  await composer.fill("Run it:\n\n```sh\ncat who.txt > ran.txt\n```")
+  await composer.fill("Some code:\n\n```sh\ncat who.txt > ran.txt\n```")
   await composer.press("Enter")
   await thread
     .locator("[data-quotable] [data-streamdown=code-block]")
