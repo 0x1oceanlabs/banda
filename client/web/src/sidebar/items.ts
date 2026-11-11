@@ -4,7 +4,8 @@
  * their order, then the sidebar list's own, Archive. The Thread menu, the
  * Pane menu, the Banda menu's Tab, the title's field and the Later's
  * picker draw their rows, and run them as any action, by id: none of them
- * knows what an App does to its Items.
+ * knows what an App does to its Items. And why the sidebar's `S` leaves a
+ * card that asks or works, in its toast.
  */
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import {
@@ -19,7 +20,8 @@ import { ArchiveIcon, ArchiveRestoreIcon } from "lucide-react"
 import { itemsOf, kinds } from "../registry"
 import type { StandRow } from "../tiling/PaneMenu"
 import type { Shell } from "../window/actions"
-import { mayArchive } from "@banda/ui/status"
+import { toast } from "@banda/ui/components/sonner"
+import { mayArchive, type Stand } from "@banda/ui/status"
 import { toggled } from "./archived"
 
 /**
@@ -134,4 +136,46 @@ export function paneRowsOf(
     icon: row.icon,
     args: { project, item: listed.id },
   }))
+}
+
+/** The toast a refusal shows in: one at a time. */
+export const REFUSED = "sidebar-refused"
+
+/**
+ * Why the sidebar's `S` leaves a card where it is (spec §2.6, "Refusals"):
+ * one that asks is answered first, and one at work waits for its turn's
+ * end; `later` names the key in force that puts it off. The toast's title
+ * says what stops it, and its next line, which wraps, what to do. None for
+ * any other card.
+ */
+export function refusalOf(
+  { stand, listed }: { stand: Stand; listed: Pick<Listed, "title" | "mark"> },
+  later: string | undefined
+): { title: string; description: string } | undefined {
+  const title = `“${listed.title}”`
+  if (stand === "working")
+    return {
+      title: `${title} is at work.`,
+      description: later
+        ? `${later} puts it off until it's done.`
+        : "Put it off until it's done.",
+    }
+  if (listed.mark === "asking")
+    return {
+      title: `${title} asks you.`,
+      description: later
+        ? `Answer it, or ${later} puts it off.`
+        : "Answer it, or put it off.",
+    }
+  return undefined
+}
+
+/** Says why `S` leaves the card, by `refusalOf`, in a toast, never a
+ * shake. */
+export function refused(
+  card: Parameters<typeof refusalOf>[0],
+  later: string | undefined
+): void {
+  const why = refusalOf(card, later)
+  if (why) toast(why.title, { id: REFUSED, description: why.description })
 }

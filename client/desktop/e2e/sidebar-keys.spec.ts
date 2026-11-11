@@ -6,7 +6,11 @@
  * alone, so a terminal and a field type them, and Alt+S, Alt+Z, Alt+U and
  * Alt+A work as they did. The focus never goes to the page. The pick's
  * ring after a key, and none after a click, dark and light, as
- * `sidebar-s7b-*.png`.
+ * `sidebar-s7b-*.png`. Ctrl+Z takes back the last act and the pick goes
+ * back to its card; S on a card that asks or works says why in a toast,
+ * and the pick stays; the region `#sb-said` tells of a call and of inbox
+ * zero (S7c), and the refusal and the Undo, dark and light, as
+ * `sidebar-s7c-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -25,6 +29,7 @@ import {
   send,
   sidebarOf,
   startWindow,
+  toastsOf,
   wallpaper,
   type Window,
 } from "./window"
@@ -407,5 +412,171 @@ test("the pick's ring after a key, and none after a click, dark and light (ADR 0
     // A tab switch cuts the shelf again.
     await tab("Working").click()
     await tab("Inbox").click()
+  }
+})
+
+/** The toast that says `words`. */
+const toastOf = (page: Page, words: string | RegExp) =>
+  toastsOf(page).getByRole("listitem").filter({ hasText: words })
+
+/** Starts the Thread `text` from outside the Window, which asks its
+ * Person at once. */
+async function asking(window: Window, text: string) {
+  call(window, "agents.send", { harness: "fake", text, settings: null })
+  await expect(cardOf(sidebarOf(window.page), text)).toContainText("Asks")
+}
+
+/** The words of an asking card's refusal, and of a working one's: its
+ * title, then its next line. */
+const ASKS = /^“please ask first” asks you\.\s*Answer it, or Z puts it off\.$/
+const WORKS =
+  /^“wait for the build” is at work\.\s*Z puts it off until it's done\.$/
+
+test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with it; S on a card that asks or works toasts why and the pick stays; the region says a call and inbox zero (ADR 0098, S7c)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await asking(window, "please ask first")
+  await send(window, "wait for the build")
+  for (const text of ["call one", "call two", "call three"]) {
+    await send(window, text)
+  }
+  const sidebar = sidebarOf(page)
+  const list = sidebar.getByRole("listbox")
+  const tab = (name: string) => tabOf(sidebar, name)
+  // The region is there from the start, empty: the calls came while the
+  // focus was in the New Thread's box, and 2 s on nothing was said.
+  const said = page.locator("#sb-said")
+  await expect(said).toHaveAttribute("role", "status")
+  await expect(said).toHaveAttribute("aria-live", "polite")
+  expect(await focusOf(page)).toBe("pane")
+  await page.waitForTimeout(2500)
+  await expect(said).toHaveText("")
+
+  // Into the list, described by the hint of its keys.
+  await tab("Inbox").focus()
+  await page.keyboard.press("Tab")
+  await expect(list).toBeFocused()
+  await expect(list).toHaveAccessibleDescription(
+    "S archives, Z puts off, U marks unread."
+  )
+  await picked(page, list, "please ask first")
+
+  // S on the card that asks: its toast says why, the pick stays, nothing
+  // is archived.
+  await page.keyboard.press("s")
+  await expect(toastOf(page, ASKS)).toBeVisible()
+  await picked(page, list, "please ask first")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive")
+  // And on the one at work, last in the list.
+  await page.keyboard.press("End")
+  await picked(page, list, "wait for the build")
+  await page.keyboard.press("s")
+  await expect(toastOf(page, WORKS)).toBeVisible()
+  await picked(page, list, "wait for the build")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive")
+
+  // S S: two archived, the pick on the third.
+  await page.keyboard.press("Home")
+  await page.keyboard.press("ArrowDown")
+  await picked(page, list, "call one")
+  await page.keyboard.press("s")
+  await picked(page, list, "call two")
+  await page.keyboard.press("s")
+  await picked(page, list, "call three")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
+  await expect(toastOf(page, "Archived 2")).toBeVisible()
+
+  // Ctrl+Z brings back the second, the pick goes back to it, and the
+  // toast tells of the first alone; again, the first.
+  await page.keyboard.press("Control+z")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+  await expect(cardOf(list, "call two")).toBeVisible()
+  await picked(page, list, "call two")
+  await expect(toastOf(page, /^Archived(?! 2)/)).toBeVisible()
+  await page.keyboard.press("Control+z")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive")
+  await expect(cardOf(list, "call one")).toBeVisible()
+  await picked(page, list, "call one")
+  expect(await focusOf(page)).toBe("list")
+
+  // A call that comes while the focus is in the list is said.
+  await send(window, "call four")
+  await expect(said).toHaveText("call four is done.")
+
+  // The last card goes: the one that asks is put off, the rest archived,
+  // and the region says inbox zero in its own words.
+  await page.keyboard.press("Home")
+  await picked(page, list, "please ask first")
+  await page.keyboard.press("z")
+  const when = pickerOf(page).getByRole("textbox", {
+    name: "When it comes back",
+  })
+  await when.fill("2h")
+  await when.press("Enter")
+  await expect(list).toBeFocused()
+  for (const title of ["call one", "call two", "call three", "call four"]) {
+    await picked(page, list, title)
+    await page.keyboard.press("s")
+  }
+  await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
+  // In 2h past 22:00 is tomorrow, which names its day: "Thu 1:25".
+  await expect(said).toHaveText(
+    /^Inbox zero\. Nothing waits for you\. 1 at work\. Next wakes at (\w+ )?\d+:\d\d\.$/
+  )
+  expect(await focusOf(page)).toBe("list")
+
+  // The hint was read once: the list is described by it no more.
+  await page.keyboard.press("Escape")
+  await focusIs(page, "pane")
+  await list.focus()
+  await expect(list).toHaveAccessibleDescription("")
+})
+
+test("a refusal's toast, and the Undo after Ctrl+Z, dark and light (ADR 0098, S7c)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await asking(window, "please ask first")
+  for (const text of ["call one", "call two", "call three"]) {
+    await send(window, text)
+  }
+  const sidebar = sidebarOf(page)
+  const list = sidebar.getByRole("listbox")
+  const tab = (name: string) => tabOf(sidebar, name)
+  await leaveSidebar(page)
+
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    await tab("Inbox").focus()
+    await page.keyboard.press("Tab")
+    await page.keyboard.press("Home")
+    await picked(page, list, "please ask first")
+    await page.keyboard.press("s")
+    const refusal = toastOf(page, ASKS)
+    await expect(refusal).toBeVisible()
+    await page.screenshot({
+      path: `test-results/sidebar-s7c-refusal-${mode}.png`,
+    })
+    await expect(refusal).toBeHidden({ timeout: 15_000 })
+
+    await page.keyboard.press("ArrowDown")
+    await page.keyboard.press("s")
+    await page.keyboard.press("s")
+    await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
+    await page.keyboard.press("Control+z")
+    await picked(page, list, "call two")
+    await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+    await expect(toastOf(page, /^Archived(?! 2)/)).toBeVisible()
+    await page.screenshot({ path: `test-results/sidebar-s7c-undo-${mode}.png` })
+
+    // Back as it was, for the other look.
+    // The toast that asks for the Thread that asks stays: Notifications'.
+    await page.keyboard.press("Control+z")
+    await expect(tab("Archive")).toHaveAccessibleName("Archive")
+    await expect(toastOf(page, /^Archived/)).toHaveCount(0)
   }
 })

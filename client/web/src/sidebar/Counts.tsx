@@ -150,7 +150,8 @@ function Counts({ projects }: WidgetProps) {
           </span>
         ))}
       </DropdownMenuTrigger>
-      <DropdownMenuContent align="center" className="w-96">
+      {/* The small inbox, where the sidebar's region speaks too. */}
+      <DropdownMenuContent align="center" className="w-96" data-small-inbox="">
         <List tallies={tallies} lists={lists} now={now} projects={projects} />
       </DropdownMenuContent>
     </DropdownMenu>

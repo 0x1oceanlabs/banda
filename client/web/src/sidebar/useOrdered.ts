@@ -215,6 +215,8 @@ export function useOrdered(
     ordered: { ...fresh, blocks: kept.blocks },
     holds,
     holder,
+    /** Whether the Person acted on a card since the list last landed. */
+    acted: mine.size > 0,
     /** What the list's scroller listens to. */
     list,
   }

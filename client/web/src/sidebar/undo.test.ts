@@ -3,9 +3,12 @@ import { HOUR } from "@banda/ui/lib/words"
 import type { Listed } from "@banda/ui/pane"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import {
+  keep,
+  KEPT_FOR,
   putBack,
   toldArchived,
   UNDO_TOAST,
+  undoLast,
   undoOf,
   type Undoable,
 } from "./undo"
@@ -88,6 +91,12 @@ test("a Later wakes it again; a Later or a Wake of one that slept puts its Later
   expect(
     undoOf("wake", thread({ later: { at: NOW, someday: true } }), NOW)
   ).toEqual([{ does: "later", args: { someday: true } }])
+})
+
+test("a mark as unread, or as read, is taken back by marking it the other way", () => {
+  expect(undoOf("unread", thread(), NOW)).toEqual([
+    { does: "unread", args: {} },
+  ])
 })
 
 /** What takes back an archive of the Thread `id`. */
@@ -187,4 +196,48 @@ test("an act that was never told, as a Wake, is put back without a toast", () =>
   })
   expect(toasts.shown).not.toHaveBeenCalled()
   expect(toasts.dismiss).not.toHaveBeenCalled()
+})
+
+/** What `run` was asked to bring back, by its items. */
+const brought = (run: ReturnType<typeof vi.fn>) =>
+  run.mock.calls.map(([, args]) => (args as { item: string }).item)
+
+test("Ctrl+Z takes back the newest act kept, then the one before: 20 of them, each for 10 minutes, and no more (spec §2.7)", () => {
+  const run = vi.fn()
+  const acts = Array.from({ length: 21 }, (_, at) => archived(`t${at + 1}`))
+  acts.forEach((done, at) => keep(done, NOW + at))
+  // The newest first; the first of 21 was not kept.
+  while (undoLast(run, NOW + 100));
+  expect(brought(run)).toEqual(
+    acts
+      .slice(1)
+      .reverse()
+      .map((done) => done.listed.id)
+  )
+  expect(undoLast(run, NOW + 100)).toBeUndefined()
+
+  // Ten minutes after it, an act is kept no more.
+  run.mockClear()
+  keep(archived("old"), NOW)
+  keep(archived("new"), NOW + 1000)
+  expect(undoLast(run, NOW + KEPT_FOR)?.listed.id).toBe("new")
+  expect(undoLast(run, NOW + KEPT_FOR)).toBeUndefined()
+  expect(brought(run)).toEqual(["new"])
+})
+
+test("an act taken back by its toast or its ghost line is kept no more, and one Ctrl+Z took back the toast no longer tells of", () => {
+  const run = vi.fn()
+  const [one, two, three] = ["t1", "t2", "t3"].map(archived)
+  for (const done of [one!, two!, three!]) {
+    keep(done, NOW)
+    toldArchived(run, done)
+  }
+  // Ctrl+Z: the newest, and the toast tells of the other two.
+  expect(undoLast(run, NOW)).toBe(three)
+  expect(toasts.shown).toHaveBeenLastCalledWith("Archived 2", expect.anything())
+  // The ghost line's Undo takes back the second; the toast's the first.
+  putBack(run, two!)
+  lastToast().action.onClick()
+  expect(brought(run)).toEqual(["t3", "t2", "t1"])
+  expect(undoLast(run, NOW)).toBeUndefined()
 })
