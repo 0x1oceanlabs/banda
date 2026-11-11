@@ -1318,7 +1318,9 @@ If Chat is removed, Agents still works through its own Thread.
   T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,
   vendored in `client/ghostty`, on a canvas in the window's colours.
   - Opened from the menu, it starts the Person's shell, and starts it
-    again when the engine lost it.
+    again when its engine lost it and has not restarted since. Under a
+    new boot of the engine it says Ended and waits for "New shell here"
+    (ADR 0106, decision 4).
   - Another Pane that started a program opens it on that terminal, as a
     sign-in does: `{kind: "terminal.terminal", args: {terminal, title,
     shell: false, done}}`. `done` is a list of commands the Pane sends
