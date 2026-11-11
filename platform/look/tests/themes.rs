@@ -10,6 +10,7 @@
 
 use banda_look::settings::Material;
 use banda_look::{Look, Places, Windows, resolve};
+use banda_theme::readable::check;
 use serde_json::Value;
 use std::fmt::Write as _;
 use std::fs;
@@ -211,6 +212,30 @@ fn drawn(look: &Look, roots: &[String; 2]) -> String {
         .collect();
     leaves("settings", &Value::Object(set), &mut out);
     lines(out, roots)
+}
+
+/// Every built-in theme in all four, solid and over glass, light and
+/// dark, reads once the resolver has done its part (ADR 0100, decision
+/// 8), over the glass each machine makes.
+#[test]
+fn each_theme_reads_in_all_four() {
+    let mut unread = Vec::new();
+    for (name, machine, theme) in SETS {
+        let (look, _, _) = look_of(machine, theme, "light", true);
+        assert!(look.desk.glass, "{name}");
+        let schemes = &look.schemes;
+        for (scheme, glass) in [
+            (&schemes.light, None),
+            (&schemes.dark, None),
+            (&schemes.light_glass, Some(look.desk.material)),
+            (&schemes.dark_glass, Some(look.desk.material)),
+        ] {
+            for one in scheme.iter().flat_map(|scheme| check(scheme, glass)) {
+                unread.push(format!("{name}, {glass:?}: {one}"));
+            }
+        }
+    }
+    assert!(unread.is_empty(), "{}", unread.join("\n"));
 }
 
 #[test]

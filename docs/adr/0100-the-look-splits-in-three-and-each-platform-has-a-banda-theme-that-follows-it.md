@@ -168,9 +168,13 @@ with Roma._
 
 8. **The resolver keeps every theme readable.**
    - Under glass the wallpaper is not known. So `check` measures the
-     contrast of text on each glass surface over the worst backdrops,
-     white, black and a mid grey. Where text would not read, the resolver
-     makes that surface's tint denser until it does.
+     contrast of text on the tiles over the worst backdrops, white, black
+     and a mid grey. The desk and the sidebar's panel over it are left
+     out: no desk clear enough to be glass reads over both white and
+     black, and the panel not for every theme.
+     _Changed 2026-11-11, in step 4b: the resolver does not make a tint
+     denser; how dense Banda's desk is, measured over the wallpaper it
+     draws, is a follow-up ADR's._
    - The system's accent may be any colour, a pale yellow too. The
      resolver works out the text on the accent (`primary-foreground`), and
      where the accent is a line or text, it darkens or lightens it until

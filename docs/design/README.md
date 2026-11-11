@@ -120,7 +120,7 @@ the colour of the glass under them and need no greys of their own
 |---|---|
 | `--muted`, `--accent`, `--secondary`, `--border` | the text at 10% |
 | `--input` | the text at 12% |
-| `--muted-foreground` | the text at 62% |
+| `--muted-foreground` | the text at 62%, less thin where that would not read at 3:1 ([0100] d8) |
 | the desk | `--background` at 40% over the wallpaper, blurred 40 px, saturated 1.4, a grain at 0.04; 10% over the system's material on macOS and Windows ([0030]) |
 | the sidebar's panel | halfway between the desk and the tiles, and it frosts what is under it |
 | a tile | solid (`[tile] opacity = 1`, [0075] d3); the kit draws 95% ([0023]'s first value) |

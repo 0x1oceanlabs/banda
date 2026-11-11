@@ -51,6 +51,13 @@ Every key, with its default:
   desk, the sidebar's panel and the tiles thinned as `[desk]` and
   `[tile]` `opacity` say, and the fills, lines and quiet text the text's
   colour thinned. `[glass.tokens]` corrects one where that does not suit.
+- The resolver keeps every theme readable (ADR 0100, decision 8). The
+  accent, where it is a line, a link or the focus, is darkened or
+  lightened to 3:1 on the background, and the text on it stays the
+  theme's while it reads, else white or black. Quiet text, 3:1, and the
+  text on a fill worked out from the theme, 4.5:1, are darkened or
+  lightened, or made less thin over glass. The theme's own text on its
+  own grounds is left alone: `check` names it when it does not read.
 - Glass is off while the system reduces transparency or raises contrast,
   in its accessibility settings, and back once it stops (ADR 0100,
   decision 4); `[desk]` `glass` stays as the Person set it.

@@ -947,8 +947,8 @@ fn a_mac_starts_on_the_macos_theme_with_its_shape() {
     assert_eq!(color(&look, false, "--focus"), "#e0478c");
     assert_eq!(color(&look, true, "--sidebar-primary"), "#e0478c");
 
-    machine.look_toml("[colors]\naccent = \"#e07a3f\"\n");
-    assert_eq!(color(&machine.look(), false, "--focus"), "#e07a3f");
+    machine.look_toml("[colors]\naccent = \"#c2410c\"\n");
+    assert_eq!(color(&machine.look(), false, "--focus"), "#c2410c");
 
     // Anywhere else it is a theme to pick.
     machine.places.mac = false;
@@ -1123,7 +1123,7 @@ fn a_theme_of_only_seeds_takes_the_rest_from_the_platform() {
     theme_toml(
         &machine,
         "seeds",
-        "[colors]\naccent = \"#e07a3f\"\nbackground = { light = \"#fbf8f3\", dark = \"#1d1a16\" }\nforeground = { light = \"#2b2620\", dark = \"#ece4d8\" }\n",
+        "[colors]\naccent = \"#c2410c\"\nbackground = { light = \"#fbf8f3\", dark = \"#1d1a16\" }\nforeground = { light = \"#2b2620\", dark = \"#ece4d8\" }\n",
     );
     machine.look_toml("theme = \"seeds\"\n");
     let look = machine.look();
@@ -1132,7 +1132,7 @@ fn a_theme_of_only_seeds_takes_the_rest_from_the_platform() {
     // over Banda's own, this device's (ADR 0100, decision 2): the accent
     // marks the focus, and the buttons take the text's colour as Banda's do.
     for (dark, ink) in [(false, "#2b2620"), (true, "#ece4d8")] {
-        assert_eq!(color(&look, dark, "--focus"), "#e07a3f");
+        assert_eq!(color(&look, dark, "--focus"), "#c2410c");
         assert_eq!(color(&look, dark, "--primary"), ink);
         for var in [
             "--card",
@@ -1149,13 +1149,13 @@ fn a_theme_of_only_seeds_takes_the_rest_from_the_platform() {
 
     // Under Omarchy the platform is its current theme, of one scheme.
     let machine = Machine::new(true);
-    theme_toml(&machine, "seeds", "[colors]\naccent = \"#e07a3f\"\n");
+    theme_toml(&machine, "seeds", "[colors]\naccent = \"#c2410c\"\n");
     machine.look_toml("theme = \"seeds\"\n");
     let look = machine.look();
     assert!(look.problems.is_empty(), "{:?}", look.problems);
     assert_eq!(look.mode, Shown::Dark);
     assert_eq!(color(&look, true, "--background"), "#19251f");
-    assert_eq!(color(&look, true, "--primary"), "#e07a3f");
+    assert_eq!(color(&look, true, "--primary"), "#c2410c");
 }
 
 #[test]
@@ -1169,7 +1169,7 @@ fn a_theme_extends_another_and_so_on() {
     theme_toml(
         &machine,
         "warm",
-        "extends = \"banda\"\n[colors]\naccent = \"#e07a3f\"\n[shape]\ncontrol = 3\n[tokens]\nattention = \"#ff0000\"\n",
+        "extends = \"banda\"\n[colors]\naccent = \"#c2410c\"\n[shape]\ncontrol = 3\n[tokens]\nattention = \"#ff0000\"\n",
     );
     machine.look_toml("theme = \"dusk\"\n");
     let look = machine.look();
@@ -1178,7 +1178,7 @@ fn a_theme_extends_another_and_so_on() {
     // colours and tokens under them.
     assert_eq!(color(&look, true, "--background"), "#101418");
     assert_eq!(color(&look, false, "--background"), "#ffffff");
-    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--focus"), "#c2410c");
     assert_eq!(color(&look, false, "--attention"), "#ff0000");
     assert_eq!(color(&look, false, "--primary"), "#18181b");
     assert_eq!(color(&look, true, "--card"), "#1f1f23");
@@ -1195,7 +1195,7 @@ fn a_theme_on_the_platform_takes_what_the_device_shows() {
     theme_toml(
         &machine,
         "mine",
-        "extends = \"platform\"\n[colors]\naccent = \"#e07a3f\"\n",
+        "extends = \"platform\"\n[colors]\naccent = \"#c2410c\"\n",
     );
     machine.look_toml("theme = \"mine\"\n");
     let look = machine.look();
@@ -1203,7 +1203,7 @@ fn a_theme_on_the_platform_takes_what_the_device_shows() {
     assert_eq!(look.mode, Shown::Dark);
     assert!(look.schemes.light.is_none());
     assert_eq!(color(&look, true, "--background"), "#19251f");
-    assert_eq!(color(&look, true, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, true, "--focus"), "#c2410c");
     assert_eq!(look.sources[1].name.as_deref(), Some("mine"));
 
     // "platform" as look.toml's theme is the device's own, as no theme.
@@ -1227,7 +1227,7 @@ fn a_base_that_is_not_there_is_named_and_the_theme_takes_the_platform() {
     theme_toml(
         &machine,
         "lone",
-        "extends = \"nope\"\n\n[colors]\naccent = \"#e07a3f\"\n",
+        "extends = \"nope\"\n\n[colors]\naccent = \"#c2410c\"\n",
     );
     machine.look_toml("theme = \"lone\"\n");
     let look = machine.look();
@@ -1240,7 +1240,7 @@ fn a_base_that_is_not_there_is_named_and_the_theme_takes_the_platform() {
     );
     assert_eq!(problem.line, Some(1));
     assert!(problem.path.ends_with("theme.toml"), "{problem}");
-    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--focus"), "#c2410c");
     assert_eq!(color(&look, false, "--background"), "#ffffff");
 }
 
@@ -1249,7 +1249,7 @@ fn a_theme_that_does_not_read_says_so_and_banda_shows() {
     let machine = Machine::new(false);
     machine.look_toml("theme = \"bent\"\n");
     for (text, said) in [
-        ("[colors\naccent = \"#e07a3f\"\n", "unclosed table"),
+        ("[colors\naccent = \"#c2410c\"\n", "unclosed table"),
         ("names = \"bent\"\n", "unknown field"),
     ] {
         theme_toml(&machine, "bent", text);
@@ -1301,7 +1301,7 @@ fn a_ring_of_themes_is_refused_and_each_still_shows() {
     theme_toml(
         &machine,
         "a",
-        "extends = \"b\"\n[colors]\naccent = \"#e07a3f\"\n",
+        "extends = \"b\"\n[colors]\naccent = \"#c2410c\"\n",
     );
     theme_toml(
         &machine,
@@ -1318,7 +1318,7 @@ fn a_ring_of_themes_is_refused_and_each_still_shows() {
         "{problem}"
     );
     // b stands alone and a over it.
-    assert_eq!(color(&look, false, "--focus"), "#e07a3f");
+    assert_eq!(color(&look, false, "--focus"), "#c2410c");
     assert_eq!(color(&look, false, "--background"), "#101418");
 
     // A theme that extends itself the same.
