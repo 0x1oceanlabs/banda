@@ -102,7 +102,7 @@ export function CutTips({
               side="right"
               align="start"
               sideOffset={6}
-              className="isolate z-50"
+              className="isolate z-top"
             >
               <Tooltip.Popup
                 data-slot="cut-tip"

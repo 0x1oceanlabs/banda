@@ -125,7 +125,7 @@ export function GroupHeader({
         data-head-rollup={plus || menu ? "" : undefined}
         className={cn(
           "flex shrink-0 items-center justify-end gap-1.5 text-xs tabular-nums",
-          (plus || menu) && "min-w-[42px]"
+          (plus || menu) && "min-w-11"
         )}
       >
         {settings.projects.rollup && folded && tone && (
