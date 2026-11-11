@@ -599,7 +599,17 @@ round trip.
      dialog, and the device fetches the bytes by the host's URL. It joins
      ADR 0082 decision 12's closed list and ADR 0089 decision 2's port.
    - Visuals come by `/p/` too (call 12 A). Their layout check stays E13
-     (#1247).
+     (#1247). _Amended 2026-11-11, with step 4d:_ a Visual's page is the
+     agents module's own file, outside every Project's folder, so
+     `bytes.issue` names none: `agents.visual_link {visual}` gives its
+     token, under the same rule, and the frame's address is
+     `app://visuals/of/<machine>/<token>`. Main relays it to `/p/` and
+     then puts Banda's sheet and script into the page and its own sandbox
+     on the response, as for this machine's Visuals, since a Visual may
+     load from the web and `/p/`'s own headers allow a page nothing from
+     it. This machine's Visuals keep `app://visuals/<project>/<visual>`,
+     read through main's engine client, until the page fetches `/p/`
+     itself (call 11 B, #1249), when the engine dresses the page.
 
 7. **Each settings file is read and written by its owner** (ADR 0081
    decision 12; ADR 0101 decisions 2 and 3).

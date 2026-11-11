@@ -7,6 +7,7 @@ import {
   lookedAt,
   lookMessage,
   visualAddress,
+  visualAddressOn,
   visualLook,
   visualLookOf,
 } from "./visual-frame"
@@ -41,6 +42,10 @@ test("a Visual wears T3 Code's names in the look's colours", () => {
   // A token the look leaves out is left out.
   expect("--card" in look.variables).toBe(false)
   expect(visualLook(read, false).theme).toBe("light")
+})
+
+test("another machine's Visual is addressed by that machine and its engine's token", () => {
+  expect(visualAddressOn("arc", "t0k3n")).toBe("app://visuals/of/arc/t0k3n")
 })
 
 test("the page's address carries its first look", () => {

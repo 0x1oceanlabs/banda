@@ -142,19 +142,22 @@ export async function copyTo(
  * method but `GET` and `HEAD` too. While `addressOf` waits, as for an
  * engine between runs or a machine that is away, the request waits, and
  * goes once there is an address: Electron does not tell a handler that the
- * page gave up, so one given up goes too, and its answer goes unread. One
+ * page gave up, so one given up goes too, and its answer goes unread. With
+ * `url`, that is the URL answered, asked as `request` was: what a module's
+ * host asks of the two for a page of its own (`Relayed`, module.ts). One
  * `addressOf` fails for, and an engine that refuses the connection, give
  * 502, which the page takes for a URL that broke. Main puts no time limit
  * on an answer, since a video's flows as long as it plays.
  */
 export const relay = <E, R>(
   request: Request,
-  addressOf: (machine: string | null) => Effect.Effect<Address, E, R>
+  addressOf: (machine: string | null) => Effect.Effect<Address, E, R>,
+  url: string = request.url
 ) =>
   Effect.gen(function* () {
     if (request.method !== "GET" && request.method !== "HEAD")
       return new Response(null, { status: 405 })
-    const named = namedBy(request.url)
+    const named = namedBy(url)
     if (!named) return missing()
     return yield* addressOf(named.machine).pipe(
       Effect.flatMap((address) =>

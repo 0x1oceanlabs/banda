@@ -5617,6 +5617,31 @@ async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
         .await
         .unwrap();
     assert_eq!(read["html"], page);
+    // A window is given a token for its page, an hour's; its Agent none.
+    let link = world
+        .call(
+            world.person(),
+            "agents.visual_link",
+            json!({ "visual": visual }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(link["token"].as_str().unwrap().len(), 64);
+    assert!(link["until"].as_i64().unwrap() > banda_kernel::now_ms());
+    let own = world
+        .call(agent, "agents.visual_link", json!({ "visual": visual }))
+        .await
+        .unwrap_err();
+    assert_eq!(own.code, Code::Forbidden);
+    let none = world
+        .call(
+            world.person(),
+            "agents.visual_link",
+            json!({ "visual": TurnId::new() }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(none.message, "There is no such Visual.");
 
     // A Person has no Thread to show it in; a page is needed.
     let person = show(world.person(), "t", 300).await.unwrap_err();

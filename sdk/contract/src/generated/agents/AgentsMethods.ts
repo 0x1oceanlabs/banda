@@ -55,6 +55,7 @@ import type { Touching } from "./Touching";
 import type { TurnChanges } from "./TurnChanges";
 import type { Unpack } from "./Unpack";
 import type { Unpacked } from "./Unpacked";
+import type { VisualLink } from "./VisualLink";
 import type { VisualPage } from "./VisualPage";
 import type { WakeAsk } from "./WakeAsk";
 import type { WriteAsk } from "./WriteAsk";
@@ -264,6 +265,13 @@ notify: CommandMethod<Notify, string>,
  * A Visual's page, as the window serves it.
  */
 visual: CallMethod<OneVisual, VisualPage>, 
+/**
+ * A token for a window to draw a Visual's page with, served at
+ * `/p/<token>` into a frame alone, until `until`, an hour: how a
+ * window on another machine shows it (ADR 0106, decision 6). An
+ * Agent is given none.
+ */
+visual_link: CallMethod<OneVisual, VisualLink>, 
 /**
  * Puts off your own Thread: it leaves your Person's list for
  * `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,

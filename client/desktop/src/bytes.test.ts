@@ -20,7 +20,7 @@ import { afterEach, beforeEach, expect, it } from "@effect/vitest"
 import type { Address } from "@banda/contract"
 import { Engine, Refused } from "@banda/desktop-kit"
 import { Deferred, Effect, Fiber, Layer, Stream } from "effect"
-import { relayed, saveCopy } from "./bytes"
+import { relayed, relayedAs, saveCopy } from "./bytes"
 import { Hosts } from "./hosts"
 
 /** A fake engine: what it heard, and how it answers. */
@@ -122,6 +122,30 @@ const asked = (url: string, init?: RequestInit) =>
       }))
     )
   )
+
+it.effect(
+  "a module's host asks the sandbox host for a page of its own, as its frame's request was asked, from the machine the URL names",
+  () =>
+    Effect.gen(function* () {
+      // A Visual's frame asks `app://visuals/…`; its page is arc's `/p/`.
+      const frame = new Request("app://visuals/of/arc/p1", {
+        headers: { "sec-fetch-dest": "iframe" },
+      })
+      let said: string | undefined
+      arc.answer = (response) => {
+        said = response.req.headers["sec-fetch-dest"] as string
+        whole("arc's page")(response)
+      }
+      const answer = yield* relayedAs(frame, "app://preview/arc/p1")
+      expect(answer.status).toBe(200)
+      expect(yield* Effect.promise(() => answer.text())).toBe("arc's page")
+      expect(arc.heard).toEqual(["/p/p1"])
+      expect(said).toBe("iframe")
+      expect(here.heard).toEqual([])
+      // The request's own URL names nothing the two hosts serve.
+      expect((yield* relayed(frame)).status).toBe(404)
+    }).pipe(Effect.provide(main()))
+)
 
 it.effect(
   "a URL that names a machine goes to that machine's engine through its forward, and one that names none to this machine's",

@@ -4,9 +4,14 @@
  * tall as the page says it is, its links and its keys passed on as the
  * MCP Apps words say (ADR 0037, decisions 4 and 5). A Visual's entry, its
  * preview and its Pane draw it; an MCP App's `ui://` page will too.
+ *
+ * A Visual another machine keeps is drawn the same (ADR 0106, decision
+ * 6): its engine gives a token for the page, asked for through the Pane's
+ * session as the frame comes near, and the address names it.
  */
 import { useEffect, useLayoutEffect, useRef, useState } from "react"
-import type { ProjectId } from "@banda/contract"
+import { ChartLineIcon } from "lucide-react"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Fit, VisualId } from "@banda/contract/agents"
 import { saidByAPage } from "@banda/ui/lib/keys"
 import { onThemeChange } from "@banda/ui/lib/look"
@@ -17,6 +22,7 @@ import {
   lookMessage,
   SANDBOX,
   visualAddress,
+  visualAddressOn,
   type VisualLook,
   visualLook,
 } from "./visual-frame"
@@ -34,6 +40,75 @@ export type VisualArgs = {
   heights: Fit[]
 }
 
+/** Where a Visual's Project is, and what its frame asks of its Pane. */
+export type VisualPlace = {
+  /** The Pane's session: the engine of the machine that keeps the page. */
+  engine: Engine
+  project: ProjectId
+  /** That machine, by its name in `hosts.toml`; none for this one. */
+  host?: string
+  /** Opens a web address on this device, through the router (ADR 0106,
+   * law 2). */
+  openLink: (url: string) => void
+}
+
+/** How far from showing a frame of another machine's asks for its page. */
+const NEAR = "800px"
+
+/**
+ * Where the frame under `near` loads the page from, with its first look.
+ * This machine's is known at once. Another machine's is asked for once
+ * the frame comes near showing, since its token lasts an hour and a long
+ * Thread's far Visuals may load later than that: undefined till then and
+ * while its engine answers, which waits while that machine is away, as a
+ * read may; null when it gives none, as an engine older than the method.
+ */
+function useAddress(
+  { engine, project, host }: VisualPlace,
+  visual: VisualId,
+  near: React.RefObject<HTMLElement | null>
+): string | null | undefined {
+  // The first look goes with the address; once the page is loaded, each
+  // new one is posted, so it repaints without loading again.
+  const [address, setAddress] = useState<string | null | undefined>(() =>
+    host === undefined
+      ? lookedAt(visualAddress(project, visual), lookNow())
+      : undefined
+  )
+  useEffect(() => {
+    const own = near.current
+    if (host === undefined || !own) return
+    let current = true
+    const ask = () =>
+      engine.call("agents.visual_link", { visual }, { project }).then(
+        ({ token }) =>
+          current &&
+          setAddress(lookedAt(visualAddressOn(host, token), lookNow())),
+        () => current && setAddress(null)
+      )
+    if (typeof IntersectionObserver === "undefined") {
+      void ask()
+      return () => {
+        current = false
+      }
+    }
+    const watch = new IntersectionObserver(
+      (seen) => {
+        if (!seen.some((one) => one.isIntersecting)) return
+        watch.disconnect()
+        void ask()
+      },
+      { rootMargin: NEAR }
+    )
+    watch.observe(own)
+    return () => {
+      current = false
+      watch.disconnect()
+    }
+  }, [engine, project, host, visual, near])
+  return address
+}
+
 /** The look the window shows now. */
 function lookNow(): VisualLook {
   const root = document.documentElement
@@ -48,23 +123,24 @@ function lookNow(): VisualLook {
  * at `zoom`: laid out that much narrower, then drawn that much larger, as
  * a browser zooms. */
 export function VisualFrame({
-  project,
+  place,
   visual,
   title,
   height,
   heights,
   zoom = 1,
   className,
-}: VisualArgs & { project: ProjectId; zoom?: number; className?: string }) {
+}: VisualArgs & { place: VisualPlace; zoom?: number; className?: string }) {
   const frame = useRef<HTMLIFrameElement>(null)
+  const held = useRef<HTMLDivElement>(null)
   const [fits, setFits] = useState<number>()
   /** How tall the frame is till its page says. */
   const [guess, setGuess] = useState(height)
-  // The first look goes with the address; once the page is loaded, each
-  // new one is posted, so it repaints without loading again.
-  const [address] = useState(() =>
-    lookedAt(visualAddress(project, visual), lookNow())
-  )
+  const address = useAddress(place, visual, held)
+  const openLink = useRef(place.openLink)
+  useLayoutEffect(() => {
+    openLink.current = place.openLink
+  })
   const post = () =>
     frame.current?.contentWindow?.postMessage(lookMessage(lookNow()), "*")
 
@@ -80,7 +156,8 @@ export function VisualFrame({
     const watch = new ResizeObserver(fit)
     watch.observe(own)
     return () => watch.disconnect()
-  }, [heights, height, fits])
+    // Its frame comes with its address, for another machine's.
+  }, [heights, height, fits, address])
 
   useEffect(() => {
     const listen = (event: MessageEvent) => {
@@ -92,8 +169,7 @@ export function VisualFrame({
       // Keys still work after the click's transient activation expires.
       if (document.activeElement !== own) return
       if (said.kind === "link") {
-        if (navigator.userActivation.isActive)
-          window.open(said.url, "_blank", "noopener")
+        if (navigator.userActivation.isActive) openLink.current(said.url)
       }
       // A key the page left goes on from its frame, as one pressed on it,
       // but as the page's: it runs nothing that acts as the Person.
@@ -113,8 +189,23 @@ export function VisualFrame({
   }, [])
 
   const tall = fits ?? guess
+  // Its machine's engine gave no page for it.
+  if (address === null)
+    return (
+      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+        <ChartLineIcon className="size-4 shrink-0" />
+        <span className="min-w-0 truncate">
+          {place.host} gave no page for this Visual.
+        </span>
+      </p>
+    )
+  // Till its address is known, its place is held at its height.
+  if (address === undefined)
+    return (
+      <div ref={held} className={className} style={{ height: tall * zoom }} />
+    )
   return (
-    <div className={className} style={{ height: tall * zoom }}>
+    <div ref={held} className={className} style={{ height: tall * zoom }}>
       <iframe
         ref={frame}
         src={address}

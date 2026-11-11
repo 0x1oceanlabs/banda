@@ -188,6 +188,37 @@ impl Bytes {
     }
 }
 
+impl Bytes {
+    /// A token for the page a module keeps at `path` and shows a window,
+    /// as agents keeps a Visual's (ADR 0106, decision 6): served at
+    /// `/p/<token>` as `bytes.issue`'s pages are, that file as it is now,
+    /// for an hour. The module answers for who asks it: no Agent is given
+    /// one.
+    pub async fn page(&self, path: PathBuf) -> Result<Issued, Refusal> {
+        let now = (self.clock)();
+        let claim = tokio::task::spawn_blocking(move || {
+            let gone = || Refusal::not_found("That page is not there.");
+            let path = dunce::canonicalize(&path).map_err(|_| gone())?;
+            if Use::Page.kind_of(&path).is_none() {
+                return Err(gone());
+            }
+            let pinned = pin(&path).map_err(|_| gone())?;
+            Ok(Claim {
+                path,
+                id: pinned.id,
+                until: now + HOUR,
+                used: Use::Page,
+            })
+        })
+        .await
+        .map_err(|_| Refusal::internal())??;
+        let token = banda_kernel::secret().map_err(|_| Refusal::internal())?;
+        let until = claim.until;
+        self.claims.lock().unwrap().keep(token.clone(), claim, now);
+        Ok(Issued { token, until })
+    }
+}
+
 /// The claim on `ask.path` of the Person's call in the Project at
 /// `folder`, as the window's byte host made one: a path it looks at only
 /// on this machine, of a kind the use serves, through a link only to a

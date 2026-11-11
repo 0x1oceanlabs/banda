@@ -94,6 +94,7 @@ mod build {
             .modes_chosen_in(host.places.modes_chosen())
             .piped(host.pipe.clone())
             .counted_in(host.working.clone())
+            .served_by(host.bytes.clone())
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {

@@ -52,6 +52,7 @@ export const DOES = {
   "agents.answer_issue": "act",
   "agents.notify": "act",
   "agents.visual": "read",
+  "agents.visual_link": "read",
   "agents.later": "act",
   "agents.wake": "act",
   "agents.see_woke": "act",

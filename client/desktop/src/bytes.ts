@@ -29,6 +29,11 @@ const engineOf = (machine: string | null): Where =>
 /** The answer to `request`, to `app://files` or `app://preview`. */
 export const relayed = (request: Request) => relay(request, engineOf)
 
+/** The answer of those two hosts to `url`, asked as `request` was: what a
+ * module's host asks for a page of its own, as a Visual's (`Relayed`). */
+export const relayedAs = (request: Request, url: string) =>
+  relay(request, engineOf, url)
+
 /** Where that engine listens now, and none while its machine is away: a
  * gesture goes now or says why not (ADR 0106, law 4). This machine is
  * never away, and its engine between runs is waited for: seconds. */

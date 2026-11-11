@@ -20,11 +20,22 @@ export type Asked<R> = Readonly<
 >
 
 /**
+ * What the byte host or the sandbox host answers `url`, asked as the
+ * request a module's host serves was: the engine's answer that gave the
+ * URL's token, this machine's or another's, relayed (files.ts). How a
+ * module's host reads a page another machine's engine keeps.
+ */
+export type Relayed = (url: string) => Effect.Effect<Response>
+
+/**
  * What a module's part serves at `app://<host>/…`, by host: an origin of
  * its own, apart from Banda's page, which may show it in a frame.
  */
 export type Served<R> = Readonly<
-  Record<string, (request: Request) => Effect.Effect<Response, never, R>>
+  Record<
+    string,
+    (request: Request, relayed: Relayed) => Effect.Effect<Response, never, R>
+  >
 >
 
 export type DesktopModule<Table, Services, Needs> = {

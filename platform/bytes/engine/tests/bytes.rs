@@ -27,6 +27,8 @@ struct World {
     at: Arc<AtomicI64>,
     http: reqwest::Client,
     root: tempfile::TempDir,
+    /// The module itself, as another module holds it.
+    bytes: Bytes,
 }
 
 impl World {
@@ -61,7 +63,7 @@ impl World {
             secret: "secret".to_owned(),
             owner,
         };
-        let app = api::router(kernel.clone(), identity, "test").merge(api::bytes(bytes));
+        let app = api::router(kernel.clone(), identity, "test").merge(api::bytes(bytes.clone()));
         let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
         let address = listener.local_addr().unwrap();
         tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
@@ -75,6 +77,7 @@ impl World {
             at,
             http,
             root,
+            bytes,
         }
     }
 
@@ -639,6 +642,42 @@ async fn a_token_of_one_route_is_not_the_others() {
         text.header(header::CONTENT_TYPE),
         Some("text/plain; charset=utf-8")
     );
+}
+
+#[tokio::test]
+async fn a_modules_own_page_is_given_a_token_and_served_as_a_page_alone() {
+    let world = World::new().await;
+    // A page a module keeps, outside every Project's folder, as agents
+    // keeps a Visual's.
+    let kept = world.outside().join("visual.html");
+    std::fs::write(&kept, "<p>shown</p>").unwrap();
+    let before = banda_kernel::now_ms();
+    let issued = world.bytes.page(kept.clone()).await.unwrap();
+    assert_eq!(issued.token.len(), 64);
+    assert!(issued.until >= before + HOUR, "an hour");
+    let page = world.page(&issued.token).await;
+    assert_eq!(page.status, StatusCode::OK);
+    assert_eq!(page.body, "<p>shown</p>");
+    assert_eq!(page.header(header::CONTENT_SECURITY_POLICY), Some(PAGE_CSP));
+    assert_eq!(
+        world.bytes(&issued.token).await.status,
+        StatusCode::NOT_FOUND
+    );
+    // Another file put in its place is not served, as with any token.
+    std::fs::remove_file(&kept).unwrap();
+    std::fs::write(&kept, "<p>other</p>").unwrap();
+    assert_eq!(
+        world.page(&issued.token).await.status,
+        StatusCode::NOT_FOUND
+    );
+
+    // No page: a file that is none, and one not there.
+    let secret = world.outside().join("secret.png");
+    let refused = world.bytes.page(secret).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    let gone = world.outside().join("gone.html");
+    let refused = world.bytes.page(gone).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
 }
 
 #[tokio::test]

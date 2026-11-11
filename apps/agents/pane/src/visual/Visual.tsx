@@ -11,7 +11,6 @@ import {
   PlusIcon,
   XIcon,
 } from "lucide-react"
-import type { ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   Dialog,
@@ -24,17 +23,17 @@ import { useScope } from "@banda/ui/hooks/use-scope"
 import { zoomHandlers } from "@banda/ui/hooks/use-zoom"
 import { zoomBy, type ZoomStep } from "@banda/ui/lib/zoom"
 import { VISUAL } from "../scopes"
-import { type VisualArgs, VisualFrame } from "./Frame"
+import { type VisualArgs, VisualFrame, type VisualPlace } from "./Frame"
 import { ZOOMS } from "./visual-frame"
 
 /** A Visual in its Thread, with its title under it and, on hover, the
  * ways to open it larger in a reserved row above the page. */
 export function Visual({
-  project,
+  place,
   visual,
   onOpen,
 }: {
-  project: ProjectId
+  place: VisualPlace
   visual: VisualArgs
   /** Opens it as a Pane of its own, beside the Thread. */
   onOpen: () => void
@@ -57,7 +56,7 @@ export function Visual({
         </div>
       </div>
       <VisualFrame
-        project={project}
+        place={place}
         {...visual}
         // The page's own gutter sits in the Thread's margin.
         className="-mx-2"
@@ -66,7 +65,7 @@ export function Visual({
         {visual.title}
       </figcaption>
       <VisualPreview
-        project={project}
+        place={place}
         visual={visual}
         open={previewing}
         onOpenChange={setPreviewing}
@@ -79,13 +78,13 @@ export function Visual({
 /** A Visual over the window, as wide as the window lets it be, zoomed from
  * 50 to 200 %; `Esc` closes it, as T3 Code's full screen. */
 function VisualPreview({
-  project,
+  place,
   visual,
   open,
   onOpenChange,
   onOpen,
 }: {
-  project: ProjectId
+  place: VisualPlace
   visual: VisualArgs
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -153,7 +152,7 @@ function VisualPreview({
           </DialogClose>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-8 py-6">
-          <VisualFrame project={project} {...visual} zoom={zoom} />
+          <VisualFrame place={place} {...visual} zoom={zoom} />
         </div>
       </DialogContent>
     </Dialog>

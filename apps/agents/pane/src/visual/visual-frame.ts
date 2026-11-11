@@ -17,6 +17,16 @@ export const VISUALS = "visuals"
 export const visualAddress = (project: string, visual: string): string =>
   `app://${VISUALS}/${project}/${visual}`
 
+/** What comes first in the address of a Visual another machine keeps. */
+export const ELSEWHERE = "of"
+
+/** Where the window serves a Visual of another machine's (ADR 0106,
+ * decision 6): `machine` is this device's name for it in `hosts.toml`,
+ * and `token` the one its engine gave for the page (`agents.visual_link`),
+ * an hour's. Never kept: a frame asks for it as it loads. */
+export const visualAddressOn = (machine: string, token: string): string =>
+  `app://${VISUALS}/${ELSEWHERE}/${machine}/${token}`
+
 /** What a Visual's page may do: run its scripts and forms, and nothing
  * of its origin's, as both its frame and its response say. */
 export const SANDBOX = "allow-scripts allow-forms"
