@@ -286,3 +286,28 @@ test("letting go plays every loop again, as CSS has it", async () => {
   expect(loop.playState).toBe("running")
   expect(vi.getTimerCount()).toBe(0)
 })
+
+test("a step reads every loop before it sets one's time, so the page works its style out once a step, not once a loop", async () => {
+  const { stepLoops, start } = await loops()
+  stop = stepLoops(document)
+  // What the step asks of each loop's time, and in which order.
+  const asked: string[] = []
+  const time = Object.getOwnPropertyDescriptor(Loop.prototype, "currentTime")!
+  for (const name of ["breath", "blink", "spin"]) {
+    const loop = start(element(), name)
+    Object.defineProperty(loop, "currentTime", {
+      get: () => {
+        asked.push("read")
+        return time.get!.call(loop)
+      },
+      set: (at: number) => {
+        asked.push("set")
+        time.set!.call(loop, at)
+      },
+    })
+  }
+  vi.advanceTimersByTime(3 * STEP)
+  // Chromium works the style out as a CSS animation is asked its state,
+  // if anything changed since: a read after another loop's set would.
+  expect(asked.join(" ")).toMatch(/^(read read read set set set ?)+$/)
+})

@@ -141,6 +141,11 @@ function soon() {
 function step() {
   timer = undefined
   const time = now()
+  // Every loop is read before any is written: a CSS animation asked its
+  // state works the page's style out first, so one read after another's
+  // write would work it out once for each loop, not once for the step.
+  const again: Animation[] = []
+  const moved: [Animation, number][] = []
   for (const [animation, one] of held) {
     const element = (animation.effect as KeyframeEffect | null)?.target
     // Gone: cancelled, or its element out of the page, which says nothing
@@ -153,7 +158,7 @@ function step() {
     if (at === undefined) continue
     // Played again from outside: held again, from where it played.
     if (animation.playState !== "paused") {
-      animation.pause()
+      again.push(animation)
       one.origin = time - at
     }
     // Its time set from outside: it goes on from there.
@@ -161,8 +166,10 @@ function step() {
     one.set = at
     if (page?.hidden || element.closest("[data-paused]")) continue
     one.set = time - one.origin
-    animation.currentTime = one.set
+    moved.push([animation, one.set])
   }
+  for (const animation of again) animation.pause()
+  for (const [animation, at] of moved) animation.currentTime = at
   if (held.size > 0) soon()
 }
 
