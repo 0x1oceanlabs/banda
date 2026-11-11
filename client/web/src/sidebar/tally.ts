@@ -67,6 +67,10 @@ export function calm(lists: Lists, now: number): boolean {
   return waiting === 0 && !works(mark)
 }
 
+/** A counted thing's `project:thing` key, as `rowKey` says its row's. */
+export const countedKey = ({ project, listed }: Counted): string =>
+  `${project}:${listed.id}`
+
 /**
  * What waits for the Person, then what works, as their list shows it:
  * each in the sidebar's `order` of `project:thing` keys, the one order of
@@ -81,14 +85,13 @@ export function inOrder(
   waiting: Counted[]
   working: Counted[]
 } {
-  const key = ({ project, listed }: Counted) => `${project}:${listed.id}`
   const seen = new Map<string, Counted>()
   for (const { things } of tallies)
-    for (const thing of things) seen.set(key(thing), thing)
+    for (const thing of things) seen.set(countedKey(thing), thing)
   const sorted = byOrder(
     [...seen.values()],
     order,
-    key,
+    countedKey,
     (a, b) => a.listed.changed - b.listed.changed
   )
   return {

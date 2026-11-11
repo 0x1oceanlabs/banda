@@ -13,11 +13,18 @@
  * whose first message says "wait" works until it is finished, "fail" fails
  * and "ask" asks; any other is answered at once and, unseen, calls its
  * Person. A Thread away from its Project's workspace bears a small diamond
- * after its title (ADR 0102, decision 6), shot as `sidebar-s6a-away-*`.
+ * after its title, or at the start of line 3's right on a card of three
+ * (ADR 0102, decision 6), shot as `sidebar-s6a-away-*`.
+ *
+ * S6b: another machine's card, arc's, is an ordinary card, its icon on
+ * line 3, alone where sidebar.toml asks; a long title fades out at its end and shows whole beside the
+ * sidebar after a 500 ms rest; the counts' list draws one-line cards.
+ * Shot as `sidebar-s6b-*.png`.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
+import { type Arc, newArc, put, withArc } from "./arc"
 import {
   agentSays,
   call,
@@ -35,9 +42,14 @@ import {
 } from "./window"
 
 let window: Window
+let arc: Arc | undefined
+let stopArc: (() => Promise<void>) | undefined
 
 test.afterEach(async () => {
   await window?.close()
+  await stopArc?.()
+  arc?.close()
+  arc = stopArc = undefined
 })
 
 /** The Flow's button, on the bar beside the workspaces (ADR 0098,
@@ -97,7 +109,9 @@ async function wide(window: Window) {
 /**
  * The window in `mode`, on its glass, with no motion; the desk's picture
  * has painted, and no toast is on its way out, which would leave the one
- * behind it blank.
+ * behind it blank. Its pictures leave the animations be: with no motion
+ * none plays but a cut text's fade, whose timeline is the text's own
+ * scroll, and Playwright's `animations: "disabled"` would cancel it.
  */
 async function look(window: Window, mode: "dark" | "light") {
   const { page, dir } = window
@@ -116,28 +130,27 @@ async function look(window: Window, mode: "dark" | "light") {
 }
 
 /**
- * The window as it is now, dark and light, as `sidebar-s6a-<name>-<mode>`,
- * and each of `cards` alone beside it, as
- * `sidebar-s6a-<name>-<card>-<mode>`. The pointer is away from the list,
- * which holds still under it.
+ * The window as it is now, dark and light, as
+ * `sidebar-<step>-<name>-<mode>`, and each of `cards` alone beside it, as
+ * `sidebar-<step>-<name>-<card>-<mode>`. The pointer is away from the
+ * list, which holds still under it.
  */
 async function shots(
   window: Window,
   name: string,
-  cards: Readonly<Record<string, Locator>> = {}
+  cards: Readonly<Record<string, Locator>> = {},
+  step = "s6a"
 ) {
   const { page } = window
   await page.mouse.move(1400, 450)
   for (const mode of ["dark", "light"] as const) {
     await look(window, mode)
     await page.screenshot({
-      path: `test-results/sidebar-s6a-${name}-${mode}.png`,
-      animations: "disabled",
+      path: `test-results/sidebar-${step}-${name}-${mode}.png`,
     })
     for (const [card, locator] of Object.entries(cards))
       await locator.screenshot({
-        path: `test-results/sidebar-s6a-${name}-${card}-${mode}.png`,
-        animations: "disabled",
+        path: `test-results/sidebar-${step}-${name}-${card}-${mode}.png`,
       })
   }
 }
@@ -154,7 +167,6 @@ async function focusShots(window: Window, name: string, card: Locator) {
     await card.focus()
     await card.locator("xpath=..").screenshot({
       path: `test-results/sidebar-s6a-${name}-focus-${mode}.png`,
-      animations: "disabled",
     })
     await card.blur()
   }
@@ -320,7 +332,7 @@ test("a card's three lines: Asks orange on its mark and time with its question, 
   })
 })
 
-test("a Thread away from its Project's workspace bears a small diamond right after its title and before its time, which the card's action never covers: the Later clock, or Wake in Later (ADR 0102, decision 6)", async () => {
+test("a Thread away from its Project's workspace bears a small diamond right after its title and before its time, or at the start of line 3's right on a card of three, which the card's action never covers: the Later clock, or Wake in Later (ADR 0102, decision 6; S6b)", async () => {
   test.setTimeout(180_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
   const { page } = window
@@ -355,13 +367,19 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await expect(asks).toContainText("Asks Run a check")
   await expect(stray.locator(".lucide-diamond")).toHaveCount(0)
 
-  /** `card`'s diamond: on line 1, right after its title and before its
-   * time; a screen reader hears it once, in the card's description. While
-   * the card's action `name` shows, the time hides under it and the
-   * diamond stays in sight. */
+  /** `card`'s diamond: on one line, right after its title and before its
+   * time; on three, at the start of line 3's right, after its Project and
+   * before its Harness's emblem, never on line 1's right. A screen reader
+   * hears it once, in the card's description. While the card's action
+   * `name` shows, the time hides under it and the diamond stays in
+   * sight. */
   const away = async (card: Locator, title: string, name: string) => {
-    const diamond = linesOf(card).first().locator(".lucide-diamond")
+    const three = (await linesOf(card).count()) === 3
+    const diamond = linesOf(card)
+      .nth(three ? 2 : 0)
+      .locator(".lucide-diamond")
     await expect(diamond).toBeVisible()
+    await expect(card.locator(".lucide-diamond")).toHaveCount(1)
     await expect(diamond).toHaveAttribute("aria-hidden", "true")
     await expect(
       card.getByTitle("Away from its Project's workspace")
@@ -370,17 +388,33 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
       "aria-description",
       /Away from its Project's workspace$/
     )
-    const words = (await card
-      .getByText(title, { exact: true })
-      .first()
-      .boundingBox())!
     const mark = (await diamond.boundingBox())!
     const time = card.locator("[data-time]")
-    expect(mark.x).toBeGreaterThanOrEqual(words.x + words.width)
-    expect(mark.x).toBeLessThanOrEqual(words.x + words.width + 8)
-    expect(mark.x + mark.width).toBeLessThanOrEqual(
-      (await time.boundingBox())!.x
-    )
+    if (three) {
+      // Line 3's right starts with it, before the emblem.
+      const third = linesOf(card).nth(2)
+      const right = third.locator(":scope > span").last().locator(":scope > *")
+      await expect(right.first()).toHaveAttribute(
+        "title",
+        "Away from its Project's workspace"
+      )
+      const project = (await third
+        .locator("[data-slot=fade-text]")
+        .boundingBox())!
+      const emblem = (await right.last().boundingBox())!
+      expect(mark.x).toBeGreaterThanOrEqual(project.x + project.width)
+      expect(mark.x + mark.width).toBeLessThanOrEqual(emblem.x)
+    } else {
+      const words = (await card
+        .getByText(title, { exact: true })
+        .first()
+        .boundingBox())!
+      expect(mark.x).toBeGreaterThanOrEqual(words.x + words.width)
+      expect(mark.x).toBeLessThanOrEqual(words.x + words.width + 8)
+      expect(mark.x + mark.width).toBeLessThanOrEqual(
+        (await time.boundingBox())!.x
+      )
+    }
     await card.focus()
     const action = card
       .locator("xpath=..")
@@ -389,7 +423,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
     await expect(time).toBeHidden()
     await expect(diamond).toBeVisible()
     const box = (await action.boundingBox())!
-    expect(box.x).toBeGreaterThanOrEqual(mark.x + mark.width)
+    if (!three) expect(box.x).toBeGreaterThanOrEqual(mark.x + mark.width)
     // §2.5's size, level with line 1 at every density.
     const line = (await linesOf(card).first().boundingBox())!
     expect(box.height).toBe(20)
@@ -420,4 +454,168 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await expect(linesOf(stray)).toHaveCount(1)
   await away(stray, "stray one", "Wake")
   await focusShots(window, "away-later-1", stray)
+})
+
+/** The Inbox, with the counts always on the bar. */
+const INBOX = 'preset = "inbox"\n[bar]\nshow = "always"\n'
+
+/** A title too long for a card of the sidebar. */
+const LONG = "Bench the window tests on arc against the new sidebar cards"
+
+test("another machine's card is an ordinary card, its icon on line 3; a long title fades out at its end and shows whole beside the sidebar after a 500 ms rest, one that fits gets no fade and no tooltip; the counts' list draws one-line cards (ADR 0098, S6b; #1067)", async () => {
+  test.setTimeout(300_000)
+  // arc holds two Threads done in its Project banda; this machine, named
+  // mac, one in Work. The sidebar is the Inbox, so arc's cards stand among
+  // mac's, and the counts are always on the bar.
+  arc = newArc()
+  stopArc = await arc.start()
+  const folder = join(arc.code.arc, "banda")
+  put(arc.disk(folder), { "README.md": "arc\n" })
+  const banda = JSON.parse(arc.banda("project", "add", folder)).ok.id as string
+  for (const title of [LONG, "Done on arc"]) {
+    arc.send(banda, title)
+    await expect
+      .poll(() => arc!.states(banda).find(([one]) => one === title)?.[1])
+      .toBe("done")
+  }
+  window = await withArc(arc, {
+    sidebar: INBOX,
+    files: { "config/machine.toml": 'name = "mac"\nicon = "laptop"\n' },
+  })
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  await leaveSidebar(page)
+  await send(window, "Sidebar for arc")
+  const mac = cardOf(panel, "Sidebar for arc")
+  const there = cardOf(panel, LONG)
+  const fits = cardOf(panel, "Done on arc")
+  await expect(there).toBeVisible()
+  await expect(mac).toBeVisible()
+
+  // Both are ordinary cards: three lines each, drawn alike; arc's names
+  // its machine on line 3, its icon and its name, and on no other line;
+  // mac's names none, as this machine's.
+  for (const card of [mac, there, fits])
+    await expect(linesOf(card)).toHaveCount(3)
+  expect(await there.getAttribute("class")).toBe(
+    await mac.getAttribute("class")
+  )
+  const third = linesOf(there).nth(2)
+  await expect(third.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(third).toContainText("banda")
+  await expect(third).toContainText("arc")
+  await expect(there.locator("[data-machine-icon]")).toHaveCount(1)
+  await expect(mac.locator("[data-machine-icon]")).toHaveCount(0)
+  await expect(linesOf(mac).nth(2)).toContainText("Work")
+
+  // The long title fades out at its end, with no "…"; one that fits has
+  // no mask at all.
+  const titleOf = (card: Locator) =>
+    linesOf(card).first().locator("[data-slot=fade-text]")
+  const styleOf = (one: Locator) =>
+    one.evaluate((element) => {
+      const { maskImage, textOverflow } = getComputedStyle(element)
+      return { maskImage, textOverflow }
+    })
+  const long = await styleOf(titleOf(there))
+  expect(long.maskImage).toMatch(
+    /^linear-gradient\(90deg, .* calc\(100% - 28px\), rgba\(0, 0, 0, 0\)\)$/
+  )
+  expect(long.textOverflow).toBe("clip")
+  expect((await styleOf(titleOf(fits))).maskImage).toBe("none")
+
+  // At rest on it, the whole title shows after 500 ms, past the sidebar's
+  // right, level with it, at most 320 px wide and 3 lines high; on one
+  // that fits, nothing shows.
+  const tip = page.locator("[data-slot=cut-tip]")
+  const restOn = async (card: Locator) => {
+    const at = (await titleOf(card).boundingBox())!
+    await page.mouse.move(at.x + 24, at.y + at.height / 2)
+    return at
+  }
+  await restOn(fits)
+  await page.waitForTimeout(900)
+  await expect(tip).toHaveCount(0)
+  await leaveSidebar(page)
+  const from = Date.now()
+  const title = await restOn(there)
+  await expect(tip).toHaveText(LONG)
+  expect(Date.now() - from).toBeGreaterThanOrEqual(500)
+  const box = (await tip.boundingBox())!
+  const edge = (await sidebar.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(edge.x + edge.width)
+  expect(box.width).toBeLessThanOrEqual(320)
+  expect(box.height).toBeLessThanOrEqual(3 * 16 + 8)
+  expect(Math.abs(box.y - title.y)).toBeLessThanOrEqual(4)
+  await leaveSidebar(page)
+  await expect(tip).toHaveCount(0)
+
+  // The pictures: the long title faded with its tooltip, mac's and arc's
+  // cards side by side, dark and light.
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    await restOn(there)
+    await expect(tip).toBeVisible()
+    await tip.evaluate((one) =>
+      Promise.all(one.getAnimations().map((played) => played.finished))
+    )
+    await page.screenshot({
+      path: `test-results/sidebar-s6b-tip-${mode}.png`,
+    })
+    await leaveSidebar(page)
+    await expect(tip).toHaveCount(0)
+  }
+  await shots(window, "machines", { mac, arc: there }, "s6b")
+
+  // Asked for its icon alone (`[machines] rows = "icon"`, ADR 0095), arc's
+  // card draws no name on line 3, which only a screen reader hears; named
+  // again, it draws it.
+  const sidebarToml = join(window.dir, "config/sidebar.toml")
+  const arcMark = third.locator('[data-machine-card="arc"]')
+  await expect(arcMark.locator(".sr-only")).toHaveCount(0)
+  writeFileSync(sidebarToml, `${INBOX}[machines]\nrows = "icon"\n`)
+  await expect(arcMark.locator(".sr-only")).toHaveText("arc")
+  await expect(arcMark.locator('[data-machine-icon="server"]')).toBeVisible()
+  await shots(window, "icon", { arc: there }, "s6b")
+  writeFileSync(sidebarToml, INBOX)
+  await expect(arcMark.locator(".sr-only")).toHaveCount(0)
+
+  // The counts' list draws each as a one-line card: its mark, its title,
+  // arc's icon where it is arc's, and its time; no Project's sign.
+  const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
+  const waiting = page.getByRole("group", { name: "Wait for you" })
+  const items = waiting.getByRole("menuitem")
+  const item = (title: string) =>
+    waiting.getByRole("menuitem", { name: new RegExp(`^${title},`) })
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    await counts.click()
+    await expect(items).toHaveCount(3)
+    await page.mouse.move(1400, 850)
+    await page.screenshot({
+      path: `test-results/sidebar-s6b-counts-${mode}.png`,
+    })
+    await page.keyboard.press("Escape")
+    await expect(waiting).toBeHidden()
+  }
+  await counts.click()
+  for (const one of await items.all()) {
+    await expect(one.locator(":scope > span")).toHaveCount(1)
+    await expect(one.locator("[data-sign]")).toHaveCount(0)
+    await expect(one.locator("[data-time]")).toBeVisible()
+  }
+  await expect(
+    item("Done on arc").locator('[data-machine-icon="server"]')
+  ).toBeVisible()
+  await expect(
+    item("Sidebar for arc").locator("[data-machine-icon]")
+  ).toHaveCount(0)
+  // A row goes to its Thread, as the card does: arc's on arc's engine.
+  await item("Done on arc").click()
+  await expect(
+    page.getByRole("region", { name: "Done on arc", exact: true })
+  ).toHaveAttribute("data-focused", "true")
 })
