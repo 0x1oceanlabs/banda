@@ -23,7 +23,7 @@ import { connect } from "node:net"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
-import { agentSays, git, read, type Window } from "./window"
+import { agentSays, bandaMenu, git, read, type Window } from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -309,7 +309,7 @@ test("arc's Diff shows arc's change to who.txt, not this machine's at the same p
 test("Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
   const { page, composer } = await opened()
   await composer.focus()
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
   await search.fill("who.txt")
@@ -404,7 +404,7 @@ test("signs: arc's Project shows its own picture, read from arc's engine, in arc
 /** arc's Files on "Same", from the Banda menu in arc's Thread; the Pane. */
 async function filesOn(page: Page, composer: Locator) {
   await composer.focus()
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await menu.getByRole("combobox", { name: "Search" }).fill("Files")
   await menu
@@ -531,7 +531,7 @@ test("step 4c: Quick Look previews arc's picture, not this machine's at the same
   )
   writeFileSync(join(here, "who.png"), Buffer.from(PNG_1X1, "base64"))
   await composer.focus()
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
   await search.fill("who.png")

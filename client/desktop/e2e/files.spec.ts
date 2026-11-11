@@ -1,7 +1,7 @@
 import { mkdirSync, rmSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import { bandaMenu, firstThread, startWindow, type Window } from "./window"
 
 let window: Window
 
@@ -19,7 +19,7 @@ const PNG = Buffer.from(
 async function openFromMenu(page: Page, words: string, title: string) {
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await search.fill(words)
   const files = menu.getByRole("group", { name: "Files" })
   await expect(files.getByRole("option").first()).toContainText(title)

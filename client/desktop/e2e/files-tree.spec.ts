@@ -3,6 +3,7 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, test } from "@playwright/test"
 import {
+  bandaMenu,
   editorsOn,
   firstThread,
   openedIn,
@@ -68,7 +69,7 @@ test("Files shows a folder as a tree: it opens folders, greys what git ignores, 
   execFileSync("git", ["init", "-q"], { cwd: project })
 
   // The Banda menu's Files opens the focused Project's folder.
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await menu.getByRole("combobox", { name: "Search" }).fill("Files")
   await menu

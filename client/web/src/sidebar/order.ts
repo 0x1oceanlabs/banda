@@ -45,6 +45,9 @@ export type View = Partial<
   settings?: Settings
   only?: ProjectId
   elsewhere?: readonly Elsewhere[]
+  /** A search in place while one runs (decision 17): its words, and the
+   * rows it finds, which the tabs and their counts take alone. */
+  search?: { words: string; found: (row: Row) => boolean }
 }
 
 /** The sidebar as it is drawn: the Inbox, every row it was made of, and
@@ -63,6 +66,7 @@ export function order(
     settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
     only,
     elsewhere = [],
+    search,
     ...shown
   }: View = {}
 ): Ordered {
@@ -79,9 +83,10 @@ export function order(
     group: groupOf(settings),
     ...settings.inbox,
     ...shown,
+    ...(search && { search: search.words }),
   }
   return {
-    ...inboxOf(rows, view, now),
+    ...inboxOf(search ? rows.filter(search.found) : rows, view, now),
     rows,
     ...(listsProjects(settings)
       ? {

@@ -77,6 +77,7 @@ import {
   sources,
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
+import { toSearch } from "../sidebar/Header"
 import { Sidebar } from "../sidebar/Sidebar"
 import { LaterPicker } from "../sidebar/LaterPicker"
 import { SaidRegion } from "../sidebar/SaidRegion"
@@ -576,6 +577,7 @@ export function Shell({
     putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
+    search: toSearch,
     closeSheet: sheet.close,
     glance,
     peek: (pane, project) =>

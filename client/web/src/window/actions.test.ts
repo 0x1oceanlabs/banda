@@ -476,8 +476,8 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   const command = vi.fn(() => Promise.resolve({}))
   const shell = shellOf({ route, settings, engine: { command } })
 
-  // The Search opens the menu at its root, the key sheet's button at its
-  // Actions (`openingOf`), as `banda menu` does.
+  // The bar's logo opens the menu at its root, the key sheet's button at
+  // its Actions (`openingOf`), as `banda menu` does.
   runAction(shell, "menu.at")
   runAction(shell, "menu.at", { route: "actions" })
   // A missing Project's folder is found in the menu; its settings are its
@@ -840,6 +840,41 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   // In the Flow free, every workspace is free.
   const free = placingOf("free", noProjectOf(projects))
   expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
+})
+
+test("Alt+Space goes to the sidebar's Search while it shows, and from there with nothing typed opens the Banda menu, as with the sidebar hidden; / and 0 are the sidebar's own (ADR 0098, decision 17)", () => {
+  const menu = vi.fn()
+  let takes = true
+  const search = vi.fn(() => takes)
+  const shell = shellOf({ menu, search, fillPeek: () => false })
+  // The sidebar shows: Search takes the key, and the menu stays shut.
+  runAction(shell, "menu.open")
+  expect(search).toHaveBeenCalledOnce()
+  expect(menu).not.toHaveBeenCalled()
+  // Again in the empty field, or with the sidebar hidden: the menu.
+  takes = false
+  runAction(shell, "menu.open")
+  expect(menu.mock.calls).toEqual([["root"]])
+  // Over Quick Look the key fills the desk first, as before.
+  runAction(shellOf({ menu, search, fillPeek: () => true }), "menu.open")
+  expect(search).toHaveBeenCalledTimes(2)
+  expect(menu).toHaveBeenCalledOnce()
+
+  // The keys: Alt+Space stays the menu's, everywhere; / and 0 are the
+  // sidebar scope's, where a field types them.
+  const of = (id: string) => ACTIONS.find((action) => action.id === id)
+  expect(of("menu.open")).toMatchObject({
+    keys: [{ code: "Space", mod: true }],
+  })
+  expect(of("menu.open")?.scope).toBeUndefined()
+  expect(of("sidebar.search")).toMatchObject({
+    scope: SIDEBAR,
+    keys: [{ code: "Slash" }],
+  })
+  expect(of("sidebar.tab-all")).toMatchObject({
+    scope: SIDEBAR,
+    keys: [{ code: "Digit0" }],
+  })
 })
 
 test("the sidebar's keys are its scope's, none held with a mod, and pane.beside brings what an Item carries beside the Pane in focus (ADR 0098, decision 13)", () => {

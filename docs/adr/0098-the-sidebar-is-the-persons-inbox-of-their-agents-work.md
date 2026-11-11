@@ -6,7 +6,7 @@ date: 2026-11-09
 # The sidebar is the Person's inbox of their Agents' work
 
 _It amends ADR 0005 (decisions 8 and 9), ADR 0008 (decisions 4 and 5: the row
-and the presets), ADR 0017 (decision 3), ADR 0067 (decisions 3 and 4:
+and the presets), ADR 0017 (decisions 1 and 3), ADR 0067 (decisions 3 and 4:
 the header and the foot), ADR 0069 (Archive as a shelf), ADR 0074
 (decisions 1 and 6, asking and the Snoozed shelf, and its name: Snooze
 becomes Later) and ADR 0079 (the Flow's place). The mark it draws is
@@ -310,6 +310,10 @@ From the audit (`2-code.md`):
 - **ADR 0017, decision 3; ADR 0067, decisions 3 and 4**: the header and
   the foot are decisions 19–21's. **ADR 0079**: the Flow's menu is in
   the bar.
+- **ADR 0017, decision 1** (added 2026-11-11 with step 12, Roma's answer
+  to the spec's P3): while the sidebar shows, `Alt+Space` goes to Search
+  first, and pressed again in the empty field opens the Banda menu
+  (decision 17).
 - **ADR 0005, decision 9** (an erratum, added with step 9: this list first
   left it out): the bar's logo opens the Banda menu (decision 21), not the
   sidebar; `Alt+A`, and the Banda menu's action, show and hide it.

@@ -1,7 +1,13 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { firstThread, startWindow, textOf, type Window } from "./window"
+import {
+  bandaMenu,
+  firstThread,
+  startWindow,
+  textOf,
+  type Window,
+} from "./window"
 
 let window: Window
 
@@ -516,7 +522,7 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await expect(settings).toHaveCount(0)
   // And in the Banda menu.
   await openSettings(page)
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const find = menu.getByRole("combobox", { name: "Search" })
   await find.fill("typed")
   await expect(menu.getByRole("option").first()).toContainText("typed")

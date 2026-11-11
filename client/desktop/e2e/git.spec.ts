@@ -2,6 +2,7 @@ import { chmodSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import {
+  bandaMenu,
   firstThread,
   git,
   setInFront,
@@ -746,7 +747,7 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
 
   // Both are in the Banda menu, as any action: Switch branch there opens
   // the focused Thread's picker, as its key does.
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   await page.keyboard.type("switch branch")
   await expect(
     page.getByRole("option", { name: /Switch branch/ })

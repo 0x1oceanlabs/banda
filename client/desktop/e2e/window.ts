@@ -974,6 +974,23 @@ export async function showPlaces(window: Window): Promise<void> {
     sidebarOf(window.page).getByRole("group", { name: "Projects" })
   ).toBeVisible()
 }
+
+/**
+ * The Banda menu, opened by its key from where the focus is (ADR 0017,
+ * decision 1). While the sidebar shows, Alt+Space goes to its Search
+ * first, and pressed there again with nothing typed opens the menu (ADR
+ * 0098, decision 17): two presses then, one where it is hidden.
+ */
+export async function bandaMenu(page: Page): Promise<Locator> {
+  await page.keyboard.press("Alt+Space")
+  const inSearch = await page.evaluate(
+    () => document.activeElement?.id === "sb-search"
+  )
+  if (inSearch) await page.keyboard.press("Alt+Space")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await expect(menu).toBeVisible()
+  return menu
+}
 /** The Later picker, Alt+Z's. */
 export const pickerOf = (page: Page) =>
   page.getByRole("dialog").filter({ hasText: "Later ·" })

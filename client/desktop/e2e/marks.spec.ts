@@ -31,6 +31,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 import { STEPS_AT_LEAST, STEPS_AT_MOST, steppedOf } from "./loops"
 import { animationsOf } from "./motion-trace"
 import {
+  bandaMenu,
   call,
   finish,
   firstThread,
@@ -298,7 +299,7 @@ test("the bar's Mark and each row draw ADR 0099's looks still, the loudest on th
 
   // The Banda menu's row draws the same look and says it, not the mark
   // under it (ADR 0099, decision 12).
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const inMenu = menu.getByRole("option", { name: /wait done/ })
   await expect(inMenu.getByRole("img", { name: "Woke" })).toBeVisible()

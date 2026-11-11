@@ -18,7 +18,7 @@ import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
-import { headerShows, type Window } from "./window"
+import { bandaMenu, headerShows, type Window } from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -148,7 +148,7 @@ test("an act arc does not run says so from the Banda menu and by its key alike, 
   // The Banda menu's page, in arc's Project: arc's Panes open no browser
   // yet.
   await composer.focus()
-  await page.keyboard.press("Alt+Space")
+  await bandaMenu(page)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await menu.getByRole("combobox", { name: "Search" }).fill("example.com")
   await menu.getByRole("option", { name: "Open example.com" }).click()

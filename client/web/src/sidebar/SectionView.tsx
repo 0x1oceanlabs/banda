@@ -109,7 +109,11 @@ export function SectionView({
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
-  useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
+  useListMotion(list, items, {
+    scene: holds.scene,
+    measure: [settings, look],
+    searching: holds.searching,
+  })
   const actOn = useActs(holding)
   const actOnSet = useSetActs(holding)
   // Your turn's cards that are done, as drawn: not one that asks, failed
