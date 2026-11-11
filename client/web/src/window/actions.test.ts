@@ -9,6 +9,7 @@ import type { Action, Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
+import { quiet } from "../calls/quiet"
 import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
 import { handlesOf } from "../tiling/mount"
 import {
@@ -166,6 +167,27 @@ test("a module is given the Window's API alone, as it is when asked", () => {
   expect(api.run("thread.new")).toBe("run")
   home = "b"
   expect(api.home).toBe("b")
+})
+
+// ADR 0098, decision 21: Alt+Q turns Quiet on until it is turned off, and
+// off again, however long it was on for; a module reads whether it is on.
+test("Alt+Q turns Quiet on until turned off, and off, and a module reads it", () => {
+  const action = ACTIONS.find((one) => one.id === "quiet.toggle")!
+  expect(action.keys).toEqual([{ code: "KeyQ", mod: true }])
+  expect(action.unlisted).toBeUndefined()
+  const shell = shellOf({ quiet: quiet.on })
+  const api = windowApiOf(shell)
+  expect(quiet.get()).toBe("off")
+  runAction(shell, "quiet.toggle")
+  expect(quiet.get()).toBe("on")
+  expect(api.quiet()).toBe(true)
+  runAction(shell, "quiet.toggle")
+  expect(quiet.get()).toBe("off")
+  expect(api.quiet()).toBe(false)
+  // On for half an hour, it goes off at once.
+  quiet.turn(Date.now() + 30 * 60_000)
+  runAction(shell, "quiet.toggle")
+  expect(quiet.get()).toBe("off")
 })
 
 test("a pick goes to the Pane that shows its thing, on any workspace, else opens it where its kind's home is", () => {

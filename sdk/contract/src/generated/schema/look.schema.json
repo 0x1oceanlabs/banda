@@ -771,7 +771,8 @@
           "type": "boolean"
         },
         "quiet": {
-          "description": "Whose quiet Banda keeps.",
+          "title": "Do Not Disturb",
+          "description": "Whether the desktop's Do Not Disturb keeps Banda quiet too: no\ntoast, no notice and no sound while it is on. Banda's own Quiet,\nthe bell at the sidebar's foot, is apart from it.",
           "$ref": "#/$defs/Quiet"
         },
         "done": {

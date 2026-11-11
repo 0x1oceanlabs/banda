@@ -194,7 +194,7 @@ export async function soundsOf(desktop: Desktop | undefined): Promise<boolean> {
 }
 
 /** Whether the desktop is quiet now, when `[notify]` keeps its quiet. */
-export async function quietNow(
+export async function desktopQuiet(
   notify: Notify,
   desktop: Desktop | undefined
 ): Promise<boolean> {

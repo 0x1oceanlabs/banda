@@ -351,6 +351,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Quit Banda (`banda.quit`), Ctrl+Q
 - Banda's own keys, until keys.toml changes (`keys.reset`), Ctrl+Alt+Shift+K
 - Show or hide the sidebar (`sidebar.toggle`), Alt+A
+- Turn Quiet on or off (`quiet.toggle`), Alt+Q
 - Go to workspace 1 (`workspace.go-1`), Alt+1
 - Go to workspace 2 (`workspace.go-2`), Alt+2
 - Go to workspace 3 (`workspace.go-3`), Alt+3

@@ -60,6 +60,7 @@ test("a call the Person looks at while it gathers is not told, though they look 
     here,
     sight,
     look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
+    quiet: () => false,
     projects: () => [],
     run: () => {},
   } as unknown as WindowApi
@@ -76,6 +77,52 @@ test("a call the Person looks at while it gathers is not told, though they look 
 
   // One the Person never looks at is.
   items.set({ p: [done("t1"), done("t3")] })
+  await vi.advanceTimersByTimeAsync(GATHER)
+  expect(toast.getToasts().map((one) => one.id)).toEqual(["p:t3"])
+  teller.stop()
+  toast.dismiss()
+})
+
+// ADR 0098, decision 21: while Quiet is on, a Thread that ends is told
+// nowhere, and a module's news neither; as Quiet ends nothing is played
+// back, and the next call is told as ever.
+test("while Quiet is on nothing is told, and as it ends nothing is played back", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("document", {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })
+  vi.stubGlobal("requestAnimationFrame", (run: () => void) => run())
+  const items = new Store<Lists>({ p: [] })
+  let quiet = true
+  const window = {
+    items,
+    here: new Store<Here>(at("elsewhere")),
+    sight: () => "in-window",
+    look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
+    quiet: () => quiet,
+    projects: () => [],
+    run: () => {},
+  } as unknown as WindowApi
+  const teller = startTelling(window)
+
+  items.set({ p: [done("t1")] })
+  await vi.advanceTimersByTimeAsync(GATHER)
+  await teller.told({
+    key: "problems",
+    kind: "failed",
+    title: "Broke",
+    buttons: [],
+  })
+  expect(toast.getToasts()).toEqual([])
+
+  // Quiet ends just after a call came: it is not told then either.
+  items.set({ p: [done("t1"), done("t2")] })
+  quiet = false
+  await vi.advanceTimersByTimeAsync(GATHER)
+  expect(toast.getToasts()).toEqual([])
+
+  items.set({ p: [done("t1"), done("t2"), done("t3")] })
   await vi.advanceTimersByTimeAsync(GATHER)
   expect(toast.getToasts().map((one) => one.id)).toEqual(["p:t3"])
   teller.stop()

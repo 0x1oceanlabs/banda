@@ -8,7 +8,7 @@ import {
 import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
-import { TriangleAlertIcon } from "lucide-react"
+import { BellOffIcon, TriangleAlertIcon } from "lucide-react"
 import {
   type RefObject,
   useCallback,
@@ -19,6 +19,7 @@ import {
   useState,
 } from "react"
 import type { Problem } from "@banda/contract/look"
+import { useQuiet } from "../calls/quiet"
 import { barAttention, useCalls, useWorkingHere } from "../calls/stores"
 import { useLookProblems } from "../look"
 import { type Layout, moved, same, written } from "./arrange"
@@ -32,11 +33,11 @@ import { useRun } from "@banda/core/react"
  * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
  * the left, which opens the Banda menu (ADR 0098, decision 21) and shows
  * the loudest state of the work, with how many things wait for the Person
- * when more than one does; `Alt+A`, and the menu's action, show and hide
- * the sidebar. The widgets, the Tiling's workspaces among them, stand on the
- * left, in the middle, centred on the window whatever the sides hold, and
- * on the right before the engine's connection, as the look's `[bar]` lists
- * them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
+ * when more than one does, and a crossed bell while Quiet is on; `Alt+A`,
+ * and the menu's action, show and hide the sidebar. The widgets, the
+ * Tiling's workspaces among them, stand on the left, in the middle,
+ * centred on the window whatever the sides hold, and on the right before
+ * the engine's connection, as the look's `[bar]` lists them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
  * What calls, for its Mark, and how many Agents work, it reads from the
  * Window's stores.
  */
@@ -65,9 +66,11 @@ export function Bar({
   const working = useWorkingHere()
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
+  const quiet = useQuiet() !== "off"
   const words =
     (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
-    (waiting > 1 ? ` · ${waiting} wait for you` : "")
+    (waiting > 1 ? ` · ${waiting} wait for you` : "") +
+    (quiet ? " · Quiet on" : "")
   const nodes = useMemo(
     () =>
       new Map(
@@ -130,6 +133,18 @@ export function Bar({
         onClick={() => run("menu.at")}
       >
         <BandaMark state={mark} className="size-5" />
+        {/* Quiet (ADR 0098, decision 21): at the prototype's corner, or
+          above the count where it shows. */}
+        {quiet && (
+          <BellOffIcon
+            aria-hidden
+            data-quiet
+            className={cn(
+              "absolute -right-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0",
+              waiting > 1 ? "-top-0.5" : "-bottom-1"
+            )}
+          />
+        )}
         {waiting > 1 && (
           <span
             aria-hidden
