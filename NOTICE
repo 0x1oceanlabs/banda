@@ -23,6 +23,10 @@ client/ghostty/README.md says where each came from, at which commit.
 - LiteLLM's model price data, in platform/harnesses/engine/src/usage/prices.json:
   MIT, platform/harnesses/engine/src/usage/LICENSE-LITELLM.
   Copyright (c) 2023 Berri AI. The snapshot records its source and commit.
+- Omarchy's themes' colours, the test fixtures in
+  platform/theme/tests/fixtures/omarchy, which Banda does not ship: MIT,
+  platform/theme/tests/fixtures/omarchy/LICENSE-OMARCHY. Copyright (c) David
+  Heinemeier Hansson. Its README says which release they are from.
 - The mock kit in docs/design/kit, which Banda does not ship: Inter and
   JetBrains Mono in its fonts/, OFL-1.1, fonts/LICENSE-Inter.txt and
   fonts/LICENSE-JetBrainsMono.txt, Copyright 2016 The Inter Project Authors,

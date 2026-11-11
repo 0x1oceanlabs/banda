@@ -17,6 +17,10 @@ export default defineConfig({
   retries: process.env.CI ? 1 : 0,
   reporter: [["list"]],
   outputDir: "test-results",
+  // The shots e2e/themes.spec.ts compares, by their names: CI's own. One
+  // missing fails its test, which no retry passes against the shot the
+  // first try wrote; scripts/bless-shots.sh keeps what a failed run shot.
+  snapshotPathTemplate: "{testDir}/shots/{arg}{ext}",
   use: { trace: "retain-on-failure" },
   projects: [
     { name: "window" },

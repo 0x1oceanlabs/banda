@@ -11,4 +11,14 @@ export type Device = {
  * The accent set in the system's settings, `#rrggbb` (ADR 0075,
  * decision 6): macOS's and Windows'.
  */
-accent?: string, };
+accent?: string, 
+/**
+ * The system reduces transparency, as its accessibility settings
+ * say: glass is off while it does (ADR 0100, decision 4).
+ */
+reduce_transparency: boolean, 
+/**
+ * The system raises contrast, or forces its own colours: glass is
+ * off while it does (ADR 0100, decision 4).
+ */
+high_contrast: boolean, };

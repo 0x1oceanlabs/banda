@@ -588,12 +588,14 @@ mod tests {
         assert_eq!(apple["--focus"], "#007aff");
         let pink = with(Device {
             accent: Some("#e0478c".to_owned()),
+            ..Device::default()
         });
         assert_eq!(pink["--primary"], "#e0478c");
         assert_eq!(pink["--sidebar-ring"], "#e0478c");
         // What is not a colour does not get in.
         let wrong = with(Device {
             accent: Some("var(--x)".to_owned()),
+            ..Device::default()
         });
         assert_eq!(wrong["--primary"], "#007aff");
     }

@@ -51,6 +51,9 @@ Every key, with its default:
   desk, the sidebar's panel and the tiles thinned as `[desk]` and
   `[tile]` `opacity` say, and the fills, lines and quiet text the text's
   colour thinned. `[glass.tokens]` corrects one where that does not suit.
+- Glass is off while the system reduces transparency or raises contrast,
+  in its accessibility settings, and back once it stops (ADR 0100,
+  decision 4); `[desk]` `glass` stays as the Person set it.
 - The corners are the theme's (ADR 0100, decision 11): `banda` is round,
   window 30 and control 10; `omarchy` takes Hyprland's rounding as the
   window's and a third of it as a control's, so a square Hyprland makes

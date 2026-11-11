@@ -1020,6 +1020,37 @@ card = { dark = "#101010" }
 }
 
 #[test]
+fn the_system_turns_glass_off_while_it_reduces_transparency_or_raises_contrast() {
+    let mut machine = Machine::new(false);
+    write(&machine.places.config.join("wall.png"), "a picture");
+    machine.look_toml("[desk]\nwallpaper = \"wall.png\"\n");
+    let device = machine.places.config.join("device.json");
+    machine.places.device = Some(device.clone());
+    // The window writes what the system says; the look follows it.
+    for (says, glass) in [
+        ("{}", true),
+        (r#"{"reduce_transparency":true}"#, false),
+        (r#"{"high_contrast":true}"#, false),
+        (
+            r#"{"reduce_transparency":false,"high_contrast":false}"#,
+            true,
+        ),
+    ] {
+        write(&device, says);
+        let resolved = resolve(&machine.places, &|| None, &[], &Default::default());
+        let look = resolved.look;
+        assert!(look.problems.is_empty(), "{:?}", look.problems);
+        assert_eq!(look.desk.glass, glass, "{says}");
+        assert_eq!(look.schemes.light_glass.is_some(), glass, "{says}");
+        assert!(resolved.watched.contains(&device), "the look follows it");
+    }
+    // The Person's own setting stays as they said it.
+    machine.look_toml("[desk]\nglass = false\nwallpaper = \"wall.png\"\n");
+    write(&device, "{}");
+    assert!(!machine.look().desk.glass);
+}
+
+#[test]
 fn glass_is_worked_out_from_the_solid_colours_and_a_theme_corrects_it() {
     let machine = Machine::new(false);
     theme_toml(
