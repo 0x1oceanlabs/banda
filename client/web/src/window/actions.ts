@@ -767,7 +767,8 @@ const FILE = "the file's absolute path"
 
 /** A toast of why a file act was not done, in its machine's words. */
 function notDone(failure: unknown) {
-  refused(failure instanceof Error ? failure.message : String(failure))
+  const said = failure instanceof Error ? failure.message : String(failure)
+  refused({ runs: false, why: said, said })
 }
 
 /**
