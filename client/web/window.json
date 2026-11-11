@@ -868,6 +868,10 @@
             "type": "string",
             "description": "the file's absolute path; a folder's ends with /"
           },
+          "project": {
+            "type": "string",
+            "description": "the Project it is in"
+          },
           "from": {
             "type": "number",
             "description": "the first line commented on, from 1"

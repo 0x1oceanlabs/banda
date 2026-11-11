@@ -1383,7 +1383,12 @@ test("@banda/ui holds no global of a Thread's details card", () => {
  * App's own parts ask theirs. None joins the list, and one that goes
  * leaves it.
  */
-const APP_METHODS = ["web/src/settings/ProjectsSettings.tsx: agents.threads"]
+const APP_METHODS = [
+  "web/src/settings/ProjectsSettings.tsx: agents.threads",
+  // The read a window's file act checks its file with, on the machine of
+  // the file's Project, in place of this device's disk (ADR 0106, step 3a).
+  "web/src/window/actions.ts: files.stat",
+]
 
 test("the Window asks an App's engine part by name no more than the list holds", () => {
   const method = /\.(?:command|call)\(\s*["'`]([a-z]+)\.([\w.-]+)["'`]/g

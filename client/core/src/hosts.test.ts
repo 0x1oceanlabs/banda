@@ -168,15 +168,11 @@ test("a host's Projects are its engine's, none archived, and never one shown bef
   hosts.start("arc")
   expect(device.start).toHaveBeenCalledWith("arc")
 
-  // A picture only its own engine reads shows as its first letter.
+  // Its picture stays a picture: the sign reads it from arc's session.
   tell([live, devbox])
   const picture = { kind: "picture", text: "v1", picked: true } as const
   hosts.projects("arc", [project("pic", { name: "émile", sign: picture })])
-  expect(hosts.get()[0]!.projects[0]!.sign).toEqual({
-    kind: "letters",
-    text: "É",
-    picked: true,
-  })
+  expect(hosts.get()[0]!.projects[0]!.sign).toEqual(picture)
 })
 
 test("a host's engine asks the desktop where it listens on each connect, once the host is live", async () => {

@@ -135,20 +135,9 @@ function Inside({
   size: SignSize
 }) {
   const { sign } = project
-  const picture = useSignPicture(
-    project.id,
-    sign.kind === "picture" ? sign.text : undefined
-  )
   switch (sign.kind) {
     case "picture":
-      return picture ? (
-        <img
-          src={picture}
-          alt=""
-          draggable={false}
-          className="size-full object-contain"
-        />
-      ) : null
+      return <Picture project={project.id} version={sign.text} />
     case "icon":
       return (
         <DynamicIcon
@@ -166,6 +155,25 @@ function Inside({
       )
     }
   }
+}
+
+/** A sign's picture at `version`, read from the machine `project` is on. */
+function Picture({
+  project,
+  version,
+}: {
+  project: ProjectSummary["id"]
+  version: string
+}) {
+  const picture = useSignPicture(project, version)
+  return picture ? (
+    <img
+      src={picture}
+      alt=""
+      draggable={false}
+      className="size-full object-contain"
+    />
+  ) : null
 }
 
 /** The quiet palette a sign's letters or icon take (ADR 0070, decision 4),

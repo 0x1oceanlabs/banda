@@ -1,7 +1,6 @@
 import "./renamed"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
-import { readSignsFrom } from "@banda/ui/lib/signs"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
@@ -40,7 +39,6 @@ const root = createRoot(document.getElementById("root")!, {
 
 if (host && engine) {
   watchProblems(engine)
-  readSignsFrom(engine)
   // Its files' bytes come through the desktop, which relays them to it.
   relayBytesFrom(engine)
   void moveEnterKey(host).catch(() => undefined)
