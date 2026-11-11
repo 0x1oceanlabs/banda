@@ -11,8 +11,7 @@ test("the logo's order is offline › failed › asking › woke › done › wo
     "asking",
     "woke",
     "done",
-    "running",
-    "thinking",
+    "working",
     "idle",
     "later",
     "rest",
@@ -20,7 +19,7 @@ test("the logo's order is offline › failed › asking › woke › done › wo
 })
 
 test("the logo shows the loudest, a Thread that woke among them", () => {
-  expect(loudest(["done", "woke", "running"])).toBe("woke")
+  expect(loudest(["done", "woke", "working"])).toBe("woke")
   expect(loudest(["woke", "asking"])).toBe("asking")
   expect(loudest(["woke", "failed"])).toBe("failed")
   expect(loudest(["failed", "offline"])).toBe("offline")
@@ -30,5 +29,5 @@ test("the logo shows the loudest, a Thread that woke among them", () => {
 test("what calls no one and works not leaves the logo at rest", () => {
   expect(loudest(["idle", "later"])).toBe("rest")
   expect(loudest(["later"])).toBe("rest")
-  expect(loudest(["idle", "thinking"])).toBe("thinking")
+  expect(loudest(["idle", "working"])).toBe("working")
 })

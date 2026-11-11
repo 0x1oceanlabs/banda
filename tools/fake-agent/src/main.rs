@@ -64,11 +64,15 @@
 //!   reads each from its own machine's disk, naming each file it read,
 //!   and replies with what each holds (`who.txt holds arc.`), so a test
 //!   sees whose file it was.
-//! - `doing` and `read`, `edit` or `execute`, then what it works on:
-//!   works on a tool call of that kind, named as Claude Code names it
-//!   (`doing read card.ts`, `doing execute pnpm test`), until a message is
-//!   sent into its turn. Another `doing …` moves on to that; anything
-//!   else ends the call and replies.
+//! - `doing` and `read`, `edit`, `delete`, `move`, `search`, `execute`,
+//!   `fetch` or `other`, then what it works on: works on a tool call of
+//!   that kind, named as Claude Code names it (`doing read card.ts`,
+//!   `doing execute pnpm test`, `doing search standOf`, `doing fetch
+//!   docs.rs`), until a message is sent into its turn. `doing think` and
+//!   `doing reply` say a piece of a thought or of the reply instead, and
+//!   `doing compact` compacts the context as Claude Code says it does.
+//!   Another `doing …` moves on to that; anything else ends the call and
+//!   replies.
 //! - `silent` and a number: says nothing for that many seconds, then
 //!   replies.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
@@ -594,20 +598,56 @@ fn cat(
     Ok(StopReason::EndTurn)
 }
 
-/// The kind of tool call `doing` names in `words`, and what it works on.
-fn doing_of(words: &str) -> Option<(ToolKind, String)> {
-    let mut after = words.split_whitespace().skip_while(|word| *word != "doing");
-    let kind = match after.nth(1)? {
-        "read" => ToolKind::Read,
-        "edit" => ToolKind::Edit,
-        "execute" => ToolKind::Execute,
-        _ => return None,
-    };
-    Some((kind, after.collect::<Vec<_>>().join(" ")))
+/// What `doing` names in `words`: a tool call of a kind, a thought, the
+/// reply, or the context compacted.
+#[derive(Clone, Copy, PartialEq)]
+enum Doing {
+    Call(ToolKind),
+    Think,
+    Reply,
+    Compact,
 }
 
-/// `doing`: works on each tool call a message names, as Claude Code titles
-/// its calls, until a message names none (see the top).
+/// What `doing` names in `words`, and what it works on.
+fn doing_of(words: &str) -> Option<(Doing, String)> {
+    let mut after = words.split_whitespace().skip_while(|word| *word != "doing");
+    let doing = match after.nth(1)? {
+        "read" => Doing::Call(ToolKind::Read),
+        "edit" => Doing::Call(ToolKind::Edit),
+        "delete" => Doing::Call(ToolKind::Delete),
+        "move" => Doing::Call(ToolKind::Move),
+        "search" => Doing::Call(ToolKind::Search),
+        "execute" => Doing::Call(ToolKind::Execute),
+        "fetch" => Doing::Call(ToolKind::Fetch),
+        "other" => Doing::Call(ToolKind::Other),
+        "think" => Doing::Think,
+        "reply" => Doing::Reply,
+        "compact" => Doing::Compact,
+        _ => return None,
+    };
+    Some((doing, after.collect::<Vec<_>>().join(" ")))
+}
+
+/// The tool call `doing` makes of `kind` on `on`, titled as Claude Code
+/// titles its own: a file's by its path, a search by its pattern, a fetch
+/// by its address, a command as it is.
+fn call_of(id: String, kind: ToolKind, on: &str, folder: &std::path::Path) -> ToolCall {
+    let title = match kind {
+        ToolKind::Read => "Read",
+        ToolKind::Edit => "Edit",
+        ToolKind::Delete => "Delete",
+        ToolKind::Move => "Move",
+        ToolKind::Search => return ToolCall::new(id, format!("grep \"{on}\"")),
+        ToolKind::Fetch => return ToolCall::new(id, format!("Fetch https://{on}")),
+        _ => return ToolCall::new(id, on),
+    };
+    let place = ToolCallLocation::new(folder.join(on));
+    ToolCall::new(id, format!("{title} {on}")).locations(vec![place])
+}
+
+/// `doing`: works on what each message names, a tool call as Claude Code
+/// titles its calls, a thought, the reply or a compaction, until a message
+/// names none (see the top).
 async fn doing(
     fake: &Fake,
     cx: &ConnectionTo<Client>,
@@ -617,32 +657,35 @@ async fn doing(
 ) -> Result<StopReason, Error> {
     let folder = fake.setup(session).folder;
     let mut calls = 0;
-    while let Some((kind, on)) = doing_of(&words) {
+    while let Some((doing, on)) = doing_of(&words) {
         calls += 1;
         let id = format!("doing-{calls}");
-        let call = match kind {
-            ToolKind::Execute => ToolCall::new(id.clone(), on),
-            _ => {
-                let title = if kind == ToolKind::Read {
-                    "Read"
-                } else {
-                    "Edit"
-                };
-                let place = ToolCallLocation::new(folder.join(&on));
-                ToolCall::new(id.clone(), format!("{title} {on}")).locations(vec![place])
+        let running =
+            |call: ToolCall| SessionUpdate::ToolCall(call.status(ToolCallStatus::InProgress));
+        let update = match doing {
+            Doing::Call(kind) => running(call_of(id.clone(), kind, &on, &folder).kind(kind)),
+            // As Claude Code's adapter says it compacts: a call of its tool
+            // `compact`.
+            Doing::Compact => {
+                let meta = json!({ "claudeCode": { "toolName": "compact" } });
+                running(ToolCall::new(id.clone(), "Compact").meta(meta.as_object().cloned()))
             }
+            Doing::Think => SessionUpdate::AgentThoughtChunk(text(&format!("Thinking: {on}"))),
+            Doing::Reply => SessionUpdate::AgentMessageChunk(text(&format!("{on} "))),
         };
-        let call = call.kind(kind).status(ToolCallStatus::InProgress);
-        say(cx, session, SessionUpdate::ToolCall(call))?;
+        let called = matches!(update, SessionUpdate::ToolCall(_));
+        say(cx, session, update)?;
         let Some(next) = steered_on(fake, session, steered).await else {
             return Ok(StopReason::Cancelled);
         };
-        let done = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
-        say(
-            cx,
-            session,
-            SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(id, done)),
-        )?;
+        if called {
+            let done = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
+            say(
+                cx,
+                session,
+                SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(id, done)),
+            )?;
+        }
         words = next;
     }
     let reply = format!("Done: {words}.");

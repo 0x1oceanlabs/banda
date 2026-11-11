@@ -94,7 +94,7 @@ test("on its tile in the Overview its Mark is small, with what it asks while it 
       lists("p1", listed)
     )
   expect(overview(thread("rest"), false)).toBe("")
-  const running = thread("running")
+  const running = thread("working")
   expect(overview(running, false)).toBe(
     markup(<ThreadMark listed={running} className="size-3.5" />)
   )

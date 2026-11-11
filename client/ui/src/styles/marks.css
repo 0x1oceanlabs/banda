@@ -42,6 +42,13 @@
 [data-slot="banda-mark"] .mark-z {
   transform-origin: 100px 4px;
 }
+/* The prompt's cursor blinks out about its own middle, and a doing's dot
+   (fetch's, limit's sand) is drawn at 0 0 and set in place by its loop. */
+[data-slot="banda-mark"] .mark-cursor {
+  transform-box: fill-box;
+  transform-origin: 50% 50%;
+  transform: scaleX(0);
+}
 
 /* Written from mark-rhythm.ts's LOOPS and LOOPED, and held equal to them
    by mark-rhythm.test.ts: change them there, then write them here with
@@ -853,6 +860,855 @@
     transform: scaleY(0.649);
   }
 }
+@keyframes mark-sweep {
+  0% {
+    transform: translate(2.6px, 0px);
+  }
+  6.25% {
+    transform: translate(2.402px, 1.273px);
+  }
+  12.5% {
+    transform: translate(1.838px, 1.8px);
+  }
+  18.75% {
+    transform: translate(0.995px, 1.273px);
+  }
+  25% {
+    transform: translate(0px, 0px);
+  }
+  31.25% {
+    transform: translate(-0.995px, -1.273px);
+  }
+  37.5% {
+    transform: translate(-1.838px, -1.8px);
+  }
+  43.75% {
+    transform: translate(-2.402px, -1.273px);
+  }
+  50% {
+    transform: translate(-2.6px, 0px);
+  }
+  56.25% {
+    transform: translate(-2.402px, 1.273px);
+  }
+  62.5% {
+    transform: translate(-1.838px, 1.8px);
+  }
+  68.75% {
+    transform: translate(-0.995px, 1.273px);
+  }
+  75% {
+    transform: translate(0px, 0px);
+  }
+  81.25% {
+    transform: translate(0.995px, -1.273px);
+  }
+  87.5% {
+    transform: translate(1.838px, -1.8px);
+  }
+  93.75% {
+    transform: translate(2.402px, -1.273px);
+  }
+  100% {
+    transform: translate(2.6px, 0px);
+  }
+}
+@keyframes mark-sweep-back {
+  0% {
+    transform: translate(-2.6px, 0px);
+  }
+  6.25% {
+    transform: translate(-2.402px, -1.273px);
+  }
+  12.5% {
+    transform: translate(-1.838px, -1.8px);
+  }
+  18.75% {
+    transform: translate(-0.995px, -1.273px);
+  }
+  25% {
+    transform: translate(0px, 0px);
+  }
+  31.25% {
+    transform: translate(0.995px, 1.273px);
+  }
+  37.5% {
+    transform: translate(1.838px, 1.8px);
+  }
+  43.75% {
+    transform: translate(2.402px, 1.273px);
+  }
+  50% {
+    transform: translate(2.6px, 0px);
+  }
+  56.25% {
+    transform: translate(2.402px, -1.273px);
+  }
+  62.5% {
+    transform: translate(1.838px, -1.8px);
+  }
+  68.75% {
+    transform: translate(0.995px, -1.273px);
+  }
+  75% {
+    transform: translate(0px, 0px);
+  }
+  81.25% {
+    transform: translate(-0.995px, 1.273px);
+  }
+  87.5% {
+    transform: translate(-1.838px, 1.8px);
+  }
+  93.75% {
+    transform: translate(-2.402px, 1.273px);
+  }
+  100% {
+    transform: translate(-2.6px, 0px);
+  }
+}
+@keyframes mark-stroke {
+  0% {
+    transform: rotate(2.5deg);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: rotate(-2.5deg);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: rotate(2.5deg);
+  }
+}
+@keyframes mark-stroke-look {
+  0% {
+    transform: translate(1.5px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: translate(-1.5px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: translate(1.5px, 0px);
+  }
+}
+@keyframes mark-stroke-look-back {
+  0% {
+    transform: translate(-1.5px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: translate(1.5px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: translate(-1.5px, 0px);
+  }
+}
+@keyframes mark-stroke-press {
+  0% {
+    transform: scale(1, 0.985);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  25% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: scale(1, 0.985);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  75% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: scale(1, 0.985);
+  }
+}
+@keyframes mark-cursor {
+  0% {
+    transform: scaleX(0);
+    animation-timing-function: steps(1, end);
+  }
+  50% {
+    transform: scaleX(1);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: scaleX(1);
+  }
+}
+@keyframes mark-fetch {
+  0% {
+    transform: translate(102px, 6.5px) scale(1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: translate(116px, -3.5px) scale(1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: translate(102px, 6.5px) scale(1);
+  }
+}
+@keyframes mark-blink-far {
+  0% {
+    transform: scaleY(1);
+    animation-timing-function: steps(1, end);
+  }
+  4.138% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+@keyframes mark-type {
+  0% {
+    transform: translate(-3px, 0px);
+  }
+  65.385% {
+    transform: translate(3px, 0px);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: translate(-3px, 0px);
+  }
+}
+@keyframes mark-type-back {
+  0% {
+    transform: translate(3px, 0px);
+  }
+  65.385% {
+    transform: translate(-3px, 0px);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: translate(3px, 0px);
+  }
+}
+@keyframes mark-taps {
+  0% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  2.747% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  5.495% {
+    transform: scale(1, 1);
+  }
+  10.989% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  13.736% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  16.484% {
+    transform: scale(1, 1);
+  }
+  21.978% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  24.725% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  27.473% {
+    transform: scale(1, 1);
+  }
+  32.967% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  35.714% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  38.462% {
+    transform: scale(1, 1);
+  }
+  43.956% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  46.703% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  49.451% {
+    transform: scale(1, 1);
+  }
+  54.945% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  57.692% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  60.44% {
+    transform: scale(1, 1);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+@keyframes mark-series-size {
+  0% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  3.431% {
+    transform: scale(0.992, 1.015);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  15.196% {
+    transform: scale(1.01, 0.98);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  30.392% {
+    transform: scale(0.99, 1.02);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  44.118% {
+    transform: scale(1.01, 0.981);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  47.549% {
+    transform: scale(1.004, 0.991);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  47.619% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  48.319% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  48.669% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  49.02% {
+    transform: scale(1, 1);
+  }
+  49.72% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  50.07% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  50.42% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  51.12% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  51.471% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  51.821% {
+    transform: scale(1, 1);
+  }
+  56.863% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  57.213% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  57.563% {
+    transform: scale(1, 1);
+  }
+  58.263% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  58.613% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  58.964% {
+    transform: scale(1, 1);
+  }
+  59.664% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  60.014% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  60.364% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  61.064% {
+    transform: scale(1, 1);
+  }
+  61.415% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  61.765% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  62.465% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  62.815% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  63.165% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  63.866% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  64.216% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  64.566% {
+    transform: scale(1, 1);
+  }
+  69.608% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  69.958% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  70.308% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  71.008% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  71.359% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  71.709% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  72.409% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  72.759% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  73.109% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  73.81% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  74.16% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  74.51% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  75.21% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  75.56% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  75.91% {
+    transform: scale(1, 1);
+  }
+  76.611% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.61, 1, 0.88, 1);
+  }
+  76.961% {
+    transform: scale(1.012, 0.97);
+    animation-timing-function: cubic-bezier(0.12, 0, 0.39, 0);
+  }
+  77.311% {
+    transform: scale(1, 1);
+  }
+  82.353% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  85.784% {
+    transform: scale(1, 1);
+  }
+  92.157% {
+    transform: scale(1, 1);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+@keyframes mark-series-look {
+  0% {
+    transform: translate(2.6px, -4.6px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  3.431% {
+    transform: translate(-1.443px, 0px);
+  }
+  12.5% {
+    transform: translate(3.2px, 0px);
+  }
+  14.706% {
+    transform: translate(-3.2px, 1.4px);
+  }
+  27.206% {
+    transform: translate(3.2px, 1.4px);
+  }
+  29.412% {
+    transform: translate(-3.2px, 2.8px);
+  }
+  41.912% {
+    transform: translate(3.2px, 2.8px);
+  }
+  44.118% {
+    transform: translate(-3.2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  47.549% {
+    transform: translate(-0.529px, 2.2px);
+  }
+  52.451% {
+    transform: translate(3px, 2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  56.863% {
+    transform: translate(-3px, 2.2px);
+  }
+  65.196% {
+    transform: translate(3px, 2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  69.608% {
+    transform: translate(-3px, 2.2px);
+  }
+  77.941% {
+    transform: translate(3px, 2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  82.353% {
+    transform: translate(3px, 2.2px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  85.784% {
+    transform: translate(2.6px, -4.6px);
+  }
+  92.157% {
+    transform: translate(2.6px, -4.6px);
+  }
+  100% {
+    transform: translate(2.6px, -4.6px);
+  }
+}
+@keyframes mark-series-look-back {
+  0% {
+    transform: translate(-2.6px, 4.6px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  3.431% {
+    transform: translate(1.443px, 0px);
+  }
+  12.5% {
+    transform: translate(-3.2px, 0px);
+  }
+  14.706% {
+    transform: translate(3.2px, -1.4px);
+  }
+  27.206% {
+    transform: translate(-3.2px, -1.4px);
+  }
+  29.412% {
+    transform: translate(3.2px, -2.8px);
+  }
+  41.912% {
+    transform: translate(-3.2px, -2.8px);
+  }
+  44.118% {
+    transform: translate(3.2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  47.549% {
+    transform: translate(0.529px, -2.2px);
+  }
+  52.451% {
+    transform: translate(-3px, -2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  56.863% {
+    transform: translate(3px, -2.2px);
+  }
+  65.196% {
+    transform: translate(-3px, -2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  69.608% {
+    transform: translate(3px, -2.2px);
+  }
+  77.941% {
+    transform: translate(-3px, -2.2px);
+    animation-timing-function: steps(1, end);
+  }
+  82.353% {
+    transform: translate(-3px, -2.2px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  85.784% {
+    transform: translate(-2.6px, 4.6px);
+  }
+  92.157% {
+    transform: translate(-2.6px, 4.6px);
+  }
+  100% {
+    transform: translate(-2.6px, 4.6px);
+  }
+}
+@keyframes mark-series-lid {
+  0% {
+    transform: scaleY(0);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  3.431% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  12.5% {
+    transform: scaleY(0.649);
+    animation-timing-function: steps(1, end);
+  }
+  14.706% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  27.206% {
+    transform: scaleY(0.649);
+    animation-timing-function: steps(1, end);
+  }
+  29.412% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  41.912% {
+    transform: scaleY(0.649);
+    animation-timing-function: steps(1, end);
+  }
+  44.118% {
+    transform: scaleY(0);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  47.549% {
+    transform: scaleY(0.21);
+  }
+  53.922% {
+    transform: scaleY(0.21);
+  }
+  63.725% {
+    transform: scaleY(0.21);
+  }
+  73.529% {
+    transform: scaleY(0.21);
+  }
+  82.353% {
+    transform: scaleY(0.21);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  85.784% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  89.216% {
+    transform: scaleY(1);
+    animation-timing-function: steps(1, end);
+  }
+  90.392% {
+    transform: scaleY(1);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+@keyframes mark-series-turn {
+  0% {
+    transform: rotate(-2deg);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  3.431% {
+    transform: rotate(0deg);
+  }
+  9.804% {
+    transform: rotate(0deg);
+  }
+  19.608% {
+    transform: rotate(0deg);
+  }
+  29.412% {
+    transform: rotate(0deg);
+  }
+  39.216% {
+    transform: rotate(0deg);
+  }
+  49.02% {
+    transform: rotate(0deg);
+  }
+  58.824% {
+    transform: rotate(0deg);
+  }
+  68.627% {
+    transform: rotate(0deg);
+  }
+  78.431% {
+    transform: rotate(0deg);
+  }
+  82.353% {
+    transform: rotate(0deg);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  85.784% {
+    transform: rotate(-2deg);
+  }
+  92.157% {
+    transform: rotate(-2deg);
+  }
+  100% {
+    transform: rotate(-2deg);
+  }
+}
+@keyframes mark-squeeze {
+  0% {
+    transform: scale(1, 1);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: scale(0.8, 1.06);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: scale(1, 1);
+  }
+}
+@keyframes mark-squeeze-lid {
+  0% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  23.182% {
+    transform: scaleY(1);
+    animation-timing-function: steps(1, end);
+  }
+  76.818% {
+    transform: scaleY(0);
+    animation-timing-function: steps(1, end);
+  }
+  100% {
+    transform: scaleY(0);
+  }
+}
+@keyframes mark-drift {
+  0% {
+    transform: translate(2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: translate(-2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: translate(2px, 0px);
+  }
+}
+@keyframes mark-drift-back {
+  0% {
+    transform: translate(-2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: translate(2px, 0px);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: translate(-2px, 0px);
+  }
+}
+@keyframes mark-drowse {
+  0% {
+    transform: scale(1, 1.031);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: scale(1, 0.969);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: scale(1, 1.031);
+  }
+}
+@keyframes mark-doze {
+  0% {
+    transform: scale(1, 1.03);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  50% {
+    transform: scale(1, 0.97);
+    animation-timing-function: cubic-bezier(0.37, 0, 0.63, 1);
+  }
+  100% {
+    transform: scale(1, 1.03);
+  }
+}
+@keyframes mark-sand {
+  0% {
+    transform: translate(106px, 8.5px) scale(0);
+  }
+  25% {
+    transform: translate(106px, 15px) scale(0.707);
+  }
+  50% {
+    transform: translate(106px, 21.5px) scale(1);
+  }
+  75% {
+    transform: translate(106px, 28px) scale(0.707);
+  }
+  100% {
+    transform: translate(106px, 34.5px) scale(0);
+  }
+}
 [data-slot="banda-mark"][data-loop="idle"] .mark-size {
   animation-name: mark-breath;
   animation-duration: 2.6s;
@@ -925,41 +1781,137 @@
   animation-name: mark-zz;
   animation-duration: 2.2s;
 }
-[data-slot="banda-mark"][data-loop="thinking"] .mark-move {
+[data-slot="banda-mark"][data-loop="think"] .mark-move {
   animation-name: mark-bob;
   animation-duration: 2.2s;
 }
-[data-slot="banda-mark"][data-loop="thinking"] .mark-turn {
+[data-slot="banda-mark"][data-loop="think"] .mark-turn {
   animation-name: mark-sway;
   animation-duration: 4.5s;
 }
-[data-slot="banda-mark"][data-loop="thinking"] .mark-look {
+[data-slot="banda-mark"][data-loop="think"] .mark-look {
   animation-name: mark-ponder;
   animation-duration: 7s;
 }
-[data-slot="banda-mark"][data-loop="thinking"] .mark-unlook {
+[data-slot="banda-mark"][data-loop="think"] .mark-unlook {
   animation-name: mark-ponder-back;
   animation-duration: 7s;
 }
-[data-slot="banda-mark"][data-loop="thinking"] .mark-lid {
+[data-slot="banda-mark"][data-loop="think"] .mark-lid {
   animation-name: mark-blink-slow;
   animation-duration: 3.4s;
 }
-[data-slot="banda-mark"][data-loop="running"] .mark-size {
+[data-slot="banda-mark"][data-loop="read"] .mark-size {
   animation-name: mark-work;
   animation-duration: 3.1s;
 }
-[data-slot="banda-mark"][data-loop="running"] .mark-look {
+[data-slot="banda-mark"][data-loop="read"] .mark-look {
   animation-name: mark-scan;
   animation-duration: 4.5s;
 }
-[data-slot="banda-mark"][data-loop="running"] .mark-unlook {
+[data-slot="banda-mark"][data-loop="read"] .mark-unlook {
   animation-name: mark-scan-back;
   animation-duration: 4.5s;
 }
-[data-slot="banda-mark"][data-loop="running"] .mark-lid {
+[data-slot="banda-mark"][data-loop="read"] .mark-lid {
   animation-name: mark-scan-lid;
   animation-duration: 1.5s;
+}
+[data-slot="banda-mark"][data-loop="search"] .mark-look {
+  animation-name: mark-sweep;
+  animation-duration: 4.833s;
+}
+[data-slot="banda-mark"][data-loop="search"] .mark-unlook {
+  animation-name: mark-sweep-back;
+  animation-duration: 4.833s;
+}
+[data-slot="banda-mark"][data-loop="edit"] .mark-turn {
+  animation-name: mark-stroke;
+  animation-duration: 0.667s;
+}
+[data-slot="banda-mark"][data-loop="edit"] .mark-look {
+  animation-name: mark-stroke-look;
+  animation-duration: 0.667s;
+}
+[data-slot="banda-mark"][data-loop="edit"] .mark-unlook {
+  animation-name: mark-stroke-look-back;
+  animation-duration: 0.667s;
+}
+[data-slot="banda-mark"][data-loop="edit"] .mark-size {
+  animation-name: mark-stroke-press;
+  animation-duration: 0.667s;
+}
+[data-slot="banda-mark"][data-loop="execute"] .mark-cursor {
+  animation-name: mark-cursor;
+  animation-duration: 1.06s;
+}
+[data-slot="banda-mark"][data-loop="fetch"] .mark-dot {
+  animation-name: mark-fetch;
+  animation-duration: 2.4s;
+}
+[data-slot="banda-mark"][data-loop="fetch"] .mark-lid {
+  animation-name: mark-blink-far;
+  animation-duration: 2.9s;
+}
+[data-slot="banda-mark"][data-loop="reply"] .mark-look {
+  animation-name: mark-type;
+  animation-duration: 1.3s;
+}
+[data-slot="banda-mark"][data-loop="reply"] .mark-unlook {
+  animation-name: mark-type-back;
+  animation-duration: 1.3s;
+}
+[data-slot="banda-mark"][data-loop="reply"] .mark-size {
+  animation-name: mark-taps;
+  animation-duration: 1.3s;
+}
+[data-slot="banda-mark"][data-loop="other"] .mark-size {
+  animation-name: mark-series-size;
+  animation-duration: 10.2s;
+}
+[data-slot="banda-mark"][data-loop="other"] .mark-look {
+  animation-name: mark-series-look;
+  animation-duration: 10.2s;
+}
+[data-slot="banda-mark"][data-loop="other"] .mark-unlook {
+  animation-name: mark-series-look-back;
+  animation-duration: 10.2s;
+}
+[data-slot="banda-mark"][data-loop="other"] .mark-lid {
+  animation-name: mark-series-lid;
+  animation-duration: 10.2s;
+}
+[data-slot="banda-mark"][data-loop="other"] .mark-turn {
+  animation-name: mark-series-turn;
+  animation-duration: 10.2s;
+}
+[data-slot="banda-mark"][data-loop="compacting"] .mark-size {
+  animation-name: mark-squeeze;
+  animation-duration: 2.2s;
+}
+[data-slot="banda-mark"][data-loop="compacting"] .mark-lid {
+  animation-name: mark-squeeze-lid;
+  animation-duration: 2.2s;
+}
+[data-slot="banda-mark"][data-loop="stuck"] .mark-look {
+  animation-name: mark-drift;
+  animation-duration: 15.708s;
+}
+[data-slot="banda-mark"][data-loop="stuck"] .mark-unlook {
+  animation-name: mark-drift-back;
+  animation-duration: 15.708s;
+}
+[data-slot="banda-mark"][data-loop="stuck"] .mark-size {
+  animation-name: mark-drowse;
+  animation-duration: 4.2s;
+}
+[data-slot="banda-mark"][data-loop="limit"] .mark-size {
+  animation-name: mark-doze;
+  animation-duration: 4.2s;
+}
+[data-slot="banda-mark"][data-loop="limit"] .mark-dot {
+  animation-name: mark-sand;
+  animation-duration: 1.8s;
 }
 [data-slot="banda-mark"] .mark-z:nth-child(2) {
   animation-delay: calc(var(--mark-phase, 0s) - 0.733s);

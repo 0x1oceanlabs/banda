@@ -18,7 +18,7 @@ import type { Lists } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLaterClock, useLists } from "../calls/stores"
 import { useLookSidebar } from "../look"
-import { ThreadMark, toneOf } from "@banda/ui/components/banda-mark"
+import { ThreadMark, toneOf, works } from "@banda/ui/components/banda-mark"
 import { order, useElsewhere } from "./order"
 import { lookOf } from "@banda/ui/status"
 import { placedOf } from "./arrange"
@@ -37,7 +37,7 @@ const WORDS: Record<Count, string> = {
 /** A count's colour, by its loudest mark: work is muted; what calls is in
  * its colour, or the text's. */
 function colourOf(mark: MarkState, color: boolean): string {
-  if (mark === "running" || mark === "thinking") return "text-muted-foreground"
+  if (works(mark)) return "text-muted-foreground"
   return (color && toneOf(mark)) || "text-foreground"
 }
 
@@ -177,14 +177,14 @@ function List({
       const where = named.get(project)
       // Its mark's look, and its time from its place's moment in that
       // look's colour, as its card has them.
-      const { look } = lookOf(listed, now)
+      const { look, doing } = lookOf(listed, now)
       return (
         <DropdownMenuItem
           key={listed.id}
           className="gap-2 py-1.5"
           onClick={() => run("pane.pick", { project, pane: listed.pane })}
         >
-          <ThreadMark listed={listed} look={look} />
+          <ThreadMark listed={listed} look={look} doing={doing} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           {where && <ProjectSign project={where} />}
           <TimeNow time={timeAt(placedOf(listed, now), look)} />

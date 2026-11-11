@@ -106,6 +106,9 @@ function declared(part: Part, [a, b, c, d]: readonly number[]): string[] {
   if (part === "turn" || part === "bell") return [`transform: rotate(${a}deg);`]
   if (part === "size") return [`transform: scale(${a}, ${b});`]
   if (part === "lid") return [`transform: scaleY(${a});`]
+  if (part === "cursor") return [`transform: scaleX(${a});`]
+  if (part === "dot")
+    return [`transform: translate(${a}px, ${b}px) scale(${c});`]
   return [`transform: translate(${a}px, ${b}px) scale(${c});`, `opacity: ${d};`]
 }
 

@@ -7,8 +7,9 @@
  * maximized, the workspaces stepped, and the overview opened and closed;
  * then the sidebar list as an Agent's day moves it, and the window once
  * its batch is over. The browser's page shows in every phase but the
- * last: the Marks, which only live, as their Threads take the Tiling over
- * (ADR 0099, decision 4).
+ * last two: the Marks, which only live, as their Threads take the Tiling
+ * over (ADR 0099, decision 4), and ten Agents at work, each Mark showing
+ * what its Agent does (ADR 0099, step 3).
  *
  * For each phase it reports the main thread's work a second, from Chrome's
  * own counters; what motion-probe.ts counts in the page (ticks, layout read
@@ -39,6 +40,7 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
+import type { Shown } from "@banda/ui/lib/mark-state"
 import { expect, test } from "@playwright/test"
 import { install, read, reset } from "./motion-probe"
 import { perSecondOf, report, type Phase } from "./motion-report"
@@ -621,57 +623,46 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     phases.marks.counted.callbacks,
     `marks: animation frames${asked.map((stack) => `\n-- asked for at:\n${stack}`).join("")}`
   ).toBe(0)
-  // The compositor's verdict on their loops, from a trace of their own:
-  // hidden and shown, the sidebar's Marks begin theirs again. Beside the
-  // two that ask, a Thread at work, one done that the Person did not see
-  // and one that failed, so the loops move every part a row's mark has.
-  // Woke's bells ring on the bar's Mark, and marks.spec traces them there.
-  if (traced) {
-    await expect(
-      (await startAgent(page, "wait done")).getByText("Waiting.")
-    ).toBeVisible()
-    await expect(
-      (await startAgent(page, "wait on")).getByText("Waiting.")
-    ).toBeVisible()
-    finish(window, "wait done")
-    call(window, "agents.send", {
-      thread: threadNamed(window, "hello 1")!.id,
-      text: "fail now",
-    })
-    const looks = ["asking", "failed", "done", "running"] as const
-    for (const [text, name] of [
-      ["wait on", "Working"],
-      ["wait done", "Done"],
-      ["hello 1", "Failed"],
-    ] as const)
-      await expect(rowOf(text).getByRole("img", { name })).toBeVisible()
-    await leaveSidebar(page)
-    await page.evaluate(() => (document.activeElement as HTMLElement).blur())
-    await expect(page.locator("[data-news]")).toHaveCount(0)
-    await startTrace(cdp, "marks: compositor")
-    await page.waitForTimeout(300)
+  /** Hides the sidebar, and shows it again: its Marks are drawn afresh. */
+  const hideAndShow = async () => {
     await page.keyboard.press("Alt+KeyA")
     await expect(sidebar).toBeHidden()
     await page.waitForTimeout(300)
     await page.keyboard.press("Alt+KeyA")
     await expect(sidebar).toBeVisible()
+  }
+  /** The compositor's verdict on the Marks' loops, from a trace of their
+   * own, as the phase `name`'s: as `redraw` draws the sidebar's Marks
+   * afresh, they begin theirs again, and the trace must see `looks`'
+   * begin. */
+  const traceMarks = async (
+    name: "marks" | "agents",
+    looks: Shown[],
+    redraw: () => Promise<void>
+  ) => {
+    await leaveSidebar(page)
+    await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+    await expect(page.locator("[data-news]")).toHaveCount(0)
+    await startTrace(cdp, `${name}: compositor`)
+    await page.waitForTimeout(300)
+    await redraw()
     await page.waitForTimeout(1000)
     const events = await stopTrace(
       cdp,
-      "marks: compositor",
-      keep ? test.info().outputPath("marks-compositor.trace.json") : undefined
+      `${name}: compositor`,
+      keep ? test.info().outputPath(`${name}-compositor.trace.json`) : undefined
     )
     const compositor = compositedOf(events, pids.window, "mark-")
-    phases.marks.compositor = compositor
+    phases[name]!.compositor = compositor
     // Loops that began where nothing of their mark was drawn, as the
     // sidebar hid and showed, and paused within 0.1 s: not counted.
     test.info().annotations.push({
-      type: "marks: brief",
+      type: `${name}: brief`,
       description: `${compositor.brief} of ${compositor.animations} loops undrawn, paused within 0.1 s, not counted`,
     })
     expect(
       compositor.names,
-      "marks: the Marks' loops the trace saw begin"
+      `${name}: the Marks' loops the trace saw begin`
     ).toEqual(expect.arrayContaining(animationsOf(looks)))
     // The gate (ADR 0099, step 1): at a scale of 1 the compositor runs
     // every loop. At another, Chromium may run an SVG's on the main
@@ -679,9 +670,99 @@ test("how the Tiling moves, against motion-budget.json", async () => {
     if (scale === 1)
       expect(
         compositor.failed,
-        "marks: loops the compositor does not run"
+        `${name}: loops the compositor does not run`
       ).toEqual([])
   }
+  // Beside the two that ask, a Thread at work, one done that the Person
+  // did not see and one that failed, so the loops move every part a row's
+  // mark has. No Thread here wakes: marks.spec traces woke's bells, on the
+  // bar's Mark.
+  await expect(
+    (await startAgent(page, "wait done")).getByText("Waiting.")
+  ).toBeVisible()
+  const on = await startAgent(page, "wait on")
+  await expect(on.getByText("Waiting.")).toBeVisible()
+  finish(window, "wait done")
+  call(window, "agents.send", {
+    thread: threadNamed(window, "hello 1")!.id,
+    text: "fail now",
+  })
+  for (const [text, name] of [
+    ["wait on", "Working"],
+    ["wait done", "Done"],
+    ["hello 1", "Failed"],
+  ] as const)
+    await expect(rowOf(text).getByRole("img", { name })).toBeVisible()
+  if (traced) {
+    // What the one at work does, as the engine says it.
+    const works = (await rowOf("wait on")
+      .getByRole("img", { name: "Working" })
+      .getAttribute("data-doing")) as Shown
+    await traceMarks("marks", ["asking", "failed", "done", works], hideAndShow)
+  }
+
+  // Ten more Threads at work, each doing a thing of its own, as the engine
+  // says it (ADR 0099, step 3), started from outside the window, all on
+  // Working's tab: a working phase, nothing moving but the Marks, which
+  // show what each does by their loops alone. ADR 0088's working allowance
+  // is two ticks a second (decision 1); between news a working Mark asks
+  // for none.
+  const doings = [
+    ["think", "doing think about it"],
+    ["read", "doing read card.ts"],
+    ["search", "doing search standOf"],
+    ["edit", "doing edit status.ts"],
+    ["execute", "doing execute pnpm test"],
+    ["fetch", "doing fetch docs.rs"],
+    ["reply", "doing reply Here it is"],
+    ["other", "doing other Skill"],
+    ["compacting", "doing compact"],
+    ["limit", "limit wait"],
+  ] as const
+  for (const [, text] of doings)
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+  const tab = (name: RegExp) => sidebar.getByRole("tab", { name })
+  await tab(/^Working/).click()
+  for (const [doing, text] of doings)
+    await expect(
+      rowOf(text).getByRole("img", { name: "Working" })
+    ).toHaveAttribute("data-doing", doing, { timeout: 15_000 })
+  await leaveSidebar(page)
+  await page.evaluate(() => (document.activeElement as HTMLElement).blur())
+  await expect(page.locator("[data-news]")).toHaveCount(0)
+  await expect
+    .poll(
+      async () => {
+        await page.evaluate(reset, false)
+        await page.waitForTimeout(HELD_HIDDEN_MS + 200)
+        return (await page.evaluate(read)).callbacks
+      },
+      {
+        message: "agents: a window with no animation frame, settling",
+        timeout: 20_000,
+        intervals: [0],
+      }
+    )
+    .toBe(0)
+  await measureStill("agents", { ms: 5000, browser: false })
+  expect(
+    phases.agents.counted.callbacks / phases.agents.seconds,
+    `agents: animation frames a second${phases.agents.counted.stacks.map((stack) => `\n-- asked for at:\n${stack}`).join("")}`
+  ).toBeLessThanOrEqual(2)
+  // Shown anew, the sidebar opens on the Inbox, whose Working shelf shows
+  // six; the rest are drawn afresh as Working's tab shows them again.
+  if (traced)
+    await traceMarks(
+      "agents",
+      doings.map(([doing]) => doing),
+      async () => {
+        await hideAndShow()
+        await page.waitForTimeout(300)
+        await tab(/^Working/).click()
+        await expect(rowOf("limit wait")).toBeVisible()
+        await leaveSidebar(page)
+      }
+    )
 
   report(scale, versions, phases)
 })

@@ -10,9 +10,22 @@ import {
 } from "../lib/mark-rhythm"
 import { cn } from "../lib/utils"
 import type { Listed } from "../pane"
-import { type MarkState, works } from "../lib/mark-state"
+import {
+  type MarkDoing,
+  type MarkState,
+  type Shown,
+  shownOf,
+  works,
+} from "../lib/mark-state"
+import { type Held, heldDoing, HOLD } from "../status"
 
-export { loudest, MARK_ORDER, type MarkState, works } from "../lib/mark-state"
+export {
+  loudest,
+  MARK_ORDER,
+  type MarkDoing,
+  type MarkState,
+  works,
+} from "../lib/mark-state"
 
 /** A Group's colour, by its Agent's state, as the sidebar marks it:
  * none for a Group with no Agent, or one at rest (ADR 0065, decision 6).
@@ -80,16 +93,14 @@ export function toneOf(mark: MarkState): string | undefined {
  * coloured by who draws it, a Thread's mark by its weight, the bar's
  * counts grey. */
 function hatOf(mark: MarkState, variant: "logo" | "agent") {
-  const works = mark === "running" || mark === "thinking"
-  return variant === "logo" && works ? "text-mark-working" : toneOf(mark)
+  return variant === "logo" && works(mark) ? "text-mark-working" : toneOf(mark)
 }
 
 /** Plain words for each state, for a title or a screen reader. */
 export const MARK_WORDS: Record<MarkState, string> = {
   rest: "Nothing runs",
   idle: "Open",
-  thinking: "Thinking",
-  running: "Working",
+  working: "Working",
   asking: "Asks you",
   done: "Done",
   failed: "Failed",
@@ -106,6 +117,7 @@ const LIDS = ["top", "bottom", "top", "bottom"] as const
 
 export function BandaMark({
   state = "rest",
+  doing,
   variant = "logo",
   playful = 30,
   news = false,
@@ -115,6 +127,10 @@ export function BandaMark({
   className,
 }: {
   state?: MarkState
+  /** What its Agent does, at work (`lookOf`): shown once what it showed
+   * held (`heldDoing`), and said by `data-doing`. Without, the logo's
+   * calm series. */
+  doing?: MarkDoing
   /** `logo`: the three tiles; `agent`: the Agent's tile alone. */
   variant?: "logo" | "agent"
   /** Seconds between the logo's tricks while at rest; 0 for none. */
@@ -156,8 +172,8 @@ export function BandaMark({
   }, [variant])
 
   useEffect(() => {
-    animator.current?.set({ state, playful, news, beat })
-  }, [state, playful, news, beat, variant])
+    animator.current?.set({ state, doing, playful, news, beat })
+  }, [state, doing, playful, news, beat, variant])
 
   const logo = variant === "logo"
   return (
@@ -235,6 +251,9 @@ export function BandaMark({
             </text>
           ))}
         </g>
+        {/* The dot a fetch sends out and the limit's sand: drawn about its
+            own middle, where marks.css's loops move it from. */}
+        <circle data-dot className="mark-loop mark-dot" r="0" opacity="0.9" />
         {/* Its pose, in the four turns `drawnOf` writes, each with the
             loop marks.css plays inside it: where it stands, how it leans,
             its size, then its spin, which no loop takes. */}
@@ -265,6 +284,15 @@ export function BandaMark({
                             />
                           ))}
                         </g>
+                        {/* What covers the `>_`'s cursor as it blinks. */}
+                        <path
+                          data-cursor
+                          className="mark-loop mark-cursor"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="4.6"
+                          strokeLinecap="round"
+                        />
                       </g>
                       <g data-bells opacity="0">
                         {[0, 1].map((at) => (
@@ -282,6 +310,10 @@ export function BandaMark({
             </g>
           </g>
         </g>
+        {/* The slot of its sub-agents' satellites (ADR 0099, decision 3),
+            which the sub-agents' work draws: in the Agent's colour, a
+            working Mark's blue (ADR 0107, decision 3). */}
+        <g data-satellites />
       </g>
     </svg>
   )
@@ -295,7 +327,14 @@ export function BandaMark({
 // the logo's tricks do; then it hands the look back to the keyframes, from
 // the pose they take it on.
 
-type Eye = "open" | "closed" | "happy" | "cross"
+/** How its eyes are drawn: round, open or shut or half shut; as strokes,
+ * happy or crossed; or, at work, as a terminal's `>_`, or one a line and
+ * the other a lens. */
+type Eye = "open" | "closed" | "half" | "happy" | "cross" | "prompt" | "lens"
+
+/** A dot beside the hat, out of its turns: where it stands, its radius,
+ * and how much of it shows, by its size. */
+type Dot = { x: number; y: number; r: number; size: number }
 
 /** How much of each shape: square, circle, triangle, octagon. Sums to 1. */
 type Weights = [number, number, number, number]
@@ -325,6 +364,10 @@ type Pose = {
   bells: number
   /** Degrees the bells swing as they ring. */
   ring: number
+  /** How much the `>_`'s cursor shows, as it blinks. */
+  cursor: number
+  /** The dot a fetch sends out, or the limit's sand; none but for those. */
+  dot: Dot | null
 }
 
 const BASE: Pose = {
@@ -344,6 +387,8 @@ const BASE: Pose = {
   eyes: 1,
   bells: 0,
   ring: 0,
+  cursor: 1,
+  dot: null,
 }
 
 const TILT = -8
@@ -426,16 +471,26 @@ const CIRCLE = 1
 const TRIANGLE = 2
 const OCTAGON = 3
 
-/** Each state's shape: calm, at work, asking the Person, or stopped. */
-const SHAPE_OF: Record<MarkState, number> = {
+/** Each look's shape: calm, at work whatever it does, asking the Person,
+ * or stopped. */
+const SHAPE_OF: Record<Shown, number> = {
   rest: SQUARE,
   idle: SQUARE,
   done: SQUARE,
   offline: SQUARE,
   woke: SQUARE,
   later: SQUARE,
-  thinking: CIRCLE,
-  running: CIRCLE,
+  think: CIRCLE,
+  read: CIRCLE,
+  search: CIRCLE,
+  edit: CIRCLE,
+  execute: CIRCLE,
+  fetch: CIRCLE,
+  reply: CIRCLE,
+  other: CIRCLE,
+  compacting: CIRCLE,
+  stuck: CIRCLE,
+  limit: CIRCLE,
   asking: TRIANGLE,
   failed: OCTAGON,
 }
@@ -493,16 +548,42 @@ type Motion = (t: number, time: number, at: Context) => Pose
 /** Asleep, its eyes closed: later's still pose; offline's snores too. */
 const ASLEEP: Pose = { ...BASE, ty: 1.5, rot: 7, ey: 2.5, eye: "closed" }
 
+/** At work: a circle. */
+const WORKS: Pose = { ...BASE, w: only(CIRCLE) }
+/** Reading, its eyes on the line, half shut: what any other work stands
+ * still as too. */
+const READING: Pose = { ...WORKS, ex: -1.5, ey: 1.5, open: 0.62 }
+
 /**
- * The still pose of each state, as `marks-final.html` draws them (ADR
- * 0099, decision 8): for a Person who asked for less motion, or `[motion]
- * off`, and for a notification's icon.
+ * The still pose of each look, and of each thing an Agent at work does, as
+ * `marks-final.html` draws them (ADR 0099, decision 8): for a Person who
+ * asked for less motion, or `[motion] off`, and for a notification's icon.
  */
-const STILL: Record<MarkState, Pose> = {
+const STILL: Record<Shown, Pose> = {
   rest: { ...BASE, eyes: 0 },
   idle: BASE,
-  thinking: { ...BASE, w: only(CIRCLE), ex: 2.6, ey: -3.2 },
-  running: { ...BASE, w: only(CIRCLE), ex: -2.6, ey: 2.6, open: 0.6 },
+  think: { ...WORKS, ex: 2.6, ey: -3.2 },
+  read: READING,
+  search: { ...WORKS, eye: "lens" },
+  edit: { ...WORKS, ex: 1.5, ey: 3.4, open: 0.55 },
+  execute: { ...WORKS, eye: "prompt", ex: -0.5 },
+  fetch: {
+    ...WORKS,
+    ex: 2.8,
+    ey: -3,
+    dot: { x: CX + 34, y: CY - 22, r: 2.8, size: 1 },
+  },
+  reply: { ...WORKS, ey: 3.4, open: 0.5 },
+  other: READING,
+  compacting: { ...WORKS, sx: 0.84, sy: 1.04, eye: "closed" },
+  stuck: { ...WORKS, eye: "half", ty: 1.5, rot: 5 },
+  limit: {
+    ...WORKS,
+    eye: "closed",
+    ey: 2,
+    rot: 5,
+    dot: { x: CX + 30, y: CY, r: 2.6, size: 1 },
+  },
   asking: { ...BASE, w: only(TRIANGLE), rot: -6, ex: -2.5, ey: 1.5, big: 1.12 },
   done: { ...BASE, eye: "happy" },
   // Upright, as a stop sign stands: the hat's tilt taken back.
@@ -514,13 +595,22 @@ const STILL: Record<MarkState, Pose> = {
   later: ASLEEP,
 }
 
+/** Reading, between its loops' moves: as `read` and `other` stand. */
+const READ_BASE: Pose = { ...WORKS, ey: 1.2, open: 0.62 }
+
 /** Each look's pose between its loops' moves, as marks-final.html's
- * motions stand: what marks.css moves it from. */
-const BASES: Record<MarkState, Pose> = {
+ * motions stand: what marks.css moves it from. The loops of `other` play
+ * reading, writing and a glance in turn, from a reading one's pose. */
+const BASES: Record<Shown, Pose> = {
   ...STILL,
   failed: { ...STILL.failed, ty: 1 },
-  thinking: { ...STILL.thinking, ty: -3, rot: -4 },
-  running: { ...BASE, w: only(CIRCLE), ey: 1.2, open: 0.62 },
+  think: { ...STILL.think, ty: -3, rot: -4 },
+  read: READ_BASE,
+  fetch: { ...STILL.fetch, dot: { x: CX + 26, y: CY - 16, r: 2.8, size: 1 } },
+  other: READ_BASE,
+  compacting: { ...WORKS, open: 0.7 },
+  stuck: { ...STILL.stuck, ex: -1, sx: 1.02, sy: 0.97 },
+  limit: { ...STILL.limit, dot: { x: CX + 30, y: CY - 14, r: 2.6, size: 0 } },
 }
 
 /** What each part's loop does to a pose, by its values. */
@@ -546,13 +636,20 @@ const MOVES: Record<Part, (pose: Pose, values: readonly number[]) => void> = {
   bell: (pose, [degrees]) => {
     pose.ring += degrees!
   },
+  cursor: (pose, [covered]) => {
+    pose.cursor *= 1 - covered!
+  },
+  // A dot's loop places it whole.
+  dot: (pose, [x, y, size]) => {
+    if (pose.dot) pose.dot = { ...pose.dot, x: x!, y: y!, size: size! }
+  },
   // The snores play only in marks.css: news hides them while it lasts.
   z: () => {},
 }
 
 /** `pose` moved by `look`'s loops as they stand at `at`, seconds of its
  * mark's rhythm: what marks.css draws then. */
-function looped(pose: Pose, look: MarkState, at: number): Pose {
+function looped(pose: Pose, look: Shown, at: number): Pose {
   const moved = { ...pose }
   for (const name of LOOPED[look] ?? []) {
     const loop = LOOPS[name]
@@ -723,6 +820,8 @@ function mix(a: Pose, b: Pose, m: number): Pose {
     eyes: lerp(a.eyes, b.eyes, m),
     bells: lerp(a.bells, b.bells, m),
     ring: lerp(a.ring, b.ring, m),
+    cursor: lerp(a.cursor, b.cursor, m),
+    dot: m < 0.5 ? a.dot : b.dot,
   }
 }
 
@@ -746,11 +845,11 @@ type Playing = {
 }
 
 /** The looks whose first draw may be news: done flips, woke arrives. */
-const ARRIVES = new Set<MarkState>(["done", "woke"])
+const ARRIVES = new Set<Shown>(["done", "woke"])
 
 /** The news a mark plays as it takes `look`, on `beat`'s rhythm. */
 function newsOf(
-  look: MarkState,
+  look: Shown,
   beat: string,
   leaps: boolean
 ): Pick<Playing, "motion" | "blend" | "until" | "stage"> {
@@ -874,10 +973,12 @@ function seenNow(): IntersectionObserver | undefined {
  * The Threads' marks that just went, by their beat: the look each showed,
  * its pose then, and when. A Thread's mark drawn again soon after is that
  * mark moved, not drawn for the first time, so a look that changed as it
- * moved is news: the sidebar draws a row afresh as it changes part, until
- * one keyed list keeps its node (ADR 0098, step 5).
+ * moved is news. The keyed list keeps a card's node as it changes part,
+ * but a card is drawn afresh as `ThreadRow` changes its root, as one that
+ * leaves the tab while the list holds does, and the Banda menu and a
+ * Pane's header draw theirs anew.
  */
-const gone = new Map<string, { look: MarkState; pose: Pose; at: number }>()
+const gone = new Map<string, { look: Shown; pose: Pose; at: number }>()
 /** Seconds a mark that went is the one drawn again. */
 const MOVED = 1
 
@@ -885,9 +986,9 @@ const MOVED = 1
  * and in another look than `look`; it is taken either way. */
 function movedFrom(
   beat: string,
-  look: MarkState,
+  look: Shown,
   now: number
-): { look: MarkState; pose: Pose } | undefined {
+): { look: Shown; pose: Pose } | undefined {
   const left = gone.get(beat)
   gone.delete(beat)
   return left && now - left.at < MOVED && left.look !== look ? left : undefined
@@ -932,14 +1033,20 @@ type Drawn = {
    * marks.css closes it, from the eye's edge to its slit; none for an
    * eye that does not blink. */
   lids: { x: number; y: number; width: number; height: number }[]
-  /** Happy or crossed eyes, drawn as strokes; empty for round ones. */
+  /** Eyes drawn as strokes: happy, crossed, `>_` or a lens; empty for
+   * round ones. */
   glyph: string
+  /** The `>_`'s cursor, which its cover hides as it blinks; empty for
+   * other eyes. */
+  cursor: string
   /** How much the eyes show at all. */
   shown: number
   /** Where each of woke's two bells hangs, inside the hat's turn. */
   bells: string[]
 }
 
+/** The radius of a searching eye's lens. */
+const LENS = 5.2
 /** Where the bells hang while they do not show: nowhere. */
 const NO_BELLS: string[] = []
 /** How far a lid reaches past its eye, so a closed eye leaves no rim. */
@@ -1004,16 +1111,17 @@ function drawnOf(p: Pose): Drawn {
   const gap = eyeGap * Math.min(p.big, 1.06)
   const xs = [ex - gap, ex + gap]
   const shown = clamp(p.eyes)
-  const round = p.eye === "open" || p.eye === "closed"
+  const round = p.eye === "open" || p.eye === "closed" || p.eye === "half"
   const closed = p.eye === "closed"
+  const half = p.eye === "half"
   const eyes = xs.map((x) =>
     shown < 0.02 || !round
       ? { cx: x, cy: ey, rx: 0, ry: 0 }
       : {
           cx: x,
-          cy: ey,
+          cy: ey + (half ? 1.6 : 0),
           rx: (closed ? 5.4 : 4.9 * p.big) * Math.min(1, shown * 1.6),
-          ry: (closed ? 1.7 : 7 * p.big * p.open) * shown,
+          ry: (closed ? 1.7 : half ? 3.2 : 7 * p.big * p.open) * shown,
         }
   )
   const lids = eyes.flatMap(({ cx, cy, rx, ry }) => {
@@ -1026,16 +1134,30 @@ function drawnOf(p: Pose): Drawn {
       { x, y: cy + (1 - LID) * ry, width, height },
     ]
   })
-  const glyph =
-    shown < 0.02 || round
-      ? ""
-      : xs
-          .map((x) =>
-            p.eye === "happy"
-              ? `M${f(x - 4.6)} ${f(ey + 2.6)}Q${f(x)} ${f(ey - 6.5)} ${f(x + 4.6)} ${f(ey + 2.6)}`
-              : `M${f(x - 3.6)} ${f(ey - 3.6)}L${f(x + 3.6)} ${f(ey + 3.6)}M${f(x + 3.6)} ${f(ey - 3.6)}L${f(x - 3.6)} ${f(ey + 3.6)}`
-          )
-          .join("")
+  const stroked = shown >= 0.02 && !round
+  const [left, right] = xs as [number, number]
+  // The `>_`'s cursor, under the right eye's place.
+  const cursor =
+    stroked && p.eye === "prompt"
+      ? `M${f(right - 4.2)} ${f(ey + 4.2)}L${f(right + 4.2)} ${f(ey + 4.2)}`
+      : ""
+  const glyph = !stroked
+    ? ""
+    : p.eye === "prompt"
+      ? `M${f(left - 3.4)} ${f(ey - 4.6)}L${f(left + 2.8)} ${f(ey)}L${f(left - 3.4)} ${f(ey + 4.6)}` +
+        (p.cursor > 0.5 ? cursor : "")
+      : p.eye === "lens"
+        ? // One eye a line, the other a lens with its handle.
+          `M${f(left)} ${f(ey - 2.6)}L${f(left)} ${f(ey + 2.6)}` +
+          `M${f(right - LENS)} ${f(ey)}a${LENS} ${LENS} 0 1 0 ${2 * LENS} 0a${LENS} ${LENS} 0 1 0 ${-2 * LENS} 0` +
+          `M${f(right + 0.7 * LENS)} ${f(ey + 0.7 * LENS)}l3.4 3.4`
+        : xs
+            .map((x) =>
+              p.eye === "happy"
+                ? `M${f(x - 4.6)} ${f(ey + 2.6)}Q${f(x)} ${f(ey - 6.5)} ${f(x + 4.6)} ${f(ey + 2.6)}`
+                : `M${f(x - 3.6)} ${f(ey - 3.6)}L${f(x + 3.6)} ${f(ey + 3.6)}M${f(x + 3.6)} ${f(ey - 3.6)}L${f(x - 3.6)} ${f(ey + 3.6)}`
+            )
+            .join("")
   // They rise into place as they show; while they do not, nothing places
   // them.
   const bells =
@@ -1045,7 +1167,7 @@ function drawnOf(p: Pose): Drawn {
             `translate(${f(CX + side * 17)} ${f(CY - 25 - 4 * (1 - p.bells))}) rotate(${f(side * 38 + p.ring)})`
         )
       : NO_BELLS
-  return { d, turns, eyes, lids, glyph, shown, bells }
+  return { d, turns, eyes, lids, glyph, cursor, shown, bells }
 }
 
 /**
@@ -1085,24 +1207,23 @@ export function EmptyMark({ className }: { className?: string }) {
  */
 const WEIGHT_OF: Partial<Record<MarkState, string>> = {
   idle: "text-mark-open",
-  thinking: "text-mark-working",
-  running: "text-mark-working",
+  working: "text-mark-working",
   later: "text-mark-later",
 }
 
-/** A Thread's mark, as the sidebar and the Banda menu show it, in its
- * colour or its weight: its `look` (`lookOf`), or, where none is given
- * yet, its mark. It keeps its Thread's own rhythm. */
+/** A Thread's mark, as the sidebar, the Banda menu and its Pane's header
+ * show it, in its colour or its weight: its `look` and, at work, what its
+ * Agent does (`lookOf`), or, where none is given, its mark. It keeps its
+ * Thread's own rhythm. */
 export function ThreadMark({
   listed,
   look = listed.mark,
-  news,
+  doing,
   className,
 }: {
   listed: Listed
   look?: MarkState
-  /** As `BandaMark`'s. */
-  news?: boolean
+  doing?: MarkDoing
   className?: string
 }) {
   // A Thread's id is a UUIDv7, the same on every machine and unlike any
@@ -1111,8 +1232,8 @@ export function ThreadMark({
     <BandaMark
       variant="agent"
       state={look}
+      doing={doing}
       playful={0}
-      news={news}
       beat={listed.id}
       label={MARK_WORDS[look]}
       className={cn("size-4 shrink-0", WEIGHT_OF[look], className)}
@@ -1140,7 +1261,7 @@ const STILL_PX = STILL_BOX.size * 2
  * the mark for outside the window, such as a system notification's icon.
  */
 export function stillMark(state: MarkState, colors: MarkColors): string {
-  const p = STILL[state]
+  const p = STILL[shownOf(state)]
   const drawn = drawnOf(p)
   const fill = colors[COLOR_OF[state] ?? "body"]
   const eyes = drawn.eyes
@@ -1190,11 +1311,60 @@ type Parts = {
   lenses: Element[]
   lids: Element[]
   glyph: Element
+  /** The cover of the `>_`'s cursor. */
+  cursor: Element
+  dot: Element
   zz: Element
   /** Each z it snores. */
   snores: Element[]
   bells: Element
   bell: Element[]
+}
+
+/** What a mark is asked to draw, as `BandaMark`'s props say it. */
+type Asked = {
+  state: MarkState
+  doing?: MarkDoing
+  playful: number
+  news: boolean
+  beat: string
+}
+
+// The marks whose Agent's doing waits for the one shown to have held, and
+// until when, in ms (`heldDoing`): one timer waits for the first of them
+// all, never one for each mark.
+const holding = new Map<Animator, number>()
+let holdTimer: ReturnType<typeof setTimeout> | undefined
+
+/** `mark` takes what it was asked again at `at`. */
+function holdUntil(mark: Animator, at: number) {
+  if (holding.get(mark) === at) return
+  holding.set(mark, at)
+  planHolds()
+}
+
+/** `mark` waits for nothing. */
+function unhold(mark: Animator) {
+  if (holding.delete(mark)) planHolds()
+}
+
+function planHolds() {
+  clearTimeout(holdTimer)
+  holdTimer = undefined
+  if (holding.size === 0) return
+  const first = Math.min(...holding.values())
+  holdTimer = setTimeout(releaseHolds, Math.max(0, first - performance.now()))
+}
+
+function releaseHolds() {
+  holdTimer = undefined
+  const now = performance.now()
+  for (const [mark, at] of [...holding])
+    if (at <= now) {
+      holding.delete(mark)
+      mark.release(at)
+    }
+  planHolds()
 }
 
 /**
@@ -1207,7 +1377,14 @@ export class Animator {
   private readonly logo: boolean
   private readonly parts: Parts
 
-  private look: MarkState = "rest"
+  /** What it draws: its look, or what its Agent at work does. */
+  private shown: Shown = "rest"
+  /** What it was last asked to draw, which it takes again as a doing that
+   * waited may show. */
+  private asked: Asked | undefined
+  /** What its Agent at work shows as doing, and since when, in ms; none
+   * unless at work. */
+  private held: Held | undefined
   private beat = ""
   /** It has drawn a look: what comes next is news. */
   private drawn = false
@@ -1246,6 +1423,8 @@ export class Animator {
       lenses: all("[data-lens]"),
       lids: all("[data-lid]"),
       glyph: one("[data-glyph]"),
+      cursor: one("[data-cursor]"),
+      dot: one("[data-dot]"),
       zz: one("[data-zz]"),
       snores: all("[data-zz] text"),
       bells: one("[data-bells]"),
@@ -1267,13 +1446,14 @@ export class Animator {
       for (const [beat, left] of gone)
         if (now - left.at >= MOVED) gone.delete(beat)
       gone.set(this.beat, {
-        look: this.look,
+        look: this.shown,
         pose: this.shownAt(now),
         at: now,
       })
     }
     marks.delete(this)
     due.delete(this)
+    unhold(this)
     byElement.delete(this.svg)
     seen?.unobserve(this.svg)
     if (marks.size === 0) unwatch()
@@ -1284,21 +1464,25 @@ export class Animator {
     }
   }
 
-  set({
-    state,
-    playful,
-    news,
-    beat,
-  }: {
-    state: MarkState
-    playful: number
-    news: boolean
-    beat: string
-  }) {
-    const now = performance.now() / 1000
+  set(asked: Asked) {
+    this.asked = asked
+    this.take(performance.now())
+  }
+
+  /** Takes what it was asked again at `at`, in ms, as a doing waited
+   * until then to show. */
+  release(at: number) {
+    if (this.asked) this.take(Math.max(performance.now(), at))
+  }
+
+  /** Draws what it was asked, as of `ms`. */
+  private take(ms: number) {
+    const { state, doing, playful, news, beat } = this.asked!
+    const now = ms / 1000
     this.playful = playful
-    const shown = this.logo && state === "idle" ? "rest" : state
-    if (this.drawn && shown === this.look) {
+    const look = this.logo && state === "idle" ? "rest" : state
+    const shown = shownOf(look, this.hold(look, doing, ms))
+    if (this.drawn && shown === this.shown) {
       // Another Thread's mark now, it keeps that Thread's rhythm.
       if (beat !== this.beat) {
         this.beat = beat
@@ -1310,11 +1494,11 @@ export class Animator {
     // again just after its Thread's mark went, where that one was.
     const moved = this.drawn || !beat ? undefined : movedFrom(beat, shown, now)
     const first = !this.drawn && !moved
-    const was = moved?.look ?? this.look
+    const was = moved?.look ?? this.shown
     const from = moved?.pose ?? this.shownAt(now)
     this.beat = beat
     this.drawn = true
-    this.look = shown
+    this.shown = shown
     // A mark drawn for the first time starts in its look, as if it had
     // been there (ADR 0099, decision 4).
     if (stillNow() || (first && !(news && ARRIVES.has(shown)))) {
@@ -1329,11 +1513,40 @@ export class Animator {
     this.play(played, now, first ? played.motion(0, now, this.context) : from)
   }
 
+  /**
+   * What its Agent shows as doing at `ms`, if it is at work in `look`, and
+   * now does `doing` (ADR 0099, decision 2): what it showed until that
+   * held `HOLD`, then the latest, which waits that long on one timer for
+   * every mark (`holdUntil`); `data-doing` says it. None otherwise.
+   */
+  private hold(
+    look: MarkState,
+    doing: MarkDoing | undefined,
+    ms: number
+  ): MarkDoing | undefined {
+    if (!works(look)) {
+      this.held = undefined
+      unhold(this)
+      this.svg.removeAttribute("data-doing")
+      return undefined
+    }
+    const held = heldDoing(this.held, doing, ms)
+    this.held = held
+    if (held.doing === doing) unhold(this)
+    else holdUntil(this, held.since + HOLD)
+    this.svg.setAttribute("data-doing", shownOf(look, held.doing))
+    return held.doing
+  }
+
   /** What it shows at `now`: what it last drew, moved by the loops marks.css
    * plays on it since. */
   private shownAt(now: number): Pose {
-    if (this.playing || stillNow() || !LOOPED[this.look]) return this.last
-    return looped(BASES[this.look], this.look, phaseOf(this.beat, wallOf(now)))
+    if (this.playing || stillNow() || !LOOPED[this.shown]) return this.last
+    return looped(
+      BASES[this.shown],
+      this.shown,
+      phaseOf(this.beat, wallOf(now))
+    )
   }
 
   private play(
@@ -1388,16 +1601,16 @@ export class Animator {
     this.playing = null
     this.leap = -Infinity
     const still = stillNow()
-    this.paint(still ? STILL[this.look] : BASES[this.look])
+    this.paint(still ? STILL[this.shown] : BASES[this.shown])
     this.snore(still)
     this.say(undefined)
-    if (!still && LOOPED[this.look]) {
+    if (!still && LOOPED[this.shown]) {
       this.phase(time)
-      this.svg.setAttribute("data-loop", this.look)
+      this.svg.setAttribute("data-loop", this.shown)
     } else this.svg.removeAttribute("data-loop")
     clearTimeout(this.timer)
     this.timer = undefined
-    if (this.logo && this.look === "rest" && !still) this.later(time)
+    if (this.logo && this.shown === "rest" && !still) this.later(time)
   }
 
   /** Its z's where a still mark draws them, `still`, or where marks.css's
@@ -1478,7 +1691,7 @@ export class Animator {
   /** The logo at rest wakes and plays a trick, unless it is not seen. */
   private rouse() {
     const now = performance.now() / 1000
-    if (this.look !== "rest" || this.hovered || this.playing) return
+    if (this.shown !== "rest" || this.hovered || this.playing) return
     if (this.paused || stillNow()) {
       this.later(now)
       return
@@ -1512,7 +1725,7 @@ export class Animator {
   }
 
   private readonly enter = () => {
-    if (this.look !== "rest" || stillNow()) return
+    if (this.shown !== "rest" || stillNow()) return
     this.hovered = true
     this.measure()
     this.play(
@@ -1525,7 +1738,7 @@ export class Animator {
   private readonly leave = () => {
     if (!this.hovered) return
     this.hovered = false
-    if (this.look !== "rest") return
+    if (this.shown !== "rest") return
     this.trick(Math.random() < 0.5 ? "flip" : "morph", performance.now() / 1000)
   }
 
@@ -1581,6 +1794,14 @@ export class Animator {
     })
     parts.glyph.setAttribute("d", drawn.glyph)
     if (drawn.glyph) parts.glyph.setAttribute("stroke-opacity", f(drawn.shown))
+    parts.cursor.setAttribute("d", drawn.cursor)
+    const { dot } = p
+    parts.dot.setAttribute("r", dot ? f(dot.r) : "0")
+    if (dot)
+      parts.dot.setAttribute(
+        "transform",
+        `translate(${f(dot.x)} ${f(dot.y)}) scale(${f(dot.size)})`
+      )
     parts.zz.setAttribute("opacity", f(clamp(p.zz)))
     parts.bells.setAttribute("opacity", f(clamp(p.bells)))
     if (p.bells > 0)

@@ -34,12 +34,12 @@ const listed = (id: string, mark: MarkState, changed: number): Listed => ({
 const lists = {
   s1: [
     listed("form", "asking", 2),
-    listed("headers", "running", 5),
+    listed("headers", "working", 5),
     listed("logo", "rest", 1),
   ],
   s2: [
     listed("migration", "failed", 3),
-    listed("release", "running", 4),
+    listed("release", "working", 4),
     listed("letters", "done", 6),
   ],
 }
@@ -169,7 +169,7 @@ const arcScratch = { ...project("r2", "No Project", "/s"), scratch: true }
 const arc = { name: "arc", projects: [banda, arcScratch] }
 const withArc = {
   ...lists,
-  r1: [listed("bench", "done", 7), listed("hosts", "running", 8)],
+  r1: [listed("bench", "done", 7), listed("hosts", "working", 8)],
   r2: [listed("idea", "asking", 9)],
 }
 const elsewhere = (preset: Preset) =>

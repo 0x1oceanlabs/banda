@@ -22,7 +22,7 @@ import {
   type PaneState,
   QUIET,
 } from "@banda/ui/pane"
-import { attentionOf, callsOf, mayArchive } from "@banda/ui/status"
+import { attentionOf, callsOf, mayArchive, nextStuck } from "@banda/ui/status"
 import { nextWake, wakeAfter } from "../sidebar/later"
 
 /** What calls the Person now. */
@@ -31,7 +31,7 @@ export type Calls = {
    * Person's turn: the bar's Mark (`attentionOf`). */
   attention: Attention
   /** The clock Laters are read by (ADR 0074): it moves only as the next
-   * one wakes by its time. */
+   * one wakes by its time, or a Thread at work gets stuck. */
   now: number
   /** Every App's Calls, the Inbox, in no order: the sidebar's `order` orders
    * them. One put off calls no one while it sleeps. */
@@ -144,12 +144,16 @@ export function ownLists({ hosts }: Stores): Lists {
 
 const NO_LISTS: Lists = {}
 
+/** The sooner of two moments, either of which may be none. */
+const soonest = (a?: number, b?: number) =>
+  a === undefined ? b : b === undefined ? a : Math.min(a, b)
+
 /**
  * Keeps the calls following the items and the Later clock: worked out
- * again as the lists change, and as the next Later wakes by its time,
- * and only then. The calls are set anew after every change of the items,
- * so what reads both may listen to the calls alone, and hears once, with
- * both new. Returns how to stop.
+ * again as the lists change, as the next Later wakes by its time, and as
+ * a Thread at work gets stuck (`nextStuck`), and only then. The calls are
+ * set anew after every change of the items, so what reads both may listen
+ * to the calls alone, and hears once, with both new. Returns how to stop.
  */
 export function followCalls({ items, calls }: Stores): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -168,7 +172,8 @@ export function followCalls({ items, calls }: Stores): () => void {
           ? was
           : attention,
     })
-    const next = nextWake(lists, now)
+    // It moves too as a Thread at work gets stuck, so its Mark shows it.
+    const next = soonest(nextWake(lists, now), nextStuck(lists, now))
     if (next !== undefined)
       timer = setTimeout(() => work(Date.now()), wakeAfter(next))
   }
@@ -290,7 +295,8 @@ export const barAttention = (calls: Calls) => calls.attention
 export const nowOf = (calls: Calls) => calls.now
 
 /** The Later clock, as where a Thread stands is read by it: it moves
- * only as the next Later wakes by its time. */
+ * only as the next Later wakes by its time, or a Thread at work gets
+ * stuck. */
 export function useLaterClock(): number {
   return useCalls(nowOf)
 }

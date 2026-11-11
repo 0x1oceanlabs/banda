@@ -28,7 +28,7 @@ const row = (
     id,
     title: id,
     mark:
-      stand === "turn" ? "asking" : stand === "working" ? "running" : "rest",
+      stand === "turn" ? "asking" : stand === "working" ? "working" : "rest",
     changed: NOW - 60_000,
     pane: { kind: "agents.thread", args: { thread: id } },
     ...more.listed,

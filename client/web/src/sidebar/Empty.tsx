@@ -90,7 +90,6 @@ export function InboxZero({ zero }: { zero: Zero }) {
           variant="logo"
           state="rest"
           playful={0}
-          news={false}
           className="size-10 text-muted-foreground opacity-60"
         />
       }
@@ -143,7 +142,6 @@ export function EmptyTab({
           variant="agent"
           state={MARKS[tab]}
           playful={0}
-          news={false}
           className={cn(
             "size-10 text-muted-foreground opacity-55",
             // Done leans, on a pivot left of its middle: back under the

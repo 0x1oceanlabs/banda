@@ -265,6 +265,25 @@
       "gate": "hard",
       "budget": 0,
       "note": "the Marks' loops the compositor does not run, in a trace of the sidebar hidden and shown (ADR 0099, step 1): at a zoom of 1 the test fails on any, as marks.spec does for woke's; at another, as at 1.6, Chromium may run an SVG's on the main thread, and it is only told"
+    },
+    {
+      "measure": "agents.ticks.callbacksPerSecond",
+      "gate": "hard",
+      "budget": 2,
+      "note": "eleven Threads at work on Working's tab, ten of them each showing a doing of its own, as their loops play: a working phase, nothing moving, allows about two ticks a second (ADR 0088, decision 1); a Mark between news asks for none (ADR 0099, step 3)",
+      "blocks": true
+    },
+    {
+      "measure": "agents.paints.perSecond",
+      "gate": "soft",
+      "budget": 860,
+      "note": "the window's paints a second while eleven working Marks only live, ten of them showing what their Agent does, with no tick of the main thread's: about 60 a Mark, as the marks phase's (504 for its eight); measured 856 at 1× on arc, 2026-11-11 (ADR 0088, decision 1's working paints budget)"
+    },
+    {
+      "measure": "agents.compositor.failed",
+      "gate": "hard",
+      "budget": 0,
+      "note": "the doings' loops the compositor does not run, in a trace of the sidebar hidden and shown, then Working's tab (ADR 0099, step 3): at a zoom of 1 the test fails on any; at another, as at 1.6, Chromium may run an SVG's on the main thread, and it is only told"
     }
   ],
   "recorded": {

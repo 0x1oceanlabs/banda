@@ -45,7 +45,7 @@ import { useLentTo, useProjectName, useThreadOf, useThreadsOf } from "./threads"
  * ago it changed, or none. */
 function wordOf(listed: Listed, now?: number): string | undefined {
   const { mark } = listed
-  if (works(mark)) return MARK_WORDS.running
+  if (works(mark)) return MARK_WORDS.working
   if (mark !== "rest" && mark !== "idle") return MARK_WORDS[mark]
   return now === undefined ? undefined : ago(listed.changed, now)
 }

@@ -116,7 +116,7 @@ test("Archive asks the Item's App to archive it on its host, in one command; an 
 })
 
 test("a Thread at work is not archived", () => {
-  const working = thread({ id: "t2", mark: "running" })
+  const working = thread({ id: "t2", mark: "working" })
   const { shell, ran } = fake(working)
   archiving.run(shell)
   expect(ran).toEqual([])

@@ -2,11 +2,13 @@ import { readFileSync } from "node:fs"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
 import { LOOPED, LOOPS } from "../lib/mark-rhythm"
+import { shownOf } from "../lib/mark-state"
 import type { Listed } from "../pane"
 import {
   BandaMark,
   groupState,
   MARK_ORDER,
+  type MarkDoing,
   type MarkState,
   stillMark,
   ThreadMark,
@@ -247,9 +249,8 @@ test("the looks of one shape draw one outline, and each shape its own", () => {
   const square = outlineOf("idle")
   for (const state of ["rest", "done", "woke", "later", "offline"] as const)
     expect(outlineOf(state), state).toBe(square)
-  expect(outlineOf("thinking")).toBe(outlineOf("running"))
   const shapes = new Set(
-    (["idle", "running", "asking", "failed"] as const).map(outlineOf)
+    (["idle", "working", "asking", "failed"] as const).map(outlineOf)
   )
   expect(shapes.size).toBe(4)
 })
@@ -275,8 +276,7 @@ test("failed is a stop sign: eight rounded corners on a circle", () => {
 })
 
 test("a Group's colour, and a lent tab's, is its Agent's state", () => {
-  expect(groupState("running")).toBe("working")
-  expect(groupState("thinking")).toBe("working")
+  expect(groupState("working")).toBe("working")
   expect(groupState("asking")).toBe("asking")
   expect(groupState("done")).toBe("done")
   expect(groupState("offline")).toBe("failed")
@@ -314,8 +314,7 @@ test("a Thread's mark that calls no one takes its look's weight", () => {
       renderToStaticMarkup(<ThreadMark listed={listed} look={look} />)
     )![1]!
   expect(svgClass("idle")).toContain("text-mark-open")
-  expect(svgClass("running")).toContain("text-mark-working")
-  expect(svgClass("thinking")).toContain("text-mark-working")
+  expect(svgClass("working")).toContain("text-mark-working")
   expect(svgClass("later")).toContain("text-mark-later")
   for (const look of ["asking", "failed", "done", "woke", "rest"] as const)
     expect(svgClass(look), look).not.toContain("text-mark-")
@@ -325,15 +324,12 @@ test("a Thread's mark that calls no one takes its look's weight", () => {
 // blue; a lone Agent's tile is coloured by who draws it, so the bar's
 // counts stay grey.
 test("the logo's hat at work is a working Mark's, and an Agent's tile alone is not", () => {
-  for (const state of ["running", "thinking"] as const) {
-    expect(renderToStaticMarkup(<BandaMark state={state} />), state).toMatch(
-      /<g data-agent[^>]*class="text-mark-working"/
-    )
-    expect(
-      renderToStaticMarkup(<BandaMark variant="agent" state={state} />),
-      state
-    ).not.toContain("text-mark-working")
-  }
+  expect(renderToStaticMarkup(<BandaMark state="working" />)).toMatch(
+    /<g data-agent[^>]*class="text-mark-working"/
+  )
+  expect(
+    renderToStaticMarkup(<BandaMark variant="agent" state="working" />)
+  ).not.toContain("text-mark-working")
 })
 
 // ADR 0099, decision 9: the Agent's tile takes the colour; on the logo the
@@ -504,18 +500,25 @@ async function motion({ reduced = false, still = false } = {}) {
   const { Animator } = await import("./banda-mark")
   return {
     Animator,
-    /** A mark of `variant` on `drawn`, first drawn in `state`, on the beat
-     * of `beat`. */
+    /** A mark of `variant` on `drawn`, first drawn in `state`, and at
+     * work doing `doing`, on the beat of `beat`. */
     mark(
       drawn: ReturnType<typeof svg>,
       state: MarkState,
-      { variant = "agent", news = false, beat = "t", playful = 0 } = {}
+      {
+        variant = "agent",
+        news = false,
+        beat = "t",
+        playful = 0,
+        doing = undefined as MarkDoing | undefined,
+      } = {}
     ) {
       const mark = new Animator(drawn.svg, variant as "agent" | "logo")
-      mark.set({ state, playful, news, beat })
+      mark.set({ state, doing, playful, news, beat })
       return {
         mark,
-        set: (state: MarkState) => mark.set({ state, playful, news, beat }),
+        set: (state: MarkState, doing?: MarkDoing) =>
+          mark.set({ state, doing, playful, news, beat }),
       }
     },
     /** Whether the clock asked for a tick. */
@@ -563,8 +566,9 @@ test("a first draw plays no news: the mark starts in its look, and its loops are
     const { mark } = time.mark(drawn, state, { beat: state })
     expect(time.ticking(), state).toBe(false)
     expect(drawn.attributes()["data-news"], state).toBeUndefined()
+    const shown = shownOf(state)
     expect(drawn.attributes()["data-loop"], state).toBe(
-      LOOPED[state] ? state : undefined
+      LOOPED[shown] ? shown : undefined
     )
     expect(drawn.attributes("[data-body]").d, state).toBe(outlineOf(state))
     mark.dispose()
@@ -589,7 +593,7 @@ test("news hands back to the keyframes: it plays on the clock for its length, th
   const { set } = time.mark(drawn, "idle")
   expect(time.ticking()).toBe(false)
   // A new shape leaps into it.
-  set("running")
+  set("working")
   expect(time.ticking()).toBe(true)
   time.run(1)
   expect(drawn.attributes()["data-news"]).toBe("leap")
@@ -598,15 +602,16 @@ test("news hands back to the keyframes: it plays on the clock for its length, th
   expect(time.ticking()).toBe(false)
   const own = drawn.attributes()
   expect(own["data-news"]).toBeUndefined()
-  expect(own["data-loop"]).toBe("running")
+  expect(own["data-loop"]).toBe("other")
   expect(own["--mark-phase"]).toMatch(/^-\d+\.\d{3}s$/)
   // Its last drawing is its look between moves, what marks.css moves.
-  expect(drawn.attributes("[data-body]").d).toBe(outlineOf("running"))
+  expect(drawn.attributes("[data-body]").d).toBe(outlineOf("working"))
   expect(turnsOf(drawn)).toBe(
     "translate(0.00 0.00) rotate(-8.00 54 45) translate(76 45) scale(1.00 1.00) translate(-76 -45) rotate(0.00 76 22.5)"
   )
-  // The same shape blends; done flips.
-  set("thinking")
+  // The same shape blends, once a doing has held its 1.5 s; done flips.
+  vi.advanceTimersByTime(1000)
+  set("working", "think")
   time.run(1)
   expect(drawn.attributes()["data-news"]).toBe("blend")
   time.run(1000)
@@ -634,6 +639,48 @@ test("woke arrives asleep, stretches, then rings", async () => {
   expect(drawn.attributes("[data-bells]").opacity).toBe("1.00")
 })
 
+// ADR 0099, decision 2: what an Agent at work does shows for at least
+// 1.5 s; one replaced sooner is skipped.
+test("a doing that changes after 0.3 s shows after 1.5 s, and one replaced within its wait never shows", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "working", { doing: "read" })
+  expect(drawn.attributes()["data-doing"]).toBe("read")
+  expect(drawn.attributes()["data-loop"]).toBe("read")
+  vi.advanceTimersByTime(300)
+  set("working", "execute")
+  expect(drawn.attributes()["data-doing"]).toBe("read")
+  expect(time.ticking()).toBe(false)
+  vi.advanceTimersByTime(1199)
+  expect(drawn.attributes()["data-doing"]).toBe("read")
+  vi.advanceTimersByTime(1)
+  expect(drawn.attributes()["data-doing"]).toBe("execute")
+  // It blends into the new doing, then hands it to its loops.
+  time.run(1)
+  expect(drawn.attributes()["data-news"]).toBe("blend")
+  time.run(1000)
+  expect(drawn.attributes()["data-loop"]).toBe("execute")
+  // Edit comes and goes before execute has held 1.5 s: fetch follows it.
+  const doings = new Set<string | undefined>()
+  set("working", "edit")
+  doings.add(drawn.attributes()["data-doing"])
+  vi.advanceTimersByTime(200)
+  set("working", "fetch")
+  for (let ms = 0; ms < 2000; ms += 100) {
+    vi.advanceTimersByTime(100)
+    doings.add(drawn.attributes()["data-doing"])
+  }
+  expect([...doings]).toEqual(["execute", "fetch"])
+  // A turn that ends shows its end at once, and no doing.
+  set("working", "think")
+  set("done")
+  expect(drawn.attributes()["data-doing"]).toBeUndefined()
+  time.run(1000)
+  expect(drawn.attributes()["data-loop"]).toBe("done")
+  vi.advanceTimersByTime(2000)
+  expect(drawn.attributes()["data-loop"]).toBe("done")
+})
+
 test("one Thread keeps one rhythm wherever its mark shows, and each Thread its own", async () => {
   const time = await motion()
   const a = svg()
@@ -649,11 +696,11 @@ test("one Thread keeps one rhythm wherever its mark shows, and each Thread its o
   expect(Math.abs(phaseIn(other) - phaseIn(b))).toBeGreaterThan(0.01)
 })
 
-// Until one keyed list keeps a row's node (ADR 0098, step 5), the sidebar
-// draws a Thread's row afresh as it changes part: Working to Your turn.
+// The list holds a card's node, but a card whose row draws another root
+// as it leaves the list is drawn afresh: its mark then moves from the last.
 test("a Thread's mark drawn again just as its last went is that mark moved: a new look is news, the same look none", async () => {
   const time = await motion()
-  const { mark: working } = time.mark(svg(), "running", { beat: "t1" })
+  const { mark: working } = time.mark(svg(), "working", { beat: "t1" })
   working.dispose()
   const done = svg()
   time.mark(done, "done", { beat: "t1" })
@@ -782,7 +829,7 @@ test("the logo at rest sets its timer once, however often another mark ticks", a
   time.run(1000)
   const timers = vi.spyOn(globalThis, "setTimeout")
   // A Thread's news beside it ticks, and the logo, still, with it.
-  const { mark, set } = time.mark(svg(), "running")
+  const { mark, set } = time.mark(svg(), "working")
   set("asking")
   expect(time.run(300)).toBeGreaterThan(20)
   expect(timers).not.toHaveBeenCalled()

@@ -17,7 +17,7 @@ const showsOf = (pane: PaneState) =>
 const thread = (id: string, more: Partial<Listed> = {}): Listed => ({
   id,
   title: `Thread ${id}`,
-  mark: "running",
+  mark: "working",
   changed: 0,
   agent: `agent ${id}`,
   pane: { kind: "agents.thread", args: { thread: id } },
