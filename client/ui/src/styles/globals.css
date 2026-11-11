@@ -792,6 +792,61 @@ html[data-drag="view"] * {
 html[data-sidebar="desk"] [data-sidebar-shown] {
   --sidebar-inset: var(--sidebar-width);
 }
+/*
+ * A sidebar card under the pointer (ADR 0098, decision 10; spec S7a).
+ * Its fill comes at once and goes over 100 ms (ADR 0088, decision 2).
+ * Its acts stand over line 1's right, whose cell keeps their room while
+ * they show, so the hover moves nothing but the title's fade, which ends
+ * before them at once, and comes back at once. They come over --dur-fast
+ * as the time goes over --dur-out, and go over --dur-out. None come by
+ * the pointer for a moment after the list moved under it (`data-calm`);
+ * with the focus in the card they show too, and on a coarse pointer
+ * always. Plain `:hover`, not Tailwind's, which asks for (hover: hover).
+ */
+[data-row]:hover > [data-card]::before,
+[data-card]:hover::before {
+  opacity: 1;
+  transition-duration: 0s;
+}
+[data-acts] {
+  opacity: 0;
+  visibility: hidden;
+  transition:
+    opacity var(--dur-out) var(--ease-exit),
+    visibility 0s var(--dur-out);
+}
+[data-acts-room] {
+  width: 0;
+}
+[data-acts-time] {
+  transition: opacity var(--dur-fast) var(--ease);
+}
+[data-row]:is(:focus-within, [data-sidebar-list]:not([data-calm]) :hover) {
+  & [data-acts] {
+    opacity: 1;
+    visibility: visible;
+    transition: opacity var(--dur-fast) var(--ease);
+  }
+  & [data-acts-room] {
+    width: var(--room);
+  }
+  & [data-acts-time] {
+    opacity: 0;
+    transition: opacity var(--dur-out) var(--ease-exit);
+  }
+}
+@media (pointer: coarse) {
+  [data-acts] {
+    opacity: 1;
+    visibility: visible;
+  }
+  [data-acts-room] {
+    width: var(--room);
+  }
+  [data-acts-time] {
+    opacity: 0;
+  }
+}
 /* With no motion, `[motion] off` or reduced motion, the sidebar and the
    toasts jump (ADR 0098, S5c): Sonner heeds the system's wish, not
    `[motion] off`. The sidebar is the aside, as the root's own

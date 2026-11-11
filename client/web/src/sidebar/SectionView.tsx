@@ -5,22 +5,19 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
 import { CutTips } from "@banda/ui/components/fade-text"
 import { Separator } from "@banda/ui/components/separator"
-import { useRun, useThisNamed } from "@banda/core/react"
+import { useEngineOf, useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
-import type { Listed, PaneState } from "@banda/ui/pane"
-import {
-  AlarmClockIcon,
-  ChevronDownIcon,
-  ChevronRightIcon,
-  SquarePenIcon,
-} from "lucide-react"
+import type { PaneState } from "@banda/ui/pane"
+import { ChevronDownIcon, ChevronRightIcon, SquarePenIcon } from "lucide-react"
+import { type Act, actsOf } from "./acts"
 import type { Row as Arranged } from "./arrange"
 import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
+import type { CardAct } from "./CardView"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
-import { itemActionOf } from "./items"
+import { archiving, itemActionOf } from "./items"
 import { EDGE } from "./MachineCard"
 import { pickLater } from "./LaterPicker"
 import { HerePart } from "./HostPart"
@@ -31,6 +28,7 @@ import { Rollup } from "./Rollup"
 import type { WithMenu } from "./ProjectMenu"
 import { DENSITY, type Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
+import { putBack, toldArchived, type Undoable, undoOf } from "./undo"
 import { HoldingContext } from "./useHold"
 import type { Holds } from "./useOrdered"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
@@ -44,10 +42,11 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
  * folds it. A card keeps its node from one part to another, so its Mark
  * plays its change as news; the list moves as `motion.ts` plays it. While
  * the list holds, a card that left stays dimmed in its slot, saying where
- * it went, and one the Person's pointer took away stands as a ghost line.
- * What the Person does to a card from it, by its menu or its hover
- * actions, is their own act, which the list draws at once; for a moment
- * after one by key closed a slot, the hover actions take no click.
+ * it went, and one the Person's pointer took away stands as a ghost line,
+ * whose Undo puts back what its act changed. What the Person does to a
+ * card from it, by its menu or its acts (ADR 0098, decision 10), is their
+ * own act, which the list draws at once; for a moment after one by key
+ * closed a slot, the acts take no click.
  */
 export function SectionView({
   regions,
@@ -107,16 +106,68 @@ export function SectionView({
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
   useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
-  // A row's Later and Wake are its Thread's App's (ADR 0087, decision 12),
-  // and the Person's own acts, which the list draws at once.
-  const wake = (row: Arranged) => {
-    const action = itemActionOf(row.listed, "wake")
-    if (!action || holding?.quiet()) return
-    holding?.act(row)
-    run(action.id, { project: row.project.id, item: row.listed.id })
+  const engineOf = useEngineOf()
+  /** Whether the Window reaches `row`'s host: one it does not refuses an
+   * act at once, as its App says, and nothing is kept to undo. */
+  const reaches = (row: Arranged) => {
+    try {
+      engineOf(row.project.id, row.listed.pane)
+      return true
+    } catch {
+      return false
+    }
   }
-  const laterKey = (listed: Listed) =>
-    keyFor(itemActionOf(listed, "later")?.id ?? "")
+  /**
+   * The Person's act on a card, by its button (decision 10): the Thread's
+   * App's, by its item actions (ADR 0087, decision 12), which the list
+   * draws at once, with what takes it back. Later opens the picker at the
+   * card, which then holds the list; Archive acts at once, and is told in
+   * the toast.
+   */
+  const onAct = (row: Arranged, act: Act, card: Element) => {
+    if (holding?.quiet()) return
+    const { listed } = row
+    const project = row.project.id
+    const undo = (): Undoable | undefined =>
+      reaches(row)
+        ? { project, listed, steps: undoOf(act, listed, Date.now()) }
+        : undefined
+    if (act === "later") {
+      pickLater({
+        project,
+        listed,
+        anchor: card,
+        onPicked: () => holding?.act(row, "pointer", undo()),
+      })
+      return
+    }
+    const done = undo()
+    holding?.act(row, "pointer", done)
+    const action = itemActionOf(listed, act === "wake" ? "wake" : "archive")
+    if (action)
+      run(action.id, {
+        project,
+        item: listed.id,
+        ...(act === "wake" ? {} : { archived: act === "archive" }),
+      })
+    if (act === "archive" && done) toldArchived(run, done)
+  }
+  /** A card's acts, each naming the key in force of what does it: its
+   * App's Later and Wake, the list's Archive. */
+  const actsFor = (row: Arranged): CardAct[] =>
+    actsOf(row.stand, row.listed).map((act) => ({
+      act,
+      key: keyFor(
+        act === "later" || act === "wake"
+          ? (itemActionOf(row.listed, act)?.id ?? "")
+          : archiving.id
+      ),
+      // Wake stands where the time says who put it off (ADR 0074).
+      ...(act === "wake" && row.listed.later?.byAgent
+        ? { note: LATER_BY_AGENT }
+        : {}),
+      run: (card) => onAct(row, act, card),
+    }))
 
   const header = (group: GroupBlock, label: string) => {
     const { project } = group
@@ -177,48 +228,11 @@ export function SectionView({
     return project && mine ? withMenu(project, head) : head
   }
 
-  /** A card's hover action: Wake in Later, else its Later's clock, which
-   * opens the picker at the card. */
-  const actionOf = (row: Arranged) =>
-    row.stand === "later" ? (
-      <Button
-        variant="ghost"
-        size="xs"
-        className="h-5"
-        // It stands where the time says when it wakes, and says who put
-        // it off where its Agent did (ADR 0074).
-        title={row.listed.later?.byAgent ? LATER_BY_AGENT : undefined}
-        onClick={() => wake(row)}
-      >
-        <AlarmClockIcon className="size-3.5" />
-        Wake
-      </Button>
-    ) : (
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        className="size-5"
-        aria-label="Later"
-        title={`Later ${laterKey(row.listed)}`}
-        onClick={(event) => {
-          if (holding?.quiet()) return
-          const anchor = event.currentTarget.closest("[data-row]")
-          pickLater({
-            project: row.project.id,
-            listed: row.listed,
-            ...(anchor ? { anchor } : {}),
-            onPicked: () => holding?.act(row, "pointer"),
-          })
-        }}
-      >
-        <AlarmClockIcon className="size-3.5" />
-      </Button>
-    )
-
   const card = (item: Extract<Item, { kind: "card" }>) => {
     const { row } = item.entry
     const went = item.ghost ?? item.went
     const said = went && wentWords(went, holds.now)
+    const undo = item.ghost && holds.undos.get(item.key)
     const drawn = (
       <ThreadRow
         engine={engine}
@@ -231,7 +245,7 @@ export function SectionView({
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
-        {...(went ? { went } : { action: actionOf(row) })}
+        {...(went ? { went } : { acts: actsFor(row) })}
       />
     )
     return (
@@ -249,8 +263,20 @@ export function SectionView({
           {drawn}
         </div>
         {item.ghost && (
-          <p className="absolute inset-0 flex items-center justify-center text-xs text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0">
+          <p className="absolute inset-0 flex items-center justify-center gap-1 text-xs text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0">
             {said}
+            {undo && (
+              <>
+                {said && <span aria-hidden>·</span>}
+                <button
+                  type="button"
+                  className="rounded-control px-0.5 text-foreground/85 outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+                  onClick={() => putBack(run, undo)}
+                >
+                  Undo
+                </button>
+              </>
+            )}
           </p>
         )}
       </>
