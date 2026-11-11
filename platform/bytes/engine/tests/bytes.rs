@@ -663,8 +663,9 @@ async fn a_modules_own_page_is_given_a_token_and_served_as_a_page_alone() {
         world.bytes(&issued.token).await.status,
         StatusCode::NOT_FOUND
     );
-    // Another file put in its place is not served, as with any token.
-    std::fs::remove_file(&kept).unwrap();
+    // Another file put in its place is not served, as with any token: the
+    // first kept beside it, so the new one is not given its place on disk.
+    std::fs::rename(&kept, world.outside().join("first.html")).unwrap();
     std::fs::write(&kept, "<p>other</p>").unwrap();
     assert_eq!(
         world.page(&issued.token).await.status,
