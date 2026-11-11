@@ -14,7 +14,8 @@
 # A scope's actions, as the composer's, work while the focus is in it,
 # before the window's, and are bound in its own table, [binds.composer]:
 # a key there may be held with no mod, as Return, but not one its field
-# would type.
+# would type. The sidebar's, as S on the card picked, work while the
+# focus is in it, and are bound in [binds.sidebar].
 
 # The mod is held for every Banda key and the mouse's moves: Alt, or one
 # or two of Alt, Ctrl and Super (⌘ on a Mac), as Ctrl+Alt where your
@@ -28,3 +29,6 @@
 
 # [binds.composer]
 # "Ctrl+Return" = "agents.composer.send"
+
+# [binds.sidebar]
+# "E" = "sidebar.archive-picked"

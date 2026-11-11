@@ -23,7 +23,7 @@ import { useMinute } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import { left } from "@banda/ui/lib/words"
 import type { Args } from "@banda/ui/module"
-import type { Listed } from "@banda/ui/pane"
+import { focusedTile, type Listed } from "@banda/ui/pane"
 import { asleep } from "@banda/ui/status"
 import {
   AlarmClockIcon,
@@ -57,11 +57,33 @@ export function useLaterAnchor(): Element | undefined {
   return useStore(picking, anchorOf)
 }
 
+/** Where the focus was as the picker opened, which it goes back to as it
+ * closes (spec §2.7): the sidebar's list, or the Pane, never the page; and
+ * whether a press elsewhere closed it, which put the focus where it went. */
+const back: { to: Element | null; outside: boolean } = {
+  to: null,
+  outside: false,
+}
+
 /** Opens the picker for a Thread, by its row where `anchor` is given;
  * none closes it. */
 export function pickLater(target: LaterTarget | undefined): void {
+  if (target && !picking.get()) {
+    back.to = document.activeElement
+    back.outside = false
+  }
   picking.set(target)
 }
+
+/** Where the focus goes as the picker closes. */
+const focusBack = () =>
+  back.outside
+    ? false
+    : back.to instanceof HTMLElement &&
+        back.to.isConnected &&
+        back.to !== document.body
+      ? back.to
+      : (focusedTile() ?? true)
 
 /** What is picked: a time for the Thread to come back at, its failed
  * turn going again then when it is a usage limit's reset (ADR 0074,
@@ -195,7 +217,10 @@ export function LaterPicker() {
   return (
     <Popover
       open={target !== undefined}
-      onOpenChange={(open) => !open && onClose()}
+      onOpenChange={(open, details) => {
+        back.outside = details.reason === "outside-press"
+        if (!open) onClose()
+      }}
     >
       {target && (
         <PopoverContent
@@ -203,6 +228,7 @@ export function LaterPicker() {
           side={target.anchor ? "right" : "bottom"}
           align="start"
           sideOffset={6}
+          finalFocus={focusBack}
           className="w-72 gap-0 p-1.5"
         >
           <Picking

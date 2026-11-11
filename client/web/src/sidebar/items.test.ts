@@ -44,6 +44,7 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
     "thread.suggest-title",
     "agents.previous-title",
     "thread.unread",
+    "agents.thread.unseen",
     "agents.make-project",
     "thread.later",
     "thread.wake",

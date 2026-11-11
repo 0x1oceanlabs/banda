@@ -55,8 +55,8 @@ pub struct KeysSettings {
 }
 
 /// What a key of `[binds]` holds (ADR 0071, decision 3): what a line
-/// runs, or a scope's own table, `[binds.composer]`, whose keys work while
-/// the focus is in that scope.
+/// runs, or a scope's own table, as `[binds.composer]` or
+/// `[binds.sidebar]`, whose keys work while the focus is in that scope.
 #[derive(Clone, Debug, Deserialize, Serialize, JsonSchema)]
 #[serde(untagged)]
 pub enum Bound {
@@ -1345,6 +1345,58 @@ mod tests {
                     "Return: Banda has no scope nope; its scopes are composer"
                 ),
             ]
+        );
+    }
+
+    #[test]
+    fn the_sidebar_s_table_moves_its_keys_and_takes_letters_as_it_has_no_field() {
+        // The sidebar's scope, as the window declares it (ADR 0098,
+        // decision 13): its keys hold no mod, and no field of its own
+        // types them, so a letter binds there.
+        let mut manifests = manifests_of(actions());
+        manifests.scopes.push(Scope {
+            id: "sidebar".to_owned(),
+            title: "Sidebar".to_owned(),
+            field: false,
+            mod_held: false,
+        });
+        for (id, code) in [
+            ("sidebar.archive-picked", "KeyS"),
+            ("sidebar.later-picked", "KeyZ"),
+        ] {
+            manifests.actions.push(Action {
+                id: id.to_owned(),
+                title: id.to_owned(),
+                section: "Sidebar".to_owned(),
+                keys: vec![Declared {
+                    code: code.to_owned(),
+                    ..Declared::default()
+                }],
+                family: None,
+                unlisted: false,
+                scope: Some("sidebar".to_owned()),
+                args: None,
+                runs_as_person: None,
+            });
+        }
+        let mut problems = Vec::new();
+        let text = "[binds.sidebar]\n\"E\" = \"sidebar.archive-picked\"\n\"Z\" = \"none\"\n\"Shift+L\" = \"sidebar.later-picked\"\n[binds]\n\"Alt+E\" = \"sidebar.archive-picked\"\n";
+        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
+        let actions = in_force(&manifests, &keys, &mut problems);
+        assert_eq!(texts(&actions, "sidebar.archive-picked"), ["S", "E"]);
+        assert_eq!(texts(&actions, "sidebar.later-picked"), ["Shift+L"]);
+        // The window's Alt+S still archives the Thread in focus anywhere.
+        assert_eq!(texts(&actions, "sidebar.archive"), ["Alt+S"]);
+        let said: Vec<(Option<u32>, &str)> = problems
+            .iter()
+            .map(|problem| (problem.line, problem.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [(
+                Some(6),
+                "Alt+E: sidebar.archive-picked works in [binds.sidebar]: bind it there"
+            )]
         );
     }
 

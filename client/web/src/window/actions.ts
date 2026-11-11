@@ -26,6 +26,7 @@ import {
   type Args,
   itemArgs,
   itemOf,
+  scoped,
   takes,
   type WindowApi,
 } from "@banda/ui/module"
@@ -55,6 +56,7 @@ import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { isFlow, nextFlow } from "../bar/Flow"
 import { archiving } from "../sidebar/items"
+import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { makeProject } from "../titles/MakeProject"
 import { pickLater } from "../sidebar/LaterPicker"
 import { logged } from "../sidebar/write-setting"
@@ -1282,6 +1284,29 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
+    // Open beside (ADR 0098, decision 14): the sidebar's Shift+Enter and
+    // the Banda menu's Tab bring a Pane right of the one in focus, from
+    // wherever it is, and the Sheet goes (ADR 0102, decision 5).
+    id: "pane.beside",
+    section: "Panes",
+    title: "Bring a Pane beside the one in focus",
+    unlisted: true,
+    run: (shell, args) => {
+      const picked = pickOf(args)
+      if (!picked) return
+      shell.closeSheet()
+      shell.change((w) =>
+        bringing(
+          w,
+          picked.project,
+          picked.pane,
+          shell.placing(),
+          shell.projectOf
+        )
+      )
+    },
+  },
+  {
     id: "calls.answer",
     section: "Threads",
     title: "Go to what calls you",
@@ -1613,6 +1638,11 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell) => shell.showSidebar(),
   },
+  // The sidebar's own keys, while the focus is in it (ADR 0098, decision
+  // 13): the Sidebar runs them on its pick.
+  ...SIDEBAR_KEYS.map(({ id, title, keys }) =>
+    scoped(SIDEBAR, { id, title, section: "Sidebar", keys })
+  ),
   {
     // A number on the Bar, past the ninth too, where the keys stop.
     id: "workspace.go",

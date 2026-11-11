@@ -69,7 +69,7 @@ async function say(window: Window, box: Locator, text: string) {
   // Its turn is over in the engine, and the Window took it in, seen: its
   // card's Mark has the open look (ADR 0099).
   await expect.poll(() => threadNamed(window, text)?.latest?.state).toBe("done")
-  const row = sidebarOf(page).getByRole("button", { name: new RegExp(text) })
+  const row = sidebarOf(page).getByRole("option", { name: new RegExp(text) })
   await expect(row.getByRole("img", { name: "Open" })).toBeVisible()
   return thread
 }
@@ -119,7 +119,7 @@ async function toastedOutOfView(
   const { page } = window
   const done = (one: string) =>
     sidebarOf(page)
-      .getByRole("button", { name: new RegExp(one) })
+      .getByRole("option", { name: new RegExp(one) })
       .getByRole("img", { name: "Done" })
   // The other Agents chimed as their turns ended, and a chime within
   // 1.5 s of the one before plays not at all (QUIET_FOR in
@@ -382,7 +382,7 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   // and "+ 4 more" the rest (ADR 0098, decision 3).
   await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
   await expect(rows).toHaveCount(6)
-  await sidebar.getByRole("button", { name: "+ 4 more" }).click()
+  await sidebar.getByRole("option", { name: "+ 4 more" }).click()
   await expect(rows).toHaveCount(10)
   await expect(rows.getByRole("img", { name: "Working" })).toHaveCount(10)
   // Each Group's plate takes its Agent's state: at work, all ten.
@@ -400,7 +400,7 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   await expect(ten).toHaveAttribute("data-focused", "true")
   await expect(one).not.toBeInViewport()
   const row = (name: string) =>
-    sidebar.getByRole("button", { name: new RegExp(name) })
+    sidebar.getByRole("option", { name: new RegExp(name) })
   await row("wait one").click()
   await expect(one).toHaveAttribute("data-focused", "true")
   await expect.poll(() => fromLeft(page, one)).toBeLessThan(3)
@@ -489,7 +489,7 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   const sidebar = sidebarOf(page)
   const toasts = toastsOf(page)
   const picker = pickerOf(page)
-  const row = sidebar.getByRole("button", { name: /hello b/ })
+  const row = sidebar.getByRole("option", { name: /hello b/ })
   // Later is a tab of its own (ADR 0098, decision 2), the Inbox another.
   const tab = sidebar.getByRole("tab", { name: /^Later/ })
   const inbox = sidebar.getByRole("tab", { name: /^Inbox/ })
@@ -533,11 +533,10 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await expect(row).toBeVisible()
   await expect(tab).toHaveAccessibleName("Later")
 
-  // The clock on its row puts it off too. A row shows its clock under the
-  // pointer, or with the focus in it: headless, nothing hovers.
+  // The clock on its row puts it off too: it shows under the pointer.
   const actions = sidebar.locator("[data-row]").filter({ hasText: "hello b" })
-  await row.focus()
-  await actions.getByRole("button", { name: "Later" }).click()
+  await row.hover()
+  await actions.locator('[data-act="later"]').click()
   await expect(field).toBeFocused()
   // Woken by Undo, its Pane stayed closed.
   await expect(b).toBeHidden()
@@ -551,8 +550,8 @@ test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, 
   await tab.click()
   await expect(tab).toHaveAttribute("aria-selected", "true")
   await expect(row).toContainText(/\d:\d\d/)
-  await row.focus()
-  await actions.getByRole("button", { name: "Wake", exact: true }).click()
+  await row.hover()
+  await actions.locator('[data-act="wake"]').click()
   await leaveSidebar(page)
   await expect(tab).toHaveAccessibleName("Later")
   await expect(row).toBeHidden()
@@ -603,7 +602,7 @@ test("a Thread at work put off until it's done comes back as its turn ends, with
   const [a] = await agents(window, "wait a")
   const sidebar = sidebarOf(page)
   const toasts = toastsOf(page)
-  const row = sidebar.getByRole("button", { name: /wait a/ })
+  const row = sidebar.getByRole("option", { name: /wait a/ })
   const tab = sidebar.getByRole("tab", { name: /^Later/ })
 
   // At work, it may sleep until its turn ends.

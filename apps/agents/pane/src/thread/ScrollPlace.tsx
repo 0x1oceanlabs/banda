@@ -25,6 +25,9 @@ const RETURNING = 1200
  * found: markdown, code and Mermaid take their room after the text. */
 const HOLD = 2000
 const MESSAGE = "[data-message-id]"
+/** What the Thread's viewport hears when its Person asks to go to where
+ * the unseen begins: the sidebar's Enter on its card, already open. */
+export const UNSEEN = "banda:unseen"
 
 function keep(thread: string, place: Place | undefined) {
   places.delete(thread)
@@ -114,8 +117,10 @@ class Coming {
   private seen: { count: number; until: number } | null = null
   private frame = 0
   private holding: AbortController | undefined
-  /** Whether its Person scrolled up by hand, from `watchHand`. */
+  /** Whether its Person scrolled up by hand, from `watchHand`, and how
+   * many messages there were then: what came after they did not see. */
   up = false
+  upAt = 0
 
   private readonly view: React.RefObject<HTMLDivElement | null>
   private readonly scroll: Scroll
@@ -213,7 +218,7 @@ export function ScrollPlace({
   viewport: React.RefObject<HTMLDivElement | null>
   last: string | undefined
 }) {
-  const { scrollToMessage } = useMessageScroller()
+  const { scrollToMessage, scrollToEnd } = useMessageScroller()
   const tile = useContext(TileContext)
   const [coming] = useState(() => new Coming(viewport, scrollToMessage))
 
@@ -230,8 +235,32 @@ export function ScrollPlace({
   useEffect(() => {
     const view = viewport.current
     if (!view) return
-    return watchHand(view, (up) => (coming.up = up))
+    return watchHand(view, (up) => {
+      if (up && !coming.up) coming.upAt = seenOf(view) ?? 0
+      coming.up = up
+    })
   }, [viewport, coming])
+
+  // Asked, it goes to where the unseen begins (ADR 0094, rule 3): the
+  // first message that came since its Person scrolled up, near the top;
+  // else its end.
+  useEffect(() => {
+    const view = viewport.current
+    if (!view) return
+    const go = () => {
+      const first = coming.up
+        ? view.querySelectorAll<HTMLElement>(MESSAGE)[coming.upAt]
+        : undefined
+      if (first)
+        scrollToMessage(first.dataset.messageId!, {
+          align: "start",
+          scrollMargin: PEEK,
+        })
+      else scrollToEnd()
+    }
+    view.addEventListener(UNSEEN, go)
+    return () => view.removeEventListener(UNSEEN, go)
+  }, [viewport, coming, scrollToMessage, scrollToEnd])
 
   // Its Tile hidden: how many messages it showed is noted as it stops
   // showing, unless the Person scrolled up; the scroller keeps that place.

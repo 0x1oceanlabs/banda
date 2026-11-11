@@ -125,7 +125,6 @@ import {
 } from "../tiling/store"
 import { Workspaces } from "../tiling/Workspaces"
 import {
-  bringing,
   closing,
   closingShown,
   opening,
@@ -700,17 +699,12 @@ export function Shell({
     (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
         case "thread":
-          // A pick goes as the sidebar's does; one brought beside takes the
-          // Sheet away too (ADR 0102, decision 5).
-          if (!row.beside)
-            return parts.run("pane.pick", {
-              project: row.project,
-              pane: row.listed.pane,
-            })
-          parts.closeSheet()
-          return change((w) =>
-            bringing(w, row.project, row.listed.pane, placing, projectOf)
-          )
+          // A pick goes as the sidebar's does, and so does one brought
+          // beside, as its Shift+Enter.
+          return parts.run(row.beside ? "pane.beside" : "pane.pick", {
+            project: row.project,
+            pane: row.listed.pane,
+          })
         case "action":
           return runAction(parts, row.action)
         case "ask":
@@ -731,7 +725,7 @@ export function Shell({
           return row.row.run(parts)
       }
     },
-    [change, placing, projectOf, newThreadIn, parts, here]
+    [newThreadIn, parts, here]
   )
 
   const frame: Frame = useMemo(
