@@ -2,14 +2,14 @@
 //! resolver changes so that it does: the contrast of each text on the
 //! surfaces under it, as WCAG 2 measures it.
 //!
-//! Over Banda's glass the wallpaper is not known, so a glass surface is
-//! measured over the worst backdrops, white, black and a mid grey; text
-//! on the desk and the sidebar's panel is left out ([`rows`]). The accent, where it is a line
+//! Over Banda's glass, the desk and the sidebar's panel are made as dense
+//! as their text needs over the wallpaper Banda draws (ADR 0111,
+//! [`densify`]); the rest of the glass is measured over the worst
+//! backdrops, white, black and a mid grey. The accent, where it is a line
 //! or text, is darkened or lightened until it reads on the background,
 //! and the text on it is worked out. What still does not read is the
 //! theme's own, and [`check`] names it.
 
-use crate::Material;
 use crate::color::{Oklab, with_alpha};
 use std::collections::BTreeMap;
 use std::fmt;
@@ -22,7 +22,7 @@ pub const QUIET: f64 = 3.0;
 /// its colour: WCAG's AA for a control and for large text.
 pub const MARK: f64 = 3.0;
 
-/// The worst backdrops for glass whose wallpaper is not known.
+/// The worst backdrops, for glass whose wallpaper is not known.
 pub const BACKDROPS: [(&str, [f64; 3]); 3] = [
     ("white", [1.0; 3]),
     ("black", [0.0; 3]),
@@ -59,17 +59,112 @@ const READ: &[(&str, &[&str], f64)] = &[
     ),
 ];
 
-/// What [`READ`] measures over `glass`. Over Banda's glass, text on the
-/// desk and on the sidebar's panel over it is left out: at the tints
-/// `[desk]` and `[tile]` say, the desk reads for no text over both white
-/// and black, and the panel not for every theme. ADR 0111 measures them
-/// over the wallpaper Banda draws.
-fn rows(
-    glass: Option<Material>,
-) -> impl Iterator<Item = &'static (&'static str, &'static [&'static str], f64)> {
-    READ.iter().filter(move |(_, on, _)| {
-        glass != Some(Material::Banda) || (*on != ["desk"] && !on.contains(&"panel"))
-    })
+/// What a scheme lies over, as the resolver knows it.
+#[derive(Clone, Copy, Debug)]
+pub enum Under<'a> {
+    /// The theme's own ground: solid, or the system's material, which the
+    /// system tints to read in its mode.
+    Ground,
+    /// Banda's glass over the wallpaper: each colour of the picture as the
+    /// page draws it, blurred and saturated, sRGB from 0 to 1 (ADR 0111);
+    /// none for a picture the resolver does not read.
+    Wallpaper(Option<&'a [[f64; 3]]>),
+}
+
+/// Whether text on `on` lies on the wallpaper, the desk and the panel
+/// over it under nothing else.
+fn on_the_wallpaper(on: &[&str]) -> bool {
+    matches!(on, ["desk"] | ["desk", "panel", ..])
+}
+
+/// What text on `on` over `under` is measured over, by its name: each
+/// colour of the wallpaper for the desk and the panel, where it was read;
+/// else over Banda's glass the worst backdrops; else the theme's own
+/// ground. Solid, the desk hides what is under it.
+fn beneath(
+    paints: &BTreeMap<&str, Paint>,
+    on: &[&str],
+    under: Under,
+) -> Vec<(Option<&'static str>, [f64; 3])> {
+    match under {
+        Under::Wallpaper(Some(colours)) if on_the_wallpaper(on) => (colours.iter())
+            .map(|&c| (Some("the wallpaper"), c))
+            .collect(),
+        Under::Wallpaper(_) => BACKDROPS.iter().map(|&(n, c)| (Some(n), c)).collect(),
+        Under::Ground => (paints.get("background"))
+            .map(|ground| vec![(None, ground.over([1.0; 3]))])
+            .unwrap_or_default(),
+    }
+}
+
+/// The surfaces of Banda's glass made denser where their text needs it,
+/// the desk and then the panel over it as it ends (ADR 0111).
+pub(crate) const DENSER: [&str; 2] = ["desk", "panel"];
+
+/// Each of `surfaces`, of [`DENSER`], made as dense as its text needs
+/// over `wallpaper`'s colours (ADR 0111, decision 2): the first thousandth
+/// from its tint up at which each text on it reads over every colour.
+/// Never denser than the worst backdrops would ask, the ceiling, which a
+/// wallpaper the resolver did not read takes.
+pub(crate) fn densify(
+    colours: &mut BTreeMap<String, String>,
+    surfaces: &[&str],
+    wallpaper: Option<&[[f64; 3]]>,
+) {
+    for &surface in surfaces {
+        let paints = paints(colours.iter().map(|(k, v)| (k.as_str(), v)));
+        let Some(&paint) = paints.get(surface) else {
+            continue;
+        };
+        let reads = |&(text, on, needs): &(&str, &[&str], f64), alpha, backdrop| {
+            let colour = |name: &str| {
+                if name == surface {
+                    Some(Paint { alpha, ..paint })
+                } else {
+                    paints.get(name).copied()
+                }
+            };
+            measure(&colour, text, on, backdrop).is_none_or(|r| r >= needs)
+        };
+        let from = (paint.alpha * 1000.0).floor() as u32;
+        // The first thousandth up to `to` at which `row` reads over each
+        // of `backdrops`, the one it last read worst over tried first.
+        let first = |row, backdrops: &[[f64; 3]], to| {
+            let mut worst = 0;
+            (from..=to).find(|&n| {
+                let alpha = f64::from(n) / 1000.0;
+                if (backdrops.get(worst)).is_some_and(|&b| !reads(row, alpha, b)) {
+                    return false;
+                }
+                match (backdrops.iter()).position(|&b| !reads(row, alpha, b)) {
+                    Some(at) => {
+                        worst = at;
+                        false
+                    }
+                    None => true,
+                }
+            })
+        };
+        let rows: Vec<_> = (READ.iter())
+            .filter(|(_, on, _)| on.last() == Some(&surface))
+            .collect();
+        let worst = BACKDROPS.map(|(_, b)| b);
+        let ceiling = (rows.iter())
+            .filter_map(|row| first(row, &worst, 1000))
+            .fold(from, u32::max);
+        let needed = match wallpaper {
+            Some(wallpaper) => (rows.iter())
+                .map(|row| first(row, wallpaper, ceiling).unwrap_or(ceiling))
+                .fold(from, u32::max),
+            None => ceiling,
+        };
+        let alpha = f64::from(needed) / 1000.0;
+        if alpha > paint.alpha
+            && let Some(denser) = with_alpha(&colours[surface], alpha)
+        {
+            colours.insert(surface.to_owned(), denser);
+        }
+    }
 }
 
 /// Text that does not read: what it is, the surface it is on, the
@@ -95,23 +190,21 @@ impl fmt::Display for Unread {
 }
 
 /// The text in `scheme` that does not read: a scheme as [`crate::tokens::scheme`]
-/// gives it, with `glass` the material it is over, none when solid. Over
-/// Banda's glass each surface is measured over the worst backdrops; the
-/// system's material is made to read in its mode, so it is measured as
-/// the theme's own ground, as solid is. Over Banda's glass, text on the
-/// desk and the panel is not measured ([`rows`]).
-pub fn check(scheme: &BTreeMap<String, String>, glass: Option<Material>) -> Vec<Unread> {
+/// gives it, over what is `under` it ([`beneath`]). Over Banda's glass,
+/// text on the desk and the panel is measured over the wallpaper's
+/// colours where they are known, the rest over the worst backdrops (ADR
+/// 0111, decision 7).
+pub fn check(scheme: &BTreeMap<String, String>, under: Under) -> Vec<Unread> {
     let paints = paints(
         scheme
             .iter()
             .map(|(k, v)| (k.strip_prefix("--").unwrap_or(k), v)),
     );
-    let backdrops = backdrops(&paints, glass);
     let colour = |name: &str| paints.get(name).copied();
-    rows(glass)
+    READ.iter()
         .filter_map(|&(text, on, needs)| {
-            let (over, ratio) = (backdrops.iter())
-                .filter_map(|&(over, backdrop)| Some((over, measure(&colour, text, on, backdrop)?)))
+            let (over, ratio) = (beneath(&paints, on, under).into_iter())
+                .filter_map(|(over, backdrop)| Some((over, measure(&colour, text, on, backdrop)?)))
                 .min_by(|a, b| a.1.total_cmp(&b.1))?;
             (ratio < needs).then(|| Unread {
                 text,
@@ -141,20 +234,20 @@ pub(crate) const MENDED: [&str; 4] = [
     "sidebar-accent-foreground",
 ];
 
-/// `text` made to read on every ground [`rows`] puts it on, over `glass`'s
-/// backdrops as [`check`] measures them: thinned, it is made less thin;
+/// `text` made to read on every ground [`READ`] puts it on, over what is
+/// `under` it as [`check`] measures it: thinned, it is made less thin;
 /// solid, it is darkened or lightened ([`lightened`]).
-pub(crate) fn mend(colours: &mut BTreeMap<String, String>, text: &str, glass: Option<Material>) {
+pub(crate) fn mend(colours: &mut BTreeMap<String, String>, text: &str, under: Under) {
     let paints = paints(colours.iter().map(|(k, v)| (k.as_str(), v)));
     let Some(&paint) = paints.get(text) else {
         return;
     };
     let colour = |name: &str| paints.get(name).copied();
-    let backdrops = backdrops(&paints, glass);
-    let grounds: Vec<([f64; 3], f64)> = rows(glass)
+    let grounds: Vec<([f64; 3], f64)> = (READ.iter())
         .filter(|(read, _, _)| *read == text)
         .flat_map(|&(_, on, needs)| {
-            (backdrops.iter()).filter_map(move |&(_, b)| Some((ground(&colour, on, b)?, needs)))
+            (beneath(&paints, on, under).into_iter())
+                .filter_map(move |(_, b)| Some((ground(&colour, on, b)?, needs)))
         })
         .collect();
     if grounds.is_empty() || reads(paint, &grounds) {
@@ -287,22 +380,6 @@ fn measure(
     Some(contrast(colour(text)?.over(ground), ground))
 }
 
-/// What a scheme over `glass` is measured over, and its name where it is
-/// one of [`BACKDROPS`]: those over Banda's glass, whose wallpaper is not
-/// known; else the theme's own ground. Solid, the desk hides what is
-/// under it; the system's material is made to read in its mode.
-fn backdrops(
-    paints: &BTreeMap<&str, Paint>,
-    glass: Option<Material>,
-) -> Vec<(Option<&'static str>, [f64; 3])> {
-    match glass {
-        Some(Material::Banda) => BACKDROPS.iter().map(|&(n, c)| (Some(n), c)).collect(),
-        _ => (paints.get("background"))
-            .map(|ground| vec![(None, ground.over([1.0; 3]))])
-            .unwrap_or_default(),
-    }
-}
-
 /// WCAG 2's relative luminance of an sRGB colour.
 pub fn luminance(rgb: [f64; 3]) -> f64 {
     let linear = |c: f64| {
@@ -350,23 +427,52 @@ mod tests {
     }
 
     #[test]
-    fn over_banda_glass_the_desk_and_the_panel_are_left_to_the_wallpaper() {
-        // 40% of white over black: dark text reads on no part of it, nor
-        // on a panel as clear. A solid tile reads over any backdrop.
+    fn over_banda_glass_the_desk_is_as_dense_as_its_text_needs_over_the_wallpaper() {
         let glass = colours(&[
             ("desk", "rgb(255 255 255 / 0.4)"),
             ("tile", "rgb(255 255 255)"),
-            ("panel", "rgb(250 250 250 / 0.1)"),
+            ("panel", "rgb(250 250 250 / 0.7)"),
             ("foreground", "#18181b"),
             ("sidebar-foreground", "#18181b"),
             ("muted-foreground", "rgb(24 24 27 / 0.62)"),
         ]);
-        assert_eq!(check(&prefixed(&glass), Some(Material::Banda)), []);
-        // A tile too clear for its text is named, over the backdrop it
-        // reads worst on.
-        let mut clear = glass.clone();
+        let densified = |wallpaper: Option<&[[f64; 3]]>| {
+            let mut colours = glass.clone();
+            densify(&mut colours, &DENSER, wallpaper);
+            assert_eq!(check(&prefixed(&colours), Under::Wallpaper(wallpaper)), []);
+            colours
+        };
+        let alpha = |colours: &BTreeMap<String, String>, surface: &str| {
+            Paint::of(&colours[surface]).unwrap().alpha
+        };
+        // A light wallpaper agrees with a light theme: the desk and the
+        // panel stay as clear as it says.
+        let light = densified(Some(&[[0.85; 3], [1.0; 3]]));
+        assert_eq!(light, glass);
+        // A darker part asks more, never more than the worst backdrops,
+        // the ceiling, which a wallpaper not read takes.
+        let dusk: &[[f64; 3]] = &[[0.15; 3], [1.0; 3]];
+        let (dusky, ceiling) = (densified(Some(dusk)), densified(None));
+        let (dusky, ceiling) = (alpha(&dusky, "desk"), alpha(&ceiling, "desk"));
+        assert!(0.4 < dusky && dusky < ceiling, "{dusky} {ceiling}");
+        // At its tint, the desk's text is named over what it reads worst on.
+        let named = |under| {
+            let unread = check(&prefixed(&glass), under);
+            (unread.iter())
+                .filter(|u| u.on == "desk")
+                .map(|u| u.over)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(named(Under::Wallpaper(None)), [Some("black"); 2]);
+        assert_eq!(
+            named(Under::Wallpaper(Some(dusk))),
+            [Some("the wallpaper"); 2]
+        );
+        // A tile too clear for its text is named over the worst backdrops,
+        // the wallpaper known or not.
+        let mut clear = densified(Some(dusk));
         clear.insert("tile".to_owned(), "rgb(255 255 255 / 0.1)".to_owned());
-        let unread = check(&prefixed(&clear), Some(Material::Banda));
+        let unread = check(&prefixed(&clear), Under::Wallpaper(Some(dusk)));
         assert!(!unread.is_empty());
         assert!(
             (unread.iter()).all(|u| u.on == "tile" && u.over == Some("black")),
@@ -382,7 +488,7 @@ mod tests {
             ("desk", "#ffffff"),
             ("foreground", "#aaaaaa"),
         ]);
-        let unread = check(&prefixed(&solid), None);
+        let unread = check(&prefixed(&solid), Under::Ground);
         assert_eq!(unread.len(), 1);
         assert_eq!(
             unread[0].to_string(),
@@ -394,7 +500,8 @@ mod tests {
             ("tile", "#ffffff"),
             ("foreground", "#aaaaaa"),
         ]);
-        let unread = check(&prefixed(&glass), Some(Material::Banda));
+        let unread = check(&prefixed(&glass), Under::Wallpaper(None));
+        let unread: Vec<_> = unread.into_iter().filter(|u| u.on == "tile").collect();
         assert_eq!(unread.len(), 1);
         assert_eq!(
             unread[0].to_string(),

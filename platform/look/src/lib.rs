@@ -21,6 +21,7 @@ pub mod file;
 pub mod keyed;
 pub mod keys;
 pub mod later;
+mod measure;
 pub mod motion;
 pub mod notify;
 pub mod settings;
@@ -30,6 +31,7 @@ pub mod sound;
 use banda_theme::color::{is_css_color, is_hex};
 pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
+use banda_theme::readable::Under;
 use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{Class, OneFile, SettingsFile};
@@ -699,19 +701,44 @@ pub fn resolve(
     keyed_layers.push(keyed::Layer::new("file", &mine, mine_file.as_ref()));
     let all = mine.clone().over(layers);
 
-    // How solid the desk and the tiles are over glass, when it is.
+    // How solid the desk and the tiles are over glass, when it is, and
+    // over Banda's the picture each scheme draws, measured as the page
+    // draws it (ADR 0111): the dark one when Banda is dark.
     let over = glass.then(|| {
         let desk = share(all.desk.opacity, material.tint());
-        (desk, share(all.tile.opacity, 1.0), material)
+        (desk, share(all.tile.opacity, 1.0))
     });
     let one = |theme: &Option<Laid>, glass| {
         (theme.as_ref()).map(|theme| scheme(theme, &mine, &all, &device, glass))
     };
+    // As `vars` gives them to the page.
+    let frost =
+        |value: Option<f64>, none| value.filter(|v| v.is_finite() && *v >= 0.0).unwrap_or(none);
+    let (blur, saturation) = (frost(all.desk.blur, 0.0), frost(all.desk.saturation, 1.0));
+    let over_glass = |theme: &Option<Laid>, picture: Option<&Wallpaper>| {
+        let (desk, tile) = over?;
+        let theme = theme.as_ref()?;
+        let colours;
+        let under = match material {
+            Material::Banda => {
+                colours = picture.and_then(|picture| measure::colours(picture, blur, saturation));
+                Under::Wallpaper(colours.as_deref())
+            }
+            Material::System => Under::Ground,
+        };
+        Some(scheme(
+            theme,
+            &mine,
+            &all,
+            &device,
+            Some((desk, tile, under)),
+        ))
+    };
     let schemes = Schemes {
         light: one(&light, None),
         dark: one(&dark, None),
-        light_glass: over.and_then(|over| one(&light, Some(over))),
-        dark_glass: over.and_then(|over| one(&dark, Some(over))),
+        light_glass: over_glass(&light, wallpaper.as_ref().or(wallpaper_dark.as_ref())),
+        dark_glass: over_glass(&dark, wallpaper_dark.as_ref().or(wallpaper.as_ref())),
     };
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
@@ -903,14 +930,14 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 /// One theme's colours as CSS variables: its palette under the colours
 /// an old `banda.toml` and `look.toml` replace, derived into tokens,
 /// under the tokens the theme and `look.toml` set ([`tokens::scheme`]).
-/// With `glass`, how solid the desk and the tiles are over it and who
-/// makes it: the scheme over glass.
+/// With `glass`, how solid the desk and the tiles are over it and what is
+/// under it: the scheme over glass.
 fn scheme(
     theme: &Laid,
     mine: &Settings,
     all: &Settings,
     device: &Device,
-    glass: Option<(f64, f64, Material)>,
+    glass: Option<(f64, f64, Under)>,
 ) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
         (key, value.get_ref())
@@ -925,10 +952,10 @@ fn scheme(
         focus(&all.focus.border),
         focus(&all.focus.inactive_border),
         device,
-        glass.map(|(desk, tile, material)| tokens::Glass {
+        glass.map(|(desk, tile, under)| tokens::Glass {
             desk,
             tile,
-            material,
+            under,
             tokens: &theme.glass,
         }),
     )

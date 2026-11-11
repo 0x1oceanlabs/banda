@@ -10,7 +10,7 @@
 
 use banda_look::settings::Material;
 use banda_look::{Look, Places, Windows, resolve};
-use banda_theme::readable::check;
+use banda_theme::readable::{Under, check};
 use serde_json::Value;
 use std::fmt::Write as _;
 use std::fs;
@@ -224,14 +224,20 @@ fn each_theme_reads_in_all_four() {
         let (look, _, _) = look_of(machine, theme, "light", true);
         assert!(look.desk.glass, "{name}");
         let schemes = &look.schemes;
-        for (scheme, glass) in [
-            (&schemes.light, None),
-            (&schemes.dark, None),
-            (&schemes.light_glass, Some(look.desk.material)),
-            (&schemes.dark_glass, Some(look.desk.material)),
+        // The test's wallpaper is not a picture: the resolver measures it
+        // over the worst backdrops (ADR 0111, decision 6).
+        let glass = match look.desk.material {
+            Material::Banda => Under::Wallpaper(None),
+            Material::System => Under::Ground,
+        };
+        for (scheme, under) in [
+            (&schemes.light, Under::Ground),
+            (&schemes.dark, Under::Ground),
+            (&schemes.light_glass, glass),
+            (&schemes.dark_glass, glass),
         ] {
-            for one in scheme.iter().flat_map(|scheme| check(scheme, glass)) {
-                unread.push(format!("{name}, {glass:?}: {one}"));
+            for one in scheme.iter().flat_map(|scheme| check(scheme, under)) {
+                unread.push(format!("{name}, {under:?}: {one}"));
             }
         }
     }

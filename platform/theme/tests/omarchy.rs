@@ -1,9 +1,10 @@
 //! Omarchy's own themes, kept as fixtures (ADR 0100, decision 8): each
-//! palette in its mode, solid and over glass, Banda's and the system's,
-//! with what still does not read once the resolver has done its part.
+//! palette in its mode, solid and over glass, Banda's over a wallpaper
+//! and the system's, with what still does not read once the resolver has
+//! done its part.
 
 use banda_theme::palette::Palette;
-use banda_theme::readable::{Unread, check};
+use banda_theme::readable::{Under, Unread, check};
 use banda_theme::tokens::{Glass, scheme};
 use banda_theme::{Device, Material};
 use std::collections::BTreeMap;
@@ -26,18 +27,24 @@ fn fixtures() -> Vec<(String, Palette)> {
     found
 }
 
+/// A wallpaper of night, dusk and day: the colours of a photo's dark,
+/// middle and bright parts, blurred.
+const DUSK: [[f64; 3]; 3] = [[0.08, 0.08, 0.12], [0.55, 0.42, 0.3], [0.92, 0.88, 0.8]];
+
 /// The scheme of `palette` with nothing said over it, solid or over
-/// `material`'s glass at its own tint, and what of it does not read.
-fn check_of(palette: &Palette, material: Option<Material>) -> Vec<Unread> {
+/// glass at its material's own tint, `under` it, and what of it does not
+/// read.
+fn check_of(palette: &Palette, glass: Option<(Material, Under)>) -> Vec<Unread> {
     let none = BTreeMap::new();
-    let glass = material.map(|material| Glass {
+    let under = glass.map_or(Under::Ground, |(_, under)| under);
+    let glass = glass.map(|(material, under)| Glass {
         desk: material.tint(),
         tile: 1.0,
-        material,
+        under,
         tokens: &none,
     });
     let scheme = scheme(palette, [], [], None, None, &Device::default(), glass);
-    check(&scheme, material)
+    check(&scheme, under)
 }
 
 #[test]
@@ -46,9 +53,22 @@ fn every_omarchy_theme_reads_solid_and_over_either_glass() {
     assert_eq!(fixtures.len(), 23, "Omarchy 4.5.0's themes");
     let mut unread = Vec::new();
     for (name, palette) in &fixtures {
-        for material in [None, Some(Material::Banda), Some(Material::System)] {
-            let over = material.map_or("solid".to_owned(), |m| format!("over {m:?}'s glass"));
-            for one in check_of(palette, material) {
+        for (over, glass) in [
+            ("solid", None),
+            (
+                "over Banda's glass, its wallpaper not read",
+                Some((Material::Banda, Under::Wallpaper(None))),
+            ),
+            (
+                "over Banda's glass on a dusky wallpaper",
+                Some((Material::Banda, Under::Wallpaper(Some(&DUSK)))),
+            ),
+            (
+                "over the system's glass",
+                Some((Material::System, Under::Ground)),
+            ),
+        ] {
+            for one in check_of(palette, glass) {
                 unread.push(format!("{name} ({}), {over}: {one}", palette.mode().word()));
             }
         }

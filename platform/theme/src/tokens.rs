@@ -16,8 +16,8 @@
 
 use crate::color::{Oklab, is_css_color, is_hex, mix, thinned};
 use crate::palette::{ANSI, Palette};
-use crate::readable::{self, MARK};
-use crate::{Device, Material, Mode};
+use crate::readable::{self, MARK, Under};
+use crate::{Device, Mode};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a token's value is.
@@ -364,13 +364,14 @@ fn mixed(a: &str, b: &str, amount: f64) -> String {
 
 /// What a scheme's glass is made of (ADR 0100, decision 4): how solid the
 /// desk and the tiles are over it, from 0 to 1, as the look says them;
-/// who makes it; and the tokens a theme's `[glass.tokens]` corrects, each
-/// a palette name, a token's name or a CSS colour.
+/// what is under it, the system's material or Banda's wallpaper; and the
+/// tokens a theme's `[glass.tokens]` corrects, each a palette name, a
+/// token's name or a CSS colour.
 #[derive(Clone, Copy, Debug)]
 pub struct Glass<'a> {
     pub desk: f64,
     pub tile: f64,
-    pub material: Material,
+    pub under: Under<'a>,
     pub tokens: &'a BTreeMap<String, String>,
 }
 
@@ -504,7 +505,7 @@ pub fn scheme<'a>(
     // Quiet text, and the text on the fills worked out from the theme,
     // read on each surface they are on (ADR 0100, decision 8).
     for text in readable::MENDED {
-        readable::mend(&mut derived, text, None);
+        readable::mend(&mut derived, text, Under::Ground);
     }
     if let Some(glass) = glass {
         // The glass's own: each surface its colour thinned, the panel
@@ -526,10 +527,19 @@ pub fn scheme<'a>(
                 derived.insert(key.clone(), resolved);
             }
         }
-        // And over glass, as its material is measured (ADR 0100, decision
-        // 8); the tints stay as `[desk]` and `[tile]` say.
+        // Over Banda's glass, the desk and the panel as dense as their
+        // text needs over the wallpaper (ADR 0111), but where
+        // `[glass.tokens]` says one; the system's material is tinted to
+        // read already. Then the rest, as what is under it is measured
+        // (ADR 0100, decision 8).
+        if let Under::Wallpaper(wallpaper) = glass.under {
+            let surfaces: Vec<_> = (readable::DENSER.into_iter())
+                .filter(|surface| !glass.tokens.contains_key(*surface))
+                .collect();
+            readable::densify(&mut derived, &surfaces, wallpaper);
+        }
         for text in readable::MENDED {
-            readable::mend(&mut derived, text, Some(glass.material));
+            readable::mend(&mut derived, text, glass.under);
         }
     }
     derived
@@ -586,7 +596,7 @@ mod tests {
             let glass = Glass {
                 desk: 0.4,
                 tile: 1.0,
-                material: Material::Banda,
+                under: Under::Wallpaper(None),
                 tokens: &corrections,
             };
             for glass in [None, Some(glass)] {
@@ -681,17 +691,16 @@ mod tests {
     }
 
     #[test]
-    fn the_desk_keeps_its_tint_over_either_material() {
+    fn the_desk_over_banda_s_wallpaper_is_as_dense_as_its_text_needs() {
         let palette = palette("background = \"#ffffff\"\nforeground = \"#18181b\"");
-        let none = BTreeMap::new();
-        let over = |material| {
+        let over = |under, tokens: &BTreeMap<String, String>| {
             let glass = Glass {
                 desk: 0.4,
                 tile: 1.0,
-                material,
-                tokens: &none,
+                under,
+                tokens,
             };
-            scheme(
+            let scheme = scheme(
                 &palette,
                 [],
                 [],
@@ -699,14 +708,27 @@ mod tests {
                 None,
                 &Device::default(),
                 Some(glass),
-            )
+            );
+            assert_eq!(readable::check(&scheme, under), []);
+            scheme
         };
-        // How dense Banda's desk is, over its wallpaper, is ADR 0111's.
-        let (system, banda) = (over(Material::System), over(Material::Banda));
-        assert_eq!(banda, system);
-        assert_eq!(banda["--desk"], "rgb(255 255 255 / 0.4)");
-        assert_eq!(readable::check(&banda, Some(Material::Banda)), []);
-        assert_eq!(readable::check(&system, Some(Material::System)), []);
+        let none = BTreeMap::new();
+        // The system's material keeps its tint, and so does Banda's over a
+        // wallpaper that agrees with the theme (ADR 0111).
+        let system = over(Under::Ground, &none);
+        assert_eq!(system["--desk"], "rgb(255 255 255 / 0.4)");
+        let light = over(Under::Wallpaper(Some(&[[0.9; 3], [1.0; 3]])), &none);
+        assert_eq!(light, system);
+        // Over a wallpaper not read, the worst backdrops', and over a dark
+        // one no denser than that.
+        let unread = over(Under::Wallpaper(None), &none);
+        let dark = over(Under::Wallpaper(Some(&[[0.0; 3], [0.2; 3]])), &none);
+        assert_eq!(unread["--desk"], "rgb(255 255 255 / 0.571)");
+        assert_eq!(dark["--desk"], unread["--desk"]);
+        // A desk `[glass.tokens]` says is as it says.
+        let said = BTreeMap::from([("desk".to_owned(), "rgb(255 255 255 / 0.3)".to_owned())]);
+        let said = over(Under::Wallpaper(Some(&[[0.9; 3], [1.0; 3]])), &said);
+        assert_eq!(said["--desk"], "rgb(255 255 255 / 0.3)");
     }
 
     #[test]
@@ -730,7 +752,7 @@ mod tests {
             let glass = Glass {
                 desk: 0.4,
                 tile: 0.9,
-                material: Material::System,
+                under: Under::Ground,
                 tokens: corrections,
             };
             let tokens = tokens.iter().copied();
