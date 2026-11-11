@@ -588,6 +588,69 @@
         ]
       },
       "runsAsPerson": true
+    },
+    {
+      "id": "agents.stop-thread",
+      "title": "Stop the turn a Thread works on",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "agents.fork-thread",
+      "title": "Fork a Thread at its last reply, and open the fork",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "agents.copy-thread",
+      "title": "Copy a Thread as Markdown",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project of the Item it acts on"
+          },
+          "item": {
+            "type": "string",
+            "description": "the Item's id in its Project, as a Thread's; none for the one in focus"
+          }
+        },
+        "additionalProperties": false
+      }
     }
   ],
   "scopes": [

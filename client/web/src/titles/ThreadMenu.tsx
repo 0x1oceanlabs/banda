@@ -5,7 +5,12 @@
  * first: the Window draws them and runs each by its id, and the Item's App
  * does it.
  */
-import { createContext, type ReactNode, useContext } from "react"
+import {
+  type ComponentType,
+  createContext,
+  type ReactNode,
+  useContext,
+} from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useAfterMenu } from "@banda/ui/components/context-menu"
 import {
@@ -40,6 +45,43 @@ export function ThreadMenus({
       {children}
       <Making engine={engine} projects={projects} />
     </ProjectsContext>
+  )
+}
+
+/** The window's Projects, as the Thread menus have them. */
+export const useMenuProjects = () => useContext(ProjectsContext)
+
+/** One row of a Thread's menu: its icon, its title, and its key in force,
+ * where it has one, at its right. */
+export function MenuRow({
+  icon: Icon,
+  title,
+  shortcut,
+  off,
+  danger,
+  onClick,
+}: {
+  icon: ComponentType
+  title: string
+  /** Its key, as it reads; an empty one keeps the key's room. */
+  shortcut?: string
+  off?: boolean
+  /** It cannot be undone, as Delete…. */
+  danger?: boolean
+  onClick: () => void
+}) {
+  return (
+    <DropdownMenuItem
+      disabled={off}
+      variant={danger ? "destructive" : "default"}
+      onClick={onClick}
+    >
+      <Icon />
+      {title}
+      {shortcut !== undefined && (
+        <DropdownMenuShortcut>{shortcut}</DropdownMenuShortcut>
+      )}
+    </DropdownMenuItem>
   )
 }
 
@@ -92,17 +134,14 @@ export function ThreadRows({
     // A key of its own, or one the Person gave it.
     const key = keyFor(action.id)
     return (
-      <DropdownMenuItem
+      <MenuRow
         key={action.id}
-        disabled={row.off}
+        icon={row.icon}
+        title={row.title}
+        shortcut={key || action.keys?.length ? key : undefined}
+        off={row.off}
         onClick={() => (action.later ? later(act) : act())}
-      >
-        <row.icon />
-        {row.title}
-        {key || action.keys?.length ? (
-          <DropdownMenuShortcut>{key}</DropdownMenuShortcut>
-        ) : null}
-      </DropdownMenuItem>
+      />
     )
   }
   return (

@@ -4,15 +4,17 @@
  * title, give back the title it had before, mark it unread or read (ADR
  * 0077), go to where its unseen begins (ADR 0094), make a Project of the
  * No Project it is in (ADR 0046), put it off and wake it (ADR 0074),
- * archive it as the sidebar list asks (ADR 0096), delete it for good, and
- * move it to another Project (ADR 0098, decision 14). The Window draws
- * their rows in the Thread menu, the Pane menu and
- * the Banda menu, and runs them by id, as any action; Threads does them,
- * on the engine of the host that lists the Thread (ADR 0081).
+ * archive it as the sidebar list asks (ADR 0096), delete it for good, move
+ * it to another Project, stop it, fork it and copy it as Markdown (ADR
+ * 0098, decision 14). The Window draws their rows in the Thread menu, the
+ * card's menu, the Pane menu and the Banda menu, and runs them by id, as
+ * any action; Threads does them, on the engine of the host that lists the
+ * Thread (ADR 0081).
  */
 import { type Engine, newId, type ProjectId } from "@banda/contract"
-import type { ThreadId } from "@banda/contract/agents"
+import type { ThreadId, ThreadView } from "@banda/contract/agents"
 import { toast } from "@banda/ui/components/sonner"
+import { copyText } from "@banda/ui/lib/clipboard"
 import {
   asking,
   cleanTitle,
@@ -45,6 +47,8 @@ import {
   Undo2Icon,
 } from "lucide-react"
 import { THREAD } from "../scopes"
+import { markdownOf } from "./copy"
+import { SHOW } from "./rows"
 import { actOf, mark } from "./sent"
 
 /** A Thread as an item action finds it: its Project, and how the lists
@@ -284,6 +288,7 @@ const makeProject: ItemAction = {
   unlisted: true,
   args: itemArgs(),
   group: "other",
+  does: "make-project",
   // The dialog takes the focus.
   later: true,
   row: (_, at) =>
@@ -503,6 +508,7 @@ const move: ItemAction = {
   },
   runsAsPerson: true,
   group: "other",
+  does: "move",
   row: () => null,
   run: (window, args) => {
     const at = threadAt(window, args)
@@ -522,6 +528,108 @@ const move: ItemAction = {
   },
 }
 
+/** Reads the Thread whole on its host, for an act named `what` on its
+ * turns or its items, and does `then` with it; what goes wrong, a toast
+ * says. */
+function withView(
+  window: WindowApi,
+  at: At,
+  what: string,
+  then: (engine: Engine, view: ThreadView) => unknown
+) {
+  const engine = reached(window, at, what)
+  const thread = at.listed.id as ThreadId
+  engine
+    ?.call("agents.thread", { thread }, { project: at.project })
+    .then((view) => then(engine, view))
+    .catch((error: unknown) => toast.error(problem(error, what)))
+}
+
+/** Stops the turn the Thread works on, as its Pane's Stop does: the
+ * card's Stop (ADR 0098, decision 14), whose row the Window draws. One
+ * that ended meanwhile has nothing to stop. */
+const stop: ItemAction = {
+  id: "agents.stop-thread",
+  section: "Threads",
+  title: "Stop the turn a Thread works on",
+  unlisted: true,
+  args: itemArgs(),
+  group: "other",
+  does: "stop",
+  row: () => null,
+  run: (window, args) => {
+    const at = threadAt(window, args)
+    if (!at) return
+    withView(window, at, "Stop", (engine, { turns }) => {
+      const turn =
+        turns.findLast((one) => one.can.stop && one.state === "running") ??
+        turns.findLast((one) => one.can.stop)
+      return (
+        turn && engine.command("agents.stop", { turn: turn.id }, at.project)
+      )
+    })
+  },
+}
+
+/** Forks the Thread at the end of its last turn that may fork (ADR 0027),
+ * and opens the fork: the card's Fork (ADR 0098, decision 14), whose row
+ * the Window draws. One with no such turn yet says so. */
+const fork: ItemAction = {
+  id: "agents.fork-thread",
+  section: "Threads",
+  title: "Fork a Thread at its last reply, and open the fork",
+  unlisted: true,
+  args: itemArgs(),
+  group: "other",
+  does: "fork",
+  row: () => null,
+  run: (window, args) => {
+    const at = threadAt(window, args)
+    if (!at) return
+    withView(window, at, "Fork", async (engine, { turns }) => {
+      const turn = turns.findLast((one) => one.can.fork)
+      if (!turn) {
+        toast("Nothing to fork yet", {
+          description: "A fork starts at a reply of its Agent.",
+        })
+        return
+      }
+      const forked = await engine.command(
+        "agents.fork",
+        { turn: turn.id },
+        at.project
+      )
+      window.run(SHOW, {
+        project: at.project,
+        thread: forked.thread,
+        harness: at.listed.harness ?? "",
+      })
+    })
+  },
+}
+
+/** Copies the Thread as Markdown, what was said in it (`markdownOf`): the
+ * card's Copy as Markdown (ADR 0098, decision 14), whose row the Window
+ * draws. */
+const copy: ItemAction = {
+  id: "agents.copy-thread",
+  section: "Threads",
+  title: "Copy a Thread as Markdown",
+  unlisted: true,
+  args: itemArgs(),
+  group: "other",
+  does: "copy",
+  row: () => null,
+  run: (window, args) => {
+    const at = threadAt(window, args)
+    if (!at) return
+    const { listed } = at
+    withView(window, at, "Copy as Markdown", (_, view) =>
+      copyText(markdownOf(view, listed.title, listed))
+    )
+  },
+}
+
 /** Threads' item actions, in the order the Thread menu lists their rows. */
 export const threadItems: readonly ItemAction[] = [
   rename,
@@ -535,4 +643,7 @@ export const threadItems: readonly ItemAction[] = [
   archive,
   remove,
   move,
+  stop,
+  fork,
+  copy,
 ]

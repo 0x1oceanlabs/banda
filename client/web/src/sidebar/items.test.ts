@@ -52,6 +52,9 @@ test("a Thread's item actions are Threads', then the sidebar list's Archive", ()
     "agents.archive-thread",
     "agents.delete-thread",
     "agents.move-thread",
+    "agents.stop-thread",
+    "agents.fork-thread",
+    "agents.copy-thread",
     "sidebar.archive",
   ])
 })

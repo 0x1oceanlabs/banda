@@ -366,6 +366,8 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Undo the last act on a card (`sidebar.undo`), Ctrl+Z, `[binds.sidebar]`
 - Rename the card picked (`sidebar.rename-picked`), F2, `[binds.sidebar]`
 - Suggest a title for the card picked (`sidebar.suggest-title-picked`), Shift+F2, `[binds.sidebar]`
+- Open the menu of the card picked (`sidebar.menu-picked`), Shift+F10 or Menu, `[binds.sidebar]`
+- Delete the card picked in the Archive, after a confirmation (`sidebar.delete-picked`), Delete or Ctrl+Backspace, `[binds.sidebar]`
 - Search (`sidebar.search`), /, `[binds.sidebar]`
 - Show the Inbox (`sidebar.tab-inbox`), 1, `[binds.sidebar]`
 - Show Working (`sidebar.tab-working`), 2, `[binds.sidebar]`

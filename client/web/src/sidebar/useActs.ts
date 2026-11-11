@@ -9,9 +9,11 @@ import { keep, toldArchived, type Undoable, undoOf } from "./undo"
 import type { Holding } from "./useHold"
 
 /** What an act on a card is told besides: the card's element, where the
- * Later picker opens; how the Person took it; and, by a key, what to do
- * as it takes the card out of the tab, before the list draws it so. */
-export type ActOn = { card: Element; by: By; gone?: () => void }
+ * Later picker opens; how the Person took it, else as their last input in
+ * the list did, as from the card's menu; by a key, what to do as it takes
+ * the card out of the tab, before the list draws it so; and, for Later,
+ * that it is put off until its turn ends, with no picker. */
+export type ActOn = { card: Element; by?: By; gone?: () => void; done?: true }
 
 /** Runs the item action of a card's Thread that does `what`, its App's,
  * with `more` args: none where its App has none. */
@@ -34,10 +36,12 @@ export function useDoing(): (
  * Thread's App's, by its item actions (ADR 0087, decision 12), which the
  * list draws at once, with what takes each back. Later opens the picker
  * at the card, which then holds the list, and tells `gone` once a time is
- * picked; Archive acts at once, and is told in the toast. Each is kept for `Ctrl+Z` too. The
- * Window that does not reach a card's host has its App refuse at once, in
- * its toast: the pick stays, and nothing is kept to undo. For a moment
- * after an act by key closed a slot, the buttons take no click.
+ * picked, or puts it off until its turn ends at once, as the card's menu
+ * asks; Archive acts at once, and is told in the toast. Each is kept for
+ * `Ctrl+Z` too. The Window that does not reach a card's host has its App
+ * refuse at once, in its toast: the pick stays, and nothing is kept to
+ * undo. For a moment after an act by key closed a slot, the buttons take
+ * no click.
  */
 export function useActs(
   holding: Holding | undefined
@@ -53,7 +57,7 @@ export function useActs(
       return false
     }
   }
-  return (row, act, { card, by, gone }) => {
+  return (row, act, { card, by, gone, done: untilDone }) => {
     if (by === "pointer" && holding?.quiet()) return
     const { listed } = row
     const project = row.project.id
@@ -64,6 +68,11 @@ export function useActs(
       const undo = { project, listed, steps: undoOf(act, listed, Date.now()) }
       keep(undo)
       return undo
+    }
+    if (act === "later" && untilDone) {
+      holding?.act(row, by, done())
+      doing(row, "later", { done: true })
+      return
     }
     if (act === "later") {
       pickLater({

@@ -12,7 +12,7 @@ import { ChevronDownIcon, ChevronRightIcon, SquarePenIcon } from "lucide-react"
 import { actsOf } from "./acts"
 import type { Row as Arranged } from "./arrange"
 import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
-import type { CardAct } from "./CardView"
+import { type CardAct, SignMenu } from "./CardView"
 import { EmptyTab, InboxZero } from "./Empty"
 import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
@@ -325,9 +325,12 @@ export function SectionView({
     </div>
   )
   return (
-    // One tooltip shows any cut text whole, beside the sidebar.
+    // One tooltip shows any cut text whole, beside the sidebar; a card's
+    // Project sign has the Project's menu.
     <CutTips edge={EDGE}>
-      {label ? <HerePart named={label}>{shown}</HerePart> : shown}
+      <SignMenu value={withMenu}>
+        {label ? <HerePart named={label}>{shown}</HerePart> : shown}
+      </SignMenu>
     </CutTips>
   )
 }

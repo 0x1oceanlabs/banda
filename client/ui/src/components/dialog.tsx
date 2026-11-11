@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import { AlertDialog as AlertDialogPrimitive } from "@base-ui/react/alert-dialog"
 import { Dialog as DialogPrimitive } from "@base-ui/react/dialog"
 import { cn } from "../lib/utils"
 
@@ -9,6 +10,13 @@ import { XIcon } from "lucide-react"
 
 function Dialog({ ...props }: DialogPrimitive.Root.Props) {
   return <DialogPrimitive.Root data-slot="dialog" {...props} />
+}
+
+/** A dialog that asks before what cannot be undone, as a delete: an
+ * `alertdialog`, which a press outside leaves open. Its parts are the
+ * dialog's. */
+function AlertDialog({ ...props }: AlertDialogPrimitive.Root.Props) {
+  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />
 }
 
 function DialogTrigger({ ...props }: DialogPrimitive.Trigger.Props) {
@@ -146,6 +154,7 @@ function DialogDescription({
 }
 
 export {
+  AlertDialog,
   Dialog,
   DialogClose,
   DialogContent,
