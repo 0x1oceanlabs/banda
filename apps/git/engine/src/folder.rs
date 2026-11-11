@@ -149,9 +149,7 @@ pub async fn pack(
         ));
     }
     if let Some(folder) = path.parent() {
-        tokio::fs::create_dir_all(folder)
-            .await
-            .map_err(Error::from)?;
+        std::fs::create_dir_all(folder).map_err(Error::from)?;
     }
     let mut args = vec!["bundle".to_owned(), "create".to_owned()];
     args.push(path.display().to_string());
@@ -245,7 +243,7 @@ pub async fn unpack(
     .await?;
     repo.run(["reset", "--quiet", head.as_str()], repo.asked())
         .await?;
-    if let Err(error) = tokio::fs::remove_file(&path).await {
+    if let Err(error) = std::fs::remove_file(&path) {
         tracing::warn!(%error, "a move's bundle could not be taken away");
     }
     Ok(())
