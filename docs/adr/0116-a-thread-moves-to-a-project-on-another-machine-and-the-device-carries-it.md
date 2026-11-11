@@ -1,12 +1,12 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-11
 ---
 
 # A Thread moves to a Project on another machine, and the device carries it
 
-_A draft, with Roma's calls of 2026-11-11 at the end. Code is cited from
-main at `f7a03ea2`._
+_Accepted by Roma on 2026-11-11, with his calls at the end. Code is cited
+from main at `f7a03ea2`._
 
 Roma, on 2026-11-11 (translated): "I work on the Mac, and then I throw
 this Thread over to another Project on devbox", and: "on the laptop I
