@@ -18,10 +18,7 @@ const WORKED = 24
 
 /** What a Thread's files take from its Pane: how it runs an action, and
  * the device, which says whether a file is this computer's. */
-export type FilesHands = Pick<
-  PaneProps<ThreadArgs>,
-  "run" | "device" | "file"
->
+export type FilesHands = Pick<PaneProps<ThreadArgs>, "run" | "device" | "file">
 
 /**
  * The paths of a Thread in `project`, for its Markdown and its menu, as

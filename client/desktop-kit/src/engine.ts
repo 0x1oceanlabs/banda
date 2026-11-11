@@ -17,5 +17,4 @@ export class Engine extends Context.Service<
      * the first time it started. */
     readonly door: Effect.Effect<string>
   }
->()("banda/Engine") {
-}
+>()("banda/Engine") {}
