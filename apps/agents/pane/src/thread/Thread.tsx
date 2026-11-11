@@ -52,7 +52,8 @@ import { PlanReady } from "../entries/parts/ProposedPlan"
 import { planTitle } from "../entries/parts/messageText"
 import { FindBar, useFound } from "./Find"
 import { visualPane } from "../visual/VisualPane"
-import { ModelPicker } from "../composer/ModelPicker"
+import { AllModels, HowPicker } from "../composer/HowPicker"
+import { changed, howOf, starred } from "../composer/how"
 import { Handoff, WhoPicker } from "../composer/WhoPicker"
 import { startGroupsOf, whoOf } from "../composer/who"
 import { Start } from "./Start"
@@ -164,6 +165,39 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     whenBackActions,
   } = useThreadSession(props)
   const picked = useMemo(() => pickedOf(offer.options), [offer.options])
+  // Its "how", with the menu of models its machine names for its Harness
+  // (ADR 0114, decisions 5 to 7).
+  const kind = harnesses.find((one) => one.id === harness)?.harness ?? harness
+  const modelMenu = accounts?.harnesses.find((one) => one.id === kind)?.models
+  const how = useMemo(
+    () => settings && howOf(picked, settings, modelMenu ?? NO_MODELS, name),
+    [picked, settings, modelMenu, name]
+  )
+  const [allModels, setAllModels] = useState(false)
+  const howActs = settings &&
+    how && {
+      onModel: (value: string) => {
+        const next = changed(settings, picked.model, value)
+        if (next) configure(next)
+      },
+      onLevel: (value: string) => {
+        const next = changed(settings, picked.effort, value)
+        if (next) configure(next)
+      },
+      onFast: (on: boolean) => {
+        const next = changed(settings, picked.fast, on)
+        if (next) configure(next)
+      },
+      onReset: () => how.reset && configure(how.reset),
+      onStar: (value: string) =>
+        void engine
+          .command("harnesses.set_models", {
+            harness: kind,
+            models: starred(how, value),
+          })
+          .catch(() => undefined),
+      onAll: () => setAllModels(true),
+    }
   // Where a started Thread may move, and whether a move to another
   // Harness asks first: until its first handoff (ADR 0078, decision 5).
   const moves = useMemo(() => {
@@ -838,15 +872,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
               {thread !== null && who && (
                 <WhoPicker who={who} disabled={acting} onPick={pickWho} />
               )}
-              <ModelPicker
-                harness={harness}
-                name={name}
-                settings={settings}
-                picked={picked}
-                disabled={acting}
-                onChange={configure}
-                harnesses={harnesses}
-              />
+              {how && howActs && (
+                <HowPicker how={how} disabled={acting} {...howActs} />
+              )}
             </>
           )}
         </Composer>
@@ -881,9 +909,20 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           onBack={() => setCrewOver(undefined)}
         />
       )}
+      {allModels && how && howActs && (
+        <AllModels
+          how={how}
+          title={harnessTitle(accounts, kind)}
+          onModel={howActs.onModel}
+          onStar={howActs.onStar}
+          onClose={() => setAllModels(false)}
+        />
+      )}
     </div>
   )
 }
+
+const NO_MODELS: readonly string[] = []
 
 export function Centered({ children }: { children: React.ReactNode }) {
   return (

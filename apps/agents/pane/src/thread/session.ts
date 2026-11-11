@@ -40,12 +40,7 @@ import type { PaneProps, PaneState } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "../composer/Attachments"
 import type { Values } from "../asking/form"
 import type { HarnessView } from "@banda/contract/harnesses"
-import {
-  byHarness,
-  harnessName,
-  harnessShort,
-  useHarnesses,
-} from "../harnesses"
+import { harnessName, harnessShort, useHarnesses } from "../harnesses"
 import { useAgentsTold, useStartsOn } from "./starts-on"
 import { useThread } from "./live-thread"
 import { settledTurn } from "../list/marks"
@@ -709,32 +704,8 @@ export function useThreadSession({
     settings,
     offer,
     configure,
-    /** A new Thread's Harnesses, each with what it would start with, for
-     * the model picker to choose one by its model; none once it started. */
-    starts:
-      thread === null && (everyDefaults || unplaced)
-        ? byHarness(offered).flatMap(({ id, name }) => {
-            const settings = draftOf(id)
-            const offer =
-              everyDefaults?.[id]?.offer ?? (unplaced ? NO_OFFER : undefined)
-            return settings && offer ? [{ id, name, settings, offer }] : []
-          })
-        : undefined,
-    /** A new Thread's default is out and it starts there still, no
-     * fallback having room: its chip warns, and says the reset (ADR 0093,
-     * decision 7). */
-    startsOut:
-      thread === null &&
-      startsOn &&
-      !startsOn.fallback &&
-      harness === startsOn.default
-        ? startsOn.out
-        : undefined,
-    /** Starts the new Thread on `next` instead, with `settings`. */
-    startOn: (next: string, settings?: Settings) => {
-      if (settings) setDrafts((drafts) => ({ ...drafts, [next]: settings }))
-      update({ ...args, harness: next })
-    },
+    /** Starts the new Thread on `next` instead. */
+    startOn: (next: string) => update({ ...args, harness: next }),
     /** Whether the Thread plans first, when its Harness offers plans. */
     plan: offer.plans ? settings?.plan : undefined,
     setPlan: (plan: boolean) => settings && configure({ ...settings, plan }),
