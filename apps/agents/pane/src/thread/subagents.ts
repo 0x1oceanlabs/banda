@@ -16,7 +16,7 @@ import { ago, duration } from "@banda/ui/lib/words"
 import { plain } from "../asking/asking"
 import { outcome, said } from "../entries/parts/calls"
 import { firstLine } from "../entries/parts/messageText"
-import { ends } from "./facts"
+import { atWork, ends } from "./facts"
 
 /** How a sub-agent looks: its satellite's state (ADR 0103, decision 12). */
 export function lookOf(lane: Subagent): SatelliteState {
@@ -330,6 +330,50 @@ export function groupOf(lanes: readonly Subagent[]): Group {
  * reads it. */
 export function groupWords({ head, counts }: Group): string {
   return [head, ...counts.map((count) => count.words)].join(" · ")
+}
+
+/** The direct sub-agents among `lanes` that work or ask: the ones the live
+ * line counts (ADR 0103, decision 19). */
+function liveOf(lanes: readonly Subagent[]): Subagent[] {
+  return direct(lanes).filter(atWork)
+}
+
+/** What a running turn's live line says of `lanes`, after its clock: "3
+ * sub-agents at work", or "Waiting on Explore" when one is. None when none
+ * is at work. */
+export function duringWords(lanes: readonly Subagent[]): string | undefined {
+  const live = liveOf(lanes)
+  if (live.length === 0) return undefined
+  return live.length > 1
+    ? `${live.length} sub-agents at work`
+    : `Waiting on ${labelOf(live[0], siblingsOf(live[0], lanes))}`
+}
+
+/** What the live line says of `lanes` once no turn runs, in the clock's
+ * place: "Reviewer is at work", or "3 sub-agents at work", then, muted,
+ * "Claude goes on when it ends". One named only by its title is "1
+ * sub-agent at work": a title is no name for a sentence, and its row says
+ * it. None when none is at work. `short` is the Harness's short name, as a
+ * row's "Claude asked". */
+export function afterWords(
+  lanes: readonly Subagent[],
+  short: string
+): { words: string; then: string } | undefined {
+  const live = liveOf(lanes)
+  if (live.length === 0) return undefined
+  if (live.length > 1)
+    return {
+      words: `${live.length} sub-agents at work`,
+      then: `${short} goes on when they end`,
+    }
+  const label = labelOf(live[0], siblingsOf(live[0], lanes))
+  return {
+    words:
+      label === live[0].title.trim()
+        ? "1 sub-agent at work"
+        : `${label} is at work`,
+    then: `${short} goes on when it ends`,
+  }
 }
 
 /**

@@ -6,6 +6,8 @@ import {
   childrenOf,
   direct,
   groupOf,
+  afterWords,
+  duringWords,
   groupWords,
   labelOf,
   lanesOf,
@@ -266,4 +268,59 @@ test("Find's words are a row's title, label, role and how it ended, never what i
   expect(wordsOf(haiku, [haiku], "Opus 5.5")).toBe(
     "Lane d\nExplore\nExplore · Haiku 5.5"
   )
+})
+
+test("the live line counts the direct sub-agents at work, asking ones too", () => {
+  expect(
+    duringWords([lane("a"), lane("b", { state: "asks" }), lane("c")])
+  ).toBe("3 sub-agents at work")
+})
+
+test("the live line names the one at work by what names it", () => {
+  expect(duringWords([lane("a", { role: "Explore" })])).toBe(
+    "Waiting on Explore"
+  )
+  expect(
+    duringWords([lane("a", { role: "general-purpose", title: "Read a.txt" })])
+  ).toBe("Waiting on Read a.txt")
+  // Codex's own fallback title gives way to its number among its siblings.
+  expect(
+    duringWords([
+      lane("a", { title: "Agent", state: "done" }),
+      lane("b", { title: "Agent" }),
+    ])
+  ).toBe("Waiting on Agent 2")
+})
+
+test("the live line ignores nested and ended sub-agents", () => {
+  const live = lane("a", { role: "Explore" })
+  const nested = lane("n", { parent: "a" })
+  expect(duringWords([live, nested])).toBe("Waiting on Explore")
+  for (const state of ["done", "failed", "stopped", "lost"] as const)
+    expect(duringWords([live, lane("x", { state })])).toBe("Waiting on Explore")
+  // Waiting to start is not at work.
+  expect(duringWords([lane("q", { state: "queued" })])).toBeUndefined()
+  expect(afterWords([lane("q", { state: "queued" })], "Claude")).toBeUndefined()
+  expect(duringWords([nested])).toBeUndefined()
+  expect(afterWords([nested], "Claude")).toBeUndefined()
+})
+
+test("after the turn one named only by its title is counted, not put in a sentence", () => {
+  const titled = lane("a", { title: "Read a.txt one line" })
+  expect(afterWords([titled], "Claude")?.words).toBe("1 sub-agent at work")
+  const general = { ...titled, role: "general-purpose" }
+  expect(afterWords([general], "Claude")?.words).toBe("1 sub-agent at work")
+  const fallback = lane("a", { title: "Agent 12345678" })
+  expect(afterWords([fallback], "Codex")?.words).toBe("Agent 1 is at work")
+})
+
+test("after the turn it says who goes on, for one and for several", () => {
+  expect(afterWords([lane("a", { role: "Reviewer" })], "Claude")).toEqual({
+    words: "Reviewer is at work",
+    then: "Claude goes on when it ends",
+  })
+  expect(afterWords([lane("a"), lane("b")], "Codex")).toEqual({
+    words: "2 sub-agents at work",
+    then: "Codex goes on when they end",
+  })
 })

@@ -2,7 +2,7 @@ import type { Event } from "@banda/contract"
 import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { event, person } from "../testing"
-import { apply, EMPTY, NOTHING } from "./state"
+import { apply, EMPTY, NOTHING, steerable } from "./state"
 import {
   awaiting,
   did,
@@ -53,6 +53,8 @@ function shape(lines: Line[]): unknown[] {
         return { fold: shape(line.lines) }
       case "working":
         return line.doing ? `working, ${line.doing.kind}` : "working"
+      case "at-work":
+        return "at-work"
       case "ended":
         return `ended ${line.turn.state}`
       case "changes":
@@ -73,7 +75,7 @@ test("tool calls and thoughts in a row are one line of work", () => {
     reply("r"),
     tool("c")
   )
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { work: ["t", "a", "b"] },
     "r",
@@ -85,9 +87,9 @@ test("tool calls and thoughts in a row are one line of work", () => {
 
 test("the turn that runs says so at its live edge, after what it did", () => {
   const started = play(asked(), event("turn.started", { turn: "u" }))
-  expect(shape(timeline(started))).toEqual(["m", "working"])
+  expect(shape(timeline(started, "Claude"))).toEqual(["m", "working"])
   const state = [tool("a"), tool("b")].reduce(apply, started)
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { work: ["a", "b"] },
     "working, calling",
@@ -106,7 +108,7 @@ test("a turn that ended folds its work, and its last reply stays", () => {
     event("turn.ended", { turn: "u", state: "done" })
   )
   // Opened, it is one list: its lines of work open into their calls.
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { fold: ["a", "r1", "b", "c"] },
     "r2",
@@ -131,7 +133,12 @@ test("a Visual stays out of its turn's fold, where the Agent showed it", () => {
     reply("r"),
     event("turn.ended", { turn: "u", state: "done" })
   )
-  expect(shape(timeline(state))).toEqual(["m", { fold: ["a", "b"] }, "v", "r"])
+  expect(shape(timeline(state, "Claude"))).toEqual([
+    "m",
+    { fold: ["a", "b"] },
+    "v",
+    "r",
+  ])
 })
 
 test("the reply a turn in plan mode ended with is its plan", () => {
@@ -148,7 +155,7 @@ test("the reply a turn in plan mode ended with is its plan", () => {
     event("turn.ended", { turn: "v", state: "done" }),
   ].reduce(apply, planning)
   // Every plan stays a card, not only the latest.
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { fold: ["a"] },
     { plan: "r" },
@@ -162,7 +169,7 @@ test("the reply a turn in plan mode ended with is its plan", () => {
     reply("r3", "w"),
     event("turn.ended", { turn: "w", state: "done" }),
   ].reduce(apply, { ...state, settings: { ...state.settings, plan: false } })
-  expect(shape(timeline(replying)).slice(-2)).toEqual(["m3", "r3"])
+  expect(shape(timeline(replying, "Claude")).slice(-2)).toEqual(["m3", "r3"])
 })
 
 test("a plan the Agent asked to carry out is in its Question, not its reply", () => {
@@ -184,7 +191,12 @@ test("a plan the Agent asked to carry out is in its Question, not its reply", ()
     event("turn.ended", { turn: "u", state: "done" }),
   ].reduce(apply, planning)
   // It stays in sight when the work before the reply folds.
-  expect(shape(timeline(state))).toEqual(["m", "q", { fold: ["a"] }, "r"])
+  expect(shape(timeline(state, "Claude"))).toEqual([
+    "m",
+    "q",
+    { fold: ["a"] },
+    "r",
+  ])
 })
 
 test("a turn with no work, or one that failed, does not fold", () => {
@@ -194,7 +206,7 @@ test("a turn with no work, or one that failed, does not fold", () => {
     reply("r"),
     event("turn.ended", { turn: "u", state: "done" })
   )
-  expect(shape(timeline(plain))).toEqual(["m", "r"])
+  expect(shape(timeline(plain, "Claude"))).toEqual(["m", "r"])
   const failed = play(
     asked("v", "n"),
     event("turn.started", { turn: "v" }),
@@ -202,7 +214,7 @@ test("a turn with no work, or one that failed, does not fold", () => {
     tool("b", "execute", "v"),
     event("turn.ended", { turn: "v", state: "failed" })
   )
-  expect(shape(timeline(failed))).toEqual([
+  expect(shape(timeline(failed, "Claude"))).toEqual([
     "n",
     { work: ["a", "b"] },
     "ended failed",
@@ -217,14 +229,14 @@ test("a stopped turn says it stopped once: in its fold", () => {
     tool("b"),
     event("turn.ended", { turn: "u", state: "stopped" })
   )
-  expect(shape(timeline(state))).toEqual(["m", { fold: ["a", "b"] }])
+  expect(shape(timeline(state, "Claude"))).toEqual(["m", { fold: ["a", "b"] }])
   // With no work to fold, its own line says it.
   const quiet = play(
     asked("v", "n"),
     event("turn.started", { turn: "v" }),
     event("turn.ended", { turn: "v", state: "stopped" })
   )
-  expect(shape(timeline(quiet))).toEqual(["n", "ended stopped"])
+  expect(shape(timeline(quiet, "Claude"))).toEqual(["n", "ended stopped"])
 })
 
 /** A tool call that ended: done, or with the exit `code` it gives. */
@@ -395,7 +407,7 @@ test("a turn that ended and changed files says which, after its reply", () => {
     reply("r"),
     event("turn.ended", { turn: "u", state: "done" })
   )
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { fold: ["e"] },
     "r",
@@ -454,12 +466,13 @@ test("a turn's changes count its sub-agents' edits; its work says the Agent's ow
     event("turn.ended", { turn: "u", state: "done" })
   )
   expect(state.edits.map((item) => item.id)).toEqual(["le"])
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     "s",
     { fold: ["e"] },
     "r",
     { changes: ["/b.md", "/a.md"] },
+    "at-work",
   ])
   expect(didWords(did(state.items, "done"))).toBe("edited a file")
 })
@@ -502,16 +515,16 @@ test("consecutive sub-agents of one turn are one group, and a lone one is its ro
     event("thought.grew", { item: "t", turn: "u", text: "Hm" }),
     started("s5", "e")
   )
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { subagents: ["s1", "s2", "s3"] },
     "r",
     "s4",
     "t",
     "s5",
-    "working",
+    "working, subagents",
   ])
-  const group = timeline(state)[1]
+  const group = timeline(state, "Claude")[1]
   expect(group).toMatchObject({
     kind: "subagents",
     id: "subagents-s1",
@@ -533,14 +546,14 @@ test("sub-agents of two turns are two lines, and stay out of a finished turn's f
     event("turn.started", { turn: "v" }),
     started("s3", "c", "v")
   )
-  expect(shape(timeline(state))).toEqual([
+  expect(shape(timeline(state, "Claude"))).toEqual([
     "m",
     { fold: ["a", "b"] },
     { subagents: ["s1", "s2"] },
     "r",
     "n",
     "s3",
-    "working",
+    "working, subagents",
   ])
 })
 
@@ -552,10 +565,13 @@ test("a sub-agent's Question is no line of the Thread and no 'Waiting for you'",
     tool("c"),
     subAsks("q", "a")
   )
-  const lines = timeline(state)
-  expect(shape(lines)).toEqual(["m", "s", "c", "working, calling"])
+  const lines = timeline(state, "Claude")
+  expect(shape(lines)).toEqual(["m", "s", "c", "working, subagents"])
   const turn = state.turns[0]
-  expect(doing(state, turn)?.kind).toBe("calling")
+  expect(doing(state, turn)).toEqual({
+    kind: "subagents",
+    words: "Waiting on Lane a",
+  })
   // The Agent's own Question still waits for you.
   const own = apply(
     state,
@@ -594,8 +610,120 @@ test("the work line counts the Agent's own work, not its sub-agents'", () => {
     reply("r"),
     event("turn.ended", { turn: "u", state: "done" })
   )
-  const lines = timeline(state)
-  expect(shape(lines)).toEqual(["m", { fold: ["t", "a", "b"] }, "s", "r"])
+  const lines = timeline(state, "Claude")
+  expect(shape(lines)).toEqual([
+    "m",
+    { fold: ["t", "a", "b"] },
+    "s",
+    "r",
+    "at-work",
+  ])
   const fold = lines[1] as Extract<Line, { kind: "fold" }>
   expect(didWords(did(workOf(fold.lines), "done"))).toBe("ran 2 commands")
+})
+
+test("the sub-agents' words win over the parent's own calls and thoughts", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s1", "a"),
+    started("s2", "b")
+  )
+  const turn = state.turns[0]
+  const both = { kind: "subagents", words: "2 sub-agents at work" }
+  // Codex's parent waits on its children with a `wait` call of its own.
+  const waiting = apply(state, tool("wait", "other"))
+  expect(doing(waiting, turn)).toEqual(both)
+  const thinking = apply(
+    state,
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" })
+  )
+  expect(doing(thinking, turn)).toEqual(both)
+  // Once they ended, it says what it does itself again.
+  const ended = (subagent: string) =>
+    event("subagent.ended", { subagent, turn: "u", state: "done", ended: 9 })
+  const back = [ended("a"), ended("b")].reduce(apply, waiting)
+  expect(doing(back, turn)?.kind).toBe("calling")
+})
+
+test("the parent's own Question comes before its sub-agents' words", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s", "a"),
+    event("question.asked", {
+      item: "p",
+      turn: "u",
+      title: "Allow pnpm c?",
+      choices: [],
+    })
+  )
+  expect(doing(state, state.turns[0])).toEqual({ kind: "asking" })
+})
+
+test("sub-agents at work after the turn keep a live line with no clock at the Thread's end", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s", "a"),
+    tool("c"),
+    event("tool.changed", { item: "c", status: "done" }),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  const lines = timeline(state, "Claude")
+  expect(shape(lines)).toEqual(["m", "s", { fold: ["c"] }, "r", "at-work"])
+  // No turn in it, so nothing for a clock to count from.
+  expect(lines.at(-1)).toEqual({
+    kind: "at-work",
+    words: "1 sub-agent at work",
+    then: "Claude goes on when it ends",
+  })
+  // No turn runs: the composer is an idle Thread's.
+  expect(steerable(state)).toBe(false)
+
+  const over = apply(
+    state,
+    event("subagent.ended", {
+      subagent: "a",
+      turn: "u",
+      state: "done",
+      ended: 9,
+    })
+  )
+  expect(shape(timeline(over, "Claude"))).toEqual([
+    "m",
+    "s",
+    { fold: ["c"] },
+    "r",
+  ])
+})
+
+test("a new turn takes the live line while sub-agents of the last one still work", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s", "a"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" }),
+    asked("v", "n"),
+    event("turn.started", { turn: "v" })
+  )
+  const kinds = timeline(state, "Claude").map((line) => line.kind)
+  expect(kinds).toContain("working")
+  expect(kinds).not.toContain("at-work")
+  // The new turn says what it does itself: it is not waiting on them.
+  const calling = apply(state, tool("c", "execute", "v"))
+  const turn = calling.turns[1]
+  expect(doing(state, turn)).toBeUndefined()
+  expect(doing(calling, turn)).toMatchObject({
+    kind: "calling",
+    said: { verb: "Running", subject: "Tool c" },
+  })
+  // Its own sub-agent's words win again, and count only its own.
+  const own = apply(calling, started("s2", "b", "v"))
+  expect(doing(own, own.turns[1])).toEqual({
+    kind: "subagents",
+    words: "Waiting on Lane b",
+  })
 })

@@ -3,6 +3,7 @@
  * each kind (ADR 0091, decision 3). A new kind of line does not compile
  * until it has a row here.
  */
+import { AtWorkLine } from "./at-work"
 import { ChangesLine } from "./changes"
 import { EndedLine } from "./ended"
 import { EntryLine } from "./entry"
@@ -20,6 +21,7 @@ const VIEWS: { [K in Line["kind"]]: LineView<K> } = {
   subagents: SubagentsLine,
   fold: FoldLine,
   working: WorkingLine,
+  "at-work": AtWorkLine,
   plan: ProposedPlanLine,
   changes: ChangesLine,
   ended: EndedLine,
@@ -43,6 +45,8 @@ export function key(line: Line): string {
       return line.id
     case "working":
       return `working-${line.turn.id}`
+    case "at-work":
+      return "at-work"
     case "changes":
       return `changes-${line.turn.id}`
     case "ended":
