@@ -9,7 +9,7 @@ import type { Action, Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
-import { arcHosts, ON_ARC, R1 } from "../tiling/testing"
+import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
 import { handlesOf } from "../tiling/mount"
 import {
   type Column,
@@ -1127,6 +1127,33 @@ test("a file act checks the file on its Project's machine and carries the Projec
     file: "/r1/a.ts",
     project: R1,
   })
+
+  // The file's Project, not the one the Person is in.
+  stat.mockClear()
+  sessionOf.mockClear()
+  const elsewhere = shellOf({
+    hosts: arcHosts(["agents", "files"]),
+    run,
+    sessionOf,
+    here: { get: () => ({ project: MINE }) },
+  })
+  runAction(elsewhere, "file.peek", { file: "/r1/a.ts", project: R1 })
+  await vi.waitFor(() => expect(stat).toHaveBeenCalled())
+  expect(sessionOf).toHaveBeenCalledWith(R1, undefined)
+
+  // The Pane in focus goes with it, saying where a Project not listed yet
+  // is.
+  stat.mockClear()
+  sessionOf.mockClear()
+  const inPane = shellOf({
+    hosts: arcHosts(["agents", "files"]),
+    run,
+    sessionOf,
+    here: { get: () => ({ project: R1, pane: { project: R1, host: "arc" } }) },
+  })
+  runAction(inPane, "file.peek", { file: "/r1/a.ts" })
+  await vi.waitFor(() => expect(stat).toHaveBeenCalled())
+  expect(sessionOf).toHaveBeenCalledWith(R1, { args: { host: "arc" } })
 
   stat.mockClear()
   run.mockClear()

@@ -1,9 +1,9 @@
 /**
  * The pictures Projects' signs show (ADR 0070): read by `projects.sign`
  * from the engine of the machine each Project is on (ADR 0106, law 1), one
- * version a Project, kept for the window's life, by session, as two
- * machines may each have a Project of one ID. A picture read once draws
- * at once wherever the sign is drawn again.
+ * version a Project, kept for the window's life, by session, as each
+ * session is its own store. A picture read once draws at once wherever
+ * the sign is drawn again.
  */
 import type { Engine, ProjectId } from "@banda/contract"
 import { useReach } from "@banda/core/react"

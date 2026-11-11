@@ -1386,7 +1386,8 @@ test("@banda/ui holds no global of a Thread's details card", () => {
 const APP_METHODS = [
   "web/src/settings/ProjectsSettings.tsx: agents.threads",
   // The read a window's file act checks its file with, on the machine of
-  // the file's Project, in place of this device's disk (ADR 0106, step 3a).
+  // the file's Project, in place of this device's disk (ADR 0106, step 3a);
+  // it moves into the Files App (#1441).
   "web/src/window/actions.ts: files.stat",
 ]
 

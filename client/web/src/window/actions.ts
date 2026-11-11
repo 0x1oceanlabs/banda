@@ -11,7 +11,6 @@ import type {
 } from "@banda/contract"
 import {
   type Act,
-  type From,
   type Hosts,
   type KeptHosts,
   linkOf,
@@ -767,7 +766,7 @@ export function closingShown(
 const FILE = "the file's absolute path"
 
 /** A toast of why a file act was not done, in its machine's words. */
-function gone(failure: unknown) {
+function notDone(failure: unknown) {
   refused(failure instanceof Error ? failure.message : String(failure))
 }
 
@@ -786,28 +785,29 @@ function present(
 ) {
   const file = args?.file
   if (typeof file !== "string") return
-  const here = shell.here.get()
+  const { here } = fromHere(shell)
   const project =
     typeof args?.project === "string"
       ? (args.project as ProjectId)
       : here.project
-  const host = here.pane?.project === project ? here.pane.host : undefined
   let session: Engine
   try {
-    session = shell.sessionOf(project, host ? { args: { host } } : undefined)
+    // Here's Pane says only where a Project not listed yet is: the router
+    // has weighed the act already and refused one that is no one's.
+    session = shell.sessionOf(project, here.pane)
   } catch (failure) {
-    return gone(failure)
+    return notDone(failure)
   }
   session
     .call("files.stat", { paths: [file] }, { project, once: true })
     .then(([stat]) => {
       if (stat) then(file, project)
       else toast.warning(`No such file: ${file}`)
-    }, gone)
+    }, notDone)
 }
 
 /** Does `then` with the device file `args` name, if it is there still,
- * for what reaches this device's disk alone (`ON_THIS_DISK`); a toast
+ * for what reaches this device's disk alone; a toast
  * says when it has gone since its link was drawn (ADR 0063, decision 2).
  */
 function presentHere(args: Args | undefined, then: (file: string) => void) {
@@ -1665,17 +1665,19 @@ export const ACTIONS: readonly Action<Shell>[] = [
 /**
  * The window's own acts on a file, by the word their ids start with, as
  * Show in folder and Quick Look: a file is a value of a Project, the one
- * the Person is in where its args name none (ADR 0106, law 3). Files' on
- * its machine, it is reached through that machine's engine, as Quick Look;
- * else it is this device's alone (`ON_THIS_DISK`).
+ * the Person is in where its args name none (ADR 0106, law 3). The ones
+ * `ON_ITS_MACHINE` lists reach it through that machine's engine; the rest,
+ * as Open in its app, are this device's disk, which another machine's
+ * Project never has.
  */
 const ON_FILES = "file"
 
-/** The acts on a file of this device's disk, which another machine's
- * Project never has: its app here, its folder here (ADR 0106, law 3). */
-const ON_THIS_DISK: ReadonlySet<string> = new Set([
-  "file.outside",
-  "file.folder",
+/** The acts on a file that go to the machine of its Project: listed, so a
+ * new one reaches no other machine's file until it is said to. */
+const ON_ITS_MACHINE: ReadonlySet<string> = new Set([
+  "file.open",
+  "file.peek",
+  "file.attach",
 ])
 
 /**
@@ -1718,9 +1720,9 @@ export function actOf(action: Action<Shell>): Act {
           : undefined,
     }
   if (owner === ON_FILES)
-    return ON_THIS_DISK.has(id)
-      ? { title, at: "device", here: true }
-      : { title, at: "owner", app: "files", here: true }
+    return ON_ITS_MACHINE.has(id)
+      ? { title, at: "owner", app: "files", here: true }
+      : { title, at: "device", here: true }
   return { title, at: ON_THIS_MACHINE.has(owner) ? "device" : "window" }
 }
 
@@ -1742,7 +1744,9 @@ export const ROUTING: Routing = {
 
 /** Where the Person is, as an act asked by a key or a menu is from: the
  * Pane in focus, on the host its frame names; else Here's Project. */
-export function fromHere(shell: Pick<Shell, "here">): From {
+export function fromHere(shell: Pick<Shell, "here">): {
+  here: { project: ProjectId; pane?: Pick<PaneState, "args"> }
+} {
   const { pane, project } = shell.here.get()
   if (!pane) return { here: { project } }
   const { host } = pane
