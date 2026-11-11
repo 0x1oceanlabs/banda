@@ -8,7 +8,9 @@ import type { Listed } from "@banda/ui/pane"
 /**
  * A Project's list as the sidebar draws it: what a module says of another's
  * Thread (`Listed.on`) goes on that Thread's row, the louder mark and its
- * call with it, and has no row of its own.
+ * call with it, and has no row of its own. Only that: a Thread another
+ * Agent started has its own card, and its call never goes on its parent's
+ * (ADR 0098, decision 24).
  */
 export function folded(listed: readonly Listed[]): readonly Listed[] {
   const about = listed.filter((thing) => thing.on !== undefined)

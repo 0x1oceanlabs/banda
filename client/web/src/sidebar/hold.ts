@@ -125,7 +125,7 @@ export function hold(
   const listing = new Set<Stand>()
   for (const block of next.blocks) {
     blocks.set(block.key, block)
-    if (block.kind === "more") listing.add(block.of)
+    if (block.kind === "more" && block.of !== "children") listing.add(block.of)
     if (block.kind === "rows") {
       listing.add(block.stand)
       for (const entry of block.rows)
@@ -173,7 +173,7 @@ export function hold(
       const row = rows.get(key)
       // Still in the tab, past the end of a cut list as the Working
       // shelf's: it changed part, and says so in its slot.
-      if (row && !by && listing.has(row.stand)) return [{ row, at: entry.at }]
+      if (row && !by && listing.has(row.stand)) return [{ ...entry, row }]
       if (by === "key") {
         closed.push(key)
         return []
@@ -187,7 +187,7 @@ export function hold(
         ...(row?.listed.later?.someday ? { someday: true } : {}),
       }
       ;(by === "pointer" ? ghosts : leaving).set(key, went)
-      return [{ row: row ?? entry.row, at: entry.at }]
+      return [{ ...entry, row: row ?? entry.row }]
     })
     // What the Person's own acts bring into this part, where it is now.
     const now = blocks.get(block.key)

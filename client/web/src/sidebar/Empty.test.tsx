@@ -2,9 +2,17 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
-import type { Row } from "./rows"
-import { emptySays, EmptyTab, InboxZero, SOMEDAY_HEAD, zeroSays } from "./Empty"
-import { inboxOf } from "./inbox"
+import { type Row, rowsOf } from "./rows"
+import {
+  type EmptyBlock,
+  EmptyPlace,
+  emptySays,
+  EmptyTab,
+  InboxZero,
+  SOMEDAY_HEAD,
+  zeroSays,
+} from "./Empty"
+import { type InboxView, inboxOf, TABS } from "./inbox"
 
 /** Tuesday, 10 November 2026, 15:00 by the local clock. */
 const NOW = new Date(2026, 10, 10, 15, 0).getTime()
@@ -78,4 +86,88 @@ test("only an empty Working offers a New Thread", () => {
       <EmptyTab tab="archive" only={undefined} projects={[]} />
     )
   ).toContain("Nothing archived yet")
+})
+
+/** A Thread in each place, by its place, as its App lists it. */
+const IN: Readonly<Record<Row["stand"], Partial<Listed>>> = {
+  turn: { mark: "asking", calls: "Which port?" },
+  open: { mark: "rest" },
+  working: { mark: "working", began: NOW - 60_000 },
+  later: { mark: "rest", later: { at: NOW - 60_000, until: AT_1830 } },
+  archived: { mark: "rest", archived: true },
+}
+
+/** The big line an empty place's markup says, if any. */
+const bigLine = (html: string) =>
+  /data-slot="empty-title"[^>]*>([^<]*)</.exec(html)?.[1]?.trim() ?? ""
+
+test("every empty place says what goes there: each tab, and each part of the Inbox alone, grouped or not, with Open and the shelf or without (ADR 0098, decision 25)", () => {
+  const project = { id: "p1", name: "banda", scratch: false } as ProjectSummary
+  // Nothing at all, then a Thread in one place alone; and one that sleeps
+  // until Someday, which inbox zero tells of.
+  const sets: Array<[string, Row[]]> = [
+    ["nothing", []],
+    ...Object.entries(IN).map(([stand, more]): [string, Row[]] => [
+      stand,
+      rowsOf(
+        {
+          p1: [
+            { id: stand, title: stand, changed: NOW - 60_000, ...more },
+          ] as Listed[],
+        },
+        [project],
+        NOW
+      ),
+    ]),
+    [
+      "someday",
+      rowsOf(
+        {
+          p1: [
+            {
+              id: "dream",
+              title: "dream",
+              mark: "rest",
+              changed: NOW - 60_000,
+              later: { at: NOW - 60_000, someday: true },
+            },
+          ] as Listed[],
+        },
+        [project],
+        NOW
+      ),
+    ],
+  ]
+  const views = TABS.flatMap((tab) =>
+    (["none", "project", "machine"] as const).flatMap((group) =>
+      [true, false].flatMap((open) =>
+        [true, false].map((working): InboxView => ({
+          tab,
+          group,
+          open,
+          working,
+        }))
+      )
+    )
+  )
+  for (const [name, rows] of sets)
+    for (const view of views) {
+      const said = `${name} on ${JSON.stringify(view)}`
+      const { blocks } = inboxOf(rows, view, NOW)
+      const cards = blocks.some(
+        (block) => block.kind === "rows" && block.rows.length > 0
+      )
+      const places = blocks.filter(
+        (block): block is EmptyBlock =>
+          block.kind === "zero" || block.kind === "empty"
+      )
+      // A tab with no card in it is never blank.
+      if (!cards) expect(places, said).not.toHaveLength(0)
+      for (const place of places) {
+        const html = renderToStaticMarkup(
+          <EmptyPlace place={place} only={undefined} projects={[]} />
+        )
+        expect(bigLine(html), said).not.toBe("")
+      }
+    }
 })

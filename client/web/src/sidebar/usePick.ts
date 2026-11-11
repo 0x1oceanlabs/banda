@@ -131,6 +131,8 @@ export function usePick({
    * the first card it shows. */
   const expand = (stop: Element) => {
     const group = stop.getAttribute("data-group")
+    // "↳ + N more at work" unfolds its parent's children (decision 24).
+    const unfold = stop.getAttribute("data-unfold")
     const own = list.current
     if (!own) return
     // The card it follows: the group's head, or the last before "+ N more".
@@ -144,7 +146,9 @@ export function usePick({
                 card.compareDocumentPosition(stop) &
                 Node.DOCUMENT_POSITION_FOLLOWING
             )
-    flushSync(() => (group !== null ? toggle(group) : more()))
+    flushSync(() =>
+      group !== null ? toggle(group) : unfold !== null ? toggle(unfold) : more()
+    )
     const first = stopsIn(own).find(
       (card) =>
         isCard(card) &&

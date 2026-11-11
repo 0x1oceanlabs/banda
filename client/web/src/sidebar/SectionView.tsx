@@ -9,8 +9,8 @@ import type { PaneState } from "@banda/ui/pane"
 import { actsOf } from "./acts"
 import type { Row as Arranged } from "./rows"
 import { type CardView, LATER_BY_AGENT, linesOf } from "./card"
-import { type CardAct, SignMenu } from "./CardView"
-import { EmptyTab, InboxZero } from "./Empty"
+import { type CardAct, ChildArrow, SignMenu } from "./CardView"
+import { EmptyPlace } from "./Empty"
 import { wentWords } from "./hold"
 import { itemActionOf } from "./items"
 import { keyId } from "./keys"
@@ -30,19 +30,20 @@ import { PickContext, pickProps, pieceKey } from "./usePick"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /**
- * The regions of the tab in view (ADR 0098, decisions 3–6), as one flat
- * list, keyed, its heads and headers among its cards: Your turn under its
- * head, Open under a hairline, the Working shelf in grey with "+ N more",
- * which opens in place; Later and the Archive by day; inbox zero and an
- * empty tab in words; and, grouped, each group under its header, which
- * folds it. A card keeps its node from one part to another, so its Mark
- * plays its change as news; the list moves as `motion.ts` plays it. While
- * the list holds, a card that left stays dimmed in its slot, saying where
- * it went, and one the Person's pointer took away stands as a ghost line,
- * whose Undo puts back what its act changed. What the Person does to a
- * card from it, by its menu or its acts (ADR 0098, decision 10), is their
- * own act, which the list draws at once; for a moment after one by key
- * closed a slot, the acts take no click.
+ * The regions of the tab in view (ADR 0098, decisions 3–6 and 24), as one
+ * flat list, keyed, its heads and headers among its cards: Your turn under
+ * its head, Open under a hairline, the Working shelf in grey with "+ N
+ * more", which opens in place, each child at work under its parent with
+ * ↳, past three "↳ + N more at work"; Later and the Archive by day; inbox
+ * zero and an empty tab in words; and, grouped, each group under its
+ * header, which folds it. A card keeps its node from one part to another,
+ * so its Mark plays its change as news; the list moves as `motion.ts`
+ * plays it. While the list holds, a card that left stays dimmed in its
+ * slot, saying where it went, and one the Person's pointer took away
+ * stands as a ghost line, whose Undo puts back what its act changed. What
+ * the Person does to a card from it, by its menu or its acts (ADR 0098,
+ * decision 10), is their own act, which the list draws at once; for a
+ * moment after one by key closed a slot, the acts take no click.
  */
 export function SectionView({
   regions,
@@ -66,7 +67,8 @@ export function SectionView({
   /** The Threads that stand away from their Project's workspace (ADR
    * 0102, decision 6). */
   strayed: ReadonlySet<string>
-  /** Folds or opens the group of that key. */
+  /** Folds or opens the group of that key; or shows every child at work
+   * of the parent of that key. */
   onToggle: (key: string) => void
   engine: Engine
   /** This machine's No Project, once the engine named it. */
@@ -91,7 +93,11 @@ export function SectionView({
   // in the No Project group they share, still name theirs.
   const here = useThisNamed(settings.machines.thisToo)
   const label = !named && view.group === "project" ? here : undefined
-  const items = itemsOf(regions, (place) => linesOf(place, view), holds)
+  const items = itemsOf(
+    regions,
+    (place, { child }) => linesOf(place, view, child),
+    holds
+  )
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
@@ -114,9 +120,8 @@ export function SectionView({
       run: (card) => actOn(row, act, { card, by: "pointer" }),
     }))
 
-
   const card = (item: Extract<Item, { kind: "card" }>) => {
-    const { row } = item.entry
+    const { row, child } = item.entry
     const went = item.ghost ?? item.went
     const said = went && wentWords(went, holds.now)
     const undo = item.ghost && holds.undos.get(item.key)
@@ -133,6 +138,7 @@ export function SectionView({
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
+        {...(child ? { child } : {})}
         {...(went ? { went } : { acts: actsFor(row) })}
       />
     )
@@ -192,28 +198,39 @@ export function SectionView({
         return <Separator className="mx-2 my-1.5 w-auto!" />
       case "more": {
         // A stop of the pick, which → or Enter opens, as a click does: the
-        // rest shows, and its first card is picked.
+        // rest shows, or a parent's children past three, and its first card
+        // is picked.
         const stop = pieceKey(host, item.key)
+        const children = block.of === "children"
         return (
           <button
             type="button"
             {...pickProps(stop, stop === picked)}
             data-more=""
+            data-unfold={children ? block.parent : undefined}
             tabIndex={-1}
-            className="w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground"
+            className={cn(
+              "w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground",
+              children && "flex items-center gap-1.5"
+            )}
             onMouseDown={(event) => event.preventDefault()}
             onClick={(event) => expand(event.currentTarget)}
           >
-            {block.of === "working"
-              ? `+ ${block.count} more`
-              : `Show ${block.count} older`}
+            {children ? (
+              <>
+                <ChildArrow className="w-2.5" />+ {block.count} more at work
+              </>
+            ) : block.of === "working" ? (
+              `+ ${block.count} more`
+            ) : (
+              `Show ${block.count} older`
+            )}
           </button>
         )
       }
       case "zero":
-        return <InboxZero zero={block} />
       case "empty":
-        return <EmptyTab tab={block.tab} only={only} projects={projects} />
+        return <EmptyPlace place={block} only={only} projects={projects} />
       case "group": {
         const { project } = block
         // Folded, it is a stop of the pick, which → or Enter unfolds.

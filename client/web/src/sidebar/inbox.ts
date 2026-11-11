@@ -1,18 +1,19 @@
 /**
  * The sidebar as the Person's inbox of their Agents' work (ADR 0098,
- * decisions 1–5 and 12): the rows in, each where `status.ts` says it
+ * decisions 1–5, 12 and 24): the rows in, each where `status.ts` says it
  * stands (`rowsOf`); out, each tab's count, the blocks the list draws for
  * the tab in view, what inbox zero says, and the one order of what calls,
- * which `Alt+U` and the counts go by. It never works out where a Thread
- * stands, only where it goes in its place. Pure, with no DOM and no React,
- * so plain tests cover it.
+ * which `Alt+U` and the counts go by. A Thread another Agent started is
+ * its child: at work, it sits under its parent. It never works out where
+ * a Thread stands, only where it goes in its place. Pure, with no DOM and
+ * no React, so plain tests cover it.
  */
 import type { ProjectSummary } from "@banda/contract"
 import type { GroupBy } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/lib/mark-state"
 import { lookOf, STAND_WORDS, type Stand } from "@banda/ui/status"
 import type { Row } from "./rows"
-import { rowKey } from "./hold"
+import { itemKey, keyOf, rowKey } from "./hold"
 import { dayAt } from "./later-time"
 
 /** The tabs under the search, in their order, as `1`–`4` pick them. */
@@ -39,7 +40,9 @@ export type InboxView = {
   /** The rest of a cut list shows: the shelf's "+ N more", the Archive's
    * "Show older". */
   more?: boolean
-  /** The groups the Person folded, by their keys. */
+  /** What the Person turned from how it first shows, by its key: the
+   * groups they folded, and the parents whose children at work they
+   * unfolded past three, by their cards' keys. */
   folded?: ReadonlySet<string>
   /** When inbox zero last said how many sleep until Someday, as this
    * device keeps it; it says so once a week (decision 12). */
@@ -49,8 +52,13 @@ export type InboxView = {
 /** A row as its place draws it, with the moment its time counts from:
  * the call's, or when it woke; the start of the turn at work; the last
  * change; the wake time, or when it was put off with none; when it was
- * archived. */
-export type Entry = { row: Row; at: number }
+ * archived. A child also names its parent. */
+export type Entry = { row: Row; at: number; child?: Child }
+
+/** A Thread another Agent started through Banda (decision 24): its
+ * parent's title, which line 3 says, and whether it sits under its parent
+ * with ↳, as at work. */
+export type Child = { parent: string; under?: true }
 
 /** What inbox zero says (decision 4): how many work, when the next one
  * wakes by its time, and, once a week, how many sleep until Someday. */
@@ -82,6 +90,9 @@ export type Block =
   /** What a cut list leaves out: the shelf's "+ N more", the Archive's
    * "Show older". */
   | { kind: "more"; key: string; of: "working" | "archived"; count: number }
+  /** A parent's children at work past the first three: "↳ + 4 more at
+   * work", by its card's key. */
+  | { kind: "more"; key: string; of: "children"; parent: string; count: number }
   /** Inbox zero, in words. */
   | ({ kind: "zero"; key: string } & Zero)
   /** A tab with nothing in it, which says what goes there (decision 25). */
@@ -102,8 +113,12 @@ export type Inbox = {
   keys: string[]
 }
 
-/** How many of Working the Inbox's shelf shows before "+ N more". */
+/** How many of Working the Inbox's shelf shows before "+ N more": its
+ * Threads that are no child at work, each with its children. */
 export const SHELF = 6
+
+/** How many children at work a parent shows before "+ N more at work". */
+export const CHILDREN = 3
 
 /** How many archived Threads the Archive draws before "Show older": a
  * list over about 200 rows is not drawn whole (ADR 0088, decision 7). */
@@ -113,6 +128,10 @@ export const ARCHIVE_SHOWN = 200
 const PARTS = ["turn", "open", "working"] as const
 type Part = (typeof PARTS)[number]
 type Parts = Partial<Record<Part, Entry[]>>
+
+/** A Thread at work and its children at work under it, theirs too, each
+ * by when it began. */
+type Family = { entry: Entry; children: Entry[] }
 
 /** Later's buckets, in their order (decision 5), by their keys. */
 const LATER = [
@@ -182,8 +201,19 @@ export function inboxOf(
     archived: [],
   }
   for (const row of rows) by[row.stand].push(row)
+  const keyed = new Map(rows.map((row) => [itemKey(row), row]))
+  const parentOf = (row: Row) => keyed.get(parentKey(row) ?? "")
   const entries = (stand: Stand, order: typeof oldest) =>
-    by[stand].map((row) => ({ row, at: atOf(row) })).sort(order)
+    by[stand]
+      .map((row): Entry => {
+        const parent = parentOf(row)
+        return {
+          row,
+          at: atOf(row),
+          ...(parent ? { child: { parent: parent.listed.title } } : {}),
+        }
+      })
+      .sort(order)
   const calling = entries("turn", oldest)
   const open = entries("open", newest)
   const working = entries("working", oldest)
@@ -203,20 +233,30 @@ export function inboxOf(
   }
   const group = view.group ?? "none"
   const folded = view.folded ?? new Set<string>()
+  // A child goes in its parent's group (decision 24).
+  const rootOf = (row: Row) => {
+    let root = row
+    const seen = new Set([row])
+    for (let up = parentOf(root); up && !seen.has(up); up = parentOf(up)) {
+      seen.add(up)
+      root = up
+    }
+    return root
+  }
   const blocks = ((): Block[] => {
     switch (view.tab) {
       case "inbox":
         return [
           ...(zero ? [{ kind: "zero" as const, key: "zero", ...zero }] : []),
           ...(group === "none"
-            ? inbox(parts, view.more === true)
-            : grouped(parts, group, folded, now)),
+            ? inbox(parts, view.more === true, folded)
+            : grouped(parts, group, folded, now, rootOf)),
         ]
       case "working":
         if (working.length === 0) return [empty("working")]
         return group === "none"
-          ? [cards("working", "working", working)]
-          : grouped({ working }, group, folded, now)
+          ? workingOf("working", familiesOf(working), folded)
+          : grouped({ working }, group, folded, now, rootOf)
       case "later":
         return later.length === 0 ? [empty("later")] : laterOf(later, now)
       case "archive":
@@ -234,7 +274,15 @@ export function inboxOf(
     },
     blocks,
     ...(zero ? { zero } : {}),
-    keys: [...calling, ...open, ...working].map(({ row }) => rowKey(row)),
+    // At work, each child under its parent, not by when it began.
+    keys: [
+      ...calling,
+      ...open,
+      ...familiesOf(working).flatMap(({ entry, children }) => [
+        entry,
+        ...children,
+      ]),
+    ].map(({ row }) => rowKey(row)),
   }
 }
 
@@ -259,39 +307,124 @@ function zeroOf(
 }
 
 /** The Inbox with no groups: Your turn under its heading, Open under a
- * divider, and the Working shelf, its first few unless `whole`. */
-function inbox(parts: Parts, whole: boolean): Block[] {
+ * divider, and the Working shelf, its first few families unless `whole`,
+ * each parent's children past three folded unless `unfolded` has it. */
+function inbox(
+  parts: Parts,
+  whole: boolean,
+  unfolded: ReadonlySet<string>
+): Block[] {
   const { turn = [], working = [] } = parts
-  const shelf = whole ? working : working.slice(0, SHELF)
+  const families = familiesOf(working)
+  const shelf = whole ? families : families.slice(0, SHELF)
+  const shown = shelf.reduce((n, { children }) => n + 1 + children.length, 0)
   return [
     ...(turn.length > 0 ? [head("turn", STAND_WORDS.turn, turn.length)] : []),
-    ...partsOf({ turn, open: parts.open }, ""),
+    ...partsOf({ turn, open: parts.open }, "", unfolded),
     ...(working.length > 0
       ? [
           head("working", STAND_WORDS.working, working.length),
-          cards("working", "working", shelf),
+          ...workingOf("working", shelf, unfolded),
         ]
       : []),
-    ...more("working", working.length - shelf.length),
+    ...more("working", working.length - shown),
   ]
+}
+
+/** The key of `row`'s parent's card, when another Agent started it. */
+function parentKey({ host, listed }: Row): string | undefined {
+  return listed.parent === undefined ? undefined : keyOf(host, listed.parent)
+}
+
+/**
+ * `working`, by when each began, in families (decision 24): each Thread
+ * whose parent does not work here, its children under it, and theirs
+ * under each of them, with ↳. A child whose parent works elsewhere, or
+ * not at all, stands by itself.
+ */
+function familiesOf(working: readonly Entry[]): Family[] {
+  const keys = new Set(working.map(({ row }) => itemKey(row)))
+  const under = new Map<string, Entry[]>()
+  const top: Entry[] = []
+  for (const entry of working) {
+    const parent = parentKey(entry.row)
+    if (parent !== undefined && keys.has(parent))
+      under.set(parent, [...(under.get(parent) ?? []), entry])
+    else top.push(entry)
+  }
+  const seen = new Set<string>()
+  const below = (key: string): Entry[] =>
+    (under.get(key) ?? []).flatMap((entry) => {
+      const child = itemKey(entry.row)
+      if (seen.has(child)) return []
+      seen.add(child)
+      const parent = entry.child?.parent ?? ""
+      return [{ ...entry, child: { parent, under: true } }, ...below(child)]
+    })
+  const families = (entries: readonly Entry[]) =>
+    entries.flatMap((entry): Family[] => {
+      const key = itemKey(entry.row)
+      if (seen.has(key)) return []
+      seen.add(key)
+      return [{ entry, children: below(key) }]
+    })
+  const placed = families(top)
+  // Threads that name each other parents in a ring have no top: the first
+  // to begin heads them.
+  return [...placed, ...families(working)]
+}
+
+/** Working's cards in `families`, its blocks keyed after `key`: each
+ * parent's first three children under it, then "+ N more at work" unless
+ * `unfolded` has the parent. */
+function workingOf(
+  key: string,
+  families: readonly Family[],
+  unfolded: ReadonlySet<string>
+): Block[] {
+  const blocks: Block[] = []
+  let part = key
+  let rows: Entry[] = []
+  for (const { entry, children } of families) {
+    const parent = itemKey(entry.row)
+    const cut =
+      children.length > CHILDREN && !unfolded.has(parent)
+        ? children.length - CHILDREN
+        : 0
+    rows.push(entry, ...children.slice(0, children.length - cut))
+    if (cut === 0) continue
+    blocks.push(cards(part, "working", rows), {
+      kind: "more",
+      key: `${parent}:children`,
+      of: "children",
+      parent,
+      count: cut,
+    })
+    part = `${key}:${parent}`
+    rows = []
+  }
+  return rows.length > 0 ? [...blocks, cards(part, "working", rows)] : blocks
 }
 
 /** Each group with something to show: its header, then, unless it is
  * folded, its rows by place, Open under a divider. Projects go by name,
- * with no Project's last; machines by name, this one's first. A header's
- * mark is the loudest look of what calls in it, as its cards draw them
- * at `now`. */
+ * with no Project's last; machines by name, this one's first. A child
+ * goes in its parent's group, the group of the first of its parents that
+ * `rootOf` finds. A header's mark is the loudest look of what calls in it,
+ * as its cards draw them at `now`. */
 function grouped(
   parts: Parts,
   by: InboxGroup,
   folded: ReadonlySet<string>,
-  now: number
+  now: number,
+  rootOf: (row: Row) => Row
 ): Block[] {
   const groups = new Map<string, { first: Row; parts: Parts }>()
   for (const part of PARTS)
     for (const entry of parts[part] ?? []) {
-      const key = groupKey(entry.row, by)
-      const group = groups.get(key) ?? { first: entry.row, parts: {} }
+      const root = rootOf(entry.row)
+      const key = groupKey(root, by)
+      const group = groups.get(key) ?? { first: root, parts: {} }
       ;(group.parts[part] ??= []).push(entry)
       groups.set(key, group)
     }
@@ -311,7 +444,7 @@ function grouped(
           waiting: turn.length,
           working: working.length,
         },
-        ...(shut ? [] : partsOf(group.parts, `${key}:`)),
+        ...(shut ? [] : partsOf(group.parts, `${key}:`, folded)),
       ]
     })
 }
@@ -353,8 +486,13 @@ function groupOrder(a: Row, b: Row, by: InboxGroup): number {
 }
 
 /** The rows of each place in `parts`, Open under a divider when Your
- * turn is above it, each block keyed after `prefix`. */
-function partsOf(parts: Parts, prefix: string): Block[] {
+ * turn is above it, each block keyed after `prefix`; at work, each child
+ * under its parent, past three unless `unfolded` has it. */
+function partsOf(
+  parts: Parts,
+  prefix: string,
+  unfolded: ReadonlySet<string>
+): Block[] {
   const { turn = [], open = [], working = [] } = parts
   return [
     ...(turn.length > 0 ? [cards(`${prefix}turn`, "turn", turn)] : []),
@@ -362,9 +500,7 @@ function partsOf(parts: Parts, prefix: string): Block[] {
       ? [{ kind: "divider" as const, key: `${prefix}divider` }]
       : []),
     ...(open.length > 0 ? [cards(`${prefix}open`, "open", open)] : []),
-    ...(working.length > 0
-      ? [cards(`${prefix}working`, "working", working)]
-      : []),
+    ...workingOf(`${prefix}working`, familiesOf(working), unfolded),
   ]
 }
 
