@@ -14,7 +14,7 @@ export const ShowTab = createContext<
 
 /** Each tab's name: the Inbox's, then each place's as its heading names
  * it, so a tab and the part it shows say the same. */
-const TAB_WORDS: Readonly<Record<Tab, string>> = {
+export const TAB_WORDS: Readonly<Record<Tab, string>> = {
   inbox: "Inbox",
   working: STAND_WORDS.working,
   later: STAND_WORDS.later,

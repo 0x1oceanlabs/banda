@@ -76,6 +76,7 @@ import {
 import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { LaterPicker } from "../sidebar/LaterPicker"
+import { SaidRegion } from "../sidebar/SaidRegion"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
 import { paneRowsOf } from "../sidebar/items"
@@ -884,6 +885,7 @@ export function Shell({
                   />
                 )}
                 <Toaster />
+                <SaidRegion />
                 <LaterPicker />
                 <QuitDialog
                   working={quitting}

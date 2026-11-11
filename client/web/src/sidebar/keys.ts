@@ -3,9 +3,10 @@
  * its scope, `sidebar`, the whole sidebar (ADR 0071, decision 1): the
  * window matches them, `keys.toml` moves them in `[binds.sidebar]`, and
  * the key sheet lists them. They hold no mod, so they work only while the
- * focus is in the sidebar, and a field there types them. The acts on the
- * pick work while the focus is in the list; `/` and the tabs' digits
- * anywhere in the sidebar. The arrows, Home, End, the pages and Esc are
+ * focus is in the sidebar, and a field there types them; Undo holds Ctrl,
+ * or ⌘ on a Mac, as a field's own does. The acts on the pick work while
+ * the focus is in the list; Undo, `/` and the tabs' digits anywhere in
+ * the sidebar. The arrows, Home, End, the pages and Esc are
  * the list's own, as a list's are. Pure, so plain tests cover it.
  */
 import type { Key } from "@banda/ui/lib/keys"
@@ -21,6 +22,7 @@ export type Does =
   | "archive"
   | "later"
   | "unread"
+  | "undo"
   | "rename"
   | "suggest"
   | "search"
@@ -73,6 +75,12 @@ export const SIDEBAR_KEYS: readonly {
     keys: [{ code: "KeyU" }],
   },
   {
+    does: "undo",
+    id: "sidebar.undo",
+    title: "Undo the last act on a card",
+    keys: [{ code: "KeyZ", primary: true }],
+  },
+  {
     does: "rename",
     id: "sidebar.rename-picked",
     title: "Rename the card picked",
@@ -116,4 +124,24 @@ export function tabOf(does: Does): Tab | undefined {
 /** The id of the action that does `does`. */
 export function keyId(does: Does): string {
   return SIDEBAR_KEYS.find((key) => key.does === does)!.id
+}
+
+/** What the hint names, in its order (spec §2.8). */
+const HINTED: readonly (readonly [Does, string])[] = [
+  ["archive", "archives"],
+  ["later", "puts off"],
+  ["unread", "marks unread"],
+]
+
+/** The hint the list is described by (spec §2.8), with the keys in force
+ * as `label` reads them: "S archives, Z puts off, U marks unread."; none
+ * where none is bound. */
+export function hintOf(
+  label: (action: string) => string | undefined
+): string | undefined {
+  const said = HINTED.flatMap(([does, words]) => {
+    const key = label(keyId(does))
+    return key ? [`${key} ${words}`] : []
+  })
+  return said.length > 0 ? `${said.join(", ")}.` : undefined
 }

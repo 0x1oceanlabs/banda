@@ -117,6 +117,9 @@ export function usePick({
     pick(key)
   }
 
+  // The card Undo brings back, which takes the pick as it draws.
+  const coming = useRef<string>(undefined)
+
   /** As an act by key takes the card `key` out of the tab: the pick goes
    * on, from the order drawn now (§2.7). */
   const goneFrom = (key: string) => {
@@ -175,7 +178,10 @@ export function usePick({
     if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
     const all = stops()
     const at = stopOf(picked)
-    const to = (step: Step) => moveTo(stepped(all.map(keyOf), picked, step))
+    const to = (step: Step) => {
+      coming.current = undefined
+      moveTo(stepped(all.map(keyOf), picked, step))
+    }
     // A page is so many stops.
     const page = () =>
       pageOf(
@@ -236,6 +242,7 @@ export function usePick({
   // A click picks what it lands on, and the ring goes.
   const onPointerDown = (event: { target: EventTarget }) => {
     setKeyed(false)
+    coming.current = undefined
     const stop =
       event.target instanceof Element && event.target.closest(`[${PICK}]`)
     if (stop) pick(keyOf(stop))
@@ -250,7 +257,8 @@ export function usePick({
   }, [open, pick])
 
   // After each drawing: the list names its pick, which comes into view
-  // after a key; a card picked that left the tab hands it on.
+  // after a key; a card picked that left the tab hands it on, and one Undo
+  // brings back into it takes it.
   const drawn = useRef<{ tab: Tab; cards: readonly string[] }>(undefined)
   useLayoutEffect(() => {
     const own = list.current
@@ -260,6 +268,12 @@ export function usePick({
     const at = all.find((stop) => keyOf(stop) === picked)
     const before = drawn.current
     drawn.current = { tab, cards }
+    const back = coming.current
+    if (before?.tab !== tab) coming.current = undefined
+    else if (back !== undefined && cards.includes(back)) {
+      coming.current = undefined
+      return moveTo(back)
+    }
     if (at) {
       own.setAttribute("aria-activedescendant", at.id)
       if (scroll.current) at.scrollIntoView({ block: "nearest" })
@@ -276,6 +290,11 @@ export function usePick({
     /** The stop picked, as drawn. */
     at: () => stopOf(now.current.picked),
     goneFrom,
+    /** As Undo brings the card `key` back: it takes the pick as it draws
+     * in this tab, unless a key or a click moves the pick first. */
+    back: (key: string) => {
+      coming.current = key
+    },
     expand,
     /** What goes on the list. */
     list: {

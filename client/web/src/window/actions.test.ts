@@ -828,9 +828,13 @@ test("the sidebar's keys are its scope's, none held with a mod, and pane.beside 
   )
   for (const { keys: bound = [] } of keys)
     for (const key of bound)
-      expect([key.alt, key.ctrl, key.super, key.primary, key.mod]).toEqual(
-        Array(5).fill(undefined)
+      expect([key.alt, key.ctrl, key.super, key.mod]).toEqual(
+        Array(4).fill(undefined)
       )
+  // Undo alone holds Ctrl, ⌘ on a Mac, as a field's own does (§2.7).
+  expect(
+    keys.filter(({ keys: bound = [] }) => bound.some((key) => key.primary))
+  ).toEqual([expect.objectContaining({ id: "sidebar.undo" })])
 
   // Open beside, by its key: the Sheet goes, and the Pane comes onto a
   // workspace as the menu's row brings it; without a Pane, nothing.

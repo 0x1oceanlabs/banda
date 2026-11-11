@@ -5,7 +5,7 @@ import type { Row } from "./arrange"
 import type { By } from "./hold"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
-import { toldArchived, type Undoable, undoOf } from "./undo"
+import { keep, toldArchived, type Undoable, undoOf } from "./undo"
 import type { Holding } from "./useHold"
 
 /** What an act on a card is told besides: the card's element, where the
@@ -30,17 +30,18 @@ export function useDoing(): (
 
 /**
  * The Person's acts on a card (ADR 0098, decision 10), by its buttons or
- * by a key on the pick (decision 13): the Thread's App's, by its item
- * actions (ADR 0087, decision 12), which the list draws at once, with
- * what takes each back. Later opens the picker at the card, which then
- * holds the list, and tells `gone` once a time is picked; Archive acts at
- * once, and is told in the toast. The Window that does not reach a card's
- * host has its App refuse at once, and nothing is kept to undo. For a
- * moment after an act by key closed a slot, the buttons take no click.
+ * by a key on the pick (decision 13), Unread by its key alone: the
+ * Thread's App's, by its item actions (ADR 0087, decision 12), which the
+ * list draws at once, with what takes each back. Later opens the picker
+ * at the card, which then holds the list, and tells `gone` once a time is
+ * picked; Archive acts at once, and is told in the toast. Each is kept for `Ctrl+Z` too. The
+ * Window that does not reach a card's host has its App refuse at once, in
+ * its toast: the pick stays, and nothing is kept to undo. For a moment
+ * after an act by key closed a slot, the buttons take no click.
  */
 export function useActs(
   holding: Holding | undefined
-): (row: Row, act: Act, on: ActOn) => void {
+): (row: Row, act: Act | "unread", on: ActOn) => void {
   const run = useRun()
   const doing = useDoing()
   const engineOf = useEngineOf()
@@ -56,27 +57,27 @@ export function useActs(
     if (by === "pointer" && holding?.quiet()) return
     const { listed } = row
     const project = row.project.id
-    const undo = (): Undoable | undefined =>
-      reaches(row)
-        ? { project, listed, steps: undoOf(act, listed, Date.now()) }
-        : undefined
+    // What takes it back, kept, as the card goes; none where it is refused.
+    const done = (): Undoable | undefined => {
+      if (!reaches(row)) return undefined
+      gone?.()
+      const undo = { project, listed, steps: undoOf(act, listed, Date.now()) }
+      keep(undo)
+      return undo
+    }
     if (act === "later") {
       pickLater({
         project,
         listed,
         anchor: card,
-        onPicked: () => {
-          gone?.()
-          holding?.act(row, by, undo())
-        },
+        onPicked: () => holding?.act(row, by, done()),
       })
       return
     }
-    gone?.()
-    const done = undo()
-    holding?.act(row, by, done)
-    if (act === "wake") doing(row, "wake")
+    const undo = done()
+    holding?.act(row, by, undo)
+    if (act === "wake" || act === "unread") doing(row, act)
     else doing(row, "archive", { archived: act === "archive" })
-    if (act === "archive" && done) toldArchived(run, done)
+    if (act === "archive" && undo) toldArchived(run, undo)
   }
 }
