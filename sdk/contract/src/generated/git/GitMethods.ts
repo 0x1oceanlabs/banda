@@ -11,7 +11,11 @@ import type { Contents } from "./Contents";
 import type { ContentsAsk } from "./ContentsAsk";
 import type { Diff } from "./Diff";
 import type { DiffAsk } from "./DiffAsk";
+import type { FolderAsk } from "./FolderAsk";
+import type { FolderFor } from "./FolderFor";
 import type { Message } from "./Message";
+import type { PackFolder } from "./PackFolder";
+import type { PackedFolder } from "./PackedFolder";
 import type { Progress } from "./Progress";
 import type { PromptAsk } from "./PromptAsk";
 import type { Prompted } from "./Prompted";
@@ -19,6 +23,7 @@ import type { Ref } from "./Ref";
 import type { RefsAsk } from "./RefsAsk";
 import type { Status } from "./Status";
 import type { SwitchAsk } from "./SwitchAsk";
+import type { UnpackFolder } from "./UnpackFolder";
 import type { WrittenAsk } from "./WrittenAsk";
 
 export type GitMethods = { 
@@ -97,4 +102,28 @@ prompt: CallMethod<PromptAsk, Prompted>,
  * A Harness's reply to `prompt` read as a message for `act`, and
  * as the name of a new branch no branch here has.
  */
-written: CallMethod<WrittenAsk, Message>, };
+written: CallMethod<WrittenAsk, Message>, 
+/**
+ * What this Project's folder is to a Thread that moves between
+ * machines (ADR 0116, decision 8): whether it is a repository,
+ * `HEAD` and its remotes' branches as commits, which of
+ * `commits` it has, and whether it is free, with nothing changed
+ * and not committed. Only a Person asks.
+ */
+folder_for: CallMethod<FolderAsk, FolderFor>, 
+/**
+ * Keeps the folder as it is now as a snapshot commit, as a
+ * checkpoint is kept, and writes a bundle of it without the
+ * commits of `have` in the Project's data, `moves/<move>.bundle`,
+ * for the window to carry. The branch, the index and the files
+ * are not touched. It answers the branch, `HEAD`, how many files
+ * are changed, and the bundle's size and SHA-256.
+ */
+pack_folder: CallMethod<PackFolder, PackedFolder>, 
+/**
+ * Takes a move's bundle carried here, and puts the folder as the
+ * one it comes from was: the same branch at the same commit, the
+ * snapshot's changes not committed. A folder with changes of its
+ * own refuses, and a branch of that name that went another way.
+ */
+unpack_folder: CallMethod<UnpackFolder, null>, };

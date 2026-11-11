@@ -541,7 +541,7 @@ pub async fn init(project: &ModuleProject) -> Result<(), Refusal> {
 }
 
 /// A name git cannot take for an option.
-fn ref_name(name: &str) -> Result<(), Refusal> {
+pub(crate) fn ref_name(name: &str) -> Result<(), Refusal> {
     match name.is_empty() || name.starts_with('-') || name.contains('\0') {
         true => Err(Refusal::invalid(
             "A branch is named, and not with a dash first.",

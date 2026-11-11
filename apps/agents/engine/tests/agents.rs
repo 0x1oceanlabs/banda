@@ -11654,3 +11654,56 @@ async fn only_a_person_carries_a_thread_and_only_whole_and_in_order() {
         .unwrap_err();
     assert_eq!(refused.code, Code::Invalid, "{refused:?}");
 }
+
+#[tokio::test]
+async fn a_window_carries_the_bundle_of_a_folders_work_beside_its_thread() {
+    let root = tempfile::tempdir().unwrap();
+    let work = World::new(root.path()).await;
+    let (home, _) = work.beside("Home").await;
+    let person = work.person();
+    let (thread, _) = work.finish(None, "hello").await;
+    let packed = carry(&work, &home, &thread).await;
+    let id = packed["move"].as_str().unwrap();
+
+    // The Git App wrote the folder's work beside the Thread's artefact.
+    fn named(folder: &Path, name: &str) -> Option<PathBuf> {
+        for entry in std::fs::read_dir(folder).ok()?.flatten() {
+            let path = entry.path();
+            if path.is_symlink() {
+                continue;
+            }
+            if path.is_dir() {
+                if let Some(found) = named(&path, name) {
+                    return Some(found);
+                }
+            } else if entry.file_name() == name {
+                return Some(path);
+            }
+        }
+        None
+    }
+    let artefact = named(root.path(), &format!("{id}.tar")).unwrap();
+    let bundle = artefact.with_extension("bundle");
+    std::fs::write(&bundle, b"a bundle").unwrap();
+
+    let ask = json!({ "move": id, "part": "folder", "at": 0 });
+    let piece = work.call(person, "agents.packed", ask).await.unwrap();
+    assert_eq!(piece["more"], json!(false));
+    let take = json!({ "move": id, "part": "folder", "at": 0, "data": piece["data"] });
+    home.call(person, "agents.take_piece", take).await.unwrap();
+    let carried = named(root.path(), &format!("{id}.bundle.part")).unwrap();
+    assert_eq!(std::fs::read(&carried).unwrap(), b"a bundle");
+    assert_ne!(carried.parent(), bundle.parent(), "in the other Project");
+
+    // It goes with the artefact as the Thread leaves.
+    let unpack = json!({ "move": id, "sha256": packed["sha256"] });
+    home.call(person, "agents.unpack_thread", unpack)
+        .await
+        .unwrap();
+    let leave = json!({ "move": id, "project": home.project });
+    work.call(person, "agents.leave_thread", leave)
+        .await
+        .unwrap();
+    assert!(!bundle.exists() && !artefact.exists());
+    assert!(carried.is_file(), "the Git App's to unpack and take away");
+}

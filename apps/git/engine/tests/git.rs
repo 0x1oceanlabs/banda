@@ -2155,3 +2155,148 @@ async fn an_agent_reads_the_repository_but_asks_for_no_act() {
     assert_eq!(refused, Some(Code::Forbidden));
     assert_eq!(world.git(&["status", "--porcelain"]), " M a.txt");
 }
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_folders_work_goes_to_another_folder_as_a_snapshot_and_the_old_one_is_not_touched() {
+    let world = World::committed().await;
+    let (home, home_folder) = world.project("Home").await;
+    // The other folder has the same repository, as far as `main`.
+    let from = world.folder.display().to_string();
+    run_git(&home_folder, &["pull", "--quiet", &from, "main"]);
+    // Here the work went on: a commit never pushed, and changes not
+    // committed, a file gone and a new one.
+    world.git(&["checkout", "--quiet", "-b", "feat/x"]);
+    world.write("a.txt", "one\ntwo\nthree\nfour\n");
+    let head = world.commit("unpushed");
+    world.write("a.txt", "one\ntwo\nthree\nfour\nfive\n");
+    std::fs::remove_file(world.folder.join("d.txt")).unwrap();
+    world.write("n.txt", "new\n");
+    let before = world.git(&["status", "--porcelain"]);
+    let index = world.index();
+
+    let person = Participant::Person(world.owner);
+    let there = |method: &'static str, params: Value| {
+        (world.kernel).call(person, method, Some(home), None, params)
+    };
+    let ours: Value = world.call("git.folder_for", json!({})).await.unwrap();
+    assert_eq!(ours["tips"], json!([head]));
+    let theirs = there("git.folder_for", json!({ "commits": ours["tips"] }))
+        .await
+        .unwrap();
+    assert_eq!(
+        (&theirs["git"], &theirs["free"]),
+        (&json!(true), &json!(true))
+    );
+    assert_eq!(
+        theirs["has"],
+        json!([]),
+        "the commit never pushed is not there"
+    );
+    let main = world.git(&["rev-parse", "main"]);
+    let known = there("git.folder_for", json!({ "commits": [main] }))
+        .await
+        .unwrap();
+    assert_eq!(known["has"], json!([main]));
+
+    let id = "01234567-89ab-cdef-0123-456789abcdef";
+    let pack = json!({ "move": id, "thread": "t-1", "have": known["has"] });
+    let packed = world.call("git.pack_folder", pack).await.unwrap();
+    assert_eq!(packed["branch"], json!("feat/x"));
+    assert_eq!(packed["head"], json!(head));
+    assert_eq!(packed["changed"], json!(3));
+    // The folder it was packed in is as it was, its index too.
+    assert_eq!(world.index(), index);
+    assert_eq!(world.git(&["status", "--porcelain"]), before);
+    assert_eq!(world.git(&["rev-parse", "HEAD"]), head);
+
+    // Carried as the window carries it, into the other Project's data.
+    let data = async |project| {
+        let opened = world.kernel.project(project).await.unwrap();
+        opened.data().join("moves")
+    };
+    let (out, into) = (data(world.project).await, data(home).await);
+    std::fs::create_dir_all(&into).unwrap();
+    let part = into.join(format!("{id}.bundle.part"));
+    std::fs::copy(out.join(format!("{id}.bundle")), &part).unwrap();
+
+    let mut unpack = json!({
+        "move": id, "thread": "t-1", "branch": "feat/x", "head": head, "sha256": "00",
+    });
+    let refused = there("git.unpack_folder", unpack.clone())
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "another hash: {refused:?}");
+    unpack["sha256"] = packed["sha256"].clone();
+    there("git.unpack_folder", unpack.clone()).await.unwrap();
+
+    // The other folder is as this one: the branch, the commit, the changes.
+    assert_eq!(run_git(&home_folder, &["status", "--porcelain"]), before);
+    assert_eq!(run_git(&home_folder, &["rev-parse", "HEAD"]), head);
+    let branch = run_git(&home_folder, &["symbolic-ref", "--short", "HEAD"]);
+    assert_eq!(branch, "feat/x");
+    let read = |folder: &std::path::Path, name: &str| std::fs::read(folder.join(name)).ok();
+    for name in ["a.txt", "b.txt", "d.txt", "n.txt"] {
+        assert_eq!(
+            read(&home_folder, name),
+            read(&world.folder, name),
+            "{name}"
+        );
+    }
+    assert!(!part.exists(), "the bundle is taken away");
+
+    // A folder with changes of its own takes none, and no Agent asks.
+    std::fs::copy(out.join(format!("{id}.bundle")), &part).unwrap();
+    let refused = there("git.unpack_folder", unpack.clone())
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(refused.message.contains("not committed"), "{refused:?}");
+    let agent = Participant::Agent(AgentId::new());
+    let refused = (world.kernel)
+        .call(agent, "git.folder_for", Some(home), None, json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden, "{refused:?}");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_branch_that_went_another_way_there_takes_no_folders_work() {
+    let world = World::committed().await;
+    let (home, home_folder) = world.project("Home").await;
+    let from = world.folder.display().to_string();
+    run_git(&home_folder, &["pull", "--quiet", &from, "main"]);
+    // Both went on from `main`, each its own way.
+    std::fs::write(home_folder.join("theirs.txt"), "theirs\n").unwrap();
+    run_git(&home_folder, &["add", "--all"]);
+    run_git(&home_folder, &["commit", "--quiet", "-m", "theirs"]);
+    world.write("a.txt", "ours\n");
+    let head = world.commit("ours");
+    world.write("n.txt", "new\n");
+
+    let id = "01234567-89ab-cdef-0123-456789abcdef";
+    let pack = json!({ "move": id, "thread": "t-1" });
+    let packed = world.call("git.pack_folder", pack).await.unwrap();
+    let data = async |project| {
+        let opened = world.kernel.project(project).await.unwrap();
+        opened.data().join("moves")
+    };
+    let (out, into) = (data(world.project).await, data(home).await);
+    std::fs::create_dir_all(&into).unwrap();
+    let part = into.join(format!("{id}.bundle.part"));
+    std::fs::copy(out.join(format!("{id}.bundle")), part).unwrap();
+    let unpack = json!({
+        "move": id, "thread": "t-1", "branch": "main", "head": head,
+        "sha256": packed["sha256"],
+    });
+    let person = Participant::Person(world.owner);
+    let refused = (world.kernel)
+        .call(person, "git.unpack_folder", Some(home), None, unpack)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+    assert!(refused.message.contains("another way"), "{refused:?}");
+    assert_eq!(run_git(&home_folder, &["status", "--porcelain"]), "");
+    assert!(home_folder.join("theirs.txt").is_file());
+}

@@ -63,13 +63,37 @@ pub struct Packed {
     pub sha256: String,
 }
 
-/// What `agents.packed` and `agents.take_piece` name: a move's artefact
-/// from byte `at`.
+/// Which of a move's files a piece is of: the Thread's artefact, or the
+/// bundle of its folder's work, which the Git App writes beside it and
+/// reads there (ADR 0116, decision 8).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Part {
+    #[default]
+    Thread,
+    Folder,
+}
+
+impl Part {
+    fn extension(self) -> &'static str {
+        match self {
+            Part::Thread => "tar",
+            Part::Folder => "bundle",
+        }
+    }
+}
+
+/// What `agents.packed` and `agents.take_piece` name: one of a move's
+/// files from byte `at`.
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
 pub struct PieceAsk {
     #[serde(rename = "move")]
     pub id: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub part: Option<Part>,
     #[ts(type = "number")]
     pub at: u64,
 }
@@ -88,6 +112,9 @@ pub struct Piece {
 pub struct TakePiece {
     #[serde(rename = "move")]
     pub id: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub part: Option<Part>,
     #[ts(type = "number")]
     pub at: u64,
     pub data: String,
@@ -185,11 +212,21 @@ fn moves(data: &Path) -> PathBuf {
 }
 
 fn artefact(data: &Path, id: Uuid) -> PathBuf {
-    moves(data).join(format!("{id}.tar"))
+    packed_file(data, id, Part::Thread)
 }
 
 fn part(data: &Path, id: Uuid) -> PathBuf {
-    moves(data).join(format!("{id}.tar.part"))
+    carried_file(data, id, Part::Thread)
+}
+
+/// One of a move's files as it was packed here.
+fn packed_file(data: &Path, id: Uuid, part: Part) -> PathBuf {
+    moves(data).join(format!("{id}.{}", part.extension()))
+}
+
+/// One of a move's files as it is carried here, piece by piece.
+fn carried_file(data: &Path, id: Uuid, part: Part) -> PathBuf {
+    moves(data).join(format!("{id}.{}.part", part.extension()))
 }
 
 fn staging(data: &Path, id: Uuid) -> PathBuf {
@@ -335,9 +372,10 @@ fn plain(path: &Path) -> io::Result<()> {
 }
 
 /// The piece of a packed move's artefact from byte `at`.
-pub async fn packed(call: &Call, PieceAsk { id, at }: PieceAsk) -> Result<Piece, Refusal> {
+pub async fn packed(call: &Call, PieceAsk { id, part, at }: PieceAsk) -> Result<Piece, Refusal> {
     person_only(call)?;
-    let path = artefact(call.project().data(), named(&id)?);
+    let of = part.unwrap_or_default();
+    let path = packed_file(call.project().data(), named(&id)?, of);
     let read = blocking(move || {
         plain(&path)?;
         let mut file = File::open(&path)?;
@@ -357,7 +395,11 @@ pub async fn packed(call: &Call, PieceAsk { id, at }: PieceAsk) -> Result<Piece,
 
 /// Keeps a piece of a move's artefact in this Project's data, at byte
 /// `at`: the next one, or one kept already, as a piece sent again.
-pub async fn take_piece(call: &Call, TakePiece { id, at, data }: TakePiece) -> Result<(), Refusal> {
+pub async fn take_piece(
+    call: &Call,
+    TakePiece { id, part, at, data }: TakePiece,
+) -> Result<(), Refusal> {
+    let of = part.unwrap_or_default();
     person_only(call)?;
     let here = call.project();
     may_go_to(here.scratch())?;
@@ -369,7 +411,7 @@ pub async fn take_piece(call: &Call, TakePiece { id, at, data }: TakePiece) -> R
     let kept = blocking(move || {
         sweep(&data);
         fs::create_dir_all(moves(&data))?;
-        let path = part(&data, id);
+        let path = carried_file(&data, id, of);
         plain(&path)?;
         let mut file = File::options().create(true).append(true).open(&path)?;
         let size = file.metadata()?.len();
@@ -526,7 +568,10 @@ pub async fn leave(live: &Live, call: &Call, Leave { id, project }: Leave) -> Re
         .await?;
     live.forget_thread(here.id(), thread).await;
     let path = artefact(here.data(), id);
+    let folder = packed_file(here.data(), id, Part::Folder);
     let tidied = blocking(move || {
+        // Its folder's work, where the Git App packed any.
+        let _ = fs::remove_file(&folder);
         fs::remove_dir_all(&staged)?;
         fs::remove_file(&path)
     });
