@@ -67,7 +67,6 @@ import { modules as known } from "../modules"
 import {
   closedOf,
   identityOf,
-  minOf,
   runs,
   sheetsOf,
   showsOf,
@@ -83,7 +82,7 @@ import { attachTo, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
 import { useNarrow } from "./narrow"
-import { floorOf, type Reveal, shownOf } from "../tiling/layout"
+import { floorsOf, type Reveal, shownOf } from "../tiling/layout"
 import { useTiling } from "../tiling/useTiling"
 import {
   current,
@@ -772,10 +771,11 @@ export function Shell({
         const column = workspace?.columns[spot.column]
         if (!workspace || !column) return undefined
         const look = columnsOf()
+        const floor = floorsOf(workspace.id, look)
         const shown = column.entries[spot.entry]
         const listed = shown && listedIn(stores.items.get(), shown, showsOf)
         return {
-          width: share(widthIn(workspace, column, look)) ?? 0.5,
+          width: share(widthIn(workspace, column, look, floor)) ?? 0.5,
           full: column.full === true,
           deck: displayOf(column, look) === "deck",
           panes: column.entries.length,
@@ -787,7 +787,7 @@ export function Shell({
           away: awayNow.current.has(entry),
           presets: look.presets,
           heights: look.heights,
-          floor: floorOf(workspace.id, minOf(column, look.min)),
+          floor: floor?.(column) ?? 0,
           // What its Item's item actions offer here (ADR 0087, decision 12).
           items: listed
             ? paneRowsOf(listed, shown.project, parts.projects())

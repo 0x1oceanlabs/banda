@@ -17,6 +17,7 @@ import {
   runOf,
   send,
   SIZES,
+  sharedOut,
   soloed,
   shift,
   toEdge,
@@ -227,6 +228,37 @@ describe("a Group", () => {
       column: "a",
       width: "1/3",
     })
+  })
+
+  test("a Group that fills the screen fits it: a column under its floor is drawn at that, and the others give it the room (ADR 0102, decision 8)", () => {
+    expect(sharedOut([0.5, 0.5], [0.2, 0.2])).toEqual([0.5, 0.5])
+    const [wide, narrow] = sharedOut([0.6, 0.4], [0.5, 0.5])
+    expect([wide, narrow]).toEqual([0.5, 0.5])
+    // What one lacks comes from the rest, each in proportion.
+    const three = sharedOut([0.6, 0.3, 0.1], [0, 0, 0.3])
+    expect(three[2]).toBe(0.3)
+    expect(three[0] / three[1]).toBeCloseTo(2)
+    expect(three.reduce((sum, at) => sum + at)).toBeCloseTo(1)
+    // Pushed under its own floor by that, it is held there too.
+    expect(sharedOut([0.55, 0.3, 0.15], [0, 0.3, 0.3])).toEqual([0.4, 0.3, 0.3])
+    // Floors that do not fit are drawn as they are, none past the room.
+    expect(sharedOut([0.5, 0.5], [0.6, 2])).toEqual([0.6, 1])
+
+    const floor = () => 0.48
+    let group = soloed(strip("ab", "gg", 0))
+    group.list[0].columns[0].width = "2/3"
+    const widths = (state: Workspaces) =>
+      state.list[0].columns.map((column) =>
+        widthIn(state.list[0], column, SIZES, floor)
+      )
+    expect(widths(group)).toEqual(["0.52", "0.48"])
+    // A column made the screen wide makes the Group wider, as asked.
+    group.list[0].columns[0].full = true
+    expect(widths(group)[1]).toBe("0.333")
+    group.list[0].columns[0].full = undefined
+    // A press goes on to a share that shows, or round to the narrowest.
+    group = widen(group, 1, SIZES, { floor, wrap: true })
+    expect(widths(group)).toEqual(["0.48", "0.52"])
   })
 
   test("a Group's owner is the first its Panes' Items name, left to right and top down", () => {

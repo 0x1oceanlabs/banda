@@ -9,6 +9,7 @@ import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { minOf } from "../registry"
 import {
+  type Floor,
   displayOf,
   drawn,
   type Ends,
@@ -43,19 +44,19 @@ export function room(strip: HTMLElement) {
   const pad = parseFloat(style.paddingLeft) || 0
   const gap = parseFloat(style.columnGap) || 0
   const inner = strip.clientWidth - pad - (parseFloat(style.paddingRight) || 0)
-  return { pad, gap, inner }
+  return { pad, gap, inner, rem: remInPx() }
 }
+
+/** What the shares of a Strip are shares of. */
+export type Space = { gap: number; inner: number; rem: number }
 
 /**
  * The share of the room a column of `min` rem is never drawn narrower
  * than: the `min-width` the Strip gives it, as a share.
  */
-export function floorIn(
-  room: { gap: number; inner: number },
-  min: number
-): number {
+export function floorIn(room: Space, min: number): number {
   return room.inner > 0
-    ? (min * remInPx() + room.gap) / (room.inner + room.gap)
+    ? (min * room.rem + room.gap) / (room.inner + room.gap)
     : 0
 }
 
@@ -79,20 +80,29 @@ export function columnIn(strip: HTMLElement, id: string): HTMLElement | null {
   return strip.querySelector<HTMLElement>(`:scope > [data-column="${id}"]`)
 }
 
-/** The floor of a column of `min` rem in the Strip of workspace `id`; 0
- * when that Strip is not drawn. */
-export function floorOf(id: string, min: number): number {
+/** The share of `space` each column is never drawn narrower than. */
+function floorsIn(space: Space, look: Look): Floor {
+  return (column) => floorIn(space, minOf(column, look.min))
+}
+
+/** Each column's floor in the Strip of workspace `id`, while it is drawn. */
+export function floorsOf(id: string, look: Look): Floor | undefined {
   const strip = stripOf(id)
-  return strip ? floorIn(room(strip), min) : 0
+  return strip ? floorsIn(room(strip), look) : undefined
 }
 
 /** The columns of `workspace` as the look sizes them: the width each is
  * drawn at, and the least, in rem; whether it fills the screen with its
- * Group. */
-export function sized(workspace: Workspace, look: Look) {
+ * Group, which shares out `space`, when known, so it fits. */
+export function sized(
+  workspace: Workspace,
+  look: Look,
+  space: Space | undefined
+) {
+  const floor = space && floorsIn(space, look)
   return workspace.columns.map((column, c) => ({
     ...column,
-    width: widthIn(workspace, column, look),
+    width: widthIn(workspace, column, look, floor),
     min: minOf(column, look.min),
     ends: groupEnds(workspace, c),
     filled: filledAt(workspace, c),
@@ -101,8 +111,12 @@ export function sized(workspace: Workspace, look: Look) {
 
 /** The columns of `workspace` as a Strip draws them, by the look: their
  * widths, whether each is a Deck, and their Panes' heights. */
-export function drawnColumns(workspace: Workspace, look: Look) {
-  return sized(workspace, look).map((column) => ({
+export function drawnColumns(
+  workspace: Workspace,
+  look: Look,
+  space: Space | undefined
+) {
+  return sized(workspace, look, space).map((column) => ({
     ...column,
     decked: displayOf(column, look) === "deck",
     heights: heightsOf(column),
@@ -180,7 +194,7 @@ export function shownOf(
   const view = viewOf(strip)
   if (view.room.inner <= 0) return undefined
   return new Map(
-    places(strip, sized(workspace, look), view.room).map((place) => [
+    places(strip, sized(workspace, look, view.room), view.room).map((place) => [
       place.id,
       shownShare(place, view),
     ])
@@ -210,7 +224,7 @@ export function roomLeft(
   if (!strip || !focused) return undefined
   const { room: space, from, to } = viewOf(strip)
   const { gap, inner } = space
-  const taken = places(strip, sized(workspace, look), space)
+  const taken = places(strip, sized(workspace, look, space), space)
     .filter(
       (place) =>
         place.id !== focused.id &&
@@ -231,15 +245,13 @@ export function roomLeft(
 export function places(
   strip: HTMLElement,
   columns: readonly { id: string; width: Width; min: number; ends?: Ends }[],
-  { pad, gap, inner }: ReturnType<typeof room> = room(strip)
+  space: ReturnType<typeof room> = room(strip)
 ): Place[] {
+  const { pad, gap, inner } = space
   const out = (side: boolean) => (side ? gap / 2 : 0)
   let left = pad
   return columns.map((column) => {
-    const at = drawn(
-      share(column.width) ?? 0.5,
-      floorIn({ gap, inner }, column.min)
-    )
+    const at = drawn(share(column.width) ?? 0.5, floorIn(space, column.min))
     const width = at * (inner + gap) - gap
     const pads = padded(column.ends)
     left += out(pads.left)
@@ -348,6 +360,7 @@ export class ColumnMotion {
   #tiles = new Map<string, Tile>()
   #started = false
   #scroll: number | undefined
+  #inner: number | undefined
   /** The column a hand sizes: the Strip's width for it waits. */
   #held: string | undefined
 
@@ -360,12 +373,18 @@ export class ColumnMotion {
    * After each drawing: a column whose width changed grows to it from the
    * width it had; one the layout put elsewhere is drawn where it was, and
    * goes to its place; a tile not seen before comes in, and one gone goes.
-   * What is there the first time is simply there.
+   * What is there the first time is simply there. `inner` is the room
+   * the shares were worked out from, when they were.
    */
-  sync(strip: HTMLElement | null, columns: Columns) {
+  sync(strip: HTMLElement | null, columns: Columns, inner?: number) {
     const first = !this.#started
     this.#started = true
     if (!strip) return
+    // A share that changed with the room, not by a key, goes with the
+    // room: as the widths CSS works out do.
+    const roomMoved =
+      inner !== undefined && this.#inner !== undefined && inner !== this.#inner
+    this.#inner = inner
     // A Strip that got narrower than its scroll is scrolled back at once:
     // what stays goes from where it was on the screen, and what went
     // fades out there.
@@ -402,7 +421,7 @@ export class ColumnMotion {
       known.drawn = target
       if (this.#held === column.id) continue
       if (Math.abs(known.size.target - target) > 1e-9) {
-        known.size.to(target, moveOf("resize"))
+        known.size.to(target, roomMoved ? { kind: "off" } : moveOf("resize"))
       }
     }
     const tiles = new Map<string, Tile>()
@@ -436,7 +455,7 @@ export class ColumnMotion {
       const by = left - moved.left + shifted
       moved.left = left
       moved.width = moved.element.offsetWidth
-      if (Math.abs(by) < 0.5) continue
+      if (Math.abs(by) < 0.5 || roomMoved) continue
       moved.slide.to(0, moveOf("move"), moved.slide.value - by)
     }
     for (const tile of tiles.values()) {

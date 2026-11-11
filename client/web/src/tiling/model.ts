@@ -154,33 +154,63 @@ export function entries(state: Workspaces): Entry[] {
 export function widthIn(
   workspace: Workspace,
   column: Column,
-  sizes: Sizes = SIZES
+  sizes: Sizes = SIZES,
+  floor: Floor = NO_FLOOR
 ): Width {
   const c = workspace.columns.indexOf(column)
   const own = ownWidth(workspace, column, sizes)
   if (column.full || !filledAt(workspace, c)) return own
-  return free(shareAt(workspace, c, share(own) ?? 0.5, sizes))
+  return free(shareAt(workspace, c, share(own) ?? 0.5, sizes, floor))
 }
 
 /** The share of the screen the column at `c` is drawn at, were its own
  * width `at`: in a Group that fills the screen, the share it has of its
- * Group's, the others keeping theirs. */
+ * Group's, the others keeping theirs, and none under its `floor`. A
+ * column made the screen wide makes the Group wider than the screen, as
+ * the Person asked: there is nothing to share out then. */
 function shareAt(
   workspace: Workspace,
   c: number,
   at: number,
-  sizes: Sizes
+  sizes: Sizes,
+  floor: Floor
 ): number {
   if (!filledAt(workspace, c)) return at
   const { start, end } = runOf(workspace.columns, c)
-  const others = workspace.columns
-    .slice(start, end)
-    .filter((_, i) => start + i !== c)
-    .reduce(
-      (sum, one) => sum + (share(ownWidth(workspace, one, sizes)) ?? 0.5),
-      0
+  const run = workspace.columns.slice(start, end)
+  const wants = run.map((one, i) =>
+    start + i === c ? at : (share(ownWidth(workspace, one, sizes)) ?? 0.5)
+  )
+  const whole = wants.reduce((sum, want) => sum + want, 0)
+  const shares = wants.map((want) => want / whole)
+  const wider = run.some((one, i) => one.full && start + i !== c)
+  return (wider ? shares : sharedOut(shares, run.map(floor)))[c - start]
+}
+
+/**
+ * The shares columns that fill the screen together are drawn at, from the
+ * `shares` they ask, which add up to the whole: none under its `floor`,
+ * and what that takes comes from the ones above theirs, each in
+ * proportion. Floors that do not fit are drawn as they are, and the Strip
+ * scrolls.
+ */
+export function sharedOut(
+  shares: readonly number[],
+  floors: readonly number[]
+): number[] {
+  const least = floors.map((floor) => Math.min(1, floor))
+  const held = new Set<number>()
+  const sum = (of: readonly number[], kept: boolean) =>
+    of.reduce((all, one, i) => all + (held.has(i) === kept ? one : 0), 0)
+  for (;;) {
+    const scale = (1 - sum(least, true)) / sum(shares, false)
+    const under = shares.flatMap((at, i) =>
+      !held.has(i) && at * scale < least[i] ? [i] : []
     )
-  return at / (at + others)
+    if (under.length === 0)
+      return shares.map((at, i) => (held.has(i) ? least[i] : at * scale))
+    for (const i of under) held.add(i)
+  }
 }
 
 /** The columns of the Group the one at `c` is in, from `start` to before
@@ -208,6 +238,18 @@ export function filledAt(workspace: Workspace, c: number): boolean {
   return (
     workspace.solo === true ||
     (column.group !== undefined && workspace.filled === column.group)
+  )
+}
+
+/** Whether columns of `workspace` share the screen: a Group of two or
+ * more that fills it. */
+export function sharesScreen(workspace: Workspace): boolean {
+  const { columns } = workspace
+  return columns.some(
+    ({ group }, c) =>
+      group !== undefined &&
+      group === columns[c + 1]?.group &&
+      filledAt(workspace, c)
   )
 }
 
@@ -861,6 +903,11 @@ function alike(a: number, b: number | undefined): boolean {
   return b !== undefined && Math.abs(a - b) < EPSILON
 }
 
+/** The share of the room a column is never drawn narrower than. */
+export type Floor = (column: Column) => number
+
+const NO_FLOOR: Floor = () => 0
+
 /** The share a column of share `at` is drawn at: at least `floor`, the
  * share its `min` asks for, and at most the whole room. */
 export function drawn(at: number, floor: number): number {
@@ -871,7 +918,7 @@ export function drawn(at: number, floor: number): number {
  * Steps the focused column's width to the next of `presets`, wider or
  * narrower, as niri does: from whatever width it has, the nearest preset
  * past it. It steps by the width the column is drawn at: in a window where
- * `floor` (the share the column is never drawn narrower than) makes two
+ * `floor` (the share a column is never drawn narrower than) makes two
  * presets look the same, it goes past both, and where no step shows, it
  * stays. With `wrap`, past the widest it goes to the narrowest, and back,
  * as niri's Mod+R does.
@@ -880,7 +927,7 @@ export function widen(
   state: Workspaces,
   by: 1 | -1,
   sizes: Sizes = SIZES,
-  { floor = 0, wrap = false }: { floor?: number; wrap?: boolean } = {}
+  { floor = NO_FLOOR, wrap = false }: { floor?: Floor; wrap?: boolean } = {}
 ): Workspaces {
   const workspace = current(state)
   const c = workspace.focus
@@ -890,7 +937,8 @@ export function widen(
   // as its share of the Group's: each step goes on to one that shows, and
   // a column that fills the screen alone has none, so the row never comes
   // back at a width the Person did not see (ADR 0102, decision 8).
-  const shows = (at: number) => drawn(shareAt(workspace, c, at, sizes), floor)
+  const shows = (at: number) =>
+    drawn(shareAt(workspace, c, at, sizes, floor), floor(column))
   const own = share(ownWidth(workspace, column, sizes)) ?? 0.5
   const now = column.full ? 1 : shows(own)
   // Of the presets drawn alike, the widest stands for them all.

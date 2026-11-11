@@ -424,7 +424,7 @@ describe("focus and moves inside a workspace", () => {
 
   test("widths step by what the window draws", () => {
     // A narrow window: 1/3, 1/2 and 2/3 are all drawn at the floor.
-    const floor = 0.8
+    const floor = () => 0.8
     let state = open(start(), A, thread("t1"), { width: "1/2" })
     expect(widen(state, -1, SIZES, { floor })).toBe(state)
     state = widen(state, 1, SIZES, { floor })
@@ -432,7 +432,7 @@ describe("focus and moves inside a workspace", () => {
     state = widen(state, -1, SIZES, { floor })
     expect(width(state)).toBe("2/3")
     // Too narrow for any step to show: it stays.
-    expect(widen(state, 1, SIZES, { floor: 1 })).toBe(state)
+    expect(widen(state, 1, SIZES, { floor: () => 1 })).toBe(state)
   })
 
   test("Alt+R goes round the widths", () => {
@@ -444,7 +444,7 @@ describe("focus and moves inside a workspace", () => {
     state = widen(state, -1, SIZES, { wrap: true })
     expect(width(state)).toBe("1")
     // In a narrow window, round from the whole screen to the floor.
-    state = widen(state, 1, SIZES, { wrap: true, floor: 0.8 })
+    state = widen(state, 1, SIZES, { wrap: true, floor: () => 0.8 })
     expect(width(state)).toBe("2/3")
   })
 
