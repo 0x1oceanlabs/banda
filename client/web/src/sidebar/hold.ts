@@ -19,6 +19,7 @@ import type { Stand } from "@banda/ui/status"
 import { wakes } from "@banda/ui/lib/words"
 import type { Row } from "./arrange"
 import type { Block, Entry } from "./inbox"
+import type { Undoable } from "./undo"
 
 /** A row's key: its Project's and its own, as Alt+U and the counts walk
  * them. */
@@ -42,9 +43,10 @@ export function keyOf(host: string | undefined, thread: string): string {
  * pointer. */
 export type By = "key" | "pointer"
 
-/** An act of the Person's on a card in this window: how, and where the
- * card stood as they took it. */
-export type Own = { by: By; was: Stand }
+/** An act of the Person's on a card in this window: how, where the card
+ * stood as they took it, and what puts that back, where its ghost line
+ * offers Undo. */
+export type Own = { by: By; was: Stand; undo?: Undoable }
 
 /** The cards the Person acted on in this window while the list held, by
  * their keys. */
@@ -322,6 +324,21 @@ export const GRACE = 150
  * rows below a slot an act by key closed have snapped up, in ms: the
  * next click meant for the card that went never lands on another's. */
 export const QUIET = 250
+
+/** How long no card shows its actions by the pointer after a wheel, a
+ * scroll or a key that moves in the list, in ms (spec S7a): a card that
+ * comes under a still pointer is not one it went to. */
+export const CALM = 300
+
+/** The keys that move in the list, by their codes. */
+export const MOVING_KEYS: ReadonlySet<string> = new Set([
+  "ArrowUp",
+  "ArrowDown",
+  "Home",
+  "End",
+  "PageUp",
+  "PageDown",
+])
 
 /** The keys that hold the list while it has the focus, by their codes:
  * the pick's, opening, and the acts on a card. */

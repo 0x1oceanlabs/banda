@@ -23,6 +23,7 @@ import type { Block, Tab } from "./inbox"
 import { DUR_FAST } from "./motion"
 import { order, useElsewhere } from "./order"
 import type { Settings } from "./settings"
+import type { Undoable } from "./undo"
 import { type Holding, useHold, useOwnKeys } from "./useHold"
 
 /** How long the first change of a list left alone waits for the others
@@ -35,10 +36,12 @@ const NOT_LEAVING: ReadonlyMap<string, Went> = new Map()
 
 /** What the list holds, the view it is drawn in, and the Later clock its
  * words read: the cards the Person's pointer took away, each a ghost line
- * in its slot, and, while it holds, those that left otherwise, dimmed in
- * theirs. `scene` changes as the view does. */
+ * in its slot, with what takes each back where its act said, and, while
+ * it holds, those that left otherwise, dimmed in theirs. `scene` changes
+ * as the view does. */
 export type Holds = {
   ghosts: ReadonlyMap<string, Went>
+  undos: ReadonlyMap<string, Undoable>
   leaving: ReadonlyMap<string, Went>
   scene: unknown
   now: number
@@ -168,12 +171,16 @@ export function useOrdered(
     if (closed) quietUntil.current = performance.now() + DUR_FAST + QUIET
   }, [closed])
   const quiet = useCallback(() => performance.now() < quietUntil.current, [])
-  // Each act is told with where its card stood: `hold` applies it once
-  // its card has gone where only an act takes it.
+  // Each act is told with where its card stood, and what takes it back:
+  // `hold` applies it once its card has gone where only an act takes it.
   const act = useCallback(
-    (row: Row, how?: By) =>
+    (row: Row, how?: By, undo?: Undoable) =>
       setMine((acts) =>
-        new Map(acts).set(itemKey(row), { by: how ?? by(), was: row.stand })
+        new Map(acts).set(itemKey(row), {
+          by: how ?? by(),
+          was: row.stand,
+          ...(undo ? { undo } : {}),
+        })
       ),
     [by]
   )
@@ -186,8 +193,18 @@ export function useOrdered(
     fresh.rows.find((row) => isCurrent(row.project.id, row.listed.pane)),
     holder
   )
+  const undos = useMemo(
+    () =>
+      new Map(
+        [...mine].flatMap(([key, { undo }]) =>
+          undo ? [[key, undo] as const] : []
+        )
+      ),
+    [mine]
+  )
   const holds: Holds = {
     ghosts: kept.ghosts,
+    undos,
     // Left alone, a card that left goes in the batch as all else lands,
     // by a fade, and is never dimmed first.
     leaving: holding ? kept.leaving : NOT_LEAVING,

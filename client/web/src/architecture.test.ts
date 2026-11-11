@@ -1478,6 +1478,7 @@ const BY_DOES = [
   "web/src/sidebar/SectionView.tsx: itemActionOf",
   "web/src/sidebar/items.ts: action.does",
   "web/src/sidebar/items.ts: itemActionOf",
+  "web/src/sidebar/undo.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
