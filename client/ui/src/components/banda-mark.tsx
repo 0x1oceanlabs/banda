@@ -118,6 +118,7 @@ const LIDS = ["top", "bottom", "top", "bottom"] as const
 export function BandaMark({
   state = "rest",
   doing,
+  held = false,
   variant = "logo",
   playful = 30,
   news = false,
@@ -131,6 +132,9 @@ export function BandaMark({
    * held (`heldDoing`), and said by `data-doing`. Without, the logo's
    * calm series. */
   doing?: MarkDoing
+  /** Its `doing` has held already, as a card holds it with its words:
+   * shown at once. */
+  held?: boolean
   /** `logo`: the three tiles; `agent`: the Agent's tile alone. */
   variant?: "logo" | "agent"
   /** Seconds between the logo's tricks while at rest; 0 for none. */
@@ -172,8 +176,8 @@ export function BandaMark({
   }, [variant])
 
   useEffect(() => {
-    animator.current?.set({ state, doing, playful, news, beat })
-  }, [state, doing, playful, news, beat, variant])
+    animator.current?.set({ state, doing, held, playful, news, beat })
+  }, [state, doing, held, playful, news, beat, variant])
 
   const logo = variant === "logo"
   return (
@@ -1219,11 +1223,14 @@ export function ThreadMark({
   listed,
   look = listed.mark,
   doing,
+  held,
   className,
 }: {
   listed: Listed
   look?: MarkState
   doing?: MarkDoing
+  /** Its `doing` has held already, as its card's words hold it. */
+  held?: boolean
   className?: string
 }) {
   // A Thread's id is a UUIDv7, the same on every machine and unlike any
@@ -1233,6 +1240,7 @@ export function ThreadMark({
       variant="agent"
       state={look}
       doing={doing}
+      held={held}
       playful={0}
       beat={listed.id}
       label={MARK_WORDS[look]}
@@ -1325,6 +1333,7 @@ type Parts = {
 type Asked = {
   state: MarkState
   doing?: MarkDoing
+  held: boolean
   playful: number
   news: boolean
   beat: string
@@ -1477,11 +1486,11 @@ export class Animator {
 
   /** Draws what it was asked, as of `ms`. */
   private take(ms: number) {
-    const { state, doing, playful, news, beat } = this.asked!
+    const { state, doing, held, playful, news, beat } = this.asked!
     const now = ms / 1000
     this.playful = playful
     const look = this.logo && state === "idle" ? "rest" : state
-    const shown = shownOf(look, this.hold(look, doing, ms))
+    const shown = shownOf(look, this.hold(look, doing, held, ms))
     if (this.drawn && shown === this.shown) {
       // Another Thread's mark now, it keeps that Thread's rhythm.
       if (beat !== this.beat) {
@@ -1517,11 +1526,13 @@ export class Animator {
    * What its Agent shows as doing at `ms`, if it is at work in `look`, and
    * now does `doing` (ADR 0099, decision 2): what it showed until that
    * held `HOLD`, then the latest, which waits that long on one timer for
-   * every mark (`holdUntil`); `data-doing` says it. None otherwise.
+   * every mark (`holdUntil`); one `held` already, at once. `data-doing`
+   * says it. None otherwise.
    */
   private hold(
     look: MarkState,
     doing: MarkDoing | undefined,
+    held: boolean,
     ms: number
   ): MarkDoing | undefined {
     if (!works(look)) {
@@ -1530,12 +1541,12 @@ export class Animator {
       this.svg.removeAttribute("data-doing")
       return undefined
     }
-    const held = heldDoing(this.held, doing, ms)
-    this.held = held
-    if (held.doing === doing) unhold(this)
-    else holdUntil(this, held.since + HOLD)
-    this.svg.setAttribute("data-doing", shownOf(look, held.doing))
-    return held.doing
+    const shows = held ? { doing, since: ms } : heldDoing(this.held, doing, ms)
+    this.held = shows
+    if (shows.doing === doing) unhold(this)
+    else holdUntil(this, shows.since + HOLD)
+    this.svg.setAttribute("data-doing", shownOf(look, shows.doing))
+    return shows.doing
   }
 
   /** What it shows at `now`: what it last drew, moved by the loops marks.css

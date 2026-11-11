@@ -9,6 +9,13 @@ import { projectLabel } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { short } from "@banda/ui/lib/words"
 import {
+  type Does,
+  type Held,
+  heldDoing,
+  HOLD,
+  sameDoes,
+} from "@banda/ui/status"
+import {
   ArchiveRestoreIcon,
   CheckIcon,
   ClockIcon,
@@ -22,6 +29,7 @@ import {
   Fragment,
   type ReactNode,
   useContext,
+  useState,
 } from "react"
 import { type Act, actsWidth } from "./acts"
 import {
@@ -31,10 +39,12 @@ import {
   type Slot,
   spokenOf,
   STRAYED,
+  timeShown,
   timesOf,
+  worksWords,
 } from "./card"
 import { CardTime } from "./CardStatus"
-import { dueOf, useClock } from "./clock"
+import { dueOf, useClock, useWakeAt } from "./clock"
 import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
@@ -73,17 +83,18 @@ export const ACT_LOOK: Readonly<
  * A sidebar card (ADR 0098, decisions 8 and 9), drawn from its model
  * (`card.ts`): one to three lines, each a left and a right, lines 2 and 3
  * under the title, past the mark. Colour is only on a call's mark and
- * time. It is drawn again only as one of its times changes (`clock.ts`).
- * It is an option of the list, which keys pick (decision 13): it has no
- * focus of its own, and its ring shows while the list has the focus and
- * the last input was a key (`globals.css`). A click opens the Pane it
- * stands for, by `pane.pick`; a screen reader hears it by `spokenOf`.
- * Under the pointer, or always on a coarse pointer, its acts show at line
- * 1's right, in the time's place (decision 10): no Tab stops, as keys and
- * menu rows do the same.
+ * time. It is drawn again only as one of its times changes (`clock.ts`),
+ * or, at work, as what its Agent does shows (`useHeld`). It is an option
+ * of the list, which keys pick (decision 13): it has no focus of its own,
+ * and its ring shows while the list has the focus and the last input was
+ * a key (`globals.css`). A click opens the Pane it stands for, by
+ * `pane.pick`; a screen reader hears it by `spokenOf`. Under the pointer,
+ * or always on a coarse pointer, its acts show at line 1's right, in the
+ * time's place (decision 10): no Tab stops, as keys and menu rows do the
+ * same.
  */
 export function Card({
-  card,
+  card: model,
   row,
   current,
   picked = false,
@@ -107,6 +118,7 @@ export function Card({
   /** The Harness list its emblem is read from; none, the Harness's own. */
   harnesses?: readonly EmblemOf[]
 }) {
+  const card = useHeld(model)
   const onOpen = useOpenRow(row)
   const now = useCardClock(card)
   const spoken = spokenOf(card, now)
@@ -297,6 +309,28 @@ export function CardLines({
   })
 }
 
+/**
+ * `card` as it shows what its Agent does at work (ADR 0099, decision 2):
+ * held as a Mark holds what it shows, each doing at least `HOLD`
+ * (`heldDoing`), so its words, its time and its Mark never disagree. A
+ * first shows at once; the list's clock takes each next one by the time
+ * it comes, once the one shown has held. Nothing holds while it does not
+ * work.
+ */
+function useHeld(card: CardModel): CardModel {
+  const { does } = card
+  const [held, setHeld] = useState<Held<Does> | undefined>(
+    () => does && { doing: does, since: Date.now() }
+  )
+  if (!does && held) setHeld(undefined)
+  const waits = does && !(held && sameDoes(held.doing, does))
+  useWakeAt(
+    waits ? (held ? held.since + HOLD : 0) : undefined,
+    (now) => does && setHeld((was) => heldDoing(was, does, now, sameDoes))
+  )
+  return waits && held ? { ...card, does: held.doing } : card
+}
+
 /** The mark of a Thread away from its Project's workspace (ADR 0102,
  * decision 6): a small diamond, as an arrow is the sign of a Pane in its
  * own window, where the card's acts never cover it. A screen reader
@@ -326,16 +360,22 @@ function Piece({
   switch (slot.kind) {
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
-      // decisions 1 and 10; ADR 0107 for a working one's muted blue).
+      // decisions 1 and 10; ADR 0107 for a working one's muted blue); at
+      // work, what its card holds its Agent does.
       return (
-        <ThreadMark listed={row.listed} look={slot.look} doing={slot.doing} />
+        <ThreadMark
+          listed={row.listed}
+          look={slot.look}
+          doing={card.does?.doing}
+          held
+        />
       )
     case "title":
       return <Title row={row} card={card} />
     case "time":
       return (
         <CardTime
-          time={card.time}
+          time={timeShown(card)}
           now={card.away?.since ?? now}
           quiet={card.quiet}
         />
@@ -360,6 +400,18 @@ function Piece({
           )}
           {slot.word && rest && " "}
           {rest}
+        </FadeText>
+      )
+    }
+    case "works": {
+      // As its time, muted a step more than a call's words (§2.5).
+      const words = card.does && worksWords(card.does, card.away?.since ?? now)
+      return (
+        <FadeText
+          tip={words || undefined}
+          className="flex-1 text-xs text-muted-foreground/60"
+        >
+          {words}
         </FadeText>
       )
     }
