@@ -101,7 +101,8 @@ arc and an act arc does not run (step 1a), and arc's Thread restored as
 the window starts again while arc is away (step 1a″);
 `remote-terminal.spec.ts`, arc's terminal: keys, its size, a link, and a
 shell found again once arc is back (step 1b), Ended as Banda restarts on
-arc, and a program there that holds no update here (step 1d);
+arc, and a program there that holds no update here (step 1d), and a path
+it prints opening arc's file (step 3c);
 `remote-run.spec.ts`, a reply's Run and a sign-in on arc, and Run
 refused while arc is away (step 1c);
 `remote-git.spec.ts`, arc's Diff, its card, a refused Commit and a push
@@ -109,7 +110,8 @@ cut off (step 2a);
 `remote-bytes.spec.ts`, this machine's pictures, PDFs, videos and pages
 through the relay to its engine, beside arc's at the same path (step 4b);
 `remote-files.spec.ts`, arc's Files: its tree, an edit saved to arc, the
-Trash and Undo, a refused drag, a held arc (step 3b).
+Trash and Undo, a refused drag, a held arc (step 3b), and a reply's
+paths and links (step 3c).
 Here,
 outside CI, the spec requires the namespace where `unshare -Ur true`
 works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as

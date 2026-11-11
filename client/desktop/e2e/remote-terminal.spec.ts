@@ -6,10 +6,11 @@
  * away finds its shell and gives it its size once arc is back; a public
  * link opens in this device's browser, and arc's own address says it is
  * arc's. Banda restarted on arc says Ended, and starts no shell by itself
- * (the `ended` road); and a program there holds no update here (the
- * `update-wait` road). The same-path job runs this spec with arc in a
- * mount namespace of its own (ci.yml's `same-path`). With BANDA_E2E_SHOTS
- * set to a folder, it leaves pictures of what it checks.
+ * (the `ended` road); a program there holds no update here (the
+ * `update-wait` road); and a path it prints opens arc's file (step 3c, the
+ * `paths` road). The same-path job runs this spec with arc in a mount
+ * namespace of its own (ci.yml's `same-path`). With BANDA_E2E_SHOTS set to
+ * a folder, it leaves pictures of what it checks.
  */
 import { existsSync } from "node:fs"
 import { join } from "node:path"

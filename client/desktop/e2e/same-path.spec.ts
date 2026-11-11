@@ -326,8 +326,8 @@ test("Quick Look on arc's file from the Banda menu shows arc's who.txt", async (
 })
 
 /** A key that shows arc's `file` in Quick Look, as a line of keys.toml
- * says, the file and its Project named: on arc, no gesture reaches the
- * action yet, Files' tree and reply paths coming with 3b and 3c. */
+ * says, the file and its Project named, without Files' tree or a reply's
+ * path between. */
 const QUICK_LOOK = "Control+Alt+KeyH"
 
 async function bindQuickLook(file: string, project: string) {
@@ -479,6 +479,7 @@ test("step 3c: a path in arc's reply opens arc's file", async () => {
     .click()
   const peek = page.locator("[data-peek]")
   await expect(peek.getByText("arc", { exact: true })).toBeVisible()
+  await expect(peek.getByText("mac", { exact: true })).toHaveCount(0)
 })
 
 test("step 3c: a path arc's terminal prints opens arc's file", async () => {
