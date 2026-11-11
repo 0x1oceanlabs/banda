@@ -935,8 +935,6 @@ const LAYOUT_MOTION = [
   "apps/agents/pane/src/thread/Minimap.tsx: transition-all",
   "apps/files/pane/src/acts.tsx: transition-[width]",
   "client/ui/src/components/button.tsx: transition-all",
-  "client/ui/src/components/level-slider.tsx: transition-[inset-inline-start,scale,box-shadow]",
-  "client/ui/src/components/level-slider.tsx: transition-[width]",
   "client/ui/src/components/trace.tsx: transition-[height]",
   "client/ui/src/styles/globals.css: @keyframes update-in",
   "client/ui/src/styles/globals.css: @keyframes update-out",
