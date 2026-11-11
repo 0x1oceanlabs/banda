@@ -14,7 +14,7 @@ import type { Quiet, Time, Tone } from "./card"
 
 /** Each call's colour, as the Mark's; woke's yellow darker on a light
  * theme, where it is small text. */
-const TONES: Readonly<Record<Tone, string>> = {
+export const TONES: Readonly<Record<Tone, string>> = {
   ...COLOR_CLASS,
   woke: "text-woke-text",
 }

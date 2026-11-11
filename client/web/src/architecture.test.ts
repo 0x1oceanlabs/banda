@@ -440,7 +440,6 @@ const DESKTOP_READS: Record<string, number> = {
   "client/web/src/settings/SettingRow.tsx": 2,
   "client/web/src/settings/Settings.tsx": 1,
   "client/web/src/sharing/AskToShare.tsx": 1,
-  "client/web/src/sidebar/Foot.tsx": 1,
   "platform/notifications/pane/src/desktop.ts": 1,
 }
 
@@ -539,6 +538,9 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
   },
   "web/src/sidebar/SectionView.tsx": {
     SectionView: ["isCurrent", "onToggle", "withMenu"],
+  },
+  "web/src/sidebar/GroupHeader.tsx": {
+    GroupHeader: ["onFold"],
   },
   "web/src/sidebar/ProjectsList.tsx": {
     ProjectsList: ["onPick", "withMenu"],
@@ -1158,12 +1160,12 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
  * `byOrder`: the sidebar list's file, the counts', Alt+U's, and a file
  * that reads a place in it, as Alt+U's start does, sort nothing by
  * themselves. What a file takes is read in each form of import and
- * re-export (`valuesTaken`), and neither `arrange`'s module nor `order`'s
- * is taken whole, so none takes `arrange` by another name.
+ * re-export (`valuesTaken`), and neither the rows' module nor `order`'s
+ * is taken whole, so none gathers the rows by another name.
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
   const sidebar = join(app, "web/src/sidebar")
-  const arranging = join(sidebar, "arrange")
+  const rowing = join(sidebar, "rows")
   const ordering = join(sidebar, "order")
   const taken = new Map(
     sources(join(app, "web/src"), { tests: false }).map((file) => [
@@ -1175,11 +1177,8 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
     [...taken]
       .filter(([, of]) => of[module]?.includes(name))
       .map(([file]) => file)
-  expect([...taking(arranging, "*"), ...taking(ordering, "*")]).toEqual([])
-  expect([
-    ...taking(arranging, "arrange"),
-    ...taking(ordering, "arrange"),
-  ]).toEqual(["web/src/sidebar/order.ts"])
+  expect([...taking(rowing, "*"), ...taking(ordering, "*")]).toEqual([])
+  expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/order.ts"])
   const list = "web/src/sidebar/useOrdered.ts"
   // The parts that draw the list take its order as it comes.
   const drawing = [

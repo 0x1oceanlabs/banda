@@ -9,7 +9,7 @@ import {
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { useLaterClock, useLists } from "../calls/stores"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import {
   type By,
   hold,
@@ -108,7 +108,7 @@ export function useOrdered(
       someday,
     ]
   )
-  const { holding, take, by, list } = useHold()
+  const { holding, take, by, list } = useHold({ still: settings.hold.still })
   // What is drawn, as its blocks, and what the Person did while it held.
   const [drawn, setDrawn] = useState<readonly Block[]>(fresh.blocks)
   const [mine, setMine] = useState<Mine>(NO_ACTS)

@@ -23,7 +23,7 @@ import {
   type Stand,
   STAND_WORDS,
 } from "@banda/ui/status"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { type Went, wentWords } from "./hold"
 import type { OnRow } from "./machine-on-row"
 

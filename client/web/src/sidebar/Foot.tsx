@@ -1,16 +1,5 @@
 import { Button } from "@banda/ui/components/button"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@banda/ui/components/dropdown-menu"
-import {
   Popover,
   PopoverClose,
   PopoverContent,
@@ -20,38 +9,21 @@ import {
 } from "@banda/ui/components/popover"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
-import {
-  BellIcon,
-  BellOffIcon,
-  FileCogIcon,
-  ListFilterIcon,
-  SettingsIcon,
-} from "lucide-react"
+import { BellIcon, BellOffIcon, SettingsIcon } from "lucide-react"
 import { useState } from "react"
-import { device } from "../boot"
 import { choicesAt, quiet, quietWords, useQuiet } from "../calls/quiet"
-import { useLookSidebar } from "../look"
 import { useOpen } from "./open"
-import { PRESET_WORDS } from "./settings"
+import { ViewMenu } from "./ViewMenu"
 
 /**
- * The sidebar's foot (ADR 0098, decision 21): Banda's settings, how the
- * sidebar arranges, and Quiet, as icons with no words, each tooltip with
- * its key in force where it has one. The key sheet and the theme went to
- * the Banda menu, which the bar's logo opens, and Add Project to ✎'s
- * menu. Its view menu writes the preset into `sidebar.toml`, through the
- * desktop, and the new arrangement comes back with the look.
+ * The sidebar's foot (ADR 0098, decision 21): Banda's settings, the view
+ * menu and Quiet, as icons with no words, each tooltip with its key in
+ * force where it has one. The key sheet and the theme went to the Banda
+ * menu, which the bar's logo opens, and Add Project to ✎'s menu.
  */
 export function Foot() {
-  const { preset, presets } = useLookSidebar()
   const keyFor = useKeyLabel()
   const open = useOpen()
-  const host = window.banda
-  const edit = () => {
-    host?.sidebar.edit().catch((error: unknown) => {
-      console.error("banda: sidebar.toml did not open", error)
-    })
-  }
   return (
     <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
       <Button
@@ -64,53 +36,7 @@ export function Foot() {
       >
         <SettingsIcon />
       </Button>
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <Button
-              variant="ghost"
-              size="icon-sm"
-              aria-label={`View: ${preset}`}
-              title={`View: ${preset}`}
-              className="text-muted-foreground"
-            >
-              <ListFilterIcon />
-            </Button>
-          }
-        />
-        <DropdownMenuContent side="top" className="w-auto min-w-60">
-          <DropdownMenuGroup>
-            <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
-            <DropdownMenuRadioGroup
-              value={preset}
-              onValueChange={(next: string) => device.sidebar.preset(next)}
-            >
-              {presets.map(({ name, origin }) => (
-                <DropdownMenuRadioItem
-                  key={name}
-                  value={name}
-                  disabled={!host}
-                  closeOnClick
-                >
-                  <span className="flex flex-col">
-                    <span className="capitalize">{name}</span>
-                    <span className="text-xs text-muted-foreground">
-                      {origin === "yours"
-                        ? "Your own preset"
-                        : PRESET_WORDS[name]}
-                    </span>
-                  </span>
-                </DropdownMenuRadioItem>
-              ))}
-            </DropdownMenuRadioGroup>
-          </DropdownMenuGroup>
-          <DropdownMenuSeparator />
-          <DropdownMenuItem disabled={!host} onClick={edit}>
-            <FileCogIcon />
-            Edit sidebar.toml
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      <ViewMenu />
       <QuietBell />
       {/* The machines come on the right (S13). */}
     </div>

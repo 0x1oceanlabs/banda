@@ -2,7 +2,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { expect, test } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { inboxOf, type InboxView } from "./inbox"
 import { type Region, regionsOf } from "./regions"
 

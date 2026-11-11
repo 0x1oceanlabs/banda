@@ -284,7 +284,7 @@ pub struct BarSettings {
 #[ts(export, export_to = "sidebar/")]
 pub struct Sidebar {
     /// Where the Person's `sidebar.toml` is, there or not: the view menu
-    /// writes the preset into it.
+    /// writes its keys into it, and opens it.
     pub file: String,
     /// The preset in force.
     pub preset: String,

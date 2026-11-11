@@ -13,11 +13,13 @@ import type {
   ProjectId,
   ProjectSummary,
 } from "@banda/contract"
+import type { GroupBy } from "@banda/contract/sidebar"
 import { standOf } from "@banda/ui/status"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
+import { GROUP_WORDS } from "../sidebar/settings"
 import { type Answer, ANSWERS } from "../trust/trust"
 import {
   type LookRow,
@@ -43,7 +45,7 @@ export type Choice =
     }
   /** A branch: the Project's Threads, and a new one there. */
   | { kind: "project"; id: string; project: ProjectSummary }
-  /** A branch: the sidebar's presets. */
+  /** A branch: how the sidebar's list is grouped. */
   | { kind: "views"; id: string }
   /** A branch: the schemes of the theme in force, and Themes… (ADR 0098,
    * decision 21). */
@@ -69,8 +71,8 @@ export type Choice =
   | { kind: "ask"; id: string; words: string; project?: ProjectId }
   /** What a module's source found; choosing it runs it. */
   | { kind: "found"; id: string; row: MenuRow }
-  /** Arranges the sidebar by a preset (ADR 0008). */
-  | { kind: "preset"; id: string; name: string; current: boolean }
+  /** Groups the sidebar's list (ADR 0098, decision 7). */
+  | { kind: "group"; id: string; group: GroupBy; current: boolean }
   /** Runs one of a Thread's item actions on it, by its id (ADR 0087,
    * decision 12): Later…, Wake now, Archive thread. */
   | {
@@ -176,6 +178,8 @@ export function branchName(branch: Branch): string {
 }
 
 const VIEWS = "Sidebar view"
+/** The ways to group the sidebar's list, in the view menu's order. */
+const GROUPS = Object.keys(GROUP_WORDS) as GroupBy[]
 const ADD_PROJECT = "Add Project"
 /** T3 Code's words for finding a missing folder. */
 export const LOCATE = "Locate folder"
@@ -378,8 +382,8 @@ export type Sources = {
   lists: Lists
   projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
-  /** The sidebar's presets, and the one in force. */
-  presets: { names: readonly string[]; current: string }
+  /** How the sidebar's list is grouped now. */
+  group: GroupBy
   /** The theme in force, and the themes there are. */
   theme: Theming
   /** The clock a Thread's Later is read by (ADR 0074). */
@@ -449,7 +453,7 @@ export function menuOf({
   inside?: Branch
   sources: Sources
 }): Group[] {
-  const { lists, projects, presets, theme, found, weight } = sources
+  const { lists, projects, group, theme, found, weight } = sources
   const byRecent = byRecentAt(sources.now)
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
@@ -506,13 +510,13 @@ export function menuOf({
       {
         label: "",
         rows: fitting(
-          presets.names.map((name) => ({
-            kind: "preset" as const,
-            id: `preset:${name}`,
-            name,
-            current: name === presets.current,
+          GROUPS.map((by) => ({
+            kind: "group" as const,
+            id: `group:${by}`,
+            group: by,
+            current: by === group,
           })),
-          (row) => [row.name]
+          (row) => [GROUP_WORDS[row.group], "group by"]
         ),
       },
     ])

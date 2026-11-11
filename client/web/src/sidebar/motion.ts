@@ -19,7 +19,8 @@
  * Only rows in view, and one each side, move; past 24 moves the whole
  * batch snaps, as it does while the list is hidden, searched, motionless
  * (`[motion] off`, reduced motion) or drawn afresh (a tab, a fold, a cut
- * list shown whole).
+ * list shown whole). A group the Person unfolds is the one move of a
+ * scene: the rows it shows fade in, quickly; one folded shuts at once.
  */
 import { type RefObject, useLayoutEffect, useRef } from "react"
 import type { Stand } from "@banda/ui/status"
@@ -282,6 +283,24 @@ export function plan(
   return { leaves, arrivals, crossfades, shifts, snap: moves > MOST }
 }
 
+/** The items of `next` in the groups `drawn` had folded: the rows a
+ * group shows as it unfolds. */
+export function unfolded(
+  drawn: readonly Item[],
+  next: readonly Item[]
+): string[] {
+  const shut = new Set(
+    drawn.flatMap((item) =>
+      item.kind === "piece" && item.piece.kind === "group" && item.piece.folded
+        ? [item.key]
+        : []
+    )
+  )
+  return next
+    .filter((item) => shut.has(item.region) && item.key !== item.region)
+    .map((item) => item.key)
+}
+
 /** Whether the window moves nothing: `[motion] off`, or the system asks
  * for reduced motion. */
 function motionless(): boolean {
@@ -385,13 +404,29 @@ export function useListMotion(
       element.remove()
     }
     going.current.clear()
-    if (scened || searching || document.hidden || motionless()) return
+    if (searching || document.hidden || motionless()) return
     const moves = plan(before.items, items, {
       heights: heights.current,
       view: viewOf(root),
     })
-    if (!moves.snap) play(root, moves, before.items, items, gone, going.current)
+    if (scened) {
+      // What a group unfolds shows, in view, fades in; the rest snaps.
+      const opened = new Set(unfolded(before.items, items))
+      const shown = moves.arrivals.filter((key) => opened.has(key))
+      if (shown.length <= MOST) fadeIn(elements.current, shown)
+    } else if (!moves.snap)
+      play(root, moves, before.items, items, gone, going.current)
   })
+}
+
+/** The items of `keys` among `drawn` fade in over `--dur-fast`. */
+function fadeIn(drawn: ReadonlyMap<string, HTMLElement>, keys: string[]) {
+  for (const key of keys)
+    drawn.get(key)?.animate([{ opacity: 0 }, { opacity: 1 }], {
+      duration: DUR_FAST,
+      easing: EASE,
+      fill: "backwards",
+    })
 }
 
 /** Plays `moves` in `root`, from `drawn` to `items`: the nodes of what

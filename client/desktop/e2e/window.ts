@@ -937,6 +937,43 @@ export function threadNamed(window: Window, title: string) {
 
 export const sidebarOf = (page: Page) =>
   page.getByRole("complementary", { name: "Sidebar" })
+
+/** The sidebar's view menu, in its foot (ADR 0098, decision 21). */
+export const viewMenuOf = (page: Page) =>
+  page.getByRole("dialog", { name: "View" })
+
+/**
+ * Groups the sidebar list by `by` from its view menu, as the Person does
+ * (ADR 0098, decision 7): the menu writes `group` into sidebar.toml, and
+ * the look brings it back, picked. Esc then closes the menu.
+ */
+export async function groupBy(
+  page: Page,
+  by: "None" | "Project" | "Machine"
+): Promise<void> {
+  await sidebarOf(page)
+    .getByRole("button", { name: "View", exact: true })
+    .click()
+  const picked = viewMenuOf(page)
+    .getByRole("radiogroup", { name: "Group by" })
+    .getByRole("radio", { name: by })
+  await picked.click()
+  await expect(picked).toHaveAttribute("aria-checked", "true")
+  await page.keyboard.press("Escape")
+  await expect(viewMenuOf(page)).toBeHidden()
+}
+
+/**
+ * The sidebar under the `places` preset, as sidebar.toml names it: the
+ * list of Projects above the Threads, until it goes (ADR 0098, decision
+ * 16). The view menu no longer picks a preset.
+ */
+export async function showPlaces(window: Window): Promise<void> {
+  writeFileSync(join(window.dir, "config/sidebar.toml"), 'preset = "places"\n')
+  await expect(
+    sidebarOf(window.page).getByRole("group", { name: "Projects" })
+  ).toBeVisible()
+}
 /** The Later picker, Alt+Z's. */
 export const pickerOf = (page: Page) =>
   page.getByRole("dialog").filter({ hasText: "Later ·" })
