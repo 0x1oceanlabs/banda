@@ -390,7 +390,7 @@ test("an edit while arc is away keeps its text: Not saved: arc is away, and it s
     .toBe("arc kept!\n")
 })
 
-test("paths: a path in arc's reply is found by arc in one round trip, opens arc's file at its line, and the menu offers no app of this computer's", async () => {
+test("paths: a path in arc's reply is found by arc, opens arc's file at its line, and the menu offers no app of this computer's", async () => {
   const { page, thread, composer, there, here } = await onArc({
     "src/long.ts": LONG,
   })
