@@ -19,7 +19,7 @@ import {
 import { lineText } from "@banda/ui/lib/file-links"
 import { FIELDS, MOD } from "@banda/ui/lib/keys"
 import { rangeMarkdown } from "@banda/ui/lib/markdown-copy"
-import { useEditors } from "@banda/ui/lib/outside"
+import { THIS_COMPUTER, useEditors } from "@banda/ui/lib/outside"
 import {
   AtSignIcon,
   CopyIcon,
@@ -153,15 +153,23 @@ export type ThreadActs = {
   /** Searches the web in Banda's browser; none where no window does. */
   search?: (words: string) => void
   open: (address: string, outside: boolean) => void
+  /** Whether an address opens in Banda's browser: another machine's
+   * Project has none yet. */
+  inBanda: (address: string) => boolean
+  /** Whether it opens from this device at all, which an address of that
+   * machine's own does not. */
+  opensHere: (address: string) => boolean
   /** Opens a file a path names, in Banda, in Quick Look over the desk, in
    * the app the system has for it, or in an editor at its line; shows it
-   * in its folder; none where no window looks at files. */
+   * in its folder; none where no window looks at files. Only a file this
+   * computer holds has an app, an editor or a folder here (`onDevice`). */
   file?: {
     open: (at: FileAt, outside: boolean) => void
     peek: (at: FileAt) => void
     system: (at: FileAt) => void
     edit: (at: FileAt) => void
     show: (at: FileAt) => void
+    onDevice: (at: FileAt) => boolean
   }
   /** Names the file at the whole `path` in the message, as `@` does. */
   attach: (path: string) => void
@@ -242,24 +250,32 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
                 <EyeIcon />
                 Quick Look
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={item(() => acts.file!.system(file))}>
-                <ExternalLinkIcon />
-                Open in its app
-                {!editor && (
-                  <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
-                )}
-              </DropdownMenuItem>
-              {editor && (
-                <DropdownMenuItem onClick={item(() => acts.file!.edit(file))}>
-                  <SquareCodeIcon />
-                  Open in {editor.name}
-                  <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
-                </DropdownMenuItem>
+              {acts.file.onDevice(file) && (
+                <>
+                  <DropdownMenuItem
+                    onClick={item(() => acts.file!.system(file))}
+                  >
+                    <ExternalLinkIcon />
+                    Open in its app
+                    {!editor && (
+                      <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+                    )}
+                  </DropdownMenuItem>
+                  {editor && (
+                    <DropdownMenuItem
+                      onClick={item(() => acts.file!.edit(file))}
+                    >
+                      <SquareCodeIcon />
+                      Open in {editor.name}
+                      <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+                    </DropdownMenuItem>
+                  )}
+                  <DropdownMenuItem onClick={item(() => acts.file!.show(file))}>
+                    <FolderOpenIcon />
+                    Show in folder
+                  </DropdownMenuItem>
+                </>
               )}
-              <DropdownMenuItem onClick={item(() => acts.file!.show(file))}>
-                <FolderOpenIcon />
-                Show in folder
-              </DropdownMenuItem>
               <DropdownMenuSeparator />
             </>
           )}
@@ -281,18 +297,29 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
         </>
       )
     }
-    case "link":
+    case "link": {
+      const inBanda = acts.inBanda(at.address)
       return (
         <>
-          <DropdownMenuItem onClick={item(() => acts.open(at.address, false))}>
-            <PanelRightIcon />
-            Open in Banda
-          </DropdownMenuItem>
-          <DropdownMenuItem onClick={item(() => acts.open(at.address, true))}>
-            <ExternalLinkIcon />
-            Open in external browser
-            <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
-          </DropdownMenuItem>
+          {inBanda && (
+            <DropdownMenuItem
+              onClick={item(() => acts.open(at.address, false))}
+            >
+              <PanelRightIcon />
+              Open in Banda
+            </DropdownMenuItem>
+          )}
+          {acts.opensHere(at.address) && (
+            <DropdownMenuItem onClick={item(() => acts.open(at.address, true))}>
+              <ExternalLinkIcon />
+              {inBanda
+                ? "Open in external browser"
+                : `Open in ${THIS_COMPUTER}'s browser`}
+              {inBanda && (
+                <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+              )}
+            </DropdownMenuItem>
+          )}
           <DropdownMenuSeparator />
           <DropdownMenuItem onClick={() => copy(at.address)}>
             <CopyIcon />
@@ -300,6 +327,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
           </DropdownMenuItem>
         </>
       )
+    }
     case "image": {
       const { preview } = at
       return (

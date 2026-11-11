@@ -56,7 +56,8 @@ import { useSubagent } from "./live-lane"
 import { useThread } from "./live-thread"
 import { turnDiffPane, zoomKey } from "./session"
 import { showBeside } from "./shown-beside"
-import { Centered, linkOpener } from "./Thread"
+import { Centered } from "./Thread"
+import { linksOf } from "./links"
 import { useThreadFiles } from "./ThreadFiles"
 import { ThreadMedia } from "./ThreadMedia"
 import { Transcript } from "./Transcript"
@@ -121,7 +122,20 @@ export const openBeside: Action = {
 }
 
 function SubagentPane(props: PaneProps<SubagentArgs>) {
-  const { engine, project, args, run, open, update, close, label, focused } =
+  const {
+    engine,
+    project,
+    args,
+    run,
+    runs,
+    device,
+    file,
+    open,
+    update,
+    close,
+    label,
+    focused,
+  } =
     props
   const { thread: threadId, sub } = args
   const thread = useThread(engine, project, threadId)
@@ -237,7 +251,15 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
     // One of its own sub-agents opens here, a level deeper.
     openSubagent: (child) => update({ thread: threadId, sub: child }),
   }
-  const files = useThreadFiles(project, drawn?.items, run)
+  const files = useThreadFiles(engine, project, drawn?.items, {
+    run,
+    device,
+    file,
+  })
+  const links = useMemo(
+    () => linksOf({ run, runs }, project),
+    [run, runs, project]
+  )
   const prompt = own?.prompt
   const { words, look } = said?.asked ?? {}
   const brief = useMemo(
@@ -277,7 +299,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
           </Centered>
         ) : (
           <ThreadMedia project={project}>
-            <MarkdownLinks open={linkOpener(run, project)}>
+            <MarkdownLinks open={links.open} hint={links.title}>
               <MarkdownFiles key={sub} host={files}>
                 <ThreadAroundProvider
                   engine={engine}

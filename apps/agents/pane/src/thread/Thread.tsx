@@ -8,7 +8,6 @@ import {
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { ProjectId } from "@banda/contract"
 import { harnessTitle, useAccounts, useHarnesses } from "../harnesses"
 import { Spinner } from "@banda/ui/components/spinner"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
@@ -61,6 +60,7 @@ import {
 } from "@banda/ui/hooks/use-status"
 import { heldWords, useShownOf } from "@banda/core/react"
 import { movedArgs, NewThreadBar } from "../composer/NewThread"
+import { linksOf } from "./links"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
 import { Transcript } from "./Transcript"
@@ -68,17 +68,6 @@ import { UNSEEN } from "./ScrollPlace"
 import { WaitsAlone, WaitsFor } from "./WhenBack"
 import { useWriters } from "./writers"
 import { ThreadAroundProvider, type ThreadActs } from "./context"
-/** Opens a web link in Banda's browser, or outside it (ADR 0051): always
- * outside where no window runs the browser for it (`run` none). */
-export function linkOpener(
-  run: PaneProps<ThreadArgs>["run"],
-  project: ProjectId
-) {
-  return (address: string, outside: boolean) => {
-    if (outside || !run) window.open(address, "_blank", "noopener,noreferrer")
-    else run("browser.open", { address, project })
-  }
-}
 
 export function Thread(props: PaneProps<ThreadArgs>) {
   const {
@@ -90,6 +79,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     update,
     run,
     runs,
+    device,
+    file,
     composer: says,
   } = props
   const machine = useMachine(engine)
@@ -208,7 +199,15 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   // What a right click found, for the Thread's menu (ADR 0063, decision 3).
   const [menu, setMenu] = useState<MenuAt | null>(null)
   // Where the paths in its replies lead (ADR 0063, decision 2).
-  const files = useThreadFiles(here ? project : null, state?.items, run)
+  const files = useThreadFiles(engine, project, state?.items, {
+    run,
+    device,
+    file,
+  })
+  const links = useMemo(
+    () => linksOf({ run, runs }, project),
+    [run, runs, project]
+  )
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   // The Banda menu's words that did not go wait in the composer.
@@ -597,7 +596,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
               here && run
                 ? (words) => run("browser.open", { words, project })
                 : undefined,
-            open: linkOpener(here ? run : undefined, project),
+            open: links.open,
+            inBanda: links.inBanda,
+            opensHere: links.opensHere,
             copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
             file: files ?? undefined,
             attach: (path) => run?.("file.attach", { file: path }),
