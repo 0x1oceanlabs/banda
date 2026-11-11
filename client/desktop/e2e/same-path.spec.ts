@@ -283,7 +283,7 @@ test.fixme("step 1c: Run on a line in arc's reply runs it in arc's terminal", as
   expect(existsSync(join(here, "ran.txt"))).toBe(false)
 })
 
-test.fixme("step 2a: arc's Diff shows arc's change to who.txt", async () => {
+test("arc's Diff shows arc's change to who.txt, not this machine's at the same path", async () => {
   const { page, composer, there, here } = await opened()
   for (const [folder, now] of [
     [arc!.disk(there), "arc changed\n"],
@@ -297,6 +297,7 @@ test.fixme("step 2a: arc's Diff shows arc's change to who.txt", async () => {
   await composer.click()
   await page.keyboard.press("Alt+KeyD")
   const diff = page.getByRole("region", { name: "Diff" })
+  await diff.getByRole("button", { name: "Expand all files" }).click()
   await expect(diff.getByText("arc changed")).toBeVisible()
   await expect(diff.getByText("mac changed")).toHaveCount(0)
 })
