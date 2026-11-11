@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Packs Banda into an app (ADR 0033, step 2): the engine, the page and the
-# window, in client/desktop/dist/.
+# window, in client/desktop/dist/; beside it, on Linux and macOS, the engine
+# alone (scripts/engine.mjs).
 #
 #   scripts/package.sh [stable|dev|local]
 #
@@ -62,3 +63,10 @@ for file in "${carried[@]}"; do
     exit 1
   fi
 done
+
+# The engine alone, for a machine with no window and for each machine's
+# engine to update itself (ADR 0115, decision 5). Not on Windows yet, whose
+# engine is no service (ADR 0090).
+if [[ ${OS:-} != Windows_NT ]]; then
+  node scripts/engine.mjs "$resources"
+fi

@@ -29,6 +29,7 @@ on:
       - .github/workflows/release.yml
       - scripts/package.sh
       - scripts/release.mjs
+      - scripts/engine.mjs
       - client/desktop/electron-builder.config.mjs
       - client/desktop/src/channel.ts
       - client/desktop/package.json
@@ -147,7 +148,10 @@ jobs:
       - name: the update file is there
         env:
           CHANNEL: ${{ needs.which.outputs.channel }}
-        run: ls "client/desktop/dist/$([[ $CHANNEL == dev ]] && echo dev || echo latest)-linux.yml"
+        run: |
+          feed=$([[ $CHANNEL == dev ]] && echo dev || echo latest)
+          ls client/desktop/dist/$feed-linux.yml client/desktop/dist/$feed-engine-linux.yml \
+            client/desktop/dist/*-engine-linux-*.tar.gz
       - name: publish
         if: needs.which.outputs.publish == 'true'
         env:
@@ -158,6 +162,7 @@ jobs:
           ${{ needs.which.outputs.version }}
           ${{ needs.which.outputs.commit }}
           client/desktop/dist/*.AppImage
+          client/desktop/dist/*-engine-linux-*.tar.gz
           client/desktop/dist/*-linux.yml
       - name: keep what was packed
         if: needs.which.outputs.publish != 'true'
@@ -166,6 +171,7 @@ jobs:
           name: banda-linux-${{ github.run_number }}
           path: |
             client/desktop/dist/*.AppImage
+            client/desktop/dist/*-engine-linux-*.tar.gz
             client/desktop/dist/*-linux.yml
           retention-days: 3
 
@@ -204,12 +210,16 @@ jobs:
       - name: the update file is there
         env:
           CHANNEL: ${{ needs.which.outputs.channel }}
-        run: ls "client/desktop/dist/$([[ $CHANNEL == dev ]] && echo dev || echo latest)-mac.yml"
+        run: |
+          feed=$([[ $CHANNEL == dev ]] && echo dev || echo latest)
+          ls client/desktop/dist/$feed-mac.yml client/desktop/dist/$feed-engine-mac.yml \
+            client/desktop/dist/*-engine-mac-*.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: banda-mac-${{ github.run_number }}
           path: |
             client/desktop/dist/*.zip
+            client/desktop/dist/*-engine-mac-*.tar.gz
             client/desktop/dist/*-mac.yml
           retention-days: 3
 
@@ -241,7 +251,7 @@ jobs:
         env:
           GITHUB_TOKEN: ${{ github.token }}
           MAC: ${{ runner.temp }}/mac
-        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$MAC"/*.zip "$MAC"/*-mac.yml
+        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$MAC"/*.zip "$MAC"/*-engine-mac-*.tar.gz "$MAC"/*-mac.yml
       # Pushed with the tap's deploy key, in the secret TAP_KEY: `brew
       # upgrade` finds the release (ADR 0033, decision 6).
       - name: the cask in the tap
