@@ -107,7 +107,9 @@ refused while arc is away (step 1c);
 `remote-git.spec.ts`, arc's Diff, its card, a refused Commit and a push
 cut off (step 2a);
 `remote-bytes.spec.ts`, this machine's pictures, PDFs, videos and pages
-through the relay to its engine, beside arc's at the same path (step 4b).
+through the relay to its engine, beside arc's at the same path (step 4b);
+`remote-files.spec.ts`, arc's Files: its tree, an edit saved to arc, the
+Trash and Undo, a refused drag, a held arc (step 3b).
 Here,
 outside CI, the spec requires the namespace where `unshare -Ur true`
 works, as the fence's tests do; `BANDA_SAME_PATH=off` runs it as
