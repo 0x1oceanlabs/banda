@@ -58,9 +58,15 @@ with good UX and UI".
    - `banda update` is its CLI: `--check`, `--now`, `--follow`, and
      `--version <v>` to go to a given one, back too.
 3. **The engine restarts once nothing runs.** Once a new copy is in place,
-   the engine restarts on it as soon as no Turn runs and no program is in
-   front in a Terminal (ADR 0106 step 1d's `terminal.running`), through
-   its systemd unit or launchd job, which the new copy writes again.
+   the engine restarts on it as soon as nothing runs, through its systemd
+   unit or launchd job, which the new copy writes again. Nothing runs
+   means:
+   - no Turn runs;
+   - no Terminal is open, while a restart still ends them (#462); once
+     Terminals outlive it, only no program in front in one (ADR 0106 step
+     1d's `terminal.running`);
+   - no key reached this machine's Panes in the last 10 minutes, so it
+     never restarts under the Person's hands.
    - **On every machine, by default.** A server's and a desktop's alike
      (ADR 0086, decision 6). `machine.toml`'s `[updates] restart = "idle"`
      says so; `"ask"` waits for the Person, `"off"` and `BANDA_UPDATES=off`
@@ -68,7 +74,8 @@ with good UX and UI".
    - **Restart now** warns while Agents work, in the words of Quit, and
      restarts anyway once the Person confirms.
    - A restart ends the Terminals, as it does today; keeping them stays
-     #462.
+     #462. Until then an open Terminal holds the restart, and the widget
+     says which.
 4. **The window no longer stops the engine to update.** The window and
    the engine are updated apart. The app restarts when the Person says,
    at once: the engine and its Agents go on, as when the window closes
@@ -81,7 +88,12 @@ with good UX and UI".
    and sha512. The engine takes that file on every machine, so a server
    needs no Electron; the app on a desktop still brings its own.
    - A copy is checked by size, sha512 and its own `--version` before it
-     is renamed into place. Signing the files stays #348.
+     is renamed into place.
+   - **On Stable, a copy is put in place by itself only once it is
+     signed** (#348): the sha512 comes from the same release, so it only
+     catches a broken download, not a release that was swapped. Until
+     releases are signed, Stable takes a new engine only when the Person
+     says. Dev, Roma's own, takes it by itself from the start.
    - Where a package manager owns Banda (`package-type`, the AUR's
      `banda-bin`), the module takes nothing and says who updates it.
 6. **Versions are agreed, not matched** (ADR 0081, decision 8).
@@ -117,6 +129,9 @@ with good UX and UI".
    downloads it from the release, checks it and puts it in its data
    folder, and Banda starts it there. From then on that machine updates
    itself (decision 1).
+   - Then it offers what the Agents there need: "Sign in to Claude on
+     devbox", which opens a terminal on devbox (ADR 0106, step 1c). On
+     2026-11-11 devbox's first Thread failed on an expired Claude sign-in.
 
 ## What it amends
 
@@ -156,6 +171,9 @@ devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 4. **One widget on the bar** for every machine.
 5. **Variant A of the mock, with this window's own row**: Roma left the
    pick to the agent.
+6. **By itself, not through the Person, but never under their hands**:
+   an open Terminal and recent keys hold a restart, and Stable waits for
+   signed releases before it updates by itself.
 
 ## Consequences
 
@@ -170,7 +188,7 @@ devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 
 ## Later
 
-- Signed releases (#348), checked before a copy is put in place.
+- Signed releases (#348): the gate of Stable's own updates (decision 5).
 - Terminals that outlive the engine's restart (#462).
 - Windows: its engine as a service and its updates (ADR 0090).
 - A Stable promoted from a Dev daily (ADR 0092, step 6) needs nothing new
