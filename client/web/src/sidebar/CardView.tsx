@@ -80,6 +80,7 @@ export function Card({
           slot={part}
           card={card}
           row={row}
+          current={current}
           now={now}
           harnesses={harnesses}
         />
@@ -87,8 +88,12 @@ export function Card({
     </Fragment>
   )
   const Element = field ? "div" : "button"
+  // A card the list draws with no action around it is its row itself, as
+  // the list's glance finds it.
+  const bare = Boolean(field) || (!action && !card.gone)
   const drawn = (
     <Element
+      data-row={bare ? "" : undefined}
       type={field ? undefined : "button"}
       aria-current={current ? "true" : undefined}
       aria-label={field ? undefined : spoken.name}
@@ -151,7 +156,7 @@ export function Card({
       })}
     </Element>
   )
-  if (field || (!action && !card.gone)) return drawn
+  if (bare) return drawn
   return (
     <div data-row className="group/row relative">
       {drawn}
@@ -208,12 +213,14 @@ function Piece({
   slot,
   card,
   row,
+  current,
   now,
   harnesses,
 }: {
   slot: Slot
   card: CardModel
   row: Row
+  current: boolean
   now: number
   harnesses: readonly EmblemOf[]
 }) {
@@ -221,13 +228,15 @@ function Piece({
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
       // decisions 1 and 10; ADR 0107 for a working one's muted blue); at
-      // work, what its card holds its Agent does.
+      // work, what its card holds its Agent does; open, no call (decision
+      // 5).
       return (
         <ThreadMark
           listed={row.listed}
           look={slot.look}
           doing={card.does?.doing}
           held
+          current={current}
         />
       )
     case "title":

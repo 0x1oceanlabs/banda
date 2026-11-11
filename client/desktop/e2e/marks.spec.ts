@@ -19,8 +19,10 @@
  * the compositor runs its loops. A mark drawn for the first time plays no
  * news, and `[motion] off` stills every loop. A working Mark shows what
  * its Agent does, and stuck once it says nothing for three minutes (ADR
- * 0099, step 3). Last, the looks the window draws live are recorded,
- * beside the approved mock's when it is given, and each doing laid out.
+ * 0099, step 3). The open Thread's mark calls no one, and an awake mark
+ * glances at the pointer over its card (step 4). Last, the looks the
+ * window draws live are recorded, beside the approved mock's when it is
+ * given, each doing laid out, and the calm of step 4.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -438,7 +440,8 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   expect(woke.failed, "loops the compositor does not run").toEqual([])
   await shots(window, "m1b-woke")
 
-  // Asks: a triangle that hops, on the bar and on its row.
+  // Asks: a triangle that hops on the bar, and on its row, the open
+  // Thread's, blinks and does not hop (ADR 0099, decision 5).
   const asks = await startAgent(page, "please ask first")
   await expect(asks.getByRole("group", { name: "Run a check" })).toBeVisible()
   const asking = rowOf(page, "please ask first").getByRole("img", {
@@ -447,8 +450,10 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   await expect(asking).toHaveAttribute("data-loop", "asking")
   await expect(asking).not.toHaveAttribute("data-news")
   await expect
-    .poll(() => loopsOf(asking))
+    .poll(() => loopsOf(logo))
     .toEqual(expect.arrayContaining(["mark-blink", "mark-hop"]))
+  await expect.poll(() => loopsOf(asking)).toContain("mark-blink")
+  expect(await loopsOf(asking)).not.toContain("mark-hop")
   await leaveSidebar(page)
   await shots(window, "m1b-rhythm")
 
@@ -498,8 +503,9 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   await expect(page.locator("html")).not.toHaveAttribute("data-still")
   await expect(logo).toHaveAttribute("data-loop", "asking")
   await expect
-    .poll(() => loopsOf(asking))
+    .poll(() => loopsOf(logo))
     .toEqual(expect.arrayContaining(["mark-blink", "mark-hop"]))
+  await expect.poll(() => loopsOf(asking)).toContain("mark-blink")
 })
 
 // ADR 0099, step 3: a working Mark shows what its Agent does, as the
@@ -868,6 +874,208 @@ test("each doing the window draws live, recorded in dark and light, laid out as 
       recordings.map((recording) => recording.stop())
     )
     for (const one of stopped) if (one.status === "rejected") throw one.reason
+    for (const recording of recordings) await recording.encode()
+  } finally {
+    await Promise.all(recordings.map((recording) => recording.discard()))
+  }
+})
+
+/** The transforms `mark`'s hat stands in by its call's group, as marks.css
+ * plays it over a call and more: one, `none`, for a mark that calls no
+ * one. */
+const standsOf = (mark: Locator) =>
+  mark.evaluate(async (svg) => {
+    const group = svg.querySelector(".mark-move")!
+    const stands = new Set<string>()
+    const end = performance.now() + 4600
+    while (performance.now() < end) {
+      stands.add(getComputedStyle(group).transform)
+      await new Promise((go) => setTimeout(go, 40))
+    }
+    return [...stands]
+  })
+
+/** Where `mark`'s first eye is drawn, across. */
+const eyeOf = (mark: Locator) =>
+  mark.evaluate((svg) =>
+    Number(svg.querySelector("[data-eye]")!.getAttribute("cx"))
+  )
+
+/** The pointer passes over `card` from its left to its right, or back,
+ * in `steps` moves `ms` apart. Where it stands is read as the page reads
+ * it, under the recording's zoom too. */
+async function pass(
+  page: Page,
+  card: Locator,
+  { steps = 8, ms = 0, back = false } = {}
+) {
+  await card.scrollIntoViewIfNeeded()
+  const box = await card.evaluate((element) => {
+    const { x, y, width, height } = element.getBoundingClientRect()
+    return { x, y: y + height / 2, width }
+  })
+  for (let at = 0; at <= steps; at++) {
+    const along = (back ? steps - at : at) / steps
+    await page.mouse.move(box.x + 2 + (box.width - 4) * along, box.y)
+    if (ms) await page.waitForTimeout(ms)
+  }
+}
+
+/** The Work Project with hello, answered as the Person looked, and two
+ * Threads that ask, the last the open one. */
+async function calmDay(page: Page) {
+  const { thread: hello, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(hello.getByText("You said: hello")).toBeVisible()
+  for (const text of ["please ask first", "please ask again"])
+    await expect(
+      (await startAgent(page, text)).getByRole("group", {
+        name: "Run a check",
+      })
+    ).toBeVisible()
+  const asks = (text: string) =>
+    rowOf(page, text).getByRole("img", { name: "Asks you" })
+  return { open: asks("please ask again"), other: asks("please ask first") }
+}
+
+// ADR 0099, step 4: calm. The open Thread's mark is the same mark without
+// its call, and stops at the end of the call it is in (decision 5). An
+// awake mark glances at the pointer as it passes its card, on the window's
+// clock, and turns back 2.5 s after it stops; one asleep does not
+// (decision 6).
+test("the open Thread's asking mark does not hop, a card under the pointer turns its eyes, and an asleep one does not (ADR 0099, step 4)", async () => {
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { page } = window
+  const { open, other } = await calmDay(page)
+  await leaveSidebar(page)
+  await expect(page.locator("aside [data-news]")).toHaveCount(0)
+
+  // The open one blinks and stands still, over a whole call and more; the
+  // other hops.
+  await expect(open).toHaveAttribute("data-calm", "")
+  await expect(other).not.toHaveAttribute("data-calm")
+  await expect.poll(() => loopsOf(open)).toContain("mark-blink")
+  expect(await loopsOf(open)).not.toContain("mark-hop")
+  await expect.poll(() => loopsOf(other)).toContain("mark-hop")
+  const [still, hops] = await Promise.all([standsOf(open), standsOf(other)])
+  expect(still).toEqual(["none"])
+  expect(hops.length).toBeGreaterThan(1)
+
+  // The other opened, it is calm once its call ends, and the first calls.
+  await rowOf(page, "please ask first").click()
+  await expect(other).toHaveAttribute("data-calm", "")
+  await expect(open).not.toHaveAttribute("data-calm")
+  await leaveSidebar(page)
+  await expect(page.locator("aside [data-news]")).toHaveCount(0, {
+    timeout: 5000,
+  })
+  await expect.poll(() => loopsOf(open)).toContain("mark-hop")
+  expect(await loopsOf(other)).not.toContain("mark-hop")
+
+  // Under the pointer, it turns its eyes to it, on the window's clock,
+  // and 2.5 s after the pointer stops back; then marks.css has it again.
+  const before = await eyeOf(open)
+  await pass(page, rowOf(page, "please ask again"))
+  const stopped = Date.now()
+  await expect(open).toHaveAttribute("data-news", "glance")
+  await expect.poll(() => eyeOf(open)).toBeGreaterThan(before + 2)
+  await expect(open).not.toHaveAttribute("data-news", { timeout: 5000 })
+  const lasted = Date.now() - stopped
+  expect(lasted).toBeGreaterThan(2000)
+  expect(lasted).toBeLessThan(3500)
+  expect(await eyeOf(open)).toBe(before)
+  await expect(open).toHaveAttribute("data-loop", "asking")
+
+  // Put off for an hour, hello sleeps on Later's tab: under the pointer,
+  // it does not glance.
+  call(window, "agents.later", {
+    thread: threadNamed(window, "hello")!.id,
+    until: Date.now() + 3_600_000,
+  })
+  await sidebarOf(page)
+    .getByRole("tab", { name: /^Later/ })
+    .click()
+  const asleep = rowOf(page, "hello").getByRole("img", { name: "Later" })
+  await expect(asleep).toHaveAttribute("data-loop", "later")
+  await watchNews(asleep)
+  await pass(page, rowOf(page, "hello"))
+  await page.waitForTimeout(500)
+  expect(await newsOf(page)).toEqual([])
+  await expect(asleep).toHaveAttribute("data-loop", "later")
+})
+
+// The calm of step 4 as the window draws it, recorded at 1440x900 by the
+// machine's ffmpeg as test-results/sidebar-m4-calm.webm, dark then light:
+// the open Thread's asking mark beside one that asks and is not open, one
+// still, the other hopping; then the pointer passes over awake cards and
+// stops on one for 2.5 s. The sidebar shows at twice its size (CSS zoom),
+// so a 16 px mark reads, and a ring shows the pointer, which a recording
+// does not; pictures of a glance end each part, as
+// test-results/sidebar-m4-glance-<mode>.png. This machine's window has no
+// pointer that hovers (`(hover: hover)` is false), so the cards' hover
+// fill and action do not show.
+test("the calm of step 4, recorded in dark and light (ADR 0099, step 4)", async () => {
+  test.setTimeout(150_000)
+  const size = { width: 1440, height: 900 }
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { app, page, dir } = window
+  await app.evaluate(
+    ({ BrowserWindow }, { width, height }) =>
+      BrowserWindow.getAllWindows()[0]?.setContentSize(width, height),
+    size
+  )
+  await page.setViewportSize(size)
+  const { open, other } = await calmDay(page)
+  await expect(open).toHaveAttribute("data-calm", "")
+  await expect(other).not.toHaveAttribute("data-calm")
+  await page.evaluate(() => {
+    document.querySelector<HTMLElement>("aside")!.style.zoom = "2"
+    const ring = document.body.appendChild(document.createElement("div"))
+    ring.style.cssText =
+      "position:fixed;left:0;top:0;width:16px;height:16px;margin:-8px 0 0 -8px;border:2px solid #3b82f6;border-radius:50%;pointer-events:none;z-index:2147483647"
+    addEventListener(
+      "pointermove",
+      ({ clientX, clientY }) =>
+        (ring.style.transform = `translate(${clientX}px, ${clientY}px)`),
+      { capture: true, passive: true }
+    )
+  })
+  await leaveSidebar(page)
+  await expect(page.locator("aside [data-news]")).toHaveCount(0)
+  const mode = async (to: "dark" | "light") => {
+    writeFileSync(join(dir, "config/look.toml"), `mode = "${to}"\n`)
+    if (to === "dark") await expect(page.locator("html")).toHaveClass(/dark/)
+    else await expect(page.locator("html")).not.toHaveClass(/dark/)
+  }
+  const aside = await sidebarOf(page).evaluate((element) =>
+    element.getBoundingClientRect().toJSON()
+  )
+  const recordings: Recording[] = []
+  try {
+    recordings.push(
+      await record(page, "test-results/sidebar-m4-calm.webm", size)
+    )
+    for (const to of ["dark", "light"] as const) {
+      await mode(to)
+      await leaveSidebar(page)
+      // Two calls of the one not open; the open one blinks, still.
+      await page.waitForTimeout(9000)
+      // The pointer over hello, open, back and forth, then over the one
+      // that hops; then it stops on hello, whose eyes turn back 2.5 s on.
+      const slow = { steps: 30, ms: 40 }
+      await pass(page, rowOf(page, "hello"), slow)
+      await pass(page, rowOf(page, "hello"), { ...slow, back: true })
+      await pass(page, rowOf(page, "please ask first"), slow)
+      await pass(page, rowOf(page, "hello"), slow)
+      await page.waitForTimeout(600)
+      await page.screenshot({
+        path: `test-results/sidebar-m4-glance-${to}.png`,
+        clip: { x: 0, y: 0, width: aside.x + aside.width + 8, height: 900 },
+      })
+      await page.waitForTimeout(3400)
+    }
+    for (const recording of recordings) await recording.stop()
     for (const recording of recordings) await recording.encode()
   } finally {
     await Promise.all(recordings.map((recording) => recording.discard()))

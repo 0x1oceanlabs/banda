@@ -444,6 +444,19 @@ export const LOOPS = {
 
 type LoopName = keyof typeof LOOPS
 
+/** The loops that call the Person, the rhythm's second layer: asks hops,
+ * failed shakes, woke rings and looks round. The open Thread's mark plays
+ * none of them, and its other loops play on (ADR 0099, decision 5). */
+export const CALLS: ReadonlySet<LoopName> = new Set<LoopName>([
+  "hop",
+  "shake",
+  "shake-turn",
+  "ring",
+  "ring-turn",
+  "bells",
+  "look-round",
+])
+
 /** Each look's loops (ADR 0099, decision 1), and for one at work, those of
  * what its Agent does (decision 2). Rest has none, nor does a look drawn
  * still. */
@@ -466,6 +479,36 @@ export const LOOPED: Partial<Record<Shown, readonly LoopName[]>> = {
   compacting: ["squeeze", "squeeze-lid"],
   stuck: ["drift", "drowse"],
   limit: ["doze", "sand"],
+}
+
+/** Seconds into its period `loop` is still from: its values stay its
+ * last ones from there to the period's end. */
+function stillFrom({ keys, period }: Loop): number {
+  const last = keys.at(-1)![1]
+  const same = (values: readonly number[]) =>
+    values.every((value, i) => value === last[i])
+  let from = keys.length - 1
+  while (from > 0 && same(keys[from - 1]![1])) from--
+  return keys[from]![0] * period
+}
+
+/** Seconds into `CALL` each look's call ends: the last of its call loops
+ * to come to rest. None for a look that calls no one. */
+const CALL_ENDS: Partial<Record<Shown, number>> = Object.fromEntries(
+  Object.entries(LOOPED).flatMap(([look, names]) => {
+    const calls = names.filter((name) => CALLS.has(name))
+    return calls.length
+      ? [[look, Math.max(...calls.map((name) => stillFrom(LOOPS[name])))]]
+      : []
+  })
+)
+
+/** Seconds left of the call `look` is in at `at` seconds of its mark's
+ * rhythm: 0 between two calls, and for a look that calls no one. */
+export function callLeft(look: Shown, at: number): number {
+  const end = CALL_ENDS[look] ?? 0
+  const into = ((at % CALL) + CALL) % CALL
+  return into < end ? end - into : 0
 }
 
 /** How far `ease` has gone at `x`, of 0 to 1, as CSS plays it. */

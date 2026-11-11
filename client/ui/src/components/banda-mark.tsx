@@ -1,6 +1,8 @@
 import { useEffect, useId, useRef } from "react"
 import { onDraw } from "../lib/frames"
 import {
+  callLeft,
+  CALLS,
   LID,
   LOOPED,
   LOOPS,
@@ -124,6 +126,7 @@ export function BandaMark({
   news = false,
   tone = true,
   beat = "",
+  current = false,
   label,
   className,
 }: {
@@ -155,6 +158,10 @@ export function BandaMark({
    * the same beat wherever it shows, on every machine, and each Thread on
    * its own. */
   beat?: string
+  /** Its Thread is the open one: it plays none of its calls, as the Person
+   * already looks at it, and stops at the end of the call it is in (ADR
+   * 0099, decision 5). */
+  current?: boolean
   /** Names the mark for a screen reader; without it the mark is decoration. */
   label?: string
   className?: string
@@ -176,8 +183,8 @@ export function BandaMark({
   }, [variant])
 
   useEffect(() => {
-    animator.current?.set({ state, doing, held, playful, news, beat })
-  }, [state, doing, held, playful, news, beat, variant])
+    animator.current?.set({ state, doing, held, playful, news, beat, current })
+  }, [state, doing, held, playful, news, beat, current, variant])
 
   const logo = variant === "logo"
   return (
@@ -544,7 +551,12 @@ function jumped(pose: Pose, lift: number): Pose {
   }
 }
 
-type Context = { seed: number; look: [number, number] | null }
+type Context = {
+  seed: number
+  look: [number, number] | null
+  /** It plays none of its calls, as the open Thread's mark. */
+  calm: boolean
+}
 
 /** A pose as a function of the seconds since it began and of the clock. */
 type Motion = (t: number, time: number, at: Context) => Pose
@@ -652,22 +664,24 @@ const MOVES: Record<Part, (pose: Pose, values: readonly number[]) => void> = {
 }
 
 /** `pose` moved by `look`'s loops as they stand at `at`, seconds of its
- * mark's rhythm: what marks.css draws then. */
-function looped(pose: Pose, look: Shown, at: number): Pose {
+ * mark's rhythm, `calm` with none of its calls: what marks.css draws
+ * then. */
+function looped(pose: Pose, look: Shown, at: number, calm = false): Pose {
   const moved = { ...pose }
   for (const name of LOOPED[look] ?? []) {
+    if (calm && CALLS.has(name)) continue
     const loop = LOOPS[name]
     MOVES[loop.part](moved, valueAt(loop, at))
   }
   return moved
 }
 
-/** Woke arrives asleep, stretches, then rings (ADR 0099, decision 1), as
- * marks-final.html's `arrives`. */
-function arrive(t: number, at: number): Pose {
+/** Woke arrives asleep, stretches, then rings, `calm` not (ADR 0099,
+ * decision 1), as marks-final.html's `arrives`. */
+function arrive(t: number, at: number, calm: boolean): Pose {
   const asleep = looped(BASES.later, "later", at)
   if (t < 1) return asleep
-  const into = looped(BASES.woke, "woke", at)
+  const into = looped(BASES.woke, "woke", at, calm)
   if (t >= ARRIVE) return into
   const q = (t - 1) / (ARRIVE - 1)
   const stretch = sin(PI * q)
@@ -831,8 +845,9 @@ function mix(a: Pose, b: Pose, m: number): Pose {
 
 const f = (n: number) => n.toFixed(2)
 
-/** What a mark's `data-news` says while news plays. */
-type Stage = "blend" | "leap" | "flip" | "asleep" | "stretch"
+/** What a mark's `data-news` says while news plays, or while it glances
+ * at the pointer, which the clock draws alike. */
+type Stage = "blend" | "leap" | "flip" | "asleep" | "stretch" | "glance"
 
 /** What the clock draws for a while: news, or the logo's trick or glance. */
 type Playing = {
@@ -844,6 +859,8 @@ type Playing = {
   stage?: (t: number) => Stage
   /** What plays after it; without, the mark settles. */
   then?: (time: number) => void
+  /** It draws a glance at the pointer alone, and lasts as long. */
+  glance?: true
   began: number
   from: Pose
 }
@@ -867,13 +884,14 @@ function newsOf(
     }
   if (look === "woke")
     return {
-      motion: (t, time) => arrive(t, at(time)),
+      motion: (t, time, context) => arrive(t, at(time), context.calm),
       blend: BLEND,
       until: ARRIVE,
       stage: (t) => (t < 1 ? "asleep" : "stretch"),
     }
   return {
-    motion: (_t, time) => looped(BASES[look], look, at(time)),
+    motion: (_t, time, context) =>
+      looped(BASES[look], look, at(time), context.calm),
     blend: BLEND,
     until: BLEND,
     stage: () => (leaps ? "leap" : "blend"),
@@ -909,12 +927,68 @@ function draw(mark: Animator) {
 let pointer: [number, number] | null = null
 let moved = -Infinity
 function onPointer(event: PointerEvent) {
-  pointer = [event.clientX, event.clientY]
-  moved = performance.now()
+  pointed(event)
   // Where each mark whose eyes follow stands is read here, as the pointer
   // moves, and never in a tick, which reads no layout (ADR 0088, decision
   // 9).
   for (const mark of marks) mark.measure()
+}
+
+/** Where the pointer is, and when it moved there. */
+function pointed(event: PointerEvent) {
+  pointer = [event.clientX, event.clientY]
+  moved = performance.now()
+}
+
+/** Seconds a glance lasts once the pointer stops, and the seconds its
+ * eyes take to turn to it, or back, within them (ADR 0099, decision 6). */
+const GLANCE = 2.5
+const TURN = 0.3
+
+/** The awake looks, whose eyes glance at the pointer as it passes their
+ * card. One asleep does not, and nor does one at work, which minds its
+ * own, as marks-final.html's rows have it. */
+const GLANCES: ReadonlySet<Shown> = new Set<Shown>([
+  "idle",
+  "done",
+  "asking",
+  "failed",
+  "woke",
+])
+
+/** The card's mark that glances at the pointer, one at most. */
+let glancer: Animator | undefined
+
+/**
+ * The pointer moves over a list of Threads' cards, or leaves it (`null`):
+ * the mark of the card under it (`[data-row]`) glances at it, if awake,
+ * on the window's clock until 2.5 s after it stops, and the one that
+ * glanced before turns back (ADR 0099, decision 6). The list's one
+ * `pointermove` listener calls it, and its `pointerleave`.
+ */
+export function glanceAt(event: PointerEvent | null) {
+  const svg = (event?.target as Element | null | undefined)
+    ?.closest("[data-row]")
+    ?.querySelector('[data-slot="banda-mark"]')
+  const mark = svg ? byElement.get(svg) : undefined
+  if (glancer !== mark) glancer?.unglance()
+  glancer = mark
+  if (!event || !mark) return
+  pointed(event)
+  mark.glance()
+}
+
+/** `pose` with its eyes turned `m` of the way to `look`, and its hat
+ * leaning after them, as marks-final.html's rows glance; eyes shut or
+ * none do not. */
+function glanced(pose: Pose, look: [number, number], m: number): Pose {
+  if (pose.eyes <= 0.5 || pose.eye === "closed") return pose
+  return {
+    ...pose,
+    ex: lerp(pose.ex, look[0], m),
+    ey: lerp(pose.ey, look[1], m),
+    rot: pose.rot + look[0] * 0.8 * m,
+  }
 }
 
 const lessMotion =
@@ -1224,6 +1298,7 @@ export function ThreadMark({
   look = listed.mark,
   doing,
   held,
+  current,
   className,
 }: {
   listed: Listed
@@ -1231,6 +1306,8 @@ export function ThreadMark({
   doing?: MarkDoing
   /** Its `doing` has held already, as its card's words hold it. */
   held?: boolean
+  /** Its Thread is the open one: it calls no one (ADR 0099, decision 5). */
+  current?: boolean
   className?: string
 }) {
   // A Thread's id is a UUIDv7, the same on every machine and unlike any
@@ -1243,6 +1320,7 @@ export function ThreadMark({
       held={held}
       playful={0}
       beat={listed.id}
+      current={current}
       label={MARK_WORDS[look]}
       className={cn("size-4 shrink-0", WEIGHT_OF[look], className)}
     />
@@ -1337,6 +1415,7 @@ type Asked = {
   playful: number
   news: boolean
   beat: string
+  current: boolean
 }
 
 // The marks whose Agent's doing waits for the one shown to have held, and
@@ -1403,9 +1482,20 @@ export class Animator {
   private playful = 30
   private visible = true
   private paused = false
+  /** The pointer is over it, the logo, or over its card. */
   private hovered = false
   /** Where it stood as the pointer last moved, while its eyes follow. */
   private box: DOMRect | undefined
+  /** How far a card's mark's eyes have turned to the pointer, from 0 to
+   * 1; where to, last; and when the clock last turned them. */
+  private turned = 0
+  private lookAt: [number, number] = [0, 0]
+  private turnedAt = 0
+  /** It plays none of its calls, as the open Thread's mark: as it is
+   * asked, once the call it was in has ended (ADR 0099, decision 5). */
+  private calm = false
+  /** What makes it calm, or call again, as the call it is in ends. */
+  private calming: ReturnType<typeof setTimeout> | undefined
   /** What wakes the logo at rest for its next trick. */
   private timer: ReturnType<typeof setTimeout> | undefined
   private last: Pose = STILL.rest
@@ -1416,6 +1506,7 @@ export class Animator {
   private readonly context: Context = {
     seed: Math.random(),
     look: null,
+    calm: false,
   }
 
   constructor(svg: SVGSVGElement, variant: "logo" | "agent") {
@@ -1463,10 +1554,12 @@ export class Animator {
     marks.delete(this)
     due.delete(this)
     unhold(this)
+    if (glancer === this) glancer = undefined
     byElement.delete(this.svg)
     seen?.unobserve(this.svg)
     if (marks.size === 0) unwatch()
     clearTimeout(this.timer)
+    clearTimeout(this.calming)
     if (this.logo) {
       this.svg.removeEventListener("pointerenter", this.enter)
       this.svg.removeEventListener("pointerleave", this.leave)
@@ -1486,7 +1579,7 @@ export class Animator {
 
   /** Draws what it was asked, as of `ms`. */
   private take(ms: number) {
-    const { state, doing, held, playful, news, beat } = this.asked!
+    const { state, doing, held, playful, news, beat, current } = this.asked!
     const now = ms / 1000
     this.playful = playful
     const look = this.logo && state === "idle" ? "rest" : state
@@ -1497,6 +1590,7 @@ export class Animator {
         this.beat = beat
         back([this])
       }
+      this.becalm(current, now)
       return
     }
     // Where it moves from, on the rhythm it kept until now; or, drawn
@@ -1508,6 +1602,11 @@ export class Animator {
     this.beat = beat
     this.drawn = true
     this.shown = shown
+    // A new look moves from where the last was, calm or not, into its own
+    // as asked.
+    clearTimeout(this.calming)
+    this.calming = undefined
+    this.calm = current
     // A mark drawn for the first time starts in its look, as if it had
     // been there (ADR 0099, decision 4).
     if (stillNow() || (first && !(news && ARRIVES.has(shown)))) {
@@ -1549,6 +1648,38 @@ export class Animator {
     return shows.doing
   }
 
+  /**
+   * Calm as `current` asks, or calling again (ADR 0099, decision 5): at
+   * once between two calls, or as the call it is in ends, never mid-hop.
+   * Its call's groups then stand still in their rest, where marks.css's
+   * `data-calm` holds them, or start again on its rhythm.
+   */
+  private becalm(current: boolean, now: number) {
+    clearTimeout(this.calming)
+    this.calming = undefined
+    if (current === this.calm) return
+    const left =
+      this.paused || stillNow()
+        ? 0
+        : callLeft(this.shown, phaseOf(this.beat, wallOf(now)))
+    if (left > 0) {
+      this.calming = setTimeout(() => {
+        this.calming = undefined
+        this.calmNow(current)
+      }, left * 1000)
+      return
+    }
+    this.calmNow(current)
+  }
+
+  private calmNow(calm: boolean) {
+    this.calm = calm
+    // While the clock draws it, it settles calm or not after.
+    if (this.playing) return
+    this.svg.toggleAttribute("data-calm", calm)
+    if (!calm) back([this])
+  }
+
   /** What it shows at `now`: what it last drew, moved by the loops marks.css
    * plays on it since. */
   private shownAt(now: number): Pose {
@@ -1556,7 +1687,8 @@ export class Animator {
     return looped(
       BASES[this.shown],
       this.shown,
-      phaseOf(this.beat, wallOf(now))
+      phaseOf(this.beat, wallOf(now)),
+      this.calm
     )
   }
 
@@ -1582,14 +1714,27 @@ export class Animator {
       return this.playing !== null
     }
     const t = time - playing.began
-    this.context.look = this.hovered ? this.looking() : null
+    this.context.look = this.hovered && this.logo ? this.looking() : null
+    this.context.calm = this.calm
     let pose = playing.motion(t, time, this.context)
     const m = ease(clamp(t / playing.blend))
     if (m < 1) pose = mix(playing.from, pose, m)
     if (time < this.leap) pose = jumped(pose, hop(time, this.leap - LEAP, LEAP))
+    // A glance turns the eyes on top of what plays, news too; what plays
+    // next moves on from what played, without it.
+    const glancing = this.turn(time)
     this.say(playing.stage?.(t))
-    this.paint(pose)
+    this.paint(
+      this.turned > 0 ? glanced(pose, this.lookAt, ease(this.turned)) : pose
+    )
+    this.last = pose
     if (t < playing.until || time < this.leap) return true
+    if (glancing) {
+      // News over, the glance goes on for as long as it lasts.
+      if (!playing.glance)
+        this.playing = { ...this.gaze(), began: time, from: pose }
+      return true
+    }
     this.end(time)
     return this.playing !== null
   }
@@ -1611,10 +1756,12 @@ export class Animator {
   private settle(time: number) {
     this.playing = null
     this.leap = -Infinity
+    this.turned = 0
     const still = stillNow()
     this.paint(still ? STILL[this.shown] : BASES[this.shown])
     this.snore(still)
     this.say(undefined)
+    this.svg.toggleAttribute("data-calm", this.calm)
     if (!still && LOOPED[this.shown]) {
       this.phase(time)
       this.svg.setAttribute("data-loop", this.shown)
@@ -1762,17 +1909,75 @@ export class Animator {
         : undefined
   }
 
-  /** Where the hovered logo's eyes turn to follow the pointer. */
-  private looking(): [number, number] | null {
+  /**
+   * Where its eyes turn to follow the pointer, unless it stopped more than
+   * `still` ms ago: the hovered logo's, from where its hat stands in its
+   * box, and a card's mark's from its box's middle, the less the nearer
+   * the pointer is, as marks-final.html's rows do.
+   */
+  private looking(still = 2500): [number, number] | null {
     const { box } = this
-    if (!box || !pointer || performance.now() - moved > 2500) return null
-    const x = box.left + box.width * 0.76
-    const y = box.top + box.height * 0.22
-    const dx = pointer[0] - x
-    const dy = pointer[1] - y
+    if (!box || !pointer || performance.now() - moved > still) return null
+    const [x, y, reach] = this.logo ? [0.76, 0.22, 120] : [0.5, 0.5, 80]
+    const dx = pointer[0] - (box.left + box.width * x)
+    const dy = pointer[1] - (box.top + box.height * y)
     const d = Math.hypot(dx, dy) || 1
-    const g = Math.min(1, d / 120)
+    const g = Math.min(1, d / reach)
     return [(dx / d) * 3.6 * g, (dy / d) * 3 * g]
+  }
+
+  /**
+   * The pointer moves over its card: an awake mark's eyes turn to it, on
+   * the window's clock, and back 2.5 s after it stops (ADR 0099, decision
+   * 6). Asleep, at work, unseen or still, it does not glance.
+   */
+  glance() {
+    if (this.logo || !GLANCES.has(this.shown) || this.paused || stillNow())
+      return
+    this.hovered = true
+    this.measure()
+    const now = performance.now() / 1000
+    if (this.turned === 0) this.turnedAt = now
+    if (!this.playing) this.play(this.gaze(), now, this.shownAt(now))
+  }
+
+  /** The pointer left its card: its eyes turn back. */
+  unglance() {
+    this.hovered = false
+    this.box = undefined
+  }
+
+  /** A glance on the clock: its look's loops as marks.css draws them,
+   * its eyes turned on top (`turn`). */
+  private gaze(): Omit<Playing, "began" | "from"> {
+    return {
+      motion: (_t, time, context) =>
+        looped(
+          BASES[this.shown],
+          this.shown,
+          phaseOf(this.beat, wallOf(time)),
+          context.calm
+        ),
+      blend: TURN,
+      until: 0,
+      stage: () => "glance",
+      glance: true,
+    }
+  }
+
+  /** Turns a card's mark's eyes to the pointer, or back, by the time since
+   * the clock last did: whether it still glances. */
+  private turn(time: number): boolean {
+    if (this.logo) return false
+    const look =
+      this.hovered && GLANCES.has(this.shown)
+        ? this.looking((GLANCE - TURN) * 1000)
+        : null
+    if (look) this.lookAt = look
+    const step = Math.min(time - this.turnedAt, 0.1) / TURN
+    this.turnedAt = time
+    this.turned = clamp(this.turned + (look ? step : -step))
+    return look !== null || this.turned > 0
   }
 
   private paint(p: Pose) {

@@ -1,5 +1,6 @@
 import { type ReactNode, useState } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { glanceAt } from "@banda/ui/components/banda-mark"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { toast } from "@banda/ui/components/sonner"
 import { trustProject } from "@banda/ui/lib/projects"
@@ -195,6 +196,8 @@ export function Sidebar({
                   id={PANEL}
                   aria-labelledby={tabId(view.tab)}
                   className="flex flex-col gap-1"
+                  onPointerMove={(event) => glanceAt(event.nativeEvent)}
+                  onPointerLeave={() => glanceAt(null)}
                 >
                   {/* This machine's list, where inbox zero tells the view it
                   told of Someday. */}
