@@ -34,7 +34,12 @@ import {
 import { linkHint, outsideClick } from "@banda/ui/lib/links"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
-import { KeyboardOffIcon, RotateCcwIcon, TerminalIcon } from "lucide-react"
+import {
+  KeyboardOffIcon,
+  PowerIcon,
+  RotateCcwIcon,
+  TerminalIcon,
+} from "lucide-react"
 import { Input } from "./input"
 import { outsideOf, type Target, targetOf } from "./links"
 import { type MenuAt, TerminalMenu, THIS_DEVICE } from "./TerminalMenu"
@@ -213,6 +218,9 @@ type Now =
   | { is: "starting" }
   | { is: "running" }
   | { is: "ended"; ended: Ended }
+  /** Its engine restarted while the shell ran, which ended it: its screen
+   * stays as it was, and the foot says why. */
+  | { is: "restarted" }
   | { is: "gone"; why: string }
   /** A shell opened while its machine was away, which never started. */
   | { is: "none" }
@@ -289,7 +297,7 @@ function Screen({
   // Its machine heard again, on the same connection or a new one, what was
   // refused while away no longer stands, whatever the shell says next.
   // Its owner's status is all a Pane reads of the link (ADR 0106, law 5).
-  const { shown } = usePlaced(project, undefined)
+  const { host, shown } = usePlaced(project, undefined)
   const reached = shown === undefined || shown.state.state === "live"
   const [wasReached, setWasReached] = useState(reached)
   if (wasReached !== reached) {
@@ -357,6 +365,11 @@ function Screen({
     // Set once the screen came, so a shell the engine lost starts again
     // once, not over and over.
     let followed = false
+    // The boot of the engine the screen came from. A shell gone under
+    // another boot went with that engine, and what ran in it with it, so
+    // the Pane says so rather than start another by itself (ADR 0106,
+    // decision 4).
+    let heardUnder: string | undefined
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { project })
     const input = new Input(call, terminal, (error) => {
@@ -392,6 +405,7 @@ function Screen({
         case "snapshot":
           followed = true
           parked = false
+          heardUnder = bootOf(engine)
           drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
           if (
@@ -430,6 +444,15 @@ function Screen({
         hear,
         (refusal) => {
           if (left) return
+          if (
+            refusal?.code === "not_found" &&
+            followed &&
+            bootOf(engine) !== heardUnder
+          ) {
+            followed = false
+            told({ is: "restarted" })
+            return
+          }
           if (refusal?.code === "not_found" && shell && followed) {
             followed = false
             void start().then(follow, fail)
@@ -600,7 +623,7 @@ function Screen({
   // The footer under the screen takes its room from the screen, inside
   // the Tile, so no Configure says so: the screen fits to what is left as
   // the footer comes, goes or says something else, before the frame shows.
-  const said = statusOf(now, problem, shell)
+  const said = statusOf(now, problem, shell, shown?.named.name ?? host)
   useLayoutEffect(() => {
     surface.current?.fit()
   }, [said])
@@ -672,11 +695,21 @@ function Screen({
   )
 }
 
+/** This boot of `engine`: none while it is not connected. */
+const bootOf = (engine: Engine) =>
+  engine.status.state === "open" ? engine.status.boot : undefined
+
 /** What the footer under the screen says: none while the program runs
- * well. */
-function statusOf(now: Now, problem: string | undefined, shell: boolean) {
+ * well. `machine` is the other machine it runs on, by name. */
+function statusOf(
+  now: Now,
+  problem: string | undefined,
+  shell: boolean,
+  machine: string | undefined
+) {
   return [
     now.is === "ended" ? endWords(now.ended, shell) : undefined,
+    now.is === "restarted" ? restartedWords(machine) : undefined,
     now.is === "gone" ? now.why : undefined,
     now.is === "none" ? "This terminal has no shell yet." : undefined,
     problem,
@@ -698,16 +731,25 @@ function Status({
 }) {
   if (!said) return null
   const startable =
-    shell && (now.is === "ended" || now.is === "gone" || now.is === "none")
+    shell &&
+    (now.is === "ended" ||
+      now.is === "restarted" ||
+      now.is === "gone" ||
+      now.is === "none")
   return (
     <footer
       role="status"
       className="flex shrink-0 items-center gap-2 border-t px-2.5 py-1.5 text-xs text-muted-foreground"
     >
+      {now.is === "restarted" && <PowerIcon className="size-3.5 shrink-0" />}
       <span className="min-w-0 flex-1">{said}</span>
       {startable && (
         <Button variant="outline" size="xs" onClick={onAgain}>
-          <RotateCcwIcon data-icon="inline-start" />
+          {now.is === "restarted" ? (
+            <TerminalIcon data-icon="inline-start" />
+          ) : (
+            <RotateCcwIcon data-icon="inline-start" />
+          )}
           {againWords(now)}
         </Button>
       )}
@@ -717,7 +759,16 @@ function Status({
 
 /** The footer's button, and what a refusal of it says was not sent. */
 const againWords = (now: Now) =>
-  now.is === "none" ? "Start a shell" : "Start again"
+  now.is === "none"
+    ? "Start a shell"
+    : now.is === "restarted"
+      ? "New shell here"
+      : "Start again"
+
+/** That Banda restarted where the terminal ran: on `machine`, or with none
+ * on this one. */
+export const restartedWords = (machine: string | undefined) =>
+  machine ? `Ended: Banda restarted on ${machine}` : "Ended: Banda restarted"
 
 /** How a program ended, in words. */
 export function endWords(ended: Ended, shell: boolean): string {
