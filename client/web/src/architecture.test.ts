@@ -2426,9 +2426,7 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  *
  * - 3c: a reply's links and Open in, as the Thread's paths go through
  *   `files.locate` and its links through the router to the device;
- * - 4c: its media, as arc's bytes come through arc's session;
- * - 4d: a Visual's links in a reply, as `visual/Frame.tsx`'s
- *   `window.open` becomes a `Link`.
+ * - 4c: its media, as arc's bytes come through arc's session.
  *
  * None joins the list, and a place that goes leaves it, as its step
  * lands. A kind that comes to say `elsewhere` reaches none, or says here
@@ -2451,10 +2449,6 @@ const REACHING: Record<string, { places: number; until: string }> = {
   "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
     places: 1,
     until: "4c",
-  },
-  "agents.thread: apps/agents/pane/src/visual/Frame.tsx: window.open": {
-    places: 1,
-    until: "4d",
   },
 }
 

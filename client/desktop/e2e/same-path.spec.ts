@@ -545,20 +545,28 @@ test.fixme("step 4c: Quick Look previews arc's picture, not this machine's at th
     .toBe(3)
 })
 
-test.fixme("step 4d: a Visual arc's Agent shows is arc's", async () => {
-  const { thread, composer } = await opened()
+test("step 4d: a Visual arc's Agent shows is drawn in its Thread and in a Pane of its own, its page from arc's engine", async () => {
+  const { page, thread, composer } = await opened()
   await composer.fill("wait")
   await composer.press("Enter")
   await expect(thread.getByText("Waiting.")).toBeVisible()
-  // agentSays runs `banda mcp` on this machine, where a tool that takes
-  // a path would read this machine's file: step 4d runs it on arc.
+  // This machine's engine keeps no such Visual: the page is arc's.
   await agentSays({ dir: arc!.dir }, "show_visual", {
     html: '<p id="who">arc</p>',
     title: "Whose",
     height: 80,
   })
-  const frame = thread.locator('iframe[title="Whose"]').contentFrame()
-  await expect(frame.locator("#who")).toHaveText("arc")
+  const shown = thread.locator('iframe[title="Whose"]')
+  await expect(shown.contentFrame().locator("#who")).toHaveText("arc")
+  // Dressed as this machine's are: it wears the look.
+  await expect(shown.contentFrame().locator("#banda-base")).toBeAttached()
+
+  // As a Pane of its own, beside the Thread.
+  await shown.hover()
+  await thread.getByRole("button", { name: "Open as Pane" }).click()
+  const frames = page.locator('iframe[title="Whose"]')
+  await expect(frames).toHaveCount(2)
+  await expect(frames.nth(1).contentFrame().locator("#who")).toHaveText("arc")
 })
 
 /** Two grey PNGs, told apart by their sizes. */

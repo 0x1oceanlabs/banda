@@ -103,6 +103,16 @@ const GIVEN: Record<
     answers: diffAnswers,
     reads: ["Scope", "Base", "Refresh"],
   },
+  // A Visual arc keeps: its page's token asked of arc as its frame
+  // comes near. There is nothing to do in it but look: what its page
+  // does stays in its frame.
+  "agents.visual": {
+    modules: ["agents"],
+    args: { visual: "v", title: "A mockup", height: 80, heights: [] },
+    answers: (method) =>
+      method === "agents.visual_link" ? { token: "t", until: 0 } : undefined,
+    gestures: {},
+  },
   // Its shell, already there, and a key typed into it.
   "terminal.terminal": {
     args: { terminal: "t", title: "Terminal", shell: true, done: null },

@@ -406,6 +406,7 @@ version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
+ "banda-bytes",
  "banda-environments",
  "banda-harnesses",
  "banda-kernel",

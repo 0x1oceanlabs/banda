@@ -10,7 +10,7 @@
  */
 export { confirm, pickFolder, pickSave, type Ask } from "./dialog"
 export { Engine } from "./engine"
-export type { Asked, DesktopModule, Served } from "./module"
+export type { Asked, DesktopModule, Relayed, Served } from "./module"
 export { Broke, NotFromPage, Refused } from "./errors"
 export { copyTo, namedBy, relay } from "./files"
 export { type Answer, type Answers, none, serve, tellPage, text } from "./ipc"

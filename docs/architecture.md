@@ -1115,6 +1115,12 @@ If Chat is removed, Agents still works through its own Thread.
   window serves it at `app://visuals/<project>/<visual>`, an origin of its
   own, sandboxed by its response and its frame (`apps/agents/desktop`),
   and the frame passes it the look's colours as T3 Code's variables.
+  Another machine's Visual is drawn the same (ADR 0106, step 4d): as its
+  frame comes near showing, the Pane's session asks that machine's engine
+  for a token for the page (`agents.visual_link`, an hour's, given to no
+  Agent), and the frame loads `app://visuals/of/<machine>/<token>`, which
+  main relays to that engine's `/p/<token>` as it does the sandbox host's
+  pages, then dresses and sandboxes as this machine's.
 - **An Agent's plan** for its turn is one entry whose steps follow the
   Harness: each plan it sends replaces the steps, and an empty one clears
   them. A new turn's plan is a new entry. Codex in plan mode writes its

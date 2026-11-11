@@ -11,6 +11,7 @@ publish.workspace = true
 agent-client-protocol.workspace = true
 async-trait.workspace = true
 base64.workspace = true
+banda-bytes = { path = "../../../platform/bytes/engine" }
 banda-harnesses = { path = "../../../platform/harnesses/engine" }
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../platform/look" }

@@ -54,6 +54,7 @@ import {
   none,
   pickFolder,
   pickSave,
+  type Relayed,
   Refused,
   serve,
   Settings,
@@ -67,7 +68,7 @@ import {
   poppedRoute,
 } from "@banda/core"
 import { BRIDGE } from "./bridge"
-import { relayed, saveCopy } from "./bytes"
+import { relayed, relayedAs, saveCopy } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
@@ -138,13 +139,19 @@ const TEST_LATENCY = app.isPackaged
   ? 0
   : Number(process.env.BANDA_TEST_LATENCY) || 0
 
+/** The byte host and the sandbox host, which ask main for no page. */
+const own: (request: Request, asks: Relayed) => ReturnType<typeof relayed> = (
+  request
+) => relayed(request)
+
 /** The hosts of `app://` beside Banda's own page: the files a Pane shows,
  * and the pages among them that run scripts, sandboxed (ADR 0073,
  * decision 5), both relayed to the engine that gave their tokens, which
  * serves them, this machine's or another's (bytes.ts, ADR 0106, decision
- * 6); and the modules' own. */
+ * 6); and the modules' own, which may ask those two for a page of theirs
+ * (`Relayed`), as a Visual another machine's engine keeps. */
 const hosts = new Map(
-  Object.entries({ ...modules.served, files: relayed, preview: relayed })
+  Object.entries({ ...modules.served, files: own, preview: own })
 )
 /** The hosts a frame shows: the modules' and the sandbox host. The byte
  * host serves any file, so no frame shows one. */
@@ -407,7 +414,12 @@ async function ready(): Promise<void> {
   )
   protocol.handle("app", (request) => {
     const served = hosts.get(new URL(request.url).host)
-    if (served) return runtime.runPromise(served(request))
+    if (served)
+      return runtime.runPromise(
+        served(request, (url) =>
+          Effect.promise(() => runtime.runPromise(relayedAs(request, url)))
+        )
+      )
     return request.url.split("?")[0] === WALLPAPER_URL
       ? wallpaper(request.url)
       : page(request)

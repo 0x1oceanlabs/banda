@@ -65,6 +65,7 @@ mod visuals;
 mod writer;
 
 use acp::Connection;
+use banda_bytes::Bytes;
 use banda_harnesses::hosts::IDLE;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
@@ -141,6 +142,10 @@ pub struct Agents {
     /// The count each running turn holds one of: the engine's, which keeps
     /// its machine awake while it is above nothing (ADR 0097).
     working: Working,
+    /// The engine's tokens for the routes beside its API, which a Visual's
+    /// page is served by (ADR 0106, decision 6); its own, served nowhere,
+    /// in a test that gives none.
+    bytes: Bytes,
 }
 
 /// How an Agent reaches Banda from its session: the engine's own program
@@ -232,7 +237,14 @@ impl Agents {
             quiet: between::QUIET,
             pipe: None,
             working,
+            bytes: Bytes::new(),
         }
+    }
+
+    /// Gives a Visual's page its token from `bytes`, the engine's, whose
+    /// routes serve it.
+    pub fn served_by(self, bytes: Bytes) -> Self {
+        Self { bytes, ..self }
     }
 
     /// Reads its settings files in `config`, `~/.config/banda`: each new
@@ -491,6 +503,11 @@ banda_kernel::methods! {
         command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
+        /// A token for a window to draw a Visual's page with, served at
+        /// `/p/<token>` into a frame alone, until `until`, an hour: how a
+        /// window on another machine shows it (ADR 0106, decision 6). An
+        /// Agent is given none.
+        call visual_link(OneVisual) -> VisualLink, Read;
         /// Puts off your own Thread: it leaves your Person's list for
         /// `after` (`30m`, `2h`, `1d`, a year at most), or until `until`,
         /// in milliseconds since the epoch. Give one of them: with
@@ -835,6 +852,27 @@ struct OneVisual {
 #[ts(export, export_to = "agents/")]
 pub struct VisualPage {
     pub html: String,
+}
+
+/// What `agents.visual_link` answers: a token for the Visual's page, for
+/// `/p/<token>`.
+#[derive(Clone, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct VisualLink {
+    pub token: String,
+    /// When it stops serving the page, in ms since the epoch.
+    #[ts(type = "number")]
+    pub until: i64,
+}
+
+/// Its token is the capability, so no log, panic or test says it.
+impl std::fmt::Debug for VisualLink {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        (f.debug_struct("VisualLink"))
+            .field("token", &"…")
+            .field("until", &self.until)
+            .finish()
+    }
 }
 
 /// What an Agent hears once its Visual shows, as T3 Code says it.
@@ -1634,6 +1672,27 @@ impl Agents {
             .await
             .map_err(|_| Refusal::not_found("There is no such Visual."))?;
         Ok(VisualPage { html })
+    }
+
+    async fn visual_link(
+        &self,
+        call: Call,
+        OneVisual { visual }: OneVisual,
+    ) -> Result<VisualLink, Refusal> {
+        // A token is for a window to draw with, as `bytes.issue`'s: the
+        // route that serves it is outside the fence.
+        if let Participant::Agent(_) = call.participant() {
+            return Err(Refusal::forbidden(
+                "A token for a Visual's page is for a window to draw it.",
+            ));
+        }
+        let path = Visuals::of(call.project().data()).path(visual);
+        let issued = (self.bytes.page(path).await)
+            .map_err(|_| Refusal::not_found("There is no such Visual."))?;
+        Ok(VisualLink {
+            token: issued.token,
+            until: issued.until,
+        })
     }
 }
 
