@@ -7,6 +7,11 @@
  * list holding still under the pointer (ADR 0098, S5c): what comes waits,
  * what leaves stays dimmed in its slot, and both land as the pointer
  * leaves, screenshot as a strip of three frames, `sidebar-s5c-*.png`.
+ * And a card's acts under the pointer (ADR 0098, S7a): Archive at once,
+ * a ghost line in its slot until the pointer leaves and the toast that
+ * takes it back, Later's picker at the card, an asking card's Later
+ * alone; each place's card at rest and under the pointer, the ghost line
+ * and the toast, as `sidebar-s7a-*.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -19,11 +24,14 @@ import {
   call,
   firstThread,
   GLASS,
+  pickerOf,
   placeOf,
   leaveSidebar,
   send,
+  sidebarOf,
   startWindow,
   threadNamed,
+  toastsOf,
   topsOf,
   wallpaper,
   type Window,
@@ -510,5 +518,234 @@ test("a Thread archived elsewhere while the list holds stays in its slot, dimmed
     frames.push(await frame())
     await page.screenshot({ path: `test-results/sidebar-s5c-${mode}.png` })
     await strip(page, frames, `test-results/sidebar-s5c-${mode}-strip.png`)
+  }
+})
+
+/** The window in `mode`, on its glass, with no motion, so what the
+ * pointer shows shows at once; no toast is on its way out. */
+async function look(window: Window, mode: "dark" | "light") {
+  const { page, dir } = window
+  const html = page.locator("html")
+  writeFileSync(
+    join(dir, "config/look.toml"),
+    `mode = "${mode}"\n${GLASS}[motion]\noff = true\n`
+  )
+  if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
+  else await expect(html).not.toHaveClass(/\bdark\b/)
+  await expect(html).toHaveAttribute("data-still", "")
+  // The desk's picture paints a frame after the look comes.
+  await page.waitForTimeout(250)
+  await expect(
+    page.locator('[data-sonner-toast][data-removed="true"]')
+  ).toHaveCount(0)
+}
+
+/** `row`, a card of the list, and 8 px round it, as `path`. */
+async function cardShot(page: Page, row: Locator, path: string) {
+  const box = (await row.boundingBox())!
+  await page.screenshot({
+    path,
+    clip: {
+      x: box.x - 8,
+      y: box.y - 8,
+      width: box.width + 16,
+      height: box.height + 16,
+    },
+  })
+}
+
+/** The cards of `scope` whose title is `title`, as the list draws them,
+ * a ghost's too. */
+const rowsNamed = (scope: Locator, title: string) =>
+  scope.locator("[data-row]").filter({ hasText: title })
+
+/** The act `name` of the card titled `title` in `scope`. */
+const actOf = (scope: Locator, title: string, name: string) =>
+  rowsNamed(scope, title).getByRole("button", { name, exact: true })
+
+test("a card's acts: Archive acts at once, its ghost line holds the slot until the pointer leaves, and Archived · Undo brings it back; Later opens the picker at the card, whose ghost's Undo wakes it; an asking card offers Later alone (ADR 0098, S7a)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  const calls = ["call one", "call two", "call three"]
+  for (const text of calls) await send(window, text)
+  call(window, "agents.send", {
+    harness: "fake",
+    text: "please ask first",
+    settings: null,
+  })
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  const rows = panel.locator("[data-row]")
+  const tab = (name: string) =>
+    sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
+  await expect(rowsNamed(panel, "please ask first")).toContainText(
+    "Asks Run a check"
+  )
+  await landed(sidebar, [...calls, "please ask first"])
+
+  // An asking card offers Later alone, which names its key.
+  await rowsNamed(panel, "please ask first").hover()
+  const later = actOf(panel, "please ask first", "Later")
+  await expect(later).toBeVisible()
+  await expect(later).toHaveAttribute("title", "Later (Alt+Z)")
+  await expect(actOf(panel, "please ask first", "Archive")).toHaveCount(0)
+
+  // A done one offers Later, then Archive; under the pointer its time
+  // fades out where they stand.
+  const two = rowsNamed(panel, "call two")
+  await two.hover()
+  const archive = actOf(panel, "call two", "Archive")
+  await expect(archive).toBeVisible()
+  await expect(archive).toHaveAttribute("title", "Archive (Alt+S)")
+  await expect(two.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
+  const held = await topsOf(rows)
+
+  // Archive acts at once: the Archive's tab counts it, a ghost line stands
+  // in its slot, and the toast says so, with Undo. No card moves while the
+  // pointer stays on the list.
+  await archive.click()
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+  const ghost = panel.locator("[data-key] > p").filter({ hasText: /^Archived/ })
+  await expect(ghost).toHaveText("Archived·Undo")
+  await expect(ghost.getByRole("button", { name: "Undo" })).toBeVisible()
+  const toast = toastsOf(page)
+    .getByRole("listitem")
+    .filter({ hasText: "Archived" })
+  await expect(toast).toBeVisible()
+  await expect(toast.getByRole("button", { name: "Undo" })).toBeVisible()
+  await rowsNamed(panel, "call three").hover()
+  await page.waitForTimeout(500)
+  expect(await topsOf(rows)).toEqual(held)
+  await expect(rowsNamed(panel, "call two")).toHaveCount(1)
+
+  // The pointer leaves: the slot closes. The toast's Undo brings it back.
+  await leaveSidebar(page)
+  await expect(rowsNamed(panel, "call two")).toHaveCount(0)
+  await expect(rows).toHaveCount(3)
+  await toast.getByRole("button", { name: "Undo" }).click()
+  await expect(tab("Archive")).toHaveAccessibleName("Archive")
+  await expect(rowsNamed(panel, "call two")).toHaveCount(1)
+  await expect(ghost).toHaveCount(0)
+
+  // Later opens the picker at the card: beside it, level with its top.
+  const one = rowsNamed(panel, "call one")
+  await one.hover()
+  await actOf(panel, "call one", "Later").click()
+  const picker = pickerOf(page)
+  await expect(picker).toContainText("call one")
+  const card = (await one.boundingBox())!
+  const box = (await picker.boundingBox())!
+  expect(box.x).toBeGreaterThanOrEqual(card.x + card.width)
+  expect(Math.abs(box.y - card.y)).toBeLessThanOrEqual(8)
+  // Picked, its ghost line says till when; the ghost's Undo wakes it, and
+  // it is back in its slot at once.
+  const field = picker.getByRole("textbox", { name: "When it comes back" })
+  await field.fill("2h")
+  await field.press("Enter")
+  await expect(tab("Later")).toHaveAccessibleName("Later, 1")
+  const put = panel.locator("[data-key] > p").filter({ hasText: /^Later · / })
+  await expect(put).toHaveText(/^Later · (\S+ )?\d+:\d\d·Undo$/)
+  await put.getByRole("button", { name: "Undo" }).click()
+  await expect(tab("Later")).toHaveAccessibleName("Later")
+  await expect(put).toHaveCount(0)
+  await expect(rowsNamed(panel, "call one")).toHaveCount(1)
+  expect(await topsOf(rows)).toEqual(held)
+})
+
+test("each place's card at rest and under the pointer, a ghost line and the toast, dark and light (ADR 0098, S7a)", async () => {
+  test.setTimeout(300_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await send(window, "Bench the window tests")
+  await send(window, "Review the sidebar spec")
+  await send(window, "wait for the build")
+  await send(window, "Sleep till the review")
+  call(window, "agents.later", {
+    thread: idOf(window, "Sleep till the review"),
+    after: "2h",
+  })
+  await send(window, "Old notes")
+  call(window, "agents.archive", { thread: idOf(window, "Old notes") })
+  call(window, "agents.send", {
+    harness: "fake",
+    text: "please ask first",
+    settings: null,
+  })
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  const tab = (name: string) =>
+    sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
+  await expect(tab("Later")).toHaveAccessibleName("Later, 1")
+  await expect(rowsNamed(panel, "please ask first")).toContainText("Asks")
+  await leaveSidebar(page)
+
+  // Each place: its tab, its card, and the acts it shows.
+  const places = [
+    ["asks", "Inbox", "please ask first", ["Later"]],
+    ["done", "Inbox", "Bench the window tests", ["Later", "Archive"]],
+    ["working", "Working", "wait for the build", ["Later"]],
+    ["later", "Later", "Sleep till the review", ["Wake"]],
+    ["archive", "Archive", "Old notes", ["Unarchive"]],
+  ] as const
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    for (const [place, name, title, acts] of places) {
+      await tab(name).click()
+      const row = rowsNamed(panel, title)
+      await expect(row).toHaveCount(1)
+      await leaveSidebar(page)
+      await expect(row.locator("[data-acts]")).toHaveCSS("opacity", "0")
+      await cardShot(
+        page,
+        row,
+        `test-results/sidebar-s7a-${place}-rest-${mode}.png`
+      )
+      await row.hover()
+      await expect(row.locator("[data-acts]")).toHaveCSS("opacity", "1")
+      expect(
+        await row
+          .locator("[data-acts] button")
+          .evaluateAll((all) => all.map((one) => one.ariaLabel))
+      ).toEqual(acts)
+      await cardShot(
+        page,
+        row,
+        `test-results/sidebar-s7a-${place}-pointer-${mode}.png`
+      )
+    }
+    await leaveSidebar(page)
+  }
+
+  // A ghost line and the toast, each look its own card archived.
+  for (const [mode, title] of [
+    ["dark", "Bench the window tests"],
+    ["light", "Review the sidebar spec"],
+  ] as const) {
+    await look(window, mode)
+    await tab("Inbox").click()
+    const row = rowsNamed(panel, title)
+    await row.hover()
+    await actOf(panel, title, "Archive").click()
+    const ghost = panel
+      .locator("[data-key] > p")
+      .filter({ hasText: /^Archived/ })
+    await expect(ghost).toBeVisible()
+    await expect(
+      toastsOf(page).getByRole("listitem").filter({ hasText: "Archived" })
+    ).toBeVisible()
+    await cardShot(page, ghost, `test-results/sidebar-s7a-ghost-${mode}.png`)
+    await page.screenshot({
+      path: `test-results/sidebar-s7a-toast-${mode}.png`,
+    })
+    await leaveSidebar(page)
+    await expect(ghost).toHaveCount(0)
+    await toastsOf(page).getByRole("button", { name: "Undo" }).click()
+    await expect(rowsNamed(panel, title)).toHaveCount(1)
   }
 })

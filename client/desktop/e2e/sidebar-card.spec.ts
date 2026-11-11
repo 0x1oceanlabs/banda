@@ -37,6 +37,7 @@ import {
   sidebarOf,
   startWindow,
   threadNamed,
+  toastsOf,
   wallpaper,
   type Window,
 } from "./window"
@@ -332,7 +333,7 @@ test("a card's three lines: Asks orange on its mark and time with its question, 
   })
 })
 
-test("a Thread away from its Project's workspace bears a small diamond right after its title and before its time, or at the start of line 3's right on a card of three, which the card's action never covers: the Later clock, or Wake in Later (ADR 0102, decision 6; S6b)", async () => {
+test("a Thread away from its Project's workspace bears a small diamond right after its title and before its time, or at the start of line 3's right on a card of three, which the card's acts never cover: the Later clock, or Wake in Later (ADR 0102, decision 6; S6b)", async () => {
   test.setTimeout(180_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
   const { page } = window
@@ -370,7 +371,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   /** `card`'s diamond: on one line, right after its title and before its
    * time; on three, at the start of line 3's right, after its Project and
    * before its Harness's emblem, never on line 1's right. A screen reader
-   * hears it once, in the card's description. While the card's action
+   * hears it once, in the card's description. While the card's act
    * `name` shows, the time hides under it and the diamond stays in
    * sight. */
   const away = async (card: Locator, title: string, name: string) => {
@@ -420,7 +421,8 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
       .locator("xpath=..")
       .getByRole("button", { name, exact: true })
     await expect(action).toBeVisible()
-    await expect(time).toBeHidden()
+    // The time fades out where the acts show (spec S7a).
+    await expect(card.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
     await expect(diamond).toBeVisible()
     const box = (await action.boundingBox())!
     if (!three) expect(box.x).toBeGreaterThanOrEqual(mark.x + mark.width)
@@ -429,7 +431,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
     expect(box.height).toBe(20)
     expect(box.y + box.height / 2).toBeCloseTo(line.y + line.height / 2, 0)
     await card.blur()
-    await expect(time).toBeVisible()
+    await expect(card.locator("[data-acts-time]")).toHaveCSS("opacity", "1")
   }
 
   // Back in the row, Work has its own workspace: both stand away from it.
@@ -442,8 +444,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await shots(window, "away", { "open-1": stray, "turn-3-asks": asks })
   await focusShots(window, "away-turn-3-asks", asks)
 
-  // Put off, its action is Wake, wider than the clock: the card keeps its
-  // room.
+  // Put off, its act is Wake: the diamond stays in sight beside it.
   call(window, "agents.later", {
     thread: idOf(window, "stray one"),
     after: "2h",
@@ -618,4 +619,22 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   await expect(
     page.getByRole("region", { name: "Done on arc", exact: true })
   ).toHaveAttribute("data-focused", "true")
+
+  // arc's card has the acts mac's has, and they go to arc's engine (spec
+  // S7a): its Archive archives it on arc, and the toast's Undo brings it
+  // back there.
+  const archivedOnArc = () =>
+    (
+      JSON.parse(arc!.banda("call", "agents.threads", "--project", banda)).ok
+        .threads as { title: string; archived?: unknown }[]
+    ).find((one) => one.title === "Done on arc")?.archived
+  await fits.hover()
+  const archive = fits
+    .locator("xpath=..")
+    .getByRole("button", { name: "Archive", exact: true })
+  await expect(archive).toBeVisible()
+  await archive.click()
+  await expect.poll(archivedOnArc).toBeDefined()
+  await toastsOf(page).getByRole("button", { name: "Undo" }).click()
+  await expect.poll(archivedOnArc).toBeUndefined()
 })

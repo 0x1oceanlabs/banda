@@ -1,4 +1,5 @@
 import { ThreadMark } from "@banda/ui/components/banda-mark"
+import { Button } from "@banda/ui/components/button"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { FadeText } from "@banda/ui/components/fade-text"
 import { MachineMark } from "@banda/ui/components/machine-icon"
@@ -7,8 +8,16 @@ import { THINKING, useThinking } from "@banda/ui/lib/naming"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { short } from "@banda/ui/lib/words"
-import { DiamondIcon } from "lucide-react"
-import { Fragment, type ReactNode } from "react"
+import {
+  ArchiveRestoreIcon,
+  CheckIcon,
+  ClockIcon,
+  DiamondIcon,
+  type LucideIcon,
+  Undo2Icon,
+} from "lucide-react"
+import { type CSSProperties, Fragment, type ReactNode } from "react"
+import { type Act, actsWidth } from "./acts"
 import {
   type CardModel,
   type CardRow,
@@ -24,6 +33,25 @@ import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
+const NO_ACTS: readonly CardAct[] = []
+
+/** What a card offers under the pointer (`acts.ts`): the act; the key
+ * in force that does it, and a note, both said in its tooltip; and what
+ * it does from the card it was pressed on. */
+export type CardAct = {
+  act: Act
+  key?: string
+  note?: string
+  run: (card: Element) => void
+}
+
+/** Each act's icon and name (ADR 0098, decision 10). */
+const ACT_LOOK: Readonly<Record<Act, { icon: LucideIcon; name: string }>> = {
+  later: { icon: ClockIcon, name: "Later" },
+  archive: { icon: CheckIcon, name: "Archive" },
+  wake: { icon: Undo2Icon, name: "Wake" },
+  unarchive: { icon: ArchiveRestoreIcon, name: "Unarchive" },
+}
 
 /**
  * A sidebar card (ADR 0098, decisions 8 and 9), drawn from its model
@@ -31,13 +59,15 @@ const NO_HARNESSES: readonly EmblemOf[] = []
  * under the title, past the mark. Colour is only on a call's mark and
  * time. It is drawn again only as one of its times changes (`clock.ts`).
  * A click opens the Pane it stands for, by `pane.pick`; a screen reader
- * hears it by `spokenOf`.
+ * hears it by `spokenOf`. Under the pointer, with the focus in it, or
+ * always on a coarse pointer, its acts show at line 1's right, in the
+ * time's place (decision 10).
  */
 export function Card({
   card,
   row,
   current,
-  action,
+  acts = NO_ACTS,
   field,
   harnesses = NO_HARNESSES,
 }: {
@@ -47,9 +77,8 @@ export function Card({
   row: CardRow
   /** Its Thread is the open one. */
   current: boolean
-  /** A button that shows while the pointer is over the card: its Later's
-   * clock, or Wake (ADR 0074). */
-  action?: ReactNode
+  /** What it offers under the pointer, Later first. */
+  acts?: readonly CardAct[]
   /** The field that names it, in its title's place (ADR 0077): the card
    * is then no button. */
   field?: ReactNode
@@ -61,7 +90,7 @@ export function Card({
   const spoken = spokenOf(card, now)
   const one = card.lines.length === 1
   // One that left, or one being named, has none.
-  const acts = action !== undefined && !card.gone && !field
+  const shown = card.gone || field ? NO_ACTS : acts
   const Element = field ? "div" : "button"
   const drawn = (
     <Element
@@ -70,12 +99,13 @@ export function Card({
       aria-label={field ? undefined : spoken.name}
       aria-description={field ? undefined : spoken.description || undefined}
       data-tone={card.tone}
+      data-card=""
       className={cn(
         "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control px-2 text-left outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-        // The hover's fill is a layer under the card that fades: at once
-        // in, over 100 ms out, by its opacity alone (ADR 0088, decision
-        // 2); it stays while the pointer is on the card's action.
-        "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit) group-hover/row:before:opacity-100 group-hover/row:before:duration-0 hover:before:opacity-100 hover:before:duration-0",
+        // The hover's fill is a layer under the card that fades
+        // (globals.css): at once in, over 100 ms out, by its opacity alone
+        // (ADR 0088, decision 2); it stays while the pointer is on an act.
+        "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit)",
         one ? "py-1" : "py-1.5",
         // The open Thread's card: a fill, with no shadow and no border.
         current && "bg-foreground/8 before:hidden"
@@ -86,25 +116,49 @@ export function Card({
         card={card}
         row={row}
         now={now}
-        acts={acts}
+        acts={shown.length}
         field={field}
         harnesses={harnesses}
       />
     </Element>
   )
-  if (field || (!action && !card.gone)) return drawn
+  if (field || (shown.length === 0 && !card.gone)) return drawn
   return (
-    <div data-row className="group/row relative">
+    <div data-row className="relative">
       {drawn}
-      {acts && (
+      {shown.length > 0 && (
+        // Over line 1's right, whose cell keeps their room: a button holds
+        // no buttons.
         <span
+          data-acts=""
           className={cn(
-            "absolute right-1 hidden items-center rounded-control bg-popover shadow-xs ring-1 ring-foreground/10 group-focus-within/row:flex group-hover/row:flex pointer-coarse:flex",
-            // Level with line 1, at the card's own top padding.
+            "absolute right-2 flex items-center gap-0.5",
             one ? "top-1" : "top-1.5"
           )}
         >
-          {action}
+          {shown.map(({ act, key, note, run }) => {
+            const { icon: Icon, name } = ACT_LOOK[act]
+            const named = key ? `${name} (${key})` : name
+            return (
+              <Button
+                key={act}
+                variant="ghost"
+                size="icon-xs"
+                aria-label={name}
+                title={note ? `${named} · ${note}` : named}
+                data-act={act}
+                className="size-5 text-muted-foreground"
+                onClick={(event) =>
+                  run(
+                    event.currentTarget.closest("[data-row]") ??
+                      event.currentTarget
+                  )
+                }
+              >
+                <Icon className="size-3.5" />
+              </Button>
+            )
+          })}
         </span>
       )}
     </div>
@@ -128,7 +182,7 @@ export function CardLines({
   card,
   row,
   now,
-  acts = false,
+  acts = 0,
   field,
   harnesses = NO_HARNESSES,
 }: {
@@ -136,8 +190,8 @@ export function CardLines({
   row: CardRow
   /** The moment it is drawn as of (`useCardClock`). */
   now: number
-  /** Its action shows over line 1's right while the pointer is on it. */
-  acts?: boolean
+  /** How many acts show over line 1's right, under the pointer. */
+  acts?: number
   /** The field that names it, in its title's place. */
   field?: ReactNode
   harnesses?: readonly EmblemOf[]
@@ -161,7 +215,7 @@ export function CardLines({
   return card.lines.map((line, index) => {
     const first = index === 0
     // #1160's mark: at the start of line 3's right, else right after the
-    // title, never at line 1's right, under the card's action.
+    // title, never at line 1's right, where the acts show.
     const strayed = card.strayed && index === (three ? 2 : 0)
     // Where a card that left went takes line 1's right.
     const right =
@@ -177,6 +231,10 @@ export function CardLines({
               {line.right.map(slot)}
             </>
           )
+    // The acts and line 1's right share one cell, which keeps the acts'
+    // room while they show: the time hides there, and the title's fade
+    // ends before them (`globals.css`).
+    const room = first && acts > 0
     return (
       <span
         key={index}
@@ -187,25 +245,26 @@ export function CardLines({
       >
         {line.left.map(slot)}
         {strayed && !three && <Strayed />}
-        {right && (
-          <span
-            className={cn(
-              "ml-auto flex shrink-0 items-center justify-end gap-1.5",
-              // While the action shows, it stands in the right's place,
-              // which hides under it whole.
-              first &&
-                acts &&
-                "group-focus-within/row:invisible group-hover/row:invisible pointer-coarse:invisible",
-              // The right keeps the room of that action, Wake's or the
-              // Later clock's, so the mark after the title stays in sight
-              // even by a time as short as "2h".
-              first &&
-                strayed &&
-                (card.stand === "later" ? "min-w-15" : "min-w-5")
-            )}
-          >
-            {right}
+        {room ? (
+          <span className="ml-auto grid shrink-0 items-center justify-items-end">
+            <span
+              data-acts-time=""
+              className="flex items-center gap-1.5 [grid-area:1/1]"
+            >
+              {right}
+            </span>
+            <span
+              data-acts-room=""
+              style={{ "--room": `${actsWidth(acts)}px` } as CSSProperties}
+              className="[grid-area:1/1]"
+            />
           </span>
+        ) : (
+          right && (
+            <span className="ml-auto flex shrink-0 items-center justify-end gap-1.5">
+              {right}
+            </span>
+          )
         )}
       </span>
     )
@@ -214,7 +273,7 @@ export function CardLines({
 
 /** The mark of a Thread away from its Project's workspace (ADR 0102,
  * decision 6): a small diamond, as an arrow is the sign of a Pane in its
- * own window, where the card's action never covers it. A screen reader
+ * own window, where the card's acts never cover it. A screen reader
  * hears it in the card's description. */
 function Strayed() {
   return (

@@ -28,26 +28,27 @@ import { HoldingContext, useHoldWhile } from "./useHold"
  * drawn. */
 type Placed = Omit<CardOf, "row" | "machine" | "away" | "stopped"> & {
   row: Row
-} & Pick<ComponentProps<typeof Card>, "current" | "action">
+} & Pick<ComponentProps<typeof Card>, "current" | "acts">
 
 /**
  * A Thread's card, the same on every machine (ADR 0098, decision 18),
  * named as `[machines]` asks (`useCard`): another machine's dims, where
  * no label above names it, while the Window does not reach it, its time
  * standing as of when it was last heard, and has its Harness's emblem
- * from that machine's engine. This machine's has the Thread menu a right click opens (ADR 0077, decision
- * 5), whose Rename… opens the field in the card itself, and its hover
- * action; another machine's has neither yet, nor has one that left the
- * tab while the list held. The menu, while open, and the field hold the
- * list still, and what its Person does from the menu is their own act,
- * which the list draws at once where it takes the card elsewhere (ADR
- * 0098, decision 6).
+ * from that machine's engine. This machine's has the Thread menu a right
+ * click opens (ADR 0077, decision 5), whose Rename… opens the field in
+ * the card itself. Every card has its acts under the pointer (ADR 0098,
+ * decision 10), which go to its host's engine; another machine's has no
+ * menu yet, and one that left the tab while the list held has neither.
+ * The menu, while open, and the field hold the list still, and what its
+ * Person does from the menu is their own act, which the list draws at
+ * once where it takes the card elsewhere (ADR 0098, decision 6).
  */
 export function ThreadRow({
   engine,
   named,
   machines,
-  action,
+  acts,
   ...placed
 }: Placed & {
   /** This machine's engine. */
@@ -83,7 +84,7 @@ export function ThreadRow({
       card={card}
       row={row}
       current={placed.current}
-      action={mine ? action : undefined}
+      acts={acts}
       harnesses={harnesses}
       field={field}
     />
