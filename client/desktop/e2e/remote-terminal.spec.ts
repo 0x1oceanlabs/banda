@@ -292,9 +292,15 @@ test("Banda restarted on arc: the terminal says Ended, starts nothing by itself,
 
   arc!.banda("stop", "--force")
   await stopArc!()
-  stopArc = await arc!.start()
+  stopArc = undefined
+  const pill = pillOf(page, screen)
+  await expect(pill).toContainText("Banda is stopped on arc", {
+    timeout: 60_000,
+  })
+  await arcOf(page).getByRole("button", { name: "Start" }).click()
+  await expect(pill).toHaveCount(0, { timeout: 60_000 })
   await expect(screen).toHaveAttribute("data-state", "restarted", {
-    timeout: 90_000,
+    timeout: 30_000,
   })
   const foot = page
     .locator("section[data-tile]")
