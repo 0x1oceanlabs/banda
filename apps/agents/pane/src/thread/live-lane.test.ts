@@ -137,6 +137,25 @@ test("a lane follows only its own entries, its Questions and the sub-agents it s
   expect(applyLane(once, said).items).toBe(once.items)
 })
 
+test("what its parent wrote after the brief comes in its lane where it came, given again whole", () => {
+  const messaged = (more: Record<string, unknown>) =>
+    event("subagent.messaged", { item: "w", turn: "u", subagent: "a", ...more })
+  const followed = [
+    call("c", "a"),
+    // The row where it was sent, in its Thread: not the lane's own.
+    messaged({ item: "r", text: "Read it" }),
+    messaged({ sub: "a", text: "Read it" }),
+    messaged({ sub: "a", text: "Read it once more." }),
+    call("d", "a"),
+  ].reduce(applyLane, fromSubagentView(read))
+  expect(followed.items.map((item) => item.id)).toEqual(["c", "w", "d"])
+  expect(followed.items[1].body).toEqual({
+    kind: "messaged",
+    subagent: "a",
+    text: "Read it once more.",
+  })
+})
+
 test("its work line counts its own calls and thoughts, and while it works only those that ended", () => {
   const working = [
     call("a", "a"),

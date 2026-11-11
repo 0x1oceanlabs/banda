@@ -441,6 +441,12 @@ function project(state: ThreadState, event: Event): ThreadState {
     case "question.closed":
     case "plan.changed":
       return { ...next, ...changeNamed(state, fact) }
+    // What the Agent wrote to a sub-agent after its brief: given again, it
+    // changes the one it started (ADR 0103, decision 25).
+    case "subagent.messaged":
+      return state.items.some((i) => i.id === fact.payload.item)
+        ? { ...next, ...changeNamed(state, fact) }
+        : { ...next, items: started() }
     case "thread.used":
       return { ...next, usage: fact.payload.usage }
     case "thread.moved": {

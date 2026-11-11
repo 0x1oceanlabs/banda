@@ -65,6 +65,16 @@ pub enum Said {
         announced: Announced,
         started: StartedTx,
     },
+    /// A message to sub-agent `child`, its child session as the Harness
+    /// names it, after its brief (ADR 0103, decision 25): `message` names
+    /// it, and `text` is all of it so far, none when the Harness sends no
+    /// words, as for one queued for a sub-agent at work. Where its parent
+    /// speaks, it shows that it went; in its own lane, what it said.
+    Messaged {
+        child: String,
+        message: String,
+        text: Option<String>,
+    },
 }
 
 /// The lane a sub-agent's start was kept as.
@@ -392,6 +402,47 @@ fn compacts(meta: Option<&acp::Meta>) -> bool {
     tool.and_then(serde_json::Value::as_str) == Some("compact")
 }
 
+/// The child session a call queued a message for, as Claude Code's
+/// SendMessage does for a sub-agent at work (ADR 0103, decision 25): its
+/// tool is SendMessage, and its result names the child by `pin.id`, or as
+/// "delivery to ‹id›". The message's words never come to a client.
+pub(super) fn queued_for(call: &acp::ToolCall) -> Option<String> {
+    let tool = (call.meta.as_ref()).and_then(|meta| meta.get("claudeCode")?.get("toolName"));
+    let named = tool
+        .and_then(serde_json::Value::as_str)
+        .unwrap_or(&call.title);
+    if named != SEND_MESSAGE {
+        return None;
+    }
+    call.content.iter().find_map(|part| match part {
+        acp::ToolCallContent::Content(acp::Content {
+            content: acp::ContentBlock::Text(text),
+            ..
+        }) => pinned(&text.text),
+        _ => None,
+    })
+}
+
+/// Claude Code's tool that writes to a sub-agent.
+const SEND_MESSAGE: &str = "SendMessage";
+
+/// The child SendMessage's result names: its `pin.id`, or the ID after
+/// "delivery to".
+fn pinned(result: &str) -> Option<String> {
+    let said = serde_json::from_str::<serde_json::Value>(result).ok();
+    let pin = said
+        .as_ref()
+        .and_then(|said| said.get("pin")?.get("id")?.as_str());
+    if let Some(id) = pin.filter(|id| !id.is_empty()) {
+        return Some(id.to_owned());
+    }
+    let (_, after) = result.split_once("delivery to ")?;
+    let id: String = (after.chars())
+        .take_while(|c| c.is_ascii_alphanumeric() || matches!(c, '-' | '_'))
+        .collect();
+    (!id.is_empty()).then_some(id)
+}
+
 /// The files a tool call works on, as the Harness names them.
 fn places(locations: Vec<acp::ToolCallLocation>) -> Vec<Place> {
     locations
@@ -554,6 +605,39 @@ mod tests {
         )));
         assert!(!call(Some(json!({ "claudeCode": { "toolName": "Read" } }))));
         assert!(!call(None));
+    }
+
+    #[test]
+    fn a_send_message_names_the_child_it_queued_for_by_its_pin_or_its_words() {
+        let call = |title: &str, tool: Option<&str>, result: &str| {
+            let meta = tool.and_then(|tool| {
+                json!({ "claudeCode": { "toolName": tool } })
+                    .as_object()
+                    .cloned()
+            });
+            let content = vec![acp::ToolCallContent::from(result.to_owned())];
+            acp::ToolCall::new("c", title).content(content).meta(meta)
+        };
+        // As `claude-message.jsonl` has it, line 48.
+        let queued = r#"{"success":true,"message":"Message queued for delivery to a055c at its next tool round.","pin":{"id":"a055c","name":"a055c","ref":"26e8b9"}}"#;
+        let pinned = call("SendMessage", Some("SendMessage"), queued);
+        assert_eq!(queued_for(&pinned).as_deref(), Some("a055c"));
+        let words = "Message queued for delivery to child-7 at its next tool round.";
+        let worded = call("Send a message", Some("SendMessage"), words);
+        assert_eq!(
+            queued_for(&worded).as_deref(),
+            Some("child-7"),
+            "by its words"
+        );
+        let titled = call("SendMessage", None, words);
+        assert_eq!(
+            queued_for(&titled).as_deref(),
+            Some("child-7"),
+            "by its title"
+        );
+        assert_eq!(queued_for(&call("SendMessage", None, "Sent.")), None);
+        let other = call("Read a.txt", Some("Read"), queued);
+        assert_eq!(queued_for(&other), None, "another tool");
     }
 
     #[test]

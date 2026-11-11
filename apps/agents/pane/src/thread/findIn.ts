@@ -37,6 +37,8 @@ function wordsOf({ body }: Item): string {
     // questions): see `has`.
     case "subagent":
       return ""
+    case "messaged":
+      return body.text ?? ""
   }
 }
 

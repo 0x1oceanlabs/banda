@@ -3,21 +3,22 @@
  * (ADR 0103, decision 21): its lane, read only, drawn as a Thread is, by
  * the Thread's own transcript and entries. Its header names it and its
  * Thread, or, nested, the breadcrumb up to it; its brief is the bubble its
- * parent wrote; a status bar takes the composer's place, with no text box.
+ * parent wrote, and so is each message after it; a status bar takes the
+ * composer's place, with no text box, and asks the Thread's Agent about it
+ * (decision 25).
  * A Thread has one: Open beside on another of its sub-agents shows that
  * one in it, and one of its own sub-agents opens in it, a level deeper.
  * Banda shows a Harness's sub-agents and manages none (ADR 0103, call
- * 11): no Stop, and no message to it.
+ * 11): no Stop, and no message to it but through its Thread's Agent.
  */
 import { Fragment, useEffect, useMemo, useRef } from "react"
-import { ChevronRightIcon, OrbitIcon } from "lucide-react"
+import { AtSignIcon, ChevronRightIcon, OrbitIcon } from "lucide-react"
 import type { ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
-import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
-import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
+import { Button } from "@banda/ui/components/button"
+import { emblemOf } from "@banda/ui/components/emblem"
 import { MarkdownFiles } from "@banda/ui/components/markdown-file"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
-import { Message, MessageContent } from "@banda/ui/components/message"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { Satellite } from "@banda/ui/components/satellite"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -28,17 +29,18 @@ import { cn } from "@banda/ui/lib/utils"
 import type { Action } from "@banda/ui/module"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import { modelNow } from "../composer/picker"
+import { Brief } from "../entries/parts/Brief"
 import { useImageReader } from "../entries/parts/MessageImages"
-import { THREAD_ZOOM, useClamp } from "../entries/parts/Messages"
 import { FADES } from "../entries/parts/RowTrigger"
 import { harnessName, harnessShort, useHarnesses } from "../harnesses"
 import { textOf } from "../list/answering"
 import { SUBAGENT } from "../scopes"
 import { threadPane } from "../ThreadPane"
 import { visualPane } from "../visual/VisualPane"
+import { askAbout } from "./ask-about"
 import {
-  type Asked,
   askedOf,
+  askWords,
   type Crumb,
   type Head,
   headOf,
@@ -187,6 +189,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
     return {
       head: headOf(threadId, own, lanes, drawn.title),
       asked: askedOf(own, lanes, short),
+      wrote: askedOf(own, lanes, short, "wrote"),
       status: statusOf(own, lanes, { model, short }),
     }
   }, [drawn, own, threadId, short])
@@ -209,6 +212,13 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
       title: drawn?.title ?? "",
     })
     run?.("pane.pick", { project, pane })
+  }
+  // Ask Claude about it: its Thread's composer, a message started about it
+  // with its chip (ADR 0103, decision 25).
+  const ask = () => {
+    if (!head) return
+    askAbout(project, threadId, head.label)
+    go("thread")
   }
   // Another level drawn takes away what had the focus in it, as the row
   // clicked: its tile keeps it, for Esc.
@@ -260,17 +270,33 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
     [run, runs, project]
   )
   const prompt = own?.prompt
+  const emblem = useMemo(
+    () => emblemOf(harnesses, harness, name),
+    [harnesses, harness, name]
+  )
   const { words, look } = said?.asked ?? {}
   const brief = useMemo(
     () =>
       prompt && words ? (
         <Brief
-          asked={{ words, ...(look && { look }) }}
+          asker={{ words, harness: emblem, ...(look && { look }) }}
           text={prompt}
-          harness={emblemOf(harnesses, harness, name)}
         />
       ) : null,
-    [prompt, words, look, harnesses, harness, name]
+    [prompt, words, look, emblem]
+  )
+  // Over what its parent wrote to it after the brief.
+  const { words: wroteWords, look: wroteLook } = said?.wrote ?? {}
+  const wrote = useMemo(
+    () =>
+      wroteWords === undefined
+        ? undefined
+        : {
+            words: wroteWords,
+            harness: emblem,
+            ...(wroteLook && { look: wroteLook }),
+          },
+    [wroteWords, wroteLook, emblem]
   )
 
   const refusal =
@@ -314,7 +340,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
                     name={name}
                     // Its own sub-agents' rows say it set them to work.
                     short={said.head.label}
-                    lane={{ id: sub, brief }}
+                    lane={{ id: sub, brief, wrote }}
                   />
                 </ThreadAroundProvider>
               </MarkdownFiles>
@@ -326,7 +352,12 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
         data-chat
         className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-(--chat-gutter) pb-4"
       >
-        {said && <StatusBar status={said.status} />}
+        {said && (
+          <StatusBar
+            status={said.status}
+            ask={{ words: askWords(short), onAsk: ask }}
+          />
+        )}
       </div>
     </div>
   )
@@ -401,41 +432,6 @@ function SubagentHead({
   )
 }
 
-/** Its brief: "Claude asked" by its Harness's logo, or "Reviewer asked"
- * by its parent's satellite, over the bubble its parent wrote, on the
- * right as the Person's own; long, clamped until it is opened. */
-function Brief({
-  asked,
-  text,
-  harness,
-}: {
-  asked: Asked
-  text: string
-  harness: EmblemOf
-}) {
-  const clamp = useClamp(text, "max-h-44", "Show the whole brief")
-  return (
-    <Message align="end" data-slot="subagent-brief">
-      <MessageContent className="items-end">
-        <span className="flex items-center gap-1.5 pr-1 text-meta text-muted-foreground">
-          {asked.look ? (
-            <Satellite state={asked.look} size={10} />
-          ) : (
-            <Emblem of={harness} className="size-3" />
-          )}
-          {asked.words}
-        </span>
-        <Bubble variant="muted" align="end" className={THREAD_ZOOM}>
-          <BubbleContent className={cn("whitespace-pre-wrap", clamp.className)}>
-            {text}
-          </BubbleContent>
-        </Bubble>
-        {clamp.toggle}
-      </MessageContent>
-    </Message>
-  )
-}
-
 /** The colour of its state's word: grey while it works, the attention's
  * while it asks, the destructive's once it failed, muted once it stopped
  * or was lost (the kit's `.s-statusbar`). */
@@ -450,9 +446,16 @@ const WORD: Record<SatelliteState, string> = {
 }
 
 /** The status bar in the composer's place, its shape and radius with no
- * text box: its satellite, its state's word, and the rest. No buttons
- * yet; nothing in it ticks (decision 20). */
-function StatusBar({ status }: { status: Status }) {
+ * text box: its satellite, its state's word, and the rest; at its end, in
+ * every state, the button that asks the Thread's Agent about it (decision
+ * 25). Nothing in it ticks (decision 20). */
+function StatusBar({
+  status,
+  ask,
+}: {
+  status: Status
+  ask: { words: string; onAsk: () => void }
+}) {
   return (
     <div
       data-slot="subagent-status"
@@ -474,6 +477,15 @@ function StatusBar({ status }: { status: Status }) {
           </Fragment>
         ))}
       </p>
+      <Button
+        variant="outline"
+        size="sm"
+        className="shrink-0"
+        onClick={ask.onAsk}
+      >
+        <AtSignIcon aria-hidden />
+        {ask.words}
+      </Button>
     </div>
   )
 }

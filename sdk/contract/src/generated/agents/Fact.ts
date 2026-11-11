@@ -123,4 +123,4 @@ can_stop?: boolean, why?: string, prompt?: string, report?: string, } } | { "kin
 /**
  * When it ended, in milliseconds since the epoch.
  */
-ended: number, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };
+ended: number, } } | { "kind": "subagent.messaged", "payload": { item: ItemId, turn: TurnId, subagent: SubagentId, text?: string, sub?: SubagentId, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };

@@ -68,7 +68,8 @@ export function timeline(state: ThreadState, short: string): Line[] {
 
 /**
  * A sub-agent's lines in its own Pane (ADR 0103, decision 21): its work
- * and replies as a turn's are, `state` holding its lane as one turn. It has
+ * and replies as a turn's are, `state` holding its lane as a turn for each
+ * time it was set to work (`delegations`), each folding its own. It has
  * no clock, as the Thread's live line is its one (decision 20), and no
  * line of how it ended, which its status bar says. A call it still runs
  * comes last, a line of its own that shimmers ("Reading card.ts"), as its

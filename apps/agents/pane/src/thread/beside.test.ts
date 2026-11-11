@@ -3,6 +3,7 @@ import { expect, test } from "vitest"
 import { agent, subagent } from "../testing"
 import {
   askedOf,
+  askWords,
   headOf,
   laneThread,
   litOf,
@@ -95,6 +96,25 @@ test("a nested sub-agent was asked by its parent, by that one's satellite", () =
   expect(askedOf(explore, [explore], "Claude")).toEqual({
     words: "Claude asked",
   })
+})
+
+test("what its parent wrote after the brief says who wrote it, as the brief does", () => {
+  expect(askedOf(reviewer, lanes, "Claude", "wrote")).toEqual({
+    words: "Claude wrote",
+  })
+  expect(
+    askedOf(
+      explore,
+      [...lanes.slice(0, 1), { ...general, state: "done" }],
+      "C",
+      "wrote"
+    )
+  ).toEqual({ words: "Fix the dots wrote", look: "done" })
+})
+
+test("its status bar asks the Thread's own Agent about it, by its Harness", () => {
+  expect(askWords("Claude")).toBe("Ask Claude about it")
+  expect(askWords("Codex")).toBe("Ask Codex about it")
 })
 
 test("its status bar names no role, and a model not its Thread's", () => {

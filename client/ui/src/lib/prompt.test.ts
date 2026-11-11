@@ -45,7 +45,7 @@ test("a skill the Harness has, named with $, is a chip that writes it back", () 
   const skills = new Set(["explain", "review:deep"])
   const text =
     "$explain this, then *see $review:deep* it.\n$5 and $other stay, as `$explain` does"
-  const doc = Node.fromJSON(schema, docOf(text, skills))
+  const doc = Node.fromJSON(schema, docOf(text, { skills }))
   expect(textOf(doc.content)).toBe(text)
   const chips: string[] = []
   doc.descendants((child) => {
@@ -60,10 +60,13 @@ test("a skill the Harness has, named with $, is a chip that writes it back", () 
 
 test("skills said later make chips of their names, and one gone is text", () => {
   const text = "$explain it, `$explain`, $review"
-  const doc = Node.fromJSON(schema, docOf(text, new Set(["review"])))
+  const doc = Node.fromJSON(
+    schema,
+    docOf(text, { skills: new Set(["review"]) })
+  )
   let state = EditorState.create({ schema, doc })
   state = state.apply(state.tr.setSelection(TextSelection.atEnd(state.doc)))
-  const tr = rechip(state, new Set(["explain"]))
+  const tr = rechip(state, { skills: new Set(["explain"]) })
   if (!tr) throw new Error("nothing changed")
   const now = state.apply(tr)
   expect(textOf(now.doc.content)).toBe(text)
@@ -73,7 +76,57 @@ test("skills said later make chips of their names, and one gone is text", () => 
   })
   expect(chips).toEqual(["explain"])
   expect(now.selection.to).toBe(now.doc.content.size - 1)
-  expect(rechip(now, new Set(["explain"]))).toBeUndefined()
+  expect(rechip(now, { skills: new Set(["explain"]) })).toBeUndefined()
+})
+
+/** The chips in `doc`, each as its kind and what it points at. */
+const chipsIn = (doc: Node) => {
+  const chips: string[] = []
+  doc.descendants((child) => {
+    if (child.type.name === "chip")
+      chips.push(`${child.attrs.kind}:${child.attrs.value}`)
+  })
+  return chips
+}
+
+test("a sub-agent of the Thread is a chip that writes words about it, and back", () => {
+  const subagents = new Set(["Reviewer", "Kim's notes", "$explain"])
+  const text =
+    "(about sub-agent 'Reviewer') skip card.ts.\n" +
+    "(about sub-agent 'Kim's notes'), and (about sub-agent '$explain')\n" +
+    "(about sub-agent 'Other') stays, as `(about sub-agent 'Reviewer')` does"
+  const doc = Node.fromJSON(
+    schema,
+    docOf(text, { subagents, skills: new Set(["explain"]) })
+  )
+  expect(textOf(doc.content)).toBe(text)
+  // An apostrophe in a label is read up to the `')` that closes it, and a
+  // skill in a label stays in it.
+  expect(chipsIn(doc)).toEqual([
+    "subagent:Reviewer",
+    "subagent:Kim's notes",
+    "subagent:$explain",
+  ])
+  // Words about one the Thread has not are text.
+  expect(chipsIn(node(text))).toEqual([])
+})
+
+test("sub-agents the Thread has later make chips of their words, and one gone is text", () => {
+  const text =
+    "(about sub-agent 'Reviewer') and (about sub-agent 'Agent 2') $explain"
+  const doc = Node.fromJSON(
+    schema,
+    docOf(text, { subagents: new Set(["Agent 2"]) })
+  )
+  const state = EditorState.create({ schema, doc })
+  const tr = rechip(state, {
+    subagents: new Set(["Reviewer"]),
+    skills: new Set(["explain"]),
+  })
+  if (!tr) throw new Error("nothing changed")
+  const now = state.apply(tr)
+  expect(textOf(now.doc.content)).toBe(text)
+  expect(chipsIn(now.doc)).toEqual(["subagent:Reviewer", "skill:explain"])
 })
 
 /** The line's pieces: each text or chip with the styles it has. */

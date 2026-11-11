@@ -1,5 +1,11 @@
 import { expect, test } from "vitest"
-import { clamped, firstLine, planTitle } from "./messageText"
+import {
+  clamped,
+  firstLine,
+  namesSubagent,
+  piecesOf,
+  planTitle,
+} from "./messageText"
 
 test("a short message shows whole", () => {
   expect(clamped("hello")).toBe(false)
@@ -29,4 +35,21 @@ test("a report's first line loses the markup that starts it", () => {
   expect(firstLine("1. First")).toBe("First")
   expect(firstLine("   ")).toBeUndefined()
   expect(firstLine(undefined)).toBeUndefined()
+})
+
+test("a Person's message shows each sub-agent of its Thread it is about as a chip", () => {
+  const known = new Set(["Reviewer", "Kim's notes"])
+  const text =
+    "(about sub-agent 'Reviewer') skip card.ts, and ask (about sub-agent 'Kim's notes').\n(about sub-agent 'Gone') stays"
+  expect(namesSubagent(text)).toBe(true)
+  expect(piecesOf(text, known)).toEqual([
+    { about: "Reviewer" },
+    { text: " skip card.ts, and ask " },
+    { about: "Kim's notes" },
+    { text: ".\n(about sub-agent 'Gone') stays" },
+  ])
+  // Words that name none stay one piece, and the bubble never an editor.
+  expect(namesSubagent("about sub-agent Reviewer")).toBe(false)
+  expect(piecesOf("just words", known)).toEqual([{ text: "just words" }])
+  expect(piecesOf("", known)).toEqual([])
 })

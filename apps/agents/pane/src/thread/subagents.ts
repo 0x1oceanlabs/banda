@@ -113,6 +113,34 @@ export function labelOf(lane: Subagent, siblings: readonly Subagent[]): string {
   return role && role !== GENERAL ? role : titled(lane, siblings)
 }
 
+/** The Thread's sub-agents by their labels, for the chips that name them
+ * in a message (ADR 0103, decision 25); of two with one label, the one
+ * that started later. */
+export function byLabel(
+  lanes: readonly Subagent[]
+): ReadonlyMap<string, Subagent> {
+  return new Map(
+    lanes.map((lane) => [labelOf(lane, siblingsOf(lane, lanes)), lane])
+  )
+}
+
+/** What the Agent, or a sub-agent, wrote to a sub-agent after its brief,
+ * as its row says it where it was sent (ADR 0103, decision 25):
+ * "Messaged", the label of the one it went to, `to`, or "a sub-agent" if
+ * the Thread no longer has it, then the first line of what it wrote; none
+ * when the Harness said no words, as it does to one at work. */
+export function messagedWords(
+  to: string | undefined,
+  text: string | undefined
+): { verb: string; subject: string; first?: string } {
+  const first = firstLine(text)
+  return {
+    verb: "Messaged",
+    subject: to ?? "a sub-agent",
+    ...(first !== undefined && { first }),
+  }
+}
+
 /** What names the sub-agent `sub` that asks a Question, by its label
  * (ADR 0103, decision 28); none for the Agent's own, or one not heard
  * of. */
