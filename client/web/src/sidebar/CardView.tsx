@@ -125,8 +125,12 @@ export function Card({
   const one = card.lines.length === 1
   // One that left, or one being named, has none.
   const shown = card.gone || field ? NO_ACTS : acts
+  // A card with no acts around it is its row itself, as the list's glance
+  // finds it (`glanceAt`).
+  const bare = Boolean(field) || (shown.length === 0 && !card.gone)
   const drawn = (
     <div
+      data-row={bare ? "" : undefined}
       {...pickProps(keyOf(row.host, row.listed.id), picked)}
       aria-current={current ? "true" : undefined}
       aria-label={field ? undefined : spoken.name}
@@ -150,13 +154,14 @@ export function Card({
         card={card}
         row={row}
         now={now}
+        current={current}
         acts={shown.length}
         field={field}
         harnesses={harnesses}
       />
     </div>
   )
-  if (field || (shown.length === 0 && !card.gone)) return drawn
+  if (bare) return drawn
   return (
     <div data-row className="relative">
       {drawn}
@@ -220,6 +225,7 @@ export function CardLines({
   card,
   row,
   now,
+  current = false,
   acts = 0,
   field,
   harnesses = NO_HARNESSES,
@@ -228,6 +234,8 @@ export function CardLines({
   row: CardRow
   /** The moment it is drawn as of (`useCardClock`). */
   now: number
+  /** Its Thread is the open one: its Mark calls no one. */
+  current?: boolean
   /** How many acts show over line 1's right, under the pointer. */
   acts?: number
   /** The field that names it, in its title's place. */
@@ -244,6 +252,7 @@ export function CardLines({
           slot={part}
           card={card}
           row={row}
+          current={current}
           now={now}
           harnesses={harnesses}
         />
@@ -347,12 +356,14 @@ function Piece({
   slot,
   card,
   row,
+  current,
   now,
   harnesses,
 }: {
   slot: Slot
   card: CardModel
   row: CardRow
+  current: boolean
   now: number
   harnesses: readonly EmblemOf[]
 }) {
@@ -361,13 +372,15 @@ function Piece({
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
       // decisions 1 and 10; ADR 0107 for a working one's muted blue); at
-      // work, what its card holds its Agent does.
+      // work, what its card holds its Agent does; open, no call (decision
+      // 5).
       return (
         <ThreadMark
           listed={row.listed}
           look={slot.look}
           doing={card.does?.doing}
           held
+          current={current}
         />
       )
     case "title":

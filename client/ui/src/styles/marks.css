@@ -9,6 +9,9 @@
  *
  * Each mark keeps its Thread's rhythm: `--mark-phase`, a negative delay,
  * starts its loops where its Thread's beat is now (`phaseOf`).
+ *
+ * The open Thread's mark, `data-calm`, plays none of its calls, the second
+ * layer, and the rest of its loops on (ADR 0099, decision 5).
  */
 /* Every group a loop moves has `mark-loop`, and its part's own class. */
 [data-slot="banda-mark"] .mark-loop {
@@ -1913,6 +1916,30 @@
 [data-slot="banda-mark"][data-loop="limit"] .mark-dot {
   animation-name: mark-sand;
   animation-duration: 1.8s;
+}
+[data-slot="banda-mark"][data-loop="woke"][data-calm] .mark-move {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="woke"][data-calm] .mark-turn {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="woke"][data-calm] .mark-bell {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="woke"][data-calm] .mark-look {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="woke"][data-calm] .mark-unlook {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="asking"][data-calm] .mark-move {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="failed"][data-calm] .mark-move {
+  animation-name: none;
+}
+[data-slot="banda-mark"][data-loop="failed"][data-calm] .mark-turn {
+  animation-name: none;
 }
 [data-slot="banda-mark"] .mark-z:nth-child(2) {
   animation-delay: calc(var(--mark-phase, 0s) - 0.733s);
