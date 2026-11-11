@@ -1011,13 +1011,30 @@ export function reachWords(
 }
 
 /**
- * Why Send waits on a Pane on host `host` (ADR 0095, decision 7), by one
- * rule of whether the Window reaches it: the host as the Window shows it
- * (`shown`), and its engine's connection (`status`). While the host is
- * not live, the pill's words (`reachWords`), so the two say the same at
- * once; away, with when Send goes. While it is live, it connects until
- * its engine is open, or says its engine refused this window. None once
- * both are.
+ * Why the Window does not reach host `host` now, by one rule: the host as
+ * the Window shows it (`shown`), and its engine's connection (`status`).
+ * While the host is not live, the pill's words (`reachWords`), so the two
+ * say the same at once. While it is live, it connects until its engine is
+ * open, or says its engine refused this window. None once both are. What
+ * goes now or not at all, as a reply's Run, is refused in these words.
+ */
+export function unreachedWords(
+  host: string,
+  shown: Shown | undefined,
+  status: Status["state"],
+  seen: (key: string) => Named
+): string | undefined {
+  const words = reachWords(host, shown, seen)
+  if (words !== undefined || status === "open") return words
+  const { name } = shown?.named ?? seen(host)
+  return status === "refused"
+    ? `${name} refused this window`
+    : `Connecting to ${name}…`
+}
+
+/**
+ * Why Send waits on a Pane on host `host` (ADR 0095, decision 7), as
+ * `unreachedWords` says it; away, with when Send goes.
  */
 export function heldWords(
   host: string,
@@ -1025,14 +1042,8 @@ export function heldWords(
   status: Status["state"],
   seen: (key: string) => Named
 ): string | undefined {
-  const words = reachWords(host, shown, seen)
-  if (words !== undefined)
-    return shown?.state.state === "away"
-      ? `${words}. Send once it is back.`
-      : words
-  if (status === "open") return undefined
-  const { name } = shown?.named ?? seen(host)
-  return status === "refused"
-    ? `${name} refused this window`
-    : `Connecting to ${name}…`
+  const words = unreachedWords(host, shown, status, seen)
+  return shown?.state.state === "away"
+    ? `${words}. Send once it is back.`
+    : words
 }

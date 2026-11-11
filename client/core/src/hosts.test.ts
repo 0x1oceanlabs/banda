@@ -12,6 +12,7 @@ import {
   emptyIn,
   FORGETTING,
   heldWords,
+  unreachedWords,
   KeptHosts,
   keyNamed,
   machinesOf,
@@ -1172,6 +1173,21 @@ test("Send on a Pane on another host says what its pill says, and connects only 
       keyNamed
     )
   ).toBe("Studio is away. Send once it is back.")
+})
+
+test("what goes now or not at all reads the pill's words and its engine's connection, as Send, without when Send goes", () => {
+  const words = (state: HostState | undefined, status: Status["state"]) =>
+    unreachedWords(
+      "arc",
+      state && shownOf(undefined, state, 0),
+      status,
+      keyNamed
+    )
+  expect(words(away, "open")).toBe("arc is away")
+  expect(words(undefined, "open")).toBe("Waiting for arc")
+  expect(words(live, "connecting")).toBe("Connecting to arc…")
+  expect(words(live, "refused")).toBe("arc refused this window")
+  expect(words(live, "open")).toBeUndefined()
 })
 
 test("a host goes by the name this device remembers until its engine says one, and the device remembers what it says", () => {

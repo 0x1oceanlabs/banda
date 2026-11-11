@@ -4,8 +4,14 @@ import { useThreadAround } from "../thread/context"
 import type { EntryProps } from "./types"
 
 export function IssueEntry({ item }: EntryProps<"issue">) {
-  const { engine, project } = useThreadAround()
+  const { engine, project, acts } = useThreadAround()
   return (
-    <Issue engine={engine} project={project} item={item.id} issue={item.body} />
+    <Issue
+      engine={engine}
+      project={project}
+      item={item.id}
+      issue={item.body}
+      openLink={acts.openLink}
+    />
   )
 }
