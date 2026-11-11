@@ -1,15 +1,18 @@
 /**
- * Files dragged from Banda (ADR 0073, decision 10): Files' rows go into a
- * Thread's composer as `@` chips, and out to other apps as the files.
+ * Files dropped on Banda (ADR 0073, decision 10): Files' rows go into a
+ * Thread's composer as `@` chips, and what drags out comes back here as
+ * the same files.
  *
  * In Banda's desktop window main runs the drag (`files.drag`), so another
  * app gets the files themselves; the page notes which they are, and a
  * composer they come back to names them rather than copying them in, as
- * it does files from another app. Elsewhere the page runs it: it carries
- * Banda's own type, the whole paths as JSON, and the paths as plain text,
- * a line each, for anything else it lands on.
+ * it does files from another app. Elsewhere the page runs it, with
+ * Banda's own type, the whole paths as JSON.
+ *
+ * Only the readers are here: a Pane of another machine may draw what
+ * reads a drop, as the Diff's tree, and the drag out reaches the desktop
+ * (`file-drag-out.ts`; ADR 0106, step 2a).
  */
-import { filesHost } from "../desktop"
 import { nameAndFolder } from "./paths"
 
 /** Banda's own type: the whole paths, as JSON. */
@@ -17,24 +20,6 @@ export const PATHS = "application/x-banda-paths"
 
 /** The files main drags out now, by their whole paths. */
 let out: readonly string[] | null = null
-
-/** Starts a drag of the files at the whole `paths`, as `event` starts:
- * main's, in Banda's desktop window, else the page's. */
-export function dragFiles(event: DragEvent, paths: readonly string[]): void {
-  const host = filesHost()
-  if (host) {
-    event.preventDefault()
-    draggingOut(paths)
-    host.drag(paths)
-  } else if (event.dataTransfer) carry(event.dataTransfer, paths)
-}
-
-/** Puts the whole `paths` on a drag the page runs. */
-function carry(data: DataTransfer, paths: readonly string[]): void {
-  data.effectAllowed = "copy"
-  data.setData(PATHS, JSON.stringify(paths))
-  data.setData("text/plain", paths.join("\n"))
-}
 
 /** Whether a drag over the page may be Banda's files: while it is over
  * the page, only its types can be read. Main's drag shows as files. */
@@ -71,7 +56,7 @@ function carried(data: DataTransfer): string[] | null {
 /** Notes that main now drags the files at the whole `paths` out: until
  * they are dropped back, or the pointer moves with no button held, as it
  * does once the drag ended elsewhere. */
-function draggingOut(paths: readonly string[]): void {
+export function draggingOut(paths: readonly string[]): void {
   out = paths
   const done = (event: PointerEvent) => {
     if (event.buttons !== 0) return
