@@ -103,12 +103,18 @@ with good UX and UI".
    - Where a package manager owns Banda (`package-type`, the AUR's
      `banda-bin`), the module takes nothing and says who updates it.
 6. **Versions are agreed, not matched** (ADR 0081, decision 8).
-   - `welcome` names the engine's version, build and the protocol it
-     picked from the client's range.
-   - `contract/released.json` is the contract of the last Dev, and a test
-     fails on any change that would break a client of it (ADR 0086,
-     decision 6). So a window one version ahead or behind works with an
-     engine waiting to restart, and does without what it lacks.
+   - `welcome` names the engine's version and build.
+   - A change to the engine's methods keeps the last Dev's windows
+     working: `scripts/contract.mjs`, in `check.sh`, compares them with
+     main's, whose previous commit is the last Dev, so no copy of the
+     released contract is kept beside it. A method gone or of another
+     kind, params that take less, or an answer that says more fail, by
+     method. A break that is meant is said in a commit of the PR,
+     `Contract-Break: <method>, <what an older window does without it>`.
+     So a window a version ahead or behind works with an engine waiting
+     to restart, and does without what it lacks.
+   - `hello` gets a range of protocols with the first change of
+     `PROTOCOL`; while every build speaks 1, there is nothing to pick.
    - A window that cannot attach says so and offers that machine's
      update, never a stop.
 7. **One widget shows every machine.** The bar's update widget becomes
@@ -156,9 +162,9 @@ Each step is its own PR, and Banda keeps updating after each.
 | Step | What it does |
 |---|---|
 | 0 | This ADR and the widget's mock |
-| 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner) |
+| 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner): done |
 | 1b | The bundle carries a pinned Node, as Windows' app does |
-| 2 | `welcome` names version, build and protocol range; `contract/released.json` and its test |
+| 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build |
 | 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet |
 | 4 | The restart once nothing runs, Restart now, `machine.toml`'s `[updates]` |
 | 5 | The desktop part: `update.ts` moved, the app swap asked of the engine part; the window stops no engine to update |
@@ -189,7 +195,8 @@ devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
   and it waits for none to run.
 - A release grows by a file of about 52 MB for each system.
 - The window may run against an engine a version apart for a while; the
-  released contract's test is what keeps that safe.
+  contract's check is what keeps that safe. On main's week before it, 7
+  of 87 changes to the contract would have needed a trailer.
 - A machine set to `"ask"` or `"off"` drifts until the Person acts; the
   widget shows it.
 
