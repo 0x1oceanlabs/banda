@@ -175,9 +175,13 @@ test("a Pane restored with a line it never typed drops it: the restart was not i
 test("a Pane restored while its machine is away watches its shell and, on the answer that it is kept, sends its own size", async () => {
   const { session, calls, streams } = engine(() => Promise.reject(AWAY))
   await mount(session, { ...NEW, terminal: "kept" as never })
+  const sizes = () =>
+    calls.filter(({ method }) => method === "terminal.resize")
+  // Its first size, refused for all it reached.
   await act(async () => surfaces.made[0]!.options.onResize(100, 40))
   await settle()
   expect(streams).toHaveLength(1)
+  const before = sizes().length
   await act(async () =>
     streams[0]!.hear({
       kind: "snapshot",
@@ -186,9 +190,8 @@ test("a Pane restored while its machine is away watches its shell and, on the an
     })
   )
   await settle()
-  expect(
-    calls.filter(({ method }) => method === "terminal.resize").at(-1)
-  ).toEqual({
+  expect(sizes()).toHaveLength(before + 1)
+  expect(sizes().at(-1)).toEqual({
     method: "terminal.resize",
     params: { terminal: "kept", size: { cols: 100, rows: 40 } },
   })
