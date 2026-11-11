@@ -40,7 +40,11 @@ import {
 import { toast } from "@banda/ui/components/sonner"
 import { copyText } from "@banda/ui/lib/clipboard"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
-import { elsewherePreviewers, Previewers, usePreviewers } from "@banda/ui/lib/previewers"
+import {
+  elsewherePreviewers,
+  Previewers,
+  usePreviewers,
+} from "@banda/ui/lib/previewers"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import type { AnyPaneKind, Args } from "@banda/ui/module"
 import type { PaneProps, PaneState, Runs } from "@banda/ui/pane"
