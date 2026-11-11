@@ -105,7 +105,7 @@ impl Serialize for Families {
 
 /// Reads a value as TOML gave it, then as `T` says, so a wrong one is
 /// named with what is right.
-fn from_toml<'de, D, T>(deserializer: D) -> Result<T, D::Error>
+pub(crate) fn from_toml<'de, D, T>(deserializer: D) -> Result<T, D::Error>
 where
     D: Deserializer<'de>,
     T: TryFrom<toml::Value, Error = String>,

@@ -319,7 +319,8 @@ mod classes {
             &[(
                 Shared,
                 &[
-                    "preset", "group", "sort", "projects", "row", "bar", "later", "machines",
+                    "preset", "group", "card", "inbox", "hold", "sort", "projects", "bar", "later",
+                    "machines",
                 ],
             )],
         ),
@@ -506,10 +507,6 @@ mod every_key {
         // None: the look's `[font]` mono, and three quarters of its size.
         "terminal.toml:font",
         "terminal.toml:size",
-        // Each line says nothing unless the Person or a preset fills it.
-        "sidebar.toml:row.line1",
-        "sidebar.toml:row.line2",
-        "sidebar.toml:row.line3",
     ];
 
     /// An event moves with an easing or a spring: the keys of the one

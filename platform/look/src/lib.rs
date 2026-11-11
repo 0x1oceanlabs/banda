@@ -349,6 +349,22 @@ pub(crate) fn say_renamed(
     }
 }
 
+/// Tells `problems`, at each place, where `text` still says a key of
+/// `retired`, which is no longer read; and gives `text` without them, every
+/// other place where it was, so the rest of the file still applies.
+pub(crate) fn say_retired(
+    path: &Path,
+    text: &str,
+    retired: &[keyed::Retired],
+    problems: &mut Vec<Problem>,
+) -> String {
+    let (kept, said) = keyed::retired(text, retired);
+    for (start, key, message) in said {
+        problems.push(Problem::placed(path, text, Some(start), Some(key), message));
+    }
+    kept
+}
+
 /// Reads `text`, the file at `path`, as a `T`. A value that does not
 /// read is named at its key and left out, so the rest of the file still
 /// applies: its entry's bytes go blank, so every place stays where it

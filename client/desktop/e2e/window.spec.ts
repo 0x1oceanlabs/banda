@@ -2710,17 +2710,21 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(sidebar.getByRole("group", { name: "Projects" })).toBeVisible()
   await page.screenshot({ path: "test-results/23-sidebar-places.png" })
 
-  // A wrong key is named by its line, and the last good arrangement stays.
+  // A key no longer used is named by its line, and the rest of the file
+  // holds (ADR 0098).
   writeFileSync(file, 'preset = "places"\n[row]\nlines = 5\n')
   const problem = page.getByRole("status", { name: /^The look: / })
-  await expect(problem).toHaveAttribute("aria-label", /sidebar\.toml:3:9: /)
+  await expect(problem).toHaveAttribute(
+    "aria-label",
+    /sidebar\.toml:2:2: \[row\] is no longer used/
+  )
   await expect(view).toHaveAccessibleName("View: places")
 
   // A preset of the Person's own is a file, and the menu lists it.
   mkdirSync(join(dir, "config/sidebars"))
   writeFileSync(
     join(dir, "config/sidebars/flat.toml"),
-    '[group]\nby = "none"\n[row]\nlines = 1\n'
+    'group = "none"\ncard = 1\n'
   )
   writeFileSync(file, 'preset = "flat"\n')
   await expect(view).toHaveAccessibleName("View: flat")

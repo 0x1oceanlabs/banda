@@ -26,7 +26,7 @@ const keysOf = (id: string) =>
 test("sidebar.toml's two machine keys show only in Machines, not in Sidebar, while Sidebar keeps its others", () => {
   expect(keysOf("sidebar")).not.toContain("machines.rows")
   expect(keysOf("sidebar")).not.toContain("machines.this-too")
-  expect(keysOf("sidebar")).toContain("row.lines")
+  expect(keysOf("sidebar")).toContain("group")
   // Drawn by the Machines section's Show card, not as rows of its own.
   expect(keysOf("machines")).toEqual([])
   expect(sectionOf("machines").files?.at(-1)).toMatchObject({
@@ -57,8 +57,8 @@ test("with one machine, a search finds neither key, as the section draws neither
   expect(search("machine on rows", false)).toEqual([])
   expect(search("name this machine", false)).toEqual([])
   // Other rows are found as before.
-  expect(search("row.lines", false).map((f) => f.row.key)).toContain(
-    "row.lines"
+  expect(search("inbox.order", false).map((f) => f.row.key)).toContain(
+    "inbox.order"
   )
 })
 

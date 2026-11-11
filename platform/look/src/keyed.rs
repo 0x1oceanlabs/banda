@@ -358,6 +358,56 @@ pub fn renamed(text: &str, renamed: &[Renamed]) -> Vec<(usize, String, String)> 
     said
 }
 
+/// A key, or a table, a file may still say that is no longer read
+/// (ADR 0098): it is left out, and the file is told where, so the rest
+/// still reads.
+pub struct Retired {
+    /// Its dotted key: `projects.list`, or a table's, `row`.
+    pub at: &'static str,
+    /// Only when it is a table: a value there is a key of today's, as
+    /// `group = "project"` is where `[group]` was.
+    pub table: bool,
+    /// What the file is told.
+    pub says: &'static str,
+}
+
+/// Each place `text` still says one of `retired`: where it starts, its
+/// dotted key and what is said; and `text` with each one's lines blank,
+/// every other place where it was.
+pub fn retired(text: &str, retired: &[Retired]) -> (String, Vec<(usize, String, String)>) {
+    let mut text = text.to_owned();
+    let mut said = Vec::new();
+    for old in retired {
+        let Ok(document) = toml_edit::Document::parse(&text) else {
+            break;
+        };
+        let leaf = old.at.rsplit('.').next().unwrap_or(old.at);
+        let found = table_at(document.as_table(), old.at, false)
+            .and_then(|table| table.get_key_value(leaf))
+            .filter(|(_, item)| !old.table || item.is_table_like());
+        let Some((key, item)) = found else {
+            continue;
+        };
+        let Some(start) = key.span().map(|span| span.start) else {
+            continue;
+        };
+        let mut spans = Vec::new();
+        if old.table {
+            spans_under(&text, key, item, &mut spans);
+        } else {
+            // From the first part of its name, so `projects.list` goes
+            // whole, and only it, inside braces too.
+            spans.extend(entry_at(&text, start).map(|(_, entry)| entry));
+        }
+        said.push((start, old.at.to_owned(), old.says.to_owned()));
+        for span in spans {
+            text = blank(&text, span);
+        }
+    }
+    said.sort();
+    (text, said)
+}
+
 /// The table `at` names: itself for a key, the one that holds it for a
 /// value.
 fn table_at<'a>(top: &'a toml_edit::Table, at: &str, key: bool) -> Option<&'a dyn TableLike> {

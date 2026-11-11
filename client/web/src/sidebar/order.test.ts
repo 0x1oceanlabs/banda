@@ -51,10 +51,7 @@ function counted(lists: Lists, keys: readonly string[]): string[] {
   )
 }
 
-const byProject: Settings = {
-  ...DEFAULT_SIDEBAR,
-  group: { ...DEFAULT_SIDEBAR.group, by: "project", bottom: [] },
-}
+const byProject: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
 
 test("the counts list and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
   const lists = {
