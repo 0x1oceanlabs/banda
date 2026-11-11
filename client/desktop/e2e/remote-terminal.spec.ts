@@ -105,6 +105,17 @@ test("arc's terminal opens on arc: hostname says arc, its header names arc, and 
   expect(existsSync(join(arc!.code.here, "banda", "seen.txt"))).toBe(false)
 })
 
+test("the terminal's key, from arc's Thread, opens arc's terminal", async () => {
+  const { page, composer, folder } = await onArc()
+  await composer.focus()
+  await page.keyboard.press("Control+Alt+Enter")
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await run(page, "hostname > keyed.txt")
+  await expect.poll(() => inFolder(folder, "keyed.txt")).toBe("arc\n")
+})
+
 test("arc's terminal hears its new size when the Tile changes", async () => {
   const { page, composer, folder } = await onArc()
   const screen = await terminalOn(page, composer)
@@ -134,6 +145,9 @@ test("a key while arc is away says it was not sent and goes nowhere; arc back, t
   await expect.poll(() => inFolder(folder, "before.pid")).toMatch(/^\d+\n$/)
   const pid = inFolder(folder, "before.pid")
 
+  const canvas = screen.locator("canvas").first()
+  const drawn = () => canvas.evaluate((one: HTMLCanvasElement) => one.height)
+  const rowsBefore = await drawn()
   arc!.blackhole(true)
   await expect.poll(() => arc!.applies()?.hole).toBe(true)
   const pill = pillOf(page, screen)
@@ -148,14 +162,9 @@ test("a key while arc is away says it was not sent and goes nowhere; arc back, t
     "title",
     "What was typed before arc went away may still arrive once it is back."
   )
-  // The band of the pill came out of the screen, so its last rows stay in
-  // view above the Tile's edge, as nothing is drawn under it.
-  const tile = page.locator("section[data-tile]").filter({ has: screen })
-  const tileBox = (await tile.boundingBox())!
-  const canvas = (await screen.locator("canvas").first().boundingBox())!
-  expect(canvas.y + canvas.height).toBeLessThanOrEqual(
-    tileBox.y + tileBox.height + 1
-  )
+  // The band of the pill came out of the screen, which drew itself anew
+  // to fit, so its last rows stay above the Tile's edge.
+  await expect.poll(drawn).toBeLessThan(rowsBefore)
   await shot(page, "terminal-arc-away", { toasts: true })
 
   arc!.blackhole(false)
