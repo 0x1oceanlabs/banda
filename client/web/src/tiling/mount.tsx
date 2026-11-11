@@ -22,6 +22,7 @@ import {
   deviceFor,
   type From,
   type Hosts,
+  type KeptHosts,
   type Owner,
   type Route,
   routeAct,
@@ -86,7 +87,7 @@ export function refused(said: string): void {
  * only because this window has not looked.
  */
 export function actAs(
-  hosts: Pick<Hosts, "reread">,
+  hosts: Pick<KeptHosts, "reread">,
   route: () => Route,
   run: (args: Args | undefined) => void
 ): void {
@@ -117,7 +118,7 @@ export function actAs(
  * - `device` is this device, which can do what `routing` says.
  */
 export function handlesOf(
-  hosts: Hosts,
+  hosts: Hosts & Pick<KeptHosts, "reread">,
   routing: Routing,
   owner: Owner,
   run: ((action: string, args?: Args) => void) | undefined,

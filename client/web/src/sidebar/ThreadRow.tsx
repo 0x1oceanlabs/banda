@@ -79,7 +79,7 @@ export function ThreadRow({
 
 /**
  * Another host's Thread (ADR 0081): shown as this machine's are, and a
- * click opens it there, as its listed Pane names its host; with no menu
+ * click opens it there, as the directory places its Project; with no menu
  * or put off yet, as the row's would go to this machine's engine. Where no
  * label above names its host, the row does; away or stopped, it dims
  * with its own words, its timer and how long ago standing.

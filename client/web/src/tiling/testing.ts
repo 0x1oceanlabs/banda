@@ -6,13 +6,14 @@
  * (`client/core/src/route.test.ts`).
  */
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Hosts, Machine, Shown } from "@banda/core"
+import type { Hosts, KeptHosts, Machine, Shown } from "@banda/core"
 
 /** arc's Project, and this machine's. */
 export const R1 = "r1" as ProjectId
 export const MINE = "mine" as ProjectId
 
-/** A Pane of arc's "r1", where its args name arc, as its Frame keeps it. */
+/** A Pane of arc's "r1", where its args name arc, as its Frame hands it
+ * in memory. */
 export const ON_ARC = { project: R1, pane: { args: { host: "arc" } } }
 
 /**
@@ -21,7 +22,9 @@ export const ON_ARC = { project: R1, pane: { args: { host: "arc" } } }
  * has is the host an old arrangement's args name, else no machine's, and
  * an act on it fails closed (`KeptHosts.hostOf`).
  */
-export function arcHosts(modules: readonly string[] | undefined): Hosts {
+export function arcHosts(
+  modules: readonly string[] | undefined
+): Hosts & Pick<KeptHosts, "reread"> {
   const arc = {
     name: "arc",
     named: { name: "arc", icon: "server" },

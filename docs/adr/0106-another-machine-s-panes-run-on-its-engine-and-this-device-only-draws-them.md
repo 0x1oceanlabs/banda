@@ -245,6 +245,11 @@ session.**
 - A `Link` from a host is http(s) only: `file:` and `app:` never reach the
   device.
 - Nothing kept or shared holds a route or a device's name for a machine.
+  _Amended 2026-11-11, at step 1a″:_ but for the directory, which keeps
+  beside a machine's ID the key this device reaches it by in its own
+  `hosts.toml` (`Placed.host`). After a restart with that machine away no
+  engine has said an ID yet, and only that key reaches it. It stays on the
+  device, and what each machine lists now wins over it.
   Only the owner compares two paths: a Mac's disk ignores case by default
   and a Linux one does not.
 - _Basis:_ Saltzer's closure, a name means nothing outside its context
@@ -979,7 +984,8 @@ and Diff, then Files, pictures, settings), 2 A, 3 A, 4 B, 5 A, 6 A, 7 A,
 - A terminal closed while its machine is away may close up to 7 days
   later, and the pill counts it meanwhile.
 - The machine is a device-local name in one place only, the byte relay's
-  URL, which is never kept.
+  URL, which is never kept. _Amended 2026-11-11, at step 1a″:_ and in this
+  device's directory, as law 2 now says.
 - arc's terminals still end with Banda on arc, now with words, and an
   update waits for a program in front; a terminal keeper is #462's.
 - A key typed in the second before Banda knew may still land late. Only

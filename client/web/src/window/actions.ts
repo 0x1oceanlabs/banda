@@ -9,7 +9,13 @@ import type {
   ProjectId,
   ProjectSummary,
 } from "@banda/contract"
-import { type Act, type From, type Hosts, routeAct } from "@banda/core"
+import {
+  type Act,
+  type From,
+  type Hosts,
+  type KeptHosts,
+  routeAct,
+} from "@banda/core"
 import { useState } from "react"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
@@ -171,7 +177,7 @@ export type Shell = WindowApi & {
   engine: Engine
   /** The Window's hosts, by which the router places what an act acts on
    * (ADR 0106, law 3). */
-  hosts: Hosts
+  hosts: Hosts & Pick<KeptHosts, "reread">
 }
 
 /** What a module is given of `shell`, a steady face of it (`useSteady`):
