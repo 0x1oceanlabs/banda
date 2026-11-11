@@ -17,7 +17,8 @@ import { regionsOf } from "./regions"
 import { ProjectMenu, type WithMenu } from "./ProjectMenu"
 import { ProjectsList } from "./ProjectsList"
 import { SectionView } from "./SectionView"
-import { PANEL, ShowTab, tabId, tabKey, Tabs } from "./Tabs"
+import { PickList, useSidebarKeys } from "./PickList"
+import { ShowTab, Tabs } from "./Tabs"
 import { HoldingContext } from "./useHold"
 import { useOrdered } from "./useOrdered"
 import { ToldSomeday, useSidebarView } from "./useSidebarView"
@@ -73,6 +74,13 @@ export function Sidebar({
   const hosts = useHosts()
   const ordering = useOrdered(projects, settings, view, isCurrent)
   const { ordered, holds, list } = ordering
+  // The aside, the keys' scope, goes to it alone, as the list's element.
+  const { aside, ...keys } = useSidebarKeys(
+    ordering,
+    view,
+    isCurrent,
+    onDismiss
+  )
   // The Project whose trust a card by its row asks about (ADR 0083,
   // decision 5); taking it back needs no card, and says when it failed.
   const [trusting, setTrusting] = useState<Trusting>()
@@ -107,7 +115,6 @@ export function Sidebar({
           isCurrent={isCurrent}
           strayed={strayed}
           onToggle={view.toggle}
-          onMore={view.toggleMore}
           engine={engine}
           machine={machine}
           withMenu={withMenu}
@@ -137,16 +144,8 @@ export function Sidebar({
         <aside
           aria-label="Sidebar"
           data-sidebar=""
-          onKeyDown={(event) => {
-            // Not Esc in a menu it opened, drawn elsewhere in the page.
-            const own = event.currentTarget.contains(event.target as Node)
-            if (event.key === "Escape" && own) onDismiss?.()
-            const tab = own ? tabKey(event.nativeEvent) : undefined
-            if (tab) {
-              event.preventDefault()
-              view.show(tab)
-            }
-          }}
+          ref={aside}
+          onKeyDown={keys.onKeyDown}
           className={cn(
             // An area of the window: what changes in it lays out and paints
             // nothing outside it (ADR 0088, decision 8).
@@ -190,12 +189,7 @@ export function Sidebar({
                     })}
                   </ProjectsList>
                 )}
-                <div
-                  role="tabpanel"
-                  id={PANEL}
-                  aria-labelledby={tabId(view.tab)}
-                  className="flex flex-col gap-1"
-                >
+                <PickList tab={view.tab} picking={keys.picking}>
                   {/* This machine's list, where inbox zero tells the view it
                   told of Someday. */}
                   <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
@@ -206,7 +200,7 @@ export function Sidebar({
                     ? hosts.map((host) => part(host, drawn(host.name)))
                     : !ordered.projects &&
                       hosts.filter(saysSomething).map((host) => part(host))}
-                </div>
+                </PickList>
               </div>
             </ScrollArea>
             <Foot />

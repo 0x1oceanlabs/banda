@@ -21,7 +21,7 @@
   "additionalProperties": false,
   "$defs": {
     "Bound": {
-      "description": "What a key of `[binds]` holds (ADR 0071, decision 3): what a line\nruns, or a scope's own table, `[binds.composer]`, whose keys work while\nthe focus is in that scope.",
+      "description": "What a key of `[binds]` holds (ADR 0071, decision 3): what a line\nruns, or a scope's own table, as `[binds.composer]` or\n`[binds.sidebar]`, whose keys work while the focus is in that scope.",
       "anyOf": [
         {
           "$ref": "#/$defs/Line"

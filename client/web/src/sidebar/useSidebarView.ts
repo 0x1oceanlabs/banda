@@ -104,10 +104,11 @@ export function useSidebarView(preset: string) {
     scrollsIn: setList,
     /**
      * Shows `next`, the tab, as it was left, or with the block keyed
-     * `block` at its top; a cut list shows cut again. A switch from inside
-     * the sidebar takes the focus to the tab it shows, as the card or the
-     * control that had it may go with the tab it was in: the focus never
-     * falls to the page.
+     * `block` at its top; a cut list shows cut again. A switch from the
+     * list keeps the focus there, on the tab's own pick; from elsewhere in
+     * the sidebar it takes the focus to the tab it shows, as the control
+     * that had it may go with the tab it was in: the focus never falls to
+     * the page.
      */
     show: (next: Tab, block?: string) => {
       if (next === tab) return
@@ -116,7 +117,11 @@ export function useSidebarView(preset: string) {
       at.current = block
       setTab(next)
       setMore(false)
-      if (list?.closest("aside")?.contains(document.activeElement))
+      const focused = document.activeElement
+      if (
+        list?.closest("aside")?.contains(focused) &&
+        focused?.getAttribute("role") !== "listbox"
+      )
         document.getElementById(tabId(next))?.focus()
     },
     /** Shows only `project`'s rows, or all again. */

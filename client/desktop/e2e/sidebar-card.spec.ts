@@ -74,7 +74,7 @@ const idOf = (window: Window, title: string) => threadNamed(window, title)!.id
 
 /** The card of the Thread named `title`: its name starts with it. */
 const cardOf = (scope: Locator, title: string) =>
-  scope.getByRole("button", { name: new RegExp(`^${title},`) })
+  scope.getByRole("option", { name: new RegExp(`^${title},`) })
 
 /** A card's lines, top down. */
 const linesOf = (card: Locator) => card.locator(":scope > span")
@@ -165,11 +165,11 @@ async function shots(
 async function focusShots(window: Window, name: string, card: Locator) {
   for (const mode of ["dark", "light"] as const) {
     await look(window, mode)
-    await card.focus()
+    await card.hover()
     await card.locator("xpath=..").screenshot({
       path: `test-results/sidebar-s6a-${name}-focus-${mode}.png`,
     })
-    await card.blur()
+    await leaveSidebar(window.page)
   }
 }
 
@@ -416,11 +416,13 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
         (await time.boundingBox())!.x
       )
     }
-    await card.focus()
+    // The acts show under the pointer: a card takes no focus (S7b).
+    await card.hover()
     const action = card
       .locator("xpath=..")
-      .getByRole("button", { name, exact: true })
+      .locator(`[data-act="${name.toLowerCase()}"]`)
     await expect(action).toBeVisible()
+    await expect(action).toHaveAttribute("aria-label", name)
     // The time fades out where the acts show (spec S7a).
     await expect(card.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
     await expect(diamond).toBeVisible()
@@ -430,7 +432,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
     const line = (await linesOf(card).first().boundingBox())!
     expect(box.height).toBe(20)
     expect(box.y + box.height / 2).toBeCloseTo(line.y + line.height / 2, 0)
-    await card.blur()
+    await leaveSidebar(card.page())
     await expect(card.locator("[data-acts-time]")).toHaveCSS("opacity", "1")
   }
 
@@ -629,9 +631,7 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
         .threads as { title: string; archived?: unknown }[]
     ).find((one) => one.title === "Done on arc")?.archived
   await fits.hover()
-  const archive = fits
-    .locator("xpath=..")
-    .getByRole("button", { name: "Archive", exact: true })
+  const archive = fits.locator("xpath=..").locator('[data-act="archive"]')
   await expect(archive).toBeVisible()
   await archive.click()
   await expect.poll(archivedOnArc).toBeDefined()

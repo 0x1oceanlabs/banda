@@ -323,9 +323,12 @@ test("the acts and line 1's right share one cell, which keeps the acts' room whi
   )
   // Only line 1 keeps a room.
   expect(html.match(/data-acts-room/g)).toHaveLength(1)
-  // The acts stand over it, after the card's button, never in it.
-  expect(html.indexOf("data-acts=")).toBeGreaterThan(html.indexOf("</button>"))
-  expect(html).toMatch(/^<div data-row="true" class="relative">/)
+  // The acts stand over it, after the card, never in it: an option holds
+  // no buttons, and the row closes right after them.
+  expect(html).toMatch(
+    /^<div data-row="true" class="relative"><div id="[^"]+" role="option"/
+  )
+  expect(html).toMatch(/<\/button><\/span><\/div>$/)
 
   // Without acts, line 1's right is as it was; one that left has none.
   expect(drawn(rowOf("turn"))).not.toMatch(/data-acts/)

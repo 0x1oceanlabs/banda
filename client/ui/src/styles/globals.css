@@ -768,8 +768,9 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
  * before them at once, and comes back at once. They come over --dur-fast
  * as the time goes over --dur-out, and go over --dur-out. None come by
  * the pointer for a moment after the list moved under it (`data-calm`);
- * with the focus in the card they show too, and on a coarse pointer
- * always. Plain `:hover`, not Tailwind's, which asks for (hover: hover).
+ * on a coarse pointer they show always. A card takes no focus: the keys
+ * act on the list's pick (S7b). Plain `:hover`, not Tailwind's, which
+ * asks for (hover: hover).
  */
 [data-row]:hover > [data-card]::before,
 [data-card]:hover::before {
@@ -789,7 +790,7 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
 [data-acts-time] {
   transition: opacity var(--dur-fast) var(--ease);
 }
-[data-row]:is(:focus-within, [data-sidebar-list]:not([data-calm]) :hover) {
+[data-sidebar-list]:not([data-calm]) [data-row]:hover {
   & [data-acts] {
     opacity: 1;
     visibility: visible;
@@ -801,6 +802,18 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   & [data-acts-time] {
     opacity: 0;
     transition: opacity var(--dur-out) var(--ease-exit);
+  }
+}
+/* The sidebar's pick (ADR 0098, decision 13; spec §2.7): a ring while
+   its list has the focus and the last input in it was a key, none after
+   a click. It does not move: a key moves it at once. */
+[role="listbox"][data-keyed]:focus [data-picked] {
+  outline: 2px solid var(--focus);
+  outline-offset: -2px;
+}
+@media (forced-colors: active) {
+  [role="listbox"][data-keyed]:focus [data-picked] {
+    outline-color: Highlight;
   }
 }
 @media (pointer: coarse) {

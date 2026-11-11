@@ -10,6 +10,7 @@ import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import type { Change, Plan } from "../tiling/arrange"
 import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
+import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { handlesOf } from "../tiling/mount"
 import {
   type Column,
@@ -817,6 +818,45 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   // In the Flow free, every workspace is free.
   const free = placingOf("free", noProjectOf(projects))
   expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
+})
+
+test("the sidebar's keys are its scope's, none held with a mod, and pane.beside brings what an Item carries beside the Pane in focus (ADR 0098, decision 13)", () => {
+  // Only while the focus is in the sidebar, where a field types them.
+  const keys = ACTIONS.filter((action) => action.scope === SIDEBAR)
+  expect(keys.map((action) => action.id)).toEqual(
+    SIDEBAR_KEYS.map((key) => key.id)
+  )
+  for (const { keys: bound = [] } of keys)
+    for (const key of bound)
+      expect([key.alt, key.ctrl, key.super, key.primary, key.mod]).toEqual(
+        Array(5).fill(undefined)
+      )
+
+  // Open beside, by its key: the Sheet goes, and the Pane comes onto a
+  // workspace as the menu's row brings it; without a Pane, nothing.
+  const pane = thread("t1")
+  const projects = projectsOf({ a: "Banda" })
+  const change = vi.fn()
+  const closeSheet = vi.fn(() => true)
+  const shell = shellOf({
+    change,
+    closeSheet,
+    placing: () => placingOf("free", noProjectOf(projects)),
+    projectOf: lookupOf(projects),
+  })
+  runAction(shell, "pane.beside", { project: "a", pane })
+  runAction(shell, "pane.beside", { project: "a" })
+  expect(closeSheet).toHaveBeenCalledOnce()
+  expect(change).toHaveBeenCalledOnce()
+  const [how] = change.mock.calls[0] as [Change]
+  const empty: Workspaces = {
+    list: [{ id: "bottom", columns: [], focus: 0 }],
+    current: 0,
+  }
+  expect(how(empty)).toEqual(
+    bringing(empty, "a", pane, shell.placing(), shell.projectOf)
+  )
+  expect(how(empty)).toBeDefined()
 })
 
 test("Arrange by Project names every Project its Panes are of, as a Pane opens, and with one Project only it (ADR 0102, decisions 7 and 9)", () => {

@@ -89,8 +89,8 @@ function readsKey(node: ts.Node): boolean {
   )
 }
 
-/** Each key `text` reads by hand, by its file: `path KeyV`. */
-function readKeys(path: string, text: string): string[] {
+/** Each key `text` reads by hand, a widget's too, as "KeyV". */
+function keysIn(path: string, text: string): string[] {
   const source = ts.createSourceFile(
     path,
     text,
@@ -134,7 +134,15 @@ function readKeys(path: string, text: string): string[] {
     ts.forEachChild(node, visit)
   }
   visit(source)
-  return found.filter((key) => !WIDGET.has(key)).map((key) => `${path} ${key}`)
+  return found
+}
+
+/** Each key `text` reads by hand that is no widget's, by its file:
+ * `path KeyV`. */
+function readKeys(path: string, text: string): string[] {
+  return keysIn(path, text)
+    .filter((key) => !WIDGET.has(key))
+    .map((key) => `${path} ${key}`)
 }
 
 test("no Pane reads a key it does not declare, but for a widget's own", () => {
@@ -152,3 +160,23 @@ test("no Pane reads a key it does not declare, but for a widget's own", () => {
   // Parsing every Pane's code takes under a second alone, but past the
   // default five while the architecture tests run beside it on CI.
 }, 30_000)
+
+test("the sidebar's list reads only a widget's keys by hand, which move its pick: what it does to a card is its scope's actions (ADR 0098, decision 13)", () => {
+  const read = sources(join(root, "client/web/src/sidebar"), {
+    tests: false,
+  }).flatMap((file) => keysIn(relative(root, file), readFileSync(file, "utf8")))
+  expect(read.filter((key) => !WIDGET.has(key))).toEqual([])
+  expect(read).toEqual(
+    expect.arrayContaining([
+      "ArrowDown",
+      "ArrowUp",
+      "Home",
+      "End",
+      "PageDown",
+      "PageUp",
+      "ArrowLeft",
+      "ArrowRight",
+      "Escape",
+    ])
+  )
+})

@@ -68,7 +68,7 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   const question = thread.getByRole("group", { name: "Run a check" })
   await expect(question).toContainText("Allow Fake AI to run a command?")
   const sidebar = sidebarOf(page)
-  const row = sidebar.getByRole("button", { name: /please ask first/ })
+  const row = sidebar.getByRole("option", { name: /please ask first/ })
   await expect(row).toContainText("Asks Run a check")
   await expect(markOf(page)).toHaveAccessibleName(/Asks you/)
 
@@ -146,7 +146,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
 
   // At work, the picker's first line is the end of its turn; Someday is
   // picked instead.
-  const row = sidebar.getByRole("button", { name: /pages 1/ })
+  const row = sidebar.getByRole("option", { name: /pages 1/ })
   await row.click({ button: "right" })
   await page
     .getByRole("menu", { name: "Thread menu" })

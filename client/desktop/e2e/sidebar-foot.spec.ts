@@ -90,7 +90,7 @@ async function withTwoProjects() {
     page,
     sidebar,
     pen: sidebar.getByRole("button", { name: "New Thread", exact: true }),
-    hello: sidebar.getByRole("button", { name: /hello/ }),
+    hello: sidebar.getByRole("option", { name: /hello/ }),
     menu: page.getByRole("menu", { name: "New Thread" }),
     drafts: page.getByRole("region", { name: "New Thread" }),
     focused: page

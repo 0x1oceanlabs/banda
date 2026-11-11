@@ -509,7 +509,7 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await page.keyboard.press("Enter")
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: /typed/ })
+    .getByRole("option", { name: /^typed,/ })
   await expect(row).toBeVisible()
   await openSettings(page)
   await row.click()

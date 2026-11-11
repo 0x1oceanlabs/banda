@@ -69,6 +69,7 @@ import { movedArgs, NewThreadBar } from "../composer/NewThread"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
 import { threadPane } from "../ThreadPane"
 import { Transcript } from "./Transcript"
+import { UNSEEN } from "./ScrollPlace"
 import { WaitsAlone, WaitsFor } from "./WhenBack"
 import { useWriters } from "./writers"
 import { ThreadAroundProvider, type ThreadActs } from "./context"
@@ -262,7 +263,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     if (!detailsShown) setOpening(null)
   }
   // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
-  // details, and Ctrl+F (⌘F) to find in it, as in T3 Code.
+  // details, and Ctrl+F (⌘F) to find in it, as in T3 Code; and where its
+  // unseen begins, which has no key.
   const scope = useScope(
     THREAD,
     {
@@ -296,6 +298,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         findField.current?.select()
         return true
       },
+      // Where its unseen begins, as the sidebar's Enter on its card asks.
+      "agents.thread.unseen": () =>
+        root.current
+          ?.querySelector("[data-slot=message-scroller-viewport]")
+          ?.dispatchEvent(new Event(UNSEEN)) ?? false,
     },
     { tile: true }
   )

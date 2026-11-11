@@ -211,24 +211,25 @@ test("the Inbox: Your turn oldest first, Open newest first under a hairline, the
   ).not.toBe(
     await colourOf(threads.getByText("read four", { exact: true }).first())
   )
-  const more = shelf.getByRole("button", { name: "+ 3 more" })
+  const more = shelf.getByRole("option", { name: "+ 3 more" })
   await expect(more).toBeVisible()
   await shots(window, "inbox")
-  // It shows the rest in place, and the focus goes on to the first of
-  // them as it goes, never to the page.
+  // It shows the rest in place, and the pick goes on to the first of them
+  // as it goes; the focus stays where it was, never on the page (S7b).
   await more.click()
   await expect(shelf.locator("[data-row]")).toHaveCount(9)
   await expect(more).toBeHidden()
-  await expect(shelf.locator(":focus")).toHaveCount(1)
+  await expect(shelf.locator("[data-picked]")).toHaveText(/wait seven/)
   await expect(page.locator("body")).not.toBeFocused()
 
-  // 1–4 show the tabs, from anywhere in the sidebar, a card too: the focus
-  // goes to the tab shown, as the card goes with the tab it was in, never
-  // to the page. The arrows go along them. Each draws at once.
-  await threads.locator("[data-row] button").first().focus()
+  // 1–4 show the tabs, from anywhere in the sidebar, the list too, which
+  // keeps the focus as it goes with the tab shown, never to the page. The
+  // arrows go along the tabs. Each draws at once.
+  const list = panel.getByRole("listbox")
+  await list.focus()
   await page.keyboard.press("2")
   await expect(tab("Working")).toHaveAttribute("aria-selected", "true")
-  await expect(tab("Working")).toBeFocused()
+  await expect(list).toBeFocused()
   await expect(page.locator("body")).not.toBeFocused()
   await expect(panel).toHaveAccessibleName("Working, 9")
   await expect(rows).toHaveCount(9)
@@ -502,7 +503,7 @@ test("a Thread archived elsewhere while the list holds stays in its slot, dimmed
         )
       )
       .toBe("0.5")
-    await expect(gone.getByRole("button", { name: "Later" })).toHaveCount(0)
+    await expect(gone.locator("[data-act]")).toHaveCount(0)
     expect(await topsOf(rows)).toEqual(held)
     const frames = [await frame()]
 
@@ -559,9 +560,10 @@ async function cardShot(page: Page, row: Locator, path: string) {
 const rowsNamed = (scope: Locator, title: string) =>
   scope.locator("[data-row]").filter({ hasText: title })
 
-/** The act `name` of the card titled `title` in `scope`. */
+/** The act `name` of the card titled `title` in `scope`: hidden from a
+ * screen reader, which has the pick's keys and the menu's rows (S7b). */
 const actOf = (scope: Locator, title: string, name: string) =>
-  rowsNamed(scope, title).getByRole("button", { name, exact: true })
+  rowsNamed(scope, title).locator(`[data-acts] [aria-label="${name}"]`)
 
 test("a card's acts: Archive acts at once, its ghost line holds the slot until the pointer leaves, and Archived · Undo brings it back; Later opens the picker at the card, whose ghost's Undo wakes it; an asking card offers Later alone (ADR 0098, S7a)", async () => {
   test.setTimeout(240_000)
@@ -586,11 +588,11 @@ test("a card's acts: Archive acts at once, its ghost line holds the slot until t
   )
   await landed(sidebar, [...calls, "please ask first"])
 
-  // An asking card offers Later alone, which names its key.
+  // An asking card offers Later alone, which names its key on the pick.
   await rowsNamed(panel, "please ask first").hover()
   const later = actOf(panel, "please ask first", "Later")
   await expect(later).toBeVisible()
-  await expect(later).toHaveAttribute("title", "Later (Alt+Z)")
+  await expect(later).toHaveAttribute("title", "Later (Z)")
   await expect(actOf(panel, "please ask first", "Archive")).toHaveCount(0)
 
   // A done one offers Later, then Archive; under the pointer its time
@@ -599,7 +601,7 @@ test("a card's acts: Archive acts at once, its ghost line holds the slot until t
   await two.hover()
   const archive = actOf(panel, "call two", "Archive")
   await expect(archive).toBeVisible()
-  await expect(archive).toHaveAttribute("title", "Archive (Alt+S)")
+  await expect(archive).toHaveAttribute("title", "Archive (S)")
   await expect(two.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
   const held = await topsOf(rows)
 

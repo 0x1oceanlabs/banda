@@ -30,10 +30,11 @@ const OWN_KEYS = [
 ].join(",")
 
 /** A layer over the window that its keys are for, while it is one: not
- * what a Pane shows in its tile, as a list of files, nor one lifted or on
+ * what a Pane shows in its tile, as a list of files, nor the sidebar's
+ * list, which is the window's own and over nothing, nor one lifted or on
  * its way out. */
 const OPEN_LAYER =
-  ":is([role=dialog],[role=alertdialog],[role=menu],[role=listbox]):not([data-tile] *,[inert],[data-closed])"
+  ":is([role=dialog],[role=alertdialog],[role=menu],[role=listbox]):not([data-tile] *,aside *,[inert],[data-closed])"
 
 /** Whether `event` is stray in the Pane `box` is in: on it, and no one
  * else's, nor in a field or a control, nor while a layer is open. */

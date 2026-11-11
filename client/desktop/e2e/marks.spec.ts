@@ -58,7 +58,7 @@ const logoOf = (page: Page) =>
     .locator('[data-slot="banda-mark"]')
 /** The row of the Thread named `title`, in the Sidebar. */
 const rowOf = (page: Page, title: string) =>
-  sidebarOf(page).getByRole("button", { name: new RegExp(title) })
+  sidebarOf(page).getByRole("option", { name: new RegExp(title) })
 
 /**
  * The window as it is, in dark and then light, as

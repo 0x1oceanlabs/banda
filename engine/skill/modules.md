@@ -352,6 +352,18 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Quit Banda (`banda.quit`), Ctrl+Q
 - Banda's own keys, until keys.toml changes (`keys.reset`), Ctrl+Alt+Shift+K
 - Show or hide the sidebar (`sidebar.toggle`), Alt+A
+- Open the card picked, or go to where its unseen begins (`sidebar.open-picked`), Return, `[binds.sidebar]`
+- Open the card picked beside the Pane in focus (`sidebar.open-picked-beside`), Shift+Return, `[binds.sidebar]`
+- Archive the card picked, or bring it back (`sidebar.archive-picked`), S, `[binds.sidebar]`
+- Put the card picked off till later (`sidebar.later-picked`), Z, `[binds.sidebar]`
+- Mark the card picked as unread, or as read (`sidebar.unread-picked`), U, `[binds.sidebar]`
+- Rename the card picked (`sidebar.rename-picked`), F2, `[binds.sidebar]`
+- Suggest a title for the card picked (`sidebar.suggest-title-picked`), Shift+F2, `[binds.sidebar]`
+- Search (`sidebar.search`), /, `[binds.sidebar]`
+- Show the Inbox (`sidebar.tab-inbox`), 1, `[binds.sidebar]`
+- Show Working (`sidebar.tab-working`), 2, `[binds.sidebar]`
+- Show Later (`sidebar.tab-later`), 3, `[binds.sidebar]`
+- Show the Archive (`sidebar.tab-archive`), 4, `[binds.sidebar]`
 - Go to workspace 1 (`workspace.go-1`), Alt+1
 - Go to workspace 2 (`workspace.go-2`), Alt+2
 - Go to workspace 3 (`workspace.go-3`), Alt+3
@@ -374,4 +386,4 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Open a Pane beside the launcher (`launcher.open-beside`), Shift+H for agents.thread or Shift+T for terminal.terminal or Shift+B for browser.browser or Shift+D for git.diff or Shift+F for files.tree, `[binds.launcher]`; takes `kind` (the kind of Pane, as terminal.terminal)
 - Search the settings (`settings.search`), /, `[binds.settings]`
 
-Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `launcher` (the Launcher, whose keys work with the mod still held too), `settings` (the Settings).
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `launcher` (the Launcher, whose keys work with the mod still held too), `settings` (the Settings), `sidebar` (the Sidebar).

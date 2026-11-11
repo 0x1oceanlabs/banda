@@ -537,7 +537,7 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
     Sidebar: ["onDismiss", "isCurrent"],
   },
   "web/src/sidebar/SectionView.tsx": {
-    SectionView: ["isCurrent", "onToggle", "onMore", "withMenu"],
+    SectionView: ["isCurrent", "onToggle", "withMenu"],
   },
   "web/src/sidebar/ProjectsList.tsx": {
     ProjectsList: ["onPick", "withMenu"],
@@ -1475,10 +1475,10 @@ const BY_DOES = [
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/SectionView.tsx: itemActionOf",
-  "web/src/sidebar/SectionView.tsx: itemActionOf",
   "web/src/sidebar/items.ts: action.does",
   "web/src/sidebar/items.ts: itemActionOf",
   "web/src/sidebar/undo.ts: itemActionOf",
+  "web/src/sidebar/useActs.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",

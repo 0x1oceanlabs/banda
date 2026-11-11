@@ -513,7 +513,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // A Thread started there shows as it starts, with how long it works.
   send(arc, banda, "Hosts over ssh, wait")
   await expect(
-    there.getByRole("button").filter({ hasText: "Hosts over ssh, wait" })
+    there.getByRole("option").filter({ hasText: "Hosts over ssh, wait" })
   ).toContainText(SHORT_TIME)
   await shot(page, "pr2-1-projects-live")
   // Its label's card has its longer facts: what it is, why it is awake,
@@ -590,17 +590,17 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // machine's, each with its host's name.
   writeFileSync(join(window.dir, "config/sidebar.toml"), 'preset = "inbox"\n')
   await expect(arcOf(page)).toHaveCount(0)
-  const tags = sidebar.getByRole("button").locator('[data-machine-card="arc"]')
+  const tags = sidebar.getByRole("option").locator('[data-machine-card="arc"]')
   await expect(tags).toHaveCount(2)
   const mark = sidebar
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Bench window tests" })
     .locator('[data-machine-card="arc"]')
   await expect(mark).toHaveText("arc")
   await expect(mark.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(
     sidebar
-      .getByRole("button")
+      .getByRole("option")
       .filter({ hasText: "Sidebar for arc" })
       .locator('[data-machine-card="arc"]')
   ).toHaveCount(0)
@@ -646,7 +646,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // link came back, so its Agent is given a turn that waits.
   send(arc, banda, "Hold arc, wait")
   await expect(
-    there.getByRole("button").filter({ hasText: "Hold arc, wait" })
+    there.getByRole("option").filter({ hasText: "Hold arc, wait" })
   ).toContainText(SHORT_TIME)
   await more.focus()
   await page.keyboard.press("Enter")
@@ -983,7 +983,7 @@ test("another machine's Thread is seen, marked unread and archived on its engine
   const bench = () => threadsOf(arc!, banda)[0]!
   expect(bench().seen).toBeUndefined()
   const row = arcOf(page)
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Bench window tests" })
   const done = row.getByRole("img", { name: "Done" })
   await expect(done).toBeVisible()
@@ -1134,7 +1134,7 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   ) as { ok: { threads: { title: string }[] } }
   expect(ours.ok.threads.map((one) => one.title)).toEqual(["Sidebar for arc"])
   await expect(
-    arcOf(page).getByRole("button").filter({ hasText: "Started on arc" })
+    arcOf(page).getByRole("option").filter({ hasText: "Started on arc" })
   ).toBeVisible()
 
   // arc's No Project: its first message makes its folder there.
@@ -1560,7 +1560,7 @@ test("another machine's Thread that calls opens on its engine by Alt+U and from 
   await work(window)
   const done = (title: string) =>
     sidebarOf(page)
-      .getByRole("button", { name: new RegExp(title) })
+      .getByRole("option", { name: new RegExp(title) })
       .getByRole("img", { name: "Done" })
   await expect(done("Sidebar for arc")).toBeVisible()
   await expect(done("Bench window tests")).toBeVisible()
@@ -2547,7 +2547,7 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
   const sidebar = sidebarOf(page)
   const done = (title: string) =>
     sidebar
-      .getByRole("button", { name: new RegExp(title) })
+      .getByRole("option", { name: new RegExp(title) })
       .getByRole("img", { name: "Done" })
   await expect(done("Sidebar for arc")).toBeVisible()
   // arc's newest is done after this machine's.
@@ -2555,7 +2555,7 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
   await expect(done("Done on arc")).toBeVisible()
   const titles = [/Bench window tests/, /Sidebar for arc/, /Done on arc/]
   await expect(
-    sidebar.getByRole("button", {
+    sidebar.getByRole("option", {
       name: /Done on arc|Sidebar for arc|Bench window tests/,
     })
   ).toHaveText(titles)
@@ -3105,12 +3105,12 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await expect(sidebar.getByText("Bench window tests")).toBeVisible()
   send(arc, banda, "Hosts over ssh, wait")
   const arcRow = sidebar
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Bench window tests" })
   const mark = arcRow.locator('[data-machine-card="arc"]')
   const name = mark.locator(".max-w-16")
   const atWork = sidebar
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Hosts over ssh, wait" })
   const workMark = atWork.locator('[data-machine-card="arc"]')
   const choice = show.getByRole("radiogroup", { name: "Machine on rows" })
@@ -3156,7 +3156,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
     .poll(() => readFileSync(shownIn, "utf8"))
     .toMatch(/this-too = true/)
   const ours = sidebar
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Sidebar for arc" })
   await expect(ours.locator('[data-machine-icon="laptop"]')).toBeVisible()
   await expect(ours.locator(".max-w-16")).toHaveText("mac")
@@ -3210,7 +3210,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await setInFront(page, false)
   await setInFront(page, true)
   const scratch = macOf
-    .getByRole("button")
+    .getByRole("option")
     .filter({ hasText: "Scratch on arc" })
   await expect(scratch.locator('[data-machine-card="arc"]')).toBeVisible()
   await expect(scratch.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
