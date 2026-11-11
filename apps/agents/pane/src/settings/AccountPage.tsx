@@ -12,6 +12,7 @@ import type {
   HarnessView,
   Icon,
   Limits,
+  UpdateAccount,
 } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -92,11 +93,17 @@ export function AccountPage({
   onWritten,
   ...props
 }: PageProps & { onBack: () => void; onWritten: () => void }) {
-  const { harness, harnesses, agents, roles, project } = props
+  const { engine, harness, harnesses, roles, project } = props
   const { refused, write } = useWrite({ onWritten, against: harness })
-  const set = (key: string, value: string) =>
-    write(harnesses.set(`harness.${harness.id}.${key}`, value))
-  const enabled = `harness.${harness.id}.enabled`
+  const update = (change: Omit<UpdateAccount, "harness">) =>
+    write(
+      engine
+        .command("harnesses.update_account", {
+          harness: harness.id,
+          ...change,
+        })
+        .then(() => [])
+    )
   // The page opens at its top, wherever the cards were scrolled.
   const top = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -116,16 +123,12 @@ export function AccountPage({
       <Hero
         harness={harness}
         of={props.of}
-        onName={(name) => set("name", tomlOf(name))}
+        onName={(name) => update({ name })}
         toggle={
           <Switch
             label={`${harness.name} on`}
             on={harness.enabled}
-            onChange={(on) =>
-              write(
-                on ? harnesses.reset(enabled) : harnesses.set(enabled, "false")
-              )
-            }
+            onChange={(enabled) => update({ enabled })}
           />
         }
       />
@@ -134,7 +137,7 @@ export function AccountPage({
       ))}
       {harness.enabled ? (
         <>
-          <RoleButtons harness={harness} roles={roles} file={agents} />
+          <RoleButtons harness={harness} roles={roles} engine={engine} />
           <Reading {...props} />
         </>
       ) : (
@@ -157,8 +160,8 @@ export function AccountPage({
       <Section title="Emblem">
         <EmblemPicker
           harness={harness}
-          onIcon={(icon) => set("icon", tomlOf(icon))}
-          onColour={(colour) => set("colour", tomlOf(colour))}
+          onIcon={(icon) => update({ icon })}
+          onColour={(colour) => update({ colour })}
         />
       </Section>
       {harness.enabled && project && (
@@ -234,16 +237,15 @@ function Hero({
   )
 }
 
-/** "Make default" and "Use as fallback", which `agents.toml`'s
- * `start.account` and `start.fallback` keep, as New Threads writes them. */
+/** "Make default" and "Use as fallback", as New Threads chooses them. */
 function RoleButtons({
   harness,
   roles,
-  file,
+  engine,
 }: {
   harness: HarnessView
   roles: Roles
-  file: Props["agents"]
+  engine: Engine
 }) {
   const { refused, write } = useWrite()
   const isDefault = roles.default === harness.id
@@ -257,7 +259,7 @@ function RoleButtons({
           aria-pressed={isDefault}
           className={cn(isDefault && "border-ring")}
           disabled={isDefault}
-          onClick={() => write(pickStart(file, "start.account", harness.id))}
+          onClick={() => write(pickStart(engine, "account", harness.id))}
         >
           {isDefault && <CheckIcon />}
           {isDefault ? "Default" : "Make default"}
@@ -271,11 +273,7 @@ function RoleButtons({
           title={isDefault ? "The default is not its own fallback." : undefined}
           onClick={() =>
             write(
-              pickStart(
-                file,
-                "start.fallback",
-                isFallback ? undefined : harness.id
-              )
+              pickStart(engine, "fallback", isFallback ? undefined : harness.id)
             )
           }
         >

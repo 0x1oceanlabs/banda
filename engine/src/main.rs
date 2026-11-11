@@ -994,50 +994,26 @@ async fn account_command(places: &Places, what: AccountCommand) -> Result<(), Fa
         AccountCommand::LoginFinish { login } => {
             ("harnesses.login_finish", json!({"login": login}))
         }
-        AccountCommand::Fallback { id: None } => (
-            "keys.settings_reset",
-            json!({ "file": "agents.toml", "key": "start.fallback" }),
+        AccountCommand::Rename { id, name } => (
+            "harnesses.update_account",
+            json!({ "harness": id, "name": name }),
         ),
-        change => {
-            let (id, file, leaf, value) = match change {
-                AccountCommand::Rename { id, name } => (id, "harnesses.toml", "name", json!(name)),
-                AccountCommand::Enable { id } => (id, "harnesses.toml", "enabled", json!(true)),
-                AccountCommand::Disable { id } => (id, "harnesses.toml", "enabled", json!(false)),
-                AccountCommand::Default { id } => {
-                    (id.clone(), "agents.toml", "start.account", json!(id))
-                }
-                AccountCommand::Fallback { id: Some(id) } => {
-                    (id.clone(), "agents.toml", "start.fallback", json!(id))
-                }
-                _ => unreachable!(),
-            };
-            let mut client = Client::connect(places).await?;
-            let list = client
-                .call("harnesses.list", None, CommandId::new(), json!({}))
-                .await?;
-            if !list
-                .as_array()
-                .is_some_and(|list| list.iter().any(|h| h["id"] == id))
-            {
-                return Err(Failure::Refused(Refusal::not_found(
-                    "There is no Account with that ID.",
-                )));
-            }
-            // Quote the entire ID as one TOML key; even a manually written
-            // ID containing dots cannot select another setting.
-            let key = if file == "harnesses.toml" {
-                format!(
-                    "harness.{}.{leaf}",
-                    serde_json::to_string(&id).map_err(Failure::broken)?
-                )
-            } else {
-                leaf.to_owned()
-            };
-            (
-                "keys.settings_set",
-                json!({ "file": file, "key": key, "value": value.to_string() }),
-            )
-        }
+        AccountCommand::Enable { id } => (
+            "harnesses.update_account",
+            json!({ "harness": id, "enabled": true }),
+        ),
+        AccountCommand::Disable { id } => (
+            "harnesses.update_account",
+            json!({ "harness": id, "enabled": false }),
+        ),
+        AccountCommand::Default { id } => (
+            "harnesses.set_start",
+            json!({ "role": "account", "harness": id }),
+        ),
+        AccountCommand::Fallback { id } => (
+            "harnesses.set_start",
+            json!({ "role": "fallback", "harness": id }),
+        ),
     };
     print_call(places, method, None, CommandId::new(), params).await
 }

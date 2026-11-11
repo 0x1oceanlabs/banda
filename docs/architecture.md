@@ -1213,6 +1213,12 @@ If Chat is removed, Agents still works through its own Thread.
   before making one. `harnesses.list`, `harnesses.account` (with the
   machine's log position it is current at), `harnesses.sign_in {harness,
   way}` and `harnesses.sign_out`. It owns `harnesses.toml`.
+- **An Account changes through one door, on its own machine** (ADR 0108).
+  `harnesses.connect_account`, `update_account` (a name, an emblem, whether
+  it is offered) and `set_start` (the default and the fallback) are
+  commands: the window and `banda account` call them on the engine of the
+  machine the Account belongs to. What a Harness runs stays the Person's,
+  written with `keys.settings_set` on that engine.
 - It asks through a Harness process of its own, with no session, in a
   pool keyed by the machine's ID, let go after five minutes with nothing
   asked.

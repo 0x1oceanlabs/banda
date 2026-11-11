@@ -18,7 +18,6 @@ import type {
   Icon,
   Kept,
 } from "@banda/contract/harnesses"
-import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {
   Dialog,
@@ -49,7 +48,6 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import { problem } from "@banda/ui/lib/words"
 import { harnessTitle } from "../harnesses"
 import { Problem } from "../thread/SignIn"
-import type { SettingsFile } from "./AgentsSettings"
 import { ApiKeyForm, GatewayForm, KEPT_WORDS } from "./AccountKeys"
 import { AccountLogin } from "./AccountLogin"
 import { EmblemPicker } from "./AccountPage"
@@ -111,14 +109,12 @@ function kindsOf(harness: string) {
 
 export function AccountSetup({
   engine,
-  file,
   base,
   taken,
   onClose,
   onAdded,
 }: {
   engine: Engine
-  file: SettingsFile
   base: HarnessView
   taken: readonly HarnessView[]
   onClose: () => void
@@ -162,29 +158,22 @@ export function AccountSetup({
     if (busy || !name.trim()) return
     setBusy(true)
     setRefused(undefined)
-    let connected = false
     try {
-      const account = await engine.call("harnesses.connect_account", {
+      const account = await engine.command("harnesses.connect_account", {
         harness: base.harness,
         id,
         name: name.trim(),
         colour,
         kind,
+        ...(icon && { icon }),
         ...(existing && { folder: folder.trim() }),
       })
-      connected = true
       setMade(account)
       setAt(at + 1)
-      // The profile exists even when the icon's write fails. Never create
-      // another one when retrying a cosmetic choice.
-      const wrong = icon
-        ? await file.set(`harness.${account.id}.icon`, tomlOf(icon))
-        : []
-      if (wrong.length) setRefused(`Account added. ${wrong.join(" ")}`)
+      onAdded()
     } catch (error) {
       setRefused(problem(error))
     } finally {
-      if (connected) onAdded()
       setBusy(false)
     }
   }

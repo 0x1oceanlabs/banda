@@ -113,6 +113,14 @@ pub enum Icon {
 }
 
 impl Icon {
+    /// Its word in `harnesses.toml`.
+    pub fn word(self) -> String {
+        match serde_json::to_value(self) {
+            Ok(serde_json::Value::String(word)) => word,
+            _ => unreachable!("an Icon is a unit variant, a string"),
+        }
+    }
+
     /// The Harness whose own icon it is, by its ID; None for a neutral one.
     pub fn harness(self) -> Option<&'static str> {
         match self {

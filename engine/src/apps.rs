@@ -591,10 +591,20 @@ mod tests {
     /// reason, and its handler says whose pass it answers.
     #[test]
     fn only_these_methods_a_pass_reaches_that_are_no_tools() {
-        let marked = [(
-            "harnesses.secret",
-            "a gateway account's own Harness asks for its key",
-        )];
+        let marked = [
+            (
+                "harnesses.update_account",
+                "an Agent may rename an Account and turn it on or off (ADR 0104, decision 4)",
+            ),
+            (
+                "harnesses.set_start",
+                "an Agent may choose the default and the fallback (ADR 0104, decision 4)",
+            ),
+            (
+                "harnesses.secret",
+                "a gateway account's own Harness asks for its key",
+            ),
+        ];
         let passed: Vec<String> = (every_method().into_iter())
             .filter(|(_, method)| method.pass)
             .map(|(name, _)| name)

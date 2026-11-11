@@ -1,6 +1,8 @@
 //! Profile discovery, identity and creation. The store persists only the
 //! connection this service validated; it never decides account policy.
-use super::{AccountProfile, AccountStore, ConnectAccount, ConnectedAccount};
+use super::{
+    AccountProfile, AccountStore, ConnectAccount, ConnectedAccount, SetStart, UpdateAccount,
+};
 use crate::model::{AccountKind, HarnessView};
 use crate::{Harness, Harnesses};
 use banda_kernel::Refusal;
@@ -18,16 +20,49 @@ pub(super) struct Profiles {
 }
 
 impl Profiles {
+    /// Changes what `change` names of its entry, and says how it is now.
+    pub fn update(&self, change: UpdateAccount) -> Result<HarnessView, Refusal> {
+        let _writing = self.lock()?;
+        self.listed(&change.harness)?;
+        if let Some(name) = &change.name {
+            check_name(name)?;
+        }
+        if let Some(colour) = change.colour {
+            check_colour(colour)?;
+        }
+        self.store.update(&change)?;
+        self.listed(&change.harness)
+    }
+
+    /// Chooses the account a new Thread starts on, or takes it back.
+    pub fn set_start(&self, start: SetStart) -> Result<(), Refusal> {
+        let _writing = self.lock()?;
+        if let Some(id) = &start.harness {
+            self.listed(id)?;
+        }
+        self.store.set_start(start.role, start.harness.as_deref())
+    }
+
+    fn lock(&self) -> Result<std::sync::MutexGuard<'_, ()>, Refusal> {
+        self.writing
+            .lock()
+            .map_err(|_| Refusal::conflict("Account settings are busy after an error."))
+    }
+
+    /// Entry `id` as the list shows it.
+    fn listed(&self, id: &str) -> Result<HarnessView, Refusal> {
+        (self.harnesses.views().into_iter())
+            .find(|harness| harness.id == id)
+            .ok_or_else(|| Refusal::not_found("There is no Account with that ID."))
+    }
+
     pub fn remove(
         &self,
         id: &str,
         expected: Option<&str>,
         by: banda_kernel::Participant,
     ) -> Result<String, Refusal> {
-        let _writing = self
-            .writing
-            .lock()
-            .map_err(|_| Refusal::conflict("Account settings are busy."))?;
+        let _writing = self.lock()?;
         let harness = self
             .harnesses
             .find(id)
@@ -117,6 +152,25 @@ impl Profiles {
         }
         connected
     }
+}
+
+fn check_name(name: &str) -> Result<(), Refusal> {
+    if name.trim().is_empty() || name.len() > 200 {
+        return Err(Refusal::invalid(
+            "An Account needs a name of at most 200 bytes.",
+        ));
+    }
+    Ok(())
+}
+
+fn check_colour(colour: u8) -> Result<(), Refusal> {
+    if colour > crate::list::COLOURS as u8 {
+        return Err(Refusal::invalid(format!(
+            "An Account's colour is 0 to {}.",
+            crate::list::COLOURS
+        )));
+    }
+    Ok(())
 }
 
 pub(super) fn variable(harness: &str) -> Option<(&'static str, &'static str)> {
@@ -243,10 +297,7 @@ impl Profiles {
         account: ConnectAccount,
         url: Option<String>,
     ) -> Result<HarnessView, Refusal> {
-        let _writing = self
-            .writing
-            .lock()
-            .map_err(|_| Refusal::conflict("Account settings are busy after an error."))?;
+        let _writing = self.lock()?;
         if !valid_id(&account.id) {
             return Err(Refusal::invalid(
                 "An Account ID is 1–80 lowercase letters, digits and hyphens, starting with a letter or digit.",
@@ -269,17 +320,8 @@ impl Profiles {
         let (default_name, default_colour) = fresh(program, &theirs);
         let name = account.name.unwrap_or(default_name);
         let colour = account.colour.unwrap_or(default_colour);
-        if colour > crate::list::COLOURS as u8 {
-            return Err(Refusal::invalid(format!(
-                "An Account's colour is 0 to {}.",
-                crate::list::COLOURS
-            )));
-        }
-        if name.trim().is_empty() || name.len() > 200 {
-            return Err(Refusal::invalid(
-                "An Account needs a name of at most 200 bytes.",
-            ));
-        }
+        check_colour(colour)?;
+        check_name(&name)?;
         let made = account.folder.is_none();
         let folder = if let Some(folder) = account.folder {
             let folder = PathBuf::from(folder);
@@ -313,10 +355,31 @@ impl Profiles {
                 "That folder is already connected as {id}."
             )));
         }
+        // A gateway's folder is new, and its Claude Code asks Banda for
+        // its key, written before the entry so that no entry stands
+        // without it.
+        let asks_for_key = url.is_some() && variable == "CLAUDE_CONFIG_DIR";
+        let undo = || {
+            // A newly made folder holding nothing but what this wrote;
+            // never an adopted folder or data written concurrently.
+            if asks_for_key {
+                let _ = std::fs::remove_file(folder.join("settings.json"));
+            }
+            if made {
+                let _ = std::fs::remove_dir(&folder);
+            }
+        };
+        if asks_for_key && let Err(error) = super::ask_for_key(&folder, &account.id) {
+            undo();
+            return Err(Refusal::conflict(format!(
+                "The gateway's Claude Code settings could not be written: {error}."
+            )));
+        }
         let result = self.store.save(&ConnectedAccount {
             id: account.id.clone(),
             name: name.trim().into(),
             colour,
+            icon: account.icon,
             harness: account.harness,
             variable,
             folder: folder.clone(),
@@ -324,11 +387,7 @@ impl Profiles {
             url,
         });
         if let Err(error) = result {
-            // A newly made, still-empty folder only; never remove an
-            // adopted folder or provider data written concurrently.
-            if made {
-                let _ = std::fs::remove_dir(&folder);
-            }
+            undo();
             return Err(error);
         }
         self.harnesses
@@ -390,6 +449,7 @@ mod tests {
             id: id.into(),
             name: Some("Work".into()),
             colour: None,
+            icon: None,
             kind: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }

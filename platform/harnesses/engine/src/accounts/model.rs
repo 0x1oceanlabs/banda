@@ -31,6 +31,9 @@ pub struct ConnectAccount {
     /// omitted, the one its Harness's accounts use least.
     #[ts(optional)]
     pub colour: Option<u8>,
+    /// Its emblem. When omitted, the one of its Harness and how it pays.
+    #[ts(optional)]
+    pub icon: Option<crate::model::Icon>,
     /// How it pays: `subscription`, or `api` for the Harness's own API
     /// sign-in. A gateway, which needs a key, is added by the Person only
     /// (`add_gateway`).
@@ -68,6 +71,14 @@ pub trait AccountStore: Send + Sync {
         Err(Refusal::conflict("Account removal is not configured."))
     }
     fn save(&self, account: &ConnectedAccount) -> Result<(), Refusal>;
+    /// Writes what `change` names of its entry.
+    fn update(&self, _change: &UpdateAccount) -> Result<(), Refusal> {
+        Err(Refusal::conflict("Changing an Account is not configured."))
+    }
+    /// Writes the account of `role`, or takes it out.
+    fn set_start(&self, _role: StartRole, _harness: Option<&str>) -> Result<(), Refusal> {
+        Err(Refusal::conflict("Changing an Account is not configured."))
+    }
 }
 
 /// A validated connection prepared by Accounts for the settings writer.
@@ -78,6 +89,8 @@ pub struct ConnectedAccount {
     /// Its colour: the one asked for, else the one its Harness's
     /// accounts use least.
     pub(super) colour: u8,
+    /// Its emblem, when one was chosen.
+    pub(super) icon: Option<crate::model::Icon>,
     pub(super) harness: String,
     pub(super) variable: &'static str,
     pub(super) folder: std::path::PathBuf,
@@ -95,6 +108,9 @@ impl ConnectedAccount {
     }
     pub fn colour(&self) -> u8 {
         self.colour
+    }
+    pub fn icon(&self) -> Option<crate::model::Icon> {
+        self.icon
     }
     pub fn harness(&self) -> &str {
         &self.harness
@@ -197,12 +213,54 @@ pub struct AddGateway {
     pub name: Option<String>,
     #[ts(optional)]
     pub colour: Option<u8>,
+    #[ts(optional)]
+    pub icon: Option<crate::model::Icon>,
     /// Its address: Anthropic's API for Claude Code, such as
     /// `https://openrouter.ai/api`; OpenAI's Responses API for Codex, such
     /// as `https://openrouter.ai/api/v1`.
     pub url: String,
     /// The key, or a reference to it: `op://…` or `pass:<name>`.
     pub key: String,
+}
+
+/// What changes of an entry of the list (ADR 0108, decision 1): its
+/// name, its emblem, or whether it is offered. What it leaves out stays,
+/// and what a Harness runs is not among them (ADR 0104, decision 4).
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "harnesses/")]
+pub struct UpdateAccount {
+    pub harness: String,
+    #[ts(optional)]
+    pub name: Option<String>,
+    #[ts(optional)]
+    pub icon: Option<crate::model::Icon>,
+    /// 0 its Harness's own, 1 to 4 the accounts'.
+    #[ts(optional)]
+    pub colour: Option<u8>,
+    #[ts(optional)]
+    pub enabled: Option<bool>,
+}
+
+/// Which account a new Thread starts on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "harnesses/")]
+pub enum StartRole {
+    /// Where a new Thread starts.
+    Account,
+    /// Where it starts while the default is out of its limits.
+    Fallback,
+}
+
+/// Chooses the account of `role`; with none, takes the choice back.
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "harnesses/")]
+pub struct SetStart {
+    pub role: StartRole,
+    #[ts(optional)]
+    pub harness: Option<String>,
 }
 
 /// A key for an account: a gateway's new one, which Banda keeps, or an

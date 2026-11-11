@@ -424,7 +424,7 @@ const DESKTOP_READS: Record<string, number> = {
   "client/web/src/bar/Update.tsx": 1,
   "client/web/src/main.tsx": 1,
   "client/web/src/menu/browse.ts": 1,
-  "client/web/src/settings/Agents.tsx": 3,
+  "client/web/src/settings/Agents.tsx": 1,
   "client/web/src/settings/BrowserSites.tsx": 1,
   "client/web/src/settings/General.tsx": 1,
   "client/web/src/settings/Keys.tsx": 2,

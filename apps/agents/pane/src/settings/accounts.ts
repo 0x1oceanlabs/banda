@@ -12,14 +12,13 @@ import type {
   Limits,
   LimitWindow,
   SignedInAs,
+  StartRole,
 } from "@banda/contract/harnesses"
-import { tomlOf } from "@banda/contract/settings"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { openProjects } from "@banda/ui/lib/projects"
 import { DAY, ago } from "@banda/ui/lib/words"
 import { groupedByHarness, harnessTitle } from "../harnesses"
-import type { SettingsFile } from "./AgentsSettings"
 
 /** What Banda knows of an account on this machine: its Threads now, when
  * its latest turn began, and its turns this week. */
@@ -211,12 +210,17 @@ export function lastWords(last: number | undefined, now: number): string {
   return now - last < 7 * DAY ? `Used ${when} ago` : `Used ${when}`
 }
 
-/** Sets where a new Thread starts, `start.account`, or the fallback,
- * `start.fallback`, in `agents.toml`; with no account, takes it out. */
+/** Chooses where a new Thread starts, or where it starts while that one
+ * is out; with no account, takes the choice back. */
 export function pickStart(
-  file: SettingsFile,
-  key: "start.account" | "start.fallback",
+  engine: Engine,
+  role: StartRole,
   id: string | undefined
 ): Promise<string[]> {
-  return id === undefined ? file.reset(key) : file.set(key, tomlOf(id))
+  return engine
+    .command("harnesses.set_start", {
+      role,
+      ...(id !== undefined && { harness: id }),
+    })
+    .then(() => [])
 }

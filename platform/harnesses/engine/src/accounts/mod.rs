@@ -90,9 +90,7 @@ impl Accounts {
     /// with `banda secret get <id>`, and the key in the machine's secrets.
     pub(crate) async fn add_gateway(&self, args: AddGateway) -> Result<GatewayAdded, Refusal> {
         let url = gateway_url(&args.url)?;
-        let profiles = self.profiles.as_ref().ok_or_else(|| {
-            Refusal::conflict("Account folders are not configured on this engine.")
-        })?;
+        let profiles = self.owning()?;
         if self.harnesses.find(&args.id).is_some() {
             return Err(Refusal::conflict("That Account ID is already registered."));
         }
@@ -105,6 +103,7 @@ impl Accounts {
             id: args.id.clone(),
             name: args.name,
             colour: args.colour,
+            icon: args.icon,
             kind: Some(AccountKind::Gateway),
             folder: None,
         };
@@ -115,16 +114,23 @@ impl Accounts {
                 return Err(refused);
             }
         };
-        if let Some(harness) = self.harnesses.find(&account.id)
-            && let Some(folder) = harness.env.get("CLAUDE_CONFIG_DIR")
-        {
-            ask_for_key(Path::new(folder), &account.id).map_err(|e| {
-                Refusal::conflict(format!(
-                    "The gateway's Claude Code settings could not be written: {e}."
-                ))
-            })?;
-        }
         Ok(GatewayAdded { account, kept })
+    }
+
+    /// Changes an entry's name, emblem, or whether it is offered.
+    pub fn update_account(&self, change: UpdateAccount) -> Result<HarnessView, Refusal> {
+        self.owning()?.update(change)
+    }
+
+    /// Chooses the account a new Thread starts on, or takes it back.
+    pub fn set_start(&self, start: SetStart) -> Result<(), Refusal> {
+        self.owning()?.set_start(start)
+    }
+
+    fn owning(&self) -> Result<&Profiles, Refusal> {
+        self.profiles
+            .as_ref()
+            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))
     }
 
     /// Keeps a new key for the gateway account `harness`.
@@ -228,10 +234,7 @@ impl Accounts {
     }
 
     pub fn profiles(&self) -> Result<Vec<AccountProfile>, Refusal> {
-        self.profiles
-            .as_ref()
-            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
-            .profiles()
+        self.owning()?.profiles()
     }
 
     pub(crate) async fn remove_account(
@@ -285,10 +288,7 @@ impl Accounts {
     }
 
     pub fn connect(&self, account: ConnectAccount) -> Result<HarnessView, Refusal> {
-        self.profiles
-            .as_ref()
-            .ok_or_else(|| Refusal::conflict("Account folders are not configured on this engine."))?
-            .connect(account)
+        self.owning()?.connect(account)
     }
 
     pub(crate) async fn account(&self, call: Call, harness: String) -> Result<Accounted, Refusal> {
@@ -656,6 +656,42 @@ mod tests {
         let refused = login_with_key(&local, &login, "sk-2").await.unwrap_err();
         assert!(refused.message.contains("got sk-2"), "{}", refused.message);
     }
+    /// A store that keeps nothing.
+    struct Refuses;
+    impl AccountStore for Refuses {
+        fn save(&self, _: &ConnectedAccount) -> Result<(), Refusal> {
+            Err(Refusal::invalid("no"))
+        }
+    }
+
+    #[tokio::test]
+    async fn a_gateway_that_cannot_be_saved_leaves_no_folder_and_no_key() {
+        let root = tempfile::tempdir().unwrap();
+        let keyring = keyring_core::mock::Store::new().unwrap();
+        let secrets =
+            Secrets::with_keyring("banda-test", root.path().join("secrets"), Some(keyring));
+        let owned = root.path().join("accounts");
+        let accounts = Accounts::new(Harnesses::known()).with_store(
+            owned.clone(),
+            Arc::new(Refuses),
+            secrets.clone(),
+        );
+        let refused = accounts
+            .add_gateway(AddGateway {
+                harness: "claude".into(),
+                id: "or".into(),
+                name: Some("OpenRouter".into()),
+                colour: None,
+                icon: None,
+                url: "https://openrouter.ai/api".into(),
+                key: "sk-test".into(),
+            })
+            .await;
+        assert!(refused.is_err());
+        assert!(!owned.join("or").exists(), "no folder is left behind");
+        assert!(!secrets.has("or").await, "no key is left behind");
+    }
+
     #[test]
     fn missing_persistence_is_a_refusal_not_a_partial_connection() {
         let accounts = Accounts::new(Harnesses::known());
@@ -667,6 +703,7 @@ mod tests {
                     id: "work".into(),
                     name: None,
                     colour: None,
+                    icon: None,
                     kind: None,
                     folder: None
                 })

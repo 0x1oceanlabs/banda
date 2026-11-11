@@ -1,6 +1,6 @@
 //! Persistence adapter for Accounts. Account policy and folder lifetimes
 //! belong to banda_harnesses::accounts; this only preserves settings text.
-use banda_harnesses::accounts::{AccountStore, ConnectedAccount};
+use banda_harnesses::accounts::{AccountStore, ConnectedAccount, StartRole, UpdateAccount};
 use banda_kernel::Refusal;
 use std::path::PathBuf;
 use toml_edit::{InlineTable, Value};
@@ -46,8 +46,10 @@ impl AccountStore for Store {
         // Clear the fallback before retirement. A failed second write leaves
         // the Account usable and reports the problem; repeating is safe.
         if clear_fallback {
-            crate::reset(&self.config, "agents.toml", "start.fallback")
-                .map_err(|e| Refusal::invalid(format!("Could not clear the fallback: {e:?}")))?;
+            written(
+                crate::reset(&self.config, "agents.toml", "start.fallback"),
+                "Could not clear the fallback",
+            )?;
         }
         let mut author = InlineTable::new();
         let (kind, id_of_author) = match by {
@@ -60,14 +62,15 @@ impl AccountStore for Store {
         retired.insert("to", Value::from(to));
         retired.insert("by", Value::InlineTable(author));
         let value = Value::InlineTable(retired);
-        crate::set(
-            &self.config,
-            "harnesses.toml",
-            &format!("harness.{}.retired", Value::from(id)),
-            &value.to_string(),
+        written(
+            crate::set(
+                &self.config,
+                "harnesses.toml",
+                &format!("harness.{}.retired", Value::from(id)),
+                &value.to_string(),
+            ),
+            "Could not remove the Account",
         )
-        .map_err(|e| Refusal::invalid(format!("Could not remove the Account: {e:?}")))?;
-        Ok(())
     }
 
     fn save(&self, account: &ConnectedAccount) -> Result<(), Refusal> {
@@ -77,6 +80,9 @@ impl AccountStore for Store {
         let mut entry = InlineTable::new();
         entry.insert("name", Value::from(account.name()));
         entry.insert("colour", Value::from(i64::from(account.colour())));
+        if let Some(icon) = account.icon() {
+            entry.insert("icon", Value::from(icon.word()));
+        }
         entry.insert("of", Value::from(account.harness()));
         if account.kind() != banda_harnesses::model::AccountKind::Subscription {
             entry.insert("kind", Value::from(account.kind().as_str()));
@@ -85,16 +91,72 @@ impl AccountStore for Store {
             entry.insert("url", Value::from(url));
         }
         entry.insert("env", Value::InlineTable(env));
-        crate::set(
-            &self.config,
-            "harnesses.toml",
-            &format!("harness.{}", account.id()),
-            &Value::InlineTable(entry).to_string(),
+        written(
+            crate::set(
+                &self.config,
+                "harnesses.toml",
+                &format!("harness.{}", account.id()),
+                &Value::InlineTable(entry).to_string(),
+            ),
+            "The Account could not be saved",
         )
-        .map_err(|problems| {
-            Refusal::invalid(format!("The Account could not be saved: {problems:?}"))
-        })
     }
+
+    fn update(&self, change: &UpdateAccount) -> Result<(), Refusal> {
+        let what = "The Account could not be changed";
+        let entry = format!("harness.{}", Value::from(change.harness.as_str()));
+        // What it names in one write, so that lands whole or not at all.
+        let mut named = InlineTable::new();
+        if let Some(name) = &change.name {
+            named.insert("name", Value::from(name.trim()));
+        }
+        if let Some(icon) = change.icon {
+            named.insert("icon", Value::from(icon.word()));
+        }
+        if let Some(colour) = change.colour {
+            named.insert("colour", Value::from(i64::from(colour)));
+        }
+        if change.enabled == Some(false) {
+            named.insert("enabled", Value::from(false));
+        }
+        if !named.is_empty() {
+            let value = Value::InlineTable(named).to_string();
+            written(
+                crate::set(&self.config, "harnesses.toml", &entry, &value),
+                what,
+            )?;
+        }
+        // On is how an entry is when it says nothing.
+        if change.enabled == Some(true) {
+            let enabled = format!("{entry}.enabled");
+            written(crate::reset(&self.config, "harnesses.toml", &enabled), what)?;
+        }
+        Ok(())
+    }
+
+    fn set_start(&self, role: StartRole, harness: Option<&str>) -> Result<(), Refusal> {
+        let key = match role {
+            StartRole::Account => "start.account",
+            StartRole::Fallback => "start.fallback",
+        };
+        written(
+            match harness {
+                Some(id) => crate::set(
+                    &self.config,
+                    "agents.toml",
+                    key,
+                    &Value::from(id).to_string(),
+                ),
+                None => crate::reset(&self.config, "agents.toml", key),
+            },
+            "The account could not be chosen",
+        )
+    }
+}
+
+/// `result`, a refusal that says `what` went wrong and why.
+fn written<E: std::fmt::Debug>(result: Result<(), E>, what: &str) -> Result<(), Refusal> {
+    result.map_err(|problems| Refusal::invalid(format!("{what}: {problems:?}")))
 }
 
 #[cfg(test)]
@@ -102,7 +164,7 @@ mod tests {
     use super::*;
     use banda_harnesses::{
         Harnesses,
-        accounts::{Accounts, ConnectAccount},
+        accounts::{Accounts, ConnectAccount, SetStart},
     };
     use std::sync::Arc;
 
@@ -129,6 +191,7 @@ mod tests {
                 id: "work".into(),
                 name: Some("Work".into()),
                 colour: None,
+                icon: None,
                 kind: None,
                 folder: None,
             })
@@ -146,6 +209,126 @@ mod tests {
                 .to_string_lossy()
         );
     }
+    /// A list in `root` with Accounts kept in its files, and its path.
+    fn listed(root: &std::path::Path) -> (Accounts, PathBuf) {
+        let config = root.join("config");
+        std::fs::create_dir(&config).unwrap();
+        let path = config.join("harnesses.toml");
+        let text = concat!(
+            "# Keep this comment\n[omarchy]\nenabled = false\n",
+            "[[harness]]\nid = \"claude\"\n",
+        );
+        std::fs::write(&path, text).unwrap();
+        let harnesses = Harnesses::load(&path).unwrap();
+        let accounts = Accounts::new(harnesses).with_store(
+            root.join("accounts"),
+            Arc::new(Store::new(config.clone())),
+            secrets(root),
+        );
+        accounts.connect(add("work", None)).unwrap();
+        (accounts, config)
+    }
+
+    fn change(id: &str) -> UpdateAccount {
+        UpdateAccount {
+            harness: id.into(),
+            name: None,
+            icon: None,
+            colour: None,
+            enabled: None,
+        }
+    }
+
+    #[test]
+    fn an_update_writes_what_it_names_and_keeps_the_rest() {
+        let root = tempfile::tempdir().unwrap();
+        let (accounts, config) = listed(root.path());
+        let file = config.join("harnesses.toml");
+        let view = accounts
+            .update_account(UpdateAccount {
+                name: Some(" Personal ".into()),
+                icon: Some(banda_harnesses::model::Icon::Personal),
+                colour: Some(3),
+                ..change("work")
+            })
+            .unwrap();
+        assert_eq!(view.name, "Personal");
+        assert_eq!(view.icon, Some(banda_harnesses::model::Icon::Personal));
+        assert_eq!(view.colour, 3);
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.contains("# Keep this comment"), "{saved}");
+        assert!(saved.contains("CLAUDE_CONFIG_DIR"), "{saved}");
+
+        let off = UpdateAccount {
+            enabled: Some(false),
+            ..change("work")
+        };
+        assert!(!accounts.update_account(off).unwrap().enabled);
+        let on = UpdateAccount {
+            enabled: Some(true),
+            ..change("work")
+        };
+        assert!(accounts.update_account(on).unwrap().enabled);
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(!saved.contains("enabled = false\n[[harness]]\nid = \"work\""));
+    }
+
+    #[test]
+    fn an_update_refuses_what_is_not_there_or_not_a_name() {
+        let root = tempfile::tempdir().unwrap();
+        let (accounts, _) = listed(root.path());
+        let missing = accounts.update_account(change("nobody")).err().unwrap();
+        assert_eq!(missing.code, banda_kernel::Code::NotFound);
+        let blank = UpdateAccount {
+            name: Some("  ".into()),
+            ..change("work")
+        };
+        assert!(accounts.update_account(blank).is_err());
+        let colour = UpdateAccount {
+            colour: Some(99),
+            ..change("work")
+        };
+        assert!(accounts.update_account(colour).is_err());
+    }
+
+    #[test]
+    fn the_default_and_the_fallback_are_chosen_and_taken_back() {
+        let root = tempfile::tempdir().unwrap();
+        let (accounts, config) = listed(root.path());
+        let file = config.join("agents.toml");
+        let pick = |role, harness: Option<&str>| {
+            accounts.set_start(SetStart {
+                role,
+                harness: harness.map(str::to_owned),
+            })
+        };
+        pick(StartRole::Account, Some("work")).unwrap();
+        pick(StartRole::Fallback, Some("claude")).unwrap();
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.contains("account = \"work\""), "{saved}");
+        assert!(saved.contains("fallback = \"claude\""), "{saved}");
+        pick(StartRole::Fallback, None).unwrap();
+        let saved = std::fs::read_to_string(&file).unwrap();
+        // The template's comment names the key too.
+        assert!(!saved.contains("\nfallback ="), "{saved}");
+        assert!(pick(StartRole::Account, Some("nobody")).is_err());
+    }
+
+    #[test]
+    fn an_emblem_is_written_with_its_account() {
+        let root = tempfile::tempdir().unwrap();
+        let (accounts, config) = listed(root.path());
+        let view = accounts
+            .connect(ConnectAccount {
+                icon: Some(banda_harnesses::model::Icon::Spare),
+                ..add("spare", None)
+            })
+            .unwrap();
+        assert_eq!(view.icon, Some(banda_harnesses::model::Icon::Spare));
+        let saved = std::fs::read_to_string(config.join("harnesses.toml")).unwrap();
+        assert!(saved.contains("icon = \"spare\""), "{saved}");
+    }
+
     /// Secrets kept in files under `root`: these accounts have none.
     fn secrets(root: &std::path::Path) -> banda_harnesses::Secrets {
         banda_harnesses::Secrets::with_keyring("banda-test", root.join("secrets"), None)
@@ -157,6 +340,7 @@ mod tests {
             id: id.into(),
             name: Some("Work".into()),
             colour: None,
+            icon: None,
             kind: None,
             folder: folder.map(|p| p.to_string_lossy().into_owned()),
         }

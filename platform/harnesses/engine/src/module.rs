@@ -17,6 +17,7 @@ use crate::accounts::secrets::{Kept, Secrets};
 use crate::accounts::{
     AccountKey, AccountProfile, AccountStatus, AccountStore, Accounted, Accounts, AddGateway,
     ConnectAccount, GatewayAdded, LoginAccount, LoginId, LoginInput, LoginStatus, RemoveAccount,
+    SetStart, UpdateAccount,
 };
 use crate::limits::Reader;
 use crate::model::{HarnessView, Limits, LimitsLook};
@@ -82,7 +83,16 @@ banda_kernel::methods! {
         call account_profiles(Nothing) -> Vec<AccountProfile>, Read, tool "account_profiles";
         /// Connects a profile or creates an empty Account folder, without
         /// changing what the registered Harness runs (ADR 0104).
-        call connect_account(ConnectAccount) -> HarnessView, Write, tool "connect_account";
+        command connect_account(ConnectAccount) -> HarnessView, Write, tool "connect_account";
+        /// Changes an entry's name, emblem, or whether it is offered; what
+        /// it runs stays the Person's (ADR 0108, decision 1). Any Agent's
+        /// pass answers here, as `banda account` is theirs too (ADR 0104,
+        /// decision 4).
+        command update_account(UpdateAccount) -> HarnessView, Write, pass;
+        /// Chooses the account a new Thread starts on, or the one it starts
+        /// on while that one is out of its limits (ADR 0108, decision 1).
+        /// Any Agent's pass answers here (ADR 0104, decision 4).
+        command set_start(SetStart) -> (), Write, pass;
         /// A Harness as it says: its program, who is signed in, how to sign
         /// in, at the machine's log's position it is current at.
         // It needs Manage, and only asks the Harness who is signed in.
@@ -255,6 +265,14 @@ impl HarnessesModule {
     ) -> Result<HarnessView, Refusal> {
         self.accounts.connect(account)
     }
+    async fn update_account(&self, _: Call, change: UpdateAccount) -> Result<HarnessView, Refusal> {
+        self.accounts.update_account(change)
+    }
+
+    async fn set_start(&self, _: Call, start: SetStart) -> Result<(), Refusal> {
+        self.accounts.set_start(start)
+    }
+
     async fn remove_account(&self, call: Call, args: RemoveAccount) -> Result<String, Refusal> {
         self.accounts.remove_account(call, args).await
     }
