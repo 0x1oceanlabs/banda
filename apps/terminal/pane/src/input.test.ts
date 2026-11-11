@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import type { JsonValue } from "@banda/contract"
+import { type JsonValue, Unreachable } from "@banda/contract"
+import { problem } from "@banda/ui/lib/words"
 import { Input } from "./input"
 
 /** An engine that answers each call when the test says so. */
@@ -79,4 +80,33 @@ test("typing a program does not read says so; a size it missed does not", async 
   input.type("a")
   await settle()
   expect(problems).toEqual([new Error("does not read")])
+})
+
+test("a write refused while away gives the foot's words and goes nowhere later", async () => {
+  const sent: string[] = []
+  let away = true
+  const send = (_method: string, params: JsonValue) => {
+    sent.push((params as { data: string }).data)
+    return away
+      ? Promise.reject(new Unreachable("arc", "arc is away"))
+      : Promise.resolve(null)
+  }
+  const said: string[] = []
+  const input = new Input(send, "t", (error) =>
+    said.push(problem(error, "your typing"))
+  )
+  input.type("rm ")
+  await settle()
+  input.type("-rf\r")
+  await settle()
+  expect(said).toEqual([
+    "arc is away: your typing was not sent.",
+    "arc is away: your typing was not sent.",
+  ])
+  // Back, what was refused stays refused: only what is typed now goes.
+  away = false
+  input.type("ls\r")
+  await settle()
+  expect(sent).toEqual(["rm ", "-rf\r", "ls\r"])
+  expect(said).toHaveLength(2)
 })

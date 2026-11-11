@@ -15,7 +15,9 @@ type Send = <M extends "terminal.write" | "terminal.resize">(
  * engine runs calls side by side, so each waits for the one before it.
  * What is typed meanwhile goes in one call, and only the last size counts.
  * A size that does not reach the program is not worth a word, as the next
- * one replaces it; typing that does not is.
+ * one replaces it; typing that does not is. A key goes now or never (ADR
+ * 0106, decision 4): one refused, as its machine is away, is said and
+ * gone, kept nowhere to go later by itself.
  */
 export class Input {
   readonly #send: Send

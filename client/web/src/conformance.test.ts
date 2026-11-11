@@ -8,14 +8,13 @@
  * it does hangs without words, and the one pill is the Frame's. The kinds
  * listed in `PENDING` wait for the steps of ADR 0106's plan named beside
  * them; none joins the list, and a kind leaves it once it passes. A kind
- * that comes to open elsewhere passes as it does: the terminal, in 1b,
- * the Diff, in 2a.
+ * that comes to open elsewhere passes as it does.
  */
 import type { JsonValue } from "@banda/contract"
 import type { AnyPaneKind } from "@banda/ui/module"
 import { type Conformance, conformance } from "@banda/ui/testing/conformance"
 import { createElement } from "react"
-import { expect, test } from "vitest"
+import { expect, test, vi } from "vitest"
 import { KindsContext } from "./launcher"
 import { modules } from "./modules"
 import { KINDS, windowModule } from "./registry"
@@ -23,6 +22,40 @@ import { KINDS, windowModule } from "./registry"
 /** The kinds that opened elsewhere before the kit came: only these may
  * wait for it. */
 const BEFORE_THE_KIT = ["agents.thread"]
+
+/** The terminal's Ghostty, which needs a GPU canvas the kit's page has
+ * not: what the Person types reaches the Pane as Ghostty hands it. */
+const surfaces = vi.hoisted(() => {
+  const made: { onData: (data: string) => void }[] = []
+  class Surface {
+    readonly cols = 80
+    readonly rows = 24
+    readonly options: { onData: (data: string) => void }
+    constructor(options: { onData: (data: string) => void }) {
+      this.options = options
+    }
+    static create(_: unknown, options: { onData: (data: string) => void }) {
+      made.push(options)
+      return Promise.resolve(new Surface(options))
+    }
+    setVisible() {}
+    focus() {}
+    fit() {}
+    write() {}
+    resetAndWrite() {}
+    setSharedGrid() {}
+    setFont() {}
+    setTheme() {}
+    setCursor() {}
+    dispose() {}
+    selectAll() {}
+    getSelection() {
+      return ""
+    }
+  }
+  return { made, Surface }
+})
+vi.mock("../../ghostty/src/index.ts", () => ({ Surface: surfaces.Surface }))
 
 /** The kinds that open elsewhere and do not pass the kit yet, each with
  * the steps that bring it there. */
@@ -69,6 +102,25 @@ const GIVEN: Record<
     args: { scope: { kind: "unstaged" }, file: null },
     answers: diffAnswers,
     reads: ["Scope", "Base", "Refresh"],
+  },
+  // Its shell, already there, and a key typed into it.
+  "terminal.terminal": {
+    args: { terminal: "t", title: "Terminal", shell: true, done: null },
+    answers: (method) =>
+      method === "terminal.watch"
+        ? {
+            held: [
+              {
+                kind: "snapshot",
+                history: "",
+                size: { cols: 80, rows: 24 },
+              },
+            ],
+          }
+        : undefined,
+    gestures: {
+      "a key typed": () => surfaces.made.at(-1)?.onData("ls"),
+    },
   },
 }
 

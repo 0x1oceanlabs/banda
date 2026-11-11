@@ -5,10 +5,12 @@
  * tests cover it.
  */
 import type { Title } from "@banda/contract/terminal"
+import { type Link, linkOf } from "@banda/core/react"
 import { named } from "@banda/ui/lib/file-links"
 
-/** A web page, or a file by its full path and perhaps its line. */
-export type Target = { page: string } | { file: string; line?: number }
+/** A web page, by the `Link` that says whose it is (ADR 0106, law 2), or
+ * a file by its full path and perhaps its line. */
+export type Target = { link: Link } | { file: string; line?: number }
 
 /**
  * Where `text` goes. A path that does not start at `/` starts in the
@@ -16,7 +18,8 @@ export type Target = { page: string } | { file: string; line?: number }
  * `at`, only a full path goes anywhere. None for a Windows path either.
  */
 export function targetOf(text: string, at?: Title): Target | null {
-  if (/^https?:\/\//i.test(text)) return { page: text }
+  const link = linkOf(text)
+  if (link) return { link }
   const { path, line } = named(text)
   const file = (full: string) => ({
     file: tidy(full),
@@ -42,5 +45,5 @@ function tidy(path: string): string {
 
 /** Where a click with Ctrl takes `target`, in words. */
 export function outsideOf(target: Target): string {
-  return "page" in target ? "in external browser" : "in its app"
+  return "link" in target ? "in external browser" : "in its app"
 }

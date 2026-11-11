@@ -10,11 +10,18 @@ const at = {
 
 test("a page goes as it is", () => {
   expect(targetOf("http://localhost:5173/", at)).toEqual({
-    page: "http://localhost:5173/",
+    link: { url: "http://localhost:5173/" },
   })
   expect(targetOf("HTTPS://example.com/a?b", undefined)).toEqual({
-    page: "HTTPS://example.com/a?b",
+    link: { url: "HTTPS://example.com/a?b" },
   })
+})
+
+test("a page is a Link: no other scheme a program prints reaches the device", () => {
+  expect(targetOf("file:///etc/passwd", at)).toEqual({
+    file: "/home/roma/code/banda/file:/etc/passwd",
+  })
+  expect(targetOf("app://files/x", undefined)).toBeNull()
 })
 
 test("a path starts in the folder of what runs in front, and keeps its line", () => {

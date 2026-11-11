@@ -78,8 +78,10 @@ export const SCENARIOS: readonly Scenario[] = [
 ]
 
 /** What a kind's engine part answers a call or a stream, by method and
- * params: a call's answer; a stream's pieces, after which it ends, or
- * none to keep it open. A refusal thrown is the engine's refusal. */
+ * params: a call's answer; a stream's pieces, after which it ends;
+ * `{ held: pieces }`, after which it stays open, as one that watches
+ * does; or none to keep it open with nothing said. A refusal thrown is
+ * the engine's refusal. */
 export type Answers = (
   method: string,
   params: JsonValue
@@ -173,9 +175,15 @@ class Side {
     }
     if (frame.type === "call")
       return socket.say({ type: "result", id, ok: answer ?? null })
-    if (!Array.isArray(answer)) return
-    for (const data of answer) socket.say({ type: "piece", stream: id, data })
-    socket.say({ type: "ended", stream: id })
+    const held =
+      answer !== null &&
+      typeof answer === "object" &&
+      !Array.isArray(answer) &&
+      Array.isArray(answer.held)
+    const pieces = held ? (answer as { held: JsonValue[] }).held : answer
+    if (!Array.isArray(pieces)) return
+    for (const data of pieces) socket.say({ type: "piece", stream: id, data })
+    if (!held) socket.say({ type: "ended", stream: id })
   }
 }
 
