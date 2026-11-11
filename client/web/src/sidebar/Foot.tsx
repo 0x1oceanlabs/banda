@@ -10,35 +10,52 @@ import {
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import { BellIcon, BellOffIcon, SettingsIcon } from "lucide-react"
-import { useState } from "react"
+import { type ContextType, useState } from "react"
 import { choicesAt, quiet, quietWords, useQuiet } from "../calls/quiet"
+import { BulkBar } from "./BulkBar"
 import { useOpen } from "./open"
+import { Bulk } from "./PickList"
 import { ViewMenu } from "./ViewMenu"
 
 /**
  * The sidebar's foot (ADR 0098, decision 21): Banda's settings, the view
  * menu and Quiet, as icons with no words, each tooltip with its key in
  * force where it has one. The key sheet and the theme went to the Banda
- * menu, which the bar's logo opens, and Add Project to ✎'s menu.
+ * menu, which the bar's logo opens, and Add Project to ✎'s menu. While
+ * cards are checked, the selection's bar lies over it, at its height, and
+ * it goes under the bar (ADR 0098, decision 15): `bulk` is what the bar
+ * acts on, and how.
  */
-export function Foot() {
+export function Foot({ bulk }: { bulk: ContextType<typeof Bulk> }) {
+  const checking = bulk.rows.length > 0
   const keyFor = useKeyLabel()
   const open = useOpen()
   return (
-    <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        className="text-muted-foreground"
-        aria-label="Settings"
-        title={keyFor("settings.open", "Settings")}
-        onClick={() => open("settings.open")}
+    <div className="relative">
+      <div
+        inert={checking || undefined}
+        className={cn(
+          "flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5 transition-opacity duration-(--dur-fast) ease-(--ease)",
+          checking && "opacity-0"
+        )}
       >
-        <SettingsIcon />
-      </Button>
-      <ViewMenu />
-      <QuietBell />
-      {/* The machines come on the right (S13). */}
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Settings"
+          title={keyFor("settings.open", "Settings")}
+          onClick={() => open("settings.open")}
+        >
+          <SettingsIcon />
+        </Button>
+        <ViewMenu />
+        <QuietBell />
+        {/* The machines come on the right (S13). */}
+      </div>
+      <Bulk value={bulk}>
+        <BulkBar />
+      </Bulk>
     </div>
   )
 }

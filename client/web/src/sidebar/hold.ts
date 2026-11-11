@@ -350,6 +350,7 @@ export const HOLDING_KEYS: ReadonlySet<string> = new Set([
   "KeyZ",
   "KeyU",
   "KeyX",
+  "Space",
   "F2",
 ])
 

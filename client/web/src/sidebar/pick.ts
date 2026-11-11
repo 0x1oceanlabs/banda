@@ -4,8 +4,10 @@
  * keeps its own. It is a card's key (`itemKey`), or a stop that is no
  * card: a folded group, or "+ N more". The arrows move it from stop to
  * stop in the drawn order and stop at the ends; after an act took cards
- * out of the tab, it goes on to the card below, as in a mail inbox.
- * Pure, so plain tests cover it.
+ * out of the tab, it goes on to the card below, as in a mail inbox. The
+ * selection (decision 15) is the cards checked besides, which the acts
+ * take while there are any: one at a time, a range from its anchor, or
+ * every card drawn. Pure, so plain tests cover it.
  */
 import type { Tab } from "./inbox"
 
@@ -69,4 +71,94 @@ export function stepped(
   const at = picked === undefined ? -1 : stops.indexOf(picked)
   if (at === -1) return step > 0 ? stops[0] : stops.at(-1)
   return stops[Math.max(0, Math.min(stops.length - 1, at + step))]
+}
+
+/** A stop of the pick as the selection reads it: its key, and whether it
+ * is a card that may be selected, not a folded group, "+ N more" or a
+ * card that left the tab while the list held. */
+export type Stop = { key: string; card: boolean }
+
+/**
+ * The selection (ADR 0098, decision 15; spec §2.7): the cards checked,
+ * which `S`, `Z` and `U` act on while there are any; the card a range
+ * starts from, the last one checked by itself; and what was checked
+ * before that range, which a range adds to, so Shift+↓ then Shift+↑ gives
+ * back what it took.
+ */
+export type Checks = {
+  selected: ReadonlySet<string>
+  anchor?: string
+  base: ReadonlySet<string>
+}
+
+const NONE: ReadonlySet<string> = new Set()
+
+export const NO_CHECKS: Checks = { selected: NONE, base: NONE }
+
+/** The selection of just `keys`, the first its anchor. */
+export function checksOf(keys: Iterable<string>): Checks {
+  const selected = new Set(keys)
+  if (selected.size === 0) return NO_CHECKS
+  const [anchor] = selected
+  return { selected, anchor, base: selected }
+}
+
+/** `checks` with the card `key` checked, or no longer: as Ctrl+click,
+ * `X` and `Space` do. A range starts from it next. */
+export function toggled(checks: Checks, key: string): Checks {
+  const selected = new Set(checks.selected)
+  if (!selected.delete(key)) selected.add(key)
+  return selected.size === 0
+    ? NO_CHECKS
+    : { selected, anchor: key, base: selected }
+}
+
+/**
+ * `checks` with the range from its anchor to `to` checked, among the
+ * drawn `stops`, the cards alone: as Shift+click and Shift+↑↓ do. With
+ * no anchor drawn, the range starts at `from`, the pick it moved from,
+ * else at `to`. What was checked before the range stays.
+ */
+export function ranged(
+  checks: Checks,
+  stops: readonly Stop[],
+  to: string,
+  from?: string
+): Checks {
+  const keys = stops.map((stop) => stop.key)
+  const anchor = [checks.anchor, from, to].find(
+    (key) => key !== undefined && keys.includes(key)
+  )
+  const at = keys.indexOf(to)
+  if (anchor === undefined || at === -1) return checks
+  const start = keys.indexOf(anchor)
+  const span = stops
+    .slice(Math.min(start, at), Math.max(start, at) + 1)
+    .filter((stop) => stop.card)
+    .map((stop) => stop.key)
+  const selected = new Set([...checks.base, ...span])
+  return selected.size === 0 ? NO_CHECKS : { ...checks, selected, anchor }
+}
+
+/** Every card the `stops` draw checked, as `Ctrl+A` does: a folded group
+ * and "+ N more" are stops but no cards, and what they hide is not drawn,
+ * so it stays out. */
+export function allChecked(stops: readonly Stop[]): Checks {
+  return checksOf(stops.filter((stop) => stop.card).map((stop) => stop.key))
+}
+
+/** `checks` with only what `stops` still draw as cards: a card that left
+ * the tab leaves the selection. The same `checks` where none left. */
+export function stillDrawn(checks: Checks, stops: readonly Stop[]): Checks {
+  const cards = new Set(stops.filter((stop) => stop.card).map((s) => s.key))
+  if ([...checks.selected].every((key) => cards.has(key))) return checks
+  const selected = new Set([...checks.selected].filter((k) => cards.has(k)))
+  if (selected.size === 0) return NO_CHECKS
+  return {
+    selected,
+    ...(checks.anchor !== undefined && cards.has(checks.anchor)
+      ? { anchor: checks.anchor }
+      : {}),
+    base: new Set([...checks.base].filter((key) => cards.has(key))),
+  }
 }

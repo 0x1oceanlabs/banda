@@ -4,10 +4,10 @@
  * window matches them, `keys.toml` moves them in `[binds.sidebar]`, and
  * the key sheet lists them. They hold no mod, so they work only while the
  * focus is in the sidebar, and a field there types them; Undo holds Ctrl,
- * or ⌘ on a Mac, as a field's own does, and so does Delete's second key,
- * Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick work while
- * the focus is in the list; Undo, `/` and the tabs' digits anywhere in
- * the sidebar. The arrows, Home, End, the pages and Esc are
+ * or ⌘ on a Mac, as a field's own does, and so do Select all, Ctrl+A, and
+ * Delete's second key, Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick
+ * work while the focus is in the list; Undo, `/` and the tabs' digits
+ * anywhere in the sidebar. The arrows, Home, End, the pages and Esc are
  * the list's own, as a list's are. Pure, so plain tests cover it.
  */
 import type { Key } from "@banda/ui/lib/keys"
@@ -23,6 +23,8 @@ export type Does =
   | "archive"
   | "later"
   | "unread"
+  | "select"
+  | "select-all"
   | "undo"
   | "rename"
   | "suggest"
@@ -78,6 +80,18 @@ export const SIDEBAR_KEYS: readonly {
     keys: [{ code: "KeyU" }],
   },
   {
+    does: "select",
+    id: "sidebar.select-picked",
+    title: "Select the card picked, or leave it out",
+    keys: [{ code: "KeyX" }, { code: "Space" }],
+  },
+  {
+    does: "select-all",
+    id: "sidebar.select-all",
+    title: "Select every card shown",
+    keys: [{ code: "KeyA", primary: true }],
+  },
+  {
     does: "undo",
     id: "sidebar.undo",
     title: "Undo the last act on a card",
@@ -127,6 +141,7 @@ export const ONCE: ReadonlySet<Does> = new Set([
   "archive",
   "later",
   "unread",
+  "select",
   "rename",
   "suggest",
   "delete",
@@ -147,11 +162,12 @@ const HINTED: readonly (readonly [Does, string])[] = [
   ["archive", "archives"],
   ["later", "puts off"],
   ["unread", "marks unread"],
+  ["select", "selects"],
 ]
 
 /** The hint the list is described by (spec §2.8), with the keys in force
- * as `label` reads them: "S archives, Z puts off, U marks unread. Shift+F10
- * for more."; none where none is bound. */
+ * as `label` reads them: "S archives, Z puts off, U marks unread, X
+ * selects. Shift+F10 for more."; none where none is bound. */
 export function hintOf(
   label: (action: string) => string | undefined
 ): string | undefined {

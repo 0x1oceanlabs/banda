@@ -1224,6 +1224,32 @@
       "scope": "sidebar"
     },
     {
+      "id": "sidebar.select-picked",
+      "title": "Select the card picked, or leave it out",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyX"
+        },
+        {
+          "code": "Space"
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
+      "id": "sidebar.select-all",
+      "title": "Select every card shown",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyA",
+          "primary": true
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
       "id": "sidebar.undo",
       "title": "Undo the last act on a card",
       "section": "Sidebar",

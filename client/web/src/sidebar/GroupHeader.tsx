@@ -37,6 +37,7 @@ export function GroupHeader({
   machine,
   stop,
   picked = false,
+  checking = false,
   onFold,
 }: {
   group: GroupBlock
@@ -48,6 +49,9 @@ export function GroupHeader({
   stop?: string
   /** The list's keys act on it. */
   picked?: boolean
+  /** The list is in check mode (decision 15), where a header is never
+   * checked. */
+  checking?: boolean
   onFold: () => void
 }) {
   const open = useOpen()
@@ -83,7 +87,8 @@ export function GroupHeader({
         type="button"
         aria-expanded={!folded}
         data-group={group.key}
-        {...(stop !== undefined && pickProps(stop, picked))}
+        {...(stop !== undefined &&
+          pickProps(stop, picked, checking ? false : undefined))}
         tabIndex={-1}
         title={project?.folder}
         className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control text-left outline-none"

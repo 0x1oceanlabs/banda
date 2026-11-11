@@ -1,5 +1,17 @@
 import { expect, test } from "vitest"
-import { pickAfter, pickIn, stepped } from "./pick"
+import {
+  allChecked,
+  type Checks,
+  checksOf,
+  NO_CHECKS,
+  pickAfter,
+  pickIn,
+  ranged,
+  stepped,
+  stillDrawn,
+  type Stop,
+  toggled,
+} from "./pick"
 
 // Your turn's a b c, then Open's d e: one drawn order across parts.
 const order = ["a", "b", "c", "d", "e"]
@@ -53,4 +65,66 @@ test("the arrows move the pick from stop to stop and stop at the ends", () => {
   expect(stepped(order, "gone", 1)).toBe("a")
   expect(stepped(order, undefined, -1)).toBe("e")
   expect(stepped([], "a", 1)).toBeUndefined()
+})
+
+// Your turn's a b, a folded group g, then c d and "+ 2 more": the stops
+// drawn, the cards alone selectable.
+const stops: Stop[] = [
+  { key: "a", card: true },
+  { key: "b", card: true },
+  { key: "#g", card: false },
+  { key: "c", card: true },
+  { key: "d", card: true },
+  { key: "#more", card: false },
+]
+const keys = (checks: Checks) => [...checks.selected]
+
+test("X and Ctrl+click check a card or no longer; the last checked anchors a range", () => {
+  const one = toggled(NO_CHECKS, "b")
+  expect(keys(one)).toEqual(["b"])
+  expect(one.anchor).toBe("b")
+  const two = toggled(one, "d")
+  expect(keys(two)).toEqual(["b", "d"])
+  expect(two.anchor).toBe("d")
+  // Unchecked, the last one leaves no selection: plain again.
+  expect(toggled(toggled(one, "b"), "x")).toEqual(toggled(NO_CHECKS, "x"))
+  expect(toggled(one, "b")).toBe(NO_CHECKS)
+})
+
+test("Shift+↓ and Shift+click check the range from the anchor, cards alone, and Shift+↑ gives back what it took", () => {
+  // No anchor yet: from the pick it moved from.
+  const down = ranged(NO_CHECKS, stops, "b", "a")
+  expect(keys(down)).toEqual(["a", "b"])
+  // On past a folded group: the group is no card.
+  const further = ranged(down, stops, "c")
+  expect(keys(further)).toEqual(["a", "b", "c"])
+  // And back up: the range shrinks.
+  expect(keys(ranged(further, stops, "b"))).toEqual(["a", "b"])
+  // Upwards from the anchor.
+  expect(keys(ranged(toggled(NO_CHECKS, "c"), stops, "a"))).toEqual([
+    "c",
+    "a",
+    "b",
+  ])
+  // What was checked before the range stays.
+  const kept = ranged(toggled(toggled(NO_CHECKS, "a"), "c"), stops, "d")
+  expect(keys(kept).sort()).toEqual(["a", "c", "d"])
+  // To a stop no longer drawn: as it was.
+  expect(ranged(down, stops, "gone")).toBe(down)
+})
+
+test("Ctrl+A checks every card drawn: a folded group and + N more stay out", () => {
+  expect(keys(allChecked(stops))).toEqual(["a", "b", "c", "d"])
+  expect(allChecked([{ key: "#g", card: false }])).toBe(NO_CHECKS)
+})
+
+test("a card no longer drawn leaves the selection; none left, plain again", () => {
+  const all = allChecked(stops)
+  expect(stillDrawn(all, stops)).toBe(all)
+  const fewer = stillDrawn(all, stops.slice(2))
+  expect(keys(fewer)).toEqual(["c", "d"])
+  expect(fewer.anchor).toBeUndefined()
+  expect(stillDrawn(all, [])).toBe(NO_CHECKS)
+  expect(keys(checksOf(["d", "a"]))).toEqual(["d", "a"])
+  expect(checksOf([])).toBe(NO_CHECKS)
 })

@@ -22,6 +22,7 @@ import {
 import type { Block, Tab } from "./inbox"
 import { DUR_FAST } from "./motion"
 import { order, useElsewhere } from "./order"
+import type { Checks } from "./pick"
 import type { Settings } from "./settings"
 import type { Undoable } from "./undo"
 import { type Holding, useHold, useOwnKeys } from "./useHold"
@@ -57,7 +58,8 @@ export type Holds = {
  * Person's own acts, those on the Thread in view (`isCurrent`) by its
  * keys too, and another view, draw at once (ADR 0098, decision 6).
  * `scene` changes as the view does, which draws the list afresh, with no
- * motion. `holder` is what the list's parts hold it by.
+ * motion. `holder` is what the list's parts hold it by. While cards are
+ * checked (`checks`, decision 15), the list holds too.
  */
 export function useOrdered(
   projects: ProjectSummary[],
@@ -68,12 +70,14 @@ export function useOrdered(
     more,
     folded,
     someday,
+    checks,
   }: {
     tab: Tab
     only?: ProjectId
     more: boolean
     folded: ReadonlySet<string>
     someday?: number
+    checks?: Checks
   },
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
 ) {
@@ -108,7 +112,10 @@ export function useOrdered(
       someday,
     ]
   )
-  const { holding, take, by, list } = useHold({ still: settings.hold.still })
+  const { holding, take, by, list } = useHold({
+    still: settings.hold.still,
+    checking: checks !== undefined && checks.selected.size > 0,
+  })
   // What is drawn, as its blocks, and what the Person did while it held.
   const [drawn, setDrawn] = useState<readonly Block[]>(fresh.blocks)
   const [mine, setMine] = useState<Mine>(NO_ACTS)

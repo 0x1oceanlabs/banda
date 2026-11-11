@@ -1,6 +1,10 @@
 import {
+  createContext,
+  type Dispatch,
   type KeyboardEvent,
   type ReactNode,
+  type RefObject,
+  type SetStateAction,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -31,12 +35,23 @@ import {
 } from "./keys"
 import { useOpen } from "./open"
 import type { Ordered } from "./order"
-import { said, tabSaid, zeroSaid } from "./said"
+import type { Checks } from "./pick"
+import { checkedSaid, said, tabSaid, zeroSaid } from "./said"
 import { PANEL, tabId } from "./Tabs"
 import { undoLast } from "./undo"
-import { useActs, useDoing } from "./useActs"
+import { type SetAct, useActs, useDoing, useSetActs } from "./useActs"
 import type { Holding } from "./useHold"
 import { PICK, PickContext, usePick } from "./usePick"
+
+/** What the selection's bar reads (`BulkBar`): the cards checked, in
+ * their order; what it does to them all from one of its buttons; how it
+ * clears them; and the list, which takes the focus back as it goes. */
+export const Bulk = createContext<{
+  rows: readonly Row[]
+  onAct: (act: SetAct, at: Element) => void
+  onClear: () => void
+  list?: RefObject<HTMLElement | null>
+}>({ rows: [], onAct: () => {}, onClear: () => {} })
 
 /** Gives the focus back to the Pane in focus (spec §2.7): never to the
  * page. */
@@ -53,10 +68,14 @@ function toPane() {
  * and the pick goes back to its card. Delete's question is the list's own
  * popup, kept here as `deleting`. A tab shown by its key is said
  * aloud, and so is inbox zero, when the Person's act brought it (`said`).
- * `aside` goes on the aside, with `onKeyDown`, its Esc: a popup and the
- * title's field take theirs first; then the sidebar over the Strip goes,
- * and a docked one gives the focus back to the Pane in focus, as it does
- * when it is hidden with the focus in it.
+ * `X` and `Space` check the card picked, `Ctrl+A` every card drawn
+ * (decision 15); while cards are checked, `S`, `Z` and `U` act on them
+ * all, as one act, and what an act leaves stays checked; how many are
+ * checked is said. `aside` goes on the aside, with `onKeyDown`, its Esc:
+ * a popup and the title's field take theirs first; then the selection
+ * clears; then the sidebar over the Strip goes, and a docked one gives
+ * the focus back to the Pane in focus, as it does when it is hidden with
+ * the focus in it.
  */
 export function useSidebarKeys(
   {
@@ -69,6 +88,8 @@ export function useSidebarKeys(
     show: (tab: Tab) => void
     toggle: (group: string) => void
     toggleMore: () => void
+    checks: Checks
+    setChecks: Dispatch<SetStateAction<Checks>>
   },
   isCurrent: (project: ProjectId, pane: PaneState) => boolean,
   onDismiss: (() => void) | undefined
@@ -87,8 +108,37 @@ export function useSidebarKeys(
     open: open && itemKey(open),
     toggle: view.toggle,
     more: view.toggleMore,
+    checks: [view.checks, view.setChecks],
   })
+  const listbox = picking.list.ref
   const actOn = useActs(holder)
+  const actOnSet = useSetActs(holder)
+  // The cards checked, in the order the list has them.
+  const checked = picking.checked
+  const checkedRows = useMemo(
+    () => ordered.rows.filter((row) => checked.has(itemKey(row))),
+    [ordered.rows, checked]
+  )
+  // How many are checked is said, a moment after it last changed.
+  const count = checked.size
+  const saidCount = useRef(count)
+  useEffect(() => {
+    if (saidCount.current === count) return
+    saidCount.current = count
+    const timer = setTimeout(() => said.say(checkedSaid(count)), SAY_CHECKED)
+    return () => clearTimeout(timer)
+  }, [count])
+
+  /** Does `act` on every card checked, from `anchor`, as the Person took
+   * it; what it leaves stays checked. By a key, the pick goes on as the
+   * cards go. */
+  const onSet = (act: SetAct, anchor: Element, by: "key" | "pointer") =>
+    actOnSet(checkedRows, act, {
+      anchor,
+      by,
+      ...(by === "key" ? { gone: picking.goneFrom } : {}),
+      after: (left) => picking.checkOnly(left.map(itemKey)),
+    })
   const doing = useDoing()
   const openIt = useOpen()
   const run = useRun()
@@ -120,6 +170,15 @@ export function useSidebarKeys(
    */
   const onPick = (does: Does) => {
     const at = picking.at()
+    // While cards are checked, the acts take them all, at the pick.
+    if (
+      count > 0 &&
+      (does === "archive" || does === "later" || does === "unread")
+    ) {
+      const anchor = at?.closest("[data-row]") ?? at ?? listbox.current
+      if (anchor) onSet(does, anchor, "key")
+      return
+    }
     if (!at) return
     if (!at.hasAttribute("data-card")) {
       if (does === "open") picking.expand(at)
@@ -133,7 +192,7 @@ export function useSidebarKeys(
     const on = {
       card: at.closest("[data-row]") ?? at,
       by: "key" as const,
-      gone: () => picking.goneFrom(key),
+      gone: () => picking.goneFrom(new Set([key])),
     }
     switch (does) {
       case "open":
@@ -171,16 +230,22 @@ export function useSidebarKeys(
       case "delete":
         if (row.stand === "archived") setDeleting(row)
         return
+      case "select":
+        return picking.checkPicked()
     }
   }
 
-  const listbox = picking.list.ref
   const handlers = Object.fromEntries(
     SIDEBAR_KEYS.map(({ does, id }): [string, Handler] => [
       id,
       (_, event) => {
         const target = event?.target
         const tab = tabOf(does)
+        if (does === "select-all") {
+          if (event && target !== listbox.current) return false
+          picking.checkAll()
+          return true
+        }
         if (tab || does === "search" || does === "undo") {
           if (target instanceof Element && target.closest(FIELDS)) return false
           if (tab) {
@@ -188,9 +253,11 @@ export function useSidebarKeys(
             said.say(tabSaid(tab, ordered.tabs[tab].count))
           } else if (does === "search") openIt("menu.at", {})
           else {
-            const done = undoLast(run)
-            if (done && target === listbox.current)
-              picking.back(keyOf(done.listed.host, done.listed.id))
+            const done = undoLast(run) ?? []
+            if (done.length > 0 && target === listbox.current)
+              picking.back(
+                new Set(done.map(({ listed }) => keyOf(listed.host, listed.id)))
+              )
           }
           return true
         }
@@ -214,16 +281,28 @@ export function useSidebarKeys(
     aside,
     picking,
     deleting: { row: deleting, ask: setDeleting },
+    /** The cards checked, and what the selection's bar does to them. */
+    bulk: {
+      rows: checkedRows,
+      onAct: (act: SetAct, at: Element) => onSet(act, at, "pointer"),
+      onClear: () => picking.checkOnly([]),
+      list: listbox,
+    },
     onKeyDown: (event: KeyboardEvent<HTMLElement>) => {
       // Not Esc in a menu it opened, drawn elsewhere in the page.
       const own = event.currentTarget.contains(event.target as Node)
       if (event.key !== "Escape" || !own || event.defaultPrevented) return
       event.preventDefault()
-      if (onDismiss) onDismiss()
+      if (count > 0) picking.checkOnly([])
+      else if (onDismiss) onDismiss()
       else toPane()
     },
   }
 }
+
+/** How long after the selection last changed how many are checked is
+ * said, in ms (spec §2.6). */
+const SAY_CHECKED = 250
 
 /** The hint's id. */
 const HINT = "sb-hint"
@@ -270,6 +349,7 @@ export function PickList({
         )}
         <div
           role="listbox"
+          aria-multiselectable
           aria-labelledby={tabId(tab)}
           aria-describedby={hinting && hint ? HINT : undefined}
           tabIndex={0}
@@ -282,7 +362,12 @@ export function PickList({
           className="flex flex-col gap-1 outline-none"
         >
           <PickContext
-            value={{ picked: picking.picked, expand: picking.expand }}
+            value={{
+              picked: picking.picked,
+              expand: picking.expand,
+              checked: picking.checked,
+              check: picking.check,
+            }}
           >
             {children}
           </PickContext>

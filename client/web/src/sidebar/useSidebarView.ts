@@ -7,6 +7,7 @@ import {
 } from "react"
 import type { ProjectId } from "@banda/contract"
 import type { Tab } from "./inbox"
+import { type Checks, NO_CHECKS } from "./pick"
 import { tabId } from "./Tabs"
 
 /** Where this device keeps when inbox zero last told of Someday. */
@@ -47,9 +48,11 @@ const scrollerOf = (list: HTMLElement | null) =>
  * the tab (ADR 0098, decision 2), each where it was scrolled to; one
  * Project's rows alone (`only`, which `pick` sets or clears); a cut list
  * whole (`more`), until the tab changes; the groups (`folded`) and the
- * other machines (`foldedHosts`) folded, each flipped by its key; and
- * when inbox zero last told of Someday. Another `preset` starts afresh,
- * on the same tab.
+ * other machines (`foldedHosts`) folded, each flipped by its key; when
+ * inbox zero last told of Someday; and the cards checked (`checks`, ADR
+ * 0098, decision 15), which another tab, a group folded and another
+ * preset clear, as hiding the sidebar does. Another `preset` starts
+ * afresh, on the same tab.
  */
 export function useSidebarView(preset: string) {
   const [tab, setTab] = useState<Tab>("inbox")
@@ -58,6 +61,7 @@ export function useSidebarView(preset: string) {
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   const [foldedHosts, setFoldedHosts] = useState<ReadonlySet<string>>(new Set())
   const [someday, setSomeday] = useState(toldSomeday)
+  const [checks, setChecks] = useState<Checks>(NO_CHECKS)
   // Inbox zero told of Someday at `at`: this device keeps it, and this
   // window's next inbox zero this week says no more (ADR 0098, decision
   // 12). The one that told keeps its line while it shows.
@@ -91,6 +95,7 @@ export function useSidebarView(preset: string) {
     setMore(false)
     setFolded(new Set())
     setFoldedHosts(new Set())
+    setChecks(NO_CHECKS)
   }
   return {
     tab,
@@ -100,6 +105,8 @@ export function useSidebarView(preset: string) {
     foldedHosts,
     someday,
     told,
+    checks,
+    setChecks,
     /** Takes the list that scrolls, as it is drawn. */
     scrollsIn: setList,
     /**
@@ -117,6 +124,7 @@ export function useSidebarView(preset: string) {
       at.current = block
       setTab(next)
       setMore(false)
+      setChecks(NO_CHECKS)
       const focused = document.activeElement
       if (
         list?.closest("aside")?.contains(focused) &&
@@ -127,7 +135,10 @@ export function useSidebarView(preset: string) {
     /** Shows only `project`'s rows, or all again. */
     pick: (project: ProjectId) =>
       setOnly((was) => (was === project ? undefined : project)),
-    toggle: (key: string) => setFolded((set) => flip(set, key)),
+    toggle: (key: string) => {
+      if (!folded.has(key)) setChecks(NO_CHECKS)
+      setFolded((set) => flip(set, key))
+    },
     toggleMore: () => setMore((was) => !was),
     foldHost: (name: string) => setFoldedHosts((set) => flip(set, name)),
   }

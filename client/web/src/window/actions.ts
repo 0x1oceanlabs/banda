@@ -1340,7 +1340,10 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Threads",
     title: "Pick when the Thread you look at wakes",
     unlisted: true,
-    run: (shell, args) => pickLater(itemOf(shell, args)),
+    run: (shell, args) => {
+      const at = itemOf(shell, args)
+      pickLater(at && { targets: [at] })
+    },
   },
   {
     id: "menu.open",

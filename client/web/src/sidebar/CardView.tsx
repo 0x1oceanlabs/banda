@@ -49,7 +49,7 @@ import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
 import type { WithMenu } from "./ProjectMenu"
-import { pickProps } from "./usePick"
+import { PickContext, pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
 const NO_ACTS: readonly CardAct[] = []
@@ -93,12 +93,15 @@ export const ACT_LOOK: Readonly<
  * `spokenOf`. Under the pointer, or always on a coarse pointer, its acts
  * show at line 1's right, in the time's place (decision 10): no Tab
  * stops, as keys and menu rows do the same.
+ * In check mode (decision 15), a card checked has a check in its mark's
+ * place, and its fill says so (`globals.css`).
  */
 export function Card({
   card: model,
   row,
   current,
   picked = false,
+  checked,
   acts = NO_ACTS,
   field,
   harnesses = NO_HARNESSES,
@@ -111,6 +114,8 @@ export function Card({
   current: boolean
   /** The list's keys act on it. */
   picked?: boolean
+  /** In check mode, whether it is checked; none out of it. */
+  checked?: boolean
   /** What it offers under the pointer, Later first. */
   acts?: readonly CardAct[]
   /** The field that names it, in its title's place (ADR 0077): a click
@@ -132,7 +137,7 @@ export function Card({
   const drawn = (
     <div
       data-row={bare ? "" : undefined}
-      {...pickProps(keyOf(row.host, row.listed.id), picked)}
+      {...pickProps(keyOf(row.host, row.listed.id), picked, checked)}
       aria-current={current ? "true" : undefined}
       aria-label={field ? undefined : spoken.name}
       aria-description={field ? undefined : spoken.description || undefined}
@@ -157,6 +162,7 @@ export function Card({
         now={now}
         current={current}
         acts={shown.length}
+        checked={checked}
         field={field}
         harnesses={harnesses}
       />
@@ -228,6 +234,7 @@ export function CardLines({
   now,
   current = false,
   acts = 0,
+  checked,
   field,
   harnesses = NO_HARNESSES,
 }: {
@@ -239,6 +246,8 @@ export function CardLines({
   current?: boolean
   /** How many acts show over line 1's right, under the pointer. */
   acts?: number
+  /** It is checked: a check takes its mark's place. */
+  checked?: boolean
   /** The field that names it, in its title's place. */
   field?: ReactNode
   harnesses?: readonly EmblemOf[]
@@ -255,6 +264,7 @@ export function CardLines({
           row={row}
           current={current}
           now={now}
+          checked={checked}
           harnesses={harnesses}
         />
       )}
@@ -378,6 +388,7 @@ function Piece({
   row,
   current,
   now,
+  checked,
   harnesses,
 }: {
   slot: Slot
@@ -385,6 +396,7 @@ function Piece({
   row: CardRow
   current: boolean
   now: number
+  checked?: boolean
   harnesses: readonly EmblemOf[]
 }) {
   const signMenu = useContext(SignMenu)
@@ -393,15 +405,17 @@ function Piece({
       // Its look's colour, or its weight for what calls no one (ADR 0099,
       // decisions 1 and 10; ADR 0107 for a working one's muted blue); at
       // work, what its card holds its Agent does; open, no call (decision
-      // 5).
+      // 5); a check over it while it is checked.
       return (
-        <ThreadMark
-          listed={row.listed}
-          look={slot.look}
-          doing={card.does?.doing}
-          held
-          current={current}
-        />
+        <MarkSlot row={row} checked={checked}>
+          <ThreadMark
+            listed={row.listed}
+            look={slot.look}
+            doing={card.does?.doing}
+            held
+            current={current}
+          />
+        </MarkSlot>
       )
     case "title":
       return <Title row={row} card={card} />
@@ -487,6 +501,43 @@ function Piece({
       // Its account's emblem (ADR 0093, decision 1).
       return <Emblem of={emblemOf(harnesses, slot.id, slot.name)} />
   }
+}
+
+/**
+ * The mark's slot (spec §2.7): in check mode a card checked has a check
+ * there, and the two cross-fade over `--dur-fast`, as nothing else moves
+ * (`globals.css`); a click on the check leaves the card out. The mark
+ * stays drawn under it, so its motion goes on.
+ */
+function MarkSlot({
+  row,
+  checked,
+  children,
+}: {
+  row: CardRow
+  checked?: boolean
+  children: ReactNode
+}) {
+  const { check } = useContext(PickContext)
+  return (
+    <span data-mark-slot="" className="grid shrink-0 place-items-center">
+      <span data-mark-face="" className="flex [grid-area:1/1]">
+        {children}
+      </span>
+      <span
+        aria-hidden
+        data-check=""
+        className="flex size-3.5 items-center justify-center rounded-small bg-foreground text-panel [grid-area:1/1]"
+        onClick={(event) => {
+          if (!checked) return
+          event.stopPropagation()
+          check(keyOf(row.host, row.listed.id))
+        }}
+      >
+        <CheckIcon className="size-2.5" strokeWidth={3.5} />
+      </span>
+    </span>
+  )
 }
 
 /** The card's title, at 500 in Your turn, grey at work and dimmer put
