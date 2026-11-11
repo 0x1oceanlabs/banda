@@ -702,7 +702,7 @@ pub fn resolve(
     // How solid the desk and the tiles are over glass, when it is.
     let over = glass.then(|| {
         let desk = share(all.desk.opacity, material.tint());
-        (desk, share(all.tile.opacity, 1.0))
+        (desk, share(all.tile.opacity, 1.0), material)
     });
     let one = |theme: &Option<Laid>, glass| {
         (theme.as_ref()).map(|theme| scheme(theme, &mine, &all, &device, glass))
@@ -903,14 +903,14 @@ fn shown_of(wanted: ModeChoice) -> Shown {
 /// One theme's colours as CSS variables: its palette under the colours
 /// an old `banda.toml` and `look.toml` replace, derived into tokens,
 /// under the tokens the theme and `look.toml` set ([`tokens::scheme`]).
-/// With `glass`, how solid the desk and the tiles are over it: the
-/// scheme over glass.
+/// With `glass`, how solid the desk and the tiles are over it and who
+/// makes it: the scheme over glass.
 fn scheme(
     theme: &Laid,
     mine: &Settings,
     all: &Settings,
     device: &Device,
-    glass: Option<(f64, f64)>,
+    glass: Option<(f64, f64, Material)>,
 ) -> BTreeMap<String, String> {
     fn named<'a>((key, value): (&'a String, &'a Spanned<String>)) -> (&'a str, &'a str) {
         (key, value.get_ref())
@@ -925,9 +925,10 @@ fn scheme(
         focus(&all.focus.border),
         focus(&all.focus.inactive_border),
         device,
-        glass.map(|(desk, tile)| tokens::Glass {
+        glass.map(|(desk, tile, material)| tokens::Glass {
             desk,
             tile,
+            material,
             tokens: &theme.glass,
         }),
     )

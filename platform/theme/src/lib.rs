@@ -14,6 +14,7 @@ pub mod file;
 pub mod fonts;
 pub mod hyprland;
 pub mod palette;
+pub mod readable;
 pub mod theme;
 pub mod tokens;
 pub mod wallpaper;

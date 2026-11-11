@@ -16,7 +16,8 @@
 
 use crate::color::{Oklab, is_css_color, is_hex, mix, thinned};
 use crate::palette::{ANSI, Palette};
-use crate::{Device, Mode};
+use crate::readable::{self, MARK};
+use crate::{Device, Material, Mode};
 use std::collections::{BTreeMap, BTreeSet};
 
 /// What a token's value is.
@@ -358,13 +359,14 @@ fn mixed(a: &str, b: &str, amount: f64) -> String {
 }
 
 /// What a scheme's glass is made of (ADR 0100, decision 4): how solid the
-/// desk and the tiles are over it, from 0 to 1, as the look says them, and
-/// the tokens a theme's `[glass.tokens]` corrects, each a palette name, a
-/// token's name or a CSS colour.
+/// desk and the tiles are over it, from 0 to 1, as the look says them;
+/// who makes it; and the tokens a theme's `[glass.tokens]` corrects, each
+/// a palette name, a token's name or a CSS colour.
 #[derive(Clone, Copy, Debug)]
 pub struct Glass<'a> {
     pub desk: f64,
     pub tile: f64,
+    pub material: Material,
     pub tokens: &'a BTreeMap<String, String>,
 }
 
@@ -389,7 +391,9 @@ const THINNED: &[(&str, f64)] = &[
 /// whose `accent` is [`SYSTEM_ACCENT`] takes `device`'s. With `glass`,
 /// the scheme over glass: the surfaces and ADR 0036's fills, lines and
 /// quiet text thinned from the solid scheme's final colours, under the
-/// theme's corrections (ADR 0080, decision 8).
+/// theme's corrections (ADR 0080, decision 8). Each is kept readable
+/// ([`readable`], ADR 0100, decision 8): the accent where it is a line or
+/// text, the text on it, quiet text and the text on the fills worked out.
 pub fn scheme<'a>(
     palette: &Palette,
     colors: impl IntoIterator<Item = (&'a str, &'a str)>,
@@ -438,13 +442,37 @@ pub fn scheme<'a>(
             said.insert(name);
         }
     }
+    // The accent where it is a line or text reads on its ground, and so
+    // does the text on it (ADR 0100, decision 8).
+    for (accent, ground) in [
+        ("primary", "background"),
+        ("ring", "background"),
+        ("sidebar-primary", "sidebar"),
+        ("sidebar-ring", "sidebar"),
+    ] {
+        if let Some(readable) = readable::readable_on(&derived[accent], &derived[ground], MARK) {
+            derived.insert(accent.to_owned(), readable);
+        }
+    }
+    for (text, fill, ground) in [
+        ("primary-foreground", "primary", "background"),
+        ("sidebar-primary-foreground", "sidebar-primary", "sidebar"),
+    ] {
+        if let Some(text_on) =
+            readable::text_on(&derived[text], &derived[fill], &derived[ground], MARK)
+        {
+            derived.insert(text.to_owned(), text_on);
+        }
+    }
     let focus = |value: Option<&str>, fallback: &str| {
         value
             .and_then(|v| refer(&derived, v))
             .or_else(|| derived.get(fallback).cloned())
             .unwrap_or_default()
     };
+    // The focus is a mark that has to be seen, whoever picked its colour.
     let active = focus(border, "primary");
+    let active = readable::readable_on(&active, &derived["background"], MARK).unwrap_or(active);
     let inactive = focus(inactive_border, "border");
     derived.insert("focus".to_owned(), active);
     derived.insert("focus-inactive".to_owned(), inactive);
@@ -469,6 +497,11 @@ pub fn scheme<'a>(
             derived.insert(name.to_owned(), value);
         }
     }
+    // Quiet text, and the text on the fills worked out from the theme,
+    // read on each surface they are on (ADR 0100, decision 8).
+    for text in readable::MENDED {
+        readable::mend(&mut derived, text, None);
+    }
     if let Some(glass) = glass {
         // The glass's own: each surface its colour thinned, the panel
         // halfway between the desk, the clearest, and the tiles.
@@ -488,6 +521,11 @@ pub fn scheme<'a>(
             if let Some(resolved) = refer(&derived, value) {
                 derived.insert(key.clone(), resolved);
             }
+        }
+        // And over glass, as its material is measured (ADR 0100, decision
+        // 8); the tints stay as `[desk]` and `[tile]` say.
+        for text in readable::MENDED {
+            readable::mend(&mut derived, text, Some(glass.material));
         }
     }
     derived
@@ -544,6 +582,7 @@ mod tests {
             let glass = Glass {
                 desk: 0.4,
                 tile: 1.0,
+                material: Material::Banda,
                 tokens: &corrections,
             };
             for glass in [None, Some(glass)] {
@@ -570,7 +609,9 @@ mod tests {
 
     #[test]
     fn the_system_accent_is_the_devices_else_the_themes_blue() {
-        let palette = palette("accent = \"system\"\nblue = \"#007aff\"\nbackground = \"#ffffff\"");
+        let palette = palette(
+            "accent = \"system\"\nblue = \"#007aff\"\nbackground = \"#ffffff\"\ndark_background = \"#f5f5f7\"",
+        );
         let none = std::iter::empty();
         let with = |device: Device| {
             scheme(
@@ -601,6 +642,70 @@ mod tests {
     }
 
     #[test]
+    fn a_pale_system_accent_reads_where_it_is_a_line_or_text() {
+        let yellow = Device {
+            accent: Some("#ffd60a".to_owned()),
+            ..Device::default()
+        };
+        let ratio = |a: &str, b: &str| {
+            let rgb = |c: &str| Oklab::parse(c).unwrap().rgb();
+            readable::contrast(rgb(a), rgb(b))
+        };
+        let light =
+            palette("accent = \"system\"\nbackground = \"#ffffff\"\ndark_background = \"#f5f5f7\"");
+        let said = [("primary-foreground", "#ffffff")];
+        let light = scheme(&light, [], said, Some("accent"), None, &yellow, None);
+        for name in ["--primary", "--ring", "--focus", "--sidebar-ring"] {
+            assert!(
+                ratio(&light[name], "#ffffff") >= MARK,
+                "{name}: {}",
+                light[name]
+            );
+        }
+        // Darker by as much as it takes, so the theme's white text on it
+        // reads too.
+        assert_eq!(light["--primary-foreground"], "#ffffff");
+        // On dark the yellow reads as it is. The theme's white on it does
+        // not, so it is black; the derive's dark text on it does.
+        let dark = palette(
+            "mode = \"dark\"\naccent = \"system\"\nbackground = \"#1e1e1e\"\ndark_background = \"#2b2b2d\"",
+        );
+        let dark = scheme(&dark, [], said, Some("accent"), None, &yellow, None);
+        assert_eq!(dark["--primary"], "#ffd60a");
+        assert_eq!(dark["--primary-foreground"], "#000000");
+        assert_eq!(dark["--sidebar-primary-foreground"], "#1e1e1e");
+    }
+
+    #[test]
+    fn the_desk_keeps_its_tint_over_either_material() {
+        let palette = palette("background = \"#ffffff\"\nforeground = \"#18181b\"");
+        let none = BTreeMap::new();
+        let over = |material| {
+            let glass = Glass {
+                desk: 0.4,
+                tile: 1.0,
+                material,
+                tokens: &none,
+            };
+            scheme(
+                &palette,
+                [],
+                [],
+                None,
+                None,
+                &Device::default(),
+                Some(glass),
+            )
+        };
+        // How dense Banda's desk is, over its wallpaper, is ADR 0111's.
+        let (system, banda) = (over(Material::System), over(Material::Banda));
+        assert_eq!(banda, system);
+        assert_eq!(banda["--desk"], "rgb(255 255 255 / 0.4)");
+        assert_eq!(readable::check(&banda, Some(Material::Banda)), []);
+        assert_eq!(readable::check(&system, Some(Material::System)), []);
+    }
+
+    #[test]
     fn tokens_that_follow_others_take_their_final_values() {
         let palette = palette("background = \"#ffffff\"\nforeground = \"#000000\"");
         let tokens = [("foreground", "#18181b"), ("raised", "#eeeeee")];
@@ -621,6 +726,7 @@ mod tests {
             let glass = Glass {
                 desk: 0.4,
                 tile: 0.9,
+                material: Material::System,
                 tokens: corrections,
             };
             let tokens = tokens.iter().copied();

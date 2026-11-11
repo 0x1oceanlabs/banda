@@ -4845,7 +4845,7 @@ test("the system's glass is its material, with Banda's grain over it", async () 
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
     files: FREE,
-    look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
+    look: '[gaps]\ninner = 12\n[colors]\naccent = "#c2410c"\n',
   })
   const { page, dir } = window
   const file = join(dir, "config/look.toml")
@@ -4858,7 +4858,7 @@ test("the window takes its look from look.toml, and again on each save", async (
   await expect(root).toHaveCSS("--gap-inner", "12px")
   // The focused tile's border takes the accent.
   await expect(thread).toHaveAttribute("data-focused", "true")
-  await expect(thread).toHaveCSS("border-top-color", "rgb(224, 122, 63)")
+  await expect(thread).toHaveCSS("border-top-color", "rgb(194, 65, 12)")
   await page.screenshot({ path: "test-results/19-look.png" })
 
   // A broken file keeps the last good look, and the bar names its line.
@@ -4875,12 +4875,12 @@ test("the window takes its look from look.toml, and again on each save", async (
 
   // niri's ring grows the focused tile's frame out into the gap, in the
   // border's colour: one frame, not two.
-  writeFileSync(file, '[focus]\nring = 3\nborder = "#3fa0e0"\n')
-  await expect(thread).toHaveCSS("border-top-color", "rgb(63, 160, 224)")
+  writeFileSync(file, '[focus]\nring = 3\nborder = "#2f8fd0"\n')
+  await expect(thread).toHaveCSS("border-top-color", "rgb(47, 143, 208)")
   // One stroke over the 1px border and 3px past it.
   await expect(thread).toHaveCSS("outline-width", "4px")
   await expect(thread).toHaveCSS("outline-offset", "-1px")
-  await expect(thread).toHaveCSS("outline-color", "rgb(63, 160, 224)")
+  await expect(thread).toHaveCSS("outline-color", "rgb(47, 143, 208)")
   await page.screenshot({ path: "test-results/21-look-ring.png" })
 
   // Motion is the look's too: a slow, straight move between workspaces

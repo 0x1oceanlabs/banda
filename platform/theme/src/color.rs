@@ -183,6 +183,33 @@ impl Oklab {
         }
     }
 
+    /// Its sRGB channels, 0 to 1, as a screen draws it: one outside sRGB
+    /// clipped to it.
+    pub fn rgb(self) -> [f64; 3] {
+        let l = (self.l + 0.396_337_777_4 * self.a + 0.215_803_757_3 * self.b).powi(3);
+        let m = (self.l - 0.105_561_345_8 * self.a - 0.063_854_172_8 * self.b).powi(3);
+        let s = (self.l - 0.089_484_177_5 * self.a - 1.291_485_548 * self.b).powi(3);
+        let encoded = |c: f64| {
+            let c = c.clamp(0.0, 1.0);
+            if c <= 0.003_130_8 {
+                c * 12.92
+            } else {
+                1.055 * c.powf(1.0 / 2.4) - 0.055
+            }
+        };
+        [
+            encoded(4.076_741_662_1 * l - 3.307_711_591_3 * m + 0.230_969_929_2 * s),
+            encoded(-1.268_438_004_6 * l + 2.609_757_401_1 * m - 0.341_319_396_5 * s),
+            encoded(-0.004_196_086_3 * l - 0.703_418_614_7 * m + 1.707_614_701 * s),
+        ]
+    }
+
+    /// As hex, `#rrggbb`, its alpha dropped.
+    pub fn hex(self) -> String {
+        let [r, g, b] = self.rgb().map(|c| (c * 255.0).round() as u8);
+        format!("#{r:02x}{g:02x}{b:02x}")
+    }
+
     /// As CSS: `oklab(L a b)`, with `/ alpha` when it is not solid.
     pub fn css(self) -> String {
         let (l, a, b) = (decimal(self.l), decimal(self.a), decimal(self.b));
@@ -196,21 +223,34 @@ impl Oklab {
 /// did (hex as `rgb()`). None for a colour it cannot read: a named one
 /// but `transparent`, `white` and `black`.
 pub fn thinned(text: &str, share: f64) -> Option<String> {
-    let share = share.clamp(0.0, 1.0);
+    if text.trim().eq_ignore_ascii_case("transparent") {
+        return Some("transparent".to_owned());
+    }
+    realpha(text, |alpha| alpha * share.clamp(0.0, 1.0))
+}
+
+/// `text` with the alpha `alpha` (0 to 1), written as it was, as
+/// [`thinned`] writes it.
+pub fn with_alpha(text: &str, alpha: f64) -> Option<String> {
+    realpha(text, |_| alpha.clamp(0.0, 1.0))
+}
+
+/// `text` written as it was, its alpha `alpha` of the one it had.
+fn realpha(text: &str, alpha: impl Fn(f64) -> f64) -> Option<String> {
     let text = text.trim().to_ascii_lowercase();
     let text = match text.as_str() {
-        "transparent" => return Some(text),
+        "transparent" => "#00000000".to_owned(),
         "white" => "#ffffff".to_owned(),
         "black" => "#000000".to_owned(),
         _ => text,
     };
     if let Some((r, g, b, a)) = parse_hex(&text) {
-        let alpha = alpha_of(f64::from(a) / 255.0 * share);
+        let alpha = alpha_of(alpha(f64::from(a) / 255.0));
         return Some(format!("rgb({r} {g} {b}{alpha})"));
     }
-    let (function, channels, alpha) = written(&text)?;
+    let (function, channels, said) = written(&text)?;
     let channels = channels.join(" ");
-    Some(format!("{function}({channels}{})", alpha_of(alpha * share)))
+    Some(format!("{function}({channels}{})", alpha_of(alpha(said))))
 }
 
 /// A colour function as it is written: its name, `rgba` and `hsla` as
@@ -304,6 +344,10 @@ mod tests {
         assert!((ink.alpha - 0.08).abs() < 1e-9 && ink.l == 0.0);
         let blue = Oklab::parse("oklch(0.6 0.2 250)").unwrap();
         assert!(close(blue, Oklab::parse(&blue.css()).unwrap()));
+        // And back to sRGB, as it was written.
+        for hex in ["#18181b", "#0b6fe0", "#ffffff", "#000000", "#faf4ed"] {
+            assert_eq!(Oklab::parse(hex).unwrap().hex(), hex);
+        }
         assert_eq!(Oklab::parse("rgba(0, 0, 0, 0.5)").unwrap().alpha, 0.5);
         for bad in ["", "red", "var(--x)", "oklch(1 0)", "lab(50 0 0)"] {
             assert_eq!(Oklab::parse(bad), None, "{bad}");
@@ -328,6 +372,16 @@ mod tests {
         assert_eq!(thinned("#fff", 1.0).unwrap(), "rgb(255 255 255)");
         assert_eq!(thinned("red", 0.5), None);
         assert_eq!(thinned("var(--x)", 0.5), None);
+        // Set, not thinned: quiet text made less thin.
+        assert_eq!(
+            with_alpha("rgb(24 24 27 / 0.1)", 0.25).unwrap(),
+            "rgb(24 24 27 / 0.25)"
+        );
+        assert_eq!(with_alpha("#ffffff66", 1.0).unwrap(), "rgb(255 255 255)");
+        assert_eq!(
+            with_alpha("oklch(1 0 0 / 10%)", 0.5).unwrap(),
+            "oklch(1 0 0 / 0.5)"
+        );
         // The same colour as Oklab reads it, at that alpha.
         let ink = Oklab::parse("#18181b").unwrap();
         let thin = Oklab::parse(&thin("#18181b")).unwrap();
