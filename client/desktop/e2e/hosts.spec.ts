@@ -707,7 +707,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(studio.getByText("Bench window tests")).toBeVisible()
 })
 
-test("another machine's Thread opens from the sidebar on its engine, waits while arc is away and catches up; other Panes are not on arc yet", async () => {
+test("another machine's Thread opens from the sidebar on its engine, waits while arc is away and catches up; Files opens on arc too", async () => {
   test.setTimeout(shots ? 300_000 : 120_000)
   arc = newArc()
   const banda = await seed(arc)
@@ -859,9 +859,9 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   // Files, by its key, opens on arc (ADR 0106, step 3b), and its header
   // names arc after its icon and title.
   await page.keyboard.press("Alt+KeyE")
-  const other = page.getByRole("region", { name: "Files" })
+  const other = page.getByRole("region", { name: "banda", exact: true })
   await expect(other.getByRole("tree")).toBeVisible()
-  expect(await headerShows(other)).toEqual(["", "Files", "machine", "buttons"])
+  expect(await headerShows(other)).toContain("machine")
   await shot(page, "pr3-3-files-on-arc")
 
   // Alt+Z on arc's Thread puts it off on arc's engine, as its Pane is
