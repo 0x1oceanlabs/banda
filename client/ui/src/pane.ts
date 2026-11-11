@@ -148,8 +148,8 @@ export type PaneProps<A> = {
    */
   label?: (label: Label | null) => void
   /** Runs an action by its id, as `WindowApi.run` does: "Add Project" from
-   * a Project picker. None where no window runs actions, as in a dialog of
-   * the settings. */
+   * a Project picker. None where no window runs actions, as in a test of a
+   * part; a dialog of the settings runs only what it says it does. */
   run?: (action: string, args?: { [key: string]: JsonValue }) => void
   /**
    * Whether an action runs from this Pane, as `run` would run it with
