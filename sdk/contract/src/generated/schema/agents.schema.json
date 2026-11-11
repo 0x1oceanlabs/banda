@@ -14,6 +14,17 @@
       "$ref": "#/$defs/Starts",
       "x-class": "machine"
     },
+    "models": {
+      "description": "The models in each Harness's menu, by the Harness's ID, as its\nThreads offer them: `claude = [\"default\", \"opus\", \"sonnet\"]` (ADR\n0114, decision 7). The stars in \"All models\" set it; with none\nnamed, the menu holds the first three the Harness offers.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "array",
+        "items": {
+          "type": "string"
+        }
+      },
+      "x-class": "machine"
+    },
     "flow": {
       "description": "The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).",
       "$ref": "#/$defs/Flow",

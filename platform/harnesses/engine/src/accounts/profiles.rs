@@ -2,7 +2,7 @@
 //! connection this service validated; it never decides account policy.
 use super::answer::{fresh, roles, title};
 use super::{
-    AccountProfile, AccountStore, ConnectAccount, ConnectedAccount, SetStart, StartRole,
+    AccountProfile, AccountStore, ConnectAccount, ConnectedAccount, SetModels, SetStart, StartRole,
     UpdateAccount,
 };
 use crate::model::{AccountKind, HarnessView};
@@ -56,6 +56,30 @@ impl Profiles {
             }
         }
         self.store.set_start(start.role, start.harness.as_deref())
+    }
+
+    /// Sets the menu of models of a Harness some account here is of: each
+    /// model once, in the order given. The models are its offer's values,
+    /// which only a Project knows, so they are taken as said.
+    pub fn set_models(&self, set: SetModels) -> Result<(), Refusal> {
+        let _writing = self.lock()?;
+        if !(self.harnesses.views().iter()).any(|one| one.harness == set.harness) {
+            return Err(Refusal::invalid(format!(
+                "No account here is of {}.",
+                set.harness
+            )));
+        }
+        let mut models: Vec<String> = Vec::new();
+        for model in set.models {
+            let model = model.trim();
+            if model.is_empty() {
+                return Err(Refusal::invalid("A model has no name."));
+            }
+            if !models.iter().any(|one| one == model) {
+                models.push(model.to_owned());
+            }
+        }
+        self.store.set_models(&set.harness, &models)
     }
 
     /// The account a new Thread starts on, by the answer's rule: the one

@@ -17,7 +17,7 @@ use crate::accounts::secrets::{Kept, Secrets};
 use crate::accounts::{
     AccountKey, AccountList, AccountProfile, AccountStatus, AccountStore, Accounted, Accounts,
     AddGateway, ConnectAccount, GatewayAdded, LoginAccount, LoginId, LoginInput, LoginStatus,
-    RemoveAccount, SetStart, UpdateAccount,
+    RemoveAccount, SetModels, SetStart, UpdateAccount,
 };
 use crate::limits::Reader;
 use crate::model::{HarnessView, Limits, LimitsLook};
@@ -98,6 +98,9 @@ banda_kernel::methods! {
         /// on while that one is out of its limits (ADR 0108, decision 1).
         /// Any Agent's pass answers here (ADR 0104, decision 4).
         command set_start(SetStart) -> (), Write, pass;
+        /// Sets the models in a Harness's menu, the stars of "All models"
+        /// (ADR 0114, decision 7). The Person's alone: no pass answers.
+        command set_models(SetModels) -> (), Write;
         /// A Harness as it says: its program, who is signed in, how to sign
         /// in, at the machine's log's position it is current at.
         // It needs Manage, and only asks the Harness who is signed in.
@@ -283,6 +286,10 @@ impl HarnessesModule {
 
     async fn set_start(&self, _: Call, start: SetStart) -> Result<(), Refusal> {
         self.accounts.set_start(start)
+    }
+
+    async fn set_models(&self, _: Call, set: SetModels) -> Result<(), Refusal> {
+        self.accounts.set_models(set)
     }
 
     async fn remove_account(&self, call: Call, args: RemoveAccount) -> Result<String, Refusal> {

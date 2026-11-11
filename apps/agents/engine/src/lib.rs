@@ -105,8 +105,8 @@ use visuals::{Inlined, Visuals};
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): how
 /// messages are sent and what a new Thread starts with, which the look
-/// resolves for the window. How a new Thread starts is the machine's, as
-/// it runs there; what Enter does and the Flow, the Person means
+/// resolves for the window. How a new Thread starts, and the menu of each
+/// Harness's models, are the machine's, as it runs there; what Enter does and the Flow, the Person means
 /// everywhere; the rest, as how soon a Thread counts as seen, is the
 /// device's (ADR 0101, decision 3).
 pub const SETTINGS: [banda_look::SettingsFile; 1] = [FILE];
@@ -116,6 +116,8 @@ const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<sending::A
         banda_look::Class::Device,
         &[
             ("start", banda_look::Class::Machine),
+            // Its Harnesses' models are the machine's (ADR 0114).
+            ("models", banda_look::Class::Machine),
             ("enter", banda_look::Class::Shared),
             ("flow", banda_look::Class::Shared),
         ],

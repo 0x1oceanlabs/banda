@@ -2,6 +2,7 @@
 //! belong to banda_harnesses::accounts; this only preserves settings text.
 use banda_harnesses::accounts::{AccountStore, ConnectedAccount, StartRole, UpdateAccount};
 use banda_kernel::Refusal;
+use std::collections::BTreeMap;
 use std::path::PathBuf;
 use toml_edit::{InlineTable, Value};
 
@@ -12,31 +13,53 @@ impl Store {
     pub fn new(config: PathBuf) -> Self {
         Self { config }
     }
+
+    /// `agents.toml` as it reads, its defaults when it is not there; none
+    /// when it does not read.
+    fn agents(&self) -> Option<banda_agents::sending::AgentsSettings> {
+        let path = self.config.join("agents.toml");
+        if !path.exists() {
+            return Some(Default::default());
+        }
+        let text = std::fs::read_to_string(&path).ok()?;
+        let mut problems = Vec::new();
+        let settings = banda_look::file::read::<banda_agents::sending::AgentsSettings>(
+            &path,
+            &text,
+            &mut problems,
+        );
+        settings.filter(|_| problems.is_empty())
+    }
 }
 impl AccountStore for Store {
     fn selection(&self) -> Result<(Option<String>, Option<String>), Refusal> {
-        let path = self.config.join("agents.toml");
-        let settings = if path.exists() {
-            let text =
-                std::fs::read_to_string(&path).map_err(|e| Refusal::invalid(e.to_string()))?;
-            let mut problems = Vec::new();
-            let settings = banda_look::file::read::<banda_agents::sending::AgentsSettings>(
-                &path,
-                &text,
-                &mut problems,
-            );
-            if !problems.is_empty() {
-                return Err(Refusal::invalid(
-                    "Fix agents.toml before removing an Account.",
-                ));
-            }
-            settings
-                .ok_or_else(|| Refusal::invalid("Fix agents.toml before removing an Account."))?
-        } else {
-            Default::default()
-        };
+        let settings = self
+            .agents()
+            .ok_or_else(|| Refusal::invalid("Fix agents.toml before removing an Account."))?;
         let start = settings.start.unwrap_or_default();
         Ok((start.account, start.fallback))
+    }
+    fn models(&self) -> BTreeMap<String, Vec<String>> {
+        (self.agents())
+            .and_then(|settings| settings.models)
+            .unwrap_or_default()
+    }
+    fn set_models(&self, harness: &str, models: &[String]) -> Result<(), Refusal> {
+        let key = format!("models.{}", Value::from(harness));
+        let what = "The menu of models could not be saved";
+        if models.is_empty() {
+            return written(crate::reset(&self.config, "agents.toml", &key), what);
+        }
+        let list: toml_edit::Array = models.iter().map(String::as_str).collect();
+        written(
+            crate::set(
+                &self.config,
+                "agents.toml",
+                &key,
+                &Value::Array(list).to_string(),
+            ),
+            what,
+        )
     }
     fn retire(
         &self,
@@ -164,7 +187,7 @@ mod tests {
     use super::*;
     use banda_harnesses::{
         Harnesses,
-        accounts::{Accounts, ConnectAccount, SetStart},
+        accounts::{Accounts, ConnectAccount, SetModels, SetStart},
     };
     use std::sync::Arc;
 
@@ -312,6 +335,34 @@ mod tests {
         // The template's comment names the key too.
         assert!(!saved.contains("\nfallback ="), "{saved}");
         assert!(pick(StartRole::Account, Some("nobody")).is_err());
+    }
+
+    #[test]
+    fn a_harness_s_menu_of_models_is_written_read_and_taken_back() {
+        let root = tempfile::tempdir().unwrap();
+        let (accounts, config) = listed(root.path());
+        let file = config.join("agents.toml");
+        let set = |harness: &str, models: &[&str]| {
+            accounts.set_models(SetModels {
+                harness: harness.to_owned(),
+                models: models.iter().map(|one| (*one).to_owned()).collect(),
+            })
+        };
+        // Each model once, in the order given.
+        set("claude", &["opus", " haiku ", "opus"]).unwrap();
+        let saved = std::fs::read_to_string(&file).unwrap();
+        assert!(saved.contains("claude = [\"opus\", \"haiku\"]"), "{saved}");
+        let read = accounts.list(0);
+        let claude = read.harnesses.iter().find(|h| h.id == "claude").unwrap();
+        assert_eq!(claude.models, ["opus", "haiku"]);
+        // None: the Harness's first three again.
+        set("claude", &[]).unwrap();
+        let read = accounts.list(0);
+        let claude = read.harnesses.iter().find(|h| h.id == "claude").unwrap();
+        assert!(claude.models.is_empty());
+        // Only a Harness some account is of, and only named models.
+        assert!(set("nobody", &["opus"]).is_err());
+        assert!(set("claude", &[" "]).is_err());
     }
 
     #[test]

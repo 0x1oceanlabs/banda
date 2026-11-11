@@ -134,6 +134,12 @@ impl Accounts {
         self.owning()?.set_start(start)
     }
 
+    /// Sets the models in a Harness's menu, or takes them back (ADR 0114,
+    /// decision 7).
+    pub fn set_models(&self, set: SetModels) -> Result<(), Refusal> {
+        self.owning()?.set_models(set)
+    }
+
     /// The list of the machine's Accounts as of its log's position `at`
     /// (ADR 0108, decision 4).
     pub fn list(&self, at: i64) -> AccountList {
@@ -147,7 +153,8 @@ impl Accounts {
         let store = self.profiles.as_ref().map(Profiles::store);
         move |at| {
             let start = store.as_ref().map_or((None, None), |store| store.start());
-            answer::answer(at, harnesses.views(), start)
+            let models = (store.as_ref()).map_or_else(Default::default, |store| store.models());
+            answer::answer(at, harnesses.views(), start, models)
         }
     }
 

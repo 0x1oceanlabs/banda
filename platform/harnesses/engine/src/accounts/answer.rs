@@ -5,6 +5,7 @@
 
 use crate::model::HarnessView;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 /// The list of a machine's Accounts as of its log's position `at`: a
@@ -42,6 +43,10 @@ pub struct HarnessOf {
     pub title: String,
     /// What a new account of it is called and coloured.
     pub next: NewAccount,
+    /// The models in its menu, as `agents.toml`'s `[models]` names them:
+    /// none when it names none, and the menu is the first three the
+    /// Harness offers (ADR 0114, decision 7).
+    pub models: Vec<String>,
 }
 
 /// What a new account of a Harness is called and coloured, beside the
@@ -62,6 +67,7 @@ pub(super) fn answer(
     at: i64,
     accounts: Vec<HarnessView>,
     (account, fallback): (Option<String>, Option<String>),
+    mut models: BTreeMap<String, Vec<String>>,
 ) -> AccountList {
     let (default, fallback) = roles(&accounts, account.as_deref(), fallback.as_deref());
     let mut harnesses: Vec<HarnessOf> = Vec::new();
@@ -82,6 +88,7 @@ pub(super) fn answer(
                 name,
                 colour,
             },
+            models: models.remove(&one.harness).unwrap_or_default(),
         });
     }
     AccountList {
@@ -191,7 +198,7 @@ mod tests {
     #[test]
     fn the_default_and_the_fallback_are_on_and_never_the_same() {
         let roles = |account, fallback| {
-            let said = answer(0, list(), start(account, fallback));
+            let said = answer(0, list(), start(account, fallback), BTreeMap::new());
             (said.default, said.fallback)
         };
         let some = |id: &str| Some(id.to_owned());
@@ -212,13 +219,18 @@ mod tests {
                 ..one
             })
             .collect();
-        let said = answer(0, off, start(Some("claude"), Some("codex")));
+        let said = answer(
+            0,
+            off,
+            start(Some("claude"), Some("codex")),
+            BTreeMap::new(),
+        );
         assert_eq!((said.default, said.fallback), (None, None));
     }
 
     #[test]
     fn each_harness_has_its_title_and_its_next_account() {
-        let said = answer(0, list(), start(None, None));
+        let said = answer(0, list(), start(None, None), BTreeMap::new());
         let of = |id: &str| said.harnesses.iter().find(|h| h.id == id).unwrap();
         assert_eq!(
             said.harnesses.iter().map(|h| &*h.id).collect::<Vec<_>>(),
@@ -238,7 +250,23 @@ mod tests {
             entry("c1", "claude", "C1", true, 1),
             entry("c3", "claude", "C3", true, 2),
         ];
-        let said = answer(0, numbered, start(None, None));
+        let said = answer(0, numbered, start(None, None), BTreeMap::new());
         assert_eq!(said.harnesses[0].next.name, "C4");
+    }
+
+    #[test]
+    fn each_harness_has_its_menu_of_models_as_written() {
+        let models = BTreeMap::from([
+            (
+                "claude".to_owned(),
+                vec!["opus".to_owned(), "haiku".to_owned()],
+            ),
+            ("gone".to_owned(), vec!["x".to_owned()]),
+        ]);
+        let said = answer(0, list(), start(None, None), models);
+        let of = |id: &str| said.harnesses.iter().find(|h| h.id == id).unwrap();
+        assert_eq!(of("claude").models, ["opus", "haiku"]);
+        // None named: the window takes the Harness's first three.
+        assert!(of("codex").models.is_empty());
     }
 }
