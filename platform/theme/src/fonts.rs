@@ -30,6 +30,33 @@ pub struct FontSettings {
 pub const SIZES: std::ops::RangeInclusive<f64> = 8.0..=32.0;
 /// shadcn's usual text is `text-sm`, 0.875 of the root's.
 const TEXT_SM: f64 = 0.875;
+/// The usual text the type scale is drawn at, in pixels: the UI level's.
+const USUAL: f64 = 14.0;
+/// The type scale (ADR 0113, decision 3): each level's size token and
+/// line height token, and their pixels where the usual text is 14. Each
+/// grows with the theme's size, as the root does: `macos`'s 13 and a
+/// Person's size scale every level together.
+pub const SCALE: &[(&str, &str, f64, f64)] = &[
+    // A reply's first heading, a page's title.
+    ("heading-size", "heading-leading", 18.0, 26.0),
+    // A reply's second heading, a dialog's title.
+    ("title-size", "title-leading", 16.0, 24.0),
+    // A reply, the Person's message; in a Pane 40rem wide or more, the
+    // wide one (ADR 0058).
+    ("prose-size", "prose-leading", 14.0, 22.0),
+    ("prose-wide-size", "prose-wide-leading", 15.0, 24.0),
+    // Rows, work lines, menus, controls.
+    ("ui-size", "ui-leading", 14.0, 20.0),
+    // Code, diffs, commands, paths.
+    ("code-size", "code-leading", 12.5, 20.0),
+    // Times, counts, captions, small buttons.
+    ("meta-size", "meta-leading", 12.0, 16.0),
+    // Only inside small things: a key, a tag, a count on an icon, a
+    // menu's label (Roma's answer, Q1).
+    ("small-size", "small-leading", 11.0, 14.0),
+    // The one number a Pane is about (Roma's answer, Q3).
+    ("figure-size", "figure-leading", 28.0, 32.0),
+];
 const GENERIC: [&str; 5] = ["monospace", "sans-serif", "serif", "system-ui", "cursive"];
 /// The monospace the window ships, as `@fontsource-variable` names it.
 const SHIPPED_MONO: &str = "JetBrains Mono Variable";
@@ -70,16 +97,17 @@ impl FontSettings {
         problems
     }
 
-    /// The CSS variables: each family as a CSS list, and the root's size
-    /// that makes the usual text `size`. `system` names the system's font
-    /// for a generic name, when it can tell.
+    /// The CSS variables: each family as a CSS list, the root's size that
+    /// makes the usual text `size`, and each level of the type scale at
+    /// `size`. `system` names the system's font for a generic name, when it
+    /// can tell.
     pub fn vars(&self, system: &dyn Fn(&str) -> Option<String>) -> Vec<(&'static str, String)> {
         let size = self
             .size
             .filter(|s| s.is_finite() && SIZES.contains(s))
             .unwrap_or(14.0);
-        let root = (size / TEXT_SM * 1000.0).round() / 1000.0;
-        vec![
+        let px = |at: f64| format!("{}px", (at * 1000.0).round() / 1000.0);
+        let mut vars = vec![
             (
                 "font-family-sans",
                 family(self.sans.as_deref(), "sans-serif", system),
@@ -88,8 +116,13 @@ impl FontSettings {
                 "font-family-mono",
                 family(self.mono.as_deref(), "monospace", system),
             ),
-            ("text-root", format!("{root}px")),
-        ]
+            ("text-root", px(size / TEXT_SM)),
+        ];
+        for (size_token, leading_token, at, leading) in SCALE {
+            vars.push((size_token, px(size * at / USUAL)));
+            vars.push((leading_token, px(size * leading / USUAL)));
+        }
+        vars
     }
 
     /// Whether a family here is the system's choice, so fontconfig's file
@@ -184,5 +217,31 @@ mod tests {
             ..FontSettings::defaults()
         };
         assert_eq!(wrong.problems().len(), 1);
+    }
+
+    #[test]
+    fn every_level_of_the_type_scale_grows_with_the_size() {
+        let level = |size: f64, name: &str| {
+            let settings = FontSettings {
+                size: Some(size),
+                ..FontSettings::defaults()
+            };
+            let vars = settings.vars(&|_| None);
+            vars.into_iter()
+                .find(|(n, _)| *n == name)
+                .map(|(_, value)| value)
+                .unwrap_or_else(|| panic!("no {name}"))
+        };
+        assert_eq!(level(14.0, "ui-size"), "14px");
+        assert_eq!(level(14.0, "meta-size"), "12px");
+        assert_eq!(level(14.0, "meta-leading"), "16px");
+        assert_eq!(level(14.0, "small-size"), "11px");
+        assert_eq!(level(14.0, "code-size"), "12.5px");
+        assert_eq!(level(14.0, "figure-size"), "28px");
+        assert_eq!(level(14.0, "prose-wide-leading"), "24px");
+        // `macos`'s 13: what was 12 in rem is 11.143 there, as it is now.
+        assert_eq!(level(13.0, "ui-size"), "13px");
+        assert_eq!(level(13.0, "meta-size"), "11.143px");
+        assert_eq!(level(13.0, "heading-leading"), "24.143px");
     }
 }
