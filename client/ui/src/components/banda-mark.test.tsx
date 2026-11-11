@@ -480,9 +480,9 @@ async function motion({ reduced = false, still = false } = {}) {
   }))
   vi.stubGlobal("addEventListener", () => {})
   vi.stubGlobal("removeEventListener", () => {})
-  // The page's root, which `[motion] off` marks.
+  // The page's root, which `[motion] off` marks, and Quiet.
   const html = new Set(still ? ["data-still"] : [])
-  let changed = () => {}
+  let changed: (records: { attributeName: string }[]) => void = () => {}
   vi.stubGlobal("document", {
     documentElement: { hasAttribute: (name: string) => html.has(name) },
     hidden: false,
@@ -492,7 +492,7 @@ async function motion({ reduced = false, still = false } = {}) {
   vi.stubGlobal(
     "MutationObserver",
     class {
-      constructor(run: () => void) {
+      constructor(run: typeof changed) {
         changed = run
       }
       observe() {}
@@ -563,7 +563,13 @@ async function motion({ reduced = false, still = false } = {}) {
     still(on: boolean) {
       if (on) html.add("data-still")
       else html.delete("data-still")
-      changed()
+      changed([{ attributeName: "data-still" }])
+    },
+    /** The Person turns Quiet on, or it ends (`html[data-quiet]`). */
+    quiet(on: boolean) {
+      if (on) html.add("data-quiet")
+      else html.delete("data-quiet")
+      changed([{ attributeName: "data-quiet" }])
     },
   }
 }
@@ -1003,4 +1009,63 @@ test("with no motion, or less, asked for, no mark glances", async () => {
     time.point(drawn, 300, 8)
     expect(time.ticking(), JSON.stringify(asked)).toBe(false)
   }
+})
+
+// ADR 0099, decision 7: Quiet stills every call, as the open Thread's mark
+// is still (decision 5): each mark ends the call it is in, and, Quiet over,
+// calls again on its own next beat. Nothing is played back.
+test("while Quiet is on, no mark calls, and as it ends each calls again on its own next beat", async () => {
+  const time = await motion()
+  const asks = svg()
+  const { set } = time.mark(asks, "asking", { beat: "a" })
+  const logo = svg()
+  time.mark(logo, "asking", { variant: "logo", beat: "" })
+  const working = svg()
+  time.mark(working, "working", { beat: "w" })
+  // Into a hop: Quiet on, it hops to its end, then stands calm.
+  while (callLeft("asking", rhythmOf("a")) < 0.3) vi.advanceTimersByTime(50)
+  const left = callLeft("asking", rhythmOf("a")) * 1000
+  time.quiet(true)
+  expect(asks.attributes()["data-calm"]).toBeUndefined()
+  vi.advanceTimersByTime(left + 20)
+  expect(asks.attributes()["data-calm"]).toBe("")
+  expect(asks.attributes()["data-loop"]).toBe("asking")
+  // The logo calls no one either; one at work has no call to end.
+  vi.advanceTimersByTime(4400)
+  expect(logo.attributes()["data-calm"]).toBe("")
+  expect(working.attributes()["data-calm"]).toBe("")
+  // A look that comes while Quiet is calm from the first: failed shakes
+  // not.
+  set("failed")
+  time.run(1000)
+  expect(asks.attributes()["data-loop"]).toBe("failed")
+  expect(asks.attributes()["data-calm"]).toBe("")
+  expect(time.ticking()).toBe(false)
+
+  // Quiet over mid-call, it waits for that call's end, and plays none of
+  // it: its next call is on its own beat.
+  while (callLeft("failed", rhythmOf("a")) < 0.3) vi.advanceTimersByTime(50)
+  const rest = callLeft("failed", rhythmOf("a")) * 1000
+  time.quiet(false)
+  expect(asks.attributes()["data-calm"]).toBe("")
+  vi.advanceTimersByTime(rest - 20)
+  expect(asks.attributes()["data-calm"]).toBe("")
+  vi.advanceTimersByTime(40)
+  expect(asks.attributes()["data-calm"]).toBeUndefined()
+  expect(callLeft("failed", rhythmOf("a"))).toBe(0)
+  expect(time.ticking()).toBe(false)
+  vi.advanceTimersByTime(4400)
+  expect(logo.attributes()["data-calm"]).toBeUndefined()
+})
+
+test("the open Thread's mark stays calm as Quiet ends", async () => {
+  const time = await motion()
+  const open = svg()
+  time.mark(open, "asking", { current: true, beat: "o" })
+  time.quiet(true)
+  vi.advanceTimersByTime(4400)
+  expect(open.attributes()["data-calm"]).toBe("")
+  time.quiet(false)
+  vi.advanceTimersByTime(4400)
+  expect(open.attributes()["data-calm"]).toBe("")
 })

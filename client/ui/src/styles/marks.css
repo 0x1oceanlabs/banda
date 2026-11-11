@@ -11,7 +11,9 @@
  * starts its loops where its Thread's beat is now (`phaseOf`).
  *
  * The open Thread's mark, `data-calm`, plays none of its calls, the second
- * layer, and the rest of its loops on (ADR 0099, decision 5).
+ * layer, and the rest of its loops on (ADR 0099, decision 5). While Quiet
+ * is on, `html[data-quiet]`, every mark is calm so (decision 7): its
+ * Animator sets `data-calm` as the call it is in ends, never mid-hop.
  */
 /* Every group a loop moves has `mark-loop`, and its part's own class. */
 [data-slot="banda-mark"] .mark-loop {

@@ -15,11 +15,11 @@ import { type Desktop, desktopOf } from "./desktop"
 import { keep } from "./recent"
 import { GATHER, loudestChime, type Played, plays } from "./sound"
 import {
+  desktopQuiet,
   iconOf,
   loudestOf,
   MANY,
   noticeOf,
-  quietNow,
   soundsOf,
   SUMMARY,
   JOINED,
@@ -27,7 +27,7 @@ import {
   summaryOf,
   toldOfCall,
 } from "./system"
-import { lookedAt, newsOf, placeOf, silentWith, tell } from "./tell"
+import { lookedAt, newsOf, placeOf, type Quiet, silentWith, tell } from "./tell"
 import { clickToasts, toastTold } from "./toast"
 import { type Button, clicked, type Told } from "./told"
 
@@ -61,6 +61,12 @@ export function startTelling(
   // Whether the desktop's notices make its own sound, as Windows' do,
   // which no run of the window changes.
   const desktopSounds = soundsOf(desktop)
+  // Banda's Quiet, and the desktop's Do Not Disturb as `[notify]` follows
+  // it, as they are now.
+  const quietNow = async (): Promise<Quiet> => ({
+    desktop: await desktopQuiet(window.look().notify, desktop),
+    banda: window.quiet(),
+  })
 
   const withdraw = (keys: Iterable<string>) => {
     const had = summarized.size
@@ -88,7 +94,7 @@ export function startTelling(
     const sight = window.sight(thing)
     // What it tells of is in sight: it says it there itself.
     if (sight === "on-screen") return
-    const place = placeOf(sight, notify, await quietNow(notify, desktop))
+    const place = placeOf(sight, notify, await quietNow())
     if (!place) return
     const named = of && !said.project ? projectNameOf(of) : undefined
     const told = named ? { ...said, project: named } : said
@@ -145,7 +151,7 @@ export function startTelling(
     const news = new Map(gathered.map((call) => [call.key, call]))
     gathered = []
     const { notify, sound } = window.look()
-    const quiet = await quietNow(notify, desktop)
+    const quiet = await quietNow()
     const own = await desktopSounds
     const chimes: Chime[] = []
     const notices: Call[] = []
@@ -200,7 +206,11 @@ export function startTelling(
     const { fresh, gone } = newsOf(calling, now)
     calling = now
     const projects = new Set(Object.keys(lists))
-    const news = fresh.filter((call) => known.has(call.project))
+    // While Quiet is on, nothing is news, so none is told as it ends
+    // either (ADR 0098, decision 21).
+    const news = window.quiet()
+      ? []
+      : fresh.filter((call) => known.has(call.project))
     known = projects
     withdraw(gone.map((call) => call.key))
     gathered.push(...news)

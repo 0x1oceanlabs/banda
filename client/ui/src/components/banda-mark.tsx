@@ -1007,9 +1007,24 @@ function stillNow(): boolean {
   )
 }
 
+/** Whether Quiet is on (ADR 0098, decision 21): `html[data-quiet]`, as
+ * the window says it. Every mark is then calm, as the open Thread's is,
+ * and calls no one (ADR 0099, decision 7). */
+function quietNow(): boolean {
+  return page?.documentElement.hasAttribute("data-quiet") ?? false
+}
+
 /** Every mark again, still or moving, as the Person now asks. */
 function restyle() {
   for (const mark of marks) mark.restyle()
+}
+
+/** What changed on the page's root: `[motion] off`, or Quiet, which
+ * calms every mark or has it call again. */
+function onRoot(changes: readonly MutationRecord[]) {
+  const changed = new Set(changes.map((one) => one.attributeName))
+  if (changed.has("data-still")) restyle()
+  if (changed.has("data-quiet")) for (const mark of marks) mark.hush()
 }
 
 /**
@@ -1072,7 +1087,7 @@ function movedFrom(
   return left && now - left.at < MOVED && left.look !== look ? left : undefined
 }
 
-let stillness: MutationObserver | undefined
+let rooted: MutationObserver | undefined
 
 /** Listens for what every mark follows, as the first one comes. */
 function watch() {
@@ -1080,10 +1095,10 @@ function watch() {
   lessMotion?.addEventListener("change", restyle)
   if (!page) return
   page.addEventListener("visibilitychange", onShown)
-  stillness = new MutationObserver(restyle)
-  stillness.observe(page.documentElement, {
+  rooted = new MutationObserver(onRoot)
+  rooted.observe(page.documentElement, {
     attributes: true,
-    attributeFilter: ["data-still"],
+    attributeFilter: ["data-still", "data-quiet"],
   })
 }
 
@@ -1092,8 +1107,8 @@ function unwatch() {
   removeEventListener("pointermove", onPointer)
   lessMotion?.removeEventListener("change", restyle)
   page?.removeEventListener("visibilitychange", onShown)
-  stillness?.disconnect()
-  stillness = undefined
+  rooted?.disconnect()
+  rooted = undefined
   seen?.disconnect()
   seen = undefined
 }
@@ -1491,8 +1506,9 @@ export class Animator {
   private turned = 0
   private lookAt: [number, number] = [0, 0]
   private turnedAt = 0
-  /** It plays none of its calls, as the open Thread's mark: as it is
-   * asked, once the call it was in has ended (ADR 0099, decision 5). */
+  /** It plays none of its calls, as the open Thread's mark, and every
+   * mark while Quiet is on: as it is asked, once the call it was in has
+   * ended (ADR 0099, decisions 5 and 7). */
   private calm = false
   /** What makes it calm, or call again, as the call it is in ends. */
   private calming: ReturnType<typeof setTimeout> | undefined
@@ -1590,7 +1606,7 @@ export class Animator {
         this.beat = beat
         back([this])
       }
-      this.becalm(current, now)
+      this.becalm(current || quietNow(), now)
       return
     }
     // Where it moves from, on the rhythm it kept until now; or, drawn
@@ -1603,10 +1619,10 @@ export class Animator {
     this.drawn = true
     this.shown = shown
     // A new look moves from where the last was, calm or not, into its own
-    // as asked.
+    // as asked: open, or while Quiet.
     clearTimeout(this.calming)
     this.calming = undefined
-    this.calm = current
+    this.calm = current || quietNow()
     // A mark drawn for the first time starts in its look, as if it had
     // been there (ADR 0099, decision 4).
     if (stillNow() || (first && !(news && ARRIVES.has(shown)))) {
@@ -1648,16 +1664,23 @@ export class Animator {
     return shows.doing
   }
 
+  /** Quiet came or went: calm, or calling again, as an open Thread's
+   * mark is (ADR 0099, decision 7). */
+  hush() {
+    if (this.asked)
+      this.becalm(this.asked.current || quietNow(), performance.now() / 1000)
+  }
+
   /**
-   * Calm as `current` asks, or calling again (ADR 0099, decision 5): at
-   * once between two calls, or as the call it is in ends, never mid-hop.
-   * Its call's groups then stand still in their rest, where marks.css's
-   * `data-calm` holds them, or start again on its rhythm.
+   * Calm, open or while Quiet, or calling again (ADR 0099, decisions 5
+   * and 7): at once between two calls, or as the call it is in ends, never
+   * mid-hop. Its call's groups then stand still in their rest, where
+   * marks.css's `data-calm` holds them, or start again on its rhythm.
    */
-  private becalm(current: boolean, now: number) {
+  private becalm(calm: boolean, now: number) {
     clearTimeout(this.calming)
     this.calming = undefined
-    if (current === this.calm) return
+    if (calm === this.calm) return
     const left =
       this.paused || stillNow()
         ? 0
@@ -1665,11 +1688,11 @@ export class Animator {
     if (left > 0) {
       this.calming = setTimeout(() => {
         this.calming = undefined
-        this.calmNow(current)
+        this.calmNow(calm)
       }, left * 1000)
       return
     }
-    this.calmNow(current)
+    this.calmNow(calm)
   }
 
   private calmNow(calm: boolean) {

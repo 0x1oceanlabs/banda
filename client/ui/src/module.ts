@@ -147,6 +147,10 @@ export type WindowApi = {
   projects: () => readonly ProjectSummary[]
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
   look: () => { notify: Notify; sound: SoundSettings }
+  /** Whether Banda's Quiet is on (ADR 0098, decision 21): nothing is told
+   * while it is, and the Inbox still fills. Only for the part that tells
+   * the Person. */
+  quiet: () => boolean
   /** Sets `key` in the settings' file `file` (ADR 0016), as `limits.look`
    * in `harnesses.toml`, to `value`, written in TOML (`tomlOf`); what was
    * wrong, if refused. The file is the one source: what reads it hears

@@ -35,6 +35,7 @@ import { RESET_KEY } from "../actions/actions"
 import { sayArranged, unarrange, undoesNow } from "./arranged"
 import { chipOf } from "./attach"
 import { device } from "../boot"
+import { quiet } from "../calls/quiet"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import { actAs, refused, type Routing } from "../tiling/mount"
@@ -200,6 +201,7 @@ export function windowApiOf(shell: Shell): WindowApi {
     sight: shell.sight,
     projects: shell.projects,
     look: shell.look,
+    quiet: shell.quiet,
     writeSetting: shell.writeSetting,
     attach: shell.attach,
     peek: shell.peek,
@@ -1629,6 +1631,15 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Show or hide the sidebar",
     keys: [{ code: "KeyA", mod: true }],
     run: (shell) => shell.toggleSidebar(),
+  },
+  {
+    // Quiet (ADR 0098, decision 21): on until turned off, or off at once,
+    // however long it was on for. The foot's bell turns it on for a while.
+    id: "quiet.toggle",
+    section: "Threads",
+    title: "Turn Quiet on or off",
+    keys: [{ code: "KeyQ", mod: true }],
+    run: () => quiet.turn(quiet.on() ? "off" : "on"),
   },
   {
     id: "sidebar.show",
