@@ -211,14 +211,3 @@ export const AGENTS_FILE: ModuleFile<Agents> = {
   before: DEFAULT_AGENTS,
 }
 
-/** A file a path in a reply names, as the window's main process found it
- * (ADR 0063, decision 2). */
-export type FoundFile = {
-  /** Its full path. */
-  file: string
-  /** Its path from the Thread's folder if it is in it, else from the
-   * folder it was found in; its full path when there is none. */
-  relative: string
-  /** Whether it is in the Thread's folder. */
-  inside: boolean
-}

@@ -1363,7 +1363,8 @@ test("the Window asks an App's engine part by name no more than the list holds",
  */
 const APP_RUNS = [
   "apps/agents/pane/src/thread/Thread.tsx: browser.open",
-  "apps/agents/pane/src/thread/Thread.tsx: browser.open",
+  "apps/agents/pane/src/thread/links.ts: browser.open",
+  "apps/agents/pane/src/thread/links.ts: browser.open",
   "apps/agents/pane/src/thread/run-line.ts: terminal.run",
   "apps/files/pane/src/views/markdown.tsx: browser.open",
   "apps/git/pane/src/index.ts: agents.thread.details",
@@ -2427,8 +2428,6 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * Thread, the terminal, New Pane and the Diff open elsewhere today, and all
  * but the Thread reach none, so only the Thread's places are here:
  *
- * - 3c: a reply's links and Open in, as the Thread's paths go through
- *   `files.locate` and its links through the router to the device;
  * - 4c: its media, as arc's bytes come through arc's session.
  *
  * None joins the list, and a place that goes leaves it, as its step
@@ -2441,10 +2440,6 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * kit catch what runs.
  */
 const REACHING: Record<string, { places: number; until: string }> = {
-  "agents.thread: apps/agents/pane/src/thread/Thread.tsx: window.open": {
-    places: 1,
-    until: "3c",
-  },
   "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
     places: 1,
     until: "4c",

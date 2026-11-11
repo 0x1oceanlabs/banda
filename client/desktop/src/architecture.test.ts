@@ -7,11 +7,6 @@
  * where a Project is: it names no `projects.*` method, whose answers say
  * a Project's folder, and asks no `Engine.folderOf`.
  *
- * One exception is named, and goes with step 3c of ADR 0106's plan: the
- * agents module's `paths`, which finds a reply's paths on this machine's
- * disk through `Engine.folderOf`, until the files module finds them on the
- * Project's machine (`files.locate`).
- *
  * The check is a lint: it reads names as written, so a method named by a
  * computed string, or a folder handed in from outside, it does not see.
  */
@@ -70,20 +65,6 @@ function projectReads(source: string, file: string): string[] {
   return found
 }
 
-/** The places main still asks where a Project is, each with the step of
- * ADR 0106's plan that takes it away: the agents module's `paths`, and
- * the kit's `folderOf` it asks by. */
-const EXCEPTIONS: Record<string, { places: string[]; until: string }> = {
-  "apps/agents/desktop/src/index.ts": {
-    places: ["Engine.folderOf"],
-    until: "3c",
-  },
-  "client/desktop-kit/src/engine.ts": {
-    places: ["projects.list"],
-    until: "3c",
-  },
-}
-
 test("main's code is found: the window's, the kit's and the Apps' parts in main", () => {
   const found = new Set(mains.map((file) => relative(root, file)))
   for (const file of [
@@ -95,18 +76,14 @@ test("main's code is found: the window's, the kit's and the Apps' parts in main"
     expect(found, file).toContain(file)
 })
 
-test("client/desktop reads no Project path: no code of main asks where a Project is, but the one named exception until its step", () => {
+test("client/desktop reads no Project path: no code of main asks where a Project is", () => {
   const reads = Object.fromEntries(
     mains.flatMap((file) => {
       const places = projectReads(readFileSync(file, "utf8"), file)
       return places.length > 0 ? [[relative(root, file), places]] : []
     })
   )
-  expect(reads).toEqual(
-    Object.fromEntries(
-      Object.entries(EXCEPTIONS).map(([file, { places }]) => [file, places])
-    )
-  )
+  expect(reads).toEqual({})
 })
 
 test("the lint finds a projects method and a folderOf asked of a value, and nothing in a comment or of a function of its own", () => {

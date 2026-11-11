@@ -1,71 +1,100 @@
 /**
- * A Thread's paths (ADR 0063, decision 2): the window's main process says
- * which file each names, from the Thread's folder and the folders its
- * tools worked in, and an action opens one.
+ * A Thread's paths (ADR 0063, decision 2): the machine that has its
+ * Project says which file each names, from the Thread's folder and the
+ * folders its tools worked in (`files.locate`), and an action opens one.
  */
 import { useLayoutEffect, useMemo } from "react"
-import type { FoundFile, Item } from "@banda/contract/agents"
+import type { Engine, ProjectId } from "@banda/contract"
+import type { Item } from "@banda/contract/agents"
+import type { Located } from "@banda/contract/files"
+import type { DeviceFile } from "@banda/core/react"
 import type { FileAt, FilesHost } from "@banda/ui/components/markdown-file"
-import { deviceFile } from "@banda/core/react"
 import { openInEditor } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
-import { type AgentsHost, agentsHost } from "../desktop"
 import type { ThreadArgs } from "./session"
 
 /** At most this many full paths of the Thread's tools are sent. */
 const WORKED = 24
 
-type Run = NonNullable<PaneProps<ThreadArgs>["run"]>
+/** What a Thread's files take from its Pane: how it runs an action, and
+ * the device, which says whether a file is this computer's. */
+export type FilesHands = Pick<
+  PaneProps<ThreadArgs>,
+  "run" | "device" | "file"
+>
 
 /**
- * The paths of a Thread in `project`, for its Markdown and its menu; none
- * where no window looks at files, nor for a Project of another host's
- * (`project` null), whose paths are not this machine's. `items` say where
- * its tools worked; `run` opens a file.
+ * The paths of a Thread in `project`, for its Markdown and its menu, as
+ * the Project's machine finds them through the Pane's `engine`; none
+ * where no window runs actions, as nothing could open one. `items` say
+ * where its tools worked.
  */
 export function useThreadFiles(
-  project: string | null,
+  engine: Pick<Engine, "call">,
+  project: ProjectId,
   items: readonly Item[] | undefined,
-  run: Run | undefined
+  { run, device, file }: FilesHands
 ): ThreadFiles | null {
-  const files = useMemo(() => {
-    const bridge = agentsHost()
-    return bridge && project !== null ? new ThreadFiles(bridge, project) : null
-  }, [project])
-  useLayoutEffect(() => files?.follow(items ?? [], run), [files, items, run])
+  const opens = run !== undefined
+  const files = useMemo(
+    () => (opens ? new ThreadFiles(engine, project) : null),
+    [engine, project, opens]
+  )
+  useLayoutEffect(
+    () => files?.follow(items ?? [], { run, device, file }),
+    [files, items, run, device, file]
+  )
   return files
 }
 
-/** A Thread's files, as main finds them and the window's actions open
- * them: a missing one is the action's to say. */
-class ThreadFiles implements FilesHost {
+/** A Thread's files, as its Project's machine finds them and the window's
+ * actions open them: a missing one is the action's to say. */
+export class ThreadFiles implements FilesHost {
   private items: readonly Item[] = []
-  private run: Run | undefined
-  private readonly bridge: AgentsHost
-  private readonly project: string
+  private hands: FilesHands = {}
+  private readonly engine: Pick<Engine, "call">
+  private readonly project: ProjectId
 
-  constructor(bridge: AgentsHost, project: string) {
-    this.bridge = bridge
+  constructor(engine: Pick<Engine, "call">, project: ProjectId) {
+    this.engine = engine
     this.project = project
   }
 
-  /** The Thread as it is now: where its tools worked, and how it runs
-   * an action. */
-  follow(items: readonly Item[], run: Run | undefined): void {
+  /** The Thread as it is now: where its tools worked, and what its Pane
+   * holds. */
+  follow(items: readonly Item[], hands: FilesHands): void {
     this.items = items
-    this.run = run
+    this.hands = hands
   }
 
-  find(paths: string[]): Promise<Array<FoundFile | null>> {
-    return this.bridge.paths(this.project, paths, workedOf(this.items))
+  /** One call to the Project's machine, which a read waits on while it
+   * is away, so the path stays text till it is back. */
+  find(paths: string[]): Promise<Located[]> {
+    return this.engine.call(
+      "files.locate",
+      { paths, worked: workedOf(this.items) },
+      { project: this.project }
+    )
+  }
+
+  /** The file as this computer holds it, none for another machine's:
+   * what opens it outside Banda takes only this (ADR 0106, decision 3). */
+  private local(at: Located): DeviceFile | undefined {
+    const { device, file } = this.hands
+    return device && file ? device.local(file(at.file)) : undefined
+  }
+
+  onDevice(at: Located): boolean {
+    return this.local(at) !== undefined
   }
 
   /** A click opens it in Files; Ctrl or ⌘ with it, in the editor at its
-   * line (ADR 0073, decision 12, as amended). */
+   * line (ADR 0073, decision 12, as amended). Another machine's file has
+   * none here, so it opens in Files then too. */
   open(at: FileAt, outside: boolean): void {
-    if (outside) this.edit(at)
+    if (outside && this.onDevice(at)) this.edit(at)
     else
-      this.run?.("file.open", {
+      this.hands.run?.("file.open", {
         file: at.file,
         project: this.project,
         line: at.line ?? null,
@@ -74,25 +103,24 @@ class ThreadFiles implements FilesHost {
 
   /** Shows it in Quick Look, over the desk (ADR 0073, decision 12). */
   peek(at: FileAt): void {
-    this.run?.("file.peek", { file: at.file, project: this.project })
+    this.hands.run?.("file.peek", { file: at.file, project: this.project })
   }
 
   /** Opens it in the app the system has for it. */
   system(at: FileAt): void {
-    this.run?.("file.outside", { file: at.file })
+    this.hands.run?.("file.outside", { file: at.file })
   }
 
   /** Opens it at its line in the editor `files.toml` names, or the first
    * found; in its app when none is. */
   edit(at: FileAt): void {
-    // This machine's alone until step 3c names a reply's paths as a
-    // session's (ADR 0106).
-    void openInEditor(deviceFile(at.file), at)
+    const local = this.local(at)
+    if (local) void openInEditor(local, at)
   }
 
   /** Shows the file in its folder, in the system's file manager. */
   show(at: FileAt): void {
-    this.run?.("file.folder", { file: at.file })
+    this.hands.run?.("file.folder", { file: at.file })
   }
 }
 

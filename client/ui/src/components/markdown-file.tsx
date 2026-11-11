@@ -1,4 +1,4 @@
-import type { FoundFile } from "@banda/contract/agents"
+import type { Located } from "@banda/contract/files"
 import { FileIcon } from "lucide-react"
 import {
   createContext,
@@ -24,21 +24,26 @@ import { useEditors } from "../lib/outside"
 import { nameAndFolder } from "../lib/paths"
 
 /** A found file, and the line its path points at. */
-export type FileAt = FoundFile & Omit<Named, "path">
+export type FileAt = Located & Omit<Named, "path">
 
 /** What the host does with a reply's paths (ADR 0063, decision 2). */
 export type FilesHost = {
-  /** The file each path names, if one is there, in their order. */
-  find: (paths: string[]) => Promise<Array<FoundFile | null>>
+  /** The files the paths name, each matched to its path by `asked`; a
+   * path that names none is left out. */
+  find: (paths: string[]) => Promise<Located[]>
   /** Opens it in Banda, or, with Ctrl or ⌘, in the editor `files.toml`
    * names (ADR 0073, decision 12, as amended); in its app when there is
    * none. */
   open: (file: FileAt, outside: boolean) => void
+  /** Whether it is on this computer, so Ctrl or ⌘ can take it out of
+   * Banda: another machine's has no app here (ADR 0106, decision 3). */
+  onDevice: (file: Located) => boolean
 }
 
 type Files = {
-  find: (path: string) => Promise<FoundFile | null>
+  find: (path: string) => Promise<Located | null>
   open: FilesHost["open"]
+  onDevice: FilesHost["onDevice"]
   /** Where Ctrl or ⌘ with a click opens a file, in words. */
   outside: string
 }
@@ -65,6 +70,7 @@ export function MarkdownFiles({
       find && {
         find,
         open: (at: FileAt, outside: boolean) => host.open(at, outside),
+        onDevice: (at: Located) => host.onDevice(at),
         outside,
       },
     [host, find, outside]
@@ -78,14 +84,14 @@ export const Written = createContext(true)
 
 /** The file `path` names: undefined while it is looked for, null when
  * there is none. */
-function useFound(path: string | undefined): FoundFile | null | undefined {
+function useFound(path: string | undefined): Located | null | undefined {
   const files = useContext(Files)
   const written = useContext(Written)
-  const [found, setFound] = useState<{ path: string; file: FoundFile | null }>()
+  const [found, setFound] = useState<{ path: string; file: Located | null }>()
   useEffect(() => {
     if (!files || !path || !written) return
     let current = true
-    const settle = (file: FoundFile | null) => {
+    const settle = (file: Located | null) => {
       if (current) setFound({ path, file })
     }
     files.find(path).then(settle, () => settle(null))
@@ -168,7 +174,7 @@ function FileLink({
   children,
 }: {
   at: Named
-  found: FoundFile
+  found: Located
   kind: "code" | "text" | "named"
   /** A named link's href, as written. */
   written?: string
@@ -192,7 +198,10 @@ function FileLink({
       className={
         kind === "named" ? "font-medium wrap-anywhere text-primary" : undefined
       }
-      title={linkHint(`${found.file}${lineText(at)}`, files.outside)}
+      title={linkHint(
+        `${found.file}${lineText(at)}`,
+        files.onDevice(found) ? files.outside : null
+      )}
       onClick={open}
       onContextMenu={(event) => {
         // macOS emits contextmenu instead of click for Ctrl+click.

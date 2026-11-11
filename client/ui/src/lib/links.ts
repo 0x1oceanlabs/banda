@@ -13,12 +13,14 @@ export function outsideClick(event: {
 }
 
 /** What a link under the pointer says: where it goes, and where a click
- * takes it; outside Banda, a page goes to the system's browser. */
+ * takes it; outside Banda, a page goes to the system's browser. With
+ * `outside` null, as for another machine's file, Ctrl does nothing more. */
 export function linkHint(
   shown: string,
-  outside = "in external browser"
+  outside: string | null = "in external browser"
 ): string {
-  return `${shown}\nClick to open in Banda · Ctrl+click to open ${outside}`
+  const click = `${shown}\nClick to open in Banda`
+  return outside === null ? click : `${click} · Ctrl+click to open ${outside}`
 }
 
 /** Opens a page in this device's browser, the device's own act (ADR 0106,

@@ -3,16 +3,13 @@
  * serves the Visuals Agents show in their Threads at `app://visuals`, and
  * lays a page out for the check before one shows (ADR 0037). It answers
  * the local media channel of the bridge, with a token this machine's
- * engine gives (ADR 0106, decision 6), and where a reply's paths lead
- * (ADR 0063).
+ * engine gives (ADR 0106, decision 6).
  */
 import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
-import { homedir } from "node:os"
 import { Engine } from "@banda/desktop-kit"
 import { VISUALS } from "@banda/agents-pane/visual"
 import type { DesktopModule, Look } from "@banda/desktop-kit"
 import { Effect, Layer, Schema } from "effect"
-import { findFiles } from "./paths"
 import { heights, lay_out } from "./preview"
 import { served } from "./visuals"
 
@@ -36,20 +33,6 @@ export const agentsDesktop: DesktopModule<
               .catch(() => null)
           )
           return issued?.token ?? null
-        }),
-    ],
-    paths: [
-      Schema.Tuple([
-        Schema.String,
-        Schema.Array(Schema.String),
-        Schema.Array(Schema.String),
-      ]),
-      ([project, paths, worked]) =>
-        Effect.gen(function* () {
-          const folder = yield* Engine.folderOf(project)
-          return yield* Effect.promise(() =>
-            findFiles(folder, paths, worked, homedir())
-          )
         }),
     ],
   },

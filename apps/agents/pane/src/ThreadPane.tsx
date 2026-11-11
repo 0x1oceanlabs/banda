@@ -14,7 +14,8 @@ import { definePane, type PaneProps } from "@banda/ui/pane"
 import { MessageSquareIcon } from "lucide-react"
 import { runLineOf } from "./thread/run-line"
 import { NEW_THREAD, type ThreadArgs } from "./thread/session"
-import { linkOpener, Thread } from "./thread/Thread"
+import { linksOf } from "./thread/links"
+import { Thread } from "./thread/Thread"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
@@ -37,11 +38,10 @@ export const threadPane = definePane<ThreadArgs>({
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
   const project = props.args.scratch ?? props.project
-  const { run, engine } = props
+  const { run, runs, engine } = props
   // The machine that has its Project, as Send reads it (ADR 0095,
-  // decision 7): on another (ADR 0081), nothing reaches this machine's
-  // files: no media from its paths, and a link opens in the system's
-  // browser, as Banda's is not there yet.
+  // decision 7): on another (ADR 0081), no media from its paths yet, and
+  // its links go through the router to this device (ADR 0106, law 2).
   const { host, shown } = usePlaced(project, props.args.host)
   const here = host === undefined
   const { state: status } = useStatus(engine)
@@ -55,9 +55,13 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     () => runLineOf(run, project, host, away),
     [run, project, host, away]
   )
+  const links = useMemo(
+    () => linksOf({ run, runs }, project),
+    [run, runs, project]
+  )
   return (
     <ThreadMedia project={here ? project : null}>
-      <MarkdownLinks open={linkOpener(here ? run : undefined, project)}>
+      <MarkdownLinks open={links.open} hint={links.title}>
         <MarkdownShell run={runLine}>
           <Thread {...props} project={project} />
         </MarkdownShell>
