@@ -140,7 +140,7 @@ export function GitButton({
           action={
             now.check && (
               <Button
-                variant="ghost"
+                variant="outline"
                 size="xs"
                 onClick={() => void check(engine, project)}
               >

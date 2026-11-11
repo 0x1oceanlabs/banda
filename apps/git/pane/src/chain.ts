@@ -49,7 +49,7 @@ const LINES_EVERY = 200
 
 /** What a run says when the connection broke under it: it is not asked
  * again, as it may have run. */
-export const LOST = "The connection to the engine was lost; check the status."
+export const LOST = "The connection was lost; this may have gone through."
 /** What a run says when its stream ended with neither ✓ nor an error. */
 export const UNSAID = "Git stopped without saying how it ended."
 
@@ -336,7 +336,9 @@ export async function check(engine: Engine, project: ProjectId): Promise<void> {
   }
 }
 
-/** Whether the commit `now` is made since the run, as its head moved. */
+/** Whether the commit `now` is made since the run, as its head moved.
+ * Anything that moved it reads the same, an Agent's commit too, as a run
+ * has no name of its own to look for on its machine yet. */
 const committed = ({ head }: Unsure, now: Status) => now.head !== head
 
 /** Whether the branch `now` has nothing its upstream lacks. */

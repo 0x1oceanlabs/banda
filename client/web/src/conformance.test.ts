@@ -62,9 +62,11 @@ const GIVEN: Record<
   // New Pane on arc, which runs every App: a click on each kind it offers.
   "window.launcher": { modules: ["agents", "terminal", "files", "git"] },
   // The Diff on arc, on a change of one file: each of its buttons, Stage
-  // and Revert among them, but those that only read.
+  // and Revert among them, but those that only read. Its Unstaged scope,
+  // as the one it opens on has no Stage or Revert to play.
   "git.diff": {
     modules: ["git"],
+    args: { scope: { kind: "unstaged" }, file: null },
     answers: diffAnswers,
     reads: ["Scope", "Base", "Refresh"],
   },
