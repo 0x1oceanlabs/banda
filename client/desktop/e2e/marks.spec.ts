@@ -15,8 +15,9 @@
  * Then the Mark lives (ADR 0099, decision 4): each look's loops play as
  * CSS on its SVG's groups, and news, a look that changes, plays on the
  * window's clock while `data-news` says which, then hands the look back to
- * the loops. Woke arrives asleep, stretches, then rings, and a trace shows
- * the compositor runs its loops. A mark drawn for the first time plays no
+ * the loops. Woke arrives asleep, stretches, then rings, and its loops are
+ * held and stepped 12 times a second (ADR 0117). A mark drawn for the
+ * first time plays no
  * news, and `[motion] off` stills every loop. Last, the looks the window
  * draws live are recorded, beside the approved mock's when it is given.
  */
@@ -24,12 +25,8 @@ import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { type MarkState, stillMark } from "@banda/ui/components/banda-mark"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import {
-  animationsOf,
-  compositedOf,
-  startTrace,
-  stopTrace,
-} from "./motion-trace"
+import { STEPS_AT_LEAST, STEPS_AT_MOST, steppedOf } from "./loops"
+import { animationsOf } from "./motion-trace"
 import {
   call,
   finish,
@@ -116,12 +113,18 @@ const newsOf = (page: Page) =>
     () => (globalThis as unknown as { news: (string | null)[] }).news
   )
 
-/** The names of the CSS animations that play on `mark`'s groups. */
+/** The names of the CSS animations that play on `mark`'s groups: held and
+ * stepped (ADR 0117), but not inside `[data-paused]`, where they wait. */
 const loopsOf = (mark: Locator) =>
   mark.evaluate((svg) =>
     svg
       .getAnimations({ subtree: true })
-      .filter((animation) => animation.playState === "running")
+      .filter(
+        (animation) =>
+          !(animation.effect as KeyframeEffect | null)?.target?.closest(
+            "[data-paused]"
+          )
+      )
       .map((animation) => (animation as CSSAnimation).animationName)
       .sort()
   )
@@ -399,15 +402,10 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   // Woke: put off for three seconds, it is its time that wakes it. Put
   // off, it leaves the bar's Mark, which works again; then it arrives
   // asleep, stretches and rings, and its loops take over. Asleep lasts a
-  // second, so the recorder catches it, not a poll of the attribute. A
-  // trace of it all says whether the compositor runs woke's loops: its
-  // bells ring on the bar's Mark alone, until the rows draw their look
-  // (ADR 0098, S6a), so motion.spec's trace of the rows has them not.
-  const cdp = await page.context().newCDPSession(page)
-  const renderer = await app.evaluate(({ BrowserWindow }) =>
-    BrowserWindow.getAllWindows()[0]!.webContents.getOSProcessId()
-  )
-  await startTrace(cdp, "woke")
+  // second, so the recorder catches it, not a poll of the attribute. Its
+  // loops are held and stepped (ADR 0117): its bells ring on the bar's
+  // Mark alone, until the rows draw their look (ADR 0098, S6a), so
+  // motion.spec's look at the rows has them not.
   await watchNews(logo)
   const done = threadNamed(window, "wait done")!.id
   call(window, "agents.later", { thread: done, until: Date.now() + 3000 })
@@ -421,17 +419,20 @@ test("the Mark lives: its loops play as CSS, news plays on the clock and hands t
   await expect
     .poll(() => loopsOf(logo))
     .toEqual(expect.arrayContaining(["mark-bells", "mark-blink", "mark-ring"]))
-  const woke = compositedOf(await stopTrace(cdp, "woke"), renderer, "mark-")
-  // Loops that began where nothing of their mark was drawn and paused
-  // within 0.1 s: not counted (motion-trace.ts).
-  test.info().annotations.push({
-    type: "woke: brief",
-    description: `${woke.brief} of ${woke.animations} loops undrawn, paused within 0.1 s, not counted`,
-  })
-  expect(woke.names, "woke's loops the trace saw begin").toEqual(
-    expect.arrayContaining(animationsOf(["woke"]))
-  )
-  expect(woke.failed, "loops the compositor does not run").toEqual([])
+  const woke = await steppedOf(logo)
+  expect(
+    woke.map((loop) => loop.name),
+    "woke's loops in view"
+  ).toEqual(expect.arrayContaining(animationsOf(["woke"])))
+  for (const loop of woke) {
+    expect(loop.held, `${loop.name} held`).toBe(true)
+    expect(loop.steps, `${loop.name}'s steps a second`).toBeGreaterThanOrEqual(
+      STEPS_AT_LEAST
+    )
+    expect(loop.steps, `${loop.name}'s steps a second`).toBeLessThanOrEqual(
+      STEPS_AT_MOST
+    )
+  }
   await shots(window, "m1b-woke")
 
   // Asks: a triangle that hops, on the bar and on its row.
