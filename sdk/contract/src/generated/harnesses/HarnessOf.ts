@@ -17,4 +17,10 @@ title: string,
 /**
  * What a new account of it is called and coloured.
  */
-next: NewAccount, };
+next: NewAccount, 
+/**
+ * The models in its menu, as `agents.toml`'s `[models]` names them:
+ * none when it names none, and the menu is the first three the
+ * Harness offers (ADR 0114, decision 7).
+ */
+models: Array<string>, };

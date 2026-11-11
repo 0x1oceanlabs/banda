@@ -327,7 +327,7 @@ mod classes {
         (
             "agents.toml",
             &[
-                (Machine, &["start"]),
+                (Machine, &["start", "models"]),
                 (Shared, &["enter", "flow"]),
                 // Not in the ADR's table: the device's, as in doubt.
                 (Device, &["seen-after"]),

@@ -1,6 +1,7 @@
 use banda_kernel::Refusal;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 #[derive(Clone, Serialize, Deserialize, TS)]
@@ -84,6 +85,19 @@ pub trait AccountStore: Send + Sync {
     /// not read.
     fn start(&self) -> (Option<String>, Option<String>) {
         self.selection().unwrap_or_default()
+    }
+    /// Each Harness's menu of models as `agents.toml`'s `[models]` names
+    /// it, by the Harness's ID: none when it names none, or does not read
+    /// (ADR 0114, decision 7).
+    fn models(&self) -> BTreeMap<String, Vec<String>> {
+        BTreeMap::new()
+    }
+    /// Writes the menu of models of `harness`; with none, takes it out, so
+    /// the menu is the Harness's first three again.
+    fn set_models(&self, _harness: &str, _models: &[String]) -> Result<(), Refusal> {
+        Err(Refusal::conflict(
+            "Changing the menu of models is not configured.",
+        ))
     }
 }
 
@@ -267,6 +281,18 @@ pub struct SetStart {
     pub role: StartRole,
     #[ts(optional)]
     pub harness: Option<String>,
+}
+
+/// Sets the models in a Harness's menu (ADR 0114, decision 7), by their
+/// values in its offer, in the order the menu shows them; with none, the
+/// menu is the Harness's first three models again.
+#[derive(Deserialize, TS, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[ts(export, export_to = "harnesses/")]
+pub struct SetModels {
+    /// The Harness's ID, as its accounts' `harness` says it: `claude`.
+    pub harness: String,
+    pub models: Vec<String>,
 }
 
 /// A key for an account: a gateway's new one, which Banda keeps, or an

@@ -67,6 +67,11 @@ pub struct AgentsSettings {
     /// and with what on each Harness, by the Harness's ID: `[start.claude]`.
     /// The Agents section sets it from the composer's bar.
     pub start: Option<Starts>,
+    /// The models in each Harness's menu, by the Harness's ID, as its
+    /// Threads offer them: `claude = ["default", "opus", "sonnet"]` (ADR
+    /// 0114, decision 7). The stars in "All models" set it; with none
+    /// named, the menu holds the first three the Harness offers.
+    pub models: Option<BTreeMap<String, Vec<String>>>,
     /// The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).
     #[serde(alias = "workspaces")]
     pub flow: Option<Flow>,
@@ -134,6 +139,7 @@ impl OneFile for AgentsSettings {
         AgentsSettings {
             enter: Some(Enter::default()),
             start: None,
+            models: None,
             flow: Some(Flow::default()),
             seen_after: Some(SEEN_AFTER),
         }
@@ -143,6 +149,7 @@ impl OneFile for AgentsSettings {
         AgentsSettings {
             enter: self.enter.or(under.enter),
             start: self.start.or(under.start),
+            models: self.models.or(under.models),
             flow: self.flow.or(under.flow),
             seen_after: self.seen_after.or(under.seen_after),
         }

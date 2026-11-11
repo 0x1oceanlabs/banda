@@ -17,6 +17,12 @@
 # mode = "auto"
 # model = "opus"
 
+# [models]
+# The models in each Harness's menu, by the Harness's ID (ADR 0114). The
+# stars in the model picker's "All models" set them. By default a menu
+# holds the first three models the Harness offers.
+# claude = ["default", "opus", "sonnet"]
+
 # How an Agent's windows stand, its Flow (ADR 0079): "free", where they
 # are, a Thread opening beside the Pane in front; "row", each Project on
 # its own workspace, its Agents in a row (ADR 0065, ADR 0102); or "solo",

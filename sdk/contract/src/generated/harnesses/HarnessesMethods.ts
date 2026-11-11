@@ -21,6 +21,7 @@ import type { LoginInput } from "./LoginInput";
 import type { LoginStatus } from "./LoginStatus";
 import type { OneHarness } from "./OneHarness";
 import type { RemoveAccount } from "./RemoveAccount";
+import type { SetModels } from "./SetModels";
 import type { SetStart } from "./SetStart";
 import type { SignIn } from "./SignIn";
 import type { UpdateAccount } from "./UpdateAccount";
@@ -61,6 +62,11 @@ update_account: CommandMethod<UpdateAccount, HarnessView>,
  * Any Agent's pass answers here (ADR 0104, decision 4).
  */
 set_start: CommandMethod<SetStart, null>, 
+/**
+ * Sets the models in a Harness's menu, the stars of "All models"
+ * (ADR 0114, decision 7). The Person's alone: no pass answers.
+ */
+set_models: CommandMethod<SetModels, null>, 
 /**
  * A Harness as it says: its program, who is signed in, how to sign
  * in, at the machine's log's position it is current at.

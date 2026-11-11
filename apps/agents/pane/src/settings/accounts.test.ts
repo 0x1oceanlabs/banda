@@ -65,9 +65,9 @@ test("the accounts go by Harness, each where its first entry stands, as their ma
       entry("gemini", "gemini", "Gemini CLI"),
     ],
     harnesses: [
-      { id: "claude", title: "Claude Code", next },
-      { id: "codex", title: "Codex", next },
-      { id: "gemini", title: "Gemini CLI", next },
+      { id: "claude", title: "Claude Code", next, models: [] },
+      { id: "codex", title: "Codex", next, models: [] },
+      { id: "gemini", title: "Gemini CLI", next, models: [] },
     ],
   })
   expect(
