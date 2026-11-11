@@ -30,6 +30,8 @@ Roma, 2026-11-02: "let's combine: on Mac and Windows take it natively, on Linux 
    - **macOS and Windows**: the system's (`material = "system"`), as a material the window asks for (decision 4). Their wallpapers are hard to read, and their materials are the look of their own apps.
    - Unset, `[desk] material` takes the platform's. Set, it wins: `"system"` on Hyprland for its blur of what is behind, `"banda"` on a Mac with `[desk] wallpaper`.
 
+   _Amended 2026-11-11 by [ADR 0111](0111-the-desk-s-density-is-measured-over-the-wallpaper-banda-draws.md): where Banda draws the glass, it also measures the wallpaper, to make the desk as dense as its text needs._
+
 2. **On Linux, each desktop is a reader of its wallpaper.** A reader says where the picture is, and which small files to follow: one of them changing means asking again. The look follows them as it follows Omarchy's link now, so a new wallpaper is new glass, with no daemon, D-Bus or native code.
    - The order: `[desk] wallpaper`, then Omarchy, then the desktop `XDG_CURRENT_DESKTOP` names.
    - **GNOME** (and Ubuntu's, Budgie, Pantheon), **Cinnamon** and **MATE**: their schema's key, through `gsettings`, which knows the schema's default too; it follows `~/.config/dconf/user`. An XML slideshow gives its first still picture.

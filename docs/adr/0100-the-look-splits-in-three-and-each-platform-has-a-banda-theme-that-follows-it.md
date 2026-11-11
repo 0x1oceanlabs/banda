@@ -179,6 +179,11 @@ with Roma._
      Omarchy's own themes kept as test fixtures: dozens of palettes, each
      in four.
 
+   _Amended 2026-11-11 by
+   [ADR 0111](0111-the-desk-s-density-is-measured-over-the-wallpaper-banda-draws.md):
+   over Banda's glass, the desk and the panel are measured over the
+   wallpaper Banda draws, not over the worst backdrops._
+
 9. **A platform theme nobody has tried on its system is marked beta.**
    The menu says "beta" beside it until it has been looked at on a real
    machine of that system (step 7). Today that is GNOME, KDE and niri. A
