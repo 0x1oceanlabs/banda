@@ -66,7 +66,7 @@ pub enum FenceWhy {
     SetupFailed,
     /// Banda has no fence on this system.
     UnsupportedOs,
-    /// Turned off for a test: a debug build's `BANDA_FENCE=off`.
+    /// Off until it is designed whole, unless `BANDA_FENCE=on` (ADR 0115).
     Off,
 }
 

@@ -224,7 +224,9 @@ function shownOf(fence: Fence, quit: string): Shown {
         "Until then, new Threads start as they did."
       )
     case "off":
-      return off("It is turned off for testing (BANDA_FENCE=off).")
+      return off(
+        "It is off until it is designed whole (BANDA_FENCE=on turns it on)."
+      )
     case "setup_failed":
       return off(
         "Banda couldn't set it up here.",
