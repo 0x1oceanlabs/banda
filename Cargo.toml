@@ -57,7 +57,11 @@ md-5 = "0.10.6"
 mime_guess = "2.0.5"
 # Who owns a file, by name, for Files' info, and who the engine runs as.
 nix = { version = "0.31.3", default-features = false, features = ["user"] }
-notify-debouncer-full = "0.7"
+# A release candidate, for notify 9: notify 8 starts the Mac's FSEvents
+# stream anew from "now" for each folder watched or let go, and loses what
+# changed meanwhile in every other folder (#1166). Back to a release once
+# there is one.
+notify-debouncer-full = "=0.8.0-rc.3"
 nucleo-matcher = "0.3.1"
 # macOS's power assertion, which keeps a Mac from idle sleep while its
 # Agents work, and the CFString that names it (ADR 0097): sysinfo builds

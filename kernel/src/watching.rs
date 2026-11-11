@@ -443,6 +443,31 @@ mod tests {
         assert!(more < 19, "{more} more pieces for 20 changes");
     }
 
+    /// FSEvents has one stream for all the folders watched, made again for
+    /// each folder watched or let go: a change made meanwhile is still
+    /// heard (#1166).
+    #[tokio::test]
+    async fn a_change_is_heard_while_other_folders_are_watched() {
+        let root = tempfile::tempdir().unwrap();
+        let base = dunce::canonicalize(root.path()).unwrap();
+        let heard_in = base.join("heard");
+        std::fs::create_dir(&heard_in).unwrap();
+        let others: Vec<PathBuf> = (0..20).map(|n| base.join(format!("other-{n}"))).collect();
+        for other in &others {
+            std::fs::create_dir(other).unwrap();
+        }
+        let mut watch = watch([heard_in.clone()]).unwrap();
+        let mut kept = Vec::new();
+        for (n, other) in others.into_iter().enumerate() {
+            std::fs::write(heard_in.join(format!("{n}.txt")), "x").unwrap();
+            kept.push(super::watch([other]).unwrap());
+            match heard(&mut watch).await {
+                Changed::Dirs(dirs) => assert_eq!(dirs, std::slice::from_ref(&heard_in)),
+                Changed::Again(_) => panic!("the system lost track"),
+            }
+        }
+    }
+
     #[tokio::test]
     async fn a_folder_about_to_move_is_let_go_of_and_its_hearers_read_it_again() {
         let root = tempfile::tempdir().unwrap();
