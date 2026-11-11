@@ -12,7 +12,7 @@ export type Heard = {
   stopped: boolean
 }
 
-export type Called = { method: string; params: unknown }
+export type Called = { method: string; params: unknown; once: boolean }
 
 export function fakeEngine(answers: Record<string, unknown> = {}): {
   engine: Engine
@@ -22,8 +22,8 @@ export function fakeEngine(answers: Record<string, unknown> = {}): {
   const streams: Heard[] = []
   const calls: Called[] = []
   const fake = {
-    call: (method: string, params: unknown) => {
-      calls.push({ method, params })
+    call: (method: string, params: unknown, how?: { once?: boolean }) => {
+      calls.push({ method, params, once: !!how?.once })
       return Promise.resolve(answers[method])
     },
     stream: (

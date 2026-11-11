@@ -46,6 +46,23 @@ test("a run says how it ended in a toast of its Project, a failure with why", ()
   })
 })
 
+test("a run that may have gone through says so, not that git failed", () => {
+  expect(
+    toldOf("s", {
+      is: "failed",
+      message: "arc went away; Push may have gone through.",
+      check: { action: "push", head: "a1" },
+    })
+  ).toEqual({
+    key: "git.s",
+    in: "s",
+    kind: "failed",
+    title: "arc went away; Push may have gone through.",
+    buttons: [],
+    close: true,
+  })
+})
+
 test("the end of a run is told of its card's Thread, and of none with no card drawn", async () => {
   const { window, told } = fakeWindow()
   stops.push(keepWindow(window))
