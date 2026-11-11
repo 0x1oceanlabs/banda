@@ -33,7 +33,7 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { cn } from "@banda/ui/lib/utils"
-import { FOOTER_CONTROL } from "../composer/Composer"
+import { FOOTER_CONTROL } from "../composer/footer"
 import { choose, chosen } from "../thread/state"
 import { fullAccessAbout, reasonOf, warns } from "./fence"
 

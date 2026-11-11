@@ -33,7 +33,7 @@ import {
 import { choose, chosen } from "../thread/state"
 import type { Move, Moves } from "../thread/moves"
 import { MoveConfirm, MoveList } from "./Moves"
-import { FOOTER_CONTROL } from "./Composer"
+import { FOOTER_CONTROL } from "./footer"
 
 /**
  * The model a Thread runs on and how hard it thinks, as one quiet trigger
