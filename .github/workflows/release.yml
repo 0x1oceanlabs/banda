@@ -1,14 +1,15 @@
 # Banda's releases (ADR 0033, step 3): Banda Dev on every push to main once
 # `ci` is green on it. Each packs the AppImage with scripts/package.sh on
-# devbox and publishes it with scripts/release.mjs, beside dev-linux.yml
+# GitHub's Ubuntu runner, as `ci` runs (ci/README.md), and publishes it with
+# scripts/release.mjs, beside dev-linux.yml
 # (dev-mac.yml for the Mac), the update file Banda Dev reads (ADR 0041; its
 # name, ADR 0092 decision 12). The Mac's zip is packed on GitHub's Apple
 # silicon runner at the same time and added to the release once it is out
 # (decision 6), so Linux never waits for the Mac.
 #
 # No Stable is built here, and a tag pushed by hand ships nothing (ADR 0092,
-# step 2): nothing here starts on a tag, and ci/job-started.sh fails every
-# job on devbox for one, which an older commit's copy of this file starts.
+# step 2): nothing here starts on a tag, and a run by hand publishes
+# nothing.
 # Banda will be promoted from a Dev once a day (its step 6).
 #
 # A PR that changes how Banda is packed packs both, publishing nothing, as
@@ -57,9 +58,8 @@ jobs:
   which:
     name: which Banda
     # A Dev only from a push to main whose `ci` passed, and a PR packed only
-    # from a branch of this repository: a fork's code never runs on devbox
-    # (ADR 0038, decision 4; ci/job-started.sh refuses it there anyway) nor
-    # on this repository's Mac runners.
+    # from a branch of this repository: a fork's code never runs with this
+    # repository's token (ADR 0038, decision 4).
     if: >-
       github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request' &&
@@ -67,7 +67,7 @@ jobs:
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
-    runs-on: devbox
+    runs-on: ubuntu-slim
     timeout-minutes: 5
     outputs:
       channel: ${{ steps.which.outputs.channel }}
@@ -100,10 +100,10 @@ jobs:
   linux:
     name: pack
     needs: which
-    runs-on: devbox
-    timeout-minutes: 45
-    # To publish. A PR's run gets it too, packing its own branch on devbox
-    # but publishing nothing.
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    # To publish. A PR's run gets it too, packing its own branch but
+    # publishing nothing.
     permissions:
       contents: write
     steps:
@@ -112,8 +112,32 @@ jobs:
           ref: ${{ needs.which.outputs.commit }}
           # release.mjs reads what the commit changed, against its parent.
           fetch-depth: 0
-      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
-        run: ci/target.sh && rustup toolchain install
+      # The Node ci/Dockerfile pins, and package.json's pnpm, as `ci`.
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
+      - run: npm install --global --silent "$(jq -r .packageManager package.json)"
+      # pnpm's store and Electron's download, as `ci` keeps them; a pack
+      # reads them and saves none.
+      - id: paths
+        run: echo "store=$(pnpm store path --silent)" >> "$GITHUB_OUTPUT"
+      - uses: actions/cache/restore@v4
+        with:
+          path: |
+            ${{ steps.paths.outputs.store }}
+            ~/.cache/electron
+          key: pnpm-${{ hashFiles('pnpm-lock.yaml') }}
+          restore-keys: pnpm-
+      - run: rustup toolchain install
+      # The release build's dependencies, which only a Dev's own run saves:
+      # a PR's pack builds on them and leaves nothing for a Dev.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: release-linux
+          save-if: ${{ needs.which.outputs.publish == 'true' }}
       - name: pack
         env:
           BANDA_VERSION: ${{ needs.which.outputs.version }}
@@ -189,8 +213,7 @@ jobs:
             client/desktop/dist/*-mac.yml
           retention-days: 3
 
-  # On GitHub's runner, which has ssh for the tap (devbox's image has
-  # none), and runs only for a release, never a PR's code.
+  # Only for a release, never a PR's code: it holds the tap's key.
   mac-publish:
     name: publish (macOS)
     needs: [which, linux, mac]
