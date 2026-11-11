@@ -2596,6 +2596,20 @@ test("a place that no longer reaches past the handles leaves the list, and each 
     expect(STEPS, key).toContain(until)
 })
 
+test("no OSC 52: nothing another machine prints reaches this device's clipboard, as the terminal renderer writes it only on the Person's own copy", () => {
+  const renderer = join(root, "client/ghostty/src")
+  for (const file of sources(renderer))
+    expect(readFileSync(file, "utf8"), file).not.toMatch(/osc[ _-]?52/i)
+  const surface = readFileSync(join(renderer, "t3/surface.ts"), "utf8")
+  const writes = [...surface.matchAll(/\.writeText\(/g)].map(
+    ({ index }) => index
+  )
+  expect(writes).toHaveLength(1)
+  // In the handler of the Person's own copy key, past any line of output.
+  const copy = surface.lastIndexOf("isTerminalCopyShortcut(event)", writes[0])
+  expect(surface.slice(copy, writes[0])).not.toContain("onData")
+})
+
 test("each of the device's own helpers still does what it is the device's for", () => {
   for (const [file, what] of Object.entries(DEVICE_HELPERS)) {
     const does = pastHandles(readFileSync(join(root, file), "utf8"), file)
