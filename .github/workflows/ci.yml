@@ -70,17 +70,26 @@ jobs:
       fail-fast: false
       matrix:
         # ts reads the checkpoints rust's tests write, so they share a job.
-        # The window's tests start the app one at a time; split over four
-        # runners they take about a quarter of their 19 minutes.
+        # The window's tests start the app one at a time, some 40 minutes
+        # of them: the specs with arc, a second engine, are slow, and
+        # Playwright's shards count tests, so they have shards of their
+        # own (scripts/check.sh's BANDA_E2E_SPECS). Each shard is some
+        # 5 minutes.
         include:
           - parts: rust ts
-          - { parts: window, shard: 1/4 }
-          - { parts: window, shard: 2/4 }
-          - { parts: window, shard: 3/4 }
-          - { parts: window, shard: 4/4 }
+          - { parts: window, specs: rest, shard: 1/6 }
+          - { parts: window, specs: rest, shard: 2/6 }
+          - { parts: window, specs: rest, shard: 3/6 }
+          - { parts: window, specs: rest, shard: 4/6 }
+          - { parts: window, specs: rest, shard: 5/6 }
+          - { parts: window, specs: rest, shard: 6/6 }
+          - { parts: window, specs: arc, shard: 1/3 }
+          - { parts: window, specs: arc, shard: 2/3 }
+          - { parts: window, specs: arc, shard: 3/3 }
     permissions:
       contents: read
     env:
+      BANDA_E2E_SPECS: ${{ matrix.specs }}
       BANDA_E2E_SHARD: ${{ matrix.shard }}
       # As ci/Dockerfile had it: no check reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
@@ -262,12 +271,18 @@ jobs:
     if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        # Each test starts arc, some 15 seconds: two runners halve it.
+        shard: [1/2, 2/2]
     permissions:
       contents: read
     env:
       # As `check`: no check reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
       BANDA_SAME_PATH: require
+      BANDA_E2E_SHARD: ${{ matrix.shard }}
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
@@ -304,12 +319,12 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm --filter @banda/desktop exec install-electron
       - run: pnpm --filter @banda/desktop build
-      - run: pnpm --filter @banda/desktop exec playwright test same-path.spec.ts remote-bytes.spec.ts remote-panes.spec.ts remote-git.spec.ts remote-terminal.spec.ts remote-run.spec.ts
+      - run: pnpm --filter @banda/desktop exec playwright test --shard="$BANDA_E2E_SHARD" same-path.spec.ts remote-bytes.spec.ts remote-panes.spec.ts remote-git.spec.ts remote-terminal.spec.ts remote-run.spec.ts
       - name: The window's traces
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: same-path-traces
+          name: same-path-traces-${{ strategy.job-index }}
           path: client/desktop/test-results/
           retention-days: 7
 
