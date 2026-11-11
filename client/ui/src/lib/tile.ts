@@ -237,6 +237,15 @@ export function holdTile(element: Element, tile: TileBox): () => void {
   }
 }
 
+/** Hears the focus land on the box of `element`'s Tile itself, as what
+ * closes over a Pane leaves it, and not on what is in it. Ends with the
+ * function it returns. */
+export function onTileFocus(element: Element, heard: () => void): () => void {
+  const box = element.closest(TILE)
+  box?.addEventListener("focus", heard)
+  return () => box?.removeEventListener("focus", heard)
+}
+
 /** The Tile `element` stands in, as the Tiling keeps it; none outside a
  * Tile. Only the Tiling configures one. */
 export function boxOf(element: Element): TileBox | undefined {

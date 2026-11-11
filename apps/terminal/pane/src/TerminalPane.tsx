@@ -23,7 +23,7 @@ import {
 import { type Clock, Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
 import { afterMoves, cancelFrame } from "@banda/ui/lib/frames"
-import { type Configure, tileOf } from "@banda/ui/lib/tile"
+import { type Configure, onTileFocus, tileOf } from "@banda/ui/lib/tile"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -244,9 +244,16 @@ function Screen({
   useEffect(() => {
     focusedNow.current = focused
     const element = mount.current
-    owed.current =
-      focused && !!element && tileOf(element).now().state === "hidden"
-    if (focused) surface.current?.focus()
+    owed.current = false
+    if (!focused || !element) return
+    // A terminal reads keys only in its field, so one given to its tile,
+    // as what closes over a Pane gives them, goes on to the field.
+    const take = () => {
+      owed.current = tileOf(element).now().state === "hidden"
+      surface.current?.focus()
+    }
+    take()
+    return onTileFocus(element, take)
   }, [focused])
 
   // Once only, and forgotten then: the Pane's args keep it till typed.

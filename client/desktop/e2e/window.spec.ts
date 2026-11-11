@@ -5787,6 +5787,66 @@ test("the marks this window kept move to its host once, and its first list shows
   expect(titled("hello").archived).toBeUndefined()
 })
 
+test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer lifted, and in a terminal after the Banda menu", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await firstThread(page)
+  // The lifted Drawer keeps a Thread of its own: this is the one in front.
+  const thread = page.locator("[data-tile][data-focused=true]")
+  const composer = thread.getByRole("textbox", { name: "Message to Fake AI" })
+
+  // The Drawer's Thread is under no layer. Lifted, the Drawer stays
+  // mounted, and words typed on the Thread still reach its message box.
+  const drawer = page.getByRole("dialog", { name: "Drawer" })
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await drawer.locator("[data-tile]").focus()
+  await page.keyboard.type("dr")
+  await expect(
+    drawer.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toHaveText("dr")
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).not.toHaveAttribute("data-drawer")
+  await thread.focus()
+  await expect(composer).not.toBeFocused()
+  await page.keyboard.type("zq")
+  await expect(composer).toHaveText("zq")
+
+  // A terminal reads keys only in its own field, whichever way the menu
+  // was opened.
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = terminalTile(page).getByRole("region", {
+    name: "Terminal screen",
+  })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const typedAfter = async (open: () => Promise<void>, file: string) => {
+    await open()
+    await expect(menu).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(menu).toBeHidden()
+    await page.keyboard.type(`echo back > ${file}`)
+    await page.keyboard.press("Enter")
+    await expect
+      .poll(() => read(join(dir, "root", "Work", file)))
+      .toBe("back\n")
+  }
+  await typedAfter(() => page.keyboard.press("Alt+Space"), "by-key.txt")
+  await typedAfter(
+    () =>
+      page
+        .getByRole("complementary", { name: "Sidebar" })
+        .getByRole("button", { name: /Search/ })
+        .click(),
+    "by-search.txt"
+  )
+})
+
 test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts one with the words", async () => {
   window = await startWindow()
   const { page } = window
