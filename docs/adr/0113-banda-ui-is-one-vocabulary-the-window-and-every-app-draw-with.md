@@ -54,8 +54,8 @@ stripped:
 |---|---|---|---|
 | type | 91 | 48 | `text-[11px]`, `text-[10.5px]`, `text-[13px]`; `font-size` as numbers |
 | layers | 55 | 40 | `z-10`, `z-50`, `z-20`, `z-1`, `z-30`, `z-40` |
-| colours | 52 | 22 | masks' `#000`, a copied palette, `bg-white`, `bg-black/10`, fallback copies of tokens |
-| shadows | 43 | 37 | `shadow-md`, `shadow-sm`, `shadow-lg`, `shadow-xs`, four of their own |
+| colours | 54 | 24 | masks' `#000`, a copied palette, `bg-white`, `bg-black/10`, fallback copies of tokens |
+| shadows | 43 | 37 | `shadow-md`, `shadow-sm`, `shadow-lg`, `shadow-xs`, five drawn by hand |
 | lengths | 27 | 10 | `pb-[5px]`, `mt-[22px]`, `gap-[7px]`: off the 4 px grid |
 | corners | 9 | 4 | already listed, each with its reason |
 
@@ -68,7 +68,7 @@ leaves a `text-[13px]` at 13.
 The design kit (`docs/design/kit/`) has the same drift: it draws keys,
 tags and menus' labels at 11, buttons, menus, tabs and toasts at 13, a
 badge at 9, and its shadows by hand. Tailwind's own names are also
-common: `text-xs` 327 times and `text-sm` 126 times, in 151 files. They
+common: `text-xs` 327 times and `text-sm` 126 times, in 150 files. They
 equal meta and UI exactly, so they are no drift, but they are a second
 name for each.
 
@@ -111,9 +111,9 @@ name for each.
    | `text-small` | 11/14 | **Roma's call, Q1:** a key, a tag, a count on an icon, a menu's label |
    | `text-figure` | 28/32 | **Roma's call, Q3:** the one number a Pane is about |
 
-   Line heights may change (`leading-none` in a badge); sizes may not.
-   Weights and letter spacing stay as the reference has them, and are
-   not checked.
+   A line height may change by Tailwind's names (`leading-none` in a
+   badge), not by a number. A size does not change. Weights and letter
+   spacing stay as the reference has them, and are not checked.
 
 4. **A shadow is one of the elevations.** Most things have none: a 1 px
    line and a step of fill set them apart (the reference, "Elevation").
@@ -150,7 +150,7 @@ name for each.
    - `paper`: a document's own page, white in every theme, as a PDF's
      or a notebook's;
    - `scrim`: black that dims, under a dialog, the Drawer, a tile out of
-     focus, and behind a video;
+     focus, a web page's veil, and behind a video;
    - the glass's light edge, as a glass token (ADR 0036).
 
 7. **Lengths are Tailwind's steps or tokens.** `p-2`, `gap-1.5`, `h-7`,
@@ -259,8 +259,8 @@ name for each.
     - **A Tree** draws only the catalogue (`design.1`), and its props
       carry no colours, with `className` for layout alone (`design.2`).
       So a Tree cannot drift in colour, type or shadow, and the Tree
-      schema holds its lengths to decision 7. _Waits for V2, the Tree
-      schema's check._
+      schema holds its lengths to decision 7. _Waits for the Tree
+      schema's check (`design.2`, planned)._
     - **A Frame** (`ui://`, ADR 0062, decision 10) gets the vocabulary
       as CSS variables through MCP Apps' `host-context-changed`, as a
       Visual already gets the colours and fonts under T3 Code's names
@@ -286,16 +286,18 @@ name for each.
 What step 1's list holds, by group. "Stays" is a reason that holds;
 the rest leave with the step named.
 
-**Colours, 52 (`design.4`)**
-- Stays, 25: masks and probes, where black and white say what shows or
+**Colours, 54 (`design.4`)**
+- Stays, 26: masks and probes, where black and white say what shows or
   read a colour back, not a colour seen (14: the Mark's mask in
-  `banda-mark.tsx`, a Project's Sign's cut, the Thread's fade masks in
+  `banda-mark.tsx`, a Project's Sign's cut, a fade's mask in
   `globals.css`, two canvas probes); Recharts' own default strokes,
   matched to restyle them (5, `chart.tsx`); the code highlighter's
-  palette, copied for Files' JSON tree (6, `code-look.ts`).
-- Named colours, step 4, 11: `paper` (4: a PDF's, a page's, a
-  notebook's), `scrim` (5: a dialog, the Drawer, the Overview's lifted
-  tile, a tile out of focus, a video), the glass's edge (2).
+  palette, copied for Files' JSON tree (6, `code-look.ts`); the Agent's
+  pointer over a web page, outlined in white to read on any page (1).
+- Named colours, step 4, 12: `paper` (4: a PDF's, a page's, a
+  notebook's), `scrim` (6: a dialog, the Drawer, the Overview's lifted
+  tile, a tile out of focus, a web page's veil, a video), the glass's
+  edge (2).
 - Drift, step 4, 16: fallback copies of tokens in the notifications
   module (6); `text-white` on two counts; hover fills of
   `black/[3.5%]` and `white/8` (4); PDF find highlights in `rgb()` (2);
@@ -303,11 +305,11 @@ the rest leave with the step named.
   selection, which the `selection` token has.
 
 **Type, 91 (`design.10`)**, all step 2: 56 at 9 to 11.5 px; 11 at 13 px;
-4 at 12.5; 2 at 15 (the Banda menu); 1 at 0.8rem (a button's `xs`); 2
+4 at 12.5; 2 at 15 (the Banda menu); 1 at 0.8rem (a small button's); 2
 figures at 40 and 28 (the Usage Pane); 2 line heights in px; 2 prose
-sizes by `var()`; 11 `font-size` numbers in stylesheets (streamdown's
-headings, footnotes, code and table cells in `globals.css`, the diff's
-header in `code-diff.tsx`, Mermaid's size). A font file's specimen
+sizes by `var()`; 11 sizes as numbers in stylesheets and styles
+(streamdown's headings, footnotes, code and table cells in `globals.css`,
+the diff's header in `code-diff.tsx`, Mermaid's size). A font file's specimen
 (Files' font view) will stay: it shows the font at sizes of its own.
 
 **Shadows, 43 (`design.11`)**, all step 3: 8 in the Top layer's
@@ -319,8 +321,8 @@ it or float; 3 of their own (the browser's inset glow and cursor
 shadow, a PDF page's lift).
 
 **Layers, 55 (`design.12`)**, step 5: 16 at the Top layer's 50 (shadcn's
-menus, dialogs and popovers, a carried Pane); 7 for the Window's areas
-(20, 30, 40); 32 inside a Pane or a component (1, 2, 10, 20).
+menus, dialogs and popovers, a carried Pane); 6 for the Window's areas
+(20, 30, 40); 33 inside a Pane or a component (1, 2, 10, 20).
 
 **Lengths, 27 (`design.13`)**, step 5: 17 in the Usage Pane, the limits'
 widget and the spend card; 3 in the browser; 7 elsewhere.
@@ -336,13 +338,13 @@ the corners' 9.
 - A. One more level, `text-small` at 11/14, only inside small things: a
   key, a tag, a count on an icon, and a menu's label (the reference
   already says 11 for it, and the kit draws keys, tags and labels at
-  11). About half the uses. The rest (Files' captions and footers,
+  11). About 20 of the 56. The rest (Files' captions and footers,
   Git's notes, the limits' and spend's notes, Settings' notes in mono)
   go up to meta, 12/16.
-- B. All up to meta, 12/16. The count on the bell grows from a 14 px dot
-  to 16.
+- B. All up to meta, 12/16. The count on the logo grows from a 14 px
+  dot to 16.
 - **I recommend A.** It keeps the look Roma liked in the mocks, and puts
-  one floor, 11, where there are six sizes today. Captions are meta.
+  one floor, 11, where there are five sizes today. Captions are meta.
 
 **Q2. 13 px (11 uses in 9 files: the sidebar's search and tabs, a
 Thread's details rows, a sub-agent's row, Files' info title, the Usage
@@ -423,7 +425,7 @@ on and off, and has no auto-merge.
    `text-heading`, `shadow-float`, `shadow-lift`, the layers, `paper`,
    `scrim`) with today's values, used by nothing yet; AGENTS.md, the
    guidelines and `skill-apps.md`.
-   - 1b. `text-xs` and `text-sm` (453 uses, 151 files) renamed to
+   - 1b. `text-xs` and `text-sm` (453 uses, 150 files) renamed to
      `text-meta` and `text-ui` by a script, at a time when few branches
      are open. Then the check refuses Tailwind's size names.
 2. **Type onto the scale,** with Roma's answers. The scale into the
@@ -434,8 +436,8 @@ on and off, and has no auto-merge.
    Tailwind's shadow sizes mapped to `float`, inset and drop shadows
    cleared.
 4. **Colours into tokens:** the copies, `paper`, `scrim`, the glass's
-   edge. Mermaid's error drawn as Banda's own block, as streamdown's is
-   red-50. Tailwind's palette cleared.
+   edge. Mermaid's error drawn as Banda's own block, since streamdown
+   draws it in its own reds. Tailwind's palette cleared.
 5. **Layers and lengths.** The named layers, with ADR 0110 step 3; each
    Tile isolates. The 27 lengths onto steps. Shots where something
    moves.
