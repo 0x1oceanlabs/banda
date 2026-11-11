@@ -37,7 +37,7 @@ export function reasonOf(fence: Fence | undefined): string | undefined {
     case "not_built":
       return "No fence yet: Banda's engine needs a restart."
     case "off":
-      return "No fence: turned off for testing (BANDA_FENCE=off)."
+      return "No fence: off until it is designed whole (BANDA_FENCE=on turns it on)."
     case "unsupported_os":
       return isMac
         ? "No fence: Banda has none for macOS yet."

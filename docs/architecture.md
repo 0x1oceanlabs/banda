@@ -497,9 +497,9 @@ The kernel holds only what every module needs, and it names no module.
   where the engine keeps their choice in its state (`modes-chosen.json`,
   `chosen_modes.rs`); found only in the file, it is no one's, and a new
   Thread starts as the fence has it. A host whose Harness's process has
-  something an Agent ran listening under it is not let go for idling. A
-  debug build's `BANDA_FENCE=off` leaves the fence out, for the
-  end-to-end tests. An Agent's `banda settings` and `banda keys bind` go
+  something an Agent ran listening under it is not let go for idling. Until
+  the fence is designed whole it is off, for every build, and
+  `BANDA_FENCE=on` turns it on (ADR 0115). An Agent's `banda settings` and `banda keys bind` go
   through the engine (`keys.settings_set`, `settings_reset`,
   `settings_rename`), which refuses under a pass what only the Person
   changes (`banda_settings::only_the_person`).

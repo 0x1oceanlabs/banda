@@ -29,7 +29,7 @@ test("anywhere else, Full access is the Person, in Banda too, and the menu says 
       "Never asks. This Agent is you, in Banda too."
     )
   expect(reasonOf(off)).toBe(
-    "No fence: turned off for testing (BANDA_FENCE=off)."
+    "No fence: off until it is designed whole (BANDA_FENCE=on turns it on)."
   )
   expect(reasonOf(docker)).toMatch(
     /^You're in the docker group: through Docker/
@@ -78,7 +78,7 @@ test("the notice of Threads from before the fence is told silently, with why, an
     key: "fence.supervised",
     kind: "done",
     title: "Threads now start Supervised",
-    body: "No fence: turned off for testing (BANDA_FENCE=off).",
+    body: "No fence: off until it is designed whole (BANDA_FENCE=on turns it on).",
     buttons: [
       {
         label: "Learn more",

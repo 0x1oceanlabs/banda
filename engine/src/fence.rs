@@ -86,8 +86,9 @@ fn probed(_spec_fd: Option<i32>, _build: Option<&str>) -> banda_fence::Probe {
 /// an Agent writes, starts behind the fence too
 /// ([`banda_kernel::host::fence_books`]). Where the fence was set up and
 /// failed, its programs are found so all the same: what failed may be
-/// what an Agent left. A debug build's `BANDA_FENCE=off` leaves it out,
-/// for a test that needs none; a release build ignores it.
+/// what an Agent left. Until it is designed whole, the fence is off
+/// unless `BANDA_FENCE=on` turns it on (ADR 0115): Banda is written in
+/// Banda, and the fence still stands in its way.
 pub async fn environment(places: &crate::places::Places) -> banda_environments::Fenced {
     use banda_kernel::{Fence, FenceWhy};
     let environment = found(places).await;
@@ -110,8 +111,8 @@ pub async fn environment(places: &crate::places::Places) -> banda_environments::
 async fn found(places: &crate::places::Places) -> banda_environments::Fenced {
     use banda_environments::Local;
     use banda_kernel::{Fence, FenceWhy};
-    if cfg!(debug_assertions) && std::env::var("BANDA_FENCE").is_ok_and(|said| said == "off") {
-        let words = "BANDA_FENCE=off turned the fence off, for a test.";
+    if std::env::var("BANDA_FENCE").map_or(true, |said| said != "on") {
+        let words = "The fence is off until it is designed whole; BANDA_FENCE=on turns it on.";
         return Local::unfenced(Fence::missing(FenceWhy::Off, words));
     }
     #[cfg(target_os = "linux")]

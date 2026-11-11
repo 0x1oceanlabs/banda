@@ -887,16 +887,18 @@ test("where the fence does not hold, Full access says the Agent is you, and Lear
     page.getByRole("menuitemradio", { name: /Full access/ })
   ).toContainText("Never asks. This Agent is you, in Banda too.")
   // Under the modes, the one reason, which leads to the Fence row.
-  const why = page.getByRole("menuitem", { name: /turned off for testing/ })
+  const why = page.getByRole("menuitem", {
+    name: /off until it is designed whole/,
+  })
   await expect(why).toHaveText(
-    "No fence: turned off for testing (BANDA_FENCE=off). Learn more"
+    "No fence: off until it is designed whole (BANDA_FENCE=on turns it on). Learn more"
   )
   await page.screenshot({ path: "test-results/fence-missing-menu.png" })
   await why.click()
   const row = fenceRow(page)
   await expect(row).toBeVisible()
   await expect(row).toContainText(
-    "Off. It is turned off for testing (BANDA_FENCE=off). New Threads start Supervised, unless you set another mode for them."
+    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Threads start Supervised, unless you set another mode for them."
   )
   await expect(row).toContainText("In Full access, an Agent is you")
   // What an Agent gets behind the fence is for where it holds.
@@ -904,7 +906,7 @@ test("where the fence does not hold, Full access says the Agent is you, and Lear
 })
 
 test("where the fence holds whole, a new Thread starts Full access, with the Person's rights and not Banda's (ADR 0083)", async () => {
-  window = await startWindow({ env: { BANDA_FENCE: "" } })
+  window = await startWindow({ env: { BANDA_FENCE: "on" } })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   const { fence } = JSON.parse(window.banda("status")) as {
@@ -1031,7 +1033,7 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   // Supervised, and leads to why.
   await kept(null)
   await expect(notice).toContainText(
-    "No fence: turned off for testing (BANDA_FENCE=off)."
+    "No fence: off until it is designed whole (BANDA_FENCE=on turns it on)."
   )
   await expect(line).toHaveCount(0)
   await page.screenshot({ path: "test-results/fence-notice.png" })
@@ -1039,7 +1041,7 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   await page.getByRole("button", { name: "The last notifications" }).click()
   const again = toastIn("Shown again")
   await expect(again).toContainText(
-    "No fence: turned off for testing (BANDA_FENCE=off)."
+    "No fence: off until it is designed whole (BANDA_FENCE=on turns it on)."
   )
   await expect(notice).toHaveCount(0)
   await again.getByRole("button", { name: "Learn more" }).click()
@@ -1070,7 +1072,7 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   // until its next turn ends.
   await kept("fenced")
   await expect(line).toContainText(
-    "Started SupervisedNo fence: turned off for testing (BANDA_FENCE=off)."
+    "Started SupervisedNo fence: off until it is designed whole (BANDA_FENCE=on turns it on)."
   )
   await page.screenshot({ path: "test-results/fence-line.png" })
   await reload()

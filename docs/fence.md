@@ -1,6 +1,6 @@
 # The fence
 
-Every Agent Banda starts runs inside a fence: the Harness, its adapter and every program they start (ADR 0083, decision 1). Your Terminals don't. Settings → General → Fence says whether it holds on this computer.
+For now the fence is off: Banda starts every Agent with no fence until the fence is designed whole, and `BANDA_FENCE=on` turns it on ([ADR 0115](adr/0115-the-fence-is-off-until-it-is-designed-whole.md)). With it on, every Agent Banda starts runs inside a fence: the Harness, its adapter and every program they start (ADR 0083, decision 1). Your Terminals don't. Settings → General → Fence says whether it holds on this computer.
 
 ## What an Agent gets, and never gets
 
@@ -37,6 +37,6 @@ Then a new Thread starts **Supervised**, which asks before it changes anything, 
 | **Off**: no fence for macOS yet | Banda has none for macOS yet. | — |
 | **Off**: no fence for Windows | Banda has none for Windows. | — |
 | **Off**: Banda couldn't set it up here | Its Details say what the engine found. | Report it with those Details. |
-| **Off**: turned off for testing | `BANDA_FENCE=off` is set. | Start Banda without it. |
+| **Off**: off until it is designed whole | Banda starts with no fence for now (ADR 0115). | Start Banda with `BANDA_FENCE=on`. |
 
 Each Harness's mode for new Threads is in Settings → Agents.

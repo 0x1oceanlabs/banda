@@ -101,7 +101,7 @@ impl Local {
     }
 
     /// `Local`, which says why there is no fence here: none on this
-    /// system yet, or a debug build's `BANDA_FENCE=off`.
+    /// system yet, or off until `BANDA_FENCE=on` (ADR 0115).
     pub fn unfenced(fence: Fence) -> Fenced {
         Fenced {
             base: None,

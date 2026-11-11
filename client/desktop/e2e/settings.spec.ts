@@ -271,7 +271,7 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   // where each Harness's new Threads' mode is (ADR 0083).
   const fence = settings.locator('[data-key="fence"]')
   await expect(fence).toContainText(
-    "Off. It is turned off for testing (BANDA_FENCE=off). New Threads start Supervised, unless you set another mode for them."
+    "Off. It is off until it is designed whole (BANDA_FENCE=on turns it on). New Threads start Supervised, unless you set another mode for them."
   )
   await expect(fence).toContainText(
     "In Full access, an Agent is you, in Banda too."
