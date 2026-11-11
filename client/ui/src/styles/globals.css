@@ -871,11 +871,6 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }
-@media (forced-colors: active) {
-  [role="listbox"][data-keyed]:focus [data-picked] {
-    outline-color: Highlight;
-  }
-}
 @media (pointer: coarse) {
   [data-acts] {
     opacity: 1;
