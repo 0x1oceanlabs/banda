@@ -3028,3 +3028,207 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
     '[[hosts]]\nname = "arc"\nssh = "arc"\n'
   )
 })
+
+test("Settings → Machines, Show: only with another machine; how it shows on its cards changes them at once, Off on a card of one line too; a search lands on it, and Name this machine too names this one", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  const banda = await seed(arc)
+  window = await startWindow({
+    look: 'mode = "dark"\n',
+    sidebar: 'preset = "inbox"\n',
+    files: { "config/machine.toml": 'name = "mac"\nicon = "laptop"\n' },
+    env: { PATH: `${arc.bin}:${process.env.PATH}` },
+  })
+  const { page } = window
+  const shownIn = join(window.dir, "config/sidebar.toml")
+  const hostsFile = join(window.dir, "config/hosts.toml")
+  const sidebar = sidebarOf(page)
+  await work(window)
+  await expect(sidebar.getByText("Sidebar for arc")).toBeVisible()
+
+  // One machine: no Show card, and a search finds neither of its keys.
+  await sidebar.getByRole("button", { name: "Settings", exact: true }).click()
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  const section = (name: RegExp) =>
+    settings
+      .getByRole("navigation", { name: "Settings sections" })
+      .getByRole("button", { name })
+  await section(/Machines/).click()
+  if (shots) await page.keyboard.press("Alt+KeyF")
+  const show = settings.getByRole("group", { name: "Show", exact: true })
+  await expect(
+    settings.getByRole("group", { name: "Other machines" })
+  ).toBeVisible()
+  await expect(show).toHaveCount(0)
+  const search = settings.getByRole("textbox", { name: "Search settings" })
+  await search.fill("machine on rows")
+  await expect(settings).toContainText("No setting says")
+  await search.fill("")
+  await settingsShot(page, "show-none")
+
+  // Another machine: the card is the last, in its words, and Settings →
+  // Sidebar shows neither key.
+  writeFileSync(
+    hostsFile,
+    `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`
+  )
+  await expect(show).toBeVisible()
+  await expect(show).toContainText(
+    "sidebar.toml on mac: how windows on mac name the machines."
+  )
+  await expect(show).toContainText("How another machine shows on its rows.")
+  await expect(show).toContainText(
+    "A label over mac's Projects, its name on its rows and in its Panes."
+  )
+  await settingsScrolledTo(show)
+  await settingsShot(page, "show-card")
+  const cardKeys = settings.locator('[data-key^="machines."]')
+  await section(/Sidebar/).click()
+  await expect(cardKeys).toHaveCount(0)
+  await section(/Machines/).click()
+  await expect(show).toBeVisible()
+
+  // The search finds them now, and lands on the row, lit.
+  await search.fill("name this machine")
+  await settings
+    .getByRole("button")
+    .filter({ hasText: "Name this machine too" })
+    .click()
+  await expect(section(/Machines/)).toHaveAttribute("aria-current", "page")
+  await expect(show.locator('[data-key="machines.this-too"]')).toHaveClass(
+    /bg-accent\/60/
+  )
+
+  // How another machine shows on its cards, changed live, in the file: on
+  // a card of three lines by its icon and name, on one of one line, as a
+  // Thread at work there, by its icon alone.
+  await expect(sidebar.getByText("Bench window tests")).toBeVisible()
+  send(arc, banda, "Hosts over ssh, wait")
+  const arcRow = sidebar
+    .getByRole("button")
+    .filter({ hasText: "Bench window tests" })
+  const mark = arcRow.locator('[data-machine-card="arc"]')
+  const name = mark.locator(".max-w-16")
+  const atWork = sidebar
+    .getByRole("button")
+    .filter({ hasText: "Hosts over ssh, wait" })
+  const workMark = atWork.locator('[data-machine-card="arc"]')
+  const choice = show.getByRole("radiogroup", { name: "Machine on rows" })
+  const pick = (words: string) =>
+    choice.getByRole("radio", { name: words, exact: true })
+  await expect(pick("Icon and name")).toHaveAttribute("aria-checked", "true")
+  await expect(name).toHaveText("arc")
+  await expect(workMark.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(workMark.locator(".max-w-16")).toHaveCount(0)
+  await shot(page, "show-rows-named")
+  await pick("Icon").click()
+  await expect
+    .poll(() => readFileSync(shownIn, "utf8"))
+    .toMatch(/rows = "icon"/)
+  await expect(pick("Icon")).toHaveAttribute("aria-checked", "true")
+  await expect(mark).toBeVisible()
+  await expect(mark.locator('[data-machine-icon="server"]')).toBeVisible()
+  await expect(name).toHaveCount(0)
+  await expect(workMark).toBeVisible()
+  await shot(page, "show-rows-icon")
+  // Off is on no card, of one line too.
+  await pick("Off").click()
+  await expect(mark).toHaveCount(0)
+  await expect(atWork).toBeVisible()
+  await expect(workMark).toHaveCount(0)
+  await shot(page, "show-rows-off")
+
+  // Written by hand, the card follows; with Off, arc's label still names
+  // it.
+  writeFileSync(shownIn, 'preset = "inbox"\n[machines]\nrows = "named"\n')
+  await expect(pick("Icon and name")).toHaveAttribute("aria-checked", "true")
+  await expect(name).toHaveText("arc")
+  writeFileSync(shownIn, 'preset = "projects"\n[machines]\nrows = "off"\n')
+  await expect(
+    arcOf(page).locator('[data-machine-icon="server"]').first()
+  ).toBeVisible()
+
+  // Name this machine too: its rows, as the same choice has them, a label
+  // over its Projects, and its Panes' headers.
+  writeFileSync(shownIn, 'preset = "inbox"\n')
+  await show.getByRole("switch", { name: "Name this machine too" }).click()
+  await expect
+    .poll(() => readFileSync(shownIn, "utf8"))
+    .toMatch(/this-too = true/)
+  const ours = sidebar
+    .getByRole("button")
+    .filter({ hasText: "Sidebar for arc" })
+  await expect(ours.locator('[data-machine-icon="laptop"]')).toBeVisible()
+  await expect(ours.locator(".max-w-16")).toHaveText("mac")
+  await shot(page, "show-this-too-inbox")
+  await pick("Off").click()
+  await expect(ours.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
+
+  writeFileSync(shownIn, 'preset = "projects"\n[machines]\nthis-too = true\n')
+  const macOf = sidebar.getByRole("group", { name: "mac", exact: true })
+  await expect(macOf.getByText("Sidebar for arc")).toBeVisible()
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  // The label says it: the rows under it carry no machine.
+  await expect(macOf.locator('[data-machine-icon="laptop"]')).toHaveCount(1)
+  await shot(page, "show-this-too-projects")
+  await macOf.getByText("Sidebar for arc").click()
+  const thread = page.getByRole("region", {
+    name: "Sidebar for arc",
+    exact: true,
+  })
+  await expect(
+    thread.locator('[data-machine-icon="laptop"]').first()
+  ).toBeVisible()
+  await shot(page, "show-this-too-pane")
+
+  // arc's Thread of no Project stands in the No Project group, under this
+  // machine's label, and still names arc: the label names only this
+  // machine's cards.
+  const menu = page.getByRole("menu", { name: "New Thread" })
+  await sidebar
+    .getByRole("button", { name: "New Thread", exact: true })
+    .click({ button: "right" })
+  await menu
+    .getByRole("group", { name: "on", exact: true })
+    .getByRole("menuitem", { name: "arc", exact: true })
+    .click()
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  await expect(
+    draft.getByRole("button", { name: "Project: No Project on arc" })
+  ).toBeVisible()
+  const composer = draft.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("Scratch on arc")
+  await composer.press("Enter")
+  await expect(
+    page
+      .getByRole("region", { name: "Scratch on arc", exact: true })
+      .getByText("You said: Scratch on arc")
+  ).toBeVisible()
+  // arc's new Project shows as the window comes to the front.
+  await setInFront(page, false)
+  await setInFront(page, true)
+  const scratch = macOf
+    .getByRole("button")
+    .filter({ hasText: "Scratch on arc" })
+  await expect(scratch.locator('[data-machine-card="arc"]')).toBeVisible()
+  await expect(scratch.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
+  await shot(page, "show-this-too-scratch")
+
+  // In the list of Projects too, this machine's stand under its label.
+  writeFileSync(shownIn, 'preset = "places"\n[machines]\nthis-too = true\n')
+  const listed = sidebar.getByRole("group", { name: "Projects", exact: true })
+  await expect(
+    listed.getByRole("group", { name: "mac", exact: true }).getByText("Work")
+  ).toBeVisible()
+  await expect(
+    listed.getByRole("group", { name: "arc", exact: true }).getByText("banda")
+  ).toBeVisible()
+  await shot(page, "show-this-too-places")
+
+  // Turned off, this machine's name goes everywhere; its Pane's too.
+  writeFileSync(shownIn, 'preset = "projects"\n')
+  await expect(macOf).toHaveCount(0)
+  await expect(thread.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
+})

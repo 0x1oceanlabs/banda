@@ -4,7 +4,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
 import { Separator } from "@banda/ui/components/separator"
-import { useRun } from "@banda/core/react"
+import { useRun, useThisNamed } from "@banda/core/react"
 import { useLook } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, PaneState } from "@banda/ui/pane"
@@ -21,6 +21,7 @@ import { wentWords } from "./hold"
 import { Dismiss, newThread } from "./open"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"
+import { HerePart } from "./HostPart"
 import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
 import { NewThreadIn } from "./NewThreadIn"
 import type { GroupBlock, Region } from "./regions"
@@ -93,6 +94,12 @@ export function SectionView({
       ? "project"
       : "none",
   }
+  // Grouped by Project, this machine's groups stand under its own label,
+  // as another's do, where the Person asked it named too (ADR 0095,
+  // decision 4). The label names only this machine's cards: another's,
+  // in the No Project group they share, still name theirs.
+  const here = useThisNamed(settings.machines.thisToo)
+  const label = !named && view.group === "project" ? here : undefined
   const items = itemsOf(regions, (place) => linesOf(place, view), holds)
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
@@ -217,7 +224,8 @@ export function SectionView({
         view={view}
         current={isCurrent(row.project.id, row.listed.pane)}
         strayed={strayed.has(row.listed.id)}
-        named={named}
+        named={named || (label !== undefined && row.host === undefined)}
+        machines={settings.machines}
         {...(went ? { went } : { action: actionOf(row) })}
       />
     )
@@ -290,7 +298,7 @@ export function SectionView({
     }
   }
 
-  return (
+  const shown = (
     <div ref={list} className="flex flex-col">
       {items.map((item, i) => {
         const gap = gapAbove(items[i - 1], item)
@@ -319,4 +327,5 @@ export function SectionView({
       })}
     </div>
   )
+  return label ? <HerePart named={label}>{shown}</HerePart> : shown
 }

@@ -18,6 +18,7 @@ import {
   HostsContext,
   type Machine,
   useHere,
+  useHereNamed,
   useMachines,
 } from "@banda/core/react"
 import { Button } from "@banda/ui/components/button"
@@ -36,7 +37,6 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useStartsOn } from "@banda/ui/hooks/use-starts-on"
-import { useNamed } from "@banda/ui/hooks/use-status"
 import { isMac } from "@banda/ui/lib/keys"
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import {
@@ -340,7 +340,7 @@ function Picks({
           {part.picks.map(item)}
         </DropdownMenuGroup>
       ))}
-      {on.length > 0 && <OnGroup engine={engine} on={on} />}
+      {on.length > 0 && <OnGroup on={on} />}
       {live && <WithGroup engine={engine} start={start} />}
       <DropdownMenuSeparator />
       <DropdownMenuItem onClick={() => open("project.add")}>
@@ -358,10 +358,10 @@ function Picks({
 }
 
 /** The menu's "on": each machine by its name and icon, this one by the
- * name its engine says it has. */
-function OnGroup({ engine, on }: { engine: Engine; on: OnPick[] }) {
+ * name its engine says it has (`useHereNamed`). */
+function OnGroup({ on }: { on: OnPick[] }) {
   const open = useOpen()
-  const named = useNamed(engine) ?? THIS_MACHINE
+  const named = useHereNamed() ?? THIS_MACHINE
   return (
     <DropdownMenuGroup>
       <DropdownMenuLabel>on</DropdownMenuLabel>

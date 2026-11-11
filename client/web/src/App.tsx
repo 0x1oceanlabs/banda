@@ -6,6 +6,7 @@ import { useProjects } from "@banda/ui/hooks/use-projects"
 import { Previewers } from "@banda/ui/lib/previewers"
 import {
   followNamed,
+  followThisNamed,
   seenNamed,
   useMachine,
   useModules,
@@ -43,7 +44,7 @@ export function App({ engine }: { engine: Engine }) {
     () =>
       new KeptHosts(
         device.hosts,
-        { seen: seenNamed, follow: followNamed },
+        { seen: seenNamed, follow: followNamed, followHere: followThisNamed },
         engine,
         { waiting: onDevice(() => localStorage, window), directory: DIRECTORY }
       )

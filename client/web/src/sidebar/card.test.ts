@@ -153,6 +153,28 @@ describe("slots, by place, density and group", () => {
     ])
   })
 
+  test("this machine, named as the others are, takes the same slots with no host, as it has no card; its icon alone, line 3 says no name (ADR 0095, decisions 4 and 5)", () => {
+    const mac: Named = { name: "mac", icon: "laptop" }
+    const asks = card(row("turn"), { machine: mac })
+    expect(asks.lines[2]!.right[0]).toEqual({
+      kind: "machine",
+      machine: mac,
+      named: true,
+    })
+    expect(
+      kinds(card(row("working", { mark: "running" }), { machine: mac }))
+    ).toEqual(["mark title | machine time"])
+    const alone = card(row("turn", {}, "arc"), {
+      machine: { ...arc, alone: true },
+    })
+    expect(alone.lines[2]!.right[0]).toEqual({
+      kind: "machine",
+      host: "arc",
+      machine: arc,
+      named: false,
+    })
+  })
+
   test("the mark shows the Thread's look", () => {
     const look = (of: Row) => card(of).lines[0]!.left[0]
     expect(look(row("turn"))).toEqual({ kind: "mark", look: "asking" })

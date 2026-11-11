@@ -170,6 +170,32 @@ test("a machine the window does not reach: a card says how long ago as of when i
   expect(said()).toMatch(/data-time=""[^>]*>15m</)
 })
 
+/** Another machine's mark, which opens its card (`MachineCard`). */
+const CARD = 'data-machine-card="arc"'
+
+test("with its icon alone, a card of three lines draws the machine as a card of one line does, its name said to a screen reader", () => {
+  const html = drawn(rowOf("turn", {}, "arc"), {
+    machine: { ...arc, alone: true },
+  })
+  expect(html).toContain(CARD)
+  expect(html).toContain('data-machine-icon="server"')
+  expect(html).toContain('<span class="sr-only">arc</span>')
+  expect(html).not.toContain("max-w-16")
+  const named = drawn(rowOf("turn", {}, "arc"), { machine: arc })
+  expect(named).toMatch(/max-w-16[^"]*">arc<\/span>/)
+})
+
+test("this machine named too has no card, as it is here; alone, its name is the icon's tooltip", () => {
+  const mac: Named = { name: "mac", icon: "laptop" }
+  const html = drawn(rowOf("turn"), { machine: mac })
+  expect(html).not.toContain("data-machine-card")
+  expect(html).toContain('data-machine-icon="laptop"')
+  expect(html).toMatch(/max-w-16[^"]*">mac<\/span>/)
+  expect(drawn(rowOf("open", { mark: "rest" }), { machine: mac })).toContain(
+    'title="mac"'
+  )
+})
+
 test("a Thread away from its Project's workspace bears a small diamond right after its title, before its card's right parts, where its action never covers it (ADR 0102, decision 6)", () => {
   for (const density of [1, 2, 3] as const)
     for (const group of ["none", "project"] as const) {

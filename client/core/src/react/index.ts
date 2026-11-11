@@ -8,8 +8,10 @@ export { HereContext, useHere } from "./here"
 export {
   HostsContext,
   type Reach,
+  useAnyHost,
   useAwayFor,
   useEngineOf,
+  useHereNamed,
   useHosts,
   useHostsBy,
   useMachinesOf,
@@ -21,6 +23,7 @@ export {
   useReach,
   useShownNow,
   useShownOf,
+  useThisNamed,
 } from "./hosts"
 export { MachinesContext, useMachines } from "./machines"
 export { RunContext, useRun } from "./run"

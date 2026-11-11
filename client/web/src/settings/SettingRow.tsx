@@ -273,7 +273,11 @@ function keyOf(value: JsonValue | undefined): string {
   return JSON.stringify(value ?? null)
 }
 
-function wordsOf(option: Option): string {
+/** An option of a choice, in words of its own instead of its value. */
+export type Worded = Option & { words?: string }
+
+function wordsOf(option: Worded): string {
+  if (option.words !== undefined) return option.words
   if (option.value === true) return "On"
   if (option.value === false) return "Off"
   return String(option.value)
@@ -287,7 +291,7 @@ export function Choice({
   onPick,
 }: {
   label: string
-  options: Option[]
+  options: Worded[]
   value?: JsonValue
   onPick: (value: JsonValue) => void
 }) {

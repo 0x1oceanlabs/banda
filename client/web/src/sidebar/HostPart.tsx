@@ -4,6 +4,7 @@
  * Projects; beside `MachineCard`, the card its name opens.
  */
 import { type ReactNode, useCallback, useContext } from "react"
+import type { Named } from "@banda/contract/machines"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { Button } from "@banda/ui/components/button"
@@ -151,6 +152,30 @@ export function HostPart({
           {children}
         </div>
       )}
+    </div>
+  )
+}
+
+/**
+ * This machine's Projects, under a label where the Person asked it named
+ * as the others are (ADR 0095, decision 4), grouped by Project or in the
+ * list of Projects: its full form, and no state, as it is always here.
+ */
+export function HerePart({
+  named,
+  children,
+}: {
+  named: Named
+  children: ReactNode
+}) {
+  return (
+    <div role="group" aria-label={named.name} className="flex flex-col">
+      <div className="flex min-h-8 items-center px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
+        <h3 className="flex min-w-0">
+          <MachineMark named={named} form="full" className="shrink" />
+        </h3>
+      </div>
+      <div className="flex flex-col gap-1">{children}</div>
     </div>
   )
 }

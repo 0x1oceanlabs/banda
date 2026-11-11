@@ -51,12 +51,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
-import {
-  cleanNamed,
-  forgetNamed,
-  useNamed,
-  useStatus,
-} from "@banda/ui/hooks/use-status"
+import { cleanNamed, forgetNamed, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import {
@@ -74,12 +69,13 @@ import {
   HostsContext,
   type HostTest,
   type Shown,
+  useHereNamed,
   useHosts,
 } from "@banda/core/react"
 import { BatteryIcon } from "@banda/ui/components/battery-icon"
 import { device } from "../boot"
 import { useTurnsOn } from "../calls/battery"
-import { useLookSettings } from "../look"
+import { useLookProblems, useLookSettings } from "../look"
 import { MachinePicker } from "./MachinePicker"
 import {
   addedWords,
@@ -102,6 +98,7 @@ import {
   type Settled,
   settle,
   settleWords,
+  showRows,
   shownActs,
   shownOn,
   started,
@@ -111,7 +108,8 @@ import {
   type Wrote,
 } from "./machines"
 import type { SectionProps } from "./sections"
-import { RowFrame } from "./SettingRow"
+import { MachineRowsPicker } from "./rows"
+import { RowFrame, SettingRow } from "./SettingRow"
 
 /** A machine's own settings file. */
 const FILE = "machine.toml"
@@ -185,7 +183,7 @@ const shownBeside = (
 export function MachinesSettings({ engine, lit, run }: SectionProps) {
   const kept = useContext(HostsContext)
   const hosts = useHosts()
-  const here = useNamed(engine)
+  const here = useHereNamed()
   // This machine as Add's settling reads it once a new machine answers,
   // which may be after this section has gone.
   const hereNow = useRef(here)
@@ -227,7 +225,41 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
           <AddMachine here={here} hosts={hosts} shown={shown} />
         </CardContent>
       </Card>
+      {hosts.length > 0 && <ShowCard name={here?.name} lit={lit} />}
     </>
+  )
+}
+
+/** Show (ADR 0095, decision 9): how this machine's windows name the
+ * machines, the two keys of `[machines]` in `sidebar.toml`, shown only
+ * here, and only with another machine, as with one nothing is named. */
+function ShowCard({ name, lit }: { name?: string; lit?: string }) {
+  const keyed = useLookSettings()["sidebar.toml"]
+  const problems = useLookProblems().filter(({ path }) =>
+    path.endsWith("/sidebar.toml")
+  )
+  const here = name ?? "this machine"
+  return (
+    <Card size="sm" role="group" aria-label="Show" className="pb-0">
+      <CardHeader>
+        <CardTitle>Show</CardTitle>
+        <CardDescription>
+          sidebar.toml on {here}: how windows on {here} name the machines.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col divide-y border-t px-0 *:px-(--card-spacing)">
+        {showRows(here).map((row) => (
+          <SettingRow
+            key={row.key}
+            row={row}
+            setting={keyed?.[row.key]}
+            problems={problems.filter((one) => one.key === row.key)}
+            lit={lit === row.key}
+            Custom={row.key === "machines.rows" ? MachineRowsPicker : undefined}
+          />
+        ))}
+      </CardContent>
+    </Card>
   )
 }
 

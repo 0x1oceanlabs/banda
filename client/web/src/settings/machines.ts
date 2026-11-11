@@ -9,7 +9,7 @@
  * it.
  */
 import type { Awake, MachineIcon, Named, Power } from "@banda/contract/machines"
-import type { Setting } from "@banda/contract/settings"
+import { type Row, rowsOf, type Setting } from "@banda/contract/settings"
 import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
 import { problem } from "@banda/ui/lib/words"
 import {
@@ -474,3 +474,30 @@ export function failedWords(error: unknown): string {
   )
   return main?.[1] ?? problem(error)
 }
+
+/** The Show card's rows of `sidebar.toml`, by their keys, as it words
+ * them (ADR 0095, decision 9); `name` is this machine's. */
+const SHOW_WORDS: Readonly<
+  Record<string, { title: string; about: (name: string) => string }>
+> = {
+  "machines.rows": {
+    title: "Machine on rows",
+    about: () => "How another machine shows on its rows.",
+  },
+  "machines.this-too": {
+    title: "Name this machine too",
+    about: (name) =>
+      `A label over ${name}'s Projects, its name on its rows and in its Panes.`,
+  },
+}
+
+/** The two rows of the Show card, in the file's order, worded for this
+ * machine's `name`; a search words them with "this machine", as it knows
+ * none. */
+export const showRows = (name = "this machine"): Row[] =>
+  rowsOf("sidebar.toml").flatMap((row) => {
+    const words = SHOW_WORDS[row.key]
+    return words
+      ? [{ ...row, title: words.title, about: words.about(name) }]
+      : []
+  })

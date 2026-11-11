@@ -16,6 +16,7 @@ import {
   KeptHosts,
   keyNamed,
   machinesOf,
+  thisNamed,
   type Names,
   namedIn,
   otherBuild,
@@ -1485,4 +1486,44 @@ test("why a machine is awake: its Agents by this window's count, its switch, or 
     line: "Sleeps by itself when idle.",
     short: "Sleeps by itself when idle",
   })
+})
+
+test("this machine is named only with this-too and another machine", () => {
+  const mac: Named = { name: "mac", icon: "laptop" }
+  expect(thisNamed(mac, false, true)).toBeUndefined()
+  expect(thisNamed(mac, true, false)).toBeUndefined()
+  expect(thisNamed(mac, true, true)).toBe(mac)
+  // Before its engine first says it, none.
+  expect(thisNamed(undefined, true, true)).toBeUndefined()
+})
+
+test("the Window hears this machine's name from its own engine, the same one once, and stops with it", () => {
+  const { device } = desktop()
+  const here = {} as Engine
+  const stop = vi.fn()
+  let take: ((named: Named) => void) | undefined
+  const hosts = new KeptHosts(
+    device,
+    {
+      ...FORGETTING,
+      followHere: (engine, said) => {
+        expect(engine).toBe(here)
+        take = said
+        return stop
+      },
+    },
+    here
+  )
+  expect(hosts.hereNamed.get()).toBeUndefined()
+  const end = hosts.follow()
+  take?.({ name: "mac", icon: "laptop" })
+  expect(hosts.hereNamed.get()).toEqual({ name: "mac", icon: "laptop" })
+  const heard = vi.fn()
+  hosts.hereNamed.subscribe(heard)
+  take?.({ name: "mac", icon: "laptop" })
+  expect(heard).not.toHaveBeenCalled()
+  take?.({ name: "m1", icon: "laptop" })
+  expect(heard).toHaveBeenCalledTimes(1)
+  end()
+  expect(stop).toHaveBeenCalled()
 })

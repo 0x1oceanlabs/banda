@@ -7,6 +7,7 @@ import {
   useState,
 } from "react"
 import type { Engine } from "@banda/contract"
+import type { MachineRows, Machines } from "@banda/contract/sidebar"
 import {
   ContextMenu,
   ContextMenuContent,
@@ -18,6 +19,7 @@ import {
   sameData,
   type Shown,
   useHostsBy,
+  useThisNamed,
 } from "@banda/core/react"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { seenNamed } from "@banda/ui/hooks/use-status"
@@ -26,6 +28,7 @@ import { ThreadRows } from "../titles/ThreadMenu"
 import { TitleField } from "../titles/Title"
 import { Card } from "./CardView"
 import { cardOf, type CardOf } from "./card"
+import { machineOnRow } from "./machine-on-row"
 import { HoldingContext, useHoldWhile } from "./useHold"
 
 /** Where a Thread's card is drawn, and how: what its card is made of but
@@ -45,11 +48,14 @@ type Placed = Omit<CardOf, "machine" | "away"> &
 export function ThreadRow({
   engine,
   named,
+  machines,
   ...placed
 }: Placed & {
   engine: Engine
-  /** A label above names its host, when it is another host's. */
+  /** A label above names its machine. */
   named: boolean
+  /** How the machines are named (`[machines]` in `sidebar.toml`). */
+  machines: Machines
 }) {
   const { row, went } = placed
   const project = row.project.id
@@ -67,10 +73,17 @@ export function ThreadRow({
   }, [left, renaming])
   useHoldWhile((menu || renaming) && !left)
   const holding = useContext(HoldingContext)
-  if (row.host !== undefined) return <ElsewhereRow {...placed} named={named} />
+  // This machine, where the Person asked it named as the others are.
+  const here = machineOnRow(useThisNamed(machines.thisToo), {
+    rows: machines.rows,
+    labelled: named,
+  })
+  if (row.host !== undefined)
+    return <ElsewhereRow {...placed} named={named} rows={machines.rows} />
+  const card = cardOf({ ...placed, ...(here ? { machine: here } : {}) })
   const drawn = (field?: ReactNode) => (
     <Card
-      card={cardOf(placed)}
+      card={card}
       row={row}
       current={placed.current}
       action={placed.action}
@@ -112,12 +125,16 @@ export function ThreadRow({
  */
 function ElsewhereRow({
   named,
+  rows,
   ...placed
 }: Placed & {
   /** A label above names its host. */
   named: boolean
+  /** How another machine shows on its rows. */
+  rows: MachineRows
 }) {
-  const { machine, away, stopped } = useElsewhere(placed.row.host, named)
+  const { there, away, stopped } = useElsewhere(placed.row.host)
+  const machine = machineOnRow(there, { rows, labelled: named })
   const card = cardOf({
     ...placed,
     ...(machine ? { machine } : {}),
@@ -132,16 +149,15 @@ function ElsewhereRow({
   )
 }
 
-/** Another host's machine, where no label above names it; as of when it
- * was last heard, while the Window does not reach it, away or stopped;
- * and that it is stopped. */
-function useElsewhere(host: string | undefined, named: boolean) {
+/** Another host's name and icon; as of when it was last heard, while the
+ * Window does not reach it, away or stopped; and that it is stopped. */
+function useElsewhere(host: string | undefined) {
   const machineOf = useCallback(
     (hosts: readonly Shown[]) =>
-      named || host === undefined ? undefined : namedIn(hosts, host, seenNamed),
-    [named, host]
+      host === undefined ? undefined : namedIn(hosts, host, seenNamed),
+    [host]
   )
-  const machine = useHostsBy(machineOf, sameData)
+  const there = useHostsBy(machineOf, sameData)
   const shownOf = useCallback(
     (hosts: readonly Shown[]) => hosts.find((one) => one.name === host),
     [host]
@@ -159,5 +175,5 @@ function useElsewhere(host: string | undefined, named: boolean) {
   )
   const away = useHostsBy(awayOf)
   const stopped = useHostsBy(stoppedOf)
-  return { machine, away, stopped }
+  return { there, away, stopped }
 }

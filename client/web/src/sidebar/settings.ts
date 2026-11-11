@@ -6,8 +6,8 @@
 import type { Sidebar } from "@banda/contract/sidebar"
 import type { Density } from "./card"
 
-/** What arranging needs of the sidebar: its keys, not where they came from. */
-export type Settings = Pick<Sidebar, "group" | "sort" | "projects">
+/** What the list needs of the sidebar: its keys, not where they came from. */
+export type Settings = Pick<Sidebar, "group" | "sort" | "projects" | "machines">
 
 /** What Banda's presets are, in a few words, for the view menu. */
 export const PRESET_WORDS: Readonly<Record<string, string>> = {

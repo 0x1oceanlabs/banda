@@ -16,6 +16,7 @@ import {
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
+import { useAnyHost } from "@banda/core/react"
 import type { PaneProps } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { ExternalLinkIcon, SearchIcon } from "lucide-react"
@@ -84,7 +85,11 @@ export function Settings({
   const first = [...wrong.values()][0]?.[0]
 
   const section = at.section
-  const found = useMemo(() => (words.trim() ? search(words) : []), [words])
+  const others = useAnyHost()
+  const found = useMemo(
+    () => (words.trim() ? search(words, others) : []),
+    [words, others]
+  )
   const go = (next: Section, key?: string) => {
     setWords("")
     const link = key ? `${next.id}/${key}` : next.id
@@ -114,8 +119,11 @@ export function Settings({
       {group.rows.map(row)}
     </Group>
   ))
-  // A file the section names twice says its problems once.
-  const names = new Set((section.files ?? []).map((file) => file.name))
+  // A file the section names twice says its problems once; a Body says
+  // those of what it draws at its own rows.
+  const names = new Set(
+    (section.files ?? []).filter((file) => !file.drawn).map((file) => file.name)
+  )
   const above = [...names].flatMap((name) =>
     (wrong.get(name) ?? NONE).filter((p) => !shown.has(`${name}:${p.key}`))
   )

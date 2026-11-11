@@ -68,6 +68,7 @@ const over = (base: Settings, keys: Keys = {}): Settings => ({
   group: { ...base.group, ...keys.group },
   sort: { ...base.sort, ...keys.sort },
   projects: { ...base.projects, ...keys.projects },
+  machines: { ...base.machines, ...keys.machines },
 })
 
 /** Banda's presets, as platform/look/sidebars/*.toml set them. */

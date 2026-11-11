@@ -43,6 +43,7 @@ export {
   type Ours,
   reachWords,
   type Shown,
+  thisNamed,
   shownOf,
   UNKNOWN,
   unreachedWords,
