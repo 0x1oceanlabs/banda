@@ -58,6 +58,12 @@ Every key, with its default:
   text on a fill worked out from the theme, 4.5:1, are darkened or
   lightened, or made less thin over glass. The theme's own text on its
   own grounds is left alone: `check` names it when it does not read.
+- Over Banda's glass, on Linux, the desk and the sidebar's panel are as
+  dense as their text needs over the wallpaper, blurred and saturated as
+  the page draws it (ADR 0111). `[desk]` `opacity` is the least they
+  are. Over a picture the resolver does not read (JPEG XL, AVIF, SVG)
+  they are as dense as over the worst. A desk or panel a theme's
+  `[glass.tokens]` sets is as it says.
 - Glass is off while the system reduces transparency or raises contrast,
   in its accessibility settings, and back once it stops (ADR 0100,
   decision 4); `[desk]` `glass` stays as the Person set it.
@@ -85,7 +91,8 @@ Every key, with its default:
 - "Dragged sizes stick too much", "not at all": `[columns]` `snap = 4`, or
   `snap = 0`; the presets and heights are where they stick.
 - "More project between the windows": `[gaps]` `inner = 16`, `outer = 16`.
-- "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`;
+- "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`, as
+  far as the desk's text reads over the wallpaper on Linux;
   "glassier windows": `[tile]` `opacity = 0.75`. Solid: `[desk]`
   `glass = false`.
 - "More frosted", "less blur": `[desk]` `blur = 64` or `blur = 20`;

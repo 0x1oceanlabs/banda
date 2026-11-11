@@ -184,7 +184,8 @@ pub struct Desk {
     pub grain: Option<f64>,
     /// The desk's tint over the blurred desktop, from 0 (clear) to 1
     /// (solid), with glass on: unset, 0.1 on macOS and Windows, whose
-    /// material is tinted already, and 0.4 on Linux.
+    /// material is tinted already, and 0.4 on Linux, where it is denser
+    /// as its text needs over the wallpaper.
     #[schemars(range(min = 0, max = 1))]
     pub opacity: Option<f64>,
     /// `"panel"`: the sidebar floats as a glass panel. `"desk"`: its rows

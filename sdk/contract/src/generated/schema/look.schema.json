@@ -224,7 +224,7 @@
           "maximum": 1
         },
         "opacity": {
-          "description": "The desk's tint over the blurred desktop, from 0 (clear) to 1\n(solid), with glass on: unset, 0.1 on macOS and Windows, whose\nmaterial is tinted already, and 0.4 on Linux.",
+          "description": "The desk's tint over the blurred desktop, from 0 (clear) to 1\n(solid), with glass on: unset, 0.1 on macOS and Windows, whose\nmaterial is tinted already, and 0.4 on Linux, where it is denser\nas its text needs over the wallpaper.",
           "type": "number",
           "format": "double",
           "minimum": 0,
