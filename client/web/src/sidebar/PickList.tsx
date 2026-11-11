@@ -5,18 +5,32 @@ import {
   useLayoutEffect,
   useMemo,
   useRef,
+  useState,
 } from "react"
 import type { ProjectId } from "@banda/contract"
+import { useRun } from "@banda/core/react"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
 import { FIELDS } from "@banda/ui/lib/keys"
 import { focusedTile, type PaneState } from "@banda/ui/pane"
 import { actsOf } from "./acts"
-import { itemKey } from "./hold"
+import { itemKey, keyOf } from "./hold"
 import type { Tab } from "./inbox"
-import { type Does, ONCE, SIDEBAR, SIDEBAR_KEYS, tabOf } from "./keys"
+import { refused } from "./items"
+import {
+  type Does,
+  hintOf,
+  keyId,
+  ONCE,
+  SIDEBAR,
+  SIDEBAR_KEYS,
+  tabOf,
+} from "./keys"
 import { useOpen } from "./open"
 import type { Ordered } from "./order"
+import { said, tabSaid, zeroSaid } from "./said"
 import { PANEL, tabId } from "./Tabs"
+import { undoLast } from "./undo"
 import { useActs, useDoing } from "./useActs"
 import type { Holding } from "./useHold"
 import { PICK, PickContext, usePick } from "./usePick"
@@ -29,16 +43,23 @@ function toPane() {
 
 /**
  * The sidebar's keys (ADR 0098, decision 13; spec §2.7), its scope's on
- * the aside (ADR 0071, decision 1): `/` and the tabs' digits anywhere in
- * it but in a field, which types them; the rest on the pick (`usePick`),
- * while the list itself has the focus, and an act on a card not again as
- * its key is held. `aside` goes on the aside, with `onKeyDown`, its Esc:
- * a popup and the title's field take theirs first; then the sidebar over
- * the Strip goes, and a docked one gives the focus back to the Pane in
- * focus, as it does when it is hidden with the focus in it.
+ * the aside (ADR 0071, decision 1): Undo, `/` and the tabs' digits
+ * anywhere in it but in a field, which keeps its own; the rest on the
+ * pick (`usePick`), while the list itself has the focus, and an act on a
+ * card not again as its key is held. Undo takes back the newest act kept,
+ * and the pick goes back to its card. A tab shown by its key is said
+ * aloud, and so is inbox zero, when the Person's act brought it (`said`).
+ * `aside` goes on the aside, with `onKeyDown`, its Esc: a popup and the
+ * title's field take theirs first; then the sidebar over the Strip goes,
+ * and a docked one gives the focus back to the Pane in focus, as it does
+ * when it is hidden with the focus in it.
  */
 export function useSidebarKeys(
-  { ordered, holder }: { ordered: Ordered; holder: Holding },
+  {
+    ordered,
+    holder,
+    acted,
+  }: { ordered: Ordered; holder: Holding; acted: boolean },
   view: {
     tab: Tab
     show: (tab: Tab) => void
@@ -66,6 +87,16 @@ export function useSidebarKeys(
   const actOn = useActs(holder)
   const doing = useDoing()
   const openIt = useOpen()
+  const run = useRun()
+  const keyLabel = useKeyLabel()
+
+  // Inbox zero, as the Person's own act brings it, is said once.
+  const zero = ordered.zero
+  const zeroed = useRef(zero !== undefined)
+  useEffect(() => {
+    if (zero && !zeroed.current && acted) said.say(zeroSaid(zero, Date.now()))
+    zeroed.current = zero !== undefined
+  }, [zero, acted])
 
   /**
    * What a key does on the pick. On a folded group or "+ N more", Enter
@@ -74,8 +105,9 @@ export function useSidebarKeys(
    * Shift+Enter opens it beside; S archives it, or brings it back in the
    * Archive; Z puts it off, at the card; U marks it unread or read; F2
    * renames it in place, and Shift+F2 asks a title. An act that takes the
-   * card out of the tab hands the pick on in the keydown. One the card
-   * does not offer, as S on one that asks, does nothing (S7c says why); a
+   * card out of the tab hands the pick on in the keydown. S on a card that
+   * asks or works says why not, in a toast, and the pick stays; U on one
+   * that asks does nothing, as a question waits until it is answered; a
    * card that left the tab while the list held only opens.
    */
   const onPick = (does: Does) => {
@@ -106,6 +138,7 @@ export function useSidebarKeys(
       case "archive": {
         const act = row.stand === "archived" ? "unarchive" : "archive"
         if (actsOf(row.stand, listed).includes(act)) actOn(row, act, on)
+        else refused(row, keyLabel(keyId("later")))
         return
       }
       case "later":
@@ -116,8 +149,9 @@ export function useSidebarKeys(
           actOn(row, "later", on)
         return
       case "unread":
-        holder.act(row, "key")
-        return doing(row, "unread")
+        if (listed.mark !== "asking")
+          actOn(row, "unread", { ...on, gone: undefined })
+        return
       case "rename":
         // Another machine's card has no field yet.
         if (row.host === undefined) doing(row, "rename", { from: "row" })
@@ -134,10 +168,17 @@ export function useSidebarKeys(
       (_, event) => {
         const target = event?.target
         const tab = tabOf(does)
-        if (tab || does === "search") {
+        if (tab || does === "search" || does === "undo") {
           if (target instanceof Element && target.closest(FIELDS)) return false
-          if (tab) view.show(tab)
-          else openIt("menu.at", {})
+          if (tab) {
+            view.show(tab)
+            said.say(tabSaid(tab, ordered.tabs[tab].count))
+          } else if (does === "search") openIt("menu.at", {})
+          else {
+            const done = undoLast(run)
+            if (done && target === listbox.current)
+              picking.back(keyOf(done.listed.host, done.listed.id))
+          }
           return true
         }
         if (event && target !== listbox.current) return false
@@ -170,10 +211,17 @@ export function useSidebarKeys(
   }
 }
 
+/** The hint's id. */
+const HINT = "sb-hint"
+
+/** Whether the list was described by its hint in this window. */
+let hinted = false
+
 /**
  * The tab in view as one list (ADR 0098, decision 13): one Tab stop, a
  * `listbox` that keeps the focus while the keys move its pick, which its
- * items read (`PickContext`).
+ * items read (`PickContext`). As it first takes the focus in a window, it
+ * is described by the hint of its keys in force, once (spec §2.8).
  */
 export function PickList({
   tab,
@@ -184,13 +232,27 @@ export function PickList({
   picking: ReturnType<typeof usePick>
   children: ReactNode
 }) {
+  const hint = hintOf(useKeyLabel())
+  const [hinting, setHinting] = useState(!hinted)
+  const { onBlur, ...list } = picking.list
   return (
     <div role="tabpanel" id={PANEL} aria-labelledby={tabId(tab)}>
+      {hinting && hint && (
+        <p id={HINT} hidden>
+          {hint}
+        </p>
+      )}
       <div
         role="listbox"
         aria-labelledby={tabId(tab)}
+        aria-describedby={hinting && hint ? HINT : undefined}
         tabIndex={0}
-        {...picking.list}
+        {...list}
+        onBlur={(event) => {
+          onBlur(event)
+          hinted = true
+          setHinting(false)
+        }}
         className="flex flex-col gap-1 outline-none"
       >
         <PickContext value={{ picked: picking.picked, expand: picking.expand }}>

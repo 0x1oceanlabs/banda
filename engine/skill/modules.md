@@ -357,6 +357,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Archive the card picked, or bring it back (`sidebar.archive-picked`), S, `[binds.sidebar]`
 - Put the card picked off till later (`sidebar.later-picked`), Z, `[binds.sidebar]`
 - Mark the card picked as unread, or as read (`sidebar.unread-picked`), U, `[binds.sidebar]`
+- Undo the last act on a card (`sidebar.undo`), Ctrl+Z, `[binds.sidebar]`
 - Rename the card picked (`sidebar.rename-picked`), F2, `[binds.sidebar]`
 - Suggest a title for the card picked (`sidebar.suggest-title-picked`), Shift+F2, `[binds.sidebar]`
 - Search (`sidebar.search`), /, `[binds.sidebar]`

@@ -11,7 +11,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
 import type { MarkState } from "@banda/ui/lib/mark-state"
-import { NO_REASON } from "@banda/ui/pane"
+import { type Listed, NO_REASON } from "@banda/ui/pane"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { dayOf } from "@banda/core"
 import { agoOf, hourOf } from "@banda/ui/lib/words"
@@ -148,6 +148,13 @@ const WORDS: Readonly<Record<Tone, Word>> = {
   destructive: "Failed",
   added: "Done",
   woke: "Woke",
+}
+
+/** The word of `listed`'s call at `now`, as its card says it; none for
+ * one that calls no one. */
+export function callWordOf(listed: Listed, now: number): Word | undefined {
+  const tone = callColor(lookOf(listed, now).look)
+  return tone && WORDS[tone]
 }
 
 /** The card of `input`. */

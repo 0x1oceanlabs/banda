@@ -1213,6 +1213,18 @@
       "scope": "sidebar"
     },
     {
+      "id": "sidebar.undo",
+      "title": "Undo the last act on a card",
+      "section": "Sidebar",
+      "keys": [
+        {
+          "code": "KeyZ",
+          "primary": true
+        }
+      ],
+      "scope": "sidebar"
+    },
+    {
       "id": "sidebar.rename-picked",
       "title": "Rename the card picked",
       "section": "Sidebar",
