@@ -34,7 +34,7 @@ export function Soon({ className }: { className?: string }) {
   return (
     <span
       className={cn(
-        "shrink-0 rounded-full bg-foreground/8 px-1.5 text-[10px] leading-4 font-normal text-muted-foreground",
+        "shrink-0 rounded-full bg-foreground/8 px-1.5 text-small leading-4 font-normal text-muted-foreground",
         className
       )}
     >

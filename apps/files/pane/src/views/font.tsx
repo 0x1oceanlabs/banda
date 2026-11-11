@@ -129,7 +129,7 @@ export default function FontView(props: PreviewProps) {
       <div className="mx-auto flex max-w-4xl flex-col gap-6 px-6 py-5">
         <header className="flex flex-col gap-1">
           <h2
-            className="truncate text-4xl leading-tight"
+            className="truncate text-[2.25rem] leading-tight"
             style={{ fontFamily: family }}
           >
             {name}
@@ -180,7 +180,7 @@ export default function FontView(props: PreviewProps) {
             samples.slice(1).map((sample) => (
               <p
                 key={sample}
-                className="truncate pl-12 text-2xl leading-tight"
+                className="truncate pl-12 text-[1.5rem] leading-tight"
                 style={{ fontFamily: family }}
               >
                 {sample}
@@ -202,12 +202,12 @@ export default function FontView(props: PreviewProps) {
                     className="flex aspect-square flex-col items-center justify-center bg-background"
                   >
                     <span
-                      className="text-2xl leading-none"
+                      className="text-[1.5rem] leading-none"
                       style={{ fontFamily: family }}
                     >
                       {String.fromCodePoint(char)}
                     </span>
-                    <span className="mt-1 text-[0.625rem] text-muted-foreground tabular-nums">
+                    <span className="mt-1 text-meta text-muted-foreground tabular-nums">
                       {code}
                     </span>
                   </div>

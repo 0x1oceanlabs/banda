@@ -329,12 +329,12 @@ function Account({
           {what}
         </span>
         {out ? (
-          <span className="ml-auto shrink-0 text-[11.5px] text-destructive">
+          <span className="ml-auto shrink-0 text-meta text-destructive">
             {backWords(limits, now)}
           </span>
         ) : (
           mostRoom && (
-            <span className="ml-auto shrink-0 text-[11.5px] text-muted-foreground">
+            <span className="ml-auto shrink-0 text-meta text-muted-foreground">
               most room
             </span>
           )

@@ -103,10 +103,10 @@ export function Spend({
   return (
     <div>
       <div className="flex flex-wrap items-end gap-3.5">
-        <div className="text-[40px] leading-none font-semibold tracking-[-0.035em] tabular-nums">
+        <div className="text-figure leading-none font-semibold tracking-[-0.035em] tabular-nums">
           {write(value)}
         </div>
-        <div className="pb-[5px] text-[12.5px] text-muted-foreground">
+        <div className="pb-[5px] text-meta text-muted-foreground">
           {cost ? "API estimate, not what your plans cost" : "tokens"}
           {cost && total.unpriced > 0 && (
             <span className="text-warning">
@@ -116,7 +116,7 @@ export function Spend({
           )}
         </div>
         {delta !== undefined && (
-          <div className="ml-auto pb-[5px] text-[12.5px] text-muted-foreground tabular-nums">
+          <div className="ml-auto pb-[5px] text-meta text-muted-foreground tabular-nums">
             {changeWords(delta)} vs {PREVIOUS[period]}
           </div>
         )}
@@ -170,7 +170,7 @@ export function Spend({
             return (
               <div
                 key={account.id}
-                className="grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-0.5 py-2 text-[13px]"
+                className="grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-0.5 py-2 text-ui"
               >
                 <span className="inline-flex items-center gap-2">
                   <Dot account={account} />
@@ -182,12 +182,12 @@ export function Spend({
                   )}
                 </span>
                 <span className="tabular-nums">{write(value)}</span>
-                <span className="text-[11.5px] text-muted-foreground">
+                <span className="text-meta text-muted-foreground">
                   {[plan, `${total.prompts.toLocaleString("en")} prompts`]
                     .filter(Boolean)
                     .join(" · ")}
                 </span>
-                <span className="text-right text-[11.5px] text-muted-foreground tabular-nums">
+                <span className="text-right text-meta text-muted-foreground tabular-nums">
                   {Math.round(share * 100)}%
                 </span>
                 <div className="relative col-span-2 mt-1.5 h-0.5 rounded-full bg-muted">
@@ -208,16 +208,16 @@ export function Spend({
           {byModel(rows, accounts, measure).map((m) => (
             <div
               key={m.model}
-              className="grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-0.5 py-2 text-[13px]"
+              className="grid grid-cols-[1fr_auto] gap-x-2.5 gap-y-0.5 py-2 text-ui"
             >
-              <span className="truncate font-mono text-[12.5px]">
+              <span className="truncate font-mono text-code">
                 {m.model}
               </span>
               <span className="tabular-nums">{write(m.value)}</span>
-              <span className="text-[11.5px] text-muted-foreground">
+              <span className="text-meta text-muted-foreground">
                 {m.accounts.map(nameOf).join(", ")}
               </span>
-              <span className="text-right text-[11.5px] text-muted-foreground tabular-nums">
+              <span className="text-right text-meta text-muted-foreground tabular-nums">
                 {m.requests.toLocaleString("en")} req
               </span>
             </div>

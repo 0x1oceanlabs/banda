@@ -172,7 +172,7 @@ export function KeyHint({ children }: { children: React.ReactNode }) {
   return (
     <Kbd
       aria-hidden
-      className="h-4 min-w-4 border-current/30 bg-transparent px-1 font-mono text-[10.5px] font-normal text-current opacity-70"
+      className="h-4 min-w-4 border-current/30 bg-transparent px-1 font-mono text-small font-normal text-current opacity-70"
     >
       {children}
     </Kbd>

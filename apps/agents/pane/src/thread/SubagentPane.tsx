@@ -437,7 +437,7 @@ function StatusBar({ status }: { status: Status }) {
       data-slot="subagent-status"
       data-look={status.look}
       aria-label={statusWords(status)}
-      className="flex min-h-12 items-center gap-2.5 rounded-card border bg-block py-2 pr-2 pl-3.5 text-[13px] leading-5 whitespace-nowrap text-muted-foreground"
+      className="flex min-h-12 items-center gap-2.5 rounded-card border bg-block py-2 pr-2 pl-3.5 text-ui whitespace-nowrap text-muted-foreground"
     >
       <Satellite state={status.look} size={12} />
       <p className={cn("flex min-w-0 flex-1 items-center gap-1.5", FADES)}>

@@ -54,7 +54,7 @@ export function MachinePicker({
   return (
     <div className="flex flex-col gap-2.5">
       <div>
-        <div className="text-[13px] font-medium">Name and icon</div>
+        <div className="text-ui font-medium">Name and icon</div>
         <div className="text-xs text-muted-foreground">{about}</div>
       </div>
       <Input

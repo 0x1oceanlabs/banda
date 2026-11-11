@@ -269,7 +269,7 @@ function Menu({
         {item("Push", CloudUploadIcon, menu.push, onPush)}
         {item("Pull", CloudDownloadIcon, menu.pull, onPull)}
         {menu.follows && (
-          <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">
+          <p className="px-2 pt-1.5 pb-1 text-small text-muted-foreground">
             Pull and Push follow the upstream {menu.follows}.
           </p>
         )}
@@ -313,7 +313,7 @@ function Under({ text }: { text?: string }) {
   return (
     <p
       title={text}
-      className="-mt-1.5 truncate pr-2 pb-1.5 pl-8 text-[11px] text-muted-foreground"
+      className="-mt-1.5 truncate pr-2 pb-1.5 pl-8 text-meta text-muted-foreground"
     >
       {text}
     </p>

@@ -263,7 +263,7 @@ function Branches({
               >
                 <span className="min-w-0 flex-1 truncate">{ref.name}</span>
                 {tag && (
-                  <span className="shrink-0 rounded-small bg-muted px-1.5 text-[10px] text-muted-foreground">
+                  <span className="shrink-0 rounded-small bg-muted px-1.5 text-small text-muted-foreground">
                     {tag}
                   </span>
                 )}
@@ -298,7 +298,7 @@ function Branches({
         <GitAlert className="px-2 pt-1">{acting.problem}</GitAlert>
       )}
       {cut && !words && (
-        <p className="px-2 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">
+        <p className="px-2 pt-1.5 pb-0.5 text-small text-muted-foreground">
           Showing {listed.length} branches: search to find others.
         </p>
       )}

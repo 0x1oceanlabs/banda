@@ -36,7 +36,7 @@ export function AsidePill({ engine, aside }: { engine: Engine; aside: Aside }) {
       </span>
       <Button
         size="xs"
-        className="h-5 rounded-full px-2 text-[11px]"
+        className="h-5 rounded-full px-2 text-small"
         disabled={busy}
         onClick={bring}
       >

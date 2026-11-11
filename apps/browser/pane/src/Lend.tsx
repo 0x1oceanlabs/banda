@@ -201,7 +201,7 @@ export function LentChip({
             title={label(LEND, `Lent to ${title}`)}
             data-lent
             data-state={groupState(mark)}
-            className="flex h-5 max-w-38 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--group-color)_13%,transparent)] pr-2 pl-1.5 text-[11px] text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--group-color)_28%,transparent)] transition-[background-color,--group-color] duration-500 outline-none hover:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] @max-[200px]:pr-1.5"
+            className="flex h-5 max-w-38 shrink-0 cursor-pointer items-center gap-1.5 rounded-full bg-[color-mix(in_oklab,var(--group-color)_13%,transparent)] pr-2 pl-1.5 text-small text-foreground shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--group-color)_28%,transparent)] transition-[background-color,--group-color] duration-500 outline-none hover:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] focus-visible:ring-2 focus-visible:ring-ring data-popup-open:bg-[color-mix(in_oklab,var(--group-color)_22%,transparent)] @max-[200px]:pr-1.5"
           />
         }
       >

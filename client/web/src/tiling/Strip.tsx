@@ -531,7 +531,7 @@ export const Strip = memo(function Strip({
 
 /** A Group's handle and the own Group's tag: a pill on its top edge. */
 const PILL =
-  "absolute top-[calc(-1*var(--group-pad)-0.375rem)] left-3 z-10 flex h-3 items-center rounded-full bg-popover px-1.5 text-[0.625rem] leading-3 text-muted-foreground ring-1 ring-border select-none"
+  "absolute top-[calc(-1*var(--group-pad)-0.375rem)] left-3 z-10 flex h-3 items-center rounded-full bg-popover px-1.5 text-small leading-3 text-muted-foreground ring-1 ring-border select-none"
 
 /**
  * A Group's handle (ADR 0065, decision 6): on its top edge, it shows

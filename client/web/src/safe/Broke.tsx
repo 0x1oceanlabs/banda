@@ -82,7 +82,7 @@ export function BrokeCard({
             className="size-5"
           />
         )}
-        <h1 id={title} className="text-base font-semibold">
+        <h1 id={title} className="text-title font-semibold">
           {text.title}
         </h1>
         <p className="text-sm text-muted-foreground">{text.body}</p>

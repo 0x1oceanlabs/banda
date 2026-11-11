@@ -251,7 +251,7 @@ function Pick({
       )}
     >
       <span className="text-sm font-medium">{title}</span>
-      <span className="w-full truncate text-[11px] text-muted-foreground">
+      <span className="w-full truncate text-meta text-muted-foreground">
         {detail}
       </span>
     </button>

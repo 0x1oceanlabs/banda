@@ -205,7 +205,7 @@ export function RowMark({
         <span
           title={mark[0].toUpperCase() + mark.slice(1)}
           className={cn(
-            "w-2.5 shrink-0 text-center text-[10px] font-semibold",
+            "w-2.5 shrink-0 text-center text-small font-semibold",
             mark === "added" || mark === "untracked"
               ? "text-added"
               : mark === "deleted"

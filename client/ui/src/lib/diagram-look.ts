@@ -5,6 +5,7 @@
  * resolved to hex, then mixed here as the card's CSS mixes them.
  */
 import { useMemo, useSyncExternalStore } from "react"
+import { BANDA } from "@banda/contract/look"
 
 type Rgb = readonly [number, number, number]
 
@@ -21,12 +22,14 @@ export function mix(ground: Rgb, ink: Rgb, amount: number): string {
   return hex([at(0), at(1), at(2)])
 }
 
-/** Mermaid's config for a diagram in `ink` on `ground`. */
+/** Mermaid's config for a diagram in `ink` on `ground`, its words in
+ * `font` at `size`, the UI level's. */
 export function diagramConfig(
   ground: Rgb,
   ink: Rgb,
   font: string,
-  dark: boolean
+  dark: boolean,
+  size: string = BANDA.light["ui-size"]
 ) {
   const text = hex(ink)
   const surface = mix(ground, ink, INK.surface)
@@ -40,7 +43,7 @@ export function diagramConfig(
     themeVariables: {
       darkMode: dark,
       fontFamily: font,
-      fontSize: "14px",
+      fontSize: size,
       background: surface,
       textColor: text,
       titleColor: text,
@@ -115,6 +118,7 @@ function tokens(): string {
     style.getPropertyValue("--foreground").trim(),
     getComputedStyle(document.body).fontFamily,
     root.classList.contains("dark") ? "dark" : "light",
+    style.getPropertyValue("--ui-size").trim(),
   ].join("|")
 }
 
@@ -123,13 +127,14 @@ function tokens(): string {
 export function useDiagramLook() {
   const look = useSyncExternalStore(subscribe, tokens, () => "")
   const config = useMemo(() => {
-    const [ground, ink, font, scheme] = look.split("|")
+    const [ground, ink, font, scheme, size] = look.split("|")
     const dark = scheme === "dark"
     return diagramConfig(
       rgbOf(ground ?? "", dark ? [10, 10, 10] : [255, 255, 255]),
       rgbOf(ink ?? "", dark ? [250, 250, 250] : [10, 10, 10]),
       font || "sans-serif",
-      dark
+      dark,
+      size || undefined
     )
   }, [look])
   return { config, look }

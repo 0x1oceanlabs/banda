@@ -94,7 +94,7 @@ export function Tabs({
             title={keyFor(`sidebar.tab-${one}`, words)}
             onClick={() => show?.(one)}
             className={cn(
-              "flex h-7 items-center gap-1 rounded-control px-1.5 text-[13px] whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+              "flex h-7 items-center gap-1 rounded-control px-1.5 text-ui whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
               archive ? "ml-auto shrink-0 px-1.5" : "min-w-0",
               one === tab
                 ? "bg-foreground/8 text-foreground"

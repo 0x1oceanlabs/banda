@@ -128,7 +128,7 @@ function UsagePane({ engine, args, update, close }: PaneProps<UsageArgs>) {
               role="tab"
               aria-selected={tab === id}
               onClick={() => update({ ...START, ...args, tab: id })}
-              className="-mb-px flex items-center border-b-[1.5px] border-transparent text-[13px] text-muted-foreground transition-colors hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
+              className="-mb-px flex items-center border-b-[1.5px] border-transparent text-ui text-muted-foreground transition-colors hover:text-foreground aria-selected:border-foreground aria-selected:text-foreground"
             >
               {words}
             </button>
@@ -265,7 +265,7 @@ function Toggle({
       aria-pressed={on}
       onClick={onClick}
       className={cn(
-        "inline-flex items-center gap-[7px] rounded-control px-2 py-1 text-[12.5px] transition-colors hover:bg-muted/60",
+        "inline-flex items-center gap-[7px] rounded-control px-2 py-1 text-meta transition-colors hover:bg-muted/60",
         !on && "text-muted-foreground/70"
       )}
     >
@@ -398,7 +398,7 @@ function WindowLimit({
     <div>
       <div
         className={cn(
-          "text-[28px] leading-none font-semibold tracking-[-0.03em] tabular-nums",
+          "text-figure leading-none font-semibold tracking-[-0.03em] tabular-nums",
           tone
         )}
       >
@@ -436,7 +436,7 @@ function WindowLimit({
         )}
       </div>
       <p
-        className="mt-2 text-[11.5px] text-muted-foreground tabular-nums"
+        className="mt-2 text-meta text-muted-foreground tabular-nums"
         title={
           window.resets_at === undefined
             ? undefined

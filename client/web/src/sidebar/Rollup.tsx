@@ -24,7 +24,7 @@ export function Rollup({
         />
       )}
       {waiting > 0 && (
-        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-attention px-1 text-[10px] font-semibold text-background">
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-attention px-1 text-small font-semibold text-background">
           {waiting}
         </span>
       )}

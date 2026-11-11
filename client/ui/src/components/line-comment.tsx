@@ -59,7 +59,7 @@ export function LineComment({
         onChange={(event) => setWords(event.target.value)}
       />
       <div className="mt-1.5 flex items-center gap-1">
-        <span className="mr-auto text-[10.5px] text-muted-foreground">
+        <span className="mr-auto text-meta text-muted-foreground">
           Ctrl+Enter to comment · it goes to the Thread's message
         </span>
         <Button variant="ghost" size="xs" onClick={onCancel}>

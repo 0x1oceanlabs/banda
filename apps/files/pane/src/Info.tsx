@@ -129,7 +129,7 @@ function Facts({
           </div>
         )}
         <div className="flex w-full min-w-0 flex-col gap-0.5">
-          <h3 className="truncate text-[13px] font-medium select-text">
+          <h3 className="truncate text-ui font-medium select-text">
             {nameOf(info.path)}
           </h3>
           <p className="text-muted-foreground">
@@ -239,7 +239,7 @@ function Rows({
   return (
     <div className="flex flex-col gap-1 border-t pt-3">
       {label && (
-        <h4 className="text-[10.5px] font-medium text-muted-foreground">
+        <h4 className="text-meta font-medium text-muted-foreground">
           {label}
         </h4>
       )}

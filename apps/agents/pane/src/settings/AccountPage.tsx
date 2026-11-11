@@ -218,7 +218,7 @@ function Hero({
           key={harness.name}
           aria-label="Account name"
           defaultValue={harness.name}
-          className="-ml-2 h-8 border-transparent bg-transparent px-2 text-base font-semibold shadow-none hover:border-input focus-visible:bg-background dark:bg-transparent"
+          className="-ml-2 h-8 border-transparent bg-transparent px-2 text-title font-semibold shadow-none hover:border-input focus-visible:bg-background dark:bg-transparent"
           onBlur={(event) => commit(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") commit(event.currentTarget.value)

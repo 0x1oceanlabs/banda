@@ -184,7 +184,7 @@ function Frame({
         {role && (
           <span
             className={cn(
-              "rounded-control bg-secondary px-1.5 py-0.5 text-[10px]",
+              "rounded-control bg-secondary px-1.5 py-0.5 text-small",
               role === "Fallback" && "text-muted-foreground"
             )}
           >
