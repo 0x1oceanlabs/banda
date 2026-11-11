@@ -226,19 +226,20 @@ function Piece({
           className="flex-1 text-xs text-muted-foreground"
         />
       )
-    case "machine":
-      // Another machine (ADR 0095, decision 5): its icon and name, small
-      // and muted, with no border; its icon alone where room is short. Its
-      // card, as the pointer rests on it, says the rest.
+    case "machine": {
+      // A machine (ADR 0095, decision 5): its icon and name, small and
+      // muted, with no border; its icon alone where room is short or the
+      // Person asked. Another machine's card, as the pointer rests on it,
+      // says the rest; this machine has none, its name its icon's tooltip.
+      const form = slot.named ? "compact" : "icon"
+      if (slot.host === undefined)
+        return <MachineMark named={slot.machine} form={form} />
       return (
         <MachineCard host={slot.host} className="flex shrink-0">
-          <MachineMark
-            named={slot.machine}
-            form={slot.named ? "compact" : "icon"}
-            title=""
-          />
+          <MachineMark named={slot.machine} form={form} title="" />
         </MachineCard>
       )
+    }
     case "harness":
       // Its account's emblem (ADR 0093, decision 1).
       return <Emblem of={emblemOf(harnesses, slot.id, slot.name)} />

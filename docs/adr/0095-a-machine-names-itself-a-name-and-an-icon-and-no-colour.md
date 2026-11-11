@@ -213,6 +213,10 @@ Machines) and `clip-notes.png`.
    - A row of one line shows the icon alone, after the Project's sign.
    - A row that hides its `project` part shows the machine in its place:
      where a Thread runs always shows.
+     _Changed on 2026-11-11 (Roma, on the Show card's mock):_ with
+     `rows = "off"` in `sidebar.toml`, it shows no machine there either:
+     Off means nowhere on rows. The label and the Pane's header still
+     name the machine (decision 7).
    - The order is the same everywhere: the Project, then the machine
      ("banda on arc").
    - The account's emblem stays at the end of the last line, in its

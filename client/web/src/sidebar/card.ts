@@ -19,6 +19,7 @@ import { lookOf, type Stand, STAND_WORDS } from "@banda/ui/status"
 import type { Placed, Row } from "./arrange"
 import { type Went, wentWords } from "./hold"
 import { atOf } from "./inbox"
+import type { OnRow } from "./machine-on-row"
 
 /** How many lines a card draws (decision 9): by where it is, or as many
  * as the Person set. */
@@ -63,8 +64,9 @@ export type Slot =
   | { kind: "says"; word?: Word; putOff?: PutOff; text?: string }
   /** Its Project's sign and name, on line 3. */
   | { kind: "project"; project: ProjectSummary }
-  /** The other machine it runs on: its icon, and on line 3 its name. */
-  | { kind: "machine"; host: string; machine: Named; named: boolean }
+  /** The machine it runs on: its icon, and on line 3 its name unless the
+   * Person asked for its icon alone; another machine's by its `host`. */
+  | { kind: "machine"; host?: string; machine: Named; named: boolean }
   /** Its Harness's emblem. */
   | { kind: "harness"; id: string; name: string }
 
@@ -108,8 +110,10 @@ export type CardOf = {
   /** The Later clock its row stands by, which its look is read by. */
   now: number
   view: CardView
-  /** The other machine it runs on, where no label above names it. */
-  machine?: Named
+  /** The machine it runs on, as its row is given it (`machineOnRow`):
+   * another's, or this one's where the Person asked; none under a label
+   * that names it, or with `off`. */
+  machine?: OnRow
   /** As of when its machine was last heard, while the Window does not
    * reach it. */
   away?: number
@@ -145,18 +149,14 @@ export function cardOf(input: CardOf): CardModel {
   const { look } = lookOf(listed, now)
   const tone = callColor(look)
   const count = linesOf(place, view)
-  // The machine stands on line 3; with none, on line 1's right.
-  const host =
-    machine && row.host !== undefined && view.group !== "machine"
-      ? { host: row.host, machine }
-      : undefined
+  // The machine stands on line 3; with none, on line 1's right, by its
+  // icon. Grouped by machine, its header names it.
+  const on = view.group === "machine" ? undefined : machine
   const lines: Line[] = [
     {
       left: [{ kind: "mark", look }, { kind: "title" }],
       right: [
-        ...(host && count < 3
-          ? [{ kind: "machine" as const, ...host, named: false }]
-          : []),
+        ...(on && count < 3 ? [machineSlot(row, on, false)] : []),
         { kind: "time" },
       ],
     },
@@ -172,7 +172,7 @@ export function cardOf(input: CardOf): CardModel {
           ? []
           : [{ kind: "project", project: row.project }],
       right: [
-        ...(host ? [{ kind: "machine" as const, ...host, named: true }] : []),
+        ...(on ? [machineSlot(row, on, true)] : []),
         ...(listed.harness
           ? [
               {
@@ -211,6 +211,21 @@ export function cardOf(input: CardOf): CardModel {
           },
         }),
     ...(strayed ? { strayed: true as const } : {}),
+  }
+}
+
+/** `machine`'s slot on `row`'s card: by its name too where `named`, unless
+ * it shows by its icon `alone`. */
+function machineSlot(
+  { host }: Row,
+  { alone, ...machine }: OnRow,
+  named: boolean
+): Slot {
+  return {
+    kind: "machine",
+    ...(host === undefined ? {} : { host }),
+    machine,
+    named: named && !alone,
   }
 }
 

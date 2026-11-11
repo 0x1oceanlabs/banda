@@ -68,10 +68,12 @@ A file named as one of Banda's presets wins over it.
 ## Machines
 
 With another machine in `hosts.toml` (ADR 0095), the window names it by
-the name and icon it gives itself: after the Project on its rows, on a
-label over its Projects in the `projects` preset, and in its Panes'
-headers, always. `[machines]` `rows` says how its rows show it:
-`"named"`, its icon and name (the default), `"icon"` alone, or `"off"`.
+the name and icon it gives itself: on its cards, before the account's
+emblem (a card of one line has its icon alone), on a label over its
+Projects, grouped by Project or in the list of Projects, and in its
+Panes' headers, always.
+`[machines]` `rows` says how its cards show it: `"named"`, its icon and
+name (the default), `"icon"` alone, or `"off"`, on no card at all.
 This machine is not named, unless `this-too = true`. With one machine
 nothing is named, and these keys change nothing.
 

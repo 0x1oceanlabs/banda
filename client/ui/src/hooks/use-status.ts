@@ -201,22 +201,6 @@ export function followThisNamed(
   return heardNamed(engine, (said) => take(cleanNamed(said, "")))
 }
 
-/** This machine's name and icon (`followThisNamed`); none until its
- * engine first says them. Settings → Machines draws it. */
-export function useNamed(engine: Engine): Named | undefined {
-  const [named, setNamed] = useState<Named>()
-  useEffect(
-    () =>
-      followThisNamed(engine, (now) =>
-        setNamed((was) =>
-          was?.name === now.name && was.icon === now.icon ? was : now
-        )
-      ),
-    [engine]
-  )
-  return named
-}
-
 /** The fence of an engine that says none: one from before the fence,
  * which gets it as it starts again. */
 const BEFORE_THE_FENCE: Fence = {

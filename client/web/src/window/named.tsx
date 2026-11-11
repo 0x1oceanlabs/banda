@@ -1,7 +1,8 @@
 /**
  * Another machine's name and icon in the Tiling's Slot `pane.header`
  * (ADR 0095, decision 7): a Pane of a Project another host has names it
- * after its Project, as the Window's hosts know it; and while the Pane
+ * after its Project, as the Window's hosts know it, and this machine's
+ * only where the Person asked (decision 4); and while the Pane
  * cannot reach that machine, the pill under the header says so, by its
  * icon. No App owns the machines, so it is the Window's own part of the
  * Slot.
@@ -21,11 +22,15 @@ import {
   useAwayFor,
   useHostsBy,
   useNamedOf,
+  useThisNamed,
   useWaiting,
 } from "@banda/core/react"
+import { useLookSidebar } from "../look"
 
 function Named({ project, pane }: { project: ProjectId; pane: PaneState }) {
-  const named = useNamedOf(project, paneHost(pane))
+  const there = useNamedOf(project, paneHost(pane))
+  const here = useThisNamed(useLookSidebar().machines.thisToo)
+  const named = there ?? here
   return named ? <MachineMark named={named} form="full" /> : null
 }
 

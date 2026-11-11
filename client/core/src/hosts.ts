@@ -62,6 +62,10 @@ export type Names = {
     key: string,
     take: (named: Named) => void
   ) => () => void
+  /** Hands `take` this machine's name and icon, as its own `engine` says
+   * them, cleaned, and keeps nothing: it is never away from its own
+   * window. Returns how to stop. */
+  followHere?: (engine: Engine, take: (named: Named) => void) => () => void
 }
 
 /** A host before this device saw its name: by its key, with the
@@ -267,10 +271,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #powers = new Map<string, { engine: Engine; stop: () => void }>()
   /** The hosts as the desktop told them last. */
   #told: readonly HostState[] = []
+  readonly #hereNamed = new Store<Named | undefined>(undefined)
 
   /** This machine and the hosts a new Thread starts on (`machinesOf`),
    * told again only as what they say changes. */
   readonly machines: Readable<readonly Machine[]> = this.#machines
+
+  /** This machine's name and icon, as its own engine says them; none
+   * until it first does, nor outside a Window. */
+  readonly hereNamed: Readable<Named | undefined> = this.#hereNamed
 
   /** The Window's one clock for the words of a host it does not reach
    * (#988): each second while anything listens, so every pill, card and
@@ -334,9 +343,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   follow(): () => void {
     const waiting = this.waiting.start()
     const hosts = this.#device.follow((hosts) => this.take(hosts))
+    const here =
+      this.#here &&
+      this.#names.followHere?.(this.#here, (named) => {
+        if (!sameData(named, this.#hereNamed.get())) this.#hereNamed.set(named)
+      })
     return () => {
       hosts?.()
       waiting()
+      here?.()
     }
   }
 
@@ -807,6 +822,15 @@ export const liveIn = (hosts: readonly Shown[]): string[] =>
 /** The names of the hosts whose rows the Window does not show. */
 export const emptyIn = (hosts: readonly Shown[]): string[] =>
   hosts.filter((host) => !holds(host)).map((host) => host.name)
+
+/** This machine's name and icon where the Window names it (ADR 0095,
+ * decision 4): only as the Person asks it (`this-too`), and only with
+ * another machine in `hosts.toml`, as with one nothing is named. */
+export const thisNamed = (
+  named: Named | undefined,
+  thisToo: boolean,
+  others: boolean
+): Named | undefined => (thisToo && others ? named : undefined)
 
 /** Host `host`'s name and icon, as the Window shows `hosts`; as this
  * device last saw it (`seen`), while the Window does not show it yet. */

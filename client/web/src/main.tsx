@@ -1,6 +1,10 @@
 import "./renamed"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
-import { followNamed, seenNamed } from "@banda/ui/hooks/use-status"
+import {
+  followNamed,
+  followThisNamed,
+  seenNamed,
+} from "@banda/ui/hooks/use-status"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
@@ -53,7 +57,11 @@ if (host && engine) {
           // queues it there, through the device (#1299). It finds which
           // machine has its Project where the main window keeps it (ADR
           // 0106, decision 1).
-          const names = { seen: seenNamed, follow: followNamed }
+          const names = {
+            seen: seenNamed,
+            follow: followNamed,
+            followHere: followThisNamed,
+          }
           const hosts = new KeptHosts(device.hosts, names, engine, {
             waiting: onDevice(() => localStorage, window),
             drains: false,

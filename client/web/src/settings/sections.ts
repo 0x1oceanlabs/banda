@@ -40,6 +40,7 @@ import { General } from "./General"
 import { Keys } from "./Keys"
 import { MachinesSettings } from "./MachinesSettings"
 import { ProblemsSettings } from "./ProblemsSettings"
+import { showRows } from "./machines"
 import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
 import { ProjectsSettings } from "./ProjectsSettings"
@@ -67,6 +68,12 @@ export type SectionFile = {
   /** Individual keys drawn by the section's Body or Foot. Other keys
    * still get their controls from the schema. */
   drawnKeys?: string[]
+  /** The rows of a `drawn` file a search still finds, in the words its
+   * Body draws them with, and lands on there. */
+  found?: Row[]
+  /** They matter only with another machine in `hosts.toml`: with none,
+   * the section draws them nowhere, so a search finds none of them. */
+  others?: boolean
 }
 
 export type Section = {
@@ -120,7 +127,18 @@ export const SECTIONS: Section[] = [
     id: "machines",
     title: "Machines",
     icon: MonitorSmartphoneIcon,
-    files: [{ name: "machine.toml" }],
+    // sidebar.toml's [machines] shows here alone, in its Show card, and
+    // with another machine in hosts.toml.
+    files: [
+      { name: "machine.toml" },
+      {
+        name: "sidebar.toml",
+        tables: ["machines"],
+        drawn: true,
+        found: showRows(),
+        others: true,
+      },
+    ],
     about:
       "Where your Projects and Agents run. Each machine names itself, and every window shows that name.",
     Body: MachinesSettings,
@@ -287,20 +305,33 @@ export function groupsOf(section: Section): { title: string; rows: Row[] }[] {
 }
 
 /** Every row, with the words a search looks in. */
-const INDEX = SECTIONS.flatMap((section) =>
-  groupsOf(section).flatMap((group) =>
-    group.rows.map((row) => ({
-      section,
-      row,
-      words: `${row.title} ${row.key} ${row.about}`.toLowerCase(),
-    }))
-  )
-)
+const INDEX = SECTIONS.flatMap((section) => {
+  const entry = (row: Row, others?: boolean) => ({
+    section,
+    row,
+    others,
+    words: `${row.title} ${row.key} ${row.about}`.toLowerCase(),
+  })
+  return [
+    ...groupsOf(section).flatMap((group) =>
+      group.rows.map((row) => entry(row))
+    ),
+    ...(section.files ?? []).flatMap((file) =>
+      (file.found ?? []).map((row) => entry(row, file.others))
+    ),
+  ]
+})
 
-/** The rows in any section that say `words`. */
-export function search(words: string): { section: Section; row: Row }[] {
+/** The rows in any section that say `words`, as the window's machines
+ * stand: `others`, another machine in `hosts.toml`. */
+export function search(
+  words: string,
+  others = true
+): { section: Section; row: Row }[] {
   const wanted = words.trim().toLowerCase()
-  return INDEX.filter((entry) => entry.words.includes(wanted))
+  return INDEX.filter(
+    (entry) => entry.words.includes(wanted) && (others || !entry.others)
+  )
 }
 
 /** A link's section and row: `appearance/tile.border`. */

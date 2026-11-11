@@ -30,7 +30,8 @@ export function takeLook(next: Look): void {
  * `pick` hands back a part of the look as it is, so it stays the same
  * object until the look changes. */
 export function useLook<T>(pick: (look: Look) => T, before: T): T {
-  return useSyncExternalStore(subscribe, () => (look ? pick(look) : before))
+  const read = () => (look ? pick(look) : before)
+  return useSyncExternalStore(subscribe, read, read)
 }
 
 /** A module's settings file as the look resolves it, again on each new

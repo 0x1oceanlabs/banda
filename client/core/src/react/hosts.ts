@@ -14,6 +14,7 @@ import {
   type Machine,
   namedIn,
   type Shown,
+  thisNamed,
 } from "../hosts"
 import type { PaneState } from "../pane"
 import { sameData } from "../store"
@@ -138,6 +139,25 @@ export function useNamedOf(
     [kept, project, named]
   )
   return useStore(kept, select, sameData)
+}
+
+const anyHost = (hosts: readonly Shown[]) => hosts.length > 0
+const itself = (named: Named | undefined) => named
+
+/** Whether `hosts.toml` has another machine, drawn again only as that
+ * changes. */
+export const useAnyHost = (): boolean => useHostsBy(anyHost)
+
+/** This machine's name and icon (`KeptHosts.hereNamed`); none until its
+ * engine first says them. */
+export const useHereNamed = (): Named | undefined =>
+  useStore(useContext(HostsContext).hereNamed, itself)
+
+/** This machine's name and icon where the Window names it (`thisNamed`),
+ * as `thisToo` says, drawn again only as that changes. */
+export function useThisNamed(thisToo: boolean): Named | undefined {
+  const others = useAnyHost()
+  return thisNamed(useHereNamed(), thisToo, others)
 }
 
 /** The session an act on a Project, or on `pane` of it, goes to
