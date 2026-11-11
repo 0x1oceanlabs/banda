@@ -2458,8 +2458,8 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * device (ADR 0106, law 1): the places `kindReaches` finds in all the
  * code the kind takes, through every import, by kind, file and what it
  * reaches, each with the step of ADR 0106's plan that takes it away. The
- * Thread and New Pane open elsewhere today, and New Pane reaches none, so
- * only the Thread's places are here:
+ * Thread, New Pane and the Diff open elsewhere today, and New Pane and
+ * the Diff reach none, so only the Thread's places are here:
  *
  * - 3c: a reply's links, Open in, and an Issue's page and the text it
  *   copies, as the Thread's paths go through `files.locate` and its links

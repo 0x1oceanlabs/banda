@@ -1,6 +1,6 @@
 /**
  * Files dragged out of Banda (ADR 0073, decision 10): Files' rows, to a
- * Thread's composer as `@` chips and to other apps as the files.
+ * Thread's Message box as `@` chips and to other apps as the files.
  *
  * In Banda's desktop window main runs the drag (`files.drag`), and the
  * page notes which files they are, for the drop that brings them back
