@@ -159,19 +159,28 @@ goes on."
      Thread stays as it was, Panes and all.
 
 8. **What the folder holds that is not committed goes as a git
-   snapshot, inside the artefact.** No push, no remote, nothing sent
-   outside the Person's machines.
-   - **Pack.** The Thread's machine writes a snapshot commit of the
-     Project's folder through an index of its own, so the branch, the
-     index and the files are not touched: every changed and new file but
-     the ignored ones, on top of `HEAD`. The header names the branch and
-     `HEAD`.
+   snapshot, beside the artefact, and the Git App makes it.** No push,
+   no remote, nothing sent outside the Person's machines.
+   - **The Git App owns it**, as it owns a turn's checkpoints
+     (`apps/git/engine/src/checkpoint.rs`, under
+     `refs/banda/checkpoints`): the same snapshot, made as the Thread is
+     packed, with the same limits and the same care for filters. The
+     Agents App knows nothing of git.
+   - **Pack.** `git.pack_folder{move, have}` on the Thread's machine
+     writes a snapshot commit of the Project's folder through an index
+     of its own, so the branch, the index and the files are not touched:
+     every changed and new file but the ignored ones, on top of `HEAD`.
+     It answers the branch, `HEAD` and how many files changed.
    - **Only what is missing.** Before it packs, the window asks the
      other machine which of the source's branch tips and `HEAD` it has
-     (`agents.has_commits`). The artefact holds a git bundle of the
-     snapshot without those: mostly the diff, and the branch's commits
-     that were never pushed.
-   - **Unpack.** The other machine fetches the bundle into
+     (`git.folder_for{commits}`, which also says whether its folder is
+     free). The snapshot goes as a git bundle without those, in the
+     Project's data beside the Thread's artefact, `moves/<move>.bundle`:
+     mostly the diff, and the branch's commits that were never pushed.
+     The window carries it in pieces as it carries the Thread
+     (`packed` and `take_piece`, which name the part).
+   - **Unpack.** `git.unpack_folder{move}` on the other machine, after
+     the Thread arrived, fetches the bundle into
      `refs/banda/moves/<thread>`, then puts its folder as the old one
      was: the same branch at the same commit, the snapshot's changes not
      committed. The ref stays until the Thread is deleted.
@@ -208,8 +217,8 @@ goes on."
 
 - `GLOSSARY.md`'s Thread says it may move to another Project, on its
   machine or another's.
-- The contract gains six methods of the Agents App, each the Person's
-  alone. `ThreadRows` and the files' list get a form that is written
+- The contract gains six methods of the Agents App and three of the Git
+  App, each the Person's alone. `ThreadRows` and the files' list get a form that is written
   down, so two builds can tell whether they keep a Thread the same way.
 - A move's cost is the Thread's size: its transcript and its images,
   through the window's two ssh links. A Thread of 30 MB takes seconds on
@@ -226,8 +235,10 @@ Each step is its own PR.
 2. **The engine, one machine:** pack, pieces, unpack, leave and give
    back, tested between two Projects of one engine, with the shape's
    check and the sweep.
-3. **The folder:** the snapshot, `has_commits`, the bundle, the folder
-   put as it was, and the refusals of a folder that is not free.
+3. **The folder, in the Git App:** `folder_for`, `pack_folder` and
+   `unpack_folder` on its checkpoint's snapshot, the bundle carried as a
+   part of the move, the folder put as it was, and the refusals of a
+   folder that is not free.
 4. **The engine, across:** the account and the Harness there, the Person
    there, Codex's handoff, and the notice with both machines.
 5. **The window:** the submenu by machine (on #1531), the dialog with its message box,
