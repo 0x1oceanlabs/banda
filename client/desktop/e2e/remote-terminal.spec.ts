@@ -360,6 +360,57 @@ test("a program in arc's terminal does not hold this machine's update: its updat
     .toEqual(["restart"])
 })
 
+test("paths: a path arc's terminal prints opens arc's file at its line; Ctrl and the menu offer no app of this computer's", async () => {
+  const { page, composer, folder } = await onArc()
+  put(arc!.disk(folder), {
+    "src/a.ts": Array.from({ length: 14 }, (_, n) => `// ${n + 1}\n`).join(""),
+  })
+  await window!.app.evaluate(({ shell }) => {
+    const opened: string[] = []
+    ;(globalThis as { outside?: string[] }).outside = opened
+    shell.openPath = async (path) => {
+      opened.push(path)
+      return ""
+    }
+  })
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  await run(page, "clear; printf 'src/a.ts:12\\n'; : > printed")
+  await expect.poll(() => inFolder(folder, "printed")).toBe("")
+  const canvas = screen.locator("canvas").first()
+  const at = { x: 24, y: 8 }
+  // The hint names no app: Ctrl does nothing more here.
+  await canvas.hover({ position: at })
+  await expect(canvas).toHaveAttribute(
+    "title",
+    `${join(folder, "src/a.ts")}\nClick to open in Banda`
+  )
+  await shot(page, "path-in-arc-terminal")
+  await canvas.click({ button: "right", position: at })
+  const menu = page.getByRole("menu", { name: "Terminal" })
+  await expect(
+    menu.getByRole("menuitem", { name: "Open in Banda" })
+  ).toBeVisible()
+  await expect(
+    menu.getByRole("menuitem", { name: "Open in its app" })
+  ).toHaveCount(0)
+  await page.keyboard.press("Escape")
+
+  await canvas.click({ position: at, modifiers: ["Control"] })
+  const file = page.getByRole("region", { name: "a.ts", exact: true })
+  await expect(file.locator("[data-lit-line]")).toHaveAttribute(
+    "data-lit-line",
+    "12"
+  )
+  await expect(file.locator('[data-line="12"]').first()).toHaveText("// 12")
+  await shot(page, "path-from-arc-terminal-opened")
+  expect(
+    await window!.app.evaluate(
+      () => (globalThis as { outside?: string[] }).outside
+    )
+  ).toEqual([])
+})
+
 test("a public link opens in this device's browser; arc's localhost says it is arc's and offers its address to copy", async () => {
   const { page, composer, folder } = await onArc()
   await window!.app.evaluate(({ shell }) => {

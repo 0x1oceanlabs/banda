@@ -466,7 +466,7 @@ test.fixme("step 5b: a folder pinned in arc's Files opens arc's folder again", a
   ).toHaveCount(0)
 })
 
-test.fixme("step 3c: a path in arc's reply opens arc's file", async () => {
+test("step 3c: a path in arc's reply opens arc's file", async () => {
   const { page, thread, composer } = await opened()
   await composer.fill("See `who.txt`.")
   await composer.press("Enter")
@@ -481,7 +481,7 @@ test.fixme("step 3c: a path in arc's reply opens arc's file", async () => {
   await expect(peek.getByText("arc", { exact: true })).toBeVisible()
 })
 
-test.fixme("step 3c: a path arc's terminal prints opens arc's file", async () => {
+test("step 3c: a path arc's terminal prints opens arc's file", async () => {
   const { page, composer, there } = await opened()
   const screen = await terminalOn(page, composer)
   // The path on the first row, then the prompt.

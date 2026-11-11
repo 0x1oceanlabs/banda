@@ -11,7 +11,7 @@
  * `same-path`). With BANDA_E2E_SHOTS set to a folder, it leaves pictures
  * of what it checks.
  */
-import { existsSync, readFileSync } from "node:fs"
+import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, shot, withArc } from "./arc"
@@ -35,6 +35,11 @@ const NOTES =
   "# Notes\n\nFrom arc.\n\n![the diagram](pic.png)\n\n" +
   "[the site](https://example.com/page)\n\n[its server](http://localhost:3000/)\n"
 const UTIL = "export const one = 1\nexport const two = 2\n"
+/** A long file, so a path to line 12 has somewhere to scroll to. */
+const LONG = Array.from(
+  { length: 14 },
+  (_, n) => `export const line${n + 1} = ${n + 1}\n`
+).join("")
 
 /** arc's part of the sidebar: its label and what it holds. */
 const arcOf = (page: Page) =>
@@ -104,6 +109,10 @@ async function opened(page: Page, row: Locator, name: string, first: string) {
   await expect(pane.getByText(first).first()).toBeVisible()
   return pane
 }
+
+/** A path's link in arc's reply, once arc has found its file. */
+const pathOf = (thread: Locator, kind: "code" | "text" | "named") =>
+  thread.locator(`[data-quotable] a[data-file][data-kind=${kind}]`)
 
 /** Whether the focus is in the editor, which Pierre draws in a shadow
  * root of its own. */
@@ -379,4 +388,144 @@ test("an edit while arc is away keeps its text: Not saved: arc is away, and it s
   await expect
     .poll(() => readFileSync(arc!.disk(join(there, "who.txt")), "utf8"))
     .toBe("arc kept!\n")
+})
+
+test("paths: a path in arc's reply is found by arc in one round trip, opens arc's file at its line, and the menu offers no app of this computer's", async () => {
+  const { page, thread, composer, there, here } = await onArc({
+    "src/long.ts": LONG,
+  })
+  const long = join(there, "src/long.ts")
+  // What the system would open, or show in its folder.
+  await window!.app.evaluate(({ shell }) => {
+    const done: string[] = []
+    ;(globalThis as { outside?: string[] }).outside = done
+    shell.openPath = async (path) => {
+      done.push(`open ${path}`)
+      return ""
+    }
+    shell.showItemInFolder = (path) => {
+      done.push(`show ${path}`)
+    }
+  })
+  const outside = () =>
+    window!.app.evaluate(() => (globalThis as { outside?: string[] }).outside)
+  const clipboard = () =>
+    window!.app.evaluate(({ clipboard }) => clipboard.readText())
+
+  // A line in the reply: one only arc has, one only this machine has, one
+  // neither has, one each has, and a link to a line.
+  await composer.fill(
+    "See `src/long.ts:12`, `only-mac.txt`, `gone.txt`, also who.txt in prose, and [the notes](notes.md#L2)."
+  )
+  await composer.press("Enter")
+  const chip = pathOf(thread, "code")
+  await expect(chip).toHaveText("src/long.ts:12")
+  await expect(chip).toHaveAttribute("data-file", long)
+  // The hint names no app: Ctrl does nothing more here.
+  await expect(chip).toHaveAttribute(
+    "title",
+    `${long}:12\nClick to open in Banda`
+  )
+  await expect(chip.locator("[data-folder]")).toHaveText("src/")
+  // A file only this machine has is no link, however the two share a path.
+  const reply = thread.locator("[data-quotable]").last()
+  await expect(reply.getByText("only-mac.txt")).toBeVisible()
+  await expect(reply.getByText("gone.txt")).toBeVisible()
+  await expect(reply.locator("a[data-file]")).toHaveCount(3)
+  const prose = pathOf(thread, "text")
+  await expect(prose).toHaveText("who.txt")
+  await expect(prose).toHaveAttribute("data-file", join(there, "who.txt"))
+  await expect(pathOf(thread, "named")).toHaveText("the notes(notes.md)")
+
+  // A click: arc's file beside the Thread, at its line, named on arc.
+  await chip.click()
+  const file = page.getByRole("region", { name: "long.ts", exact: true })
+  await expect(file.locator("[data-lit-line]")).toHaveAttribute(
+    "data-lit-line",
+    "12"
+  )
+  await expect(file.locator('[data-line="12"]').first()).toHaveText(
+    "export const line12 = 12"
+  )
+  await expect(file.locator("[data-machine-icon]").first()).toBeVisible()
+  await shot(page, "path-in-arc-reply")
+
+  // Ctrl+click: another machine's file has no app here, so it opens in
+  // Banda too.
+  await prose.click({ modifiers: ["Control"] })
+  const who = page.getByRole("region", { name: "who.txt", exact: true })
+  await expect(who.locator('[data-line="1"]').first()).toHaveText("arc")
+  expect(await outside()).toEqual([])
+
+  // Its menu: what reaches this computer is not offered.
+  const menu = page.getByRole("menu", { name: "Thread" })
+  await chip.click({ button: "right" })
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "Open in Banda",
+    "Quick Look",
+    "Copy full path",
+    "Copy relative path",
+    "Add to message",
+  ])
+  await shot(page, "path-menu-on-arc", { toasts: true })
+  await menu.getByRole("menuitem", { name: "Quick Look" }).click()
+  const peek = page.locator("[data-peek]")
+  await expect(peek).toHaveAttribute("aria-label", "Quick Look: long.ts")
+  await expect(peek.getByText("export const line1 = 1").first()).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(peek).toBeHidden()
+  await chip.click({ button: "right" })
+  await menu.getByRole("menuitem", { name: "Copy relative path" }).click()
+  await expect.poll(clipboard).toBe("src/long.ts:12")
+  await expect(menu).toBeHidden()
+  await chip.click({ button: "right" })
+  await menu.getByRole("menuitem", { name: "Add to message" }).click()
+  await expect(composer).toContainText("long.ts")
+
+  // A file gone from arc since says so, in arc's words.
+  rmSync(arc!.disk(long))
+  await chip.click()
+  await expect(page.getByText(`No such file: ${long}`)).toBeVisible()
+
+  // The window never read the path on this machine.
+  expect(existsSync(join(here, "src/long.ts"))).toBe(false)
+})
+
+test("links: a reply's public link opens in this device's browser, and arc's localhost says it is arc's", async () => {
+  const { page, thread, composer } = await onArc()
+  await window!.app.evaluate(({ shell }) => {
+    const opened: string[] = []
+    ;(globalThis as { linkOpens?: string[] }).linkOpens = opened
+    shell.openExternal = async (url) => {
+      opened.push(url)
+    }
+  })
+  const opens = () =>
+    window!.app.evaluate(
+      () => (globalThis as { linkOpens?: string[] }).linkOpens
+    )
+  await composer.fill(
+    "See [the site](https://example.com/page) and [its server](http://localhost:3000/)."
+  )
+  await composer.press("Enter")
+  const site = thread.getByRole("link", { name: "the site" })
+  await expect(site).toHaveAttribute("title", /\nOpens in /)
+  await site.click()
+  await expect.poll(opens).toEqual(["https://example.com/page"])
+
+  const server = thread.getByRole("link", { name: "its server" })
+  await expect(server).toHaveAttribute("title", "localhost:3000 is arc's")
+  // The menu promises nothing it will refuse: the address, to copy.
+  await server.click({ button: "right" })
+  const menu = page.getByRole("menu", { name: "Thread" })
+  await expect(menu.getByRole("menuitem")).toHaveText(["Copy address"])
+  await page.keyboard.press("Escape")
+  await server.click()
+  const toast = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "localhost:3000 is arc's" })
+  await expect(toast).toBeVisible()
+  await expect(toast).toContainText("It opens here once port forwarding comes.")
+  expect(await opens()).toEqual(["https://example.com/page"])
 })
