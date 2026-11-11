@@ -12,7 +12,8 @@ import type { LineProps } from "./types"
 /**
  * The turn that runs, at its live edge (ADR 0058, decision 5): how long it
  * has worked, "Working for 45s", and what it does now: "· Running pnpm
- * test · 11s", or "· Waiting for you".
+ * test · 11s", "· 3 sub-agents at work" (ADR 0103, decision 19), or
+ * "· Waiting for you".
  */
 export function WorkingLine({ line, facts }: LineProps<"working">) {
   const { turn, doing } = line
@@ -37,6 +38,8 @@ export function WorkingLine({ line, facts }: LineProps<"working">) {
               "Waiting for you"
             ) : doing.kind === "thinking" ? (
               "Thinking"
+            ) : doing.kind === "subagents" ? (
+              doing.words
             ) : (
               <>
                 {[doing.said.verb, doing.said.subject]

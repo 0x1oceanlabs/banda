@@ -504,7 +504,7 @@ test("an entry of a kind this window does not know is left out of the Thread (AD
   const state = fromView(view)
   expect(state.items).toEqual(known.items)
   // No line, no gap and no work of theirs, so Find has nothing of theirs.
-  expect(timeline(state)).toEqual(timeline(known))
+  expect(timeline(state, "Claude")).toEqual(timeline(known, "Claude"))
 })
 
 test("an Agent's plan is one item its steps change, and the context follows", () => {

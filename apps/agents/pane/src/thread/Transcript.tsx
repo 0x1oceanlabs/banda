@@ -89,7 +89,7 @@ export function Transcript({
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
   const later = writers.own?.later
   const turn = working(state)
-  const lines = useMemo(() => timeline(state), [state])
+  const lines = useMemo(() => timeline(state, short), [state, short])
   const asks = useMemo(() => awaiting(state), [state])
   const thoughts = useMemo(() => thoughtTimes(state), [state])
   const last = state.items.at(-1)

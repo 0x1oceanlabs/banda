@@ -3,7 +3,9 @@
  * Agent's tool calls and thoughts in a row are one line of work, a turn
  * that ended folds its work away behind how long it took and what it did,
  * and the turn that runs says, at its end, how long it has and what it
- * does now (ADR 0058, decisions 4 and 5). Pure, so plain tests cover it.
+ * does now (ADR 0058, decisions 4 and 5). Sub-agents that outlive their
+ * turn keep a live line at the Thread's end (ADR 0103, decision 19). Pure,
+ * so plain tests cover it.
  */
 import type {
   Item,
@@ -21,6 +23,7 @@ import {
   total,
 } from "../entries/parts/changes"
 import { askedByLane } from "./facts"
+import { afterWords, duringWords } from "./subagents"
 import {
   isReply,
   planOf,
@@ -44,16 +47,23 @@ export type Line =
   | { kind: "fold"; id: string; turn: TurnView; lines: Line[] }
   /** The turn that runs, after what it has done: what it does now. */
   | { kind: "working"; turn: TurnView; doing?: Doing }
+  /** No turn runs and sub-agents still work: the live line, with no
+   * clock, at the Thread's end (ADR 0103, decision 19). `then` is muted
+   * after `words`. */
+  | { kind: "at-work"; words: string; then: string }
   /** The reply a turn in plan mode ended with: the plan it proposed. */
   | { kind: "plan"; turn: TurnView; item: Said }
   /** The files a turn that ended changed, after what it wrote. */
   | { kind: "changes"; turn: TurnView; files: FileChange[] }
 
-/** The Thread's lines, from the rows {@link rows} gives. */
-export function timeline(state: ThreadState): Line[] {
+/** The Thread's lines, from the rows {@link rows} gives. `short` is its
+ * Harness's short name, "Claude", who goes on after its sub-agents. */
+export function timeline(state: ThreadState, short: string): Line[] {
   const turn = running(state)
-  const lines = fold(group(rows(state)), state.turns)
-  return working(changed(lines, state), turn, turn && doing(state, turn))
+  const lines = changed(fold(group(rows(state)), state.turns), state)
+  return turn
+    ? working(lines, turn, doing(state, turn))
+    : stillAtWork(lines, state, short)
 }
 
 /** Whether `row` is work: a tool call or a thought. */
@@ -78,6 +88,8 @@ function turnOf(line: Line): string | undefined {
     case "work":
     case "subagents":
       return line.turn
+    case "at-work":
+      return undefined
     default:
       return line.turn.id
   }
@@ -227,10 +239,9 @@ function opened(line: Line): Line[] {
  * did, or else the message that asked for it. */
 function working(
   lines: Line[],
-  turn: TurnView | undefined,
+  turn: TurnView,
   now: Doing | undefined
 ): Line[] {
-  if (!turn) return lines
   const row: Line = { kind: "working", turn, ...(now && { doing: now }) }
   const last = lines.findLastIndex((line) => turnOf(line) === turn.id)
   const message = lines.findIndex(
@@ -241,19 +252,31 @@ function working(
   return [...lines.slice(0, at), row, ...lines.slice(at)]
 }
 
+/** Sub-agents at work with no turn that runs say so at the Thread's end,
+ * with no clock (ADR 0103, decision 19). */
+function stillAtWork(lines: Line[], state: ThreadState, short: string): Line[] {
+  const after = afterWords(state.subagents, short)
+  return after ? [...lines, { kind: "at-work", ...after }] : lines
+}
+
 /** What the turn that runs does now, as its live line says after how
  * long it has worked. */
 export type Doing =
   /** A Question of it waits for the Person. */
   | { kind: "asking" }
+  /** Its sub-agents work: "3 sub-agents at work", "Waiting on Explore". */
+  | { kind: "subagents"; words: string }
   /** A call runs, since `since` (ms since the epoch). */
   | { kind: "calling"; said: Words; since: number }
   | { kind: "thinking" }
 
 /** What `turn` does now: it waits on its Person while a Question of it is
- * open, or else what it did last, while that still goes. A sub-agent's
- * Question is not its: the sub-agent's row says what it asks (ADR 0103,
- * decision 28). */
+ * open, or else on the sub-agents it started, whatever it called itself,
+ * as Codex's `wait` (ADR 0103, decision 19), or else what it did last,
+ * while that still goes. Sub-agents an earlier turn left at work are not
+ * its: the Harness takes a new turn while they work on. Nor is a
+ * sub-agent's Question: the sub-agent's row says what it asks (decision
+ * 28). */
 export function doing(state: ThreadState, turn: TurnView): Doing | undefined {
   const own = state.items.filter(
     (item) => item.turn === turn.id && !askedByLane(item)
@@ -261,6 +284,10 @@ export function doing(state: ThreadState, turn: TurnView): Doing | undefined {
   const open = (item: Item) =>
     item.body.kind === "question" && item.body.state === "open"
   if (own.some(open)) return { kind: "asking" }
+  const words = duringWords(
+    state.subagents.filter((lane) => lane.turn === turn.id)
+  )
+  if (words) return { kind: "subagents", words }
   const last = own.at(-1)
   if (last?.body.kind === "thought") return { kind: "thinking" }
   if (last?.body.kind !== "tool") return undefined

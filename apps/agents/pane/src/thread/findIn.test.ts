@@ -26,7 +26,7 @@ test("a folded turn holds the words its work shows, in any case", () => {
     event("reply.grew", { item: "r", turn: "u", text: "Done." }),
     event("turn.ended", { turn: "u", state: "done" }),
   ].reduce(apply, EMPTY)
-  const fold = timeline(state).find((line) => line.kind === "fold")!
+  const fold = timeline(state, "Claude").find((line) => line.kind === "fold")!
   expect(holds(fold, "notes")).toBe(true)
   expect(holds(fold, "TESTS")).toBe(true)
   // The reply stays outside the fold.
@@ -65,7 +65,9 @@ test("Find matches a sub-agent row's label, role and report's first line, never 
       content: [],
     })
   )
-  const group = timeline(state).find((line) => line.kind === "subagents")!
+  const group = timeline(state, "Claude").find(
+    (line) => line.kind === "subagents"
+  )!
   const lanes = { byId: byId(state.subagents), model: "Opus 5.5" }
   expect(holds(group, "explore", lanes)).toBe(true)
   expect(holds(group, "MAP THE", lanes)).toBe(true)
@@ -91,7 +93,9 @@ test("Find matches a sub-agent row's label, role and report's first line, never 
     })
   )
   const ended = { byId: byId(done.subagents) }
-  const settled = timeline(done).find((line) => line.kind === "subagents")!
+  const settled = timeline(done, "Claude").find(
+    (line) => line.kind === "subagents"
+  )!
   expect(holds(settled, "in 3 places", ended)).toBe(true)
   expect(holds(settled, "sidebar.ts", ended)).toBe(false)
   // The anchor is the same entry; the record changed.

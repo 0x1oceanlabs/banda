@@ -79,6 +79,12 @@ test("sub-agents show as rows where they started, grouped, and settle into one l
   await expect(reviewer).toContainText("Asks: pnpm vitest")
   await expect(reviewer.getByRole("img", { name: "Asks" })).toBeVisible()
   await expect(thread.getByText(/^Waiting for you/)).toBeHidden()
+  // The live line counts the one that asks as at work, and does not wait
+  // on the Person for it (ADR 0103, decision 28).
+  await expect(thread.getByText("· 3 sub-agents at work")).toBeVisible()
+  await expect(
+    thread.locator("[data-slot=trace-line]", { hasText: "Waiting for you" })
+  ).toHaveCount(0)
   // A closed row counts nothing, and no row offers Stop.
   await expect(thread.locator("[data-slot=subagent]")).toHaveCount(3)
   await expect(thread.locator("[data-slot=subagents]")).not.toContainText(
@@ -207,4 +213,70 @@ test("a sub-agent that fails stays in its row and the Thread keeps working", asy
     thread.getByText("The sub-agents said: general-purpose failed.")
   ).toBeVisible()
   await shots(window, "failed")
+})
+
+test("the live line names the sub-agents at work", async () => {
+  window = await startWindow({ look: LOOK })
+  const { thread, composer } = await firstThread(window.page)
+  await composer.fill("sub-agents slow three")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^Working for/)).toBeVisible()
+  await expect(thread.getByText("· 3 sub-agents at work")).toBeVisible()
+  await shots(window, "live-line")
+})
+
+test("the live line says which sub-agent it waits on when one is at work", async () => {
+  window = await startWindow({ look: LOOK })
+  const { thread, composer } = await firstThread(window.page)
+  await composer.fill("sub-agents slow")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^Working for/)).toBeVisible()
+  await expect(
+    thread.getByText("· Waiting on Read a.txt one line")
+  ).toBeVisible()
+  await shots(window, "live-line-one")
+})
+
+test("sub-agents that outlive their turn keep the live line, and the composer stays free", async () => {
+  window = await startWindow({ look: LOOK })
+  const { thread, composer } = await firstThread(window.page)
+  await composer.fill("sub-agents outlive slow")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await expect(thread.getByText(/^Working for/)).toBeHidden()
+  // The line goes on at the Thread's end: a working satellite in the
+  // spinner's place, and no clock.
+  const line = thread.locator("[data-slot=trace-line]", {
+    hasText: "1 sub-agent at work",
+  })
+  await expect(line).toContainText("· Fake AI goes on when it ends")
+  await expect(line.locator('[data-sat="working"]')).toBeAttached()
+  await expect(
+    thread.locator("[data-slot=message-scroller-item]").last()
+  ).toContainText("1 sub-agent at work")
+  await expect(line).not.toHaveText(/\d+s/)
+  await shots(window, "outlive")
+  // A narrow Thread cuts the muted tail first, and keeps who is at work.
+  await sized(window, 480)
+  const title = line.locator("[data-slot=trace-title]")
+  await expect
+    .poll(() => title.evaluate((one) => one.scrollWidth <= one.clientWidth))
+    .toBe(true)
+  await window.page.screenshot({
+    path: "test-results/thread-subagents-outlive-narrow.png",
+  })
+  await sized(window, 1440)
+  // No turn runs: the composer is an idle Thread's, with no Stop, and a
+  // message starts a new turn while the sub-agent works on.
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    /^Write to Fake AI\. /
+  )
+  await expect(
+    thread.getByRole("button", { name: "Stop", exact: true })
+  ).toHaveCount(0)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(line).toBeVisible()
 })

@@ -635,6 +635,9 @@ sub-agents and the Crew `audit-routes`:
         row, and what Claude then says is its "went on by itself" turn
         (`apps/agents/engine/src/between.rs:183`). Reason: no recording
         shows one, so its words have nothing to be tried on.
+    - _Amended 2026-11-11, during step 1:_ one sub-agent named only by its
+      title reads "1 sub-agent at work · Claude goes on when it ends". A
+      title is no name for a sentence, and its row says it.
     - _Amended 2026-11-10, during step 1 (Roma's call 11):_ no Stop stays after the turn
       (decision 24). While sub-agents outlive their turn, the rows and the
       live line say the work goes on, and the composer is an idle
