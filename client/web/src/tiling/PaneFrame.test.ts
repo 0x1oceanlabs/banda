@@ -4,7 +4,7 @@ import type { Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import { arcHosts, MINE, ON_ARC, R1 } from "./testing"
-import { gateOf, handlesOf, type Routing } from "./mount"
+import { gateOf, handlesOf, type Routing, routingOnly } from "./mount"
 import { type Frame, handleOf } from "./PaneFrame"
 
 /** A frame that notes what its Panes open and update. */
@@ -197,6 +197,23 @@ test("the gate of a Pane on arc reads arc's Apps, as its welcome lists them, nev
   expect(shows("nobody.knows", { arc: ["nobody"] })).toBe(
     "This window does not know this kind of Pane."
   )
+})
+
+test("a Pane given one act of the window's hears that nothing else runs from it, as the Settings' sign-in terminal", () => {
+  const routing: Routing = {
+    act: (id) => ({ title: id, at: "window", takes: () => false }),
+    has: () => false,
+  }
+  const { runs } = handlesOf(
+    arcHosts(["agents"]),
+    routingOnly(routing, "link.open"),
+    ON_ARC,
+    () => undefined,
+    undefined
+  )
+  expect(runs!("link.open").runs).toBe(true)
+  expect(runs!("browser.open").runs).toBe(false)
+  expect(runs!("edit.paste").runs).toBe(false)
 })
 
 test("a Pane's own act takes its Project, and the Item it shows, where its args name none, so it acts on that Pane's, not on the one in focus (ADR 0106, law 3)", () => {

@@ -75,6 +75,14 @@ export const RoutingContext = createContext<Routing>({
   has: () => false,
 })
 
+/** `routing` for a Pane that may run act `id` of the window's and no
+ * other, as a terminal over the Settings: it hears that nothing else runs
+ * from it. */
+export const routingOnly = (routing: Routing, id: string): Routing => ({
+  ...routing,
+  act: (asked) => (asked === id ? routing.act(asked) : undefined),
+})
+
 /** Says why an act did not run, in a toast, once while it shows: "Not on
  * arc yet: Open in a browser" (ADR 0106, law 3), with a Copy where it
  * offers one. */

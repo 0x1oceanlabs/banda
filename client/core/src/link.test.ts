@@ -12,6 +12,9 @@ test("only http(s) makes a Link: file: and app: never reach the device", () => {
   expect(linkOf("app://files/secret")).toBeUndefined()
   expect(linkOf("javascript:alert(1)")).toBeUndefined()
   expect(linkOf("not a link")).toBeUndefined()
+  // Text a program prints that parses as an address only by accident.
+  expect(linkOf("http:8080")).toBeUndefined()
+  expect(linkOf("https:443")).toBeUndefined()
 })
 
 test("an address of the machine's own is named as that machine's; a public page is no machine's", () => {
@@ -24,6 +27,9 @@ test("an address of the machine's own is named as that machine's; a public page 
     "http://[::1]:5173/",
     "http://0.0.0.0:3000/",
     "http://app.localhost/",
+    "http://[::]:8000/",
+    "http://localhost.:3000/",
+    "http://[::ffff:127.0.0.1]:3000/",
   ])
     expect(linkOf(own, "arc")?.of, own).toBe("arc")
   expect(linkOf("https://github.com/a", "arc")).toEqual({

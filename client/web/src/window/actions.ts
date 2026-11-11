@@ -21,7 +21,6 @@ import {
 import { useState } from "react"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { openOutside } from "@banda/ui/lib/links"
 import { updateProject } from "@banda/ui/lib/projects"
 import {
   type Action,
@@ -1137,7 +1136,9 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (_shell, args = {}) => {
       const link = typeof args.url === "string" ? linkOf(args.url) : undefined
-      if (link) openOutside(link.url)
+      // Main hands an http(s) address to the system, and nothing else
+      // leaves the page.
+      if (link) window.open(link.url, "_blank", "noopener")
     },
   },
   {

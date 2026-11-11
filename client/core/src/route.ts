@@ -36,7 +36,9 @@ export type Owner =
  * App. Where it runs:
  *
  * - `owner`: on the machine its values are on, as an App's with an engine
- *   part, there while that machine's welcome lists the App (`app`);
+ *   part, there while that machine's welcome lists the App (`app`); or
+ *   in this window where the App is the window's, and that machine only
+ *   weighs its args (`refuses`), as a link of arc's own;
  * - `device`: on this device, as the browser's pages and this device's
  *   disk, which another machine's values never reach;
  * - `window`: in this window, whatever machine its values are on, as the
