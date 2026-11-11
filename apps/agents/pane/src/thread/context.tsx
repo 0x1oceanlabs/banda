@@ -52,7 +52,7 @@ export type ThreadActs = {
   accounts?: () => void
   /** How its Person signs in again, below a turn that failed for that. */
   signIn: (turn: TurnView) => React.ReactNode
-  /** Opens a web address on this device, past the router (ADR 0106, law 2). */
+  /** Opens a web address on this device, through the router (ADR 0106, law 2). */
   openLink: (url: string) => void
 }
 

@@ -88,6 +88,10 @@ arc and an act arc does not run (step 1a), and arc's Thread restored as
 the window starts again while arc is away (step 1a″);
 `remote-terminal.spec.ts`, arc's terminal: keys, its size, a link, and a
 shell found again once arc is back (step 1b);
+`remote-run.spec.ts`, a reply's Run and a sign-in on arc, and Run
+refused while arc is away (step 1c);
+`remote-git.spec.ts`, arc's Diff, its card, a refused Commit and a push
+cut off (step 2a);
 `remote-bytes.spec.ts`, this machine's pictures, PDFs, videos and pages
 through the relay to its engine, beside arc's at the same path (step 4b).
 Here,
