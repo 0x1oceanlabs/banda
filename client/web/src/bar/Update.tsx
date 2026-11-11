@@ -20,6 +20,7 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE } from "@banda/ui/lib/words"
 import { type ReactNode, useEffect, useState } from "react"
+import type { Engine } from "@banda/contract"
 import type { Note, Update } from "@banda/core"
 import {
   firstOf,
@@ -34,8 +35,10 @@ import {
   sizeWords,
   UPDATED_FOR,
   versionsWords,
+  waitWords,
   workingWords,
 } from "./updating"
+import { useRunningHere } from "./running"
 
 /** The notes the popover lists before "Show all". */
 const NOTES = 6
@@ -70,8 +73,15 @@ function useUpdate(): Update | undefined {
 const shown = (update: Update | undefined): update is Update =>
   update !== undefined && (update.state !== "none" || update.always)
 
-/** The update's widget; `working` is how many Threads work now. */
-export function UpdateWidget({ working }: { working: number }) {
+/** The update's widget, on this machine's `engine`; `working` is how many
+ * Threads work now. */
+export function UpdateWidget({
+  engine,
+  working,
+}: {
+  engine: Engine
+  working: number
+}) {
   const update = useUpdate()
   // What it last showed, while it shrinks out of the bar.
   const [last, setLast] = useState<Update>()
@@ -83,7 +93,9 @@ export function UpdateWidget({ working }: { working: number }) {
     const timer = setTimeout(() => setLast(undefined), LEAVES_IN)
     return () => clearTimeout(timer)
   }, [now])
-  useRestartWhenIdle(now, working)
+  // Only a version ready to restart into waits for them.
+  const running = useRunningHere(engine, now?.state === "ready")
+  useRestartWhenIdle(now, working, running)
   useUpdatedFor(now, open)
   const drawn = now ?? last
   if (!drawn) return null
@@ -131,7 +143,7 @@ export function UpdateWidget({ working }: { working: number }) {
           )}
         </PopoverTrigger>
         <PopoverContent className="w-84 gap-0 p-0">
-          <About update={drawn} working={working} />
+          <About update={drawn} working={working} running={running} />
         </PopoverContent>
       </Popover>
     </span>
@@ -145,15 +157,22 @@ export function UpdateWidget({ working }: { working: number }) {
   )
 }
 
-/** Restarts into a version that waits for the Threads, once none has
- * worked for `IDLE_FOR` (ADR 0072, decision 3). */
-function useRestartWhenIdle(update: Update | undefined, working: number) {
+/** Restarts into a version that waits for the Threads and this machine's
+ * terminals, once no Thread has worked, and no program run in front, for
+ * `IDLE_FOR` (ADR 0072, decision 3): `running` is none until its terminals
+ * have answered, so it waits for that too. */
+function useRestartWhenIdle(
+  update: Update | undefined,
+  working: number,
+  running: number | undefined
+) {
   const waits = update?.state === "ready" && update.waits
+  const idle = working === 0 && running === 0
   useEffect(() => {
-    if (!waits || working > 0) return
+    if (!waits || !idle) return
     const timer = setTimeout(() => host()?.restart(), IDLE_FOR)
     return () => clearTimeout(timer)
-  }, [waits, working])
+  }, [waits, idle])
 }
 
 /** Says that Banda updated `UPDATED_FOR`, unless the Person opened what
@@ -168,9 +187,17 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
 }
 
 /** What the popover says. */
-function About({ update, working }: { update: Update; working: number }) {
+function About({
+  update,
+  working,
+  running = 0,
+}: {
+  update: Update
+  working: number
+  running: number | undefined
+}) {
   const at = useNow(MINUTE)
-  const warning = workingWords(working)
+  const warning = workingWords(working, running)
   switch (update.state) {
     case "downloading": {
       const size = sizeWords(update)
@@ -221,11 +248,7 @@ function About({ update, working }: { update: Update; working: number }) {
             <Head
               update={update}
               to={update.version}
-              words={
-                working > 0
-                  ? `Waits for ${working === 1 ? "a Thread" : `${working} Threads`} to finish ${working === 1 ? "its turn" : "their turns"}`
-                  : "Restarts in a moment"
-              }
+              words={waitWords(working, running) ?? "Restarts in a moment"}
             />
             <div className="px-3.5">
               <Notes notes={update.notes} />

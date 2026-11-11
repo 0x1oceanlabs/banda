@@ -1,4 +1,4 @@
-import type { Status } from "@banda/contract"
+import type { Engine, Status } from "@banda/contract"
 import {
   BandaMark,
   loudest,
@@ -28,6 +28,7 @@ import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
 import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
 import { useRun } from "@banda/core/react"
+import { useStatus } from "@banda/ui/hooks/use-status"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
@@ -42,13 +43,14 @@ import { useRun } from "@banda/core/react"
  * Window's stores.
  */
 export function Bar({
-  status,
+  engine,
   problems,
   widgets,
   listed,
   onArrange,
 }: {
-  status: Status
+  /** This machine's engine: its connection, and what its update waits for. */
+  engine: Engine
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
   /** The widgets of each part, drawn. */
@@ -58,6 +60,7 @@ export function Bar({
   /** Writes `[bar]`'s lists once a widget moved with the mod. */
   onArrange?: (bar: Layout) => void
 }) {
+  const status = useStatus(engine)
   const keyFor = useKeyLabel()
   const run = useRun()
   // What the modules' work calls the Person for, for the mark to show,
@@ -170,7 +173,7 @@ export function Bar({
         <div data-part="right" className={zone("right")}>
           {draw("right")}
         </div>
-        <UpdateWidget working={working} />
+        <UpdateWidget engine={engine} working={working} />
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

@@ -12,7 +12,6 @@ import {
   newId,
   type ProjectId,
   type ProjectSummary,
-  type Status,
 } from "@banda/contract"
 import { Toaster, toast } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
@@ -162,14 +161,12 @@ const menuSources = sources.map(({ source }) => source)
  */
 export function Shell({
   engine,
-  status,
   modules,
   projects,
   home,
   onCreated,
 }: {
   engine: Engine
-  status: Status
   modules: readonly string[]
   projects: ProjectSummary[]
   /** The home Project, where a New Thread starts with no Pane on screen. */
@@ -819,7 +816,7 @@ export function Shell({
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar
-              status={status}
+              engine={engine}
               problems={bar.problems}
               widgets={bar.parts}
               listed={bar.listed}
