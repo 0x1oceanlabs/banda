@@ -597,6 +597,8 @@ fn main() -> ExitCode {
     // says whether this is the job.
     if let Command::Serve { job, .. } = &mut cli.command {
         *job = service::launchd::begin(*job);
+        // What its welcome says to every window (ADR 0115, decision 6).
+        banda_kernel::set_build(build_id::own());
     }
     match cli.command {
         // Before anything else: it stays on this one thread.

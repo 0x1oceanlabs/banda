@@ -33,7 +33,14 @@ fence?: Fence,
  * engine draws an icon it has not as `desktop`, so a new icon is
  * additive too.
  */
-named?: Named, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
+named?: Named, 
+/**
+ * Banda's version this engine was built as, and its build id
+ * (ADR 0115, decision 6). A window of another build still
+ * attaches while it speaks this protocol, and does without what
+ * this engine lacks. An engine that says none is older than both.
+ */
+version?: string, build?: string, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
 /**
  * A command's place in the log of its scope (ADR 0082, decision
  * 4): the last fact it wrote. A view current there shows what it

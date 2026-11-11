@@ -168,6 +168,19 @@ pub fn set_version(version: &'static str) {
     let _ = VERSION.set(version);
 }
 
+static BUILD: std::sync::OnceLock<Option<String>> = std::sync::OnceLock::new();
+
+/// The engine's build id, in hex, as `banda --version` says it; none when
+/// its program has none, or before the engine told it.
+pub fn build() -> Option<&'static str> {
+    BUILD.get().and_then(Option::as_deref)
+}
+
+/// Tells the kernel the engine's build id; `banda serve` does, once.
+pub fn set_build(build: Option<String>) {
+    let _ = BUILD.set(build);
+}
+
 /// A name that works as one file or folder name: 1 to 64 characters, with
 /// no slashes and no leading dot. Returns it without surrounding projects.
 pub fn plain_name(name: &str) -> Option<&str> {
