@@ -418,6 +418,73 @@ pub struct Done {
     pub detail: Option<String>,
 }
 
+/// What `git.folder_for` is asked: commits of the folder a Thread moves
+/// from, each named whole.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct FolderAsk {
+    #[serde(default)]
+    pub commits: Vec<String>,
+}
+
+/// What a Project's folder is to a move (ADR 0116, decision 8).
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct FolderFor {
+    /// Whether it is a git repository.
+    pub git: bool,
+    /// Whether nothing in it is changed and not committed, and no command
+    /// of Banda's writes in it now.
+    pub free: bool,
+    /// `HEAD` and its remotes' branches, as commits: what a folder it
+    /// moves to is asked for.
+    pub tips: Vec<String>,
+    /// The commits asked for that it has.
+    pub has: Vec<String>,
+}
+
+/// What `git.pack_folder` is asked: the move, the Thread whose snapshot
+/// it keeps, and the commits the other machine has.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct PackFolder {
+    #[serde(rename = "move")]
+    pub id: String,
+    pub thread: String,
+    #[serde(default)]
+    pub have: Vec<String>,
+}
+
+/// What `git.pack_folder` answers: the folder as it was packed, and its
+/// bundle's size and SHA-256.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct PackedFolder {
+    /// The branch checked out; none when `HEAD` is detached.
+    pub branch: Option<String>,
+    pub head: String,
+    /// How many files are changed and not committed.
+    pub changed: u32,
+    #[ts(type = "number")]
+    pub size: u64,
+    pub sha256: String,
+}
+
+/// What `git.unpack_folder` is asked: the move, its Thread, and the
+/// folder as `pack_folder` answered it.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct UnpackFolder {
+    #[serde(rename = "move")]
+    pub id: String,
+    pub thread: String,
+    #[serde(default)]
+    #[ts(optional)]
+    pub branch: Option<String>,
+    pub head: String,
+    pub sha256: String,
+}
+
 /// What `git.switch` is asked: a branch here, or a remote's, which a
 /// branch of its own then follows.
 #[derive(Clone, Debug, Deserialize, TS)]

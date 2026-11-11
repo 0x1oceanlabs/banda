@@ -22,6 +22,7 @@ pub mod model;
 mod act;
 mod checkpoint;
 mod diff;
+mod folder;
 mod index;
 mod lines;
 mod message;
@@ -36,7 +37,8 @@ mod watch;
 use banda_kernel::{Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Stream};
 use model::{
     ActAsk, BranchAsk, ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk,
-    Message, Progress, PromptAsk, Prompted, Ref, RefsAsk, Status, SwitchAsk, WrittenAsk,
+    FolderAsk, FolderFor, Message, PackFolder, PackedFolder, Progress, PromptAsk, Prompted, Ref,
+    RefsAsk, Status, SwitchAsk, UnpackFolder, WrittenAsk,
 };
 use repo::Repo;
 use serde_json::Value;
@@ -169,6 +171,24 @@ banda_kernel::methods! {
         /// A Harness's reply to `prompt` read as a message for `act`, and
         /// as the name of a new branch no branch here has.
         call written(WrittenAsk) -> Message, Read;
+        /// What this Project's folder is to a Thread that moves between
+        /// machines (ADR 0116, decision 8): whether it is a repository,
+        /// `HEAD` and its remotes' branches as commits, which of
+        /// `commits` it has, and whether it is free, with nothing changed
+        /// and not committed. Only a Person asks.
+        call folder_for(FolderAsk) -> FolderFor, Read;
+        /// Keeps the folder as it is now as a snapshot commit, as a
+        /// checkpoint is kept, and writes a bundle of it without the
+        /// commits of `have` in the Project's data, `moves/<move>.bundle`,
+        /// for the window to carry. The branch, the index and the files
+        /// are not touched. It answers the branch, `HEAD`, how many files
+        /// are changed, and the bundle's size and SHA-256.
+        call pack_folder(PackFolder) -> PackedFolder, Run;
+        /// Takes a move's bundle carried here, and puts the folder as the
+        /// one it comes from was: the same branch at the same commit, the
+        /// snapshot's changes not committed. A folder with changes of its
+        /// own refuses, and a branch of that name that went another way.
+        call unpack_folder(UnpackFolder) -> (), Run;
     }
 }
 
@@ -302,6 +322,27 @@ impl Git {
 
     async fn written(&self, call: Call, ask: WrittenAsk) -> Result<Message, Refusal> {
         message::written(&Repo::open(call.project()).await?, ask).await
+    }
+
+    async fn folder_for(&self, call: Call, ask: FolderAsk) -> Result<FolderFor, Refusal> {
+        folder::person_only(&call)?;
+        let busy = match Repo::find(call.project()).await? {
+            Some(repo) => self.writing.of(&repo.top).busy(),
+            None => false,
+        };
+        folder::folder_for(call.project(), busy, ask).await
+    }
+
+    async fn pack_folder(&self, call: Call, ask: PackFolder) -> Result<PackedFolder, Refusal> {
+        folder::person_only(&call)?;
+        folder::pack(call.project(), ask).await
+    }
+
+    async fn unpack_folder(&self, call: Call, ask: UnpackFolder) -> Result<(), Refusal> {
+        folder::person_only(&call)?;
+        let repo = Repo::open(call.project()).await?;
+        let _writing = self.writing.of(&repo.top).hold().await;
+        folder::unpack(call.project(), ask).await
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {

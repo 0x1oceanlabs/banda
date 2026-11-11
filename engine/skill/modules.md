@@ -150,7 +150,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Show the Diff, or hide it (`git.diff`), Alt+D
 - Switch branch (`git.branch`), Alt+Shift+G
 
-Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
+Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`, `folder_for`, `pack_folder`, `unpack_folder`.
 
 ## Pull requests (`pulls`)
 

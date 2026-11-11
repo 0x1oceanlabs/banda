@@ -387,15 +387,18 @@ move_thread: CommandMethod<MoveThread, null>,
  */
 pack_thread: CommandMethod<OneThread, Packed>, 
 /**
- * A piece of a packed move's artefact from byte `at`, 512 KiB at
- * most, in base64, and whether more comes after it. Only a
- * Person reads it.
+ * A piece of one of a packed move's files from byte `at`, 512 KiB
+ * at most, in base64, and whether more comes after it: the
+ * Thread's artefact, or with `part` "folder" the bundle of its
+ * folder's work, which the Git App packed beside it (ADR 0116,
+ * decision 8). Only a Person reads it.
  */
 packed: CallMethod<PieceAsk, Piece>, 
 /**
- * Keeps a piece of a move's artefact, carried from another
+ * Keeps a piece of one of a move's files, carried from another
  * machine, in this Project's data: the next one, or one kept
- * already. Only a Person carries one.
+ * already; `part` as `packed` takes it. Only a Person carries
+ * one.
  */
 take_piece: CommandMethod<TakePiece, null>, 
 /**
