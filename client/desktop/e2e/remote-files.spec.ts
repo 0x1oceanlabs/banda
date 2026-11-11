@@ -269,8 +269,9 @@ test("a markdown of arc's is drawn, its picture as words until 4c, its links ope
   ).toBeVisible()
   expect(await external()).toEqual(["https://example.com/page"])
   // JSON's view reads bytes, which come with 4c: it draws as text.
-  const data = await opened(page, row("data.json"), "data.json", "from")
-  await expect(data.locator('[data-line="1"]').first()).toContainText("arc")
+  const data = await opened(page, row("data.json"), "data.json", "arc")
+  await expect(data.locator('[data-line="1"]').first()).toContainText('"from"')
+  await expect(data.getByText("does not parse")).toHaveCount(0)
   await row("manual.pdf").dblclick()
   const pdf = page.getByRole("region", { name: "manual.pdf", exact: true })
   await expect(pdf.getByText("Preview comes soon")).toBeVisible()
