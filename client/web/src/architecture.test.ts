@@ -107,9 +107,10 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import {
   appStrings,
+  beyond,
   componentProps,
-  corners,
   desktopReads,
+  drawingFiles,
   hostReads,
   imports,
   kindReaches,
@@ -907,72 +908,22 @@ const LAYOUT_MOTION = [
 ]
 
 /** The window's own code and the Panes', with their stylesheets; not
- * what only tests use. */
-const drawing = [
-  ...["web/src", "core/src", "ui/src", "ghostty/src"].map((folder) =>
-    join(app, folder)
-  ),
-  ...[...folders.values()]
-    .map((folder) => join(folder, "pane/src"))
-    .filter((folder) => existsSync(folder)),
-]
-  .flatMap((folder) => sources(folder, { tests: false, styles: true }))
-  .filter((file) => !file.startsWith(join(app, "ui/src/testing")))
+ * what only tests use. The look check reads the same (look.test.ts). */
+const drawing = drawingFiles(root)
 
-/** What `check` finds in each file that draws, by its path. */
-const foundInDrawing = (check: (source: string) => string[]) =>
-  drawing.flatMap((file) =>
-    check(readFileSync(file, "utf8")).map(
-      (what) => `${relative(root, file)}: ${what}`
-    )
+/** What animates layout in each file that draws, by its path. */
+const moving = drawing.flatMap((file) =>
+  layoutMotion(readFileSync(file, "utf8")).map(
+    (what) => `${relative(root, file)}: ${what}`
   )
-
-const moving = foundInDrawing(layoutMotion)
-
-/** What `list` holds more often than `than` does: once for each time
- * more. */
-function beyond(list: string[], than: string[]): string[] {
-  const left = [...than]
-  return list.filter((each) => {
-    const at = left.indexOf(each)
-    if (at >= 0) left.splice(at, 1)
-    return at < 0
-  })
-}
+)
 
 test("nothing more animates a size or a place: only what does today", () => {
-  expect(drawing).toContain(join(app, "ui/src/styles/globals.css"))
   expect(beyond(moving, LAYOUT_MOTION)).toEqual([])
 })
 
 test("a case that no longer animates one leaves the list", () => {
   expect(beyond(LAYOUT_MOTION, moving)).toEqual([])
-})
-
-/** The corners on no level, each with why (ADR 0080, decision 6): the
- * Group's plate is its tiles' corner and its pad (ADR 0065, decision 6),
- * the overview draws the levels at its scale, and a Project's sign is an
- * icon, its corner a share of its size. */
-const OWN_CORNERS = [
-  "client/ui/src/components/project-sign.tsx: borderRadius",
-  "client/ui/src/styles/globals.css: border-start-start-radius: var(--group-radius)",
-  "client/ui/src/styles/globals.css: border-end-start-radius: var(--group-radius)",
-  "client/ui/src/styles/globals.css: border-start-end-radius: var(--group-radius)",
-  "client/ui/src/styles/globals.css: border-end-end-radius: var(--group-radius)",
-  "client/web/src/tiling/Overview.tsx: rounded-(--overview-plate)",
-  "client/web/src/tiling/Overview.tsx: rounded-(--overview-radius)",
-  "client/web/src/tiling/Overview.tsx: borderRadius",
-  "client/web/src/tiling/Overview.tsx: borderRadius",
-]
-
-const cornered = foundInDrawing(corners)
-
-test("a component rounds by the five levels, round or none: no px, calc() or min() (ADR 0080, decision 6)", () => {
-  expect(beyond(cornered, OWN_CORNERS)).toEqual([])
-})
-
-test("a corner that takes a level leaves the list", () => {
-  expect(beyond(OWN_CORNERS, cornered)).toEqual([])
 })
 
 /** The window's clock (`frames.ts`): it alone asks the browser for the

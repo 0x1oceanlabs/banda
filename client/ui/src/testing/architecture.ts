@@ -4,7 +4,8 @@
  * files of a folder, the modules each one names, the Apps each one names,
  * what each one takes of a module as values, where each one reads the
  * desktop's bridge, what each one animates and the props its components
- * take, those that are code and all of them; and for ADR 0106's laws 1
+ * take, those that are code and all of them; the files that draw, which
+ * the look check (`look.ts`) reads too; and for ADR 0106's laws 1
  * and 6, where a kind of Pane's code reaches past the handles it is given,
  * the kinds a file declares, and where code asks where its Pane is.
  * For tests alone: it reads the disk.
@@ -12,7 +13,6 @@
 /// <reference types="node" />
 import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, sep } from "node:path"
-import { TOKENS } from "@banda/contract/look"
 import ts from "typescript"
 
 /**
@@ -67,6 +67,39 @@ export function sources(
     if (entry.isDirectory()) return sources(path, { tests, styles })
     if (!(styles ? /\.(tsx?|css)$/ : /\.tsx?$/).test(entry.name)) return []
     return tests || !entry.name.includes(".test.") ? [path] : []
+  })
+}
+
+/**
+ * The files that draw, under the repository's `root`: the Window's code
+ * and the Panes', with their stylesheets, as the layout-motion check and
+ * the look check read them (ADR 0113, decision 9): `client/web`,
+ * `client/core`, `client/ui` and `client/ghostty`, and each App's and
+ * platform part's `pane/src`; not tests, nor `@banda/ui/testing`.
+ */
+export function drawingFiles(root: string): string[] {
+  const client = join(root, "client")
+  return [
+    ...["web/src", "core/src", "ui/src", "ghostty/src"].map((folder) =>
+      join(client, folder)
+    ),
+    ...[...parts(root).values()]
+      .map((folder) => join(folder, "pane/src"))
+      .filter((folder) => existsSync(folder)),
+  ]
+    .flatMap((folder) => sources(folder, { tests: false, styles: true }))
+    .filter((file) => !file.startsWith(join(client, "ui/src/testing")))
+}
+
+/** What `list` holds more often than `than` does: once for each time
+ * more. A list of cases that only falls is held by two of these: nothing
+ * found beyond the list, and nothing listed beyond what is found. */
+export function beyond(list: string[], than: string[]): string[] {
+  const left = [...than]
+  return list.filter((each) => {
+    const at = left.indexOf(each)
+    if (at >= 0) left.splice(at, 1)
+    return at < 0
   })
 }
 
@@ -211,41 +244,6 @@ export function layoutMotion(source: string): string[] {
     )
       found.push(`@keyframes ${start[1]}`)
   }
-  return found
-}
-
-/** The corners a component may take: the five levels, as the token list
- * has them (ADR 0080, decision 6), round, none, or its holder's. */
-const LEVELS = Object.entries(TOKENS)
-  .filter(([, { group }]) => group === "radius")
-  .map(([name]) => name.replace(/-radius$/, ""))
-const ROUNDING = new Set([...LEVELS, "full", "none", "[inherit]"])
-const CORNER = new RegExp(
-  `^(?:var\\(--(?:${LEVELS.join("|")})-radius\\)|0|9999px|50%|inherit)$`
-)
-
-/**
- * Each corner `source`, a source file or a stylesheet, rounds by other
- * than a level, once for each place it does: a Tailwind class that is no
- * level (`rounded-md`, `rounded-[3px]`, `rounded-(--x)`, a bare
- * `rounded`), a CSS `border-radius` of another value (px, `calc()`,
- * `min()`), and a style's `borderRadius`. Comments are no place, so words
- * such as "rounded up" are not taken for a class.
- */
-export function corners(source: string): string[] {
-  const code = source
-    .replace(/\/\*[\s\S]*?\*\//g, "")
-    .replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
-  const found: string[] = []
-  for (const [match, value] of code.matchAll(
-    /(?<![\w./-])rounded(?:-(?:tl|tr|bl|br|ss|se|es|ee|[tblrse]))?(?:-(\w+|\[[^\]\s]*\]|\([^)\s]*\)))?(?![\w./-])/g
-  ))
-    if (value === undefined || !ROUNDING.has(value)) found.push(match)
-  for (const [match, value] of code.matchAll(
-    /(?<![\w-])border(?:-[a-z]+)*-radius\s*:\s*([^;{}"'`]+)/g
-  ))
-    if (!CORNER.test(value.trim())) found.push(match.trim())
-  for (const [match] of code.matchAll(/\bborderRadius\b/g)) found.push(match)
   return found
 }
 
