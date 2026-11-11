@@ -8,7 +8,7 @@ test.afterEach(async () => {
 })
 
 for (const accepted of [true, false]) {
-  test(`a clicked effort waits for the engine to ${accepted ? "confirm" : "refuse"} it`, async () => {
+  test(`a clicked effort level waits for the engine to ${accepted ? "confirm" : "refuse"} it`, async () => {
     window = await startWindow()
     const { page } = window
     let confirm = () => {}
@@ -47,20 +47,17 @@ for (const accepted of [true, false]) {
     const model = thread.getByRole("button", { name: /^Model:/ })
     await expect(model).toHaveAccessibleName("Model: Fast, Medium")
     await model.click()
-    const effort = page.getByRole("slider", { name: "Effort" })
-    const track = page.locator("[data-base-ui-slider-control]")
-    const box = await track.boundingBox()
-    if (!box) throw new Error("The effort track is missing")
-    await track.click({ position: { x: box.width - 10, y: box.height / 2 } })
+    // The level chosen stays as it was until the engine answers.
+    const effort = page.getByRole("radiogroup", { name: "Effort" })
+    await effort.getByRole("radio", { name: "Max" }).click()
     await expect.poll(() => calls).toBe(1)
-    await expect(effort).toHaveAttribute("aria-valuetext", "Max")
+    await expect(model).toBeDisabled()
     confirm()
     await expect(model).toBeEnabled()
     await expect(model).toHaveAccessibleName(
       `Model: Fast, ${accepted ? "Max" : "Medium"}`
     )
-    await expect(effort).toHaveAttribute(
-      "aria-valuetext",
+    await expect(effort.getByRole("radio", { checked: true })).toHaveText(
       accepted ? "Max" : "Medium"
     )
     if (!accepted) {
@@ -68,23 +65,11 @@ for (const accepted of [true, false]) {
       return
     }
 
-    // Keyboard changes and drags keep their preview through the same wait.
-    await effort.press("Home")
+    // A level already chosen is no change, and asks nothing.
+    await effort.getByRole("radio", { name: "Max" }).click()
+    await effort.getByRole("radio", { name: "Low" }).click()
     await expect.poll(() => calls).toBe(2)
-    await expect(effort).toHaveAttribute("aria-valuetext", "Low")
     confirm()
-    await expect(model).toBeEnabled()
     await expect(model).toHaveAccessibleName("Model: Fast, Low")
-    await effort.locator("..").hover()
-    await page.mouse.down()
-    await page.mouse.move(box.x + box.width - 10, box.y + box.height / 2, {
-      steps: 5,
-    })
-    await page.mouse.up()
-    await expect.poll(() => calls).toBe(3)
-    await expect(effort).toHaveAttribute("aria-valuetext", "Max")
-    confirm()
-    await expect(model).toBeEnabled()
-    await expect(model).toHaveAccessibleName("Model: Fast, Max")
   })
 }

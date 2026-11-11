@@ -911,29 +911,31 @@ test("a Person chooses the model and the mode under the message box", async () =
   // Where the fence does not hold, as here, a new Thread starts
   // Supervised (ADR 0083).
   await expect(mode("Supervised")).toBeVisible()
-  await expect(thread.getByRole("button", { name: /^Model:/ })).toBeHidden()
+  // Before its Harness said its models, the picker goes by its name.
+  await expect(model("Fake AI")).toBeVisible()
   await composer.fill("which settings")
   await composer.press("Enter")
   await expect(
     thread.getByText("Mode default, model fast, brief false")
   ).toBeVisible()
 
-  // The Harness offered its options with its first turn. The picker
-  // opens on the effort; the model's name opens the models.
+  // The Harness offered its options with its first turn: its menu of
+  // models, the first three while none are starred, the effort's levels
+  // and Fast mode (ADR 0114, decision 5).
   await model("Fast, Medium").click()
-  const effort = page.getByRole("slider", { name: "Effort" })
-  await expect(effort).toHaveAttribute("aria-valuetext", "Medium")
-  await page.getByRole("button", { name: "Models" }).click()
-  // A row is named by its model alone: the logo beside it only decorates.
-  await page.getByRole("option", { name: "Smart", exact: true }).click()
+  const effort = page.getByRole("radiogroup", { name: "Effort" })
+  await expect(effort.getByRole("radio", { checked: true })).toHaveText(
+    "Medium"
+  )
+  await page.getByRole("option", { name: /^Smart/ }).click()
   await expect(model("Smart, Medium")).toBeVisible()
   await model("Smart, Medium").click()
-  await effort.focus()
-  await effort.press("End")
+  await effort.getByRole("radio", { name: "Max" }).click()
   await expect(model("Smart, Max")).toBeVisible()
-  const fast = page.getByRole("button", { name: "Fast mode" })
+  const fast = page.getByRole("switch", { name: /^Fast mode/ })
   await fast.click()
-  await expect(fast).toHaveAttribute("aria-pressed", "true")
+  await expect(fast).toHaveAttribute("aria-checked", "true")
+  await expect(model("Smart, Max, Fast mode")).toBeVisible()
   await page.screenshot({ path: "test-results/6-effort.png" })
   await page.keyboard.press("Escape")
 
@@ -1203,6 +1205,47 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   await expect(notice).toHaveCount(0)
 })
 
+test("All models stars a model into the menu, through the machine's agents.toml (ADR 0114, decision 6)", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const model = thread.getByRole("button", { name: /^Model:/ })
+  await model.click()
+  await page.getByRole("button", { name: /^All models/ }).click()
+  // A window over the Pane: the menu's models, then the rest.
+  const all = page.getByRole("dialog", { name: "Models" })
+  await expect(all.getByRole("group", { name: "In the menu" })).toBeVisible()
+  await all.getByRole("button", { name: "Take Smart out of the menu" }).click()
+  await expect(
+    all
+      .getByRole("group", { name: /^All of/ })
+      .getByRole("option", { name: /^Smart/ })
+  ).toBeVisible()
+  await expect
+    .poll(() => readFileSync(join(dir, "config/agents.toml"), "utf8"))
+    .toMatch(/^fake = \["fast"\]$/m)
+  await page.screenshot({ path: "test-results/6-all-models.png" })
+  // Arrows and Enter choose; the window closes.
+  await page.keyboard.press("ArrowDown")
+  await page.keyboard.press("Enter")
+  await expect(all).toBeHidden()
+  await expect(model).toHaveAccessibleName(/^Model: Smart/)
+  // The Thread's model stands first in the menu while it is not starred.
+  await model.click()
+  await expect(
+    page.getByRole("listbox", { name: "Model" }).getByRole("option")
+  ).toHaveText([/^Smart/, /^Fast/])
+  await page.keyboard.press("Escape")
+  // Esc closes the window too.
+  await model.click()
+  await page.getByRole("button", { name: /^All models/ }).click()
+  await page.keyboard.press("Escape")
+  await expect(all).toBeHidden()
+})
+
 test("a new Thread's account is chosen in its phrase, and its model in the Message box (ADR 0114)", async () => {
   window = await startWindow({ other: true })
   const { page } = window
@@ -1224,9 +1267,8 @@ test("a new Thread's account is chosen in its phrase, and its model in the Messa
   await next.getByRole("button", { name: "Account: Fake AI" }).click()
   await page.getByRole("button", { name: /^Other AI/ }).click()
   await next.getByRole("button", { name: /^Model: Fast/ }).click()
-  await page.getByRole("button", { name: "Models" }).click()
   const models = page.getByRole("listbox", { name: "Model" })
-  await expect(models.getByRole("option")).toHaveText([/Fast$/, /Smart$/])
+  await expect(models.getByRole("option")).toHaveText([/^Fast/, /^Smart/])
   await page.screenshot({ path: "test-results/6-every-harness.png" })
   await models.getByRole("option", { name: "Smart" }).click()
   await expect(
