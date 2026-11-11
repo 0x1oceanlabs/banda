@@ -15,9 +15,9 @@
 
 use crate::accounts::secrets::{Kept, Secrets};
 use crate::accounts::{
-    AccountKey, AccountProfile, AccountStatus, AccountStore, Accounted, Accounts, AddGateway,
-    ConnectAccount, GatewayAdded, LoginAccount, LoginId, LoginInput, LoginStatus, RemoveAccount,
-    SetStart, UpdateAccount,
+    AccountKey, AccountList, AccountProfile, AccountStatus, AccountStore, Accounted, Accounts,
+    AddGateway, ConnectAccount, GatewayAdded, LoginAccount, LoginId, LoginInput, LoginStatus,
+    RemoveAccount, SetStart, UpdateAccount,
 };
 use crate::limits::Reader;
 use crate::model::{HarnessView, Limits, LimitsLook};
@@ -78,6 +78,11 @@ banda_kernel::methods! {
     HarnessesModule(Call) as "HarnessesMethods" in "harnesses/" {
         /// The Harnesses this computer can start.
         call list(Nothing) -> Vec<HarnessView>, Read, tool "accounts";
+        /// The machine's Accounts in one answer (ADR 0108, decision 4):
+        /// each entry, the Harnesses they are accounts of with what a new
+        /// one is called, and the default and the fallback a new Thread
+        /// starts on. Read it again on a `list_changed` after its `at`.
+        call accounts(Nothing) -> AccountList, Read;
         /// Profile folders on this machine. A discovered folder is not proof
         /// of sign-in; no credentials are returned (ADR 0104).
         call account_profiles(Nothing) -> Vec<AccountProfile>, Read, tool "account_profiles";
@@ -228,6 +233,7 @@ impl Module for HarnessesModule {
     }
 
     async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.accounts.follow(project.clone());
         self.limits.start(project.clone()).await?;
         self.usage.start(project).await
     }
@@ -253,6 +259,12 @@ impl Module for HarnessesModule {
 impl HarnessesModule {
     async fn list(&self, _: Call, _: Nothing) -> Result<Vec<HarnessView>, Refusal> {
         Ok(self.harnesses.views())
+    }
+
+    async fn accounts(&self, call: Call, _: Nothing) -> Result<AccountList, Refusal> {
+        // Where the log is first: a change after it is told after it.
+        let at = call.project().at().await?;
+        Ok(self.accounts.list(at))
     }
 
     async fn account_profiles(&self, _: Call, _: Nothing) -> Result<Vec<AccountProfile>, Refusal> {

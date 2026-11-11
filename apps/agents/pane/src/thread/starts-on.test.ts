@@ -1,15 +1,6 @@
 import { expect, test } from "vitest"
-import type { Defaults } from "@banda/contract/agents"
-import type { Engine } from "@banda/contract"
 import type { HarnessView, Limits } from "@banda/contract/harnesses"
-import {
-  lastStart,
-  outOf,
-  readAsTold,
-  startOf,
-  startsOn,
-  startsOnWords,
-} from "./starts-on"
+import { outOf, startsOn, startsOnWords } from "./starts-on"
 
 const NOW = 1_000_000
 const signedIn = new Map([
@@ -20,6 +11,12 @@ const signedIn = new Map([
 const entry = (id: string, enabled = true) =>
   ({ id, name: id[0]!.toUpperCase() + id.slice(1), enabled }) as HarnessView
 const harnesses = [entry("claude"), entry("work"), entry("codex")]
+/** The list as its machine says it: it names the default and the
+ * fallback, and has made sure both are on and not the same. */
+const listOf = (
+  accounts: HarnessView[],
+  roles: { account?: string; fallback?: string }
+) => ({ accounts, default: roles.account, fallback: roles.fallback })
 const limits = (harness: string, used: number, resets_at?: number) =>
   ({
     harness,
@@ -27,41 +24,33 @@ const limits = (harness: string, used: number, resets_at?: number) =>
     windows: [{ id: "week", kind: "weekly", label: "Weekly", used, resets_at }],
   }) as Limits
 
-test("a new Thread starts on the default: the one start names, else the first on", () => {
-  expect(startsOn(harnesses, {}, [], NOW, signedIn)?.id).toBe("claude")
-  expect(startsOn(harnesses, { account: "work" }, [], NOW, signedIn)?.id).toBe(
-    "work"
-  )
-  const off = [entry("claude", false), entry("work")]
-  expect(startsOn(off, { account: "claude" }, [], NOW, signedIn)?.id).toBe(
-    "work"
-  )
+test("a new Thread starts on the default its machine names, none while it names none", () => {
   expect(
-    startsOn([entry("claude", false)], {}, [], NOW, signedIn)
-  ).toBeUndefined()
+    startsOn(listOf(harnesses, { account: "work" }), [], NOW, signedIn)?.id
+  ).toBe("work")
+  expect(startsOn(listOf(harnesses, {}), [], NOW, signedIn)).toBeUndefined()
 })
 
 test("while the default is out, a new Thread starts on the fallback, if it has room", () => {
   const out = [limits("work", 100, NOW + 60_000)]
   const agents = { account: "work", fallback: "codex" }
-  expect(startsOn(harnesses, agents, out, NOW, signedIn)).toEqual({
+  expect(startsOn(listOf(harnesses, agents), out, NOW, signedIn)).toEqual({
     id: "codex",
     default: "work",
     out: { until: NOW + 60_000, window: "Weekly" },
     fallback: true,
   })
   const both = [...out, limits("codex", 100)]
-  expect(startsOn(harnesses, agents, both, NOW, signedIn)?.id).toBe("work")
-  expect(startsOn(harnesses, { account: "work" }, out, NOW, signedIn)?.id).toBe(
+  expect(startsOn(listOf(harnesses, agents), both, NOW, signedIn)?.id).toBe(
     "work"
   )
+  expect(
+    startsOn(listOf(harnesses, { account: "work" }), out, NOW, signedIn)?.id
+  ).toBe("work")
   // Once its window resets, the default has room again.
-  expect(startsOn(harnesses, agents, out, NOW + 60_000, signedIn)?.id).toBe(
-    "work"
-  )
-  // A fallback that is off is none.
-  const codexOff = [entry("work"), entry("codex", false)]
-  expect(startsOn(codexOff, agents, out, NOW, signedIn)?.id).toBe("work")
+  expect(
+    startsOn(listOf(harnesses, agents), out, NOW + 60_000, signedIn)?.id
+  ).toBe("work")
 })
 
 test("an account is out while a window of it is spent, till its last reset", () => {
@@ -73,13 +62,17 @@ test("an account is out while a window of it is spent, till its last reset", () 
 
 test("the settings say where new Threads start while the default is out", () => {
   const agents = { account: "work", fallback: "codex" }
-  const out = startsOn(harnesses, agents, [limits("work", 100)], NOW, signedIn)!
+  const out = startsOn(
+    listOf(harnesses, agents),
+    [limits("work", 100)],
+    NOW,
+    signedIn
+  )!
   expect(startsOnWords(out, harnesses)).toBe(
     "Work is out: new Threads start on Codex till Work has room."
   )
   const none = startsOn(
-    harnesses,
-    { account: "work" },
+    listOf(harnesses, { account: "work" }),
     [limits("work", 100)],
     NOW,
     signedIn
@@ -88,7 +81,10 @@ test("the settings say where new Threads start while the default is out", () => 
     "Work is out: new Threads start on it still, as no signed-in fallback has room."
   )
   expect(
-    startsOnWords(startsOn(harnesses, agents, [], NOW, signedIn)!, harnesses)
+    startsOnWords(
+      startsOn(listOf(harnesses, agents), [], NOW, signedIn)!,
+      harnesses
+    )
   ).toBeUndefined()
 })
 
@@ -100,92 +96,24 @@ test("fallback requires a confirmed sign-in and also covers a signed-out default
       ["work", true],
       ["codex", status],
     ])
-    expect(startsOn(harnesses, agents, out, NOW, unknown)?.id).toBe("work")
+    expect(startsOn(listOf(harnesses, agents), out, NOW, unknown)?.id).toBe(
+      "work"
+    )
   }
   const signedOut = new Map([
     ["work", false],
     ["codex", true],
   ])
-  const starts = startsOn(harnesses, agents, [], NOW, signedOut)!
+  const starts = startsOn(listOf(harnesses, agents), [], NOW, signedOut)!
   expect(starts.id).toBe("codex")
   expect(startsOnWords(starts, harnesses)).toBe(
     "Work is signed out: new Threads start on Codex till Work signs in again."
   )
-  expect(startsOn(harnesses, agents, [], NOW, signedIn)?.id).toBe("work")
+  expect(startsOn(listOf(harnesses, agents), [], NOW, signedIn)?.id).toBe(
+    "work"
+  )
   expect(
-    startsOn(harnesses, agents, [limits("codex", 100)], NOW, signedOut)?.id
+    startsOn(listOf(harnesses, agents), [limits("codex", 100)], NOW, signedOut)
+      ?.id
   ).toBe("work")
-})
-
-test("a draft starts by the accounts its machine named, once it said them", () => {
-  const said = {
-    account: "work",
-    fallback: "codex",
-  } as Partial<Defaults> as Defaults
-  expect(startOf(undefined)).toBeUndefined()
-  const start = startOf({ claude: said, work: said })
-  expect(start).toEqual(said)
-  expect(startsOn(harnesses, start!, [], NOW, signedIn)?.id).toBe("work")
-  // A machine that names none starts on its first one on.
-  const none = startOf({ claude: {} as Partial<Defaults> as Defaults })
-  expect(startsOn(harnesses, none!, [], NOW, signedIn)?.id).toBe("claude")
-})
-
-test("while its machine has not answered, a draft keeps what that machine named last, and takes nothing from another's", () => {
-  const arc = {} as Engine
-  const mac = {} as Engine
-  expect(lastStart(arc, undefined)).toBeUndefined()
-  expect(lastStart(arc, { account: "work" })).toEqual({ account: "work" })
-  expect(lastStart(arc, undefined)).toEqual({ account: "work" })
-  expect(lastStart(mac, undefined)).toBeUndefined()
-  // What it names now wins, naming none too.
-  expect(lastStart(arc, {})).toEqual({})
-  expect(lastStart(arc, undefined)).toEqual({})
-})
-
-const reader = (...revs: string[]) => {
-  const ask = () => Promise.resolve({ rev: revs.shift() ?? "gone" })
-  return { ask, left: () => revs.length }
-}
-const never = () => false
-const noWait = () => Promise.resolve()
-
-test("a read that says what the machine told is taken at once", async () => {
-  const { ask, left } = reader("told", "later")
-  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "told" })
-  expect(left()).toBe(1)
-})
-
-test("with nothing told yet a read is taken as it is", async () => {
-  const { ask, left } = reader("first", "later")
-  expect(await readAsTold(ask, undefined, never, noWait)).toEqual({
-    rev: "first",
-  })
-  expect(left()).toBe(1)
-})
-
-test("a read ahead of the machine asks again till it says what the machine told", async () => {
-  // The file read otherwise, then read as it did: a tell never comes for that.
-  const { ask, left } = reader("ahead", "ahead", "told")
-  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "told" })
-  expect(left()).toBe(0)
-})
-
-test("a machine that never says what was read ahead does not keep a draft asking", async () => {
-  let asked = 0
-  const ask = () => {
-    asked += 1
-    return Promise.resolve({ rev: "ahead" })
-  }
-  expect(await readAsTold(ask, "told", never, noWait)).toEqual({ rev: "ahead" })
-  expect(asked).toBe(30)
-})
-
-test("a read answers none once the draft that asked has gone", async () => {
-  let gone = false
-  const ask = () => {
-    gone = true
-    return Promise.resolve({ rev: "ahead" })
-  }
-  expect(await readAsTold(ask, "told", () => gone, noWait)).toBeUndefined()
 })

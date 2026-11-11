@@ -59,7 +59,7 @@ import {
   Trash2Icon,
   Undo2Icon,
 } from "lucide-react"
-import { useAccount } from "../harnesses"
+import { useAccount, useHarnesses } from "../harnesses"
 import { AccountLogin } from "./AccountLogin"
 import { commandLine, wordsOf } from "../thread/sign-in"
 import { Problem, Ways, Warning } from "../thread/SignIn"
@@ -90,11 +90,10 @@ type PageProps = Props & {
 /** An account's page. */
 export function AccountPage({
   onBack,
-  onWritten,
   ...props
-}: PageProps & { onBack: () => void; onWritten: () => void }) {
+}: PageProps & { onBack: () => void }) {
   const { engine, harness, harnesses, roles, project } = props
-  const { refused, write } = useWrite({ onWritten, against: harness })
+  const { refused, write } = useWrite({ against: harness })
   const update = (change: Omit<UpdateAccount, "harness">) =>
     write(
       engine
@@ -178,10 +177,7 @@ export function AccountPage({
           harness={harness}
           roles={roles}
           count={props.use?.threads}
-          onRemoved={() => {
-            onWritten()
-            onBack()
-          }}
+          onRemoved={onBack}
         />
       </Row>
       <Section title="How it starts">
@@ -710,14 +706,9 @@ function Remove({
   const [asking, setAsking] = useState(false)
   const [busy, setBusy] = useState(false)
   const [refused, setRefused] = useState<string>()
-  const list = useRead(
-    useCallback(() => engine.call("harnesses.list", {}), [engine])
-  )
-  const target =
-    list.state === "ready"
-      ? list.value.find((h) => h.id === roles.default)
-      : undefined
-  const canRemove = target?.enabled && target.id !== harness.id
+  // The default its machine names is on, so its Threads can go there.
+  const target = useHarnesses(engine).find((h) => h.id === roles.default)
+  const canRemove = target !== undefined && target.id !== harness.id
   const remove = async () => {
     setBusy(true)
     setRefused(undefined)

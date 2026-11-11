@@ -1,6 +1,7 @@
 //! One owner for Account discovery, connections and sign-in lifetimes.
 //! The machine API delegates here. Settings only persists a prepared
 //! connection; providers keep their credentials and report identity.
+mod answer;
 mod logins;
 mod model;
 mod omarchy;
@@ -13,7 +14,8 @@ use crate::model::{Account, AccountKind, HarnessView, SignedInAs};
 use crate::{Failed, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
-use banda_kernel::{Call, Environment, EventFilter, Participant, Refusal};
+pub use answer::{AccountList, HarnessOf, NewAccount};
+use banda_kernel::{Call, Environment, EventFilter, ModuleProject, Participant, Refusal};
 use logins::Logins;
 pub use model::*;
 pub(crate) use omarchy::Omarchy;
@@ -31,6 +33,11 @@ const VERSION: u32 = 1;
 
 /// What a sign-in or sign-out writes; its subject is the Harness's ID.
 const ACCOUNT_CHANGED: &str = "account_changed";
+
+/// What a list that reads otherwise writes, with no subject: a window
+/// reads the list again. A rename is one, and ends no Turn, as an
+/// `account_changed` would (ADR 0108, decision 4).
+const LIST_CHANGED: &str = "list_changed";
 
 /// How long the module's own process of a Harness may sit with nothing
 /// asked.
@@ -125,6 +132,72 @@ impl Accounts {
     /// Chooses the account a new Thread starts on, or takes it back.
     pub fn set_start(&self, start: SetStart) -> Result<(), Refusal> {
         self.owning()?.set_start(start)
+    }
+
+    /// The list of the machine's Accounts as of its log's position `at`
+    /// (ADR 0108, decision 4).
+    pub fn list(&self, at: i64) -> AccountList {
+        self.reader()(at)
+    }
+
+    /// What reads the list as of a position, apart from the service, so a
+    /// task can keep it.
+    fn reader(&self) -> impl Fn(i64) -> AccountList + Clone + Send + 'static {
+        let harnesses = self.harnesses.clone();
+        let store = self.profiles.as_ref().map(Profiles::store);
+        move |at| {
+            let start = store.as_ref().map_or((None, None), |store| store.start());
+            answer::answer(at, harnesses.views(), start)
+        }
+    }
+
+    /// Follows the folders the list is made from, and writes
+    /// `list_changed` each time it reads otherwise: after a command, the
+    /// CLI or a change by hand alike.
+    pub(crate) fn follow(&self, project: ModuleProject) {
+        let mut watch = match project.watch(self.harnesses.folders()) {
+            Ok(watch) => watch,
+            Err(error) => {
+                tracing::warn!(%error, "the Accounts are not followed: a window sees a change as it reads them again");
+                return;
+            }
+        };
+        if let [folder, ..] = watch.limited() {
+            tracing::warn!(
+                folder = %folder.display(),
+                "the system had no watch left, so a change of the Accounts by hand is not told: \
+                 raise inotify's max_user_watches"
+            );
+        }
+        let reader = self.reader();
+        let read = move || {
+            let reader = reader.clone();
+            tokio::task::spawn_blocking(move || reader(0))
+        };
+        tokio::spawn(async move {
+            let Ok(mut was) = read().await else {
+                return;
+            };
+            while watch.next().await.is_some() {
+                let Ok(now) = read().await else {
+                    return;
+                };
+                if now == was {
+                    continue;
+                }
+                was = now;
+                let owner = Participant::Person(project.owner());
+                let wrote = project
+                    .write(move |tx| {
+                        tx.emit(LIST_CHANGED, VERSION, None, owner, &Value::Null)?;
+                        Ok(())
+                    })
+                    .await;
+                if let Err(error) = wrote {
+                    tracing::warn!(%error, "a change of the Accounts was not told");
+                }
+            }
+        });
     }
 
     fn owning(&self) -> Result<&Profiles, Refusal> {

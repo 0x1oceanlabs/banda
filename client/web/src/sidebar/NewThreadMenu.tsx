@@ -35,7 +35,7 @@ import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import { useMachineStartsOn } from "@banda/ui/hooks/use-starts-on"
+import { useStartsOn } from "@banda/ui/hooks/use-starts-on"
 import { useNamed } from "@banda/ui/hooks/use-status"
 import { isMac } from "@banda/ui/lib/keys"
 import { NO_PROJECT } from "@banda/ui/lib/projects"
@@ -155,7 +155,7 @@ export function onPicks(machines: readonly Machine[], start: Start): OnPick[] {
 
 /**
  * The menu's "with": the Harnesses on, in the order their list names
- * them, and the one a click takes: `starts`, as `useMachineStartsOn` says
+ * them, and the one a click takes: `starts`, as `useStartsOn` says
  * a new Thread starts there (ADR 0093, decision 7), else the first.
  */
 export function withPicks(
@@ -402,10 +402,7 @@ function WithGroup({ engine, start }: { engine: Engine; start: Start }) {
   const open = useOpen()
   const kept = useContext(HostsContext)
   const there = start.host === undefined ? engine : kept.engine(start.host)
-  const { on, ticked } = withPicks(
-    useHarnesses(there),
-    useMachineStartsOn(there)?.id
-  )
+  const { on, ticked } = withPicks(useHarnesses(there), useStartsOn(there)?.id)
   if (on.length === 0) return null
   return (
     <DropdownMenuGroup>

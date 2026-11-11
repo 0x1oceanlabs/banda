@@ -5,18 +5,17 @@
  * Person's moves them all; Banda never does by itself.
  */
 import { useState } from "react"
-import { AGENTS_FILE } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { Emblem } from "@banda/ui/components/emblem"
-import { useHarnesses } from "@banda/ui/hooks/use-harnesses"
-import { useFile } from "@banda/ui/lib/look"
+import { useAccounts, useHarnesses } from "@banda/ui/hooks/use-harnesses"
 import type { Filler, SpentProps } from "@banda/ui/slots"
 import { moveAll, useWaitingOn } from "../thread/move-all"
 import { movesOf, waysOn } from "../thread/moves"
 
 function WaitingThreads({ engine, account, limits, now }: SpentProps) {
+  // The account's machine's list, and its fallback.
   const harnesses = useHarnesses(engine)
-  const { fallback } = useFile(AGENTS_FILE)
+  const fallback = useAccounts(engine)?.fallback
   const waiting = useWaitingOn(engine, account)
   const [moved, setMoved] = useState<"moving" | "moved">()
   // Only an account of its Harness: it goes on with each one's session.

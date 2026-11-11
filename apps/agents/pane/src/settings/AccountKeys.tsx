@@ -15,7 +15,6 @@ import {
 } from "@banda/ui/components/field"
 import { Input } from "@banda/ui/components/input"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { harnessTitle } from "../harnesses"
 import { Problem } from "../thread/SignIn"
 import { type Gateway, freeId, gatewaysOf } from "./accounts"
 
@@ -29,6 +28,7 @@ export const KEPT_WORDS: Readonly<Record<Kept, string>> = {
 export function GatewayForm({
   engine,
   base,
+  title: harness,
   taken,
   colour,
   onAdded,
@@ -36,6 +36,8 @@ export function GatewayForm({
 }: {
   engine: Engine
   base: HarnessView
+  /** What its Harness is called: `Claude Code`. */
+  title: string
   taken: readonly HarnessView[]
   colour: number
   onAdded: (added: GatewayAdded) => void
@@ -49,7 +51,6 @@ export function GatewayForm({
   const { busy, problem, act } = useAct()
   useEffect(() => onBusy(busy), [busy, onBusy])
   const id = freeId(chosen.id, taken)
-  const harness = harnessTitle(taken, base.harness)
   const ready = !busy && [name, url, key].every((text) => text.trim())
   const choose = (gateway: Gateway) => {
     setChosen(gateway)

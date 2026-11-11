@@ -378,6 +378,93 @@ fn a_change_to_an_account_stays_on_its_machine() {
     }
 }
 
+/// A machine says what its Accounts are in one answer, and tells each
+/// change of it as `list_changed`, a rename too, which ends no Turn and so
+/// is never an `account_changed` (ADR 0108, decision 4).
+#[test]
+fn the_accounts_are_one_answer_told_again_as_the_list_changes() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let claude = json!({ "file": "harnesses.toml", "key": "harness.claude", "value": "{ name = \"Claude Code\" }" });
+    places.ok("keys.settings_set", None, claude);
+    let work = json!({ "harness": "claude", "id": "work", "name": "Work" });
+    places.ok("harnesses.connect_account", None, work);
+    let start = |role: &str, id: &str| json!({ "role": role, "harness": id });
+    places.ok("harnesses.set_start", None, start("account", "work"));
+
+    let said = places.ok("harnesses.accounts", None, json!({}));
+    assert_eq!(
+        (&said["default"], &said["fallback"]),
+        (&json!("work"), &Value::Null)
+    );
+    // Named as its program, whatever its own entry is called; the host's
+    // Omarchy may add accounts of its own, so the next name is not said.
+    let harnesses = said["harnesses"].as_array().unwrap();
+    let claude = harnesses.iter().find(|one| one["id"] == "claude").unwrap();
+    assert_eq!(claude["title"], "Claude Code", "{said}");
+
+    let at = said["at"].to_string();
+    let mut follow = places
+        .banda(&[
+            "follow",
+            "--machine",
+            "--module",
+            "harnesses",
+            "--after",
+            &at,
+        ])
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let (heard, events) = mpsc::channel();
+    let lines = BufReader::new(follow.stdout.take().unwrap());
+    std::thread::spawn(move || {
+        for line in lines.lines().map_while(Result::ok) {
+            let _ = heard.send(serde_json::from_str::<Value>(&line).unwrap());
+        }
+    });
+    let told = |what: &str| {
+        let event = (events.recv_timeout(Duration::from_secs(10)))
+            .unwrap_or_else(|_| panic!("{what} is told"));
+        assert_eq!(event["kind"], "list_changed", "{what}: {event}");
+    };
+    // What the setting up told late is let go of first, so each change
+    // below hears its own.
+    while events.recv_timeout(Duration::from_secs(1)).is_ok() {}
+
+    places.ok(
+        "harnesses.update_account",
+        None,
+        json!({ "harness": "work", "name": "Client" }),
+    );
+    told("a rename");
+    let by_hand = json!({ "file": "agents.toml", "key": "start.fallback", "value": "\"claude\"" });
+    places.ok("keys.settings_set", None, by_hand);
+    told("a fallback written in the file");
+    let said = places.ok("harnesses.accounts", None, json!({}));
+    assert_eq!(
+        (&said["default"], &said["fallback"]),
+        (&json!("work"), &json!("claude"))
+    );
+
+    // The default is not its own fallback, and an account that is off
+    // takes no role.
+    let same = places.call("harnesses.set_start", None, start("fallback", "work"));
+    assert_eq!(refusal(&same), "invalid");
+    let off = json!({ "harness": "claude", "enabled": false });
+    places.ok("harnesses.update_account", None, off);
+    told("an account turned off");
+    let said = places.ok("harnesses.accounts", None, json!({}));
+    assert_eq!(said["fallback"], Value::Null, "{said}");
+    let refused = places.call("harnesses.set_start", None, start("account", "claude"));
+    assert_eq!(refusal(&refused), "invalid");
+
+    follow.kill().unwrap();
+    follow.wait().unwrap();
+    drop(stdin);
+    engine.wait().unwrap();
+}
+
 /// Beside its API, the engine serves a file's bytes, and a page into a
 /// frame, by the token `bytes.issue` gave (ADR 0106, step 4a).
 #[test]

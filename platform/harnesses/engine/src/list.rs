@@ -1030,6 +1030,18 @@ impl Harnesses {
         Ok(result)
     }
 
+    /// The folders whose files make the list: its file's, which holds
+    /// `agents.toml` too, and Omarchy's accounts', where it finds them;
+    /// each resolved, as the system names what changed by the real path.
+    pub(crate) fn folders(&self) -> Vec<PathBuf> {
+        let list = self.0.lock().unwrap();
+        let file = (list.file.as_ref()).and_then(|(path, _)| path.parent().map(Path::to_path_buf));
+        let omarchy = (list.omarchy.as_ref()).map(|omarchy| omarchy.folder().to_path_buf());
+        (file.into_iter().chain(omarchy))
+            .map(|folder| dunce::canonicalize(&folder).unwrap_or(folder))
+            .collect()
+    }
+
     /// The list as its file says now. A file that changed into one that
     /// does not read is logged, and the list before it stays.
     fn now(&self) -> Arc<[Harness]> {

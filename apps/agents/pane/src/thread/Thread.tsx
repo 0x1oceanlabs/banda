@@ -17,7 +17,7 @@ import {
   EmptyTitle,
 } from "@banda/ui/components/empty"
 import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
-import { useHarnesses } from "../harnesses"
+import { harnessTitle, useAccounts, useHarnesses } from "../harnesses"
 import { Spinner } from "@banda/ui/components/spinner"
 import { ZoomBadge } from "@banda/ui/components/zoom-badge"
 import { useZoom, zoomHandlers } from "@banda/ui/hooks/use-zoom"
@@ -70,7 +70,6 @@ import { Transcript } from "./Transcript"
 import { WaitsAlone, WaitsFor } from "./WhenBack"
 import { useWriters } from "./writers"
 import { ThreadAroundProvider, type ThreadActs } from "./context"
-
 /** Opens a web link in Banda's browser, or outside it (ADR 0051): always
  * outside where no window runs the browser for it (`run` none). */
 export function linkOpener(
@@ -95,6 +94,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     composer: says,
   } = props
   const machine = useMachine(engine)
+  const accounts = useAccounts(engine)
   const harnesses = useHarnesses(engine)
   const { limits, now } = useLimitsNow(engine)
   const unplaced = project === machine
@@ -169,8 +169,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     const confirm = !state.items.some(
       (item) => item.body.kind === "moved" && item.body.how.kind !== "same"
     )
-    return { ...movesOf(harnesses, harness, ran, limits, now), confirm }
-  }, [thread, state, harness, harnesses, limits, now])
+    const of = harnesses.find((one) => one.id === harness)?.harness ?? harness
+    const title = harnessTitle(accounts, of)
+    return { ...movesOf(harnesses, harness, ran, limits, now), confirm, title }
+  }, [thread, state, harness, harnesses, accounts, limits, now])
   // Learn more, wherever the fence is spoken of: Settings → General, at
   // the Fence row (ADR 0083).
   const learn = () => run?.("settings.open", { link: FENCE_LINK })

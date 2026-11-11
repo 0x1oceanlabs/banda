@@ -8,7 +8,6 @@ import {
   gatewaysOf,
   groupsOf,
   lastWords,
-  newAccountOf,
   pickStart,
   threadsWords,
   usesOf,
@@ -56,13 +55,21 @@ test("an account's use is summed over the Projects, its latest turn the latest o
   expect(uses.get("work")).toBeUndefined()
 })
 
-test("the accounts go by Harness, each where its first entry stands", () => {
-  const groups = groupsOf([
-    entry("claude", "claude", "Work"),
-    entry("codex", "codex"),
-    entry("personal", "claude", "Personal"),
-    entry("gemini", "gemini", "Gemini CLI"),
-  ])
+test("the accounts go by Harness, each where its first entry stands, as their machine names it", () => {
+  const next = { id: "", name: "", colour: 1 }
+  const groups = groupsOf({
+    accounts: [
+      entry("claude", "claude", "Work"),
+      entry("codex", "codex"),
+      entry("personal", "claude", "Personal"),
+      entry("gemini", "gemini", "Gemini CLI"),
+    ],
+    harnesses: [
+      { id: "claude", title: "Claude Code", next },
+      { id: "codex", title: "Codex", next },
+      { id: "gemini", title: "Gemini CLI", next },
+    ],
+  })
   expect(
     groups.map(({ harness, name, accounts }) => [
       harness,
@@ -133,21 +140,6 @@ test("the default and the fallback are chosen through the engine it is handed", 
     ["harnesses.set_start", { role: "account", harness: "work" }],
     ["harnesses.set_start", { role: "fallback" }],
   ])
-})
-
-test("a new account is named and coloured after the ones of its Harness", () => {
-  const c = (id: string, name: string, colour: number) => ({
-    ...entry(id, "claude", name),
-    colour,
-  })
-  const numbered = [c("claude", "C1", 0), c("c2", "C2", 1), c("c3", "C3", 2)]
-  expect(newAccountOf("claude", numbered)).toEqual({ name: "C4", colour: 3 })
-  const named = [c("claude", "Claude Code", 0), c("work", "Work", 3)]
-  expect(newAccountOf("claude", named)).toEqual({
-    name: "Claude Code 3",
-    colour: 1,
-  })
-  expect(newAccountOf("codex", named)).toEqual({ name: "Codex 1", colour: 1 })
 })
 
 test("a new account takes the first free ID, and a gateway the ones its Harness speaks to", () => {

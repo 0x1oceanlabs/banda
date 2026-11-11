@@ -3,9 +3,13 @@
  * the Panes show them: the machine's module `harnesses` (ADR 0040), which
  * names no Project.
  */
-import type { HarnessView } from "@banda/contract/harnesses"
+import type { AccountList, HarnessView } from "@banda/contract/harnesses"
 
-export { useAccount, useHarnesses } from "@banda/ui/hooks/use-harnesses"
+export {
+  useAccount,
+  useAccounts,
+  useHarnesses,
+} from "@banda/ui/hooks/use-harnesses"
 
 /** What a sentence calls a Harness, `Claude` for Claude Code, or its ID
  * when this computer does not know it. */
@@ -23,25 +27,14 @@ export function harnessName(
   return harnesses.find((harness) => harness.id === id)?.name ?? unknown
 }
 
-/** The Harnesses Banda knows, by what their accounts are grouped under:
- * the Harness's own entry may be renamed `Work`, or `C1`. */
-const PROGRAMS: Readonly<Record<string, string>> = {
-  claude: "Claude Code",
-  codex: "Codex",
-}
-
 /** What the accounts of `harness`, as an entry's `harness` says it, are
- * grouped under: `Claude Code`, never one account's name. */
+ * grouped under, as their machine says it (ADR 0108, decision 4): `Claude
+ * Code`, never one account's name. Its ID while the machine has not said. */
 export function harnessTitle(
-  harnesses: readonly Pick<HarnessView, "id" | "name" | "harness">[],
+  answer: Pick<AccountList, "harnesses"> | undefined,
   harness: string
 ): string {
-  return (
-    PROGRAMS[harness] ??
-    harnesses.find((one) => one.id === harness)?.name ??
-    harnesses.find((one) => one.harness === harness)?.name ??
-    harness
-  )
+  return answer?.harnesses.find((one) => one.id === harness)?.title ?? harness
 }
 
 /** `list`'s entries by the Harness they run, each Harness where its first

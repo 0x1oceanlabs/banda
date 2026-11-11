@@ -14,6 +14,7 @@ import {
 import type { Engine } from "@banda/contract"
 import type {
   AccountKind,
+  AccountList,
   HarnessView,
   Icon,
   Kept,
@@ -46,12 +47,11 @@ import {
 import { Spinner } from "@banda/ui/components/spinner"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { problem } from "@banda/ui/lib/words"
-import { harnessTitle } from "../harnesses"
 import { Problem } from "../thread/SignIn"
 import { ApiKeyForm, GatewayForm, KEPT_WORDS } from "./AccountKeys"
 import { AccountLogin } from "./AccountLogin"
 import { EmblemPicker } from "./AccountPage"
-import { freeId, gatewaysOf, KIND_WORDS, newAccountOf } from "./accounts"
+import { freeId, gatewaysOf, KIND_WORDS } from "./accounts"
 
 const PURPOSES: { name: string; icon: Icon }[] = [
   { name: "Work", icon: "work" },
@@ -110,17 +110,22 @@ function kindsOf(harness: string) {
 export function AccountSetup({
   engine,
   base,
-  taken,
+  answer,
   onClose,
-  onAdded,
 }: {
   engine: Engine
   base: HarnessView
-  taken: readonly HarnessView[]
+  /** What its machine says of its Accounts: what a new one is called. */
+  answer: AccountList
   onClose: () => void
-  onAdded: () => void
 }) {
-  const fresh = newAccountOf(base.harness, taken)
+  const of = answer.harnesses.find((one) => one.id === base.harness)
+  const fresh = of?.next ?? {
+    id: freeId(base.harness, answer.accounts),
+    name: "",
+    colour: 1,
+  }
+  const title = of?.title ?? base.harness
   const codex = base.harness === "codex"
   const [kind, setKind] = useState<AccountKind>()
   const [at, setAt] = useState(0)
@@ -142,7 +147,7 @@ export function AccountSetup({
   const profiles = useRead(kind === "subscription" ? readProfiles : null)
   const steps = kind ? STEPS[kind] : []
   const step = steps[at]
-  const id = freeId(base.harness, taken)
+  const { id } = fresh
   const draft = { ...base, id, name, icon, colour, kind: kind ?? base.kind }
   const close = () => {
     if (!busy && !running) onClose()
@@ -170,7 +175,6 @@ export function AccountSetup({
       })
       setMade(account)
       setAt(at + 1)
-      onAdded()
     } catch (error) {
       setRefused(problem(error))
     } finally {
@@ -193,9 +197,7 @@ export function AccountSetup({
     >
       <DialogContent className="max-h-[85vh] overflow-y-auto">
         <DialogHeader>
-          <DialogTitle>
-            Add a {harnessTitle(taken, base.harness)} account
-          </DialogTitle>
+          <DialogTitle>Add a {title} account</DialogTitle>
           <DialogDescription>
             {!step
               ? "How does this account pay?"
@@ -338,13 +340,13 @@ export function AccountSetup({
           <GatewayForm
             engine={engine}
             base={base}
-            taken={taken}
+            title={title}
+            taken={answer.accounts}
             colour={colour}
             onBusy={setRunning}
             onAdded={(added) => {
               setMade(added.account)
               setKept(added.kept)
-              onAdded()
             }}
           />
         )}
