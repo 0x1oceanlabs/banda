@@ -306,9 +306,7 @@ test("arc's Diff shows arc's change to who.txt, not this machine's at the same p
   await expect(diff.getByText("mac changed")).toHaveCount(0)
 })
 
-test.fixme("step 3b: Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
-  // Quick open on arc's Project: this window's list of Projects names no
-  // folder of arc's, so the Files rows are not there before 3b.
+test("Quick Look on arc's file from the Banda menu shows arc's who.txt", async () => {
   const { page, composer } = await opened()
   await composer.focus()
   await page.keyboard.press("Alt+Space")
@@ -341,8 +339,10 @@ async function bindQuickLook(file: string, project: string) {
 
 test("quick-look: a file of arc's shows in Quick Look naming arc; a file gone from arc, or arc away, is refused at once", async () => {
   test.setTimeout(SHOTS ? 300_000 : 180_000)
-  const { page, composer, project, there } = await opened()
-  const who = `${there}/who.txt`
+  const { page, composer, project, there } = await opened({
+    files: { "kept/who.txt": "arc\n" },
+  })
+  const who = `${there}/kept/who.txt`
   await bindQuickLook(who, project)
   await composer.focus()
   const peek = page.locator("[data-peek]")
@@ -356,8 +356,10 @@ test("quick-look: a file of arc's shows in Quick Look naming arc; a file gone fr
   const header = peek.locator("header").first()
   await expect(header.getByText("arc", { exact: true })).toBeVisible()
   await expect(header.locator('[data-machine-icon="server"]')).toBeVisible()
-  // What draws a file there comes with arc's Files (3b).
-  await expect(peek.getByText("Not on arc yet")).toBeVisible()
+  // Its folder is short, from arc's Project, and its body is arc's.
+  await expect(header.getByText("kept", { exact: true })).toBeVisible()
+  await expect(header).not.toContainText(there)
+  await expect(peek.locator('[data-line="1"]').first()).toHaveText("arc")
   await shot(page, "quick-look-arc")
   await page.keyboard.press("Escape")
   await expect(peek).toHaveCount(0)
@@ -414,7 +416,7 @@ async function filesOn(page: Page, composer: Locator) {
     .filter({ has: page.getByRole("navigation", { name: "Places" }) })
 }
 
-test.fixme("step 3b: arc's Files lists arc's files and opens who.txt as arc's", async () => {
+test("arc's Files lists arc's files and opens who.txt as arc's", async () => {
   const { page, composer } = await opened()
   const pane = await filesOn(page, composer)
   const tree = pane.getByRole("tree")
@@ -430,21 +432,20 @@ test.fixme("step 3b: arc's Files lists arc's files and opens who.txt as arc's", 
   await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
 })
 
-test.fixme("step 3b: a row of arc's Files dragged into arc's Message box names arc's file to arc's Agent", async () => {
+test("a row of arc's Files dragged into arc's Message box names arc's file to arc's Agent", async () => {
   const { page, thread, composer } = await opened()
   const pane = await filesOn(page, composer)
+  await composer.fill("cat ")
   await pane
     .getByRole("tree")
     .getByRole("treeitem", { name: "only-arc.txt" })
     .dragTo(composer)
   await expect(composer.locator("[data-chip=file]")).toHaveText("only-arc.txt")
-  await composer.press("Home")
-  await composer.pressSequentially("cat ")
   await composer.press("Enter")
   await expect(thread.getByText("only-arc.txt holds arc.")).toBeVisible()
 })
 
-test.fixme("step 3b: a folder pinned in arc's Files opens arc's folder again", async () => {
+test.fixme("step 5b: a folder pinned in arc's Files opens arc's folder again", async () => {
   const { page, composer, there } = await opened()
   put(arc!.disk(there), { "kept/only-arc-kept.txt": "arc\n" })
   put(join(arc!.code.here, "Same"), { "kept/only-mac-kept.txt": "mac\n" })
