@@ -468,10 +468,10 @@ test.fixme("step 5b: a folder pinned in arc's Files opens arc's folder again", a
 
 test("step 3c: a path in arc's reply opens arc's file", async () => {
   const { page, thread, composer } = await opened()
-  await composer.fill("See `who.txt`.")
+  await composer.fill("See `who.txt:1`.")
   await composer.press("Enter")
   const chip = thread.locator("[data-quotable] a[data-file]")
-  await expect(chip).toHaveText("who.txt")
+  await expect(chip).toHaveText("who.txt:1")
   await chip.click({ button: "right" })
   await page
     .getByRole("menu", { name: "Thread" })
@@ -488,10 +488,14 @@ test("step 3c: a path arc's terminal prints opens arc's file", async () => {
   await page.keyboard.type("clear; printf './who.txt\\n'; : > printed")
   await page.keyboard.press("Enter")
   await expect.poll(() => read(arc!.disk(join(there, "printed")))).toBe("")
-  await screen
-    .locator("canvas")
-    .first()
-    .click({ button: "right", position: { x: 24, y: 8 } })
+  // Under the pointer it is a link, once the shell has said where it is.
+  const canvas = screen.locator("canvas").first()
+  await canvas.hover({ position: { x: 24, y: 8 } })
+  await expect(canvas).toHaveAttribute(
+    "title",
+    `${join(there, "who.txt")}\nClick to open in Banda`
+  )
+  await canvas.click({ button: "right", position: { x: 24, y: 8 } })
   await page
     .getByRole("menu", { name: "Terminal" })
     .getByRole("menuitem", { name: "Open in Banda" })
