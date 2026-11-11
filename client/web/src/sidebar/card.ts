@@ -25,6 +25,7 @@ import {
 } from "@banda/ui/status"
 import type { Row } from "./rows"
 import { type Went, wentWords } from "./hold"
+import type { Child } from "./inbox"
 import type { OnRow } from "./machine-on-row"
 
 /** How many lines a card draws (decision 9): by where it is, or as many
@@ -74,6 +75,9 @@ export type Slot =
   | { kind: "works" }
   /** Its Project's sign and name, on line 3. */
   | { kind: "project"; project: ProjectSummary }
+  /** In the Project's place on line 3, a child's parent: ↳ and its
+   * title (decision 24). */
+  | { kind: "parent"; title: string }
   /** The machine it runs on: its icon, and on line 3 its name unless the
    * Person asked for its icon alone; another machine's by its `host`. */
   | { kind: "machine"; host?: string; machine: Named; named: boolean }
@@ -115,6 +119,9 @@ export type CardModel = {
   /** Its Agent put it off, as it stands in Later (ADR 0074, decision
    * 10). */
   byAgent?: true
+  /** Another Agent started it: its parent, and whether it sits under it,
+   * ↳ before its mark and its lines in by as much (decision 24). */
+  child?: Child
 }
 
 /** The row a card is drawn from: the sidebar's, or, in the counts' list,
@@ -146,15 +153,21 @@ export type CardOf = {
   /** Where it went, if it left the tab while the list held. */
   went?: Went
   strayed?: boolean
+  /** Its parent, when another Agent started it (`inbox.ts`). */
+  child?: Child
 }
 
 /** The lines a card of `place` draws, in `view` (decision 9): auto, three
  * in Your turn, two there when grouped by Project, whose header names it,
- * and one for the rest. */
-export function linesOf(place: Stand, { density, group }: CardView): 1 | 2 | 3 {
+ * unless a `child`'s line 3 names its parent; and one for the rest. */
+export function linesOf(
+  place: Stand,
+  { density, group }: CardView,
+  child?: Child
+): 1 | 2 | 3 {
   if (density !== "auto") return density
   if (place !== "turn") return 1
-  return group === "project" ? 2 : 3
+  return group === "project" && !child ? 2 : 3
 }
 
 /** Each call's word, by its colour. */
@@ -176,11 +189,12 @@ export function callWordOf(listed: Listed, now: number): Word | undefined {
 export function cardOf(input: CardOf): CardModel {
   const { row, place, at, now, view, machine, away, stopped, went, strayed } =
     input
+  const { child } = input
   const { listed, stand } = row
   const { look } = lookOf(listed, now)
   const does = works(look) ? doesOf(listed, now) : undefined
   const tone = callColor(look)
-  const count = linesOf(place, view)
+  const count = linesOf(place, view, child)
   // The machine stands on line 3; with none, on line 1's right, by its
   // icon. Grouped by machine, its header names it.
   const on = view.group === "machine" ? undefined : machine
@@ -202,8 +216,9 @@ export function cardOf(input: CardOf): CardModel {
     })
   if (count >= 3)
     lines.push({
-      left:
-        view.group === "project" || !("name" in row.project)
+      left: child
+        ? [{ kind: "parent", title: child.parent }]
+        : view.group === "project" || !("name" in row.project)
           ? []
           : [{ kind: "project", project: row.project }],
       right: [
@@ -250,6 +265,7 @@ export function cardOf(input: CardOf): CardModel {
     ...(stand === "later" && listed.later?.byAgent
       ? { byAgent: true as const }
       : {}),
+    ...(child ? { child } : {}),
   }
 }
 
@@ -424,8 +440,8 @@ const STAND_SAID: Readonly<Record<Stand, string>> = {
  * description, what its Agent does at work, on a card of one line too, as
  * its Mark shows it there, then what its other lines say, each `·` a full
  * stop, ✓ "passed" and ✗ "failed"; then that it strayed from its
- * Project's workspace, that its machine is away, and where it went if it
- * left the tab.
+ * Project's workspace, who started it if another Agent did, that its
+ * machine is away, and where it went if it left the tab.
  */
 export function spokenOf(card: CardModel, now: number): Spoken {
   const word = card.tone
@@ -440,6 +456,7 @@ export function spokenOf(card: CardModel, now: number): Spoken {
     for (const slot of [...line.left, ...line.right])
       said.push(...slotSaid(slot, at))
   if (card.strayed) said.push(STRAYED)
+  if (card.child) said.push(`Started by ${card.child.parent}`)
   if (card.away)
     said.push(
       `${card.away.machine ?? "Its machine"} is ${card.away.stopped ? "stopped" : "away"}, ${agoSaid(card.away.since, now)}`
@@ -476,6 +493,8 @@ function slotSaid(slot: Slot, now: number): string[] {
       return [slot.machine.name]
     case "harness":
       return [slot.name]
+    // Said with who started it, after the lines.
+    case "parent":
     case "mark":
     case "title":
     case "time":

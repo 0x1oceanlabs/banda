@@ -82,16 +82,17 @@ export const ACT_LOOK: Readonly<
 /**
  * A sidebar card (ADR 0098, decisions 8 and 9), drawn from its model
  * (`card.ts`): one to three lines, each a left and a right, lines 2 and 3
- * under the title, past the mark. Colour is only on a call's mark and
- * time. It is drawn again only as one of its times changes (`clock.ts`),
- * or, at work, as what its Agent does shows (`useHeld`). It is an option
- * of the list, which keys pick (decision 13): it has no focus of its own,
- * and its ring shows while the list has the focus and the last input was
- * a key (`globals.css`). A click opens the Pane it stands for, by
- * `pane.pick`; a screen reader hears it by `spokenOf`. Under the pointer,
- * or always on a coarse pointer, its acts show at line 1's right, in the
- * time's place (decision 10): no Tab stops, as keys and menu rows do the
- * same.
+ * under the title, past the mark. A child under its parent starts with ↳,
+ * and its lines go in by as much (decision 24). Colour is only on a
+ * call's mark and time. It is drawn again only as one of its times
+ * changes (`clock.ts`), or, at work, as what its Agent does shows
+ * (`useHeld`). It is an option of the list, which keys pick (decision
+ * 13): it has no focus of its own, and its ring shows while the list has
+ * the focus and the last input was a key (`globals.css`). A click opens
+ * the Pane it stands for, by `pane.pick`; a screen reader hears it by
+ * `spokenOf`. Under the pointer, or always on a coarse pointer, its acts
+ * show at line 1's right, in the time's place (decision 10): no Tab
+ * stops, as keys and menu rows do the same.
  */
 export function Card({
   card: model,
@@ -259,6 +260,8 @@ export function CardLines({
       )}
     </Fragment>
   )
+  // A child under its parent: ↳ first, its lines in by as much.
+  const under = card.child?.under === true
   return card.lines.map((line, index) => {
     const first = index === 0
     // #1160's mark: at the start of line 3's right, else right after the
@@ -287,9 +290,10 @@ export function CardLines({
         key={index}
         className={cn(
           "flex min-w-0 items-center gap-1.5",
-          first ? "min-h-5" : "min-h-4 pl-5.5"
+          first ? "min-h-5" : under ? "min-h-4 pl-9.5" : "min-h-4 pl-5.5"
         )}
       >
+        {first && under && <ChildArrow className="w-2.5" />}
         {line.left.map(slot)}
         {strayed && !three && <Strayed />}
         {room ? (
@@ -338,6 +342,22 @@ function useHeld(card: CardModel): CardModel {
     (now) => does && setHeld((was) => heldDoing(was, does, now, sameDoes))
   )
   return waits && held ? { ...card, does: held.doing } : card
+}
+
+/** A child's ↳, muted, in a column of its own (decision 24); a screen
+ * reader hears who started it in the card's description. */
+export function ChildArrow({ className }: { className: string }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        "shrink-0 text-center text-xs text-muted-foreground",
+        className
+      )}
+    >
+      ↳
+    </span>
+  )
 }
 
 /** The mark of a Thread away from its Project's workspace (ADR 0102,
@@ -441,6 +461,14 @@ function Piece({
         ? signMenu(slot.project, sign, "flex min-w-0 flex-1")
         : sign
     }
+    case "parent":
+      // ↳ where the Project's sign stands, then its parent's title.
+      return (
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+          <ChildArrow className="w-3.5" />
+          <FadeText tip={slot.title}>{slot.title}</FadeText>
+        </span>
+      )
     case "machine": {
       // A machine (ADR 0095, decision 5): its icon and name, small and
       // muted, with no border; its icon alone where room is short or the

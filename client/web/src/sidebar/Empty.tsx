@@ -15,7 +15,7 @@ import type { MarkState } from "@banda/ui/lib/mark-state"
 import { cn } from "@banda/ui/lib/utils"
 import { wakes } from "@banda/ui/lib/words"
 import { SquarePenIcon } from "lucide-react"
-import type { Tab, Zero } from "./inbox"
+import type { Block, Tab, Zero } from "./inbox"
 import { actionDoing, archiving } from "./items"
 import { useNewThread } from "./open"
 import { ShowTab } from "./Tabs"
@@ -56,6 +56,32 @@ export function emptySays(
         ...(key ? { small: `${key} on a Thread closes it here.` } : {}),
       }
   }
+}
+
+/** A place the list shows with no card in it: inbox zero, or a tab with
+ * nothing in it. */
+export type EmptyBlock = Extract<Block, { kind: "zero" | "empty" }>
+
+/**
+ * An empty place as the list draws it (ADR 0098, decision 25): every one
+ * says what goes there, and `Empty.test.tsx` walks each tab and each part
+ * of the Inbox, grouped or not, for one that does not.
+ */
+export function EmptyPlace({
+  place,
+  only,
+  projects,
+}: {
+  place: EmptyBlock
+  /** The Project whose rows alone the list shows, if one. */
+  only: ProjectId | undefined
+  projects: readonly ProjectSummary[]
+}) {
+  return place.kind === "zero" ? (
+    <InboxZero zero={place} />
+  ) : (
+    <EmptyTab tab={place.tab} only={only} projects={projects} />
+  )
 }
 
 /** The look each empty place's mark stands in, still. */
