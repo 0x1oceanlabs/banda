@@ -116,6 +116,37 @@
   --text-meta--line-height: 1rem;
   --text-code: 0.78125rem;
   --text-code--line-height: 1.25rem;
+  /* Banda UI's names (ADR 0113), with today's values, used by nothing
+     yet. The type levels: rows, menus and controls; a dialog's title and
+     a reply's second heading; a page's title and a reply's first heading.
+     They join the theme's tokens with the scale in step 2. */
+  --text-ui: 0.875rem;
+  --text-ui--line-height: 1.25rem;
+  --text-title: 1rem;
+  --text-title--line-height: 1.5rem;
+  --text-heading: 1.125rem;
+  --text-heading--line-height: 1.625rem;
+  /* The elevations (decision 4): what floats, the Top layer and a Pane's
+     own floating bar, at the menus' shadow; what the Person carries, at a
+     Peek's. Their strengths go into the theme in step 3. */
+  --shadow-float:
+    0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-lift: 0 30px 80px -12px rgb(0 0 0 / 0.45);
+  /* Two colours that are not the theme's (decision 6): a document's own
+     page, white in every theme, as a PDF's; and black that dims, under a
+     dialog or the Drawer, behind a video. */
+  --color-paper: #fff;
+  --color-scrim: #000;
+  /* The layers, by name (decision 5), with today's values; their order is
+     ADR 0110 step 3's. Inside a Pane or a component: above its siblings,
+     and its floating bar or sticky head. The Window's own: the sidebar,
+     the Drawer and sheets, the Top layer, and what the Person carries. */
+  --z-index-raised: 10;
+  --z-index-float: 20;
+  --z-index-sidebar: 20;
+  --z-index-drawer: 30;
+  --z-index-top: 50;
+  --z-index-carried: 50;
   --font-sans: var(--font-family-sans);
   --font-mono: var(--font-family-mono);
 }

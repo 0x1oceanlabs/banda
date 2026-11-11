@@ -6,8 +6,8 @@ import { expect, test } from "vitest"
 import {
   MANIFEST_NAMES,
   componentProps,
-  corners,
   desktopReads,
+  drawingFiles,
   hostReads,
   imports,
   kindReaches,
@@ -272,29 +272,14 @@ test("the check sees keyframes by what their steps set", () => {
   ).toEqual(["@keyframes grow"])
 })
 
-test("the check sees each corner that is no level, as a class, in CSS and in a style", () => {
-  expect(
-    corners(
-      `<a className="rounded-md rounded-[3px] rounded-[calc(var(--radius)-3px)]" />` +
-        `<b className="rounded-[min(var(--radius-md),10px)] rounded-(--x) rounded bg-muted" />` +
-        `<c className="rounded-card rounded-t-control hover:rounded-small rounded-full rounded-e-none rounded-[inherit] rounded-tile rounded-window" />\n` +
-        `.d { border-radius: calc(var(--radius) * 0.6); border-top-left-radius: 2px }\n` +
-        `.e { border-radius: var(--small-radius); border-end-end-radius: 0; border-radius: 9999px }\n` +
-        `const f = { borderRadius: 3 }\n` +
-        `// rounded up, and a rounded-md in a comment\n` +
-        `/* border-radius: 4px */ const g = "https://rounded.example"`
-    )
-  ).toEqual([
-    "rounded-md",
-    "rounded-[3px]",
-    "rounded-[calc(var(--radius)-3px)]",
-    "rounded-[min(var(--radius-md),10px)]",
-    "rounded-(--x)",
-    "rounded",
-    "border-radius: calc(var(--radius) * 0.6)",
-    "border-top-left-radius: 2px",
-    "borderRadius",
-  ])
+test("the files that draw are the Window's and the Panes', stylesheets too, and no test", () => {
+  const root = join(import.meta.dirname, "../../../..")
+  const drawing = drawingFiles(root)
+  expect(drawing).toContain(join(root, "client/ui/src/styles/globals.css"))
+  expect(drawing).toContain(join(root, "apps/agents/pane/src/thread/Find.tsx"))
+  expect(drawing.filter((file) => /\.test\.|\/testing\//.test(file))).toEqual(
+    []
+  )
 })
 
 test("a part is found by each name of its manifest, not by the old module.toml, finding none throws, and so does one id twice", () => {
