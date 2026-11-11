@@ -354,13 +354,13 @@ fn blank(id: WorkspaceId) -> Workspace {
 }
 
 /// Where a Pane is: its workspace, its column and its place in it.
-struct Spot {
-    workspace: usize,
-    column: usize,
-    pane: usize,
+pub(crate) struct Spot {
+    pub(crate) workspace: usize,
+    pub(crate) column: usize,
+    pub(crate) pane: usize,
 }
 
-fn spot(list: &Arrangement, pane: PaneId) -> Result<Spot, Refusal> {
+pub(crate) fn spot(list: &Arrangement, pane: PaneId) -> Result<Spot, Refusal> {
     list.iter()
         .enumerate()
         .find_map(|(w, workspace)| {
@@ -435,28 +435,6 @@ pub fn showing_asked<'a>(list: &'a Arrangement, asked: &Shown) -> Option<&'a Pan
             && pane.shows.kind == asked.kind
             && pane.shows.args.get("thread") == asked.args.get("thread")
     })
-}
-
-/// Where a Pane an Agent opens with no place goes: into its Thread's
-/// Group, as a Diff opened from the Thread goes (ADR 0065, decision 7),
-/// and a Thread in no Group starts one for it. Only the Thread's Pane of
-/// `project` counts; with none on a workspace, it has no place here.
-pub fn agents_place(list: &Arrangement, project: ProjectId, thread: Uuid) -> Option<Place> {
-    let asked = Shown {
-        project,
-        kind: "agents.thread".into(),
-        args: serde_json::json!({ "thread": thread.to_string() }),
-    };
-    showing_asked(list, &asked).map(|pane| Place::Group { pane: pane.id })
-}
-
-/// Where a Pane an Agent opens with its Thread not shown goes: last on the
-/// workspace `project` owns, even emptied (ADR 0102, decision 4). With
-/// none owned, it has no place here.
-pub fn owned_place(list: &Arrangement, project: ProjectId) -> Option<Place> {
-    (list.iter())
-        .any(|w| w.project == Some(project))
-        .then_some(Place::Project { project })
 }
 
 /// A Pane to open: what it shows, and how.
@@ -1290,12 +1268,13 @@ fn check_share(value: Option<&str>, what: &str, of: &str) -> Result<(), Refusal>
 }
 
 #[cfg(test)]
-mod tests {
+pub(crate) mod tests {
     use super::*;
+    use crate::placing::agents_place;
     use serde_json::json;
 
     /// A new command's seed.
-    fn seed() -> Seed {
+    pub(crate) fn seed() -> Seed {
         Seed::of(&Uuid::now_v7().to_string())
     }
 
@@ -1342,7 +1321,7 @@ mod tests {
         assert_eq!(list[0].columns[0].panes[0].shows.project, project);
     }
 
-    fn shown(project: ProjectId, kind: &str, n: u32) -> Shown {
+    pub(crate) fn shown(project: ProjectId, kind: &str, n: u32) -> Shown {
         Shown {
             project,
             kind: kind.to_owned(),
@@ -1369,7 +1348,7 @@ mod tests {
     /// A workspace with no column.
     const EMPTY: Vec<Vec<u64>> = Vec::new();
 
-    fn opened(list: &mut Arrangement, shown: Shown, place: Option<Place>) -> PaneId {
+    pub(crate) fn opened(list: &mut Arrangement, shown: Shown, place: Option<Place>) -> PaneId {
         open(
             list,
             Opening {
@@ -2389,21 +2368,6 @@ mod tests {
         );
         close(&mut list, pane, &seed()).unwrap();
         assert_eq!(agents_place(&list, work, thread), None);
-    }
-
-    #[test]
-    fn only_a_workspace_its_project_owns_takes_what_its_agent_opens_there() {
-        let mut list = start();
-        let (work, home) = (ProjectId::new(), ProjectId::new());
-        // A Pane of Work on a free workspace, or another Project's: no place.
-        opened(&mut list, shown(work, "a.a", 1), None);
-        assert_eq!(owned_place(&list, work), None);
-        list[0].project = Some(home);
-        assert_eq!(owned_place(&list, work), None);
-        // Work's own, emptied: last there.
-        list[1].project = Some(work);
-        let place = Some(Place::Project { project: work });
-        assert_eq!(owned_place(&list, work), place);
     }
 
     #[test]

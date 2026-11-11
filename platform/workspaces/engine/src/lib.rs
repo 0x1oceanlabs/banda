@@ -24,6 +24,7 @@
 
 pub mod commands;
 pub mod model;
+pub mod placing;
 
 use banda_kernel::{
     AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx,
@@ -34,6 +35,7 @@ pub use commands::{
     Regroup, ShowAs, Size, Take, Tidy, Update,
 };
 use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
+use placing::{Asked, By, Flow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -48,12 +50,46 @@ pub struct Workspaces {
     /// The Pane kinds that open as a Group of their own, as their window
     /// parts say (ADR 0065, decision 7).
     grouped: BTreeSet<String>,
+    /// The Pane kinds that stand on their Project's workspace, as their
+    /// window parts say (ADR 0065, decision 9).
+    home: BTreeSet<String>,
+    /// Reads this machine's Flow; none, the Flow `free`.
+    flow: Option<Box<dyn Fn() -> Flow + Send + Sync>>,
 }
 
 impl Workspaces {
     /// Workspaces that know no kind of Pane to open as a Group of its own.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// The kinds of Pane that stand on their Project's workspace.
+    pub fn home_kinds(mut self, kinds: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.home = kinds.into_iter().map(Into::into).collect();
+        self
+    }
+
+    /// The facts a Pane showing `shows` is placed by, read before the
+    /// change, which cannot wait.
+    async fn asked(&self, call: &Call, shows: &Shown, by: By) -> Asked {
+        let project = shows.project;
+        // A draft stands in the machine's own ID, as no Project.
+        let scratch =
+            project == call.project().id() || call.scratch(project).await.unwrap_or(false);
+        Asked {
+            flow: self.flow.as_ref().map_or(Flow::Free, |read| read()),
+            project,
+            grouped: self.grouped.contains(&shows.kind),
+            home: self.home.contains(&shows.kind),
+            scratch,
+            by,
+        }
+    }
+
+    /// Where this machine's Flow is read from (ADR 0110, decision 5).
+    pub fn flow(mut self, read: impl Fn() -> Flow + Send + Sync + 'static) -> Self {
+        self.flow = Some(Box::new(read));
+        self
     }
 
     /// The kinds of Pane that open as a Group of their own, as a Thread
@@ -498,7 +534,16 @@ impl Workspaces {
         if self.grouped.contains(&open.shows.kind) {
             open.grouped.get_or_insert(true);
         }
+        let by = By::Person { from: open.from };
+        let asked = if open.place.is_none() && open.instead.is_none() {
+            Some(self.asked(&call, &open.shows, by).await)
+        } else {
+            None
+        };
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
+            if let Some(asked) = asked {
+                open.place = placing::place(list, asked);
+            }
             Ok(commands::open(list, open, seed)?)
         })
         .await?;
@@ -760,24 +805,23 @@ impl Workspaces {
         // it goes into another Pane's column, which stays as it is.
         let grouped = self.grouped.contains(&shows.kind);
         let stacks = (beside.as_ref()).is_some_and(|b| matches!(b.side, Side::Above | Side::Below));
-        // The Thread whose session the pass was made for: what its Agent
-        // opens with no place goes into that Thread's Group. A kind that
-        // opens as a Group of its own does not: it comes first in its Group
-        // (ADR 0065, decisions 6 and 7).
-        let thread = call.thread().filter(|_| !grouped);
+        // What its Agent opens with no place goes where the Flow says: into
+        // the Group of the Thread its pass was made for (ADR 0065, decisions
+        // 6 and 7), else on its Project's workspace (ADR 0102, decision 4).
+        let by = By::Agent {
+            thread: call.thread(),
+        };
+        let asked = if beside.is_none() {
+            Some(self.asked(&call, &shows, by).await)
+        } else {
+            None
+        };
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             let place = beside.map(|b| b.place(list, wall)).transpose()?;
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
-            // With its Thread not shown, last on the workspace its Project
-            // owns, even emptied (ADR 0102, decision 4); with none, where a
-            // Pane with no place goes. The engine does not know the Flow,
-            // so one owned from the row draws it in the Flow `free` too.
-            let project = wall.project;
-            let place = place
-                .or_else(|| thread.and_then(|t| model::agents_place(list, project, t)))
-                .or_else(|| model::owned_place(list, project));
+            let place = place.or_else(|| placing::place(list, asked?));
             let opening = Opening {
                 place,
                 by: Some(me),

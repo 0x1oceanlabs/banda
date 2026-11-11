@@ -6,10 +6,14 @@ import type { Place } from "./Place";
 
 export type Open = { 
 /**
- * Left out, a column on the right of the top workspace that shows a
- * Pane of its Project, or of the empty one at the bottom.
+ * Left out, where the Flow says (ADR 0110).
  */
 place?: Place, 
+/**
+ * The Pane it is opened from, the one in front, which the Flow places
+ * it by. Left out, as from none.
+ */
+from?: PaneId, 
 /**
  * The Pane it shows in place of, which leaves.
  */

@@ -9,6 +9,7 @@
 //! window's modules. They write the contract's list of methods.
 
 use crate::places::{Places, channel, from_checkout};
+use banda_agents::sending::{self, AgentsSettings};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_bytes::Bytes;
@@ -18,12 +19,14 @@ use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::methods::MethodTable;
 use banda_kernel::{KernelBuilder, Method, Working};
 use banda_keys::KeysModule;
+use banda_look::OneFile;
 use banda_machines::{Machine, Machines};
 use banda_problems::Problems;
 use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
+use banda_workspaces::placing::Flow;
 
 /// One App or platform part, as the scan found it, or the window's own.
 pub struct Part {
@@ -199,9 +202,17 @@ mod build {
     }
 
     /// The Pane kinds that open as a Group of their own, as the window
-    /// parts say (ADR 0065, decision 7).
-    pub fn workspaces(_: &HostContext<'_>) -> Workspaces {
-        Workspaces::new().grouped_kinds(crate::modules::grouped_kinds())
+    /// parts say (ADR 0065, decision 7), and this machine's copy of the
+    /// Flow (ADR 0110, decision 5).
+    pub fn workspaces(host: &HostContext<'_>) -> Workspaces {
+        let file = host.places.config.join(AgentsSettings::NAME);
+        Workspaces::new()
+            .grouped_kinds(crate::modules::grouped_kinds())
+            .home_kinds(crate::modules::home_kinds())
+            .flow(move || match sending::flow(&file) {
+                sending::Flow::Free => Flow::Free,
+                sending::Flow::Row | sending::Flow::Solo => Flow::Row,
+            })
     }
 }
 

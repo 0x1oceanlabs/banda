@@ -106,11 +106,17 @@ function actionOf(action: Action<never>) {
 
 /** What a module's window part offers, as `banda modules` prints it: its
  * code says it; this is a copy for the engine, which has no window. The
- * engine reads from it which kinds of Pane open as a Group of their own,
- * for the workspaces (ADR 0065, decision 7). */
+ * engine reads from it which kinds of Pane open as a Group of their own
+ * (ADR 0065, decision 7) and which stand on their Project's workspace,
+ * for the workspaces (ADR 0110). */
 function windowOf(module: Module) {
   return {
-    panes: module.panes.map(({ kind, grouped }) => ({ kind, grouped })),
+    panes: module.panes.map(({ kind, grouped, home }) => ({
+      kind,
+      grouped,
+      // Said, whatever its Flow: the engine asks it only in the row.
+      ...(home && { home: true }),
+    })),
     actions: allOf(module).map(actionOf),
     ...(module.scopes.length > 0 && { scopes: module.scopes }),
     sources: module.sources.map(({ id, label }) => ({ id, label })),
