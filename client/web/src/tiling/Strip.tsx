@@ -1,7 +1,16 @@
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
-import { Component, memo, useEffect, useLayoutEffect, useRef } from "react"
+import {
+  Component,
+  memo,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react"
+import { flushSync } from "react-dom"
+import { sameData } from "@banda/core"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
@@ -14,6 +23,7 @@ import {
   isFree,
   keepsPlace,
   runOf,
+  sharesScreen,
   share,
   type Workspace,
 } from "./model"
@@ -28,6 +38,8 @@ import {
   type Reveal,
   revealTo,
   room,
+  sized,
+  type Space,
   scrollOf,
   shownShare,
   widthAt,
@@ -127,7 +139,11 @@ export const Strip = memo(function Strip({
   const focus = workspace.columns[workspace.focus]?.id
   const look = useLookColumns()
   const groups = useLookGroups()
-  const columns = drawnColumns(workspace, look)
+  // A Group that fills the screen shares out the room, so a new room is
+  // new widths while there is one; else CSS works them out alone.
+  const sharing = sharesScreen(workspace)
+  const [space, setSpace] = useState<Space>()
+  const columns = drawnColumns(workspace, look, space)
   const focusedGroup = workspace.columns[workspace.focus]?.group
   // Whether each Pane shows an Item, and how it calls; each Group's
   // owner: its state and its name.
@@ -160,16 +176,43 @@ export const Strip = memo(function Strip({
 
   // Columns grow, shrink and go to new places on the look's springs.
   const motion = useRef(new ColumnMotion())
+  // Read whenever the widths change, so what a key asks goes by the room
+  // as it is, whatever a resize that changed no width left alone.
   useLayoutEffect(() => {
-    motion.current.sync(scroller.current, columns)
+    const strip = scroller.current
+    if (!sharing || !strip) return setSpace(undefined)
+    const measured = room(strip)
+    setSpace((had) => (sameData(had, measured) ? had : measured))
+  }, [sharing, layout])
+  useLayoutEffect(() => {
+    // Not until the room is known, or what is there the first time moves.
+    if (!sharing || space) {
+      motion.current.sync(scroller.current, columns, space?.inner)
+    }
   })
   useEffect(() => () => motion.current.stop(), [])
 
   // What a scroll needs, as it is now: the columns, and for a swipe's end
   // the focus and the frame; what the mouse's sizing reads too.
-  const now = useRef({ focus, frame, columns, look, on: false, onStep })
+  const now = useRef({
+    workspace,
+    focus,
+    frame,
+    columns,
+    look,
+    on: false,
+    onStep,
+  })
   useLayoutEffect(() => {
-    now.current = { focus, frame, columns, look, on: live && !zooms, onStep }
+    now.current = {
+      workspace,
+      focus,
+      frame,
+      columns,
+      look,
+      on: live && !zooms,
+      onStep,
+    }
   })
   useSizing(scroller, motion, now)
 
@@ -181,11 +224,21 @@ export const Strip = memo(function Strip({
     before.current = focus
   }, [focus, layout])
   // The room changes when the window does, or the sidebar comes or goes
-  // over the Strip's left: the focused column comes whole into view again.
+  // over the Strip's left: the focused column comes whole into view again,
+  // and a Group that shares the screen shares out the new room, before
+  // this frame shows, when that changes a width.
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
     const watch = new ResizeObserver(() => {
+      const { workspace, look, columns } = now.current
+      if (sharesScreen(workspace)) {
+        const measured = room(strip)
+        const widths = sized(workspace, look, measured)
+        if (widths.some(({ width }, c) => width !== columns[c]?.width)) {
+          flushSync(() => setSpace(measured))
+        }
+      }
       revealFocus(strip, now.current.columns, now.current.focus)
       aimed(strip)
     })

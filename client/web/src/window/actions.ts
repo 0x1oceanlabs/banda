@@ -44,7 +44,6 @@ import {
   leads,
   identityOf,
   launcher,
-  minOf,
   moduleAct,
   showsOf,
   widthOf,
@@ -71,7 +70,7 @@ import {
   workspaceMoved,
 } from "../tiling/arrange"
 import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
-import { floorOf, roomLeft } from "../tiling/layout"
+import { floorsOf, roomLeft } from "../tiling/layout"
 import {
   across,
   bring,
@@ -242,7 +241,7 @@ function resize(shell: Shell, by: 1 | -1, wrap = false) {
     const column = workspace.columns[workspace.focus]
     if (!column) return undefined
     const look = columnsOf()
-    const floor = floorOf(workspace.id, minOf(column, look.min))
+    const floor = floorsOf(workspace.id, look)
     return resized(w, widen(w, by, look, { floor, wrap }))
   })
 }

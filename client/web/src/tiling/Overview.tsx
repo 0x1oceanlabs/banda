@@ -219,7 +219,7 @@ export function Overview({
   const fitted = useMemo(() => {
     if (!screen) return undefined
     const widths = workspaces.list.map((workspace) => {
-      const drawn = drawnColumns(workspace, look)
+      const drawn = drawnColumns(workspace, look, screen)
       const columns = drawn.map((column) =>
         Math.max(
           (share(column.width) ?? 0.5) * (screen.inner + screen.gap) -
@@ -803,7 +803,7 @@ function Row({
           onClose={onCloseWorkspace}
         />
       )}
-      {drawnColumns(workspace, look).map((column, c) => {
+      {drawnColumns(workspace, look, undefined).map((column, c) => {
         return (
           <div
             key={column.id}
