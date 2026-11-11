@@ -127,29 +127,30 @@ pub async fn move_thread(
 
 /// A Thread about to move: its rows, the images its items name, and the
 /// files they name.
-struct Leaving {
-    rows: ThreadRows,
-    images: Vec<ImageRow>,
-    files: Files,
+pub(crate) struct Leaving {
+    pub(crate) rows: ThreadRows,
+    pub(crate) images: Vec<ImageRow>,
+    pub(crate) files: Files,
     /// The sessions of the Harnesses it ran on before as it has them in
     /// the Project it moves to, as JSON, when one of them stays here.
-    earlier: Option<String>,
+    pub(crate) earlier: Option<String>,
 }
 
 /// The files a Thread's rows name in its Project's data.
-struct Files {
-    images: Vec<ImageId>,
-    visuals: Vec<VisualId>,
+#[derive(Clone, Debug, serde::Serialize, Deserialize)]
+pub(crate) struct Files {
+    pub(crate) images: Vec<ImageId>,
+    pub(crate) visuals: Vec<VisualId>,
     /// Its sessions' IDs, the one it has and those of the Harnesses it ran
     /// on before (ADR 0078, decision 5): Claude Code's are files here.
-    sessions: Vec<String>,
+    pub(crate) sessions: Vec<String>,
     /// The folders of the files kept for its Person's messages, by their
     /// names ([`ThreadRows::kept_in`]).
-    kept: Vec<String>,
+    pub(crate) kept: Vec<String>,
 }
 
 /// `thread` whole, if it may move.
-fn leaving(sql: &Connection, thread: ThreadId) -> Result<Leaving, Error> {
+pub(crate) fn leaving(sql: &Connection, thread: ThreadId) -> Result<Leaving, Error> {
     let rows = ThreadRows::read(sql, thread)?
         .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
     may_move(stands(sql, thread)?)?;
@@ -183,7 +184,7 @@ fn leaving(sql: &Connection, thread: ThreadId) -> Result<Leaving, Error> {
 }
 
 /// Where `thread`'s work stands, as the store has it now.
-fn stands(sql: &Connection, thread: ThreadId) -> Result<Stands, Error> {
+pub(crate) fn stands(sql: &Connection, thread: ThreadId) -> Result<Stands, Error> {
     let forks = store::evidence::<Evidence>(sql, thread)?.is_some_and(|now| now.forks());
     Ok(Stands {
         works: store::running(sql, thread)?.is_some(),
@@ -201,7 +202,7 @@ fn stands(sql: &Connection, thread: ThreadId) -> Result<Stands, Error> {
 /// and the project key it was written under, as the adapter Banda carries
 /// keeps them (`sessions.ts`). One that is not there is passed over, and
 /// one a session ID names that is no plain file name too.
-fn copy_files(from: &Path, to: &Path, files: &Files) -> io::Result<()> {
+pub(crate) fn copy_files(from: &Path, to: &Path, files: &Files) -> io::Result<()> {
     // Each as it is named beneath a Project's data.
     let data = Path::new("");
     let (images, visuals) = (Images::of(data), Visuals::of(data));
@@ -233,7 +234,7 @@ fn copy_files(from: &Path, to: &Path, files: &Files) -> io::Result<()> {
 /// The refusal of a copy that found a file of the Thread's gone another
 /// way in the other Project, as a session two copies of the Thread went
 /// on with; any other failure as it is.
-fn apart(error: io::Error) -> Error {
+pub(crate) fn apart(error: io::Error) -> Error {
     if error.kind() != io::ErrorKind::AlreadyExists {
         return Error::from(error);
     }
@@ -244,7 +245,7 @@ fn apart(error: io::Error) -> Error {
 /// `thread` as the Project it moves to has it already: none, as it should
 /// be; or its rows, when a move cut short left it there as it came with
 /// `rows`, and the move goes on. One that went on there is refused.
-fn already(
+pub(crate) fn already(
     sql: &Connection,
     thread: ThreadId,
     rows: &ThreadRows,
@@ -260,7 +261,7 @@ fn already(
 /// Writes `rows` and `images`, `thread` whole, into this Project, from
 /// `from`, with the line that says so, and answers its rows as they are
 /// now. One here already, as it came before, is not written again.
-fn arrive(
+pub(crate) fn arrive(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,
@@ -285,7 +286,7 @@ fn arrive(
 /// Takes `thread` out of this Project for `to`, if it is still as `rows`,
 /// what was copied there, has it, and still at rest: what other Threads
 /// do for it is no row of its own.
-fn leave(
+pub(crate) fn leave(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,

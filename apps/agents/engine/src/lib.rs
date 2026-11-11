@@ -56,6 +56,7 @@ mod store;
 mod switching;
 mod time_comes;
 mod titles;
+mod to_machine;
 mod to_project;
 mod touching;
 mod transcript;
@@ -98,6 +99,7 @@ use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
+use to_machine::{Leave, OneMove, Packed, Piece, PieceAsk, TakePiece, Unpack, Unpacked};
 use to_project::MoveThread;
 use touching::Touching;
 use ts_rs::TS;
@@ -575,6 +577,35 @@ banda_kernel::methods! {
         /// Project of No project. Only a Person moves a Thread (ADR 0098,
         /// decision 14).
         command move_thread(MoveThread) -> (), Write;
+        /// Packs a Thread at rest into one artefact in this Project's
+        /// data, for a Project on another machine (ADR 0116): its rows
+        /// and the files they name, as `move_thread` takes them. It
+        /// answers the move, and its artefact's size and SHA-256. The
+        /// Thread stays here until `leave_thread`. Only a Person packs.
+        command pack_thread(OneThread) -> Packed, Write;
+        /// A piece of a packed move's artefact from byte `at`, 512 KiB at
+        /// most, in base64, and whether more comes after it. Only a
+        /// Person reads it.
+        call packed(PieceAsk) -> Piece, Read;
+        /// Keeps a piece of a move's artefact, carried from another
+        /// machine, in this Project's data: the next one, or one kept
+        /// already. Only a Person carries one.
+        command take_piece(TakePiece) -> (), Write;
+        /// Unpacks a move's artefact, once every piece is here and its
+        /// SHA-256 is the one it was packed with, into this Project: the
+        /// Thread whole, with the line that says where it came from. An
+        /// engine that keeps a Thread another way refuses, and so does a
+        /// Project that has the Thread already and went on with it.
+        command unpack_thread(Unpack) -> Unpacked, Write;
+        /// Takes a packed Thread out of this Project, for the `project`
+        /// it was unpacked in, if it is still as it was packed and at
+        /// rest; else it stays, and `give_back` there takes its copy out.
+        command leave_thread(Leave) -> (), Write;
+        /// Takes the copy a move unpacked here back out, as the Thread
+        /// stayed where it was: only while nothing went on with it here.
+        /// Asked only once `leave_thread` refused: after a Thread left,
+        /// its copy here is the Thread.
+        command give_back(OneMove) -> (), Write;
     }
 }
 
@@ -1452,6 +1483,34 @@ impl Agents {
 
     async fn move_thread(&self, call: Call, ask: MoveThread) -> Result<(), Refusal> {
         to_project::move_thread(&self.live, &call, ask).await
+    }
+
+    async fn pack_thread(
+        &self,
+        call: Call,
+        OneThread { thread }: OneThread,
+    ) -> Result<Packed, Refusal> {
+        to_machine::pack(&self.live, &call, thread).await
+    }
+
+    async fn packed(&self, call: Call, ask: PieceAsk) -> Result<Piece, Refusal> {
+        to_machine::packed(&call, ask).await
+    }
+
+    async fn take_piece(&self, call: Call, ask: TakePiece) -> Result<(), Refusal> {
+        to_machine::take_piece(&call, ask).await
+    }
+
+    async fn unpack_thread(&self, call: Call, ask: Unpack) -> Result<Unpacked, Refusal> {
+        to_machine::unpack(&self.live, &call, ask).await
+    }
+
+    async fn leave_thread(&self, call: Call, ask: Leave) -> Result<(), Refusal> {
+        to_machine::leave(&self.live, &call, ask).await
+    }
+
+    async fn give_back(&self, call: Call, ask: OneMove) -> Result<(), Refusal> {
+        to_machine::give_back(&self.live, &call, ask).await
     }
 
     async fn suggest_title(
