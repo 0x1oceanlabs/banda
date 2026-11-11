@@ -1004,8 +1004,9 @@ struct Moving {
 /// Agent opened, or the Project's own Group. A column in none joins it,
 /// and a Group becomes it or stands just after it, in the order they
 /// stood. Any other goes last. A Group that filled the screen fills it
-/// there, when none does. One already there stays; with `only`, only that
-/// Project's move.
+/// there, when none does. One already there stays, but for the Person's
+/// own column in none, which joins the own Group; with `only`, only that
+/// Project's move, and none already there.
 pub fn arrange(
     list: &mut Arrangement,
     projects: &[ProjectId],
@@ -1024,12 +1025,17 @@ pub fn arrange(
             let of_an_agent = lead.is_some() || panes.any(|pane| pane.by.is_some());
             let project = lead.unwrap_or(&workspace.columns[c].panes[0]).shows.project;
             let home = projects.contains(&project).then_some(project);
-            if workspace.project == home || only.is_some_and(|one| one != project) {
+            let group = workspace.columns[c].group;
+            let was_own = group.is_some() && group == workspace.own;
+            let own = home.is_some() && (was_own || !of_an_agent);
+            // On its workspace, but for the Person's own column in none
+            // when the Person arranges.
+            let settled = group.is_some() || !own || only.is_some();
+            let there = workspace.project == home && settled;
+            if there || only.is_some_and(|one| one != project) {
                 c = range.end;
                 continue;
             }
-            let group = workspace.columns[c].group;
-            let was_own = group.is_some() && group == workspace.own;
             let filled = group.is_some() && group == workspace.filled;
             if was_own {
                 workspace.own = None;
@@ -1040,7 +1046,7 @@ pub fn arrange(
             moving.push(Moving {
                 home,
                 columns: workspace.columns.drain(range).collect(),
-                own: home.is_some() && (was_own || !of_an_agent),
+                own,
                 filled,
             });
         }

@@ -224,7 +224,10 @@ day.
    and no Pane an Agent opened goes into the own Group, first, which it
    starts when there is none (decision 4); the Groups the Person made
    stand just after it, in the order they stood, and an Agent's goes
-   last. A Group keeps its `Alt+M` fill. A Project counts as one as it
+   last. A column in none already on its Project's workspace, with no
+   Agent's Thread and no Pane an Agent opened, joins the own Group as
+   well, so a Pane sent home from a free workspace is gathered too
+   (#1311): the Person's Arrange, not the one `only` sends. A Group keeps its `Alt+M` fill. A Project counts as one as it
    does for a Pane that opens: another machine's too, and one whose
    folder is missing; a draft in this machine's own ID, as a new Thread
    in No Project starts, is of no Project. The sidebar's Flow menu

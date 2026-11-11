@@ -96,5 +96,3 @@ Each step is its own PR, and the window keeps working after each.
 
 - Whether `Alt+Enter` on a free workspace stays there or goes to the
   Project's workspace.
-- Whether a Pane sent home from a free workspace is gathered by Arrange
-  into the own Group (#1311).
