@@ -30,6 +30,7 @@ import {
 } from "@banda/ui/components/suggestions"
 import { DetailsRow } from "@banda/ui/components/thread-details"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { copyText } from "@banda/ui/lib/clipboard"
 import { problem } from "@banda/ui/lib/words"
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react"
 import { branchName, finds, listedOf, taken } from "./branches"
@@ -268,9 +269,7 @@ function Branches({
                 )}
               </ContextMenuTrigger>
               <ContextMenuContent>
-                <DropdownMenuItem
-                  onClick={() => void navigator.clipboard.writeText(ref.name)}
-                >
+                <DropdownMenuItem onClick={() => copyText(ref.name)}>
                   Copy branch name
                 </DropdownMenuItem>
               </ContextMenuContent>

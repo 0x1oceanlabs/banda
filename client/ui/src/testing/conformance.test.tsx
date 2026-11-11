@@ -141,6 +141,30 @@ function Lists({ engine }: PaneProps<None>) {
   return <p>{listed} Projects</p>
 }
 
+/** Draws a button only once arc answers, and reads again on Refresh with
+ * no words of its own, as a Pane's reads may: its pill is the Frame's. */
+function Reads({ engine }: PaneProps<None>) {
+  const [listed, list] = useState<number>()
+  const read = () =>
+    engine.call("projects.list", null as never).then(
+      (projects) => list(projects.length),
+      () => undefined
+    )
+  useEffect(() => void read(), [engine])
+  return listed === undefined ? (
+    <p>Reading</p>
+  ) : (
+    <div>
+      <button type="button" onClick={() => void read()}>
+        Refresh
+      </button>
+      <button type="button" onClick={() => list(0)}>
+        Clear
+      </button>
+    </div>
+  )
+}
+
 /** A kind of the kit's own that opens on another machine. */
 const kind = (id: string, Pane: ComponentType<PaneProps<None>>) =>
   definePane<None>({
@@ -195,6 +219,18 @@ test("a kind that drops what an older build of arc refuses says nothing, and the
     })
   ).toEqual([
     'kit.lists, arc lacks the method, as it mounts: leaves "There is no method "projects.list"." unhandled',
+  ])
+})
+
+test("a button that only reads may wait as the Frame's pill says why, and one an older build gave no reason to draw is no fault", async () => {
+  const read = {
+    kind: kind("kit.reads", Reads),
+    answers: (method: string) => (method === "projects.list" ? [] : null),
+  }
+  expect(await conformance({ ...read, reads: ["Refresh"] })).toEqual([])
+  // Played as an act, its read waiting is the kit's finding.
+  expect(await conformance(read)).toEqual([
+    "kit.reads, away before an act, Refresh: projects.list still waits, and nothing says why",
   ])
 })
 

@@ -265,7 +265,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         const part = typeof args?.part === "string" ? args.part : null
         if (part === null) detailsWanted.current = !detailsWanted.current
         // A part to open shows the card, where this Thread draws one.
-        else if (unplaced || !here) return false
+        else if (unplaced) return false
         else {
           detailsWanted.current = true
           setOpening(part)
@@ -405,8 +405,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             area={area}
             onQuote={(quote) => composer.current?.quote(quote)}
           />
-          {/* Another host's details open what is not there yet. */}
-          {!unplaced && here && (
+          {!unplaced && (
             <ThreadDetails
               engine={engine}
               project={project}

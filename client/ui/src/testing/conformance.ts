@@ -109,6 +109,10 @@ export type Conformance<A extends { [key: string]: JsonValue }> = {
    * button it draws once mounted. A kind that draws none is given its
    * gestures, or `{}` when there is nothing to do in it but look. */
   gestures?: Readonly<Record<string, Gesture>>
+  /** The buttons it draws that only read, as Refresh and a menu of what
+   * there is: law 4 lets a read wait for the link while the Frame's pill
+   * says why, so the kit plays none of them as an act. */
+  reads?: readonly string[]
 }
 
 /** One thing a kind asked of its session. */
@@ -340,6 +344,10 @@ async function settle(): Promise<void> {
 const nameOf = (button: Element) =>
   (button.getAttribute("aria-label") ?? button.textContent ?? "").trim()
 
+/** A button the Pane does not draw: on a build of arc that lacks its
+ * methods, the Pane has nothing to draw it for, which is no fault. */
+class NotDrawn extends Error {}
+
 /** What an error says. */
 const said = (error: unknown) =>
   error instanceof Error ? error.message : String(error)
@@ -390,7 +398,7 @@ async function mount<A extends { [key: string]: JsonValue }>(
       const button = [...pane.querySelectorAll("button")].find(
         (one) => nameOf(one) === name
       )
-      if (!button) throw new Error(`there is no ${name} to click`)
+      if (!button) throw new NotDrawn(`there is no ${name} to click`)
       button.click()
     },
   }
@@ -547,7 +555,8 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
         kept = mounted
       } catch (error) {
         mounting = one ? mounting : left.length
-        found.add(`${at}: ${said(error)}`)
+        if (!(lacks && error instanceof NotDrawn))
+          found.add(`${at}: ${said(error)}`)
       } finally {
         await one?.unmount()
       }
@@ -567,7 +576,8 @@ export async function conformance<A extends { [key: string]: JsonValue }>(
       const buttons: string[] = []
       const drawn = await play("live", "as it mounts", (pane) => {
         for (const button of pane.root.querySelectorAll("button"))
-          if (!button.disabled) buttons.push(nameOf(button))
+          if (!button.disabled && !spec.reads?.includes(nameOf(button)))
+            buttons.push(nameOf(button))
       })
       // A kind with nothing to click, as a terminal that is typed in,
       // would pass having done nothing: its gestures are to be given.
