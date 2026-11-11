@@ -2560,10 +2560,7 @@ test("the kind checker finds the file of each kind of Pane, and the Thread, the 
     previewers.map(({ id }) => id).filter((id) => !previewersDeclared.has(id))
   ).toEqual([])
   expect(previewers.filter((one) => one.elsewhere).map(({ id }) => id)).toEqual(
-    expect.arrayContaining([
-      "files.code",
-      "files.markdown",
-    ])
+    expect.arrayContaining(["files.code", "files.markdown"])
   )
 })
 
