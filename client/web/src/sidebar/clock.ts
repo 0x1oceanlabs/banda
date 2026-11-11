@@ -11,9 +11,10 @@ import { WEEK } from "@banda/core"
 import { HOUR, nextShort } from "@banda/ui/lib/words"
 import type { Time } from "./card"
 
-/** When the words of a wake time `at` next change, after `now`: its hour
- * today, its weekday too within the week, a date before that, by the
- * local midnights and by the week's edge. */
+/** When the words of a wake time `at`, or of when a usage limit lets an
+ * Agent go on, next change, after `now`: its hour today, its weekday too
+ * within the week, a date before that, by the local midnights and by the
+ * week's edge. */
 export function nextClock(at: number, now: number): number {
   const midnight = new Date(now)
   midnight.setHours(24, 0, 0, 0)
@@ -28,6 +29,7 @@ export function nextOf(time: Time, now: number): number | undefined {
     case "ago":
       return nextShort(time.at, now)
     case "wakes":
+    case "goes on":
       return nextClock(time.at, now)
     case "someday":
     case "when done":
@@ -111,16 +113,21 @@ const LIST: Clock = newClock(
       }
 )
 
+/** Calls `wake` with the time then as `at` comes, on the list's clock; at
+ * once for a moment past. None while `at` is none. */
+export function useWakeAt(at: number | undefined, wake: (now: number) => void) {
+  useEffect(
+    () => (at === undefined ? undefined : LIST.wakeAt(at, wake)),
+    [at, wake]
+  )
+}
+
 /**
  * The time now, as a card reads it, drawn again only at the moment
  * `next(now)` names: when one of its times changes next.
  */
 export function useClock(next: (now: number) => number | undefined): number {
   const [now, setNow] = useState(Date.now)
-  const at = next(now)
-  useEffect(
-    () => (at === undefined ? undefined : LIST.wakeAt(at, setNow)),
-    [at]
-  )
+  useWakeAt(next(now), setNow)
   return now
 }

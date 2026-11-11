@@ -1,7 +1,8 @@
 /**
  * How a card's time is drawn (`card.ts`, spec §2.5): short and still,
  * "now", "40s", "14m", "2h", "3d", "Mar 3"; put off, when it wakes,
- * "18:30", "Tue 9:00", "Mar 3", "someday" or "when done". Nothing ticks:
+ * "18:30", "Tue 9:00", "Mar 3", "someday" or "when done"; at a usage
+ * limit, when its Agent goes on, "15:00". Nothing ticks:
  * the list's clock (`clock.ts`) draws a time again only as its words
  * change. A call's time takes its colour, the only colour on a card but
  * its mark's (ADR 0098, decision 8).
@@ -33,6 +34,7 @@ export function timeWords(time: Time, now: number): string {
     case "ago":
       return short(time.at, now)
     case "wakes":
+    case "goes on":
       return wakes(time.at, now)
     case "someday":
       return "someday"

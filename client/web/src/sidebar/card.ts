@@ -8,14 +8,21 @@
  * clock (`clock.ts`).
  */
 import type { ProjectSummary } from "@banda/contract"
+import type { DoingKind } from "@banda/contract/agents"
 import type { Named } from "@banda/contract/machines"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
-import type { MarkDoing, MarkState } from "@banda/ui/lib/mark-state"
+import { type MarkDoing, type MarkState, works } from "@banda/ui/lib/mark-state"
 import { NO_REASON } from "@banda/ui/pane"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { dayOf } from "@banda/core"
-import { agoOf, hourOf } from "@banda/ui/lib/words"
-import { lookOf, type Stand, STAND_WORDS } from "@banda/ui/status"
+import { agoOf, hourOf, short, wakes } from "@banda/ui/lib/words"
+import {
+  type Does,
+  doesOf,
+  lookOf,
+  type Stand,
+  STAND_WORDS,
+} from "@banda/ui/status"
 import type { Placed, Row } from "./arrange"
 import { type Went, wentWords } from "./hold"
 import { atOf } from "./inbox"
@@ -44,24 +51,28 @@ export type Word = "Asks" | "Done" | "Failed" | "Woke"
 export type Quiet = Exclude<Stand, "turn" | "open">
 
 /** A time a card says, as a moment and a kind: how long ago, short and
- * still; when it wakes, by the clock; or a Later that keeps no time. */
+ * still; when it wakes, or goes on past a usage limit, by the clock; or a
+ * Later that keeps no time. */
 export type Time =
   | { kind: "ago"; at: number; tone?: Tone }
   | { kind: "wakes"; at: number }
+  | { kind: "goes on"; at: number }
   | { kind: "someday" }
   | { kind: "when done" }
 
 /** Who put a Thread off, and when (decision 11). */
 export type PutOff = { at: number; byAgent: boolean }
 
-/** What a slot of a card draws. The title and the time are the card's
- * own; the rest carry what they draw. */
+/** What a slot of a card draws. The title, the time and what its Agent
+ * does are the card's own; the rest carry what they draw. */
 export type Slot =
-  | { kind: "mark"; look: MarkState; doing?: MarkDoing }
+  | { kind: "mark"; look: MarkState }
   | { kind: "title" }
   | { kind: "time" }
   /** Line 2: a word and what it says, or who put it off and when. */
   | { kind: "says"; word?: Word; putOff?: PutOff; text?: string }
+  /** Line 2 at work: what its Agent does (`CardModel.does`). */
+  | { kind: "works" }
   /** Its Project's sign and name, on line 3. */
   | { kind: "project"; project: ProjectSummary }
   /** The machine it runs on: its icon, and on line 3 its name unless the
@@ -88,6 +99,10 @@ export type CardModel = {
   tone?: Tone
   quiet?: Quiet
   time: Time
+  /** What its Agent does, at work: what its Mark shows, line 2 says and
+   * its time is at a usage limit (`timeShown`). Its card holds it as the
+   * Mark holds what it shows (`heldDoing`), so they never disagree. */
+  does?: Does
   /** It left the tab while the list held: where it went, shown in its
    * time's place (nothing where its Mark says it), and as a screen reader
    * hears it. */
@@ -146,8 +161,8 @@ export function cardOf(input: CardOf): CardModel {
   const { row, place, at, now, view, machine, away, stopped, went, strayed } =
     input
   const { listed, stand } = row
-  const shown = lookOf(listed, now)
-  const { look } = shown
+  const { look } = lookOf(listed, now)
+  const does = works(look) ? doesOf(listed, now) : undefined
   const tone = callColor(look)
   const count = linesOf(place, view)
   // The machine stands on line 3; with none, on line 1's right, by its
@@ -155,7 +170,7 @@ export function cardOf(input: CardOf): CardModel {
   const on = view.group === "machine" ? undefined : machine
   const lines: Line[] = [
     {
-      left: [{ kind: "mark", ...shown }, { kind: "title" }],
+      left: [{ kind: "mark", look }, { kind: "title" }],
       right: [
         ...(on && count < 3 ? [machineSlot(row, on, false)] : []),
         { kind: "time" },
@@ -165,7 +180,10 @@ export function cardOf(input: CardOf): CardModel {
   if (count >= 2)
     // Its right waits for the PR and the diff (F1b, F2); Failed's stays
     // empty (decision 8).
-    lines.push({ left: [saysOf(row, tone && WORDS[tone])], right: [] })
+    lines.push({
+      left: [does ? { kind: "works" } : saysOf(row, tone && WORDS[tone])],
+      right: [],
+    })
   if (count >= 3)
     lines.push({
       left:
@@ -194,6 +212,7 @@ export function cardOf(input: CardOf): CardModel {
     ...(tone ? { tone } : {}),
     ...(quiet ? { quiet } : {}),
     time: timeOf(row, at, tone),
+    ...(does ? { does } : {}),
     ...(went
       ? {
           gone: {
@@ -231,11 +250,11 @@ function machineSlot(
 }
 
 /**
- * Line 2 (decision 8, §2.6): a call's word and what it says, the
- * question, why it failed or the done note, never in a colour; Woke, who
- * put it off and when, and what it said; else what it was last asked. A
- * working card's own words come with ADR 0099's step 3, and Done's first
- * sentence of the last reply, where no note is, with its own PR.
+ * Line 2 (decision 8, §2.6) where no Agent works: a call's word and what
+ * it says, the question, why it failed or the done note, never in a
+ * colour; Woke, who put it off and when, and what it said; else what it
+ * was last asked. Done's first sentence of the last reply, where no note
+ * is, comes with its own PR.
  */
 function saysOf({ listed }: Row, word: Word | undefined): Says {
   const { calls, said, later } = listed
@@ -279,6 +298,57 @@ export function saysWords(
   return [off, text].filter(Boolean).join(" · ")
 }
 
+/** What line 2 says of a doing that works on nothing named (§2.6). */
+const SAID: Partial<Record<MarkDoing, string>> = {
+  think: "Thinks",
+  reply: "Writes to you",
+  compacting: "Compacting the context",
+}
+
+/** How line 2 says each kind of what a turn does to what it works on
+ * (§2.6); a command, and a tool with no words of its own, is said by
+ * what it works on alone. */
+const VERBS: Partial<Record<DoingKind, (on: string) => string>> = {
+  edit: (on) => `Edits ${on}`,
+  read: (on) => `Reads ${on}`,
+  search: (on) => `Searches “${on}”`,
+  fetch: (on) => `Fetches ${on}`,
+  delete: (on) => `Deletes ${on}`,
+  move: (on) => `Moves ${on}`,
+}
+
+/**
+ * What a working card says its Agent does at `now` (ADR 0098, decision 8;
+ * §2.6), in `doesOf`'s order: "Usage limit · goes on at 15:00"; "No
+ * events for 6m", by `ago`'s words for how long; "Compacting the
+ * context"; what its turn does, "pnpm test", "Edits Row.tsx"; or, with
+ * nothing named yet, that it works.
+ */
+export function worksWords(
+  { doing, kind, on, at }: Does,
+  now: number,
+  ago: (at: number, now: number) => string = short
+): string {
+  // Only a limit and silence have a moment.
+  if (at !== undefined)
+    return doing === "limit"
+      ? `Usage limit · goes on at ${wakes(at, now)}`
+      : `No events for ${ago(at, now)}`
+  const said = SAID[doing]
+  if (said) return said
+  if (on === undefined) return "Working"
+  const verb = kind && VERBS[kind]
+  return verb ? verb(on) : on
+}
+
+/** The time `card` shows: at a usage limit, when it goes on (decision
+ * 8); else its own. */
+export function timeShown({ does, time }: CardModel): Time {
+  return does?.doing === "limit" && does.at !== undefined
+    ? { kind: "goes on", at: does.at }
+    : time
+}
+
 /** The time a Thread that stands as `row` says, counted from `at` (§2.5):
  * how long ago, in its call's `tone`; put off, when it wakes. */
 export function timeOf(
@@ -305,7 +375,9 @@ export function timeAt(placed: Placed, look: MarkState): Time {
  * heard; and how long that has been. */
 export function timesOf(card: CardModel): Time[] {
   if (card.away) return [{ kind: "ago", at: card.away.since }]
-  const times: Time[] = [card.time]
+  const times: Time[] = [timeShown(card)]
+  if (card.does?.doing === "stuck" && card.does.at !== undefined)
+    times.push({ kind: "ago", at: card.does.at })
   for (const line of card.lines)
     for (const slot of [...line.left, ...line.right])
       if (slot.kind === "says" && slot.putOff)
@@ -330,18 +402,20 @@ const STAND_SAID: Readonly<Record<Stand, string>> = {
 /**
  * How `card` is said at `now` (§2.8): its name is its title, its word and
  * its time in full ("14 minutes", never "14m", which a reader may say as
- * metres); its description, what its other lines say, each `·` a full
- * stop, ✓ "passed" and ✗ "failed"; then that it strayed from its
- * Project's workspace, that its machine is away, and where it went if it
- * left the tab.
+ * metres); its description, what its Agent does at work, on a card of one
+ * line too, as its Mark shows it there, then what its other lines say,
+ * each `·` a full stop, ✓ "passed" and ✗ "failed"; then that it strayed
+ * from its Project's workspace, that its machine is away, and where it
+ * went if it left the tab.
  */
 export function spokenOf(card: CardModel, now: number): Spoken {
   const word = card.tone ? WORDS[card.tone] : STAND_SAID[card.stand]
   const at = card.away?.since ?? now
-  const name = [card.title, word, timeSaid(card.time, at)].join(", ")
-  const said = card.lines.flatMap((line) =>
-    [...line.left, ...line.right].flatMap((slot) => slotSaid(slot, at))
-  )
+  const name = [card.title, word, timeSaid(timeShown(card), at)].join(", ")
+  const said = card.does ? [worksWords(card.does, at, agoSaid)] : []
+  for (const line of card.lines)
+    for (const slot of [...line.left, ...line.right])
+      said.push(...slotSaid(slot, at))
   if (card.strayed) said.push(STRAYED)
   if (card.away)
     said.push(
@@ -382,6 +456,7 @@ function slotSaid(slot: Slot, now: number): string[] {
     case "mark":
     case "title":
     case "time":
+    case "works":
       return []
   }
 }
@@ -422,17 +497,21 @@ export function agoSaid(at: number, now: number): string {
   }
 }
 
-/** When `at` wakes, in full, as `wakes` says it short. */
-function wakesSaid(at: number, now: number): string {
+/** When `at` is, in full, as `wakes` says it short: "at 18:30", "Friday
+ * at 9:00", "December 3". */
+function clockSaid(at: number, now: number): string {
   switch (dayOf(at, now)) {
     case "today":
-      return `wakes at ${hourOf(at)}`
+      return `at ${hourOf(at)}`
     case "week":
-      return `wakes ${WEEKDAY.format(at)} at ${hourOf(at)}`
+      return `${WEEKDAY.format(at)} at ${hourOf(at)}`
     case "date":
-      return `wakes ${MONTH_DAY.format(at)}`
+      return MONTH_DAY.format(at)
   }
 }
+
+/** When `at` wakes, in full. */
+const wakesSaid = (at: number, now: number) => `wakes ${clockSaid(at, now)}`
 
 /** A card's time, in full. */
 function timeSaid(time: Time, now: number): string {
@@ -441,6 +520,8 @@ function timeSaid(time: Time, now: number): string {
       return agoSaid(time.at, now)
     case "wakes":
       return wakesSaid(time.at, now)
+    case "goes on":
+      return `goes on ${clockSaid(time.at, now)}`
     case "someday":
       return "someday"
     case "when done":

@@ -14,6 +14,11 @@
  * and "ask" asks; any other is answered at once and, unseen, calls its
  * Person. A Thread away from its Project's workspace bears a small diamond
  * after its title (ADR 0102, decision 6), shot as `sidebar-s6a-away-*`.
+ *
+ * A working card says what its Agent does, held as its Mark shows it (ADR
+ * 0099, M3b): line 2's words where the card has the lines, its time at a
+ * usage limit, and what a screen reader hears. The Working tab with its
+ * Agents each at something else is shot as `sidebar-m3b-working-*`.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -66,6 +71,9 @@ const cardOf = (scope: Locator, title: string) =>
 /** A card's lines, top down. */
 const linesOf = (card: Locator) => card.locator(":scope > span")
 
+/** A card's Mark. */
+const markOf = (card: Locator) => card.locator("svg[data-look]")
+
 /** The colour `element`'s text is drawn in. */
 const colourOf = (element: Locator) =>
   element.evaluate((one) => getComputedStyle(one).color)
@@ -116,27 +124,28 @@ async function look(window: Window, mode: "dark" | "light") {
 }
 
 /**
- * The window as it is now, dark and light, as `sidebar-s6a-<name>-<mode>`,
+ * The window as it is now, dark and light, as `sidebar-<step>-<name>-<mode>`,
  * and each of `cards` alone beside it, as
- * `sidebar-s6a-<name>-<card>-<mode>`. The pointer is away from the list,
+ * `sidebar-<step>-<name>-<card>-<mode>`. The pointer is away from the list,
  * which holds still under it.
  */
 async function shots(
   window: Window,
   name: string,
-  cards: Readonly<Record<string, Locator>> = {}
+  cards: Readonly<Record<string, Locator>> = {},
+  step = "s6a"
 ) {
   const { page } = window
   await page.mouse.move(1400, 450)
   for (const mode of ["dark", "light"] as const) {
     await look(window, mode)
     await page.screenshot({
-      path: `test-results/sidebar-s6a-${name}-${mode}.png`,
+      path: `test-results/sidebar-${step}-${name}-${mode}.png`,
       animations: "disabled",
     })
     for (const [card, locator] of Object.entries(cards))
       await locator.screenshot({
-        path: `test-results/sidebar-s6a-${name}-${card}-${mode}.png`,
+        path: `test-results/sidebar-${step}-${name}-${card}-${mode}.png`,
         animations: "disabled",
       })
   }
@@ -420,4 +429,141 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await expect(linesOf(stray)).toHaveCount(1)
   await away(stray, "stray one", "Wake")
   await focusShots(window, "away-later-1", stray)
+})
+
+/** When a usage limit lets an Agent go on, as a card says it: "15:00", or
+ * "Thu 0:30" past midnight. */
+const GOES_ON = String.raw`([A-Z][a-z]{2} )?\d{1,2}:\d\d`
+
+// ADR 0099, step 3 (M3b): line 2 of a working card says what its Agent
+// does, by the same hold as its Mark. A card in Working has one line
+// (ADR 0098, decision 9), so these are drawn in Your turn's three, where
+// the list holds each under the pointer as its Agent starts work again.
+test("a working card says what its Agent does as its Mark shows it: the command it runs, no events for 3m once it says nothing, and at its usage limit when it goes on, on line 1's right too (ADR 0099, M3b)", async () => {
+  test.setTimeout(180_000)
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { page } = window
+  await firstThread(page)
+  // The page's clock is moved on by hand later, its timers made anew.
+  await page.clock.install()
+  await page.reload()
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  await expect(sidebar).toBeVisible()
+  await leaveSidebar(page)
+  for (const title of ["card one", "card two", "card three"])
+    await send(window, title)
+  const runs = cardOf(panel, "card one")
+  const silent = cardOf(panel, "card two")
+  const limited = cardOf(panel, "card three")
+  for (const card of [runs, silent, limited])
+    await expect(linesOf(card)).toHaveCount(3)
+
+  // The pointer rests on the list; each Agent starts work again.
+  await runs.hover()
+  const again = (title: string, text: string) =>
+    call(window, "agents.send", { thread: idOf(window, title), text })
+  again("card one", "doing execute pnpm test")
+  again("card two", "silent 200")
+  again("card three", "limit wait")
+  const said = (card: Locator) => linesOf(card).nth(1)
+  await expect(said(runs)).toHaveText("pnpm test")
+  await expect(markOf(runs)).toHaveAttribute("data-doing", "execute")
+  // With nothing said yet, it works.
+  await expect(said(silent)).toHaveText("Working")
+  await expect(markOf(silent)).toHaveAttribute("data-doing", "other")
+  await expect(said(limited)).toHaveText(
+    new RegExp(`^Usage limit · goes on at ${GOES_ON}$`)
+  )
+  await expect(markOf(limited)).toHaveAttribute("data-doing", "limit")
+  // Three minutes on, the one that says nothing is stuck, on its card and
+  // its Mark alike.
+  await page.clock.fastForward("03:10")
+  await expect(said(silent)).toHaveText("No events for 3m")
+  await expect(markOf(silent)).toHaveAttribute("data-doing", "stuck")
+
+  // Away, each goes to Working, one line. At its limit, line 1's right
+  // says when it goes on; a screen reader hears what each does.
+  const goesOn = (await said(limited).textContent())!.replace(
+    "Usage limit · goes on at ",
+    ""
+  )
+  await leaveSidebar(page)
+  await sidebar.getByRole("tab", { name: /^Working/ }).click()
+  await expect(linesOf(limited)).toHaveCount(1)
+  await expect(limited.locator("[data-time]")).toHaveText(goesOn)
+  await expect(limited).toHaveAccessibleName(
+    new RegExp(`^card three, Working, goes on `)
+  )
+  await expect(limited).toHaveAttribute(
+    "aria-description",
+    `Usage limit. goes on at ${goesOn}`
+  )
+  await expect(silent).toHaveAttribute(
+    "aria-description",
+    "No events for 3 minutes"
+  )
+})
+
+/** What each Agent in the Working tab's shot does, as the fake Agent is
+ * told it, under a title of the kind a Person gives. */
+const AT_WORK = [
+  ["Plan the Later picker", "doing think about it"],
+  ["Audit the sidebar code", "doing read card.ts"],
+  ["Find every standOf caller", "doing search standOf"],
+  ["Fade long titles", "doing edit Row.tsx"],
+  ["Fix the flaky inbox test", "doing execute pnpm test"],
+  ["Read the ACP docs", "doing fetch docs.rs"],
+  ["Explain the hold rules", "doing reply Here it is"],
+  ["Overview open/close zoom", "doing compact"],
+  ["Draft the release notes", "doing other Skill"],
+  ["Remove the old shelves", "doing delete Shelf.tsx"],
+  ["waybar: show Banda's counts", "limit wait"],
+] as const
+
+// The Working tab with ten Agents each at something else, one that says
+// nothing and one at its usage limit, at 1440x900, dark and light, as
+// test-results/sidebar-m3b-working-<mode>.png, and the sidebar alone as
+// sidebar-m3b-working-list-<mode>.png.
+test("the Working tab: ten Agents each at something else, one stuck and one at its usage limit, in dark and light (ADR 0099, M3b)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await page.clock.install()
+  await page.reload()
+  const sidebar = sidebarOf(page)
+  await expect(sidebar).toBeVisible()
+  const start = (text: string, title: string) => {
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+    return expect
+      .poll(() => threadNamed(window, text)?.id)
+      .toBeTruthy()
+      .then(() =>
+        call(window, "agents.rename", { thread: idOf(window, text), title })
+      )
+  }
+  // One says nothing; a minute on, the rest start, and the page's clock
+  // moves two minutes ahead of the engine's: three minutes have passed
+  // for the first alone, while the rest are a minute from it.
+  await start("silent 600", "Keep awake while Agents work")
+  await page.waitForTimeout(65_000)
+  for (const [title, text] of AT_WORK) await start(text, title)
+  await sidebar.getByRole("tab", { name: /^Working/ }).click()
+  const panel = sidebar.getByRole("tabpanel")
+  await expect(panel.locator("[data-row]")).toHaveCount(AT_WORK.length + 1)
+  await page.clock.fastForward("02:00")
+  const stuck = cardOf(panel, "Keep awake while Agents work")
+  await expect(markOf(stuck)).toHaveAttribute("data-doing", "stuck")
+  for (const [title] of AT_WORK)
+    await expect(markOf(cardOf(panel, title))).not.toHaveAttribute(
+      "data-doing",
+      "stuck"
+    )
+  await expect(
+    cardOf(panel, "waybar: show Banda's counts").locator("[data-time]")
+  ).toHaveText(new RegExp(`^${GOES_ON}$`))
+  await expect(page.locator("aside [data-news]")).toHaveCount(0)
+  await shots(window, "working", { list: sidebar }, "m3b")
 })

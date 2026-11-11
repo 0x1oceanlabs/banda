@@ -501,7 +501,7 @@ async function motion({ reduced = false, still = false } = {}) {
   return {
     Animator,
     /** A mark of `variant` on `drawn`, first drawn in `state`, and at
-     * work doing `doing`, on the beat of `beat`. */
+     * work doing `doing`, `held` already or not, on the beat of `beat`. */
     mark(
       drawn: ReturnType<typeof svg>,
       state: MarkState,
@@ -511,14 +511,15 @@ async function motion({ reduced = false, still = false } = {}) {
         beat = "t",
         playful = 0,
         doing = undefined as MarkDoing | undefined,
+        held = false,
       } = {}
     ) {
       const mark = new Animator(drawn.svg, variant as "agent" | "logo")
-      mark.set({ state, doing, playful, news, beat })
+      mark.set({ state, doing, held, playful, news, beat })
       return {
         mark,
         set: (state: MarkState, doing?: MarkDoing) =>
-          mark.set({ state, doing, playful, news, beat }),
+          mark.set({ state, doing, held, playful, news, beat }),
       }
     },
     /** Whether the clock asked for a tick. */
@@ -679,6 +680,18 @@ test("a doing that changes after 0.3 s shows after 1.5 s, and one replaced withi
   expect(drawn.attributes()["data-loop"]).toBe("done")
   vi.advanceTimersByTime(2000)
   expect(drawn.attributes()["data-loop"]).toBe("done")
+})
+
+// A card holds what its Agent does with its words, and its Mark shows
+// that at once: one hold, so the two never disagree.
+test("a doing its card held already shows at once", async () => {
+  const time = await motion()
+  const drawn = svg()
+  const { set } = time.mark(drawn, "working", { doing: "read", held: true })
+  vi.advanceTimersByTime(300)
+  set("working", "execute")
+  expect(drawn.attributes()["data-doing"]).toBe("execute")
+  expect(time.ticking()).toBe(true)
 })
 
 test("one Thread keeps one rhythm wherever its mark shows, and each Thread its own", async () => {

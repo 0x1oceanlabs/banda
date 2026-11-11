@@ -15,7 +15,9 @@ import {
   spokenOf,
   timeAt,
   timeOf,
+  timeShown,
   timesOf,
+  worksWords,
 } from "./card"
 
 /** Tuesday, 10 November 2026, 15:00 by the local clock. */
@@ -253,6 +255,115 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
   })
 })
 
+describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)", () => {
+  const TWO: CardView = { density: 2, group: "none" }
+  /** A working card of `more`, two lines, and its line 2's words. */
+  const works = (more: Partial<Listed>) => {
+    const one = card(row("working", { mark: "working", ...more }), {
+      view: TWO,
+    })
+    expect(kinds(one)[1]).toBe("works | ")
+    return worksWords(one.does!, NOW)
+  }
+  const doing = (
+    what: NonNullable<Listed["doing"]>["what"],
+    title?: string
+  ): Partial<Listed> => ({
+    doing: { what, since: NOW - MINUTE, ...(title ? { title } : {}) },
+    stepped: NOW - MINUTE,
+  })
+  const at16 = new Date(2026, 10, 10, 16, 0).getTime()
+
+  test("the first that applies: the limit, then silence, then compacting, then the doing", () => {
+    const all = { ...doing("execute", "pnpm test"), compacting: true as const }
+    expect(works({ ...all, limitUntil: at16, stepped: NOW - HOUR })).toBe(
+      "Usage limit · goes on at 16:00"
+    )
+    expect(works({ ...all, stepped: NOW - 6 * MINUTE })).toBe(
+      "No events for 6m"
+    )
+    expect(works(all)).toBe("Compacting the context")
+    expect(works(doing("execute", "pnpm test"))).toBe("pnpm test")
+  })
+
+  test.each<[NonNullable<Listed["doing"]>["what"], string | undefined, string]>(
+    [
+      ["execute", "pnpm test", "pnpm test"],
+      ["edit", "Row.tsx", "Edits Row.tsx"],
+      ["read", "card.ts", "Reads card.ts"],
+      ["search", "standOf", "Searches “standOf”"],
+      ["fetch", "docs.rs", "Fetches docs.rs"],
+      ["delete", "x", "Deletes x"],
+      ["move", "x", "Moves x"],
+      ["think", undefined, "Thinks"],
+      ["reply", undefined, "Writes to you"],
+      ["other", "Skill", "Skill"],
+    ]
+  )("%s %s says %s", (what, title, words) => {
+    expect(works(doing(what, title))).toBe(words)
+  })
+
+  test("with nothing named yet, it says it works", () => {
+    expect(works({})).toBe("Working")
+    expect(works(doing("edit"))).toBe("Working")
+  })
+
+  test("its Mark shows what the words say: one doing, on the card, for both", () => {
+    const one = card(
+      row("working", { mark: "working", ...doing("delete", "x") })
+    )
+    expect(one.lines[0]!.left[0]).toEqual({ kind: "mark", look: "working" })
+    expect(one.does).toEqual({ doing: "edit", kind: "delete", on: "x" })
+    expect(card(row("turn")).does).toBeUndefined()
+  })
+
+  test("a card held in Your turn's three lines says what its Agent does now", () => {
+    const held = card(
+      row("working", { mark: "working", ...doing("execute", "pnpm test") }),
+      { place: "turn" }
+    )
+    expect(kinds(held)[1]).toBe("works | ")
+  })
+
+  test("at the limit, line 1's right says when it goes on, on the clock", () => {
+    const limited = card(row("working", { mark: "working", limitUntil: at16 }))
+    expect(limited.time).toEqual({ kind: "ago", at: NOW - 14 * MINUTE })
+    expect(timeShown(limited)).toEqual({ kind: "goes on", at: at16 })
+    expect(timesOf(limited)).toEqual([{ kind: "goes on", at: at16 }])
+    expect(spokenOf(limited, NOW)).toEqual({
+      name: "Fix the form, Working, goes on at 16:00",
+      description: "Usage limit. goes on at 16:00",
+    })
+    const friday = new Date(2026, 10, 13, 9, 0).getTime()
+    expect(
+      spokenOf(
+        card(row("working", { mark: "working", limitUntil: friday })),
+        NOW
+      ).name
+    ).toBe("Fix the form, Working, goes on Friday at 9:00")
+  })
+
+  test("silence counts on the list's clock, and is said in full", () => {
+    const stuck = card(
+      row("working", { mark: "working", stepped: NOW - 6 * MINUTE })
+    )
+    expect(timesOf(stuck)).toEqual([
+      stuck.time,
+      { kind: "ago", at: NOW - 6 * MINUTE },
+    ])
+    expect(spokenOf(stuck, NOW).description).toBe("No events for 6 minutes")
+  })
+
+  test("a card of one line says what its Agent does to a screen reader, as its Mark shows it", () => {
+    const one = card(
+      row("working", { mark: "working", ...doing("read", "card.ts") }, "arc"),
+      { machine: arc }
+    )
+    expect(one.lines).toHaveLength(1)
+    expect(spokenOf(one, NOW).description).toBe("Reads card.ts. arc")
+  })
+})
+
 describe("tones: colour only on the mark and on a call's time", () => {
   test("each call's colour, on the card and its time", () => {
     const tone = (more: Partial<Listed>) => {
@@ -358,7 +469,7 @@ describe("spokenOf (spec §2.8)", () => {
     })
     expect(spokenOf(working, NOW)).toEqual({
       name: "Fix the form, Working, 2 hours",
-      description: "arc",
+      description: "Working. arc",
     })
     const failed = card(
       row("turn", { mark: "failed", calls: "3 tests fail · #1061 ✗" })
@@ -445,7 +556,7 @@ describe("spokenOf (spec §2.8)", () => {
     })
     expect(spokenOf(away, NOW)).toEqual({
       name: "Fix the form, Working, 18 minutes",
-      description: "arc. arc is away, 12 minutes",
+      description: "Working. arc. arc is away, 12 minutes",
     })
     const stopped = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
@@ -453,7 +564,7 @@ describe("spokenOf (spec §2.8)", () => {
       stopped: true,
     })
     expect(spokenOf(stopped, NOW).description).toBe(
-      "arc. arc is stopped, 12 minutes"
+      "Working. arc. arc is stopped, 12 minutes"
     )
     const gone = (went: NonNullable<CardOf["went"]>) =>
       spokenOf(
