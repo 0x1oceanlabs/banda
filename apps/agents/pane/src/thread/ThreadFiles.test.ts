@@ -1,7 +1,7 @@
 import type { ProjectId } from "@banda/contract"
 import type { Item } from "@banda/contract/agents"
 import type { Located } from "@banda/contract/files"
-import { type Device, deviceFile, projectFile } from "@banda/core"
+import { type Device, deviceFile, projectFile } from "@banda/core/react"
 import { beforeEach, expect, test, vi } from "vitest"
 import { ThreadFiles, type FilesHands } from "./ThreadFiles"
 
