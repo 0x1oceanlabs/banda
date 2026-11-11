@@ -3,7 +3,7 @@
  * composer, as in T3 Code (ADR 0015, decision 4): a click in the Thread
  * leaves the box, and the next words still reach it. A key or a paste
  * something else took, one in a field or on a control, and any while a
- * dialog or a menu is open, are left where they were.
+ * dialog or a menu is open over it, are left where they were.
  */
 
 /** What takes keys of its own. */
@@ -28,8 +28,11 @@ const OWN_KEYS = [
   "[data-takes-keys]",
 ].join(",")
 
-/** A layer over the window that its keys are for. */
-const OPEN_LAYER = "[role=dialog],[role=alertdialog],[role=menu],[role=listbox]"
+/** A layer over the window that its keys are for, while it is one: not
+ * what a Pane shows in its tile, as a list of files, nor one lifted or on
+ * its way out. */
+const OPEN_LAYER =
+  ":is([role=dialog],[role=alertdialog],[role=menu],[role=listbox]):not([data-tile] *,[inert],[data-closed])"
 
 /** Whether `event` is stray in the Pane `box` is in: on it, and no one
  * else's, nor in a field or a control, nor while a layer is open. */
@@ -38,7 +41,10 @@ export function stray(event: Event, box: Element): boolean {
   if (event.defaultPrevented || !(target instanceof Element)) return false
   if (!box.closest(PANE)?.contains(target) || target.closest(OWN_KEYS))
     return false
-  return document.querySelector(OPEN_LAYER) === null
+  // The Drawer is such a layer, and the Pane in it is under none.
+  return [...document.querySelectorAll(OPEN_LAYER)].every((layer) =>
+    layer.contains(box)
+  )
 }
 
 /** A Pane, as the window frames it. */
