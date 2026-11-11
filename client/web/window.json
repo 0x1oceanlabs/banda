@@ -526,6 +526,13 @@
       ]
     },
     {
+      "id": "link.open",
+      "title": "Open a link",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "pane.put-away",
       "title": "Close every Pane that shows an Item, on any workspace",
       "section": "Panes",

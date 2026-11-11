@@ -54,6 +54,8 @@ test("with no folder only a full path goes anywhere, and never a Windows one", (
 })
 
 test("outside Banda, a page goes to the browser and a file to its app", () => {
-  expect(outsideOf({ page: "https://a.b/" })).toBe("in external browser")
+  expect(outsideOf({ link: { url: "https://a.b/" } })).toBe(
+    "in external browser"
+  )
   expect(outsideOf({ file: "/a" })).toBe("in its app")
 })
