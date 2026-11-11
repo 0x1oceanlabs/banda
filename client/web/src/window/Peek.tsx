@@ -151,8 +151,15 @@ export function Peek({
               )}
               <PaneSlot project={project} pane={pane} at="project" />
             </PaneHeader>
-            {/* As a Frame's: arc going away shows on what it shows. */}
-            {there && <PaneSlot project={project} pane={pane} at="pill" />}
+            {/* As a Frame's: arc going away shows on what it shows, which
+                needs the machine's session to show anything. */}
+            {there && reach.engine && (
+              <div className="relative z-10 h-0 shrink-0">
+                <div className="pointer-events-none absolute inset-x-2 top-1 flex justify-center">
+                  <PaneSlot project={project} pane={pane} at="pill" />
+                </div>
+              </div>
+            )}
             {/* Its machine not known yet, it waits for it, in its words. */}
             {reach.engine ? (
               <FloatingPane

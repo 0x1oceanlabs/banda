@@ -82,7 +82,16 @@ export function Preview({
   )
     return instead
   if (previewer === null)
-    return <Facts stat={stat} note="No preview for this kind yet." />
+    return (
+      <Facts
+        stat={stat}
+        note={
+          local && !local(stat.path)
+            ? "Preview comes soon"
+            : "No preview for this kind yet."
+        }
+      />
+    )
   if (mode === "quick" && !previewer.can.quick)
     return (
       <Facts
