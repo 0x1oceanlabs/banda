@@ -291,9 +291,11 @@ function Screen({
   // Its owner's status is all a Pane reads of the link (ADR 0106, law 5).
   const { shown } = usePlaced(project, undefined)
   const reached = shown === undefined || shown.state.state === "live"
-  useEffect(() => {
+  const [wasReached, setWasReached] = useState(reached)
+  if (wasReached !== reached) {
+    setWasReached(reached)
     if (reached) setNotSent(undefined)
-  }, [reached])
+  }
   const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
