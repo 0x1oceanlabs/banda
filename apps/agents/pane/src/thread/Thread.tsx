@@ -48,7 +48,9 @@ import { planTitle } from "../entries/parts/messageText"
 import { FindBar, useFound } from "./Find"
 import { visualPane } from "../visual/VisualPane"
 import { ModelPicker } from "../composer/ModelPicker"
-import { movesOf, stepped } from "./moves"
+import { Handoff, WhoPicker } from "../composer/WhoPicker"
+import { whoOf } from "../composer/who"
+import { type Move, movesOf, stepped } from "./moves"
 import { useLimitsNow } from "./starts-on"
 import { pickedOf } from "../composer/picker"
 import { ModeMenu } from "../settings/ThreadSettings"
@@ -99,7 +101,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const machine = useMachine(engine)
   const accounts = useAccounts(engine)
   const harnesses = useHarnesses(engine)
-  const { limits, now } = useLimitsNow(engine)
+  const { limits, now, warn } = useLimitsNow(engine)
   const unplaced = project === machine
   const fence = useFence(engine)
   // Another host's (ADR 0081): what would reach this machine's files, or
@@ -176,6 +178,17 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     const title = harnessTitle(accounts, of)
     return { ...movesOf(harnesses, harness, ran, limits, now), confirm, title }
   }, [thread, state, harness, harnesses, accounts, limits, now])
+  // Its "who", and the handoff it asks of above the Message box (ADR
+  // 0114, decision 4).
+  const who = useMemo(
+    () => moves && whoOf(moves, accounts, limits, warn),
+    [moves, accounts, limits, warn]
+  )
+  const [handoff, setHandoff] = useState<Move>()
+  const pickWho = (move: Move) => {
+    if (move.same || !who?.confirm) moveTo(move.harness.id)
+    else setHandoff(move)
+  }
   // Learn more, wherever the fence is spoken of: Settings → General, at
   // the Fence row (ADR 0083).
   const learn = () => run?.("settings.open", { link: FENCE_LINK })
@@ -596,6 +609,16 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             keys={answerKeys}
           />
         )}
+        {handoff && (
+          <Handoff
+            move={handoff}
+            onStay={() => setHandoff(undefined)}
+            onHandOff={() => {
+              setHandoff(undefined)
+              moveTo(handoff.harness.id)
+            }}
+          />
+        )}
         <Composer
           ref={composer}
           name={name}
@@ -644,6 +667,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   fence={{ fence, onLearn: learn }}
                 />
               )}
+              {thread !== null && who && (
+                <WhoPicker who={who} disabled={acting} onPick={pickWho} />
+              )}
               <ModelPicker
                 harness={harness}
                 name={name}
@@ -655,8 +681,6 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 out={startsOut}
                 onStart={startOn}
                 harnesses={harnesses}
-                moves={moves}
-                onMove={(move) => moveTo(move.harness.id)}
               />
             </>
           )}

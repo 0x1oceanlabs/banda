@@ -31,8 +31,6 @@ import {
   type Picked,
 } from "./picker"
 import { choose, chosen } from "../thread/state"
-import type { Move, Moves } from "../thread/moves"
-import { MoveConfirm, MoveList } from "./Moves"
 import { FOOTER_CONTROL } from "./footer"
 
 /**
@@ -43,8 +41,7 @@ import { FOOTER_CONTROL } from "./footer"
  * way back to the Harness's defaults beside the model's name, which opens
  * the list of models. A new Thread's list holds every Harness's models,
  * each under its logo: choosing one chooses the Harness too. A started
- * Thread's lists, under the slider, the accounts and Harnesses it may
- * move to (ADR 0078).
+ * Thread's account is chosen beside it, in `WhoPicker` (ADR 0114).
  */
 export function ModelPicker({
   harness,
@@ -57,8 +54,6 @@ export function ModelPicker({
   out,
   onStart,
   harnesses,
-  moves,
-  onMove,
 }: {
   /** The Harness's id, for its emblem, and its name. */
   harness: string
@@ -77,22 +72,15 @@ export function ModelPicker({
   out?: { until?: number }
   /** Starts the new Thread on another Harness, with `settings`. */
   onStart?: (harness: string, settings?: Settings) => void
-  /** A started Thread's moves, and whether a move to another Harness
-   * asks first: once per Thread. */
-  moves?: Moves
-  /** Moves the Thread. */
-  onMove?: (move: Move) => void
 }) {
   const { model, effort, fast } = picked
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<"levels" | "models">("levels")
-  const [confirming, setConfirming] = useState<Move>()
   // Keep the preview through the configure round trip. New settings
   // replace it; clearing it on release would animate back to the old level.
   const [sliding, setSliding] = useState<{ settings: Settings; at: number }>()
   const others = starts && starts.length > 1 ? starts : undefined
-  const movable = !!moves && (moves.same.length > 1 || moves.others.length > 0)
-  if (!model && !effort && !others && !movable) return null
+  if (!model && !effort && !others) return null
 
   const value = model && String(chosen(settings, model))
   const now = model?.choices.find((choice) => choice.value === value)
@@ -123,23 +111,6 @@ export function ModelPicker({
       setSliding(undefined)
   }
   const shown = effort ? view : "models"
-  const moveTo = (move: Move) => {
-    if (move.on) return
-    if (!move.same && moves?.confirm) {
-      setConfirming(move)
-      return
-    }
-    setOpen(false)
-    onMove?.(move)
-  }
-  const list = moves && (
-    <MoveList
-      same={moves.same}
-      others={moves.others}
-      harnessName={moves.title}
-      onPick={moveTo}
-    />
-  )
   // The models: this Harness's alone; for a new Thread, every Harness's.
   const groups: Group[] = (others ?? [undefined]).map((start) => {
     if (!start || start.id === harness)
@@ -171,7 +142,6 @@ export function ModelPicker({
       onOpenChange={(next) => {
         setOpen(next)
         setView("levels")
-        setConfirming(undefined)
         setSliding(undefined)
       }}
     >
@@ -186,7 +156,8 @@ export function ModelPicker({
           />
         }
       >
-        {logo}
+        {/* A started Thread's account is its "who" (ADR 0114). */}
+        {starts && logo}
         {named}
         {out && (
           <span
@@ -201,25 +172,14 @@ export function ModelPicker({
         align="end"
         className="w-72 gap-0 rounded-card p-1"
       >
-        {out && !confirming && (
+        {out && (
           <p className="px-2.5 pt-1.5 pb-1 text-xs text-warning">
             {name} is out of its limits
             {out.until === undefined ? "" : ` until ${clock(out.until)}`}. A
             fallback in Settings → Agents starts new Threads there meanwhile.
           </p>
         )}
-        {confirming ? (
-          <MoveConfirm
-            move={confirming}
-            from={name}
-            onCancel={() => setConfirming(undefined)}
-            onMove={() => {
-              setOpen(false)
-              setConfirming(undefined)
-              onMove?.(confirming)
-            }}
-          />
-        ) : shown === "levels" && effort ? (
+        {shown === "levels" && effort ? (
           <>
             <div className="relative flex h-9 items-center justify-center px-9">
               {fast && (
@@ -267,22 +227,18 @@ export function ModelPicker({
               onSlide={(at) => setSliding({ settings, at })}
               onChoose={(index) => pick(effort, levels[index].value)}
             />
-            {list}
           </>
         ) : (
-          <>
-            <Models
-              harnesses={harnesses}
-              groups={groups}
-              current={harness}
-              onBack={effort && (() => setView("levels"))}
-              onChoose={(group, next) => {
-                setOpen(false)
-                group.choose(next)
-              }}
-            />
-            {!effort && list}
-          </>
+          <Models
+            harnesses={harnesses}
+            groups={groups}
+            current={harness}
+            onBack={effort && (() => setView("levels"))}
+            onChoose={(group, next) => {
+              setOpen(false)
+              group.choose(next)
+            }}
+          />
         )}
       </PopoverContent>
     </Popover>
