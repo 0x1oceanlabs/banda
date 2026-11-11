@@ -1364,7 +1364,6 @@ test("the Window asks an App's engine part by name no more than the list holds",
 const APP_RUNS = [
   "apps/agents/pane/src/thread/Thread.tsx: browser.open",
   "apps/agents/pane/src/thread/links.ts: browser.open",
-  "apps/agents/pane/src/thread/links.ts: browser.open",
   "apps/agents/pane/src/thread/run-line.ts: terminal.run",
   "apps/files/pane/src/views/markdown.tsx: browser.open",
   "apps/git/pane/src/index.ts: agents.thread.details",
@@ -2614,7 +2613,6 @@ const FILE_STAMPS: Record<string, string[]> = {
   "client/web/src/window/attach.ts": ["projectFile"],
   "client/core/src/files.ts": ["deviceFile", "projectFile"],
   "client/core/src/route.ts": ["deviceFile"],
-  "apps/agents/pane/src/thread/ThreadFiles.ts": ["deviceFile"],
 }
 
 test("a file is stamped with its Project or its device only in the places listed", () => {
