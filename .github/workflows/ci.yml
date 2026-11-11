@@ -91,12 +91,18 @@ jobs:
     env:
       BANDA_E2E_SPECS: ${{ matrix.specs }}
       BANDA_E2E_SHARD: ${{ matrix.shard }}
+      # What the contract is compared with: the PR's base, or main before
+      # this push (scripts/contract.mjs).
+      BANDA_CONTRACT_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
       # As ci/Dockerfile had it: no check reads the debug info.
       CARGO_PROFILE_DEV_DEBUG: 0
     steps:
       - uses: actions/checkout@fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09 # v5.1.0
         with:
           persist-credentials: false
+          # `ts` compares the contract with main's and reads the branch's
+          # Contract-Break trailers (scripts/contract.mjs).
+          fetch-depth: ${{ matrix.parts == 'rust ts' && 0 || 1 }}
       # The Node ci/Dockerfile pins, and package.json's pnpm.
       - id: node
         run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"

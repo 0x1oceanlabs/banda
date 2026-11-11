@@ -104,6 +104,9 @@ ts() {
   quiet pnpm -r typecheck
   quiet pnpm -r test
 
+  step "The contract still works for the last Dev's windows (ADR 0115, decision 6)"
+  node scripts/contract.mjs ${BANDA_CONTRACT_BASE:+"$BANDA_CONTRACT_BASE"}
+
   step "What Banda ships is under a license it may ship (ADR 0038, decision 1)"
   node scripts/licenses.mjs
   # And for Windows, whose engine is built of crates of its own (ADR 0090).
