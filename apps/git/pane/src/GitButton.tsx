@@ -3,8 +3,9 @@
  * the whole chain (`chain.ts`). Its progress is in the button: the step,
  * a hook and its last line, a timer; then ✓ for ten seconds. While the
  * message is written, Stop ends the run. An error stays in the card
- * until it is closed. A push on the default branch asks first; a new
- * Thread's Commit… opens the Commit dialog.
+ * until it is closed; a run cut off on its way, which may have gone
+ * through, offers Check (`chain.ts`). A push on the default branch asks
+ * first; a new Thread's Commit… opens the Commit dialog.
  */
 import { type ReactNode, useState, useSyncExternalStore } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
@@ -38,7 +39,7 @@ import {
   GitCommitIcon,
   InfoIcon,
 } from "lucide-react"
-import { dismiss, hearRun, run, runOf, stop, type Writer } from "./chain"
+import { check, dismiss, hearRun, run, runOf, stop, type Writer } from "./chain"
 import { CommitDialog } from "./CommitDialog"
 import {
   askOf,
@@ -136,6 +137,17 @@ export function GitButton({
         <GitAlert
           className="rounded-control bg-destructive/10 py-1 pr-1 pl-2"
           onDismiss={() => dismiss(project)}
+          action={
+            now.check && (
+              <Button
+                variant="ghost"
+                size="xs"
+                onClick={() => void check(engine, project)}
+              >
+                Check
+              </Button>
+            )
+          }
         >
           {now.message}
         </GitAlert>

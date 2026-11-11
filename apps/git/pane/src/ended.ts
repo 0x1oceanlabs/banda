@@ -5,6 +5,7 @@
  * engine (`git.acted`).
  */
 import type { ProjectId } from "@banda/contract"
+import type { Action } from "@banda/contract/git"
 import type { Args, WindowApi } from "@banda/ui/module"
 
 /** What the window lets the module ask, while it runs. */
@@ -44,10 +45,15 @@ function detailsShown(project: ProjectId): (string | null)[] {
   return [...(drawn.get(project)?.values() ?? [])]
 }
 
-/** How a run of the git button ended, as the card says it. */
+/** What a run cut off on its way needs for Check to say what became of
+ * it: what it did, and the commit it started from. */
+export type Unsure = { action: Action; head: string | undefined }
+
+/** How a run of the git button ended, as the card says it. One cut off
+ * on its way, which may have gone through, carries `check`. */
 export type Ended =
   | { is: "done"; title: string; detail?: string }
-  | { is: "failed"; message: string }
+  | { is: "failed"; message: string; check?: Unsure }
 
 /** The toast of a run that ended in `project`, as `notifications.tell`
  * takes it: one per Project, the next replacing it; a failure sounds and
@@ -71,8 +77,10 @@ export function toldOf(project: ProjectId, ended: Ended, about?: string): Args {
     : {
         ...base,
         kind: "failed",
-        title: "Git failed",
-        body: ended.message,
+        // Cut off on its way, it may not have failed at all.
+        ...(ended.check
+          ? { title: ended.message }
+          : { title: "Git failed", body: ended.message }),
         close: true,
       }
 }
