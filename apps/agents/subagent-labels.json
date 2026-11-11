@@ -1,0 +1,93 @@
+{
+  "about": "What names a sub-agent (ADR 0103, decision 17): the engine's label (apps/agents/engine/src/lanes.rs) and the window's labelOf (apps/agents/pane/src/thread/subagents.ts). `siblings` are the IDs of those started beside it, in order; `id` is its own. Both tests read these cases.",
+  "cases": [
+    {
+      "case": "a role names it",
+      "role": "Explore",
+      "title": "Map the keys",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Explore"
+    },
+    {
+      "case": "Claude's default role gives way to its title",
+      "role": "general-purpose",
+      "title": "Read a.txt",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Read a.txt"
+    },
+    {
+      "case": "a Codex one, with no role, goes by its title",
+      "role": null,
+      "title": "Read a",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Read a"
+    },
+    {
+      "case": "a role of spaces names nothing",
+      "role": "  ",
+      "title": "Read a",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Read a"
+    },
+    {
+      "case": "Codex's own fallback title gives way to its number among its siblings",
+      "role": null,
+      "title": "Agent",
+      "id": "b",
+      "siblings": ["a", "b"],
+      "label": "Agent 2"
+    },
+    {
+      "case": "and so does the fallback with 8 characters of its thread's ID",
+      "role": null,
+      "title": "Agent 1a2b3c4d",
+      "id": "c",
+      "siblings": ["a", "b", "c"],
+      "label": "Agent 3"
+    },
+    {
+      "case": "and a title cleared",
+      "role": null,
+      "title": "",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Agent 1"
+    },
+    {
+      "case": "one not among its siblings is the first",
+      "role": null,
+      "title": "Agent",
+      "id": "z",
+      "siblings": ["a"],
+      "label": "Agent 1"
+    },
+    {
+      "case": "a title that only starts with the word is the Harness's own",
+      "role": null,
+      "title": "Agent of change",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Agent of change"
+    },
+    {
+      "case": "and so is a name its parent gave",
+      "role": null,
+      "title": "Agent research",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Agent research"
+    },
+    {
+      "case": "what is not an ID's lower hex is a title",
+      "role": null,
+      "title": "Agent 1A2B3C4D",
+      "id": "a",
+      "siblings": ["a"],
+      "label": "Agent 1A2B3C4D"
+    }
+  ]
+}

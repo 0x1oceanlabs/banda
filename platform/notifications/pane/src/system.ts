@@ -28,22 +28,37 @@ const ANSWER: Record<Chime, string> = {
   failed: "Open",
 }
 
+/** What a call's notice and toast are titled: its title, or for a
+ * sub-agent's Question who asks and its Thread (ADR 0103, decision 33). */
+function titleOf({ asker, title }: Call): string {
+  return asker ? `${asker} asks · ${title}` : title
+}
+
 /** A notice of one call, `project` the name of its Project when the window
- * has more than one. One that waits for the Person stays. */
+ * has more than one. One that waits for the Person stays. A sub-agent's
+ * Question says what it asks alone, as its title says who asks. */
 export function noticeOf(
   call: Call,
   detail: boolean,
   project?: string
 ): Notice {
-  const said = MARK_WORDS[call.chime]
   const where = whereOf(call, project)
+  const title = titleOf(call)
   return {
     key: call.key,
-    title: where ? `${call.title} · ${where}` : call.title,
-    body: detail && call.detail ? `${said} · ${call.detail}` : said,
+    title: where ? `${title} · ${where}` : title,
+    body: bodyOf(call, detail),
     answer: ANSWER[call.chime],
     lasts: call.chime !== "done",
   }
+}
+
+/** What a call's notice says: its mark's word and, with `detail`, what it
+ * said. */
+function bodyOf(call: Call, detail: boolean): string {
+  const word = MARK_WORDS[call.chime]
+  if (!detail || !call.detail) return word
+  return call.asker ? call.detail : `${word} · ${call.detail}`
 }
 
 /** Where a call's thing is, after its title: its Project, by `project`,
@@ -71,7 +86,7 @@ export function toldOfCall(
   projectName?: string
 ): Told {
   const { key, body, answer } = noticeOf(call, detail)
-  const { project, about, pane, title, answers } = call
+  const { project, about, pane, answers } = call
   const goes = { label: answer, action: GO_TO, args: { project, about, pane } }
   // What answers it there and then are its buttons; a click opens it.
   const buttons = answers?.length ? answers.slice(0, 2) : [goes]
@@ -79,7 +94,7 @@ export function toldOfCall(
   return {
     key,
     kind: call.chime,
-    title,
+    title: titleOf(call),
     ...(where ? { project: where } : {}),
     ...(body ? { body } : {}),
     buttons,

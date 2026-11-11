@@ -35,6 +35,37 @@ use tokio::sync::mpsc;
 /// Why a lane at work when Banda stopped is Lost.
 const RESTARTED: &str = "Stopped when Banda restarted.";
 
+/// Claude Code's default role, which names no kind of helper.
+const GENERAL: &str = "general-purpose";
+
+/// What names a sub-agent (ADR 0103, decision 17): its role, unless that
+/// is Claude's default `general-purpose`, then its title. Codex's own
+/// fallback title, and a title cleared, give way to its number among
+/// `siblings`: "Agent 2". The window's `labelOf` says the same, and
+/// `apps/agents/subagent-labels.json` holds the cases both are to give.
+pub fn label(lane: &Subagent, siblings: &[Subagent]) -> String {
+    let role = lane.role.as_deref().map(str::trim).unwrap_or_default();
+    if !role.is_empty() && role != GENERAL {
+        return role.to_owned();
+    }
+    let title = lane.title.trim();
+    if !title.is_empty() && !fallback(title) {
+        return title.to_owned();
+    }
+    let at = siblings.iter().position(|one| one.id == lane.id);
+    format!("Agent {}", at.map_or(1, |at| at + 1))
+}
+
+/// Codex's own title for a sub-agent its parent gave no name: "Agent", or
+/// "Agent" and the last 8 characters of its thread's ID, a UUID's lower
+/// hex. A name its parent gave, "Agent research", is a title.
+fn fallback(title: &str) -> bool {
+    let id = |rest: &str| {
+        rest.len() == 8 && rest.bytes().all(|c| matches!(c, b'0'..=b'9' | b'a'..=b'f'))
+    };
+    title == "Agent" || title.strip_prefix("Agent ").is_some_and(id)
+}
+
 /// Who hears a Thread's sub-agents.
 pub struct Hearer {
     pub live: Arc<Live>,
@@ -851,5 +882,60 @@ mod tests {
         assert_eq!(next(LaneState::Unknown, false, None, "Fake"), Next::Keep);
         let back = next(LaneState::Running, false, None, "Fake");
         assert_eq!(back, Next::Is(SubagentState::Running, None));
+    }
+
+    /// `apps/agents/subagent-labels.json`: what names a sub-agent, which
+    /// the window's `labelOf` gives too.
+    #[derive(serde::Deserialize)]
+    struct Labels {
+        cases: Vec<LabelCase>,
+    }
+
+    #[derive(serde::Deserialize)]
+    struct LabelCase {
+        case: String,
+        role: Option<String>,
+        title: String,
+        id: String,
+        siblings: Vec<String>,
+        label: String,
+    }
+
+    #[test]
+    fn a_sub_agent_is_named_as_the_shared_cases_say() {
+        let Labels { cases } =
+            serde_json::from_str(include_str!("../../subagent-labels.json")).unwrap();
+        assert!(cases.len() >= 8, "the cases are there");
+        let turn = TurnId::new();
+        for LabelCase {
+            case,
+            role,
+            title,
+            id,
+            siblings,
+            label: expected,
+        } in cases
+        {
+            let ids: HashMap<&str, SubagentId> = (siblings.iter().chain([&id]))
+                .map(|id| (id.as_str(), SubagentId::new()))
+                .collect();
+            let lane = |id: &str| Subagent {
+                id: ids[id],
+                turn,
+                parent: None,
+                title: title.clone(),
+                role: role.clone(),
+                model: None,
+                state: SubagentState::Running,
+                why: None,
+                can_stop: false,
+                started: 0,
+                ended: None,
+                prompt: None,
+                report: None,
+            };
+            let beside: Vec<_> = siblings.iter().map(|id| lane(id)).collect();
+            assert_eq!(label(&lane(&id), &beside), expected, "{case}");
+        }
     }
 }

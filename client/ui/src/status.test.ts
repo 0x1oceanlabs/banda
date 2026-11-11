@@ -195,6 +195,14 @@ test("what asks, failed or finished unseen calls, with what it said", () => {
   expect(calls[0]).toMatchObject({ key: "s:t2", project: "s", since: 1 })
 })
 
+test("a call carries its asker, and no call without one has the field", () => {
+  const asking = (id: string, asker?: string): Listed =>
+    thing({ id, mark: "asking", ...(asker ? { asker } : {}) })
+  const [theirs, own] = callsOf({ s: [asking("t1", "Reviewer"), asking("t2")] })
+  expect(theirs).toMatchObject({ about: "t1", asker: "Reviewer" })
+  expect(own).not.toHaveProperty("asker")
+})
+
 test("a put-off Thread calls no one while it sleeps, and calls as it wakes", () => {
   const done = (later: Listed["later"]): Listed =>
     thing({ mark: "done", later })

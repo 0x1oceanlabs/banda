@@ -91,6 +91,7 @@ export function listedOf(
         : mark === "done"
           ? latest?.note
           : undefined
+  const asker = mark === "asking" ? thread.asking[0]?.asker : undefined
   const answers = project ? answersOf(thread, mark, project) : []
   // A Thread is titled by its first message: that says nothing new.
   const line = thread.message?.split("\n", 1)[0].trim()
@@ -122,6 +123,7 @@ export function listedOf(
       : {}),
     ...(thread.changed_lines ? { changedLines: thread.changed_lines } : {}),
     ...(calls ? { calls } : {}),
+    ...(asker ? { asker } : {}),
     ...(answers.length ? { answers } : {}),
     ...(said ? { said } : {}),
     ...(harness ? { by: harness } : {}),

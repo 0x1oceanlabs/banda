@@ -34,16 +34,20 @@ const ALLOWS: Partial<Record<ToolKind, string>> = {
 
 /** What a Question asks in words, and the command or file it is about in
  * mono when it asks for a tool call: "Allow Claude Code to run a
- * command?", `pnpm test`. Any other asks in its own words. */
+ * command?", `pnpm test`. A sub-agent's says the command its call runs,
+ * in mono, whoever asks; the drawer draws it once when that is all it
+ * says (ADR 0103, decision 28). Any other asks in its own words. */
 export function wordsOf(
   question: QuestionBody,
   about: ToolKind | undefined,
   name: string
 ): { words: string; detail?: string } {
   const title = plain(question.title)
+  if (question.form || question.plan !== undefined) return { words: title }
+  if (question.sub !== undefined)
+    return { words: title, detail: named(question.title) }
   const does = about && ALLOWS[about]
-  if (!does || question.form || question.plan !== undefined)
-    return { words: title }
+  if (!does) return { words: title }
   return { words: `Allow ${name} to ${does}?`, detail: named(question.title) }
 }
 

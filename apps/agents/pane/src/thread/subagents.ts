@@ -113,6 +113,17 @@ export function labelOf(lane: Subagent, siblings: readonly Subagent[]): string {
   return role && role !== GENERAL ? role : titled(lane, siblings)
 }
 
+/** What names the sub-agent `sub` that asks a Question, by its label
+ * (ADR 0103, decision 28); none for the Agent's own, or one not heard
+ * of. */
+export function askerOf(
+  sub: SubagentId | undefined,
+  lanes: readonly Subagent[]
+): string | undefined {
+  const lane = lanes.find((one) => one.id === sub)
+  return lane && labelOf(lane, siblingsOf(lane, lanes))
+}
+
 /** Its role, short: `general-purpose` reads "general". */
 function roleWord(lane: Subagent): string | undefined {
   const role = lane.role?.trim()

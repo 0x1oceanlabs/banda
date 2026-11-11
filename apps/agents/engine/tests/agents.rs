@@ -5130,7 +5130,8 @@ async fn codexs_sub_agents_are_lanes_and_their_last_words_their_reports() {
             anchor(read),
             anchor(write),
             "tool: wait (Done)".into(),
-            "question: Run command (Answered)".into(),
+            // As its call is titled, not the Harness's "Run command".
+            "question: touch d.txt (Answered)".into(),
             "tool: wait (Done)".into(),
             "message: alpha done".into(),
         ]
@@ -5153,7 +5154,7 @@ async fn codexs_sub_agents_are_lanes_and_their_last_words_their_reports() {
             "Write f",
             vec![
                 "tool: touch d.txt (Done)".to_owned(),
-                "question: Run command (Answered)".to_owned(),
+                "question: touch d.txt (Answered)".to_owned(),
                 "message: done".to_owned(),
             ],
             "done",

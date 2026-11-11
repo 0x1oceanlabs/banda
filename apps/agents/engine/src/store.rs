@@ -1843,7 +1843,8 @@ pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> 
         "SELECT id, json_extract(body, '$.title'),
                 CASE WHEN json_extract(body, '$.form') IS NULL
                       AND json_extract(body, '$.plan') IS NULL
-                     THEN json_extract(body, '$.choices') END
+                     THEN json_extract(body, '$.choices') END,
+                json_extract(body, '$.sub')
          FROM agents_items
          WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
     ))?;
@@ -1852,13 +1853,42 @@ pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> 
             .get::<_, Option<String>>(2)?
             .and_then(|said| serde_json::from_str(&said).ok())
             .unwrap_or_default();
-        Ok(Asking {
+        let question = Asking {
             item: row.get(0)?,
             title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
             choices,
-        })
+            asker: None,
+        };
+        Ok((question, row.get::<_, Option<SubagentId>>(3)?))
     })?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    rows.map(|row| {
+        let (question, sub) = row?;
+        let asker = match sub {
+            Some(sub) => lane_label(sql, sub)?,
+            None => None,
+        };
+        Ok(Asking { asker, ..question })
+    })
+    .collect()
+}
+
+/// What names sub-agent `sub` (ADR 0103, decision 17), among those started
+/// beside it, by the same parent in the same turn; none for a lane no
+/// longer kept.
+pub fn lane_label(sql: &Connection, sub: SubagentId) -> Result<Option<String>, Error> {
+    let Some(lane) = sql
+        .query_row(&format!("{LANE} WHERE id = ?1"), params![sub], read_lane)
+        .optional()?
+    else {
+        return Ok(None);
+    };
+    let mut statement = sql.prepare(&format!(
+        "{LANE} WHERE thread = ({LANES_THREAD}) AND turn = ?2 AND parent IS ?3 ORDER BY rowid"
+    ))?;
+    let siblings = statement
+        .query_map(params![sub, lane.turn, lane.parent], read_lane)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(Some(crate::lanes::label(&lane, &siblings)))
 }
 
 /// The start of the latest message sent into the Thread: one a turn was
@@ -3369,6 +3399,34 @@ mod tests {
             .collect();
         assert_eq!(asking, [asked, own], "the Thread asks for both");
         assert!(asks(&kept.sql, kept.thread).unwrap());
+    }
+
+    #[test]
+    fn a_listed_question_says_its_sub_agents_label() {
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        let lane = kept.lane(turn, None);
+        let asks = |sub| question("Run pnpm test?", sub);
+        kept.put(Some(turn), asks(Some(lane.id)), None);
+        kept.put(Some(turn), asks(None), None);
+        let askers: Vec<_> = (asking(&kept.sql, kept.thread).unwrap().into_iter())
+            .map(|a| a.asker)
+            .collect();
+        assert_eq!(
+            askers,
+            [Some("Explore".to_owned()), None],
+            "by its role, and none for the Agent's own"
+        );
+        // A Codex one of its turn, named by its number among its siblings.
+        let mut bare = kept.lane(turn, None);
+        bare.title = "Agent".into();
+        bare.role = None;
+        set_lane(&kept.sql, &bare).unwrap();
+        assert_eq!(
+            lane_label(&kept.sql, bare.id).unwrap().as_deref(),
+            Some("Agent 2")
+        );
+        assert_eq!(lane_label(&kept.sql, SubagentId::new()).unwrap(), None);
     }
 
     #[test]

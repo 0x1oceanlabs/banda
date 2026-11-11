@@ -10,7 +10,8 @@ import {
   type Press,
   wordsOf,
 } from "./asking"
-import { agent } from "../testing"
+import { agent, subagent } from "../testing"
+import { askerOf } from "../thread/subagents"
 import type { Asked, QuestionBody } from "../thread/state"
 
 const choice = (id: string, allows: boolean, always = false): Choice => ({
@@ -107,6 +108,31 @@ test("a Question is about the call of its turn with its title, or the last that 
   expect(aboutOf([...items, other], other)).toBeUndefined()
   const later = asked("Later")
   expect(aboutOf([later, call("d", "Later", "fetch")], later)).toBeUndefined()
+})
+
+test("a sub-agent's question names who asks and what its call would do", () => {
+  const reviewer = subagent("l", { title: "Review", role: "Reviewer" })
+  expect(askerOf("l", [reviewer])).toBe("Reviewer")
+  // An Agent's own, or one the Thread has not heard of, names no one.
+  expect(askerOf(undefined, [reviewer])).toBeUndefined()
+  expect(askerOf("m", [reviewer])).toBeUndefined()
+  // Its title in mono, whatever the Agent would have said of a call: a
+  // lone command is both, so the drawer draws it once.
+  const asked = question({ title: "pnpm vitest", sub: "l" })
+  expect(wordsOf(asked, undefined, "Claude")).toEqual({
+    words: "pnpm vitest",
+    detail: "pnpm vitest",
+  })
+  expect(
+    wordsOf(
+      question({ title: "May I run `pnpm vitest`?", sub: "l" }),
+      undefined,
+      "Claude"
+    )
+  ).toEqual({ words: "May I run pnpm vitest?", detail: "pnpm vitest" })
+  // A form or a plan asks in its own words, as the Agent's do.
+  const form = question({ title: "Which colour?", sub: "l", form: [] })
+  expect(wordsOf(form, undefined, "Claude")).toEqual({ words: "Which colour?" })
 })
 
 test("a sub-agent's Question is about none of the Agent's calls", () => {

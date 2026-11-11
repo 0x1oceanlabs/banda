@@ -38,6 +38,18 @@ test("a Thread an Agent started names its parent; one its Person started names n
   expect(listedOf(thread(), "Claude")).not.toHaveProperty("parent")
 })
 
+test("a listed thread says who asks: only the first Question's sub-agent", () => {
+  const asks = (asking: ListedThread["asking"]) =>
+    listedOf(thread({ asking }), "Claude").asker
+  const reviewer = { item: "q1", title: "pnpm vitest", asker: "Reviewer" }
+  const own = { item: "q2", title: "Run npm test?" }
+  expect(asks([reviewer, own])).toBe("Reviewer")
+  expect(asks([own, reviewer])).toBeUndefined()
+  expect(listedOf(thread({ asking: [own] }), "Claude")).not.toHaveProperty(
+    "asker"
+  )
+})
+
 test("a Thread that asks says what it asks", () => {
   const asking = thread({
     latest: { turn: "u1", state: "running", began: 3 },
