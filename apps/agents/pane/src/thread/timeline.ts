@@ -66,6 +66,52 @@ export function timeline(state: ThreadState, short: string): Line[] {
     : stillAtWork(lines, state, short)
 }
 
+/**
+ * A sub-agent's lines in its own Pane (ADR 0103, decision 21): its work
+ * and replies as a turn's are, `state` holding its lane as one turn. It has
+ * no clock, as the Thread's live line is its one (decision 20), and no
+ * line of how it ended, which its status bar says. A call it still runs
+ * comes last, a line of its own that shimmers ("Reading card.ts"), as its
+ * row opened in place shows it. One stopped is not a turn its Person
+ * stopped, which folds as "You stopped": its work stays open, as one cut
+ * short does.
+ */
+export function laneTimeline(state: ThreadState): Line[] {
+  const folds = state.turns.filter((turn) => turn.state !== "stopped")
+  const lines = fold(group(rows(state)), folds).filter(
+    (line) => line.kind !== "ended"
+  )
+  const turn = running(state)
+  return turn ? callsLast(lines, turn.state) : lines
+}
+
+/** Whether `item` is a call that still runs, or waits for its Person, in
+ * a turn that is `turn`. */
+export function going(item: Item, turn?: TurnState): boolean {
+  if (item.body.kind !== "tool") return false
+  const now = outcome(item.body, turn)
+  return now === "running" || now === "waiting"
+}
+
+/** `lines` with the calls that still run taken out of their lines of work
+ * and put at the end, each a line of its own. */
+function callsLast(lines: Line[], turn: TurnState): Line[] {
+  const last: Item[] = []
+  const kept = lines.flatMap((line): Line[] => {
+    if (line.kind === "item" && going(line.item, turn)) {
+      last.push(line.item)
+      return []
+    }
+    if (line.kind !== "work") return [line]
+    const rest: Item[] = []
+    for (const item of line.items) (going(item, turn) ? last : rest).push(item)
+    if (rest.length === line.items.length) return [line]
+    if (rest.length > 1) return [{ ...line, items: rest }]
+    return rest.map((item) => ({ kind: "item", item }))
+  })
+  return [...kept, ...last.map((item): Line => ({ kind: "item", item }))]
+}
+
 /** Whether `row` is work: a tool call or a thought. */
 function isWork(line: Line): line is Extract<Row, { kind: "item" }> {
   return line.kind === "item" && isWorkKind(line.item.body.kind)
@@ -372,11 +418,11 @@ export function did(items: Item[], turn?: TurnState): Did {
   for (const item of items) {
     if (item.body.kind === "thought") add("think", false)
     if (item.body.kind !== "tool") continue
-    const now = outcome(item.body, turn)
-    if (turn === "running" && (now === "running" || now === "waiting")) continue
+    if (turn === "running" && going(item, turn)) continue
     ended.push(item)
     const kind = item.body.tool
-    add(kind, now === "failed", kind === "edit" ? fresh(item.body, edited) : 1)
+    const failed = outcome(item.body, turn) === "failed"
+    add(kind, failed, kind === "edit" ? fresh(item.body, edited) : 1)
   }
   const acts = ACTS.filter((kind) => counts.has(kind))
   // The most first; a tie keeps the order the Agent did them in.

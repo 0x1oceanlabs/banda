@@ -39,6 +39,8 @@ import { useThreadFiles } from "./ThreadFiles"
 import { type AnswerKeys, pressOf, QuestionDrawer } from "../asking/Questions"
 import { aboutOf, keyAnswer } from "../asking/asking"
 import { askerOf } from "./subagents"
+import { OPEN_BESIDE } from "./beside"
+import { opensBeside } from "./SubagentPane"
 import { drafted } from "../composer/drafts"
 import { ThreadDetails, useWide } from "./Details"
 import { PlanReady } from "../entries/parts/ProposedPlan"
@@ -91,6 +93,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     open,
     update,
     run,
+    runs,
     composer: says,
   } = props
   const machine = useMachine(engine)
@@ -298,6 +301,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   )
   useEffect(() => scope(root.current), [scope])
 
+  // Its sub-agents open beside it where the router says their Pane does.
+  const beside = useMemo(
+    () => thread !== null && opensBeside(runs, thread),
+    [runs, thread]
+  )
   // What the Thread's parts ask, and the Pane does (ADR 0091, decision 4).
   const acts: ThreadActs = {
     openDiff,
@@ -329,6 +337,15 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     ),
     // Through the router, to this device's browser (ADR 0106, law 2).
     openLink: (url) => run?.("link.open", { url }),
+    // Beside it, in its Group: the one Pane it has for its sub-agents
+    // (ADR 0103, decision 21), where that Pane opens from it.
+    openSubagent:
+      run && thread !== null && beside
+        ? (sub) => {
+            const agent = writers.self ?? writers.own?.agent
+            run(OPEN_BESIDE, { project, thread, sub, ...(agent && { agent }) })
+          }
+        : undefined,
   }
 
   return (
@@ -669,7 +686,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   )
 }
 
-function Centered({ children }: { children: React.ReactNode }) {
+export function Centered({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex h-full items-center justify-center p-6">
       {children}

@@ -9,6 +9,7 @@ import {
   didWords,
   doing,
   foldTitle,
+  laneTimeline,
   type Line,
   thoughtTimes,
   timeline,
@@ -725,5 +726,60 @@ test("a new turn takes the live line while sub-agents of the last one still work
   expect(doing(own, own.turns[1])).toEqual({
     kind: "subagents",
     words: "Waiting on Lane b",
+  })
+})
+
+/** A lane's items as its Pane draws them: one turn, as long as it worked
+ * (`laneThread`), in `state`. */
+function laneOf(state: TurnView["state"], ...events: Event[]) {
+  const turn: TurnView = {
+    id: "u",
+    message: "",
+    state,
+    started: 0,
+    can: NOTHING,
+  }
+  return { ...play(...events), turns: [turn] }
+}
+
+test("a sub-agent's lane has no clock, and its call that runs comes last", () => {
+  const state = laneOf(
+    "running",
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" }),
+    ...ran("a", "read"),
+    reply("r1"),
+    tool("b", "read"),
+    ...ran("c", "search")
+  )
+  // "Reading b" shimmers last, alone; what is left of its line of work
+  // stays where it was.
+  expect(shape(laneTimeline(state))).toEqual([
+    { work: ["t", "a"] },
+    "r1",
+    "c",
+    "b",
+  ])
+  // The Thread's own has its clock at its end.
+  expect(shape(timeline(state, "Claude")).at(-1)).toMatch(/^working/)
+})
+
+test("a sub-agent's lane that ended folds as a turn does, with no line of how it ended", () => {
+  const work = [...ran("a", "read"), ...ran("b", "read"), reply("r")]
+  expect(shape(laneTimeline(laneOf("done", ...work)))).toEqual([
+    { fold: ["a", "b"] },
+    "r",
+  ])
+  // Its status bar says it failed, or was cut short.
+  for (const state of ["failed", "interrupted"] as const) {
+    const lane = laneOf(state, ...work)
+    expect(shape(laneTimeline(lane))).toEqual([{ work: ["a", "b"] }, "r"])
+    expect(shape(timeline(lane, "Claude"))).toContain(`ended ${state}`)
+  }
+  // One stopped is not a turn its Person stopped, which folds as "You
+  // stopped": its work stays open, as one cut short.
+  const stopped = laneOf("stopped", ...work)
+  expect(shape(laneTimeline(stopped))).toEqual([{ work: ["a", "b"] }, "r"])
+  expect(shape(timeline(stopped, "Claude"))).toContainEqual({
+    fold: ["a", "b"],
   })
 })

@@ -37,7 +37,7 @@ import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
-import type { PaneProps } from "@banda/ui/pane"
+import type { PaneProps, PaneState } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "../composer/Attachments"
 import type { Values } from "../asking/form"
 import type { HarnessView } from "@banda/contract/harnesses"
@@ -106,6 +106,22 @@ export const NEW_THREAD: ThreadArgs = { thread: null, harness: "", title: "" }
 /** What a Thread's text size is kept under (ADR 0063, decision 5): a
  * Thread not yet made has one for all. */
 export const zoomKey = (thread: string | null) => `thread ${thread ?? "new"}`
+
+/** The git module's Diff on `turn` of `thread`, on `path` in it, if one:
+ * its title comes from the engine, which names the turn. */
+export function turnDiffPane(
+  thread: ThreadId,
+  turn: string,
+  path?: string
+): PaneState {
+  return {
+    kind: "git.diff",
+    args: {
+      scope: { kind: "turn", thread, turn, title: "" },
+      file: path ?? null,
+    },
+  }
+}
 
 /** What Implement asks the Agent, once plan mode is off. */
 const IMPLEMENT = "Implement the plan."
@@ -595,21 +611,10 @@ export function useThreadSession({
       void go(IMPLEMENT, [], false, { ...settings, plan: false }, "Implement")
   }
   // A turn's changes open in the git module's Diff, on that Turn: in the
-  // Diff already open, or beside the Thread (ADR 0034).
+  // Diff already open, or beside the Thread, in its Group (ADR 0034; ADR
+  // 0065, decision 7).
   const openDiff = (turn: string, path?: string) => {
-    if (thread === null) return
-    // Its title comes from the engine, which names the turn. It goes into
-    // the Thread's Group (ADR 0065, decision 7).
-    open(
-      {
-        kind: "git.diff",
-        args: {
-          scope: { kind: "turn", thread, turn, title: "" },
-          file: path ?? null,
-        },
-      },
-      "group"
-    )
+    if (thread !== null) open(turnDiffPane(thread, turn, path), "group")
   }
   const stop = (turn: TurnView) =>
     void acting.act(

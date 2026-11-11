@@ -23,6 +23,7 @@ import type {
   TurnView,
 } from "@banda/contract/agents"
 import type { ImageReader } from "../entries/parts/MessageImages"
+import { useShownBeside } from "./shown-beside"
 import type { VisualArgs } from "../visual/Frame"
 
 /** What a part of the Thread may ask, named for what it asks, not for who
@@ -54,6 +55,10 @@ export type ThreadActs = {
   signIn: (turn: TurnView) => React.ReactNode
   /** Opens a web address on this device, through the router (ADR 0106, law 2). */
   openLink: (url: string) => void
+  /** Opens sub-agent `sub` beside: its Pane in the Thread's Group, or the
+   * one the Thread has, showing it; in that Pane, one level deeper (ADR
+   * 0103, decision 21). None where it cannot. */
+  openSubagent?: (sub: SubagentId) => void
 }
 
 export type ThreadAround = {
@@ -109,6 +114,13 @@ export function useThreadAround(): ThreadAround {
   return around
 }
 
+/** Whether `sub`'s row is lit: the Thread's Pane beside shows it (ADR
+ * 0103, decision 21). */
+export function useLit(sub: SubagentId): boolean {
+  const { project, thread } = useThreadAround()
+  return useShownBeside(project, thread) === sub
+}
+
 /** Whether `sub`'s row is open, and how to open or close it. */
 export function useOpened(sub: SubagentId): [boolean, (open: boolean) => void] {
   const { opened } = useThreadAround()
@@ -133,6 +145,7 @@ export function ThreadAroundProvider({
   })
   const canPutOff = acts.putOff !== undefined
   const canSet = acts.accounts !== undefined
+  const canOpen = acts.openSubagent !== undefined
   const stable = useMemo<ThreadActs>(
     () => ({
       openDiff: (turn, path) => latest.current.openDiff(turn, path),
@@ -148,8 +161,11 @@ export function ThreadAroundProvider({
       accounts: canSet ? () => latest.current.accounts?.() : undefined,
       signIn: (turn) => latest.current.signIn(turn),
       openLink: (url) => latest.current.openLink(url),
+      openSubagent: canOpen
+        ? (sub) => latest.current.openSubagent?.(sub)
+        : undefined,
     }),
-    [canPutOff, canSet]
+    [canPutOff, canSet, canOpen]
   )
   // Kept by sub-agent IDs, which no other Thread has.
   const [opened] = useState(openedRows)

@@ -1,7 +1,7 @@
 # The agents module's Panes
 
-The Thread Pane, the Visual Pane, the Threads' list for the sidebar, and
-the module's settings. How the Thread is built is ADR 0091; how it looks
+The Thread Pane, the sub-agent Pane, the Visual Pane, the Threads' list
+for the sidebar, and the module's settings. How the Thread is built is ADR 0091; how it looks
 is ADR 0058.
 
 ## Where things live
@@ -9,8 +9,8 @@ is ADR 0058.
 | Folder | What |
 |---|---|
 | `ThreadPane.tsx` | The Thread as a Pane: its kind, and what it gives the Thread. |
-| `thread/` | The Thread: `Thread.tsx` (transcript, dock and message box), `Transcript.tsx`, `context.tsx` (`useThreadAround`), its state (`state.ts`), its timeline (`timeline.ts`), the session, find, the queue, the details card. Its sub-agents (ADR 0103): `subagents.ts` (what a row and a group say), `live-lane.ts` (an opened row's work, read and followed); `facts.ts` is how a fact starts or changes an entry, which the Thread's state, a sub-agent's and what the Pane heard of each share. |
-| `entries/` | One file per kind of entry, `index.tsx` the table that picks one, `kinds.ts` the timeline's rules for each kind, `types.ts` what a view is given. `parts/` holds what the views share: messages, tool calls, cards, diffs, the proposed plan, a line of work folded (`WorkFold.tsx`), the line a sub-agent's row and their group open by (`RowTrigger.tsx`). `subagent.tsx` is a sub-agent's row, opened in place. |
+| `thread/` | The Thread: `Thread.tsx` (transcript, dock and message box), `Transcript.tsx`, `context.tsx` (`useThreadAround`), its state (`state.ts`), its timeline (`timeline.ts`), the session, find, the queue, the details card. Its sub-agents (ADR 0103): `subagents.ts` (what a row and a group say), `live-lane.ts` (an opened row's work, read and followed), `SubagentPane.tsx` (one opened beside its Thread, as a Pane in its Group: read only, drawn by `Transcript.tsx`), `beside.ts` (what that Pane's args name and its header, brief and status bar say), `shown-beside.ts` (which row the Thread lights while the Pane shows it); `facts.ts` is how a fact starts or changes an entry, which the Thread's state, a sub-agent's and what the Pane heard of each share. |
+| `entries/` | One file per kind of entry, `index.tsx` the table that picks one, `kinds.ts` the timeline's rules for each kind, `types.ts` what a view is given. `parts/` holds what the views share: messages, tool calls, cards, diffs, the proposed plan, a line of work folded (`WorkFold.tsx`), the line a sub-agent's row and their group open by (`RowTrigger.tsx`). `subagent.tsx` is a sub-agent's row, opened in place, and its Open beside. |
 | `lines/` | One file per kind of line the timeline adds, `index.tsx` the table and the lines' keys, `types.ts` what a view is given. `parts/` holds the changes card. `subagents.tsx` is the group of sub-agents one message started. |
 | `composer/` | The message box: its menus, attachments, drafts, history, slash commands and the model picker. |
 | `asking/` | Questions: the drawer that docks on the composer, its form and its keys. |

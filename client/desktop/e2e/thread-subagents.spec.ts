@@ -217,12 +217,13 @@ test("a row opens in place and nothing above it moves", async () => {
   await sized(window, 1440)
   await report.scrollIntoViewIfNeeded()
   await expect(report).toBeInViewport()
-  // An open row offers nothing to do in step 1: no Stop, no Open beside.
+  // An open row offers Open beside, and no Stop: Banda shows sub-agents
+  // and manages none (ADR 0103, call 11).
   const opened = thread.locator("[data-slot=subagent]")
   await expect(opened.getByRole("button", { name: /Stop/ })).toHaveCount(0)
-  await expect(opened.getByRole("button", { name: /Open beside/ })).toHaveCount(
-    0
-  )
+  await expect(
+    opened.getByRole("button", { name: "Open beside" })
+  ).toBeVisible()
   await shots(window, "opened")
 })
 
@@ -327,4 +328,203 @@ test("sub-agents that outlive their turn keep the live line, and the composer st
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await expect(line).toBeVisible()
+})
+
+/** The Pane beside a Thread that shows its sub-agents, and its parts. */
+function besidePane(page: Window["page"]) {
+  const pane = page.locator("[data-slot=subagent-pane]")
+  return {
+    pane,
+    tile: page.locator("[data-tile]", { has: pane }),
+    title: pane.getByRole("heading", { level: 2 }),
+    crumbs: pane.getByRole("navigation", { name: "Where it is" }),
+    status: pane.locator("[data-slot=subagent-status]"),
+    brief: pane.locator("[data-slot=subagent-brief]"),
+  }
+}
+
+/** Opens sub-agent `name` of `scope` beside, by its row's Open beside,
+ * which the pointer shows in its time's place, and the keys reach. By
+ * the keys here: the window under test matches no (hover: hover), which
+ * Tailwind's hover asks for. */
+async function openBeside(scope: Locator, name: string) {
+  const label = scope.page().getByRole("button", { name, exact: true })
+  const row = scope.getByRole("button", { name, exact: true })
+  await row.hover()
+  await scope
+    .locator("[data-slot=subagent]")
+    .filter({ has: label })
+    .getByRole("button", { name: "Open beside" })
+    .press("Enter")
+  return row
+}
+
+test("Open beside shows a sub-agent in its Thread's Group, live to its end", async () => {
+  window = await startWindow({
+    look: LOOK,
+    env: { FAKE_AGENT_OUTLIVES_BY: "8000" },
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents outlive")
+  await composer.press("Enter")
+  const row = thread.getByRole("button", { name: "Read a.txt one line" })
+  await expect(row.getByRole("img", { name: "Working" })).toBeVisible()
+  // Its row opened offers it; it opens in the Thread's Group.
+  await row.click()
+  await thread
+    .locator("[data-slot=subagent]")
+    .getByRole("button", { name: "Open beside" })
+    .click()
+  const beside = besidePane(page)
+  await expect(beside.pane).toBeVisible()
+  const group = await plateOf(thread).getAttribute("data-group-plate")
+  expect(group).toBeTruthy()
+  await expect(plateOf(beside.tile)).toHaveAttribute("data-group-plate", group!)
+  // Its header names it and its Thread; its brief is the Harness's.
+  await expect(beside.title).toHaveText("Read a.txt one line")
+  await expect(beside.pane).toContainText("sub-agent of sub-agents outlive")
+  await expect(beside.brief).toContainText("Fake AI asked")
+  await expect(beside.brief).toContainText(
+    "Read a.txt and answer with its first line only."
+  )
+  await expect(beside.brief.locator("[data-slot=bubble-content]")).toBeVisible()
+  // The status bar in the composer's place, with no text box and no Stop.
+  await expect(beside.status).toHaveAttribute(
+    "aria-label",
+    /^Working( · Haiku 5\.5)? · Runs on its own$/
+  )
+  await expect(beside.pane.getByRole("textbox")).toHaveCount(0)
+  await expect(beside.pane.getByRole("button", { name: /Stop/ })).toHaveCount(0)
+  // The row it shows stays lit.
+  await expect(thread.locator("[data-slot=subagent]")).toHaveAttribute(
+    "data-lit",
+    "true"
+  )
+  await shots(window, "beside-working")
+  // It follows the lane: its answer, then how it ended, with a still
+  // duration.
+  await expect(beside.status).toHaveAttribute(
+    "aria-label",
+    /^Done · Haiku 5\.5 · \d+s · Returned its answer to Fake AI$/,
+    { timeout: 20_000 }
+  )
+  await expect(beside.status).toContainText("Done")
+  await expect(beside.pane).toContainText("alpha")
+  await shots(window, "beside-done")
+})
+
+test("a Thread has one sub-agent Pane: another row's Open beside shows that one in it", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents three")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await thread.getByRole("button", { name: /^Ran 3 sub-agents/ }).click()
+  const rows = thread.locator("[data-slot=subagent]")
+  await expect(rows).toHaveCount(3)
+  const beside = besidePane(page)
+  const explore = await openBeside(thread, "Explore")
+  await expect(beside.title).toHaveText("Explore")
+  // Its model is not its Thread's: the bar says it.
+  await expect(beside.status).toHaveAttribute(
+    "aria-label",
+    /^Done · Haiku 5\.5 · \d+s · Returned its answer to Fake AI$/
+  )
+  const lit = thread.locator("[data-slot=subagent][data-lit]")
+  await expect(lit).toHaveCount(1)
+  await expect(
+    lit.getByRole("button", { name: "Explore", exact: true })
+  ).toBeVisible()
+  const tile = await beside.tile.getAttribute("data-tile")
+  // Another sub-agent: the same Pane, which shows it now, and its row is
+  // the one lit.
+  // Back in the Thread, whose composer takes the focus as it comes.
+  await composer.click()
+  const reviewer = await openBeside(thread, "Reviewer")
+  await expect(beside.title).toHaveText("Reviewer")
+  await expect(beside.pane).toHaveCount(1)
+  await expect(beside.tile).toHaveAttribute("data-tile", tile!)
+  await expect(lit).toHaveCount(1)
+  await expect(
+    lit.getByRole("button", { name: "Reviewer", exact: true })
+  ).toBeVisible()
+  await expect(explore).toBeVisible()
+  await expect(reviewer).toBeVisible()
+  await shots(window, "beside-another")
+})
+
+test("a nested sub-agent opens deeper in the same Pane, with its crumbs, and Esc goes back up", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents nested")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await openBeside(thread, "Read a.txt one line")
+  const beside = besidePane(page)
+  await expect(beside.title).toHaveText("Read a.txt one line")
+  await expect(beside.crumbs).toHaveCount(0)
+  // Its own sub-agent is a row in it, one level down.
+  await expect(beside.pane.locator("[data-slot=subagent]")).toHaveCount(1)
+  await openBeside(beside.pane, "Explore")
+  // Deeper: the crumbs from its Thread, its label, then its title muted;
+  // its parent asked it.
+  await expect(beside.title).toHaveText("Explore")
+  await expect(beside.crumbs.getByRole("button")).toHaveText([
+    "sub-agents nested",
+    "Read a.txt one line",
+  ])
+  await expect(beside.pane).toContainText("Find b.txt")
+  await expect(beside.brief).toContainText("Read a.txt one line asked")
+  await expect(beside.brief).toContainText(
+    "Read b.txt and answer with its first line only."
+  )
+  await expect(beside.pane).toContainText("bravo")
+  await expect(beside.status).toHaveAttribute(
+    "aria-label",
+    /^Done · .* · Returned its answer to Read a\.txt one line$/
+  )
+  // Its Thread lights the row it went from.
+  await expect(thread.locator("[data-slot=subagent]")).toHaveAttribute(
+    "data-lit",
+    "true"
+  )
+  await shots(window, "beside-nested")
+  // Esc goes one level up; at the top it does nothing new.
+  await page.keyboard.press("Escape")
+  await expect(beside.title).toHaveText("Read a.txt one line")
+  await expect(beside.crumbs).toHaveCount(0)
+  await page.keyboard.press("Escape")
+  await expect(beside.title).toHaveText("Read a.txt one line")
+  await expect(beside.pane).toBeVisible()
+  // A crumb goes to its level, the Thread's to the Thread.
+  await openBeside(beside.pane, "Explore")
+  await beside.crumbs
+    .getByRole("button", { name: "Read a.txt one line" })
+    .click()
+  await expect(beside.title).toHaveText("Read a.txt one line")
+  await openBeside(beside.pane, "Explore")
+  await beside.crumbs.getByRole("button", { name: "sub-agents nested" }).click()
+  await expect(thread).toHaveAttribute("data-focused", "true")
+})
+
+test("a Codex sub-agent with no name opens beside by its number, its answer returned to its Harness", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("sub-agents codex unnamed")
+  await composer.press("Enter")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  await openBeside(thread, "Agent 1")
+  const beside = besidePane(page)
+  await expect(beside.title).toHaveText("Agent 1")
+  await expect(beside.pane).toContainText(
+    "sub-agent of sub-agents codex unnamed"
+  )
+  await expect(beside.status).toHaveAttribute(
+    "aria-label",
+    /^Done · 6 Luna · \d+s · Returned its answer to Fake AI$/
+  )
 })

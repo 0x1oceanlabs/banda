@@ -677,6 +677,24 @@ sub-agents and the Crew `audit-routes`:
       the stack as a Thread's screen does, since it is its Thread's view:
       ADR 0089, decision 8, would only name it and open it on a wide
       screen.
+    - _Amended 2026-11-11, during step 2:_
+      - **Open beside is offered only for a Thread on this machine.**
+        A Pane that opens on another machine passes the Pane kit first
+        (ADR 0106, laws 5 and 6). This one draws with the Thread's own
+        views, which wait for that kit until ADR 0106's slice 4d. On
+        another machine, the row opened in place shows the sub-agent.
+      - **The status bar names no role.** A role is always the label
+        already (decision 17), so the bar says the state, a model that
+        differs from the Thread's, and how the sub-agent stands.
+      - **Codex's sub-agent has no "Codex asked" bubble.** Codex sends
+        its child no brief the client sees (`codex-lanes.jsonl`), so
+        the Pane opens on its work.
+      - **"Claude wrote" waits for "Ask Claude about it".** The engine
+        keeps only a lane's first brief, and Claude's SendMessage is
+        not recorded with the declaration yet.
+      - **The screen on top comes after.** The window has no outcome
+        yet for "no room for a Group". Until then, a narrow window
+        scrolls to the Pane as it does to any Pane in a Group.
 22. **A Crew opens beside as the Crew Pane, `agents.crew`**, last in the
     Deck right of the Thread.
     - **It opens by itself once**, when the Crew starts; closed, it stays

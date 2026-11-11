@@ -3,11 +3,14 @@
  * one row on the work line's edge, with its satellite, its title, its role
  * and model, what it does now or how it ended, and its time, which does not
  * tick. A click opens it in place, with nothing above it moving: its brief,
- * its work as one line, its report. Banda shows a Harness's sub-agents and
- * manages none of them (Roma's call 11), so a row offers no Stop.
+ * its work as one line, its report, and Open beside, which the pointer
+ * also shows at the row's right in its time's place (decision 21). The row
+ * stays lit while the Pane beside shows it. Banda shows a Harness's
+ * sub-agents and manages none of them (ADR 0103, call 11), so a row offers
+ * no Stop.
  */
 import { useState } from "react"
-import { LayersIcon } from "lucide-react"
+import { LayersIcon, PanelRightIcon } from "lucide-react"
 import type { Item } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -20,13 +23,12 @@ import { Trace } from "@banda/ui/components/trace"
 import type { SatelliteState } from "@banda/ui/lib/satellite"
 import { cn } from "@banda/ui/lib/utils"
 import { CallEntry } from "./call"
-import { outcome } from "./parts/calls"
 import { THREAD_ZOOM } from "./parts/Messages"
 import { FADES, RowTrigger } from "./parts/RowTrigger"
 import { Kinds, WorkFold } from "./parts/WorkFold"
 import { ThoughtEntry } from "./thought"
 import type { EntryOf, EntryProps, SubagentRow } from "./types"
-import { useOpened, useThreadAround } from "../thread/context"
+import { useLit, useOpened, useThreadAround } from "../thread/context"
 import {
   laneDid,
   type LaneState,
@@ -35,71 +37,101 @@ import {
   workOfLane,
 } from "../thread/live-lane"
 import { type Now, nowWords, stateWord } from "../thread/subagents"
+import { going } from "../thread/timeline"
 
 export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
   const [open, setOpen] = useOpened(item.body.subagent)
+  const lit = useLit(item.body.subagent)
+  const { acts } = useThreadAround()
   if (!subagentRow) return null
   const { lane, said } = subagentRow
   const tone = TONES[said.look]
+  // Closed, the pointer shows Open beside; opened, its own button does.
+  const beside = open ? undefined : acts.openSubagent
   return (
     <Collapsible
       open={open}
       onOpenChange={setOpen}
       data-slot="subagent"
       data-look={said.look}
+      data-lit={lit || undefined}
       className="flex min-w-0 flex-col"
     >
-      <RowTrigger
-        aria-label={said.label}
-        aria-description={[stateWord(lane), nowWords(said.now), said.time].join(
-          " · "
-        )}
-      >
-        {/* Not a TraceIcon, which hides itself: the satellite names how
+      {/* The pointer shows Open beside in its time's place, beside the
+          line that opens it in place, not in it. */}
+      <div className="group/line relative flex min-w-0 flex-col">
+        <RowTrigger
+          aria-label={said.label}
+          aria-description={[
+            stateWord(lane),
+            nowWords(said.now),
+            said.time,
+          ].join(" · ")}
+          className={cn(lit && "bg-foreground/5")}
+        >
+          {/* Not a TraceIcon, which hides itself: the satellite names how
             the row stands. */}
-        <span className="flex size-4 shrink-0 items-center justify-center">
-          <Satellite state={said.look} size={10} />
-        </span>
-        <span className={cn("max-w-[58%] min-w-10", FADES, tone.title)}>
-          {said.title}
-        </span>
-        {said.role && (
-          <span className={cn("shrink-0 text-meta", tone.role)}>
-            {said.role}
+          <span className="flex size-4 shrink-0 items-center justify-center">
+            <Satellite state={said.look} size={10} />
           </span>
-        )}
-        {said.plus && (
+          <span className={cn("max-w-[58%] min-w-10", FADES, tone.title)}>
+            {said.title}
+          </span>
+          {said.role && (
+            <span className={cn("shrink-0 text-meta", tone.role)}>
+              {said.role}
+            </span>
+          )}
+          {said.plus && (
+            <span
+              title="Its own sub-agents"
+              className="shrink-0 text-meta text-sub-faint tabular-nums"
+            >
+              {said.plus}
+            </span>
+          )}
+          {said.failed && (
+            <span className="shrink-0 rounded-control bg-destructive/12 px-1.5 text-[11px] leading-[18px] font-medium text-destructive">
+              Failed
+            </span>
+          )}
           <span
-            title="Its own sub-agents"
-            className="shrink-0 text-meta text-sub-faint tabular-nums"
+            className={cn(
+              "min-w-0 flex-1 basis-0 text-[13px]",
+              FADES,
+              !said.failed && "ml-1.5",
+              tone.now
+            )}
           >
-            {said.plus}
+            <NowSaid now={said.now} />
           </span>
-        )}
-        {said.failed && (
-          <span className="shrink-0 rounded-control bg-destructive/12 px-1.5 text-[11px] leading-[18px] font-medium text-destructive">
-            Failed
+          <span
+            className={cn(
+              "min-w-11 shrink-0 text-right text-meta tabular-nums",
+              tone.time,
+              beside &&
+                "group-hover/line:invisible group-has-[[data-beside]:focus-visible]/line:invisible"
+            )}
+          >
+            {said.time}
           </span>
+        </RowTrigger>
+        {beside && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Open beside"
+            title="Open beside"
+            data-beside=""
+            // Still there for the keys, unseen until the pointer or the
+            // focus is on it.
+            className="pointer-events-none absolute top-0.5 right-5.5 text-muted-foreground opacity-0 group-hover/line:pointer-events-auto group-hover/line:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
+            onClick={() => beside(lane.id)}
+          >
+            <PanelRightIcon className="size-3.5" />
+          </Button>
         )}
-        <span
-          className={cn(
-            "min-w-0 flex-1 basis-0 text-[13px]",
-            FADES,
-            !said.failed && "ml-1.5",
-            tone.now
-          )}
-        >
-          <NowSaid now={said.now} />
-        </span>
-        <span
-          className={cn(
-            "min-w-11 shrink-0 text-right text-meta tabular-nums",
-            tone.time
-          )}
-        >
-          {said.time}
-        </span>
-      </RowTrigger>
+      </div>
       {/* It opens at once, as the kit's does: what it holds shows whole
           below it, and nothing above it moves. */}
       <CollapsibleContent className="flex min-w-0 flex-col gap-2.5 pt-1 pb-2 pl-6 text-sm wrap-break-word text-muted-foreground">
@@ -150,16 +182,30 @@ function NowSaid({ now: { lead, text, mono } }: { now: Now }) {
   )
 }
 
-/** A row opened in place: who asked it what, its work as one line, and its
- * report. Its work is read once it opens, and followed while it shows. */
+/** A row opened in place: who asked it what, its work as one line, its
+ * report, and Open beside, where the Thread can. Its work is read once it
+ * opens, and followed while it shows. */
 function Opened({ row: { lane, said, asker } }: { row: SubagentRow }) {
-  const { engine, project, thread } = useThreadAround()
+  const { engine, project, thread, acts } = useThreadAround()
   const live = useSubagent(engine, project, thread, lane.id)
   return (
     <>
       {lane.prompt && <Brief asker={asker} text={lane.prompt} />}
       {live.state === "ready" && <Work lane={live.view} />}
-      {lane.report && <Report text={lane.report} done={said.look === "done"} />}
+      {(lane.report || acts.openSubagent) && (
+        <Report text={lane.report} done={said.look === "done"}>
+          {acts.openSubagent && (
+            <Button
+              variant="ghost"
+              size="xs"
+              onClick={() => acts.openSubagent?.(lane.id)}
+            >
+              <PanelRightIcon data-icon="inline-start" />
+              Open beside
+            </Button>
+          )}
+        </Report>
+      )}
     </>
   )
 }
@@ -200,12 +246,10 @@ function Brief({ asker, text }: { asker: string; text: string }) {
  * Nothing before it has done any. */
 function Work({ lane }: { lane: LaneState }) {
   const turn = turnStateOf(lane.subagent)
-  const work = workOfLane(lane)
-  const going = (item: Item) =>
-    item.body.kind === "tool" &&
-    ["running", "waiting"].includes(outcome(item.body, turn))
-  const ended = work.filter((item) => !going(item))
-  const running = work.filter(going)
+  const ended: Item[] = []
+  const running: Item[] = []
+  for (const item of workOfLane(lane))
+    (going(item, turn) ? running : ended).push(item)
   if (ended.length === 0 && running.length === 0) return null
   const last = lane.items.at(-1)
   const step = (item: Item, live: boolean) =>
@@ -247,31 +291,45 @@ function Work({ lane }: { lane: LaneState }) {
   )
 }
 
-/** Its report as quoted prose, faded after four lines; a done one shows
- * all of it on "Show all". */
-function Report({ text, done }: { text: string; done: boolean }) {
+/** Its report as quoted prose, faded after four lines, and the row's
+ * quiet actions under it, `children`; a done one shows all of it on "Show
+ * all", there beside them. */
+function Report({
+  text,
+  done,
+  children,
+}: {
+  text?: string
+  done: boolean
+  children?: React.ReactNode
+}) {
   const [all, setAll] = useState(false)
   return (
     <div data-clamp-scope className="flex min-w-0 flex-col gap-1">
-      <div
-        data-slot="subagent-report"
-        data-clamped={all ? undefined : "report"}
-        className={cn(
-          "border-l-2 border-sub-rule pl-3 text-foreground/88",
-          THREAD_ZOOM,
-          !all &&
-            "max-h-[calc(var(--prose-leading)*4+0.5rem)] scroll-fade-b overflow-hidden [--scroll-fade-reveal:1px] scroll-fade-b-10"
-        )}
-      >
-        <Markdown>{text}</Markdown>
-      </div>
-      {done && (
-        <div data-clamp-more={all ? undefined : ""} className="-ml-2 flex">
-          <Button variant="ghost" size="xs" onClick={() => setAll(!all)}>
-            {all ? "Show less" : "Show all"}
-          </Button>
+      {text && (
+        <div
+          data-slot="subagent-report"
+          data-clamped={all ? undefined : "report"}
+          className={cn(
+            "border-l-2 border-sub-rule pl-3 text-foreground/88",
+            THREAD_ZOOM,
+            !all &&
+              "max-h-[calc(var(--prose-leading)*4+0.5rem)] scroll-fade-b overflow-hidden [--scroll-fade-reveal:1px] scroll-fade-b-10"
+          )}
+        >
+          <Markdown>{text}</Markdown>
         </div>
       )}
+      <div className="-ml-2 flex items-center gap-0.5 empty:hidden">
+        {children}
+        {text && done && (
+          <div data-clamp-more={all ? undefined : ""} className="flex">
+            <Button variant="ghost" size="xs" onClick={() => setAll(!all)}>
+              {all ? "Show less" : "Show all"}
+            </Button>
+          </div>
+        )}
+      </div>
     </div>
   )
 }
