@@ -415,7 +415,7 @@ test("paths: a path in arc's reply is found by arc in one round trip, opens arc'
   // A line in the reply: one only arc has, one only this machine has, one
   // neither has, one each has, and a link to a line.
   await composer.fill(
-    "See `src/long.ts:12`, `only-mac.txt`, `gone.txt`, also who.txt in prose, and [the notes](notes.md#L2)."
+    "See `src/long.ts:12`, `only-mac.txt`, `gone.txt`, also src/util.ts in prose, and [the notes](notes.md#L2)."
   )
   await composer.press("Enter")
   const chip = pathOf(thread, "code")
@@ -433,8 +433,8 @@ test("paths: a path in arc's reply is found by arc in one round trip, opens arc'
   await expect(reply.getByText("gone.txt")).toBeVisible()
   await expect(reply.locator("a[data-file]")).toHaveCount(3)
   const prose = pathOf(thread, "text")
-  await expect(prose).toHaveText("who.txt")
-  await expect(prose).toHaveAttribute("data-file", join(there, "who.txt"))
+  await expect(prose).toHaveText("src/util.ts")
+  await expect(prose).toHaveAttribute("data-file", join(there, "src/util.ts"))
   await expect(pathOf(thread, "named")).toHaveText("the notes(notes.md)")
 
   // A click: arc's file beside the Thread, at its line, named on arc.
@@ -453,8 +453,10 @@ test("paths: a path in arc's reply is found by arc in one round trip, opens arc'
   // Ctrl+click: another machine's file has no app here, so it opens in
   // Banda too.
   await prose.click({ modifiers: ["Control"] })
-  const who = page.getByRole("region", { name: "who.txt", exact: true })
-  await expect(who.locator('[data-line="1"]').first()).toHaveText("arc")
+  const util = page.getByRole("region", { name: "util.ts", exact: true })
+  await expect(util.locator('[data-line="1"]').first()).toHaveText(
+    "export const one = 1"
+  )
   expect(await outside()).toEqual([])
 
   // Its menu: what reaches this computer is not offered.
