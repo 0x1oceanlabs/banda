@@ -14,7 +14,7 @@ import {
   type ProjectSummary,
   type Status,
 } from "@banda/contract"
-import { Toaster, toast } from "@banda/ui/components/sonner"
+import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
