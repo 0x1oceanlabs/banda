@@ -9,6 +9,7 @@ import {
   shortOf,
   sizeWords,
   versionsWords,
+  waitWords,
   workingWords,
 } from "./updating"
 
@@ -45,7 +46,7 @@ describe("the update's line on hover, which says what a click does", () => {
     }
     expect(lineOf(ready)).toBe("dev.66 is ready · click to restart")
     expect(lineOf({ ...ready, waits: true })).toBe(
-      "Restarts into dev.66 once no Thread works"
+      "Restarts into dev.66 once Threads and terminals are idle"
     )
     expect(
       lineOf({ ...known, state: "failed", reason: "Banda cannot write /opt" })
@@ -98,6 +99,32 @@ it("warns only while Threads work", () => {
   expect(workingWords(1)).toBe("A Thread is working. A restart stops its turn.")
   expect(workingWords(3)).toBe(
     "3 Threads are working. A restart stops their turns."
+  )
+})
+
+it("warns of programs in this machine's terminals too", () => {
+  expect(workingWords(0, 1)).toBe(
+    "A program runs in a terminal. A restart stops it."
+  )
+  expect(workingWords(0, 2)).toBe(
+    "2 programs run in terminals. A restart stops them."
+  )
+  expect(workingWords(1, 1)).toBe(
+    "A Thread is working and a program runs in a terminal. A restart stops them."
+  )
+  expect(workingWords(2, 3)).toBe(
+    "2 Threads are working and 3 programs run in terminals. A restart stops them."
+  )
+})
+
+it("says what a version waits for", () => {
+  expect(waitWords(0, 0)).toBeUndefined()
+  expect(waitWords(1, 0)).toBe("Waits for a Thread to finish its turn")
+  expect(waitWords(3, 0)).toBe("Waits for 3 Threads to finish their turns")
+  expect(waitWords(0, 1)).toBe("Waits for a program in a terminal to finish")
+  expect(waitWords(0, 2)).toBe("Waits for 2 programs in terminals to finish")
+  expect(waitWords(1, 1)).toBe(
+    "Waits for a Thread to finish its turn and for a program in a terminal to finish"
   )
 })
 

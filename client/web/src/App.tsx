@@ -10,7 +10,6 @@ import {
   seenNamed,
   useMachine,
   useModules,
-  useStatus,
 } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { Slots } from "@banda/ui/slots"
@@ -29,7 +28,6 @@ import { AskToShare } from "./sharing/AskToShare"
  * The other machines of `hosts.toml` show below this one's (ADR 0081).
  */
 export function App({ engine }: { engine: Engine }) {
-  const status = useStatus(engine)
   const machine = useMachine(engine)
   const modules = useModules(engine)
   const slots = useMemo(() => slotsOf(modules), [modules])
@@ -94,7 +92,6 @@ export function App({ engine }: { engine: Engine }) {
             <Machines hosts={hosts}>
               <Shell
                 engine={engine}
-                status={status}
                 modules={modules}
                 projects={projects}
                 home={home?.id ?? machine}

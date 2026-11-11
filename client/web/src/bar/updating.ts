@@ -29,7 +29,7 @@ export function lineOf(update: Update): string {
       return `Downloading ${shortOf(update.version)} · ${percentOf(update.share)}`
     case "ready":
       return update.waits
-        ? `Restarts into ${shortOf(update.version)} once no Thread works`
+        ? `Restarts into ${shortOf(update.version)} once Threads and terminals are idle`
         : `${shortOf(update.version)} is ready · click to restart`
     case "out":
       return `${shortOf(update.version)} is out · install it with brew`
@@ -66,12 +66,41 @@ export function versionsWords(notes: readonly Note[]): string | undefined {
   return notes.length > 1 ? `${notes.length} versions newer` : undefined
 }
 
-/** How the popover says that Threads work, which a restart stops. */
-export function workingWords(working: number): string | undefined {
-  if (working === 0) return undefined
-  return working === 1
-    ? "A Thread is working. A restart stops its turn."
-    : `${working} Threads are working. A restart stops their turns.`
+/** How the popover says that Threads work and that this machine's
+ * terminals run programs, which a restart stops. */
+export function workingWords(working: number, running = 0): string | undefined {
+  const threads = working === 1 ? "A Thread is" : `${working} Threads are`
+  const programs =
+    running === 1
+      ? "a program runs in a terminal"
+      : `${running} programs run in terminals`
+  if (working === 0 && running === 0) return undefined
+  if (running === 0)
+    return working === 1
+      ? "A Thread is working. A restart stops its turn."
+      : `${threads} working. A restart stops their turns.`
+  if (working === 0)
+    return `${programs[0]!.toUpperCase()}${programs.slice(1)}. A restart stops ${running === 1 ? "it" : "them"}.`
+  return `${threads} working and ${programs}. A restart stops them.`
+}
+
+/** What a version that waits waits for, the Threads' turns and the
+ * programs in this machine's terminals (ADR 0106, decision 4); none once
+ * nothing holds it. */
+export function waitWords(
+  working: number,
+  running: number
+): string | undefined {
+  const turns =
+    working === 1
+      ? "a Thread to finish its turn"
+      : `${working} Threads to finish their turns`
+  const programs =
+    running === 1
+      ? "a program in a terminal to finish"
+      : `${running} programs in terminals to finish`
+  const what = [working > 0 && turns, running > 0 && programs].filter(Boolean)
+  return what.length > 0 ? `Waits for ${what.join(" and for ")}` : undefined
 }
 
 /** What the popover says of a look while nothing new is known
