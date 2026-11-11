@@ -8,9 +8,10 @@
  * so plain tests cover it.
  */
 import type { ProjectSummary } from "@banda/contract"
+import type { GroupBy } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/lib/mark-state"
-import { STAND_WORDS, type Stand } from "@banda/ui/status"
-import type { Row } from "./arrange"
+import { lookOf, STAND_WORDS, type Stand } from "@banda/ui/status"
+import type { Row } from "./rows"
 import { rowKey } from "./hold"
 import { dayAt } from "./later-time"
 
@@ -18,16 +19,15 @@ import { dayAt } from "./later-time"
 export type Tab = "inbox" | "working" | "later" | "archive"
 export const TABS: readonly Tab[] = ["inbox", "working", "later", "archive"]
 
-/** What the list may be grouped by, when it is (decision 7). Not the
- * settings' `GroupBy`: `sidebar.toml` does not group by machine yet. */
-type InboxGroup = "project" | "machine"
+/** What the list may be grouped by, when it is (decision 7). */
+type InboxGroup = Exclude<GroupBy, "none">
 
 /** How the Person has the list in view. */
 export type InboxView = {
   tab: Tab
   /** What the list is grouped by (`group` in `sidebar.toml`): none by
    * default. */
-  group?: "none" | InboxGroup
+  group?: GroupBy
   /** Your turn's order (`[inbox] order`): oldest first by default, so no
    * one waits forever. */
   order?: "oldest" | "newest"
@@ -62,7 +62,8 @@ export type Block =
   | { kind: "head"; key: string; label: string; count?: number }
   /** A group's header (decision 7): its Project, or its machine (none
    * for this one), whether it is folded, and its rollup: the loudest
-   * mark of its rows, how many wait for the Person and how many work. */
+   * look of what calls in it, how many wait for the Person and how many
+   * work. */
   | {
       kind: "group"
       key: string
@@ -209,13 +210,13 @@ export function inboxOf(
           ...(zero ? [{ kind: "zero" as const, key: "zero", ...zero }] : []),
           ...(group === "none"
             ? inbox(parts, view.more === true)
-            : grouped(parts, group, folded)),
+            : grouped(parts, group, folded, now)),
         ]
       case "working":
         if (working.length === 0) return [empty("working")]
         return group === "none"
           ? [cards("working", "working", working)]
-          : grouped({ working }, group, folded)
+          : grouped({ working }, group, folded, now)
       case "later":
         return later.length === 0 ? [empty("later")] : laterOf(later, now)
       case "archive":
@@ -277,11 +278,14 @@ function inbox(parts: Parts, whole: boolean): Block[] {
 
 /** Each group with something to show: its header, then, unless it is
  * folded, its rows by place, Open under a divider. Projects go by name,
- * with no Project's last; machines by name, this one's first. */
+ * with no Project's last; machines by name, this one's first. A header's
+ * mark is the loudest look of what calls in it, as its cards draw them
+ * at `now`. */
 function grouped(
   parts: Parts,
   by: InboxGroup,
-  folded: ReadonlySet<string>
+  folded: ReadonlySet<string>,
+  now: number
 ): Block[] {
   const groups = new Map<string, { first: Row; parts: Parts }>()
   for (const part of PARTS)
@@ -294,8 +298,7 @@ function grouped(
   return [...groups]
     .sort(([, a], [, b]) => groupOrder(a.first, b.first, by))
     .flatMap(([key, group]): Block[] => {
-      const { turn = [], open = [], working = [] } = group.parts
-      const all = [...turn, ...open, ...working]
+      const { turn = [], working = [] } = group.parts
       const shut = folded.has(key)
       return [
         {
@@ -304,7 +307,7 @@ function grouped(
           by,
           ...placeOf(group.first, by),
           folded: shut,
-          mark: loudest(all.map(({ row }) => row.listed.mark)),
+          mark: loudest(turn.map(({ row }) => lookOf(row.listed, now).look)),
           waiting: turn.length,
           working: working.length,
         },

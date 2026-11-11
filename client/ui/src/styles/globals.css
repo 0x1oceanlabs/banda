@@ -836,6 +836,34 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
     transition: opacity var(--dur-out) var(--ease-exit);
   }
 }
+/* A group header in the sidebar (ADR 0098, decision 7; S8b): its fill
+   under the pointer, as a card's; its + and ⋯ in its rollup's place under
+   the pointer or with the keyboard's focus in it, always on a coarse
+   pointer. Plain `:hover`, as the cards' acts. A click that folds keeps
+   the rollup in sight until the pointer leaves (`data-clicked`). */
+[data-head]:hover::before {
+  opacity: 1;
+  transition-duration: 0s;
+}
+[data-head-acts] {
+  opacity: 0;
+}
+[data-head]:is(:hover, :has(:focus-visible)):not([data-clicked]) {
+  & [data-head-acts] {
+    opacity: 1;
+  }
+  & [data-head-rollup] {
+    visibility: hidden;
+  }
+}
+@media (pointer: coarse) {
+  [data-head-acts] {
+    opacity: 1;
+  }
+  [data-head-rollup] {
+    visibility: hidden;
+  }
+}
 /* The sidebar's pick (ADR 0098, decision 13; spec §2.7): a ring while
    its list has the focus and the last input in it was a key, none after
    a click. It does not move: a key moves it at once. */

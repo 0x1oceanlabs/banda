@@ -58,6 +58,7 @@ import {
   settingsLinkOf,
 } from "../menu/menu"
 import { writeLook } from "../menu/theme"
+import { writeGroup } from "../sidebar/write-setting"
 import {
   columnsOf,
   useLookColumns,
@@ -720,8 +721,8 @@ export function Shell({
             project: row.project,
             item: row.listed.id,
           })
-        case "preset":
-          return device.sidebar.preset(row.name)
+        case "group":
+          return writeGroup(parts.writeSetting, row.group)
         case "look":
           return writeLook(parts.writeSetting, row)
         case "found":

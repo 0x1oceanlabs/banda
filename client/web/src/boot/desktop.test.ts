@@ -10,7 +10,7 @@ test("without the desktop each part does nothing, and the settings say why they 
   expect(device.menu.listen(() => undefined)).toBeUndefined()
   expect(device.files.exists("/a")).toBeUndefined()
   expect(() => device.quit()).not.toThrow()
-  expect(() => device.sidebar.preset("inbox")).not.toThrow()
+  expect(() => device.sidebar.edit()).not.toThrow()
   expect(await device.settings.set("look.toml", "a", "1")).toEqual([
     "Only Banda's app writes the settings.",
   ])

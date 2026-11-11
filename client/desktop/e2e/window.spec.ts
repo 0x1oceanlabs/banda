@@ -44,6 +44,9 @@ import {
   type Window,
   read,
   workspaceNames,
+  groupBy,
+  showPlaces,
+  viewMenuOf,
 } from "./window"
 
 let window: Window
@@ -2684,10 +2687,9 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await composer.fill("hello")
   await composer.press("Enter")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const view = sidebar.getByRole("button", { name: /^View: / })
-  await expect(view).toHaveAccessibleName("View: projects")
   // The Inbox in view, under its tab (ADR 0098, decision 2), each Project
-  // a group in it: the row sits under its Project's name.
+  // a group in it, as the preset reads: the row sits under its Project's
+  // name.
   await expect(
     sidebar.getByRole("tablist", { name: "Threads by where they stand" })
   ).toBeVisible()
@@ -2699,13 +2701,25 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
   await page.screenshot({ path: "test-results/22-sidebar-projects.png" })
 
-  // The menu writes the preset into the file and keeps the rest; the
-  // arrangement comes back from the file.
-  await view.click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
-  await expect(view).toHaveAccessibleName("View: places")
-  expect(readFileSync(file, "utf8")).toBe('# mine\npreset = "places"\n')
-  await expect(sidebar.getByRole("group", { name: "Projects" })).toBeVisible()
+  // The view menu shows how the list is grouped, as drawn, and writes the
+  // group into the file, keeping the rest; the arrangement comes back
+  // from the file (ADR 0098, decision 7).
+  await sidebar.getByRole("button", { name: "View", exact: true }).click()
+  const groups = viewMenuOf(page).getByRole("radiogroup", { name: "Group by" })
+  await expect(groups.getByRole("radio", { checked: true })).toHaveText(
+    "Project"
+  )
+  await groups.getByRole("radio", { name: "None" }).click()
+  await expect(groups.getByRole("radio", { checked: true })).toHaveText("None")
+  expect(textOf(file)).toContain("# mine\n")
+  expect(textOf(file)).toContain('group = "none"')
+  await expect(work).toHaveCount(0)
+  await expect(sidebar.getByRole("option", { name: /hello/ })).toBeVisible()
+  await page.keyboard.press("Escape")
+
+  // Under the places preset the list of Projects shows above, until it
+  // goes (decision 16).
+  await showPlaces(window)
   await page.screenshot({ path: "test-results/23-sidebar-places.png" })
 
   // A key no longer used is named by its line, and the rest of the file
@@ -2716,22 +2730,22 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
     "aria-label",
     /sidebar\.toml:2:2: \[row\] is no longer used/
   )
-  await expect(view).toHaveAccessibleName("View: places")
+  await expect(sidebar.getByRole("group", { name: "Projects" })).toBeVisible()
 
-  // A preset of the Person's own is a file, and the menu lists it.
+  // A preset of the Person's own is a file, and reads as its keys say.
   mkdirSync(join(dir, "config/sidebars"))
   writeFileSync(
     join(dir, "config/sidebars/flat.toml"),
-    'group = "none"\ncard = 1\n'
+    'group = "project"\ncard = 1\n'
   )
   writeFileSync(file, 'preset = "flat"\n')
-  await expect(view).toHaveAccessibleName("View: flat")
   await expect(problem).toBeHidden()
-  await view.click()
+  await expect(sidebar.getByRole("group", { name: "Projects" })).toHaveCount(0)
   await expect(
-    page.getByRole("menuitemradio", { name: /^flat/ })
-  ).toContainText("Your own preset")
-  await page.keyboard.press("Escape")
+    placeOf(sidebar.getByRole("tabpanel"), "Work").getByRole("option", {
+      name: /hello/,
+    })
+  ).toBeVisible()
 })
 
 test("keys.toml binds a key, frees one, and the bar names what is wrong", async () => {
@@ -4318,8 +4332,7 @@ test("Threads of no Project share the first free workspace, which takes a Projec
   await say(page, "scratch one")
   await page.keyboard.press("Alt+Enter")
   await say(page, "scratch two")
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^projects/ }).click()
+  await groupBy(page, "Project")
   await sidebar
     .getByRole("button", { name: "New Thread in No Project" })
     .click()
@@ -6225,17 +6238,30 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   ).toHaveAccessibleName("Archive, 1")
   await expect(thread).toBeHidden()
 
-  // The sidebar's view: its presets, one picked writes the file.
+  // The sidebar's view: Group by, the one in force ticked; one picked
+  // writes the file, and the list comes back grouped (ADR 0098, decision
+  // 7).
   await page.keyboard.press("Alt+Space")
   await search.fill("view")
   await search.press("Enter")
-  await expect(menu.getByRole("option", { name: /inbox/i })).toBeVisible()
-  await search.fill("projects")
+  await expect(menu.getByRole("option", { name: /^None/ })).toBeVisible()
+  await search.fill("machine")
   await search.press("Enter")
   await expect(menu).toBeHidden()
-  await expect(
-    sidebar.getByRole("button", { name: "View: projects" })
-  ).toBeVisible()
+  await expect
+    .poll(() => textOf(join(window.dir, "config/sidebar.toml")))
+    .toContain('group = "machine"')
+  // The one Thread is archived: a new one, from outside the Window, goes
+  // under this machine's header.
+  window.banda(
+    "call",
+    "agents.send",
+    "--project",
+    projectId(window, "Work"),
+    "--params",
+    JSON.stringify({ harness: "fake", text: "hello again", settings: null })
+  )
+  await expect(placeOf(sidebar, "This machine")).toHaveCount(2)
 })
 
 test("on a Project's empty workspace, a new Thread starts in that Project", async () => {
@@ -6613,8 +6639,7 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   // A screen reader hears it before the Project's name. The Project's
   // menu trusts it, on a card that says what will load.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await showPlaces(window)
   const row = sidebar
     .getByRole("group", { name: "Projects" })
     .getByRole("button", { name: /^(Not trusted )?widget$/ })
@@ -6747,8 +6772,7 @@ test("a Project is pinned, named, archived and removed from its row's menu and t
   await setInFront(page, true)
   // The places view lists every Project, each a row with its menu.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await showPlaces(window)
   const projects = sidebar.getByRole("group", { name: "Projects" })
   const header = projects.getByRole("button", { name: /^Work/ })
 
@@ -6831,8 +6855,7 @@ test("a Project whose folder is gone shows as missing, and Locate folder opens i
   const moved = join(dir, "moved")
   mkdirSync(moved)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await showPlaces(window)
   const old = sidebar
     .getByRole("group", { name: "Projects" })
     .getByRole("button", { name: /^old/ })
@@ -7283,8 +7306,7 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
 
   // Listed as places, a Project picked: ✎ starts in it, though the
   // Person is in lab.
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await showPlaces(window)
   const projects = sidebar.getByRole("group", { name: "Projects" })
   const lab = projects.getByRole("button", { name: /^lab/ })
   const workLine = projects.getByRole("button", { name: /^Work/ })
@@ -7302,12 +7324,11 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await startsIn("lab")
 
   // Listed by Project: a section's own, its menu's, and No Project's.
-  await sidebar.getByRole("button", { name: /^View: / }).click()
-  await page.getByRole("menuitemradio", { name: /^projects/ }).click()
+  await groupBy(page, "Project")
   const section = placeOf(sidebar, "Work")
   await section.getByRole("button", { name: "New Thread in Work" }).click()
   await startsIn("Work")
-  await section.getByRole("button", { name: /^Work/ }).click({
+  await section.getByRole("button", { name: "Work", exact: true }).click({
     button: "right",
   })
   await page.getByRole("menuitem", { name: "New Thread" }).click()
@@ -7373,7 +7394,9 @@ test("the sidebar's edge drags its width, which the Strip follows and the window
   // (ADR 0098, decision 21). The key sheet and the theme are the Banda
   // menu's, and Add Project ✎'s menu's (sidebar-foot.spec.ts).
   await expect(sidebar.getByRole("button", { name: "Settings" })).toBeVisible()
-  await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
+  await expect(
+    sidebar.getByRole("button", { name: "View", exact: true })
+  ).toBeVisible()
   for (const gone of ["Every action and its key", /^Theme/, "Add Project"])
     await expect(sidebar.getByRole("button", { name: gone })).toHaveCount(0)
   await page.screenshot({ path: "test-results/8a-sidebar-foot.png" })
@@ -7967,14 +7990,11 @@ test("No Project creates a folder only on the first message", async () => {
   ).toContainText("scratch hello")
   expect(existsSync(join(dir, "root", "scratch"))).toBe(true)
   await expect(placeOf(page, "No Project")).toHaveCount(0)
-  const view = page.getByRole("button", { name: /^View: / })
-  await view.click()
-  await page.getByRole("menuitemradio", { name: /^projects/ }).click()
+  await groupBy(page, "Project")
   await expect(
     placeOf(page, "No Project").filter({ hasText: "scratch hello" })
   ).toHaveCount(1)
-  await view.click()
-  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await showPlaces(window)
   await expect(placeOf(page, "No Project")).toHaveCount(0)
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })

@@ -2,7 +2,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { emptySays, EmptyTab, InboxZero, SOMEDAY_HEAD, zeroSays } from "./Empty"
 import { inboxOf } from "./inbox"
 

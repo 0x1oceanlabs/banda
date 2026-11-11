@@ -1,7 +1,7 @@
 /**
  * The sidebar's words for TypeScript (ADR 0008, ADR 0098): the arrangement
  * `banda look` resolves from `sidebar.toml`, and Banda's defaults for
- * before it comes. The view menu writes the preset with `banda settings
+ * before it comes. The view menu writes its keys with `banda settings
  * set` (ADR 0016).
  */
 import type { Sidebar } from "./generated/sidebar/Sidebar"

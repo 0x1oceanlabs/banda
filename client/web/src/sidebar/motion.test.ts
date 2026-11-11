@@ -2,7 +2,7 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { describe, expect, test } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import type { Went } from "./hold"
 import type { Block } from "./inbox"
 import {

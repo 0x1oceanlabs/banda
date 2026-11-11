@@ -25,7 +25,8 @@ export type Region = {
   label?: string
   /** Its header, when it is a group. */
   group?: GroupBlock
-  /** The other machine whose group it is. */
+  /** The other machine whose Project's group it is, which goes under
+   * that machine's label; a machine's own group names it itself. */
   host?: string
   blocks: Block[]
 }
@@ -63,7 +64,9 @@ export function regionsOf(blocks: readonly Block[]): Region[] {
           key: block.key,
           label: groupName(block),
           group: block,
-          ...(block.host === undefined ? {} : { host: block.host }),
+          ...(block.by === "project" && block.host !== undefined
+            ? { host: block.host }
+            : {}),
           blocks: [],
         })
         break

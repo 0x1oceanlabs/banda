@@ -74,7 +74,7 @@ import { useLookSidebar, useThemes } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
-import { PRESET_WORDS } from "../sidebar/settings"
+import { GROUP_WORDS, groupOf } from "../sidebar/settings"
 import { itemActionsOf } from "../sidebar/items"
 import {
   type Act,
@@ -378,7 +378,7 @@ function Menu({
   const hosts = useHosts()
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
-  const { preset, presets } = useLookSidebar()
+  const group = groupOf(useLookSidebar())
   const uses = useOpened()
   const [now] = useState(Date.now)
   const { at } = opening
@@ -424,7 +424,7 @@ function Menu({
       lists,
       projects,
       actions,
-      presets: { names: presets.map((one) => one.name), current: preset },
+      group,
       theme,
       now: laterClock,
       items: itemActionsOf,
@@ -436,8 +436,7 @@ function Menu({
       lists,
       projects,
       actions,
-      presets,
-      preset,
+      group,
       theme,
       laterClock,
       found,
@@ -919,17 +918,17 @@ function RowView({
         <>
           <ListFilterIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 flex-1 truncate">{branchName(row)}</span>
-          <Detail>
-            <span className="capitalize">{sources.presets.current}</span>
-          </Detail>
+          <Detail>Group by {GROUP_WORDS[sources.group]}</Detail>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
       )
-    case "preset":
+    case "group":
       return (
         <>
-          <span className="min-w-0 flex-1 truncate capitalize">{row.name}</span>
-          <Detail>{PRESET_WORDS[row.name] ?? "Your own preset"}</Detail>
+          <span className="min-w-0 flex-1 truncate">
+            {GROUP_WORDS[row.group]}
+          </span>
+          <Detail>Group by</Detail>
           {row.current && <CheckIcon className="size-4 shrink-0" />}
         </>
       )

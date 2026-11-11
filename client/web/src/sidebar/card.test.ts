@@ -4,7 +4,7 @@ import { type Listed, NO_REASON } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { describe, expect, test } from "vitest"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import {
   agoSaid,
   type CardModel,

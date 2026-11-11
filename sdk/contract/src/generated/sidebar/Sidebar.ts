@@ -16,7 +16,7 @@ import type { Sort } from "./Sort";
 export type Sidebar = { 
 /**
  * Where the Person's `sidebar.toml` is, there or not: the view menu
- * writes the preset into it.
+ * writes its keys into it, and opens it.
  */
 file: string, 
 /**

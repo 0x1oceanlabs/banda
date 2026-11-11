@@ -33,7 +33,7 @@ import {
   PowerIcon,
   SettingsIcon,
 } from "lucide-react"
-import type { ProjectLine } from "./arrange"
+import type { ProjectLine } from "./rows"
 import { MachineCard } from "./MachineCard"
 import { Rollup } from "./Rollup"
 import type { Settings } from "./settings"

@@ -1,7 +1,7 @@
 import { useEngineOf, useRun } from "@banda/core/react"
 import type { ItemAction } from "@banda/ui/module"
 import type { Act } from "./acts"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import type { By } from "./hold"
 import { itemActionOf } from "./items"
 import { pickLater } from "./LaterPicker"

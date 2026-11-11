@@ -1687,14 +1687,16 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   brings the window's own keys back until the file changes. The settings Pane's
   Keys section shows the file's lines, and opens the key sheet in the
   window for the rest.
-- **The sidebar** lists every Thread of every Project, arranged as a preset
-  and the Person's keys say (ADR 0008): grouped by state, by Project or not
-  at all; sorted by need, by change or by title; shelves at the bottom;
-  a list of Projects above; rows of one, two or three lines. `arrange.ts` is
-  the one pure rule. `banda look` resolves the keys from `sidebar.toml`
-  (`platform/look/src/sidebar.rs`; Banda's presets `inbox`, `projects` and `places`
-  are files in `platform/look/sidebars/`), and the view menu writes the preset
-  into the file, keeping the Person's other keys and comments. The sidebar
+- **The sidebar** lists every Thread of every Project, arranged as the
+  Person's keys say (ADR 0008, as ADR 0098 amends it): grouped by Project,
+  by machine or not at all; Your turn oldest or newest first; Open and the
+  Working shelf in the Inbox or not; cards of one, two or three lines.
+  `order.ts` is the one order, from the rows of `rows.ts`, laid out by
+  `inbox.ts`. `banda look` resolves the keys from `sidebar.toml`
+  (`platform/look/src/sidebar.rs`; a file that names one of Banda's old
+  presets, `inbox`, `projects` or `places`, still reads as a group), and the
+  view menu writes them into the file, keeping the Person's other keys and
+  comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per
   row (its title, mark, times, what calls the Person, what it was last
   asked, and the Pane a click opens). A new Thread opens as a Thread

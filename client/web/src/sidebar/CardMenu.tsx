@@ -65,7 +65,7 @@ import {
 } from "lucide-react"
 import { MenuRow, useMenuProjects } from "../titles/ThreadMenu"
 import { actsOf } from "./acts"
-import type { Row } from "./arrange"
+import type { Row } from "./rows"
 import { ACT_LOOK } from "./CardView"
 import { refused } from "./items"
 import { type Does, keyId } from "./keys"

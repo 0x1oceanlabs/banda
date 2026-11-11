@@ -11,8 +11,8 @@ lines a card has, and what the Inbox shows. Its keys lie over the preset
 it names, and the preset's over Banda's defaults. The Person's keys
 always win, so switching the preset never undoes them.
 
-The view menu in the sidebar's header switches the preset: it writes
-`preset = "…"` into this file and keeps everything else. If the file is
+The view menu in the sidebar's foot writes the keys of the view below
+into this file, one at a time, and keeps everything else. If the file is
 not there yet, it starts as this template:
 
 <!-- include ../sidebar.toml -->
@@ -32,10 +32,6 @@ not there yet, it starts as this template:
   default its order keeps still there, and what is new takes its place
   when the pointer leaves.
 
-The window draws `card`, `[inbox]`, `[hold]` and `group = "machine"`
-from ADR 0098's step 8 on, with the view menu that writes them. Until
-then they are read and checked, and change nothing on screen.
-
 ## Presets
 
 Banda's own, kept so a file that names one still reads:
@@ -44,10 +40,12 @@ Banda's own, kept so a file that names one still reads:
 - `projects`: `group = "project"`.
 - `places`: `group = "project"` too. Until the list of Projects goes
   (ADR 0098, decision 16), the window shows that list above, and the
-  Threads as one list.
+  Threads as one list; a group picked in the view menu leaves it for
+  `inbox`.
 
 A preset of the Person's own is `~/.config/banda/sidebars/<name>.toml`,
-with the keys of `sidebar.toml` except `preset`. The view menu lists it.
+with the keys of `sidebar.toml` except `preset`. Settings → Sidebar
+lists it.
 Behind Banda's fence the settings folder is read-only to you: write the
 preset in your Project, and give your Person the line that copies it
 there.
