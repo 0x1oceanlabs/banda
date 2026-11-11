@@ -1097,8 +1097,9 @@ fn an_agents_banda_acts_under_its_pass() {
         ],
     );
     assert!(added.status.success(), "{added:?}");
+    // The result alone on stdout (ADR 0108, decision 3).
     let added: Value = serde_json::from_slice(&added.stdout).unwrap();
-    assert_eq!(added["ok"]["id"], "review-work");
+    assert_eq!(added["id"], "review-work");
     let folder = places._dir.path().join("data/accounts/review-work");
     assert!(folder.is_dir());
     for args in [
@@ -1127,6 +1128,45 @@ fn an_agents_banda_acts_under_its_pass() {
     );
     let unknown = places.as_agent(session, &["account", "default", "not-registered"]);
     assert!(!unknown.status.success());
+    // A refusal goes to stderr: stdout holds only results.
+    assert!(unknown.stdout.is_empty(), "{unknown:?}");
+    let said: Value = serde_json::from_slice(&unknown.stderr).unwrap();
+    assert_eq!(said["error"]["code"], "not_found", "{said}");
+
+    // A list is a stream, narrowed by flags; `-` takes its lines back.
+    let lines = |stdout: &[u8]| -> Vec<Value> {
+        (std::str::from_utf8(stdout).unwrap().lines())
+            .map(|line| serde_json::from_str(line).unwrap())
+            .collect()
+    };
+    let ours = places.as_agent(session, &["account", "list", "--of", "claude"]);
+    assert!(ours.status.success(), "{ours:?}");
+    let found = lines(&ours.stdout);
+    let review = |found: &[Value]| found.iter().find(|one| one["id"] == "review-work").cloned();
+    assert_eq!(review(&found).unwrap()["role"], "fallback", "{found:?}");
+    assert!(
+        found.iter().all(|one| one["harness"] == "claude"),
+        "{found:?}"
+    );
+    let mut disable = places.agent(session, &["account", "disable", "-"]);
+    let mut piped = (disable.stdin(Stdio::piped()).stdout(Stdio::piped()))
+        .spawn()
+        .unwrap();
+    let line = review(&found).unwrap().to_string();
+    let mut ids = piped.stdin.take().unwrap();
+    writeln!(ids, "{line}").unwrap();
+    writeln!(ids, "not-registered").unwrap();
+    drop(ids);
+    let piped = piped.wait_with_output().unwrap();
+    assert!(!piped.status.success(), "one ID was refused: {piped:?}");
+    let disabled = lines(&piped.stdout);
+    assert_eq!(disabled.len(), 1);
+    assert_eq!(disabled[0]["enabled"], false);
+    let off = ["account", "list", "--disabled", "--field", "id"];
+    let off = places.as_agent(session, &off);
+    assert_eq!(String::from_utf8(off.stdout).unwrap(), "review-work\n");
+    let on = ["account", "enable", "review-work"];
+    assert!(places.as_agent(session, &on).status.success());
     let duplicate = places.as_agent(
         session,
         &[
@@ -1161,15 +1201,9 @@ fn an_agents_banda_acts_under_its_pass() {
     let removed = places.as_agent(session, &["account", "remove", "review-work"]);
     assert!(removed.status.success(), "{removed:?}");
     assert!(folder.is_dir(), "session provenance is retained");
-    let listed = places.as_agent(session, &["account", "list"]);
-    let listed: Value = serde_json::from_slice(&listed.stdout).unwrap();
-    assert!(
-        !listed["ok"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|h| h["id"] == "review-work")
-    );
+    let listed = places.as_agent(session, &["account", "list", "--field", "id"]);
+    let listed = String::from_utf8(listed.stdout).unwrap();
+    assert!(!listed.lines().any(|id| id == "review-work"), "{listed}");
 
     // Removal's machine event moves an idle Thread in another Project,
     // without giving the Agent access to that Project's contents.

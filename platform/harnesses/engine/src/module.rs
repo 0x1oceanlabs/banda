@@ -82,7 +82,9 @@ banda_kernel::methods! {
         /// each entry, the Harnesses they are accounts of with what a new
         /// one is called, and the default and the fallback a new Thread
         /// starts on. Read it again on a `list_changed` after its `at`.
-        call accounts(Nothing) -> AccountList, Read;
+        /// Any Agent's pass answers here, as `banda account list` is
+        /// theirs too (ADR 0104, decision 4).
+        call accounts(Nothing) -> AccountList, Read, pass;
         /// Profile folders on this machine. A discovered folder is not proof
         /// of sign-in; no credentials are returned (ADR 0104).
         call account_profiles(Nothing) -> Vec<AccountProfile>, Read, tool "account_profiles";
