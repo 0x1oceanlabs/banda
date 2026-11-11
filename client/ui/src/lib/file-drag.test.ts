@@ -1,5 +1,6 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { carries, dragFiles, droppedPaths, PATHS } from "./file-drag"
+import { carries, droppedPaths, PATHS } from "./file-drag"
+import { dragFiles } from "./file-drag-out"
 
 afterEach(() => {
   vi.unstubAllGlobals()
