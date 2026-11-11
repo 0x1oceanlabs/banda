@@ -2473,7 +2473,7 @@ const DEVICE_HELPERS: Record<string, PastHandle[]> = {
   // opens in its apps; the rows draw only where that gives one, and the
   // drag out of Banda only with one.
   "client/ui/src/lib/outside.ts": ["@banda/ui/desktop"],
-  "client/ui/src/lib/file-drag.ts": ["@banda/ui/desktop"],
+  "client/ui/src/lib/file-drag-out.ts": ["@banda/ui/desktop"],
   // Decision 3: a public page opens in this device's browser.
   "client/ui/src/lib/links.ts": ["window.open"],
 }
@@ -2566,8 +2566,6 @@ test("the kind checker finds the file of each kind of Pane, and the Thread, the 
     expect.arrayContaining([
       "files.code",
       "files.markdown",
-      "files.json",
-      "files.notebook",
     ])
   )
 })
@@ -2667,7 +2665,7 @@ test("a file is stamped with its Project or its device only in the places listed
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 5,
-  "apps/agents/pane/src/thread/Thread.tsx": 20,
+  "apps/agents/pane/src/thread/Thread.tsx": 18,
   "apps/agents/pane/src/thread/session.ts": 1,
 }
 

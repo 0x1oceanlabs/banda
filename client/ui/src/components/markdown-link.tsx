@@ -13,14 +13,24 @@ import { MarkdownFileLink } from "./markdown-file"
 type OpenLink = (url: string, external: boolean) => void
 const Opener = createContext<OpenLink | null>(null)
 
+/** What a link says under the pointer, where a host opens it its own way. */
+type LinkTitle = (url: string) => string
+const Titled = createContext<LinkTitle>(linkHint)
+
 export function MarkdownLinks({
   open,
+  hint = linkHint,
   children,
 }: {
   open: OpenLink
+  hint?: LinkTitle
   children: ReactNode
 }) {
-  return <Opener value={open}>{children}</Opener>
+  return (
+    <Opener value={open}>
+      <Titled value={hint}>{children}</Titled>
+    </Opener>
+  )
 }
 
 /** Only absolute HTTP(S) destinations participate in Thread navigation. */
@@ -48,6 +58,7 @@ export function MarkdownLink({
   "data-footnote-backref": back,
 }: ComponentProps<"a"> & NoteMarks) {
   const open = useContext(Opener)
+  const hint = useContext(Titled)
   if (href?.startsWith("#"))
     return (
       <PlaceLink
@@ -80,7 +91,7 @@ export function MarkdownLink({
       rel="noopener noreferrer"
       data-streamdown="link"
       className="font-medium wrap-anywhere text-primary"
-      title={url && open && href ? linkHint(href) : title}
+      title={url && open && href ? hint(href) : title}
       onClick={follow}
       onContextMenu={(event) => {
         // macOS emits contextmenu instead of click for Ctrl+click.

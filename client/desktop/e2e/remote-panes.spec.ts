@@ -105,9 +105,9 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   )
   // What opens on arc is live; the rest stays in view, dimmed, with why.
   const button = (name: string) => launcher.getByRole("button", { name })
-  for (const name of ["Thread", "Terminal"])
+  for (const name of ["Thread", "Terminal", "Files"])
     await expect(button(name), name).toBeEnabled()
-  for (const name of ["Files", "Browser"])
+  for (const name of ["Browser"])
     await expect(button(name), name).toBeDisabled()
   await expect(
     launcher.getByText("Not on arc yet", { exact: true })

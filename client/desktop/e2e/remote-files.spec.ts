@@ -31,7 +31,9 @@ test.afterEach(async () => {
 /** The title of arc's Thread in its Project "Same". */
 const TITLE = "Bench remote Files"
 
-const NOTES = "# Notes\n\nFrom arc.\n\n![the diagram](pic.png)\n"
+const NOTES =
+  "# Notes\n\nFrom arc.\n\n![the diagram](pic.png)\n\n" +
+  "[the site](https://example.com/page)\n\n[its server](http://localhost:3000/)\n"
 const UTIL = "export const one = 1\nexport const two = 2\n"
 
 /** arc's part of the sidebar: its label and what it holds. */
@@ -155,26 +157,40 @@ test("files: arc's tree lists arc's folder, its places are arc's, a file opens f
 test("files: arc's Agent writes the file under unsaved text, and the conflict bar names it; the text stays and nothing goes over the Agent's write", async () => {
   const { page, composer, thread, there } = await onArc()
   const { row } = await filesOf(page, composer)
-  const notes = await opened(page, row("notes.md"), "notes.md", "Notes")
-  await notes.getByRole("button", { name: "Edit" }).click()
-  await expect(notes.getByRole("textbox", { name: "notes.md" })).toBeVisible()
-  // The Agent writes, as the Person is typing, before the text rests.
-  await composer.fill("on disk")
-  await notes.locator('[data-line="1"]').first().click()
+  await row("src").click()
+  const util = await opened(page, row("util.ts"), "util.ts", "export const one")
+  await util.getByRole("button", { name: "Edit" }).click()
+  await expect.poll(() => inEditor(page)).toBe(true)
+  // The fake Agent's walk waits at a read and writes on the next message,
+  // so its write lands before the text rests the 500 ms a save waits.
+  await composer.fill("walk the files")
+  await composer.press("Enter")
+  await expect(thread.getByText("Read notes.md").last()).toBeVisible()
+  await composer.fill("go on")
+  await util.locator('[data-line="2"]').first().click()
   await expect.poll(() => inEditor(page)).toBe(true)
   await page.keyboard.press("End")
-  await page.keyboard.type(" mine")
+  await page.keyboard.type(" // mine")
   await composer.press("Enter")
-  await expect(thread.getByText("I edited notes.md")).toBeVisible()
-  const bar = notes.getByRole("alert", { name: "Changed on disk" })
+  const bar = util.getByRole("alert", { name: "Changed on disk" })
   await expect(bar).toContainText("Changed on disk by the Agent")
-  await expect(notes.locator('[data-line="1"]').first()).toContainText(" mine")
-  expect(
-    readFileSync(arc!.disk(join(there, "notes.md")), "utf8")
-  ).not.toContain("mine")
+  await expect(util.locator('[data-line="2"]').first()).toContainText(" mine")
+  const disk = readFileSync(arc!.disk(join(there, "src/util.ts")), "utf8")
+  expect(disk).toContain("export const three = 3")
+  expect(disk).not.toContain("mine")
 })
 
-test("files: a rename and the Trash go through arc's engine, and Undo brings each back", async () => {
+test("files: a real drag of a row of arc's onto a folder moves it, on arc", async () => {
+  const { page, composer, there } = await onArc()
+  const { row } = await filesOf(page, composer)
+  await row("only-arc.txt").dragTo(row("src"))
+  await expect
+    .poll(() => existsSync(arc!.disk(join(there, "src/only-arc.txt"))))
+    .toBe(true)
+  expect(existsSync(arc!.disk(join(there, "only-arc.txt")))).toBe(false)
+})
+
+test("files: a rename and the Trash go through arc's engine, and Undo brings the file back from the Trash", async () => {
   const { page, composer, there, here } = await onArc()
   const { row } = await filesOf(page, composer)
   await row("only-arc.txt").click()
@@ -218,10 +234,21 @@ test("Alt+P: quick open finds arc's files and opens arc's file", async () => {
   await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
 })
 
-test("a markdown of arc's is drawn, its picture as words until 4c, and a PDF shows its facts", async () => {
+test("a markdown of arc's is drawn, its picture as words until 4c, its links open outside or say whose they are; a JSON draws as text, and a PDF shows its facts", async () => {
   const { page, composer } = await onArc({
     "manual.pdf": "%PDF-1.4 not really",
+    "data.json": '{ "from": "arc" }\n',
   })
+  const { app } = window!
+  await app.evaluate(({ shell }) => {
+    const opened: string[] = []
+    ;(globalThis as { linkOpens?: string[] }).linkOpens = opened
+    shell.openExternal = async (url) => {
+      opened.push(url)
+    }
+  })
+  const external = () =>
+    app.evaluate(() => (globalThis as { linkOpens?: string[] }).linkOpens)
   const { row } = await filesOf(page, composer)
   const notes = await opened(page, row("notes.md"), "notes.md", "Notes")
   await expect(
@@ -230,6 +257,20 @@ test("a markdown of arc's is drawn, its picture as words until 4c, and a PDF sho
   // Its picture is arc's bytes, which come with 4c: its words show.
   await expect(notes.getByText("the diagram")).toBeVisible()
   await expect(notes.getByRole("img", { name: "the diagram" })).toHaveCount(0)
+  // A public page goes to this device's browser on a plain click, and
+  // arc's own address says whose it is and opens nothing here.
+  await notes.getByRole("link", { name: /the site/ }).click()
+  await expect.poll(external).toEqual(["https://example.com/page"])
+  await notes.getByRole("link", { name: /its server/ }).click()
+  await expect(
+    page
+      .getByRole("region", { name: "Notifications" })
+      .getByText("localhost:3000 is arc's")
+  ).toBeVisible()
+  expect(await external()).toEqual(["https://example.com/page"])
+  // JSON's view reads bytes, which come with 4c: it draws as text.
+  const data = await opened(page, row("data.json"), "data.json", "from")
+  await expect(data.locator('[data-line="1"]').first()).toContainText("arc")
   await row("manual.pdf").dblclick()
   const pdf = page.getByRole("region", { name: "manual.pdf", exact: true })
   await expect(pdf.getByText("Preview comes soon")).toBeVisible()

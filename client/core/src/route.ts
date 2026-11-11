@@ -244,7 +244,7 @@ export type Device = {
 /** The words for a file on another machine than where it is held
  * (`Device.across`): `name` is that machine's, none for the device's
  * own. */
-export function fileIsOn(name: string | undefined, device: string): string {
+function fileIsOn(name: string | undefined, device: string): string {
   return name === undefined
     ? `That file is on ${device}. Files don't move between machines yet.`
     : `That file is on ${name}`
@@ -267,17 +267,26 @@ export function deviceFor(
       const where = whereOf(hosts, { project: file.project })
       return where && "here" in where ? deviceFile(file.path) : undefined
     },
-    across: (file, to) => {
-      const whose = whereOf(hosts, { project: file.project })
-      const its = whereOf(hosts, { project: to })
-      if (whose === undefined || its === undefined) return undefined
-      if ("nowhere" in whose) return whose.nowhere
-      if ("nowhere" in its) return its.nowhere
-      if (sameWhere(whose, its)) return undefined
-      return fileIsOn(
-        "host" in whose ? nameOf(hosts, whose.host) : undefined,
-        device
-      )
-    },
+    across: (file, to) => fileAcross(hosts, file, to, device),
   }
+}
+
+/** `Device.across`, for what names no Pane's device, as the window's own
+ * `file.attach`: `device` names this computer. */
+export function fileAcross(
+  hosts: Hosts,
+  file: ProjectFile,
+  to: ProjectId,
+  device: string
+): string | undefined {
+  const whose = whereOf(hosts, { project: file.project })
+  const its = whereOf(hosts, { project: to })
+  if (whose === undefined || its === undefined) return undefined
+  if ("nowhere" in whose) return whose.nowhere
+  if ("nowhere" in its) return its.nowhere
+  if (sameWhere(whose, its)) return undefined
+  return fileIsOn(
+    "host" in whose ? nameOf(hosts, whose.host) : undefined,
+    device
+  )
 }

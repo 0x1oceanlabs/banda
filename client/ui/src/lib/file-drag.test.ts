@@ -1,7 +1,7 @@
 import { afterEach, expect, test, vi } from "vitest"
 import { type DeviceFile, type ProjectFile, projectFile } from "@banda/core"
 import type { ProjectId } from "@banda/contract"
-import { carries, droppedFiles, PATHS } from "./file-drag"
+import { carries, dropEffectOf, droppedFiles, PATHS } from "./file-drag"
 import { dragFiles } from "./file-drag-out"
 
 afterEach(() => {
@@ -47,7 +47,7 @@ test("outside Banda's window the page runs the drag: Banda's own type, and the p
   dragFiles(event, files, here(files))
   expect(event.preventDefault).not.toHaveBeenCalled()
   expect(data.types).toEqual([PATHS, "text/plain"])
-  expect(data.effectAllowed).toBe("copy")
+  expect(data.effectAllowed).toBe("copyMove")
   expect(data.getData("text/plain")).toBe("/w/src/main.ts\n/w/docs/")
   expect(carries(data)).toBe(true)
   expect(droppedFiles(data)).toEqual(of("/w/src/main.ts", "/w/docs/"))
@@ -122,4 +122,14 @@ test("main's drag that ended elsewhere is forgotten as the pointer moves free", 
   move(1)
   move(0)
   expect(droppedFiles(dataTransfer(["a.ts"]))).toBeNull()
+})
+
+test("a drop on a folder moves, or copies with a key held, or where the drag allows no move, as main's does not", () => {
+  const allowing = (effectAllowed: string) =>
+    ({ effectAllowed }) as DataTransfer
+  expect(dropEffectOf(allowing("copyMove"), false)).toBe("move")
+  expect(dropEffectOf(allowing("copyMove"), true)).toBe("copy")
+  expect(dropEffectOf(allowing("all"), false)).toBe("move")
+  expect(dropEffectOf(allowing("copyLink"), false)).toBe("copy")
+  expect(dropEffectOf(allowing("copy"), false)).toBe("copy")
 })

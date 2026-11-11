@@ -160,7 +160,6 @@ export const json = definePreviewer({
   },
   priority: 10,
   can: { quick: true, edit: false, find: false },
-  elsewhere: true,
   load: () => import("./views/json"),
 })
 
@@ -171,7 +170,6 @@ export const notebook = definePreviewer({
   match: { extensions: ["ipynb"], mimes: ["application/x-ipynb+json"] },
   priority: 10,
   can: { quick: true, edit: false, find: false },
-  elsewhere: true,
   load: () => import("./views/notebook"),
 })
 

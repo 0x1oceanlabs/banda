@@ -28,6 +28,18 @@ export function carries(data: DataTransfer): boolean {
   return data.types.includes(PATHS)
 }
 
+/** What a drop on a folder does, as a drag over it says: a move, or a
+ * copy with a key held or where the drag allows no move, as main's does
+ * not. Chromium calls off a drop whose effect its drag did not allow, and
+ * a file of another machine would then never hear its refusal. */
+export function dropEffectOf(
+  data: DataTransfer,
+  copy: boolean
+): "copy" | "move" {
+  const moves = /move|all|uninitialized/i.test(data.effectAllowed)
+  return copy || !moves ? "copy" : "move"
+}
+
 /** Whether a drag may bring Banda's files: its own type, or files, which
  * main's drag brings back. */
 export function bringsFiles(data: DataTransfer | null): boolean {
