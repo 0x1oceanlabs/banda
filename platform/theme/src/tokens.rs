@@ -192,6 +192,16 @@ pub const TOKENS: &[Token] = list! {
     // usual text (`text-sm`) the size said. Everything in rem grows with it.
     Font Font ["font-family-sans", "font-family-mono"];
     Font Length ["text-root"];
+    // The type scale (ADR 0113, decision 3): each level's size and line
+    // height, worked out from the theme's size as the root is
+    // (`fonts::SCALE`).
+    Font Length [
+        "heading-size", "heading-leading", "title-size", "title-leading",
+        "prose-size", "prose-leading", "prose-wide-size", "prose-wide-leading",
+        "ui-size", "ui-leading", "code-size", "code-leading", "meta-size",
+        "meta-leading", "small-size", "small-leading", "figure-size",
+        "figure-leading",
+    ];
 };
 
 /// Tokens renamed: each old name, and the token it is now. A theme that

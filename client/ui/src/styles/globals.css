@@ -108,25 +108,57 @@
   --radius-2xl: var(--card-radius);
   --radius-3xl: var(--card-radius);
   --radius-4xl: var(--card-radius);
-  /* The chat's type (ADR 0058): prose sized by its Pane. */
   --color-block: var(--block);
   --color-raised: var(--raised);
+  /* The type scale (ADR 0113, decision 3): each level the theme's tokens,
+     sized from its font size (platform/theme/src/fonts.rs). Prose is
+     sized by its Pane (ADR 0058). Tailwind's own sizes are cleared; its
+     names land on a level, for what comes as it is, as streamdown and
+     shadcn's components (decision 8): xs meta, sm UI, base title, lg and
+     up heading. */
+  --text-*: initial;
+  --text-heading: var(--heading-size);
+  --text-heading--line-height: var(--heading-leading);
+  --text-title: var(--title-size);
+  --text-title--line-height: var(--title-leading);
   --text-prose: var(--prose-size);
   --text-prose--line-height: var(--prose-leading);
-  --text-meta: 0.75rem;
-  --text-meta--line-height: 1rem;
-  --text-code: 0.78125rem;
-  --text-code--line-height: 1.25rem;
-  /* Banda UI's names (ADR 0113), with today's values, used by nothing
-     yet. The type levels: rows, menus and controls; a dialog's title and
-     a reply's second heading; a page's title and a reply's first heading.
-     They join the theme's tokens with the scale in step 2. */
-  --text-ui: 0.875rem;
-  --text-ui--line-height: 1.25rem;
-  --text-title: 1rem;
-  --text-title--line-height: 1.5rem;
-  --text-heading: 1.125rem;
-  --text-heading--line-height: 1.625rem;
+  --text-ui: var(--ui-size);
+  --text-ui--line-height: var(--ui-leading);
+  --text-code: var(--code-size);
+  --text-code--line-height: var(--code-leading);
+  --text-meta: var(--meta-size);
+  --text-meta--line-height: var(--meta-leading);
+  --text-small: var(--small-size);
+  --text-small--line-height: var(--small-leading);
+  --text-figure: var(--figure-size);
+  --text-figure--line-height: var(--figure-leading);
+  --text-xs: var(--meta-size);
+  --text-xs--line-height: var(--meta-leading);
+  --text-sm: var(--ui-size);
+  --text-sm--line-height: var(--ui-leading);
+  --text-base: var(--title-size);
+  --text-base--line-height: var(--title-leading);
+  --text-lg: var(--heading-size);
+  --text-lg--line-height: var(--heading-leading);
+  --text-xl: var(--heading-size);
+  --text-xl--line-height: var(--heading-leading);
+  --text-2xl: var(--heading-size);
+  --text-2xl--line-height: var(--heading-leading);
+  --text-3xl: var(--heading-size);
+  --text-3xl--line-height: var(--heading-leading);
+  --text-4xl: var(--heading-size);
+  --text-4xl--line-height: var(--heading-leading);
+  --text-5xl: var(--heading-size);
+  --text-5xl--line-height: var(--heading-leading);
+  --text-6xl: var(--heading-size);
+  --text-6xl--line-height: var(--heading-leading);
+  --text-7xl: var(--heading-size);
+  --text-7xl--line-height: var(--heading-leading);
+  --text-8xl: var(--heading-size);
+  --text-8xl--line-height: var(--heading-leading);
+  --text-9xl: var(--heading-size);
+  --text-9xl--line-height: var(--heading-leading);
   /* The elevations (decision 4): what floats, the Top layer and a Pane's
      own floating bar, at the menus' shadow; what the Person carries, at a
      Peek's. Their strengths go into the theme in step 3. */
@@ -1140,38 +1172,36 @@ html[data-still] :is([data-slot="satellite"], [data-sat-motion]) {
  * The chat's values (ADR 0058): one set for every part of a Thread, and
  * for markdown wherever it shows. Its surfaces, `--block` and `--raised`,
  * are tokens the look mixes from the ground and the ink, so every theme
- * has them.
+ * has them; so are prose's size and line, narrow and wide.
  */
 :root {
-  /* Prose, and the room beside it, for a narrow Pane. */
-  --prose-size: 0.875rem;
-  --prose-leading: 1.375rem;
+  /* The room beside prose, for a narrow Pane. */
   --chat-gutter: 1rem;
 }
 /* Banda tiles: a Thread is often half a screen or less, beside another.
    Its text follows the Pane's width, not the window's; a wide one reads
-   larger. */
+   larger: there prose is the wide level. */
 @container thread (width >= 40rem) {
   [data-chat] {
-    --prose-size: 0.9375rem;
-    --prose-leading: 1.5rem;
+    --prose-size: var(--prose-wide-size);
+    --prose-leading: var(--prose-wide-leading);
     --chat-gutter: 1.5rem;
   }
 }
 
-/* Markdown as the chat sets it: headings no bigger than 18px, lists
-   close, inline code a small chip. */
+/* Markdown as the chat sets it, on the type scale: headings the heading
+   and the title, lists close, inline code a chip at code's size. */
 [data-streamdown="heading-1"] {
   margin: 1.5rem 0 0.5rem;
-  font-size: 1.125rem;
-  line-height: 1.625rem;
+  font-size: var(--heading-size);
+  line-height: var(--heading-leading);
   font-weight: 600;
   letter-spacing: -0.01em;
 }
 [data-streamdown="heading-2"] {
   margin: 1.25rem 0 0.375rem;
-  font-size: 1rem;
-  line-height: 1.5rem;
+  font-size: var(--title-size);
+  line-height: var(--title-leading);
   font-weight: 600;
 }
 [data-streamdown="heading-3"],
@@ -1206,7 +1236,7 @@ html[data-still] :is([data-slot="satellite"], [data-sat-motion]) {
   padding: 0.0625rem 0.3125rem;
   border-radius: var(--small-radius);
   background: var(--raised);
-  font-size: 0.875em;
+  font-size: var(--code-size);
 }
 [data-streamdown="blockquote"] {
   margin-block: 0.75rem;
@@ -1265,14 +1295,14 @@ a[data-file][data-kind="text"] {
   padding: 0 0.25rem;
   border-radius: var(--small-radius);
   background: color-mix(in oklab, var(--primary) 14%, transparent);
-  font-size: 0.6875rem;
+  font-size: var(--small-size);
   line-height: 1;
 }
 [data-slot="markdown"] section[data-footnotes] {
   margin-top: 1.25rem;
   padding-top: 0.75rem;
   border-top: 1px solid var(--border);
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   line-height: 1.125rem;
   color: var(--muted-foreground);
 }
@@ -1334,8 +1364,8 @@ a[data-file][data-kind="text"] {
   border: 0;
   border-radius: 0;
   background: transparent;
-  font-size: 0.78125rem;
-  line-height: 1.25rem;
+  font-size: var(--code-size);
+  line-height: var(--code-leading);
 }
 [data-streamdown="code-block"][data-language=""]
   [data-streamdown="code-block-body"] {
@@ -1415,7 +1445,7 @@ a[data-file][data-kind="text"] {
   gap: 0.3rem;
   width: auto;
   padding: 0 0.5rem 0 0.375rem;
-  font-size: 0.75rem;
+  font-size: var(--meta-size);
 }
 /* Wrapped, a long line goes on under its own number. */
 [data-streamdown="code-block-body"][data-wrap] :is(pre, code) {
@@ -1441,8 +1471,8 @@ a[data-file][data-kind="text"] {
 [data-streamdown="table-header-cell"],
 [data-streamdown="table-cell"] {
   padding: 0.5rem 0.875rem;
-  font-size: 0.875rem;
-  line-height: 1.25rem;
+  font-size: var(--ui-size);
+  line-height: var(--ui-leading);
 }
 [data-streamdown="table-header-cell"] {
   font-weight: 550;
