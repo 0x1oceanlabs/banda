@@ -15,7 +15,7 @@ import { threadPane } from "../ThreadPane"
 import { ANSWER, RETRY, SHOW } from "./rows"
 
 /** An arg that is a text, or none. */
-const textOf = (args: Args | undefined, key: string) => {
+export const textOf = (args: Args | undefined, key: string) => {
   const value = args?.[key]
   return typeof value === "string" ? value : undefined
 }

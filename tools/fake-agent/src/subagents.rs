@@ -18,9 +18,9 @@
 //! Each word after `sub-agents` changes that, and they combine. All but
 //! `three`, `codex` and `load` act on the last sub-agent started. Without the
 //! client showing sub-agents, `outlive`, `later`, `again`, `codex`,
-//! `unknown`, `refuses`, `load`, `background`, `reworded` and `early`
-//! change nothing, and the rest come on the parent's session: `asks` asks
-//! as the parent itself does, as Claude Code's adapter asks today.
+//! `unnamed`, `unknown`, `refuses`, `load`, `background`, `reworded` and
+//! `early` change nothing, and the rest come on the parent's session: `asks`
+//! asks as the parent itself does, as Claude Code's adapter asks today.
 //!
 //! - `three`: three at once, an Explore, a general-purpose and a
 //!   Reviewer, which end in the order 3, 1, 2.
@@ -47,6 +47,8 @@
 //!   running twice, then able to stop; no `session_message`, a `wait`
 //!   call of the parent's while they work, no stop once idle, and the
 //!   report is its last reply.
+//! - `unnamed`: with `codex`, it is announced with Codex's own title for
+//!   one its parent gave no name, "Agent", as Codex V1 names them.
 //! - `unknown`: its state is unknown for a while, then running again.
 //! - `refuses`: it can never be stopped on its own (`capabilities: {}`).
 //! - `load`: with `FAKE_AGENT_SESSIONS` naming a folder, the session keeps
@@ -129,11 +131,12 @@ const NESTED: Brief = Brief {
 
 /// The words that change nothing for a client that does not show
 /// sub-agents: what they change, Claude Code's old shape has no frame of.
-const APART_ONLY: [&str; 10] = [
+const APART_ONLY: [&str; 11] = [
     "outlive",
     "later",
     "again",
     "codex",
+    "unnamed",
     "unknown",
     "refuses",
     "load",
@@ -376,8 +379,12 @@ impl Parent {
     fn announce(&self, sub: &Sub, message: &str, prompt: &str) -> Result<(), Error> {
         let title = sub.brief.title;
         if self.codex {
+            let named = match self.on(sub, "unnamed") {
+                true => "Agent",
+                false => title,
+            };
             let first = SubagentUpdate::new(sub.session.clone())
-                .title(title)
+                .title(named)
                 .capabilities(SubagentSessionCapabilities::new());
             self.of(sub, first)?;
             self.says(&sub.session, self.options(sub, false))?;

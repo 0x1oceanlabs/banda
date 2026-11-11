@@ -6,6 +6,9 @@
       "home": true
     },
     {
+      "kind": "agents.subagent"
+    },
+    {
       "kind": "agents.visual"
     }
   ],
@@ -63,6 +66,13 @@
     {
       "id": "agents.show",
       "title": "Show a Thread",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "agents.subagent.open",
+      "title": "Open a sub-agent beside its Thread",
       "section": "Threads",
       "keys": [],
       "unlisted": true
@@ -237,6 +247,17 @@
         }
       ],
       "scope": "thread"
+    },
+    {
+      "id": "agents.subagent.up",
+      "title": "Go up to the sub-agent that started this one",
+      "section": "Sub-agent",
+      "keys": [
+        {
+          "code": "Escape"
+        }
+      ],
+      "scope": "subagent"
     },
     {
       "id": "agents.visual.zoom-in",
@@ -557,6 +578,10 @@
     {
       "id": "thread",
       "title": "Thread"
+    },
+    {
+      "id": "subagent",
+      "title": "Sub-agent"
     },
     {
       "id": "visual",

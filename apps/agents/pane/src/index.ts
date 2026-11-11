@@ -13,10 +13,11 @@ import {
 } from "@banda/ui/module"
 import { actOnTile } from "@banda/ui/hooks/use-scope"
 import type { Key } from "@banda/ui/lib/keys"
-import { COMPOSER, THREAD, VISUAL } from "./scopes"
+import { COMPOSER, SUBAGENT, THREAD, VISUAL } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./visual/VisualPane"
+import { openBeside, subagentPane } from "./thread/SubagentPane"
 import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
@@ -98,14 +99,18 @@ const composer = own(COMPOSER, "Composer")
 /** A Thread's keys: its details card and its find are T3 Code's. */
 const thread = own(THREAD, "Thread")
 
+/** A sub-agent's Pane's key: Esc, one level up. */
+const subagent = own(SUBAGENT, "Sub-agent")
+
 export const agents = defineModule({
   id: "agents",
   engine: true,
-  panes: [threadPane, visualPane],
+  panes: [threadPane, subagentPane, visualPane],
   watches: [threadsWatch],
   actions: [
     newThread,
     ...answering,
+    openBeside,
     composer("send", "Send the message, as agents.toml says Enter does", {
       code: "Enter",
     }),
@@ -140,11 +145,15 @@ export const agents = defineModule({
       "Move the Thread to the next account of its Harness",
       { code: "ArrowDown", primary: true, shift: true }
     ),
+    subagent("up", "Go up to the sub-agent that started this one", {
+      code: "Escape",
+    }),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
   scopes: [
     { id: COMPOSER, title: "Composer", field: true },
     { id: THREAD, title: "Thread" },
+    { id: SUBAGENT, title: "Sub-agent" },
     { id: VISUAL, title: "Visual preview" },
   ],
   sources: [askSource],

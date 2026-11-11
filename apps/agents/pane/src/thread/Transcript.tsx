@@ -1,5 +1,6 @@
 /** A Thread's transcript: its entries and lines, in the scroller that
- * follows the live edge (ADR 0058, ADR 0091). */
+ * follows the live edge (ADR 0058, ADR 0091). A sub-agent's Pane draws its
+ * lane with it (ADR 0103, decision 21). */
 import { useMemo, useRef } from "react"
 import type {
   Item,
@@ -39,8 +40,8 @@ import type { SubagentRow } from "../entries/types"
 import { modelNow } from "../composer/picker"
 import type { Lanes } from "./findIn"
 import type { Followed } from "./live-thread"
-import { byId, direct, rowOf } from "./subagents"
-import { awaiting, thoughtTimes, timeline } from "./timeline"
+import { byId, rowOf } from "./subagents"
+import { awaiting, laneTimeline, thoughtTimes, timeline } from "./timeline"
 import { key, LineOf } from "../lines"
 import type { LineFacts } from "../lines/types"
 import { Queue, type QueueActions } from "./Queue"
@@ -49,47 +50,73 @@ import { Minimap } from "./Minimap"
 import { useThreadAround } from "./context"
 import type { Moves } from "./moves"
 
-type Answering = {
-  /** Whether a command is on its way; what acts waits for it. A Question
-   * is answered on the composer (ADR 0058, decision 6). */
-  answering: boolean
+/** A Listing with no other Thread, as a sub-agent's Pane has: its
+ * messages are its own. */
+const NO_WRITERS: Listing = { threads: new Map() }
+
+/** No messages that wait, as in a sub-agent's Pane. */
+const NO_WAITS: Waiting[] = []
+
+/** A queue there is none of: a sub-agent's Pane sends nothing. */
+const NO_QUEUE: QueueActions = {
+  onSendNow: () => {},
+  onEdit: async () => false,
+  onRemove: () => {},
+  onContinue: () => {},
+  onEditing: () => {},
 }
 
+/** A Thread's transcript; a sub-agent's Pane, which sends nothing and
+ * finds nothing, gives none of what it may leave out. */
 export function Transcript({
-  forYou,
-  finding,
+  forYou = false,
+  finding = "",
   state,
-  waits,
+  waits = NO_WAITS,
   name,
   short,
-  queue,
-  writers,
-  answering,
+  queue = NO_QUEUE,
+  writers = NO_WRITERS,
+  answering = false,
   moves,
   whenBack,
-}: Answering & {
-  writers: Listing
+  lane,
+}: {
+  /** The Threads whose Agents wrote to it. */
+  writers?: Listing
+  /** Whether a command is on its way; what acts waits for it. A Question
+   * is answered on the composer (ADR 0058, decision 6). */
+  answering?: boolean
   /** The Thread waits for its Person: a Question, or a plan. */
-  forYou: boolean
+  forYou?: boolean
   /** What the Person looks for in it, if anything. */
-  finding: string
+  finding?: string
   state: Followed
   /** The messages that wait, from {@link waiting}. */
-  waits: Waiting[]
+  waits?: Waiting[]
   name: string
   /** Its Harness's short name, "Claude", who sets its sub-agents to work. */
   short: string
-  queue: QueueActions
+  queue?: QueueActions
   /** Where the Thread may move, for a limit's card. */
   moves?: Moves
   /** The messages that wait for its machine, last (ADR 0105). */
   whenBack?: React.ReactNode
+  /** A sub-agent's lane, read only in its own Pane, `state` holding it as
+   * one turn (ADR 0103, decision 21): its brief first, its lines with no
+   * clock, its own place to come back to, nothing to fork or edit, and
+   * the rows of the sub-agents it started, set to work by it, `short`. */
+  lane?: { id: SubagentId; brief: React.ReactNode }
 }) {
   const { thread, reader, acts } = useThreadAround()
   // Its Later, to put it off until a usage limit's reset (ADR 0074).
   const later = writers.own?.later
   const turn = working(state)
-  const lines = useMemo(() => timeline(state, short), [state, short])
+  const ofLane = lane !== undefined
+  const lines = useMemo(
+    () => (ofLane ? laneTimeline(state) : timeline(state, short)),
+    [state, short, ofLane]
+  )
   const asks = useMemo(() => awaiting(state), [state])
   const thoughts = useMemo(() => thoughtTimes(state), [state])
   const last = state.items.at(-1)
@@ -110,9 +137,10 @@ export function Transcript({
     MINUTE,
     state.subagents.some((lane) => !lane.ended)
   )
+  const top = lane?.id
   const rows = useMemo(
-    () => rowsOf(state, lanes, short, now),
-    [state, lanes, short, now]
+    () => rowsOf(state, lanes, short, now, top),
+    [state, lanes, short, now, top]
   )
   const turns = useMemo(
     () => new Map(state.turns.map((one) => [one.id, one])),
@@ -166,12 +194,17 @@ export function Transcript({
       <MessageScroller>
         <MessageScrollerViewport
           ref={viewport}
-          aria-label={`Thread with ${name}`}
+          aria-label={ofLane ? `Sub-agent ${short}` : `Thread with ${name}`}
         >
           <MessageScrollerContent
             data-chat
             className="mx-auto w-full max-w-3xl gap-5 px-(--chat-gutter) pt-4 pb-6"
           >
+            {lane?.brief && (
+              <MessageScrollerItem key="brief">
+                {lane.brief}
+              </MessageScrollerItem>
+            )}
             {forkedFrom && (
               <MessageScrollerItem key="forked-from">
                 <Writer
@@ -240,7 +273,11 @@ export function Transcript({
         </MessageScrollerViewport>
         <ScrollToEnd queued={waits.length} forYou={forYou} />
         <Minimap messages={messages} />
-        <ScrollPlace thread={thread} viewport={viewport} last={last?.id} />
+        <ScrollPlace
+          thread={lane?.id ?? thread}
+          viewport={viewport}
+          last={last?.id}
+        />
       </MessageScroller>
     </MessageScrollerProvider>
   )
@@ -257,33 +294,37 @@ const drawn = new WeakMap<Subagent, SubagentRow>()
 const wording = (row: SubagentRow) => JSON.stringify([row.said, row.asker])
 
 /** The row of each sub-agent the Thread shows, the ones no sub-agent
- * started (ADR 0103, decision 16), by its ID, as the Thread words it:
- * set to work by its Harness, `short`, its parent's model the Thread's,
- * at `now`. */
+ * started (ADR 0103, decision 16), or in a sub-agent's Pane the ones `top`
+ * started, one level down, by its ID, as the Thread words it: set to work
+ * by `short`, its Harness or that sub-agent, its parent's model the
+ * Thread's, at `now`. */
 function rowsOf(
   state: Followed,
   lanes: Lanes,
   short: string,
-  now: number
+  now: number,
+  top?: SubagentId
 ): Map<SubagentId, SubagentRow> {
   return new Map(
-    direct(state.subagents).map((lane) => {
-      const row: SubagentRow = {
-        lane,
-        said: rowOf(lane, {
-          lanes: state.subagents,
-          heard: state.heard,
-          items: state.items,
-          parentModel: lanes.model,
-          now,
-        }),
-        asker: short,
-      }
-      const was = drawn.get(lane)
-      if (was && wording(was) === wording(row)) return [lane.id, was]
-      drawn.set(lane, row)
-      return [lane.id, row]
-    })
+    state.subagents
+      .filter((lane) => lane.parent === top)
+      .map((lane) => {
+        const row: SubagentRow = {
+          lane,
+          said: rowOf(lane, {
+            lanes: state.subagents,
+            heard: state.heard,
+            items: state.items,
+            parentModel: lanes.model,
+            now,
+          }),
+          asker: short,
+        }
+        const was = drawn.get(lane)
+        if (was && wording(was) === wording(row)) return [lane.id, was]
+        drawn.set(lane, row)
+        return [lane.id, row]
+      })
   )
 }
 
