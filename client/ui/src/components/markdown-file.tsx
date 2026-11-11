@@ -31,9 +31,10 @@ export type FilesHost = {
   /** The files the paths name, each matched to its path by `asked`; a
    * path that names none is left out. */
   find: (paths: string[]) => Promise<Located[]>
-  /** Opens it in Banda, or, with Ctrl or ⌘, in the editor `files.toml`
-   * names (ADR 0073, decision 12, as amended); in its app when there is
-   * none. */
+  /** Opens it in Banda, or, with Ctrl or ⌘ on this computer's file, in
+   * the editor `files.toml` names (ADR 0073, decision 12, as amended); in
+   * its app when there is none. Another machine's opens in Banda either
+   * way. */
   open: (file: FileAt, outside: boolean) => void
   /** Whether it is on this computer, so Ctrl or ⌘ can take it out of
    * Banda: another machine's has no app here (ADR 0106, decision 3). */
@@ -165,7 +166,9 @@ export function MarkdownFileLink({
 const LINKED = new WeakMap<Element, FileAt>()
 
 /** A link to a found file. A click opens it in Banda, and with Ctrl or ⌘
- * in the editor, or in its app when there is none. */
+ * on this computer's file in the editor, or in its app when there is none.
+ * Another machine's file is not dragged out: its `file://` URL would name
+ * this computer's file on the same path (ADR 0106, decision 3). */
 function FileLink({
   at,
   found,
@@ -182,6 +185,7 @@ function FileLink({
 }) {
   const files = useContext(Files)!
   const file: FileAt = { ...found, line: at.line, column: at.column }
+  const here = files.onDevice(found)
   const open = (event: MouseEvent<HTMLAnchorElement>) => {
     event.preventDefault()
     files.open(file, outsideClick(event))
@@ -192,6 +196,7 @@ function FileLink({
         if (link) LINKED.set(link, file)
       }}
       href={fileUrl(found.file)}
+      draggable={here ? undefined : false}
       data-file={found.file}
       data-kind={kind}
       data-written={written}
@@ -200,7 +205,7 @@ function FileLink({
       }
       title={linkHint(
         `${found.file}${lineText(at)}`,
-        files.onDevice(found) ? files.outside : null
+        here ? files.outside : null
       )}
       onClick={open}
       onContextMenu={(event) => {
