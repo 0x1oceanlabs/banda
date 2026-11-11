@@ -401,6 +401,8 @@ mod tests {
                     boot: "a boot".into(),
                     fence: None,
                     named: None,
+                    version: None,
+                    build: None,
                 };
                 socket.send(say(welcome)).await.unwrap();
                 while let Some(Ok(Message::Text(text))) = socket.next().await {

@@ -50,6 +50,10 @@ export type Status =
        * changes. None from an engine that names it nothing. The page
        * cleans it before it draws it (ADR 0095, decision 2). */
       named?: Named
+      /** Banda's version this engine was built as, and its build id (ADR
+       * 0115, decision 6). None from an engine older than both. */
+      version?: string
+      build?: string
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -877,6 +881,8 @@ export class Engine {
           boot: frame.boot,
           ...(frame.fence && { fence: frame.fence }),
           ...(frame.named && { named: frame.named }),
+          ...(frame.version && { version: frame.version }),
+          ...(frame.build && { build: frame.build }),
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)

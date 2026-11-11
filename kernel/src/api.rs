@@ -182,6 +182,16 @@ pub enum EngineFrame {
         )]
         #[ts(optional)]
         named: Option<crate::Named>,
+        /// Banda's version this engine was built as, and its build id
+        /// (ADR 0115, decision 6). A window of another build still
+        /// attaches while it speaks this protocol, and does without what
+        /// this engine lacks. An engine that says none is older than both.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        version: Option<String>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        build: Option<String>,
     },
     Result {
         #[ts(type = "number")]
@@ -464,6 +474,8 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         boot: api.kernel.boot().to_owned(),
         fence: Some(api.kernel.fence()),
         named: api.kernel.named(),
+        version: Some(crate::version().to_owned()),
+        build: crate::build().map(str::to_owned),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;
@@ -765,5 +777,24 @@ mod tests {
         assert_eq!(named(r#","named":{"icon":7}"#), None);
         assert_eq!(named(r#","named":null"#), None);
         assert_eq!(named(""), None);
+    }
+
+    /// An engine from before ADR 0115 says no version, and its welcome
+    /// still reads; a newer one says both.
+    #[test]
+    fn a_welcome_says_its_version_and_build_when_it_knows_them() {
+        let read = |said: &str| {
+            let welcome =
+                format!(r#"{{"type":"welcome","protocol":1,"engine":"e","modules":[]{said}}}"#);
+            match serde_json::from_str::<EngineFrame>(&welcome) {
+                Ok(EngineFrame::Welcome { version, build, .. }) => (version, build),
+                other => panic!("{said}: {other:?}"),
+            }
+        };
+        assert_eq!(read(""), (None, None));
+        assert_eq!(
+            read(r#","version":"0.1.0-dev.660","build":"4505ed37""#),
+            (Some("0.1.0-dev.660".into()), Some("4505ed37".into()))
+        );
     }
 }
