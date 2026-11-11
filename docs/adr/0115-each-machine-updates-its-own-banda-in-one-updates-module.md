@@ -82,11 +82,17 @@ with good UX and UI".
    (ADR 0086, decision 3). The engine then follows by decision 3. The
    page's own wait for idle goes.
 5. **Each release carries the engine alone.** Beside the apps, a release
-   has `banda-engine-<version>-<os>-<arch>.tar.zst` (`banda`, its line
-   tables and `adapters/`) for Linux x64 and arm64 and macOS arm64, and a
-   feed file of its own, `<channel>-engine.yml`, with each file's size
-   and sha512. The engine takes that file on every machine, so a server
-   needs no Electron; the app on a desktop still brings its own.
+   has `<folder>-<version>-engine-<os>-<arch>.tar.gz` (`banda`, its line
+   tables on macOS, `adapters/` and the licenses, laid out as the engine's
+   own copy) for each system Banda is packed for, Linux x86_64 and macOS
+   arm64 today, and a feed file of its own beside the app's,
+   `<feed>-engine-<os>.yml` (`dev-engine-linux.yml`), with the file's size
+   and sha512 (`scripts/engine.mjs`). A gzip'd tar, as every machine opens
+   one with what it has. The engine takes that file on every machine, so a
+   server needs no Electron; the app on a desktop still brings its own.
+   - The bundle carries no Node yet: a machine with no window runs the
+     adapters on a Node 22 or newer on its PATH. Carrying one, as Windows'
+     app does (`scripts/node.mjs`), is step 1b.
    - A copy is checked by size, sha512 and its own `--version` before it
      is renamed into place.
    - **On Stable, a copy is put in place by itself only once it is
@@ -150,7 +156,8 @@ Each step is its own PR, and Banda keeps updating after each.
 | Step | What it does |
 |---|---|
 | 0 | This ADR and the widget's mock |
-| 1 | The engine bundle and `<channel>-engine.yml` in `release.yml` and `release.mjs` |
+| 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner) |
+| 1b | The bundle carries a pinned Node, as Windows' app does |
 | 2 | `welcome` names version, build and protocol range; `contract/released.json` and its test |
 | 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet |
 | 4 | The restart once nothing runs, Restart now, `machine.toml`'s `[updates]` |
@@ -180,7 +187,7 @@ devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 - Banda updates with no window open, and a server with nobody connected.
 - Updating the app no longer ends a Turn: only the engine's restart does,
   and it waits for none to run.
-- A release grows by three files of about 70 MB each.
+- A release grows by a file of about 52 MB for each system.
 - The window may run against an engine a version apart for a while; the
   released contract's test is what keeps that safe.
 - A machine set to `"ask"` or `"off"` drifts until the Person acts; the
