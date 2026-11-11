@@ -94,11 +94,14 @@ amendments, and ADR 0078's placing of the moves under the effort slider.
 
 7. **The menu is the machine's, per Harness, in `agents.toml`.**
    `[models]` names each Harness's menu by its ID:
-   `claude = ["default", "opus", "sonnet"]`. The engine answers it with
-   what a new Thread starts with (`agents.defaults`), the first three
-   filled in when none are named. A star goes through one engine command
-   on the Thread's machine, as ADR 0108's decision 1 has it for an
-   account. The window never writes the file.
+   `claude = ["default", "opus", "sonnet"]`. The machine's list of
+   accounts (`harnesses.accounts`) answers it with each Harness, as written,
+   beside the default and the fallback. A star goes through one command on
+   the machine's engine, `harnesses.set_models`, as ADR 0108's decision 1
+   has `set_start` for the default. The window never writes the file. With
+   none named, the menu is the first three models of the Harness's offer.
+   That rule is a pure function, since only a Project's offer knows the
+   models.
 
 8. **The pickers take one answer and give back one change.**
    - In: one value per Thread, built by pure functions from what the
@@ -121,16 +124,17 @@ amendments, and ADR 0078's placing of the moves under the effort slider.
 - `ModelPicker` splits in two: a "who" picker, whose menu is the moves
   (`thread/moves.ts`) and the starts, and a "how" picker. `NewThreadBar`
   and the empty Thread's `Start` give way to the phrase.
-- `agents.toml` gains `[models]`, its schema and its template. The engine
-  gains the command that writes it, and `agents.defaults` answers the menu.
+- `agents.toml` gains `[models]`, its schema and its template. The
+  harnesses module gains `set_models`, and `harnesses.accounts` answers
+  each Harness's menu.
 - ADR 0031's decision 6 no longer holds: the Harness is chosen with the
   account, not with the model.
 
 ## Build order
 
 1. This ADR, with the mocks.
-2. The engine: `[models]`, the answer in `agents.defaults`, and the
-   command to star a model.
+2. The engine: `[models]`, the menu in `harnesses.accounts`, and
+   `harnesses.set_models`.
 3. The pickers' data in and out (decision 8), as pure functions with
    tests. `ModelPicker` then draws from them, unchanged on screen.
 4. "How": the menu of models, "All models", the effort as segments
