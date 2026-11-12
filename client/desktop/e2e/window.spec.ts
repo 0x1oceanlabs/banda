@@ -4137,7 +4137,7 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   // The bar shows it as the Project's: its sign, and its name on it.
   await expect(
     numbers.getByRole("button", { name: "Workspace 1" })
-  ).toHaveAttribute("title", "Work: Overview (Alt+O)")
+  ).toHaveAttribute("title", "Work: Workspace 1 (Alt+1)")
   const strip = page.locator("[data-strip]").first()
   await expect(
     strip.getByRole("textbox", { name: "Message to Fake AI" })
