@@ -39,14 +39,14 @@ test("a read that left entries out says so once in the window's log, naming thei
   const engine = engineWith({
     a: "reminder",
     m: "message",
-    b: "crew",
+    b: "poll",
     c: "reminder",
   })
   const read = await readThread(engine, project, "t")
   expect(read.items.map((item) => item.id)).toEqual(["m"])
   expect(warned.mock.calls).toEqual([
     [
-      "agents: left out entries of kinds this window does not know: reminder, crew",
+      "agents: left out entries of kinds this window does not know: reminder, poll",
     ],
   ])
 })

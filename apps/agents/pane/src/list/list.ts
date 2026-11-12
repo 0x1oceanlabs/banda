@@ -57,6 +57,9 @@ export const THREADS_FILTER = {
     "subagent.started",
     "subagent.changed",
     "subagent.ended",
+    "crew.started",
+    "crew.progressed",
+    "crew.ended",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -98,7 +101,8 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
 /**
  * Whether `fact` may change how many of a Thread's direct sub-agents work
  * or failed, and which one works (ADR 0103, decision 10): one started, one
- * ended, or one's state changed. Only the engine knows its lanes, so the
+ * ended, or one's state changed; or what its Crew at work says, its phase
+ * and count (step 4). Only the engine knows its lanes and Crews, so the
  * list is read again.
  */
 function movesSubagents(fact: Fact): boolean {
@@ -108,7 +112,11 @@ function movesSubagents(fact: Fact): boolean {
     case "subagent.changed":
       return fact.payload.state !== undefined
     case "subagent.ended":
+    case "crew.started":
+    case "crew.ended":
       return true
+    case "crew.progressed":
+      return (fact.payload.agents ?? []).length > 0
     default:
       return false
   }

@@ -6,6 +6,7 @@
 import { memo } from "react"
 import type { Body } from "@banda/contract/agents"
 import { CallEntry } from "./call"
+import { CrewEntry } from "./crew"
 import { IssueEntry } from "./issue"
 import { MessageEntry } from "./message"
 import { MessagedEntry } from "./messaged"
@@ -30,6 +31,7 @@ const VIEWS: { [K in Body["kind"]]: EntryView<K> } = {
   visual: VisualEntry,
   subagent: SubagentEntry,
   messaged: MessagedEntry,
+  crew: CrewEntry,
 }
 
 /** One entry, drawn by its kind; drawn again only when it or what its

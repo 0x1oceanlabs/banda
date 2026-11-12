@@ -25,6 +25,7 @@ export const DOES = {
   "agents.threads": "read",
   "agents.thread": "read",
   "agents.subagent": "read",
+  "agents.crew": "read",
   "agents.defaults": "read",
   "agents.accounts": "read",
   "agents.changes": "read",

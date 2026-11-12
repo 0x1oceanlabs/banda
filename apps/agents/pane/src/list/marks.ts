@@ -33,12 +33,17 @@ export function markOf(thread: ListedThread): MarkState {
 }
 
 /**
- * Whether a Thread works: its latest turn runs, or a sub-agent of it
- * works on after that turn ended, so it is not Done until they end (ADR
- * 0103, decision 19). `ListedThread::works` in the engine says the same.
+ * Whether a Thread works: its latest turn runs, or a sub-agent or a Crew
+ * of it works on after that turn ended, so it is not Done until they end
+ * (ADR 0103, decision 19). `ListedThread::works` in the engine says the
+ * same.
  */
-export function worksNow({ latest, subagents }: ListedThread): boolean {
-  return latest?.state === "running" || (subagents?.working ?? 0) > 0
+export function worksNow({ latest, subagents, crew }: ListedThread): boolean {
+  return (
+    latest?.state === "running" ||
+    (subagents?.working ?? 0) > 0 ||
+    crew !== undefined
+  )
 }
 
 /**

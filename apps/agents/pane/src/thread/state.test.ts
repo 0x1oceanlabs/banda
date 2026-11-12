@@ -494,7 +494,7 @@ test("an entry of a kind this window does not know is left out of the Thread (AD
       message,
       newer("s", "reminder", "Look at the routes tomorrow"),
       ...rest,
-      newer("c", "crew", "Crew audit-routes"),
+      newer("c", "poll", "Which day suits?"),
     ],
     turns: known.turns,
     settings: known.settings,
@@ -1063,4 +1063,73 @@ test("the entry the Agent may still write is its last, a sub-agent's anchor too,
     })
   )
   expect(writing(asked)?.id).toBe("s")
+})
+
+test("a Crew's facts keep it beside its row, each agent in its place, and it goes with its turn", () => {
+  const agent = (phase: number, index: number, state: string) => ({
+    index,
+    label: `agent ${phase}.${index}`,
+    phase,
+    state,
+    attempt: 1,
+  })
+  const crew = {
+    id: "w",
+    turn: "u",
+    title: "audit-routes",
+    phases: [
+      { index: 1, title: "Scan" },
+      { index: 2, title: "Fix" },
+    ],
+    agents: [],
+    state: "working",
+    started: 1,
+  }
+  const working = play(
+    ...begun(),
+    event("crew.started", { item: "c", crew }),
+    event("crew.progressed", {
+      crew: "w",
+      agents: [agent(2, 1, "running"), agent(1, 1, "running")],
+      tokens: 10,
+    }),
+    event("crew.progressed", {
+      crew: "w",
+      agents: [agent(1, 1, "done")],
+      log: "scanned",
+    }),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  expect(working.items.map((item) => item.id)).toEqual(["m", "c"])
+  expect(working.items[1].body).toEqual({ kind: "crew", crew: "w" })
+  const [kept] = working.crews
+  expect(kept.agents.map((a) => [a.phase, a.index, a.state])).toEqual([
+    [1, 1, "done"],
+    [2, 1, "running"],
+  ])
+  expect([kept.log, kept.tokens]).toEqual(["scanned", 10])
+  // Fork and rewind wait while it works.
+  expect(working.turns[0].can.fork).toBe(false)
+
+  const ended = apply(
+    working,
+    event("crew.ended", {
+      crew: "w",
+      turn: "u",
+      state: "done",
+      result: "ok",
+      ended: 9,
+    })
+  )
+  expect(ended.crews[0]).toMatchObject({
+    state: "done",
+    result: "ok",
+    ended: 9,
+  })
+  expect(ended.turns[0].can.fork).toBe(true)
+  const rewound = apply(
+    ended,
+    event("thread.rewound", { thread: "t", turn: "u" })
+  )
+  expect(rewound.crews).toEqual([])
 })
