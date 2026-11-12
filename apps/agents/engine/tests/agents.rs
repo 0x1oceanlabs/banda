@@ -3935,7 +3935,57 @@ struct SubAgents {
 
 /// What the real Harnesses are asked to do with sub-agents, as Banda
 /// declares them (ADR 0103, Plan step 1, item 10).
-const DECLARED: [&SubAgents; 3] = [&CLAUDE_LANES, &CODEX_LANES, &CLAUDE_MESSAGE];
+const DECLARED: [&SubAgents; 4] = [&CLAUDE_LANES, &CODEX_LANES, &CLAUDE_MESSAGE, &CLAUDE_CREW];
+
+/// Claude Code's Crews (ADR 0103, step 4): a Workflow of three phases,
+/// supervised, which asks before it starts, logs after each phase, calls
+/// eighteen agents at once in its second so some may wait, and whose last
+/// agent's command asks between turns; Claude goes on by itself once it
+/// ends. Then one with Full access whose script throws after its first
+/// phase; Claude goes on by itself after that one too.
+const CLAUDE_CREW: SubAgents = SubAgents {
+    file: "claude-crew",
+    harness: "claude",
+    threads: &[
+        Asked {
+            mode: "supervised",
+            sends: &["Call the Workflow tool with this script, then answer `launched` and \
+                      nothing else:\n\n```js\nexport const meta = { name: 'scan-fix-verify', \
+                      description: 'Read, print and write small files', phases: [\n  { title: \
+                      'Scan', detail: 'read a.txt and b.txt' },\n  { title: 'Fix', detail: \
+                      'eighteen agents print the files' },\n  { title: 'Verify', detail: \
+                      'write d.txt' },\n] }\nphase('Scan')\nconst scanned = await parallel([\n  \
+                      () => agent('Read a.txt and answer with its first line only.', { label: \
+                      'read a', model: 'haiku', effort: 'low' }),\n  () => agent('Read b.txt \
+                      and answer with its first line only.', { label: 'read b', model: 'haiku', \
+                      effort: 'low' }),\n])\nlog('scanned ' + scanned.length + ' files')\n\
+                      phase('Fix')\nconst names = ['a.txt', 'b.txt', 'c.txt']\nconst printed = \
+                      await parallel(Array.from({ length: 18 }, (_, i) => () => agent('Run `cat ' \
+                      + names[i % 3] + '` with Bash and answer with its output only.', { label: \
+                      'cat ' + (i + 1), model: 'haiku', effort: 'low' })))\nlog('printed ' + \
+                      printed.filter(Boolean).length + ' files')\nphase('Verify')\nconst wrote = \
+                      await agent('Run `echo delta > d.txt` with Bash, then answer `done` \
+                      only.', { label: 'write d', model: 'haiku', effort: 'low' })\n\
+                      log('verified')\nreturn [scanned.join(', '), wrote].join('; ')\n```"],
+            goes_on: true,
+            always: false,
+            steps: &[],
+        },
+        Asked {
+            mode: "full_access",
+            sends: &["Call the Workflow tool with this script, then answer `launched` and \
+                      nothing else:\n\n```js\nexport const meta = { name: 'scan-then-throw', \
+                      description: 'Read a file, then fail', phases: [\n  { title: 'Scan', \
+                      detail: 'read c.txt' },\n  { title: 'Never', detail: 'not reached' },\n] \
+                      }\nphase('Scan')\nconst line = await agent('Read c.txt and answer with \
+                      its first line only.', { label: 'read c', model: 'haiku', effort: 'low' \
+                      })\nlog('scanned')\nthrow new Error('stopped after Scan on purpose')\n```"],
+            goes_on: true,
+            always: false,
+            steps: &[],
+        },
+    ],
+};
 
 /// Claude Code's sub-agents in lanes: three at once in the foreground; one
 /// in the background; one that starts its own; one whose command asks and
@@ -4191,26 +4241,41 @@ fn least(harness: &str) -> Value {
 /// `cargo test -p banda-agents --test agents
 /// record_the_real_harnesses_with_sub_agents -- --ignored --nocapture`,
 /// and read the files before committing them. The recordings from before
-/// the declaration stay as they are: this cannot record them again.
+/// the declaration stay as they are: this cannot record them again. With
+/// `BANDA_RECORD_RAW` naming a folder, what the Harness said unscrubbed is
+/// kept there, so a recording whose scrub refuses it is not lost: never
+/// commit that folder. With `BANDA_RECORD_FROM` naming such a folder,
+/// nothing is asked of the models: what it keeps is scrubbed again.
 #[tokio::test]
 #[ignore = "calls the real models, which costs money"]
 async fn record_the_real_harnesses_with_sub_agents() {
     let only = std::env::var("BANDA_RECORD").ok();
+    let from = std::env::var_os("BANDA_RECORD_FROM").map(PathBuf::from);
+    let kept = from
+        .clone()
+        .or_else(|| std::env::var_os("BANDA_RECORD_RAW").map(PathBuf::from));
     for recorded in DECLARED
         .iter()
         .filter(|r| only.as_deref().is_none_or(|o| o == r.file))
     {
         let (raw, root) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-        let world = World::recording(root.path(), recorded.harness, raw.path()).await;
-        for view in world.sub_agents(recorded, Duration::from_secs(600)).await {
+        let raw = match &kept {
+            Some(kept) => kept.join(recorded.file),
+            None => raw.path().to_owned(),
+        };
+        std::fs::create_dir_all(&raw).unwrap();
+        let raw = raw.as_path();
+        let world = World::recording(root.path(), recorded.harness, raw).await;
+        let views = match from {
+            Some(_) => Vec::new(),
+            None => world.sub_agents(recorded, Duration::from_secs(600)).await,
+        };
+        for view in views {
             println!("{}: {:#?}", recorded.file, texts(&view));
             println!("{}: {:#?}", recorded.file, view.subagents);
+            println!("{}: {:#?}", recorded.file, view.crews);
         }
-        std::fs::write(
-            recorded_file(recorded.file),
-            world.scrubbed(raw.path()).await,
-        )
-        .unwrap();
+        std::fs::write(recorded_file(recorded.file), world.scrubbed(raw).await).unwrap();
     }
 }
 
@@ -4255,7 +4320,7 @@ impl World {
         let scrubbed = private
             .iter()
             .filter_map(|(was, is)| Some((was.filter(|w| !w.is_empty())?, is)))
-            .fold(without_personal_setup(&recorded), |text, (was, is)| {
+            .fold(joined_replies(&without_personal_setup(&recorded)), |text, (was, is)| {
                 text.replace(was, is)
             });
         let left = private.iter().filter_map(|(was, _)| *was);
@@ -4368,7 +4433,7 @@ impl World {
 
     /// Allows each Question in `thread` once, until it has `turns` turns,
     /// or more if a real Harness goes on by itself, none of them runs and
-    /// no sub-agent works; waits up to `limit` for each step. While
+    /// no sub-agent or Crew works; waits up to `limit` for each step. While
     /// `always` holds, the next Question of a sub-agent is allowed always,
     /// and then no more.
     async fn answering(
@@ -4384,6 +4449,7 @@ impl World {
                     .iter()
                     .all(|t| !matches!(t.state, TurnState::Queued | TurnState::Running))
                 && !v.subagents.iter().any(|lane| lane.state.works())
+                && !v.crews.iter().any(|crew| crew.state.works())
         };
         loop {
             let view = self
@@ -4502,6 +4568,36 @@ const ACCOUNT: [&str; 3] = ["email", "organization", "plan"];
 /// Harness says of its account beyond [`ACCOUNT`]: each list of commands
 /// cut to [`OWN_COMMANDS`], Claude Code's `agent` option to its default,
 /// and no `detail` on an auth status.
+/// `recorded` with each reply's pieces in a row joined into its first: a
+/// path the Agent writes may come split across them, and only whole it is
+/// written out.
+fn joined_replies(recorded: &str) -> String {
+    let piece = |entry: &Value| {
+        let update = entry.pointer("/frame/params/update")?;
+        (update["sessionUpdate"] == "agent_message_chunk" && update["content"]["type"] == "text")
+            .then(|| (entry["frame"]["params"]["sessionId"].clone(), update["messageId"].clone()))
+    };
+    let mut lines: Vec<Value> = Vec::new();
+    for line in recorded.lines() {
+        let entry: Value = serde_json::from_str(line).unwrap();
+        if let (Some(last), Some(of)) = (lines.last_mut(), piece(&entry))
+            && piece(last) == Some(of)
+        {
+            let more = entry.pointer("/frame/params/update/content/text").cloned();
+            let text = last.pointer_mut("/frame/params/update/content/text").unwrap();
+            let joined = format!("{}{}", text.as_str().unwrap_or(""), more.unwrap().as_str().unwrap_or(""));
+            *text = Value::String(joined);
+            continue;
+        }
+        lines.push(entry);
+    }
+    let mut joined: String = lines.iter().map(|entry| format!("{entry}\n")).collect();
+    if !recorded.ends_with('\n') {
+        joined.pop();
+    }
+    joined
+}
+
 fn without_personal_setup(recorded: &str) -> String {
     recorded
         .lines()
@@ -4956,6 +5052,100 @@ async fn a_claude_workflow_ends_its_turn_at_once_and_its_agent_asks_as_claude_by
     );
     assert_eq!(view.turns.len(), 2);
     assert!(view.turns.iter().all(|t| t.state == TurnState::Done));
+}
+
+/// Claude Code's Crews as it says them (ADR 0103, step 4): the Workflow
+/// call asks with its script's `meta`, the turn ends at once, and the
+/// Crew works on; its phases and agents come whole in each frame, those
+/// past Claude's limit of sixteen at once waiting Queued; the command its
+/// last agent runs asks between turns as the Crew's, in no turn of the
+/// Agent's own; and the turn Claude goes on with after it ends names it.
+/// A script that throws fails its Crew in the first line of Claude's
+/// words. What each left is in an output file a replay does not have.
+#[tokio::test]
+#[cfg_attr(
+    windows,
+    ignore = "the recording the fake agent replays was made on Linux: it moves the recorded folder to this one, and the rest of each path keeps its /, as no Harness on Windows says it"
+)]
+async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
+    let root = tempfile::tempdir().unwrap();
+    let (world, views) = World::replay_sub_agents(root.path(), &CLAUDE_CREW).await;
+    let [supervised, full] = &views[..] else {
+        panic!("one view per Thread: {}", views.len())
+    };
+    let crew = the_crew(supervised);
+    let kinds: Vec<_> = (texts(supervised).iter())
+        .map(|line| line.split(':').next().unwrap().to_owned())
+        .collect();
+    assert_eq!(
+        kinds,
+        ["message", "tool", "question", "crew", "message", "tool", "question", "notice", "message"]
+    );
+    let lines = texts(supervised);
+    assert_eq!(lines[1], "tool: Workflow (Done)");
+    assert_eq!(lines[3], format!("crew: {}", crew.id));
+    assert_eq!(lines[4], "message: launched");
+    assert!(lines[5].starts_with("tool: echo delta > ") && lines[5].ends_with("d.txt (Done)"));
+    assert_eq!(lines[7], "notice: Fake went on by itself.");
+    // The Workflow call's Question carries what the Crew will be.
+    let start = supervised.items.iter().find_map(|item| match &item.body {
+        Body::Question { start: Some(start), .. } => Some(start),
+        _ => None,
+    });
+    let start = start.expect("the Question to start it");
+    assert_eq!(start.title, "scan-fix-verify");
+    // The command its last agent ran asked as the Crew's.
+    let asked = supervised.items.iter().filter_map(|item| match &item.body {
+        Body::Question { crew, .. } => Some(*crew),
+        _ => None,
+    });
+    assert_eq!(asked.collect::<Vec<_>>(), [None, Some(crew.id)]);
+    assert_eq!(supervised.turns.len(), 2, "no turn of its own for it");
+    let read = world.crew(crew).await;
+    assert_eq!(entries(&read.items).len(), 2, "its call and its Question");
+
+    assert_eq!(crew.state, CrewState::Done);
+    assert_eq!(json!(crew.turn), json!(supervised.turns[0].id));
+    assert_eq!(crew.went_on, Some(supervised.turns[1].id));
+    let phases: Vec<_> = (crew.phases.iter())
+        .map(|phase| (phase.title.as_str(), phase.detail.as_deref()))
+        .collect();
+    assert_eq!(
+        phases,
+        [
+            ("Scan", Some("read a.txt and b.txt")),
+            ("Fix", Some("eighteen agents print the files")),
+            ("Verify", Some("write d.txt")),
+        ]
+    );
+    let per_phase = |n: u16| crew.agents.iter().filter(|agent| agent.phase == n).count();
+    assert_eq!((per_phase(1), per_phase(2), per_phase(3)), (2, 18, 1));
+    assert!(crew.agents.iter().all(|agent| agent.state == SubagentState::Done));
+    assert_eq!(crew.agents[0].model.as_deref(), Some("claude-haiku-5-5"));
+    assert_eq!((crew.result.as_deref(), crew.log.as_deref()), (None, None), "no output file");
+    let facts = world.crew_facts().await;
+    let queued = (facts.iter())
+        .filter(|(kind, _)| kind == "crew.progressed")
+        .flat_map(|(_, fact)| fact["agents"].as_array().cloned().unwrap_or_default())
+        .any(|agent| agent["state"] == "queued");
+    assert!(queued, "past sixteen at once, some waited");
+    // Written only as something a Person sees changed: far fewer than the
+    // frames Claude sent.
+    let progressed = facts.iter().filter(|(kind, _)| kind == "crew.progressed").count();
+    assert!(progressed < 55, "{progressed} of 55 frames");
+
+    let failed = the_crew(full);
+    assert_eq!(failed.state, CrewState::Failed);
+    assert_eq!(
+        failed.why.as_deref(),
+        Some("Dynamic workflow \"Read a file, then fail\" failed: Error: stopped after Scan on purpose")
+    );
+    let agents: Vec<_> = (failed.agents.iter())
+        .map(|agent| (agent.label.as_str(), agent.state, agent.result.as_deref()))
+        .collect();
+    assert_eq!(agents, [("read c", SubagentState::Done, Some("charlie"))]);
+    assert!(failed.went_on.is_some());
+    assert!(full.turns.iter().all(|turn| turn.state == TurnState::Done));
 }
 
 /// Codex's sub-agents, before Banda declared them, are rows of their
@@ -12239,9 +12429,11 @@ async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
     assert_eq!(kinds.first(), Some(&"crew.started"));
     assert_eq!(kinds.iter().filter(|kind| **kind == "crew.ended").count(), 1);
     let progressed = kinds.iter().filter(|kind| **kind == "crew.progressed").count();
-    // Each phase: its agents start, then end; its log line; and the turn
-    // it went on with.
-    assert_eq!(progressed, 3 * 3 + 1, "{facts:#?}");
+    // Each phase: its agents start, then end; and the turn it went on
+    // with. Its log line comes with its end, from its output file.
+    assert_eq!(progressed, 3 * 2 + 1, "{facts:#?}");
+    let ended = facts.iter().find(|(kind, _)| kind == "crew.ended").unwrap();
+    assert_eq!(ended.1["log"], "phase 3 done");
 }
 
 /// A big Crew's agents wait their turn, Queued, and are all kept.
@@ -12354,11 +12546,12 @@ async fn a_crew_whose_script_throws_fails() {
     .await;
     let crew = the_crew(&view);
     assert_eq!(crew.state, CrewState::Failed);
+    // The first line of what Claude says: not where the script threw.
     assert_eq!(
         crew.why.as_deref(),
-        Some("Dynamic workflow \"Audit the routes\" failed")
+        Some("Dynamic workflow \"Audit the routes\" failed: Error: the script threw after Scan")
     );
-    assert_eq!(crew.result.as_deref(), Some("Error: the script threw after Scan."));
+    assert_eq!(crew.result, None, "a script that threw leaves its file empty");
     assert!(!world.listed(&sent["thread"]).await.works());
 }
 

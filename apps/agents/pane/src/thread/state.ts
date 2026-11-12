@@ -544,7 +544,7 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "crew.ended": {
-      const { crew: id, state: ended, why, result, tokens } = fact.payload
+      const { crew: id, state: ended, why, result, log, tokens } = fact.payload
       return {
         ...next,
         crews: changeOne(state.crews, id, (crew) => ({
@@ -552,6 +552,7 @@ function project(state: ThreadState, event: Event): ThreadState {
           state: ended,
           why,
           result,
+          log: log ?? crew.log,
           tokens: tokens ?? crew.tokens,
           ended: fact.payload.ended,
         })),

@@ -273,6 +273,7 @@ fn end(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, mut now: Crew) -> 
         state: now.state,
         why: now.why.clone(),
         result: now.result.clone(),
+        log: (now.log != was.log).then(|| now.log.clone()).flatten(),
         tokens: now.tokens,
         ended: now.ended.unwrap_or(now.started),
     };
@@ -341,22 +342,59 @@ fn cut_words(cut: &Cut, harness: &str) -> String {
     }
 }
 
-/// What Crew `crew` gave back: its output file, read once, at most
-/// [`RESULT`] bytes, cut where a character ends. None when there is none.
-pub async fn result_of(output: &Path) -> Option<String> {
-    let file = tokio::fs::File::open(output).await.ok()?;
-    let mut bytes = Vec::new();
-    file.take(RESULT).read_to_end(&mut bytes).await.ok()?;
-    let text = match String::from_utf8(bytes) {
-        Ok(text) => text,
-        Err(cut) => {
-            let valid = cut.utf8_error().valid_up_to();
-            let mut bytes = cut.into_bytes();
-            bytes.truncate(valid);
-            String::from_utf8(bytes).ok()?
-        }
+/// The most of a Crew's output file Banda reads: Claude writes there its
+/// whole tree beside its result, more than the Result keeps.
+const OUTPUT: u64 = 4 * 1024 * 1024;
+
+/// What a Crew left as it ended, read once from its output file.
+#[derive(Debug, Default, PartialEq, Eq)]
+pub struct Left {
+    /// Its Result, at most [`RESULT`] bytes, cut where a character ends.
+    pub result: Option<String>,
+    /// The last line its script logged, which no frame carries while it
+    /// works.
+    pub log: Option<String>,
+}
+
+/// What Crew's output file `output` holds: Claude's object of its `result`
+/// and `logs` (`tests/recordings/claude-crew.jsonl`), or else its text as
+/// it is. Nothing when there is no file or nothing in it.
+pub async fn left_in(output: &Path) -> Left {
+    let Ok(file) = tokio::fs::File::open(output).await else {
+        return Left::default();
     };
-    (!text.trim().is_empty()).then_some(text)
+    let mut bytes = Vec::new();
+    if file.take(OUTPUT).read_to_end(&mut bytes).await.is_err() {
+        return Left::default();
+    }
+    let text = String::from_utf8_lossy(&bytes);
+    let (result, log) = match serde_json::from_str::<serde_json::Value>(&text) {
+        Ok(serde_json::Value::Object(left)) => {
+            let result = match left.get("result") {
+                None | Some(serde_json::Value::Null) => None,
+                Some(serde_json::Value::String(said)) => Some(said.clone()),
+                Some(other) => serde_json::to_string_pretty(other).ok(),
+            };
+            let logs = left.get("logs").and_then(serde_json::Value::as_array);
+            let last = logs.and_then(|logs| logs.iter().rev().find_map(serde_json::Value::as_str));
+            (result, last.map(str::to_owned))
+        }
+        _ => (Some(text.into_owned()), None),
+    };
+    Left {
+        result: result.map(capped).filter(|result| !result.trim().is_empty()),
+        log,
+    }
+}
+
+/// `text` cut to at most [`RESULT`] bytes, where a character ends.
+fn capped(mut text: String) -> String {
+    let mut at = text.len().min(RESULT as usize);
+    while !text.is_char_boundary(at) {
+        at -= 1;
+    }
+    text.truncate(at);
+    text
 }
 
 /// Who hears a Thread's Crews.
@@ -556,18 +594,22 @@ impl Hearer {
     /// Its task ended, as `notified` says, with what it left.
     async fn notified(&self, track: Track, notified: Notified) -> Result<(), String> {
         let state = ended_as(notified.end.or(track.ending));
-        let result = match &notified.output {
-            Some(output) => result_of(Path::new(output)).await,
-            None => None,
+        let left = match &notified.output {
+            Some(output) => left_in(Path::new(output)).await,
+            None => Left::default(),
         };
+        // Its first line: a script that threw says where after it.
         let why = match state {
-            CrewState::Failed => notified.summary.clone(),
+            CrewState::Failed => (notified.summary.as_deref())
+                .and_then(|summary| summary.lines().next())
+                .map(str::to_owned),
             _ => None,
         };
         let now = Crew {
             state,
             why,
-            result,
+            result: left.result,
+            log: left.log.or_else(|| track.record.log.clone()),
             tokens: notified.tokens.or(track.record.tokens),
             ..track.record.clone()
         };
@@ -773,18 +815,32 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn a_result_is_its_output_file_read_once_at_most_64_kb() {
+    async fn a_result_is_what_claudes_output_file_says_it_returned_at_most_64_kb() {
         let folder = tempfile::tempdir().unwrap();
         let output = folder.path().join("t.output");
-        assert_eq!(result_of(&output).await, None, "no file");
-        std::fs::write(&output, "  \n").unwrap();
-        assert_eq!(result_of(&output).await, None, "nothing in it");
+        let left = async || left_in(&output).await;
+        assert_eq!(left().await, Left::default(), "no file");
+        std::fs::write(&output, "").unwrap();
+        assert_eq!(left().await, Left::default(), "a script that threw");
+        // Claude's object: what it returned, and the lines it logged.
+        let said = serde_json::json!({
+            "summary": "Read", "agentCount": 2, "logs": ["scanned 2 files", "verified"],
+            "result": "alpha, bravo; done", "workflowProgress": [],
+        });
+        std::fs::write(&output, said.to_string()).unwrap();
+        let read = left().await;
+        assert_eq!(read.result.as_deref(), Some("alpha, bravo; done"));
+        assert_eq!(read.log.as_deref(), Some("verified"));
+        // A value not a string, as a script may return, is written out.
+        std::fs::write(&output, r#"{"result": {"n": 2}}"#).unwrap();
+        assert_eq!(left().await.result.as_deref(), Some("{\n  \"n\": 2\n}"));
+        // Any other text is its Result as it is, cut at 64 KB where a
+        // character ends.
         std::fs::write(&output, "apple banana").unwrap();
-        assert_eq!(result_of(&output).await.as_deref(), Some("apple banana"));
-        // Cut at 64 KB, where a character ends.
+        assert_eq!(left().await.result.as_deref(), Some("apple banana"));
         let long = "é".repeat(40 * 1024);
         std::fs::write(&output, &long).unwrap();
-        let read = result_of(&output).await.unwrap();
+        let read = left().await.result.unwrap();
         assert_eq!(read.len(), 64 * 1024);
         assert!(long.starts_with(&read));
     }

@@ -301,11 +301,14 @@ fn agent(entry: &Value) -> Option<CrewAgent> {
 }
 
 /// An agent's state in Banda's words: one Claude says it errored because
-/// its Crew was stopped is Stopped. A state Banda does not know is Running
-/// once it started, else Queued.
+/// its Crew was stopped is Stopped, and one it says starts with no start
+/// time waits for a place, Queued, as Claude says those past its limit of
+/// agents at once. A state Banda does not know is Running once it started,
+/// else Queued.
 fn agent_state(said: Option<&str>, ended_with: Option<&str>, started: bool) -> SubagentState {
     match said {
         Some("queued" | "pending" | "waiting") => SubagentState::Queued,
+        Some("start" | "started") if !started => SubagentState::Queued,
         Some("start" | "started" | "running" | "progress") => SubagentState::Running,
         Some("done" | "completed" | "success") => SubagentState::Done,
         Some("error" | "failed") if ended_with == Some("stopped") => SubagentState::Stopped,
@@ -396,6 +399,31 @@ mod tests {
             agent.why.as_deref(),
             Some("Stopped because the workflow was stopped")
         );
+    }
+
+    /// Past Claude's limit of agents at once, an agent waits as one that
+    /// starts with no start time (`tests/recordings/claude-crew.jsonl`).
+    #[test]
+    fn an_agent_that_starts_with_no_start_time_waits_queued() {
+        let agent = |started: Option<i64>| {
+            let mut entry = serde_json::json!({
+                "type": "workflow_agent", "index": 19, "label": "cat 17", "phaseIndex": 2,
+                "state": "start", "queuedAt": 1, "attempt": 1,
+            });
+            if let Some(at) = started {
+                entry["startedAt"] = at.into();
+            }
+            let frame = serde_json::json!({
+                "type": "system", "subtype": "task_progress", "task_id": "w",
+                "workflow_progress": [entry],
+            });
+            let Some(Sdk::Progress(progress)) = read(&frame) else {
+                panic!("progress");
+            };
+            progress.tree.unwrap().agents[0].state
+        };
+        assert_eq!(agent(None), SubagentState::Queued);
+        assert_eq!(agent(Some(5)), SubagentState::Running);
     }
 
     #[test]

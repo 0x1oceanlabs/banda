@@ -1984,6 +1984,11 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         result: Option<String>,
+        /// The last line its script logged, when its end says one no
+        /// frame said while it worked.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        log: Option<String>,
         #[ts(optional, type = "number")]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         tokens: Option<u64>,
