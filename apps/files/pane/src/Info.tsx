@@ -239,9 +239,7 @@ function Rows({
   return (
     <div className="flex flex-col gap-1 border-t pt-3">
       {label && (
-        <h4 className="text-meta font-medium text-muted-foreground">
-          {label}
-        </h4>
+        <h4 className="text-meta font-medium text-muted-foreground">{label}</h4>
       )}
       {/* Each term over its value in a narrow panel; beside it in one
           wide enough. */}

@@ -214,9 +214,7 @@ export function QuestionDrawer({
       {!folded && (
         <>
           {!(asker && detail === words) && (
-            <p className="mt-0.5 text-ui font-[550] wrap-break-word">
-              {words}
-            </p>
+            <p className="mt-0.5 text-ui font-[550] wrap-break-word">{words}</p>
           )}
           {detail && (
             <pre className="mt-2 max-h-32 overflow-auto rounded-control bg-raised px-3 py-2 font-mono text-code break-all whitespace-pre-wrap">

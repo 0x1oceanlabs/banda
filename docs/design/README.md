@@ -134,19 +134,38 @@ block is the text at 4% and raised at 8%, over the clear tile.
 Inter (variable) for the UI and prose, JetBrains Mono for code, both in
 [`kit/fonts/`](kit/fonts/) under the OFL ([0075] d1, [0047]). The
 `macos` theme takes the system's font at 13 ([0075] d1). The sizes are
-[0058] d1's.
+[0058] d1's, on one scale ([0113] d3): each level is a token of the
+theme, its size and its line (`--meta-size`, `--meta-leading`), worked
+out from the theme's font size, so `macos`'s 13 and a Person's size
+scale every level together. Code writes the level's class.
 
-| Role | Size / line | Weight |
-|---|---|---|
-| prose: replies, the Person's message | 14/22; 15/24 in a Thread 40rem wide or more | 400 |
-| UI: rows, work lines, menus | 14/20 | 400; titles 500 |
-| meta: times, counts, captions, small buttons | 12/16 | 400; words such as **Asks** 500 |
-| mono: code, diffs, commands, paths | 12.5/20 | 400 |
-| a reply's headings | 18/26 at most, then 16/24, then the text's | 600 |
-| a card's title | 14 | 550 |
+| Level | Size / line | For | Weight |
+|---|---|---|---|
+| `text-heading` | 18/26 | a reply's first heading, a page's title, the message box's first heading | 600 |
+| `text-title` | 16/24 | a reply's second heading, a dialog's title | 600; a dialog's 500 |
+| `text-prose` | 14/22; 15/24 in a Thread 40rem wide or more | replies, the Person's message | 400 |
+| `text-ui` | 14/20 | rows, work lines, menus, controls, tabs, search; a card's title at 550 | 400; titles 500 |
+| `text-code` | 12.5/20 | code, diffs, commands, paths | 400 |
+| `text-meta` | 12/16 | times, counts, captions, footers, notes, small buttons | 400; words such as **Asks** 500 |
+| `text-small` | 11/14 | only inside a small thing: a key, a tag, a count on an icon, a menu's label | 400 to 600 |
+| `text-figure` | 28/32 | the one number a Pane is about, as the Usage Pane's | 600 |
 
-Times and counts take tabular figures. Text follows the Pane's width, not
-the window's ([0058] d2).
+Roma's answers ([0113], 2026-11-11):
+
+- **Nothing between the levels.** From 9 to 11.5 px is `text-small`
+  inside a key, a tag, a count on an icon or a menu's label, and
+  `text-meta` everywhere else: captions, footers, notes (Q1).
+- **13 is 14:** `text-ui`, the kit's search, tabs, buttons, menus and
+  toasts too (Q2). A denser look is a theme's font size, as `macos`'s 13.
+- **18 is the ceiling,** a page's title too; a figure is `text-figure`,
+  and only for the one number a Pane is about (Q3).
+
+A line height changes only by Tailwind's names (`leading-none` in a
+badge), never by a number. Tailwind's own size names land on the levels,
+for what comes as it is (streamdown, shadcn as published): `xs` meta, `sm`
+UI, `base` title, `lg` and up heading; the rest are cleared. Times and
+counts take tabular figures. Text follows the Pane's width, not the
+window's ([0058] d2).
 
 ### Icons
 
@@ -181,8 +200,8 @@ Five levels ([0080] d6), each inside the one above it:
 - A Group's plate is the tile's radius plus its margin, half a gap
   ([0065] d6).
 - **Spacing**: 8 px between tiles and round the Strip (`[gaps]`), 8 inside
-  a panel, a 4 px grid inside everything, 20 between a Thread's rows, 8 to
-  12 inside them ([0058] d1).
+  a panel, Tailwind's steps, 4 px, with halves (2 px) inside small things
+  ([0113] d7), 20 between a Thread's rows, 8 to 12 inside them ([0058] d1).
 - **Heights**: the bar 36 (macOS 38), a Pane header 40 in the kit, a
   control 28, an icon button 28 or 24 in a header, a menu's item 30, a
   sidebar row about 28, a card three lines.
@@ -207,6 +226,12 @@ for what floats: the window over the desktop, the glass sidebar's panel
 light message box's hairline and haze, copied from Codex ([0031] d1), and
 the Top layer. There is no shadow under the current card ([0098] d8), no
 glow and no coloured ring.
+
+The elevations by name ([0113] d4): `shadow-float` for what floats (the
+Top layer, a Pane's own floating bar: Find, a quote's button, a zoom
+badge), `shadow-lift` for what the Person carries (a Pane being moved, a
+Peek), and the Window's own: a tile over glass, the focused tile, the
+glass sidebar.
 
 ### Motion and rhythm
 
@@ -434,7 +459,7 @@ it the composer):
 - **Solid** over glass, always (`--floating`, [0075] d3).
 - **A menu**: the card radius, 4 px inside, items 30 px high at the
   control's radius, a 16 px icon in muted, the key on the right in muted,
-  a label at 11 px, separators as 1 px lines. The Pane menu shows each
+  a label at `text-small`, separators as 1 px lines. The Pane menu shows each
   row's key ([0066] d3).
 - **A toast** is Sonner's, at the window's top right: one line and one
   action: "Archived · Undo" ([0048], [0098] d10).
@@ -640,6 +665,13 @@ The skeleton, with the kit beside the page:
 </body>
 ```
 
+The kit's tokens are the theme's, by their names and values
+(`--ui-size`, `--meta-leading`, `--card-radius`, the colours of both
+schemes): a test holds them (`client/web/src/look.test.ts`), and the look
+check reads the kit's stylesheets as it reads the window's ([0113] d9).
+Its first names, `--text-ui`, `--text-meta`, `--r-card` and the others,
+stay for the mocks written with them.
+
 Markup written from a script after load needs
 `BandaIcons.scan(); BandaMark.scan(); Sub.scan()`. A page published
 elsewhere, as a claude.ai Artifact, takes the fonts along or loads them
@@ -724,4 +756,5 @@ kit's own demos. Each is a JPEG at quality 85.
 [0103]: ../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md
 [0107]: ../adr/0107-a-working-mark-takes-the-group-plate-s-blue-muted.md
 [0111]: ../adr/0111-the-desk-s-density-is-measured-over-the-wallpaper-banda-draws.md
+[0113]: ../adr/0113-banda-ui-is-one-vocabulary-the-window-and-every-app-draw-with.md
 [0117]: ../adr/0117-what-loops-forever-steps-twelve-times-a-second.md

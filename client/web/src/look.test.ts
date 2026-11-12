@@ -15,8 +15,15 @@
  */
 import { readFileSync } from "node:fs"
 import { join, relative } from "node:path"
+import { BANDA, TOKENS, type Token } from "@banda/contract/look"
 import { beyond, drawingFiles } from "@banda/ui/testing/architecture"
-import { look, makesNames, refusal, type Rule } from "@banda/ui/testing/look"
+import {
+  kitSheets,
+  look,
+  makesNames,
+  refusal,
+  type Rule,
+} from "@banda/ui/testing/look"
 import { expect, test } from "vitest"
 
 const root = join(import.meta.dirname, "../../..")
@@ -52,6 +59,34 @@ const LISTED: Listed[] = [
       "client/ui/src/styles/globals.css: #000",
       "client/ui/src/styles/globals.css: #000",
       "client/ui/src/styles/globals.css: #000",
+    ],
+  },
+  {
+    rule: "design.4",
+    why: "Stays: the kit's masks and fades, as the Window's: black says what shows.",
+    cases: [
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/kit.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
+      "docs/design/kit/sub.css: #000",
     ],
   },
   {
@@ -134,8 +169,9 @@ const LISTED: Listed[] = [
   },
   {
     rule: "design.4",
-    why: "Step 4, drift onto tokens: white on two counts, which the count's own foreground has; hover fills of black and white, which the text thinned has.",
+    why: "Step 4, drift onto tokens: white on three counts, the kit's too, which the count's own foreground has; hover fills of black and white, which the text thinned has.",
     cases: [
+      "docs/design/kit/kit.css: #fff",
       "apps/browser/pane/src/Extensions.tsx: text-white",
       "apps/git/pane/src/GitButton.tsx: bg-black/[3.5%]",
       "apps/git/pane/src/GitButton.tsx: bg-white/8",
@@ -161,18 +197,28 @@ const LISTED: Listed[] = [
   // them, all stay.
   {
     rule: "design.9",
-    why: "Stays: a Project's sign is an icon, its corner a share of its size.",
-    cases: ["client/ui/src/components/project-sign.tsx: borderRadius"],
+    why: "Stays: a Project's sign is an icon, its corner a share of its size, in the Window and the kit.",
+    cases: [
+      "client/ui/src/components/project-sign.tsx: borderRadius",
+      "docs/design/kit/kit.css: border-radius: 4px",
+      "docs/design/kit/kit.css: border-radius: 4px",
+    ],
   },
   {
     rule: "design.9",
-    why: "Stays: a Group's plate is its tiles' corner and its pad (ADR 0065, decision 6).",
+    why: "Stays: a Group's plate is its tiles' corner and its pad (ADR 0065, decision 6), in the Window and the kit.",
     cases: [
+      "docs/design/kit/kit.css: border-radius: calc(var(--tile-radius) + var(--gap) / 2)",
       "client/ui/src/styles/globals.css: border-end-end-radius: var(--group-radius)",
       "client/ui/src/styles/globals.css: border-end-start-radius: var(--group-radius)",
       "client/ui/src/styles/globals.css: border-start-end-radius: var(--group-radius)",
       "client/ui/src/styles/globals.css: border-start-start-radius: var(--group-radius)",
     ],
+  },
+  {
+    rule: "design.9",
+    why: "Stays: the kit's stop button, a square drawn in CSS: an icon, as lucide's are.",
+    cases: ["docs/design/kit/kit.css: border-radius: 2.5px"],
   },
   {
     rule: "design.9",
@@ -274,6 +320,22 @@ const LISTED: Listed[] = [
     ],
   },
 
+  {
+    rule: "design.11",
+    why: "Step 3: the kit's shadows, drawn by hand, go onto the elevations as the Window's do: the window over the desktop, a tile, the focused tile, the glass sidebar's panel, the light message box's haze, the Top layer, a floating tip.",
+    cases: [
+      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px var(--window-line), inset 0 1px 0 var(--window-highlight), 0 30px 70px -20px rgb(0 0 0 / 0.55), 0 10px 24px -12px rgb(0 0 0 / 0.3)",
+      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--border), var(--tile-shadow)",
+      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--focus), var(--focus-shadow), var(--tile-shadow)",
+      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--border), var(--panel-shadow)",
+      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024)",
+      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08)",
+      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px var(--border), 0 12px 32px -12px rgb(0 0 0 / 0.4)",
+      "docs/design/kit/sub.css: box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024)",
+      "docs/design/kit/sub.css: box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.4)",
+    ],
+  },
+
   // Layers (design.12, decision 5): all move in step 5, with ADR 0110
   // step 3.
   {
@@ -351,6 +413,15 @@ const LISTED: Listed[] = [
     ],
   },
 
+  {
+    rule: "design.12",
+    why: "Step 5: the kit's two layers take their names as the Window's do: the blurred wallpaper under the glass, the floating tip over all.",
+    cases: [
+      "docs/design/kit/kit.css: z-index: -2",
+      "docs/design/kit/sub.css: z-index: 1000",
+    ],
+  },
+
   // Lengths (design.13, decision 7): all move in step 5.
   {
     rule: "design.13",
@@ -394,8 +465,9 @@ const LISTED: Listed[] = [
   },
 ]
 
-/** Each case found, as `rule file: what`, with its refusal. */
-const pairs = drawingFiles(root).flatMap((file) => {
+/** Each case found, as `rule file: what`, with its refusal: in the files
+ * that draw, and in the kit's stylesheets, which draw the mocks. */
+const pairs = [...drawingFiles(root), ...kitSheets()].flatMap((file) => {
   const at = relative(root, file)
   return look(readFileSync(file, "utf8"), { names: makesNames(file) }).map(
     (each) =>
@@ -421,4 +493,57 @@ test("each group of the list says why, and holds a case", () => {
     expect(why).toMatch(/^(?:Stays|Step [1-5])/)
     expect(cases.length).toBeGreaterThan(0)
   }
+})
+
+/** The custom properties the kit defines in its rules of `selector`, by
+ * their names without `--`. */
+function kitDefines(selector: string): Map<string, string> {
+  const sheet = readFileSync(join(root, "docs/design/kit/kit.css"), "utf8")
+  const rules = [
+    ...sheet.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g),
+  ].filter(([, head]) => head.trim() === selector)
+  expect(rules.length, selector).toBeGreaterThan(0)
+  return new Map(
+    rules.flatMap(([, , body]) =>
+      [...body.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)].map(
+        ([, name, value]) => [name, value.trim()] as const
+      )
+    )
+  )
+}
+
+/** Where the kit draws otherwise on purpose: the design reference's
+ * "Where the kit and the code differ". */
+const KIT_DIFFERS: Partial<Record<Token, string>> = {
+  "tile-opacity":
+    "a tile over glass: 95% in the kit, solid in the window (ADR 0075, decision 3)",
+}
+
+test("the kit's tokens are the theme's: its colours, its type scale and its corners", () => {
+  const schemes = {
+    dark: kitDefines(':root,\n[data-theme="dark"]'),
+    light: kitDefines('[data-theme="light"]'),
+  }
+  // Type, shape and glass are the same in both schemes.
+  const both = kitDefines(":root")
+  const own = (name: string): name is Token =>
+    name in TOKENS && !(name in KIT_DIFFERS)
+  const off = (["dark", "light"] as const).flatMap((mode) =>
+    [...schemes[mode], ...both].flatMap(([name, value]) =>
+      own(name) && value !== BANDA[mode][name]
+        ? [
+            `${mode} ${name}: the kit's ${value}, the theme's ${BANDA[mode][name]}`,
+          ]
+        : []
+    )
+  )
+  expect(off).toEqual([])
+  // The kit names every level, so a mock draws each as the window does.
+  const levels = Object.entries(TOKENS)
+    .filter(
+      ([, { kind, group }]) =>
+        kind === "length" && (group === "radius" || group === "font")
+    )
+    .map(([name]) => name)
+  expect(levels.filter((name) => !both.has(name))).toEqual([])
 })
