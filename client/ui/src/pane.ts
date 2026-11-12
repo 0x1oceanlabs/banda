@@ -186,6 +186,14 @@ export type PaneProps<A> = {
    * decision 7).
    */
   peek?: boolean
+  /**
+   * Nothing can be drawn beside this Pane now, so what it would open beside
+   * itself, it shows over itself (ADR 0103, decision 21): a narrow window,
+   * which hides the sidebar, the drawer, and Quick Look. A Thread shows its
+   * sub-agent as a screen on top. None, or false, where a Pane can open
+   * beside it.
+   */
+  alone?: boolean
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {

@@ -31,7 +31,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Find in the Thread (`agents.thread.find`), Ctrl+F, `[binds.thread]`
 - Move the Thread to the previous account of its Harness (`agents.thread.account-previous`), Ctrl+Shift+Up, `[binds.thread]`
 - Move the Thread to the next account of its Harness (`agents.thread.account-next`), Ctrl+Shift+Down, `[binds.thread]`
-- Go up to the sub-agent that started this one (`agents.subagent.up`), Escape, `[binds.subagent]`
+- Go back up, to the sub-agent that started this one or to its Thread (`agents.subagent.up`), Escape, `[binds.subagent]`
 - Zoom the Visual in (`agents.visual.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.visual]`
 - Zoom the Visual out (`agents.visual.zoom-out`), Ctrl+-, `[binds.visual]`
 - The Visual at its own size (`agents.visual.zoom-reset`), Ctrl+0, `[binds.visual]`

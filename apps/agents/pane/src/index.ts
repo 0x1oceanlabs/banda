@@ -100,7 +100,7 @@ const composer = own(COMPOSER, "Composer")
 /** A Thread's keys: its details card and its find are T3 Code's. */
 const thread = own(THREAD, "Thread")
 
-/** A sub-agent's Pane's key: Esc, one level up. */
+/** A sub-agent's Pane's key, and its screen's: Esc, one level up. */
 const subagent = own(SUBAGENT, "Sub-agent")
 
 export const agents = defineModule({
@@ -146,9 +146,11 @@ export const agents = defineModule({
       "Move the Thread to the next account of its Harness",
       { code: "ArrowDown", primary: true, shift: true }
     ),
-    subagent("up", "Go up to the sub-agent that started this one", {
-      code: "Escape",
-    }),
+    subagent(
+      "up",
+      "Go back up, to the sub-agent that started this one or to its Thread",
+      { code: "Escape" }
+    ),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
   scopes: [

@@ -695,9 +695,17 @@ sub-agents and the Crew `audit-routes`:
         where it came, "Claude wrote", or "Reviewer wrote" for a nested
         one. A message queued for a sub-agent at work has no words, so it
         has no bubble.
-      - **The screen on top comes after.** The window has no outcome
-        yet for "no room for a Group". Until then, a narrow window
-        scrolls to the Pane as it does to any Pane in a Group.
+      - **The screen on top comes with `PaneProps.alone`.** The window
+        says when nothing can be drawn beside a Pane: in a window narrow
+        enough to hide the sidebar, in the Drawer, and in Quick Look. A
+        Thread's Pane that is alone asks the window for no Pane: its
+        rows' Open beside reads "Open", and opens the sub-agent over the
+        Thread, under the Pane's own header. ← and `Esc` go back, and a
+        nested one is one more screen. The screens are the Thread Pane's
+        view, as its scroll is: nothing goes into the arrangement, and
+        none comes back after a restart. A screen open as the window
+        widens stays until the Person goes back, and a Pane open beside
+        as it narrows stays too.
 22. **A Crew opens beside as the Crew Pane, `agents.crew`**, last in the
     Deck right of the Thread.
     - **It opens by itself once**, when the Crew starts; closed, it stays

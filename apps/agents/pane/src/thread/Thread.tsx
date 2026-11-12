@@ -3,6 +3,7 @@
  * (ADR 0058, ADR 0091 decision 5). The Pane only holds it.
  */
 import { MarkdownFiles } from "@banda/ui/components/markdown-file"
+import { cn } from "@banda/ui/lib/utils"
 import {
   ContextMenu,
   ContextMenuTrigger,
@@ -31,8 +32,9 @@ import { type AnswerKeys, pressOf, QuestionDrawer } from "../asking/Questions"
 import { aboutOf, keyAnswer } from "../asking/asking"
 import { askerOf, byLabel } from "./subagents"
 import { tookAsk, useAskedAbout } from "./ask-about"
-import { OPEN_BESIDE } from "./beside"
+import { NO_SCREENS, opensOf, type Screens, subagentOpening } from "./screens"
 import { opensBeside } from "./SubagentPane"
+import { SubagentScreens } from "./SubagentScreen"
 import { drafted } from "../composer/drafts"
 import { ThreadDetails, useWide } from "./Details"
 import { PlanReady } from "../entries/parts/ProposedPlan"
@@ -82,6 +84,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     runs,
     device,
     file,
+    alone = false,
     composer: says,
   } = props
   const machine = useMachine(engine)
@@ -297,6 +300,23 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     setWasShown(detailsShown)
     if (!detailsShown) setOpening(null)
   }
+  // Its sub-agents open beside it where the router says their Pane does;
+  // where nothing can be drawn beside it, over it, as screens on top (ADR
+  // 0103, decision 21), which are this Thread's view, as its scroll is.
+  const beside = useMemo(
+    () => thread !== null && opensBeside(runs, thread),
+    [runs, thread]
+  )
+  const opens = opensOf(alone, beside)
+  const [over, setOver] = useState<{ thread: string | null; screens: Screens }>(
+    { thread, screens: NO_SCREENS }
+  )
+  const screens = over.thread === thread ? over.screens : NO_SCREENS
+  const show = (screens: Screens) => setOver({ thread, screens })
+  // A screen on top covers the Thread, which keeps its scroll and its draft
+  // under it; its keys and its composer's wait.
+  const covered = screens.length > 0
+
   // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
   // details, and Ctrl+F (⌘F) to find in it, as in T3 Code; and where its
   // unseen begins, which has no key.
@@ -329,6 +349,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         return !!to
       },
       "agents.thread.find": () => {
+        // Under a screen, nothing of it shows to find.
+        if (covered) return false
         setFind((now) => now ?? { query: "", at: 0 })
         findField.current?.select()
         return true
@@ -343,11 +365,6 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   )
   useEffect(() => scope(root.current), [scope])
 
-  // Its sub-agents open beside it where the router says their Pane does.
-  const beside = useMemo(
-    () => thread !== null && opensBeside(runs, thread),
-    [runs, thread]
-  )
   // What the Thread's parts ask, and the Pane does (ADR 0091, decision 4).
   const acts: ThreadActs = {
     openDiff,
@@ -380,12 +397,16 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     // Through the router, to this device's browser (ADR 0106, law 2).
     openLink: (url) => run?.("link.open", { url }),
     // Beside it, in its Group: the one Pane it has for its sub-agents
-    // (ADR 0103, decision 21), where that Pane opens from it.
+    // (ADR 0103, decision 21), where that Pane opens from it; alone, over
+    // it, a screen.
     openSubagent:
-      run && thread !== null && beside
+      run && thread !== null && opens
         ? (sub) => {
             const agent = writers.self ?? writers.own?.agent
-            run(OPEN_BESIDE, { project, thread, sub, ...(agent && { agent }) })
+            const where = { project, thread, agent }
+            const to = subagentOpening(opens, screens, sub, where)
+            if ("screens" in to) show(to.screens)
+            else run(to.action, to.args)
           }
         : undefined,
   }
@@ -394,7 +415,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     // Files dropped anywhere on the Pane join the message.
     <div
       ref={root}
-      className="@container/thread flex h-full min-h-0 flex-col"
+      className="@container/thread relative flex h-full min-h-0 flex-col"
       style={{ "--thread-zoom": zoom.zoom } as React.CSSProperties}
       onPointerDownCapture={(event) => acted(event.nativeEvent)}
       onKeyDownCapture={(event) => {
@@ -403,7 +424,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       }}
       onKeyDown={(event) => {
         const press =
-          asking && thread !== null
+          asking && thread !== null && !covered
             ? pressOf(event, root.current, dock.current, written.current)
             : undefined
         const answer = press && keyAnswer(press)
@@ -414,6 +435,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
         }
       }}
       onDragOver={(event) => {
+        // Under a screen, its composer takes nothing.
+        if (covered) return
         const data = event.dataTransfer
         if (!data.types.includes("Files") && !carries(data)) return
         event.preventDefault()
@@ -459,7 +482,13 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             if (at && !event.defaultPrevented) setMenu(at)
             else event.preventBaseUIHandler()
           }}
-          render={<div ref={area} className="relative min-h-0 flex-1" />}
+          render={
+            <div
+              ref={area}
+              inert={covered}
+              className={cn("relative min-h-0 flex-1", covered && "invisible")}
+            />
+          }
           // A reply copies as Markdown and HTML (ADR 0063, decision 4).
           onCopy={copyAsMarkdown}
         >
@@ -569,6 +598,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 host={host}
                 reader={reader}
                 acts={acts}
+                opens={opens}
               >
                 <Transcript
                   // Each Thread scrolls on its own, from where it was left.
@@ -624,7 +654,11 @@ export function Thread(props: PaneProps<ThreadArgs>) {
       <div
         ref={dock}
         data-chat
-        className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-(--chat-gutter) pb-4"
+        inert={covered}
+        className={cn(
+          "mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-(--chat-gutter) pb-4",
+          covered && "invisible"
+        )}
       >
         {offer.outdated && (
           <div className="px-1">
@@ -702,7 +736,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                 : undefined
           }
           plan={plan}
-          focused={focused}
+          focused={focused && !covered}
           busy={sending}
           working={turn}
           steering={steering}
@@ -749,6 +783,24 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           )}
         </Composer>
       </div>
+      {/* After the dock: as they go, the row they went from takes the
+          focus after its composer did. */}
+      {thread !== null && (
+        <SubagentScreens
+          engine={engine}
+          project={project}
+          thread={thread}
+          run={run}
+          runs={runs}
+          device={device}
+          file={file}
+          open={open}
+          screens={screens}
+          focused={focused}
+          under={area}
+          onScreens={show}
+        />
+      )}
     </div>
   )
 }

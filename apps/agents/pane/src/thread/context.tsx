@@ -23,6 +23,7 @@ import type {
   TurnView,
 } from "@banda/contract/agents"
 import type { ImageReader } from "../entries/parts/MessageImages"
+import type { Opens } from "./screens"
 import { useShownBeside } from "./shown-beside"
 import type { VisualArgs } from "../visual/Frame"
 
@@ -56,8 +57,9 @@ export type ThreadActs = {
   /** Opens a web address on this device, through the router (ADR 0106, law 2). */
   openLink: (url: string) => void
   /** Opens sub-agent `sub` beside: its Pane in the Thread's Group, or the
-   * one the Thread has, showing it; in that Pane, one level deeper (ADR
-   * 0103, decision 21). None where it cannot. */
+   * one the Thread has, showing it; in that Pane, one level deeper; where
+   * the Thread's Pane is alone, over it, as a screen (ADR 0103, decision
+   * 21, {@link useOpens}). None where it cannot. */
   openSubagent?: (sub: SubagentId) => void
 }
 
@@ -121,6 +123,17 @@ export function useLit(sub: SubagentId): boolean {
   return useShownBeside(project, thread) === sub
 }
 
+/** How the Thread's sub-agents open from their rows: beside, or over its
+ * Pane where it is alone. Apart from the rest, as it changes with the
+ * window. */
+const OpensOf = createContext<Opens>("beside")
+
+/** How the Thread's sub-agents open from their rows, which their buttons
+ * say (`openWords`). */
+export function useOpens(): Opens {
+  return useContext(OpensOf)
+}
+
 /** Whether `sub`'s row is open, and how to open or close it. */
 export function useOpened(sub: SubagentId): [boolean, (open: boolean) => void] {
   const { opened } = useThreadAround()
@@ -129,7 +142,8 @@ export function useOpened(sub: SubagentId): [boolean, (open: boolean) => void] {
 }
 
 /** Gives a Thread's parts what they read: `acts` may be new on every
- * render, and the parts still see one set. */
+ * render, and the parts still see one set; and how its sub-agents open,
+ * `opens`, beside by default. */
 export function ThreadAroundProvider({
   engine,
   project,
@@ -137,8 +151,12 @@ export function ThreadAroundProvider({
   host,
   reader,
   acts,
+  opens = "beside",
   children,
-}: Omit<ThreadAround, "opened"> & { children: React.ReactNode }) {
+}: Omit<ThreadAround, "opened"> & {
+  opens?: Opens
+  children: React.ReactNode
+}) {
   const latest = useRef(acts)
   useLayoutEffect(() => {
     latest.current = acts
@@ -173,5 +191,9 @@ export function ThreadAroundProvider({
     () => ({ engine, project, thread, host, reader, acts: stable, opened }),
     [engine, project, thread, host, reader, stable, opened]
   )
-  return <Around.Provider value={around}>{children}</Around.Provider>
+  return (
+    <Around.Provider value={around}>
+      <OpensOf value={opens}>{children}</OpensOf>
+    </Around.Provider>
+  )
 }
