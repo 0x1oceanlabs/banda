@@ -1,7 +1,7 @@
 //! Bounded journal reads. A partial final line is retried next time;
 //! offsets and parser state are committed together with their records.
 use super::journal::{self, Codex, Record};
-use crate::limits::Kind;
+use crate::kinds::Kind;
 use serde::{Deserialize, Serialize};
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, Read, Seek, SeekFrom};

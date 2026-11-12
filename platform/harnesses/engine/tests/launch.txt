@@ -82,3 +82,24 @@ pi ["acp"] in Some("/work")
   BANDA_UNTRUSTED=
   unset []
   writes []
+== codex, not trusted (of codex, sessions codex, shadows None)
+/usr/bin/node ["/srv/banda/adapters/codex-acp.mjs"] in None
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=1
+  CODEX_CONFIG={"shell_environment_policy.set.BANDA_TOKEN":"f00d"}
+  npm_config_omit=optional
+  unset []
+  writes []
+== codex, with credentials (of codex, sessions codex, shadows None)
+/usr/bin/node ["/srv/banda/adapters/codex-acp.mjs"] in Some("/work")
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CODEX_CONFIG={"shell_environment_policy.set.BANDA_TOKEN":"f00d","shell_environment_policy.set.GH_TOKEN":"ghp"}
+  GH_TOKEN=ghp
+  npm_config_omit=optional
+  unset ["SSH_AUTH_SOCK"]
+  writes []

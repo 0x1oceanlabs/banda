@@ -17,7 +17,7 @@ use std::io;
 use std::path::{Path, PathBuf};
 
 /// The variable that names Codex's home.
-pub const VARIABLE: &str = "CODEX_HOME";
+pub const VARIABLE: &str = crate::kinds::CODEX.home;
 
 /// Whether a home can shadow another here: not where links need the
 /// Person's leave, Windows, where each Codex account keeps its sessions and
@@ -46,7 +46,7 @@ pub fn home(env: &BTreeMap<String, String>) -> Option<PathBuf> {
     let named = |home: Option<String>| home.filter(|home| !home.is_empty()).map(PathBuf::from);
     (named(env.get(VARIABLE).cloned()))
         .or_else(|| named(std::env::var(VARIABLE).ok()))
-        .or_else(|| Some(dirs::home_dir()?.join(".codex")))
+        .or_else(|| Some(dirs::home_dir()?.join(crate::kinds::CODEX.default_home)))
 }
 
 /// Whether two folders are one.

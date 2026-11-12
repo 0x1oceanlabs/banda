@@ -223,12 +223,11 @@ fn check_colour(colour: u8) -> Result<(), Refusal> {
     Ok(())
 }
 
+/// The variable that names an account of `harness`'s home, and its home
+/// in the Person's by default.
 pub(super) fn variable(harness: &str) -> Option<(&'static str, &'static str)> {
-    match harness {
-        "claude" => Some(("CLAUDE_CONFIG_DIR", ".claude")),
-        "codex" => Some(("CODEX_HOME", ".codex")),
-        _ => None,
-    }
+    let row = crate::kinds::Kind::named(harness)?.row();
+    Some((row.home, row.default_home))
 }
 
 /// Both automatic discovery and the connect picker use the same XDG rule.
@@ -382,7 +381,9 @@ impl Profiles {
         // A gateway's folder is new, and its Claude Code asks Banda for
         // its key, written before the entry so that no entry stands
         // without it.
-        let asks_for_key = url.is_some() && variable == "CLAUDE_CONFIG_DIR";
+        let helper =
+            crate::kinds::Kind::named(&account.harness).is_some_and(|k| k.row().key_helper);
+        let asks_for_key = url.is_some() && helper;
         let undo = || {
             // A newly made folder holding nothing but what this wrote;
             // never an adopted folder or data written concurrently.

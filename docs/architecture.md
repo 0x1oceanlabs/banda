@@ -1232,6 +1232,16 @@ If Chat is removed, Agents still works through its own Thread.
   before making one. `harnesses.list`, `harnesses.account` (with the
   machine's log position it is current at), `harnesses.sign_in {harness,
   way}` and `harnesses.sign_out`. It owns `harnesses.toml`.
+- **What differs between Harnesses is one table** (ADR 0108, decision
+  6): `platform/harnesses/engine/src/kinds.rs` has a row for Claude Code
+  and one for Codex (its home variable and default home, its CLI's
+  variable, its journals, how an API key account signs in, whether it
+  signs in with a device code, whether a gateway asks for its key with a
+  helper) and how each reaches a gateway. Accounts, profiles, usage,
+  limits and shadows ask `Kind::named` (by ID) or `Kind::of` and the
+  row; what a launch does per Harness (Codex's shell variables, Claude
+  Code's sessions folder) moves into one launch next.
+  `tests/launch.txt` pins what each kind of entry starts as.
 - **A machine says what its Accounts are in one answer** (ADR 0108,
   decision 4): `harnesses.accounts` gives each entry, the Harnesses they
   are accounts of with their title and what a new one is called, and the

@@ -47,42 +47,7 @@ pub(crate) const TABLE: &str = "CREATE TABLE harnesses_limits (
     kept TEXT NOT NULL
 )";
 
-/// Which Harness's limits Banda can read.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub(crate) enum Kind {
-    Claude,
-    Codex,
-}
-
-impl Kind {
-    /// What `harness` runs: the Harness it is an account of (ADR 0078),
-    /// else the CLI its adapter is told of, by the variable or the
-    /// program's name, else its ID. So a second account, an entry of its
-    /// own with Claude Code's adapter, is Claude Code's.
-    pub(crate) fn of(harness: &Harness) -> Option<Kind> {
-        let named = |name: &str| match name {
-            "claude" | "CLAUDE_CODE_EXECUTABLE" => Some(Kind::Claude),
-            "codex" | "CODEX_PATH" => Some(Kind::Codex),
-            _ => None,
-        };
-        if let Some(kind) = harness.of.as_deref().and_then(named) {
-            return Some(kind);
-        }
-        let Some(cli) = &harness.cli else {
-            return named(&harness.id);
-        };
-        let program = std::path::Path::new(&cli.program).file_stem();
-        named(&cli.variable).or_else(|| named(program?.to_str()?))
-    }
-
-    /// The ID Banda knows it by, as its built-in entry's.
-    pub(crate) fn id(self) -> &'static str {
-        match self {
-            Kind::Claude => "claude",
-            Kind::Codex => "codex",
-        }
-    }
-}
+use crate::kinds::Kind;
 
 /// What a read found.
 #[derive(Debug, Default, PartialEq)]

@@ -87,7 +87,8 @@ impl Omarchy {
 
     pub fn merge(&self, mut list: Vec<Harness>) -> Vec<Harness> {
         // A custom-only list (including a trial's fake Harness) is explicit.
-        if !list.iter().any(|h| h.id == "claude" || h.id == "codex") {
+        let known = |id: &str| crate::kinds::Kind::named(id).is_some();
+        if !list.iter().any(|h| known(&h.id)) {
             return list;
         }
         for (id, name, path) in &self.programs {
@@ -113,7 +114,7 @@ impl Omarchy {
             harness.carried = None;
             list.push(harness);
         }
-        for provider in ["claude", "codex"] {
+        for provider in crate::kinds::Kind::ALL.map(crate::kinds::Kind::id) {
             let (variable, default) = super::profiles::variable(provider).unwrap();
             let Some(base) = list
                 .iter()
