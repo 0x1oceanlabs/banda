@@ -27,6 +27,7 @@ import {
   foundIn,
   Hosts,
   installCommand,
+  terminalArgs,
   installedIn,
   hostsOf,
   linesOf,
@@ -139,6 +140,19 @@ const waitsBeforeIn = (args: string[]) => {
     Number(args.find((one) => one.startsWith(`${key}=`))?.split("=")[1])
   return said("ServerAliveInterval") * said("ServerAliveCountMax") * 1000
 }
+
+it("a terminal's ssh is Banda's own, but with a terminal and free to ask", () => {
+  const args = terminalArgs("roma@devbox", "claude")
+  expect(args.slice(-3)).toEqual(["--", "roma@devbox", "claude"])
+  expect(args).toContain("-t")
+  expect(args).not.toContain("-T")
+  expect(args).not.toContain("BatchMode=yes")
+  for (const option of followerArgs(DEVBOX).slice(0, -3))
+    if (option !== "-T" && option !== "BatchMode=yes" && option !== "-o")
+      expect(args).toContain(option)
+  for (let at = 0; at < args.length - 3; at++)
+    if (args[at] === "-o") expect(args[at + 1]).toMatch(/^[A-Za-z0-9]+=/)
+})
 
 it("the follower takes no agent, no X11, no forward, no tunnel, no command of the config's and no shared connection, gives up soon on a machine that does not answer but waits out a sign-in, and runs banda through sh", () => {
   const args = followerArgs(DEVBOX)

@@ -722,6 +722,25 @@ const commandArgs = (host: Entry, remote: string) => [
 export const followerArgs = (host: Entry) =>
   commandArgs(host, remoteCommand(host.banda))
 
+/** A terminal's arguments: `remote` run at `ssh` on a terminal there,
+ * with every option Banda's own ssh has but `-T` and BatchMode, so ssh
+ * may ask what it needs, as a passphrase, and the program there has a
+ * terminal: "Sign in to Claude on <name>" runs `claude` so (ADR 0115,
+ * decision 8). */
+export const terminalArgs = (ssh: string, remote: string) => [
+  "-t",
+  ...PLAIN_SSH.filter(
+    (arg, at, all) =>
+      arg !== "-T" && arg !== "BatchMode=yes" && all[at + 1] !== "BatchMode=yes"
+  ),
+  ...PATIENT,
+  "-o",
+  "ClearAllForwardings=yes",
+  "--",
+  ssh,
+  remote,
+]
+
 /** The forward's arguments: this machine's loopback port `from` to port
  * `to` on that machine's loopback, and nothing else. It ends when it
  * cannot listen, and soon on a link gone silent (`QUICK`). */

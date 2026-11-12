@@ -565,3 +565,12 @@ export const showRows = (name = "this machine"): Row[] =>
       ? [{ ...row, title: words.title, about: words.about(name) }]
       : []
   })
+
+/** `argv` as one line a shell types: each argument as it is where it is
+ * plain, else in single quotes, as sh, bash, zsh and fish read them. */
+export const shellLine = (argv: readonly string[]) =>
+  argv
+    .map((arg) =>
+      /^[\w@%+=:,./-]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`
+    )
+    .join(" ")
