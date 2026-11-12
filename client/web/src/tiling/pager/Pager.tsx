@@ -1,5 +1,5 @@
 /**
- * The Pager, drawn (`pager.ts` says what it takes and gives): a button per
+ * The Pager, drawn (`rules.ts` says what it takes and gives): a button per
  * cell, and the mark on the one on screen. What a cell shows is decided
  * there; here each `Face` has its drawing. The cells come, go and mark the
  * one on screen on the look's `workspace` move, with the screen
@@ -11,7 +11,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { PlusIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef } from "react"
 import { PagerMotion } from "./motion"
-import type { Cell, Face } from "./pager"
+import type { Cell, Face } from "./rules"
 
 /** How wide each cell is drawn, in rem: the mark's 1.5rem and a hair each
  * side. */

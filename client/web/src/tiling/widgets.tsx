@@ -13,11 +13,11 @@ import type { Widget, WidgetProps } from "@banda/ui/module"
 import { useContext, useMemo } from "react"
 import { AsidePill } from "./AsidePill"
 import { AsideContext, useTiled } from "./kept"
-import { cellsOf, pagerStateOf } from "./pager/pager"
+import { cellsOf, pagerStateOf } from "./pager/rules"
 import { Pager } from "./pager/Pager"
 import { ASIDE, WORKSPACES } from "./widget-ids"
 
-/** The Pager (`pager/pager.ts`): what the Tiling holds, as cells, drawn
+/** The Pager (`pager/rules.ts`): what the Tiling holds, as cells, drawn
  * again only as they change. A click goes to a workspace by its place, as
  * the keys of `workspace.go-N` reach only the first nine. */
 function PagerWidget({ projects }: WidgetProps) {
