@@ -87,7 +87,7 @@
 # [bar]
 # height = 36
 # left = ["workspaces.list", "window.flow"]  # widgets after the Mark, by id, in order; Alt and drag moves one
-# center = ["sidebar.counts"]        # widgets in the middle; [] leaves it empty
+# center = []                       # widgets in the middle, as "sidebar.counts"; empty by default
 # right = ["workspaces.aside", "terminal.ports", "harnesses.limits", "notifications.recent", "clock.now"]  # widgets on the right, before the connection
 
 # A Thread that drops from the top over the workspace, on Alt+`.

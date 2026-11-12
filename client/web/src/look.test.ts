@@ -170,7 +170,7 @@ const LISTED: Listed[] = [
   },
   {
     rule: "design.4",
-    why: "Step 4, drift onto tokens: white on three counts, the kit's too, which the count's own foreground has; hover fills of black and white, which the text thinned has.",
+    why: "Step 4, drift onto tokens: white on two counts, the kit's too, which the count's own foreground has; hover fills of black and white, which the text thinned has.",
     cases: [
       "docs/design/kit/kit.css: #fff",
       "apps/browser/pane/src/Extensions.tsx: text-white",
@@ -178,7 +178,6 @@ const LISTED: Listed[] = [
       "apps/git/pane/src/GitButton.tsx: bg-white/8",
       "client/ui/src/components/thread-details.tsx: bg-black/[3.5%]",
       "client/ui/src/components/thread-details.tsx: bg-white/8",
-      "client/web/src/bar/Bar.tsx: text-white",
     ],
   },
   {

@@ -200,7 +200,7 @@ test("Quick Look shows the row picked over the desk on Space, follows ↓ in the
   await expect(peek).toHaveAttribute("aria-label", "Quick Look: a.ts")
   await page
     .getByRole("banner")
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
     .click()
   await expect(page.getByRole("dialog", { name: "Banda menu" })).toBeVisible()
   await expect(peek).not.toHaveAttribute("data-fill")

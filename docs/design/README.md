@@ -304,10 +304,12 @@ One row, 36 px, text at the meta size in muted ([0024], [0098] d20–22):
   shows by its Sign alone, faint while it is empty and keeps its place
   ([0102]). A number is the workspace's place, its `Alt+N`; a click goes
   there, and nothing else.
-- **Middle**: empty but for the sidebar's counts while the sidebar is
-  hidden ([0035]). [0098] d22 puts them beside the logo, which shows the
-  loudest state: Your turn in its colour, the working in grey, "3 · 7",
-  nothing when nothing calls.
+- **Beside the logo**, while the sidebar is hidden ([0098] d22): the
+  count, Your turn in its loudest call's colour, the working in grey,
+  "3 · 7", nothing when nothing calls; a click opens the small inbox,
+  Your turn in one-line cards and "7 at work ›".
+- **Middle**: empty. The sidebar's counts ([0035]) stand there only
+  where the Person lists them.
 - **Right**: widgets that show only with something to say: ports
   `:5173 +1`, the limits' ring ([0043]), an update, the bell ([0048]).
 - No boxes, no pills, no call dots on the numbers ([0102]); only the

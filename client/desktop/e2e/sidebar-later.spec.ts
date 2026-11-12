@@ -30,7 +30,7 @@ test.afterEach(async () => {
 })
 
 /** The bar's Mark, named by what calls. */
-const markOf = (page: Page) => page.getByRole("button", { name: /^Banda menu/ })
+const markOf = (page: Page) => page.getByRole("button", { name: /^Banda(:|$)/ })
 
 /** The window at 1440×900, the size the sidebar's screenshots share,
  * its marks in their still poses, as marks.spec.ts draws them: a picture
@@ -96,7 +96,7 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   await expect(thread).toBeHidden()
   await expect(toastsOf(page).getByText(/^Later, until /)).toBeVisible()
   await expect(row).toBeHidden()
-  await expect(markOf(page)).toHaveAccessibleName("Banda menu")
+  await expect(markOf(page)).toHaveAccessibleName("Banda")
   await leaveSidebar(page)
 
   // Its time comes: it is the Person's turn again, Woke, with the same
@@ -165,7 +165,7 @@ test("a Thread put off Someday sleeps on as its turn ends, until a new question 
     .toBe(true)
   // Its turn runs on, but put off it is away: the bar leaves it out, and
   // nothing else works or calls.
-  await expect(markOf(page)).toHaveAccessibleName("Banda menu")
+  await expect(markOf(page)).toHaveAccessibleName("Banda")
 
   // Its card in Later says it keeps no time.
   const tab = (name: string) =>

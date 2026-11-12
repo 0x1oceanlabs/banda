@@ -422,7 +422,7 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   await expect(one).toBeInViewport({ ratio: 0.99 })
 })
 
-test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, the bar's counts list it in that order, and they are the switcher (ADR 0065, ADR 0079, ADR 0087)", async () => {
+test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, the count beside the logo says whose turn it is and who works, and the small inbox lists the calls in that order (ADR 0079, ADR 0087, ADR 0098 decision 22)", async () => {
   window = await startWindow()
   const { page } = window
   const [a, b, c] = await agents(
@@ -433,53 +433,55 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
     "hello d"
   )
   const bar = page.getByRole("banner")
-  const counts = bar.getByRole("button", { name: /working|done/ })
+  const count = bar.locator("[data-inbox-count]")
+  const logo = bar.getByRole("button", { name: /^Banda(:|$)/ })
   await page.keyboard.press("Alt+KeyA")
   await expect(sidebarOf(page)).toBeHidden()
-  // The bar names the Agent in front, and counts the ones at work.
-  await expect(counts).toHaveAccessibleName("3 working")
-  await expect(counts).toContainText("hello d")
+  // Nothing calls, so no count shows; the logo says who works.
+  await expect(logo).toHaveAccessibleName("Banda: 3 at work")
+  await expect(count).toHaveCount(0)
 
   // They finish one after another.
   finish(window, "wait a")
-  await expect(counts).toHaveAccessibleName("1 done · 2 working")
+  await expect(count).toHaveAccessibleName("Inbox: 1 your turn, 2 at work")
+  await expect(count).toHaveText("1·2")
   finish(window, "wait b")
-  await expect(counts).toHaveAccessibleName("2 done · 1 working")
+  await expect(count).toHaveAccessibleName("Inbox: 2 your turn, 1 at work")
   finish(window, "wait c")
-  await expect(counts).toHaveAccessibleName("3 done")
+  await expect(count).toHaveAccessibleName("Inbox: 3 your turn")
+  await expect(count).toHaveText("3")
+  await expect(logo).toHaveAccessibleName("Banda: Done, 3 your turn")
 
-  // The counts' list goes in the sidebar list's order, the one order of
+  // The small inbox goes in the sidebar list's order, the one order of
   // what calls (ADR 0087, decision 8): Your turn oldest first, so no one
   // waits forever (ADR 0098, decision 3).
-  await counts.click()
-  const waiting = page.getByRole("group", { name: "Wait for you" })
-  await expect(waiting.getByRole("menuitem")).toHaveText([
+  await count.click()
+  const inbox = page.getByRole("dialog", { name: "Inbox" })
+  await expect(inbox.getByRole("option")).toHaveText([
     /wait a/,
     /wait b/,
     /wait c/,
   ])
   await page.keyboard.press("Escape")
-  await expect(waiting).toBeHidden()
+  await expect(inbox).toBeHidden()
 
   // Alt+U takes the next below, as the sidebar list orders them though it
-  // is hidden: down the counts' list. The bar names each as it comes.
+  // is hidden: down the small inbox's list.
   await page.keyboard.press("Alt+KeyU")
   await expect(a).toHaveAttribute("data-focused", "true")
-  await expect(counts).toHaveAccessibleName("2 done")
-  await expect(counts).toContainText("wait a")
+  await expect(count).toHaveAccessibleName("Inbox: 2 your turn")
   await page.keyboard.press("Alt+KeyU")
   await expect(b).toHaveAttribute("data-focused", "true")
-  await expect(counts).toHaveAccessibleName("1 done")
-  await expect(counts).toContainText("wait b")
+  await expect(count).toHaveAccessibleName("Inbox: 1 your turn")
 
-  // A row of the counts' list goes there too.
-  await counts.click()
-  await page.getByRole("menuitem", { name: /wait c/ }).click()
+  // A card of the small inbox goes there too, by Enter.
+  await count.click()
+  await expect(inbox.getByRole("listbox")).toBeFocused()
+  await page.keyboard.press("Enter")
   await expect(c).toHaveAttribute("data-focused", "true")
-  await expect(counts).toBeHidden()
-  await expect(
-    bar.getByRole("img", { name: "Nothing waits for you, nothing works" })
-  ).toBeVisible()
+  await expect(inbox).toBeHidden()
+  await expect(count).toHaveCount(0)
+  await expect(logo).toHaveAccessibleName("Banda")
 })
 
 test("Alt+Z puts the Thread in front off until the time typed, its Pane closes, Undo wakes it, and so do Wake on its shelf and on its picker (ADR 0074)", async () => {

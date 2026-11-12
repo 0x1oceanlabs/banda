@@ -1190,7 +1190,17 @@
       "title": "Show the sidebar",
       "section": "Threads",
       "keys": [],
-      "unlisted": true
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "tab": {
+            "type": "string",
+            "description": "the tab it shows, with the focus in its list: inbox, working, later or archive"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "sidebar.open-picked",

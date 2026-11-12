@@ -126,12 +126,12 @@ async function wide(window: Window) {
  * none plays but a cut text's fade, whose timeline is the text's own
  * scroll, and Playwright's `animations: "disabled"` would cancel it.
  */
-async function look(window: Window, mode: "dark" | "light") {
+async function look(window: Window, mode: "dark" | "light", more = "") {
   const { page, dir } = window
   const html = page.locator("html")
   writeFileSync(
     join(dir, "config/look.toml"),
-    `mode = "${mode}"\n${GLASS}[motion]\noff = true\n`
+    `mode = "${mode}"\n${GLASS}[motion]\noff = true\n${more}`
   )
   if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
   else await expect(html).not.toHaveClass(/\bdark\b/)
@@ -476,6 +476,10 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
 /** The Inbox, with the counts always on the bar. */
 const INBOX = 'preset = "inbox"\n[bar]\nshow = "always"\n'
 
+/** The counts in the bar's middle, where the Person lists them: none
+ * stand there by default (ADR 0098, decision 22). */
+const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
+
 /** A title too long for a card of the sidebar. */
 const LONG = "Bench the window tests on arc against the new sidebar cards"
 
@@ -608,7 +612,7 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   const item = (title: string) =>
     waiting.getByRole("menuitem", { name: new RegExp(`^${title},`) })
   for (const mode of ["dark", "light"] as const) {
-    await look(window, mode)
+    await look(window, mode, COUNTS)
     await counts.click()
     await expect(items).toHaveCount(3)
     await page.mouse.move(1400, 850)

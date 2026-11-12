@@ -592,7 +592,7 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   const asking = sidebar.getByRole("img", { name: "Asks you" })
   await expect(asking).toHaveCount(2)
   const logo = page
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
     .locator('[data-slot="banda-mark"]')
   await expect(logo).toHaveAttribute("data-look", "asking")
   // Nothing has the keyboard or the pointer, and no news plays: the Marks
