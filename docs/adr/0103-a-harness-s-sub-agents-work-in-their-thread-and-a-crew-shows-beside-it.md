@@ -1170,6 +1170,49 @@ Pane's menu, the script copied to `.claude/workflows/`; Crews of Banda's
 own over `send`, as the Threads App's table of runs (ADR 0082, decision
 8), the first candidate for `task@1`.
 
+### Amended 2026-11-12, steps 4–6
+
+Decided for steps 4–6, and what the recording
+`apps/agents/engine/tests/recordings/claude-crew.jsonl` showed (Haiku,
+21 agents and 1, about $0.05):
+
+- **A Question between turns** is the Crew's only while exactly one Crew
+  works and no turn of the Agent's own is open: it names the Crew
+  (`Question.crew`, asker "Crew ‹title›"), and its call is the Crew's.
+  Otherwise it is the Agent's own, in a turn by itself, as before
+  (decision 28).
+- **Progress is written only on a change**: an agent's state, label,
+  model, attempt, result or why; a phase; a new agent; or the log line.
+  Tokens and times ride along with the next change. The recording's 55
+  frames became 26 facts.
+- **The log line.** No frame carries what a script logs: Claude writes
+  it only into the output file's `logs`. So the Crew's log line comes
+  with its end (`crew.ended.log`, the last line), and the card draws no
+  log line while the Crew works. A frame that carries one
+  (`workflow_log`) is read, should Claude send it later.
+- **The Result** is read once from `output_file`: Claude's JSON object,
+  whose `result` is the Result (a value not a string is written out),
+  capped at 64 KB where a character ends; any other text is the Result
+  as it is. A script that throws leaves the file empty: no Result, and
+  the why is the first line of Claude's summary, not the stack.
+- **Queued.** Past Claude's limit of agents at once (16 here), an agent
+  comes as `start` with no `startedAt`: Banda says Queued.
+- **Pipeline rows** are ordered by index within each phase.
+- **The Crew's edits** count in the turn Claude goes on with after it,
+  which `crew.went_on` names once its usage says the Crew's run
+  (`_claude/origin.runId`); it comes at that turn's end, as a
+  `crew.progressed`. The changes card does not count them yet: #1326
+  holds the edge cases.
+- **An agent's work in its detail** comes later, in an issue of its own.
+- **"Don't ask again"** stays as option 2 of the Question to start a
+  Crew, as Claude offers it.
+- **A Crew's open calls end when it ends**: done with a Crew that is
+  done, else failed; its open Questions close.
+- **The Thread works while its Crew does**: listed (`ListedThread.crew`),
+  held and kept awake, counted by the Mark, refused archive, and an
+  update waits; so do a Thread's sub-agents that outlive their turn,
+  which archive and updates had missed.
+
 ## Roma's calls
 
 On 2026-11-10, over the mocks, Roma took every recommendation. The ten
@@ -1275,4 +1318,5 @@ On 2026-11-10, during step 1 (translated):
     _Dropped 2026-11-10 with decision 23 (Roma's call 11)._
 - **A Crew's open calls.** A workflow agent's call that asked never ends,
   even after its Crew stops. Step 4 decides whether the engine ends a
-  Crew's open calls when the Crew ends.
+  Crew's open calls when the Crew ends. _Answered 2026-11-12: it does
+  (Amended 2026-11-12, steps 4–6)._
