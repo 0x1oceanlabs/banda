@@ -84,11 +84,17 @@ export function onPage(take: (holder: Element) => void): () => void {
 }
 
 /** The focused Pane's tile, which the window marks `data-focused`; while
- * the Sheet shows, the Sheet, which has the keys (ADR 0102, decision 5). */
+ * the Sheet shows, the Sheet, which has the keys (ADR 0102, decision 5).
+ * Each workspace keeps a tile focused: the one live, not `inert`, as a
+ * workspace out of view is, is the one the focus can go to. */
 export function focusedTile(): HTMLElement | null {
+  const tiles = document.querySelectorAll<HTMLElement>(
+    "[data-tile][data-focused=true]"
+  )
   return (
     document.querySelector<HTMLElement>("[data-sheet]") ??
-    document.querySelector<HTMLElement>("[data-tile][data-focused=true]")
+    [...tiles].find((tile) => !tile.closest("[inert]")) ??
+    null
   )
 }
 
