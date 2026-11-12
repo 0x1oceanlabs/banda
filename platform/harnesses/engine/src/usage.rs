@@ -6,7 +6,7 @@ mod model;
 mod prices;
 mod store;
 
-use crate::limits::Kind;
+use crate::kinds::Kind;
 use crate::{Harness, Harnesses};
 use banda_kernel::{Error, ModuleProject};
 pub use model::{UsageNow, UsageRead, UsageRow, UsageTokens, UsageTotal};
@@ -41,10 +41,9 @@ fn sources(harnesses: &[Harness]) -> Vec<Source> {
         .filter(|h| h.enabled)
         .filter_map(|h| {
             let kind = Kind::of(h)?;
-            let (variable, default, folder, prefix) = match kind {
-                Kind::Claude => ("CLAUDE_CONFIG_DIR", ".claude", "projects", "claude"),
-                Kind::Codex => ("CODEX_HOME", ".codex", "sessions", "codex"),
-            };
+            let row = kind.row();
+            let (variable, default, folder, prefix) =
+                (row.home, row.default_home, row.journals, row.id);
             let home = h.env.get("HOME").map(PathBuf::from).or_else(dirs::home_dir);
             let config = h
                 .env

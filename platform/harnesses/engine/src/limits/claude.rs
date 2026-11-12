@@ -29,7 +29,7 @@ pub(crate) const USAGE: &str = "https://api.anthropic.com/api/oauth/usage";
 const ANSWERING: Duration = Duration::from_secs(10);
 
 /// The variable that names Claude Code's configuration folder.
-const CONFIG: &str = "CLAUDE_CONFIG_DIR";
+const CONFIG: &str = crate::kinds::CLAUDE.home;
 
 const HOUR: i64 = 60 * 60 * 1000;
 
@@ -164,7 +164,7 @@ impl Place {
     fn folder(&self) -> PathBuf {
         match &self.named {
             Some(named) => PathBuf::from(named),
-            None => self.home.join(".claude"),
+            None => self.home.join(crate::kinds::CLAUDE.default_home),
         }
     }
 }

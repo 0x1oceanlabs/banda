@@ -4,6 +4,7 @@
 //! `agents.toml` (ADR 0040, decision 6).
 
 use crate::carried::Carried;
+use crate::kinds::{CLAUDE, CODEX, CODEX_CONFIG, Kind};
 use crate::model::{AccountKind, HarnessView, Icon, LimitsLook};
 use crate::shadow;
 use banda_kernel::{Holes, Program, ProjectId, SSH_AGENT, project_env};
@@ -23,7 +24,7 @@ pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
 /// every Claude account's process reads and writes (ADR 0078, decision 3),
 /// and which a Thread's go with it to another Project.
 pub fn claude_sessions(data: &Path) -> PathBuf {
-    data.join("sessions").join("claude")
+    data.join("sessions").join(CLAUDE.id)
 }
 
 /// Whether a Project's Harness process may load what the Project's folder
@@ -173,7 +174,6 @@ impl Harness {
     /// the fence with its `holes` in it. Codex's shells get the credentials
     /// as they get a pass ([`Harness::in_project`]).
     pub fn start(&self) -> Program {
-        use crate::limits::Kind;
         let mut program = Program::harness(&self.command, self.args.clone(), self.holes.clone());
         program.env = self.env.clone();
         let set = &self.credentials.set;
@@ -230,9 +230,8 @@ impl Harness {
     /// the Harness it is or is an account of, where a home can shadow
     /// another's; else its own ID.
     pub fn sessions(&self) -> &str {
-        use crate::limits::Kind;
         match Kind::of(self) {
-            Some(Kind::Claude) => "claude",
+            Some(Kind::Claude) => CLAUDE.id,
             Some(Kind::Codex) if self.shadows.is_none() || shadow::LINKS => self.harness(),
             _ => &self.id,
         }
@@ -255,7 +254,6 @@ impl Harness {
     /// (ADR 0078, decision 3). Nothing for the same entry, nor for another
     /// Harness's.
     pub async fn take_session(&self, from: &Harness, session: &str) -> std::io::Result<()> {
-        use crate::limits::Kind;
         if from.id == self.id || Kind::of(self) != Some(Kind::Codex) {
             return Ok(());
         }
@@ -300,7 +298,6 @@ impl Harness {
         shells: &BTreeMap<String, String>,
         trusted: bool,
     ) -> Harness {
-        use crate::limits::Kind;
         let mut harness = self.clone();
         (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
         (harness.env).extend(shells.clone());
@@ -337,60 +334,6 @@ impl Harness {
             self.credentials.unset.push(SSH_AGENT.to_owned());
         }
     }
-}
-
-/// What Codex's adapter takes as Codex's configuration for each of its
-/// sessions: a JSON object, whose keys may be dotted paths, as Codex's
-/// `-c` takes them.
-const CODEX_CONFIG: &str = "CODEX_CONFIG";
-
-/// The provider a Codex gateway account names for itself.
-const CODEX_PROVIDER: &str = "banda-gateway";
-
-/// How long Codex waits for `banda secret get`: a key kept as a reference
-/// may wait for its password manager to be unlocked (ADR 0078, decision 1).
-const SECRET_WAIT_MS: u64 = 60_000;
-
-/// Makes `harness`, an account, a gateway's at `url` (ADR 0078, decision
-/// 1): Claude Code sends its requests there, and asks for its key with the
-/// `apiKeyHelper` its folder's settings name; Codex gets a provider of its
-/// own there, over its entry's `CODEX_CONFIG`, chosen for its sessions,
-/// whose token it asks `banda secret get <id>` for. Neither gets the key.
-fn gateway(harness: &mut Harness, url: &str) -> Result<(), String> {
-    use crate::limits::Kind;
-    use serde_json::{Map, Value};
-    match Kind::of(harness) {
-        Some(Kind::Claude) => {
-            (harness.env).insert("ANTHROPIC_BASE_URL".to_owned(), url.to_owned());
-        }
-        Some(Kind::Codex) => {
-            let mut config = match harness
-                .env
-                .get(CODEX_CONFIG)
-                .map(|c| serde_json::from_str(c))
-            {
-                None => Map::new(),
-                Some(Ok(Value::Object(config))) => config,
-                Some(_) => return Err("a gateway's `CODEX_CONFIG` is a JSON object".to_owned()),
-            };
-            let key = |k: &str| format!("model_providers.{CODEX_PROVIDER}.{k}");
-            config.insert("model_provider".to_owned(), CODEX_PROVIDER.into());
-            config.insert(key("name"), harness.name.as_str().into());
-            config.insert(key("base_url"), url.into());
-            config.insert(key("wire_api"), "responses".into());
-            config.insert(key("auth.command"), "banda".into());
-            config.insert(
-                key("auth.args"),
-                serde_json::json!(["secret", "get", harness.id]),
-            );
-            config.insert(key("auth.timeout_ms"), SECRET_WAIT_MS.into());
-            (harness.env).insert(CODEX_CONFIG.to_owned(), Value::Object(config).to_string());
-            // What Codex's adapter starts its sessions with.
-            (harness.env).insert("MODEL_PROVIDER".to_owned(), CODEX_PROVIDER.to_owned());
-        }
-        None => return Err("a gateway is an account of Claude Code or Codex".to_owned()),
-    }
-    Ok(())
 }
 
 /// `before`, a `CODEX_CONFIG`, with `variables` set in Codex's shells and
@@ -482,11 +425,9 @@ impl List {
             .map(|harness| {
                 let mut harness = harness.carried_by(carried);
                 if let Some(root) = &self.accounts {
-                    let variable = match harness.of.as_deref() {
-                        Some("claude") => Some("CLAUDE_CONFIG_DIR"),
-                        Some("codex") => Some("CODEX_HOME"),
-                        _ => None,
-                    };
+                    let variable = (harness.of.as_deref())
+                        .and_then(Kind::named)
+                        .map(|kind| kind.row().home);
                     let home = variable
                         .and_then(|key| harness.env.get(key))
                         .and_then(|p| dunce::canonicalize(p).ok());
@@ -837,12 +778,15 @@ impl HarnessEntry {
         // Harness's (ADR 0078, decision 3).
         if account
             && own_home.is_some_and(|home| !home.is_empty())
-            && crate::limits::Kind::of(&harness) == Some(crate::limits::Kind::Codex)
+            && Kind::of(&harness) == Some(Kind::Codex)
         {
             harness.shadows = shared_home;
         }
+        // A gateway's account sends its requests there (ADR 0078, decision 1).
         if let Some(url) = harness.url.clone() {
-            gateway(&mut harness, &url)?;
+            let kind = Kind::of(&harness)
+                .ok_or_else(|| "a gateway is an account of Claude Code or Codex".to_owned())?;
+            kind.gateway(&mut harness, &url)?;
         }
         Ok(harness)
     }
@@ -1197,23 +1141,23 @@ struct Adapter {
 
 const ADAPTERS: [Adapter; 2] = [
     Adapter {
-        id: "claude",
+        id: CLAUDE.id,
         name: "Claude Code",
         short: "Claude",
         package: "@agentclientprotocol/claude-agent-acp",
         version: "0.99.1",
         // The adapter's Agent SDK 0.3.312 was built for Claude Code
         // 2.1.312 (its `claudeCodeVersion`).
-        cli: ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
+        cli: ("claude", CLAUDE.cli, "2.1.312"),
     },
     Adapter {
-        id: "codex",
+        id: CODEX.id,
         name: "Codex",
         short: "Codex",
         package: "@agentclientprotocol/codex-acp",
         version: "2.5.0",
         // The adapter depends on `@openai/codex` ^0.165.0.
-        cli: ("codex", "CODEX_PATH", "0.165.0"),
+        cli: ("codex", CODEX.cli, "0.165.0"),
     },
 ];
 
@@ -1807,10 +1751,7 @@ mod tests {
             "a sentence says Claude"
         );
         assert_eq!(personal.kind, AccountKind::Subscription);
-        assert_eq!(
-            crate::limits::Kind::of(personal),
-            Some(crate::limits::Kind::Claude)
-        );
+        assert_eq!(Kind::of(personal), Some(Kind::Claude));
 
         // An account of Banda's Harness needs no entry for the Harness.
         let alone = "[[harness]]\nid = \"api\"\nof = \"claude\"\nkind = \"api\"\n";
@@ -1824,10 +1765,7 @@ mod tests {
             (own.command.as_str(), own.carried.as_deref()),
             ("my-acp", None)
         );
-        assert_eq!(
-            crate::limits::Kind::of(&own),
-            Some(crate::limits::Kind::Codex)
-        );
+        assert_eq!(Kind::of(&own), Some(Kind::Codex));
     }
 
     #[test]
@@ -2266,14 +2204,31 @@ args = [\"acp\"]
         let shells = BTreeMap::from([("BANDA_TOKEN".to_owned(), "f00d".to_owned())]);
         let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
         let mut said = String::new();
-        for harness in list.now().iter() {
-            let started =
-                harness.in_project(project, data, work(), Holes::default(), &shells, true);
+        // Each entry in a Project the Person trusts; Codex also in one they
+        // do not, and with the credentials a trusted Project gives.
+        let mut runs: Vec<(Harness, bool, bool)> = (list.now().iter())
+            .map(|h| (h.clone(), true, false))
+            .collect();
+        let codex = list.find("codex").unwrap();
+        runs.extend([(codex.clone(), false, false), (codex, true, true)]);
+        for (harness, trusted, credentials) in runs {
+            let mut started =
+                harness.in_project(project, data, work(), Holes::default(), &shells, trusted);
+            if credentials {
+                (started.credentials.set).insert("GH_TOKEN".to_owned(), "ghp".to_owned());
+                (started.credentials.unset).push("SSH_AUTH_SOCK".to_owned());
+            }
             let start = started.start();
             let env: BTreeMap<_, _> = start.env.iter().collect();
             said += &format!(
-                "== {} (of {}, sessions {}, shadows {:?})\n{} {:?} in {:?}\n",
+                "== {}{}{} (of {}, sessions {}, shadows {:?})\n{} {:?} in {:?}\n",
                 harness.id,
+                if trusted { "" } else { ", not trusted" },
+                if credentials {
+                    ", with credentials"
+                } else {
+                    ""
+                },
                 harness.harness(),
                 harness.sessions(),
                 harness.shadows,
@@ -2290,7 +2245,9 @@ args = [\"acp\"]
             );
         }
         let mut said = said.replace(&project.to_string(), "<project>");
-        if let Some(home) = dirs::home_dir() {
+        // The Person's home, where a shadow's shared home is; a home of
+        // `/` would match every path.
+        if let Some(home) = dirs::home_dir().filter(|home| home.components().count() > 1) {
             said = said.replace(&home.display().to_string(), "~");
         }
         let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/launch.txt");
@@ -2298,7 +2255,6 @@ args = [\"acp\"]
             std::fs::write(&file, &said).unwrap();
         }
         let pinned = std::fs::read_to_string(&file).unwrap_or_default();
-        assert!(pinned == said, "a launch changed: BANDA_BLESS=1 writes it\n{said}");
+        assert_eq!(pinned, said, "a launch changed: BANDA_BLESS=1 writes it");
     }
-
 }

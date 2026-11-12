@@ -13,6 +13,7 @@ pub mod carried;
 pub mod cli;
 pub mod github;
 pub mod hosts;
+mod kinds;
 mod limits;
 mod list;
 pub mod model;
