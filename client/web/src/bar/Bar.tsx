@@ -8,15 +8,7 @@ import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
 import { BellOffIcon, TriangleAlertIcon } from "lucide-react"
-import {
-  type RefObject,
-  useCallback,
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react"
+import { useCallback, useMemo, useRef } from "react"
 import type { Problem } from "@banda/contract/look"
 import { useQuiet } from "../calls/quiet"
 import {
@@ -26,13 +18,14 @@ import {
   useLaterClock,
 } from "../calls/stores"
 import { useLookProblems } from "../look"
-import { type Layout, moved, same, written } from "./arrange"
 import { logoName, logoWords } from "./count"
-import { PARTS, type Part } from "./placed"
+import { type Layout, written } from "./layout/arrange"
+import { PARTS, type Part } from "./layout/placed"
+import { layoutOf, useArranging } from "./layout/useArranging"
+import type { Drawn } from "./layout/Widgets"
 import { SmallInbox, useInboxCount } from "./SmallInbox"
 import { UpdateWidget } from "./Update"
-import type { Drawn } from "./Widgets"
-import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import {
   keyNamed,
   namedIn,
@@ -45,20 +38,32 @@ import type { Lists } from "@banda/ui/pane"
 import { awayAtWork } from "@banda/ui/status"
 
 /**
- * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
- * the left, which opens the Banda menu (ADR 0098, decision 21) and shows
- * the loudest state of the work, and a crossed bell while Quiet is on;
- * `Alt+A`, and the menu's action, show and hide the sidebar. While it is
- * hidden, the count beside the mark says whose turn it is and who works,
- * and opens the small inbox (decision 22); the mark's name says it too,
- * "Banda: 3 your turn, 7 at work". The widgets, the
- * Tiling's workspaces among them, stand on the left, in the middle,
- * centred on the window whatever the sides hold, and on the right before
- * the engine's connection, as the look's `[bar]` lists them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
- * What calls, for its Mark, and how many Agents work, it reads from the
- * Window's stores. Another machine away shows on the Mark only while its
- * Agents were at work as it was last heard: then it sleeps, offline, and
- * its name says which (ADR 0098, decision 18).
+ * The Bar: the Window's line across its top, a program that holds other
+ * programs (ADR 0024, ADR 0064, ADR 0087). It draws its own parts and
+ * gives the rest of the line to the widgets, each a program of its own.
+ *
+ *   in    widgets   each part's widgets, drawn, as `[bar]` places them
+ *                   (`layout/Widgets.tsx`, from the modules' `Widget`s)
+ *         listed    `[bar]`'s lists, which a move rewrites
+ *         problems  what the window finds wrong besides the look, as an id
+ *                   in `[bar]` with no widget
+ *         engine    this machine's engine: its connection and its updates
+ *   draws <header>: the Mark at the left edge; the parts `left`, `center`
+ *         (centred on the window) and `right`, each widget in a
+ *         `data-widget` box; then the update, the look's problems and the
+ *         engine's connection
+ *   runs  `menu.at` on the Mark; a widget runs its own
+ *   gives `onArrange` with `[bar]`'s new lists, once a widget moved with
+ *         the mod is let go (`layout/useArranging.ts`)
+ *
+ * The Mark shows the loudest state of the work and a crossed bell while
+ * Quiet is on (ADR 0098, decision 21); while the sidebar is hidden, the
+ * count beside it says whose turn it is and who works, and opens the small
+ * inbox (decision 22), and its name says it too, "Banda: 3 your turn, 7 at
+ * work". Another machine away shows on it only while its Agents were at
+ * work as it was last heard: then it sleeps, offline, and its name says
+ * which (decision 18). Where Banda draws the window's title bar, the Bar
+ * is it (ADR 0030).
  */
 export function Bar({
   engine,
@@ -190,164 +195,6 @@ export function Bar({
       </div>
     </header>
   )
-}
-
-/** Each part's ids, as drawn. */
-function layoutOf(widgets: Partial<Record<Part, readonly Drawn[]>>): Layout {
-  const ids = (part: Part) => (widgets[part] ?? []).map((one) => one.id)
-  return { left: ids("left"), center: ids("center"), right: ids("right") }
-}
-
-/** A widget picked up with the mod: where it would go, and where the pointer
- * holds it. */
-type Drag = {
-  id: string
-  part: Part
-  index: number
-  /** Released here, it goes back. */
-  away: boolean
-  /** Where the pointer took it, from its corner. */
-  grab: { x: number; y: number }
-  at: { x: number; y: number }
-}
-
-/**
- * Moving a widget with the mod (ADR 0064): a press with the mod picks it up, it
- * follows the pointer while the others make room, and a release writes
- * where it stands; `Escape`, or a release away from the bar, puts it back.
- * What it wrote stands until the look reads it back.
- */
-function useArranging(
-  header: RefObject<HTMLElement | null>,
-  shown: Layout,
-  write: (after: Layout) => void
-) {
-  const holdsMod = useHoldsMod()
-  const [drag, setDrag] = useState<Drag | null>(null)
-  const [pending, setPending] = useState<Layout | null>(null)
-  const base = pending && !same(pending, shown) ? pending : shown
-  // What it wrote stands a while, until the look reads the file back.
-  useEffect(() => {
-    if (!pending) return
-    const late = setTimeout(() => setPending(null), 3000)
-    return () => clearTimeout(late)
-  }, [pending])
-  const layout = drag ? moved(base, drag.id, drag.part, drag.index) : base
-  // The widget held follows the pointer from the place it would take.
-  useLayoutEffect(() => {
-    const bar = header.current
-    if (!bar || !drag) return
-    const held = bar.querySelector<HTMLElement>(
-      `[data-widget="${CSS.escape(drag.id)}"]`
-    )
-    if (!held) return
-    held.style.transform = ""
-    const place = held.getBoundingClientRect()
-    const x = drag.at.x - drag.grab.x - place.left
-    const y = drag.at.y - drag.grab.y - place.top
-    held.style.transform = `translate(${x}px, ${y}px)`
-    return () => {
-      held.style.transform = ""
-    }
-  })
-  useEffect(() => {
-    const bar = header.current
-    if (!bar) return
-    const target = (id: string, x: number, y: number) => {
-      const box = bar.getBoundingClientRect()
-      const share = (x - box.left) / box.width
-      const part: Part =
-        share < 1 / 3 ? "left" : share > 2 / 3 ? "right" : "center"
-      const others = base[part].filter((one) => one !== id)
-      let index = others.length
-      for (const [i, other] of others.entries()) {
-        const at = bar
-          .querySelector(`[data-widget="${CSS.escape(other)}"]`)
-          ?.getBoundingClientRect()
-        if (!at || at.width === 0) continue
-        if (x < at.left + at.width / 2) {
-          index = i
-          break
-        }
-      }
-      return { part, index, away: y > box.bottom + 48 }
-    }
-    const down = (event: PointerEvent) => {
-      if (!holdsMod(event) || event.button !== 0) return
-      const held = (event.target as Element).closest<HTMLElement>(
-        "[data-widget]"
-      )
-      const id = held?.dataset.widget
-      const part = id && PARTS.find((one) => base[one].includes(id))
-      if (!held || !id || !part) return
-      event.preventDefault()
-      event.stopPropagation()
-      bar.setPointerCapture(event.pointerId)
-      const box = held.getBoundingClientRect()
-      setDrag({
-        id,
-        part,
-        index: base[part].indexOf(id),
-        away: false,
-        grab: { x: event.clientX - box.left, y: event.clientY - box.top },
-        at: { x: event.clientX, y: event.clientY },
-      })
-    }
-    const move = (event: PointerEvent) => {
-      if (!drag) return
-      const at = { x: event.clientX, y: event.clientY }
-      setDrag({ ...drag, ...target(drag.id, at.x, at.y), at })
-    }
-    const up = (event: PointerEvent) => {
-      if (!drag) return
-      setDrag(null)
-      // Where the pointer lets go: on a busy page the release can come
-      // with the last moves, before any of them is drawn, and `drag` is
-      // then a step behind it.
-      const { part, index, away } = target(
-        drag.id,
-        event.clientX,
-        event.clientY
-      )
-      const after = moved(base, drag.id, part, index)
-      if (away || same(after, base)) return
-      setPending(after)
-      write(after)
-    }
-    const cancel = () => setDrag(null)
-    // With the mod, a widget is held, not clicked.
-    const click = (event: MouseEvent) => {
-      if (!holdsMod(event)) return
-      if (!(event.target as Element).closest("[data-widget]")) return
-      event.preventDefault()
-      event.stopPropagation()
-    }
-    const key = (event: KeyboardEvent) => {
-      if (!drag || event.key !== "Escape") return
-      event.preventDefault()
-      event.stopPropagation()
-      setDrag(null)
-    }
-    bar.addEventListener("pointerdown", down, { capture: true })
-    bar.addEventListener("pointermove", move)
-    bar.addEventListener("pointerup", up)
-    bar.addEventListener("pointercancel", cancel)
-    bar.addEventListener("click", click, { capture: true })
-    window.addEventListener("keydown", key, { capture: true })
-    return () => {
-      bar.removeEventListener("pointerdown", down, { capture: true })
-      bar.removeEventListener("pointermove", move)
-      bar.removeEventListener("pointerup", up)
-      bar.removeEventListener("pointercancel", cancel)
-      bar.removeEventListener("click", click, { capture: true })
-      window.removeEventListener("keydown", key, { capture: true })
-    }
-  }, [header, base, drag, write, holdsMod])
-  return {
-    layout,
-    dragging: drag?.id,
-    over: drag && !drag.away ? drag.part : undefined,
-  }
 }
 
 /** Which other machines out of reach had Agents at work, as the logo's

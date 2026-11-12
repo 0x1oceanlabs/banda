@@ -886,8 +886,11 @@ as a Person's `group.bottom` asks; none of Banda's presets has one.
 **Bar**:
 The Window's line across its top: the Mark, which opens the Banda menu
 (ADR 0098, decision 21), at its left edge, then widgets on its left, in
-its middle and on its right, the Pager among them (ADR 0024, ADR 0064). On a phone it is a header with at most two
-compact widgets (ADR 0089).
+its middle and on its right, the Pager among them (ADR 0024, ADR 0064).
+On a phone it is a header with at most two compact widgets (ADR 0089).
+It is a program that holds others: it draws the Mark and places the
+widgets, each a program of its own, as `[bar]` says; what it takes and
+gives is written at the top of `client/web/src/bar/Bar.tsx`.
 
 **Widget**:
 A small view on the Bar, an App's or one of Banda's own parts', as the

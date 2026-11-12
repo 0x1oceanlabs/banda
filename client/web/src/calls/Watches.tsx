@@ -20,8 +20,8 @@ import {
   useHostsBy,
 } from "@banda/core/react"
 import type { Listed, Report, Watch } from "@banda/ui/pane"
-import { dropHost, markAway, StoresContext, takeLists } from "../calls/stores"
-import { useLowBattery } from "../calls/battery"
+import { dropHost, markAway, StoresContext, takeLists } from "./stores"
+import { useLowBattery } from "./battery"
 import { runs, watches } from "../registry"
 import { useListedOn } from "../window/machines"
 import { folded } from "./fold"

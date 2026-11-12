@@ -1,8 +1,8 @@
 import type { Problem } from "@banda/contract/look"
 import type { WidgetProps } from "@banda/ui/module"
 import { type ReactNode, useMemo } from "react"
-import { useLookBar, useLookSettings } from "../look"
-import { runs, widgets } from "../registry"
+import { useLookBar, useLookSettings } from "../../look"
+import { runs, widgets } from "../../registry"
 import type { Layout } from "./arrange"
 import { type Known, PARTS, type Part, placed } from "./placed"
 

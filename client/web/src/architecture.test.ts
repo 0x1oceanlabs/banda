@@ -360,7 +360,7 @@ test("the Tiling names nothing the Apps list", () => {
  * leaves it.
  */
 const AGENT_READERS = [
-  "web/src/bar/fold.ts",
+  "web/src/calls/fold.ts",
   "web/src/calls/sight.ts",
   "web/src/sidebar/Counts.tsx",
   "web/src/window/shows.ts",
@@ -759,7 +759,7 @@ test("the sidebar's frame keeps under its ceiling, and the ceiling follows it do
 const MEMOIZED = [
   "web/src/tiling/PaneFrame.tsx: export const PaneFrame = memo(",
   "web/src/tiling/Strip.tsx: export const Strip = memo(",
-  "web/src/bar/Watches.tsx: export const Watches = memo(",
+  "web/src/calls/Watches.tsx: export const Watches = memo(",
   "web/src/menu/BandaMenu.tsx: export const BandaMenu = memo(",
   "web/src/window/Drawer.tsx: export const Drawer = memo(",
   "web/src/registry.tsx: { widget: { ...widget, Widget: memo(widget.Widget) }, module }",
@@ -1123,7 +1123,7 @@ const RANKING = [
   // `loudest`
   "client/ui/src/lib/mark-state.ts",
   // the loudest of what an Agent's Thread calls about
-  "client/web/src/bar/fold.ts",
+  "client/web/src/calls/fold.ts",
   // the loudest chime, and whether it is louder than the last
   "platform/notifications/pane/src/sound.ts",
   "platform/notifications/pane/src/sound.ts",
