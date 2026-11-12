@@ -4,7 +4,7 @@
  * (docs/adr/0016-settings-window.html). It keeps no setting of its own:
  * every value is the look's, as `banda look --follow` read the files.
  */
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useContext, useEffect, useMemo, useRef, useState } from "react"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -16,10 +16,17 @@ import {
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
-import { useAnyHost } from "@banda/core/react"
+import {
+  HostsContext,
+  useAnyHost,
+  useHosts,
+  useShownOf,
+} from "@banda/core/react"
+import { copyText } from "@banda/ui/lib/clipboard"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
-import { ExternalLinkIcon, SearchIcon } from "lucide-react"
+import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react"
 import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
 import {
@@ -32,6 +39,14 @@ import {
 } from "./sections"
 import type { SettingsArgs } from "./pane"
 import { Group, Rows, SettingRow } from "./SettingRow"
+import { SettingsFor } from "./SettingsFor"
+import { MachinePill } from "../window/named"
+import {
+  classOf,
+  hasMachinePart,
+  throughEngine,
+  useMachineSettings,
+} from "./machine-settings"
 
 const NONE: Problem[] = []
 
@@ -86,6 +101,35 @@ export function Settings({
 
   const section = at.section
   const others = useAnyHost()
+  // Whose parts it shows (ADR 0106, step 5b): in a section with a part of
+  // the machine's, the machine picked, by its engine; the rest is this
+  // device's, as the look reads it. Machines shows every machine itself.
+  const kept = useContext(HostsContext)
+  const hosts = useHosts()
+  const fileNames = (section.files ?? []).map((file) => file.name)
+  const switches =
+    hosts.length > 0 &&
+    section.id !== "machines" &&
+    fileNames.some(hasMachinePart)
+  const on =
+    switches && hosts.some((host) => host.name === args.on)
+      ? args.on
+      : undefined
+  const shownOn = useShownOf(on)
+  const machineEngine = useMemo(
+    () => (on === undefined ? engine : kept.engine(on)),
+    [on, engine, kept]
+  )
+  const machine = useMachineSettings(
+    on === undefined ? undefined : machineEngine,
+    fileNames
+  )
+  const machineWriter = useMemo(
+    () => throughEngine(machineEngine),
+    [machineEngine]
+  )
+  const theirs = (r: Row) =>
+    on !== undefined && classOf(r.file, r.key) === "machine"
   const found = useMemo(
     () => (words.trim() ? search(words, others) : []),
     [words, others]
@@ -93,12 +137,17 @@ export function Settings({
   const go = (next: Section, key?: string) => {
     setWords("")
     const link = key ? `${next.id}/${key}` : next.id
-    if (link !== args.link) update({ link })
+    if (link !== args.link) update({ ...args, link })
   }
   // A problem shows at the row of its key; the rest, above the section.
   const row = (r: Row) => {
-    const setting = keyed[r.file]?.[r.key]
-    const here = (wrong.get(r.file) ?? NONE).filter((p) => p.key === r.key)
+    const mine = theirs(r)
+    const setting = mine
+      ? machine.keyed[r.file]?.[r.key]
+      : keyed[r.file]?.[r.key]
+    const here = (mine ? machine.problems : (wrong.get(r.file) ?? NONE)).filter(
+      (p) => p.key === r.key
+    )
     return (
       <SettingRow
         key={`${r.file}:${r.key}`}
@@ -107,6 +156,8 @@ export function Settings({
         lit={r.key === at.key}
         problems={here}
         Custom={section.custom?.[r.key]}
+        writer={mine ? machineWriter : undefined}
+        where={on !== undefined && !mine ? `on ${THIS_COMPUTER}` : undefined}
       />
     )
   }
@@ -209,6 +260,21 @@ export function Settings({
               {words ? "Search" : section.title}
             </b>
           </PaneHeader>
+          {switches && !words && (
+            <SettingsFor
+              hosts={hosts}
+              on={on}
+              onPick={(picked) => update({ link: args.link, on: picked })}
+            />
+          )}
+          {shownOn && shownOn.state.state !== "live" && !words && (
+            <div className="flex justify-center pt-2">
+              <MachinePill
+                shown={shownOn}
+                onStart={() => kept.start(shownOn.name)}
+              />
+            </div>
+          )}
           <ScrollArea className="min-h-0 flex-1">
             <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-6">
               {words ? (
@@ -244,14 +310,29 @@ export function Settings({
                         {section.about}
                       </p>
                     </div>
-                    {own && <OpenFile file={own} words="Open file" />}
+                    {own && on === undefined && (
+                      <OpenFile file={own} words="Open file" />
+                    )}
+                    {own && on !== undefined && machine.paths[own] && (
+                      <ThereFile path={machine.paths[own]} on={shownOn} />
+                    )}
                   </div>
                   {section.Body && (
-                    <section.Body engine={engine} lit={at.key} run={run} />
+                    <section.Body
+                      engine={machineEngine}
+                      on={on}
+                      lit={at.key}
+                      run={run}
+                    />
                   )}
                   {groups}
                   {section.Foot && (
-                    <section.Foot engine={engine} lit={at.key} run={run} />
+                    <section.Foot
+                      engine={machineEngine}
+                      on={on}
+                      lit={at.key}
+                      run={run}
+                    />
                   )}
                   {above.length > 0 && (
                     <div
@@ -288,6 +369,29 @@ function OpenFile({ file, words }: { file: string; words: string }) {
     >
       <ExternalLinkIcon />
       {words}
+    </Button>
+  )
+}
+
+/** Another machine's file, which this computer cannot open: where it is
+ * there, to copy (ADR 0106, decision 7, call 18). */
+function ThereFile({
+  path,
+  on,
+}: {
+  path: string
+  on?: { named: { name: string } }
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="sm"
+      className="max-w-72 font-mono text-xs text-muted-foreground"
+      title={`Copy where it is on ${on?.named.name ?? "that machine"}`}
+      onClick={() => copyText(path)}
+    >
+      <span className="truncate">{path}</span>
+      <CopyIcon />
     </Button>
   )
 }

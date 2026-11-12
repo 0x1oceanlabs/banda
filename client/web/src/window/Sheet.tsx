@@ -141,9 +141,9 @@ export function useSheet(where: () => ProjectId) {
     []
   )
   const settings = useCallback(
-    (link?: string) =>
+    (link?: string, on?: string) =>
       show(
-        paneOf(settingsPane, { link: link ?? "" }),
+        paneOf(settingsPane, { link: link ?? "", ...(on && { on }) }),
         undefined,
         // With no link, where they are.
         { again: link !== undefined && link !== "" }

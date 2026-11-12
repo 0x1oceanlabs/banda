@@ -16,10 +16,10 @@ import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { shownProjects } from "@banda/ui/lib/projects"
-import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
 import { PaneMount, RoutingContext, routingOnly } from "../tiling/mount"
+import { throughEngine } from "./machine-settings"
 import type { SectionProps } from "./sections"
 
 /** The Panes a sign-in opens: a terminal, and no other kind. */
@@ -32,29 +32,24 @@ const LINK_OPEN = "link.open"
 /** A machine's settings file, written through its engine as the Person
  * (ADR 0108, decision 1), which keeps the mode they choose for a Harness's
  * new Threads: only Full access chosen here counts where the fence does
- * not hold (ADR 0083). */
-const throughEngine = (engine: Engine, name: string): SettingsFile => {
-  const said = (asked: Promise<unknown>) =>
-    asked.then(
-      (): string[] => [],
-      (error: unknown) => problem(error).split("\n")
-    )
+ * not hold (ADR 0083). This computer opens only its own. */
+const fileOf = (engine: Engine, name: string, here: boolean): SettingsFile => {
+  const writer = throughEngine(engine)
   return {
-    set: (key, value) =>
-      said(engine.call("keys.settings_set", { file: name, key, value })),
-    reset: (key) =>
-      said(engine.call("keys.settings_reset", { file: name, key })),
-    reveal: () => void window.banda?.settings.reveal(name),
+    set: (key, value) => writer.set(name, key, value),
+    reset: (key) => writer.reset(name, key),
+    reveal: here ? () => void window.banda?.settings.reveal(name) : undefined,
   }
 }
 
-export function Agents({ engine, lit, run }: SectionProps) {
+export function Agents({ engine, on, lit, run }: SectionProps) {
+  const here = on === undefined
   const [agents, harnesses] = useMemo(
     () => [
-      throughEngine(engine, "agents.toml"),
-      throughEngine(engine, "harnesses.toml"),
+      fileOf(engine, "agents.toml", here),
+      fileOf(engine, "harnesses.toml", here),
     ],
-    [engine]
+    [engine, here]
   )
   // Any Project offers what a new Thread starts with, and runs a terminal:
   // the first, as the window's home, once there is one.

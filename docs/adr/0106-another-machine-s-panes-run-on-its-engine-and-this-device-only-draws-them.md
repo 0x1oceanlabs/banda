@@ -640,6 +640,12 @@ round trip.
      shows, with Copy (call 18).
    - Stage 2 changes only the machine's files. The arrangement stays the
      machine's whose window shows it (ADR 0101, decision 5).
+   - _Amended 2026-11-12, at step 5b:_ Roma picked the switch under the
+     crumb (mock A, `~/Banda/artifacts/settings-for-machine/`), shown in
+     each section with a part of the machine's but Machines, which edits
+     every machine itself. Settings opens on the machine of the Pane in
+     focus. A row only its file edits says "In its file there" for
+     another machine's.
 
 8. **Stage 2 adds no away handling of its own, once every act fails
    fast.** Step 0′ makes that true: until then calls and acting streams

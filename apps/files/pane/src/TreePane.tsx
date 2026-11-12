@@ -149,6 +149,7 @@ import {
 import { holding, moveFile, workedAt, workedIn } from "./work"
 import { peeked } from "./peek"
 import type { Undoable } from "./undo"
+import { pinThere, useMachinePins } from "./pins"
 
 export type TreeArgs = {
   /** The folder, whole; `""` is the Project's, which it names once read. */
@@ -320,19 +321,24 @@ function TreePane(props: PaneProps<TreeArgs>) {
     },
     [props, project]
   )
-  const pin = useCallback(
-    (whole: string, on: boolean) =>
-      props.run?.("files.pin", { dir: tilded(whole, home), pin: on }),
-    [props, home]
-  )
-  // Pins are this device's, in its files.toml, until 5b: another
-  // machine's Files shows that machine's places and none of these (ADR
-  // 0106, decision 5, call 9 A).
+  // Pins are the machine's (ADR 0106, decision 7): this one's in its
+  // files.toml, as the look reads it; another's through its engine, there.
   const here = localOf(device, file, dir || "/") !== undefined
+  const theirs = useMachinePins(here ? undefined : engine)
+  const pin = useCallback(
+    (whole: string, on: boolean) => {
+      const dir = tilded(whole, home)
+      if (here) props.run?.("files.pin", { dir, pin: on })
+      else void pinThere(engine, theirs, dir, on).catch(() => undefined)
+    },
+    [props, home, here, engine, theirs]
+  )
   const pinned = useMemo(
     () =>
-      here ? finder.pinned.map((place) => untilded(place, home, "/")) : [],
-    [here, finder.pinned, home]
+      (here ? finder.pinned : theirs).map((place) =>
+        untilded(place, home, "/")
+      ),
+    [here, finder.pinned, theirs, home]
   )
   const local = useCallback(
     (whole: string) => localOf(device, file, whole),
@@ -409,7 +415,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
             onGoTyped={goTyped}
             onOpenFile={openFile}
             onAttach={attach}
-            onPin={here ? pin : undefined}
+            onPin={pin}
             local={local}
           />
         )}

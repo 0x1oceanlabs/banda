@@ -190,7 +190,16 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `pinned`) is read through that machine's engine, `keys.settings_read`,
   and `keys.settings_changed` says as it changes, so a window of another
   device shows that machine's; nothing else of a file leaves its device
-  (ADR 0106, decision 7).
+  (ADR 0106, decision 7). Settings shows it under "Settings for: This Mac
+  / arc", a switch under the crumb in each section with a part of the
+  machine's but Machines, set to the machine of the Pane it was opened
+  from (`SettingsArgs.on`). The machine's rows read through
+  `useMachineSettings` and write through that engine (`keys.settings_set`,
+  `throughEngine`), the section's own Body and Foot take that engine, and
+  the rest say "on this Mac". While that machine is away its pill shows
+  and a change is refused at once; its file shows its path there, with
+  Copy, in place of Open file. Files on arc reads and pins arc's
+  `pinned` the same way (`apps/files/pane/src/pins.ts`).
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`
   prints its core, `banda skill <topic>` a topic, and
   `banda skill --export <folder>` writes an Agent Skills folder. Each
