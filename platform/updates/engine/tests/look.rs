@@ -1,5 +1,8 @@
 //! A look at a channel's releases, served by a fake GitHub: what the
-//! module takes, and what it refuses.
+//! module takes, and what it refuses. Windows takes no engine updates
+//! yet: `feed::system` names no Windows bundle.
+
+#![cfg(unix)]
 
 use axum::Router;
 use axum::extract::{Path as Url, State};
