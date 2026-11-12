@@ -10,7 +10,19 @@
  * waits; then a row for each machine, from what its engine says on
  * `updates.state`, with its acts; what changed; and when they looked.
  * Each machine decides for itself; the widget only shows and asks.
+ *
+ *   in    this window's app's update (`window.banda.update`), and what
+ *         each machine's engine says on `updates.state` (`heard.tsx`)
+ *   draws its icon and pill, the worst state over them all, and the
+ *         popover with a row for each
+ *   runs  `update.check` and `update.restart`, and a machine's restart
+ *         there, from the popover
+ *
+ * It always stands on the bar, last on the right where `[bar]` does not
+ * place it (`../layout/placed.ts`).
  */
+import type { Widget } from "@banda/ui/module"
+import { UPDATE } from "../widget-ids"
 import { Button } from "@banda/ui/components/button"
 import { MachineIcon } from "@banda/ui/components/machine-icon"
 import {
@@ -42,7 +54,7 @@ import type { Engine } from "@banda/contract"
 import type { Note, Update } from "@banda/core"
 import { sameEach, useStore } from "@banda/core/react"
 import { CheckIcon, PanelsLeftBottomIcon } from "lucide-react"
-import { HERE, StoresContext } from "../calls/stores"
+import { HERE, StoresContext } from "../../calls/stores"
 import {
   FollowUpdates,
   useEngineFor,
@@ -827,4 +839,11 @@ function After({ ms, children }: { ms: number; children: ReactNode }) {
     return () => clearTimeout(timer)
   }, [ms])
   return shown ? children : null
+}
+
+export const updateWidget: Widget = {
+  id: UPDATE,
+  about:
+    "Banda's updates, of this window and of each machine: what is ready, and a restart into it.",
+  Widget: ({ engine }) => <UpdateWidget engine={engine} />,
 }

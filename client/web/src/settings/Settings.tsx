@@ -27,7 +27,7 @@ import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react"
-import { problemWords } from "../bar/Bar"
+import { problemWords } from "../bar/problems/Problems"
 import { useLookProblems, useLookSettings } from "../look"
 import {
   groupsOf,

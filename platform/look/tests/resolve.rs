@@ -525,7 +525,10 @@ fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
             "terminal.ports",
             "harnesses.limits",
             "notifications.recent",
-            "clock.now"
+            "clock.now",
+            "window.update",
+            "window.problems",
+            "window.connection"
         ]
     );
 

@@ -392,7 +392,7 @@
           }
         },
         "right": {
-          "description": "The widgets on the bar's right, by id, in order, before the\nengine's connection: the workspaces set aside, `\"workspaces.aside\"`.",
+          "description": "The widgets on the bar's right, by id, in order: the workspaces set\naside, `\"workspaces.aside\"`; the update, `\"window.update\"`, the\nlook's problems, `\"window.problems\"`, and the engine's connection,\n`\"window.connection\"`, which stand last here when no part lists\nthem.",
           "type": "array",
           "items": {
             "type": "string"

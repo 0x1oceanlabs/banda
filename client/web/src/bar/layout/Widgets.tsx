@@ -20,10 +20,10 @@ export type Drawn = { id: string; node: ReactNode }
 export function useWidgets(
   running: readonly string[],
   { engine, projects }: WidgetProps
-): { parts: Record<Part, Drawn[]>; listed: Layout; problems: Problem[] } {
+): { parts: Record<Part, Drawn[]>; listed: Layout } {
   const bar = useLookBar()
   const settings = useLookSettings()["look.toml"]
-  const { parts, problems } = useMemo(() => {
+  const { parts } = useMemo(() => {
     const known = (id: string): Known => {
       const theirs = widgets.get(id)
       if (!theirs) return undefined
@@ -42,5 +42,18 @@ export function useWidgets(
     () => ({ left: bar.left, center: bar.center, right: bar.right }),
     [bar]
   )
-  return { parts: drawn, listed, problems }
+  return { parts: drawn, listed }
+}
+
+/** Each id `[bar]` names that no module has a widget for, as a Problem at
+ * its line (`placed`), for the look's problems to say. */
+export function useBarProblems(): Problem[] {
+  const bar = useLookBar()
+  const settings = useLookSettings()["look.toml"]
+  return useMemo(
+    () =>
+      placed(bar, (id) => (widgets.has(id) ? "shown" : undefined), settings)
+        .problems,
+    [bar, settings]
+  )
 }

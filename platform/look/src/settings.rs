@@ -283,8 +283,11 @@ pub struct Bar {
     /// the sidebar's counts, `"sidebar.counts"`, where the Person lists
     /// them.
     pub center: Option<Vec<String>>,
-    /// The widgets on the bar's right, by id, in order, before the
-    /// engine's connection: the workspaces set aside, `"workspaces.aside"`.
+    /// The widgets on the bar's right, by id, in order: the workspaces set
+    /// aside, `"workspaces.aside"`; the update, `"window.update"`, the
+    /// look's problems, `"window.problems"`, and the engine's connection,
+    /// `"window.connection"`, which stand last here when no part lists
+    /// them.
     pub right: Option<Vec<String>>,
 }
 
@@ -302,6 +305,9 @@ pub const BAR_RIGHT: &[&str] = &[
     "harnesses.limits",
     "notifications.recent",
     "clock.now",
+    "window.update",
+    "window.problems",
+    "window.connection",
 ];
 
 pub(crate) fn owned(ids: &[&str]) -> Vec<String> {

@@ -5,7 +5,7 @@
  * opens. What a machine's state is the foot's machines say, and its
  * cards (ADR 0098, decision 18).
  */
-import { useOpenUpdates } from "../bar/heard"
+import { useOpenUpdates } from "../bar/update/heard"
 import { type ReactNode, useContext } from "react"
 import type { Named } from "@banda/contract/machines"
 import { MachineMark } from "@banda/ui/components/machine-icon"

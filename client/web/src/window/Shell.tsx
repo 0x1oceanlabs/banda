@@ -817,7 +817,6 @@ export function Shell({
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar
               engine={engine}
-              problems={bar.problems}
               widgets={bar.parts}
               listed={bar.listed}
               onArrange={arrangeBar}

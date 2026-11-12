@@ -22,7 +22,7 @@ import { DIRECTORY } from "./directory"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
-import { Updates } from "./bar/heard"
+import { Updates } from "./bar/update/heard"
 
 /**
  * The page: the engine's Projects, then the window. With no Project, a new

@@ -71,6 +71,14 @@ Codex, `codex app-server`'s rate limits.
      shows.
    - Right: the widgets, then, as now, the engine's connection and the
      look's broken files.
+     _Changed on 2026-11-12:_ Roma made the Bar a program that holds
+     others, each its own. The update, the look's problems and the
+     engine's connection are widgets as any other, `window.update`,
+     `window.problems` and `window.connection`, last in Banda's `right`.
+     As the workspaces do on the left (ADR 0064, decision 2), they always
+     stand on the bar: one no part lists goes last on the right, so a
+     Person's own `right`, written before, hides none of them. Each still
+     shows only while it has something to say.
 
 2. **It draws text and small icons, and nothing else.** No boxes or
    pills: a widget is an icon, maybe a number or a word, in the bar's

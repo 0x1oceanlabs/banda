@@ -73,6 +73,9 @@ export const DEFAULT_BAR: Bar = {
     "harnesses.limits",
     "notifications.recent",
     "clock.now",
+    "window.update",
+    "window.problems",
+    "window.connection",
   ],
 }
 
