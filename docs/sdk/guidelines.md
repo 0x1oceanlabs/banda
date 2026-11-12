@@ -319,8 +319,8 @@ neither (borders.5, device.5).
   `-control`, `-card`, `-tile`, `-window`, round or none. *Check:* today
   (the look check, which the corner check joined).
 - **design.10 Type takes the scale,** by the level's name (`text-meta`,
-  `text-ui`, `text-prose`, …; ADR 0113 d3); no size as a number. *Check:*
-  today; `text-xs` and `text-sm` after ADR 0113's step 1b.
+  `text-ui`, `text-prose`, …; ADR 0113 d3); no size as a number, nor by
+  Tailwind's name (`text-xs`, `text-sm`). *Check:* today.
 - **design.11 A shadow is an elevation:** `float`, `lift`, or the
   Window's own (ADR 0113 d4); most things have none. *Check:* today.
 - **design.12 A layer is named;** a Pane's stay inside its Tile (ADR 0113

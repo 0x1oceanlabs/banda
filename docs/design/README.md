@@ -163,7 +163,9 @@ Roma's answers ([0113], 2026-11-11):
 A line height changes only by Tailwind's names (`leading-none` in a
 badge), never by a number. Tailwind's own size names land on the levels,
 for what comes as it is (streamdown, shadcn as published): `xs` meta, `sm`
-UI, `base` title, `lg` and up heading; the rest are cleared. Times and
+UI, `base` title, `lg` and up heading; the rest are cleared. Banda's code,
+shadcn's components copied into `@banda/ui` too, writes the level's name,
+and the look check refuses Tailwind's. Times and
 counts take tabular figures. Text follows the Pane's width, not the
 window's ([0058] d2).
 

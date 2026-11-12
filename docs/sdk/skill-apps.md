@@ -132,7 +132,7 @@ act reads `window.here.get()` as it runs.
 - `design.9` Corners take the five levels: `rounded-small` to
   `rounded-window`, round or none.
 - `design.10` Type takes the scale, by the level's name (`text-meta`,
-  `text-ui`, …); no size as a number.
+  `text-ui`, …); no size as a number, nor by Tailwind's name (`text-xs`).
 - `design.11` A shadow is an elevation: `float`, `lift`, or the Window's
   own; most things have none.
 - `design.12` A layer is named; a Pane's stay inside its Tile.

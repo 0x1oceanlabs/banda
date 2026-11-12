@@ -28,8 +28,8 @@ pub struct FontSettings {
 }
 
 pub const SIZES: std::ops::RangeInclusive<f64> = 8.0..=32.0;
-/// The usual text, in pixels, where the root is 16: the UI level's, and
-/// shadcn's `text-sm`. The type scale is drawn at it.
+/// The usual text, in pixels, where the root is 16: the UI level's,
+/// `text-ui`, which shadcn calls `text-sm`. The type scale is drawn at it.
 const USUAL: f64 = 14.0;
 /// The type scale (ADR 0113, decision 3): each level's size token and
 /// line height token, and their pixels where the usual text is 14. Each

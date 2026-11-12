@@ -8,7 +8,7 @@
  * |---|---|---|
  * | colour | `design.4` | hex, `rgb()`, `oklch()` and the other colour functions, a named or system colour, a Tailwind palette class (`bg-white`, `text-amber-500`) |
  * | corner | `design.9` | a corner on no level (ADR 0080, decision 6) |
- * | type | `design.10` | a size as a number (`text-[11px]`, `text-(length:--x)`, `font-size: 12px`, `fontSize: 14`), a line height in a class's brackets, a Tailwind size name but `text-xs` and `text-sm` |
+ * | type | `design.10` | a size as a number (`text-[11px]`, `text-(length:--x)`, `font-size: 12px`, `fontSize: 14`), a line height in a class's brackets, a Tailwind size name (`text-sm`, `text-base`) |
  * | shadow | `design.11` | Tailwind's sizes (`shadow-md`, `drop-shadow-sm`), a shadow drawn by hand, `box-shadow`, `text-shadow`, `drop-shadow()` |
  * | layer | `design.12` | `z-10`, `z-[100]`, `z-index: 4`, `zIndex: 1` |
  * | length | `design.13` | a length in a spacing or size class's brackets off the 4 px grid: `pb-[5px]`, `gap-[7px]` |
@@ -22,9 +22,8 @@
  * worked out from a token (`oklch(from var(--…) …)`) or from data
  * (`rgb(${…})`); a ring, an inset line with no blur in a token's colour; a
  * shadow, a layer or a size by a custom property's name; `z-index` 0, -1
- * and `auto`. Tailwind's `text-xs` and `text-sm` stay allowed until ADR
- * 0113's step 1b renames them. A line height in a stylesheet goes with its
- * size, and is not counted apart.
+ * and `auto`. A line height in a stylesheet goes with its size, and is
+ * not counted apart.
  *
  * Comments are no place. A shadow drawn by hand is one case, the colours
  * in it with it.
@@ -303,14 +302,13 @@ const TYPE = named("text").filter(
   ([name, value]) => value === `var(--${name}-size)`
 )
 /** Tailwind's size names `@theme` maps onto the levels for what comes as
- * it is (decision 8), refused in Banda's code but `xs` and `sm`, which
- * stay until step 1b (ADR 0113) renames them to `text-meta` and `text-ui`. */
+ * it is (decision 8), streamdown and shadcn as published: refused in
+ * Banda's code, shadcn's components copied into `@banda/ui` too, as their
+ * corners are (ADR 0080, decision 6). `scripts/look-names.mjs` renames
+ * `text-xs` and `text-sm` (step 1b). */
 const REFUSED = named("text")
+  .filter(([name, value]) => value !== `var(--${name}-size)`)
   .map(([name]) => name)
-  .filter(
-    (name) =>
-      !TYPE.some(([level]) => level === name) && name !== "xs" && name !== "sm"
-  )
 /** The pixels a size is, a literal or a token's as Banda's own theme has
  * it (`var(--meta-size)`). */
 function pixelsOf(size: string): number | undefined {

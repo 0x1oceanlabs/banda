@@ -113,7 +113,7 @@ test("the check sees a size as a number, and not a level, a colour or a size wor
     of(
       "type",
       `<a className="text-[11px] text-[0.8rem] text-[0.90625rem]/5 text-(length:--prose-size) text-[length:var(--x)] leading-[18px]" />\n` +
-        `<b className="text-meta text-xs text-sm/6 text-(--group-color) text-[var(--sdm-c,inherit)] leading-none leading-(--prose-leading)" />\n` +
+        `<b className="text-meta text-ui/6 text-(--group-color) text-[var(--sdm-c,inherit)] leading-none leading-(--prose-leading)" />\n` +
         `.c { font-size: 12px !important; line-height: 16px; font-size: var(--text-root); font-size: inherit }\n` +
         `.d { font-size: calc(var(--a) * var(--b)) }\n` +
         `const e = { fontSize: "14px" }, f = { fontSize: 13 }, g = { fontSize: size }, h: { fontSize: number }`
@@ -142,15 +142,29 @@ test("the check sees a size as a number, and not a level, a colour or a size wor
   expect(instead(`"text-(length:--prose-size)"`)).toContain("`text-prose`")
 })
 
-test("Tailwind's size names are refused but text-xs and text-sm, until step 1b", () => {
+test("Tailwind's size names are refused, and the refusal names the level", () => {
   expect(
     of(
       "type",
-      `<a className="text-base md:text-lg text-xl text-2xl text-xs text-sm text-sm/6 text-base-foreground prose-lg" />`
+      `<a className="text-base md:text-lg text-xl text-2xl text-xs [&_svg]:text-sm text-sm/6 text-base-foreground prose-lg context-sm --text-sm" />`
     )
-  ).toEqual(["text-base", "text-lg", "text-xl", "text-2xl"])
+  ).toEqual([
+    "text-base",
+    "text-lg",
+    "text-xl",
+    "text-2xl",
+    "text-xs",
+    "text-sm",
+    "text-sm",
+  ])
   expect(look(`"text-base"`)[0].instead).toBe(
     "is Tailwind's size name: write `text-title`, or add a level to the theme"
+  )
+  expect(look(`"text-xs"`)[0].instead).toBe(
+    "is Tailwind's size name: write `text-meta`, or add a level to the theme"
+  )
+  expect(look(`"text-sm/6"`)[0].instead).toBe(
+    "is Tailwind's size name: write `text-ui`, or add a level to the theme"
   )
   expect(look(`"text-4xl"`)[0].instead).toContain("`text-heading`")
 })
