@@ -30,6 +30,12 @@ banda_kernel::id!(
     export_to = "agents/"
 );
 banda_kernel::id!(
+    /// A Crew: the sub-agents one Thread set to work together in phases,
+    /// what Claude Code calls a workflow (ADR 0103, decision 2).
+    CrewId,
+    export_to = "agents/"
+);
+banda_kernel::id!(
     /// An image a Thread item carries.
     ImageId,
     export_to = "agents/"
@@ -661,6 +667,16 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sub: Option<SubagentId>,
+        /// The Crew whose agent asks, between turns, while it is the one
+        /// Crew at work (ADR 0103, decision 28).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        crew: Option<CrewId>,
+        /// The Crew Claude asks to start, as its script's `meta` says it
+        /// (ADR 0103, decision 30).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start: Option<CrewStart>,
     },
     /// A line from Banda about the Thread, such as a session the
     /// Harness could not continue.
@@ -718,6 +734,11 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         text: Option<String>,
+    },
+    /// Where a Crew started, which shows it (ADR 0103, decision 18): its
+    /// record is the Thread's `crews`.
+    Crew {
+        crew: CrewId,
     },
 }
 
@@ -855,6 +876,11 @@ pub struct ThreadView {
     #[ts(optional, as = "Option<Vec<Item>>")]
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub edits: Vec<Item>,
+    /// Its Crews, in the order they started (ADR 0103, decision 10). Left
+    /// out when it has none.
+    #[ts(optional, as = "Option<Vec<Crew>>")]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub crews: Vec<Crew>,
 }
 
 /// Where a sub-agent's work stands, in Banda's words (ADR 0103, decision
@@ -938,6 +964,194 @@ pub struct Subagent {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub report: Option<String>,
+    /// The Crew it works in, when Claude's raw frames tie it to one by its
+    /// task (ADR 0103, decision 10).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crew: Option<CrewId>,
+    /// Its phase in that Crew, by the phase's index.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub phase: Option<u16>,
+    /// It runs in the background: its parent's turn need not wait for it.
+    #[ts(optional, as = "Option<bool>")]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub background: bool,
+}
+
+/// A Crew as its Thread keeps it (ADR 0103, decisions 2, 9 and 10): its
+/// script's title, description and phases, and each agent the script
+/// called so far, as Claude's raw frames last said them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Crew {
+    pub id: CrewId,
+    /// The turn it started in.
+    pub turn: TurnId,
+    /// Its script's name: "audit-routes".
+    pub title: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// Its phases, as its script names them, in order.
+    pub phases: Vec<Phase>,
+    /// The agents its script called, by phase, each in the order of its
+    /// index there; a phase's agents grow as the script calls them.
+    pub agents: Vec<CrewAgent>,
+    pub state: CrewState,
+    /// Why it ended as it did, when that is worth saying.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// When it started, in milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub started: i64,
+    /// When it ended, the same way; none while it works.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended: Option<i64>,
+    /// How many tokens its agents used, as Claude last said.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<u64>,
+    /// What its script last logged, when a frame carries it.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub log: Option<String>,
+    /// Its script, for View script.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub script: Option<String>,
+    /// What it gave back as it ended: its output file, read once, at most
+    /// 64 KB. None when it gave none.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    /// The turn Claude went on with by itself after it ended, once its
+    /// usage names the Crew's run.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub went_on: Option<TurnId>,
+}
+
+/// Where a Crew stands, in Banda's words (ADR 0103, decision 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum CrewState {
+    /// Its script runs.
+    Working,
+    /// Its script finished.
+    Done,
+    /// Its script failed.
+    Failed,
+    /// It was stopped: by Claude, or by the Thread's Stop.
+    Stopped,
+    /// It was cut off from Banda, as a sub-agent is (decision 3).
+    Lost,
+}
+
+impl CrewState {
+    /// Whether it works.
+    pub fn works(self) -> bool {
+        self == CrewState::Working
+    }
+}
+
+/// One step of a Crew, as its script names it: "Scan", "Fix", "Verify".
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Phase {
+    /// From 1, as Claude counts them.
+    pub index: u16,
+    pub title: String,
+    /// What the script's `meta` says the phase does.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// One agent a Crew's script called, as Claude's raw frames say it. It is
+/// no lane: its work is in Claude's transcript (ADR 0103, decision 22).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CrewAgent {
+    /// Its place in its phase, from 1; an agent of a pipeline keeps it from
+    /// phase to phase.
+    pub index: u32,
+    pub label: String,
+    /// Its phase, by the phase's index.
+    pub phase: u16,
+    /// Queued while it waits for a slot.
+    pub state: SubagentState,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub model: Option<String>,
+    /// Which try this is, from 1.
+    pub attempt: u16,
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub tokens: Option<u64>,
+    /// How many tool calls it made.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub calls: Option<u32>,
+    /// How long it took, in milliseconds.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub took: Option<i64>,
+    /// When it started, in milliseconds since the epoch; none while queued.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started: Option<i64>,
+    /// The start of its brief.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub prompt: Option<String>,
+    /// The start of what it gave back.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub result: Option<String>,
+    /// What it last did: its last tool and what that worked on.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub last: Option<String>,
+    /// Why it failed or stopped, as Claude says.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub why: Option<String>,
+    /// Its lane, when it is one of the Thread's sub-agents.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lane: Option<SubagentId>,
+}
+
+/// A Crew Claude asks to start, as its script's `meta` says it (ADR 0103,
+/// decision 30): what the Question to start it shows.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CrewStart {
+    pub title: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    pub phases: Vec<Phase>,
+    /// The script, for View script.
+    pub script: String,
+}
+
+/// A Crew as its Pane reads it (`agents.crew`), current at `at`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CrewView {
+    #[ts(type = "number")]
+    pub at: i64,
+    /// The Thread it works in.
+    pub thread: ThreadId,
+    pub crew: Crew,
+    /// What its agents did between turns, as the Thread shows it too:
+    /// their calls and the Questions they asked.
+    pub items: Vec<Item>,
 }
 
 /// A sub-agent as its Pane, or its row opened in place, reads it
@@ -1058,15 +1272,21 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subagents: Option<Subagents>,
+    /// Its Crew at work, after its turn too (ADR 0103, decision 10): line
+    /// 2's "Crew audit-routes · Fix 4/7". None while none works.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crew: Option<CrewBrief>,
 }
 
 impl ListedThread {
     /// Whether the Thread works: its latest turn runs, or a direct
-    /// sub-agent of it works on after that turn ended (ADR 0103, decision
-    /// 19). The list, the Mark, the bar and the sound all read it so.
+    /// sub-agent or a Crew of it works on after that turn ended (ADR 0103,
+    /// decision 19). The list, the Mark, the bar and the sound all read it so.
     pub fn works(&self) -> bool {
         let runs = (self.latest.as_ref()).is_some_and(|latest| latest.state == TurnState::Running);
-        runs || self.subagents.as_ref().is_some_and(|subs| subs.working > 0)
+        let lanes = self.subagents.as_ref().is_some_and(|subs| subs.working > 0);
+        runs || lanes || self.crew.is_some()
     }
 
     /// Whether the Thread is archived now, by the rule a window applies to
@@ -1091,6 +1311,20 @@ pub struct Subagents {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub only: Option<String>,
+}
+
+/// A Thread's Crew at work as its list says it (ADR 0103, decisions 10 and
+/// 32): "Crew ‹title› · ‹phase› ‹done›/‹of›".
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CrewBrief {
+    pub title: String,
+    /// The phase of the agent that started last; empty before any did.
+    pub phase: String,
+    /// That phase's agents done.
+    pub done: u16,
+    /// That phase's agents so far: it grows as the script calls them.
+    pub of: u16,
 }
 
 /// When its Person archived a Thread (ADR 0096, decision 4): by its
@@ -1578,6 +1812,12 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         asker: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        crew: Option<CrewId>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        start: Option<CrewStart>,
     },
     #[serde(rename = "question.answered")]
     QuestionAnswered {
@@ -1656,6 +1896,15 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         report: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        crew: Option<CrewId>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phase: Option<u16>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        background: Option<bool>,
     },
     /// A sub-agent ended, as `state` says, and can no longer be stopped.
     /// `why` is this end's, none for one that needs none; a `report` given
@@ -1692,6 +1941,54 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         sub: Option<SubagentId>,
+    },
+    /// A Crew started, and `item` is where it shows, in its turn (ADR
+    /// 0103, decision 18).
+    #[serde(rename = "crew.started")]
+    CrewStarted { item: ItemId, crew: Crew },
+    /// What changed of a Crew at work, and only that: written only when an
+    /// agent's state, a phase, a count or the log line changes, never for
+    /// each frame. `agents` are the agents new or changed, each whole;
+    /// `phases` all of them, when they changed. `went_on` names the turn
+    /// Claude went on with by itself after it ended, as Claude's usage
+    /// names the Crew's run then.
+    #[serde(rename = "crew.progressed")]
+    CrewProgressed {
+        crew: CrewId,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        phases: Option<Vec<Phase>>,
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(optional, as = "Option<Vec<CrewAgent>>")]
+        agents: Vec<CrewAgent>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        log: Option<String>,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tokens: Option<u64>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        went_on: Option<TurnId>,
+    },
+    /// A Crew ended, as `state` says, in `turn`, the turn it started in.
+    /// Its open calls ended and its Questions closed with it.
+    #[serde(rename = "crew.ended")]
+    CrewEnded {
+        crew: CrewId,
+        turn: TurnId,
+        state: CrewState,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        why: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        result: Option<String>,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        tokens: Option<u64>,
+        #[ts(type = "number")]
+        ended: i64,
     },
     /// The Agent showed its Person a Visual (ADR 0037).
     #[serde(rename = "visual.shown")]
@@ -1785,6 +2082,9 @@ mod tests {
             why: None,
             prompt: None,
             report: None,
+            crew: None,
+            phase: None,
+            background: None,
         };
         let id = subagent.to_string();
         for (role, said) in [

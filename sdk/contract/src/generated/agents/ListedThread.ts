@@ -3,6 +3,7 @@ import type { AgentId } from "../AgentId";
 import type { Archived } from "./Archived";
 import type { Asking } from "./Asking";
 import type { ChangedLines } from "./ChangedLines";
+import type { CrewBrief } from "./CrewBrief";
 import type { Doing } from "./Doing";
 import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
@@ -68,7 +69,12 @@ changed_lines?: ChangedLines,
  * failed since its latest turn began (ADR 0103, decision 10): the
  * card's line 2 and the Mark's red satellite. None otherwise.
  */
-subagents?: Subagents, id: ThreadId, 
+subagents?: Subagents, 
+/**
+ * Its Crew at work, after its turn too (ADR 0103, decision 10): line
+ * 2's "Crew audit-routes · Fix 4/7". None while none works.
+ */
+crew?: CrewBrief, id: ThreadId, 
 /**
  * The Harness it runs on, by its ID in the Harness list; chosen when
  * it starts, it stays (ADR 0006). Empty for a Thread from before

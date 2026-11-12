@@ -279,6 +279,8 @@ mod tests {
             plan: None,
             sub: None,
             asker: None,
+            crew: None,
+            start: None,
         };
         assert_eq!(woken(&timed, &asked, agent, NOW), Some(Wake::Question));
         let failed = ended(TurnState::Failed);

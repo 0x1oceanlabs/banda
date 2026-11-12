@@ -43,6 +43,15 @@ impl WeakSession {
     }
 }
 
+/// What reaches whoever hears a Thread's Crews (ADR 0103, decision 9).
+pub enum CrewSaid {
+    /// A raw frame of Claude's.
+    Raw(Sdk),
+    /// What an agent of the one Crew at work, Claude's task `task`, did
+    /// between turns: its call, a change of it, or its Question.
+    Said { task: String, said: Said },
+}
+
 /// What a turn sends the Harness: its message's text and images.
 pub struct Prompt {
     pub text: String,
@@ -196,6 +205,33 @@ impl Session {
     /// them any more once the session closes or the Harness is gone.
     pub fn lanes(&self) -> Option<mpsc::UnboundedReceiver<LaneSaid>> {
         self.connection.routes.hear_lanes(&self.id)
+    }
+
+    /// Hears what the session's Crews say, from now on; `None` while
+    /// someone already hears them. Nobody hears them any more once the
+    /// session closes or the Harness is gone.
+    pub fn crews(&self) -> Option<mpsc::UnboundedReceiver<CrewSaid>> {
+        self.connection.routes.hear_crews(&self.id)
+    }
+
+    /// The task of the one Crew at work in the session's background, if
+    /// exactly one is (ADR 0103, decision 28).
+    pub fn crew_alone(&self) -> Option<String> {
+        self.connection.routes.crew_alone(&self.id)
+    }
+
+    /// Hands what an agent of Crew `task` did between turns to whoever
+    /// hears the session's Crews; given back when nobody does.
+    pub fn tell_crew(&self, task: String, said: Said) -> Result<(), Box<Said>> {
+        let Some(crews) = self.connection.routes.crews_of(&self.id) else {
+            return Err(Box::new(said));
+        };
+        crews
+            .send(CrewSaid::Said { task, said })
+            .map_err(|error| match error.0 {
+                CrewSaid::Said { said, .. } => Box::new(said),
+                CrewSaid::Raw(_) => unreachable!("sent as said"),
+            })
     }
 
     /// Sets the session's options so it runs as `wanted`: one at a time,

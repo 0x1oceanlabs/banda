@@ -20,9 +20,9 @@ use crate::acp::ToolPart;
 use crate::acp::{Answer, Running, Said, ToolChange, unstarted};
 use crate::doing::{Doer, Doings};
 use crate::full_access::{Chosen, runs_supervised};
-use crate::live::{LaneRun, TurnRun};
+use crate::live::{CrewRun, LaneRun, TurnRun};
 use crate::model::{
-    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, SubagentId, ThreadId, ToolKind,
+    Body, CrewId, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, SubagentId, ThreadId, ToolKind,
     ToolStatus, TurnId, Usage,
 };
 use crate::touching::{Place, Toucher, Touches, diffed};
@@ -191,6 +191,8 @@ pub enum Holder<'a> {
     Turn(&'a TurnRun),
     /// None once the sub-agent ended: nobody waits on what it asks then.
     Lane(Option<&'a LaneRun>),
+    /// A Crew at work, whose agents ask between turns; none once it ended.
+    Crew(Option<&'a CrewRun>),
 }
 
 impl Holder<'_> {
@@ -200,7 +202,8 @@ impl Holder<'_> {
         match self {
             Holder::Turn(run) => run.ask(item, answer),
             Holder::Lane(Some(run)) => run.ask(item, answer),
-            Holder::Lane(None) => {
+            Holder::Crew(Some(run)) => run.ask(item, answer),
+            Holder::Lane(None) | Holder::Crew(None) => {
                 let _ = answer.send(Answer::Cancelled);
                 false
             }
@@ -211,7 +214,8 @@ impl Holder<'_> {
         match self {
             Holder::Turn(run) => run.forget(item),
             Holder::Lane(Some(run)) => run.forget(item),
-            Holder::Lane(None) => {}
+            Holder::Crew(Some(run)) => run.forget(item),
+            Holder::Lane(None) | Holder::Crew(None) => {}
         }
     }
 
@@ -219,6 +223,8 @@ impl Holder<'_> {
         match self {
             Holder::Turn(run) => run.take_steered(),
             Holder::Lane(run) => run.is_some_and(LaneRun::take_steered),
+            // No message goes into a Crew.
+            Holder::Crew(_) => false,
         }
     }
 }
@@ -241,6 +247,9 @@ pub struct Transcript {
     agent: AgentId,
     /// The sub-agent whose lane it writes; none for the Thread's own.
     sub: Option<SubagentId>,
+    /// The Crew whose agents' calls and Questions it writes between turns,
+    /// in the Crew's turn, as the Thread's entries (ADR 0103, decision 28).
+    crew: Option<CrewId>,
     /// The Harness's name, for plain words.
     harness: String,
     /// What the turn started with, and what the session runs with now.
@@ -294,6 +303,7 @@ impl Transcript {
             turn: turn.id,
             agent: turn.agent,
             sub: None,
+            crew: None,
             harness,
             settings,
             running,
@@ -333,6 +343,7 @@ impl Transcript {
             turn,
             agent,
             sub: Some(sub),
+            crew: None,
             harness,
             settings: Settings::default(),
             running: Running {
@@ -348,6 +359,82 @@ impl Transcript {
             due: None,
             resets: None,
         }
+    }
+
+    /// Writes what the agents of Crew `crew`, started in `turn` of
+    /// `thread`, do between turns: their calls and Questions, as the
+    /// Thread's entries in that turn, which touch the Thread nowhere (ADR
+    /// 0103, decision 28). Its Questions are answered as a sub-agent's,
+    /// by the Thread's mode as they ask, unless its Harness keeps the mode.
+    pub fn crew(
+        project: ModuleProject,
+        thread: ThreadId,
+        agent: AgentId,
+        turn: TurnId,
+        crew: CrewId,
+        harness: String,
+        native: bool,
+    ) -> Transcript {
+        Transcript {
+            toucher: None,
+            doer: None,
+            stepped: None,
+            project,
+            thread,
+            turn,
+            agent,
+            sub: None,
+            crew: Some(crew),
+            harness,
+            settings: Settings::default(),
+            running: Running {
+                native,
+                ..Running::default()
+            },
+            pieces: Pieces::default(),
+            tools: HashMap::new(),
+            asked: HashMap::new(),
+            plan: None,
+            messages: HashMap::new(),
+            message: None,
+            due: None,
+            resets: None,
+        }
+    }
+
+    /// Ends the calls it started that never said they ended, as `ended`
+    /// says: a Crew's, as the Crew ends (ADR 0103, decision 28).
+    pub async fn end_calls(&mut self, ended: ToolStatus) -> Result<(), String> {
+        self.close().await?;
+        let open: Vec<ItemId> = self.tools.values().map(|shown| shown.item).collect();
+        let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+        self.project
+            .write(move |tx| {
+                for id in open {
+                    let Some((_, mut item)) = store::item(tx.sql(), id)? else {
+                        continue;
+                    };
+                    let Body::Tool { status, .. } = &mut item.body else {
+                        continue;
+                    };
+                    if !matches!(status, ToolStatus::Pending | ToolStatus::Running) {
+                        continue;
+                    }
+                    *status = ended;
+                    store::set_body(tx.sql(), id, &item.body)?;
+                    let changed = Fact::ToolChanged {
+                        item: id,
+                        title: None,
+                        status: Some(ended),
+                        content: None,
+                        exit: None,
+                    };
+                    emit(tx, agent, thread, &changed)?;
+                }
+                Ok(())
+            })
+            .await
+            .map_err(plain)
     }
 
     /// Which file a sub-agent's calls work on, while it is at work.
@@ -474,6 +561,7 @@ impl Transcript {
                 offered,
                 form,
                 plan,
+                start,
                 answer,
             } => {
                 self.close().await?;
@@ -490,26 +578,34 @@ impl Transcript {
                         && !said.trim().is_empty()
                 });
                 let title = called.or(title).or(shown);
-                let by_mode = match self.sub {
+                let by_mode = match (self.sub, self.crew) {
                     // The Agent's own keep their turn's mode.
-                    None => (!self.running.native).then_some(self.settings.mode),
-                    Some(_) if self.running.native => None,
-                    // A sub-agent may ask after its turn ended: by the
-                    // Thread's mode as it asks (ADR 0103, decision 28).
-                    Some(_) => Some(self.mode_now().await?),
+                    (None, None) => (!self.running.native).then_some(self.settings.mode),
+                    _ if self.running.native => None,
+                    // A sub-agent, or a Crew's agent, may ask after its turn
+                    // ended: by the Thread's mode as it asks (ADR 0103,
+                    // decision 28).
+                    _ => Some(self.mode_now().await?),
                 };
                 let tool = tool.unwrap_or(ToolKind::Other);
-                let asker = match self.sub {
-                    Some(sub) => self
-                        .project
-                        .read(move |sql| store::lane_label(sql, sub))
-                        .await
-                        .map_err(plain)?,
-                    None => None,
+                let (sub, crew) = (self.sub, self.crew);
+                let asker = self
+                    .project
+                    .read(move |sql| match (sub, crew) {
+                        (Some(sub), _) => store::lane_label(sql, sub),
+                        (None, Some(crew)) => Ok(store::crew_title(sql, crew)?
+                            .map(|title| crate::crews::asker(&title))),
+                        (None, None) => Ok(None),
+                    })
+                    .await
+                    .map_err(plain)?;
+                let whose = questions::Whose {
+                    sub: self.sub,
+                    asker,
+                    crew: self.crew,
+                    start: start.map(|start| *start),
                 };
-                let asked = questions::ask(
-                    self.turn, by_mode, tool, title, offered, form, plan, self.sub, asker,
-                );
+                let asked = questions::ask(self.turn, by_mode, tool, title, offered, form, plan, whose);
                 let (id, body, asked) = match asked {
                     Ok(questions::Asked::Open(opened)) => *opened,
                     Ok(questions::Asked::ByMode(once)) => {
@@ -572,7 +668,7 @@ impl Transcript {
                     self.put(id, Body::Plan { steps }, made, None).await
                 }
             },
-            Said::Used { usage, resets } => {
+            Said::Used { usage, resets, .. } => {
                 if resets.is_some() {
                     self.resets = resets;
                 }
@@ -918,7 +1014,7 @@ impl Transcript {
         named: Option<String>,
     ) -> Result<(), String> {
         let (thread, turn, agent) = (self.thread, self.turn, Participant::Agent(self.agent));
-        let sub = self.sub;
+        let (sub, crew) = (self.sub, self.crew);
         let lane = if matches!(body, Body::Question { .. }) {
             None
         } else {
@@ -937,7 +1033,10 @@ impl Transcript {
                 if let Body::Tool { content, .. } = &item.body {
                     store::tool_images(tx.sql(), content, id, agent, tx.now())?;
                 }
-                if sub.is_none() {
+                if let Some(crew) = crew {
+                    store::set_item_crew(tx.sql(), id, crew)?;
+                }
+                if sub.is_none() && crew.is_none() {
                     store::touch_thread(tx.sql(), thread, tx.now())?;
                 }
                 emit(tx, agent, thread, &fact)

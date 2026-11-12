@@ -14,7 +14,9 @@
 //! Banda lets one go, for a change of the Project's trust or of a
 //! Harness's account, or as a Thread moves elsewhere, it notes the cut on
 //! the sub-agents at work there ([`Cut`]), which end Lost in its words
-//! once the process is gone. A Project removed stops them.
+//! once the process is gone. A Project removed stops them. A Crew at work
+//! is held the same way, from [`Live::crew`] until its [`CrewRun`] is let
+//! go.
 //!
 //! One lock holds the running turns, the cancels, the sub-agents and the
 //! Questions together, so a stop that comes while a turn starts, or while
@@ -43,7 +45,7 @@
 
 use crate::acp::{Answer, Connection, Session, WeakSession};
 use crate::doing::Doings;
-use crate::model::{ItemId, SubagentId, ThreadId, TurnId, Values};
+use crate::model::{CrewId, ItemId, SubagentId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use crate::{Pipe, kept};
 use banda_harnesses::hosts::{Held, Hosts};
@@ -132,6 +134,8 @@ struct Turns {
     secrets: HashMap<ItemId, Values>,
     /// The sub-agents at work.
     lanes: HashMap<SubagentId, LaneHeld>,
+    /// The Crews at work, held as a lane is, with no child session.
+    crews: HashMap<CrewId, LaneHeld>,
 }
 
 /// Whose a Question is: a turn's, or a sub-agent's, which its turn's end
@@ -140,6 +144,8 @@ struct Turns {
 enum Owner {
     Turn(TurnId),
     Lane(SubagentId),
+    /// A Crew's agent's, asked between turns (ADR 0103, decision 28).
+    Crew(CrewId),
 }
 
 /// A sub-agent at work, as memory holds it.
@@ -199,13 +205,16 @@ impl Turns {
         }
     }
 
-    /// Notes `cut` on each sub-agent at work that `whose` names; which
-    /// they are.
+    /// Notes `cut` on each sub-agent and Crew at work that `whose` names;
+    /// which sub-agents they are.
     fn cut(&mut self, cut: &Cut, whose: impl Fn(&LaneHeld) -> bool) -> Vec<SubagentId> {
         let mut were = Vec::new();
         for (sub, held) in self.lanes.iter_mut().filter(|(_, held)| whose(held)) {
             held.cut = Some(cut.clone());
             were.push(*sub);
+        }
+        for held in self.crews.values_mut().filter(|held| whose(held)) {
+            held.cut = Some(cut.clone());
         }
         were
     }
@@ -497,6 +506,41 @@ impl Live {
         turns.lanes.get(&sub).and_then(|held| held.cut.clone())
     }
 
+    /// Why Banda cut Crew `crew` off, if it did while it worked.
+    pub fn crew_cut(&self, crew: CrewId) -> Option<Cut> {
+        let turns = self.turns.lock().unwrap();
+        turns.crews.get(&crew).and_then(|held| held.cut.clone())
+    }
+
+    /// Crew `crew` of `thread` in `project` works in `session`, its
+    /// Thread's, from now until the returned run is let go: it counts as at
+    /// work, which keeps the machine awake, keeps the process from being
+    /// let go as idle, and holds the session weakly (ADR 0103, decision
+    /// 11).
+    pub fn crew(
+        self: &Arc<Self>,
+        project: ProjectId,
+        thread: ThreadId,
+        crew: CrewId,
+        session: &Session,
+    ) -> CrewRun {
+        let held = LaneHeld {
+            project,
+            harness: session.harness().to_owned(),
+            thread,
+            child: String::new(),
+            session: session.downgrade(),
+            cut: None,
+        };
+        self.turns.lock().unwrap().crews.insert(crew, held);
+        CrewRun {
+            live: self.clone(),
+            crew,
+            _held: session.keep(),
+            _at_work: self.working.hold(),
+        }
+    }
+
     /// A turn the engine runs, from now until the returned run is let go:
     /// what memory holds of it goes then, and it no longer counts as at
     /// work.
@@ -722,6 +766,44 @@ impl LaneRun {
     /// No message goes into a sub-agent (ADR 0103, decision 25).
     pub fn take_steered(&self) -> bool {
         false
+    }
+}
+
+/// A Crew at work, as memory holds it: letting it go, as it ends, ends it
+/// there, with its agents' Questions.
+pub struct CrewRun {
+    live: Arc<Live>,
+    crew: CrewId,
+    /// Its process is not let go as idle while it works.
+    _held: Held,
+    /// Counted as at work while it works.
+    _at_work: AtWork,
+}
+
+impl CrewRun {
+    /// Holds one of its agents' Questions until a Person answers it, or
+    /// it ends.
+    pub fn ask(&self, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
+        let mut turns = self.live.turns.lock().unwrap();
+        turns
+            .questions
+            .insert(item, (Owner::Crew(self.crew), answer));
+        true
+    }
+
+    /// Lets go of a Question that could not be written, or that the
+    /// Harness took back.
+    pub fn forget(&self, item: ItemId) {
+        self.live.forget_question(item);
+    }
+}
+
+impl Drop for CrewRun {
+    fn drop(&mut self) {
+        let mut turns = self.live.turns.lock().unwrap();
+        turns.crews.remove(&self.crew);
+        turns.release_of(Owner::Crew(self.crew));
+        self.live.changed.notify_waiters();
     }
 }
 

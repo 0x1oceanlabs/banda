@@ -18,7 +18,7 @@
 
 use crate::live::Live;
 use crate::model::{
-    Body, Choice, Fact, Field, FieldValue, Input, Item, ItemId, Mode, QuestionState, SubagentId,
+    Body, Choice, CrewId, CrewStart, Fact, Field, FieldValue, Input, Item, ItemId, Mode, QuestionState, SubagentId,
     ThreadId, ToolKind, TurnId, Values,
 };
 use crate::{emit, store};
@@ -48,14 +48,26 @@ pub enum Asked {
     Open(Box<(ItemId, Body, Fact)>),
 }
 
+/// Who asks a Question, when it is not the Agent itself, and what it asks
+/// to start (ADR 0103, decisions 8, 28 and 30).
+#[derive(Default)]
+pub struct Whose {
+    /// The sub-agent that asks, whose Question is the Thread's all the same.
+    pub sub: Option<SubagentId>,
+    /// What names who asks, which its fact keeps for its notice (decision
+    /// 33): a sub-agent's label, or "Crew ‹title›".
+    pub asker: Option<String>,
+    /// The Crew whose agent asks.
+    pub crew: Option<CrewId>,
+    /// The Crew the Agent asks to start.
+    pub start: Option<CrewStart>,
+}
+
 /// A Question the Harness asks in `turn`, offering every choice it has,
-/// its "always" ones too (ADR 0003, decision 9); `sub` is the sub-agent
-/// that asks, when it is not the Agent itself, whose Question is the
-/// Thread's all the same (ADR 0103, decision 8), and `asker` what names
-/// it, which its fact keeps for its notice (decision 33). For a Harness
-/// with no modes of its own, `by_mode` is the Thread's mode, and the engine
-/// answers where the mode allows the tool, as T3 Code does; never a form,
-/// which asks what only the Person knows.
+/// its "always" ones too (ADR 0003, decision 9), asked by `whose`. For a
+/// Harness with no modes of its own, `by_mode` is the Thread's mode, and
+/// the engine answers where the mode allows the tool, as T3 Code does;
+/// never a form, which asks what only the Person knows.
 #[expect(
     clippy::too_many_arguments,
     reason = "a Question's parts, as the Harness asks it"
@@ -68,9 +80,14 @@ pub fn ask(
     choices: Vec<Choice>,
     form: Option<Vec<Field>>,
     plan: Option<String>,
-    sub: Option<SubagentId>,
-    asker: Option<String>,
+    whose: Whose,
 ) -> Result<Asked, String> {
+    let Whose {
+        sub,
+        asker,
+        crew,
+        start,
+    } = whose;
     if form.is_none()
         && by_mode.is_some_and(|mode| allowed(mode, tool))
         && let Some(once) = allow_once(&choices)
@@ -91,6 +108,8 @@ pub fn ask(
         plan: plan.clone(),
         sub,
         asker,
+        crew,
+        start: start.clone(),
     };
     let body = Body::Question {
         title,
@@ -101,6 +120,8 @@ pub fn ask(
         answer: None,
         values: None,
         sub,
+        crew,
+        start,
     };
     Ok(Asked::Open(Box::new((item, body, asked))))
 }
@@ -239,6 +260,21 @@ pub fn close_lane(
     sub: SubagentId,
 ) -> Result<(), Error> {
     for item in store::lane_questions(tx.sql(), sub)? {
+        shut(tx, author, thread, item)?;
+    }
+    Ok(())
+}
+
+/// Crew `crew` of `thread` ended, which `author` brought about: the
+/// Questions its agents asked that never got an answer close, as a lane's
+/// do (ADR 0103, decision 28).
+pub fn close_crew(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    crew: CrewId,
+) -> Result<(), Error> {
+    for item in store::crew_questions(tx.sql(), crew)? {
         shut(tx, author, thread, item)?;
     }
     Ok(())
@@ -452,8 +488,7 @@ mod tests {
             choices,
             None,
             None,
-            None,
-            None,
+            Whose::default(),
         ) {
             Ok(Asked::Open(opened)) => opened.1,
             _ => unreachable!("a Person answers without a mode"),
@@ -498,8 +533,7 @@ mod tests {
             offered,
             form,
             None,
-            None,
-            None,
+            Whose::default(),
         ) {
             Ok(Asked::ByMode(id)) => Some(id),
             _ => None,
@@ -528,8 +562,7 @@ mod tests {
                 Vec::new(),
                 None,
                 None,
-                None,
-                None
+                Whose::default(),
             )
             .is_err()
         );
@@ -633,6 +666,8 @@ mod tests {
             answer: None,
             values: None,
             sub: None,
+            crew: None,
+            start: None,
         }
     }
 

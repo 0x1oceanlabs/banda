@@ -138,6 +138,20 @@ impl Given {
         });
         Given { servers, meta }
     }
+
+    /// A Thread's session also asks Claude Code for the raw frames Crews
+    /// and background sub-agents are made of (ADR 0103, decision 9); a
+    /// short run's does not. Another Harness passes them by.
+    fn with_raw_frames(mut self) -> Given {
+        let meta = self.meta.get_or_insert_default();
+        let claude = meta
+            .entry("claudeCode".to_owned())
+            .or_insert_with(|| serde_json::json!({}));
+        if let Some(claude) = claude.as_object_mut() {
+            claude.insert("emitRawSDKMessages".to_owned(), sdk::asked());
+        }
+        self
+    }
 }
 
 impl Connection {
@@ -182,7 +196,7 @@ impl Connection {
             return Ok((Session::new(self, session.clone()), Opened::Known));
         }
         let (program, pass) = banda().unzip();
-        let given = Given::of(program, self.trusted);
+        let given = Given::of(program, self.trusted).with_raw_frames();
         if let Some((
             earlier,
             ForkAt {

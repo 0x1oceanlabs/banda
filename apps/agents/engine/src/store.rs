@@ -5,10 +5,10 @@ use crate::changes::ChangedLines;
 use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
-    AccountUse, Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
+    AccountUse, Archived, Asking, Body, Crew, CrewBrief, CrewId, CrewState, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
     Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Subagent,
     SubagentId, SubagentState, Subagents, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState,
-    TurnView, Usage, VisualId,
+    ToolStatus, TurnView, Usage, VisualId,
 };
 use crate::rules::Lanes;
 use crate::search;
@@ -290,6 +290,48 @@ CREATE VIRTUAL TABLE agents_search USING fts5(
 -- with a rowid below this are not in it yet; 0 once none is left.
 CREATE TABLE agents_backfill (below INTEGER NOT NULL);
 INSERT INTO agents_backfill SELECT COALESCE(MAX(rowid), 0) + 1 FROM agents_items;
+"#,
+    r#"
+-- A Thread's Crews (ADR 0103, decisions 2, 9 and 10): the turn it started
+-- in, its anchor, Claude's task and run it is, as raw frames name them;
+-- its script's title, description and phases, and its agents, as JSON;
+-- its state, and what it gave back. `went_on` is the turn Claude went on
+-- with by itself after it ended.
+CREATE TABLE agents_crews (
+    id TEXT PRIMARY KEY,
+    thread TEXT NOT NULL,
+    turn TEXT NOT NULL,
+    item TEXT NOT NULL,
+    task TEXT NOT NULL,
+    run TEXT,
+    title TEXT NOT NULL,
+    description TEXT,
+    phases TEXT NOT NULL,
+    agents TEXT NOT NULL,
+    state TEXT NOT NULL,
+    why TEXT,
+    started_at INTEGER NOT NULL,
+    ended_at INTEGER,
+    tokens INTEGER,
+    log TEXT,
+    script TEXT,
+    result TEXT,
+    went_on TEXT
+);
+CREATE UNIQUE INDEX agents_crews_by_task ON agents_crews (thread, task);
+CREATE INDEX agents_crews_by_state ON agents_crews (state);
+
+-- A lane's Crew and phase, whether it runs in the background, and the
+-- tool use that launched it, which ties it to Claude's raw frames.
+ALTER TABLE agents_subagents ADD COLUMN crew TEXT;
+ALTER TABLE agents_subagents ADD COLUMN phase INTEGER;
+ALTER TABLE agents_subagents ADD COLUMN background INTEGER NOT NULL DEFAULT 0;
+ALTER TABLE agents_subagents ADD COLUMN launch TEXT;
+
+-- The Crew a call of the Thread's is, as one of its agents made it between
+-- turns: it ends as the Crew ends.
+ALTER TABLE agents_items ADD COLUMN crew TEXT;
+CREATE INDEX agents_items_by_crew ON agents_items (crew) WHERE crew IS NOT NULL;
 "#,
 ];
 
@@ -841,6 +883,7 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
                 agent,
                 parent,
                 subagents: listed_subagents(sql, thread.id, latest.as_ref())?,
+                crew: listed_crew(sql, thread.id)?,
                 latest,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
@@ -1448,19 +1491,36 @@ pub fn copy_turns(
         .iter()
         .map(|(id, ..)| (*id, SubagentId::new()))
         .collect();
+    // The Crews of those turns, the same way.
+    let mut listed =
+        sql.prepare("SELECT id, turn, item FROM agents_crews WHERE thread = ?1 ORDER BY rowid")?;
+    let crews = listed
+        .query_map(params![from], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<rusqlite::Result<Vec<(CrewId, TurnId, ItemId)>>>()?;
+    let crews: Vec<_> = (crews.into_iter())
+        .filter(|(_, turn, _)| new_turns.contains_key(turn))
+        .collect();
+    let new_crews: HashMap<CrewId, CrewId> =
+        crews.iter().map(|(id, ..)| (*id, CrewId::new())).collect();
     // Its own items to the last of `through`'s, but for a later turn's, as
-    // a message queued while it ran; and its lanes' items and the
-    // Questions they asked, which may come after and end nothing. An
-    // anchor, or a Question a lane asked, names the lane's copy.
+    // a message queued while it ran; and its lanes' and Crews' items and
+    // the Questions they asked, which may come after and end nothing. An
+    // anchor, or a Question a lane or a Crew asked, names its copy.
     let mut listed = sql.prepare(
         "SELECT id, turn, author, sub,
-                CASE WHEN json_extract(body, '$.kind') = 'subagent'
-                       OR json_extract(body, '$.sub') IS NOT NULL THEN body END
+                CASE WHEN json_extract(body, '$.kind') IN ('subagent', 'crew')
+                       OR json_extract(body, '$.sub') IS NOT NULL
+                       OR json_extract(body, '$.crew') IS NOT NULL THEN body END,
+                COALESCE(crew, json_extract(body, '$.crew'))
          FROM agents_items WHERE thread = ?1
          AND (sub IS NOT NULL OR json_extract(body, '$.sub') IS NOT NULL
+              OR crew IS NOT NULL OR json_extract(body, '$.crew') IS NOT NULL
               OR rowid <= (SELECT MAX(rowid) FROM agents_items
-                           WHERE thread = ?1 AND turn = ?2 AND sub IS NULL
-                             AND json_extract(body, '$.sub') IS NULL))
+                           WHERE thread = ?1 AND turn = ?2 AND sub IS NULL AND crew IS NULL
+                             AND json_extract(body, '$.sub') IS NULL
+                             AND json_extract(body, '$.crew') IS NULL))
          ORDER BY rowid",
     )?;
     let items = listed
@@ -1471,25 +1531,23 @@ pub fn copy_turns(
                 row.get(2)?,
                 row.get(3)?,
                 maybe_column::<Body>(row, 4)?,
+                row.get(5)?,
             ))
         })?
-        .collect::<rusqlite::Result<
-            Vec<(
-                ItemId,
-                Option<TurnId>,
-                String,
-                Option<SubagentId>,
-                Option<Body>,
-            )>,
-        >>()?;
+        .collect::<rusqlite::Result<Vec<CopiedItem>>>()?;
     let mut new_items = HashMap::new();
     let mut insert = sql.prepare(
-        "INSERT INTO agents_items (id, thread, turn, author, at, body, harness_message, sub)
-         SELECT ?2, ?3, ?4, ?5, at, COALESCE(?6, body), harness_message, ?7
+        "INSERT INTO agents_items (id, thread, turn, author, at, body, harness_message, sub, crew)
+         SELECT ?2, ?3, ?4, ?5, at, COALESCE(?6, body), harness_message, ?7, ?8
          FROM agents_items WHERE id = ?1",
     )?;
     let lane_of = |id: SubagentId| new_lanes.get(&id).copied();
-    for (id, turn, author, sub, body) in items {
+    let crew_of = |id: CrewId| new_crews.get(&id).copied();
+    for (id, turn, author, sub, body, crew) in items {
+        // A Crew's call or Question goes with its copy.
+        if crew.is_some_and(|crew| crew_of(crew).is_none()) {
+            continue;
+        }
         let turn = match turn.map(|turn| new_turns.get(&turn)) {
             Some(None) => continue,
             new => new.flatten(),
@@ -1502,7 +1560,7 @@ pub fn copy_turns(
         if sub.or(asker).is_some_and(|lane| lane_of(lane).is_none()) {
             continue;
         }
-        let body = body.map(|body| lanes_named(body, lane_of));
+        let body = body.map(|body| lanes_named(body, lane_of, crew_of));
         let new = ItemId::new();
         new_items.insert(id, new);
         insert.execute(params![
@@ -1512,23 +1570,55 @@ pub fn copy_turns(
             turn,
             whose(author),
             body.as_ref().map(json).transpose()?,
-            sub.and_then(lane_of)
+            sub.and_then(lane_of),
+            crew.and_then(crew_of)
         ])?;
     }
     let mut insert = sql.prepare(
         "INSERT INTO agents_subagents (id, thread, turn, parent, item, title, role, model,
-             state, why, can_stop, started_at, ended_at, prompt, report)
+             state, why, can_stop, started_at, ended_at, prompt, report, crew, phase,
+             background)
          SELECT ?2, ?3, ?4, ?5, ?6, title, role, model, state, why, can_stop, started_at,
-             ended_at, prompt, report FROM agents_subagents WHERE id = ?1",
+             ended_at, prompt, report, ?7, phase, background
+         FROM agents_subagents WHERE id = ?1",
     )?;
     for (id, turn, parent, item) in lanes {
+        let crew: Option<CrewId> = sql.query_row(
+            "SELECT crew FROM agents_subagents WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
         insert.execute(params![
             id,
             new_lanes[&id],
             to,
             new_turns[&turn],
             parent.and_then(lane_of),
-            new_items.get(&item).copied().unwrap_or(item)
+            new_items.get(&item).copied().unwrap_or(item),
+            crew.and_then(crew_of)
+        ])?;
+    }
+    let mut insert = sql.prepare(
+        "INSERT INTO agents_crews (id, thread, turn, item, task, run, title, description,
+             phases, agents, state, why, started_at, ended_at, tokens, log, script, result,
+             went_on)
+         SELECT ?2, ?3, ?4, ?5, task, run, title, description, phases, agents, state, why,
+             started_at, ended_at, tokens, log, script, result, ?6
+         FROM agents_crews WHERE id = ?1",
+    )?;
+    for (id, turn, item) in crews {
+        let went_on: Option<TurnId> = sql.query_row(
+            "SELECT went_on FROM agents_crews WHERE id = ?1",
+            params![id],
+            |row| row.get(0),
+        )?;
+        insert.execute(params![
+            id,
+            new_crews[&id],
+            to,
+            new_turns[&turn],
+            new_items.get(&item).copied().unwrap_or(item),
+            went_on.and_then(|turn| new_turns.get(&turn).copied())
         ])?;
     }
     let mut insert = sql.prepare(
@@ -1556,9 +1646,24 @@ pub fn copy_turns(
     Ok(())
 }
 
+/// An item a fork copies: its ID, turn, author and lane; its body, when it
+/// names a lane or a Crew; and its Crew.
+type CopiedItem = (
+    ItemId,
+    Option<TurnId>,
+    String,
+    Option<SubagentId>,
+    Option<Body>,
+    Option<CrewId>,
+);
+
 /// `body` with the lane it names, its anchor's or the one that asks, as
-/// `lane_of` renames it.
-fn lanes_named(mut body: Body, lane_of: impl Fn(SubagentId) -> Option<SubagentId>) -> Body {
+/// `lane_of` renames it, and the Crew it names, as `crew_of` does.
+fn lanes_named(
+    mut body: Body,
+    lane_of: impl Fn(SubagentId) -> Option<SubagentId>,
+    crew_of: impl Fn(CrewId) -> Option<CrewId>,
+) -> Body {
     match &mut body {
         Body::Subagent { subagent: lane }
         | Body::Messaged { subagent: lane, .. }
@@ -1566,6 +1671,12 @@ fn lanes_named(mut body: Body, lane_of: impl Fn(SubagentId) -> Option<SubagentId
             sub: Some(lane), ..
         } => {
             *lane = lane_of(*lane).unwrap_or(*lane);
+        }
+        Body::Crew { crew }
+        | Body::Question {
+            crew: Some(crew), ..
+        } => {
+            *crew = crew_of(*crew).unwrap_or(*crew);
         }
         _ => {}
     }
@@ -1646,6 +1757,11 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
         &format!("DELETE FROM agents_subagents WHERE thread = ?1 AND turn IN ({LATER})"),
         params![thread, turn],
     )?;
+    // Nor did their Crews; their calls and Questions went with the items.
+    sql.execute(
+        &format!("DELETE FROM agents_crews WHERE thread = ?1 AND turn IN ({LATER})"),
+        params![thread, turn],
+    )?;
     sql.execute(
         &format!("DELETE FROM agents_turns WHERE id IN ({LATER})"),
         params![thread, turn],
@@ -1673,6 +1789,7 @@ pub fn delete_thread(sql: &Connection, thread: ThreadId) -> Result<(), Error> {
         "DELETE FROM agents_notices WHERE thread = ?1",
         "DELETE FROM agents_items WHERE thread = ?1",
         "DELETE FROM agents_subagents WHERE thread = ?1",
+        "DELETE FROM agents_crews WHERE thread = ?1",
         "DELETE FROM agents_turns WHERE thread = ?1",
         "DELETE FROM agents_threads WHERE id = ?1",
     ] {
@@ -1848,7 +1965,7 @@ pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> 
                 CASE WHEN json_extract(body, '$.form') IS NULL
                       AND json_extract(body, '$.plan') IS NULL
                      THEN json_extract(body, '$.choices') END,
-                json_extract(body, '$.sub')
+                json_extract(body, '$.sub'), json_extract(body, '$.crew')
          FROM agents_items
          WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
     ))?;
@@ -1863,13 +1980,15 @@ pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> 
             choices,
             asker: None,
         };
-        Ok((question, row.get::<_, Option<SubagentId>>(3)?))
+        let whose = (row.get::<_, Option<SubagentId>>(3)?, row.get(4)?);
+        Ok((question, whose))
     })?;
     rows.map(|row| {
-        let (question, sub) = row?;
-        let asker = match sub {
-            Some(sub) => lane_label(sql, sub)?,
-            None => None,
+        let (question, whose): (Asking, (Option<SubagentId>, Option<CrewId>)) = row?;
+        let asker = match whose {
+            (Some(sub), _) => lane_label(sql, sub)?,
+            (None, Some(crew)) => crew_title(sql, crew)?.map(|title| crate::crews::asker(&title)),
+            (None, None) => None,
         };
         Ok(Asking { asker, ..question })
     })
@@ -2144,7 +2263,8 @@ pub fn last_reply(
 
 /// A lane as its row reads, then its Thread.
 const LANE: &str = "SELECT id, turn, parent, title, role, model, state, why, can_stop,
-    started_at, ended_at, prompt, report, thread FROM agents_subagents";
+    started_at, ended_at, prompt, report, thread, crew, phase, background
+    FROM agents_subagents";
 
 fn read_lane(row: &Row<'_>) -> rusqlite::Result<Subagent> {
     Ok(Subagent {
@@ -2161,17 +2281,20 @@ fn read_lane(row: &Row<'_>) -> rusqlite::Result<Subagent> {
         ended: row.get(10)?,
         prompt: row.get(11)?,
         report: row.get(12)?,
+        crew: row.get(14)?,
+        phase: row.get(15)?,
+        background: row.get(16)?,
     })
 }
 
-/// What [`insert_lane`] did.
+/// What [`insert_lane`] or [`insert_crew`] did.
 #[derive(Debug, PartialEq)]
-pub enum Upserted {
-    /// The lane is new, and kept.
+pub enum Upserted<T = Subagent> {
+    /// It is new, and kept.
     New,
-    /// The Thread keeps a lane for that child session already: this one, as
-    /// kept. Nothing was written.
-    Known(Box<Subagent>),
+    /// The Thread keeps it already, for that child session or that task:
+    /// this one, as kept. Nothing was written.
+    Known(Box<T>),
 }
 
 /// Keeps `lane`, a new sub-agent of `thread` that shows at `item`, for the
@@ -2199,8 +2322,10 @@ pub fn insert_lane(
     }
     sql.execute(
         "INSERT INTO agents_subagents (id, thread, turn, parent, item, title, role, model, state,
-             why, can_stop, started_at, ended_at, prompt, report, evidence)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16)",
+             why, can_stop, started_at, ended_at, prompt, report, evidence, crew, phase,
+             background)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18,
+             ?19)",
         params![
             lane.id,
             thread,
@@ -2217,7 +2342,10 @@ pub fn insert_lane(
             lane.ended,
             lane.prompt,
             lane.report,
-            evidence
+            evidence,
+            lane.crew,
+            lane.phase,
+            lane.background
         ],
     )?;
     Ok(Upserted::New)
@@ -2244,7 +2372,8 @@ pub fn lane_of_child(
 pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
     sql.execute(
         "UPDATE agents_subagents SET title = ?2, role = ?3, model = ?4, state = ?5, why = ?6,
-             can_stop = ?7, ended_at = ?8, prompt = ?9, report = ?10
+             can_stop = ?7, ended_at = ?8, prompt = ?9, report = ?10, crew = ?11, phase = ?12,
+             background = ?13
          WHERE id = ?1",
         params![
             lane.id,
@@ -2256,8 +2385,21 @@ pub fn set_lane(sql: &Connection, lane: &Subagent) -> Result<(), Error> {
             lane.can_stop,
             lane.ended,
             lane.prompt,
-            lane.report
+            lane.report,
+            lane.crew,
+            lane.phase,
+            lane.background
         ],
+    )?;
+    Ok(())
+}
+
+/// Keeps `launch`, the tool use that launched lane `sub`, which Claude's
+/// raw frames name it by.
+pub fn set_launch(sql: &Connection, sub: SubagentId, launch: &str) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_subagents SET launch = ?2 WHERE id = ?1",
+        params![sub, launch],
     )?;
     Ok(())
 }
@@ -2304,9 +2446,15 @@ pub fn lanes_at_work(sql: &Connection, thread: ThreadId) -> Result<Lanes, Error>
                 EXISTS (SELECT 1 FROM agents_subagents
                         WHERE thread = ?1 AND state IN (?2, ?3) AND parent IS NULL)",
         params![thread, running, asks],
-        |row| Ok((row.get(0)?, row.get(1)?)),
+        |row| Ok((row.get::<_, bool>(0)?, row.get::<_, bool>(1)?)),
     )?;
-    Ok(Lanes { work, direct })
+    // A Crew at work is the Agent's own work outliving its turn, as a
+    // direct lane is: fork and rewind wait for it, and Stop reaches it.
+    let crew = crew_at_work(sql, thread)?;
+    Ok(Lanes {
+        work: work || crew,
+        direct: direct || crew,
+    })
 }
 
 /// Whether a lane of the Thread has not ended: it works, or waits for a
@@ -2321,12 +2469,13 @@ pub fn lanes_unended(sql: &Connection, thread: ThreadId) -> Result<bool, Error> 
     )?)
 }
 
-/// Whether a lane of any of the Project's Threads is at work.
+/// Whether a lane or a Crew of any of the Project's Threads is at work.
 pub fn any_lane_at_work(sql: &Connection) -> Result<bool, Error> {
     let [running, asks] = at_work();
     Ok(sql.query_row(
-        "SELECT EXISTS (SELECT 1 FROM agents_subagents WHERE state IN (?1, ?2))",
-        params![running, asks],
+        "SELECT EXISTS (SELECT 1 FROM agents_subagents WHERE state IN (?1, ?2))
+             OR EXISTS (SELECT 1 FROM agents_crews WHERE state = ?3)",
+        params![running, asks, word(CrewState::Working)],
         |row| row.get(0),
     )?)
 }
@@ -2374,6 +2523,225 @@ pub fn lanes_in(
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// A Crew as its row reads, then its Thread.
+const CREW: &str = "SELECT id, turn, title, description, phases, agents, state, why,
+    started_at, ended_at, tokens, log, script, result, went_on, thread FROM agents_crews";
+
+fn read_crew(row: &Row<'_>) -> rusqlite::Result<Crew> {
+    Ok(Crew {
+        id: row.get(0)?,
+        turn: row.get(1)?,
+        title: row.get(2)?,
+        description: row.get(3)?,
+        phases: column(row, 4)?,
+        agents: column(row, 5)?,
+        state: word_of(row, 6)?,
+        why: row.get(7)?,
+        started: row.get(8)?,
+        ended: row.get(9)?,
+        tokens: row.get::<_, Option<i64>>(10)?.map(|tokens| tokens.max(0) as u64),
+        log: row.get(11)?,
+        script: row.get(12)?,
+        result: row.get(13)?,
+        went_on: row.get(14)?,
+    })
+}
+
+/// Keeps `crew`, a new Crew of `thread` that shows at `item`, Claude's task
+/// `task` of run `run`; or, when the Thread keeps that task already, as a
+/// frame said again, answers that one and writes nothing.
+pub fn insert_crew(
+    sql: &Connection,
+    thread: ThreadId,
+    crew: &Crew,
+    item: ItemId,
+    (task, run): (&str, Option<&str>),
+) -> Result<Upserted<Crew>, Error> {
+    if let Some(known) = crew_of_task(sql, thread, task)? {
+        return Ok(Upserted::Known(Box::new(known)));
+    }
+    sql.execute(
+        "INSERT INTO agents_crews (id, thread, turn, item, task, run, title, description,
+             phases, agents, state, why, started_at, ended_at, tokens, log, script, result,
+             went_on)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17,
+             ?18, ?19)",
+        params![
+            crew.id,
+            thread,
+            crew.turn,
+            item,
+            task,
+            run,
+            crew.title,
+            crew.description,
+            json(&crew.phases)?,
+            json(&crew.agents)?,
+            word(crew.state),
+            crew.why,
+            crew.started,
+            crew.ended,
+            crew.tokens.map(|tokens| tokens as i64),
+            crew.log,
+            crew.script,
+            crew.result,
+            crew.went_on
+        ],
+    )?;
+    Ok(Upserted::New)
+}
+
+/// Keeps what `crew` is now, by its ID; its Thread, turn, anchor, task and
+/// run stay.
+pub fn set_crew(sql: &Connection, crew: &Crew) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_crews SET title = ?2, description = ?3, phases = ?4, agents = ?5,
+             state = ?6, why = ?7, ended_at = ?8, tokens = ?9, log = ?10, script = ?11,
+             result = ?12, went_on = ?13
+         WHERE id = ?1",
+        params![
+            crew.id,
+            crew.title,
+            crew.description,
+            json(&crew.phases)?,
+            json(&crew.agents)?,
+            word(crew.state),
+            crew.why,
+            crew.ended,
+            crew.tokens.map(|tokens| tokens as i64),
+            crew.log,
+            crew.script,
+            crew.result,
+            crew.went_on
+        ],
+    )?;
+    Ok(())
+}
+
+/// One Crew and its Thread.
+pub fn crew(sql: &Connection, id: CrewId) -> Result<Option<(ThreadId, Crew)>, Error> {
+    Ok(sql
+        .query_row(&format!("{CREW} WHERE id = ?1"), params![id], |row| {
+            Ok((row.get(15)?, read_crew(row)?))
+        })
+        .optional()?)
+}
+
+/// The Thread's Crews, in the order they started.
+pub fn crews(sql: &Connection, thread: ThreadId) -> Result<Vec<Crew>, Error> {
+    let mut statement = sql.prepare(&format!("{CREW} WHERE thread = ?1 ORDER BY rowid"))?;
+    let rows = statement.query_map(params![thread], read_crew)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The Thread's Crew that is Claude's task `task`, if it keeps one.
+pub fn crew_of_task(sql: &Connection, thread: ThreadId, task: &str) -> Result<Option<Crew>, Error> {
+    Ok(sql
+        .query_row(
+            &format!("{CREW} WHERE thread = ?1 AND task = ?2"),
+            params![thread, task],
+            read_crew,
+        )
+        .optional()?)
+}
+
+/// The Thread's Crew of Claude's run `run`, if it keeps one.
+pub fn crew_of_run(sql: &Connection, thread: ThreadId, run: &str) -> Result<Option<Crew>, Error> {
+    Ok(sql
+        .query_row(
+            &format!("{CREW} WHERE thread = ?1 AND run = ?2"),
+            params![thread, run],
+            read_crew,
+        )
+        .optional()?)
+}
+
+/// Whether a Crew of the Thread works.
+pub fn crew_at_work(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    Ok(sql.query_row(
+        "SELECT EXISTS (SELECT 1 FROM agents_crews WHERE thread = ?1 AND state = ?2)",
+        params![thread, word(CrewState::Working)],
+        |row| row.get(0),
+    )?)
+}
+
+/// The Project's Crews at work, each with its Thread, in the order they
+/// started.
+pub fn every_crew_at_work(sql: &Connection) -> Result<Vec<(ThreadId, Crew)>, Error> {
+    let mut statement = sql.prepare(&format!("{CREW} WHERE state = ?1 ORDER BY rowid"))?;
+    let rows = statement.query_map(params![word(CrewState::Working)], |row| {
+        Ok((row.get(15)?, read_crew(row)?))
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The Thread's Crew at work as its list says it (ADR 0103, decision 10):
+/// the one that started last.
+fn listed_crew(sql: &Connection, thread: ThreadId) -> Result<Option<CrewBrief>, Error> {
+    let crew = sql
+        .query_row(
+            &format!("{CREW} WHERE thread = ?1 AND state = ?2 ORDER BY rowid DESC LIMIT 1"),
+            params![thread, word(CrewState::Working)],
+            read_crew,
+        )
+        .optional()?;
+    Ok(crew.map(|crew| crate::crews::brief(&crew)))
+}
+
+/// A Question of the Thread's that a Crew's agent asked, `?1`.
+const ASKED_BY_CREW: &str = "sub IS NULL AND json_extract(body, '$.kind') = 'question'
+    AND json_extract(body, '$.crew') = ?1";
+
+/// The Questions Crew `crew`'s agents asked that still wait for an answer.
+pub fn crew_questions(sql: &Connection, crew: CrewId) -> Result<Vec<Item>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE {ASKED_BY_CREW} AND {OPEN_QUESTION} ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![crew, open_word()?], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The calls Crew `crew`'s agents made between turns that have not ended.
+pub fn crew_open_calls(sql: &Connection, crew: CrewId) -> Result<Vec<Item>, Error> {
+    let open = [ToolStatus::Pending, ToolStatus::Running].map(word);
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE crew = ?1 AND json_extract(body, '$.kind') = 'tool'
+         AND json_extract(body, '$.status') IN (?2, ?3) ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![crew, open[0], open[1]], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// What Crew `crew`'s agents did between turns: their calls and the
+/// Questions they asked, in the order they came.
+pub fn crew_items(sql: &Connection, crew: CrewId) -> Result<Vec<Item>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE crew = ?1 OR ({ASKED_BY_CREW}) ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![crew], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// Marks item `id` as a call Crew `crew`'s agent made.
+pub fn set_item_crew(sql: &Connection, id: ItemId, crew: CrewId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_items SET crew = ?2 WHERE id = ?1",
+        params![id, crew],
+    )?;
+    Ok(())
+}
+
+/// The title of Crew `crew`, while it is kept.
+pub fn crew_title(sql: &Connection, crew: CrewId) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT title FROM agents_crews WHERE id = ?1",
+            params![crew],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 /// Whether another Thread works on what `thread`'s Agent asked it (ADR
 /// 0019, decision 4): its last reply comes back here once its turn ends.
 pub fn awaited(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
@@ -2401,13 +2769,15 @@ pub fn thread_visuals(sql: &Connection, thread: ThreadId) -> Result<Vec<VisualId
 /// holds a Thread's rows joins it, or a move leaves them behind. Its
 /// images' rows go apart ([`thread_images`]), and the index of its
 /// messages is written again where they go ([`search`]).
-const THREAD_TABLES: [(&str, &str); 5] = [
+const THREAD_TABLES: [(&str, &str); 6] = [
     ("agents_threads", "id = ?1"),
     ("agents_turns", "thread = ?1"),
     ("agents_items", "thread = ?1"),
     ("agents_notices", "thread = ?1"),
     // Its sub-agents' lanes (ADR 0103), whose entries are its items.
     ("agents_subagents", "thread = ?1"),
+    // Its Crews (ADR 0103).
+    ("agents_crews", "thread = ?1"),
 ];
 
 /// A Thread whole, as the module's tables hold it: each table's rows of
@@ -3086,6 +3456,8 @@ mod tests {
                     answer: None,
                     values: None,
                     sub: None,
+                    crew: None,
+                    start: None,
                 },
             };
             insert_item(&sql, summary.id, &item, None).unwrap();
@@ -3430,6 +3802,8 @@ mod tests {
             answer: None,
             values: None,
             sub,
+            crew: None,
+            start: None,
         }
     }
 
@@ -3512,6 +3886,9 @@ mod tests {
                 ended: Some(2),
                 prompt: Some("Find where the sidebar reads them".into()),
                 report: Some("In sidebar.ts".into()),
+                crew: None,
+                phase: None,
+                background: false,
             };
             let anchor = Body::Subagent { subagent: lane.id };
             let item = self.put(Some(turn), anchor, parent);
@@ -4166,6 +4543,9 @@ mod tests {
             ended: Some(2),
             prompt: None,
             report: None,
+            crew: None,
+            phase: None,
+            background: false,
         };
         let anchor = said(Body::Subagent { subagent: lane.id });
         insert_item(&sql, gone, &anchor, None).unwrap();
@@ -4272,6 +4652,9 @@ mod tests {
             ended: Some(2),
             prompt: None,
             report: None,
+            crew: None,
+            phase: None,
+            background: false,
         };
         let anchor = said(1, Body::Subagent { subagent: lane.id });
         insert_item(sql, summary.id, &anchor, None).unwrap();

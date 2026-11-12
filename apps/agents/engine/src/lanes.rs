@@ -18,7 +18,7 @@
 //! words that say why (decision 3), as does every lane at work when Banda
 //! restarts.
 
-use crate::acp::{Announced, IdleWhy, LaneSaid, LaneState, Session, StartedRx, WeakSession};
+use crate::acp::{Announced, IdleWhy, LaneSaid, LaneState, Session, StartedRx, Tie, WeakSession};
 use crate::between::ENDING;
 use crate::live::{Cut, LaneRun, Live};
 use crate::model::{
@@ -177,6 +177,9 @@ pub fn start(
         ended: None,
         prompt: None,
         report: None,
+        crew: None,
+        phase: None,
+        background: false,
     };
     let item = ItemId::new();
     let kept = store::insert_lane(tx.sql(), thread, &lane, item, &announced.child)?;
@@ -296,7 +299,13 @@ pub fn patch(was: &Subagent, now: &Subagent) -> Option<Fact> {
         let can_stop = (was.can_stop != now.can_stop).then_some(now.can_stop);
         (can_stop, set(&was.report, &now.report))
     };
+    let crew = (was.crew != now.crew).then_some(now.crew).flatten();
+    let phase = (was.phase != now.phase).then_some(now.phase).flatten();
+    let background = (was.background != now.background).then_some(now.background);
     let nothing = state.is_none()
+        && crew.is_none()
+        && phase.is_none()
+        && background.is_none()
         && title.is_none()
         && role.is_none()
         && model.is_none()
@@ -313,6 +322,9 @@ pub fn patch(was: &Subagent, now: &Subagent) -> Option<Fact> {
         why: None,
         prompt,
         report,
+        crew,
+        phase,
+        background,
     })
 }
 
@@ -524,7 +536,9 @@ impl Lane {
                 now.role = role.or(now.role);
                 self.change(now, None).await;
             }
-            LaneSaid::Brief { message, text, .. } => {
+            LaneSaid::Brief {
+                message, text, tie, ..
+            } => {
                 if self.briefed.is_none() && self.record.prompt.is_none() {
                     self.briefed = Some(message.clone());
                 }
@@ -533,7 +547,11 @@ impl Lane {
                     now.prompt = Some(text);
                     self.change(now, None).await;
                 }
+                if let Some(tie) = tie {
+                    self.tied(tie).await;
+                }
             }
+            LaneSaid::Tied { tie, .. } => self.tied(tie).await,
             // At work, its report waits for its end; after, it is its
             // report at once.
             LaneSaid::Report { text, .. } => {
@@ -547,6 +565,37 @@ impl Lane {
             // Announced again: it goes on in its lane.
             LaneSaid::Seen { announced, .. } => self.announced(announced).await,
         }
+    }
+
+    /// What Claude's raw frames tie it to: the tool use that launched it,
+    /// whether it runs in the background, and the Crew whose agent it is.
+    async fn tied(&mut self, tie: Tie) {
+        let (thread, sub) = (self.hearer.thread, self.record.id);
+        let (task, launch) = (tie.task.clone(), tie.launch.clone());
+        let crew = self
+            .hearer
+            .project
+            .write(move |tx| {
+                store::set_launch(tx.sql(), sub, &launch)?;
+                let crew = match &task {
+                    Some(task) => store::crew_of_task(tx.sql(), thread, task)?,
+                    None => None,
+                };
+                Ok(crew.map(|crew| crew.id))
+            })
+            .await
+            .map_err(plain);
+        let crew = match crew {
+            Ok(crew) => crew,
+            Err(error) => {
+                tracing::warn!(%error, "what ties a sub-agent could not be written");
+                return;
+            }
+        };
+        let mut now = self.record.clone();
+        now.background = tie.background;
+        now.crew = crew.or(now.crew);
+        self.change(now, None).await;
     }
 
     /// What its parent says it is as it announces it: what it gives
@@ -676,6 +725,9 @@ mod tests {
             ended: None,
             prompt: None,
             report: None,
+            crew: None,
+            phase: None,
+            background: false,
         }
     }
 
@@ -933,6 +985,9 @@ mod tests {
                 ended: None,
                 prompt: None,
                 report: None,
+                crew: None,
+                phase: None,
+                background: false,
             };
             let beside: Vec<_> = siblings.iter().map(|id| lane(id)).collect();
             assert_eq!(label(&lane(&id), &beside), expected, "{case}");

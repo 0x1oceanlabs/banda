@@ -283,6 +283,7 @@ mod tests {
             now: Default::default(),
             changed_lines: None,
             subagents: None,
+            crew: None,
         }
     }
 
