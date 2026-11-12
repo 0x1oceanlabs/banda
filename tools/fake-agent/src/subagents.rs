@@ -612,7 +612,7 @@ impl Parent {
         let mut answer = sub.brief.answer.to_owned();
         if self.on(sub, "form") {
             let chose = match self.fake.forms.load(Ordering::Relaxed) {
-                true => choose(&self.cx, self.its(sub), false).await,
+                true => choose(&self.cx, self.its(sub), false, false).await,
                 false => Ok("I cannot ask you here.".to_owned()),
             };
             let chose = chose.unwrap_or_else(|_| "The question was cancelled.".to_owned());

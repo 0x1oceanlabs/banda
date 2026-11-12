@@ -406,6 +406,14 @@ pub struct Field {
     #[serde(default)]
     pub secret: bool,
     pub input: Input,
+    /// Of a field of choices, the ID of the form's text field where a
+    /// Person answers it in their own words, as Claude Code's
+    /// `question_0_custom` answers `question_0`: in place of a choice, or
+    /// besides those picked of several. That field stays in the form, for
+    /// a window that does not pair them.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub other: Option<String>,
 }
 
 /// What text a field takes, when the Harness says.

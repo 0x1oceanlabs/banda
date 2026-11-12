@@ -1140,13 +1140,13 @@ test("a Person fills in the form an Agent asks with", async () => {
   await composer.fill("choose a colour")
   await composer.press("Enter")
   const question = thread.getByRole("group", { name: "Which colour?" })
-  await question.getByRole("radio", { name: /^Blue/ }).click()
   await expect(question.getByText("Like the sea")).toBeVisible()
+  // The question's own words are the last of its choices, not a page.
+  await expect(question.getByLabel("In your own words")).toBeVisible()
+  await expect(question.getByRole("button", { name: "Next" })).toHaveCount(0)
   await page.screenshot({ path: "test-results/8-form.png" })
-  // One field at a time, as T3 Code asks.
-  await expect(question.getByText("1 of 2")).toBeVisible()
-  await question.getByRole("button", { name: "Next" }).click()
-  await question.getByRole("button", { name: "Submit" }).click()
+  // One question of one choice: its pick answers it.
+  await question.getByRole("radio", { name: /^Blue/ }).click()
   await expect(thread.getByText("You chose Blue.")).toBeVisible()
   await expect(question).toBeHidden()
   // Answered, it is one line, its answers opening from it.
@@ -1156,14 +1156,34 @@ test("a Person fills in the form an Agent asks with", async () => {
   await composer.fill("choose once more")
   await composer.press("Enter")
   const again = thread.getByRole("group", { name: "Which colour?" }).last()
-  // Keys pick a choice of the field shown, and move on to the next.
+  // The key after the choices goes to the own words, and Enter sends them.
   await again.getByRole("radio", { name: /^Red/ }).focus()
-  await page.keyboard.press("2")
-  await expect(again.getByText("2 of 2")).toBeVisible()
-  await again.getByLabel("Other").fill("Green")
-  await again.getByRole("button", { name: "Submit" }).click()
+  await page.keyboard.press("3")
+  await expect(again.getByLabel("In your own words")).toBeFocused()
+  await page.keyboard.type("Green")
+  await page.keyboard.press("Enter")
   await expect(thread.getByText("You chose Green.")).toBeVisible()
+
+  await composer.fill("choose with drinks")
+  await composer.press("Enter")
+  const both = thread.getByRole("group", { name: "Which colour?" }).last()
+  const steps = both.getByRole("navigation", { name: "Questions" })
+  await expect(steps.getByRole("button")).toHaveText(["1Colour", "2Drinks"])
+  // A pick moves on to the next question, and its step is ticked.
+  await both.getByRole("radio", { name: /^Red/ }).focus()
+  await page.keyboard.press("2")
+  await expect(both.getByText("What to drink?")).toBeVisible()
+  await expect(steps.getByRole("button", { name: /Colour/ })).toContainText(
+    "Colour"
+  )
+  await both.getByRole("checkbox", { name: "Tea" }).click()
+  await both.getByLabel("In your own words").last().fill("Milk")
   await page.mouse.move(0, 0)
+  await page.screenshot({ path: "test-results/9-questions.png" })
+  await both.getByRole("button", { name: "Submit" }).click()
+  await expect(
+    thread.getByText("You chose Blue. To drink: Tea, Milk.")
+  ).toBeVisible()
   await page.screenshot({ path: "test-results/9-answered.png" })
 })
 

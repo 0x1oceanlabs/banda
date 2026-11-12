@@ -8,7 +8,8 @@
 //! - `choose`: asks for a colour with a form, as Claude Code asks its own
 //!   questions, and replies with the answer, or that the Person skipped.
 //!   `quickly`, it stops waiting after 300 milliseconds, as Codex does when
-//!   a question times out.
+//!   a question times out. `drinks` asks a second question, of any of its
+//!   choices, as a multiSelect asks.
 //! - `which settings`: replies with the session's mode, model and brevity.
 //! - `which effort`: replies with the session's effort and whether it is fast.
 //! - `plan done`: in the plan mode, switches to accepting edits, as Claude
@@ -152,17 +153,17 @@ use agent_client_protocol::schema::v1::{
     ElicitationAction, ElicitationContentValue, ElicitationFormMode, ElicitationSchema,
     ElicitationSessionScope, EnumOption, ForkSessionRequest, ForkSessionResponse, ImageContent,
     Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    LogoutCapabilities, LogoutRequest, LogoutResponse, MessageId, NewSessionRequest,
-    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind, Plan,
-    PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities, PromptRequest,
-    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
-    ResumeSessionResponse, SessionCapabilities, SessionCloseCapabilities, SessionConfigOption,
-    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption,
-    SessionForkCapabilities, SessionId, SessionNotification, SessionResumeCapabilities,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallLocation,
-    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput,
-    UsageUpdate,
+    LogoutCapabilities, LogoutRequest, LogoutResponse, MessageId, MultiSelectPropertySchema,
+    NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
+    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities,
+    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionCloseCapabilities,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionConfigSelectOption, SessionForkCapabilities, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
+    ToolCall, ToolCallContent, ToolCallLocation, ToolCallStatus, ToolCallUpdate,
+    ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde::{Deserialize, Serialize};
@@ -860,7 +861,13 @@ async fn turn(
     }
     if words.contains("choose") {
         let reply = if fake.forms.load(Ordering::Relaxed) {
-            choose(&cx, &session, words.contains("quickly")).await?
+            choose(
+                &cx,
+                &session,
+                words.contains("quickly"),
+                words.contains("drinks"),
+            )
+            .await?
         } else {
             "I cannot ask you here.".to_owned()
         };
@@ -1481,15 +1488,28 @@ async fn choose(
     cx: &ConnectionTo<Client>,
     session: &SessionId,
     quickly: bool,
+    drinks: bool,
 ) -> Result<String, Error> {
     let colour = StringPropertySchema::new().title("Colour").one_of(vec![
         EnumOption::new("Red", "Red"),
         EnumOption::new("Blue", "Blue").description("Like the sea"),
     ]);
     let other = StringPropertySchema::new().title("Other");
-    let schema = ElicitationSchema::new()
+    let mut schema = ElicitationSchema::new()
         .property("question_0", colour, false)
-        .property("question_0_custom", other, false);
+        .property("question_0_custom", other.clone(), false);
+    if drinks {
+        let drink = MultiSelectPropertySchema::titled(vec![
+            EnumOption::new("Tea", "Tea"),
+            EnumOption::new("Coffee", "Coffee"),
+        ])
+        .title("Drinks")
+        .description("What to drink?");
+        schema =
+            schema
+                .property("question_1", drink, false)
+                .property("question_1_custom", other, false);
+    }
     let scope = ElicitationSessionScope::new(session.clone()).tool_call_id("ask-1");
     let form = ElicitationFormMode::new(scope, schema);
     let request = CreateElicitationRequest::new(form, "Which colour?");
@@ -1509,9 +1529,19 @@ async fn choose(
                 Some(ElicitationContentValue::String(s)) if !s.is_empty() => Some(s.clone()),
                 _ => None,
             };
-            match said("question_0_custom").or_else(|| said("question_0")) {
+            let colour = match said("question_0_custom").or_else(|| said("question_0")) {
                 Some(colour) => format!("You chose {colour}."),
                 None => "You chose nothing.".to_owned(),
+            };
+            let mut drunk = match content.get("question_1") {
+                Some(ElicitationContentValue::StringArray(picks)) => picks.clone(),
+                _ => Vec::new(),
+            };
+            drunk.extend(said("question_1_custom"));
+            if drunk.is_empty() {
+                colour
+            } else {
+                format!("{colour} To drink: {}.", drunk.join(", "))
             }
         }
         ElicitationAction::Decline => "You skipped the question.".to_owned(),

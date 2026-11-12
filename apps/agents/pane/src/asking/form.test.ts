@@ -1,6 +1,6 @@
 import type { Field } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { draftOf, filled, problem, ready, summary } from "./form"
+import { asked, draftOf, filled, problem, ready, summary } from "./form"
 
 const colours = [
   { value: "red", name: "Red" },
@@ -87,4 +87,74 @@ test("an answer reads by each field's title and each choice's name", () => {
     { id: "also", title: "Also", value: "Red, Blue" },
     { id: "loud", title: "Loud", value: "Yes" },
   ])
+})
+
+/** Claude Code's AskUserQuestion: each question, then its own words. */
+const ASK: Field[] = [
+  {
+    id: "question_0",
+    title: "Colour",
+    required: true,
+    secret: false,
+    input: { kind: "choice", choices: colours },
+    other: "question_0_custom",
+  },
+  {
+    id: "question_0_custom",
+    title: "Other",
+    required: false,
+    secret: false,
+    input: { kind: "text" },
+  },
+  {
+    id: "question_1",
+    title: "Also",
+    required: false,
+    secret: false,
+    input: { kind: "choices", choices: colours, default: [] },
+    other: "question_1_custom",
+  },
+  {
+    id: "question_1_custom",
+    title: "Other",
+    required: false,
+    secret: false,
+    input: { kind: "text" },
+  },
+]
+
+test("a question's own words go with it, not on a page of their own", () => {
+  expect(asked(ASK).map((field) => field.id)).toEqual([
+    "question_0",
+    "question_1",
+  ])
+  expect(asked(FORM)).toEqual(FORM)
+})
+
+test("a required question is answered by a choice or by one's own words", () => {
+  const draft = draftOf(ASK)
+  expect(ready(ASK, draft)).toBe(false)
+  expect(ready(ASK, { ...draft, question_0: "red" })).toBe(true)
+  expect(ready(ASK, { ...draft, question_0_custom: "Teal" })).toBe(true)
+  expect(ready(ASK, { ...draft, question_0_custom: "  " })).toBe(false)
+})
+
+test("one's own words read with the question they answer", () => {
+  const values = {
+    question_0_custom: "Teal",
+    question_1: ["blue"],
+    question_1_custom: "Green",
+  }
+  expect(summary(ASK, values)).toEqual([
+    { id: "question_0", title: "Colour", value: "", own: "Teal" },
+    { id: "question_1", title: "Also", value: "Blue", own: "Green" },
+  ])
+  // The Harness gets each as it asked: the choice, and the words apart.
+  expect(
+    filled(ASK, {
+      ...draftOf(ASK),
+      question_1: ["blue"],
+      question_1_custom: "Green",
+    })
+  ).toEqual({ question_1: ["blue"], question_1_custom: "Green" })
 })
