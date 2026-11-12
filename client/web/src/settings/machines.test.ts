@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import type { HostState, HostTest } from "@banda/core"
+import type { HostTest } from "@banda/core"
 import { Refused } from "@banda/contract"
 import { ELSEWHERE } from "../boot"
 import {
@@ -10,8 +10,6 @@ import {
   awakeValue,
   ended,
   failedWords,
-  buildWords,
-  factsWords,
   foundNamed,
   lidWords,
   movedIcon,
@@ -24,7 +22,6 @@ import {
   shownActs,
   shownOn,
   started,
-  stateWords,
   testWords,
   installSteps,
   shellLine,
@@ -106,45 +103,6 @@ test("Add settles a new machine beside the ones shown, and says what it will wri
   expect(addedWords("arc")).toBe("Added arc.")
 })
 
-const live = (version: string | null, build = "abc1234ff"): HostState => ({
-  name: "arc",
-  ssh: "arc",
-  state: "live",
-  build,
-  version,
-  own: { build: "abc1234ff", version: "0.1.0-dev.421" },
-})
-
-test("a machine's state, in Settings' own words", () => {
-  expect(stateWords(live("0.1.0-dev.421"))).toBe("live · same build")
-  expect(stateWords(live("0.1.0-dev.418", "def"))).toBe("live · other build")
-  expect(stateWords({ name: "arc", ssh: "arc", state: "connecting" })).toBe(
-    "connecting"
-  )
-  expect(
-    stateWords({ name: "arc", ssh: "arc", state: "signin", url: "https://x" })
-  ).toBe("sign in to Tailscale")
-  expect(
-    stateWords({ name: "arc", ssh: "arc", state: "away", why: "ssh ended" })
-  ).toBe("away")
-  expect(stateWords({ name: "arc", ssh: "arc", state: "stopped" })).toBe(
-    "stopped"
-  )
-  expect(
-    stateWords({ name: "arc", ssh: "arc", state: "refused", why: "no banda" })
-  ).toBe("refused")
-})
-
-test("a live machine's build says whether it is this window's; none is known while it is not live", () => {
-  expect(buildWords(live("0.1.0-dev.421"))).toBe("dev.421, same as here")
-  expect(buildWords(live("0.1.0-dev.418", "def"))).toBe("dev.418 vs dev.421")
-  // One that says no version is told by its build.
-  expect(buildWords(live(null, "abc1234ff"))).toBe("abc1234 vs dev.421")
-  expect(
-    buildWords({ name: "arc", ssh: "arc", state: "stopped" })
-  ).toBeUndefined()
-})
-
 test("a Test says what it found, cleaned, or why it found nothing", () => {
   const found: HostTest = {
     state: "found",
@@ -206,15 +164,6 @@ test("what went wrong is Settings' own words, the window's, main's over the brid
   expect(failedWords(new Error(ELSEWHERE))).toBe(
     "Only Banda's app reaches other machines."
   )
-})
-
-test("what a machine says it is shows on one line, each part cleaned, a part it leaves out left out", () => {
-  expect(factsWords(["SLIMBOOK EVO14", "Arch Linux"])).toBe(
-    "SLIMBOOK EVO14 · Arch Linux"
-  )
-  expect(factsWords([undefined, "macOS 26.1"])).toBe("macOS 26.1")
-  expect(factsWords(["\u200b", null])).toBe("")
-  expect(factsWords(["x".repeat(60)])).toHaveLength(40)
 })
 
 test("acts that overlap keep a part busy until the last ends, with the words of the latest still running", () => {

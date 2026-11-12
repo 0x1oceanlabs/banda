@@ -43,6 +43,7 @@ import {
   timesOf,
   worksWords,
 } from "./card"
+import { awayShort } from "../machines/words"
 import { CardTime } from "./CardStatus"
 import { dueOf, useClock, useWakeAt } from "./clock"
 import { keyOf } from "./hold"
@@ -144,8 +145,13 @@ export function Card({
       data-tone={card.tone}
       data-card=""
       data-went={card.gone ? "" : undefined}
+      data-away={card.away ? "" : undefined}
       className={cn(
         "relative isolate flex w-full min-w-0 flex-col gap-0.5 rounded-control px-2 text-left",
+        // Its machine out of reach, it dims where it stands, over
+        // --dur-slow, and comes back alike (decision 18; spec §2.1).
+        "transition-opacity duration-(--dur-slow) ease-(--ease)",
+        card.away && "opacity-55",
         // The hover's fill is a layer under the card that fades
         // (globals.css): at once in, over 100 ms out, by its opacity alone
         // (ADR 0088, decision 2); it stays while the pointer is on an act.
@@ -510,6 +516,18 @@ function Piece({
     case "harness":
       // Its account's emblem (ADR 0093, decision 1).
       return <Emblem of={emblemOf(harnesses, slot.id, slot.name)} />
+    case "away": {
+      // Since when its machine is out of reach, by the list's clock, after
+      // the machine's name: "arc · away 12m" (decision 18).
+      const words = card.away && awayShort(card.away, now)
+      return (
+        words && (
+          <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
+            {slot.dot ? `· ${words}` : words}
+          </span>
+        )
+      )
+    }
   }
 }
 

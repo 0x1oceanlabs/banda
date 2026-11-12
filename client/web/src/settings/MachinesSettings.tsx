@@ -88,9 +88,7 @@ import {
   awakeOn,
   awakeValue,
   awayWords,
-  buildWords,
   ended,
-  factsWords,
   failedWords,
   foundNamed,
   installSteps,
@@ -108,11 +106,11 @@ import {
   shownActs,
   shownOn,
   started,
-  stateWords,
   testWords,
   Told,
   type Wrote,
 } from "./machines"
+import { buildWords, factsWords, stateWords } from "../machines/words"
 import type { SectionProps } from "./sections"
 import { MachineRowsPicker } from "./rows"
 import { RowFrame, SettingRow } from "./SettingRow"

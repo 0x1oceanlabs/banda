@@ -12,7 +12,7 @@ import { Dismiss } from "./open"
 import { TrustCard, type Trusting } from "../trust/TrustCard"
 import { Foot } from "./Foot"
 import { Header } from "./Header"
-import { HostLines, HostPart, saysSomething } from "./HostPart"
+import { HostPart } from "./HostPart"
 import { regionsOf } from "./regions"
 import { DeleteDialog } from "./CardMenu"
 import { ProjectMenu, type WithMenu } from "./ProjectMenu"
@@ -178,19 +178,7 @@ export function Sidebar({
                     only={view.only}
                     onPick={view.pick}
                     withMenu={withMenu}
-                  >
-                    {hosts.map((host) => {
-                      const lines = ordered.projects!.filter(
-                        (line) => line.host === host.name
-                      )
-                      return part(
-                        host,
-                        lines.length > 0 && (
-                          <HostLines lines={lines} settings={settings} />
-                        )
-                      )
-                    })}
-                  </ProjectsList>
+                  />
                 )}
                 <PickList
                   tab={view.tab}
@@ -201,12 +189,10 @@ export function Sidebar({
                   told of Someday. */}
                   <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
                   {/* Grouped by Project, each host's groups follow under its
-                  label; grouped otherwise, its rows are among this machine's,
-                  and its label shows only what is not as usual. */}
-                  {groupOf(settings) === "project"
-                    ? hosts.map((host) => part(host, drawn(host.name)))
-                    : !ordered.projects &&
-                      hosts.filter(saysSomething).map((host) => part(host))}
+                  label; grouped otherwise, its cards are among this
+                  machine's, and the foot says how it stands. */}
+                  {groupOf(settings) === "project" &&
+                    hosts.map((host) => part(host, drawn(host.name)))}
                 </PickList>
               </div>
             </ScrollArea>

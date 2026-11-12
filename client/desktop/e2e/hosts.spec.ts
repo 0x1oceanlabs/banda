@@ -17,8 +17,8 @@
  * on its Thread, in a toast that names arc, and nothing goes there once
  * it is back; a Stop on its way as arc goes says it may have gone
  * through. arc that answers nothing, its link up, is away in seconds as
- * well, its rows dim and its label as of when it was last heard, and
- * stopped it keeps its rows too. The counts
+ * well, its rows dim and the foot's machines say since when it was last
+ * heard, and stopped it keeps its rows too. The counts
  * list and Alt+U place its Threads where the sidebar list does, among
  * this machine's. A new Thread's picker groups
  * the Projects by machine, in a popped-out Pane's window as in the
@@ -399,16 +399,39 @@ const cardOf = (page: Page, name = "arc") =>
 const arcOf = (page: Page) =>
   sidebarOf(page).getByRole("group", { name: "arc", exact: true })
 
-/** What arc's label says away: as of when the window last heard it, where
- * it did, by 24 hours. */
-const AWAY = /^away( · as of \d\d:\d\d)?$/
-/** The same, the window having heard it. */
-const AWAY_AS_OF = /^away · as of \d\d:\d\d$/
-/** What arc's label says stopped. */
-const STOPPED_AS_OF = /^stopped · as of \d\d:\d\d$/
+/** arc's dot in the sidebar's foot (ADR 0098, decision 18): how it
+ * stands, and in its tooltip how long it has been out of reach. */
+const dotOf = (page: Page) =>
+  sidebarOf(page).locator('[data-machine-dot="arc"]')
+/** What arc's dot says away: since when the window last heard it, by a
+ * card's short steps. */
+const AWAY = /^arc · away( \d+[smhd])?$/
+/** What arc's dot says stopped. */
+const STOPPED = /^arc · stopped( \d+[smhd])?$/
 
-/** What a machine holds, dim, while the window does not reach it. */
-const dimmed = (part: Locator) => part.locator(".opacity-45")
+/** Whether arc's dot says the window reaches it: `live`, or `away`. */
+const stands = (page: Page, standing: "live" | "away", timeout?: number) =>
+  expect(dotOf(page)).toHaveAttribute("data-standing", standing, { timeout })
+
+/** What a machine holds, dim, while the window does not reach it: its
+ * cards. */
+const dimmed = (part: Locator) => part.locator("[data-card][data-away]")
+
+/** Why arc stands as it does, as its row in the foot's machines says it
+ * in its tooltip: "arc has not answered since 14:02". */
+async function machineWhy(page: Page): Promise<string> {
+  await sidebarOf(page)
+    .getByRole("button", { name: /^Machines: / })
+    .click()
+  // By its key: this machine may be named arc too, as its host is.
+  const row = page
+    .getByRole("dialog", { name: "Machines" })
+    .locator('[data-machine="arc"]')
+  const why = (await row.locator("[data-machine-words]").getAttribute("title"))!
+  await page.keyboard.press("Escape")
+  await expect(page.getByRole("dialog", { name: "Machines" })).toHaveCount(0)
+  return why
+}
 
 /** This machine's Project "Work", with a Thread done; its id. */
 async function work(window: Window): Promise<string> {
@@ -511,7 +534,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(label.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(placeOf(there, "banda").first()).toBeVisible()
   await expect(there.getByText("Bench window tests")).toBeVisible()
-  await expect(there.getByRole("status", { name: "Connecting" })).toHaveCount(0)
+  await stands(page, "live")
   // A Thread started there shows as it starts, with how long it works.
   send(arc, banda, "Hosts over ssh, wait")
   await expect(
@@ -621,7 +644,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(there.getByText("Bench window tests")).toBeVisible()
   arc.down(true)
   arc.cut()
-  await expect(there.getByText(/^away/)).toBeVisible()
+  await stands(page, "away")
   await expect(there.getByText("Bench window tests")).toBeVisible()
   // Away, ssh would not reach it: its ⋯ has no Stop.
   await more.focus()
@@ -633,12 +656,11 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await page.keyboard.press("Escape")
   await expect(page.getByRole("menu")).toHaveCount(0)
   await more.blur()
-  // Its label says once what its rows are as of: when the window last
-  // heard arc.
-  await expect(there.getByText(AWAY_AS_OF)).toBeVisible()
+  // The foot's dot says since when: when the window last heard arc.
+  await expect(dotOf(page)).toHaveAttribute("title", AWAY)
   await shot(page, "pr2-3-away")
   arc.down(false)
-  await expect(there.getByText(/^away/)).toHaveCount(0, { timeout: 60_000 })
+  await stands(page, "live", 60_000)
   await expect(there.getByText("Bench window tests")).toBeVisible()
 
   // Stopped there from its label's ⋯: an Agent works there, so a toast
@@ -658,7 +680,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
     .getByRole("listitem")
     .filter({ hasText: "Agents work on arc" })
   await expect(asks).toBeVisible()
-  await expect(there.getByText(/^stopped/)).toHaveCount(0)
+  await stands(page, "live")
   if (shots) {
     // The toasts spread under the pointer, once the menu has gone.
     await expect(page.getByRole("menu")).toHaveCount(0)
@@ -667,7 +689,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
     await page.screenshot({ path: join(shots, "stop-asks.png") })
   }
   await asks.getByRole("button", { name: "Stop anyway" }).click()
-  await expect(there.getByText(STOPPED_AS_OF)).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", STOPPED)
   // Stopped, its ⋯ has no Stop; its rows are still there to fold.
   await more.focus()
   await page.keyboard.press("Enter")
@@ -686,9 +708,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await expect(dimmed(there).getByText("Hold arc, wait")).toBeVisible()
   await shot(page, "pr2-4-stopped")
   await there.getByRole("button", { name: "Start" }).click()
-  await expect(there.getByText(/^stopped/)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
   // What arc lists anew lands as the pointer leaves: the list holds under
   // it (ADR 0098 decision 6, S5c).
   await leaveSidebar(page)
@@ -777,19 +797,15 @@ test("another machine's Thread opens from the sidebar on its engine, waits while
   await expect(thread.getByText("You said: hi")).toBeVisible()
   // Its pill has arc's icon, and says for how long, by the Window's one
   // clock: nothing under a minute, then minutes, after what is said as it
-  // changes. arc's label says instead what its rows are as of, and that
-  // stays.
+  // changes. The foot's dot says it too, as arc's cards do.
   const pill = page.locator("[data-machine-pill]").filter({ has: away })
   await expect(pill.locator('[data-machine-icon="server"]')).toBeVisible()
   await expect(pill).toHaveText("arc is away")
-  const label = arcOf(page)
-  const asOf = label.getByText(AWAY_AS_OF)
-  await expect(asOf).toBeVisible()
-  const said = await asOf.textContent()
+  await expect(dotOf(page)).toHaveAttribute("title", AWAY)
   await page.clock.fastForward("02:00")
   await expect(pill).toHaveText("arc is away · 2 min")
   await expect(away).toHaveText("arc is away")
-  await expect(label.getByText(said!, { exact: true })).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", "arc · away 2m")
   await composer.fill("back again")
   const later = thread.getByRole("button", { name: "Send when back" })
   await expect(later).toBeEnabled()
@@ -1197,9 +1213,7 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   )
   await shot(page, "step4c-3b-picked-away")
   arc.down(false)
-  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
 
   // On arc, its picker lists this machine's Projects first, and adds none
   // there.
@@ -1654,7 +1668,7 @@ test("another machine's Thread that asks has its toast name arc, and Allow and T
   await expect(again).toContainText("ask once more · arc")
   arc.down(true)
   arc.cut()
-  await expect(arcOf(page).getByText(AWAY)).toBeVisible()
+  await stands(page, "away")
   await expect(again).toBeVisible()
   await again.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(toasts.filter({ hasText: "arc is away" })).toBeVisible({
@@ -1669,9 +1683,7 @@ test("another machine's Thread that asks has its toast name arc, and Allow and T
   ) as { ok: { threads: { title: string }[] } }
   expect(ok.threads.map(({ title }) => title)).toEqual(["Sidebar for arc"])
   arc.down(false)
-  await expect(arcOf(page).getByText(AWAY)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
   // Back, and heard again, as a Thread it starts now shows in its list:
   // nothing it was refused runs there by itself, a while after either.
   send(arc, banda, "back on arc")
@@ -1719,7 +1731,7 @@ test("with arc away, Stop on its Thread is refused at once in a toast that names
   // once, in a toast that names arc and Stop.
   arc.down(true)
   arc.cut()
-  await expect(arcOf(page).getByText(AWAY)).toBeVisible()
+  await stands(page, "away")
   await stop.click()
   await expect(
     toasts.filter({ hasText: "arc is away: Stop was not sent." })
@@ -1737,9 +1749,7 @@ test("with arc away, Stop on its Thread is refused at once in a toast that names
   // arc back, and heard again: nothing refused went there by itself, a
   // while after either.
   arc.down(false)
-  await expect(arcOf(page).getByText(AWAY)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
   await expect(stop).toBeVisible()
   for (const until = Date.now() + 5_000; Date.now() < until;) {
     runs()
@@ -1785,9 +1795,7 @@ test("a Stop on its way as arc goes says at once that it may have gone through, 
   const [[, then]] = states(arc!, banda) as [[string, string]]
   expect(["stopped", "running"]).toContain(then)
   arc.down(false)
-  await expect(arcOf(page).getByText(AWAY)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
   for (const until = Date.now() + 5_000; Date.now() < until;) {
     expect(states(arc!, banda)).toEqual([["Bench window tests", then]])
     await page.waitForTimeout(250)
@@ -1814,7 +1822,7 @@ test("with arc away, the Banda menu's words for a new Thread on arc are refused 
   ).toBeVisible()
   arc.down(true)
   arc.cut()
-  await expect(arcOf(page).getByText(AWAY)).toBeVisible()
+  await stands(page, "away")
 
   // Its words are refused at once, in a toast that names arc, and wait in
   // the new Thread's composer for the Person to send.
@@ -1842,9 +1850,7 @@ test("with arc away, the Banda menu's words for a new Thread on arc are refused 
   // arc back, and heard again: no Thread starts there by itself, a while
   // after either; the words still wait.
   arc.down(false)
-  await expect(arcOf(page).getByText(AWAY)).toHaveCount(0, {
-    timeout: 60_000,
-  })
+  await stands(page, "live", 60_000)
   for (const until = Date.now() + 5_000; Date.now() < until;) {
     expect(states(arc!, banda)).toEqual([["Bench window tests", "done"]])
     await page.waitForTimeout(250)
@@ -1878,7 +1884,7 @@ function writeOnArc(arc: Arc, project: string, thread: string, text: string) {
   )
 }
 
-test("arc that answers nothing is away in seconds: Send fails at once, its label says as of when it was last heard and its rows dim with their words; what arc wrote meanwhile shows once it answers; stopped, it keeps its rows (H5c)", async () => {
+test("arc that answers nothing is away in seconds: Send fails at once, the foot's machines say since when it was last heard and its rows dim with their words; what arc wrote meanwhile shows once it answers; stopped, it keeps its rows (H5c)", async () => {
   test.setTimeout(shots ? 300_000 : 180_000)
   arc = newArc()
   const banda = await seed(arc)
@@ -1929,23 +1935,19 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
     await page.screenshot({ path: join(shots, "h5c-3.png") })
   }
 
-  // arc is away (Q7): its label says once, and not dim, what its rows are
-  // as of, when the window last heard it, and its tooltip why; its rows
-  // dim, each with its own words; this machine's do not. The pill says it
-  // as when its link is gone, and Send waits for arc (ADR 0105).
-  const asOf = there.getByText(AWAY_AS_OF)
-  await expect(asOf).toBeVisible()
-  const heard = (await asOf.textContent())!.replace("away · as of ", "")
+  // arc is away (Q7): the foot's dot says so, and its row in the foot's
+  // machines why, since when the window last heard it (ADR 0098,
+  // decision 18); its rows dim, each with its own words; this machine's
+  // do not. The pill says it as when its link is gone, and Send waits for
+  // arc (ADR 0105).
+  await expect(dotOf(page)).toHaveAttribute("title", AWAY)
+  const why = await machineWhy(page)
+  const heard = why.replace("arc has not answered since ", "")
   expect([
     await clockAt(page, before - 16_000),
     await clockAt(page, before),
   ]).toContain(heard)
-  await expect(asOf).toHaveAttribute(
-    "title",
-    `arc has not answered since ${heard}`
-  )
   await expect(dimmed(there).getByText("Bench window tests")).toBeVisible()
-  await expect(dimmed(there).getByText(AWAY)).toHaveCount(0)
   await expect(dimmed(sidebar).getByText("Sidebar for arc")).toHaveCount(0)
   await expect(pill).toHaveText("arc is away")
   await expect(pill.locator('[data-machine-icon="server"]')).toBeVisible()
@@ -1961,18 +1963,18 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
     .poll(() => keptOf(arc!, banda, only!.id))
     .toContain("You said: written while quiet")
   await expect(thread.getByText("You said: written while quiet")).toHaveCount(0)
-  // A while on, the pill says for how long; the label's time stays.
+  // A while on, the pill and the dot say for how long; why stays.
   await page.clock.fastForward("02:00")
   await expect(pill).toHaveText("arc is away · 2 min")
-  await expect(there.getByText(`away · as of ${heard}`)).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", "arc · away 2m")
+  expect(await machineWhy(page)).toBe(why)
   await shot(page, "h5c-1")
   await lightShot(window, "h5c-1-light")
 
-  // arc answers again: its label goes quiet, its rows undim, the pill
-  // goes and Send is on, the words still there; what it wrote meanwhile
-  // shows.
+  // arc answers again: its dot is live, its rows undim, the pill goes
+  // and Send is on, the words still there; what it wrote meanwhile shows.
   arc.hush(false)
-  await expect(there.getByText(AWAY)).toHaveCount(0, { timeout: 10_000 })
+  await stands(page, "live", 10_000)
   await expect(dimmed(there)).toHaveCount(0)
   await expect(pill).toHaveCount(0)
   await expect(sending).toBeEnabled({ timeout: SOON })
@@ -1986,35 +1988,35 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   arc.hush(true)
   await expect(async () => {
     await page.clock.fastForward("00:16")
-    await expect(there.getByText(AWAY_AS_OF)).toBeVisible({ timeout: 500 })
+    await stands(page, "away", 500)
   }).toPass({ timeout: 15_000 })
   await expect(dimmed(there).getByText("Bench window tests")).toBeVisible()
   arc.hush(false)
-  await expect(there.getByText(AWAY)).toHaveCount(0, { timeout: 10_000 })
+  await stands(page, "live", 10_000)
 
   // The link drops, and arc's engine runs on and writes there: back, the
   // Pane shows it (#801).
   arc.down(true)
   arc.cut()
-  await expect(there.getByText(AWAY_AS_OF)).toBeVisible()
+  await stands(page, "away")
   writeOnArc(arc, banda, only!.id, "written while cut")
   await expect
     .poll(() => keptOf(arc!, banda, only!.id))
     .toContain("You said: written while cut")
   arc.down(false)
-  await expect(there.getByText(AWAY)).toHaveCount(0, { timeout: 60_000 })
+  await stands(page, "live", 60_000)
   await expect(thread.getByText("You said: written while cut")).toBeVisible()
 
-  // Banda stopped there: its rows stay, dim, with their words (Q8), and
-  // its label says stopped, as of when it was last heard, with Start; the
-  // pill says why, and Send waits for arc.
+  // Banda stopped there: its rows stay, dim, with their words (Q8), its
+  // dot says stopped, and its label has Start; the pill says why, and
+  // Send waits for arc.
   await expect(sending).toBeEnabled({ timeout: 60_000 })
   expect(
     await page.evaluate(() =>
       (globalThis as unknown as Paged).banda.hostStop("arc", false)
     )
   ).toBe("stopped")
-  await expect(there.getByText(STOPPED_AS_OF)).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", STOPPED)
   await expect(dimmed(there).getByText("Bench window tests")).toBeVisible()
   await expect(pill).toHaveText("Banda is stopped on arc·Start")
   await expect(later).toHaveAttribute(
@@ -2023,14 +2025,8 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   )
   await shot(page, "h5c-2")
   await lightShot(window, "h5c-2-light")
-  // Its words show whole beside Start. Its ⋯, shown as the pointer is
-  // over its label or as Tab reaches it (headless, nothing hovers), sits
-  // beside Start, never over it: the words give way, whole in their
-  // tooltip.
-  const stoppedWords = there.getByText(STOPPED_AS_OF)
-  const narrowed = () =>
-    stoppedWords.evaluate((words) => words.scrollWidth - words.clientWidth)
-  expect(await narrowed()).toBeLessThanOrEqual(0)
+  // Its ⋯, shown as the pointer is over its label or as Tab reaches it
+  // (headless, nothing hovers), sits beside Start, never over it.
   const starting = there.getByRole("button", { name: "Start" })
   const more = there.getByRole("button", { name: "arc menu" })
   await starting.focus()
@@ -2050,17 +2046,13 @@ test("arc that answers nothing is away in seconds: Send fails at once, its label
   await page.waitForTimeout(300)
   expect(await box(starting)).toEqual(start)
   expect(await box(more)).toEqual(dots)
-  await expect(stoppedWords).toHaveAttribute(
-    "title",
-    (await stoppedWords.textContent())!
-  )
   if (shots) {
     await page.waitForTimeout(500)
     await page.screenshot({ path: join(shots, "h5c-5.png") })
   }
   await more.blur()
   await starting.click()
-  await expect(there.getByText(/^stopped/)).toHaveCount(0, { timeout: 60_000 })
+  await stands(page, "live", 60_000)
   await expect(dimmed(there)).toHaveCount(0, { timeout: 60_000 })
   await expect(pill).toHaveCount(0)
   await stopEngine()
@@ -2625,13 +2617,13 @@ test("hosts.toml applies as it changes: a machine added by hand or through the b
     engine: { speaks: true },
   })
 
-  // Stop Banda on arc: its engine stops, and the label says so.
+  // Stop Banda on arc: its engine stops, and the foot's dot says so.
   expect(
     await page.evaluate(() =>
       (globalThis as unknown as Paged).banda.hostStop("arc", false)
     )
   ).toBe("stopped")
-  await expect(there.getByText(/^stopped/)).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", STOPPED)
 
   // Taken out through the bridge: arc goes, and the file is empty.
   await page.evaluate(() =>
@@ -3212,15 +3204,17 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await expect(scratch.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
   await shot(page, "show-this-too-scratch")
 
-  // In the list of Projects too, this machine's stand under its label.
+  // In the list of Projects too, this machine's stand under its label;
+  // another machine's Threads stand among the cards (ADR 0098, decision
+  // 18), not in the list.
   writeFileSync(shownIn, 'preset = "places"\n[machines]\nthis-too = true\n')
   const listed = sidebar.getByRole("group", { name: "Projects", exact: true })
   await expect(
     listed.getByRole("group", { name: "mac", exact: true }).getByText("Work")
   ).toBeVisible()
   await expect(
-    listed.getByRole("group", { name: "arc", exact: true }).getByText("banda")
-  ).toBeVisible()
+    listed.getByRole("group", { name: "arc", exact: true })
+  ).toHaveCount(0)
   await shot(page, "show-this-too-places")
 
   // Turned off, this machine's name goes everywhere; its Pane's too.

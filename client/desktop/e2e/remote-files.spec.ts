@@ -44,6 +44,13 @@ const LONG = Array.from(
   (_, n) => `export const line${n + 1} = ${n + 1}\n`
 ).join("")
 
+/** arc's dot in the sidebar's foot, which says how it stands: `live`, or
+ * `away` (ADR 0098, decision 18). */
+const dotOf = (page: Page) =>
+  page
+    .getByRole("complementary", { name: "Sidebar" })
+    .locator('[data-machine-dot="arc"]')
+
 /** arc's part of the sidebar: its label and what it holds. */
 const arcOf = (page: Page) =>
   page
@@ -401,7 +408,9 @@ test("an edit while arc is away keeps its text: Not saved: arc is away, and it s
   await expect.poll(() => inEditor(page)).toBe(true)
 
   arc!.blackhole(true)
-  await expect(arcOf(page).getByText(/^away/)).toBeVisible({ timeout: 60_000 })
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "away", {
+    timeout: 60_000,
+  })
   await who.locator('[data-line="1"]').first().click()
   await expect.poll(() => inEditor(page)).toBe(true)
   await page.keyboard.press("End")
@@ -414,7 +423,7 @@ test("an edit while arc is away keeps its text: Not saved: arc is away, and it s
 
   // Back, the next keystroke saves it, over its base hash.
   arc!.blackhole(false)
-  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0, {
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "live", {
     timeout: 90_000,
   })
   await who.locator('[data-line="1"]').first().click()

@@ -860,6 +860,11 @@ export const liveIn = (hosts: readonly Shown[]): string[] =>
 export const emptyIn = (hosts: readonly Shown[]): string[] =>
   hosts.filter((host) => !holds(host)).map((host) => host.name)
 
+/** The names of the hosts the Window does not reach, whose rows it shows
+ * as they were last heard (`Shown.away`). */
+export const awayIn = (hosts: readonly Shown[]): string[] =>
+  hosts.filter((host) => host.away !== undefined).map((host) => host.name)
+
 /** This machine's name and icon where the Window names it (ADR 0095,
  * decision 4): only as the Person asks it (`this-too`), and only with
  * another machine in `hosts.toml`, as with one nothing is named. */

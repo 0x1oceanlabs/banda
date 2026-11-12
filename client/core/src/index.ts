@@ -30,6 +30,7 @@ export {
   asOfWords,
   awakeWords,
   awayFor,
+  awayIn,
   awaySince,
   batteryWords,
   cleanPower,

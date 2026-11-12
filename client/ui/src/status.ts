@@ -88,6 +88,8 @@ export type Look = { look: MarkState; doing?: MarkDoing }
  *   the approved mocks draw the Archive's cards;
  * - back from Later by itself, it rings as `woke` (`wokeRings`);
  * - open, seen and done with, it is awake and looks around: `idle`;
+ * - at work on a machine out of reach (`Listed.away`), it sleeps as
+ *   `offline`, where it stands;
  * - else its mark says it: what asks, failed or is done, or what works,
  *   with what it does (`doesOf`).
  */
@@ -211,7 +213,39 @@ function lookIn(listed: Listed, stand: Stand, now: number): MarkState {
   if (stand === "later" || stand === "archived") return "later"
   if (stand === "turn" && wokeRings(listed, now)) return "woke"
   if (stand === "open" && listed.mark === "rest") return "idle"
+  // At work on a machine out of reach, it is not known to work: it sleeps
+  // and snores, as the logo does while no engine answers (ADR 0098,
+  // decision 18). It still stands in Working, where it was.
+  if (stand === "working" && listed.away) return "offline"
   return listed.mark
+}
+
+/**
+ * The other machines out of the Window's reach whose Agents were at work
+ * as they were last heard, each by its key in `hosts.toml` with how many
+ * (ADR 0098, decision 18): what the bar's logo says it sleeps for, as
+ * their cards do. One put off is left out, as the bar leaves it out.
+ */
+export function awayAtWork(
+  lists: Lists,
+  now: number
+): ReadonlyMap<string, number> {
+  const away = new Map<string, number>()
+  for (const listed of Object.values(lists).flat()) {
+    const { host } = listed
+    if (host !== undefined && listed.away && standOf(listed, now) === "working")
+      away.set(host, (away.get(host) ?? 0) + 1)
+  }
+  return away
+}
+
+/** The other machines whose Threads stand as last heard in `lists`
+ * (`Listed.away`), by their keys. */
+export function hostsAway(lists: Lists): ReadonlySet<string> {
+  const away = new Set<string>()
+  for (const listed of Object.values(lists).flat())
+    if (listed.away && listed.host !== undefined) away.add(listed.host)
+  return away
 }
 
 /**

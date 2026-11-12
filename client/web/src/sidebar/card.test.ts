@@ -5,6 +5,7 @@ import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { describe, expect, test } from "vitest"
 import type { Row } from "./rows"
+import { awayShort } from "../machines/words"
 import {
   agoSaid,
   type CardModel,
@@ -89,6 +90,41 @@ describe("density (ADR 0098, decision 9)", () => {
     expect(held.place).toBe("turn")
     expect(held.stand).toBe("open")
     expect(held.tone).toBeUndefined()
+  })
+})
+
+describe("a machine out of reach (ADR 0098, decision 18)", () => {
+  test("its card stands where it was; line 3 says it after the machine; at work it sleeps, with nothing said it does", () => {
+    const away = NOW - 12 * MINUTE
+    const asks = card(row("turn", { away: true }, "arc"), {
+      machine: arc,
+      away,
+    })
+    expect(kinds(asks)).toEqual([
+      "mark title | time",
+      "says | ",
+      "project | machine away harness",
+    ])
+    expect(asks.lines[2]!.right[1]).toEqual({ kind: "away", dot: true })
+    expect([asks.stand, asks.tone]).toEqual(["turn", "attention"])
+    expect(awayShort(asks.away!, NOW)).toBe("away 12m")
+    // Grouped by machine, its header names it: the words stand alone.
+    const grouped = card(row("turn", { away: true }, "arc"), {
+      machine: arc,
+      away,
+      view: { density: "auto", group: "machine" },
+    })
+    expect(grouped.lines[2]!.right[0]).toEqual({ kind: "away", dot: false })
+    // A card of one line has no line 3: its time stands as it went.
+    const working = card(
+      row("working", { mark: "working", away: true }, "arc"),
+      { machine: arc, away }
+    )
+    expect(kinds(working)).toEqual(["mark title | machine time"])
+    expect(working.lines[0]!.left[0]).toEqual({ kind: "mark", look: "offline" })
+    expect(working.does).toBeUndefined()
+    expect(working.stand).toBe("working")
+    expect(timesOf(working)).toEqual([{ kind: "ago", at: away }])
   })
 })
 

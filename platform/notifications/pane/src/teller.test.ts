@@ -128,3 +128,56 @@ test("while Quiet is on nothing is told, and as it ends nothing is played back",
   teller.stop()
   toast.dismiss()
 })
+
+// ADR 0098, decision 18: what a machine out of reach did meanwhile comes
+// in one list as it is heard again, and is told of nowhere; what it does
+// after that is told as ever.
+test("a machine back from away updates its calls silently, and what comes after is told", async () => {
+  vi.useFakeTimers()
+  vi.stubGlobal("document", {
+    addEventListener: () => {},
+    removeEventListener: () => {},
+  })
+  vi.stubGlobal("requestAnimationFrame", (run: () => void) => run())
+  const working = (id: string): Listed => ({
+    ...done(id),
+    mark: "working",
+    host: "arc",
+  })
+  const items = new Store<Lists>({ r: [working("t1"), working("t2")] })
+  const window = {
+    items,
+    here: new Store<Here>(at("elsewhere")),
+    sight: () => "in-window",
+    look: () => ({ notify: NOTIFY, sound: DEFAULT_SOUND }),
+    quiet: () => false,
+    projects: () => [],
+    run: () => {},
+  } as unknown as WindowApi
+  const teller = startTelling(window)
+  const away = (one: Listed): Listed => ({ ...one, away: true })
+
+  // arc goes away; back, both ended while it was away: nothing is told.
+  items.set({ r: [away(working("t1")), away(working("t2"))] })
+  items.set({
+    r: [
+      { ...done("t1"), host: "arc" },
+      { ...done("t2"), host: "arc" },
+    ],
+  })
+  await vi.advanceTimersByTimeAsync(GATHER)
+  expect(toast.getToasts()).toEqual([])
+
+  // The next that ends there is told.
+  items.set({
+    r: [
+      { ...done("t1"), host: "arc" },
+      { ...done("t2"), host: "arc" },
+      { ...done("t3"), host: "arc" },
+    ],
+  })
+  await vi.advanceTimersByTimeAsync(GATHER)
+  expect(toast.getToasts().map((one) => one.id)).toEqual(["r:t3"])
+  teller.stop()
+  toast.dismiss()
+})
