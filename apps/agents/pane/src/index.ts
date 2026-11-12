@@ -13,11 +13,12 @@ import {
 } from "@banda/ui/module"
 import { actOnTile } from "@banda/ui/hooks/use-scope"
 import type { Key } from "@banda/ui/lib/keys"
-import { COMPOSER, SUBAGENT, THREAD, VISUAL } from "./scopes"
+import { COMPOSER, CREW, SUBAGENT, THREAD, VISUAL } from "./scopes"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
 import { visualPane } from "./visual/VisualPane"
 import { openBeside, subagentPane } from "./thread/SubagentPane"
+import { crewPane, openCrew } from "./thread/CrewPane"
 import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
@@ -103,15 +104,19 @@ const thread = own(THREAD, "Thread")
 /** A sub-agent's Pane's key, and its screen's: Esc, one level up. */
 const subagent = own(SUBAGENT, "Sub-agent")
 
+/** The Crew Pane's key, and its screen's: Esc, back. */
+const crew = own(CREW, "Crew")
+
 export const agents = defineModule({
   id: "agents",
   engine: true,
-  panes: [threadPane, subagentPane, visualPane],
+  panes: [threadPane, subagentPane, crewPane, visualPane],
   watches: [threadsWatch],
   actions: [
     newThread,
     ...answering,
     openBeside,
+    openCrew,
     composer("send", "Send the message, as agents.toml says Enter does", {
       code: "Enter",
     }),
@@ -151,12 +156,18 @@ export const agents = defineModule({
       "Go back up, to the sub-agent that started this one or to its Thread",
       { code: "Escape" }
     ),
+    crew(
+      "back",
+      "Close the agent's detail, or go back to the Thread from its Crew",
+      { code: "Escape" }
+    ),
     ...zoomActions(VISUAL, "agents.visual", "the Visual", "Visual preview"),
   ],
   scopes: [
     { id: COMPOSER, title: "Composer", field: true },
     { id: THREAD, title: "Thread" },
     { id: SUBAGENT, title: "Sub-agent" },
+    { id: CREW, title: "Crew" },
     { id: VISUAL, title: "Visual preview" },
   ],
   sources: [askSource],

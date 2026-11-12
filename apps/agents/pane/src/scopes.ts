@@ -10,5 +10,10 @@ export const THREAD = "thread"
  * to its Thread (ADR 0103, decision 21). */
 export const SUBAGENT = "subagent"
 
+/** The Crew Pane, or its screen over its Thread: Esc there closes the
+ * agent's detail, or from a screen goes back to its Thread (ADR 0103,
+ * decision 22). */
+export const CREW = "crew"
+
 /** A Visual's preview over the window, and its zoom. */
 export const VISUAL = "visual"

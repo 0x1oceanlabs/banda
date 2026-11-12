@@ -37,6 +37,15 @@ import { crewAsker } from "./crew"
 import { byOther } from "./state"
 import { opensBeside } from "./SubagentPane"
 import { SubagentScreens } from "./SubagentScreen"
+import {
+  CrewScreen,
+  crewOpening,
+  OPEN_CREW,
+  openedCrews,
+  opensCrew,
+  rememberOpened,
+} from "./CrewPane"
+import { keyOf, toOpen } from "./crew-pane"
 import { drafted } from "../composer/drafts"
 import { ThreadDetails, useWide } from "./Details"
 import { PlanReady } from "../entries/parts/ProposedPlan"
@@ -232,7 +241,8 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   const ready = state !== undefined
   useEffect(() => {
     if (askedAbout === undefined || thread === null || !ready) return
-    composer.current?.about(askedAbout)
+    if ("about" in askedAbout) composer.current?.about(askedAbout.about)
+    else composer.current?.putBack(askedAbout.draft, [])
     tookAsk(project, thread, askedAbout)
   }, [askedAbout, project, thread, ready])
   const findField = useRef<HTMLInputElement>(null)
@@ -315,9 +325,22 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   )
   const screens = over.thread === thread ? over.screens : NO_SCREENS
   const show = (screens: Screens) => setOver({ thread, screens })
+  // Its Crews the same way: beside it in their Pane, or alone, over it, a
+  // screen of its own (ADR 0103, decision 22).
+  const crewsBeside = useMemo(
+    () => thread !== null && opensCrew(runs, thread),
+    [runs, thread]
+  )
+  const crewOpens = opensOf(alone, crewsBeside)
+  const [crewOver, setCrewOver] = useState<{
+    thread: string | null
+    crew: string
+    pick?: string
+  }>()
+  const crewScreen = crewOver?.thread === thread ? crewOver : undefined
   // A screen on top covers the Thread, which keeps its scroll and its draft
   // under it; its keys and its composer's wait.
-  const covered = screens.length > 0
+  const covered = screens.length > 0 || crewScreen !== undefined
 
   // Its keys (ADR 0071, decision 1): its zoom, which sizes its words, its
   // details, and Ctrl+F (⌘F) to find in it, as in T3 Code; and where its
@@ -368,6 +391,23 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   useEffect(() => scope(root.current), [scope])
 
   // What the Thread's parts ask, and the Pane does (ADR 0091, decision 4).
+  // The Agent whose Thread this is, whose Group its Panes open in.
+  const writer = writers.self ?? writers.own?.agent
+  // Its Crew Pane opens by itself, once a Crew, where it opens beside it,
+  // and leaves the focus be; closed, it stays closed for that Crew
+  // (decision 22). Over a Thread alone it does not: a screen would cover
+  // what the Person writes.
+  const crews = state?.crews
+  useEffect(() => {
+    if (!run || thread === null || crewOpens !== "beside" || !crews) return
+    const opening = toOpen(crews, openedCrews())
+    if (opening.length === 0) return
+    rememberOpened(opening.map((crew) => crew.id))
+    const quiet = { agent: writer, quiet: true }
+    for (const crew of opening)
+      run(OPEN_CREW, crewOpening(project, thread, crew.id, quiet))
+  }, [crews, run, thread, crewOpens, project, writer])
+
   const acts: ThreadActs = {
     openDiff,
     openVisual: (visual) => open(paneOf(visualPane, visual), "group"),
@@ -404,11 +444,25 @@ export function Thread(props: PaneProps<ThreadArgs>) {
     openSubagent:
       run && thread !== null && opens
         ? (sub) => {
-            const agent = writers.self ?? writers.own?.agent
-            const where = { project, thread, agent }
+            const where = { project, thread, agent: writer }
             const to = subagentOpening(opens, screens, sub, where)
             if ("screens" in to) show(to.screens)
             else run(to.action, to.args)
+          }
+        : undefined,
+    // Beside it, in its Group, the Crew Pane; alone, over it, a screen
+    // (ADR 0103, decision 22).
+    openCrew:
+      run && thread !== null && crewOpens
+        ? (crew, agent) => {
+            const pick = agent && keyOf(agent)
+            if (crewOpens === "over")
+              setCrewOver({ thread, crew, ...(pick && { pick }) })
+            else
+              run(
+                OPEN_CREW,
+                crewOpening(project, thread, crew, { pick, agent: writer })
+              )
           }
         : undefined,
     // A ready message, for the Person to send or change (ADR 0103,
@@ -809,6 +863,18 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           focused={focused}
           under={area}
           onScreens={show}
+        />
+      )}
+      {thread !== null && crewScreen && (
+        <CrewScreen
+          engine={engine}
+          project={project}
+          thread={thread}
+          crew={crewScreen.crew}
+          pick={crewScreen.pick}
+          focused={focused}
+          onPick={(pick) => setCrewOver({ ...crewScreen, pick })}
+          onBack={() => setCrewOver(undefined)}
         />
       )}
     </div>

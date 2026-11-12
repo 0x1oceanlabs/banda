@@ -9,6 +9,9 @@
       "kind": "agents.subagent"
     },
     {
+      "kind": "agents.crew"
+    },
+    {
       "kind": "agents.visual"
     }
   ],
@@ -73,6 +76,13 @@
     {
       "id": "agents.subagent.open",
       "title": "Open a sub-agent beside its Thread",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "agents.crew.open",
+      "title": "Open a Crew beside its Thread",
       "section": "Threads",
       "keys": [],
       "unlisted": true
@@ -258,6 +268,17 @@
         }
       ],
       "scope": "subagent"
+    },
+    {
+      "id": "agents.crew.back",
+      "title": "Close the agent's detail, or go back to the Thread from its Crew",
+      "section": "Crew",
+      "keys": [
+        {
+          "code": "Escape"
+        }
+      ],
+      "scope": "crew"
     },
     {
       "id": "agents.visual.zoom-in",
@@ -663,6 +684,10 @@
     {
       "id": "subagent",
       "title": "Sub-agent"
+    },
+    {
+      "id": "crew",
+      "title": "Crew"
     },
     {
       "id": "visual",

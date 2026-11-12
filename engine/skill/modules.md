@@ -32,6 +32,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the Thread to the previous account of its Harness (`agents.thread.account-previous`), Ctrl+Shift+Up, `[binds.thread]`
 - Move the Thread to the next account of its Harness (`agents.thread.account-next`), Ctrl+Shift+Down, `[binds.thread]`
 - Go back up, to the sub-agent that started this one or to its Thread (`agents.subagent.up`), Escape, `[binds.subagent]`
+- Close the agent's detail, or go back to the Thread from its Crew (`agents.crew.back`), Escape, `[binds.crew]`
 - Zoom the Visual in (`agents.visual.zoom-in`), Ctrl+= or Ctrl+Shift+=, `[binds.visual]`
 - Zoom the Visual out (`agents.visual.zoom-out`), Ctrl+-, `[binds.visual]`
 - The Visual at its own size (`agents.visual.zoom-reset`), Ctrl+0, `[binds.visual]`
@@ -41,7 +42,7 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the Thread you look at to Later, or wake it (`thread.later`), Alt+Z; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus), `until` (when it wakes, in milliseconds since 1970), `resume` (with until, its failed turn goes again then), `done` (it sleeps until its turn ends), `someday` (it sleeps with no time, until something wakes it)
 - Wake the Thread you look at from Later (`thread.wake`); takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 
-Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field), `thread` (the Thread), `subagent` (the Sub-agent), `visual` (the Visual preview).
+Its scopes, whose actions' keys work while the focus is in them and are bound in their own table of `keys.toml`: `composer` (the Composer, a field), `thread` (the Thread), `subagent` (the Sub-agent), `crew` (the Crew), `visual` (the Visual preview).
 
 Its methods, `banda call agents.<method>`: `threads`, `thread`, `subagent`, `crew`, `defaults`, `accounts`, `changes`, `search`, `write`, `touching`, `doing`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `show_visual`, `preview_visual`, `draft_issue`, `answer_issue`, `notify`, `visual`, `visual_link`, `later`, `wake`, `see_woke`, `read`, `unread`, `archive`, `unarchive`, `delete`, `import_marks`, `rename`, `suggest_title`, `switch`, `go_on`, `move_thread`, `pack_thread`, `packed`, `take_piece`, `unpack_thread`, `leave_thread`, `give_back`.
 
