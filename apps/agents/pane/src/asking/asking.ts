@@ -6,7 +6,7 @@
  */
 import type { Choice, Item, ToolKind } from "@banda/contract/agents"
 import { type Said, summary } from "./form"
-import type { Asked, QuestionBody } from "../thread/state"
+import { type Asked, byOther, type QuestionBody } from "../thread/state"
 
 /** A title without markdown's code marks: a Harness writes a command as
  * `` `pnpm test` ``. */
@@ -44,18 +44,24 @@ export function wordsOf(
 ): { words: string; detail?: string } {
   const title = plain(question.title)
   if (question.form || question.plan !== undefined) return { words: title }
-  if (question.sub !== undefined)
-    return { words: title, detail: named(question.title) }
+  if (byOther(question)) return { words: title, detail: named(question.title) }
   const does = about && ALLOWS[about]
   if (!does) return { words: title }
   return { words: `Allow ${name} to ${does}?`, detail: named(question.title) }
+}
+
+/** What a Question that waits or was answered is about, in one line: the
+ * command or file it names, or the Crew it asks to start, "Crew
+ * audit-routes", not Claude's tool for it (ADR 0103, decision 30). */
+export function aboutWords(question: QuestionBody): string {
+  return question.start ? `Crew ${question.start.title}` : named(question.title)
 }
 
 /** The kind of tool call Question `asked` asks about: the call of its turn
  * with its title, or else the last that waits. A sub-agent's asks about
  * none of the Agent's calls: its own are in its lane. */
 export function aboutOf(items: Item[], asked: Asked): ToolKind | undefined {
-  if (asked.body.sub !== undefined) return undefined
+  if (byOther(asked.body)) return undefined
   const at = items.findIndex((item) => item.id === asked.id)
   const calls = items
     .slice(0, at < 0 ? items.length : at)
@@ -119,7 +125,7 @@ export function foldedOf(question: QuestionBody): Folded {
       kind: "chose",
       text: `You chose: ${chosen ? plain(chosen.name) : answer}`,
     }
-  const what = named(question.title)
+  const what = aboutWords(question)
   if (!chosen.allows) return { kind: "declined", text: `Declined: ${what}` }
   return {
     kind: "allowed",

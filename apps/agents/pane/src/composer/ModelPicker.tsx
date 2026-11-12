@@ -23,6 +23,7 @@ import {
   ZapIcon,
 } from "lucide-react"
 import {
+  effortShown,
   levelAt,
   levelsOf,
   modelName,
@@ -37,7 +38,8 @@ import { FOOTER_CONTROL } from "./footer"
  * The model a Thread runs on and how hard it thinks, as one quiet trigger
  * beside the send button, as Codex has it: the Harness's logo, the model,
  * the effort lighter beside it, in words rather than colours (ADR 0058,
- * decision 8). It opens on a slider of effort levels, with Fast mode and a
+ * decision 8), but its top level, Ultracode or Ultra, in magenta (ADR
+ * 0103, decision 31). It opens on a slider of effort levels, with Fast mode and a
  * way back to the Harness's defaults beside the model's name, which opens
  * the list of models. A new Thread's list holds every Harness's models,
  * each under its logo: choosing one chooses the Harness too. A started
@@ -94,13 +96,24 @@ export function ModelPicker({
   const logo = <Emblem of={emblemOf(harnesses, harness, name)} />
   // A Harness that has not said its models yet goes by its own name.
   const what = now ? modelName(now) : level ? undefined : name
+  const word = effortShown(settings, picked.rest, level)
   const named = (
     <>
       {what && <span className="truncate">{what}</span>}
-      {level && <span className="shrink-0 opacity-70">{level.name}</span>}
+      {word && (
+        <span
+          data-top={word.top || undefined}
+          className={cn(
+            "shrink-0",
+            word.top ? "text-effort-top" : "opacity-70"
+          )}
+        >
+          {word.name}
+        </span>
+      )}
     </>
   )
-  const label = [what, level?.name].filter(Boolean).join(", ")
+  const label = [what, word?.name].filter(Boolean).join(", ")
   // Only a change goes to the Harness: each is a round trip to it.
   const pick = async (option: HarnessOption, next: OptionValue) => {
     if (next === chosen(settings, option)) {

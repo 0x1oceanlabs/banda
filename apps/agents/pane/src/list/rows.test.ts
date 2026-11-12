@@ -258,3 +258,39 @@ test("a Thread whose sub-agents work on after its turn lists as working, with li
   })
   expect(listedOf(thread(), "Claude")).not.toHaveProperty("subagents")
 })
+
+test("a Thread whose Crew works on lists as working, line 2 naming the Crew and its phase (ADR 0103, decision 32)", () => {
+  const latest = { turn: "u1", state: "done" as const, began: 1 }
+  const crew = { title: "audit-routes", phase: "Fix", done: 4, of: 7 }
+  const listed = listedOf(thread({ latest, crew }), "Claude")
+  expect(listed.mark).toBe("working")
+  expect(listed.subagents).toEqual({
+    working: 0,
+    failed: 0,
+    said: "Crew audit-routes · Fix 4/7",
+  })
+  // Before any phase, its name alone; its words before its sub-agents'.
+  const early = listedOf(
+    thread({
+      latest,
+      crew: { ...crew, phase: "", done: 0, of: 0 },
+      subagents: { working: 1, failed: 0, only: "Reviewer" },
+    }),
+    "Claude"
+  )
+  expect(early.subagents?.said).toBe("Crew audit-routes")
+})
+
+test("the turn Claude went on with after a Crew calls with the Crew's end, and nothing more (ADR 0103, decision 33)", () => {
+  const latest = { turn: "u2", state: "done" as const, began: 1, note: "Hi" }
+  const listed = listedOf(
+    thread({
+      latest,
+      crew_ended: { title: "audit-routes", state: "done", failed: 2 },
+    }),
+    "Claude"
+  )
+  expect(listed.mark).toBe("done")
+  expect(listed.calls).toBe("Crew audit-routes finished · 2 failed")
+  expect(listedOf(thread({ latest }), "Claude").calls).toBe("Hi")
+})

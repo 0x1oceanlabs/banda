@@ -1,6 +1,7 @@
 import type { HarnessOption, Settings } from "@banda/contract/agents"
 import { describe, expect, it } from "vitest"
 import {
+  effortShown,
   levelAt,
   levelsOf,
   modelName,
@@ -111,5 +112,26 @@ describe("the model picker", () => {
     expect(modelNow(settings({ model: "default" }), [model])).toBe("Opus 5.5")
     expect(modelNow(settings({ model: "gone" }), [model])).toBeUndefined()
     expect(modelNow(settings(), [effort])).toBeUndefined()
+  })
+})
+
+describe("the effort's top level (ADR 0103, decision 31)", () => {
+  const high = { value: "high", name: "High" }
+  it("names Ultracode in magenta while Claude's switch is on, at any level", () => {
+    const on = settings({ ultracode: true })
+    expect(effortShown(on, [ultracode], high)).toEqual({
+      name: "Ultracode",
+      top: true,
+    })
+    expect(effortShown(settings(), [ultracode], high)).toEqual({
+      name: "High",
+      top: false,
+    })
+    expect(effortShown(settings(), [ultracode], undefined)).toBeUndefined()
+  })
+  it("draws Codex's Ultra, its last level, in magenta", () => {
+    expect(
+      effortShown(settings(), [], { value: "ultra", name: "Ultra" })
+    ).toEqual({ name: "Ultra", top: true })
   })
 })

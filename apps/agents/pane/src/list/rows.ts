@@ -12,6 +12,7 @@
 import type { ProjectId } from "@banda/contract"
 import type {
   Choice,
+  CrewBrief,
   ListedThread,
   Later,
   Subagents,
@@ -30,6 +31,7 @@ import { archiveHolds } from "./list"
 import { markOf } from "./marks"
 import { threadPane } from "../ThreadPane"
 import { workWords } from "../thread/subagents"
+import { endedNote } from "../thread/crew"
 
 /** The agents module's actions a toast's buttons run (index.ts). */
 export const ANSWER = "agents.answer"
@@ -96,7 +98,7 @@ export function listedOf(
       : mark === "failed"
         ? latest?.reason || NO_REASON
         : mark === "done"
-          ? latest?.note
+          ? (endedOf(thread) ?? latest?.note)
           : undefined
   const asker = mark === "asking" ? thread.asking[0]?.asker : undefined
   const answers = project ? answersOf(thread, mark, project) : []
@@ -129,7 +131,9 @@ export function listedOf(
       ? { limitUntil: thread.limit_until }
       : {}),
     ...(thread.changed_lines ? { changedLines: thread.changed_lines } : {}),
-    ...(thread.subagents ? { subagents: subagentsOf(thread.subagents) } : {}),
+    ...(thread.subagents || thread.crew
+      ? { subagents: subagentsOf(thread.subagents, thread.crew) }
+      : {}),
     ...(thread.crew ? { crew: thread.crew } : {}),
     ...(calls ? { calls } : {}),
     ...(asker ? { asker } : {}),
@@ -150,10 +154,29 @@ export function listedOf(
 }
 
 /** A Thread's direct sub-agents as the sidebar reads them (ADR 0103,
- * decision 32): line 2's words are the live line's. */
-function subagentsOf({ working, failed, only }: Subagents): ListedSubagents {
-  const said = workWords(working, only)
+ * decision 32): line 2's words are the live line's, its Crew's at work
+ * first, "Crew audit-routes · Fix 4/7". */
+function subagentsOf(
+  { working, failed, only }: Subagents = { working: 0, failed: 0 },
+  crew?: CrewBrief
+): ListedSubagents {
+  const said = crew ? crewWords(crew) : workWords(working, only)
   return { working, failed, ...(said ? { said } : {}) }
+}
+
+/** What a done Thread's call says of the Crew its latest turn went on
+ * from: "Crew audit-routes finished · 2 failed" (ADR 0103, decision 33).
+ * It rings as the turn's done does: a Crew has no sound of its own. */
+function endedOf({ crew_ended }: ListedThread): string | undefined {
+  return crew_ended
+    ? endedNote(crew_ended.title, crew_ended.state, crew_ended.failed)
+    : undefined
+}
+
+/** A Crew at work as line 2 says it: "Crew audit-routes · Fix 4/7", or
+ * its name alone before any phase. */
+export function crewWords({ title, phase, done, of }: CrewBrief): string {
+  return phase ? `Crew ${title} · ${phase} ${done}/${of}` : `Crew ${title}`
 }
 
 /** A Thread's Later as the sidebar reads it (ADR 0074): Someday's too,

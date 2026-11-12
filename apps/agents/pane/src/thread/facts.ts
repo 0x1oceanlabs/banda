@@ -73,7 +73,8 @@ export function startedBy(fact: Fact, event: Event): Item | undefined {
       return at(item, { kind: "notice", text }, turn)
     }
     case "question.asked": {
-      const { item, turn, title, choices, form, plan, sub } = fact.payload
+      const { item, turn, title, choices, form, plan, sub, crew, start } =
+        fact.payload
       const body: Body = {
         kind: "question",
         title,
@@ -83,6 +84,10 @@ export function startedBy(fact: Fact, event: Event): Item | undefined {
         state: "open",
         // The sub-agent that asks; its Question is the Thread's all the same.
         ...(sub && { sub }),
+        // The Crew whose agent asks, or the Crew it asks to start (ADR
+        // 0103, decisions 28 and 30).
+        ...(crew && { crew }),
+        ...(start && { start }),
       }
       return at(item, body, turn)
     }

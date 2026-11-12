@@ -30,8 +30,11 @@ import {
   type LucideIcon,
 } from "lucide-react"
 import { Docked } from "../entries/parts/Card"
+import { CrewStartBody } from "./CrewStart"
+import { startHead } from "../thread/crew"
 import { ProposedPlan } from "../entries/parts/ProposedPlan"
 import {
+  aboutWords,
   answersOf,
   choiceAt,
   type Folded,
@@ -62,7 +65,9 @@ export type AnswerKeys = (answer: "decline" | "main") => boolean
 export function Question({ question }: { question: QuestionBody }) {
   const line =
     question.state === "open" ? (
-      <WaitingLine title={plain(question.title)} />
+      <WaitingLine
+        title={question.start ? aboutWords(question) : plain(question.title)}
+      />
     ) : (
       <FoldedLine folded={foldedOf(question)} />
     )
@@ -149,6 +154,7 @@ export function QuestionDrawer({
   about,
   asker,
   name,
+  short: shortName = name,
   answering,
   onAnswer,
   keys,
@@ -160,11 +166,13 @@ export function QuestionDrawer({
   asker?: string
   /** The Agent's Harness, as the words say who asks. */
   name: string
+  /** Its short name, "Claude", who wants to start a Crew. */
+  short?: string
   answering: boolean
   onAnswer: Answer
   keys?: React.Ref<AnswerKeys>
 }) {
-  const { title, choices, form } = item.body
+  const { title, choices, form, start } = item.body
   const [folded, setFolded] = useState(false)
   const { words, detail } = wordsOf(item.body, about, name)
   const answers = answersOf(choices)
@@ -192,7 +200,11 @@ export function QuestionDrawer({
       onKeyDown={pick}
     >
       <div className="flex h-6 items-center gap-2">
-        {asker ? (
+        {start ? (
+          <span className="shrink-0 text-meta font-semibold text-attention">
+            {startHead(shortName)}
+          </span>
+        ) : asker ? (
           <span className="flex min-w-0 items-center gap-1.5 text-meta font-semibold text-attention">
             <span aria-hidden className="flex shrink-0">
               <Satellite state="asks" size={10} />
@@ -205,7 +217,11 @@ export function QuestionDrawer({
             Needs you
           </span>
         )}
-        {folded && <span className="min-w-0 truncate font-[550]">{words}</span>}
+        {folded && (
+          <span className="min-w-0 truncate font-[550]">
+            {start ? start.title : words}
+          </span>
+        )}
         <Button
           size="icon-xs"
           variant="ghost"
@@ -218,7 +234,15 @@ export function QuestionDrawer({
           {folded ? <ChevronUpIcon /> : <ChevronDownIcon />}
         </Button>
       </div>
-      {!folded && (
+      {!folded && start && (
+        <CrewStartBody
+          start={start}
+          choices={choices}
+          answering={answering}
+          onAnswer={onAnswer}
+        />
+      )}
+      {!folded && !start && (
         <>
           {!(asker && detail === words) && (
             <p className="mt-0.5 text-ui font-[550] wrap-break-word">{words}</p>

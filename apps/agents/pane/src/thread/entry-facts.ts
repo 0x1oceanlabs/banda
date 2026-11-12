@@ -4,7 +4,13 @@
  * (ADR 0088, decision 9); `entry-facts.test.ts` holds that. Each fact goes only
  * to the entries that show it: one that went to all would draw them all
  * again each time it changed. */
-import type { Item, SubagentId, TurnView } from "@banda/contract/agents"
+import type {
+  Crew,
+  CrewId,
+  Item,
+  SubagentId,
+  TurnView,
+} from "@banda/contract/agents"
 import type { EntryFacts, SubagentRow } from "../entries/types"
 import {
   isReply,
@@ -41,12 +47,14 @@ export function knownOf(state: ThreadState) {
 }
 
 /** The facts of one entry; `rows` the sub-agents' rows the Thread shows,
- * `about` what its messages say of sub-agents (ADR 0103, decision 25). */
+ * `about` what its messages say of sub-agents (ADR 0103, decision 25);
+ * `crews` its Crews. */
 export function factsOf(
   { asks, thoughts, live, turns, firsts, turnState }: Known,
   writers: Listing,
   rows: Map<SubagentId, SubagentRow> = new Map(),
-  about: (item: Item) => Partial<EntryFacts> = () => ({})
+  about: (item: Item) => Partial<EntryFacts> = () => ({}),
+  crews: ReadonlyMap<CrewId, Crew> = new Map()
 ): (item: Item) => EntryFacts {
   return (item) => ({
     // Only a call shows how its turn stands.
@@ -60,6 +68,7 @@ export function factsOf(
     subagentRow:
       item.body.kind === "subagent" ? rows.get(item.body.subagent) : undefined,
     ...about(item),
+    crew: item.body.kind === "crew" ? crews.get(item.body.crew) : undefined,
   })
 }
 

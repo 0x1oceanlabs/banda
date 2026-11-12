@@ -5,7 +5,7 @@ use crate::changes::ChangedLines;
 use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
-    AccountUse, Archived, Asking, Body, Crew, CrewBrief, CrewId, CrewState, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
+    AccountUse, Archived, Asking, Body, Crew, CrewBrief, CrewEnded, CrewId, CrewState, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
     Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Subagent,
     SubagentId, SubagentState, Subagents, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState,
     ToolStatus, TurnView, Usage, VisualId,
@@ -884,6 +884,7 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
                 parent,
                 subagents: listed_subagents(sql, thread.id, latest.as_ref())?,
                 crew: listed_crew(sql, thread.id)?,
+                crew_ended: crew_went_on(sql, thread.id, latest.as_ref())?,
                 latest,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
@@ -2686,6 +2687,33 @@ fn listed_crew(sql: &Connection, thread: ThreadId) -> Result<Option<CrewBrief>, 
         )
         .optional()?;
     Ok(crew.map(|crew| crate::crews::brief(&crew)))
+}
+
+/// The Crew the Thread's latest turn went on from, as its call says it
+/// (ADR 0103, decision 33).
+fn crew_went_on(
+    sql: &Connection,
+    thread: ThreadId,
+    latest: Option<&LatestTurn>,
+) -> Result<Option<CrewEnded>, Error> {
+    let Some(latest) = latest else { return Ok(None) };
+    let crew = sql
+        .query_row(
+            &format!("{CREW} WHERE thread = ?1 AND went_on = ?2 ORDER BY rowid DESC LIMIT 1"),
+            params![thread, latest.turn],
+            read_crew,
+        )
+        .optional()?;
+    Ok(crew.map(|crew| {
+        let failed = (crew.agents.iter())
+            .filter(|agent| agent.state == crate::model::SubagentState::Failed)
+            .count();
+        CrewEnded {
+            title: crew.title,
+            state: crew.state,
+            failed: u16::try_from(failed).unwrap_or(u16::MAX),
+        }
+    }))
 }
 
 /// A Question of the Thread's that a Crew's agent asked, `?1`.

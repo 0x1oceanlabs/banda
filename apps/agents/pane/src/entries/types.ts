@@ -1,6 +1,7 @@
 /** What every entry's view is given (ADR 0091, decision 2). */
 import type {
   Body,
+  Crew,
   Item,
   ListedThread,
   Subagent,
@@ -45,6 +46,9 @@ export type EntryFacts = {
   /** The same in that sub-agent's own Pane: who wrote it, over its
    * bubble. */
   wrote?: Asker
+  /** The Crew an anchor names, as its card shows it (ADR 0103, decision
+   * 18); none for any other entry. */
+  crew?: Crew
 }
 
 /** A sub-agent where it started (ADR 0103, decision 15): the same object

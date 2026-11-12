@@ -33,6 +33,8 @@ import { aboutOf, keyAnswer } from "../asking/asking"
 import { askerOf, byLabel } from "./subagents"
 import { tookAsk, useAskedAbout } from "./ask-about"
 import { NO_SCREENS, opensOf, type Screens, subagentOpening } from "./screens"
+import { crewAsker } from "./crew"
+import { byOther } from "./state"
 import { opensBeside } from "./SubagentPane"
 import { SubagentScreens } from "./SubagentScreen"
 import { drafted } from "../composer/drafts"
@@ -409,6 +411,9 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             else run(to.action, to.args)
           }
         : undefined,
+    // A ready message, for the Person to send or change (ADR 0103,
+    // decision 26).
+    draft: (text) => composer.current?.putBack(text, []),
   }
 
   return (
@@ -701,8 +706,13 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             key={asking.id}
             item={asking}
             about={state && aboutOf(state.items, asking)}
-            asker={state && askerOf(asking.body.sub, state.subagents)}
+            asker={
+              state &&
+              (askerOf(asking.body.sub, state.subagents) ??
+                crewAsker(asking.body.crew, state.crews))
+            }
             name={name}
+            short={short}
             answering={acting}
             onAnswer={(choice, values) => answer(asking.id, choice, values)}
             keys={answerKeys}
@@ -728,7 +738,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           history={history}
           placeholder={
             asking
-              ? asking.body.sub === undefined
+              ? !byOther(asking.body)
                 ? `Answer above, or write to say no and tell ${name} what to do instead`
                 : `Answer above, or write to ${name}`
               : planned

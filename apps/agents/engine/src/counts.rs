@@ -284,6 +284,7 @@ mod tests {
             changed_lines: None,
             subagents: None,
             crew: None,
+            crew_ended: None,
         }
     }
 

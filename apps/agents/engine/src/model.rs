@@ -1277,6 +1277,12 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub crew: Option<CrewBrief>,
+    /// The Crew its latest turn went on from, once it ended (ADR 0103,
+    /// decision 33): what its call says, "Crew audit-routes finished · 2
+    /// failed". None for a turn that went on from none.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub crew_ended: Option<CrewEnded>,
 }
 
 impl ListedThread {
@@ -1325,6 +1331,17 @@ pub struct CrewBrief {
     pub done: u16,
     /// That phase's agents so far: it grows as the script calls them.
     pub of: u16,
+}
+
+/// A Crew a Thread's latest turn went on from, as its call says it (ADR
+/// 0103, decision 33).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CrewEnded {
+    pub title: String,
+    pub state: CrewState,
+    /// How many of its agents failed.
+    pub failed: u16,
 }
 
 /// When its Person archived a Thread (ADR 0096, decision 4): by its

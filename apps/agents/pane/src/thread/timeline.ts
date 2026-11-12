@@ -8,7 +8,9 @@
  * so plain tests cover it.
  */
 import type {
+  Crew,
   Item,
+  Subagent,
   ToolKind,
   TurnState,
   TurnView,
@@ -23,7 +25,14 @@ import {
   total,
 } from "../entries/parts/changes"
 import { askedByLane } from "./facts"
-import { afterWords, duringWords } from "./subagents"
+import { afterCrew, duringCrew, endedWords } from "./crew"
+import {
+  afterWords,
+  direct,
+  duringWords,
+  labelOf,
+  siblingsOf,
+} from "./subagents"
 import {
   isReply,
   planOf,
@@ -50,7 +59,11 @@ export type Line =
   /** No turn runs and sub-agents still work: the live line, with no
    * clock, at the Thread's end (ADR 0103, decision 19). `then` is muted
    * after `words`. */
-  | { kind: "at-work"; words: string; then: string }
+  | { kind: "at-work"; words: string; then: string; crew?: boolean }
+  /** A Crew or a sub-agent that ended after its turn had: "↩ Crew
+   * audit-routes finished · 14m", then, muted, "Claude went on by
+   * itself", in the place of that turn's notice (ADR 0103, decision 19). */
+  | { kind: "back"; id: string; words: string; then?: string; crew: boolean }
   /** The reply a turn in plan mode ended with: the plan it proposed. */
   | { kind: "plan"; turn: TurnView; item: Said }
   /** The files a turn that ended changed, after what it wrote. */
@@ -60,7 +73,11 @@ export type Line =
  * Harness's short name, "Claude", who goes on after its sub-agents. */
 export function timeline(state: ThreadState, short: string): Line[] {
   const turn = running(state)
-  const lines = changed(fold(group(rows(state)), state.turns), state)
+  const lines = cameBack(
+    changed(fold(group(rows(state)), state.turns), state),
+    state,
+    short
+  )
   return turn
     ? working(lines, turn, doing(state, turn))
     : stillAtWork(lines, state, short)
@@ -136,6 +153,7 @@ function turnOf(line: Line): string | undefined {
     case "subagents":
       return line.turn
     case "at-work":
+    case "back":
       return undefined
     default:
       return line.turn.id
@@ -299,12 +317,96 @@ function working(
   return [...lines.slice(0, at), row, ...lines.slice(at)]
 }
 
-/** Sub-agents at work with no turn that runs say so at the Thread's end,
- * with no clock (ADR 0103, decision 19). */
+/** Sub-agents or a Crew at work with no turn that runs say so at the
+ * Thread's end, with no clock (ADR 0103, decision 19): the Crew first. */
 function stillAtWork(lines: Line[], state: ThreadState, short: string): Line[] {
+  const crew = afterCrew(state.crews, short)
+  if (crew) return [...lines, { kind: "at-work", ...crew, crew: true }]
   const after = afterWords(state.subagents, short)
   return after ? [...lines, { kind: "at-work", ...after }] : lines
 }
+
+/** When a line's first entry came, where that is known. */
+function atOf(line: Line): number | undefined {
+  switch (line.kind) {
+    case "item":
+    case "plan":
+      return line.item.at
+    case "work":
+    case "subagents":
+      return line.items[0]?.at
+    case "fold":
+      return line.lines[0] && atOf(line.lines[0])
+    case "ended":
+      return line.turn.ended
+    default:
+      return undefined
+  }
+}
+
+/**
+ * A Crew, or a direct sub-agent, that ended after its turn had says so
+ * where it ended (ADR 0103, decision 19): a Crew Claude went on with in
+ * the place of that turn's "went on by itself", which the line says
+ * after it; else before the first line that came later. One that ended
+ * within its turn says it on its card or its row alone.
+ */
+function cameBack(lines: Line[], state: ThreadState, short: string): Line[] {
+  const turns = new Map(state.turns.map((turn) => [turn.id, turn]))
+  const after = (turn: string, ended: number | undefined) => {
+    const its = turns.get(turn)?.ended
+    return ended !== undefined && its !== undefined && its < ended
+  }
+  const backs: { at: number; line: Line; replaces?: string }[] = []
+  for (const crew of state.crews) {
+    // A Lost one says so on its card, which offers to go on: Claude
+    // goes on with nothing by itself.
+    if (!CREW_BACK.has(crew.state) || !after(crew.turn, crew.ended)) continue
+    const said = endedWords(crew, short)
+    const went =
+      crew.went_on === undefined ? undefined : turns.get(crew.went_on)
+    backs.push({
+      at: crew.ended!,
+      line: { kind: "back", id: `back-${crew.id}`, ...said, crew: true },
+      ...(went && { replaces: went.message }),
+    })
+  }
+  for (const lane of direct(state.subagents)) {
+    if (!BACK[lane.state] || !after(lane.turn, lane.ended)) continue
+    const words = `${labelOf(lane, siblingsOf(lane, state.subagents))} ${BACK[lane.state]}`
+    backs.push({
+      at: lane.ended!,
+      line: { kind: "back", id: `back-${lane.id}`, words, crew: false },
+    })
+  }
+  if (backs.length === 0) return lines
+  let out = lines
+  for (const back of backs.sort((a, b) => a.at - b.at)) {
+    const at = back.replaces
+      ? out.findIndex(
+          (line) => line.kind === "item" && line.item.id === back.replaces
+        )
+      : -1
+    if (at >= 0) {
+      out = out.toSpliced(at, 1, back.line)
+      continue
+    }
+    const later = out.findIndex((line) => (atOf(line) ?? -Infinity) > back.at)
+    out = out.toSpliced(later < 0 ? out.length : later, 0, back.line)
+  }
+  return out
+}
+
+/** How a sub-agent that ended after its turn says it did; a Lost one
+ * says it on its row alone. */
+const BACK: Partial<Record<Subagent["state"], string>> = {
+  done: "finished",
+  failed: "failed",
+  stopped: "stopped",
+}
+
+/** The ends of a Crew that come back after its turn. */
+const CREW_BACK: ReadonlySet<Crew["state"]> = new Set(["done", "failed"])
 
 /** What the turn that runs does now, as its live line says after how
  * long it has worked. */
@@ -331,9 +433,9 @@ export function doing(state: ThreadState, turn: TurnView): Doing | undefined {
   const open = (item: Item) =>
     item.body.kind === "question" && item.body.state === "open"
   if (own.some(open)) return { kind: "asking" }
-  const words = duringWords(
-    state.subagents.filter((lane) => lane.turn === turn.id)
-  )
+  const words =
+    duringWords(state.subagents.filter((lane) => lane.turn === turn.id)) ??
+    duringCrew(state.crews, turn.id)
   if (words) return { kind: "subagents", words }
   const last = own.at(-1)
   if (last?.body.kind === "thought") return { kind: "thinking" }

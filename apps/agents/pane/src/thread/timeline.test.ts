@@ -57,6 +57,8 @@ function shape(lines: Line[]): unknown[] {
         return line.doing ? `working, ${line.doing.kind}` : "working"
       case "at-work":
         return "at-work"
+      case "back":
+        return `back ${line.words}`
       case "ended":
         return `ended ${line.turn.state}`
       case "changes":
@@ -875,5 +877,123 @@ test("a message with no words, queued for a sub-agent at work, starts no turn of
     { fold: ["a", "r1", "b"] },
     "q",
     "r2",
+  ])
+})
+
+/** Crew `w` of turn `u`, as it starts: Scan, then Fix. */
+const crewStarted = (item = "k") =>
+  event("crew.started", {
+    item,
+    crew: {
+      id: "w",
+      turn: "u",
+      title: "audit-routes",
+      phases: [
+        { index: 1, title: "Scan" },
+        { index: 2, title: "Fix" },
+      ],
+      agents: [],
+      state: "working",
+      started: 0,
+    },
+  })
+
+const crewAgents = (...states: string[]) =>
+  event("crew.progressed", {
+    crew: "w",
+    agents: states.map((state, at) => ({
+      index: at + 1,
+      label: `fix ${at + 1}`,
+      phase: 2,
+      state,
+      attempt: 1,
+      started: 10 + at,
+    })),
+  })
+
+test("a Crew names itself on the live line during its turn, and after it with who goes on", () => {
+  const during = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    crewStarted(),
+    crewAgents("done", "running")
+  )
+  expect(doing(during, during.turns[0])).toEqual({
+    kind: "subagents",
+    words: "Crew audit-routes · Fix 1/2",
+  })
+  const after = apply(during, event("turn.ended", { turn: "u", state: "done" }))
+  const lines = timeline(after, "Claude")
+  expect(shape(lines)).toEqual(["m", "k", "at-work"])
+  expect(lines.at(-1)).toEqual({
+    kind: "at-work",
+    words: "Crew audit-routes is at work · Fix 1/2",
+    then: "Claude goes on when it ends",
+    crew: true,
+  })
+})
+
+test("a Crew that ends after its turn comes back in the place of Claude's going on by itself", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    crewStarted(),
+    event("turn.ended", { turn: "u", state: "done" }),
+    crewAgents("done", "done")
+  )
+  const ended = apply(
+    state,
+    event("crew.ended", { crew: "w", turn: "u", state: "done", ended: 1e12 })
+  )
+  // Ended, and Claude not yet on with it: at the end, no one named.
+  expect(shape(timeline(ended, "Claude"))).toEqual([
+    "m",
+    "k",
+    expect.stringMatching(/^back Crew audit-routes finished · /),
+  ])
+  const went = [
+    event("notice.posted", {
+      item: "n",
+      turn: "v",
+      text: "Claude went on by itself.",
+    }),
+    event("turn.queued", { turn: "v", message: "n" }),
+    event("turn.started", { turn: "v" }),
+    reply("r", "v"),
+    event("crew.progressed", { crew: "w", went_on: "v" }),
+  ].reduce(apply, ended)
+  const lines = timeline(went, "Claude")
+  expect(shape(lines)).toEqual([
+    "m",
+    "k",
+    expect.stringMatching(/^back Crew audit-routes finished/),
+    "r",
+    "working",
+  ])
+  expect(lines[2]).toMatchObject({ then: "Claude went on by itself" })
+})
+
+test("a sub-agent that ends after its turn comes back as one line", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    started("s", "a"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  const over = apply(
+    state,
+    event("subagent.ended", {
+      subagent: "a",
+      turn: "u",
+      state: "done",
+      ended: 1e12,
+    })
+  )
+  expect(shape(timeline(over, "Claude"))).toEqual([
+    "m",
+    "s",
+    "r",
+    "back Lane a finished",
   ])
 })
