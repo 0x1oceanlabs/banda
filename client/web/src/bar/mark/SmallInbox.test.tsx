@@ -7,8 +7,8 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { afterEach, expect, test, vi } from "vitest"
-import { newStores, StoresContext } from "../calls/stores"
-import { ThreadMenus } from "../titles/ThreadMenu"
+import { newStores, StoresContext } from "../../calls/stores"
+import { ThreadMenus } from "../../titles/ThreadMenu"
 import {
   countOf,
   countWords,
