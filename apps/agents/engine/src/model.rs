@@ -62,6 +62,16 @@ pub struct Image {
     pub name: Option<String>,
 }
 
+/// Where the Person writes a message from (ADR 0122): the name of the
+/// machine their window runs on, as its engine names it, and whether that
+/// is the Thread's own machine.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct WrittenFrom {
+    pub machine: String,
+    pub here: bool,
+}
+
 /// How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness
 /// that has modes of its own enforces the mode; for any other, the engine
 /// answers the Harness's Questions by it.

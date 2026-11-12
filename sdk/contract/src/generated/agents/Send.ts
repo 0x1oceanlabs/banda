@@ -2,6 +2,7 @@
 import type { ImageId } from "./ImageId";
 import type { Settings } from "./Settings";
 import type { ThreadId } from "./ThreadId";
+import type { WrittenFrom } from "./WrittenFrom";
 
 /**
  * A message in a Thread, or the first one of a new Thread on a Harness.
@@ -32,4 +33,9 @@ settings?: Settings | null,
  * It goes into the turn that runs, if one does, instead of waiting
  * for a turn of its own.
  */
-steer?: boolean, };
+steer?: boolean, 
+/**
+ * Where the Person writes it from: their window's machine, and
+ * whether that is the Thread's (ADR 0122). A window says it.
+ */
+from?: WrittenFrom | null, };
