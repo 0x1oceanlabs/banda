@@ -13,6 +13,7 @@ import {
 } from "../tiling/model"
 import {
   besideOf,
+  callAfter,
   nextCall,
   type Shows,
   showing,
@@ -237,4 +238,10 @@ test("Alt+U goes to the next call below, in the sidebar's order, and round", () 
   // A call the sidebar lists nowhere comes last.
   expect(nextCall([call("t9", "asking", 0)], order, "s:t4")?.about).toBe("t9")
   expect(nextCall([], order)).toBeUndefined()
+  // By the Pane in focus: the Thread it shows, or none.
+  expect(
+    callAfter(calling, order, { project: "s", subject: "t2" })?.about
+  ).toBe("t3")
+  expect(callAfter(calling, order, { project: "s" })?.about).toBe("t1")
+  expect(callAfter(calling, order, null)?.about).toBe("t1")
 })

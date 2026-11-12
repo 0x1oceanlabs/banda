@@ -31,7 +31,7 @@ import type { Layout } from "../bar/arrange"
 import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
 import { quiet } from "../calls/quiet"
-import { besideOf, isShowing, nextCall, sightOf } from "../calls/sight"
+import { besideOf, callAfter, isShowing, sightOf } from "../calls/sight"
 import {
   followCalls,
   itemsOf,
@@ -568,9 +568,7 @@ export function Shell({
     answer: () => {
       const calls = stores.calls.get()
       const { keys } = orderNow(stores.items.get(), projects, calls.now)
-      const { pane } = here.get()
-      const at = pane?.subject ? `${pane.project}:${pane.subject}` : undefined
-      const call = nextCall(calls.list, keys, at)
+      const call = callAfter(calls.list, keys, here.get().pane)
       if (call)
         parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
