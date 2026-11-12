@@ -90,7 +90,7 @@ import { listApp, listShortcut } from "./entry"
 import { hasMenuBar } from "./menubar"
 import { Status, statusLayer } from "./status"
 import { menuBar } from "./tray"
-import { Hosts } from "./hosts"
+import { Hosts, terminalArgs } from "./hosts"
 import { startLog, watchProblems } from "./problems"
 import { revive } from "./revive"
 import { Editors } from "./editors"
@@ -509,6 +509,10 @@ async function ready(): Promise<void> {
     hostInstallCancel: [
       text,
       ([ssh]) => Hosts.use((hosts) => hosts.cancelInstall(ssh)),
+    ],
+    hostTerminal: [
+      Schema.Tuple([Schema.String, Schema.String]),
+      ([ssh, remote]) => Effect.sync(() => terminalArgs(ssh, remote)),
     ],
     // Its lines go to the page that asked, as they come.
     hostInstalling: {},

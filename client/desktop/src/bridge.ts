@@ -81,6 +81,10 @@ export const BRIDGE = bridge({
   hostInstall: invoke<[ssh: string], { version: string; path: string }>(),
   /** Cancel: ends the Install running at `ssh`. */
   hostInstallCancel: invoke<[ssh: string]>(),
+  /** ssh's arguments to run `remote` at `ssh` on a terminal there, as
+   * Banda's own ssh reaches it but free to ask: "Sign in to Claude on
+   * <name>" (ADR 0115, decision 8). */
+  hostTerminal: invoke<[ssh: string, remote: string], string[]>(),
   /** Each line `install.sh` says there while Install runs, as it comes. */
   hostInstalling: { listen: push<{ ssh: string; line: string }>() },
   /** Stop Banda on host `name`: its own `banda stop` there, which stops

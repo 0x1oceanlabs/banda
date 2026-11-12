@@ -21,10 +21,11 @@ import {
   useRef,
   useState,
 } from "react"
-import type { Engine } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { MachineIcon as Icon, Named } from "@banda/contract/machines"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
+import { CopyButton } from "@banda/ui/components/copy-button"
 import {
   Card,
   CardContent,
@@ -49,6 +50,7 @@ import {
 } from "@banda/ui/components/popover"
 import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
+import { useAccount } from "@banda/ui/hooks/use-harnesses"
 import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { cleanNamed, forgetNamed, useStatus } from "@banda/ui/hooks/use-status"
@@ -62,6 +64,7 @@ import {
   PlayIcon,
   PlugZapIcon,
   PowerIcon,
+  SquareTerminalIcon,
   Undo2Icon,
 } from "lucide-react"
 import {
@@ -100,6 +103,7 @@ import {
   type Settled,
   settle,
   settleWords,
+  shellLine,
   showRows,
   shownActs,
   shownOn,
@@ -163,6 +167,9 @@ function useAsk() {
   return { ...shownActs(acts), ask }
 }
 
+/** The Harness "Sign in to Claude on <name>" is of. */
+const CLAUDE = "claude"
+
 /** The icons the machines in `others` have, each with their names. */
 function takenBy(others: readonly Named[]): ReadonlyMap<Icon, string[]> {
   const taken = new Map<Icon, string[]>()
@@ -197,6 +204,27 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
     (except?: string) => shownBeside(hereNow.current, kept.get(), except),
     [kept]
   )
+  // "Sign in to Claude on <name>": a terminal here, a shell of a Project
+  // here, that runs Claude there over ssh; the window's own action
+  // (`terminal.run`) opens it, so not from a dialog of the settings.
+  const { listed } = useProjects(engine)
+  const project =
+    listed.state === "ready"
+      ? shownProjects(listed.value).find((one) => !one.missing)?.id
+      : undefined
+  const claude = useMemo<ClaudeThere>(
+    () => ({
+      project,
+      open:
+        run &&
+        project !== undefined &&
+        (async (ssh) => {
+          const line = shellLine(await device.hosts.terminalArgs(ssh, "claude"))
+          run("terminal.run", { line: `ssh ${line}`, project })
+        }),
+    }),
+    [project, run]
+  )
   return (
     <>
       <ThisMachine engine={engine} named={here} hosts={hosts} lit={lit} />
@@ -222,13 +250,89 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
               lit={lit}
               run={run}
               others={shownBeside(here, hosts, host.name)}
+              claude={claude}
             />
           ))}
-          <AddMachine here={here} hosts={hosts} shown={shown} />
+          <AddMachine here={here} hosts={hosts} shown={shown} claude={claude} />
         </CardContent>
       </Card>
       {hosts.length > 0 && <ShowCard name={here?.name} lit={lit} />}
     </>
+  )
+}
+
+/** What opens "Sign in to Claude on <name>" (ADR 0115, decision 8): a
+ * shell of this machine's `project` in a terminal Pane, where `ssh -t
+ * <ssh> claude` is typed, with Banda's own options but free to ask, and
+ * the Person signs in with /login. None where there is no Project here,
+ * or Settings is a dialog: the Person is given the command. */
+type ClaudeThere = {
+  project: ProjectId | undefined
+  open: ((ssh: string) => Promise<void>) | undefined | false
+}
+
+/** "Sign in to Claude on <name>", for the machine at `ssh`. */
+function SignInClaude({
+  claude,
+  ssh,
+  name,
+  onCheck,
+}: {
+  claude: ClaudeThere
+  ssh: string
+  name: string
+  /** Reads who is signed in there again. */
+  onCheck?: () => void
+}) {
+  const { busy, problem, ask } = useAsk()
+  const { open } = claude
+  const line = `ssh -t ${ssh} claude`
+  return (
+    <div className="flex flex-col gap-1.5">
+      {open ? (
+        <span className="text-meta text-muted-foreground">
+          A terminal here runs Claude on {name}: type /login there.
+        </span>
+      ) : (
+        <>
+          <span className="text-meta text-muted-foreground">
+            {claude.project === undefined
+              ? "No Project here for its terminal: run"
+              : "Run"}{" "}
+            this in a terminal here, then type /login there.
+          </span>
+          <div className="flex items-center gap-1.5">
+            <code className="min-w-0 flex-1 truncate rounded-control bg-muted px-2 py-1 font-mono text-meta">
+              {line}
+            </code>
+            <CopyButton text={line} label="Copy the command" />
+          </div>
+        </>
+      )}
+      <div className="flex flex-wrap items-center gap-2">
+        {open && (
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => void ask(() => open(ssh))}
+          >
+            <SquareTerminalIcon />
+            Sign in to Claude on {name}
+          </Button>
+        )}
+        {onCheck && (
+          <Button size="sm" variant="ghost" onClick={onCheck}>
+            Check again
+          </Button>
+        )}
+      </div>
+      {problem && (
+        <p role="alert" className="text-meta text-destructive">
+          {problem}
+        </p>
+      )}
+    </div>
   )
 }
 
@@ -583,12 +687,14 @@ function HostRow({
   lit,
   run,
   others,
+  claude,
 }: {
   host: Shown
   lit?: string
   run?: SectionProps["run"]
   /** The other machines shown, this one's too, for the picker's grey. */
   others: readonly Named[]
+  claude: ClaudeThere
 }) {
   const kept = useContext(HostsContext)
   const { name: key, named, state, power } = host
@@ -656,6 +762,19 @@ function HostRow({
   const build = buildWords(state)
   const why =
     state.state === "away" || state.state === "refused" ? state.why : undefined
+  // Whether Claude is signed in there, as its Harness says, read while
+  // the row is open and the machine live: reading starts it there.
+  const [round, setRound] = useState(0)
+  const account = useAccount(
+    kept.engine(key),
+    open && live ? CLAUDE : undefined,
+    round
+  )
+  const signedOut =
+    open &&
+    live &&
+    account.state === "ready" &&
+    account.view.account.signed_in_as?.signed_in === false
   const shownTest = tested?.in === state.state ? tested.test : undefined
   const words = shownTest && testWords(shownTest, name)
   const found = shownTest && foundNamed(shownTest, name)
@@ -805,6 +924,20 @@ function HostRow({
                 onCommit={(text) => set({ banda: text })}
               />
             </RowFrame>
+            {signedOut && (
+              <RowFrame
+                dataKey={`${key}.claude`}
+                title="Claude"
+                about={`Not signed in on ${name}: its Agents cannot start there.`}
+              >
+                <SignInClaude
+                  claude={claude}
+                  ssh={ssh}
+                  name={name}
+                  onCheck={() => setRound((now) => now + 1)}
+                />
+              </RowFrame>
+            )}
             {build && (
               <RowFrame dataKey={`${key}.build`} title="Build">
                 <span className="text-meta text-muted-foreground tabular-nums">
@@ -1147,6 +1280,7 @@ function AddMachine({
   here,
   hosts,
   shown,
+  claude,
 }: {
   /** This machine's name and icon now. */
   here: Named | undefined
@@ -1154,6 +1288,7 @@ function AddMachine({
   /** The machines shown now, this one first, but machine `except`, as
    * Add settles against. */
   shown: (except?: string) => readonly Named[]
+  claude: ClaudeThere
 }) {
   const kept = useContext(HostsContext)
   const reached = hosts.map((one) => one.state.ssh).join(" ")
@@ -1173,12 +1308,16 @@ function AddMachine({
     settled?: Settled
     failed?: string
   }>()
+  // The machine Install set up and Add added, by its address: what its
+  // Agents need there is offered next.
+  const [installed, setInstalled] = useState<{ ssh: string; name: string }>()
   const { busy, doing, problem, ask } = useAsk()
   // One at a time: a second's answer could come before the first's.
   const connect = (to: string) => {
     const ssh = to.trim()
     if (!ssh || busy) return
     setAdded(undefined)
+    setInstalled(undefined)
     void ask(async () => {
       setFound(undefined)
       setFound({ address: ssh, test: await device.hosts.test(ssh, null) })
@@ -1219,6 +1358,7 @@ function AddMachine({
     if (!found || busy) return
     const ssh = found.address
     setAdded(undefined)
+    setInstalled(undefined)
     setInstalling({ address: ssh, lines: [] })
     void ask(async () => {
       try {
@@ -1231,8 +1371,11 @@ function AddMachine({
         )
         const test = await device.hosts.test(ssh, null)
         setFound({ address: ssh, test })
-        if (test.state === "found")
-          await addAt(ssh, foundNamed(test, ssh)?.name)
+        if (test.state === "found") {
+          const name = foundNamed(test, ssh)?.name
+          await addAt(ssh, name)
+          setInstalled({ ssh, name: name ?? ssh })
+        }
       } finally {
         setInstalling(undefined)
       }
@@ -1366,6 +1509,13 @@ function AddMachine({
         <p role="status" className="text-meta text-muted-foreground">
           {addedWords(added.name, added.settled, added.failed)}
         </p>
+      )}
+      {installed && (
+        <SignInClaude
+          claude={claude}
+          ssh={installed.ssh}
+          name={added?.settled?.named.name ?? installed.name}
+        />
       )}
       {problem && (
         <p role="alert" className="text-meta text-destructive">

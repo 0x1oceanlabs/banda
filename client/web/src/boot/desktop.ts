@@ -108,6 +108,10 @@ export const device = {
     /** Cancel: ends the Install running at `ssh`. */
     cancelInstall: (ssh: string): Promise<void> =>
       desktop()?.hostInstallCancel(ssh) ?? elsewhere(),
+    /** ssh's arguments to run `remote` at `ssh` on a terminal there, as
+     * Banda's own ssh but free to ask (ADR 0115, decision 8). */
+    terminalArgs: (ssh: string, remote: string): Promise<string[]> =>
+      desktop()?.hostTerminal(ssh, remote) ?? elsewhere(),
     /** The Hosts of `~/.ssh/config` to suggest for Add; none without the
      * desktop. */
     suggestions: (): Promise<string[]> =>

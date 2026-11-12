@@ -27,6 +27,7 @@ import {
   stateWords,
   testWords,
   installSteps,
+  shellLine,
   Told,
 } from "./machines"
 
@@ -487,4 +488,11 @@ test("Install's steps are its lines in words, the last still running", () => {
     { words: "dev.642 is on devbox already", done: true },
     { words: "Starting its engine", done: false },
   ])
+})
+
+test("a terminal's line keeps each argument whole, quoting only what is not plain", () => {
+  expect(
+    shellLine(["-t", "-o", "LogLevel=INFO", "--", "roma@devbox", "claude"])
+  ).toBe("-t -o LogLevel=INFO -- roma@devbox claude")
+  expect(shellLine(["my box", "it's"])).toBe(`'my box' 'it'\\''s'`)
 })
