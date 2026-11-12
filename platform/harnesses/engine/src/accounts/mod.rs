@@ -250,9 +250,9 @@ impl Accounts {
             .harnesses
             .get(&args.harness)
             .map_err(Refusal::invalid)?;
-        if !harness.row().is_some_and(|row| row.api_way.is_none()) {
+        if !harness.row().is_some_and(|row| row.api_way().is_none()) {
             return Err(Refusal::invalid(
-                "Only Codex takes an API key here: Claude Code signs in to Anthropic Console itself.",
+                "This Harness takes no API key here: its CLI signs in to its console itself.",
             ));
         }
         let key = args.key.trim();
@@ -660,7 +660,7 @@ async fn heard(project: &ModuleProject, harness: &str) {
 /// way of its Harness's; any other account every way.
 fn fits(harness: &Harness, way: &str) -> bool {
     match harness.kind {
-        AccountKind::Api => harness.row().and_then(|row| row.api_way) == Some(way),
+        AccountKind::Api => harness.row().and_then(|row| row.api_way()) == Some(way),
         AccountKind::Subscription | AccountKind::Gateway => true,
     }
 }

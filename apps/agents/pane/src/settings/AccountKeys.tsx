@@ -1,11 +1,17 @@
 /**
  * The keys of Add account (ADR 0078, decision 1): a gateway's, which Banda
- * keeps in this computer's keyring, and Codex's OpenAI key, which Codex
- * keeps. The window sends a key once and never reads it back.
+ * keeps in this computer's keyring, and an API key a Harness's CLI takes
+ * itself, as Codex does. The window sends a key once and never reads it back.
  */
 import { type ReactNode, useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
-import type { GatewayAdded, HarnessView, Kept } from "@banda/contract/harnesses"
+import type {
+  Adds,
+  Gateway,
+  GatewayAdded,
+  HarnessView,
+  Kept,
+} from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
 import {
   Field,
@@ -16,7 +22,7 @@ import {
 import { Input } from "@banda/ui/components/input"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { Problem } from "../thread/SignIn"
-import { type Gateway, freeId, gatewaysOf } from "./accounts"
+import { freeId, gatewaysOf } from "./accounts"
 
 /** Where a gateway's key went, in words. */
 export const KEPT_WORDS: Readonly<Record<Kept, string>> = {
@@ -28,6 +34,7 @@ export const KEPT_WORDS: Readonly<Record<Kept, string>> = {
 export function GatewayForm({
   engine,
   base,
+  adds,
   title: harness,
   taken,
   colour,
@@ -36,6 +43,8 @@ export function GatewayForm({
 }: {
   engine: Engine
   base: HarnessView
+  /** How its machine adds an account of its Harness. */
+  adds: Adds
   /** What its Harness is called: `Claude Code`. */
   title: string
   taken: readonly HarnessView[]
@@ -43,10 +52,10 @@ export function GatewayForm({
   onAdded: (added: GatewayAdded) => void
   onBusy: (busy: boolean) => void
 }) {
-  const gateways = gatewaysOf(base.harness)
+  const gateways = gatewaysOf(adds)
   const [chosen, setChosen] = useState(gateways[0]!)
   const [name, setName] = useState(chosen.name)
-  const [url, setUrl] = useState(chosen.urls[base.harness] ?? "")
+  const [url, setUrl] = useState(chosen.url)
   const [key, setKey] = useState("")
   const { busy, problem, act } = useAct()
   useEffect(() => onBusy(busy), [busy, onBusy])
@@ -55,7 +64,7 @@ export function GatewayForm({
   const choose = (gateway: Gateway) => {
     setChosen(gateway)
     setName(gateway.name)
-    setUrl(gateway.urls[base.harness] ?? "")
+    setUrl(gateway.url)
   }
   const add = async () => {
     if (!ready) return
@@ -87,7 +96,7 @@ export function GatewayForm({
               aria-pressed={gateway.id === chosen.id}
               onClick={() => choose(gateway)}
             >
-              {gateway.urls[base.harness] ? gateway.name : "Your own"}
+              {gateway.url ? gateway.name : "Your own"}
             </Button>
           ))}
         </div>
@@ -107,11 +116,7 @@ export function GatewayForm({
           id="gateway-url"
           value={url}
           onChange={(event) => setUrl(event.target.value)}
-          placeholder={
-            base.harness === "codex"
-              ? "https://… (OpenAI’s Responses API)"
-              : "https://… (Anthropic’s API)"
-          }
+          placeholder={`https://… (${adds.speaks})`}
           autoComplete="off"
           spellCheck={false}
         />
@@ -138,15 +143,22 @@ export function GatewayForm({
   )
 }
 
-/** Codex's OpenAI key, which `codex login --with-api-key` keeps. */
+/** An API key a Harness's CLI takes itself and keeps, as Codex's
+ * `codex login --with-api-key` does. */
 export function ApiKeyForm({
   engine,
   harness,
+  title,
+  vendor,
   onKept,
   onBusy,
 }: {
   engine: Engine
   harness: string
+  /** What its Harness is called: `Codex`. */
+  title: string
+  /** Whose key it is: `OpenAI`. */
+  vendor: string
   onKept: () => void
   onBusy: (busy: boolean) => void
 }) {
@@ -167,7 +179,7 @@ export function ApiKeyForm({
   return (
     <KeyForm problem={problem} onSubmit={() => void send()}>
       <Field>
-        <FieldLabel htmlFor="api-key">OpenAI API key</FieldLabel>
+        <FieldLabel htmlFor="api-key">{vendor} API key</FieldLabel>
         <KeyInput
           id="api-key"
           value={key}
@@ -175,8 +187,8 @@ export function ApiKeyForm({
           placeholder="sk-…"
         />
         <FieldDescription>
-          Banda hands it to <code>codex login --with-api-key</code> and forgets
-          it: Codex keeps it in this account’s own folder.
+          Banda hands it to {title}’s sign-in and forgets it: {title} keeps it
+          in this account’s own folder.
         </FieldDescription>
       </Field>
       <Button type="submit" className="self-end" disabled={!ready}>

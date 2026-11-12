@@ -81,6 +81,9 @@ type PageProps = Props & {
   harness: HarnessView
   /** Its Harness's name, as its group shows it. */
   of: string
+  /** Whether its machine adds and signs in an account of its Harness
+   * itself: else its sign-in is the ways its Harness offers. */
+  adds: boolean
   limits?: Limits
   now: number
   use?: Use
@@ -341,6 +344,7 @@ function AccountState({
   harness,
   open,
   limits,
+  adds,
   account,
 }: PageProps & { account: Account }) {
   const who = account.signed_in_as
@@ -365,7 +369,7 @@ function AccountState({
           ? "Not signed in."
           : `${harness.name} does not say who is signed in.`}
       </p>
-      {["claude", "codex"].includes(harness.harness) ? (
+      {adds ? (
         <AccountLogin engine={engine} harness={harness.id} />
       ) : (
         <Ways
