@@ -6,12 +6,12 @@ date: 2026-11-09
 # The sidebar is the Person's inbox of their Agents' work
 
 _It amends ADR 0005 (decisions 8 and 9), ADR 0008 (decisions 4 and 5: the row
-and the presets), ADR 0017 (decisions 1 and 3), ADR 0067 (decisions 3 and 4:
-the header and the foot), ADR 0069 (Archive as a shelf), ADR 0074
-(decisions 1 and 6, asking and the Snoozed shelf, and its name: Snooze
-becomes Later) and ADR 0079 (the Flow's place). The mark it draws is
-ADR 0099's. Code is cited from main at `de0deb68`; the audit cites
-`290ec9a9`._
+and the presets), ADR 0017 (decision 3, and decision 1 until 2026-11-12),
+ADR 0067 (decisions 3 and 4: the header and the foot), ADR 0069 (Archive
+as a shelf), ADR 0074 (decisions 1 and 6, asking and the Snoozed shelf,
+and its name: Snooze becomes Later) and ADR 0079 (the Flow's place). The
+mark it draws is ADR 0099's. Code is cited from main at `de0deb68`; the
+audit cites `290ec9a9`._
 
 Roma, on 2026-11-09 (translated): "I want to put the sidebar with the
 Agents in order." Roma runs ten Agents and more at once, and asked for a
@@ -107,6 +107,8 @@ From the audit (`2-code.md`):
      lines, the Project is in the header), Open, Working. The pointer
      over the header shows **+** (New Thread here) and **⋯** (the
      Project's menu). The Working tab is grouped the same way.
+     _Amended 2026-11-12 by Roma (decision 19, as amended): no **+**; the
+     header shows **⋯** alone._
    - **By Machine** is the same with the machine's icon and name.
    - The order of the Projects does not follow need: the rollup says
      where the calls are, and `Alt+U` still walks the oldest first.
@@ -198,6 +200,11 @@ From the audit (`2-code.md`):
     - A Thread with no Project (ADR 0046) says "No project" on line 3,
       and is its own group, last.
 
+    _Amended 2026-11-12 by Roma (decision 19, as amended): the sidebar
+    starts no Thread, so ✎, the group header's **+** and the menu's New
+    Thread here went; Locate folder stays, for a folder that is missing.
+    Add Project… is the Banda menu's, and Projects… the settings'._
+
 ### Search
 
 17. **Search filters the list where it is** (`Alt+Space` or a click; the
@@ -212,6 +219,13 @@ From the audit (`2-code.md`):
     - `↑↓` and `Enter` open; `Esc` clears and goes back.
     - Each machine's engine searches its own messages; a machine away is
       searched by title only, and says so.
+
+    _Amended 2026-11-12 by Roma: the sidebar has no search of its own;
+    with the Banda menu's, Banda had two. The Banda menu is the one
+    search, of actions, Projects, Threads and files, and `Alt+Space` opens
+    it always, as ADR 0017's decision 1 first had it; `/` in the sidebar
+    opens it too. The field, its filters, the All tab and its key `0` went
+    (S12a); the messages' search (S12c) will not be built._
 
 ### Machines
 
@@ -237,6 +251,13 @@ From the audit (`2-code.md`):
       (`Alt+N`); in (the Projects, No project); on (the machines); with
       (the Harnesses); then Add Project… and Projects…. A tick marks what
       a click takes; picking one starts the Thread.
+
+    _Amended 2026-11-12 by Roma: the header holds no ✎, and no Search
+    (decision 17, as amended), so there is no header: the tabs are the
+    sidebar's top. A Thread starts in the New Thread Pane, by `Alt+Enter`
+    and from the Banda menu, which has it already; the sidebar starts
+    none._
+
 20. **The Flow moves to the bar**, beside the workspaces' numbers: it
     arranges the desk, not the list. Its icon shows the Flow in force;
     `Alt+Shift+M` as before (ADR 0079).
@@ -273,6 +294,9 @@ From the audit (`2-code.md`):
     here"); Archive ("S on a card closes it here"); a search with no
     match ("No Thread matches "zed" · searched titles and messages on arc
     and mac").
+    _Amended 2026-11-12 by Roma (decisions 17 and 19, as amended): the
+    first run offers Add Project… alone, Working says "No Agent works now"
+    and starts nothing, and with no search there is no search's place._
 
 ### Where a Thread stands, once
 
@@ -313,7 +337,9 @@ From the audit (`2-code.md`):
 - **ADR 0017, decision 1** (added 2026-11-11 with step 12, Roma's answer
   to the spec's P3): while the sidebar shows, `Alt+Space` goes to Search
   first, and pressed again in the empty field opens the Banda menu
-  (decision 17).
+  (decision 17). _Taken back 2026-11-12 by Roma: with the sidebar's
+  Search gone, `Alt+Space` opens the Banda menu always, and ADR 0017's
+  decision 1 stands as it was._
 - **ADR 0005, decision 9** (an erratum, added with step 9: this list first
   left it out): the bar's logo opens the Banda menu (decision 21), not the
   sidebar; `Alt+A`, and the Banda menu's action, show and hide it.
@@ -375,3 +401,11 @@ On 2026-11-09, over the mocks and the prototype:
 - Snooze renamed Later, everywhere.
 - The icons: Flow to the bar, the key sheet and theme to the Banda menu,
   Quiet in the foot: "all the decisions are good".
+
+On 2026-11-12, over the sidebar built:
+
+- No search of its own and no New Thread (decisions 17 and 19, as
+  amended): "The search is superfluous; it must be removed: we have a
+  global search, and you wrote two. And creating a new Thread is not
+  needed either, it can be cut too: we have it in the Thread's window
+  itself."

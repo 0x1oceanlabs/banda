@@ -655,10 +655,7 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
 /* The sidebar's pick (ADR 0098, decision 13; spec §2.7): a ring while
    its list has the focus and the last input in it was a key, none after
    a click. It does not move: a key moves it at once. */
-[role="listbox"][data-keyed]:focus [data-picked],
-/* And while Search has the focus, whose ↑↓ move it and Enter opens it
-   (decision 17). */
-[data-sidebar]:has([role="combobox"]:focus) [role="listbox"] [data-picked] {
+[role="listbox"][data-keyed]:focus [data-picked] {
   outline: 2px solid var(--focus);
   outline-offset: -2px;
 }

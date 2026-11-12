@@ -134,9 +134,7 @@ function pageOf(view: Element | null, stops: readonly Element[]): number {
  * leaves the tab hands the pick on to the one below (`pickAfter`), as an
  * act by key does in the keydown (`goneFrom`). `keyed` says the last
  * input in the list was a key, for its ring; a click picks the card it
- * lands on, with none. Search, the list's combobox (ADR 0098, decision
- * 17), moves the pick by `step` with the focus kept in it, and names it
- * as the list does; a search typed afresh picks its first stop.
+ * lands on, with none.
  *
  * The selection, `checks` (decision 15), is the view's, as it holds the
  * list: Ctrl+click (⌘ on a Mac) checks a card or no longer, and
@@ -151,7 +149,6 @@ export function usePick({
   toggle,
   more,
   checks: [checks, setChecks],
-  search,
 }: {
   tab: Tab
   /** The open Thread's card, by its key. */
@@ -162,11 +159,8 @@ export function usePick({
   more: () => void
   /** The selection, and what sets it. */
   checks: [Checks, Dispatch<SetStateAction<Checks>>]
-  /** What Search says. */
-  search: string
 }) {
   const list = useRef<HTMLDivElement>(null)
-  const field = useRef<HTMLInputElement>(null)
   const [picks, setPicks] = useState<Picks>({})
   const [keyed, setKeyed] = useState(false)
   const picked = picks[tab]
@@ -394,9 +388,7 @@ export function usePick({
   // After each drawing: the list names its pick, which comes into view
   // after a key; a card picked that left the tab hands it on, and one Undo
   // brings back into it takes it, the first drawn of several.
-  const drawn = useRef<{ tab: Tab; cards: readonly string[]; search: string }>(
-    undefined
-  )
+  const drawn = useRef<{ tab: Tab; cards: readonly string[] }>(undefined)
   useLayoutEffect(() => {
     const own = list.current
     if (!own) return
@@ -404,7 +396,7 @@ export function usePick({
     const cards = all.filter(isCard).map(keyOf)
     const at = all.find((stop) => keyOf(stop) === picked)
     const before = drawn.current
-    drawn.current = { tab, cards, search }
+    drawn.current = { tab, cards }
     const back = coming.current
     if (before?.tab !== tab) coming.current = undefined
     else if (back !== undefined) {
@@ -416,14 +408,8 @@ export function usePick({
     // A card drawn no more leaves the selection.
     const kept = stillDrawn(checks, checkable(all))
     if (kept !== checks) setChecks(kept)
-    // A search typed afresh picks the first it found, which Enter opens.
-    const first = all[0] && keyOf(all[0])
-    if (before && before.search !== search && search.trim() && first !== picked)
-      return moveTo(first)
-    for (const one of [own, field.current]) {
-      if (at) one?.setAttribute("aria-activedescendant", at.id)
-      else one?.removeAttribute("aria-activedescendant")
-    }
+    if (at) own.setAttribute("aria-activedescendant", at.id)
+    else own.removeAttribute("aria-activedescendant")
     if (at && scroll.current) at.scrollIntoView({ block: "nearest" })
     scroll.current = false
     if (at || picked === undefined || before?.tab !== tab) return
@@ -457,10 +443,9 @@ export function usePick({
     checkAll: () => setChecks(allChecked(checkable(stops()))),
     /** Leaves just `keys` checked: none clears the selection. */
     checkOnly: (keys: Iterable<string>) => setChecks(checksOf(keys)),
-    /** Moves the pick by `step`, as Search's ↑↓ do. */
+    /** Moves the pick by `step`, as the small inbox puts it on its first
+     * card. */
     step: to,
-    /** Search's field, which names the pick as the list does. */
-    field,
     /** What Enter does on a stop that is no card: a group's header folds
      * or unfolds, and "+ N more" shows the rest (`expand`). */
     enter: (stop: Element) => (unfolded(stop) ? shut(stop) : expand(stop)),

@@ -1,4 +1,3 @@
-import type { ProjectId } from "@banda/contract"
 import {
   BandaMark,
   callColor,
@@ -10,11 +9,10 @@ import { ProjectSign } from "@banda/ui/components/project-sign"
 import { useHereNamed, useShownOf } from "@banda/core/react"
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
-import { ChevronRightIcon, EllipsisIcon, PlusIcon } from "lucide-react"
+import { ChevronRightIcon, EllipsisIcon } from "lucide-react"
 import { useState } from "react"
 import { TONES } from "./CardStatus"
 import { HOVER_FILL } from "./CardView"
-import { newThread, useOpen } from "./open"
 import type { GroupBlock } from "./regions"
 import type { Settings } from "./settings"
 import { pickProps } from "./usePick"
@@ -24,20 +22,20 @@ import { pickProps } from "./usePick"
  * its name and a chevron that folds it, turning over 150 ms; on the right
  * its rollup, how many wait for the Person in the colour of the loudest
  * call and how many work in grey, and, folded, the loudest one's mark
- * too. The pointer over it, or the keyboard's focus in it, shows **+**, a
- * New Thread there, and **⋯**, the Project's menu its right click opens,
- * in the rollup's place (decision 16). A machine's group has the
- * machine's icon and name. Another machine's Project has neither yet:
- * each act would go to this machine's engine. Inside the list, which keys
- * pick (decision 13), none of it is a Tab stop: the header is a stop of
- * the pick (`stop`), folded or not, which ← folds and → or Enter unfolds,
- * Enter folding it again; Shift+F10 or the Menu key on it opens the
- * Project's menu, as ⋯ does, and picked by a key it shows + and ⋯ too.
+ * too. The pointer over it, or the keyboard's focus in it, shows **⋯**,
+ * the Project's menu its right click opens, in the rollup's place
+ * (decision 16); no **+**: the sidebar starts no Thread (Roma,
+ * 2026-11-12). A machine's group has the machine's icon and name. Another
+ * machine's Project has no menu yet: each act would go to this machine's
+ * engine. Inside the list, which keys pick (decision 13), none of it is a
+ * Tab stop: the header is a stop of the pick (`stop`), folded or not,
+ * which ← folds and → or Enter unfolds, Enter folding it again; Shift+F10
+ * or the Menu key on it opens the Project's menu, as ⋯ does, and picked
+ * by a key it shows ⋯ too.
  */
 export function GroupHeader({
   group,
   settings,
-  machine,
   stop,
   picked = false,
   checking = false,
@@ -45,9 +43,6 @@ export function GroupHeader({
 }: {
   group: GroupBlock
   settings: Settings
-  /** This machine's No Project, where its group's + starts a Thread;
-   * none until the engine names it. */
-  machine?: ProjectId
   /** Its key as a stop of the pick. */
   stop: string
   /** The list's keys act on it. */
@@ -57,19 +52,10 @@ export function GroupHeader({
   checking?: boolean
   onFold: () => void
 }) {
-  const open = useOpen()
   const { project, folded } = group
   const byProject = group.by === "project"
-  const mine = byProject && group.host === undefined
-  // + starts a Thread in the Project, or in this machine's No Project,
-  // though none starts before the engine names it; ⋯ is a Project's.
-  const plus = mine && settings.projects.newThread
-  const menu = mine && project !== undefined
-  const start = () => {
-    if (project)
-      newThread(open, { project: project.id, missing: project.missing })
-    else if (machine) newThread(open, { project: machine })
-  }
+  // ⋯ is this machine's Projects' alone.
+  const menu = byProject && group.host === undefined && project !== undefined
   const tone = callColor(group.mark)
   // A click that folds or unfolds keeps the rollup in sight until the
   // pointer leaves the header (`globals.css`).
@@ -129,10 +115,10 @@ export function GroupHeader({
         focus in the header, the acts in its place, which it keeps room
         for. A click that folds leaves the rollup in sight. */}
       <span
-        data-head-rollup={plus || menu ? "" : undefined}
+        data-head-rollup={menu ? "" : undefined}
         className={cn(
           "flex shrink-0 items-center justify-end gap-1.5 text-meta tabular-nums",
-          (plus || menu) && "min-w-11"
+          menu && "min-w-5"
         )}
       >
         {settings.projects.rollup && folded && tone && (
@@ -161,49 +147,34 @@ export function GroupHeader({
           </span>
         )}
       </span>
-      {(plus || menu) && (
+      {menu && (
         <span
           data-head-acts=""
-          className="absolute inset-y-0 right-2 flex items-center gap-0.5"
+          className="absolute inset-y-0 right-2 flex items-center"
         >
-          {plus && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              tabIndex={-1}
-              className="size-5 text-muted-foreground [&_svg]:size-3.5"
-              aria-label={`New Thread in ${project?.name ?? NO_PROJECT}`}
-              title="New Thread here"
-              onClick={start}
-            >
-              <PlusIcon />
-            </Button>
-          )}
-          {menu && project && (
-            <Button
-              variant="ghost"
-              size="icon-xs"
-              tabIndex={-1}
-              className="size-5 text-muted-foreground [&_svg]:size-3.5"
-              aria-label={`${project.name} menu`}
-              title="Project menu"
-              // The menu its right click opens, at the button.
-              onClick={(event) => {
-                const { left, bottom } =
-                  event.currentTarget.getBoundingClientRect()
-                event.currentTarget.dispatchEvent(
-                  new MouseEvent("contextmenu", {
-                    bubbles: true,
-                    cancelable: true,
-                    clientX: left,
-                    clientY: bottom,
-                  })
-                )
-              }}
-            >
-              <EllipsisIcon />
-            </Button>
-          )}
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            tabIndex={-1}
+            className="size-5 text-muted-foreground [&_svg]:size-3.5"
+            aria-label={`${project.name} menu`}
+            title="Project menu"
+            // The menu its right click opens, at the button.
+            onClick={(event) => {
+              const { left, bottom } =
+                event.currentTarget.getBoundingClientRect()
+              event.currentTarget.dispatchEvent(
+                new MouseEvent("contextmenu", {
+                  bubbles: true,
+                  cancelable: true,
+                  clientX: left,
+                  clientY: bottom,
+                })
+              )
+            }}
+          >
+            <EllipsisIcon />
+          </Button>
         </span>
       )}
     </div>

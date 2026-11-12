@@ -1452,17 +1452,6 @@
       "scope": "sidebar"
     },
     {
-      "id": "sidebar.tab-all",
-      "title": "Show All a search found",
-      "section": "Sidebar",
-      "keys": [
-        {
-          "code": "Digit0"
-        }
-      ],
-      "scope": "sidebar"
-    },
-    {
       "id": "workspace.go",
       "title": "Go to a workspace",
       "section": "Workspaces",

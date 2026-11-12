@@ -400,7 +400,6 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Show Working (`sidebar.tab-working`), 2, `[binds.sidebar]`
 - Show Later (`sidebar.tab-later`), 3, `[binds.sidebar]`
 - Show the Archive (`sidebar.tab-archive`), 4, `[binds.sidebar]`
-- Show All a search found (`sidebar.tab-all`), 0, `[binds.sidebar]`
 - Go to workspace 1 (`workspace.go-1`), Alt+1
 - Go to workspace 2 (`workspace.go-2`), Alt+2
 - Go to workspace 3 (`workspace.go-3`), Alt+3

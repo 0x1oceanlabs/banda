@@ -17,7 +17,7 @@
  * - the rows that shift snap.
  *
  * Only rows in view, and one each side, move; past 24 moves the whole
- * batch snaps, as it does while the list is hidden, searched, motionless
+ * batch snaps, as it does while the list is hidden, motionless
  * (`[motion] off`, reduced motion) or drawn afresh (a tab, a fold, a cut
  * list shown whole). A group the Person unfolds is the one move of a
  * scene: the rows it shows fade in, quickly; one folded shuts at once.
@@ -343,8 +343,8 @@ function drawnIn(list: HTMLElement): Map<string, HTMLElement> {
 /**
  * Plays each batch of the list drawn in `list` from `items`: as `plan`
  * says, by the heights the list measures once while `measure` stays the
- * same (the look, its font, the cards' density); nothing as `scene` changes, which draws
- * the list afresh, nor while it is `searching`. What goes is the node
+ * same (the look, its font, the cards' density); nothing as `scene`
+ * changes, which draws the list afresh. What goes is the node
  * React let go of, put back where it was, inert and hidden from a screen
  * reader, for as long as it fades. A new batch takes those out at once.
  * The list says the height its items add up to (`data-height`), for the
@@ -353,11 +353,7 @@ function drawnIn(list: HTMLElement): Map<string, HTMLElement> {
 export function useListMotion(
   list: RefObject<HTMLElement | null>,
   items: readonly Item[],
-  {
-    scene,
-    measure,
-    searching = false,
-  }: { scene: unknown; measure: readonly unknown[]; searching?: boolean }
+  { scene, measure }: { scene: unknown; measure: readonly unknown[] }
 ): void {
   const heights = useRef(new Map<string, number>())
   const measured = useRef<readonly unknown[]>([])
@@ -405,7 +401,7 @@ export function useListMotion(
       element.remove()
     }
     going.current.clear()
-    if (searching || document.hidden || motionless()) return
+    if (document.hidden || motionless()) return
     const moves = plan(before.items, items, {
       heights: heights.current,
       view: viewOf(root),

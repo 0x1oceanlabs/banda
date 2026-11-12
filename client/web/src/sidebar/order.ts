@@ -38,9 +38,6 @@ export type View = Partial<
 > & {
   settings?: Settings
   elsewhere?: readonly Elsewhere[]
-  /** A search in place while one runs (decision 17): its words, and the
-   * rows it finds, which the tabs and their counts take alone. */
-  search?: { words: string; found: (row: Row) => boolean }
   /** The Projects whose trust the Person put off on this device. */
   putOff?: ReadonlySet<ProjectId>
 }
@@ -60,7 +57,6 @@ export function order(
   {
     settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
     elsewhere = [],
-    search,
     putOff,
     ...shown
   }: View = {}
@@ -76,14 +72,13 @@ export function order(
     group: settings.group,
     ...settings.inbox,
     ...shown,
-    ...(search && { search: search.words }),
   }
   const heard = {
     calls: projectCallsOf(projects, putOff),
     none: projects.every((project) => project.scratch),
   }
   return {
-    ...inboxOf(search ? rows.filter(search.found) : rows, view, now, heard),
+    ...inboxOf(rows, view, now, heard),
     rows,
   }
 }

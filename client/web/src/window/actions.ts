@@ -166,10 +166,6 @@ export type Shell = WindowApi & {
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
    * decision 7); false when nothing peeks. */
   fillPeek: () => boolean
-  /** Takes the focus to the sidebar's Search while the sidebar shows,
-   * unless it is there with nothing typed or a dialog has it (ADR 0098,
-   * decision 17); false when it did not. */
-  search: () => boolean
   /** Takes the Sheet away while it shows (ADR 0102, decision 5); false
    * when none does. */
   closeSheet: () => boolean
@@ -1338,18 +1334,15 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     overDialogs: true,
     // Over Quick Look its key has the tile fill the desk, or float again,
     // as ⌥Space does in a Finder (ADR 0073, decision 7, as amended): the
-    // menu opens once Quick Look is closed. With the sidebar shown it
-    // goes to Search first, and pressed again there with nothing typed
-    // opens the menu (ADR 0017, decision 1, as ADR 0098's decision 17
-    // amends it). A module opens it on one of its sources alone, as
-    // Files' quick open does.
+    // menu opens once Quick Look is closed. A module opens it on one of
+    // its sources alone, as Files' quick open does.
     args: takes({
       source: "a source's id, to show its rows alone, as files.find",
     }),
     run: (shell, args) => {
       if (typeof args?.source === "string")
         return shell.route(`find.${args.source}`)
-      if (!shell.fillPeek() && !shell.search()) shell.menu("root")
+      if (!shell.fillPeek()) shell.menu("root")
     },
   },
   {

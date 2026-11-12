@@ -504,21 +504,35 @@ export function wallpaper(dir: string) {
   )
 }
 
-/** Opens the Banda menu at "Add Project" as the Person does, by ✎'s
- * menu in the sidebar's header (ADR 0098, decision 16): the sidebar
- * shows. The menu, at its ways to add one. */
+/** Opens the Banda menu at "Add Project" as the Person does: by the bar's
+ * logo, whatever the mod, then its action, Add Project (ADR 0026). The
+ * menu, at its ways to add one. */
 export async function addProject(page: Page): Promise<Locator> {
   await page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: "New Thread", exact: true })
-    .click({ button: "right" })
-  await page
-    .getByRole("menu", { name: "New Thread" })
-    .getByRole("menuitem", { name: "Add Project…" })
+    .getByRole("banner")
+    .getByRole("button", { name: /^Banda(:|$)/ })
     .click()
   const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await menu.getByRole("combobox", { name: "Search" }).fill("add project")
+  await menu.getByRole("option", { name: /^Add Project/ }).click()
   await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
   return menu
+}
+
+/** A new Thread in the Project `name`, from the Banda menu, as the Person
+ * starts one there: into the Project, then its New Thread here. The
+ * sidebar starts none (ADR 0098, decision 19, as amended 2026-11-12). */
+export async function newThreadIn(page: Page, name: string): Promise<void> {
+  const menu = await bandaMenu(page)
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await search.fill(name)
+  await expect(menu.getByRole("option").first()).toContainText(name)
+  await search.press("Enter")
+  await expect(menu.getByRole("option").first()).toContainText(
+    "New Thread here"
+  )
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
 }
 
 /** Makes a Project called `name` from the Banda menu, as the Person does:
@@ -984,16 +998,10 @@ export async function groupBy(
 
 /**
  * The Banda menu, opened by its key from where the focus is (ADR 0017,
- * decision 1). While the sidebar shows, Alt+Space goes to its Search
- * first, and pressed there again with nothing typed opens the menu (ADR
- * 0098, decision 17): two presses then, one where it is hidden.
+ * decision 1): Alt+Space opens it, the sidebar shown or not.
  */
 export async function bandaMenu(page: Page): Promise<Locator> {
   await page.keyboard.press("Alt+Space")
-  const inSearch = await page.evaluate(
-    () => document.activeElement?.id === "sb-search"
-  )
-  if (inSearch) await page.keyboard.press("Alt+Space")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await expect(menu).toBeVisible()
   return menu

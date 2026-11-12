@@ -330,11 +330,11 @@ test("inbox zero says how many work and when the next wakes, once a week how man
   await expect(panel).toContainText("Nothing waits for you")
   await expect(panel).toContainText("No Agent works now")
   await shots(window, "zero-empty")
-  // Each tab with nothing in it says what goes there; Working's starts a
-  // Thread.
+  // Each tab with nothing in it says what goes there; none starts a Thread
+  // (Roma, 2026-11-12).
   await tab("Working").click()
   await expect(panel).toContainText("No Agent works now")
-  await expect(panel.getByRole("button", { name: "New Thread" })).toBeVisible()
+  await expect(panel.getByRole("button")).toHaveCount(0)
   await shots(window, "working-empty")
   await tab("Later").click()
   await expect(panel).toContainText("Nothing for later")

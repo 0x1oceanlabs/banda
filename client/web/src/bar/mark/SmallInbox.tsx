@@ -187,7 +187,7 @@ const same = <T,>(value: T) => value
  * The small inbox's list (ADR 0098, decision 22; spec §6.9 of the keys'
  * research): the sidebar's Inbox with Your turn alone, in one-line cards,
  * in the same `listbox` in the scope `sidebar`, so the same keys work
- * (`useSidebarKeys`), but no tabs, no Search and no `1`–`4`. It takes the
+ * (`useSidebarKeys`), but no tabs and no `1`–`4`. It takes the
  * focus as it is drawn, on the first card; the sidebar's own Esc clears
  * what is checked, then closes it (`onEsc`). It says nothing of Someday,
  * which the sidebar tells once a week. After it, "7 at work ›".
@@ -228,7 +228,6 @@ function SmallList({
     folded: NONE,
     someday,
     checks,
-    search: "",
   }
   const ordering = useOrdered(projects, settings, view, isCurrent)
   const { aside, ...keys } = useSidebarKeys(
@@ -239,7 +238,6 @@ function SmallList({
       show: NOTHING,
       toggle: NOTHING,
       toggleMore: NOTHING,
-      searchFor: NOTHING,
     },
     isCurrent,
     onEsc,
@@ -267,7 +265,6 @@ function SmallList({
             strayed={NONE}
             onToggle={NOTHING}
             engine={engine}
-            projects={projects}
             holds={ordering.holds}
           />
         </PickList>
