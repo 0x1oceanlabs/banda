@@ -537,9 +537,11 @@ function project(state: ThreadState, event: Event): ThreadState {
           ...crew,
           phases: phases ?? crew.phases,
           agents: withAgents(crew.agents, agents ?? []),
-          log: log ?? crew.log,
+          ...((log ?? crew.log) !== undefined && { log: log ?? crew.log }),
           tokens: tokens ?? crew.tokens,
-          went_on: went_on ?? crew.went_on,
+          ...((went_on ?? crew.went_on) !== undefined && {
+            went_on: went_on ?? crew.went_on,
+          }),
         })),
       }
     }

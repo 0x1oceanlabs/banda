@@ -179,18 +179,19 @@ fn moved(was: &CrewAgent, now: &CrewAgent) -> bool {
 /// new or changed, each whole, the phases when they changed, and the
 /// tokens as they are now.
 pub fn progress(was: &Crew, now: &Crew) -> Option<Fact> {
+    let known = |agent: &CrewAgent| was.agents.iter().find(|one| same(one, agent));
+    let stirred =
+        (now.agents.iter()).any(|agent| known(agent).is_none_or(|known| moved(known, agent)));
+    // Kept with it is the whole of `now`: every agent that changed at all
+    // rides along, its tokens and what it does now too, so the fact gives
+    // what is kept.
     let agents: Vec<CrewAgent> = (now.agents.iter())
-        .filter(
-            |agent| match was.agents.iter().find(|one| same(one, agent)) {
-                Some(known) => moved(known, agent),
-                None => true,
-            },
-        )
+        .filter(|agent| known(agent) != Some(*agent))
         .cloned()
         .collect();
     let phases = (now.phases != was.phases).then(|| now.phases.clone());
     let log = (now.log != was.log).then(|| now.log.clone()).flatten();
-    if agents.is_empty() && phases.is_none() && log.is_none() {
+    if !stirred && phases.is_none() && log.is_none() {
         return None;
     }
     Some(Fact::CrewProgressed {
