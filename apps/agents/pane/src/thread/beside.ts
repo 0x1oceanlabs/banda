@@ -6,6 +6,7 @@
  * says. Pure, so plain tests cover it.
  */
 import type {
+  Crew,
   Item,
   Subagent,
   SubagentId,
@@ -324,6 +325,7 @@ function movedTo(item: Item, turn: string): Item {
 /** No calls of its sub-agents that change files: its Pane counts no
  * changes. */
 const NO_EDITS: Item[] = []
+const NO_CREWS: Crew[] = []
 
 /**
  * Sub-agent `lane` as its Pane draws it, as a Thread's state with a turn
@@ -353,7 +355,7 @@ export function laneThread(thread: Followed, lane: LaneState): Followed {
     subagents:
       fresh.length > 0 ? [...thread.subagents, ...fresh] : thread.subagents,
     // A lane holds no Crews of its own.
-    crews: [],
+    crews: NO_CREWS,
     edits: NO_EDITS,
     ...(thread.heard && { heard: thread.heard }),
   }
