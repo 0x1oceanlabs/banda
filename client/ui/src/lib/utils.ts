@@ -22,8 +22,7 @@ const LEVELS = Object.entries(TOKENS).flatMap(
 const ELEVATIONS = [
   ...Object.entries(TOKENS).flatMap(
     ([token, { group }]) =>
-      (group === "elevation" && /^([a-z]+)-shadow$/.exec(token)?.slice(1)) ||
-      []
+      (group === "elevation" && /^([a-z]+)-shadow$/.exec(token)?.slice(1)) || []
   ),
   "tile",
   "focus",
