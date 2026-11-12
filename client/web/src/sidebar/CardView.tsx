@@ -49,6 +49,7 @@ import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
 import type { WithMenu } from "./ProjectMenu"
+import { marked } from "./search"
 import { PickContext, pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
@@ -128,7 +129,7 @@ export function Card({
   const onOpen = useOpenRow(row)
   const now = useCardClock(card)
   const spoken = spokenOf(card, now)
-  const one = card.lines.length === 1
+  const one = card.lines.length === 1 && !card.found
   // One that left, or one being named, has none.
   const shown = card.gone || field ? NO_ACTS : acts
   // A card with no acts around it is its row itself, as the list's glance
@@ -272,7 +273,7 @@ export function CardLines({
   )
   // A child under its parent: ↳ first, its lines in by as much.
   const under = card.child?.under === true
-  return card.lines.map((line, index) => {
+  const lines = card.lines.map((line, index) => {
     const first = index === 0
     // #1160's mark: at the start of line 3's right, else right after the
     // title, never at line 1's right, where the acts show.
@@ -330,6 +331,36 @@ export function CardLines({
       </span>
     )
   })
+  const { found } = card
+  if (!found) return lines
+  // Under them, the line of the message a search found it by, its words
+  // marked as concept-v7 marks them (S12c).
+  return [
+    ...lines,
+    <span
+      key="found"
+      data-found=""
+      className={cn(
+        "flex min-h-4 min-w-0 items-center",
+        under ? "pl-9.5" : "pl-5.5"
+      )}
+    >
+      <FadeText
+        tip={found.snippet}
+        className="flex-1 text-meta text-muted-foreground"
+      >
+        {marked(found).map(({ text, hit }, at) =>
+          hit ? (
+            <mark key={at} className="rounded-small bg-woke/30 text-foreground">
+              {text}
+            </mark>
+          ) : (
+            text
+          )
+        )}
+      </FadeText>
+    </span>,
+  ]
 }
 
 /**

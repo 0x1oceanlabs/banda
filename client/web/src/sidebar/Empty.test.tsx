@@ -9,7 +9,10 @@ import {
   emptySays,
   EmptyTab,
   InboxZero,
+  type Looked,
+  noneSays,
   SOMEDAY_HEAD,
+  titlesOnlySays,
   zeroSays,
 } from "./Empty"
 import { type InboxView, inboxOf, TABS } from "./inbox"
@@ -170,4 +173,41 @@ test("every empty place says what goes there: each tab, and each part of the Inb
         expect(bigLine(html), said).not.toBe("")
       }
     }
+})
+
+test("a search that found nothing says its words and where it looked: titles alone with filters alone; the messages too with words, waiting while a machine has not answered, and one away or failed read by its titles alone (spec §2.6, S12c)", () => {
+  const looked = (more: Partial<Looked> = {}): Looked => ({
+    on: [],
+    away: [],
+    failed: [],
+    messages: true,
+    pending: false,
+    ...more,
+  })
+  const small = (more: Partial<Looked>) => noneSays("zed", looked(more)).small
+  expect(noneSays("zed", looked()).big).toBe("No Thread matches “zed”")
+  expect(small({ messages: false })).toBe("Searched titles.")
+  expect(small({ messages: false, on: ["mac", "arc"] })).toBe(
+    "Searched titles on mac and arc."
+  )
+  expect(small({})).toBe("Searched titles and messages.")
+  expect(small({ on: ["arc", "mac"] })).toBe(
+    "Searched titles and messages on arc and mac."
+  )
+  expect(small({ on: ["arc"], away: ["mac"] })).toBe(
+    "Searched titles and messages on arc; mac is away, titles only."
+  )
+  expect(small({ on: ["arc"], away: ["mac", "pi"] })).toBe(
+    "Searched titles and messages on arc; mac and pi are away, titles only."
+  )
+  expect(small({ on: ["arc"], failed: ["mac"] })).toBe(
+    "Searched titles and messages on arc; titles only on mac."
+  )
+  expect(small({ on: ["arc", "mac"], pending: true })).toBe(
+    "Searching messages…"
+  )
+  expect(titlesOnlySays(["arc"])).toBe("Titles only on arc")
+  expect(titlesOnlySays(["arc", "mac", "pi"])).toBe(
+    "Titles only on arc, mac and pi"
+  )
 })

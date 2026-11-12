@@ -10,6 +10,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { DoingKind } from "@banda/contract/agents"
 import type { Named } from "@banda/contract/machines"
+import type { Finding } from "@banda/ui/module"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
 import { type MarkDoing, type MarkState, works } from "@banda/ui/lib/mark-state"
 import { type Listed, NO_REASON } from "@banda/ui/pane"
@@ -125,6 +126,9 @@ export type CardModel = {
   /** Another Agent started it: its parent, and whether it sits under it,
    * ↳ before its mark and its lines in by as much (decision 24). */
   child?: Child
+  /** A search found it by a message, not its title (S12c): that
+   * message's line, with where its words are, under its lines. */
+  found?: Pick<Finding, "snippet" | "hits">
 }
 
 /** The row a card is drawn from: the sidebar's, or, in the counts' list,
@@ -158,6 +162,8 @@ export type CardOf = {
   strayed?: boolean
   /** Its parent, when another Agent started it (`inbox.ts`). */
   child?: Child
+  /** The message a search found it by, not its title (`inbox.ts`). */
+  found?: Finding
 }
 
 /** The lines a card of `place` draws, in `view` (decision 9): auto, three
@@ -192,7 +198,7 @@ export function callWordOf(listed: Listed, now: number): Word | undefined {
 export function cardOf(input: CardOf): CardModel {
   const { row, place, at, now, view, machine, away, stopped, went, strayed } =
     input
-  const { child } = input
+  const { child, found } = input
   const { listed, stand } = row
   const { look } = lookOf(listed, now)
   const does = works(look) ? doesOf(listed, now) : undefined
@@ -273,6 +279,7 @@ export function cardOf(input: CardOf): CardModel {
       ? { byAgent: true as const }
       : {}),
     ...(child ? { child } : {}),
+    ...(found ? { found: { snippet: found.snippet, hits: found.hits } } : {}),
   }
 }
 
@@ -464,6 +471,7 @@ export function spokenOf(card: CardModel, now: number): Spoken {
       said.push(...slotSaid(slot, at))
   if (card.strayed) said.push(STRAYED)
   if (card.child) said.push(`Started by ${card.child.parent}`)
+  if (card.found) said.push(`Found in a message: ${card.found.snippet}`)
   if (card.away)
     said.push(
       `${card.away.machine ?? "Its machine"} is ${card.away.stopped ? "stopped" : "away"}, ${agoSaid(card.away.since, now)}`

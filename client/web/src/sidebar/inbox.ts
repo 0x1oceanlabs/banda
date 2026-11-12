@@ -9,6 +9,7 @@
  * no React, so plain tests cover it.
  */
 import type { ProjectSummary } from "@banda/contract"
+import type { Finding } from "@banda/ui/module"
 import type { GroupBy } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/lib/mark-state"
 import { lookOf, STAND_WORDS, type Stand } from "@banda/ui/status"
@@ -57,13 +58,21 @@ export type InboxView = {
    * are those it found: no inbox zero then, and a tab with none says
    * so. */
   search?: string
+  /** The rows a search found by a message, not by their titles, each by
+   * its card's key, with that message's line (S12c): under "In messages"
+   * in All, and with it wherever their cards show. */
+  messages?: ReadonlyMap<string, Finding>
+  /** The machines a search read the titles of alone, as their messages
+   * could not be searched: All's results say so. */
+  titlesOnly?: readonly string[]
 }
 
 /** A row as its place draws it, with the moment its time counts from:
  * the call's, or when it woke; the start of the turn at work; the last
  * change; the wake time, or when it was put off with none; when it was
- * archived. A child also names its parent. */
-export type Entry = { row: Row; at: number; child?: Child }
+ * archived. A child also names its parent; one a search found by a
+ * message, that message's line. */
+export type Entry = { row: Row; at: number; child?: Child; found?: Finding }
 
 /** A Thread another Agent started through Banda (decision 24): its
  * parent's title, which line 3 says, and whether it sits under its parent
@@ -108,6 +117,9 @@ export type Block =
   /** A place with nothing in it, which says what goes there (decision
    * 25). */
   | { kind: "empty"; key: string; tab: EmptyAt; words?: string }
+  /** Under what a search found, the machines whose titles alone it read,
+   * by their keys, this one's empty (S12c). */
+  | { kind: "titles-only"; key: string; machines: readonly string[] }
 
 /** A tab's count, and whether it is the Person's turn there. */
 export type TabCount = { count: number; calls: boolean }
@@ -219,10 +231,12 @@ export function inboxOf(
     by[stand]
       .map((row): Entry => {
         const parent = parentOf(row)
+        const found = view.messages?.get(itemKey(row))
         return {
           row,
           at: atOf(row),
           ...(parent ? { child: { parent: parent.listed.title } } : {}),
+          ...(found ? { found } : {}),
         }
       })
       .sort(order)
@@ -267,7 +281,8 @@ export function inboxOf(
       case "all": {
         const found = allOf(
           { turn, open, working, later, archived },
-          view.more === true
+          view.more === true,
+          view.titlesOnly ?? []
         )
         return found.length === 0 ? [none("search")] : found
       }
@@ -536,28 +551,60 @@ function partsOf(
   ]
 }
 
-/** All that a search found, under one head (decision 17): what calls,
- * what is open, at work, put off and archived, each in its tab's order;
- * the Archive's first few unless `whole`. None where it found none. */
+/** What a search found in each place. */
+type Places = Record<Stand, Entry[]>
+
+/** All that a search found (decision 17): by the titles, then "In
+ * messages" those it found by a message alone (S12c), each under its
+ * head; in each, what calls, what is open, at work, put off and archived,
+ * each in its tab's order; the Archive's first few by title unless
+ * `whole`. Under them, the machines whose titles alone it read. None
+ * where it found none. */
 function allOf(
-  found: Record<"turn" | "open" | "working" | "later" | "archived", Entry[]>,
-  whole: boolean
+  found: Places,
+  whole: boolean,
+  titlesOnly: readonly string[]
 ): Block[] {
-  const { archived } = found
+  const by = (message: boolean) =>
+    Object.fromEntries(
+      (Object.keys(found) as Stand[]).map((stand) => [
+        stand,
+        found[stand].filter((entry) => (entry.found !== undefined) === message),
+      ])
+    ) as Places
+  const titled = by(false)
+  const { archived } = titled
   const shown = whole ? archived : archived.slice(0, ARCHIVE_SHOWN)
-  const places = { ...found, archived: shown }
-  const blocks = (Object.keys(places) as Stand[]).flatMap((stand) =>
-    places[stand].length > 0
-      ? [cards(`all:${stand}`, stand, places[stand])]
-      : []
-  )
+  const blocks = [
+    ...partOf("all", "Titles", { ...titled, archived: shown }),
+    ...more("archived", archived.length - shown.length),
+    ...partOf("messages", "In messages", by(true)),
+  ]
   return blocks.length === 0
     ? []
     : [
-        head("all", "Titles"),
         ...blocks,
-        ...more("archived", archived.length - shown.length),
+        ...(titlesOnly.length > 0
+          ? [
+              {
+                kind: "titles-only" as const,
+                key: "search:titles-only",
+                machines: titlesOnly,
+              },
+            ]
+          : []),
       ]
+}
+
+/** `places`' cards under the head `label`, each place's keyed after
+ * `prefix`; none where it holds none. */
+function partOf(prefix: string, label: string, places: Places): Block[] {
+  const blocks = (Object.keys(places) as Stand[]).flatMap((stand) =>
+    places[stand].length > 0
+      ? [cards(`${prefix}:${stand}`, stand, places[stand])]
+      : []
+  )
+  return blocks.length === 0 ? [] : [head(prefix, label), ...blocks]
 }
 
 /** Later by when each wakes, under Today, Tomorrow, Later, Someday and

@@ -11,6 +11,7 @@
  */
 import { useCallback, useContext } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { Finding } from "@banda/ui/module"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import {
   holds,
@@ -21,6 +22,7 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
+import { itemKey } from "./hold"
 import { type Inbox, inboxOf, type InboxView } from "./inbox"
 import {
   type Elsewhere,
@@ -46,8 +48,15 @@ export type View = Partial<
   only?: ProjectId
   elsewhere?: readonly Elsewhere[]
   /** A search in place while one runs (decision 17): its words, and the
-   * rows it finds, which the tabs and their counts take alone. */
-  search?: { words: string; found: (row: Row) => boolean }
+   * rows it finds by their titles, which the tabs and their counts take
+   * alone, with those it found by a message (`message`), each with it;
+   * and the machines it read by their titles alone (`titlesOnly`). */
+  search?: {
+    words: string
+    found: (row: Row) => boolean
+    message?: (row: Row) => Finding | undefined
+    titlesOnly?: readonly string[]
+  }
 }
 
 /** The sidebar as it is drawn: the Inbox, every row it was made of, and
@@ -78,15 +87,30 @@ export function order(
   const rows = [...mine, ...others.flatMap((host) => host.rows)].filter(
     (row) => only === undefined || row.project.id === only
   )
+  // A search's rows: those its title finds, and those only a message
+  // does, each with that message.
+  const messages = new Map<string, Finding>()
+  const found = !search
+    ? rows
+    : rows.filter((row) => {
+        if (search.found(row)) return true
+        const message = search.message?.(row)
+        if (message) messages.set(itemKey(row), message)
+        return message !== undefined
+      })
   const view: InboxView = {
     tab: "inbox",
     group: groupOf(settings),
     ...settings.inbox,
     ...shown,
-    ...(search && { search: search.words }),
+    ...(search && {
+      search: search.words,
+      messages,
+      ...(search.titlesOnly && { titlesOnly: search.titlesOnly }),
+    }),
   }
   return {
-    ...inboxOf(search ? rows.filter(search.found) : rows, view, now),
+    ...inboxOf(found, view, now),
     rows,
     ...(listsProjects(settings)
       ? {
@@ -105,12 +129,11 @@ export function order(
  * those of `hosts.toml` the Window shows rows of, live or away (ADR 0081,
  * decision 4). It is said here alone, so the sidebar list, the counts and
  * Alt+U never place another machine's Thread apart. */
-const elsewhereOf = (hosts: readonly Shown[]): Elsewhere[] =>
-  hosts.filter(holds)
+const elsewhereOf = (hosts: readonly Shown[]): Shown[] => hosts.filter(holds)
 
 /** The other machines the order places (`elsewhereOf`), drawn again only
- * as they change, for the sidebar list and the counts' list. */
-export const useElsewhere = (): readonly Elsewhere[] =>
+ * as they change, for the sidebar list, its search and the counts' list. */
+export const useElsewhere = (): readonly Shown[] =>
   useHostsBy(elsewhereOf, sameEach)
 
 /**

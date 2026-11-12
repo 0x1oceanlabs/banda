@@ -20,6 +20,7 @@ import { visualPane } from "./visual/VisualPane"
 import { openBeside, subagentPane } from "./thread/SubagentPane"
 import { threadsWatch } from "./list/ThreadsWatch"
 import { askSource } from "./list/sources"
+import { searchThreads } from "./list/search"
 import { NEW_THREAD } from "./thread/session"
 import { hearBack } from "./thread/WhenBack"
 import { threadItems } from "./list/items"
@@ -160,6 +161,7 @@ export const agents = defineModule({
     { id: VISUAL, title: "Visual preview" },
   ],
   sources: [askSource],
+  search: searchThreads,
   items: threadItems,
   top: [moveThread],
   slots: [threadHeader, waitingThreads],

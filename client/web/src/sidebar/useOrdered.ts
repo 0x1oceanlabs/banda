@@ -7,12 +7,7 @@ import {
   useState,
 } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import {
-  sameData,
-  type Shown,
-  useHereNamed,
-  useHostsBy,
-} from "@banda/core/react"
+import { sameData, useHereNamed, useHostsBy } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { useLaterClock, useLists } from "../calls/stores"
 import type { Row } from "./rows"
@@ -29,10 +24,18 @@ import type { Block, Tab } from "./inbox"
 import { DUR_FAST } from "./motion"
 import { order, useElsewhere } from "./order"
 import type { Checks } from "./pick"
-import { finds, type Names, queryOf } from "./search"
+import {
+  finds,
+  hostNames,
+  type Names,
+  narrows,
+  queryOf,
+  type Searched,
+} from "./search"
 import type { Settings } from "./settings"
 import type { Undoable } from "./undo"
 import { type Holding, useHold, useOwnKeys } from "./useHold"
+import { useSearch } from "./useSearch"
 
 /** How long the first change of a list left alone waits for the others
  * that come with it, in ms: they all land in one commit (ADR 0088,
@@ -41,10 +44,6 @@ const BATCH = 250
 
 const NO_ACTS: Mine = new Map()
 const NOT_LEAVING: ReadonlyMap<string, Went> = new Map()
-
-/** The name each other machine says it has, by its name in `hosts.toml`. */
-const hostNames = (hosts: readonly Shown[]): Record<string, string> =>
-  Object.fromEntries(hosts.map((host) => [host.name, host.named.name]))
 
 /** How a search names a row's machine (`Names`): another's by its name in
  * `hosts.toml` and the one it says it has; this one's by its own. */
@@ -74,6 +73,8 @@ export type Holds = {
   now: number
   /** A search runs, and nothing in the list moves (spec §2.2). */
   searching: boolean
+  /** What it found in the messages, while it reads them (S12c). */
+  searched?: Searched
 }
 
 /**
@@ -86,7 +87,8 @@ export type Holds = {
  * Person's own acts, those on the Thread in view (`isCurrent`) by its
  * keys too, and another view, a search's too, draw at once (ADR 0098,
  * decision 6). A search in place (decision 17) takes the rows it finds,
- * by their words and filters at the Later clock's `now`.
+ * by their words and filters at the Later clock's `now`: by their titles,
+ * and by what every machine's engine finds in their messages (`useSearch`).
  * `scene` changes as the view does, which draws the list afresh, with no
  * motion. `holder` is what the list's parts hold it by. While cards are
  * checked (`checks`, decision 15), the list holds too.
@@ -128,6 +130,7 @@ export function useOrdered(
     [search]
   )
   const names = useNames()
+  const searched = useSearch(query, lists, projects, elsewhere, names, only)
   const fresh = useMemo(
     () =>
       order(lists, projects, now, {
@@ -142,6 +145,16 @@ export function useOrdered(
           search: {
             words: query.text,
             found: (row: Row) => finds(query, row, now, names),
+            ...(searched && {
+              // A message found, as the filters narrow it too.
+              message: (row: Row) => {
+                const found = searched.found.get(itemKey(row))
+                return found && narrows(query, row, now, names)
+                  ? found
+                  : undefined
+              },
+              titlesOnly: [...searched.away, ...searched.failed],
+            }),
           },
         }),
       }),
@@ -158,6 +171,7 @@ export function useOrdered(
       someday,
       query,
       names,
+      searched,
     ]
   )
   const { holding, take, by, list } = useHold({
@@ -275,6 +289,7 @@ export function useOrdered(
     scene,
     now,
     searching: query !== undefined,
+    ...(searched && { searched }),
   }
   return {
     ordered: { ...fresh, blocks: kept.blocks },

@@ -1,6 +1,13 @@
 import { type ReactNode, useContext, useEffect, useState } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import { holds, sameEach, useHereNamed, useHostsBy } from "@banda/core/react"
+import {
+  holds,
+  sameData,
+  sameEach,
+  type Shown,
+  useHereNamed,
+  useHostsBy,
+} from "@banda/core/react"
 import { BandaMark } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -19,6 +26,7 @@ import { SquarePenIcon } from "lucide-react"
 import type { Block, EmptyAt, Zero } from "./inbox"
 import { actionDoing, archiving } from "./items"
 import { useNewThread } from "./open"
+import { HERE, hostNames, type Searched } from "./search"
 import { ShowTab } from "./Tabs"
 import { ToldSomeday } from "./useSidebarView"
 
@@ -43,19 +51,44 @@ const listed = (names: readonly string[]) =>
     ? (names[0] ?? "")
     : `${names.slice(0, -1).join(", ")} and ${names.at(-1)}`
 
-/** What a search that found nothing says (decision 25): the words it ran
- * with, and where it looked, as `on` names the machines whose titles it
- * searched; the messages come with S12c. */
+/** Where a search looked, by the machines' names: those whose titles,
+ * and messages where it read them (`messages`), it searched (`on`), none
+ * named where this one is the only one; those away, and those whose
+ * engine failed it, whose titles alone it read; and whether a machine
+ * has yet to answer. */
+export type Looked = {
+  on: readonly string[]
+  away: readonly string[]
+  failed: readonly string[]
+  messages: boolean
+  pending: boolean
+}
+
+/** What a search that found nothing says (decision 25, spec §2.6): the
+ * words it ran with, and where it looked (`Looked`); with no word typed,
+ * filters alone, it read the titles alone. */
 export function noneSays(
   words: string,
-  on: readonly string[]
+  { on, away, failed, messages, pending }: Looked
 ): { big: string; small: string } {
-  return {
-    big: `No Thread matches “${words}”`,
-    small:
-      on.length > 0 ? `Searched titles on ${listed(on)}.` : "Searched titles.",
-  }
+  const big = `No Thread matches “${words}”`
+  const where = on.length > 0 ? ` on ${listed(on)}` : ""
+  if (!messages) return { big, small: `Searched titles${where}.` }
+  if (pending) return { big, small: "Searching messages…" }
+  const said = [
+    `Searched titles and messages${where}`,
+    ...(away.length > 0
+      ? [`${listed(away)} ${away.length > 1 ? "are" : "is"} away, titles only`]
+      : []),
+    ...(failed.length > 0 ? [`titles only on ${listed(failed)}`] : []),
+  ]
+  return { big, small: `${said.join("; ")}.` }
 }
+
+/** Under what a search found, the machines whose titles alone it read,
+ * by their names (S12c). */
+export const titlesOnlySays = (names: readonly string[]) =>
+  `Titles only on ${listed(names)}`
 
 /** What a tab with nothing in it says (decision 25): what goes there,
  * and the key that puts it there, as the keys in force name it. */
@@ -92,11 +125,14 @@ export function EmptyPlace({
   place,
   only,
   projects,
+  searched,
 }: {
   place: EmptyBlock
   /** The Project whose rows alone the list shows, if one. */
   only: ProjectId | undefined
   projects: readonly ProjectSummary[]
+  /** What a search found in the messages, while it reads them. */
+  searched?: Searched | undefined
 }) {
   return place.kind === "zero" ? (
     <InboxZero zero={place} />
@@ -106,6 +142,7 @@ export function EmptyPlace({
       words={place.words}
       only={only}
       projects={projects}
+      searched={searched}
     />
   )
 }
@@ -163,17 +200,53 @@ export function InboxZero({ zero }: { zero: Zero }) {
   )
 }
 
-/** The machines a search looked on, by the names they say they have:
- * this one, then each other whose rows the Window shows; none named
- * where this one is the only one. */
-function useSearchedOn(): string[] {
-  const here = useHereNamed()?.name
-  const there = useHostsBy(
-    (hosts) => hosts.filter(holds).map((host) => host.named.name),
-    sameEach
+/** The other machines whose rows the Window shows, by their keys. */
+const holding = (hosts: readonly Shown[]) =>
+  hosts.filter(holds).map((host) => host.name)
+
+/** The name a machine says it has, by its key in a search (`HERE` for
+ * this one). */
+function useNameOf(): (key: string) => string {
+  const here = useHereNamed()?.name ?? "this machine"
+  const named = useHostsBy(hostNames, sameData)
+  return (key) => (key === HERE ? here : (named[key] ?? key))
+}
+
+/** Where a search looked (`Looked`), by the machines' names: this one,
+ * then each other whose rows the Window shows; or, as it read the
+ * messages, those `searched` says; none named where this one is the
+ * only one. */
+function useLooked(searched: Searched | undefined): Looked {
+  const name = useNameOf()
+  const there = useHostsBy(holding, sameEach)
+  const named = (keys: readonly string[]) =>
+    there.length === 0 ? [] : keys.map(name)
+  if (!searched)
+    return {
+      on: named([HERE, ...there]),
+      away: [],
+      failed: [],
+      messages: false,
+      pending: false,
+    }
+  return {
+    on: named(searched.on),
+    away: searched.away.map(name),
+    failed: searched.failed.map(name),
+    messages: true,
+    pending: searched.pending,
+  }
+}
+
+/** Under what a search found, the machines whose titles alone it read,
+ * as they are away or their engine failed it (S12c). */
+export function TitlesOnly({ machines }: { machines: readonly string[] }) {
+  const name = useNameOf()
+  return (
+    <p className="px-2 pt-2 pb-1 text-meta text-muted-foreground/70">
+      {titlesOnlySays(machines.map(name))}
+    </p>
   )
-  if (there.length === 0) return []
-  return [...(here === undefined ? [] : [here]), ...there]
 }
 
 /**
@@ -186,16 +259,19 @@ export function EmptyTab({
   words = "",
   only,
   projects,
+  searched,
 }: {
   tab: EmptyAt
   words?: string | undefined
   /** The Project whose rows alone the list shows, if one. */
   only: ProjectId | undefined
   projects: readonly ProjectSummary[]
+  /** What a search found in the messages, while it reads them. */
+  searched?: Searched | undefined
 }) {
   const keyFor = useKeyLabel()
   const startThread = useNewThread(only, projects)
-  const on = useSearchedOn()
+  const looked = useLooked(searched)
   // The key of whatever App puts a Thread off, and the list's Archive's.
   const action =
     tab === "later"
@@ -205,7 +281,7 @@ export function EmptyTab({
         : undefined
   const key = action ? keyFor(action.id) : undefined
   const { big, small } =
-    tab === "search" ? noneSays(words, on) : emptySays(tab, key)
+    tab === "search" ? noneSays(words, looked) : emptySays(tab, key)
   return (
     <Place
       mark={

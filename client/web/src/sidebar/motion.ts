@@ -72,6 +72,7 @@ export const HEIGHTS: Readonly<Record<string, number>> = {
   more: 24,
   zero: 64,
   empty: 120,
+  "titles-only": 24,
 }
 
 /** Between two cards of one part, and between two regions, in px. */

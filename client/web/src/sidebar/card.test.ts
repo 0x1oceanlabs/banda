@@ -545,6 +545,23 @@ describe("spokenOf (spec §2.8)", () => {
     )
   })
 
+  test("one a search found by a message has that message's line under its lines, and says it last (S12c)", () => {
+    const found = {
+      id: "t",
+      snippet: "…the quokka sleeps all day…",
+      hits: [{ from: 5, to: 11 }],
+      at: NOW,
+    }
+    const later = card(row("later", { mark: "rest" }), { found })
+    expect(later.found).toEqual({ snippet: found.snippet, hits: found.hits })
+    // Its own lines stay as they were: one in Later.
+    expect(kinds(later)).toEqual(["mark title | time"])
+    expect(spokenOf(later, NOW).description).toBe(
+      "Found in a message: …the quokka sleeps all day…"
+    )
+    expect(card(row("later", { mark: "rest" })).found).toBeUndefined()
+  })
+
   test("Woke says who put it off, in full, and just now in its first seconds", () => {
     const now = card(
       row("turn", {

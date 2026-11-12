@@ -120,7 +120,7 @@ function line(block: Block): string {
     case "divider":
       return "---"
     case "rows":
-      return `${block.stand}: ${block.rows.map(({ row, child }) => `${child?.under ? "↳" : ""}${row.listed.id}`).join(" ")}`
+      return `${block.stand}: ${block.rows.map(({ row, child, found }) => `${child?.under ? "↳" : ""}${row.listed.id}${found ? ` “${found.snippet}”` : ""}`).join(" ")}`
     case "more":
       return `+ ${block.count} ${block.of}`
     case "zero": {
@@ -131,6 +131,8 @@ function line(block: Block): string {
     }
     case "empty":
       return `empty: ${block.tab}`
+    case "titles-only":
+      return `titles only: ${block.machines.join(" ")}`
   }
 }
 

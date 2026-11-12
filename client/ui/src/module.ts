@@ -518,6 +518,30 @@ export type Widget = {
   compact?: true
 }
 
+/** An Item a module's search found by one of its messages (`ListSearch`):
+ * its id, as the module lists it; a line of that message, with where the
+ * words are in it, in UTF-16 code units as JavaScript slices a string;
+ * and when it was written, in ms since the epoch. */
+export type Finding = {
+  id: string
+  snippet: string
+  hits: readonly { from: number; to: number }[]
+  at: number
+}
+
+/**
+ * How the sidebar's search reads the messages of what a module lists
+ * (ADR 0098, decision 17; spec S12c): the Items of `project` whose
+ * messages hold every one of `words`, each once, asked of `session`, the
+ * engine of the machine that has that Project, which searches its own.
+ * The titles are the window's to search.
+ */
+export type ListSearch = (
+  session: Engine,
+  project: ProjectId,
+  words: string
+) => Promise<readonly Finding[]>
+
 /** A part of an App the Window draws in its Top layer while an action
  * asked for it (`WindowApi.top`): a dialog. The Window keeps what was
  * asked, so the App keeps no store for it. */
@@ -572,6 +596,8 @@ export type Module = {
    * of its actions asks (`WindowApi.top`): a dialog, as moving a Thread
    * (ADR 0116, decision 7). */
   top: readonly TopPart[]
+  /** How the sidebar's search reads the messages of what it lists. */
+  search?: ListSearch
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -596,6 +622,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   previewers?: readonly Previewer[]
   items?: readonly ItemAction[]
   top?: readonly TopPart[]
+  search?: ListSearch
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -614,6 +641,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     previewers: module.previewers ?? [],
     items: module.items ?? [],
     top: module.top ?? [],
+    ...(module.search && { search: module.search }),
     start: module.start,
   }
 }

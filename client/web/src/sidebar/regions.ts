@@ -57,6 +57,7 @@ export function regionsOf(blocks: readonly Block[]): Region[] {
     switch (block.kind) {
       case "zero":
       case "empty":
+      case "titles-only":
         regions.push({ key: block.key, blocks: [block] })
         break
       case "group":

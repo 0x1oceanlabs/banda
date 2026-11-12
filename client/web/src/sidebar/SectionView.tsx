@@ -11,7 +11,7 @@ import { actsOf } from "./acts"
 import type { Row as Arranged } from "./rows"
 import { type CardView, callWordOf, LATER_BY_AGENT, linesOf } from "./card"
 import { type CardAct, ChildArrow, SignMenu } from "./CardView"
-import { EmptyPlace } from "./Empty"
+import { EmptyPlace, TitlesOnly } from "./Empty"
 import { wentWords } from "./hold"
 import { itemActionOf } from "./items"
 import { keyId } from "./keys"
@@ -101,9 +101,10 @@ export function SectionView({
   // in the No Project group they share, still name theirs.
   const here = useThisNamed(settings.machines.thisToo)
   const label = !named && view.group === "project" ? here : undefined
+  // A card a search found by a message has that message's line too.
   const items = itemsOf(
     regions,
-    (place, { child }) => linesOf(place, view, child),
+    (place, { child, found }) => linesOf(place, view, child) + (found ? 1 : 0),
     holds
   )
   const list = useRef<HTMLDivElement>(null)
@@ -145,7 +146,7 @@ export function SectionView({
     }))
 
   const card = (item: Extract<Item, { kind: "card" }>) => {
-    const { row, child } = item.entry
+    const { row, child, found } = item.entry
     const went = item.ghost ?? item.went
     const said = went && wentWords(went, holds.now)
     const undo = item.ghost && holds.undos.get(item.key)
@@ -164,6 +165,7 @@ export function SectionView({
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
         {...(child ? { child } : {})}
+        {...(found ? { found } : {})}
         {...(went ? { went } : { acts: actsFor(row) })}
       />
     )
@@ -278,7 +280,16 @@ export function SectionView({
       }
       case "zero":
       case "empty":
-        return <EmptyPlace place={block} only={only} projects={projects} />
+        return (
+          <EmptyPlace
+            place={block}
+            only={only}
+            projects={projects}
+            searched={holds.searched}
+          />
+        )
+      case "titles-only":
+        return <TitlesOnly machines={block.machines} />
       case "group": {
         const { project } = block
         // Folded, it is a stop of the pick, which → or Enter unfolds.

@@ -11,6 +11,7 @@ import {
   type AnyPaneKind,
   defineModule,
   type ItemAction,
+  type ListSearch,
   type Module,
   type Previewer,
   type Scope,
@@ -127,6 +128,12 @@ export const watches: readonly { watch: Watch; module: Module }[] = all.flatMap(
 /** Where the Banda menu finds the modules' rows, each with its module. */
 export const sources: readonly { source: Source; module: Module }[] =
   all.flatMap((module) => module.sources.map((source) => ({ source, module })))
+
+/** How the modules' searches read the messages of what they list, for
+ * the sidebar's search (ADR 0098, decision 17). */
+export const searches: readonly ListSearch[] = all.flatMap((module) =>
+  module.search ? [module.search] : []
+)
 
 /** How the modules draw kinds of file (ADR 0073, decision 6), in their
  * order: a Pane that shows a file picks among them. */

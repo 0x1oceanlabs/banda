@@ -11,6 +11,11 @@
  * with All's counts, the hint and no match, dark and light, as
  * `sidebar-s12a-*.png`.
  *
+ * The messages too (S12c): each machine's engine searches its own, and a
+ * Thread a message finds, not its title, shows under "In messages" with a
+ * line of that message. A machine away is read by its titles alone, and
+ * the results say so. Shot as `sidebar-s12c-*.png`.
+ *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, one that
  * says "fail" fails, one that says "ask" asks, any other is answered at
@@ -182,7 +187,7 @@ test("Search finds titles in every tab: All comes first and is picked, each tab 
   await search.click()
   await search.fill("zed")
   await expect(sidebar.getByText("No Thread matches “zed”")).toBeVisible()
-  await expect(sidebar.getByText("Searched titles.")).toBeVisible()
+  await expect(sidebar.getByText("Searched titles and messages.")).toBeVisible()
   await expect(tab("All")).toHaveAccessibleName("All")
   await page.keyboard.press("Escape")
   await expect(search).toHaveValue("")
@@ -304,6 +309,79 @@ test("Alt+Space focuses Search while the sidebar shows, and in an empty field op
   await expect(menu).toBeHidden()
 })
 
+/** Work's folder on this machine, where its Agents read. */
+function workFolder(window: Window): string {
+  const { ok } = JSON.parse(window.banda("call", "projects.list")) as {
+    ok: { name: string; folder: string }[]
+  }
+  return ok.find((project) => project.name === "Work")!.folder
+}
+
+/** Work's Threads for a search of the messages: "quokka" in an Agent's
+ * reply alone (its `cat` says what notes.txt holds), and in a title. */
+async function quokkas(window: Window) {
+  writeFileSync(
+    join(workFolder(window), "notes.txt"),
+    "the quokka sleeps all day\n"
+  )
+  await send(window, "cat notes.txt")
+  await send(window, "Feed the quokka")
+  await send(window, "Bench the window tests")
+}
+
+test("a word only in an Agent's reply finds its Thread under In messages, after the titles, with a line of that reply, the word marked; Enter opens it; a filter narrows it; no match says it searched titles and messages (ADR 0098, S12c)", async () => {
+  test.setTimeout(240_000)
+  window = await startWindow()
+  const { page } = window
+  await firstThread(page)
+  await quokkas(window)
+  const { sidebar, search, list, tab } = partsOf(page)
+  await leaveSidebar(page)
+  await expect(list.getByRole("option")).toHaveCount(3)
+
+  await search.click()
+  await page.keyboard.type("QUOKKA")
+  const reply = cardOf(list, "cat notes.txt")
+  await expect(reply).toBeVisible()
+  // Its title first, then the reply's Thread, once each.
+  await expect(list.getByRole("option")).toHaveCount(2)
+  await expect(tab("All")).toHaveAccessibleName("All, 2")
+  await expect(list.getByRole("option").first()).toHaveAccessibleName(
+    /^Feed the quokka,/
+  )
+  const heads = sidebar.getByText(/^(Titles|In messages)$/)
+  await expect(heads).toHaveText(["Titles", "In messages"])
+  // The line of the reply, its word marked; the title's card has none.
+  const line = reply.locator("[data-found]")
+  await expect(line).toContainText("quokka sleeps all day")
+  await expect(line.locator("mark")).toHaveText(["quokka"])
+  await expect(reply).toHaveAttribute(
+    "aria-description",
+    /Found in a message: .*quokka sleeps all day/
+  )
+  await expect(
+    cardOf(list, "Feed the quokka").locator("[data-found]")
+  ).toHaveCount(0)
+
+  // ↓ picks it from the field, and Enter opens it.
+  await page.keyboard.press("ArrowDown")
+  await picked(list, search, "cat notes.txt")
+  await page.keyboard.press("Enter")
+  await expect(
+    page.getByRole("region", { name: "cat notes.txt", exact: true })
+  ).toBeVisible()
+
+  // A filter narrows what the messages found too.
+  await search.click()
+  await search.fill("quokka is:working")
+  await expect(
+    sidebar.getByText("No Thread matches “quokka is:working”")
+  ).toBeVisible()
+  await expect(sidebar.getByText("Searched titles and messages.")).toBeVisible()
+  await search.fill("quokka is:done")
+  await expect(list.getByRole("option")).toHaveCount(2)
+})
+
 /** The window at 1440×900, its desk's glass made of a picture. */
 async function wide(window: Window) {
   const { app, page, dir } = window
@@ -365,4 +443,92 @@ test("what a search finds with All's counts, the hint and no match, dark and lig
     await expect(search).toHaveValue("")
     await leaveSidebar(page)
   }
+})
+
+test("each machine searches its own messages: arc's reply finds arc's Thread; with arc away, arc is read by its titles alone and the results say so; dark and light (ADR 0098, S12c)", async () => {
+  test.setTimeout(360_000)
+  // arc has a Thread whose reply alone says "quokka", and one titled so.
+  arc = newArc()
+  stopArc = await arc.start()
+  const folder = join(arc.code.arc, "dots")
+  put(arc.disk(folder), {
+    "README.md": "arc\n",
+    "zoo.txt": "a quokka naps on arc\n",
+  })
+  const dots = JSON.parse(arc.banda("project", "add", folder)).ok.id as string
+  for (const title of ["cat zoo.txt", "Quokka photos on arc"]) {
+    arc.send(dots, title)
+    await expect
+      .poll(() => arc!.states(dots).find(([one]) => one === title)?.[1])
+      .toBe("done")
+  }
+  window = await withArc(arc, {
+    sidebar: 'preset = "inbox"\n',
+    files: { "config/machine.toml": 'name = "mac"\nicon = "laptop"\n' },
+  })
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  await quokkas(window)
+  const { sidebar, search, list } = partsOf(page)
+  await expect(list.getByRole("option")).toHaveCount(5)
+  await leaveSidebar(page)
+  await expect(toastsOf(page).getByRole("listitem")).toHaveCount(0, {
+    timeout: 30_000,
+  })
+  const shot = (subject: string, mode: string) =>
+    page.screenshot({
+      path: `test-results/sidebar-s12c-${subject}-${mode}.png`,
+      animations: "disabled",
+    })
+  const titlesOnly = sidebar.getByText("Titles only on arc", { exact: true })
+
+  // arc reached: each machine's messages, each reply's line.
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    await search.click()
+    await search.fill("quokka")
+    await expect(list.getByRole("option")).toHaveCount(4)
+    await expect(
+      cardOf(list, "cat zoo.txt").locator("[data-found]")
+    ).toContainText("quokka naps on arc")
+    await expect(
+      cardOf(list, "cat notes.txt").locator("[data-found]")
+    ).toContainText("quokka sleeps all day")
+    await expect(titlesOnly).toHaveCount(0)
+    await shot("messages", mode)
+    await page.keyboard.press("Escape")
+    await leaveSidebar(page)
+  }
+
+  // arc away: its titles alone, and the results say so.
+  arc.blackhole(true)
+  await search.click()
+  await search.fill("quokka")
+  await expect(titlesOnly).toBeVisible({ timeout: 60_000 })
+  await expect(cardOf(list, "cat zoo.txt")).toHaveCount(0)
+  await expect(cardOf(list, "Quokka photos on arc")).toBeVisible()
+  await expect(
+    cardOf(list, "cat notes.txt").locator("[data-found]")
+  ).toContainText("quokka sleeps all day")
+  // Found nowhere: where it looked, in words.
+  await search.fill("zebra")
+  await expect(
+    sidebar.getByText(
+      "Searched titles and messages on mac; arc is away, titles only."
+    )
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await leaveSidebar(page)
+  for (const mode of ["dark", "light"] as const) {
+    await look(window, mode)
+    await search.click()
+    await search.fill("quokka")
+    await expect(titlesOnly).toBeVisible()
+    await expect(list.getByRole("option")).toHaveCount(3)
+    await shot("away", mode)
+    await page.keyboard.press("Escape")
+    await leaveSidebar(page)
+  }
+  arc.blackhole(false)
 })
