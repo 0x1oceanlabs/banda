@@ -101,13 +101,13 @@ function Calendar({ day }: { day: Day }) {
       <div
         role="grid"
         aria-label={monthTitle(shown)}
-        className="grid grid-cols-[1.375rem_repeat(7,2.25rem)] gap-y-px text-center text-[0.78rem] tabular-nums"
+        className="grid grid-cols-[1.375rem_repeat(7,2.25rem)] gap-y-px text-center text-meta tabular-nums"
       >
         <span />
         {names.map((name) => (
           <span
             key={name}
-            className="grid h-5.5 place-items-center text-[0.6875rem] text-muted-foreground"
+            className="grid h-5.5 place-items-center text-meta text-muted-foreground"
           >
             {name}
           </span>
@@ -135,7 +135,7 @@ function Row({
 }) {
   return (
     <>
-      <span className="grid h-7.5 place-items-center text-[0.65rem] text-muted-foreground/70">
+      <span className="grid h-7.5 place-items-center text-meta text-muted-foreground/70">
         {week.number}
       </span>
       {week.days.map(({ day: one, out }) => (
