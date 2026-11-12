@@ -123,6 +123,7 @@ pub(super) fn form_fields(schema: &acp::ElicitationSchema) -> Option<Vec<Field>>
                 required,
                 secret,
                 input,
+                other: None,
             }),
             // A field the Person cannot fill in: the form cannot be
             // submitted without it.
@@ -133,7 +134,29 @@ pub(super) fn form_fields(schema: &acp::ElicitationSchema) -> Option<Vec<Field>>
     // The schema keeps no order; Claude Code's and Codex's IDs number
     // their questions, so `question_2` comes before `question_10`.
     fields.sort_by_cached_key(|f| natural(&f.id));
+    pair_own_answers(&mut fields);
     Some(fields)
+}
+
+/// Gives each field of choices the text field that answers it in the
+/// Person's own words: Claude Code's AskUserQuestion follows `question_0`
+/// with `question_0_custom`, an optional text titled "Other" that it marks
+/// for no client but JetBrains AIR. Paired by that ID, not by the title.
+fn pair_own_answers(fields: &mut [Field]) {
+    let texts: Vec<String> = fields
+        .iter()
+        .filter(|f| matches!(f.input, Input::Text { .. }) && !f.required && !f.secret)
+        .map(|f| f.id.clone())
+        .collect();
+    for field in fields.iter_mut() {
+        if !matches!(field.input, Input::Choice { .. } | Input::Choices { .. }) {
+            continue;
+        }
+        let own = format!("{}_custom", field.id);
+        if texts.contains(&own) {
+            field.other = Some(own);
+        }
+    }
 }
 
 /// An ID's words and numbers, so numbers sort as numbers.
@@ -258,6 +281,43 @@ mod tests {
                 ("question_10", false),
             ]
         );
+    }
+
+    #[test]
+    fn a_question_of_choices_gets_the_field_that_answers_it_in_ones_own_words() {
+        let one = serde_json::json!({
+            "type": "string",
+            "oneOf": [{ "const": "Red", "title": "Red" }],
+        });
+        let many = serde_json::json!({
+            "type": "array",
+            "items": { "anyOf": [{ "const": "Tea", "title": "Tea" }] },
+        });
+        let text = serde_json::json!({ "type": "string", "title": "Other" });
+        let form = schema(
+            serde_json::json!({
+                "question_0": one,
+                "question_0_custom": text,
+                "question_1": many,
+                "question_1_custom": text,
+                "name": text,
+                "name_custom": text,
+                "lone": one,
+            }),
+            &[],
+        );
+        let fields = form_fields(&form).unwrap();
+        let other = |id: &str| {
+            fields
+                .iter()
+                .find(|f| f.id == id)
+                .and_then(|f| f.other.as_deref())
+        };
+        assert_eq!(other("question_0"), Some("question_0_custom"));
+        assert_eq!(other("question_1"), Some("question_1_custom"));
+        assert_eq!(other("name"), None, "only a field of choices");
+        assert_eq!(other("lone"), None, "only with its text field there");
+        assert_eq!(fields.len(), 7, "the text fields stay in the form");
     }
 
     #[test]

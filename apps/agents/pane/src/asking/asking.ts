@@ -5,7 +5,7 @@
  * it.
  */
 import type { Choice, Item, ToolKind } from "@banda/contract/agents"
-import { summary } from "./form"
+import { type Said, summary } from "./form"
 import type { Asked, QuestionBody } from "../thread/state"
 
 /** A title without markdown's code marks: a Harness writes a command as
@@ -95,7 +95,7 @@ export type Folded = {
   kind: "allowed" | "declined" | "chose" | "answered" | "skipped" | "closed"
   text: string
   /** A form's answers, by field. */
-  values?: { id: string; title: string; value: string }[]
+  values?: Said[]
 }
 
 export function foldedOf(question: QuestionBody): Folded {

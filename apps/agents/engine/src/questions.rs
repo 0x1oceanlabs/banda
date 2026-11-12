@@ -570,6 +570,7 @@ mod tests {
             required,
             secret: id == "key",
             input,
+            other: None,
         };
         Body::Question {
             title: "Which colour?".into(),

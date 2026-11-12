@@ -3,6 +3,7 @@ import type {
   Choice,
   Field as FormField,
   Input as FieldInput,
+  OptionChoice,
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { Checkbox } from "@banda/ui/components/checkbox"
@@ -11,15 +12,25 @@ import {
   FieldContent,
   FieldDescription,
   FieldError,
-  FieldGroup,
   FieldLabel,
-  FieldLegend,
-  FieldSet,
 } from "@banda/ui/components/field"
 import { Input } from "@banda/ui/components/input"
 import { Kbd } from "@banda/ui/components/kbd"
-import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
 import {
+  Questionnaire,
+  QuestionnaireChoice,
+  QuestionnaireChoiceDescription,
+  QuestionnaireChoices,
+  QuestionnaireDescription,
+  QuestionnaireInput,
+  QuestionnaireItem,
+  QuestionnaireTitle,
+} from "@banda/ui/components/questionnaire"
+import { cn } from "@banda/ui/lib/utils"
+import { CheckIcon } from "lucide-react"
+import {
+  answered,
+  asked,
   type Draft,
   draftOf,
   filled,
@@ -29,11 +40,14 @@ import {
 } from "./form"
 import { answersOf } from "./asking"
 
-/** A Question that asks for a form, one field at a time as T3 Code asks
- * (ADR 0010, decision 5): Previous, and Next or Submit, which Enter
- * presses; keys 1–9 pick a choice of the field shown. The answer that
- * says no, with Esc, skips the form; the main one submits what was filled
- * in, and any other skips it. */
+/** A Question that asks for a form, as shadcn's Questionnaire asks (ADR
+ * 0010, decision 5; #1513): one question at a time, its choices as rows
+ * that keys 1–9 pick, and the words that answer it in the Person's own as
+ * the last row. A pick moves on to the next question. One question of one
+ * choice is answered by its pick, with no Submit. Several have a step each,
+ * named by the Harness's title, that goes back to it. The answer that says
+ * no, with Esc, skips the form; the main one, with Enter, submits what was
+ * filled in; any other skips it. */
 export function QuestionForm({
   form,
   choices,
@@ -50,120 +64,265 @@ export function QuestionForm({
 }) {
   const [draft, setDraft] = useState(() => draftOf(form))
   const [page, setPage] = useState(0)
-  const set = (id: string, value: Draft[string]) =>
-    setDraft((now) => ({ ...now, [id]: value }))
+  const set = (changes: Draft) => setDraft((now) => ({ ...now, ...changes }))
+  const shown = asked(form)
+  const values = filled(form, draft)
   const complete = ready(form, draft)
-  const pages = form.length
+  const pages = shown.length
   const last = page >= pages - 1
-  const field = form[page]
+  const field = shown[page]
   const { decline, main, others, kept } = answersOf(choices)
-  // Next, or on the last field the main answer once the form can go.
+  // One question of one choice: its pick is the answer.
+  const picked =
+    pages === 1 &&
+    field?.input.kind === "choice" &&
+    main !== undefined &&
+    others.length === 0 &&
+    kept.length === 0
+  const own = field?.other !== undefined && values[field.other] !== undefined
+  const submit = (draftNow: Draft) => {
+    if (answering || !main || !ready(form, draftNow)) return false
+    onAnswer(main.id, filled(form, draftNow))
+    return true
+  }
+  // Next, or on the last question the main answer once the form can go.
   const onward = () => {
     if (answering) return true
     if (!last) setPage(page + 1)
-    else if (main && complete) onAnswer(main.id, filled(form, draft))
-    else return false
+    else if (!submit(draft)) return false
     return true
   }
   useImperativeHandle(enter, () => onward)
-  const keys = (event: React.KeyboardEvent) => {
-    if (event.altKey || event.ctrlKey || event.metaKey) return
+  // A pick of one choice moves on; of the only question, it answers.
+  const pick = (at: FormField, value: string) => {
+    const changes: Draft = { [at.id]: value }
+    // One of one choice: the own words were another answer, and go.
+    if (at.other !== undefined) changes[at.other] = ""
+    const next = { ...draft, ...changes }
+    setDraft(next)
+    if (picked) submit(next)
+    else if (!last) setPage(page + 1)
+  }
+  const write = (at: FormField, text: string) => {
+    if (at.other === undefined) return
+    const changes: Draft = { [at.other]: text }
+    // Of one choice, the own words are the answer in place of a pick.
+    if (at.input.kind === "choice" && text.trim() !== "") changes[at.id] = ""
+    set(changes)
+  }
+  // The key after the choices goes to the own words, which the
+  // Questionnaire gives no key; Enter in a field of text moves on, as in a
+  // form, or in the own words sends them. Its choices take theirs.
+  const keys = (event: React.KeyboardEvent<HTMLElement>) => {
+    if (event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) return
+    if (event.nativeEvent.isComposing) return
     const target = event.target
-    const typing = target instanceof HTMLInputElement && target.type !== "radio"
-    if (event.key === "Enter" && !event.shiftKey) {
-      // Enter in a field or on a choice moves on, as in a form.
-      const onField =
-        (typing && target.type !== "checkbox") ||
-        (target instanceof Element && target.closest("[role=radio]"))
-      if (!onField || event.nativeEvent.isComposing) return
+    const typing =
+      target instanceof HTMLInputElement &&
+      !["checkbox", "radio"].includes(target.type)
+    const choices =
+      field?.input.kind === "choice" || field?.input.kind === "choices"
+        ? field.input.choices.length
+        : 0
+    if (
+      !typing &&
+      field?.other !== undefined &&
+      choices < 9 &&
+      event.key === String(choices + 1)
+    ) {
+      const words = event.currentTarget.querySelector<HTMLInputElement>(
+        "fieldset[data-active] [data-slot=questionnaire-input]"
+      )
+      if (!words) return
       event.preventDefault()
       event.stopPropagation()
-      onward()
+      words.focus()
       return
     }
-    const choice =
-      field?.input.kind === "choice" &&
-      field.input.choices[Number(event.key) - 1]
-    if (typing || !choice) return
+    if (event.key !== "Enter" || !typing) return
     event.preventDefault()
-    set(field.id, choice.value)
-    if (!last) setPage(page + 1)
+    event.stopPropagation()
+    onward()
   }
   return (
-    <div className="flex flex-col gap-3" onKeyDown={keys}>
-      <FieldGroup className="gap-4">
-        {field && (
-          <FormInput
-            key={field.id}
-            field={field}
-            value={draft[field.id]}
+    <div onKeyDownCapture={keys}>
+      <Questionnaire
+        item={field?.id}
+        onItemChange={(name) => {
+          const at = shown.findIndex((f) => f.id === name)
+          if (at >= 0) setPage(at)
+        }}
+        shortcuts="numbers"
+        onSubmit={(event) => {
+          event.preventDefault()
+          if (!last) setPage(page + 1)
+          else submit(draft)
+        }}
+      >
+        {pages > 1 && (
+          <Steps
+            fields={shown}
+            page={page}
+            values={values}
             disabled={answering}
-            onChange={(value) => set(field.id, value)}
+            onPage={setPage}
           />
         )}
-      </FieldGroup>
-      <div className="flex flex-wrap items-center gap-2">
-        {decline && (
-          <Button
-            size="sm"
-            variant="outline"
-            className="pr-1.5"
-            aria-keyshortcuts="Escape"
+        {shown.map((at) => (
+          <QuestionnaireItem
+            key={at.id}
+            name={at.id}
+            required={at.required}
+            multiple={at.input.kind === "choices"}
             disabled={answering}
-            onClick={() => onAnswer(decline.id)}
           >
-            {decline.name}
-            <KeyHint>Esc</KeyHint>
-          </Button>
-        )}
-        <span className="flex-1" />
-        {pages > 1 && (
-          <span className="text-xs text-muted-foreground tabular-nums">
-            {page + 1} of {pages}
-          </span>
-        )}
-        {page > 0 && (
-          <Button
-            size="sm"
-            variant="ghost"
-            className="text-muted-foreground"
-            disabled={answering}
-            onClick={() => setPage(page - 1)}
-          >
-            Previous
-          </Button>
-        )}
-        {last &&
-          [...others, ...kept].map((choice) => (
+            <Asks field={at} single={pages === 1} />
+            <FormInput
+              field={at}
+              draft={draft}
+              disabled={answering}
+              onChange={(value) => set({ [at.id]: value })}
+              onPick={(value) => pick(at, value)}
+              onWrite={(text) => write(at, text)}
+            />
+          </QuestionnaireItem>
+        ))}
+        <div className="flex flex-wrap items-center gap-2">
+          {decline && (
             <Button
-              key={choice.id}
+              type="button"
               size="sm"
               variant="outline"
+              className="pr-1.5"
+              aria-keyshortcuts="Escape"
               disabled={answering}
-              onClick={() =>
-                choice.allows
-                  ? onAnswer(choice.id, filled(form, draft))
-                  : onAnswer(choice.id)
-              }
+              onClick={() => onAnswer(decline.id)}
             >
-              {choice.name}
+              {decline.name}
+              <KeyHint>Esc</KeyHint>
             </Button>
-          ))}
-        {(!last || main) && (
-          <Button
-            size="sm"
-            className="pr-1.5"
-            aria-keyshortcuts="Enter"
-            disabled={answering || (last && !complete)}
-            onClick={onward}
-          >
-            {last ? main?.name : "Next"}
-            <KeyHint>⏎</KeyHint>
-          </Button>
-        )}
-      </div>
+          )}
+          <span className="flex-1" />
+          {page > 0 && (
+            <Button
+              type="button"
+              size="sm"
+              variant="ghost"
+              className="text-muted-foreground"
+              disabled={answering}
+              onClick={() => setPage(page - 1)}
+            >
+              Previous
+            </Button>
+          )}
+          {last &&
+            [...others, ...kept].map((choice) => (
+              <Button
+                key={choice.id}
+                type="button"
+                size="sm"
+                variant="outline"
+                disabled={answering}
+                onClick={() =>
+                  choice.allows
+                    ? onAnswer(choice.id, values)
+                    : onAnswer(choice.id)
+                }
+              >
+                {choice.name}
+              </Button>
+            ))}
+          {(!last || (main && (!picked || own))) && (
+            <Button
+              type="button"
+              size="sm"
+              className="pr-1.5"
+              aria-keyshortcuts="Enter"
+              disabled={
+                answering ||
+                (last
+                  ? !complete
+                  : field !== undefined &&
+                    field.required &&
+                    !answered(field, values))
+              }
+              onClick={onward}
+            >
+              {last ? main?.name : "Next"}
+              <KeyHint>⏎</KeyHint>
+            </Button>
+          )}
+        </div>
+      </Questionnaire>
     </div>
   )
+}
+
+/** The questions as steps, each named by the Harness's title, a tick on
+ * those answered; a step goes back to its question. */
+function Steps({
+  fields,
+  page,
+  values,
+  disabled,
+  onPage,
+}: {
+  fields: FormField[]
+  page: number
+  values: Values
+  disabled: boolean
+  onPage: (page: number) => void
+}) {
+  return (
+    <nav aria-label="Questions" className="-mb-1 -ml-2 flex flex-wrap gap-0.5">
+      {fields.map((field, at) => {
+        const done = answered(field, values)
+        return (
+          <button
+            key={field.id}
+            type="button"
+            disabled={disabled}
+            aria-current={at === page ? "step" : undefined}
+            onClick={() => onPage(at)}
+            className={cn(
+              "inline-flex h-6 items-center gap-1.5 rounded-small px-2 text-meta whitespace-nowrap text-muted-foreground transition-colors outline-none hover:bg-muted/60 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50",
+              done && "text-foreground",
+              at === page && "bg-raised font-medium text-foreground"
+            )}
+          >
+            {done ? (
+              <CheckIcon aria-label="Answered" className="size-3 text-added" />
+            ) : (
+              <span className="tabular-nums opacity-70">{at + 1}</span>
+            )}
+            {field.title}
+          </button>
+        )
+      })}
+    </nav>
+  )
+}
+
+/** What a question asks. Of several, the Harness's title names its step
+ * and its description asks; of one, the title is a label above what the
+ * Question already asks in its words. */
+function Asks({ field, single }: { field: FormField; single: boolean }) {
+  const { title, description } = field
+  if (field.input.kind === "toggle") return null
+  if (single || !description)
+    return (
+      <>
+        <QuestionnaireTitle className="text-meta font-medium text-muted-foreground">
+          {title}
+        </QuestionnaireTitle>
+        {description && (
+          <QuestionnaireDescription className="mt-0 text-ui text-foreground">
+            {description}
+          </QuestionnaireDescription>
+        )}
+      </>
+    )
+  return <QuestionnaireTitle>{description}</QuestionnaireTitle>
 }
 
 /** The key that gives an answer, on its button, as a quiet cap in the
@@ -181,41 +340,38 @@ export function KeyHint({ children }: { children: React.ReactNode }) {
 
 function FormInput({
   field,
-  value,
+  draft,
   disabled,
   onChange,
+  onPick,
+  onWrite,
 }: {
   field: FormField
-  value: Draft[string]
+  draft: Draft
   disabled: boolean
   onChange: (value: Draft[string]) => void
+  onPick: (value: string) => void
+  onWrite: (text: string) => void
 }) {
-  const { title, description, required, secret, input } = field
+  const { title, description, required, secret, input, other } = field
+  const value = draft[field.id]
   const id = useId()
   const wrong = problem(field, value)
-  // The input points at what tells about it: its description, its problem.
-  const describedBy =
-    [description && `${id}-about`, wrong && `${id}-wrong`]
-      .filter(Boolean)
-      .join(" ") || undefined
-  const about = description && (
-    <FieldDescription id={`${id}-about`}>{description}</FieldDescription>
-  )
   const error = wrong && <FieldError id={`${id}-wrong`}>{wrong}</FieldError>
   switch (input.kind) {
     case "text":
     case "number":
       return (
         <Field data-invalid={wrong !== undefined}>
-          <FieldLabel htmlFor={id}>{title}</FieldLabel>
           <Input
             id={id}
+            aria-label={title}
             type={secret ? "password" : typed(input)}
             value={String(value)}
             disabled={disabled}
             required={required}
             aria-invalid={wrong !== undefined}
-            aria-describedby={describedBy}
+            aria-describedby={wrong ? `${id}-wrong` : undefined}
             onChange={(event) => onChange(event.target.value)}
             {...(input.kind === "number" && {
               min: input.minimum,
@@ -223,82 +379,58 @@ function FormInput({
               step: input.integer ? 1 : "any",
             })}
           />
-          {about}
           {error}
         </Field>
       )
     case "choice":
-      return (
-        <FieldSet>
-          <div className="flex items-center justify-between gap-2">
-            <FieldLegend id={`${id}-title`} variant="label">
-              {title}
-            </FieldLegend>
-            {!required && value !== "" && (
-              <Button
-                size="xs"
-                variant="ghost"
-                disabled={disabled}
-                onClick={() => onChange("")}
-              >
-                Clear
-              </Button>
-            )}
-          </div>
-          {about}
-          <RadioGroup
-            value={value}
-            disabled={disabled}
-            aria-labelledby={`${id}-title`}
-            aria-describedby={describedBy}
-            onValueChange={(next) => onChange(String(next))}
-          >
-            {input.choices.map((choice, at) => (
-              <Field key={choice.value} orientation="horizontal">
-                <RadioGroupItem
-                  value={choice.value}
-                  id={`${id}-${at}`}
-                  aria-keyshortcuts={at < 9 ? String(at + 1) : undefined}
-                />
-                <Chosen id={`${id}-${at}`} {...choice} />
-                {at < 9 && (
-                  <span className="ml-auto flex text-muted-foreground">
-                    <KeyHint>{at + 1}</KeyHint>
-                  </span>
-                )}
-              </Field>
-            ))}
-          </RadioGroup>
-        </FieldSet>
-      )
     case "choices": {
-      const picked = Array.isArray(value) ? value : []
+      const many = input.kind === "choices"
+      const picks = Array.isArray(value) ? value : []
+      const words = other === undefined ? undefined : draft[other]
+      const toggle = (choice: OptionChoice) =>
+        onChange(
+          picks.includes(choice.value)
+            ? picks.filter((v) => v !== choice.value)
+            : [...picks, choice.value]
+        )
       return (
-        <FieldSet data-invalid={wrong !== undefined}>
-          <FieldLegend variant="label">{title}</FieldLegend>
-          {about}
-          <FieldGroup data-slot="checkbox-group" className="gap-3">
-            {input.choices.map((choice, at) => (
-              <Field key={choice.value} orientation="horizontal">
-                <Checkbox
-                  id={`${id}-${at}`}
-                  checked={picked.includes(choice.value)}
-                  disabled={disabled}
-                  aria-describedby={describedBy}
-                  onCheckedChange={(on) =>
-                    onChange(
-                      on
-                        ? [...picked, choice.value]
-                        : picked.filter((v) => v !== choice.value)
-                    )
-                  }
-                />
-                <Chosen id={`${id}-${at}`} {...choice} />
-              </Field>
+        <>
+          <QuestionnaireChoices>
+            {input.choices.map((choice) => (
+              <QuestionnaireChoice
+                key={choice.value}
+                value={choice.value}
+                checked={
+                  many ? picks.includes(choice.value) : value === choice.value
+                }
+                disabled={disabled}
+                onChange={() => (many ? toggle(choice) : onPick(choice.value))}
+              >
+                <span>{choice.name}</span>
+                {choice.description && (
+                  <QuestionnaireChoiceDescription>
+                    {choice.description}
+                  </QuestionnaireChoiceDescription>
+                )}
+              </QuestionnaireChoice>
             ))}
-          </FieldGroup>
+            {other !== undefined && (
+              <QuestionnaireInput
+                aria-label="In your own words"
+                placeholder="Something else…"
+                shortcut={
+                  input.choices.length < 9
+                    ? String(input.choices.length + 1)
+                    : undefined
+                }
+                value={typeof words === "string" ? words : ""}
+                disabled={disabled}
+                onChange={(event) => onWrite(event.target.value)}
+              />
+            )}
+          </QuestionnaireChoices>
           {error}
-        </FieldSet>
+        </>
       )
     }
     case "toggle":
@@ -308,10 +440,14 @@ function FormInput({
             id={id}
             checked={value === true}
             disabled={disabled}
-            aria-describedby={describedBy}
             onCheckedChange={(on) => onChange(on)}
           />
-          <Chosen id={id} name={title} description={description} />
+          <FieldContent>
+            <FieldLabel htmlFor={id} className="font-normal">
+              {title}
+            </FieldLabel>
+            {description && <FieldDescription>{description}</FieldDescription>}
+          </FieldContent>
         </Field>
       )
   }
@@ -332,26 +468,4 @@ function typed(input: FieldInput): string {
     default:
       return "text"
   }
-}
-
-/** A choice's name, and what it means when the Harness says. */
-function Chosen({
-  id,
-  name,
-  description,
-}: {
-  id: string
-  name: string
-  description?: string
-}) {
-  return (
-    <FieldContent>
-      <FieldLabel htmlFor={id} className="font-normal">
-        {name}
-      </FieldLabel>
-      {description && (
-        <FieldDescription id={`${id}-about`}>{description}</FieldDescription>
-      )}
-    </FieldContent>
-  )
 }

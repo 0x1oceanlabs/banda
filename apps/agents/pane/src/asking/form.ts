@@ -113,25 +113,44 @@ export function filled(form: Field[], draft: Draft): Values {
   return values
 }
 
-/** Whether the form can go: every field it needs is filled, and every
+/** The form's questions, one to a page: every field but those that
+ * answer another in the Person's own words, which go with it. */
+export function asked(form: Field[]): Field[] {
+  const others = new Set(form.flatMap((field) => field.other ?? []))
+  return form.filter((field) => !others.has(field.id))
+}
+
+/** Whether field `field` is answered: filled, or its own words are. */
+export function answered(field: Field, values: Values): boolean {
+  return (
+    field.id in values || (field.other !== undefined && field.other in values)
+  )
+}
+
+/** Whether the form can go: every field it needs is answered, and every
  * field filled takes what was typed in it. */
 export function ready(form: Field[], draft: Draft): boolean {
   const values = filled(form, draft)
   return form.every(
     (field) =>
-      (!field.required || field.id in values) &&
+      (!field.required || answered(field, values)) &&
       problem(field, draft[field.id]) === undefined
   )
 }
 
-/** The answer as a Person reads it: each filled field, by its title. */
-export function summary(
-  form: Field[],
-  values: Values
-): { id: string; title: string; value: string }[] {
-  return form.flatMap(({ id, title, input }) => {
+/** One answer as a Person reads it: the field's title, what was chosen,
+ * and what they said in their own words. */
+export type Said = { id: string; title: string; value: string; own?: string }
+
+/** The answer as a Person reads it: each answered field, by its title;
+ * the words that answer a field go with it. */
+export function summary(form: Field[], values: Values): Said[] {
+  return asked(form).flatMap(({ id, title, input, other }) => {
+    const words = other === undefined ? undefined : values[other]
+    const own = typeof words === "string" ? words : undefined
     const value = values[id]
-    if (value === undefined) return []
+    if (value === undefined)
+      return own === undefined ? [] : [{ id, title, value: "", own }]
     const name = (v: string) =>
       input.kind === "choice" || input.kind === "choices"
         ? (input.choices.find((c) => c.value === v)?.name ?? v)
@@ -144,6 +163,6 @@ export function summary(
         : Array.isArray(value)
           ? value.map(name).join(", ")
           : name(String(value))
-    return [{ id, title, value: read }]
+    return [{ id, title, value: read, ...(own !== undefined && { own }) }]
   })
 }

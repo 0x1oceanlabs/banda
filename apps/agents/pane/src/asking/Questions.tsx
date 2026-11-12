@@ -113,11 +113,18 @@ function FoldedLine({ folded }: { folded: Folded }) {
         <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
           <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-            {folded.values.map(({ id, title, value }) => (
+            {folded.values.map(({ id, title, value, own }) => (
               <Fragment key={id}>
                 <dt>{title}</dt>
                 <dd className="min-w-0 wrap-break-word text-foreground">
                   {value}
+                  {own !== undefined && (
+                    <>
+                      {value && " · "}
+                      <span className="text-muted-foreground">own: </span>
+                      {own}
+                    </>
+                  )}
                 </dd>
               </Fragment>
             ))}
