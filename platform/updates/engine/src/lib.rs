@@ -808,6 +808,8 @@ mod tests {
         let engine = folder.path().join("engine");
         let copy = engine.join("0.1.0-dev.11");
         std::fs::create_dir_all(&copy).unwrap();
+        // As take::copies finds one, and the program the engine runs.
+        std::fs::write(copy.join("banda"), "").unwrap();
         std::fs::write(copy.join(PROGRAM), "").unwrap();
         std::fs::write(copy.join("version"), "banda 0.1.0-dev.11 (build b)\n").unwrap();
         let banda = Banda {
