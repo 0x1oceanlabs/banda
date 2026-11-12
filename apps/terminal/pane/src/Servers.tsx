@@ -1,3 +1,24 @@
+/**
+ * The servers started in Banda, on the bar (ADR 0044, decision 5): the
+ * widget `terminal.ports`, the first one's port, and how many more. A
+ * click lists every Project's; a row opens its server in a browser Pane
+ * in its Project, or with Ctrl or ⌘ in the Person's browser, and its
+ * square stops it.
+ *
+ *   in    projects  the Projects, each heard on its own
+ *         engine    the engine, for each Project's `terminal.ports`
+ *                   stream: its servers while it lasts, put together in
+ *                   the order they came (`arrived.ts`)
+ *   draws nothing while no Project has a server; else ":5173 +2", and a
+ *         click opens the list: each server's address, whether an Agent
+ *         or a Terminal started it and its program, its Project's Sign,
+ *         and a square that stops it
+ *   runs  `browser.open` with the server's address in its Project, on a
+ *         row; with Ctrl or ⌘, the Person's browser instead; the
+ *         engine's `terminal.stop_server` in its Project, on the square
+ *         or Delete or Backspace, and a toast says why one failed, but
+ *         for one the engine refused
+ */
 import {
   type Engine,
   type ProjectId,
@@ -23,13 +44,7 @@ import type { MouseEvent } from "react"
 import { useCallback, useEffect, useState } from "react"
 import { arrived, type Placed } from "./arrived"
 
-/**
- * The servers started in Banda, on the bar (ADR 0044, decision 5): the
- * first one's port, and how many more. A click lists every Project's; a row
- * opens its server in a browser Pane in its Project, or with Ctrl or ⌘ in
- * the Person's browser, and its square stops it. It draws nothing while
- * no Project has a server.
- */
+/** The servers' widget, as the top of this file says. */
 export function ServersWidget({ engine, projects }: WidgetProps) {
   const [placed, setPlaced] = useState<Placed[]>([])
   const heard = useCallback(

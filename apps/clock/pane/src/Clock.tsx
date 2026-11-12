@@ -1,3 +1,18 @@
+/**
+ * The clock on the bar, the widget `clock.now` (ADR 0024, decision 3):
+ * the day, in the bar's muted text, and the time, in the text's own, by
+ * this device's clock and language. A click shows the month, today on a
+ * faint fill, each week with its number; its arrows go a month back and
+ * on, and Today comes back.
+ *
+ *   in    clock      this device's clock, again as each minute begins
+ *                    (`useMinute`)
+ *         language   this device's language, for the words and the day
+ *                    the week starts on (`Intl`, `month.ts`)
+ *   draws the day and the time; a click opens the month, with its weeks'
+ *         numbers, today and its ISO week at its foot
+ *   runs  nothing: it has no engine part, and asks nothing
+ */
 import { Button } from "@banda/ui/components/button"
 import {
   Popover,
@@ -23,12 +38,7 @@ import {
   weeksOf,
 } from "./month"
 
-/**
- * The clock on the bar: the day, in the bar's muted text, and the time,
- * in the text's own, by this device's clock and language. A click shows
- * the month, today on a faint fill, each week with its number; its
- * arrows go a month back and on, and Today comes back.
- */
+/** The clock, as the top of this file says. */
 export function ClockWidget() {
   // Drawn again as each minute begins, not up to one late.
   const at = useMinute()

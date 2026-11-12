@@ -1,3 +1,19 @@
+/**
+ * The bell, the widget `notifications.recent` (ADR 0048, decision 2): a
+ * click shows the last toasts again, the newest in front, as Sonner's
+ * stack, opened, with their buttons. They stay till the bell is clicked
+ * again, `Esc`, a click elsewhere, or one of their buttons is. A button
+ * runs its action as the toast's did.
+ *
+ *   in    recent   the last notices, five at most, kept in the window's
+ *                  own storage (`recent.ts`), read as the bell is
+ *                  clicked
+ *   draws the bell; a click shows the last notices again as toasts in a
+ *         toaster of its own in the Top layer, or "Nothing yet" with
+ *         none, and puts away the window's toasts on screen
+ *   runs  the action of a toast's button, or of a click on the toast,
+ *         with its args, as the toast first shown did
+ */
 import { Button } from "@banda/ui/components/button"
 import { Toaster, type ToastT, toast } from "@banda/ui/components/sonner"
 import { TopLayer } from "@banda/ui/components/top-layer"
@@ -19,12 +35,7 @@ const NOTHING = {
   description: "What still waits for you is in the sidebar.",
 } satisfies ToastT
 
-/**
- * The bell (ADR 0048, decision 2): a click shows the last toasts again,
- * the newest in front, as Sonner's stack, opened, with their buttons.
- * They stay till the bell is clicked again, `Esc`, a click elsewhere, or
- * one of their buttons is. A button runs its action as the toast's did.
- */
+/** The bell, as the top of this file says. */
 export function BellWidget() {
   const run = useRun()
   const [open, setOpen] = useState(false)
