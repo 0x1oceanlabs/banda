@@ -129,4 +129,9 @@ can_stop?: boolean, why?: string, prompt?: string, report?: string, crew?: CrewI
 /**
  * When it ended, in milliseconds since the epoch.
  */
-ended: number, } } | { "kind": "subagent.messaged", "payload": { item: ItemId, turn: TurnId, subagent: SubagentId, text?: string, sub?: SubagentId, } } | { "kind": "crew.started", "payload": { item: ItemId, crew: Crew, } } | { "kind": "crew.progressed", "payload": { crew: CrewId, phases?: Array<Phase>, agents?: Array<CrewAgent>, log?: string, tokens?: number, went_on?: TurnId, } } | { "kind": "crew.ended", "payload": { crew: CrewId, turn: TurnId, state: CrewState, why?: string, result?: string, tokens?: number, ended: number, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };
+ended: number, } } | { "kind": "subagent.messaged", "payload": { item: ItemId, turn: TurnId, subagent: SubagentId, text?: string, sub?: SubagentId, } } | { "kind": "crew.started", "payload": { item: ItemId, crew: Crew, } } | { "kind": "crew.progressed", "payload": { crew: CrewId, phases?: Array<Phase>, agents?: Array<CrewAgent>, log?: string, tokens?: number, went_on?: TurnId, } } | { "kind": "crew.ended", "payload": { crew: CrewId, turn: TurnId, state: CrewState, why?: string, result?: string, 
+/**
+ * The last line its script logged, when its end says one no
+ * frame said while it worked.
+ */
+log?: string, tokens?: number, ended: number, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, heights: Array<Fit>, } } | { "kind": "issue.drafted", "payload": { item: ItemId, turn: TurnId, fingerprint: string, title: string, body: string, comment_on?: number, } } | { "kind": "issue.answered", "payload": { item: ItemId, state: IssueState, title?: string, body?: string, url?: string, } };

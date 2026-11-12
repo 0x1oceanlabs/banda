@@ -19,7 +19,8 @@
 //!   session, to run `echo ok > d.txt`: allowed, the call ends done.
 //! - `big`: its Fix phase calls 50 agents, 8 at a time: the rest wait,
 //!   Queued.
-//! - `log`: it logs a line after each phase.
+//! - `log`: it logs a line after each phase, which only its output file
+//!   says, as Claude's.
 //! - `fails`: its script throws after the first phase: it ends failed.
 //! - `long`: each agent works 600 ms, not 60.
 //! - `dies`: the fake agent's process ends in its second phase.
@@ -217,16 +218,13 @@ impl Crew {
     }
 
     /// Its whole tree now.
-    fn progress(&self, agents: &[Agent], log: Option<&str>, tokens: u64) -> Result<(), Error> {
+    fn progress(&self, agents: &[Agent], tokens: u64) -> Result<(), Error> {
         let mut tree: Vec<Value> = ["Scan", "Fix", "Verify"]
             .iter()
             .enumerate()
             .map(|(at, title)| json!({ "type": "workflow_phase", "index": at + 1, "title": title }))
             .collect();
         tree.extend(agents.iter().map(Agent::frame));
-        if let Some(line) = log {
-            tree.push(json!({ "type": "workflow_log", "message": line }));
-        }
         self.system(
             "task_progress",
             json!({
@@ -244,16 +242,16 @@ impl Crew {
         let fix = if self.on("big") { 50 } else { 3 };
         let mut agents: Vec<Agent> = Vec::new();
         let mut tokens = 0;
-        let mut log = None;
+        let mut logs = Vec::new();
         for (phase, count) in [(1u16, 2u32), (2, fix), (3, 1)] {
             if phase == 2 && self.on("fails") {
-                return self.end("failed", tokens).await;
+                return self.end("failed", tokens, &logs).await;
             }
             for index in 1..=count {
                 let state = if index <= 8 { "start" } else { "queued" };
                 agents.push(Agent::new(phase, index, state));
             }
-            self.progress(&agents, log.as_deref(), tokens)?;
+            self.progress(&agents, tokens)?;
             if phase == 2 && self.on("dies") {
                 tokio::time::sleep(pace).await;
                 std::process::exit(1);
@@ -278,14 +276,13 @@ impl Crew {
                 for at in at_work.iter().skip(8).take(8) {
                     agents[*at].state = "start";
                 }
-                self.progress(&agents, log.as_deref(), tokens)?;
+                self.progress(&agents, tokens)?;
             }
             if self.on("log") {
-                log = Some(format!("phase {phase} done"));
-                self.progress(&agents, log.as_deref(), tokens)?;
+                logs.push(format!("phase {phase} done"));
             }
         }
-        self.end("completed", tokens).await
+        self.end("completed", tokens, &logs).await
     }
 
     /// `asks`: the Verify agent asks to run a command, on the parent's
@@ -319,13 +316,26 @@ impl Crew {
 
     /// Its end, as `status` says, with what it left; then the Agent goes
     /// on by itself with it.
-    async fn end(&self, status: &str, tokens: u64) -> Result<(), Error> {
+    /// Its output file is Claude's object of what it returned and logged;
+    /// a script that threw leaves it empty.
+    async fn end(&self, status: &str, tokens: u64, logs: &[String]) -> Result<(), Error> {
         let output = self.folder.join(format!(".crew-{}.output", self.task));
-        let result = match status {
-            "completed" => "Fixed 3 dead routes; the build passes.",
-            _ => "Error: the script threw after Scan.",
+        let left = match status {
+            "completed" => json!({
+                "summary": "Audit the routes",
+                "logs": logs,
+                "result": "Fixed 3 dead routes; the build passes.",
+            })
+            .to_string(),
+            _ => String::new(),
         };
-        let _ = std::fs::write(&output, result);
+        let _ = std::fs::write(&output, left);
+        let summary = match status {
+            "completed" => "Dynamic workflow \"Audit the routes\" completed".to_owned(),
+            _ => "Dynamic workflow \"Audit the routes\" failed: Error: the script threw after \
+                  Scan\n    at <anonymous> (workflow.js:5:7)"
+                .to_owned(),
+        };
         self.system("task_updated", json!({ "patch": { "status": status } }))?;
         self.system(
             "task_notification",
@@ -333,7 +343,7 @@ impl Crew {
                 "tool_use_id": self.launch,
                 "status": status,
                 "output_file": output.to_string_lossy(),
-                "summary": format!("Dynamic workflow \"Audit the routes\" {status}"),
+                "summary": summary,
                 "usage": { "total_tokens": tokens, "tool_uses": 6, "duration_ms": 100 },
             }),
         )?;
@@ -379,7 +389,9 @@ impl Agent {
             "phaseTitle": title,
             "agentId": format!("a{}{}", self.phase, self.index),
             "model": "fake-small",
-            "state": self.state,
+            // One past the limit at once waits as Claude says it: it
+            // starts, with no start time.
+            "state": if self.state == "queued" { "start" } else { self.state },
             "attempt": 1,
             "queuedAt": 1,
             "promptPreview": format!("{title} part {}", self.index),
