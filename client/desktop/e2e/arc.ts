@@ -123,6 +123,8 @@ if [ -e "$here/blackhole" ]; then
 fi
 sleep "$(cat "$here/handshake")"
 unset BANDA_TOKEN BANDA_ENGINE
+# arc's own programs come first there, as for what arc.start runs.
+export PATH="$here/../arc/bin:$PATH"
 ${Object.entries(exports)
   .map(([name, value]) => `export ${name}=${quoted(value)}`)
   .join("\n")}
