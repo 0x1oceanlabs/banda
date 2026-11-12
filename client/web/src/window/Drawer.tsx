@@ -145,6 +145,8 @@ export const Drawer = memo(function Drawer({
           mixed={false}
           frame={own}
           actions={pin}
+          // It drops over the workspace: nothing is drawn beside it.
+          noRoom
         />
       </div>
     </div>
