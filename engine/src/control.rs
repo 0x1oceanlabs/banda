@@ -334,7 +334,7 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     };
     if !force {
         let working = working(&mut client).await?;
-        if working > 0 && !agreed(working)? {
+        if working > 0 && !agreed(working, Ending::Quit)? {
             return Err(Failure::Broken("Nothing was stopped.".into()));
         }
     }
@@ -408,7 +408,7 @@ fn locked(places: &Places) -> bool {
 
 /// How many Agents are working now: Threads whose latest turn runs, in
 /// every Project.
-async fn working(client: &mut Client) -> Result<usize, Failure> {
+pub(crate) async fn working(client: &mut Client) -> Result<usize, Failure> {
     let projects = client
         .ask("projects.list", None, CommandId::new(), json!({}))
         .await?;
@@ -432,25 +432,47 @@ async fn working(client: &mut Client) -> Result<usize, Failure> {
     Ok(working)
 }
 
-/// What Quit says when Agents are working, in the words it says them in
-/// everywhere (decision 3; `quit.rs`).
-fn question(working: usize) -> String {
-    let Some((title, detail)) = quit::asks(working, cfg!(target_os = "macos")) else {
+/// What stops the engine while Agents work: Quit, or Restart now onto a
+/// new copy (ADR 0115, decision 3), which asks in Quit's words.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum Ending {
+    Quit,
+    Restart,
+}
+
+/// What `ending` says when Agents are working, in the words Quit says
+/// them in everywhere (decision 3; `quit.rs`).
+fn question(working: usize, ending: Ending) -> String {
+    let asks = match ending {
+        Ending::Quit => quit::asks,
+        Ending::Restart => quit::restart_asks,
+    };
+    let Some((title, detail)) = asks(working, cfg!(target_os = "macos")) else {
         return String::new();
     };
     format!("{title}. {detail}")
 }
 
-/// Asks the Person in the terminal whether to stop `working` Agents; with
-/// no terminal to ask in, refuses, saying how to stop them anyway.
-fn agreed(working: usize) -> Result<bool, Failure> {
+/// Asks the Person in the terminal whether `ending` stops `working`
+/// Agents; with no terminal to ask in, refuses, saying how to anyway.
+pub(crate) fn agreed(working: usize, ending: Ending) -> Result<bool, Failure> {
+    let (button, anyway) = match ending {
+        Ending::Quit => (
+            quit::QUIT,
+            "Nothing was stopped: banda stop --force quits anyway.",
+        ),
+        Ending::Restart => (
+            quit::RESTART,
+            "Nothing was restarted: banda update --now --force restarts anyway.",
+        ),
+    };
     if !std::io::stdin().is_terminal() {
         return Err(Failure::Refused(Refusal::conflict(format!(
-            "{} Nothing was stopped: banda stop --force quits anyway.",
-            question(working)
+            "{} {anyway}",
+            question(working, ending)
         ))));
     }
-    eprint!("{} {}? [y/N] ", question(working), quit::QUIT);
+    eprint!("{} {button}? [y/N] ", question(working, ending));
     let _ = std::io::stderr().flush();
     let mut answer = String::new();
     std::io::stdin()
@@ -535,12 +557,17 @@ mod tests {
             "this computer"
         };
         assert_eq!(
-            question(1),
+            question(1, Ending::Quit),
             format!("An Agent works on {here}. Quitting Banda stops it too.")
         );
         assert_eq!(
-            question(2),
+            question(2, Ending::Quit),
             format!("2 Agents work on {here}. Quitting Banda stops them too.")
+        );
+        assert_eq!(
+            question(2, Ending::Restart),
+            format!("2 Agents work on {here}. Restarting Banda's engine stops them too."),
+            "banda update --now asks under Quit's title"
         );
     }
 

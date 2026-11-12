@@ -59,6 +59,7 @@ mod fence;
 mod files;
 mod mcp;
 mod modules;
+mod moving;
 mod parent;
 mod places;
 mod problems;
@@ -164,13 +165,29 @@ enum Command {
     },
     /// This machine's updates (ADR 0115): what it runs, the newest its
     /// channel has, what it takes and what is ready, as one JSON line.
+    ///
+    /// The engine moves onto a copy in place by itself once no Turn runs,
+    /// no terminal is open and no key reached one for ten minutes, as
+    /// machine.toml's `updates` says ("when-idle", "ask" or "off").
     Update {
         /// Looks at the channel now, and takes the newest engine when it is
         /// newer, then says what it found.
-        #[arg(long, conflicts_with = "follow")]
-        check: bool,
-        /// Prints a line again on each change, the current one first.
         #[arg(long)]
+        check: bool,
+        /// Puts this version in place, an older one too, and keeps to it:
+        /// the engine moves onto it as onto any new copy, and takes none
+        /// above it. `newest` takes the newest again.
+        #[arg(long, value_name = "VERSION")]
+        version: Option<String>,
+        /// Restarts the engine on the copy in place now, which ends its
+        /// terminals; while Agents work, it asks first, as Quit does.
+        #[arg(long)]
+        now: bool,
+        /// With --now: restarts while Agents work, without asking.
+        #[arg(long, requires = "now")]
+        force: bool,
+        /// Prints a line again on each change, the current one first.
+        #[arg(long, conflicts_with_all = ["check", "version", "now"])]
         follow: bool,
     },
     /// Prints what this machine is called and drawn by, as every window
@@ -628,6 +645,13 @@ fn main() -> ExitCode {
             Places::from_env().and_then(|places| runtime()?.block_on(run(command, places)))
         }
     };
+    // The engine stopped to move onto its new copy, its runtime gone:
+    // the copy runs in its place (ADR 0115, decision 3).
+    #[cfg(unix)]
+    let done = match (done, moving::onto()) {
+        (Ok(()), Some(program)) => Err(moving::exec(program)),
+        (done, _) => done,
+    };
     match done {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => failure.end(filter),
@@ -787,7 +811,22 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Secret { what } => account::secret(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
-        Command::Update { check, follow } => update(&places, check, follow).await,
+        Command::Update {
+            check,
+            version,
+            now,
+            force,
+            follow,
+        } => {
+            let update = Update {
+                check,
+                version,
+                now,
+                force,
+                follow,
+            };
+            self::update(&places, update).await
+        }
         Command::Thread { what } => {
             let (method, project, params) = match what {
                 ThreadCommand::Later {
@@ -870,17 +909,64 @@ async fn print_call(
     Ok(())
 }
 
+/// What `banda update` is asked.
+struct Update {
+    check: bool,
+    version: Option<String>,
+    now: bool,
+    force: bool,
+    follow: bool,
+}
+
 /// `banda update`: the updates module's state, looked at now with
-/// `check`, or each change of it with `follow`.
-async fn update(places: &Places, check: bool, follow: bool) -> Result<(), Failure> {
+/// `check`, or each change of it with `follow`; a version put in place
+/// with `version`, and the engine restarted on the copy in place with
+/// `now`, in that order. One JSON line for each.
+async fn update(places: &Places, asked: Update) -> Result<(), Failure> {
     let mut client = Client::connect(places).await?;
-    if check {
+    let acts = asked.check || asked.version.is_some() || asked.now;
+    if asked.check {
         let found = client
             .call("updates.check", None, CommandId::new(), json!({}))
             .await?;
         println!("{found}");
+    }
+    if let Some(version) = &asked.version {
+        let taken = client
+            .call(
+                "updates.take",
+                None,
+                CommandId::new(),
+                json!({ "version": version }),
+            )
+            .await?;
+        println!("{taken}");
+    }
+    if asked.now {
+        let mut force = asked.force;
+        if !force {
+            let working = control::working(&mut client).await?;
+            if working > 0 {
+                if !control::agreed(working, control::Ending::Restart)? {
+                    return Err(Failure::Broken("Nothing was restarted.".into()));
+                }
+                force = true;
+            }
+        }
+        let moving = client
+            .call(
+                "updates.restart",
+                None,
+                CommandId::new(),
+                json!({ "force": force }),
+            )
+            .await?;
+        println!("{moving}");
+    }
+    if acts {
         return Ok(());
     }
+    let follow = asked.follow;
     let stream = client.stream("updates.state").await?;
     loop {
         match client.heard().await? {

@@ -20,6 +20,13 @@ const MANY: Said = Said {
 /// The button that quits anyway; the other, the default, is Cancel.
 pub const QUIT: &str = "Quit anyway";
 
+/// What Restart now says under Quit's title, for one Agent and for more,
+/// and its button (ADR 0115, decision 3): the engine's restart onto a new
+/// copy stops them as Quit does.
+const RESTART_ONE: &str = "Restarting Banda's engine stops it too.";
+const RESTART_MANY: &str = "Restarting Banda's engine stops them too.";
+pub const RESTART: &str = "Restart anyway";
+
 /// This machine, as the words name it: a Mac, or any other computer.
 const MAC: &str = "this Mac";
 const ELSEWHERE: &str = "this computer";
@@ -43,6 +50,18 @@ pub fn asks(working: usize, mac: bool) -> Option<(String, &'static str)> {
         .replace("{n}", &working.to_string())
         .replace("{here}", here);
     Some((title, said.detail))
+}
+
+/// What Restart now asks while `working` Agents work: Quit's title, and
+/// that the restart stops them; nothing with none at work.
+pub fn restart_asks(working: usize, mac: bool) -> Option<(String, &'static str)> {
+    let (title, _) = asks(working, mac)?;
+    let detail = if working == 1 {
+        RESTART_ONE
+    } else {
+        RESTART_MANY
+    };
+    Some((title, detail))
 }
 
 #[cfg(test)]
@@ -94,6 +113,25 @@ mod tests {
             ))
         );
         assert_eq!(QUIT, "Quit anyway");
+    }
+
+    #[test]
+    fn restart_now_asks_under_quits_title() {
+        assert_eq!(restart_asks(0, false), None);
+        assert_eq!(
+            restart_asks(1, false),
+            Some((
+                "An Agent works on this computer".to_owned(),
+                "Restarting Banda's engine stops it too."
+            ))
+        );
+        assert_eq!(
+            restart_asks(2, true),
+            Some((
+                "2 Agents work on this Mac".to_owned(),
+                "Restarting Banda's engine stops them too."
+            ))
+        );
     }
 
     /// Writes the words beside the generated types, as ts-rs writes them,

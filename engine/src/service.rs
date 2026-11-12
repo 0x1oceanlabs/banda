@@ -351,7 +351,7 @@ pub fn own_unit(systemd: &dyn Systemd) -> Option<String> {
 
 /// The engine's unit a cgroup file names, as
 /// `0::/user.slice/…/app.slice/banda-engine.service`.
-fn unit_in(cgroup: &str) -> Option<&str> {
+pub(crate) fn unit_in(cgroup: &str) -> Option<&str> {
     let engine = format!("{FOLDER}-engine");
     cgroup.lines().find_map(|line| {
         let path = line.splitn(3, ':').nth(2)?;

@@ -22,6 +22,11 @@
 //!
 //! While its Agents work, and while plugged in if the Person says so, it
 //! keeps its machine from idle sleep, until it stops (ADR 0097).
+//!
+//! Asked by the updates module to move onto a new copy, it stops as asked
+//! to stop, and `main` then runs that copy in its place (`moving.rs`;
+//! ADR 0115, decision 3). The window's child does not move: it restarts
+//! with Banda.
 
 use crate::apps::{self, HostContext};
 use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
@@ -32,8 +37,9 @@ use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here};
 use banda_kernel::api::{self, OwnerSecret};
-use banda_kernel::{Kernel, PROTOCOL, Working};
+use banda_kernel::{Hands, Kernel, PROTOCOL, Working};
 use banda_machines::Machine;
+use banda_updates::restart::{Moves, Restart};
 use std::fs::{File, TryLockError};
 use std::path::Path;
 
@@ -207,6 +213,10 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // The tokens the bytes module gives, which the engine serves beside
     // its API (ADR 0106, step 4a).
     let bytes = banda_bytes::Bytes::new();
+    // The terminals open and the Person's last key, and how the engine
+    // moves onto a new copy, for the updates module (ADR 0115).
+    let hands = Hands::new();
+    let restart = Restart::new(moves(with_parent));
     // Every engine part in the list of Apps (ADR 0062, decision 11).
     let host = HostContext {
         places: &places,
@@ -216,6 +226,8 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         machine: &machine,
         working: &working,
         bytes: &bytes,
+        hands: &hands,
+        restart: &restart,
     };
     let opening = apps::serve(builder, &host).open();
     let kernel = tokio::select! {
@@ -247,7 +259,13 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
 
     let asked = run.clone();
     let stop = async move {
-        stopped(with_parent, term).await;
+        tokio::select! {
+            () = stopped(with_parent, term) => {}
+            program = restart.asked() => {
+                tracing::info!("the engine stops to move onto its new copy");
+                crate::moving::asked(program);
+            }
+        }
         // Asked to stop: what ends it from here on ends it as asked, and
         // it opens its app no more.
         asked.left(Left::Stopping);
@@ -299,6 +317,18 @@ fn own_unit() -> Option<String> {
         service::own_unit(&service::User)
     } else {
         None
+    }
+}
+
+/// How this engine moves onto a new copy: in its own place, unless it is
+/// the window's child, or on Windows, where the app brings the engine.
+fn moves(with_parent: bool) -> Moves {
+    if cfg!(windows) {
+        Moves::Never("On Windows the engine restarts with Banda's app".to_owned())
+    } else if with_parent {
+        Moves::Never("This engine is the window's child: it restarts with Banda".to_owned())
+    } else {
+        Moves::Itself
     }
 }
 

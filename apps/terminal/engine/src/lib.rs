@@ -28,7 +28,9 @@ mod windows;
 #[cfg(not(unix))]
 pub use windows::{NO_SERVERS, NO_TERMINALS};
 
-use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
+use banda_kernel::{
+    Call, Hands, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream,
+};
 use model::{Open, Piece, Running, Servers, Size, TerminalId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -65,11 +67,34 @@ pub struct Terminals {
     /// The servers started in Banda, a terminal's or an Agent's (ADR 0044).
     #[cfg(unix)]
     servers: Arc<Scanner>,
+    /// Told how many terminals are open and when a key reached one, so
+    /// the engine restarts on a new copy only with none (ADR 0115,
+    /// decision 3).
+    hands: Hands,
 }
 
 impl Terminals {
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Tells `hands` how many terminals are open, on each change, and
+    /// when a key reaches one. Counted from the runtime it is built in.
+    pub fn held_in(mut self, hands: Hands) -> Self {
+        self.hands = hands.clone();
+        let open = self.open.clone();
+        let mut fronts = self.fronts.subscribe();
+        if let Ok(runtime) = tokio::runtime::Handle::try_current() {
+            runtime.spawn(async move {
+                loop {
+                    hands.terminals(open_now(&open.lock().unwrap()));
+                    if fronts.changed().await.is_err() {
+                        return;
+                    }
+                }
+            });
+        }
+        self
     }
 
     fn find(&self, project: ProjectId, id: TerminalId) -> Result<Arc<Terminal>, Refusal> {
@@ -180,6 +205,12 @@ where
     heard
 }
 
+/// How many terminals are open whose program has not ended, in every
+/// Project.
+fn open_now(open: &HashMap<TerminalId, Arc<Terminal>>) -> usize {
+    open.values().filter(|terminal| !terminal.ended()).count()
+}
+
 /// How many of `project`'s terminals run a program in front.
 fn count(open: &HashMap<TerminalId, Arc<Terminal>>, project: ProjectId) -> Running {
     let terminals = (open.values())
@@ -284,6 +315,7 @@ impl Terminals {
             return Err(Refusal::invalid("Type at most 64 KB at once."));
         }
         let terminal = self.find(call.project().id(), terminal)?;
+        self.hands.typed(banda_kernel::now_ms());
         terminal.write(&data).await.map_err(Refusal::conflict)
     }
 

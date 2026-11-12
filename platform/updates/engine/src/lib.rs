@@ -9,15 +9,25 @@
 //! It takes nothing from a checkout's build (Banda Local), where a package
 //! manager owns Banda (`package-type` beside the running program), with
 //! `BANDA_UPDATES=off`, or where `machine.toml` says `updates = "off"`.
-//! Restarting on the copy it took is ADR 0115's step 4; until then it
-//! waits beside the running one.
+//!
+//! Once a copy is in place, the engine moves onto it as soon as nothing
+//! runs ([`restart`]): no Turn, no terminal open, no key in the last ten
+//! minutes; with `updates = "ask"`, once the Person says
+//! (`updates.restart`). The window's child waits for Banda to restart.
+//! `updates.take` puts a given version in place, an older one too, and
+//! the looks then take nothing above it until the Person takes the newest
+//! again: the choice is kept in `engine/chosen`.
 
 pub mod feed;
+pub mod restart;
 pub mod take;
 
-use banda_kernel::{Call, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Stream};
+use banda_kernel::{
+    Call, InHand, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Stream,
+};
 use banda_machines::TakeUpdates;
 use feed::{Feed, Release, Which};
+use restart::{Facts, Next, Refused, Restart, Waits};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::PathBuf;
@@ -56,10 +66,20 @@ pub struct UpdateState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub taking: Option<Taking>,
-    /// A newer engine in place beside this one, which it does not run yet.
+    /// A copy in place beside this one, which it moves onto: a newer
+    /// one, or the one chosen.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub ready: Option<String>,
+    /// What the copy ready waits for before the engine moves onto it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub waits: Option<Waits>,
+    /// The version the Person chose (`banda update --version`): the looks
+    /// take nothing above it until they take the newest again.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub chosen: Option<String>,
     /// Why the last look or take failed, in words; the next look tries
     /// again.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -118,16 +138,37 @@ struct Held {
     looking: tokio::sync::Mutex<()>,
     /// The looks run from the first `opened`, once.
     started: AtomicBool,
+    /// How it moves onto a copy, and what it waits for; none in a test
+    /// that only looks.
+    restarting: Option<Restarting>,
 }
+
+/// What the restart reads, and how it asks for one.
+struct Restarting {
+    restart: Restart,
+    /// The Turns that run on this machine.
+    turns: watch::Receiver<usize>,
+    /// The terminals open, and the Person's last key.
+    hands: watch::Receiver<InHand>,
+}
+
+/// The file in `engine/` that keeps the version the Person chose.
+const CHOSEN: &str = "chosen";
 
 impl Updates {
     pub fn new(banda: Banda, take: watch::Receiver<TakeUpdates>) -> Updates {
-        let ready = take::copies(&banda.engine)
-            .into_iter()
-            .find(|copy| feed::is_above(copy, &banda.version));
+        let chosen = chosen(&banda.engine);
+        let copies = take::copies(&banda.engine);
+        let ready = match &chosen {
+            Some(chosen) => {
+                (*chosen != banda.version && copies.contains(chosen)).then(|| chosen.clone())
+            }
+            None => (copies.into_iter()).find(|copy| feed::is_above(copy, &banda.version)),
+        };
         let state = UpdateState {
             running: banda.version.clone(),
             ready,
+            chosen,
             ..UpdateState::default()
         };
         Updates(Arc::new(Held {
@@ -139,6 +180,26 @@ impl Updates {
             state: watch::Sender::new(state),
             looking: tokio::sync::Mutex::new(()),
             started: AtomicBool::new(false),
+            restarting: None,
+        }))
+    }
+
+    /// Moves onto a copy in place through `restart`, once no Turn counted
+    /// in `turns` runs and `hands` holds nothing.
+    pub fn restarts(
+        self,
+        restart: Restart,
+        turns: watch::Receiver<usize>,
+        hands: watch::Receiver<InHand>,
+    ) -> Updates {
+        let held = Arc::into_inner(self.0).expect("set before it is shared");
+        Updates(Arc::new(Held {
+            restarting: Some(Restarting {
+                restart,
+                turns,
+                hands,
+            }),
+            ..held
         }))
     }
 
@@ -194,6 +255,7 @@ impl Updates {
         }
         let found = self.find().await;
         let looked = banda_kernel::now_ms();
+        let chosen = chosen(&self.0.banda.engine);
         match found {
             Err(why) => self.0.state.send_modify(|state| {
                 state.off = None;
@@ -206,9 +268,11 @@ impl Updates {
                     state.looked = Some(looked);
                     state.newest = Some(newest);
                     state.failed = None;
+                    state.chosen.clone_from(&chosen);
                 });
-                if let Some((url, feed)) = take {
-                    self.take(&url, &feed).await;
+                // Nothing above the version the Person chose.
+                if let Some((url, feed)) = take.filter(|_| chosen.is_none()) {
+                    self.take_bundle(&url, &feed).await;
                 }
             }
         }
@@ -224,40 +288,54 @@ impl Updates {
             "stable" => Which::Stable,
             _ => Which::Dev,
         };
-        let (os, arch) = feed::system().ok_or("no engine for this system")?;
         let releases = self.releases(which).await?;
         let have = (self.0.state.borrow().ready.clone()).unwrap_or_else(|| banda.version.clone());
         let above = feed::above(&releases, &banda.version, which);
         let newest = (above.first()).map_or_else(|| banda.version.clone(), |(_, v)| v.clone());
-        let feed_name = feed::feed_name(which, os);
         for (release, version) in above {
             if !feed::is_above(&version, &have) {
                 break;
             }
-            let Some(asset) = release.file(&feed_name) else {
-                tracing::info!(%version, "no {feed_name} in its release yet");
-                continue;
-            };
-            let text = (take::get(&asset.browser_download_url).await?)
-                .text()
-                .await
-                .map_err(|e| format!("{feed_name}: {}", banda_kernel::https::cause(&e)))?;
-            let Some(feed) = Feed::read(&text) else {
-                tracing::warn!(%version, "{feed_name} names no file: not taken");
-                continue;
-            };
-            let bundle = feed::bundle_name(banda.folder, &version, os, arch);
-            if feed.version != version || feed.file != bundle {
-                tracing::warn!(%version, file = %feed.file, "{feed_name} is not this Banda's: not taken");
-                continue;
+            if let Ok(found) = self.bundle(which, release, &version).await? {
+                return Ok((newest, Some(found)));
             }
-            let Some(asset) = release.file(&bundle) else {
-                tracing::info!(%version, "{bundle} is not all there yet");
-                continue;
-            };
-            return Ok((newest, Some((asset.browser_download_url.clone(), feed))));
         }
         Ok((newest, None))
+    }
+
+    /// Where `release`'s engine for this system is, and what its feed
+    /// says; `Ok(Err(why))` when it has none to take, as one not all
+    /// there yet.
+    async fn bundle(
+        &self,
+        which: Which,
+        release: &Release,
+        version: &str,
+    ) -> Result<Result<(String, Feed), String>, String> {
+        let (os, arch) = feed::system().ok_or("no engine for this system")?;
+        let feed_name = feed::feed_name(which, os);
+        let Some(asset) = release.file(&feed_name) else {
+            tracing::info!(%version, "no {feed_name} in its release yet");
+            return Ok(Err(format!("{version}'s release has no {feed_name}")));
+        };
+        let text = (take::get(&asset.browser_download_url).await?)
+            .text()
+            .await
+            .map_err(|e| format!("{feed_name}: {}", banda_kernel::https::cause(&e)))?;
+        let Some(feed) = Feed::read(&text) else {
+            tracing::warn!(%version, "{feed_name} names no file: not taken");
+            return Ok(Err(format!("{version}'s {feed_name} names no file")));
+        };
+        let bundle = feed::bundle_name(self.0.banda.folder, version, os, arch);
+        if feed.version != version || feed.file != bundle {
+            tracing::warn!(%version, file = %feed.file, "{feed_name} is not this Banda's: not taken");
+            return Ok(Err(format!("{version}'s {feed_name} is not this Banda's")));
+        }
+        let Some(asset) = release.file(&bundle) else {
+            tracing::info!(%version, "{bundle} is not all there yet");
+            return Ok(Err(format!("{bundle} is not all there yet")));
+        };
+        Ok(Ok((asset.browser_download_url.clone(), feed)))
     }
 
     /// The releases `which` reads: the newest Devs, or the Stable marked
@@ -299,7 +377,7 @@ impl Updates {
     }
 
     /// Downloads, checks and puts in place the engine at `url`.
-    async fn take(&self, url: &str, feed: &Feed) {
+    async fn take_bundle(&self, url: &str, feed: &Feed) {
         let engine = &self.0.banda.engine;
         let version = feed.version.clone();
         tracing::info!(%version, "taking a new engine");
@@ -332,7 +410,10 @@ impl Updates {
         match taken {
             Ok(kept) => {
                 tracing::info!(%version, folder = %kept.display(), "a new engine is in place");
-                take::prune(engine, &self.0.banda.version);
+                let chosen = chosen(engine);
+                let mut keep = vec![self.0.banda.version.as_str(), version.as_str()];
+                keep.extend(chosen.as_deref());
+                take::prune(engine, &keep);
                 self.0.state.send_modify(|state| {
                     state.taking = None;
                     state.ready = Some(version);
@@ -348,6 +429,12 @@ impl Updates {
             }
         }
     }
+}
+
+/// The version the Person chose, as `engine/chosen` keeps it.
+fn chosen(engine: &std::path::Path) -> Option<String> {
+    let said = std::fs::read_to_string(engine.join(CHOSEN)).ok()?;
+    Some(said.trim().to_owned()).filter(|said| !said.is_empty())
 }
 
 /// Who owns Banda where `program` runs: what `package-type` beside it
@@ -373,10 +460,48 @@ banda_kernel::methods! {
         call check(Nothing) -> UpdateState, Write;
         /// What this machine's updates are, then that again on each
         /// change: what it runs, the newest found, what it takes, what is
-        /// ready, and why not.
+        /// ready, what that waits for, and why not.
         stream state(Nothing) -> UpdateState, Read;
+        /// Restart now: the engine moves onto the copy ready at once,
+        /// which ends its Turns and terminals. It refuses while Turns run,
+        /// unless `force`: the Person said so after Quit's warning.
+        call restart(RestartNow) -> Moving, Manage;
+        /// Puts `version` in place, an older one too, and keeps it as
+        /// chosen: the engine moves onto it as it moves onto any copy
+        /// ready, and the looks take nothing above it. `newest` drops the
+        /// choice and looks again.
+        call take(TakeVersion) -> UpdateState, Manage;
     }
 }
+
+/// What Restart now asks.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "updates/")]
+struct RestartNow {
+    /// Moves while Turns run, which it ends.
+    #[serde(default)]
+    #[ts(optional)]
+    force: Option<bool>,
+}
+
+/// What `take` asks.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "updates/")]
+struct TakeVersion {
+    /// A version of this machine's channel, or `newest`.
+    version: String,
+}
+
+/// The engine is moving: from the version it ran onto the one ready.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "updates/")]
+pub struct Moving {
+    pub from: String,
+    pub to: String,
+}
+
+/// What `take` takes `newest` as: the choice dropped.
+const NEWEST: &str = "newest";
 
 impl Updates {
     async fn check(&self, _: Call, _: Nothing) -> Result<UpdateState, Refusal> {
@@ -386,7 +511,214 @@ impl Updates {
     async fn state(&self, _: Call, _: Nothing) -> Result<Stream, Refusal> {
         Ok(follow(self.watch()))
     }
+
+    async fn restart(&self, _: Call, RestartNow { force }: RestartNow) -> Result<Moving, Refusal> {
+        self.restart_now(force.unwrap_or(false))
+    }
+
+    async fn take(
+        &self,
+        _: Call,
+        TakeVersion { version }: TakeVersion,
+    ) -> Result<UpdateState, Refusal> {
+        self.choose(&version).await
+    }
+
+    /// Restart now: moves onto the copy ready, unless Turns run and not
+    /// `force`.
+    pub fn restart_now(&self, force: bool) -> Result<Moving, Refusal> {
+        let Some(restarting) = &self.0.restarting else {
+            return Err(Refusal::invalid("This engine does not restart itself."));
+        };
+        let facts = self.facts(restarting);
+        let running = &self.0.banda.version;
+        match restart::now(&facts, force) {
+            Ok(()) => {}
+            Err(Refused::Nothing) => {
+                return Err(Refusal::conflict(format!(
+                    "No other copy is ready: {running} is the newest in place. banda update \
+                     --check looks for one."
+                )));
+            }
+            Err(Refused::Never(why)) => return Err(Refusal::conflict(why)),
+            Err(Refused::Working(turns)) => {
+                let agents = match turns {
+                    1 => "An Agent works".to_owned(),
+                    _ => format!("{turns} Agents work"),
+                };
+                return Err(Refusal::conflict(format!(
+                    "{agents} on this machine: restarting stops them too. Nothing was \
+                     restarted: force restarts anyway."
+                )));
+            }
+        }
+        self.move_now(restarting)
+            .ok_or_else(|| Refusal::conflict("The copy ready is gone from its folder."))
+    }
+
+    /// Puts `version` in place and keeps it as chosen; `newest` drops the
+    /// choice and looks again.
+    pub async fn choose(&self, version: &str) -> Result<UpdateState, Refusal> {
+        let version = version.to_owned();
+        let engine = &self.0.banda.engine;
+        if version == NEWEST {
+            let _ = std::fs::remove_file(engine.join(CHOSEN));
+            // The newest copy in place waits again, not the one chosen.
+            let ready = (take::copies(engine).into_iter())
+                .find(|copy| feed::is_above(copy, &self.0.banda.version));
+            self.0.state.send_modify(|state| {
+                state.chosen = None;
+                state.ready = ready;
+            });
+            return Ok(self.look().await);
+        }
+        if feed::Version::of(&version).is_none() {
+            return Err(Refusal::invalid(format!(
+                "\"{version}\" is not a version of Banda's, as 0.1.0-dev.660, or newest."
+            )));
+        }
+        let _one = self.0.looking.lock().await;
+        if let Some(off) = self
+            .off()
+            .filter(|_| *self.0.take.borrow() != TakeUpdates::Off)
+        {
+            return Err(Refusal::conflict(off));
+        }
+        let running = self.0.banda.version.clone();
+        if version != running && !take::copies(engine).contains(&version) {
+            let (url, feed) = self.release(&version).await.map_err(Refusal::conflict)?;
+            self.take_bundle(&url, &feed).await;
+            if let Some(failed) = self.0.state.borrow().failed.clone() {
+                return Err(Refusal::conflict(failed));
+            }
+        }
+        std::fs::create_dir_all(engine)
+            .and_then(|()| std::fs::write(engine.join(CHOSEN), format!("{version}\n")))
+            .map_err(|e| Refusal::conflict(format!("{}: {e}", engine.display())))?;
+        tracing::info!(%version, "the Person chose this engine");
+        self.0.state.send_modify(|state| {
+            state.chosen = Some(version.clone());
+            state.ready = (version != running).then(|| version.clone());
+            state.failed = None;
+        });
+        Ok(self.0.state.borrow().clone())
+    }
+
+    /// Where release `version`'s engine is, and what its feed says.
+    async fn release(&self, version: &str) -> Result<(String, Feed), String> {
+        let which = match self.0.banda.channel {
+            "stable" => Which::Stable,
+            _ => Which::Dev,
+        };
+        let url = format!("{}/releases/tags/v{version}", self.0.releases);
+        let client = banda_kernel::https::client()?;
+        let response = (client.get(&url))
+            .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+            .send()
+            .await
+            .map_err(|e| format!("GitHub: {}", banda_kernel::https::cause(&e)))?;
+        if response.status().as_u16() == 404 {
+            return Err(format!("Banda has no release {version}"));
+        }
+        if !response.status().is_success() {
+            return Err(format!(
+                "GitHub answered {} for {version}",
+                response.status().as_u16()
+            ));
+        }
+        let text = (response.text().await)
+            .map_err(|e| format!("GitHub: {}", banda_kernel::https::cause(&e)))?;
+        let release: Release = serde_json::from_str(&text)
+            .map_err(|e| format!("GitHub's release {version} did not read: {e}"))?;
+        if !which.takes(&release) {
+            return Err(format!(
+                "{version} is not a release of this Banda's channel"
+            ));
+        }
+        self.bundle(which, &release, version).await?
+    }
+
+    /// What holds now, for the restart's policy.
+    fn facts<'a>(&self, restarting: &'a Restarting) -> Facts<'a> {
+        Facts {
+            ready: self.0.state.borrow().ready.is_some(),
+            take: *self.0.take.borrow(),
+            moves: restarting.restart.moves(),
+            turns: *restarting.turns.borrow(),
+            in_hand: *restarting.hands.borrow(),
+            now: banda_kernel::now_ms(),
+        }
+    }
+
+    /// Asks the engine to move onto the copy ready: what it moves from
+    /// and onto, unless the copy is gone.
+    fn move_now(&self, restarting: &Restarting) -> Option<Moving> {
+        let to = self.0.state.borrow().ready.clone()?;
+        let program = self.0.banda.engine.join(&to).join(PROGRAM);
+        if !program.is_file() {
+            tracing::warn!(version = %to, "the copy ready has no program: not moved onto");
+            self.0.state.send_modify(|state| state.ready = None);
+            return None;
+        }
+        let from = self.0.banda.version.clone();
+        tracing::info!(%from, %to, "the engine moves onto the copy ready");
+        restarting.restart.ask(program);
+        Some(Moving { from, to })
+    }
+
+    /// Moves onto a copy ready once [`restart::next`] says, and says what
+    /// it waits for meanwhile; until the engine moves.
+    async fn drive(self) {
+        let Some(restarting) = &self.0.restarting else {
+            return;
+        };
+        let mut state = self.watch();
+        let mut turns = restarting.turns.clone();
+        let mut hands = restarting.hands.clone();
+        let mut take = self.0.take.clone();
+        loop {
+            state.borrow_and_update();
+            turns.borrow_and_update();
+            hands.borrow_and_update();
+            take.borrow_and_update();
+            let waits = match restart::next(&self.facts(restarting)) {
+                Next::Move if self.move_now(restarting).is_some() => return,
+                Next::Move | Next::Nothing => None,
+                Next::Wait(waits) => Some(waits),
+            };
+            let quiet = (waits.as_ref())
+                .and_then(|waits| waits.typed_until)
+                .map(|until| until - banda_kernel::now_ms());
+            self.0.state.send_if_modified(|state| {
+                let changed = state.waits != waits;
+                state.waits = waits;
+                changed
+            });
+            let quiet = async move {
+                match quiet {
+                    Some(left) => {
+                        let left = u64::try_from(left.max(0)).unwrap_or_default();
+                        tokio::time::sleep(Duration::from_millis(left)).await;
+                    }
+                    None => std::future::pending().await,
+                }
+            };
+            let gone = tokio::select! {
+                changed = state.changed() => changed.is_err(),
+                changed = turns.changed() => changed.is_err(),
+                changed = hands.changed() => changed.is_err(),
+                changed = take.changed() => changed.is_err(),
+                () = quiet => false,
+            };
+            if gone {
+                return;
+            }
+        }
+    }
 }
+
+/// The engine's program in its copy's folder.
+const PROGRAM: &str = if cfg!(windows) { "banda.exe" } else { "banda" };
 
 /// Each value of `changes`, the current one first, as a stream's pieces.
 fn follow(mut changes: watch::Receiver<UpdateState>) -> Stream {
@@ -427,11 +759,13 @@ impl Module for Updates {
         Self::method_kind(method)
     }
 
-    /// Looks a minute after the engine starts, then each hour.
+    /// Looks a minute after the engine starts, then each hour, and
+    /// moves onto a copy ready once nothing runs.
     async fn opened(&self, _: ModuleProject) -> Result<(), banda_kernel::Error> {
         if self.0.started.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        tokio::spawn(self.clone().drive());
         let updates = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(updates.0.first).await;
@@ -449,5 +783,152 @@ impl Module for Updates {
 
     async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
         self.dispatch_stream(call, method, params).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use restart::Moves;
+
+    /// A machine running dev.10 with dev.11 in place, which moves as
+    /// `moves` says.
+    struct Machine {
+        updates: Updates,
+        restart: Restart,
+        turns: watch::Sender<usize>,
+        hands: watch::Sender<InHand>,
+        take: watch::Sender<TakeUpdates>,
+        engine: PathBuf,
+        _folder: tempfile::TempDir,
+    }
+
+    fn machine(moves: Moves) -> Machine {
+        let folder = tempfile::tempdir().unwrap();
+        let engine = folder.path().join("engine");
+        let copy = engine.join("0.1.0-dev.11");
+        std::fs::create_dir_all(&copy).unwrap();
+        std::fs::write(copy.join(PROGRAM), "").unwrap();
+        std::fs::write(copy.join("version"), "banda 0.1.0-dev.11 (build b)\n").unwrap();
+        let banda = Banda {
+            channel: "dev",
+            folder: "banda-dev",
+            version: "0.1.0-dev.10".to_owned(),
+            program: None,
+            engine: engine.clone(),
+        };
+        let (take, taken) = watch::channel(TakeUpdates::WhenIdle);
+        let (turns, counted) = watch::channel(0);
+        let (hands, held) = watch::channel(InHand::default());
+        let restart = Restart::new(moves);
+        let updates = Updates::new(banda, taken).restarts(restart.clone(), counted, held);
+        Machine {
+            updates,
+            restart,
+            turns,
+            hands,
+            take,
+            engine,
+            _folder: folder,
+        }
+    }
+
+    /// The next `waits` the state says, past those `until` refuses.
+    async fn waits_until(
+        state: &mut watch::Receiver<UpdateState>,
+        until: impl Fn(&Option<Waits>) -> bool,
+    ) -> Option<Waits> {
+        let waits = tokio::time::timeout(Duration::from_secs(5), async {
+            loop {
+                let waits = state.borrow_and_update().waits.clone();
+                if until(&waits) {
+                    return waits;
+                }
+                state.changed().await.unwrap();
+            }
+        });
+        waits.await.expect("the state said it")
+    }
+
+    #[tokio::test]
+    async fn the_engine_moves_once_nothing_runs_and_says_what_it_waits_for() {
+        let machine = machine(Moves::Itself);
+        let mut state = machine.updates.watch();
+        assert_eq!(state.borrow().ready.as_deref(), Some("0.1.0-dev.11"));
+        machine.turns.send_replace(2);
+        machine.hands.send_replace(InHand {
+            terminals: 1,
+            typed: None,
+        });
+        tokio::spawn(machine.updates.clone().drive());
+
+        let waits = waits_until(&mut state, Option::is_some).await.unwrap();
+        assert_eq!((waits.turns, waits.terminals), (2, 1));
+        machine.turns.send_replace(0);
+        let waits = waits_until(&mut state, |w| w.as_ref().is_some_and(|w| w.turns == 0)).await;
+        assert_eq!(waits.unwrap().terminals, 1, "the terminal holds it still");
+
+        machine.hands.send_replace(InHand::default());
+        let program = tokio::time::timeout(Duration::from_secs(5), machine.restart.asked())
+            .await
+            .expect("it moved");
+        assert_eq!(program, machine.engine.join("0.1.0-dev.11").join(PROGRAM));
+    }
+
+    #[tokio::test]
+    async fn ask_waits_for_the_person_and_restart_now_warns_while_turns_run() {
+        let machine = machine(Moves::Itself);
+        machine.take.send_replace(TakeUpdates::Ask);
+        let mut state = machine.updates.watch();
+        tokio::spawn(machine.updates.clone().drive());
+        let waits = waits_until(&mut state, Option::is_some).await.unwrap();
+        assert!(waits.person, "{waits:?}");
+
+        machine.turns.send_replace(1);
+        let refused = machine.updates.restart_now(false).unwrap_err();
+        assert!(refused.message.contains("An Agent works"), "{refused:?}");
+        let moving = machine.updates.restart_now(true).unwrap();
+        assert_eq!(
+            (moving.from.as_str(), moving.to.as_str()),
+            ("0.1.0-dev.10", "0.1.0-dev.11")
+        );
+        assert_eq!(
+            machine.restart.asked().await,
+            machine.engine.join("0.1.0-dev.11").join(PROGRAM)
+        );
+    }
+
+    #[tokio::test]
+    async fn the_windows_child_waits_for_banda_to_restart() {
+        let machine = machine(Moves::Never("it restarts with Banda".to_owned()));
+        let mut state = machine.updates.watch();
+        tokio::spawn(machine.updates.clone().drive());
+        let waits = waits_until(&mut state, Option::is_some).await.unwrap();
+        assert_eq!(waits.restart.as_deref(), Some("it restarts with Banda"));
+        let refused = machine.updates.restart_now(true).unwrap_err();
+        assert_eq!(refused.message, "it restarts with Banda");
+    }
+
+    #[tokio::test]
+    async fn a_key_holds_it_ten_minutes() {
+        let machine = machine(Moves::Itself);
+        let now = banda_kernel::now_ms();
+        machine.hands.send_replace(InHand {
+            terminals: 0,
+            typed: Some(now),
+        });
+        let mut state = machine.updates.watch();
+        tokio::spawn(machine.updates.clone().drive());
+        let waits = waits_until(&mut state, Option::is_some).await.unwrap();
+        assert_eq!(waits.typed_until, Some(now + restart::QUIET_MS));
+
+        // Ten minutes after the key, it moves.
+        machine.hands.send_replace(InHand {
+            terminals: 0,
+            typed: Some(now - restart::QUIET_MS),
+        });
+        tokio::time::timeout(Duration::from_secs(5), machine.restart.asked())
+            .await
+            .expect("it moved");
     }
 }

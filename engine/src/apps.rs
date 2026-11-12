@@ -17,7 +17,7 @@ use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::methods::MethodTable;
-use banda_kernel::{KernelBuilder, Method, Working};
+use banda_kernel::{Hands, KernelBuilder, Method, Working};
 use banda_keys::KeysModule;
 use banda_look::OneFile;
 use banda_machines::{Machine, Machines};
@@ -26,6 +26,7 @@ use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_updates::Updates;
+use banda_updates::restart::Restart;
 use banda_workspaces::Workspaces;
 use banda_workspaces::placing::Flow;
 
@@ -65,6 +66,11 @@ pub struct HostContext<'a> {
     /// The tokens the bytes module gives, which the routes beside the API
     /// serve (ADR 0106, step 4a).
     pub bytes: &'a Bytes,
+    /// The terminals open and the Person's last key in one, which the
+    /// terminal module tells and the updates module waits on (ADR 0115).
+    pub hands: &'a Hands,
+    /// How the updates module asks the engine to move onto a new copy.
+    pub restart: &'a Restart,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -126,8 +132,8 @@ mod build {
         Pulls::new()
     }
 
-    pub fn terminal(_: &HostContext<'_>) -> Terminals {
-        Terminals::new()
+    pub fn terminal(host: &HostContext<'_>) -> Terminals {
+        Terminals::new().held_in(host.hands.clone())
     }
 
     /// The bytes module shares its tokens with the routes beside the API,
@@ -189,7 +195,8 @@ mod build {
 
     /// This machine's own updates (ADR 0115): its engine's copies are in
     /// the data folder's `engine/`, as the window keeps its own, and
-    /// machine.toml says whether it takes them.
+    /// machine.toml says whether it takes them. It moves onto one once no
+    /// Turn runs and the Person has nothing in hand.
     pub fn updates(host: &HostContext<'_>) -> Updates {
         let banda = banda_updates::Banda {
             channel: channel(),
@@ -198,7 +205,11 @@ mod build {
             program: std::env::current_exe().ok(),
             engine: host.places.data.join("engine"),
         };
-        Updates::new(banda, host.machine.updates())
+        Updates::new(banda, host.machine.updates()).restarts(
+            host.restart.clone(),
+            host.working.count(),
+            host.hands.now(),
+        )
     }
 
     /// The Pane kinds that open as a Group of their own, as the window
@@ -240,6 +251,8 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         machine: &machine,
         working: &Working::new(),
         bytes: &Bytes::new(),
+        hands: &Hands::new(),
+        restart: &Restart::new(banda_updates::restart::Moves::Itself),
     })
 }
 

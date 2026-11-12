@@ -2,6 +2,9 @@
 import type { CallMethod } from "../CallMethod";
 import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
+import type { Moving } from "./Moving";
+import type { RestartNow } from "./RestartNow";
+import type { TakeVersion } from "./TakeVersion";
 import type { UpdateState } from "./UpdateState";
 
 export type UpdatesMethods = { 
@@ -13,6 +16,19 @@ check: CallMethod<Nothing, UpdateState>,
 /**
  * What this machine's updates are, then that again on each
  * change: what it runs, the newest found, what it takes, what is
- * ready, and why not.
+ * ready, what that waits for, and why not.
  */
-state: StreamMethod<Nothing, UpdateState>, };
+state: StreamMethod<Nothing, UpdateState>, 
+/**
+ * Restart now: the engine moves onto the copy ready at once,
+ * which ends its Turns and terminals. It refuses while Turns run,
+ * unless `force`: the Person said so after Quit's warning.
+ */
+restart: CallMethod<RestartNow, Moving>, 
+/**
+ * Puts `version` in place, an older one too, and keeps it as
+ * chosen: the engine moves onto it as it moves onto any copy
+ * ready, and the looks take nothing above it. `newest` drops the
+ * choice and looks again.
+ */
+take: CallMethod<TakeVersion, UpdateState>, };
