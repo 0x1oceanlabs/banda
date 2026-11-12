@@ -48,7 +48,10 @@ test("the ISO week at a year's turn belongs to the year of its Thursday", () => 
 })
 
 test("months shift across years", () => {
-  expect(shifted({ year: 2026, month: 11 }, 1)).toEqual({ year: 2027, month: 0 })
+  expect(shifted({ year: 2026, month: 11 }, 1)).toEqual({
+    year: 2027,
+    month: 0,
+  })
   expect(shifted({ year: 2026, month: 0 }, -1)).toEqual({
     year: 2025,
     month: 11,
