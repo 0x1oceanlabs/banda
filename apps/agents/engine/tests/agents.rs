@@ -2,7 +2,7 @@
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
 use banda_agents::model::{
-    Body, Choice, Exit, Failure, Item, ItemId, Mode, OptionValue, QuestionState, Settings,
+    Body, Choice, Crew, CrewState, CrewView, Exit, Failure, Item, ItemId, Mode, OptionValue, QuestionState, Settings,
     StepState, Subagent, SubagentId, SubagentState, SubagentView, ThreadList, ThreadView,
     ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Wake,
 };
@@ -12133,4 +12133,282 @@ async fn a_thread_whose_session_came_along_goes_on_with_it_on_the_other_machines
         .filter(|text| text.starts_with("moved: "))
         .collect();
     assert_eq!(moved, ["moved: claude-a → claude-b Same"]);
+}
+
+/// The Thread's only Crew.
+fn the_crew(view: &ThreadView) -> &Crew {
+    let [crew] = view.crews.as_slice() else {
+        panic!("one Crew: {:?}", view.crews);
+    };
+    crew
+}
+
+/// Whether the Thread holds `n` Crews and none works.
+fn crews_ended(view: &ThreadView, n: usize) -> bool {
+    view.crews.len() == n && view.crews.iter().all(|crew| !crew.state.works())
+}
+
+impl World {
+    /// What the Project's facts said of Crews, each by its kind.
+    async fn crew_facts(&self) -> Vec<(String, Value)> {
+        let project = self.kernel.project(self.project).await.unwrap();
+        let events = project.events_after(0, EventFilter::default(), usize::MAX);
+        let events = events.await.unwrap().into_iter();
+        (events.filter(|event| event.kind.starts_with("crew.")))
+            .map(|event| (event.kind, event.payload))
+            .collect()
+    }
+
+    /// Crew `crew` as its Pane reads it.
+    async fn crew(&self, crew: &Crew) -> CrewView {
+        let params = json!({ "crew": crew.id });
+        let read = self.call(self.person(), "agents.crew", params).await;
+        serde_json::from_value(read.unwrap()).unwrap()
+    }
+}
+
+/// A Crew works in the background once its turn ended: its Thread shows
+/// where it started, holds its phases and agents, works while it does, and
+/// keeps its Result; the turn Claude goes on with after it is named (ADR
+/// 0103, step 4).
+#[tokio::test]
+async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew long log").await;
+    let thread = &sent["thread"];
+    let view = (world.until(thread, |v| {
+        !ongoing(v, &sent["turn"]) && v.crews.iter().any(|crew| crew.state.works())
+    }))
+    .await;
+    let crew = the_crew(&view);
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+    assert_eq!(json!(crew.turn), sent["turn"]);
+    assert_eq!(crew.title, "audit-routes");
+    assert_eq!(crew.description.as_deref(), Some("Find dead routes and fix them"));
+    let phases: Vec<_> = (crew.phases.iter())
+        .map(|phase| (phase.index, phase.title.as_str(), phase.detail.as_deref()))
+        .collect();
+    assert_eq!(
+        phases,
+        [
+            (1, "Scan", Some("read the routes")),
+            (2, "Fix", Some("one agent a route")),
+            (3, "Verify", Some("check the build")),
+        ]
+    );
+    assert!(texts(&view).contains(&format!("crew: {}", crew.id)));
+    // The Thread works while its Crew does: listed, and not archived.
+    let listed = world.listed(thread).await;
+    assert!(listed.works(), "{listed:?}");
+    assert_eq!(listed.crew.as_ref().map(|brief| brief.title.as_str()), Some("audit-routes"));
+    let refused = world.archive(world.person(), thread, true).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
+
+    let view = world.until(thread, |v| crews_ended(v, 1) && v.crews[0].went_on.is_some()).await;
+    let crew = the_crew(&view);
+    assert_eq!(crew.state, CrewState::Done);
+    assert_eq!(crew.result.as_deref(), Some("Fixed 3 dead routes; the build passes."));
+    assert_eq!(crew.log.as_deref(), Some("phase 3 done"));
+    let agents: Vec<_> = (crew.agents.iter())
+        .map(|agent| (agent.phase, agent.index, agent.state))
+        .collect();
+    assert_eq!(
+        agents,
+        [
+            (1, 1, SubagentState::Done),
+            (1, 2, SubagentState::Done),
+            (2, 1, SubagentState::Done),
+            (2, 2, SubagentState::Done),
+            (2, 3, SubagentState::Done),
+            (3, 1, SubagentState::Done),
+        ]
+    );
+    assert!(crew.ended.is_some());
+    let went_on = view.turns.iter().find(|turn| Some(turn.id) == crew.went_on);
+    assert!(went_on.is_some(), "the turn it went on with: {:?}", view.turns);
+    assert!(texts(&view).contains(&"message: The Crew fixed the routes.".to_owned()));
+    let listed = world.listed(thread).await;
+    assert!(listed.crew.is_none());
+    // Read alone, as its Pane does.
+    let read = world.crew(crew).await;
+    assert_eq!((&read.crew, read.thread), (crew, view.thread.id));
+    // Written once started, as its agents or log changed, and once ended.
+    let facts = world.crew_facts().await;
+    let kinds: Vec<_> = facts.iter().map(|(kind, _)| kind.as_str()).collect();
+    assert_eq!(kinds.first(), Some(&"crew.started"));
+    assert_eq!(kinds.iter().filter(|kind| **kind == "crew.ended").count(), 1);
+    let progressed = kinds.iter().filter(|kind| **kind == "crew.progressed").count();
+    // Each phase: its agents start, then end; its log line; and the turn
+    // it went on with.
+    assert_eq!(progressed, 3 * 3 + 1, "{facts:#?}");
+}
+
+/// A big Crew's agents wait their turn, Queued, and are all kept.
+#[tokio::test]
+async fn a_big_crews_agents_wait_queued_and_all_end() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew big").await;
+    let view = world.until(&sent["thread"], |v| crews_ended(v, 1)).await;
+    let crew = the_crew(&view);
+    assert_eq!(crew.agents.len(), 2 + 50 + 1);
+    let queued = (world.crew_facts().await.into_iter())
+        .filter(|(kind, _)| kind == "crew.progressed")
+        .flat_map(|(_, fact)| fact["agents"].as_array().cloned().unwrap_or_default())
+        .any(|agent| agent["state"] == "queued");
+    assert!(queued, "some waited");
+    assert!(crew.agents.iter().all(|agent| agent.state == SubagentState::Done));
+}
+
+/// What a Crew's agent asks between turns is the Crew's while it is the
+/// one Crew at work: named by it, read with it, and its call its own
+/// (ADR 0103, decision 28).
+#[tokio::test]
+async fn a_crews_agent_asks_between_turns_as_the_crew() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew asks").await;
+    let thread = &sent["thread"];
+    let view = world.until(thread, |v| asked(v).is_some()).await;
+    let crew = the_crew(&view).clone();
+    let (question, sub) = asked(&view).unwrap();
+    assert_eq!(sub, None);
+    let item = view.items.iter().find(|item| item.id == question).unwrap();
+    let Body::Question { crew: by, .. } = &item.body else {
+        unreachable!("a Question");
+    };
+    assert_eq!(*by, Some(crew.id));
+    // No turn of the Agent's own opened for it.
+    assert_eq!(view.turns.len(), 1, "{:?}", view.turns);
+    let listed = world.listed(thread).await;
+    let asking: Vec<_> = listed.asking.iter().map(|asked| asked.asker.clone()).collect();
+    assert_eq!(asking, [Some("Crew audit-routes".to_owned())]);
+    world.answer(question, "allow-once").await;
+    let view = world.until(thread, |v| crews_ended(v, 1)).await;
+    assert_eq!(the_crew(&view).state, CrewState::Done);
+    let read = world.crew(&crew).await;
+    let entries = entries(&read.items);
+    assert_eq!(
+        entries,
+        [
+            "tool: echo ok > d.txt (Done)",
+            "question: echo ok > d.txt (Answered)",
+        ]
+    );
+}
+
+/// With two Crews at work, what one's agent asks is the Agent's own, in
+/// a turn of its own: Banda cannot tell whose it is.
+#[tokio::test]
+async fn with_two_crews_at_work_a_question_is_the_agents_own() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew two asks").await;
+    let thread = &sent["thread"];
+    let view = world.until(thread, |v| asked(v).is_some()).await;
+    assert_eq!(view.crews.len(), 2);
+    let (question, _) = asked(&view).unwrap();
+    let item = view.items.iter().find(|item| item.id == question).unwrap();
+    assert!(matches!(item.body, Body::Question { crew: None, .. }));
+    assert_ne!(json!(item.turn), sent["turn"], "a turn of the Agent's own");
+    world.answer(question, "allow-once").await;
+    world.until(thread, |v| crews_ended(v, 2)).await;
+}
+
+/// The Workflow call asks before the Crew starts, with what its script's
+/// `meta` says; allowed, it starts (ADR 0103, decision 30).
+#[tokio::test]
+async fn the_workflow_call_asks_with_what_its_script_says() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew start").await;
+    let thread = &sent["thread"];
+    let view = world.until(thread, |v| asked(v).is_some()).await;
+    let (question, _) = asked(&view).unwrap();
+    let item = view.items.iter().find(|item| item.id == question).unwrap();
+    let Body::Question { start: Some(start), choices, .. } = &item.body else {
+        panic!("a Question to start a Crew: {:?}", item.body);
+    };
+    assert_eq!(start.title, "audit-routes");
+    let titles: Vec<_> = start.phases.iter().map(|phase| phase.title.as_str()).collect();
+    assert_eq!(titles, ["Scan", "Fix", "Verify"]);
+    assert!(start.script.starts_with("export const meta"));
+    assert_eq!(choices.len(), 3, "\"Don't ask again\" kept: {choices:?}");
+    world.answer(question, "allow-once").await;
+    let view = world.until(thread, |v| crews_ended(v, 1)).await;
+    assert_eq!(the_crew(&view).state, CrewState::Done);
+}
+
+/// A Crew whose script throws ends Failed, in Claude's words.
+#[tokio::test]
+async fn a_crew_whose_script_throws_fails() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew fails").await;
+    // Once the turn Claude went on with after it ended too.
+    let view = (world.until(&sent["thread"], |v| {
+        let went_on = v.crews.first().and_then(|crew| crew.went_on);
+        crews_ended(v, 1) && went_on.is_some_and(|turn| !ongoing(v, &json!(turn)))
+    }))
+    .await;
+    let crew = the_crew(&view);
+    assert_eq!(crew.state, CrewState::Failed);
+    assert_eq!(
+        crew.why.as_deref(),
+        Some("Dynamic workflow \"Audit the routes\" failed")
+    );
+    assert_eq!(crew.result.as_deref(), Some("Error: the script threw after Scan."));
+    assert!(!world.listed(&sent["thread"]).await.works());
+}
+
+/// A Harness whose process ends loses its Crew at work.
+#[tokio::test]
+async fn a_harness_that_dies_loses_its_crew() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "crew dies").await;
+    let view = world.until(&sent["thread"], |v| crews_ended(v, 1)).await;
+    let crew = the_crew(&view);
+    assert_eq!(
+        (crew.state, crew.why.as_deref()),
+        (CrewState::Lost, Some("Fake stopped while it worked."))
+    );
+    assert!(!world.listed(&sent["thread"]).await.works());
+}
+
+/// Banda restarted: a Crew that was at work is Lost, its Questions closed
+/// and its calls ended (ADR 0103, decision 3).
+#[test]
+fn a_restart_loses_the_crew_at_work_and_closes_its_question() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses()),
+        async |world| {
+            let sent = world.send(None, "crew asks").await;
+            let view = world.until(&sent["thread"], |v| asked(v).is_some()).await;
+            (sent, asked(&view).unwrap().0)
+        },
+        async |world, (sent, question)| {
+            let view = world.thread(&sent["thread"]).await;
+            let crew = the_crew(&view);
+            assert_eq!(
+                (crew.state, crew.why.as_deref()),
+                (CrewState::Lost, Some("Stopped when Banda restarted."))
+            );
+            let item = view.items.iter().find(|item| item.id == question).unwrap();
+            assert!(matches!(
+                item.body,
+                Body::Question {
+                    state: QuestionState::Closed,
+                    ..
+                }
+            ));
+            let read = world.crew(crew).await;
+            assert_eq!(entries(&read.items)[0], "tool: echo ok > d.txt (Failed)");
+            assert!(world.listed(&sent["thread"]).await.asking.is_empty());
+            assert!(!world.listed(&sent["thread"]).await.works());
+        },
+    );
 }
