@@ -2424,10 +2424,9 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * device (ADR 0106, law 1): the places `kindReaches` finds in all the
  * code the kind takes, through every import, by kind, file and what it
  * reaches, each with the step of ADR 0106's plan that takes it away. The
- * Thread, the terminal, New Pane and the Diff open elsewhere today, and all
- * but the Thread reach none, so only the Thread's places are here:
- *
- * - 4c: its media, as arc's bytes come through arc's session.
+ * Thread, the terminal, New Pane, the Diff, Files and the Visual open
+ * elsewhere today, and since step 4c none reaches past them, so the list
+ * is empty.
  *
  * None joins the list, and a place that goes leaves it, as its step
  * lands. A kind that comes to say `elsewhere` reaches none, or says here
@@ -2438,12 +2437,7 @@ test("where a Thread stands is read from status.ts, and no more files read a Lat
  * a global another file set, it does not see. The same-path test and the
  * kit catch what runs.
  */
-const REACHING: Record<string, { places: number; until: string }> = {
-  "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
-    places: 1,
-    until: "4c",
-  },
-}
+const REACHING: Record<string, { places: number; until: string }> = {}
 
 /**
  * The device's own helpers, which any kind may reach for what they do

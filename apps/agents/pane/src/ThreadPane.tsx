@@ -43,7 +43,6 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   // decision 7): on another (ADR 0081), its media come from that machine
   // and its links go through the router to this device (ADR 0106, law 2).
   const { host, shown } = usePlaced(project, props.args.host)
-  const here = host === undefined
   const { state: status } = useStatus(engine)
   const away =
     host === undefined
