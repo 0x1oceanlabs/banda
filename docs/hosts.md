@@ -142,7 +142,11 @@ Each keeps your other hosts and comments, writes the file whole, and
 keeps a change you saved meanwhile. `hostTest` is Test connection, and
 Add's Connect: it runs `uname`, `banda --version` and `banda status`
 there, which starts nothing, and says the system there and the machine's
-own name and icon. `hostStop` is Stop Banda: that machine's own `banda stop`; the
+own name and icon. Where no Banda is found, it runs this build's
+`install.sh` there with `--check`, which takes nothing, and says what
+Install would put there. `hostInstall` is Install: `install.sh` there,
+its lines told as they come (`hostInstalling`), until
+`hostInstallCancel`. `hostStop` is Stop Banda: that machine's own `banda stop`; the
 host then shows stopped, and Banda starts nothing there until you start
 it, or Banda here starts again, even when the host was away as you
 stopped it.
@@ -153,7 +157,12 @@ none already in the file.
 
 - Banda, where Banda finds it or at the path `banda` names: best the
   same build as this one. An engine there that does not speak this
-  window's protocol is refused.
+  window's protocol is refused. On a Linux or macOS machine with none,
+  Add → Connect offers **Install Banda on <name>**, which does it: that
+  machine downloads this window's version of the engine itself, checks
+  it and puts it in its own data folder, no root asked, and from then on
+  it updates itself (ADR 0115). By hand, it is the same script:
+  `curl -fsSL https://github.com/0x1oceanlabs/banda/releases/download/v<version>/install.sh | sh -s -- <version>`.
 - On Linux, its engine as a service that outlives your ssh session:
   `loginctl enable-linger $USER`, once. On a Mac, you logged in at its
   screen; locked is fine (see below).

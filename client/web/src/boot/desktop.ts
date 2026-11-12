@@ -87,6 +87,27 @@ export const device = {
      * nothing there: Test connection, and Add's Connect. */
     test: (ssh: string, banda: string | null): Promise<HostTest> =>
       desktop()?.hostTest(ssh, banda) ?? elsewhere(),
+    /** Install: this build's Banda put on the machine at `ssh`, where Test
+     * found none (ADR 0115, decision 8); `told` hears each line its
+     * `install.sh` says there, as it comes. The version in place. */
+    install: async (
+      ssh: string,
+      told: (line: string) => void
+    ): Promise<{ version: string; path: string }> => {
+      const bridge = desktop()
+      if (!bridge) return elsewhere()
+      const stop = bridge.hostInstalling.listen((said) => {
+        if (said.ssh === ssh) told(said.line)
+      })
+      try {
+        return await bridge.hostInstall(ssh)
+      } finally {
+        stop()
+      }
+    },
+    /** Cancel: ends the Install running at `ssh`. */
+    cancelInstall: (ssh: string): Promise<void> =>
+      desktop()?.hostInstallCancel(ssh) ?? elsewhere(),
     /** The Hosts of `~/.ssh/config` to suggest for Add; none without the
      * desktop. */
     suggestions: (): Promise<string[]> =>

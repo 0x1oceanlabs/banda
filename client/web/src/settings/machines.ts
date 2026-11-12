@@ -245,6 +245,14 @@ export function testWords(
         detail: `banda ${short(test.banda)}, ${build}`,
       }
     }
+    case "missing": {
+      const said = factsWords([test.system, archWords(test.arch)])
+      return {
+        found: true,
+        title: `Found ${name}${said ? ` · ${said}` : ""}`,
+        detail: `No Banda there yet. Banda ${short({ build: null, version: test.version })} is put in ${name}'s own folder; it then updates itself.`,
+      }
+    }
     case "signin":
       return { found: false, title: "Sign in to Tailscale to reach it" }
     case "away":
@@ -252,6 +260,62 @@ export function testWords(
     case "refused":
       return { found: false, title: `Cannot use it: ${test.why}` }
   }
+}
+
+/** A machine's architecture as people name it: x64, arm64. */
+const archWords = (arch: string) => (arch === "x86_64" ? "x64" : arch)
+
+/** One step of Install, in words, and whether it is done or still runs. */
+export type InstallStep = { words: string; done: boolean }
+
+/**
+ * Install's steps on machine `name`, in words, from the lines its
+ * `install.sh` said so far (scripts/install.sh): the download, done once
+ * it is checked; the check; putting it in place; and, once `installed`,
+ * starting its engine, which the window does as it adds the machine. The
+ * last still runs, until Banda is there.
+ */
+export function installSteps(
+  lines: readonly string[],
+  name: string
+): InstallStep[] {
+  let version = ""
+  let size = ""
+  const steps: InstallStep[] = []
+  const now = (words: string) => {
+    for (const step of steps) step.done = true
+    steps.push({ words, done: false })
+  }
+  for (const line of lines) {
+    const [word, ...rest] = line.split(" ")
+    switch (word) {
+      case "version":
+        version = short({ build: null, version: rest[0] ?? "" })
+        break
+      case "downloading": {
+        const bytes = Number(rest[1])
+        size = bytes > 0 ? ` (${Math.round(bytes / 1e6)} MB)` : ""
+        now(`Downloading ${version}${size}, on ${name}`)
+        break
+      }
+      case "checked": {
+        const download = steps.at(-1)
+        if (download)
+          download.words = `Downloaded ${version}${size}, on ${name}`
+        now("Checked")
+        now("Putting it in place")
+        break
+      }
+      case "present":
+        now(`${version} is on ${name} already`)
+        now("Starting its engine")
+        break
+      case "installed":
+        now("Starting its engine")
+        break
+    }
+  }
+  return steps
 }
 
 /** The keys of `machine.toml` that say when a machine stays awake, each

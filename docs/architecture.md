@@ -1595,6 +1595,14 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   stream `updates.state` says what it runs, the newest found, a take's
   progress, what is ready and why not (`banda update --follow`).
   Restarting on a ready copy is ADR 0115's step 4; until then it waits.
+- **A machine with no Banda is set up by `scripts/install.sh`** (ADR
+  0115, decision 8), one POSIX sh script, published with each release
+  and packed in the app's resources: it puts the engine bundle of a
+  version in place as the module does, as the Person, and says each step
+  on a line whose first word is what it is. Add → Connect runs the app's
+  copy over ssh (`hosts.ts`, `installCommand`, the script in base64 so
+  any login shell takes it), `--check` first, then for real, and draws
+  its lines as steps.
 - **What still runs from inside the AppImage** is Electron's, and, for an
   engine that is the window's child, the Node the ACP adapters run on,
   the window's Electron. An engine started as the session's service from

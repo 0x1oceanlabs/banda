@@ -108,6 +108,8 @@ const hostsLayer = ({
     test: () => Effect.die("unused"),
     stop: () => Effect.die("unused"),
     suggestions: Effect.die("unused"),
+    install: () => Effect.die("unused"),
+    cancelInstall: () => Effect.die("unused"),
   })
 
 const main = (hosts = hostsLayer()) => Layer.merge(hereLayer(), hosts)
