@@ -290,7 +290,9 @@ One row, 36 px, text at the meta size in muted ([0024], [0098] d20–22):
   shows and hides the sidebar), the workspaces' numbers `1 2 3` and
   `+`, the current one on a faint fill, then the Flow's icon
   (`columns-3`, [0098] d20). In the row and solo, a Project's workspace
-  shows by its Sign alone ([0102]).
+  shows by its Sign alone, faint while it is empty and keeps its place
+  ([0102]). A number is the workspace's place, its `Alt+N`; a click goes
+  there, and nothing else.
 - **Middle**: empty but for the sidebar's counts while the sidebar is
   hidden ([0035]). [0098] d22 puts them beside the logo, which shows the
   loudest state: Your turn in its colour, the working in grey, "3 · 7",

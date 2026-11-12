@@ -330,21 +330,24 @@ export function takesGroup(
   return column?.group !== undefined && column.group !== workspace.own
 }
 
+/** Whether a Project's emptied workspace goes once the window leaves it:
+ * the window knows it has no Threads, or knows no such Project (ADR 0102,
+ * decision 2). */
+export type Gone = (project: ProjectId) => boolean
+
+/** No Project's emptied workspace goes. */
+export const NONE_GONE: Gone = () => false
+
 /** Whether `workspace`, emptied, keeps its place once the window leaves
  * it: in the row and solo, `strict`, a Project's does, but when its
- * Project is known to have no Threads, one of `gone` (ADR 0102, decision
- * 2). In the Flow free every workspace is free, and none does (decision
- * 1). */
+ * Project is `gone` (ADR 0102, decision 2). In the Flow free every
+ * workspace is free, and none does (decision 1). */
 export function keepsPlace(
   workspace: Workspace,
-  gone: readonly ProjectId[],
+  gone: Gone,
   strict: boolean
 ): boolean {
-  return (
-    strict &&
-    workspace.project !== undefined &&
-    !gone.includes(workspace.project)
-  )
+  return strict && workspace.project !== undefined && !gone(workspace.project)
 }
 
 /** The Project Pane `pane` moves as: its own alone; `whole`, with its

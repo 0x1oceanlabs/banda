@@ -4,7 +4,7 @@ import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { onPage, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
-import type { Entry, Workspaces as State } from "./model"
+import type { Entry, Gone, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import type { Reveal } from "./layout"
 import type { Shows } from "./shows"
@@ -54,8 +54,8 @@ export function Workspaces({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
-  /** The Projects known to have no Threads (`Strip`). */
-  gone: readonly ProjectId[]
+  /** Whether a Project's emptied workspace goes (`Strip`). */
+  gone: Gone
   /** What the Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */

@@ -18,7 +18,7 @@ import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { groupedOf, startable, widthOf } from "../registry"
 import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
-import { focused, soloed, type Workspaces } from "./model"
+import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
   answered,
   answeredTo,
@@ -33,9 +33,6 @@ import {
 } from "./unheard"
 import { keepView, loadView, moveOver } from "./store"
 import { useArranged } from "./useArranged"
-
-/** No Project is known to have no Threads. */
-const NONE: readonly ProjectId[] = []
 
 /** A change the engine refused is logged: the window draws what it says.
  * One whose answer was lost may have run: its fact draws it, if it did. */
@@ -75,7 +72,7 @@ export function useTiling({
   home,
   flow = "row",
   row,
-  gone = NONE,
+  gone = NONE_GONE,
 }: {
   engine: Engine
   machine: ProjectId | undefined
@@ -84,9 +81,10 @@ export function useTiling({
   flow?: Flow
   /** In solo, the workspace `Alt+M` shows as the row for a while. */
   row?: string
-  /** The Projects known to have no Threads, whose emptied workspace goes;
-   * every other Project's stays (ADR 0102, decision 2). */
-  gone?: readonly ProjectId[]
+  /** Whether a Project's emptied workspace goes: one known to have no
+   * Threads, or one the window does not know; every other Project's
+   * stays (ADR 0102, decision 2). */
+  gone?: Gone
 }) {
   const solo = flow === "solo"
   // The arrangement is the engine's; the view, the window's (ADR 0025).

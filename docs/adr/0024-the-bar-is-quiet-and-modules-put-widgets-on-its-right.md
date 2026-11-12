@@ -60,6 +60,13 @@ Codex, `codex app-server`'s rate limits.
      ways in a mockup on 2026-11-02 and kept these two. The first `+`, a
      button of its own that was off on the empty workspace, showed two
      signs for one place, and moved right whenever a number came.
+     _Changed on 2026-11-12:_ Roma found the bar's workspaces unpredictable
+     and chose, from a mockup, one drawing: a free workspace by its number,
+     a Project's by its Sign (ADR 0102, decision 2), one cell each, so a
+     number is its `Alt+N`. The dots, the dashed frame and the click on the
+     one shown that opened the overview are gone; a click goes to a
+     workspace, and the overview is its key's. `[bar] workspaces` in a
+     `look.toml` still loads, and says nothing.
    - Middle: empty. The focused Pane's header already names what it
      shows.
    - Right: the widgets, then, as now, the engine's connection and the

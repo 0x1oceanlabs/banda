@@ -288,6 +288,10 @@ describe("plans", () => {
   })
 
   test("tidies only empty workspaces the Person has left", () => {
+    const among =
+      (...gone: ProjectId[]) =>
+      (project: ProjectId) =>
+        gone.includes(project)
     const state = arranged()
     expect(tidied(state)).toBeUndefined()
     const left: Workspaces = {
@@ -309,7 +313,7 @@ describe("plans", () => {
       current: 1,
     }
     expect(tidied(kept)).toBeUndefined()
-    expect(tidied(kept, [mine])).toEqual({
+    expect(tidied(kept, among(mine))).toEqual({
       method: "workspaces.tidy",
       params: { keep: current(kept).id },
     })
@@ -324,11 +328,11 @@ describe("plans", () => {
       ],
       current: 1,
     }
-    expect(tidied(owned, [mine, machine])).toEqual({
+    expect(tidied(owned, among(mine, machine))).toEqual({
       method: "workspaces.tidy",
       params: { keep: current(owned).id },
     })
-    expect(tidied({ ...owned, current: 0 }, [machine])).toBeUndefined()
+    expect(tidied({ ...owned, current: 0 }, among(machine))).toBeUndefined()
     // With another empty one to let go, it is named to stay.
     const both: Workspaces = {
       list: [...kept.list.slice(0, 1), ...left.list],
@@ -340,8 +344,8 @@ describe("plans", () => {
     })
     // In the Flow free every workspace is free: a Project's goes too, as
     // before ADR 0102 (decision 1).
-    expect(tidied(kept, [], false)).toEqual(tidied(kept, [mine]))
-    expect(tidied(both, [], false)).toEqual({
+    expect(tidied(kept, undefined, false)).toEqual(tidied(kept, among(mine)))
+    expect(tidied(both, undefined, false)).toEqual({
       method: "workspaces.tidy",
       params: { keep: current(both).id },
     })

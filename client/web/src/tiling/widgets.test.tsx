@@ -6,15 +6,15 @@
  * as React's does, once what it selects is another value, and what it
  * selected then is kept in `asked`.
  */
-import type { Engine, ProjectId } from "@banda/contract"
-import { type Run, Store } from "@banda/core/react"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { Store } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { beforeEach, expect, test, vi } from "vitest"
 import { TilingContext } from "./kept"
 import { fresh, go, inBar, move, open, start, type Workspaces } from "./model"
 import { WORKSPACES } from "./widget-ids"
-import { picked, tilingWidgets } from "./widgets"
+import { tilingWidgets } from "./widgets"
 
 const asked = vi.hoisted(() => [] as unknown[])
 vi.mock("react", async (actual) => ({
@@ -46,13 +46,14 @@ const right = { place: "right" } as const
 const project = "p1" as ProjectId
 
 /** The workspaces' widget, drawn from a store that holds `state`, as the
- * Window's `Kept` gives the Tiling's: its markup, and the store. */
-function drawn(state: Workspaces) {
+ * Window's `Kept` gives the Tiling's, with the `projects` the window
+ * knows: its markup, and the store. */
+function drawn(state: Workspaces, projects: ProjectSummary[] = []) {
   const { Widget } = tilingWidgets.find((widget) => widget.id === WORKSPACES)!
   const store = new Store(state)
   const markup = renderToStaticMarkup(
     <TilingContext value={store}>
-      <Widget engine={{} as Engine} projects={[]} />
+      <Widget engine={{} as Engine} projects={projects} />
     </TilingContext>
   )
   return {
@@ -80,17 +81,45 @@ test("the numbers draw the workspaces the bar shows from the Tiling's store, pas
   expect(markup).toContain('aria-label="Workspace 11" title="Workspace 11"')
 })
 
-test("a number runs an action by its id: the one on screen the overview, another a go by its place, past the ninth too", () => {
-  const ran: unknown[][] = []
-  const run: Run = (...call) => void ran.push(call)
-  picked(run, 10, 0)
-  picked(run, 0, 0)
-  picked(run, 3, 4)
-  expect(ran).toEqual([
-    ["workspace.go", { index: 10 }],
-    ["overview.toggle"],
-    ["workspace.go", { index: 3 }],
-  ])
+test("a Project's workspace shows its Sign, faint once emptied; one of a Project the window does not know, its number; the bottom one, its +", () => {
+  const known: ProjectSummary = {
+    id: "p1",
+    name: "Brand",
+    folder: "/code/brand",
+    pinned: false,
+    archived: false,
+    sees_others: false,
+    sign: { kind: "letters", text: "B", picked: false },
+    trusted: true,
+    scratch: false,
+    missing: false,
+  }
+  const column = (id: string, project: ProjectId) => ({
+    id,
+    active: 0,
+    entries: [{ id: `${id}e`, project, pane: terminal(1) }],
+  })
+  const state: Workspaces = {
+    list: [
+      { id: "w0", columns: [column("c0", project)], focus: 0, project },
+      { id: "w1", columns: [], focus: 0, project },
+      { id: "w2", columns: [column("c2", "gone" as ProjectId)], focus: 0 },
+      { id: "w3", columns: [], focus: 0 },
+    ],
+    current: 2,
+  }
+  const cells = drawn(state, [known]).markup.split("<button").slice(1)
+  expect(cells).toHaveLength(4)
+  expect(cells[0]).toContain('title="Brand: Workspace 1"')
+  expect(cells[0]).toContain("data-sign")
+  expect(cells[0]).not.toContain("opacity-45")
+  expect(cells[1]).toContain("data-sign")
+  expect(cells[1]).toContain("opacity-45")
+  expect(cells[2]).toContain('aria-current="true"')
+  expect(cells[2]).toMatch(/>3<\/button>$/)
+  expect(cells[3]).toContain('aria-label="New workspace"')
+  // No cell is dashed, and none is drawn as a dot.
+  expect(cells.join("")).not.toMatch(/dashed|rounded-full/)
 })
 
 test("a key that moves only the focus draws the numbers not again", () => {

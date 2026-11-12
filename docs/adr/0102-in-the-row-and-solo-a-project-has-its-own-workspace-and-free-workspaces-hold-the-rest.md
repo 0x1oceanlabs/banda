@@ -55,6 +55,11 @@ day.
      Project has no Threads left.
    - The bar shows a Project's workspace by its Sign alone, and a free
      one by its number (changed in #1127: no call dot, no Group map).
+     _Changed on 2026-11-12:_ emptied, a Project's that keeps its place
+     shows its Sign faint, with no dashed frame. A Project the window does
+     not know, archived or removed, keeps no place: its emptied workspace
+     goes as a free one does, and while it holds Panes the bar shows its
+     number. Before, it stayed for good, a dashed number no rule named.
    _Built_ after the UX review: emptied, a Project's workspace that keeps
    its place says whose it is and that it keeps its place until the
    Person closes it. "Close the workspace", under those words, in the

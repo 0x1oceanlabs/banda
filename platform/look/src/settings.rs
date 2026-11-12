@@ -249,9 +249,12 @@ pub struct Focus {
 pub struct Bar {
     #[schemars(range(min = 0))]
     pub height: Option<f64>,
-    /// How the bar shows the workspaces: `"numbers"`, or `"dots"` with the
-    /// one shown drawn long, as GNOME's.
-    pub workspaces: Option<Workspaces>,
+    /// How the bar showed the workspaces, numbers or dots: still read, so
+    /// a `look.toml` that says it loads, and let go. The bar shows a free
+    /// workspace by its number and a Project's by its Sign, always.
+    #[serde(rename = "workspaces", skip_serializing)]
+    #[schemars(skip)]
+    _workspaces: Option<serde::de::IgnoredAny>,
     /// The widgets on the bar's left, after the Mark, by id, in order: the
     /// workspaces, `"workspaces.list"` (ADR 0024, ADR 0064), and the Flow,
     /// `"window.flow"` (ADR 0098).
@@ -362,15 +365,6 @@ pub enum GroupSaturation {
     Soft,
     Normal,
     Vivid,
-}
-
-/// How the bar shows the workspaces.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
-pub enum Workspaces {
-    Numbers,
-    Dots,
 }
 
 /// What a theme's `theme.toml` says of its shape, font and glass, in
@@ -621,7 +615,7 @@ impl Settings {
             },
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
-                workspaces: self.bar.workspaces.or(under.bar.workspaces),
+                _workspaces: None,
                 left: self.bar.left.or(under.bar.left),
                 center: self.bar.center.or(under.bar.center),
                 right: self.bar.right.or(under.bar.right),
@@ -731,7 +725,7 @@ impl Settings {
             },
             bar: Bar {
                 height: Some(36.0),
-                workspaces: Some(Workspaces::Numbers),
+                _workspaces: None,
                 left: Some(owned(BAR_LEFT)),
                 center: Some(owned(BAR_CENTER)),
                 right: Some(owned(BAR_RIGHT)),
@@ -859,6 +853,12 @@ mod tests {
     fn a_groups_old_look_still_loads() {
         let old: Settings = toml::from_str("[groups]\nlook = \"halo\"\nhandle = false\n").unwrap();
         assert_eq!(old.groups.handle, Some(false));
+    }
+
+    #[test]
+    fn the_bars_old_workspaces_still_loads() {
+        let old: Settings = toml::from_str("[bar]\nworkspaces = \"dots\"\nheight = 30\n").unwrap();
+        assert_eq!(old.bar.height, Some(30.0));
     }
 
     #[test]

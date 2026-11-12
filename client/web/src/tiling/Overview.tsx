@@ -37,6 +37,7 @@ import {
   find,
   focused,
   groupAttributes,
+  type Gone,
   keepsPlace,
   padded,
   share,
@@ -142,9 +143,9 @@ export function Overview({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
-  /** The Projects known to have no Threads, whose emptied workspace goes
-   * once the window leaves it (`keepsPlace`). */
-  gone: readonly ProjectId[]
+  /** Whether a Project's emptied workspace goes once the window leaves
+   * it (`keepsPlace`). */
+  gone: Gone
   /** The Thread each Pane shows, as its module lists it, and how it
    * calls the Person. */
   shows: Shows

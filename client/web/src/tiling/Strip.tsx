@@ -21,6 +21,7 @@ import {
   type Entry,
   groupAttributes,
   isFree,
+  type Gone,
   keepsPlace,
   runOf,
   sharesScreen,
@@ -109,9 +110,9 @@ export const Strip = memo(function Strip({
   /** In the row and solo, where a Project's workspace holds its Panes
    * only (ADR 0102). */
   strict: boolean
-  /** The Projects known to have no Threads, whose emptied workspace goes
-   * once the window leaves it (`keepsPlace`). */
-  gone: readonly ProjectId[]
+  /** Whether a Project's emptied workspace goes once the window leaves
+   * it (`keepsPlace`). */
+  gone: Gone
   /** What its Panes show, as their Apps list it, and how each calls. */
   shows: Shows
   /** An Agent opened it, and the Person has not looked at it yet. */

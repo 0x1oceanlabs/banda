@@ -37,9 +37,7 @@ pub use banda_theme::{Origin, Places, path_of};
 pub use file::{Class, OneFile, SettingsFile};
 use motion::Motion;
 use serde::Serialize;
-use settings::{
-    Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, ThemeFile, Workspaces,
-};
+use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, ThemeFile};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -135,7 +133,6 @@ pub struct Desk {
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Bar {
-    pub workspaces: Workspaces,
     /// The widgets of each part, by id, in order (ADR 0024, decision 4):
     /// on the left after the Mark, in the middle, and on the right (ADR 0064).
     pub left: Vec<String>,
@@ -801,7 +798,6 @@ pub fn resolve(
             motion: all.motion.resolve(),
             columns: all.columns.resolve(),
             bar: Bar {
-                workspaces: all.bar.workspaces.unwrap_or(Workspaces::Numbers),
                 left: all
                     .bar
                     .left
