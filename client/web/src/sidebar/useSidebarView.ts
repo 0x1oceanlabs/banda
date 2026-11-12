@@ -47,18 +47,13 @@ const scrollerOf = (list: HTMLElement | null) =>
  * the tab (ADR 0098, decision 2), each where it was scrolled to; a cut
  * list whole (`more`), until the tab changes; the groups (`folded`) and the
  * other machines (`foldedHosts`) folded, each flipped by its key; when
- * inbox zero last told of Someday; the cards checked (`checks`, ADR 0098,
- * decision 15), which another tab, a search begun or ended, a group
- * folded and another preset clear, as hiding the sidebar does; and what
- * Search has typed (decision 17), which shows All while it runs and the
- * tab it began on once it is cleared. Another `preset` starts afresh, on
- * the same tab.
+ * inbox zero last told of Someday; and the cards checked (`checks`, ADR
+ * 0098, decision 15), which another tab, a group folded and another
+ * preset clear, as hiding the sidebar does. Another `preset` starts
+ * afresh, on the same tab.
  */
 export function useSidebarView(preset: string) {
   const [tab, setTab] = useState<Tab>("inbox")
-  const [search, setSearch] = useState("")
-  // The tab a search began on, which its end brings back.
-  const [began, setBegan] = useState<Tab>("inbox")
   const [more, setMore] = useState(false)
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   const [foldedHosts, setFoldedHosts] = useState<ReadonlySet<string>>(new Set())
@@ -98,31 +93,8 @@ export function useSidebarView(preset: string) {
     setFoldedHosts(new Set())
     setChecks(NO_CHECKS)
   }
-  // Where `tab` is left, kept for when it shows again.
-  const leave = () => {
-    const scroller = scrollerOf(list)
-    if (scroller) scrolls.current.set(tab, scroller.scrollTop)
-  }
   return {
     tab,
-    search,
-    /**
-     * Search says `text`: as a search begins, All shows, first and
-     * picked; as it is cleared, the tab it began on comes back as it was
-     * left. The focus stays where it is, in Search.
-     */
-    searchFor: (text: string) => {
-      const was = search.trim() !== ""
-      const runs = text.trim() !== ""
-      setSearch(text)
-      if (was === runs) return
-      leave()
-      at.current = undefined
-      setMore(false)
-      setChecks(NO_CHECKS)
-      if (runs) setBegan(tab)
-      setTab(runs ? "all" : began)
-    },
     more,
     folded,
     foldedHosts,
@@ -141,9 +113,9 @@ export function useSidebarView(preset: string) {
      * the page.
      */
     show: (next: Tab, block?: string) => {
-      // All is there only while a search runs.
-      if (next === tab || (next === "all" && search.trim() === "")) return
-      leave()
+      if (next === tab) return
+      const scroller = scrollerOf(list)
+      if (scroller) scrolls.current.set(tab, scroller.scrollTop)
       at.current = block
       setTab(next)
       setMore(false)

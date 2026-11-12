@@ -35,17 +35,17 @@ const listed = (
   ...more,
 })
 
-test("a Project's menu: New Thread here, Open folder, Project settings…; then Archive its Threads and Remove from Banda… (ADR 0098, decision 16)", () => {
+test("a Project's menu: Open folder, Project settings…; then Archive its Threads and Remove from Banda…; no New Thread here (ADR 0098, decision 16, as Roma amended it on 2026-11-12)", () => {
   expect(entriesOf(banda)).toEqual([
-    ["new", "folder", "settings"],
+    ["folder", "settings"],
     ["archive", "remove"],
   ])
 })
 
-test("on a card that asks for trust, Trust… and Not now come first; a missing folder is located in New Thread's place", () => {
+test("on a card that asks for trust, Trust… and Not now come first; a missing folder is located first", () => {
   expect(entriesOf(banda, "trust")).toEqual([
     ["trust", "not-now"],
-    ["new", "folder", "settings"],
+    ["folder", "settings"],
     ["archive", "remove"],
   ])
   const gone = { ...banda, missing: true }

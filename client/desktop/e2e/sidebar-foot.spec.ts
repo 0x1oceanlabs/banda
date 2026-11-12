@@ -1,22 +1,15 @@
 /**
- * The sidebar's header and foot (ADR 0098, decisions 19–21). ✎ starts a
- * Thread at once where Alt+Enter does (`Here.starts`, ADR 0102): in the
- * Project in front, on the machine that lists it, with the default
- * Harness (S9a). A right click, a press held, ↓ or Shift+F10 opens its
- * menu instead, which starts nothing by opening: New Thread with its key
- * in force; "in", the Projects and No Project; "with", the Harnesses;
- * then Add Project… and Projects…. A tick marks what a click takes, and a
- * pick starts one at once. With one machine the menu names none (ADR
- * 0095, decision 4). Esc gives ✎ the focus back, never the page; a press
- * on ✎ while it is open shuts it, and starts nothing. The Flow left the
- * header for the bar, after the workspaces, as it arranges the desk, not
- * the list (decision 20, S9b). The foot keeps Settings and View, each
- * tooltip with its key; the key sheet and the theme went to the Banda
- * menu, which the bar's logo opens now, not the sidebar, and Add Project
- * to ✎'s menu (decision 21, S9c). Quiet's bell is the foot's third: on
- * for 30 minutes, nothing calls, and both bells are crossed (S9d).
- * Pictures for Roma, dark and light, with glass and without, at 1440×900:
- * `test-results/sidebar-s9a-*.png`, `test-results/sidebar-s9b-*.png`,
+ * The sidebar's foot and the bar (ADR 0098, decisions 19–21). The sidebar
+ * has no header: no Search and no ✎, as Roma amended decisions 17 and 19
+ * on 2026-11-12; the Banda menu searches, and a Thread starts in the New
+ * Thread Pane. The Flow left the header for the bar, after the
+ * workspaces, as it arranges the desk, not the list (decision 20, S9b).
+ * The foot keeps Settings and View, each tooltip with its key; the key
+ * sheet, the theme and Add Project are the Banda menu's, which the bar's
+ * logo opens now, not the sidebar (decision 21, S9c). Quiet's bell is the
+ * foot's third: on for 30 minutes, nothing calls, and both bells are
+ * crossed (S9d). Pictures for Roma, dark and light, with glass and
+ * without, at 1440×900: `test-results/sidebar-s9b-*.png`,
  * `test-results/sidebar-s9c-*.png` and `test-results/sidebar-s9d-*.png`.
  */
 import { readFileSync, writeFileSync } from "node:fs"
@@ -58,7 +51,7 @@ async function wide({ app, page }: Window) {
  * made of a wallpaper, as Banda's desk is by default (ADR 0100), and with
  * glass off: `sidebar-<name>-<mode>.png` and
  * `sidebar-<name>-<mode>-noglass.png`, the name led by its step,
- * `s9a-menu`. */
+ * `s9c-menu`. */
 async function shots({ dir, page }: Window, name: string) {
   const html = page.locator("html")
   wallpaper(dir)
@@ -96,173 +89,8 @@ async function withTwoProjects() {
     window,
     page,
     sidebar,
-    pen: sidebar.getByRole("button", { name: "New Thread", exact: true }),
-    hello: sidebar.getByRole("option", { name: /hello/ }),
-    menu: page.getByRole("menu", { name: "New Thread" }),
-    drafts: page.getByRole("region", { name: "New Thread" }),
-    focused: page
-      .getByRole("region", { name: "New Thread" })
-      .and(page.locator('[data-focused="true"]')),
   }
 }
-
-test("✎'s menu ticks what a click takes, and starts one elsewhere at once: in Work, with Other AI", async () => {
-  const { window, page, pen, hello, menu, drafts, focused } =
-    await withTwoProjects()
-  await hello.click()
-  const before = await drafts.count()
-
-  // A right click opens it, and starts nothing.
-  await pen.click({ button: "right" })
-  await expect(menu).toBeVisible()
-  await expect(drafts).toHaveCount(before)
-  await expect(pen).toHaveAttribute("aria-expanded", "true")
-  // New Thread first, with its key in force.
-  await expect(menu.getByRole("menuitem").first()).toHaveText(
-    /^New Thread\s*Alt\+Return$/
-  )
-  // in: the Projects, then No Project; Work, where a click starts, ticked.
-  const inside = menu.getByRole("group", { name: "in" })
-  await expect(inside.getByRole("menuitem", { name: "Work" })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
-  await expect(
-    inside.getByRole("menuitem", { name: "lab" })
-  ).not.toHaveAttribute("aria-current")
-  await expect(inside.getByRole("menuitem").last()).toHaveAccessibleName(
-    "No Project"
-  )
-  // One machine: none named, so no "on".
-  await expect(menu.getByRole("group", { name: "on" })).toHaveCount(0)
-  // with: the Harnesses on, by their emblems and names, the first ticked.
-  const harnesses = menu.getByRole("group", { name: "with" })
-  await expect(harnesses.getByRole("menuitem")).toHaveCount(2)
-  await expect(harnesses.getByRole("menuitem").first()).toHaveAccessibleName(
-    "Fake AI"
-  )
-  await expect(
-    harnesses.getByRole("menuitem", { name: "Fake AI" })
-  ).toHaveAttribute("aria-current", "true")
-  await expect(
-    harnesses.getByRole("menuitem", { name: "Other AI" })
-  ).not.toHaveAttribute("aria-current")
-  await expect(
-    menu.getByRole("menuitem", { name: "Add Project…" })
-  ).toBeVisible()
-  await expect(menu.getByRole("menuitem", { name: "Projects…" })).toBeVisible()
-  await shots(window, "s9a-menu")
-
-  // A pick starts one at once: in Work, the click's, with Other AI.
-  await harnesses.getByRole("menuitem", { name: "Other AI" }).click()
-  await expect(menu).toBeHidden()
-  await expect(
-    focused.getByRole("button", { name: "Project: Work" })
-  ).toBeVisible()
-  await expect(
-    focused.getByRole("textbox", { name: "Message to Other AI" })
-  ).toBeVisible()
-
-  // In lab, on the default Harness.
-  await pen.click({ button: "right" })
-  await menu
-    .getByRole("group", { name: "in" })
-    .getByRole("menuitem", { name: "lab" })
-    .click()
-  await expect(
-    focused.getByRole("button", { name: "Project: lab" })
-  ).toBeVisible()
-  await expect(
-    focused.getByRole("textbox", { name: "Message to Fake AI" })
-  ).toBeVisible()
-
-  // Projects…: the settings, at the Projects.
-  await pen.click({ button: "right" })
-  await menu.getByRole("menuitem", { name: "Projects…" }).click()
-  await expect(
-    page.getByRole("region", { name: "Settings", exact: true })
-  ).toBeVisible()
-
-  // Add Project…: the Banda menu, at Add Project.
-  await pen.click({ button: "right" })
-  await menu.getByRole("menuitem", { name: "Add Project…" }).click()
-  const banda = page.getByRole("dialog", { name: "Banda menu" })
-  await expect(banda.getByRole("option", { name: /New Project/ })).toBeVisible()
-  await page.keyboard.press("Escape")
-  await expect(banda).toBeHidden()
-})
-
-test("✎'s menu opens by the keys, a right click and a press held, and starts nothing; Esc gives ✎ the focus back; a click starts a Thread at once where Alt+Enter does", async () => {
-  const { window, page, pen, hello, menu, drafts, focused } =
-    await withTwoProjects()
-  await expect(
-    focused.getByRole("button", { name: "Project: lab" })
-  ).toBeVisible()
-  await hello.click()
-  const before = await drafts.count()
-  const shut = async () => {
-    await page.keyboard.press("Escape")
-    await expect(menu).toBeHidden()
-    await expect(pen).toBeFocused()
-    await expect(page.locator("body")).not.toBeFocused()
-  }
-
-  // ↓, then Shift+F10, on ✎ in focus.
-  await pen.focus()
-  await page.keyboard.press("ArrowDown")
-  await expect(menu).toBeVisible()
-  await shut()
-  await page.keyboard.press("Shift+F10")
-  await expect(menu).toBeVisible()
-  await shut()
-
-  // A press on ✎ while its menu is open shuts it, and starts nothing.
-  await pen.click({ button: "right" })
-  await expect(menu).toBeVisible()
-  await pen.click()
-  await expect(menu).toBeHidden()
-  await expect(drafts).toHaveCount(before)
-
-  // A press held half a second opens it; let go, it stays, and nothing
-  // started.
-  const box = (await pen.boundingBox())!
-  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
-  await page.mouse.down()
-  await expect(menu).toBeVisible()
-  await page.mouse.up()
-  await expect(menu).toBeVisible()
-  await expect(drafts).toHaveCount(before)
-  await shut()
-
-  // Shut after a right click, which has no click of its own, Enter on ✎
-  // starts one at once all the same. The count shows no press above
-  // started one either.
-  await pen.click({ button: "right" })
-  await expect(menu).toBeVisible()
-  await shut()
-  await page.keyboard.press("Enter")
-  await expect(drafts).toHaveCount(before + 1)
-  // Closed again, so the picture below has Work's Thread and one draft.
-  await focused.getByRole("button", { name: "Close New Thread" }).click()
-  await expect(drafts).toHaveCount(before)
-
-  // Back in Work's Thread, a short press is a click: it starts the next
-  // one there, with no question and no menu.
-  await hello.click()
-  await expect(pen).toHaveAttribute("title", "New Thread (Alt+Return)")
-  await pen.click()
-  await expect(menu).toBeHidden()
-  await expect(drafts).toHaveCount(before + 1)
-  await expect(
-    focused.getByRole("button", { name: "Project: Work" })
-  ).toBeVisible()
-  await expect(
-    focused.getByRole("textbox", { name: "Message to Fake AI" })
-  ).toBeVisible()
-  // The pointer off the sidebar, for the picture of its header at rest.
-  await page.mouse.move(900, 450)
-  await shots(window, "s9a-header")
-})
 
 test("the Flow on the bar, and its menu: the one in force checked, its key beside the two it goes between", async () => {
   // Where it stands, its words, a pick and Alt+Shift+M are roma-day's

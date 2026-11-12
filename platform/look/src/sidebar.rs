@@ -259,8 +259,6 @@ pub struct ProjectsSettings {
     pub order: Option<ProjectOrder>,
     /// A Project shows its loudest mark and how many need you.
     pub rollup: Option<bool>,
-    /// Each Project offers a new Thread in it.
-    pub new_thread: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -376,8 +374,6 @@ pub struct Projects {
     pub order: ProjectOrder,
     /// A Project shows its loudest mark and how many need the Person.
     pub rollup: bool,
-    /// Each Project offers a new Thread in it.
-    pub new_thread: bool,
 }
 
 /// The counts in the bar's middle, as the window draws them.
@@ -401,9 +397,11 @@ const RENAMED: &[Renamed] = &[
     Renamed::value("preset", "spaces", "projects"),
 ];
 
-/// What ADR 0098 put out of use: the presets' sections and rows, and the
-/// list of Projects (decisions 7, 9 and 16). A file that still says them
-/// is told so, and the rest of it holds.
+/// What ADR 0098 put out of use: the presets' sections and rows, the
+/// list of Projects (decisions 7, 9 and 16), and a Project's New Thread,
+/// as the sidebar starts no Thread (decision 19, as Roma amended it on
+/// 2026-11-12). A file that still says them is told so, and the rest of
+/// it holds.
 const RETIRED: &[Retired] = &[
     Retired {
         at: "group",
@@ -419,6 +417,11 @@ const RETIRED: &[Retired] = &[
         at: "projects.list",
         table: false,
         says: "projects.list is no longer used",
+    },
+    Retired {
+        at: "projects.new-thread",
+        table: false,
+        says: "projects.new-thread is no longer used: a Thread starts in the New Thread Pane",
     },
 ];
 
@@ -456,7 +459,6 @@ impl SidebarSettings {
             projects: ProjectsSettings {
                 order: self.projects.order.or(under.projects.order),
                 rollup: self.projects.rollup.or(under.projects.rollup),
-                new_thread: self.projects.new_thread.or(under.projects.new_thread),
             },
             bar: BarSettings {
                 show: self.bar.show.or(under.bar.show),
@@ -493,7 +495,6 @@ impl SidebarSettings {
             projects: ProjectsSettings {
                 order: Some(ProjectOrder::Changed),
                 rollup: Some(true),
-                new_thread: Some(true),
             },
             bar: BarSettings {
                 show: Some(BarShow::Closed),
@@ -539,7 +540,6 @@ impl SidebarSettings {
             projects: Projects {
                 order: all.projects.order.unwrap_or(ProjectOrder::Changed),
                 rollup: all.projects.rollup.unwrap_or(true),
-                new_thread: all.projects.new_thread.unwrap_or(true),
             },
             bar: BarCounts {
                 show: all.bar.show.unwrap_or(BarShow::Closed),
@@ -853,7 +853,7 @@ mod tests {
         let (sidebar, problems) = with(
             "preset = \"projects\"\n\
              [group]\nby = \"none\"\nstates = [\"active\", \"settled\"]\nlimit = 0\n\
-             [projects]\nlist = true\norder = \"name\"\n\
+             [projects]\nlist = true\norder = \"name\"\nnew-thread = false\n\
              [row]\nlines = 1\nhide = [\"harness\"]\nline1 = [\"mark\"]\n\
              [machines]\nrows = \"icon\"\n",
         );
@@ -868,6 +868,10 @@ mod tests {
                 (7, "projects.list is no longer used"),
                 (
                     9,
+                    "projects.new-thread is no longer used: a Thread starts in the New Thread Pane"
+                ),
+                (
+                    10,
                     "[row] is no longer used: card = \"auto\", 3, 2 or 1 says a card's lines"
                 ),
             ]
@@ -1056,10 +1060,7 @@ mod tests {
         assert_eq!(keys(def("InboxSettings")), ["open", "order", "working"]);
         assert_eq!(consts("InboxOrder"), ["oldest", "newest"]);
         assert_eq!(keys(def("HoldSettings")), ["still"]);
-        assert_eq!(
-            keys(def("ProjectsSettings")),
-            ["new-thread", "order", "rollup"]
-        );
+        assert_eq!(keys(def("ProjectsSettings")), ["order", "rollup"]);
     }
 
     #[test]

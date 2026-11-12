@@ -12,7 +12,7 @@ import {
   useState,
 } from "react"
 import type { ProjectId } from "@banda/contract"
-import { useHereNamed, useRun } from "@banda/core/react"
+import { type Run, useRun } from "@banda/core/react"
 import { glanceAt } from "@banda/ui/components/banda-mark"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
@@ -22,7 +22,6 @@ import { PROJECT_CARD } from "../trust/TrustCard"
 import { actsOf } from "./acts"
 import type { Row } from "./rows"
 import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
-import { LIST, type SearchField } from "./Header"
 import { itemKey, keyOf } from "./hold"
 import type { ProjectAsks, Tab } from "./inbox"
 import { refused } from "./items"
@@ -35,13 +34,11 @@ import {
   SIDEBAR_KEYS,
   tabOf,
 } from "./keys"
-import { useOpen } from "./open"
 import type { Ordered } from "./order"
 import type { Checks } from "./pick"
 import { firstAct } from "./ProjectCard"
 import { checkedSaid, said, tabSaid, zeroSaid } from "./said"
 import { useAskedTab } from "./showing"
-import { valuesOf } from "./search"
 import { PANEL, tabId } from "./Tabs"
 import { undoLast } from "./undo"
 import { type SetAct, useActs, useDoing, useSetActs } from "./useActs"
@@ -95,8 +92,6 @@ export function useSidebarKeys(
     toggleMore: () => void
     checks: Checks
     setChecks: Dispatch<SetStateAction<Checks>>
-    search: string
-    searchFor: (text: string) => void
   },
   isCurrent: (project: ProjectId, pane: PaneState) => boolean,
   onDismiss: (() => void) | undefined,
@@ -118,7 +113,6 @@ export function useSidebarKeys(
     toggle: view.toggle,
     more: view.toggleMore,
     checks: [view.checks, view.setChecks],
-    search: view.search,
   })
   const listbox = picking.list.ref
   const actOn = useActs(holder)
@@ -150,8 +144,14 @@ export function useSidebarKeys(
       after: (left) => picking.checkOnly(left.map(itemKey)),
     })
   const doing = useDoing()
-  const openIt = useOpen()
   const run = useRun()
+  // What opens a Pane or a menu lets the Sidebar over the Strip go first,
+  // as `useOpen` does for its parts: these keys run outside the Dismiss
+  // they read, so by `onDismiss` itself.
+  const openIt: Run = (action, args) => {
+    onDismiss?.()
+    run(action, args)
+  }
   const keyLabel = useKeyLabel()
   // The card whose Thread Delete asks about.
   const [deleting, setDeleting] = useState<Row>()
@@ -254,8 +254,6 @@ export function useSidebarKeys(
     }
   }
 
-  const field = picking.field
-  const searching = view.search.trim() !== ""
   const handlers = Object.fromEntries(
     SIDEBAR_KEYS.map(({ does, id }): [string, Handler] => [
       id,
@@ -270,12 +268,10 @@ export function useSidebarKeys(
         if (tab || does === "search" || does === "undo") {
           if (target instanceof Element && target.closest(FIELDS)) return false
           if (small && does !== "undo") return false
-          // All is there only while a search runs.
-          if (tab === "all" && !searching) return false
           if (tab) {
             view.show(tab)
-            said.say(tabSaid(tab, ordered.tabs[tab]?.count ?? 0))
-          } else if (does === "search") field.current?.focus()
+            said.say(tabSaid(tab, ordered.tabs[tab].count))
+          } else if (does === "search") openIt("menu.at", {})
           else {
             const done = undoLast(run) ?? []
             if (done.length > 0 && target === listbox.current)
@@ -285,10 +281,7 @@ export function useSidebarKeys(
           }
           return true
         }
-        // Search opens the pick as the list does, by Enter or beside.
-        const opens = does === "open" || does === "beside"
-        const searched = opens && target === field.current
-        if (event && target !== listbox.current && !searched) return false
+        if (event && target !== listbox.current) return false
         if (!event?.repeat || !ONCE.has(does)) onPick(does)
         return true
       },
@@ -306,43 +299,9 @@ export function useSidebarKeys(
     }
   }, [])
 
-  // Where the focus was as Search took it, which Esc gives it back to.
-  const cameFrom = useRef<Element | null>(null)
-  const here = useHereNamed()?.name
-  const all = ordered.rows
-  const values = useMemo(() => valuesOf(all, here), [all, here])
-  const search: SearchField = {
-    text: view.search,
-    say: view.searchFor,
-    field,
-    values,
-    onFocus: (event) => {
-      cameFrom.current = event.relatedTarget
-    },
-    onKeyDown: (event) => {
-      if (event.nativeEvent.isComposing) return
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
-        event.preventDefault()
-        picking.step(event.key === "ArrowDown" ? 1 : -1)
-      } else if (event.key === "Escape") {
-        // Its own layer: it clears what it says, and the focus goes back
-        // where it came from, a Pane's, else the list. It keeps this Esc,
-        // so the Top layer hears none (`window/top/stack.ts`).
-        event.preventDefault()
-        event.stopPropagation()
-        view.searchFor("")
-        const from = cameFrom.current
-        if (from?.closest("[data-tile]")) toPane()
-        else if (from instanceof HTMLElement && from.isConnected) from.focus()
-        else listbox.current?.focus()
-      }
-    },
-  }
-
   return {
     aside,
     picking,
-    search,
     deleting: { row: deleting, ask: setDeleting },
     /** The cards checked, and what the selection's bar does to them. */
     bulk: {
@@ -415,7 +374,6 @@ export function PickList({
         <div
           role="listbox"
           aria-multiselectable
-          id={LIST}
           aria-labelledby={tabId(tab)}
           aria-describedby={hinting && hint ? HINT : undefined}
           tabIndex={0}

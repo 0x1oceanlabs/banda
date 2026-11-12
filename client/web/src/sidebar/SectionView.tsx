@@ -69,8 +69,6 @@ export function SectionView({
   strayed,
   onToggle,
   engine,
-  machine,
-  projects,
   holds,
 }: {
   regions: readonly Region[]
@@ -85,9 +83,6 @@ export function SectionView({
    * of the parent of that key. */
   onToggle: (key: string) => void
   engine: Engine
-  /** This machine's No Project, once the engine named it. */
-  machine?: ProjectId
-  projects: readonly ProjectSummary[]
   holds: Holds
 }) {
   const keyFor = useKeyLabel()
@@ -114,11 +109,7 @@ export function SectionView({
   const list = useRef<HTMLDivElement>(null)
   // Each look, with its font, is measured again, as the cards' density.
   const look = useLook((one) => one.vars, undefined)
-  useListMotion(list, items, {
-    scene: holds.scene,
-    measure: [settings, look],
-    searching: holds.searching,
-  })
+  useListMotion(list, items, { scene: holds.scene, measure: [settings, look] })
   const actOn = useActs(holding)
   const actOnSet = useSetActs(holding)
   // Your turn's cards that are done, as drawn: not one that asks, failed
@@ -283,13 +274,7 @@ export function SectionView({
       }
       case "zero":
       case "empty":
-        return (
-          <EmptyPlace
-            place={block}
-            projects={projects}
-            {...(machine ? { machine } : {})}
-          />
-        )
+        return <EmptyPlace place={block} />
       case "project": {
         const stop = pieceKey(host, item.key)
         return (
@@ -310,7 +295,6 @@ export function SectionView({
           <GroupHeader
             group={block}
             settings={settings}
-            {...(machine ? { machine } : {})}
             stop={stop}
             picked={stop === picked}
             checking={checking}

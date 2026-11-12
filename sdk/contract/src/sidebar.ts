@@ -40,7 +40,7 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   inbox: { order: "oldest", open: true, working: true },
   hold: { still: true },
   sort: { by: "attention" },
-  projects: { order: "changed", rollup: true, newThread: true },
+  projects: { order: "changed", rollup: true },
   bar: {
     show: "closed",
     counts: ["asking", "done", "working"],

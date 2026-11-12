@@ -8,7 +8,6 @@ import { useLookSidebar } from "../look"
 import { Dismiss } from "./open"
 import { AskedTrust } from "../trust/TrustCard"
 import { Foot } from "./Foot"
-import { Header } from "./Header"
 import { HostPart } from "./HostPart"
 import { regionsOf } from "./regions"
 import { DeleteDialog } from "./CardMenu"
@@ -22,8 +21,8 @@ import { ToldSomeday, useSidebarView } from "./useSidebarView"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
- * the Person's inbox of their Agents' work (ADR 0098), its tabs under the
- * header, every Thread of every Project where it stands, arranged as
+ * the Person's inbox of their Agents' work (ADR 0098), its tabs at its
+ * top, every Thread of every Project where it stands, arranged as
  * `sidebar.toml` says (ADR 0008). The modules list what each Project has;
  * the sidebar only arranges and draws it. Its view menu writes the keys
  * into the file, by the settings, and the new arrangement comes back
@@ -37,7 +36,6 @@ export function Sidebar({
   hiding,
   engine,
   projects,
-  machine,
   isCurrent,
   strayed,
 }: {
@@ -52,9 +50,6 @@ export function Sidebar({
   hiding?: boolean
   engine: Engine
   projects: ProjectSummary[]
-  /** This machine's No Project, where its section's New Thread starts;
-   * none until the engine names it. */
-  machine?: ProjectId
   /** Whether a Pane is the one that has the focus, by all its args, as
    * before; `Here.pane` says it by what it shows, which is #827's fix. */
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
@@ -72,7 +67,7 @@ export function Sidebar({
   const ordering = useOrdered(projects, settings, view, isCurrent)
   const { ordered, holds, list } = ordering
   // The aside, the keys' scope, goes to it alone, as the list's element.
-  const { aside, search, ...keys } = useSidebarKeys(
+  const { aside, ...keys } = useSidebarKeys(
     ordering,
     view,
     isCurrent,
@@ -93,8 +88,6 @@ export function Sidebar({
           strayed={strayed}
           onToggle={view.toggle}
           engine={engine}
-          machine={machine}
-          projects={projects}
           holds={holds}
         />
       )
@@ -131,7 +124,6 @@ export function Sidebar({
               "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
           )}
         >
-          <Header {...{ engine, projects, search }} />
           <Tabs tabs={ordered.tabs} tab={view.tab} />
           {/* What is in the list holds it, and so does the trust card; a
           Project's menu archives its Threads by their rows. */}

@@ -72,7 +72,6 @@ import {
   sources,
 } from "../registry"
 import { Edge } from "../sidebar/Edge"
-import { toSearch } from "../sidebar/Header"
 import { Sidebar } from "../sidebar/Sidebar"
 import { LaterPicker } from "../sidebar/LaterPicker"
 import { RemovingProject } from "../settings/RemoveProject"
@@ -534,7 +533,6 @@ export function Shell({
     putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
-    search: toSearch,
     closeSheet: sheet.close,
     glance,
     peek: (pane, project) =>
@@ -778,7 +776,6 @@ export function Shell({
                   onDismiss={narrow ? hideOver : undefined}
                   hiding={hiding}
                   projects={projects}
-                  machine={machine}
                   strayed={strayedIn(workspaces, placing)}
                   isCurrent={focusedIn(workspaces)}
                 />

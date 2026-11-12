@@ -31,6 +31,7 @@ import {
   markFullAccess,
   ON_SCREEN,
   newProject,
+  newThreadIn,
   plateOf,
   placeOf,
   leaveSidebar,
@@ -227,15 +228,6 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
   await page.keyboard.press("Alt+Enter")
   await page.keyboard.press("Alt+Enter")
   await expect(drafts).toHaveCount(4)
-  await expect(drafts.last()).toHaveAttribute("data-focused", "true")
-  // The sidebar's ✎ too, which names that key (ADR 0098, decision 19).
-  const pen = page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: "New Thread", exact: true })
-  await expect(pen).toHaveAttribute("title", "New Thread (Alt+Return)")
-  await pen.click()
-  await pen.click()
-  await expect(drafts).toHaveCount(6)
   await expect(drafts.last()).toHaveAttribute("data-focused", "true")
   await page.screenshot({ path: "test-results/2-many-new.png" })
 
@@ -4461,18 +4453,13 @@ test("Threads of no Project share the first free workspace, which takes a Projec
   const threads = page
     .locator(`${ON_SCREEN} [data-strip]`)
     .getByRole("textbox", { name: "Message to Fake AI" })
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
 
-  // The first screen's Thread; one by Alt+Enter, with no Project yet; and
-  // one from No Project's section of the sidebar: all on workspace 1, the
-  // one free workspace, shown by its number.
+  // The first screen's Thread and two by Alt+Enter, with no Project yet:
+  // all on workspace 1, the one free workspace, shown by its number.
   await say(page, "scratch one")
   await page.keyboard.press("Alt+Enter")
   await say(page, "scratch two")
-  await groupBy(page, "Project")
-  await sidebar
-    .getByRole("button", { name: "New Thread in No Project" })
-    .click()
+  await page.keyboard.press("Alt+Enter")
   await say(page, "scratch three")
   await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
   await expect(threads).toHaveCount(3)
@@ -6070,7 +6057,7 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
   await expect(composer).toHaveText("zq")
 
   // A terminal reads keys only in its own field, whichever way the menu
-  // or the sidebar's Search was opened.
+  // was opened.
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -6081,15 +6068,13 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
   })
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
-  // Each field it opens takes the keys, and Esc gives them back.
-  const typedAfter = async (
-    open: () => Promise<void>,
-    field: Locator,
-    file: string
-  ) => {
+  const search = page
+    .getByRole("dialog", { name: "Banda menu" })
+    .getByRole("combobox", { name: "Search" })
+  // Its field takes the keys, and Esc gives them back.
+  const typedAfter = async (open: () => Promise<void>, file: string) => {
     await open()
-    await expect(field).toBeFocused()
+    await expect(search).toBeFocused()
     await page.keyboard.press("Escape")
     await expect
       .poll(() =>
@@ -6102,20 +6087,14 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
       .poll(() => read(join(dir, "root", "Work", file)))
       .toBe("back\n")
   }
-  // Alt+Space and a click take the sidebar's Search (ADR 0098, decision
-  // 17); the bar's logo opens the menu.
-  const search = page
-    .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("combobox", { name: "Search" })
-  await typedAfter(() => page.keyboard.press("Alt+Space"), search, "by-key.txt")
-  await typedAfter(() => search.click(), search, "by-search.txt")
+  // Alt+Space opens it, the sidebar shown, and so does the bar's logo.
+  await typedAfter(() => page.keyboard.press("Alt+Space"), "by-key.txt")
   await typedAfter(
     () =>
       page
         .getByRole("banner")
         .getByRole("button", { name: /^Banda(:|$)/ })
         .click(),
-    menu.getByRole("combobox", { name: "Search" }),
     "by-logo.txt"
   )
 })
@@ -6131,7 +6110,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
 
   // The bar's logo opens it, and Esc closes it.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await sidebar.screenshot({ path: "test-results/26-sidebar-search.png" })
+  await sidebar.screenshot({ path: "test-results/26-sidebar.png" })
   await page
     .getByRole("banner")
     .getByRole("button", { name: /^Banda(:|$)/ })
@@ -6143,8 +6122,8 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
-  // Alt+Space, from the sidebar's Search with nothing typed; the words
-  // find the Thread, and New Thread with them waits last.
+  // Alt+Space, the sidebar shown; the words find the Thread, and New
+  // Thread with them waits last.
   await bandaMenu(page)
   const search = menu.getByRole("combobox", { name: "Search" })
   await search.fill("hel")
@@ -6562,12 +6541,9 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
   )
   await expect(words).toBeHidden()
 
-  // Play's next Thread makes its workspace again, at the end. Its head
-  // stands in the sidebar's one flat list, among the cards, by its place
-  // (ADR 0098, S5c), no group around them.
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  const play = placeOf(sidebar, "Play")
-  await play.getByRole("button", { name: "New Thread in Play" }).click()
+  // Play's next Thread, from the Banda menu, makes its workspace again, at
+  // the end.
+  await newThreadIn(page, "Play")
   await expect(inPlay).toBeVisible()
   await expect(plays).toHaveCount(1)
   await expect(bar.locator("[aria-current]")).toHaveAccessibleName(
@@ -6592,7 +6568,7 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
 
   // In the Flow free every workspace is free: emptied, Play's says only
   // that it is empty, and goes once the Person leaves it (decision 1).
-  await play.getByRole("button", { name: "New Thread in Play" }).click()
+  await newThreadIn(page, "Play")
   await expect(inPlay).toBeVisible()
   await expect(plays).toHaveCount(1)
   const flow = page.getByRole("banner").getByRole("button", { name: /^Flow: / })
@@ -6615,10 +6591,9 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
   await expect(plays).toHaveCount(0)
 })
 
-test("Alt+Enter and the sidebar's New Thread start in the Project in front, on its workspace; beside a Thread of no Project, in No Project (ADR 0102)", async () => {
+test("Alt+Enter starts in the Project in front, on its workspace; beside a Thread of no Project, in No Project (ADR 0102)", async () => {
   window = await startWindow()
   const { page } = window
-  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   const current = numbers.locator("[aria-current]:not([inert])")
   const drafts = page
@@ -6645,11 +6620,6 @@ test("Alt+Enter and the sidebar's New Thread start in the Project in front, on i
   // Alt+Enter starts in Play, beside its draft: the screen stays there.
   await page.keyboard.press("Alt+Enter")
   await expect(drafts).toHaveCount(2)
-  await startsIn("Play")
-  await expect(current).toHaveText("P")
-  // So does the sidebar's New Thread.
-  await sidebar.getByRole("button", { name: "New Thread", exact: true }).click()
-  await expect(drafts).toHaveCount(3)
   await startsIn("Play")
   await expect(current).toHaveText("P")
 
@@ -6708,7 +6678,7 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
 
-  // ✎'s menu opens "Add Project"; "Local folder" starts the path at ~ and
+  // The Banda menu's "Add Project"; "Local folder" starts the path at ~ and
   // lists the folders that fit what is typed.
   await addProject(page)
   await search.fill("local")
@@ -6753,17 +6723,9 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
       }
     ).ok.find((one) => one.name === name)
   const trusted = () => listed("widget")?.trusted
-  /** The settings at the Project `name`, by ✎'s Projects… (ADR 0098,
-   * decision 16). */
+  /** The settings at the Project `name`, by their route. */
   const projectSettings = async (name: string) => {
-    await page
-      .getByRole("complementary", { name: "Sidebar" })
-      .getByRole("button", { name: "New Thread", exact: true })
-      .click({ button: "right" })
-    await page
-      .getByRole("menu", { name: "New Thread" })
-      .getByRole("menuitem", { name: "Projects…" })
-      .click()
+    banda("menu", "settings.projects")
     const pane = page.getByRole("main").filter({ hasText: "Settings" })
     const picker = pane.getByRole("combobox", { name: "Project" })
     await picker.click()
@@ -6949,7 +6911,6 @@ test("a Project's menu opens its settings, where it is pinned, named, archived a
     .click({ button: "right" })
   const menu = page.getByRole("menu", { name: "Project menu" })
   await expect(menu.getByRole("menuitem")).toHaveText([
-    "New Thread here",
     "Open folder",
     "Project settings…",
     "Archive its Threads",
@@ -7027,14 +6988,11 @@ test("a Project whose folder is gone is a card in Your turn, and Locate folder o
   const old = sidebar.getByRole("option", { name: "“old” is missing" })
   await expect(old).toContainText("Project /nonexistent/banda-old")
 
-  // Its menu's Locate folder, in New Thread's place, opens "Locate
+  // Its menu's first entry, Locate folder, opens "Locate
   // folder" where the folder was.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
   await old.click({ button: "right" })
-  await expect(
-    page.getByRole("menuitem", { name: "New Thread here" })
-  ).toBeHidden()
   await page.getByRole("menuitem", { name: "Locate folder" }).click()
   await expect(search).toHaveValue("/nonexistent/")
   await page.keyboard.press("Escape")
@@ -7262,28 +7220,19 @@ test("the sidebar over the Strip goes once it opened a menu, a Thread or the set
     await expect(menu).toBeHidden()
   }
 
-  // Search searches in place: it takes the focus, and the sidebar stays
-  // (ADR 0098, decision 17).
+  // Its list's / opens the Banda menu, the one search (ADR 0098, decision
+  // 17, as Roma amended it on 2026-11-12).
   await over()
-  const search = sidebar.getByRole("combobox", { name: "Search" })
-  await search.click()
-  await expect(search).toBeFocused()
-  await expect(sidebar).toBeVisible()
-
-  // ✎'s menu's Add Project…: the Banda menu, at Add Project.
-  await addProject(page)
+  await sidebar.getByRole("listbox").focus()
+  await page.keyboard.press("/")
+  await expect(menu).toBeVisible()
   await expect(sidebar).toBeHidden()
   await shut()
 
-  // New Thread: a new Thread in Work, in focus.
-  await sidebar.getByRole("button", { name: "New Thread", exact: true }).click()
+  // A card: its Thread, in focus.
+  await sidebar.getByRole("option", { name: /hello/ }).click()
   await expect(sidebar).toBeHidden()
-  await expect(
-    page
-      .getByRole("region", { name: "New Thread" })
-      .and(page.locator('[data-focused="true"]'))
-      .getByRole("button", { name: "Project: Work" })
-  ).toBeVisible()
+  await expect(thread).toHaveAttribute("data-focused", "true")
 
   // The gear: the settings.
   await over()
@@ -7413,14 +7362,14 @@ test("with no Pane in focus, the window's keys work as the Banda menu fades", as
   await letGo()
 })
 
-test("the sidebar's New Thread buttons and a Project's menu start a Thread where each stands, and the row in focus is marked", async () => {
+test("the sidebar marks the row in focus, and after a row's click Alt+Enter starts where it stands", async () => {
   window = await startWindow()
   const { page } = window
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const focused = page
     .getByRole("region", { name: "New Thread" })
     .and(page.locator('[data-focused="true"]'))
-  // Each starts a new Thread in its Project, in focus; then the pointer
+  // A new Thread in its Project, in focus; then the pointer
   // leaves the sidebar, whose rows held still under it (ADR 0065,
   // decision 8), and what came meanwhile moves in.
   const startsIn = async (project: string) => {
@@ -7457,37 +7406,19 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await expect(scratch).toHaveAttribute("aria-current", "true")
   await expect(hello).not.toHaveAttribute("aria-current")
 
-  // The header's ✎ starts where the Person is, as Alt+Enter does (ADR
-  // 0102): beside the Thread of no Project, on a free workspace, in No
-  // Project; beside the Thread of Work, in Work.
-  const header = sidebar.getByRole("button", {
-    name: "New Thread",
-    exact: true,
-  })
-  await header.click()
+  // Alt+Enter starts where the Person is (ADR 0102): beside the Thread
+  // of no Project, on a free workspace, in No Project; beside the Thread
+  // of Work, in Work. The sidebar starts none itself (ADR 0098, decision
+  // 19, as Roma amended it on 2026-11-12).
+  await page.keyboard.press("Alt+Enter")
   await startsIn("No Project")
   await expect(scratch).not.toHaveAttribute("aria-current")
   await hello.click()
-  await header.click()
+  await page.keyboard.press("Alt+Enter")
   await startsIn("Work")
-  await newProject(page, "lab")
-  await startsIn("lab")
-
-  // Grouped by Project: a header's own +, its menu's New Thread here,
-  // and No Project's (ADR 0098, decision 16).
-  await groupBy(page, "Project")
-  const section = placeOf(sidebar, "Work")
-  await section.getByRole("button", { name: "New Thread in Work" }).click()
-  await startsIn("Work")
-  await section.getByRole("option", { name: "Work", exact: true }).click({
-    button: "right",
-  })
-  await page.getByRole("menuitem", { name: "New Thread here" }).click()
-  await startsIn("Work")
-  await sidebar
-    .getByRole("button", { name: "New Thread in No Project" })
-    .click()
-  await startsIn("No Project")
+  await expect(
+    sidebar.getByRole("button", { name: /^New Thread/ })
+  ).toHaveCount(0)
 })
 
 test("the sidebar's edge drags its width, which the Strip follows and the window keeps", async () => {
@@ -7542,8 +7473,8 @@ test("the sidebar's edge drags its width, which the Strip follows and the window
   await expect.poll(width).toBe(272)
 
   // Its foot, icons with no words beside them: the gear and the view
-  // (ADR 0098, decision 21). The key sheet and the theme are the Banda
-  // menu's, and Add Project ✎'s menu's (sidebar-foot.spec.ts).
+  // (ADR 0098, decision 21). The key sheet, the theme and Add Project
+  // are the Banda menu's (sidebar-foot.spec.ts).
   await expect(sidebar.getByRole("button", { name: "Settings" })).toBeVisible()
   await expect(
     sidebar.getByRole("button", { name: "View", exact: true })

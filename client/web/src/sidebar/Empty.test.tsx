@@ -70,47 +70,33 @@ test("Someday's line shows Later at Someday's head, by the key the Inbox gives i
   expect(blocks.map((block) => block.key)).toContain(SOMEDAY_HEAD)
 })
 
-test("only an empty Working offers a New Thread", () => {
-  const working = renderToStaticMarkup(<EmptyTab tab="working" projects={[]} />)
+test("no empty tab starts a Thread itself: the New Thread Pane does (Roma, 2026-11-12)", () => {
+  const working = renderToStaticMarkup(<EmptyTab tab="working" />)
   expect(working).toContain("No Agent works now")
-  expect(working).toContain("New Thread")
-  const later = renderToStaticMarkup(<EmptyTab tab="later" projects={[]} />)
+  expect(working).not.toContain("<button")
+  const later = renderToStaticMarkup(<EmptyTab tab="later" />)
   expect(later).toContain("Nothing for later")
-  expect(later).not.toContain("New Thread")
-  expect(
-    renderToStaticMarkup(<EmptyTab tab="archive" projects={[]} />)
-  ).toContain("Nothing archived yet")
+  expect(later).not.toContain("<button")
+  expect(renderToStaticMarkup(<EmptyTab tab="archive" />)).toContain(
+    "Nothing archived yet"
+  )
 })
 
-test("the first run asks for a Project, in §2.6's words, and offers a Thread with no project once this machine's is named (ADR 0098, decision 25)", () => {
+test("the first run asks for a Project, in §2.6's words, and offers Add Project… alone (ADR 0098, decision 25, as Roma amended it on 2026-11-12)", () => {
   const first = renderToStaticMarkup(
     <EmptyPlace
       place={{ kind: "zero", key: "zero", working: 0, first: true }}
-      projects={[]}
-      machine="none"
     />
   )
   expect(bigLine(first)).toBe("Add a project to start")
   expect(first).toContain("A folder your Agents work in.")
   expect(first).toContain("Add Project…")
-  expect(first).toContain("start a Thread with no project")
-  // Before the engine names its No Project, only Add Project….
-  const unnamed = renderToStaticMarkup(
-    <EmptyPlace
-      place={{ kind: "zero", key: "zero", working: 0, first: true }}
-      projects={[]}
-    />
-  )
-  expect(unnamed).toContain("Add Project…")
-  expect(unnamed).not.toContain("with no project")
+  expect(first).not.toContain("with no project")
   // Inbox zero is no first run.
   expect(
     bigLine(
       renderToStaticMarkup(
-        <EmptyPlace
-          place={{ kind: "zero", key: "zero", working: 0 }}
-          projects={[]}
-        />
+        <EmptyPlace place={{ kind: "zero", key: "zero", working: 0 }} />
       )
     )
   ).toBe("Nothing waits for you")
@@ -192,9 +178,7 @@ test("every empty place says what goes there: each tab, and each part of the Inb
       // A tab with no card in it is never blank.
       if (!cards) expect(places, said).not.toHaveLength(0)
       for (const place of places) {
-        const html = renderToStaticMarkup(
-          <EmptyPlace place={place} projects={[]} />
-        )
+        const html = renderToStaticMarkup(<EmptyPlace place={place} />)
         expect(bigLine(html), said).not.toBe("")
       }
     }

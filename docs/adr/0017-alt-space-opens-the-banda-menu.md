@@ -44,6 +44,8 @@ Roma, on 2026-11-01, looking at the sidebar's header:
 
    _Amended 2026-11-11 by [ADR 0098](0098-the-sidebar-is-the-persons-inbox-of-their-agents-work.md), decision 17 (Roma's answer to the spec's P3, option A): while the sidebar shows, `Alt+Space` takes the focus to its Search, which filters the list in place; pressed again there with nothing typed, it opens the Banda menu. With the sidebar hidden, or from a dialog, it opens the menu as before. Over Quick Look it still fills the desk first. The key stays the menu's own (`menu.open`), so moving it in `keys.toml` moves both._
 
+   _Taken back 2026-11-12 by Roma, as ADR 0098's decisions 17 and 19 are amended: the sidebar has no Search of its own, the Banda menu being the one search, so `Alt+Space` opens the menu always, as this decision first said. Over Quick Look it still fills the desk first._
+
 2. **One window in the middle, as Raycast's.**
    - It sits in the upper third of Banda's window, and dims what lies behind it.
    - Only one is open at a time.

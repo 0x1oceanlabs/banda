@@ -25,7 +25,6 @@ preset = "inbox"
 # [projects]
 # order = "changed"                  # "changed" or "name"
 # rollup = true                      # a Project shows its loudest mark and count
-# new-thread = true                  # each Project offers a new Thread in it
 
 # [later]
 # presets = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"]  # the picker's, up to eight

@@ -168,10 +168,6 @@
         "rollup": {
           "description": "A Project shows its loudest mark and how many need you.",
           "type": "boolean"
-        },
-        "new-thread": {
-          "description": "Each Project offers a new Thread in it.",
-          "type": "boolean"
         }
       },
       "additionalProperties": false

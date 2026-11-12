@@ -357,10 +357,11 @@ d6–7):
 The Person's inbox ([0098]), 16rem wide, a glass panel with the tile's
 radius:
 
-- **Header**: Search, quiet, with no frame (its key on hover), and ✎ (a
-  new Thread). Under it the tabs **Inbox · Working · Later** and Archive
-  as an icon. A tab's count is plain; Inbox's is orange while something is
-  the Person's turn.
+- **Its top** is the tabs **Inbox · Working · Later** and Archive as an
+  icon, with no header above them: the sidebar has no search and no ✎ of
+  its own. The Banda menu (`Alt+Space`) is the one search, and a Thread
+  starts in the New Thread Pane (Roma, 2026-11-12). A tab's count is
+  plain; Inbox's is orange while something is the Person's turn.
 - **Inbox** has three parts: **Your turn**, cards, oldest first; **Open**,
   one line each in the normal colour, under a divider; **Working**, a grey
   shelf of one-line rows, the first six, then "+ N more".

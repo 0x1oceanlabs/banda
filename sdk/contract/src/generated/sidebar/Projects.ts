@@ -5,8 +5,4 @@ export type Projects = { order: ProjectOrder,
 /**
  * A Project shows its loudest mark and how many need the Person.
  */
-rollup: boolean, 
-/**
- * Each Project offers a new Thread in it.
- */
-newThread: boolean, };
+rollup: boolean, };

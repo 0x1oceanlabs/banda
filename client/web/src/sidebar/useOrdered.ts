@@ -7,12 +7,6 @@ import {
   useState,
 } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import {
-  sameData,
-  type Shown,
-  useHereNamed,
-  useHostsBy,
-} from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
 import { useLaterClock, useLists } from "../calls/stores"
 import type { Row } from "./rows"
@@ -29,7 +23,6 @@ import type { Block, Tab } from "./inbox"
 import { DUR_FAST } from "./motion"
 import { order, useElsewhere } from "./order"
 import type { Checks } from "./pick"
-import { finds, type Names, queryOf } from "./search"
 import type { Settings } from "./settings"
 import { useNotNow } from "../trust/not-now"
 import type { Undoable } from "./undo"
@@ -43,25 +36,6 @@ const BATCH = 250
 const NO_ACTS: Mine = new Map()
 const NOT_LEAVING: ReadonlyMap<string, Went> = new Map()
 
-/** The name each other machine says it has, by its name in `hosts.toml`. */
-const hostNames = (hosts: readonly Shown[]): Record<string, string> =>
-  Object.fromEntries(hosts.map((host) => [host.name, host.named.name]))
-
-/** How a search names a row's machine (`Names`): another's by its name in
- * `hosts.toml` and the one it says it has; this one's by its own. */
-function useNames(): Names {
-  const here = useHereNamed()?.name
-  const named = useHostsBy(hostNames, sameData)
-  return useCallback(
-    (host) => {
-      if (host === undefined) return here === undefined ? [] : [here]
-      const said = named[host]
-      return said === undefined ? [host] : [host, said]
-    },
-    [here, named]
-  )
-}
-
 /** What the list holds, the view it is drawn in, and the Later clock its
  * words read: the cards the Person's pointer took away, each a ghost line
  * in its slot, with what takes each back where its act said, and, while
@@ -73,8 +47,6 @@ export type Holds = {
   leaving: ReadonlyMap<string, Went>
   scene: unknown
   now: number
-  /** A search runs, and nothing in the list moves (spec §2.2). */
-  searching: boolean
 }
 
 /**
@@ -86,9 +58,7 @@ export type Holds = {
  * holds (`useHold`), what is drawn holds still and what moves waits; left
  * alone, the changes of a quarter of a second land together; the
  * Person's own acts, those on the Thread in view (`isCurrent`) by its
- * keys too, and another view, a search's too, draw at once (ADR 0098,
- * decision 6). A search in place (decision 17) takes the rows it finds,
- * by their words and filters at the Later clock's `now`.
+ * keys too, and another view draw at once (ADR 0098, decision 6).
  * `scene` changes as the view does, which draws the list afresh, with no
  * motion. `holder` is what the list's parts hold it by. While cards are
  * checked (`checks`, decision 15), the list holds too.
@@ -102,15 +72,12 @@ export function useOrdered(
     folded,
     someday,
     checks,
-    search,
   }: {
     tab: Tab
     more: boolean
     folded: ReadonlySet<string>
     someday?: number
     checks?: Checks
-    /** What Search says. */
-    search: string
   },
   isCurrent: (project: ProjectId, pane: PaneState) => boolean
 ) {
@@ -121,13 +88,6 @@ export function useOrdered(
   // The other machines of `hosts.toml` (ADR 0081): the rows of those the
   // order places, as the counts and Alt+U place them.
   const elsewhere = useElsewhere()
-  // What Search asks while it runs (decision 17), and how it names a row's
-  // machine for `on:`.
-  const query = useMemo(
-    () => (search.trim() === "" ? undefined : queryOf(search)),
-    [search]
-  )
-  const names = useNames()
   const putOff = useNotNow()
   const fresh = useMemo(
     () =>
@@ -139,12 +99,6 @@ export function useOrdered(
         more,
         folded,
         ...(someday === undefined ? {} : { someday }),
-        ...(query && {
-          search: {
-            words: query.text,
-            found: (row: Row) => finds(query, row, now, names),
-          },
-        }),
       }),
     [
       lists,
@@ -157,8 +111,6 @@ export function useOrdered(
       more,
       folded,
       someday,
-      query,
-      names,
     ]
   )
   const { holding, take, by, list } = useHold({
@@ -170,24 +122,15 @@ export function useOrdered(
   const [mine, setMine] = useState<Mine>(NO_ACTS)
   // Another view, by the Person's hand, draws its order straight away;
   // so does a Project's trust they put off, which only their hand does.
-  const words = query?.text
-  const [scene, setScene] = useState({
-    tab,
-    more,
-    folded,
-    settings,
-    words,
-    putOff,
-  })
+  const [scene, setScene] = useState({ tab, more, folded, settings, putOff })
   if (
     scene.tab !== tab ||
     scene.more !== more ||
     scene.folded !== folded ||
     scene.settings !== settings ||
-    scene.words !== words ||
     scene.putOff !== putOff
   ) {
-    setScene({ tab, more, folded, settings, words, putOff })
+    setScene({ tab, more, folded, settings, putOff })
     setDrawn(fresh.blocks)
     setMine(NO_ACTS)
   }
@@ -276,7 +219,6 @@ export function useOrdered(
     leaving: holding ? kept.leaving : NOT_LEAVING,
     scene,
     now,
-    searching: query !== undefined,
   }
   return {
     ordered: { ...fresh, blocks: kept.blocks },

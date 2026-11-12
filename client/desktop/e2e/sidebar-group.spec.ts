@@ -3,7 +3,8 @@
  * sign, its name and a chevron, Play before Work by name; on its right how
  * many wait for the Person in the loudest call's colour, then how many
  * work in grey; folded, the loudest one's mark too. Under the pointer,
- * + and ⋯ take the rollup's place; inside the list, which keys pick (S7b),
+ * ⋯ takes the rollup's place, with no + (Roma, 2026-11-12); inside the
+ * list, which keys pick (S7b),
  * none of it is a Tab stop, and the header is a stop of the pick, whose
  * Shift+F10 opens the Project's menu (S11). The view menu in
  * the sidebar's foot writes `group` into sidebar.toml; by machine, this
@@ -186,13 +187,16 @@ test("grouped by Project, each header has its sign, name and chevron, by name; i
   await expect(linesOf(cardOf(panel, "wait one"))).toHaveCount(1)
   await shots(window, "project")
 
-  // The pointer over a header shows + and ⋯ in the rollup's place; no
-  // Tab stops there, as the list's keys pick (S7b).
-  const plus = work.getByRole("button", { name: "New Thread in Work" })
+  // The pointer over a header shows ⋯ in the rollup's place, and no +;
+  // no Tab stop there, as the list's keys pick (S7b).
+  const more = work.getByRole("button", { name: "Work menu" })
   await work.hover()
   await expect(work.locator("[data-head-acts]")).toHaveCSS("opacity", "1")
-  await expect(plus).toHaveAttribute("tabindex", "-1")
-  await expect(work.getByRole("button", { name: "Work menu" })).toBeVisible()
+  await expect(more).toHaveAttribute("tabindex", "-1")
+  await expect(more).toBeVisible()
+  await expect(
+    work.getByRole("button", { name: "New Thread in Work" })
+  ).toHaveCount(0)
   await expect(waiting).toBeHidden()
   await shots(window, "project-focus", { pointer: true })
   await leaveSidebar(page)
@@ -448,7 +452,7 @@ test("a Project whose folder is missing is a card in Your turn: Enter opens Loca
   expect(window.banda("call", "projects.list")).not.toContain("banda-old")
 })
 
-test("a group's header is a stop of the pick: picked, it shows + and ⋯, and Shift+F10 or the Menu key opens the Project's menu, whose New Thread here starts in it (ADR 0098, S11)", async () => {
+test("a group's header is a stop of the pick: picked, it shows ⋯, and Shift+F10 or the Menu key opens the Project's menu, with no New Thread here (ADR 0098, S11; Roma 2026-11-12)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -467,6 +471,10 @@ test("a group's header is a stop of the pick: picked, it shows + and ⋯, and Sh
   const list = await focusList(page)
   await expect(header).toHaveAttribute("aria-selected", "true")
   await expect(work.locator("[data-head-acts]")).toHaveCSS("opacity", "1")
+  await expect(
+    work.getByRole("button", { name: "New Thread in Work" })
+  ).toHaveCount(0)
+  await shots(window, "group-picked", { step: "s11" })
 
   // Shift+F10 opens the Project's menu by the header; Esc gives the list
   // its focus back.
@@ -474,7 +482,6 @@ test("a group's header is a stop of the pick: picked, it shows + and ⋯, and Sh
   await page.keyboard.press("Shift+F10")
   await expect(menu).toBeVisible()
   await expect(menu.getByRole("menuitem")).toHaveText([
-    "New Thread here",
     "Open folder",
     "Project settings…",
     "Archive its Threads",
@@ -488,8 +495,8 @@ test("a group's header is a stop of the pick: picked, it shows + and ⋯, and Sh
   await expect(list).toBeFocused()
 
   // ← folds it; Enter unfolds it and picks its first card, ↑ the header
-  // again. The Menu key opens the menu too, and New Thread here starts a
-  // Thread in Work.
+  // again. The Menu key opens the menu too; Esc gives the list its focus
+  // back.
   await page.keyboard.press("ArrowLeft")
   await expect(header).toHaveAttribute("aria-expanded", "false")
   await expect(header).toHaveAttribute("aria-selected", "true")
@@ -500,14 +507,9 @@ test("a group's header is a stop of the pick: picked, it shows + and ⋯, and Sh
   await expect(header).toHaveAttribute("aria-selected", "true")
   await page.keyboard.press("ContextMenu")
   await expect(menu).toBeVisible()
-  await menu.getByRole("menuitem", { name: "New Thread here" }).click()
+  await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
-  await expect(
-    page
-      .getByRole("region", { name: "New Thread" })
-      .and(page.locator('[data-focused="true"]'))
-      .getByRole("button", { name: "Project: Work" })
-  ).toBeVisible()
+  await expect(list).toBeFocused()
 
   // ⋯ under the pointer opens the same menu.
   await work.hover()
@@ -525,9 +527,9 @@ test("with no Project and no Thread, the Inbox is the first run: Add Project… 
   const panel = sidebarOf(page).getByRole("tabpanel")
   await expect(panel).toContainText("Add a project to start")
   await expect(panel).toContainText("A folder your Agents work in.")
-  await expect(
-    panel.getByRole("button", { name: "start a Thread with no project" })
-  ).toBeVisible()
+  // It starts no Thread itself: a Thread starts in the New Thread Pane
+  // (Roma, 2026-11-12).
+  await expect(panel.getByRole("button")).toHaveText(["Add Project…"])
   await shots(window, "first-run", { step: "s11" })
 
   await panel.getByRole("button", { name: "Add Project…" }).click()

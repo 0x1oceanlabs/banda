@@ -6,10 +6,10 @@
  * focus is in the sidebar, and a field there types them; Undo holds Ctrl,
  * or ⌘ on a Mac, as a field's own does, and so do Select all, Ctrl+A, and
  * Delete's second key, Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick
- * work while the focus is in the list; Undo, `/` and the tabs' digits
- * anywhere in the sidebar. The arrows, Home, End, the pages and Esc are
- * the list's own, as a list's are, and Search's ↑↓ and Esc its own. Pure,
- * so plain tests cover it.
+ * work while the focus is in the list; Undo, `/`, which opens the Banda
+ * menu, the one search (Roma, 2026-11-12), and the tabs' digits anywhere
+ * in the sidebar. The arrows, Home, End, the pages and Esc are the list's
+ * own, as a list's are. Pure, so plain tests cover it.
  */
 import type { Key } from "@banda/ui/lib/keys"
 import { TABS, type Tab } from "./inbox"
@@ -36,7 +36,6 @@ export type Does =
 
 /** What a tab's key is called, in the tabs' order. */
 const TAB_TITLES: Readonly<Record<Tab, string>> = {
-  all: "Show All a search found",
   inbox: "Show the Inbox",
   working: "Show Working",
   later: "Show Later",
@@ -135,13 +134,6 @@ export const SIDEBAR_KEYS: readonly {
     title: TAB_TITLES[tab],
     keys: [{ code: `Digit${at + 1}` }],
   })),
-  // All, while a search runs, which comes before the others.
-  {
-    does: "tab-all",
-    id: "sidebar.tab-all",
-    title: TAB_TITLES.all,
-    keys: [{ code: "Digit0" }],
-  },
 ]
 
 /** The acts on a card that a key held down does not do again: a held `S`
@@ -158,7 +150,7 @@ export const ONCE: ReadonlySet<Does> = new Set([
 
 /** The tab a key of the sidebar shows, if it shows one. */
 export function tabOf(does: Does): Tab | undefined {
-  return does.startsWith("tab-") ? (does.slice(4) as Tab) : undefined
+  return TABS.find((tab) => does === `tab-${tab}`)
 }
 
 /** The id of the action that does `does`. */

@@ -28,7 +28,6 @@ import {
   FolderSearchIcon,
   type LucideIcon,
   SettingsIcon,
-  SquarePenIcon,
   Trash2Icon,
 } from "lucide-react"
 import { LOCATE } from "../menu/menu"
@@ -37,7 +36,7 @@ import { notNow } from "../trust/not-now"
 import { actsOf } from "./acts"
 import type { ProjectAsks } from "./inbox"
 import type { Row } from "./rows"
-import { newThread, useOpen } from "./open"
+import { useOpen } from "./open"
 import { useActs } from "./useActs"
 import { HoldingContext, useHoldWhile } from "./useHold"
 
@@ -63,9 +62,9 @@ export function archivableIn(
  * A Project's menu (ADR 0098, decision 16), around what opens it: its
  * group header, whose ⋯ opens it as a right click does, Shift+F10 and the
  * Menu key on that header picked, a card's Project sign, and a Project's
- * own card, whose Trust… and Not now come first, for the keys. New Thread
- * here, or Locate folder for a Project whose folder is missing; Open
- * folder; Project settings…; then Archive its Threads,
+ * own card, whose Trust… and Not now come first, for the keys. Locate
+ * folder for a Project whose folder is missing; Open folder; Project
+ * settings…; then Archive its Threads,
  * those its cards may archive, told in the one Archived toast whose Undo
  * takes them all back; and Remove from Banda…, which asks first. Each runs
  * by the Window's actions, as their keys would. Open, it holds the list
@@ -102,20 +101,12 @@ export function ProjectMenu({
 
 /** A row of a Project's menu, by what it does. */
 export type ProjectEntry =
-  | "trust"
-  | "not-now"
-  | "new"
-  | "locate"
-  | "folder"
-  | "settings"
-  | "archive"
-  | "remove"
+  "trust" | "not-now" | "locate" | "folder" | "settings" | "archive" | "remove"
 
 /** Each row's icon and title. */
 const LOOK: Record<ProjectEntry, { icon: LucideIcon; title: string }> = {
   trust: { icon: BadgeCheckIcon, title: "Trust…" },
   "not-now": { icon: CircleDashedIcon, title: "Not now" },
-  new: { icon: SquarePenIcon, title: "New Thread here" },
   locate: { icon: FolderSearchIcon, title: LOCATE },
   folder: { icon: FolderOpenIcon, title: "Open folder" },
   settings: { icon: SettingsIcon, title: "Project settings…" },
@@ -125,10 +116,11 @@ const LOOK: Record<ProjectEntry, { icon: LucideIcon; title: string }> = {
 
 /**
  * A Project's menu in groups a line apart (ADR 0098, decision 16): on its
- * own card that `asks` for trust, Trust… and Not now first; then New
- * Thread here, or Locate folder where its folder is `missing`, Open folder
- * and Project settings…; then Archive its Threads and Remove from Banda….
- * Pure, so plain tests cover it.
+ * own card that `asks` for trust, Trust… and Not now first; then Locate
+ * folder where its folder is `missing`, Open folder and Project
+ * settings…; then Archive its Threads and Remove from Banda…. No New
+ * Thread here: the sidebar starts no Thread (Roma, 2026-11-12). Pure, so
+ * plain tests cover it.
  */
 export function entriesOf(
   { missing }: Pick<ProjectSummary, "missing">,
@@ -136,7 +128,7 @@ export function entriesOf(
 ): ProjectEntry[][] {
   return [
     ...(asks === "trust" ? [["trust", "not-now"] as ProjectEntry[]] : []),
-    [missing ? "locate" : "new", "folder", "settings"],
+    [...(missing ? ["locate" as const] : []), "folder", "settings"],
     ["archive", "remove"],
   ]
 }
@@ -154,7 +146,7 @@ function Entries({
   asks?: ProjectAsks
   trigger: RefObject<HTMLDivElement | null>
 }) {
-  // Settings and a new Thread open a Pane or a menu; the rest act in place.
+  // Settings and Locate open a Pane or a menu; the rest act in place.
   const open = useOpen()
   const run = useRun()
   const later = useAfterMenu()
@@ -167,7 +159,6 @@ function Entries({
     trust: () =>
       later(() => run("projects.trust", { project: id, trusted: true })),
     "not-now": () => notNow(id),
-    new: () => newThread(open, { project: id }),
     locate: () => open("projects.locate", { project: id }),
     folder: () => run("file.outside", { file: project.folder }),
     settings: () => open("projects.settings", { project: id }),

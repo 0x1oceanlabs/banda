@@ -654,13 +654,13 @@ test("one place answers a pick, and only the action reaches it", () => {
  * that names an action or a kind of the agents module's (`agents.…`) or a
  * Thread's (`thread.…`), and that module's settings file (`AGENTS_FILE`).
  * None of them names an App (ADR 0087, decision 1); these go with
- * intents (B8c), and the sidebar's New Thread with them, as the key
- * starts one. The Flow is the Tiling's own now, in `tiling.toml` (ADR
- * 0127, decision 4), so its readers left the list. None joins the list,
- * and one that goes leaves it. Not what only tests use.
+ * intents (B8c). The sidebar's New Thread went (Roma, 2026-11-12): the
+ * key and the New Thread Pane start one. The Flow is the Tiling's own
+ * now, in `tiling.toml` (ADR 0127, decision 4), so its readers left the
+ * list. None joins the list, and one that goes leaves it. Not what only
+ * tests use.
  */
 const APP_STRINGS = [
-  "web/src/sidebar/open.ts: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
@@ -715,7 +715,7 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
  * into a part, not the frame. It only falls, as the Window's does: a PR
  * that cuts the file more than `SLACK` lines below it lowers it.
  */
-const SIDEBAR_LINES = 174
+const SIDEBAR_LINES = 165
 
 test("the sidebar's frame keeps under its ceiling, and the ceiling follows it down", () => {
   const text = readFileSync(join(app, "web/src/sidebar/Sidebar.tsx"), "utf8")
