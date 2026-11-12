@@ -1,4 +1,6 @@
+import { readFileSync } from "node:fs"
 import { expect, test } from "vitest"
+import { defines } from "../testing/look"
 import { cn } from "./utils"
 
 test("the chat's sizes merge as sizes, keeping a colour beside them", () => {
@@ -8,6 +10,27 @@ test("the chat's sizes merge as sizes, keeping a colour beside them", () => {
   expect(cn("text-xs", "text-code")).toBe("text-code")
   // A size with its own line height takes the place of an earlier one.
   expect(cn("text-sm leading-relaxed", "text-prose")).toBe("text-prose")
+})
+
+test("each level of the type scale merges as a size, keeping a colour beside it", () => {
+  const theme = defines(
+    readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8"),
+    "@theme inline"
+  )
+  const levels = [...theme].flatMap(([name, value]) => {
+    const level = /^text-([a-z]+)$/.exec(name)?.[1]
+    return level && value === `var(--${level}-size)` ? [level] : []
+  })
+  expect(levels).toContain("small")
+  for (const level of levels) {
+    expect(cn(`text-${level}`, "text-muted-foreground")).toBe(
+      `text-${level} text-muted-foreground`
+    )
+    expect(cn("text-muted-foreground", `text-${level}`)).toBe(
+      `text-muted-foreground text-${level}`
+    )
+    expect(cn("text-xs", `text-${level}`)).toBe(`text-${level}`)
+  }
 })
 
 test("a corner's level replaces another", () => {

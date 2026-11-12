@@ -269,7 +269,7 @@ function Menu({
         {item("Push", CloudUploadIcon, menu.push, onPush)}
         {item("Pull", CloudDownloadIcon, menu.pull, onPull)}
         {menu.follows && (
-          <p className="px-2 pt-1.5 pb-1 text-small text-muted-foreground">
+          <p className="px-2 pt-1.5 pb-1 text-meta text-muted-foreground">
             Pull and Push follow the upstream {menu.follows}.
           </p>
         )}

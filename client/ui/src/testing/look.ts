@@ -345,14 +345,17 @@ type Level = (typeof SCALE)[number]
 /** A length or a number, alone: `11px`, `0.8rem`, `1.5`. */
 const LITERAL = /^-?[\d.]+(?:px|rem|em|pt|%)?$/
 
-/** Of `levels`, the nearest `pixels`, the larger on a tie. */
-function nearest(levels: Level[], pixels: number): Level {
+/** Of `levels`, the nearest `pixels`, the larger on a tie; none of none. */
+function nearest(levels: Level[], pixels: number): Level | undefined {
   const off = (level: Level) => Math.abs(level.pixels - pixels)
-  return levels.reduce((best, level) =>
-    off(level) < off(best) ||
-    (off(level) === off(best) && level.pixels > best.pixels)
-      ? level
-      : best
+  return levels.reduce<Level | undefined>(
+    (best, level) =>
+      !best ||
+      off(level) < off(best) ||
+      (off(level) === off(best) && level.pixels > best.pixels)
+        ? level
+        : best,
+    undefined
   )
 }
 
@@ -368,13 +371,13 @@ function levelOf(size: string): string | undefined {
   }
   const pixels = pixelsOf(size)
   if (pixels === undefined) return undefined
-  const { level, only } = nearest(SCALE, pixels)
-  if (only === undefined) return `\`${level}\``
+  const near = nearest(SCALE, pixels)
+  if (!near || near.only === undefined) return near && `\`${near.level}\``
   const any = nearest(
     SCALE.filter((each) => each.only === undefined),
     pixels
   )
-  return `\`${level}\` ${only}, else \`${any.level}\``
+  return `\`${near.level}\` ${near.only}${any ? `, else \`${any.level}\`` : ""}`
 }
 
 const TEXT_ARBITRARY = new RegExp(`${START}text-(${ARBITRARY})(?![\\w.-])`, "g")
