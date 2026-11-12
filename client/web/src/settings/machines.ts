@@ -310,6 +310,15 @@ export function installSteps(
         now(`${version} is on ${name} already`)
         now("Starting its engine")
         break
+      case "warning": {
+        // What its Agents will lack there, said once, as a step done.
+        const words = rest.join(" ")
+        steps.push({
+          words: words.charAt(0).toUpperCase() + words.slice(1),
+          done: true,
+        })
+        break
+      }
       case "installed":
         now("Starting its engine")
         break
