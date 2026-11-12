@@ -898,7 +898,7 @@ mod tests {
     fn a_preset_of_ones_own_is_told_of_its_keys_out_of_use_too() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::create_dir(dir.path().join("sidebars")).unwrap();
-        let flat = dir.path().join("sidebars/flat.toml");
+        let flat = dir.path().join("sidebars").join("flat.toml");
         std::fs::write(&flat, "group = \"none\"\n[row]\nlines = 1\n").unwrap();
         std::fs::write(dir.path().join("sidebar.toml"), "preset = \"flat\"\n").unwrap();
         let (sidebar, problems) = resolved(dir.path());
