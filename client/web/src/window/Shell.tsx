@@ -732,7 +732,6 @@ export function Shell({
     },
     [newThreadIn, parts, here]
   )
-
   const frame: Frame = useMemo(
     () => ({
       // A tile takes the focus as the DOM gives it, on the workspace on
