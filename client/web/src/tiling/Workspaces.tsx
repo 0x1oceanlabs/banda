@@ -38,6 +38,7 @@ export function Workspaces({
   zoomed,
   reveal,
   inset,
+  narrow,
   frame,
   onStep,
   onGo,
@@ -68,6 +69,9 @@ export function Workspaces({
   reveal?: Reveal
   /** How far the sidebar reaches over their left, in rem (`Strip`). */
   inset: number
+  /** The window is narrow, so the sidebar hides: nothing can be drawn
+   * beside their Panes (`Strip`). */
+  narrow: boolean
   frame: Frame
   /** A swipe up or down with the mod held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -236,6 +240,7 @@ export function Workspaces({
               zoomed={zoomed}
               reveal={reveal}
               inset={inset}
+              narrow={narrow}
               frame={frame}
               onStep={onStep}
               onStart={onStart}

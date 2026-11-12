@@ -344,17 +344,18 @@ function besidePane(page: Window["page"]) {
 }
 
 /** Opens sub-agent `name` of `scope` beside, by its row's Open beside,
- * which the pointer shows in its time's place, and the keys reach. By
- * the keys here: the window under test matches no (hover: hover), which
- * Tailwind's hover asks for. */
-async function openBeside(scope: Locator, name: string) {
+ * which the pointer shows in its time's place, and the keys reach; or, as
+ * `words` says, by the same button's Open, over its Thread. By the keys
+ * here: the window under test matches no (hover: hover), which Tailwind's
+ * hover asks for. */
+async function openBeside(scope: Locator, name: string, words = "Open beside") {
   const label = scope.page().getByRole("button", { name, exact: true })
   const row = scope.getByRole("button", { name, exact: true })
   await row.hover()
   await scope
     .locator("[data-slot=subagent]")
     .filter({ has: label })
-    .getByRole("button", { name: "Open beside" })
+    .getByRole("button", { name: words, exact: true })
     .press("Enter")
   return row
 }
@@ -617,4 +618,190 @@ test("a message queued for a sub-agent at work is a row with no words", async ()
   const beside = besidePane(page)
   await expect(beside.brief).toBeVisible()
   await expect(beside.pane.locator("[data-slot=subagent-wrote]")).toHaveCount(0)
+})
+
+/** The screens over a Thread in `scope`, where its Pane is alone, and the
+ * parts of the one on top. */
+function screenOf(scope: Locator) {
+  const screen = scope.locator("[data-slot=subagent-screen]:not([inert])")
+  return {
+    all: scope.locator("[data-slot=subagent-screen]"),
+    screen,
+    title: screen.getByRole("heading", { level: 2 }),
+    back: screen.getByRole("button", { name: "Back", exact: true }),
+    status: screen.locator("[data-slot=subagent-status]"),
+    brief: screen.locator("[data-slot=subagent-brief]"),
+  }
+}
+
+/** The Thread `thread` shows, by its tile, which stays found while a
+ * screen hides its composer. */
+async function tileOf(thread: Locator) {
+  const tile = await thread.getAttribute("data-tile")
+  return thread.page().locator(`[data-tile="${tile}"]`)
+}
+
+test("in a narrow window a sub-agent opens over its Thread as a screen, and ← and Esc go back to it as it was", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const tile = await tileOf(thread)
+  // Narrower than the sidebar and a column: the sidebar hides, and
+  // nothing can be drawn beside the Thread.
+  await sized(window, 728)
+  await expect(
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toBeHidden()
+  await composer.fill("sub-agents nested")
+  await composer.press("Enter")
+  await expect(tile.getByText(/^The sub-agents said:/)).toBeVisible()
+  await composer.fill("a draft")
+  const view = tile.locator("[data-slot=message-scroller-viewport]")
+  await expect
+    .poll(() => view.evaluate((one) => one.scrollHeight > one.clientHeight))
+    .toBe(false)
+  // Its row's button reads Open, opened or not.
+  const row = tile.getByRole("button", {
+    name: "Read a.txt one line",
+    exact: true,
+  })
+  await row.click()
+  const opened = tile.locator("[data-slot=subagent]")
+  await expect(opened.getByRole("button", { name: "Open beside" })).toHaveCount(
+    0
+  )
+  await opened.getByRole("button", { name: "Open", exact: true }).click()
+  // The screen covers the Thread, its composer included, under the Pane's
+  // own header: ←, its label and its Thread, then its brief and work.
+  const over = screenOf(tile)
+  await expect(over.screen).toBeVisible()
+  await expect(over.screen).toBeFocused()
+  await expect(over.title).toHaveText("Read a.txt one line")
+  await expect(over.screen).toContainText("sub-agent of sub-agents nested")
+  await expect(over.brief).toContainText("Fake AI asked")
+  await expect(over.screen).toContainText("alpha")
+  await expect(composer).toBeHidden()
+  await expect(
+    tile.getByRole("button", { name: "Close sub-agents nested" })
+  ).toBeVisible()
+  // Its status bar at the bottom, with no text box and no Stop.
+  await expect(over.status).toHaveAttribute("aria-label", /^Done · /)
+  await expect(
+    over.status.getByRole("button", { name: "Ask Fake AI about it" })
+  ).toBeVisible()
+  await expect(over.screen.getByRole("textbox")).toHaveCount(0)
+  await expect(over.screen.getByRole("button", { name: /Stop/ })).toHaveCount(0)
+  // The window was asked for no Pane.
+  await expect(page.locator("[data-slot=subagent-pane]")).toHaveCount(0)
+  await page.screenshot({ path: "test-results/thread-subagents-screen.png" })
+  // ← goes back to the Thread as it was: its draft, and the row it went
+  // from focused.
+  await over.back.click()
+  await expect(over.all).toHaveCount(0)
+  await expect(composer).toHaveText("a draft")
+  await expect(row).toBeFocused()
+  // Esc too.
+  await opened.getByRole("button", { name: "Open", exact: true }).click()
+  await expect(over.title).toHaveText("Read a.txt one line")
+  await page.keyboard.press("Escape")
+  await expect(over.all).toHaveCount(0)
+  await expect(row).toBeFocused()
+
+  // Its own sub-agent is one more screen, in place of the breadcrumb, and
+  // Esc goes up one level at a time.
+  await opened.getByRole("button", { name: "Open", exact: true }).click()
+  await openBeside(over.screen, "Explore", "Open")
+  await expect(over.all).toHaveCount(2)
+  await expect(over.title).toHaveText("Explore")
+  await expect(over.screen).toContainText("sub-agent of Read a.txt one line")
+  await expect(over.screen.getByRole("navigation")).toHaveCount(0)
+  await expect(over.brief).toContainText("Read a.txt one line asked")
+  await expect(over.screen).toContainText("bravo")
+  await page.screenshot({
+    path: "test-results/thread-subagents-screen-nested.png",
+  })
+  await page.keyboard.press("Escape")
+  await expect(over.all).toHaveCount(1)
+  await expect(over.title).toHaveText("Read a.txt one line")
+  await expect(
+    over.screen.getByRole("button", { name: "Explore", exact: true })
+  ).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(over.all).toHaveCount(0)
+  await expect(row).toBeFocused()
+  await expect(page.locator("[data-slot=subagent-pane]")).toHaveCount(0)
+
+  // Where the bar is narrow, its button goes to a second line, under its
+  // words.
+  await opened.getByRole("button", { name: "Open", exact: true }).click()
+  await sized(window, 400)
+  const words = over.status.locator("p")
+  const ask = over.status.getByRole("button")
+  const box = async (part: Locator) => (await part.boundingBox())!
+  await expect
+    .poll(async () => (await box(ask)).y)
+    .toBeGreaterThan((await box(words)).y + (await box(words)).height - 1)
+  // The button moves there as it moves anywhere: once it is there.
+  await expect
+    .poll(async () => Math.round((await box(ask)).x - (await box(words)).x))
+    .toBe(0)
+  await page.screenshot({
+    path: "test-results/thread-subagents-screen-400.png",
+  })
+})
+
+test("Ask Claude about it from a screen goes back to the Thread, its composer focused with the sub-agent's chip", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const tile = await tileOf(thread)
+  await sized(window, 728)
+  await composer.fill("sub-agents nested")
+  await composer.press("Enter")
+  await expect(tile.getByText(/^The sub-agents said:/)).toBeVisible()
+  await composer.fill("why?")
+  await openBeside(tile, "Read a.txt one line", "Open")
+  const over = screenOf(tile)
+  await openBeside(over.screen, "Explore", "Open")
+  await expect(over.all).toHaveCount(2)
+  await over.status
+    .getByRole("button", { name: "Ask Fake AI about it" })
+    .click()
+  // Every screen goes; the composer has the chip, then what was written.
+  await expect(over.all).toHaveCount(0)
+  await expect(composer).toBeFocused()
+  const chip = composer.locator("[data-chip=subagent]")
+  await expect(chip).toHaveText("Explore")
+  await expect(composer).toHaveText("Explore why?")
+})
+
+test("in the Drawer a sub-agent opens over its Thread, and Esc goes back without lifting the Drawer", async () => {
+  window = await startWindow({ look: LOOK })
+  const { page } = window
+  await firstThread(page)
+  const drawer = page.getByRole("dialog", { name: "Drawer" })
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  const ask = drawer.getByRole("textbox", { name: "Message to Fake AI" })
+  await ask.fill("sub-agents three")
+  await ask.press("Enter")
+  await expect(drawer.getByText(/^The sub-agents said:/)).toBeVisible()
+  await drawer.getByRole("button", { name: /^Ran 3 sub-agents/ }).click()
+  const reviewer = await openBeside(drawer, "Reviewer", "Open")
+  const over = screenOf(drawer)
+  await expect(over.title).toHaveText("Reviewer")
+  await expect(over.status).toBeVisible()
+  await expect(page.locator("[data-slot=subagent-pane]")).toHaveCount(0)
+  await page.screenshot({
+    path: "test-results/thread-subagents-screen-drawer.png",
+  })
+  // Esc goes back to the Thread, and the Drawer stays dropped.
+  await page.keyboard.press("Escape")
+  await expect(over.all).toHaveCount(0)
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await expect(reviewer).toBeFocused()
+  await expect(ask).toBeVisible()
+  // Then Esc lifts it, as ever.
+  await page.keyboard.press("Escape")
+  await expect(drawer).not.toHaveAttribute("data-drawer")
 })

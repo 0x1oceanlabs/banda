@@ -250,7 +250,7 @@
     },
     {
       "id": "agents.subagent.up",
-      "title": "Go up to the sub-agent that started this one",
+      "title": "Go back up, to the sub-agent that started this one or to its Thread",
       "section": "Sub-agent",
       "keys": [
         {

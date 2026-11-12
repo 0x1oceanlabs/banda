@@ -187,6 +187,7 @@ export const PaneFrame = memo(function PaneFrame({
   hidden = false,
   away = false,
   alone = false,
+  noRoom = false,
 }: {
   entry: Entry
   modules: readonly string[]
@@ -217,6 +218,9 @@ export const PaneFrame = memo(function PaneFrame({
   /** It is that window's one Pane, drawn over the whole of it; the
    * frame's `popOut` brings it back. */
   alone?: boolean
+  /** Nothing can be drawn beside it now, as in a narrow window or the
+   * drawer: its Pane is told it is alone (`PaneProps.alone`). */
+  noRoom?: boolean
 }) {
   const keyFor = useKeyLabel()
   const kind = kindOf(entry.pane.kind)
@@ -511,6 +515,7 @@ export const PaneFrame = memo(function PaneFrame({
                   owner={owner}
                   focused={focused}
                   selected={selected}
+                  alone={noRoom}
                   handle={handle}
                   run={frame.run}
                 />

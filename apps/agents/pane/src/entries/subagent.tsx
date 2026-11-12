@@ -4,13 +4,14 @@
  * and model, what it does now or how it ended, and its time, which does not
  * tick. A click opens it in place, with nothing above it moving: its brief,
  * its work as one line, its report, and Open beside, which the pointer
- * also shows at the row's right in its time's place (decision 21). The row
- * stays lit while the Pane beside shows it. Banda shows a Harness's
+ * also shows at the row's right in its time's place (decision 21); where
+ * its Thread's Pane is alone, Open, which shows it over the Thread, as a
+ * screen. The row stays lit while the Pane beside shows it. Banda shows a Harness's
  * sub-agents and manages none of them (ADR 0103, call 11), so a row offers
  * no Stop.
  */
 import { useState } from "react"
-import { LayersIcon, PanelRightIcon } from "lucide-react"
+import { ArrowRightIcon, LayersIcon, PanelRightIcon } from "lucide-react"
 import type { Item } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -28,7 +29,7 @@ import { FADES, RowTrigger } from "./parts/RowTrigger"
 import { Kinds, WorkFold } from "./parts/WorkFold"
 import { ThoughtEntry } from "./thought"
 import type { EntryOf, EntryProps, SubagentRow } from "./types"
-import { useLit, useOpened, useThreadAround } from "../thread/context"
+import { useLit, useOpened, useOpens, useThreadAround } from "../thread/context"
 import {
   laneDid,
   type LaneState,
@@ -36,6 +37,7 @@ import {
   useSubagent,
   workOfLane,
 } from "../thread/live-lane"
+import { type Opens, openWords } from "../thread/screens"
 import { type Now, nowWords, stateWord } from "../thread/subagents"
 import { going } from "../thread/timeline"
 
@@ -43,11 +45,14 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
   const [open, setOpen] = useOpened(item.body.subagent)
   const lit = useLit(item.body.subagent)
   const { acts } = useThreadAround()
+  const opens = useOpens()
   if (!subagentRow) return null
   const { lane, said } = subagentRow
   const tone = TONES[said.look]
   // Closed, the pointer shows Open beside; opened, its own button does.
   const beside = open ? undefined : acts.openSubagent
+  const words = openWords(opens)
+  const Icon = ICONS[opens]
   return (
     <Collapsible
       open={open}
@@ -61,6 +66,8 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
           line that opens it in place, not in it. */}
       <div className="group/line relative flex min-w-0 flex-col">
         <RowTrigger
+          // What takes the focus back as its screen goes.
+          data-sub={lane.id}
           aria-label={said.label}
           aria-description={[
             stateWord(lane),
@@ -120,15 +127,15 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label="Open beside"
-            title="Open beside"
+            aria-label={words}
+            title={words}
             data-beside=""
             // Still there for the keys, unseen until the pointer or the
             // focus is on it.
             className="pointer-events-none absolute top-0.5 right-5.5 text-muted-foreground opacity-0 group-hover/line:pointer-events-auto group-hover/line:opacity-100 focus-visible:pointer-events-auto focus-visible:opacity-100"
             onClick={() => beside(lane.id)}
           >
-            <PanelRightIcon className="size-3.5" />
+            <Icon className="size-3.5" />
           </Button>
         )}
       </div>
@@ -139,6 +146,13 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
       </CollapsibleContent>
     </Collapsible>
   )
+}
+
+/** Open's icon: a Pane at the right, beside; an arrow on, over the
+ * Thread, which ← takes back. */
+const ICONS: Record<Opens, typeof PanelRightIcon> = {
+  beside: PanelRightIcon,
+  over: ArrowRightIcon,
 }
 
 /** The colours of a row's parts by how it looks: grey all through while it
@@ -183,10 +197,12 @@ function NowSaid({ now: { lead, text, mono } }: { now: Now }) {
 }
 
 /** A row opened in place: who asked it what, its work as one line, its
- * report, and Open beside, where the Thread can. Its work is read once it
- * opens, and followed while it shows. */
+ * report, and Open beside, or Open over its Thread, where the Thread can.
+ * Its work is read once it opens, and followed while it shows. */
 function Opened({ row: { lane, said, asker } }: { row: SubagentRow }) {
   const { engine, project, thread, acts } = useThreadAround()
+  const opens = useOpens()
+  const Icon = ICONS[opens]
   const live = useSubagent(engine, project, thread, lane.id)
   return (
     <>
@@ -200,8 +216,8 @@ function Opened({ row: { lane, said, asker } }: { row: SubagentRow }) {
               size="xs"
               onClick={() => acts.openSubagent?.(lane.id)}
             >
-              <PanelRightIcon data-icon="inline-start" />
-              Open beside
+              <Icon data-icon="inline-start" />
+              {openWords(opens)}
             </Button>
           )}
         </Report>

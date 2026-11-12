@@ -92,6 +92,7 @@ export const Strip = memo(function Strip({
   away,
   zoomed,
   reveal: asked,
+  narrow,
   frame,
   onStep,
   onStart,
@@ -128,6 +129,9 @@ export const Strip = memo(function Strip({
    * (`--sidebar-inset`): as it changes, the Strip is drawn again, and its
    * columns slide to where the padding puts them, as on any move. */
   inset: number
+  /** The window is narrow, so the sidebar hides (`useNarrow`): nothing can
+   * be drawn beside its Panes (`PaneProps.alone`). */
+  narrow: boolean
   frame: Frame
   /** The mod and the middle button dragged up or down step once. */
   onStep: (by: 1 | -1) => void
@@ -510,6 +514,7 @@ export const Strip = memo(function Strip({
                 marked={marked(entry)}
                 away={away.has(entry.id)}
                 zoomed={entry.id === zoomed}
+                noRoom={narrow}
                 height={column.decked ? undefined : column.heights[e]}
                 item={item(entry)}
                 project={projectOf(entry.project)}

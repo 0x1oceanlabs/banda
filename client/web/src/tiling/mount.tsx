@@ -250,6 +250,7 @@ export function PaneMount({
   focused,
   selected,
   peek,
+  alone,
   handle,
   run,
 }: {
@@ -261,6 +262,8 @@ export function PaneMount({
   focused: boolean
   selected?: boolean
   peek?: boolean
+  /** Nothing can be drawn beside it now (`PaneProps.alone`). */
+  alone?: boolean
   handle: Handle
   run: ((action: string, args?: Args) => void) | undefined
 }) {
@@ -275,6 +278,7 @@ export function PaneMount({
           focused={focused}
           selected={selected}
           {...(peek && { peek })}
+          {...(alone && { alone })}
           {...handle}
           {...handles}
         />

@@ -872,6 +872,7 @@ export function Shell({
                     zoomed={zoomed}
                     reveal={reveal}
                     inset={sidebarShown && !narrow ? sidebarWidth : 0}
+                    narrow={narrow}
                     frame={frame}
                     onStep={stepBy}
                     onGo={goTo}

@@ -164,6 +164,7 @@ export function Peek({
                 label={label}
                 run={run}
                 peek
+                alone
               />
             ) : (
               <p className="p-4 text-sm text-muted-foreground">
@@ -204,6 +205,7 @@ export function FloatingPane({
   run,
   focused = false,
   peek = false,
+  alone = false,
 }: {
   engine: Engine
   owner: Owner
@@ -217,6 +219,8 @@ export function FloatingPane({
   run: (action: string, args?: Args) => void
   focused?: boolean
   peek?: boolean
+  /** Nothing can be drawn beside it (`PaneProps.alone`), as in Quick Look. */
+  alone?: boolean
 }) {
   const { runs } = usePaneHandles(owner, run, pane)
   const gate = gateOf(pane, elsewhere ? runs : undefined, useModules(engine))
@@ -239,6 +243,7 @@ export function FloatingPane({
           owner={owner}
           focused={focused}
           peek={peek}
+          alone={alone}
           handle={handle}
           run={run}
         />
