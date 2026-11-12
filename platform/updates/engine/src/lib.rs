@@ -94,6 +94,51 @@ pub struct UpdateState {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub off: Option<String>,
+    /// When the newest version's release was published, in ms since the
+    /// epoch, as the last look found it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional, type = "number")]
+    pub published: Option<i64>,
+    /// How this engine came to run its version, when it moved onto it
+    /// from another (ADR 0115, decision 3); none for one started so.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub updated: Option<Updated>,
+    /// What `machine.toml`'s `updates` says: `when-idle`, `ask` or `off`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub takes: Option<TakeUpdates>,
+}
+
+/// An engine that moved onto the version it runs.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "updates/")]
+pub struct Updated {
+    /// The version it ran before.
+    pub from: String,
+    /// When it moved, in ms since the epoch.
+    #[ts(type = "number")]
+    pub at: i64,
+    /// It moved by itself, once nothing ran; not as the Person said.
+    pub idle: bool,
+}
+
+/// The file in `engine/` that keeps how the engine last moved, for the
+/// copy it moved onto: `{ "to": …, "from": …, "at": …, "idle": … }`.
+const MOVED: &str = "moved";
+
+/// How the engine that runs `version` came to it, as `engine/moved`
+/// says, when it moved onto it.
+fn moved(engine: &std::path::Path, version: &str) -> Option<Updated> {
+    #[derive(Deserialize)]
+    struct Moved {
+        to: String,
+        #[serde(flatten)]
+        updated: Updated,
+    }
+    let said: Moved =
+        serde_json::from_str(&std::fs::read_to_string(engine.join(MOVED)).ok()?).ok()?;
+    (said.to == version).then_some(said.updated)
 }
 
 /// An engine on its way.
@@ -172,6 +217,8 @@ impl Updates {
             running: banda.version.clone(),
             ready,
             chosen,
+            updated: moved(&banda.engine, &banda.version),
+            takes: Some(*take.borrow()),
             ..UpdateState::default()
         };
         Updates(Arc::new(Held {
@@ -266,11 +313,12 @@ impl Updates {
                 state.looked = Some(looked);
                 state.failed = Some(why);
             }),
-            Ok((newest, take)) => {
+            Ok((newest, published, take)) => {
                 self.0.state.send_modify(|state| {
                     state.off = None;
                     state.looked = Some(looked);
                     state.newest = Some(newest);
+                    state.published = published;
                     state.failed = None;
                     state.chosen.clone_from(&chosen);
                 });
@@ -311,7 +359,7 @@ impl Updates {
     /// The newest version its channel has, and the engine to take, when
     /// one is above the one running and the one ready: where its bundle
     /// is and what its feed says.
-    async fn find(&self) -> Result<(String, Option<(String, Feed)>), String> {
+    async fn find(&self) -> Result<(String, Option<i64>, Option<(String, Feed)>), String> {
         let banda = &self.0.banda;
         let which = match banda.channel {
             "stable" => Which::Stable,
@@ -321,15 +369,18 @@ impl Updates {
         let have = (self.0.state.borrow().ready.clone()).unwrap_or_else(|| banda.version.clone());
         let above = feed::above(&releases, &banda.version, which);
         let newest = (above.first()).map_or_else(|| banda.version.clone(), |(_, v)| v.clone());
+        let published = (releases.iter())
+            .find(|release| release.tag_name.strip_prefix('v') == Some(newest.as_str()))
+            .and_then(feed::Release::published);
         for (release, version) in above {
             if !feed::is_above(&version, &have) {
                 break;
             }
             if let Ok(found) = self.bundle(which, release, &version).await? {
-                return Ok((newest, Some(found)));
+                return Ok((newest, published, Some(found)));
             }
         }
-        Ok((newest, None))
+        Ok((newest, published, None))
     }
 
     /// Where `release`'s engine for this system is, and what its feed
@@ -581,7 +632,7 @@ impl Updates {
                 )));
             }
         }
-        self.move_now(restarting)
+        self.move_now(restarting, false)
             .ok_or_else(|| Refusal::conflict("The copy ready is gone from its folder."))
     }
 
@@ -679,9 +730,10 @@ impl Updates {
         }
     }
 
-    /// Asks the engine to move onto the copy ready: what it moves from
-    /// and onto, unless the copy is gone.
-    fn move_now(&self, restarting: &Restarting) -> Option<Moving> {
+    /// Asks the engine to move onto the copy ready, by itself once `idle`,
+    /// or as the Person said: what it moves from and onto, unless the copy
+    /// is gone. The copy hears how in `engine/moved`.
+    fn move_now(&self, restarting: &Restarting, idle: bool) -> Option<Moving> {
         let to = self.0.state.borrow().ready.clone()?;
         let program = self.0.banda.engine.join(&to).join(PROGRAM);
         if !program.is_file() {
@@ -691,6 +743,15 @@ impl Updates {
         }
         let from = self.0.banda.version.clone();
         tracing::info!(%from, %to, "the engine moves onto the copy ready");
+        let said = serde_json::json!({
+            "to": to,
+            "from": from,
+            "at": banda_kernel::now_ms(),
+            "idle": idle,
+        });
+        if let Err(e) = std::fs::write(self.0.banda.engine.join(MOVED), said.to_string()) {
+            tracing::warn!(%e, "how the engine moved is not kept");
+        }
         restarting.restart.ask(program);
         Some(Moving { from, to })
     }
@@ -711,7 +772,7 @@ impl Updates {
             hands.borrow_and_update();
             take.borrow_and_update();
             let waits = match restart::next(&self.facts(restarting)) {
-                Next::Move if self.move_now(restarting).is_some() => return,
+                Next::Move if self.move_now(restarting, true).is_some() => return,
                 Next::Move | Next::Nothing => None,
                 Next::Wait(waits) => Some(waits),
             };
@@ -795,6 +856,19 @@ impl Module for Updates {
             return Ok(());
         }
         tokio::spawn(self.clone().drive());
+        // machine.toml's `updates`, as the state says it.
+        let said = self.0.state.clone();
+        let mut take = self.0.take.clone();
+        tokio::spawn(async move {
+            while take.changed().await.is_ok() {
+                let now = *take.borrow_and_update();
+                said.send_if_modified(|state| {
+                    let changed = state.takes != Some(now);
+                    state.takes = Some(now);
+                    changed
+                });
+            }
+        });
         let updates = self.clone();
         tokio::spawn(async move {
             tokio::time::sleep(updates.0.first).await;
@@ -904,6 +978,14 @@ mod tests {
             .await
             .expect("it moved");
         assert_eq!(program, machine.engine.join("0.1.0-dev.11").join(PROGRAM));
+        // The copy it moved onto says it updated, by itself; another
+        // version's engine says nothing of it.
+        let updated = moved(&machine.engine, "0.1.0-dev.11").expect("kept");
+        assert_eq!(
+            (updated.from.as_str(), updated.idle),
+            ("0.1.0-dev.10", true)
+        );
+        assert_eq!(moved(&machine.engine, "0.1.0-dev.10"), None);
     }
 
     #[tokio::test]
@@ -927,6 +1009,8 @@ mod tests {
             machine.restart.asked().await,
             machine.engine.join("0.1.0-dev.11").join(PROGRAM)
         );
+        let updated = moved(&machine.engine, "0.1.0-dev.11").unwrap();
+        assert!(!updated.idle, "the Person said");
     }
 
     #[tokio::test]

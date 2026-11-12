@@ -22,6 +22,7 @@ import { DIRECTORY } from "./directory"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
+import { Updates } from "./bar/heard"
 
 /**
  * The page: the engine's Projects, then the window. With no Project, a new
@@ -95,13 +96,15 @@ export function App({ engine }: { engine: Engine }) {
         <HostsContext value={hosts}>
           <RoutingContext value={ROUTING}>
             <Machines hosts={hosts}>
-              <Shell
-                engine={engine}
-                modules={modules}
-                projects={projects}
-                home={home?.id ?? machine}
-                onCreated={created}
-              />
+              <Updates>
+                <Shell
+                  engine={engine}
+                  modules={modules}
+                  projects={projects}
+                  home={home?.id ?? machine}
+                  onCreated={created}
+                />
+              </Updates>
             </Machines>
           </RoutingContext>
         </HostsContext>

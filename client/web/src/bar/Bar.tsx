@@ -49,7 +49,7 @@ export function Bar({
   listed,
   onArrange,
 }: {
-  /** This machine's engine: its connection. */
+  /** This machine's engine: its connection, and its updates. */
   engine: Engine
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
@@ -171,7 +171,7 @@ export function Bar({
         <div data-part="right" className={zone("right")}>
           {draw("right")}
         </div>
-        <UpdateWidget />
+        <UpdateWidget engine={engine} />
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

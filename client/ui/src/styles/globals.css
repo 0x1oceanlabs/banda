@@ -636,6 +636,10 @@ html[data-still] [data-group-plate] {
   opacity: 0.9;
   stroke-dasharray: 2.2 3.3;
 }
+[data-update-icon="quiet"] [data-track] {
+  opacity: 0.35;
+}
+[data-update-icon="quiet"] [data-ring],
 [data-update-icon="none"] [data-ring],
 [data-update-icon="failed"] [data-ring] {
   opacity: 0;

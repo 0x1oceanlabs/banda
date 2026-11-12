@@ -104,7 +104,7 @@ fn publish(
     served.files.insert(feed_file.clone(), text.into_bytes());
     served.files.insert(name.clone(), body);
     format!(
-        r#"{{"tag_name":"v{version}","name":"Banda Dev {version}","draft":false,"prerelease":true,"assets":[
+        r#"{{"tag_name":"v{version}","name":"Banda Dev {version}","draft":false,"prerelease":true,"published_at":"2026-11-12T05:17:00Z","assets":[
             {{"name":"{feed_name}","state":"uploaded","browser_download_url":"{at}/files/{feed_file}"}},
             {{"name":"{name}","state":"uploaded","browser_download_url":"{at}/files/{name}"}}]}}"#
     )
@@ -269,6 +269,7 @@ async fn nothing_newer_takes_nothing() {
     .await;
     let state = machine.updates.look().await;
     assert_eq!(state.newest.as_deref(), Some("0.1.0-dev.12"));
+    assert_eq!(state.published, Some(1_794_460_620_000), "when it was out");
     assert_eq!((state.ready, state.failed), (None, None));
 }
 

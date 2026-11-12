@@ -116,6 +116,7 @@ import {
 import type { SectionProps } from "./sections"
 import { MachineRowsPicker } from "./rows"
 import { RowFrame, SettingRow } from "./SettingRow"
+import { UpdatesRow } from "./UpdatesRow"
 
 /** A machine's own settings file. */
 const FILE = "machine.toml"
@@ -514,6 +515,14 @@ function ThisMachine({
             className="border-t px-(--card-spacing) py-3 last:pb-0"
           />
         ))}
+        <div className="border-t [&>[data-key]]:px-(--card-spacing)">
+          <UpdatesRow
+            named={now}
+            engine={engine}
+            live
+            lit={lit === "this.updates"}
+          />
+        </div>
         {got?.battery === true && (
           <p className="flex items-center gap-2 border-t px-(--card-spacing) pt-2.5 text-meta text-muted-foreground">
             <LaptopIcon className="size-3.5 shrink-0" />
@@ -898,6 +907,13 @@ function HostRow({
                   awayWords(name)
                 )
               }
+            />
+            <UpdatesRow
+              host={key}
+              named={named}
+              engine={kept.engine(key)}
+              live={live}
+              lit={lit === `${key}.updates`}
             />
             <RowFrame
               dataKey={`${key}.ssh`}
