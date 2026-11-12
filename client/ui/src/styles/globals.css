@@ -160,12 +160,28 @@
   --text-8xl--line-height: var(--heading-leading);
   --text-9xl: var(--heading-size);
   --text-9xl--line-height: var(--heading-leading);
-  /* The elevations (decision 4): what floats, the Top layer and a Pane's
-     own floating bar, at the menus' shadow; what the Person carries, at a
-     Peek's. Their strengths go into the theme in step 3. */
-  --shadow-float:
-    0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-lift: 0 30px 80px -12px rgb(0 0 0 / 0.45);
+  /* The elevations (decision 4), tokens with their strengths the theme's:
+     what floats, the Top layer and a Pane's own floating bar; what the
+     Person carries, a Pane being moved or a Peek; and the Window's own, a
+     tile over glass, the focused tile, the glass sidebar. Tailwind's sizes
+     land on float, for what comes as it is (decision 8); inset and drop
+     shadows are cleared. */
+  --shadow-float: var(--float-shadow);
+  --shadow-lift: var(--lift-shadow);
+  --shadow-tile: var(--tile-shadow);
+  --shadow-focus: var(--focus-shadow);
+  --shadow-panel: var(--panel-shadow);
+  --shadow: var(--float-shadow);
+  --shadow-2xs: var(--float-shadow);
+  --shadow-xs: var(--float-shadow);
+  --shadow-sm: var(--float-shadow);
+  --shadow-md: var(--float-shadow);
+  --shadow-lg: var(--float-shadow);
+  --shadow-xl: var(--float-shadow);
+  --shadow-2xl: var(--float-shadow);
+  --shadow-inner: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
   /* Two colours that are not the theme's (decision 6): a document's own
      page, white in every theme, as a PDF's; and black that dims, under a
      dialog or the Drawer, behind a video. */
@@ -211,10 +227,11 @@
      Solid, on glass too (ADR 0075, decision 3). */
   --floating: var(--popover);
   /* Banda's own glass (ADR 0023): the wallpaper the desktop serves. Only
-     glass casts the shadows: a solid desk shows none. */
+     glass casts the shadows: a solid desk shows none, a clear shadow, as
+     `none` would void the list of shadows it joins. */
   --desk-wallpaper: none;
-  --tile-shadow: none;
-  --panel-shadow: none;
+  --tile-shadow: 0 0 #0000;
+  --panel-shadow: 0 0 #0000;
   --bar-rule: transparent;
   /* The sidebar floats over the Strip's left: the Strip's columns start
      past it, and scroll on under it. */
