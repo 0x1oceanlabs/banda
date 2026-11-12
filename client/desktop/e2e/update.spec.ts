@@ -54,7 +54,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     down: 11_800_000,
     size: 31_000_000,
   })
-  // Until it is down the window has no row of its own (ADR 0115, the
+  // Until it is down the window has no row of its own (ADR 0119, the
   // chosen mock): the icon's ring says how far.
   await downloading.click()
   const popover = page.locator("[data-slot=popover-content]")
@@ -64,7 +64,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
 
   // Ready, while a Thread works: the version stands beside the icon, and
   // the popover says where Banda goes, what changed by kind (ADR 0072),
-  // and that only the window restarts (ADR 0115, decision 4).
+  // and that only the window restarts (ADR 0119, decision 4).
   await composer.fill("slow please")
   await composer.press("Enter")
   await tell({
@@ -213,7 +213,7 @@ test("on macOS the widget says a version is out, with its brew command (ADR 0033
   await page.screenshot({ path: "test-results/8-update-out.png" })
 })
 
-test("Banda's window restarts at once while a Thread works, and the new one says it updated (ADR 0072, ADR 0115)", async () => {
+test("Banda's window restarts at once while a Thread works, and the new one says it updated (ADR 0072, ADR 0119)", async () => {
   window = await startWindow()
   const { page, app } = window
   const tell = (value: object) =>

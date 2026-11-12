@@ -163,7 +163,7 @@ enum Command {
         #[command(subcommand)]
         what: ProjectCommand,
     },
-    /// This machine's updates (ADR 0115): what it runs, the newest its
+    /// This machine's updates (ADR 0119): what it runs, the newest its
     /// channel has, what it takes and what is ready, as one JSON line.
     ///
     /// The engine moves onto a copy in place by itself once no Turn runs,
@@ -577,7 +577,7 @@ fn main() -> ExitCode {
     // says whether this is the job.
     if let Command::Serve { job, .. } = &mut cli.command {
         *job = service::launchd::begin(*job);
-        // What its welcome says to every window (ADR 0115, decision 6).
+        // What its welcome says to every window (ADR 0119, decision 6).
         banda_kernel::set_build(build_id::own());
     }
     match cli.command {
@@ -646,7 +646,7 @@ fn main() -> ExitCode {
         }
     };
     // The engine stopped to move onto its new copy, its runtime gone:
-    // the copy runs in its place (ADR 0115, decision 3).
+    // the copy runs in its place (ADR 0119, decision 3).
     #[cfg(unix)]
     let done = match (done, moving::onto()) {
         (Ok(()), Some(program)) => Err(moving::exec(program)),

@@ -1,4 +1,4 @@
-//! Taking a new engine (ADR 0115, decisions 2 and 5): the bundle a feed
+//! Taking a new engine (ADR 0119, decisions 2 and 5): the bundle a feed
 //! names, downloaded, checked by its size and SHA-512, unpacked beside the
 //! engine's copies, checked by its own `--version`, and renamed into place
 //! as `<engine>/<version>/`, laid out as the window's copy is

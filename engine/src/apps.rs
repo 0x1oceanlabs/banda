@@ -67,7 +67,7 @@ pub struct HostContext<'a> {
     /// serve (ADR 0106, step 4a).
     pub bytes: &'a Bytes,
     /// The terminals open and the Person's last key in one, which the
-    /// terminal module tells and the updates module waits on (ADR 0115).
+    /// terminal module tells and the updates module waits on (ADR 0119).
     pub hands: &'a Hands,
     /// How the updates module asks the engine to move onto a new copy.
     pub restart: &'a Restart,
@@ -193,7 +193,7 @@ mod build {
         }
     }
 
-    /// This machine's own updates (ADR 0115): its engine's copies are in
+    /// This machine's own updates (ADR 0119): its engine's copies are in
     /// the data folder's `engine/`, as the window keeps its own, and
     /// machine.toml says whether it takes them. It moves onto one once no
     /// Turn runs and the Person has nothing in hand.

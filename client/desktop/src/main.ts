@@ -16,7 +16,7 @@
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It swaps its own app for the release its
- * engine says is newest (`@banda/updates-desktop`, ADR 0115).
+ * engine says is newest (`@banda/updates-desktop`, ADR 0119).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -212,7 +212,7 @@ const where = whereOf({
   // goes as it stops.
   electron: process.env.APPIMAGE || ownNode ? undefined : process.execPath,
 })
-// What Install runs on another machine (ADR 0115, decision 8): the app's
+// What Install runs on another machine (ADR 0119, decision 8): the app's
 // own copy, or the checkout's.
 const installScript = app.isPackaged
   ? join(process.resourcesPath, "install.sh")
@@ -448,7 +448,7 @@ async function ready(): Promise<void> {
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
 
-  // The app's own update, the updates module's part here (ADR 0115,
+  // The app's own update, the updates module's part here (ADR 0119,
   // decision 2): the engine's updates module says what is newest, and
   // this window swaps its app. Its restart leaves the engine and its
   // Agents running: the engine moves onto its new copy once nothing runs.

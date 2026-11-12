@@ -32,13 +32,13 @@ const ON_THE_HOST: [(&str, usize, &str); 17] = [
         "engine/src/moving.rs",
         1,
         "runs the engine's new copy in the engine's own place, with exec, once it stopped to move \
-         onto it (ADR 0115, decision 3)",
+         onto it (ADR 0119, decision 3)",
     ),
     (
         "platform/updates/engine/src/take.rs",
         1,
         "runs a new copy of the engine it took, by its own path, with --version, to check it says \
-         the version its feed named before it goes into place (ADR 0115, decision 5)",
+         the version its feed named before it goes into place (ADR 0119, decision 5)",
     ),
     (
         "kernel/src/host.rs",

@@ -1,5 +1,5 @@
 // Checks that this change keeps the engine's contract good for the windows
-// of the last Dev (ADR 0115, decision 6; ADR 0086, decision 6): machines
+// of the last Dev (ADR 0119, decision 6; ADR 0086, decision 6): machines
 // update apart, so a window and an engine a version apart work together.
 //
 //   node scripts/contract.mjs [base]
@@ -171,7 +171,7 @@ try {
   }
   if (broken.length) {
     console.error(
-      `The contract breaks windows of ${base.slice(0, 9)} (ADR 0115, decision 6):`
+      `The contract breaks windows of ${base.slice(0, 9)} (ADR 0119, decision 6):`
     )
     for (const line of broken) console.error(`  ${line}`)
     console.error(

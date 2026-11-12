@@ -51,7 +51,7 @@ export type Status =
        * cleans it before it draws it (ADR 0095, decision 2). */
       named?: Named
       /** Banda's version this engine was built as, and its build id (ADR
-       * 0115, decision 6). None from an engine older than both. */
+       * 0119, decision 6). None from an engine older than both. */
       version?: string
       build?: string
     }

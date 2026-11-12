@@ -1,7 +1,7 @@
 //! What the Person has in hand on this host: how many terminals are open,
 //! and when a key last reached one. The terminal module tells it, and the
 //! updates module reads it, so the engine never restarts under the
-//! Person's hands (ADR 0115, decision 3). It names no module, as
+//! Person's hands (ADR 0119, decision 3). It names no module, as
 //! [`Working`](crate::Working) does not.
 
 use std::sync::Arc;

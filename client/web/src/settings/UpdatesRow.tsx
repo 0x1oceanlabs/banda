@@ -1,5 +1,5 @@
 /**
- * A machine's updates in Settings → Machines (ADR 0115, decision 7): the
+ * A machine's updates in Settings → Machines (ADR 0119, decision 7): the
  * line the bar's widget shows for it, Restart now while a copy waits, and
  * its machine.toml's `updates`: When idle, Ask or Off, written on that
  * machine through its engine. What it says is what its engine said on

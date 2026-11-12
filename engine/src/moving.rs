@@ -1,4 +1,4 @@
-//! How the engine moves onto another copy of itself (ADR 0115, decision
+//! How the engine moves onto another copy of itself (ADR 0119, decision
 //! 3): the updates module asks ([`banda_updates::restart::Restart`]), the
 //! engine stops as a TERM stops it, and then, its runtime and every child
 //! that dies with it gone, it runs the new copy's program in its own

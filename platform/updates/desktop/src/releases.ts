@@ -1,6 +1,6 @@
 /**
  * Where the window's app finds its next version: a source of its own,
- * electron-updater's `custom` provider (ADR 0092, decision 12; ADR 0115,
+ * electron-updater's `custom` provider (ADR 0092, decision 12; ADR 0119,
  * decision 2). Which version that is, the engine decides: its updates
  * module reads the channel's releases by its rules (`feed.rs`), and says
  * the newest on `updates.state`. This source only reads that release:

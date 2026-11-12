@@ -1,5 +1,5 @@
 /**
- * The updates module's part in the window's main process (ADR 0115,
+ * The updates module's part in the window's main process (ADR 0119,
  * decision 2; ADR 0028): it carries out what only the window can, the
  * swap of its own app, and decides nothing the engine decides. The
  * engine's updates module looks at the channel's releases by its rules,
@@ -18,7 +18,7 @@
  *
  * The app restarts at once when the Person says: the engine and its
  * Agents go on, as when the window closes (ADR 0086, decision 3), and
- * the engine moves onto its new copy once nothing runs (ADR 0115,
+ * the engine moves onto its new copy once nothing runs (ADR 0119,
  * decision 4).
  *
  * What it tells the page is one `Update`, for the bar (ADR 0041,

@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-11
 ---
 
@@ -167,14 +167,14 @@ Each step is its own PR, and Banda keeps updating after each.
 | 0 | This ADR and the widget's mock |
 | 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner): done |
 | 1b | The bundle carries a pinned Node, as Windows' app does: `node/node`, from `scripts/node.mjs`'s checked pins for Linux x64 and macOS arm64; `install.sh` warns while a release carries none (#1586, about 52 MB to 101 MB): done |
-| 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build |
+| 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build (#1539): done |
 | 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet (#1541): built |
 | 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart (#1602): built. The restart is in place: the engine `exec`s the new copy's `banda` in its own process, so its systemd unit or launchd job and the state's lock stay. A copy that crashes as it starts is started again by that unit as any crash is, up to three times a minute (`Restart=on-failure`, `StartLimitBurst=3` in 60 s), then left stopped; launchd's job starts it again unless it exited 0. The input that holds it is a key in this machine's terminals; `--version` keeps its choice in `engine/chosen` |
 | 5 | The desktop part: `update.ts` moved to `platform/updates/desktop`, which reads only the engine's newest release; the window stops no engine to update, and a newer copy the window put in place is the engine's ready one (#1603): built |
 | 6 | The widget over every machine, as the chosen mock; Settings → Machines' row and `updates` setting; the sidebar's other build opens it. `updates.state` also says when the newest was published, how the engine came to its version (`engine/moved`) and its `updates`. "Update all when idle" is not built: a machine set to When idle already restarts by itself once idle (#1604): built |
 | 7 | Install Banda on another machine from Add → Connect: `scripts/install.sh`, published with each release and packed in the app, run over ssh (#1577): built; "Sign in to Claude on <name>" after it, and on a machine whose Claude is signed out: `ssh -t <ssh> claude` typed into a shell of a Project here (#1587): built |
 
-devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
+devbox ran on `4-banda.sh` by hand until step 3; since dev.697 that script only runs the release's `install.sh` (step 7).
 
 ## Roma's calls (2026-11-11)
 

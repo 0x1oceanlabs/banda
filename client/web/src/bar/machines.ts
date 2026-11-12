@@ -1,5 +1,5 @@
 /**
- * What the update widget says of each machine (ADR 0115, decision 7):
+ * What the update widget says of each machine (ADR 0119, decision 7):
  * one row each, this machine's too, from what its engine says on
  * `updates.state`, and the bar's word over them all and this window's
  * app. Pure, so plain tests cover it; Update.tsx draws it, and Settings →
@@ -22,7 +22,7 @@ export type MachineUpdates = {
   /** What its engine last said, kept while it is away; none before it
    * said anything. */
   said?: UpdateState
-  /** Its engine answers no `updates.state`: one older than ADR 0115's
+  /** Its engine answers no `updates.state`: one older than ADR 0119's
    * step 3. */
   refused?: boolean
 }
@@ -180,7 +180,7 @@ function sizeOf(down: number, size: number): string | undefined {
 }
 
 /** What the bar shows over this window's app and every machine: the
- * worst state, in this order (the chosen mock, ADR 0115); `app` where it
+ * worst state, in this order (the chosen mock, ADR 0119); `app` where it
  * is this window's app's own, which the bar then words as before. */
 export type Worst = { app?: true } & (
   | { kind: "failed"; pill: string }

@@ -25,7 +25,7 @@
 //!
 //! Asked by the updates module to move onto a new copy, it stops as asked
 //! to stop, and `main` then runs that copy in its place (`moving.rs`;
-//! ADR 0115, decision 3). The window's child does not move: it restarts
+//! ADR 0119, decision 3). The window's child does not move: it restarts
 //! with Banda.
 
 use crate::apps::{self, HostContext};
@@ -214,7 +214,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // its API (ADR 0106, step 4a).
     let bytes = banda_bytes::Bytes::new();
     // The terminals open and the Person's last key, and how the engine
-    // moves onto a new copy, for the updates module (ADR 0115).
+    // moves onto a new copy, for the updates module (ADR 0119).
     let hands = Hands::new();
     let restart = Restart::new(moves(with_parent));
     // Every engine part in the list of Apps (ADR 0062, decision 11).

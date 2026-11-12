@@ -1,7 +1,7 @@
 /**
  * The updates module's part in main reaches main through nothing: what it
  * needs of the app, main hands it (`App`), and what it asks of the engine
- * goes through the contract (ADR 0028, decision 4; ADR 0115, decision 2).
+ * goes through the contract (ADR 0028, decision 4; ADR 0119, decision 2).
  * No file of `client/desktop`.
  */
 import { readFileSync } from "node:fs"

@@ -283,7 +283,7 @@ Its methods, `banda call sharing.<method>`: `state`, `new_id`, `example`.
 
 ## Updates (`updates`)
 
-Each machine updates its own Banda (ADR 0115): its engine looks at its channel's releases a minute after it starts, then hourly, takes the newest engine alone, checks it, and puts it beside the running one in its data folder, keeping two; a newer copy a window put there as its app updated is ready too. It says what it found and took on the stream updates.state. It takes nothing from a checkout's build, where a package manager owns Banda, with BANDA_UPDATES=off, or where machine.toml says updates = "off". Once a new copy is in place, the engine moves onto it as soon as nothing runs: no Turn, no terminal open, no key in the last ten minutes; with updates = "ask", once the Person says (banda update --now). banda update --version takes a given version, an older one too.
+Each machine updates its own Banda (ADR 0119): its engine looks at its channel's releases a minute after it starts, then hourly, takes the newest engine alone, checks it, and puts it beside the running one in its data folder, keeping two; a newer copy a window put there as its app updated is ready too. It says what it found and took on the stream updates.state. It takes nothing from a checkout's build, where a package manager owns Banda, with BANDA_UPDATES=off, or where machine.toml says updates = "off". Once a new copy is in place, the engine moves onto it as soon as nothing runs: no Turn, no terminal open, no key in the last ten minutes; with updates = "ask", once the Person says (banda update --now). banda update --version takes a given version, an older one too.
 
 Its methods, `banda call updates.<method>`: `check`, `state`, `restart`, `take`.
 

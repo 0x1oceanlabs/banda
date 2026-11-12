@@ -43,7 +43,7 @@ export type Update = { name: string; have: string; always: boolean } & (
     }
   | {
       /** Down: Restart starts it at once, and the engine and its Agents
-       * go on (ADR 0115, decision 4); or the quit installs it. */
+       * go on (ADR 0119, decision 4); or the quit installs it. */
       state: "ready"
       version: string
       notes: Note[]
@@ -132,7 +132,7 @@ export type HostTest =
     }
   /** Reachable, with no Banda there: what Install would put there, this
    * window's own `version`, by what the machine's `install.sh --check`
-   * says of it (ADR 0115, decision 8): its system, as found, and `arch`,
+   * says of it (ADR 0119, decision 8): its system, as found, and `arch`,
    * "x86_64" or "arm64". */
   | { state: "missing"; system: string | null; arch: string; version: string }
   | { state: "signin"; url: string }

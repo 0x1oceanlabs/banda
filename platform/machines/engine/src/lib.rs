@@ -101,7 +101,7 @@ impl Machine {
         self.0.awake.subscribe()
     }
 
-    /// Whether this machine takes Banda's updates, kept current (ADR 0115,
+    /// Whether this machine takes Banda's updates, kept current (ADR 0119,
     /// decision 3): the updates module reads it before each look.
     pub fn updates(&self) -> watch::Receiver<TakeUpdates> {
         self.0.updates.subscribe()

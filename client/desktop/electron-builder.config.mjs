@@ -50,7 +50,7 @@ export default {
     extraResources: [
       { from: "../../target/release/banda", to: "banda" },
       // What Install in Settings → Machines runs on another machine over
-      // ssh, of this build (ADR 0115, decision 8; src/hosts.ts).
+      // ssh, of this build (ADR 0119, decision 8; src/hosts.ts).
       { from: "../../scripts/install.sh", to: "install.sh" },
     ],
   },

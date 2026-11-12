@@ -433,7 +433,7 @@ pub(crate) async fn working(client: &mut Client) -> Result<usize, Failure> {
 }
 
 /// What stops the engine while Agents work: Quit, or Restart now onto a
-/// new copy (ADR 0115, decision 3), which asks in Quit's words.
+/// new copy (ADR 0119, decision 3), which asks in Quit's words.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum Ending {
     Quit,

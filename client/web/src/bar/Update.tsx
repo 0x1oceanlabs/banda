@@ -1,5 +1,5 @@
 /**
- * The updates widget on the bar's right (ADR 0115, decision 7; ADR 0041,
+ * The updates widget on the bar's right (ADR 0119, decision 7; ADR 0041,
  * decision 4; ADR 0072): one widget over this window's app and every
  * machine the window shows, this one too. Its icon and pill say the worst
  * state over them all: failed, in `--destructive`, with where; a machine
@@ -339,7 +339,7 @@ function About({
 const windowShown = (app: Update) =>
   ["ready", "out", "failed", "updated"].includes(app.state)
 
-/** This window's own row (ADR 0115, decision 7): it restarts at once,
+/** This window's own row (ADR 0119, decision 7): it restarts at once,
  * and the Agents go on. */
 function WindowRow({ app }: { app: Update | undefined }) {
   if (!app || !windowShown(app)) return null
@@ -526,7 +526,7 @@ function Corner({
   }
 }
 
-/** Restart now on a machine (ADR 0115, decision 3): at once while no
+/** Restart now on a machine (ADR 0119, decision 3): at once while no
  * Agent works there; else it asks first, Cancel the default, and lists
  * the Threads whose turns it stops. A restart refused as Agents began
  * meanwhile asks after all. `ask` restarts a machine; `dialog` is drawn

@@ -161,7 +161,7 @@ none already in the file.
   Add → Connect offers **Install Banda on <name>**, which does it: that
   machine downloads this window's version of the engine itself, checks
   it and puts it in its own data folder, no root asked, and from then on
-  it updates itself (ADR 0115). By hand, it is the same script:
+  it updates itself (ADR 0119). By hand, it is the same script:
   `curl -fsSL https://github.com/0x1oceanlabs/banda/releases/download/v<version>/install.sh | sh -s -- <version>`.
 - On Linux, its engine as a service that outlives your ssh session:
   `loginctl enable-linger $USER`, once. On a Mac, you logged in at its
