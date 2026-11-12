@@ -92,9 +92,9 @@ with good UX and UI".
    and sha512 (`scripts/engine.mjs`). A gzip'd tar, as every machine opens
    one with what it has. The engine takes that file on every machine, so a
    server needs no Electron; the app on a desktop still brings its own.
-   - The bundle carries no Node yet: a machine with no window runs the
-     adapters on a Node 22 or newer on its PATH. Carrying one, as Windows'
-     app does (`scripts/node.mjs`), is step 1b.
+   - The bundle carries a pinned Node, `node/node`, as Windows' app does
+     (`scripts/node.mjs`, step 1b), so a machine with no window needs none
+     on its PATH.
    - A copy is checked by size, sha512 and its own `--version` before it
      is renamed into place.
    - **On Stable, a copy is put in place by itself only once it is
@@ -165,13 +165,13 @@ Each step is its own PR, and Banda keeps updating after each.
 |---|---|
 | 0 | This ADR and the widget's mock |
 | 1 | The engine bundle and `<feed>-engine-<os>.yml`, packed by `package.sh` and published by `release.yml` (#1534, on #1533, which packs on GitHub's runner): done |
-| 1b | The bundle carries a pinned Node, as Windows' app does |
+| 1b | The bundle carries a pinned Node, as Windows' app does: `node/node`, from `scripts/node.mjs`'s checked pins for Linux x64 and macOS arm64; `install.sh` warns while a release carries none (#1586, about 52 MB to 101 MB): done |
 | 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build |
 | 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet (#1541): built |
 | 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart |
 | 5 | The desktop part: `update.ts` moved, the app swap asked of the engine part; the window stops no engine to update |
 | 6 | The widget over every machine, as the chosen mock |
-| 7 | Install Banda on another machine from Add → Connect: `scripts/install.sh`, published with each release and packed in the app, run over ssh (#1577): built; "Sign in to Claude on <name>" after it waits, as a machine just set up has no Project for its terminal |
+| 7 | Install Banda on another machine from Add → Connect: `scripts/install.sh`, published with each release and packed in the app, run over ssh (#1577): built; "Sign in to Claude on <name>" after it, and on a machine whose Claude is signed out: `ssh -t <ssh> claude` typed into a shell of a Project here (#1587): built |
 
 devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 
@@ -195,7 +195,8 @@ devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 - Banda updates with no window open, and a server with nobody connected.
 - Updating the app no longer ends a Turn: only the engine's restart does,
   and it waits for none to run.
-- A release grows by a file of about 52 MB for each system.
+- A release grows by a file of about 101 MB for each system, half of it
+  Node.
 - The window may run against an engine a version apart for a while; the
   contract's check is what keeps that safe. On main's week before it, 7
   of 87 changes to the contract would have needed a trailer.
