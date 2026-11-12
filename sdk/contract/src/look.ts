@@ -46,7 +46,6 @@ export type { GroupAsking } from "./generated/look/GroupAsking"
 export type { GroupSaturation } from "./generated/look/GroupSaturation"
 export type { GroupWorking } from "./generated/look/GroupWorking"
 export type { Overview } from "./generated/look/Overview"
-export type { Workspaces } from "./generated/look/Workspaces"
 export type { Center } from "./generated/look/Center"
 export type { Display } from "./generated/look/Display"
 export type { Bind } from "./generated/look/Bind"
@@ -66,7 +65,6 @@ export const WALLPAPER_URL = "app://banda/desk/wallpaper"
 
 /** The bar, as `banda look` gives it with no files. */
 export const DEFAULT_BAR: Bar = {
-  workspaces: "numbers",
   left: ["workspaces.list", "window.flow"],
   center: ["sidebar.counts"],
   right: [

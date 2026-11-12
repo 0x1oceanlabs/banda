@@ -114,10 +114,11 @@ describe("a Project's workspace", () => {
     const mine = "p1" as ProjectId
     const project = { id: "w0", columns: [], focus: 0, project: mine }
     const free = { id: "w1", columns: [], focus: 0 }
-    expect(keepsPlace(project, [], true)).toBe(true)
-    expect(keepsPlace(project, [mine], true)).toBe(false)
-    expect(keepsPlace(project, [], false)).toBe(false)
-    expect(keepsPlace(free, [], true)).toBe(false)
+    const none = () => false
+    expect(keepsPlace(project, none, true)).toBe(true)
+    expect(keepsPlace(project, (id) => id === mine, true)).toBe(false)
+    expect(keepsPlace(project, none, false)).toBe(false)
+    expect(keepsPlace(free, none, true)).toBe(false)
   })
 })
 

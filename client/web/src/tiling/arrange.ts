@@ -12,7 +12,7 @@
  * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
-import type { CommandId, Engine, Event, ProjectId } from "@banda/contract"
+import type { CommandId, Engine, Event } from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -31,7 +31,9 @@ import {
   type Entry,
   entries,
   find,
+  type Gone,
   keepsPlace,
+  NONE_GONE,
   samePane,
   type Workspace,
   type Workspaces,
@@ -550,7 +552,7 @@ export function resized(
  */
 export function tidied(
   state: Workspaces,
-  gone: readonly ProjectId[] = [],
+  gone: Gone = NONE_GONE,
   strict = true
 ): Command | undefined {
   const last = state.list.length - 1
@@ -597,7 +599,7 @@ export function closingWorkspace(
   const at = closableAt(state, id)
   if (at === undefined || at === state.current) return undefined
   const { project } = state.list[at]
-  return tidied(state, project === undefined ? [] : [project])
+  return tidied(state, (other) => other === project)
 }
 
 /**

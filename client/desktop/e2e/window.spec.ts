@@ -300,11 +300,11 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await expect(overview).toBeHidden()
   await expect(launcher).toHaveAttribute("data-focused", "true")
 
-  // A click on the current number opens it too; Esc goes back.
+  // A click on the current number goes nowhere else: the overview is its
+  // key's alone.
   await numbers.getByRole("button", { name: "Workspace 2" }).click()
-  await expect(overview).toBeVisible()
-  await page.keyboard.press("Escape")
   await expect(overview).toBeHidden()
+  await expect(launcher).toHaveAttribute("data-focused", "true")
 
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar).toBeVisible()
@@ -312,7 +312,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await expect(sidebar).toBeHidden()
 })
 
-test("the bar's workspaces come and go on the look's motion, as numbers or dots", async () => {
+test("the bar's workspaces come and go on the look's motion", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
     files: FREE,
@@ -322,8 +322,6 @@ test("the bar's workspaces come and go on the look's motion, as numbers or dots"
   const { composer } = await firstThread(page)
   await expect(composer).toBeFocused()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  const width = (cell: Locator) =>
-    cell.evaluate((e) => e.getBoundingClientRect().width)
   const x = async (cell: Locator) => (await cell.boundingBox())!.x
 
   // The Pane goes to the empty workspace at the bottom, which becomes
@@ -378,24 +376,13 @@ test("the bar's workspaces come and go on the look's motion, as numbers or dots"
   // Emptied, it is still there while the Person is; left, it narrows
   // where it was, out of reach.
   await page.keyboard.press("Alt+KeyW")
-  await expect(two.locator(".border-dashed")).toBeVisible()
+  await expect(two).toHaveText("2")
+  await expect(two).toHaveAttribute("aria-current", "true")
   await page.keyboard.press("Alt+PageUp")
   const gone = numbers.locator("[inert]")
   await expect(gone).toHaveCount(1)
   await expect(gone).toHaveCount(0)
   await expect(two).toHaveCount(0)
-
-  // As dots, the one shown is drawn long.
-  await window.close()
-  window = await startWindow({ look: '[bar]\nworkspaces = "dots"\n' })
-  await firstThread(window.page)
-  const dots = window.page.getByRole("navigation", { name: "Workspaces" })
-  const one = dots.getByRole("button", { name: "Workspace 1" })
-  await expect(one).toHaveAttribute("aria-current", "true")
-  await expect.poll(() => width(one)).toBe(30)
-  await expect
-    .poll(() => width(dots.getByRole("button", { name: "New workspace" })))
-    .toBe(14)
 })
 
 test("a sideways swipe moves the Strip and lands on a column; a scroll up and down leaves it be", async () => {
