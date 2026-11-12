@@ -6,9 +6,9 @@
  * Written by platform/look/tests/tokens.rs from the list in
  * platform/theme/src/tokens.rs and Banda's own theme: change them there.
  */
-export type TokenKind = "colour" | "length" | "number" | "percentage" | "font"
+export type TokenKind = "colour" | "length" | "number" | "percentage" | "font" | "shadow"
 
-export type TokenGroup = "shadcn" | "sidebar" | "state" | "focus" | "desk" | "tile" | "chat" | "sign" | "account" | "terminal" | "layout" | "radius" | "font"
+export type TokenGroup = "shadcn" | "sidebar" | "state" | "focus" | "desk" | "tile" | "chat" | "sign" | "account" | "terminal" | "layout" | "radius" | "font" | "elevation"
 
 export const TOKENS = {
   "background": { kind: "colour", group: "shadcn" },
@@ -126,6 +126,8 @@ export const TOKENS = {
   "small-leading": { kind: "length", group: "font" },
   "figure-size": { kind: "length", group: "font" },
   "figure-leading": { kind: "length", group: "font" },
+  "float-shadow": { kind: "shadow", group: "elevation" },
+  "lift-shadow": { kind: "shadow", group: "elevation" },
 } as const satisfies Readonly<
   Record<string, { kind: TokenKind; group: TokenGroup }>
 >
@@ -257,6 +259,8 @@ export const BANDA: Readonly<
     "small-leading": "14px",
     "figure-size": "28px",
     "figure-leading": "32px",
+    "float-shadow": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+    "lift-shadow": "0 30px 80px -12px rgb(0 0 0 / 0.45)",
   },
   dark: {
     "background": "#19191c",
@@ -374,5 +378,7 @@ export const BANDA: Readonly<
     "small-leading": "14px",
     "figure-size": "28px",
     "figure-leading": "32px",
+    "float-shadow": "0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1)",
+    "lift-shadow": "0 30px 80px -12px rgb(0 0 0 / 0.45)",
   },
 }
