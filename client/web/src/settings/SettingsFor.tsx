@@ -34,7 +34,7 @@ export function SettingsFor({
     })),
   ]
   return (
-    <div className="flex items-center gap-2.5 border-b px-4 py-2 text-sm text-muted-foreground">
+    <div className="flex items-center gap-2.5 border-b px-4 py-2 text-ui text-muted-foreground">
       <span id="settings-for">Settings for</span>
       <div
         role="radiogroup"
@@ -49,7 +49,7 @@ export function SettingsFor({
             aria-checked={choice.key === on}
             onClick={() => onPick(choice.key)}
             className={cn(
-              "flex items-center gap-1.5 rounded-small px-2.5 py-0.5 text-xs [&_svg]:size-3.5",
+              "flex items-center gap-1.5 rounded-small px-2.5 py-0.5 text-meta [&_svg]:size-3.5",
               choice.key === on && "bg-accent text-foreground"
             )}
           >

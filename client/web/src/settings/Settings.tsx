@@ -386,7 +386,7 @@ function ThereFile({
     <Button
       variant="ghost"
       size="sm"
-      className="max-w-72 font-mono text-xs text-muted-foreground"
+      className="max-w-72 font-mono text-meta text-muted-foreground"
       title={`Copy where it is on ${on?.named.name ?? "that machine"}`}
       onClick={() => copyText(path)}
     >
