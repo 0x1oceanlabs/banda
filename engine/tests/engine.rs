@@ -77,6 +77,9 @@ impl Places {
             .env("BANDA_CACHE", self._dir.path().join("cache"))
             .env("BANDA_THUMBNAILS", "")
             .env("BANDA_LOG", "warn")
+            // A title's run would open a session of its own, whose MCP
+            // servers and shells these tests read (ADR 0118).
+            .env("BANDA_AUTO_TITLE", "off")
             // The test's own engine, as its owner, wherever the tests run:
             // in an Agent's shell too, which hands `banda` a pass and names
             // its Project.
