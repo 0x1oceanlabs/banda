@@ -145,3 +145,16 @@ export function nextCall(
   const from = here === undefined ? -1 : at(here)
   return sorted.find((call) => at(call.key) > from) ?? sorted[0]
 }
+
+/** `nextCall` below the Thread the Pane `here` shows, by its key in the
+ * sidebar's order, `project:thing`; from the top for a Pane of none. */
+export const callAfter = (
+  calling: readonly Call[],
+  order: readonly string[],
+  here: { project: ProjectId; subject?: string | undefined } | null
+): Call | undefined =>
+  nextCall(
+    calling,
+    order,
+    here?.subject ? `${here.project}:${here.subject}` : undefined
+  )
