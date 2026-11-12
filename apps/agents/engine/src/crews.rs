@@ -248,6 +248,7 @@ fn end(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, mut now: Crew) -> 
     }
     now.ended = Some(tx.now());
     store::set_crew(tx.sql(), &now)?;
+    // Its calls end as it did: done with a Crew that is done.
     let ended = match now.state {
         CrewState::Done => ToolStatus::Done,
         _ => ToolStatus::Failed,
@@ -616,15 +617,12 @@ impl Hearer {
         self.end(track, now).await
     }
 
-    /// Ends Crew `track` as `now`: its open calls first, then it, its
-    /// Questions and its fact; then lets it go.
+    /// Ends Crew `track` as `now`: what its agents said is written first,
+    /// then its end, which ends its open calls and closes its Questions;
+    /// then lets it go.
     async fn end(&self, mut track: Track, now: Crew) -> Result<(), String> {
-        let calls = match now.state {
-            CrewState::Done => ToolStatus::Done,
-            _ => ToolStatus::Failed,
-        };
-        if let Err(error) = track.transcript.end_calls(calls).await {
-            tracing::warn!(%error, "a Crew's calls could not be ended");
+        if let Err(error) = track.transcript.close().await {
+            tracing::warn!(%error, "what a Crew's agents said could not be written");
         }
         let (thread, agent) = (self.thread, Participant::Agent(self.agent));
         let ended = self

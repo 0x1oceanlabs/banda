@@ -402,41 +402,6 @@ impl Transcript {
         }
     }
 
-    /// Ends the calls it started that never said they ended, as `ended`
-    /// says: a Crew's, as the Crew ends (ADR 0103, decision 28).
-    pub async fn end_calls(&mut self, ended: ToolStatus) -> Result<(), String> {
-        self.close().await?;
-        let open: Vec<ItemId> = self.tools.values().map(|shown| shown.item).collect();
-        let (thread, agent) = (self.thread, Participant::Agent(self.agent));
-        self.project
-            .write(move |tx| {
-                for id in open {
-                    let Some((_, mut item)) = store::item(tx.sql(), id)? else {
-                        continue;
-                    };
-                    let Body::Tool { status, .. } = &mut item.body else {
-                        continue;
-                    };
-                    if !matches!(status, ToolStatus::Pending | ToolStatus::Running) {
-                        continue;
-                    }
-                    *status = ended;
-                    store::set_body(tx.sql(), id, &item.body)?;
-                    let changed = Fact::ToolChanged {
-                        item: id,
-                        title: None,
-                        status: Some(ended),
-                        content: None,
-                        exit: None,
-                    };
-                    emit(tx, agent, thread, &changed)?;
-                }
-                Ok(())
-            })
-            .await
-            .map_err(plain)
-    }
-
     /// Which file a sub-agent's calls work on, while it is at work.
     pub fn set_toucher(&mut self, toucher: Option<Toucher>) {
         self.toucher = toucher;
