@@ -43,10 +43,7 @@ fn own(name: &str) -> bool {
 /// The Codex home `env` names: its `CODEX_HOME`, else the engine's own,
 /// else `~/.codex`.
 pub fn home(env: &BTreeMap<String, String>) -> Option<PathBuf> {
-    let named = |home: Option<String>| home.filter(|home| !home.is_empty()).map(PathBuf::from);
-    (named(env.get(VARIABLE).cloned()))
-        .or_else(|| named(std::env::var(VARIABLE).ok()))
-        .or_else(|| Some(dirs::home_dir()?.join(crate::kinds::CODEX.default_home)))
+    crate::kinds::CODEX.home(env, dirs::home_dir().as_deref())
 }
 
 /// Whether two folders are one.

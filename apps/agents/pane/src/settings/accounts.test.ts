@@ -5,7 +5,6 @@ import { DAY, HOUR } from "@banda/ui/lib/words"
 import {
   cardWindows,
   freeId,
-  gatewaysOf,
   groupsOf,
   lastWords,
   pickStart,
@@ -142,20 +141,11 @@ test("the default and the fallback are chosen through the engine it is handed", 
   ])
 })
 
-test("a new account takes the first free ID, and a gateway the ones its Harness speaks to", () => {
+test("a new account takes the first free ID", () => {
   const taken = [
     entry("claude", "claude", "C1"),
     entry("claude-2", "claude", "C2"),
   ]
   expect(freeId("claude", taken)).toBe("claude-3")
   expect(freeId("openrouter", taken)).toBe("openrouter")
-  const ids = (harness: string) => gatewaysOf(harness).map((one) => one.id)
-  expect(ids("claude")).toEqual([
-    "openrouter",
-    "zai",
-    "kimi",
-    "litellm",
-    "gateway",
-  ])
-  expect(ids("codex")).toEqual(["openrouter", "litellm", "gateway"])
 })

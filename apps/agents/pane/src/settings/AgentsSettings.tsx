@@ -1,6 +1,6 @@
 import { useState } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
-import type { HarnessView } from "@banda/contract/harnesses"
+import type { Adds, HarnessOf, HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -122,6 +122,11 @@ export function AgentsSettings({
   const list = answer.accounts
   const on = list.filter((one) => one.enabled)
   const roles: Roles = { default: answer.default, fallback: answer.fallback }
+  // The Harness an account is added to, when its machine adds one itself.
+  const addsTo = answer.harnesses.find(
+    (one): one is HarnessOf & { adds: Adds } =>
+      one.id === adding?.of?.harness && one.adds !== undefined
+  )
   const groups = groupsOf(answer)
   const shown = list.find((one) => one.id === opened.id)
   const of = (one: HarnessView) =>
@@ -133,6 +138,9 @@ export function AgentsSettings({
         {...props}
         harness={shown}
         of={of(shown)}
+        adds={answer.harnesses.some(
+          (one) => one.id === shown.harness && one.adds
+        )}
         limits={limitsOf(shown.id)}
         now={now}
         use={uses?.get(shown.id)}
@@ -178,10 +186,11 @@ export function AgentsSettings({
         <PlusIcon />
         Add a Harness: any agent that speaks ACP
       </Button>
-      {adding?.of && ["claude", "codex"].includes(adding.of.harness) ? (
+      {addsTo ? (
         <AccountSetup
           engine={engine}
-          base={list.find((one) => one.harness === adding.of!.harness)!}
+          base={list.find((one) => one.harness === addsTo.id)!}
+          of={addsTo}
           answer={answer}
           onClose={() => setAdding(undefined)}
         />

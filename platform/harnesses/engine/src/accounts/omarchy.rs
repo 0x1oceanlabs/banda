@@ -115,7 +115,8 @@ impl Omarchy {
             list.push(harness);
         }
         for provider in crate::kinds::Kind::ALL.map(crate::kinds::Kind::id) {
-            let (variable, default) = super::profiles::variable(provider).unwrap();
+            let row = crate::kinds::Kind::named(provider).unwrap().row();
+            let (variable, default) = (row.home, row.default_home);
             let Some(base) = list
                 .iter()
                 .find(|h| h.id == provider && h.of.is_none() && h.enabled)

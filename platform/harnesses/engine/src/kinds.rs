@@ -5,6 +5,8 @@
 
 use crate::Harness;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 /// What Codex's adapter takes as Codex's configuration for each of its
 /// sessions: a JSON object, whose keys may be dotted paths, as Codex's
@@ -37,16 +39,80 @@ pub(crate) struct Row {
     pub cli: &'static str,
     /// The folder of its home its journals are in.
     pub journals: &'static str,
-    /// The way that signs in an account billed by the token (ADR 0078,
-    /// decision 1), when its Harness has one; else its CLI takes the key
-    /// itself, on stdin.
-    pub api_way: Option<&'static str>,
+    /// Its subscriptions, as the Person buys them.
+    pub plans: &'static str,
+    /// How an account billed by the token signs in (ADR 0078, decision 1).
+    pub api: Api,
+    /// How such an account is billed, as a sentence ends it.
+    pub billed: &'static str,
+    /// The API a gateway answers it in.
+    pub speaks: &'static str,
+    /// The gateways Banda knows that speak it, with their address for it.
+    pub gateways: &'static [Gateway],
     /// Whether a gateway account asks Banda for its key with a helper its
     /// home's settings name, as Claude Code's `apiKeyHelper`; else its
     /// gateway's configuration says how ([`Kind::gateway`]).
     pub key_helper: bool,
     /// Whether its CLI signs in with a code shown on another computer.
     pub device_code: bool,
+    /// The variable that names to its adapter the folder in a Project's
+    /// `data` its sessions go in, one for every account of it, so any of
+    /// them goes on with a Thread's session (ADR 0078, decision 3); else
+    /// they stay in each account's home.
+    pub sessions: Option<&'static str>,
+    /// The variable of its configuration that sets what its shells get,
+    /// which its shells do not inherit from its own environment.
+    pub shells: Option<&'static str>,
+    /// Whether an account's home of its own shadows its Harness's, to share
+    /// its sessions ([`crate::shadow`]; ADR 0078, decision 3).
+    pub shadows: bool,
+}
+
+/// How an account billed by the token signs in (ADR 0078, decision 1).
+pub(crate) enum Api {
+    /// In a terminal, by its CLI's sign-in way `way`, to `console`, where
+    /// its CLI keeps the key.
+    Console {
+        way: &'static str,
+        console: &'static str,
+    },
+    /// Its CLI takes a key of `vendor`'s itself, on stdin.
+    Key { vendor: &'static str },
+}
+
+/// A gateway Banda knows, and its address for one Harness.
+pub(crate) struct Gateway {
+    pub id: &'static str,
+    pub name: &'static str,
+    pub url: &'static str,
+}
+
+const fn gateway(id: &'static str, name: &'static str, url: &'static str) -> Gateway {
+    Gateway { id, name, url }
+}
+
+impl Row {
+    /// The way that signs in an account billed by the token, when its
+    /// CLI does not take the key itself.
+    pub(crate) fn api_way(&self) -> Option<&'static str> {
+        match self.api {
+            Api::Console { way, .. } => Some(way),
+            Api::Key { .. } => None,
+        }
+    }
+
+    /// The home `env` names: its variable, else the engine's own, else its
+    /// folder in `person`'s home.
+    pub(crate) fn home(
+        &self,
+        env: &BTreeMap<String, String>,
+        person: Option<&Path>,
+    ) -> Option<PathBuf> {
+        let named = |home: Option<String>| home.filter(|home| !home.is_empty()).map(PathBuf::from);
+        (named(env.get(self.home).cloned()))
+            .or_else(|| named(std::env::var(self.home).ok()))
+            .or_else(|| Some(person?.join(self.default_home)))
+    }
 }
 
 pub(crate) const CLAUDE: Row = Row {
@@ -55,9 +121,24 @@ pub(crate) const CLAUDE: Row = Row {
     default_home: ".claude",
     cli: "CLAUDE_CODE_EXECUTABLE",
     journals: "projects",
-    api_way: Some("console-login"),
+    plans: "Claude Pro or Max",
+    api: Api::Console {
+        way: "console-login",
+        console: "Anthropic Console",
+    },
+    billed: "through Anthropic Console",
+    speaks: "Anthropic’s API",
+    gateways: &[
+        gateway("openrouter", "OpenRouter", "https://openrouter.ai/api"),
+        gateway("zai", "z.ai", "https://api.z.ai/api/anthropic"),
+        gateway("kimi", "Kimi", "https://api.moonshot.ai/anthropic"),
+        gateway("litellm", "LiteLLM", "http://localhost:4000"),
+    ],
     key_helper: true,
     device_code: false,
+    sessions: Some("BANDA_CLAUDE_SESSIONS"),
+    shells: None,
+    shadows: false,
 };
 
 pub(crate) const CODEX: Row = Row {
@@ -66,9 +147,19 @@ pub(crate) const CODEX: Row = Row {
     default_home: ".codex",
     cli: "CODEX_PATH",
     journals: "sessions",
-    api_way: None,
+    plans: "ChatGPT Plus or Pro",
+    api: Api::Key { vendor: "OpenAI" },
+    billed: "with an OpenAI key",
+    speaks: "OpenAI’s Responses API",
+    gateways: &[
+        gateway("openrouter", "OpenRouter", "https://openrouter.ai/api/v1"),
+        gateway("litellm", "LiteLLM", "http://localhost:4000/v1"),
+    ],
     key_helper: false,
     device_code: true,
+    sessions: None,
+    shells: Some(CODEX_CONFIG),
+    shadows: true,
 };
 
 impl Kind {

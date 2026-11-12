@@ -47,6 +47,75 @@ pub struct HarnessOf {
     /// none when it names none, and the menu is the first three the
     /// Harness offers (ADR 0114, decision 7).
     pub models: Vec<String>,
+    /// How Banda adds an account of it itself, when it knows the Harness:
+    /// else the Person writes its entry.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adds: Option<Adds>,
+}
+
+/// How Banda adds an account of a Harness it knows (ADR 0078, decision
+/// 1): billed by a subscription, by the token, or through a gateway.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct Adds {
+    /// Its subscriptions, as the Person buys them: `Claude Pro or Max`.
+    pub plans: String,
+    /// How an account billed by the token signs in.
+    pub api: ApiSignIn,
+    /// How it is billed: `through Anthropic Console`.
+    pub billed: String,
+    /// The API a gateway answers it in: `Anthropic’s API`.
+    pub speaks: String,
+    /// The gateways Banda knows that speak it, with their address for it.
+    pub gateways: Vec<Gateway>,
+}
+
+/// How an account billed by the token signs in: to a console, in a
+/// terminal, where its CLI keeps the key; or with a key its CLI takes.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+#[serde(tag = "by", rename_all = "lowercase")]
+pub enum ApiSignIn {
+    /// `Anthropic Console`.
+    Console { console: String },
+    /// A key of `vendor`'s: `OpenAI`.
+    Key { vendor: String },
+}
+
+/// A gateway Banda knows, with its address for one Harness.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct Gateway {
+    pub id: String,
+    pub name: String,
+    pub url: String,
+}
+
+impl Adds {
+    fn of(row: &crate::kinds::Row) -> Adds {
+        use crate::kinds::Api;
+        Adds {
+            plans: row.plans.to_owned(),
+            api: match row.api {
+                Api::Console { console, .. } => ApiSignIn::Console {
+                    console: console.to_owned(),
+                },
+                Api::Key { vendor } => ApiSignIn::Key {
+                    vendor: vendor.to_owned(),
+                },
+            },
+            billed: row.billed.to_owned(),
+            speaks: row.speaks.to_owned(),
+            gateways: (row.gateways.iter())
+                .map(|g| Gateway {
+                    id: g.id.to_owned(),
+                    name: g.name.to_owned(),
+                    url: g.url.to_owned(),
+                })
+                .collect(),
+        }
+    }
 }
 
 /// What a new account of a Harness is called and coloured, beside the
@@ -89,6 +158,7 @@ pub(super) fn answer(
                 colour,
             },
             models: models.remove(&one.harness).unwrap_or_default(),
+            adds: crate::kinds::Kind::named(&one.harness).map(|kind| Adds::of(kind.row())),
         });
     }
     AccountList {

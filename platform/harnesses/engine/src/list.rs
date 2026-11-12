@@ -4,7 +4,7 @@
 //! `agents.toml` (ADR 0040, decision 6).
 
 use crate::carried::Carried;
-use crate::kinds::{CLAUDE, CODEX, CODEX_CONFIG, Kind};
+use crate::kinds::{CLAUDE, CODEX, Kind};
 use crate::model::{AccountKind, HarnessView, Icon, LimitsLook};
 use crate::shadow;
 use banda_kernel::{Holes, Program, ProjectId, SSH_AGENT, project_env};
@@ -16,15 +16,38 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-/// The variable that names the folder of a Project's Claude Code sessions
-/// to the adapter Banda carries (ADR 0078, decision 3).
-pub const SESSIONS_VARIABLE: &str = "BANDA_CLAUDE_SESSIONS";
-
 /// The folder of a Project's Claude Code sessions in its `data`, which
 /// every Claude account's process reads and writes (ADR 0078, decision 3),
 /// and which a Thread's go with it to another Project.
 pub fn claude_sessions(data: &Path) -> PathBuf {
-    data.join("sessions").join(CLAUDE.id)
+    sessions_in(data, CLAUDE.id)
+}
+
+/// The folder in a Project's `data` of the sessions of the Harness `id`,
+/// when its row keeps them there ([`crate::kinds::Row::sessions`]).
+fn sessions_in(data: &Path, id: &str) -> PathBuf {
+    data.join("sessions").join(id)
+}
+
+/// Where a Harness's process for a Project starts, all that
+/// [`Harness::launch`] takes besides the entry.
+pub struct Place<'a> {
+    pub project: ProjectId,
+    /// The Project's own folder of Banda's, where Banda keeps its data.
+    pub data: &'a Path,
+    /// The Project's folder.
+    pub folder: &'a Path,
+    /// The holes the Project has in the fence.
+    pub holes: Holes,
+    /// The variables the shells its Agents run commands in get, which hand
+    /// their `banda` a pass (ADR 0019).
+    pub shells: &'a BTreeMap<String, String>,
+    /// Whether the Person trusts the Project's folder (ADR 0083, decision 5).
+    pub trusted: bool,
+    /// Whether the Person said they trust the Project, and the credentials
+    /// that gives ([`crate::github::credentials`]; ADR 0083, F0-3).
+    pub said: bool,
+    pub credentials: Credentials,
 }
 
 /// Whether a Project's Harness process may load what the Project's folder
@@ -85,10 +108,10 @@ pub struct Harness {
     /// everything said, a secret typed into a form too.
     pub record: Option<PathBuf>,
     /// The folder its process starts in: a trusted Project's, as
-    /// [`Harness::in_project`] says; else the engine's own.
+    /// [`Harness::launch`] says; else the engine's own.
     pub cwd: Option<PathBuf>,
     /// The holes its process has in the fence (ADR 0083, decision 1): its
-    /// Project's, as [`Harness::in_project`] says; none for the machine's.
+    /// Project's, as [`Harness::launch`] says; none for the machine's.
     pub holes: Holes,
     /// The Person's credentials its process gets, and those it must not.
     pub credentials: Credentials,
@@ -98,7 +121,7 @@ pub struct Harness {
 /// not (ADR 0083): the GitHub token Banda read for a Project the Person
 /// said they trust, and in any other every GitHub token and the SSH
 /// agent's socket taken out of the environment it starts in
-/// ([`Harness::set_trust_said`]). They make no other process: a process
+/// ([`Harness::launch`]). They make no other process: a process
 /// started with others goes on, so a token that changes reaches the next
 /// start, and whether the Person trusts the Project lets its processes go
 /// anyway; one started without a token the Project now gets goes once it
@@ -159,6 +182,12 @@ impl Harness {
         self.of.as_deref().unwrap_or(&self.id)
     }
 
+    /// What the Harness it runs does its own way, when Banda knows it
+    /// ([`Kind::of`]).
+    pub(crate) fn row(&self) -> Option<&'static crate::kinds::Row> {
+        Kind::of(self).map(Kind::row)
+    }
+
     /// The entry's own program with `args` after its arguments and `env`
     /// over its environment, as a Harness's sign-in in a terminal runs: the
     /// Person runs it, outside the fence.
@@ -171,18 +200,19 @@ impl Harness {
 
     /// How its process starts: its `command` and `args`, with its `env`
     /// and its `credentials`, in its `cwd`: a Harness's, to start behind
-    /// the fence with its `holes` in it. Codex's shells get the credentials
-    /// as they get a pass ([`Harness::in_project`]).
+    /// the fence with its `holes` in it. Shells that do not inherit its
+    /// environment get the credentials as they get a pass
+    /// ([`Harness::launch`]).
     pub fn start(&self) -> Program {
         let mut program = Program::harness(&self.command, self.args.clone(), self.holes.clone());
         program.env = self.env.clone();
         let set = &self.credentials.set;
         program.env.extend(set.clone());
-        if Kind::of(self) == Some(Kind::Codex)
+        if let Some(variable) = self.row().and_then(|row| row.shells)
             && !set.is_empty()
-            && let Some(config) = codex_config(self.env.get(CODEX_CONFIG).map(String::as_str), set)
+            && let Some(config) = codex_config(self.env.get(variable).map(String::as_str), set)
         {
-            program.env.insert(CODEX_CONFIG.to_owned(), config);
+            program.env.insert(variable.to_owned(), config);
         }
         program.unset = self.credentials.unset.clone();
         program.cwd = self.cwd.clone();
@@ -209,7 +239,7 @@ impl Harness {
     }
 
     /// Whether its process may load what the Project's folder names: not
-    /// when [`Harness::in_project`] started it for a Project the Person has
+    /// when [`Harness::launch`] started it for a Project the Person has
     /// not trusted.
     pub fn trusted(&self) -> bool {
         self.env
@@ -226,13 +256,14 @@ impl Harness {
     }
 
     /// Where its sessions live, as [`Harness::shares_sessions`] tells two
-    /// entries apart: `claude` for every Claude Code account; for Codex
-    /// the Harness it is or is an account of, where a home can shadow
-    /// another's; else its own ID.
+    /// entries apart: its Harness's ID for every account of one that keeps
+    /// them in the Project (Claude Code); for one whose homes shadow
+    /// another's (Codex) the Harness it is or is an account of, where a
+    /// home can shadow; else its own ID.
     pub fn sessions(&self) -> &str {
-        match Kind::of(self) {
-            Some(Kind::Claude) => CLAUDE.id,
-            Some(Kind::Codex) if self.shadows.is_none() || shadow::LINKS => self.harness(),
+        match self.row() {
+            Some(row) if row.sessions.is_some() => row.id,
+            Some(row) if row.shadows && (self.shadows.is_none() || shadow::LINKS) => self.harness(),
             _ => &self.id,
         }
     }
@@ -254,7 +285,7 @@ impl Harness {
     /// (ADR 0078, decision 3). Nothing for the same entry, nor for another
     /// Harness's.
     pub async fn take_session(&self, from: &Harness, session: &str) -> std::io::Result<()> {
-        if from.id == self.id || Kind::of(self) != Some(Kind::Codex) {
+        if from.id == self.id || !self.row().is_some_and(|row| row.shadows) {
             return Ok(());
         }
         // An account's own home reaches the shared sessions through its shadow.
@@ -266,73 +297,66 @@ impl Harness {
             .await?
     }
 
-    /// The entry as its process for `project` starts: it, and every program
+    /// The entry as its process for a Project starts, from the entry and
+    /// its [`Place`] alone (ADR 0108, decision 6): it, and every program
     /// it starts, an Agent's server too, carries the Project (ADR 0044,
     /// decision 2). Its process for the machine carries none.
     ///
-    /// The shells its Agents run commands in get `shells`, the variables
-    /// that hand their `banda` a pass (ADR 0019): from its environment,
-    /// which a shell inherits, and Codex's from `CODEX_CONFIG` too, as
-    /// `shell_environment_policy.set`, which Codex sets in each shell after
-    /// its policy's excludes.
+    /// The shells its Agents run commands in get the [`Place::shells`]
+    /// variables: from its environment, which a shell inherits, and, where
+    /// its row names a configuration that sets them (Codex's
+    /// `CODEX_CONFIG`), as `shell_environment_policy.set` there, which
+    /// Codex sets in each shell after its policy's excludes.
     ///
-    /// Claude Code's sessions go in the Project's `data`, one folder for
-    /// every Claude account, so any of them goes on with a Thread's session
-    /// (ADR 0078, decision 3). The adapter Banda carries reads the folder
-    /// from `BANDA_CLAUDE_SESSIONS`; another program ignores it.
+    /// A Harness whose row keeps its sessions in the Project (Claude Code)
+    /// gets their folder in the Project's `data`, one for every account,
+    /// so any of them goes on with a Thread's session (ADR 0078, decision
+    /// 3), and writes there (ADR 0083, decision 1).
     ///
     /// [`UNTRUSTED_VARIABLE`] says whether the Project is `trusted`, so a
     /// process started under the other trust is not this entry.
     ///
-    /// It has the `holes` its Project has in the fence, and Claude Code's
-    /// its sessions' folder too, which it writes (ADR 0083, decision 1). It
-    /// starts in the Project's `folder` once the Person trusts it; until
-    /// then where the engine runs, as nothing of a folder not trusted is
-    /// for a process to read as it starts (decision 5).
-    pub fn in_project(
-        &self,
-        project: ProjectId,
-        data: &Path,
-        folder: &Path,
-        mut holes: Holes,
-        shells: &BTreeMap<String, String>,
-        trusted: bool,
-    ) -> Harness {
+    /// It has the `holes` its Project has in the fence. It starts in the
+    /// Project's `folder` once the Person trusts it; until then where the
+    /// engine runs, as nothing of a folder not trusted is for a process to
+    /// read as it starts (decision 5). Where the Person said they trust
+    /// it, it gets their GitHub token and their SSH agent, whose socket its
+    /// environment binds behind the fence; in any other, every GitHub
+    /// token and `SSH_AUTH_SOCK` are taken out of the environment it
+    /// starts in (F0-3).
+    pub fn launch(&self, place: Place) -> Harness {
         let mut harness = self.clone();
-        (harness.env).extend(project_env(project).map(|(key, id)| (key.to_owned(), id)));
-        (harness.env).extend(shells.clone());
-        let untrusted = if trusted { "" } else { "1" };
+        let mut holes = place.holes;
+        (harness.env).extend(project_env(place.project).map(|(key, id)| (key.to_owned(), id)));
+        (harness.env).extend(place.shells.clone());
+        let untrusted = if place.trusted { "" } else { "1" };
         (harness.env).insert(UNTRUSTED_VARIABLE.to_owned(), untrusted.to_owned());
-        if Kind::of(self) == Some(Kind::Codex) && !shells.is_empty() {
+        let row = self.row();
+        if let Some(variable) = row.and_then(|row| row.shells)
+            && !place.shells.is_empty()
+        {
             // The entry's own, else the one the engine runs with.
-            let before =
-                (self.env.get(CODEX_CONFIG).cloned()).or_else(|| std::env::var(CODEX_CONFIG).ok());
-            if let Some(config) = codex_config(before.as_deref(), shells) {
-                (harness.env).insert(CODEX_CONFIG.to_owned(), config);
+            let before = (self.env.get(variable).cloned()).or_else(|| std::env::var(variable).ok());
+            if let Some(config) = codex_config(before.as_deref(), place.shells) {
+                (harness.env).insert(variable.to_owned(), config);
             }
         }
-        if Kind::of(self) == Some(Kind::Claude) {
-            let sessions = claude_sessions(data);
-            (harness.env).insert(SESSIONS_VARIABLE.to_owned(), sessions.display().to_string());
+        if let Some(row) = row
+            && let Some(variable) = row.sessions
+        {
+            let sessions = sessions_in(place.data, row.id);
+            (harness.env).insert(variable.to_owned(), sessions.display().to_string());
             holes.writes.push(sessions);
         }
-        harness.cwd = trusted.then(|| folder.to_owned());
+        harness.cwd = place.trusted.then(|| place.folder.to_owned());
         holes.writes.extend(self.holes.writes.iter().cloned());
+        holes.ssh_agent = place.said;
         harness.holes = holes;
-        harness
-    }
-
-    /// What its process gets as its Project's trust is said or not
-    /// (`said`; ADR 0083, F0-3): where the Person said they trust it, their
-    /// GitHub token and their SSH agent, whose socket its environment
-    /// binds behind the fence; in any other, every GitHub token and
-    /// `SSH_AUTH_SOCK` are taken out of the environment it starts in.
-    pub async fn set_trust_said(&mut self, said: bool) {
-        self.credentials = crate::github::credentials(said).await;
-        self.holes.ssh_agent = said;
-        if !said {
-            self.credentials.unset.push(SSH_AGENT.to_owned());
+        harness.credentials = place.credentials;
+        if !place.said {
+            harness.credentials.unset.push(SSH_AGENT.to_owned());
         }
+        harness
     }
 }
 
@@ -374,6 +398,29 @@ fn codex_config(before: Option<&str>, variables: &BTreeMap<String, String>) -> O
         ),
     }
     Some(Value::Object(config).to_string())
+}
+
+/// A [`Place`] for a test: a Project the Person said they trust, with no
+/// credentials.
+#[cfg(test)]
+pub(crate) fn at<'a>(
+    project: ProjectId,
+    data: &'a Path,
+    folder: &'a Path,
+    holes: Holes,
+    shells: &'a BTreeMap<String, String>,
+    trusted: bool,
+) -> Place<'a> {
+    Place {
+        project,
+        data,
+        folder,
+        holes,
+        shells,
+        trusted,
+        said: true,
+        credentials: Credentials::default(),
+    }
 }
 
 /// The Harnesses this machine can start. Read from a file, they follow
@@ -774,11 +821,11 @@ impl HarnessEntry {
             holes: Holes::default(),
             credentials: Credentials::default(),
         };
-        // A Codex account that signs in in a home of its own shadows its
-        // Harness's (ADR 0078, decision 3).
+        // An account that signs in in a home of its own shadows its
+        // Harness's, where its row says so (Codex; ADR 0078, decision 3).
         if account
             && own_home.is_some_and(|home| !home.is_empty())
-            && Kind::of(&harness) == Some(Kind::Codex)
+            && harness.row().is_some_and(|row| row.shadows)
         {
             harness.shadows = shared_home;
         }
@@ -1334,6 +1381,7 @@ fn template() -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::kinds::CODEX_CONFIG;
 
     #[test]
     fn omarchy_accounts_follow_metadata_and_explicit_removal() {
@@ -1662,14 +1710,14 @@ mod tests {
         let work = list.get("work").unwrap();
         assert_eq!(work.holes.writes, vec![folder.clone()]);
         assert!(list.get("other").unwrap().holes.writes.is_empty());
-        let in_project = work.in_project(
+        let in_project = work.launch(at(
             ProjectId::new(),
             root.path(),
             root.path(),
             Holes::default(),
             &BTreeMap::new(),
             false,
-        );
+        ));
         assert!(in_project.holes.writes.contains(&folder));
         assert!(!in_project.holes.writes.contains(&owned));
         #[cfg(unix)]
@@ -1784,7 +1832,7 @@ mod tests {
         };
         for harness in known() {
             let started =
-                harness.in_project(project, data, work(), Holes::default(), &shells, true);
+                harness.launch(at(project, data, work(), Holes::default(), &shells, true));
             assert_eq!(started.env["BANDA_TOKEN"], "f00d", "{}", harness.id);
         }
 
@@ -1793,7 +1841,7 @@ mod tests {
              env = { CODEX_CONFIG = '{\"model\":\"o3\"}' }\n",
         );
         let config =
-            config(&own.in_project(project, data, work(), Holes::default(), &shells, true));
+            config(&own.launch(at(project, data, work(), Holes::default(), &shells, true)));
         assert_eq!(config["model"], "o3", "the entry's own stays");
         assert_eq!(
             config["shell_environment_policy.set.BANDA_TOKEN"], "f00d",
@@ -1802,17 +1850,17 @@ mod tests {
 
         let other =
             listed("[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\ncommand = \"gemini\"\n");
-        let started = other.in_project(project, data, work(), Holes::default(), &shells, true);
+        let started = other.launch(at(project, data, work(), Holes::default(), &shells, true));
         assert_eq!(started.env["BANDA_ENGINE"], "ws://127.0.0.1:4000/ws");
         assert_eq!(started.env.get(CODEX_CONFIG), None, "Codex's alone");
-        let none = own.in_project(
+        let none = own.launch(at(
             project,
             data,
             work(),
             Holes::default(),
             &BTreeMap::new(),
             true,
-        );
+        ));
         assert_eq!(none.env.get("BANDA_TOKEN"), None);
         assert_eq!(none.env[CODEX_CONFIG], r#"{"model":"o3"}"#, "as it was");
     }
@@ -1857,14 +1905,14 @@ mod tests {
     fn every_process_of_a_project_says_whether_it_is_trusted() {
         let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
         for harness in known() {
-            let trusted = harness.in_project(
+            let trusted = harness.launch(at(
                 project,
                 data,
                 work(),
                 Holes::default(),
                 &BTreeMap::new(),
                 true,
-            );
+            ));
             assert!(trusted.trusted(), "{}", harness.id);
             // Said even when trusted, over what the engine's own
             // environment says.
@@ -1874,14 +1922,14 @@ mod tests {
                 "{}",
                 harness.id
             );
-            let not = harness.in_project(
+            let not = harness.launch(at(
                 project,
                 data,
                 work(),
                 Holes::default(),
                 &BTreeMap::new(),
                 false,
-            );
+            ));
             assert!(!not.trusted(), "{}", harness.id);
             assert_eq!(not.start().env[UNTRUSTED_VARIABLE], "1", "{}", harness.id);
             assert_ne!(not, trusted, "a process of the other trust is another");
@@ -1909,15 +1957,29 @@ mod tests {
     #[tokio::test]
     async fn only_a_project_said_trusted_gives_the_github_token_and_the_ssh_agent() {
         crate::github::keep(Some("t".to_owned()));
-        let mut harness = known()[0].clone();
-        harness.set_trust_said(true).await;
-        let started = harness.start();
+        let harness = known()[0].clone();
+        let shells = BTreeMap::new();
+        let launch = |said: bool, credentials| {
+            let place = Place {
+                said,
+                credentials,
+                ..at(
+                    ProjectId::new(),
+                    work(),
+                    work(),
+                    Holes::default(),
+                    &shells,
+                    true,
+                )
+            };
+            harness.launch(place).start()
+        };
+        let started = launch(true, crate::github::credentials(true).await);
         assert_eq!(started.env.get("GH_TOKEN").map(String::as_str), Some("t"));
         assert!(started.holes().unwrap().ssh_agent);
         assert!(started.unset.is_empty());
 
-        harness.set_trust_said(false).await;
-        let started = harness.start();
+        let started = launch(false, crate::github::credentials(false).await);
         assert!(!started.env.contains_key("GH_TOKEN"));
         assert!(!started.holes().unwrap().ssh_agent);
         for variable in ["GH_TOKEN", "GITHUB_TOKEN", SSH_AGENT] {
@@ -1938,13 +2000,20 @@ mod tests {
             ..Holes::default()
         };
         let in_project = |harness: &Harness| {
-            harness.in_project(project, data, work(), kept.clone(), &BTreeMap::new(), true)
+            harness.launch(at(
+                project,
+                data,
+                work(),
+                kept.clone(),
+                &BTreeMap::new(),
+                true,
+            ))
         };
         let claude = in_project(&list[0]);
         // Joined as the host joins a path.
         let sessions = data.join("sessions").join("claude");
         assert_eq!(
-            claude.env[SESSIONS_VARIABLE],
+            claude.env[CLAUDE.sessions.unwrap()],
             sessions.display().to_string()
         );
         // Its process writes them behind the fence, and reads what it was
@@ -1958,25 +2027,29 @@ mod tests {
         assert_eq!(started.cwd.as_deref(), Some(work()));
         let codex = in_project(&list[1]);
         assert!(
-            !codex.env.contains_key(SESSIONS_VARIABLE),
+            !codex.env.contains_key(CLAUDE.sessions.unwrap()),
             "Codex keeps its own"
         );
-        assert_eq!(codex.start().holes(), Some(&kept), "nor writes Claude's");
+        let said = Holes {
+            ssh_agent: true,
+            ..kept.clone()
+        };
+        assert_eq!(codex.start().holes(), Some(&said), "nor writes Claude's");
         let second = "[[harness]]\nid = \"work\"\nname = \"Work\"\ncommand = \"acp\"\n\
                       cli = { program = \"claude\", variable = \"CLAUDE_CODE_EXECUTABLE\" }\n";
         let second = listed_in(Path::new("h"), second).unwrap().remove(0);
         assert_eq!(
             second
-                .in_project(
+                .launch(at(
                     project,
                     data,
                     work(),
                     Holes::default(),
                     &BTreeMap::new(),
                     true
-                )
-                .env[SESSIONS_VARIABLE],
-            claude.env[SESSIONS_VARIABLE],
+                ))
+                .env[CLAUDE.sessions.unwrap()],
+            claude.env[CLAUDE.sessions.unwrap()],
             "every Claude account, one folder"
         );
     }
@@ -2212,8 +2285,14 @@ args = [\"acp\"]
         let codex = list.find("codex").unwrap();
         runs.extend([(codex.clone(), false, false), (codex, true, true)]);
         for (harness, trusted, credentials) in runs {
-            let mut started =
-                harness.in_project(project, data, work(), Holes::default(), &shells, trusted);
+            let mut started = harness.launch(at(
+                project,
+                data,
+                work(),
+                Holes::default(),
+                &shells,
+                trusted,
+            ));
             if credentials {
                 (started.credentials.set).insert("GH_TOKEN".to_owned(), "ghp".to_owned());
                 (started.credentials.unset).push("SSH_AUTH_SOCK".to_owned());

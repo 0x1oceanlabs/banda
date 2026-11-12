@@ -15,6 +15,8 @@ import type { Engine } from "@banda/contract"
 import type {
   AccountKind,
   AccountList,
+  Adds,
+  HarnessOf,
   HarnessView,
   Icon,
   Kept,
@@ -51,7 +53,7 @@ import { Problem } from "../thread/SignIn"
 import { ApiKeyForm, GatewayForm, KEPT_WORDS } from "./AccountKeys"
 import { AccountLogin } from "./AccountLogin"
 import { EmblemPicker } from "./AccountPage"
-import { freeId, gatewaysOf, KIND_WORDS } from "./accounts"
+import { KIND_WORDS } from "./accounts"
 
 const PURPOSES: { name: string; icon: Icon }[] = [
   { name: "Work", icon: "work" },
@@ -78,25 +80,19 @@ const STEP_WORDS: Readonly<Record<Step, string>> = {
   gateway: "Its address and key",
 }
 
-/** How an account of `harness` pays, as the first step offers it. */
-function kindsOf(harness: string) {
-  const claude = harness === "claude"
-  const gateways = gatewaysOf(harness)
-    .filter((gateway) => gateway.urls[harness])
-    .map((gateway) => gateway.name)
+/** How an account of the Harness `title` pays, as the first step offers
+ * it, in the words its machine says (`adds`). */
+function kindsOf(title: string, adds: Adds) {
+  const gateways = adds.gateways.map((gateway) => gateway.name)
   return [
     {
       kind: "subscription",
-      about: claude
-        ? "Claude Pro or Max. You sign in in a terminal, as in Claude Code itself."
-        : "ChatGPT Plus or Pro. You sign in in a terminal, as in Codex itself.",
+      about: `${adds.plans}. You sign in in a terminal, as in ${title} itself.`,
       Icon: UserRoundIcon,
     },
     {
       kind: "api",
-      about: claude
-        ? "Billed by the token through Anthropic Console. Claude Code keeps the key."
-        : "Billed by the token with an OpenAI key. Codex keeps the key.",
+      about: `Billed by the token ${adds.billed}. ${title} keeps the key.`,
       Icon: KeyRoundIcon,
     },
     {
@@ -110,23 +106,21 @@ function kindsOf(harness: string) {
 export function AccountSetup({
   engine,
   base,
+  of,
   answer,
   onClose,
 }: {
   engine: Engine
   base: HarnessView
-  /** What its machine says of its Accounts: what a new one is called. */
+  /** What its machine says of its Harness: what a new account is called,
+   * and how it adds one. */
+  of: HarnessOf & { adds: Adds }
+  /** What its machine says of its Accounts. */
   answer: AccountList
   onClose: () => void
 }) {
-  const of = answer.harnesses.find((one) => one.id === base.harness)
-  const fresh = of?.next ?? {
-    id: freeId(base.harness, answer.accounts),
-    name: "",
-    colour: 1,
-  }
-  const title = of?.title ?? base.harness
-  const codex = base.harness === "codex"
+  const { next: fresh, title, adds } = of
+  const api = adds.api
   const [kind, setKind] = useState<AccountKind>()
   const [at, setAt] = useState(0)
   const [existing, setExisting] = useState(false)
@@ -183,9 +177,10 @@ export function AccountSetup({
   }
   const madeWords = made && {
     subscription: `${made.name} is connected. Verify its sign-in below, or finish later from its account page.`,
-    api: codex
-      ? `${made.name} is signed in with its key.`
-      : `${made.name} is connected. Sign in to Anthropic Console below: Claude Code keeps the key.`,
+    api:
+      api.by === "key"
+        ? `${made.name} is signed in with its key.`
+        : `${made.name} is connected. Sign in to ${api.console} below: ${title} keeps the key.`,
     gateway: `${made.name} is added. ${kept ? KEPT_WORDS[kept] : ""}`,
   }
   return (
@@ -208,7 +203,7 @@ export function AccountSetup({
         </DialogHeader>
         {!kind && (
           <ItemGroup className="gap-2">
-            {kindsOf(base.harness).map((one) => (
+            {kindsOf(title, adds).map((one) => (
               <Item
                 key={one.kind}
                 variant="outline"
@@ -340,6 +335,7 @@ export function AccountSetup({
           <GatewayForm
             engine={engine}
             base={base}
+            adds={adds}
             title={title}
             taken={answer.accounts}
             colour={colour}
@@ -352,14 +348,16 @@ export function AccountSetup({
         )}
         {made &&
           kind &&
-          (kind === "api" && codex && !keyed ? (
+          (kind === "api" && api.by === "key" && !keyed ? (
             <>
               <p className="text-ui">
-                {made.name} is connected. Give it its OpenAI key.
+                {made.name} is connected. Give it its {api.vendor} key.
               </p>
               <ApiKeyForm
                 engine={engine}
                 harness={made.id}
+                title={title}
+                vendor={api.vendor}
                 onBusy={setRunning}
                 onKept={() => setKeyed(true)}
               />

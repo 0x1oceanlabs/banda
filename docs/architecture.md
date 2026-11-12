@@ -491,7 +491,7 @@ The kernel holds only what every module needs, and it names no module.
   ssh-agent's folders (`/tmp/ssh-*`). A program behind the fence gets no `BANDA_STATE`,
   `BANDA_DATA`, `BANDA_ROOT` or `BANDA_CACHE`; a Harness's gets `GH_TOKEN`
   and the SSH agent only in a Project the Person said they trust
-  (`trust_said`, `Harness::set_trust_said`), and no GitHub token or
+  (`trust_said`, `Place::said` in `Harness::launch`), and no GitHub token or
   `SSH_AUTH_SOCK` in any other, fence or none (`Credentials`, which make
   no other process).
   The kernel holds what the probe found (`Fence`): `welcome` carries it,
