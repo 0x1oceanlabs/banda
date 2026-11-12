@@ -25,6 +25,10 @@
 //! - `long`: each agent works 600 ms, not 60.
 //! - `dies`: the fake agent's process ends in its second phase.
 //! - `two`: two Crews at once, the second without `asks`.
+//! - `rich`: its agents say what Claude's do: route files as labels, real
+//!   start times and durations, tokens, tool calls and the last tool; Fix's
+//!   second agent is on its second attempt and its third fails, with why;
+//!   each works 1.2 s, so its times show.
 //!
 //! With `FAKE_AGENT_CREW_CUE` naming a file, a Crew holds in its Fix phase,
 //! some of its agents done and some at work, until that file is there:
@@ -172,7 +176,11 @@ impl Crew {
         let input = json!({ "script": self.script() });
         let fields = ToolCallUpdateFields::new().raw_input(input.clone());
         let update = ToolCallUpdate::new(self.launch.clone(), fields);
-        say(&self.cx, &self.session, SessionUpdate::ToolCallUpdate(update))?;
+        say(
+            &self.cx,
+            &self.session,
+            SessionUpdate::ToolCallUpdate(update),
+        )?;
         if self.on("start") {
             let options = vec![
                 PermissionOption::new("allow-once", "Yes", PermissionOptionKind::AllowOnce),
@@ -193,7 +201,11 @@ impl Crew {
             if !allowed(&self.cx, question, &["allow-once", "allow-with-updates"]).await {
                 let fields = ToolCallUpdateFields::new().status(ToolCallStatus::Failed);
                 let update = ToolCallUpdate::new(self.launch.clone(), fields);
-                say(&self.cx, &self.session, SessionUpdate::ToolCallUpdate(update))?;
+                say(
+                    &self.cx,
+                    &self.session,
+                    SessionUpdate::ToolCallUpdate(update),
+                )?;
                 return Ok(false);
             }
         }
@@ -204,7 +216,11 @@ impl Crew {
             .status(ToolCallStatus::Completed)
             .raw_output(output);
         let update = ToolCallUpdate::new(self.launch.clone(), fields);
-        say(&self.cx, &self.session, SessionUpdate::ToolCallUpdate(update))?;
+        say(
+            &self.cx,
+            &self.session,
+            SessionUpdate::ToolCallUpdate(update),
+        )?;
         Ok(true)
     }
 
@@ -244,19 +260,31 @@ impl Crew {
 
     /// Works its phases, says its end, and goes on by itself with it.
     async fn work(self) -> Result<(), Error> {
-        let pace = Duration::from_millis(if self.on("long") { 600 } else { 60 });
+        let pace = Duration::from_millis(match (self.on("rich"), self.on("long")) {
+            // Slow enough that its times and Timeline show.
+            (true, _) => 1200,
+            (false, true) => 600,
+            (false, false) => 60,
+        });
         let fix = if self.on("big") { 50 } else { 3 };
         let mut agents: Vec<Agent> = Vec::new();
         let mut tokens = 0;
         let mut logs = Vec::new();
         let mut cued = false;
+        let rich = self.on("rich");
         for (phase, count) in [(1u16, 2u32), (2, fix), (3, 1)] {
             if phase == 2 && self.on("fails") {
                 return self.end("failed", tokens, &logs).await;
             }
             for index in 1..=count {
                 let state = if index <= 8 { "start" } else { "queued" };
-                agents.push(Agent::new(phase, index, state));
+                let mut agent = Agent::new(phase, index, state);
+                if rich {
+                    agent.rich = true;
+                    agent.attempt = if (phase, index) == (2, 2) { 2 } else { 1 };
+                    agent.started = (state != "queued").then(now);
+                }
+                agents.push(agent);
             }
             self.progress(&agents, tokens)?;
             if phase == 2 && self.on("dies") {
@@ -271,7 +299,7 @@ impl Crew {
                 tokio::time::sleep(pace).await;
                 tokens += 1000;
                 let at_work: Vec<usize> = (agents.iter().enumerate())
-                    .filter(|(_, agent)| agent.phase == phase && agent.state != "done")
+                    .filter(|(_, agent)| agent.phase == phase && agent.at_work())
                     .map(|(at, _)| at)
                     .collect();
                 if at_work.is_empty() {
@@ -280,10 +308,13 @@ impl Crew {
                 // Held on cue, Fix ends one agent first.
                 let holds = phase == 2 && !cued && cueing();
                 for at in at_work.iter().take(if holds { 1 } else { 8 }) {
-                    agents[*at].state = "done";
+                    agents[*at].end();
                 }
                 for at in at_work.iter().skip(8).take(if holds { 0 } else { 8 }) {
                     agents[*at].state = "start";
+                    if rich {
+                        agents[*at].started = Some(now());
+                    }
                 }
                 self.progress(&agents, tokens)?;
                 if phase == 2 && !cued {
@@ -366,8 +397,13 @@ impl Crew {
             "completed" => "The Crew fixed the routes.",
             _ => "The Crew failed.",
         };
-        say(&self.cx, &self.session, SessionUpdate::AgentMessageChunk(text(words)))?;
-        let origin = json!({ "_claude/origin": { "kind": "task-notification", "runId": self.run } });
+        say(
+            &self.cx,
+            &self.session,
+            SessionUpdate::AgentMessageChunk(text(words)),
+        )?;
+        let origin =
+            json!({ "_claude/origin": { "kind": "task-notification", "runId": self.run } });
         let used = UsageUpdate::new(30_000, 200_000)
             .cost(Cost::new(0.1, "USD"))
             .meta(origin.as_object().cloned());
@@ -390,12 +426,36 @@ async fn cue() {
     }
 }
 
+/// Now, in milliseconds since the epoch, as Claude's frames say times.
+fn now() -> u64 {
+    let since = std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH);
+    since.map_or(0, |since| since.as_millis() as u64)
+}
+
+/// The routes a `rich` Crew's agents work on, by their index.
+const ROUTES: [&str; 8] = [
+    "client/web/src/routes/billing/invoices.ts",
+    "client/web/src/routes/settings/keys.ts",
+    "client/web/src/routes/hosts/pair.ts",
+    "client/web/src/routes/threads/later.ts",
+    "client/web/src/routes/threads/share.ts",
+    "client/web/src/routes/auth/session.ts",
+    "client/web/src/routes/files/upload.ts",
+    "client/web/src/routes/spaces/open.ts",
+];
+
 /// One agent of a Crew, as its tree says it.
 #[derive(Clone)]
 struct Agent {
     phase: u16,
     index: u32,
     state: &'static str,
+    /// It says what Claude's agents say (`rich`).
+    rich: bool,
+    attempt: u32,
+    /// When it started and how long it took, with `rich`.
+    started: Option<u64>,
+    took: Option<u64>,
 }
 
 impl Agent {
@@ -404,6 +464,74 @@ impl Agent {
             phase,
             index,
             state,
+            rich: false,
+            attempt: 1,
+            started: None,
+            took: None,
+        }
+    }
+
+    fn at_work(&self) -> bool {
+        !matches!(self.state, "done" | "failed")
+    }
+
+    /// It ends: done, or, `rich`, Fix's third fails.
+    fn end(&mut self) {
+        self.state = if self.rich && (self.phase, self.index) == (2, 3) {
+            "failed"
+        } else {
+            "done"
+        };
+        self.took = self.started.map(|started| now().saturating_sub(started));
+    }
+
+    fn route(&self) -> &'static str {
+        ROUTES[(self.index as usize - 1) % ROUTES.len()]
+    }
+
+    /// What a `rich` agent adds to its frame.
+    fn rich(&self, frame: &mut Value) {
+        let route = self.route();
+        frame["label"] = json!(match self.phase {
+            1 => format!(
+                "scan {}",
+                ["billing, settings, hosts", "threads, auth, files"][(self.index as usize - 1) % 2]
+            ),
+            2 => route.to_owned(),
+            _ => "Tests: billing, auth".to_owned(),
+        });
+        frame["model"] = json!(if self.phase == 2 {
+            "fake-large"
+        } else {
+            "fake-small"
+        });
+        frame["attempt"] = json!(self.attempt);
+        frame["promptPreview"] = json!(format!(
+            "Add the access check to {route}. Scan found that it reads the session before it checks the caller's rights; move the check first and keep the rest."
+        ));
+        frame["tokens"] =
+            json!(8_000 + u64::from(self.index) * 1_300 + if self.at_work() { 0 } else { 30_000 });
+        frame["toolCalls"] = json!(3 + self.index);
+        frame["lastToolName"] = json!("Edit");
+        frame["lastToolSummary"] = json!(route.rsplit('/').next().unwrap_or(route));
+        if let Some(started) = self.started {
+            frame["startedAt"] = json!(started);
+        }
+        if let Some(took) = self.took {
+            frame["durationMs"] = json!(took);
+        }
+        match self.state {
+            "done" => {
+                frame["resultPreview"] = json!(format!(
+                    "{{\"route\":\"{route}\",\"fixed\":true,\"methods\":[\"GET\"],\"check\":\"requireAccess\"}}"
+                ))
+            }
+            "failed" => {
+                frame["state"] = json!("failed");
+                frame["error"] =
+                    json!("Pairing runs before a session; the check can't come first.");
+            }
+            _ => {}
         }
     }
 
@@ -429,6 +557,9 @@ impl Agent {
         }
         if self.state == "done" {
             frame["resultPreview"] = json!("ok");
+        }
+        if self.rich {
+            self.rich(&mut frame);
         }
         frame
     }
@@ -468,7 +599,11 @@ pub(super) async fn turn(
     }
     let first = crew(words.iter().any(|word| word == "asks"));
     if !first.launch().await? {
-        say(cx, session, SessionUpdate::AgentMessageChunk(text("I did not start it.")))?;
+        say(
+            cx,
+            session,
+            SessionUpdate::AgentMessageChunk(text("I did not start it.")),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     first.started()?;
@@ -479,7 +614,11 @@ pub(super) async fn turn(
         second.started()?;
         crews.push(second);
     }
-    say(cx, session, SessionUpdate::AgentMessageChunk(text("The Crew is at work.")))?;
+    say(
+        cx,
+        session,
+        SessionUpdate::AgentMessageChunk(text("The Crew is at work.")),
+    )?;
     *then = Some(Box::pin(async move {
         let works = crews.into_iter().map(|crew| tokio::spawn(crew.work()));
         for work in works.collect::<Vec<_>>() {

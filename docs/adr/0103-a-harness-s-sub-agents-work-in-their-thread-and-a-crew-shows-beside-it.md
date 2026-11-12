@@ -1233,6 +1233,22 @@ Decided for steps 4–6, and what the recording
   - `--effort-top` is a theme token (`effort-top`), so a theme may set it.
   - A dot and Open open the Crew Pane (step 5); where none opens, the
     card offers neither.
+- **The Crew Pane** (decision 22, step 5):
+  - One a Thread (`agents.crew`, its identity the Thread), in the
+    Thread's Group: another Crew of the Thread shows in it.
+  - It opens by itself once a Crew, where it opens beside, and leaves the
+    focus in the Thread; this window remembers which Crews it opened.
+    Where the Thread's Pane is alone it does not open by itself: a screen
+    would cover what the Person writes. Open and the dots open it there,
+    as a screen on top, as a sub-agent's (decision 21).
+  - The filter's Working is the agents at work; Queued ones show in "N
+    waiting for a slot". A filter folds nothing.
+  - A row's time and the Timeline's axis do not tick; only the header's
+    clock and the Timeline's now line move. At work, the axis ends a step
+    past now.
+  - An agent's detail has no "Open as Pane" and no work yet: its last
+    tool stands for its work until the agent's work, read from Claude's
+    transcript, comes (its own issue).
 
 ## Roma's calls
 

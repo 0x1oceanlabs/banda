@@ -91,7 +91,9 @@ function agentsOf(crew: Crew, index: number): CrewAgent[] {
 }
 
 /** How many of `agents` look each way. */
-function tally(agents: readonly CrewAgent[]): Map<SatelliteState, number> {
+export function tally(
+  agents: readonly CrewAgent[]
+): Map<SatelliteState, number> {
   const counts = new Map<SatelliteState, number>()
   for (const agent of agents) {
     const look = lookOfAgent(agent)
@@ -158,7 +160,7 @@ export function dotTip(agent: CrewAgent): string {
 
 /** The counts at work, each that is not none: "3 working", "1 asks", "2
  * done", "1 failed", "20 waiting". */
-function countWords(counts: Map<SatelliteState, number>): Count[] {
+export function countWords(counts: Map<SatelliteState, number>): Count[] {
   const of = (look: SatelliteState) => counts.get(look) ?? 0
   const all: Count[] = [
     { words: `${of("working")} working` },
@@ -174,7 +176,8 @@ function countWords(counts: Map<SatelliteState, number>): Count[] {
  * offers Ask Claude to go on (decisions 18, 20 and 26). */
 export type Foot = { counts: Count[]; time?: string; goOn: boolean }
 
-const plural = (n: number, noun: string) => `${n} ${noun}${n === 1 ? "" : "s"}`
+export const plural = (n: number, noun: string) =>
+  `${n} ${noun}${n === 1 ? "" : "s"}`
 
 /** `crew`'s foot at `now`: at work, "12 agents · 6 working · 4 done · 2
  * failed"; done, "12 agents · 3 phases · 2 failed"; Lost, why it stopped
