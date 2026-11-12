@@ -1,41 +1,17 @@
 import type { Engine, Status } from "@banda/contract"
-import {
-  BandaMark,
-  loudest,
-  type MarkState,
-} from "@banda/ui/components/banda-mark"
-import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
-import { BellOffIcon, TriangleAlertIcon } from "lucide-react"
+import { TriangleAlertIcon } from "lucide-react"
 import { useCallback, useMemo, useRef } from "react"
 import type { Problem } from "@banda/contract/look"
-import { useQuiet } from "../calls/quiet"
-import {
-  barAttention,
-  useCalls,
-  useItems,
-  useLaterClock,
-} from "../calls/stores"
 import { useLookProblems } from "../look"
-import { logoName, logoWords } from "./count"
 import { type Layout, written } from "./layout/arrange"
 import { PARTS, type Part } from "./layout/placed"
 import { layoutOf, useArranging } from "./layout/useArranging"
 import type { Drawn } from "./layout/Widgets"
-import { SmallInbox, useInboxCount } from "./SmallInbox"
+import { Mark } from "./mark/Mark"
 import { UpdateWidget } from "./Update"
-import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
-import {
-  keyNamed,
-  namedIn,
-  type Shown,
-  useHosts,
-  useRun,
-} from "@banda/core/react"
 import { useStatus } from "@banda/ui/hooks/use-status"
-import type { Lists } from "@banda/ui/pane"
-import { awayAtWork } from "@banda/ui/status"
 
 /**
  * The Bar: the Window's line across its top, a program that holds other
@@ -48,22 +24,17 @@ import { awayAtWork } from "@banda/ui/status"
  *         problems  what the window finds wrong besides the look, as an id
  *                   in `[bar]` with no widget
  *         engine    this machine's engine: its connection and its updates
- *   draws <header>: the Mark at the left edge; the parts `left`, `center`
+ *   draws <header>: the Mark at the left edge (`mark/`); the parts `left`, `center`
  *         (centred on the window) and `right`, each widget in a
  *         `data-widget` box; then the update, the look's problems and the
  *         engine's connection
- *   runs  `menu.at` on the Mark; a widget runs its own
+ *   runs  nothing of its own: the Mark and each widget run theirs
  *   gives `onArrange` with `[bar]`'s new lists, once a widget moved with
  *         the mod is let go (`layout/useArranging.ts`)
  *
- * The Mark shows the loudest state of the work and a crossed bell while
- * Quiet is on (ADR 0098, decision 21); while the sidebar is hidden, the
- * count beside it says whose turn it is and who works, and opens the small
- * inbox (decision 22), and its name says it too, "Banda: 3 your turn, 7 at
- * work". Another machine away shows on it only while its Agents were at
- * work as it was last heard: then it sleeps, offline, and its name says
- * which (decision 18). Where Banda draws the window's title bar, the Bar
- * is it (ADR 0030).
+ * The Mark is a program of its own (`mark/Mark.tsx`), and so is each
+ * widget. Where Banda draws the window's title bar, the Bar is it (ADR
+ * 0030).
  */
 export function Bar({
   engine,
@@ -84,23 +55,6 @@ export function Bar({
   onArrange?: (bar: Layout) => void
 }) {
   const status = useStatus(engine)
-  const keyFor = useKeyLabel()
-  const run = useRun()
-  // What the modules' work calls the Person for, for the mark to show.
-  const attention = useCalls(barAttention)
-  const mark = loudest([attention.mark, markOf(status)])
-  const quiet = useQuiet() !== "off"
-  // Who is the Person's turn and who works, beside the logo while the
-  // sidebar is hidden, and in its name (ADR 0098, decision 22), with
-  // another machine away while its Agents were at work (decision 18).
-  const count = useInboxCount()
-  const away = useAwayAtWork()
-  const words = logoWords(
-    mark,
-    count,
-    quiet,
-    status.state === "open" ? away : undefined
-  )
   const nodes = useMemo(
     () =>
       new Map(
@@ -149,30 +103,8 @@ export function Bar({
         dragging && "cursor-grabbing select-none"
       )}
     >
-      {/* The Mark stays at the left edge, as the Apple menu does, and
-        opens the Banda menu at its root: Alt+Space's own action would
-        focus the sidebar's Search, or fill the desk with Quick Look's
-        tile where one shows. */}
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={logoName(words)}
-        aria-haspopup="dialog"
-        title={`${keyFor("menu.open", "Banda menu")}${words && ` · ${words}`}`}
-        className="relative"
-        onClick={() => run("menu.at")}
-      >
-        <BandaMark state={mark} className="size-5" />
-        {/* Quiet (ADR 0098, decision 21): at the prototype's corner. */}
-        {quiet && (
-          <BellOffIcon
-            aria-hidden
-            data-quiet
-            className="absolute -right-1 -bottom-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0"
-          />
-        )}
-      </Button>
-      <SmallInbox engine={engine} count={count} />
+      {/* The Mark stays at the left edge, as the Apple menu does. */}
+      <Mark engine={engine} />
       <div data-part="left" className={zone("left")}>
         {draw("left")}
       </div>
@@ -195,31 +127,6 @@ export function Bar({
       </div>
     </header>
   )
-}
-
-/** Which other machines out of reach had Agents at work, as the logo's
- * name says them: "arc is away with Agents at work"; none while none. */
-function useAwayAtWork(): string | undefined {
-  const now = useLaterClock()
-  const hosts = useHosts()
-  const said = useItems(
-    useCallback((lists: Lists) => awayNames(lists, now, hosts), [now, hosts])
-  )
-  return said || undefined
-}
-
-function awayNames(lists: Lists, now: number, hosts: readonly Shown[]): string {
-  const names = [...awayAtWork(lists, now).keys()].map(
-    (key) => namedIn(hosts, key, keyNamed).name
-  )
-  if (names.length === 0) return ""
-  return `${names.join(", ")} ${names.length === 1 ? "is" : "are"} away with Agents at work`
-}
-
-/** The mark sleeps while the engine does not answer, and fails if it refused. */
-function markOf(status: Status): MarkState {
-  if (status.state === "open") return "rest"
-  return status.state === "refused" ? "failed" : "offline"
 }
 
 /** Says nothing while the engine answers; otherwise, what is going on. */
