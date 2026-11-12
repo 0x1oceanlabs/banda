@@ -440,20 +440,20 @@ function typeIn(code: string): Case[] {
  * elevation (`float`, `lift`, `none`) or a colour (`shadow-black/10`). */
 const SIZES = new Set(["2xs", "xs", "sm", "md", "lg", "xl", "2xl"])
 
-/** Whether `value`, a shadow as CSS or a class's brackets write it,
- * draws a ring: each of its shadows inset, with no blur. A ring in a
- * literal colour is that colour's case. */
-function ring(value: string): boolean {
-  return split(value, ",").every((shadow) => {
-    const parts = split(shadow.trim(), /[\s_]/).filter(Boolean)
-    const lengths = parts.filter((part) => LITERAL.test(part))
-    return (
-      parts.includes("inset") &&
-      lengths.length >= 2 &&
-      lengths.length <= 4 &&
-      (lengths[2] === undefined || Number.parseFloat(lengths[2]) === 0)
-    )
-  })
+/** Whether `shadow`, one of a list as CSS or a class's brackets write
+ * it, draws a ring: a line with no blur, inset (`inset 0 1px 0 …`) or
+ * round the box, as Tailwind's `ring` draws it (`0 0 0 1px …`). A ring in
+ * a literal colour is that colour's case. */
+function ring(shadow: string): boolean {
+  const parts = split(shadow.trim(), /[\s_]/).filter(Boolean)
+  const lengths = parts.filter((part) => LITERAL.test(part))
+  const [x, y, blur = 0, spread = 0] = lengths.map(Number.parseFloat)
+  return (
+    lengths.length >= 2 &&
+    lengths.length <= 4 &&
+    blur === 0 &&
+    (parts.includes("inset") || (x === 0 && y === 0 && spread > 0))
+  )
 }
 
 /** `value` split by `by` outside brackets. */
@@ -471,9 +471,11 @@ function split(value: string, by: string | RegExp): string[] {
 }
 
 /** Whether a shadow's `value`, as a declaration or a class's brackets
- * say it, draws other than no shadow, a name or a ring. */
+ * say it, draws other than no shadow, or a list of names and rings (an
+ * elevation over a tile's line). */
 const drawn = (value: string) =>
-  value !== "none" && !byName(value) && !ring(value)
+  value !== "none" &&
+  split(value, ",").some((shadow) => !byName(shadow.trim()) && !ring(shadow))
 
 const SHADOW_CLASS = new RegExp(
   `${START}(?:inset-|drop-|text-)?shadow(?:-(${ARBITRARY}|[\\w.]+))?(?:/[\\w.\\[\\]%]+)?(?![\\w./(-]|\\s*:)`,

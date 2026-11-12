@@ -197,6 +197,8 @@ test("the check sees a shadow that is no elevation, and not a ring, a name or a 
         `<b className="shadow-none shadow-float shadow-lift shadow-(--tile-shadow) shadow-[var(--x)] shadow-black/10 shadow-foreground/5 ring-1 transition-[scale,box-shadow]" />\n` +
         `<c className="shadow-[inset_0_0_0_1px_color-mix(in_oklab,var(--group-color)_28%,transparent)] shadow-[inset_0_0_30px_var(--primary)]" />\n` +
         `.d { box-shadow: inset 0 0 0 2px var(--focus); box-shadow: inset 3px 0 var(--ink); box-shadow: none }\n` +
+        `.d2 { box-shadow: 0 0 0 1px var(--line), inset 0 1px 0 var(--edge), var(--lift-shadow) }\n` +
+        `.d3 { box-shadow: 0 0 0 1px var(--line), 0 12px 32px var(--x); box-shadow: 0 2px 0 1px var(--x) }\n` +
         `.e { box-shadow: 0 1px 2px var(--x); text-shadow: 0 0 1px black; filter: drop-shadow(0 1px 2px var(--x)) }\n` +
         `const f = { boxShadow: "0 0 4px var(--x)" }, g = "a shadow-free page"`
     )
@@ -209,6 +211,8 @@ test("the check sees a shadow that is no elevation, and not a ring, a name or a 
     "inset-shadow-xs",
     "text-shadow-sm",
     "shadow-[inset_0_0_30px_var(--primary)]",
+    "box-shadow: 0 0 0 1px var(--line), 0 12px 32px var(--x)",
+    "box-shadow: 0 2px 0 1px var(--x)",
     "box-shadow: 0 1px 2px var(--x)",
     "text-shadow: 0 0 1px black",
     "drop-shadow(0 1px 2px var(--x))",
