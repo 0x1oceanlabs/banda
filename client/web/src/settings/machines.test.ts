@@ -446,6 +446,26 @@ test("a machine with no Banda says what Install would put there", () => {
   ).toBe("Found m1 · arm64")
 })
 
+test("Install's warning is a step of its own, said as install.sh says it", () => {
+  const steps = installSteps(
+    [
+      "version 0.1.0-dev.700",
+      "downloading banda-dev-0.1.0-dev.700-engine-linux-x86_64.tar.gz 55000000",
+      "checked banda-dev-0.1.0-dev.700-engine-linux-x86_64.tar.gz",
+      "warning no Node 22 or newer for its Agents: this release carries none, and the PATH here has Node 18",
+      "installed 0.1.0-dev.700 /home/roma/.local/share/banda-dev/engine/0.1.0-dev.700",
+    ],
+    "devbox"
+  )
+  expect(steps.map((step) => step.words)).toEqual([
+    "Downloaded dev.700 (55 MB), on devbox",
+    "Checked",
+    "Putting it in place",
+    "No Node 22 or newer for its Agents: this release carries none, and the PATH here has Node 18",
+    "Starting its engine",
+  ])
+})
+
 test("Install's steps are its lines in words, the last still running", () => {
   const said = [
     "machine linux x86_64 Ubuntu 24.04",

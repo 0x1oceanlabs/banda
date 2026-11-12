@@ -9,9 +9,11 @@
 // are. It writes, in client/desktop/dist/:
 //
 // - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda`, its line tables
-//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`) and the
-//   licenses, laid out as the engine's own copy is (client/desktop/src/
-//   program.ts), so its files go into <data>/engine/<version>/ as they are;
+//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the Node they
+//   run on (`node/node`, ADR 0115 step 1b: scripts/node.mjs put it in
+//   target/node/<platform>/) and the licenses, laid out as the engine's
+//   own copy is (client/desktop/src/program.ts), so its files go into
+//   <data>/engine/<version>/ as they are;
 // - <feed>-engine-<os>.yml, beside the app's own (dev-linux.yml): the
 //   version, and the file's size and sha512, as electron-builder writes
 //   them. Banda Local writes none, as it never updates.
@@ -27,9 +29,10 @@ import {
   statSync,
   writeFileSync,
 } from "node:fs"
-import { join } from "node:path"
+import { join, resolve } from "node:path"
 
 import { CHANNELS } from "../client/desktop/src/channel.ts"
+import { NODE_RELEASE } from "./node.mjs"
 
 const [resources] = process.argv.slice(2)
 const which = process.env.BANDA_CHANNEL ?? "local"
@@ -63,6 +66,20 @@ for (const name of carried) {
   }
 }
 
+// The Node the adapters run on with no Electron beside them, where
+// platform/harnesses' carried.rs looks: `node/node` beside the engine.
+const platform = `${process.platform}-${process.arch}`
+// Whole, as tar takes a second -C from where the first left it.
+const nodes = resolve("target", "node", platform)
+const node = execFileSync(join(nodes, "node", "node"), ["--version"], {
+  encoding: "utf8",
+}).trim()
+if (node !== `v${NODE_RELEASE.version}`) {
+  throw new Error(
+    `engine.mjs: ${nodes}/node/node says ${node}, not the v${NODE_RELEASE.version} pinned; run node scripts/node.mjs ${platform}`
+  )
+}
+
 // The engine says the version it was built as, or it is not this one.
 const said = execFileSync(join(resources, "banda"), ["--version"], {
   encoding: "utf8",
@@ -75,9 +92,11 @@ const dist = "client/desktop/dist"
 const name = `${channel.folder}-${version}-engine-${os}-${arch}.tar.gz`
 const file = join(dist, name)
 rmSync(file, { force: true })
-execFileSync("tar", ["-czf", file, "-C", resources, ...carried], {
-  stdio: "inherit",
-})
+execFileSync(
+  "tar",
+  ["-czf", file, "-C", resources, ...carried, "-C", nodes, "node/node"],
+  { stdio: "inherit" }
+)
 
 const listed = execFileSync("tar", ["-tzf", file], { encoding: "utf8" })
   .split("\n")
@@ -86,6 +105,7 @@ for (const name of [
   "banda",
   "adapters/claude-agent-acp.mjs",
   "adapters/codex-acp.mjs",
+  "node/node",
 ]) {
   if (!listed.includes(name))
     throw new Error(`engine.mjs: ${file} has no ${name}`)

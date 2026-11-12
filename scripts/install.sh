@@ -26,6 +26,7 @@
 #   present <version> <path>        that version is in place already
 #   downloading <file> <bytes>
 #   checked <file>
+#   warning <words>                 what its Agents will lack there
 #   installed <version> <path>      the last line, once it is in place
 #
 # --check says machine, version and where it would go (`would <version>
@@ -169,6 +170,18 @@ echo "$says" >"$fresh/version"
 rm -rf "$kept"
 mv "$fresh" "$kept"
 fresh=
+
+# The Node its Agents' adapters run on (platform/harnesses' carried.rs):
+# the bundle's own node/node from ADR 0115 step 1b; before it, a Node 22
+# or newer on PATH, which here is ssh's and may lack the login shell's.
+if [ ! -x "$kept/node/node" ]; then
+  major=$(node --version 2>/dev/null | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')
+  if [ "${major:-0}" -lt 22 ]; then
+    had=none
+    [ -n "$major" ] && had="Node $major"
+    echo "warning no Node 22 or newer for its Agents: this release carries none, and the PATH here has $had"
+  fi
+fi
 
 # The two newest stay, as the window and platform/updates keep them.
 ls -1 "$engine" | grep -v '^\.' | sort -t. -k1,1n -k2,2n -k3,3n -k4,4n | sed '$d' | sed '$d' |

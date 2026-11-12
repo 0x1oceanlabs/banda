@@ -29,8 +29,9 @@ cargo build --release --bin banda
 pnpm install --frozen-lockfile --silent
 # The app carries the licenses of what it is built from (ADR 0038). On
 # Windows it also carries a Node, which runs the adapters there (ADR 0090,
-# decision 5): pinned, checked, and in the notices; MSVC writes the
-# engine's line tables beside it, as banda.pdb.
+# decision 5), and elsewhere the engine bundle does: pinned, checked, and
+# in the notices; MSVC writes the engine's line tables beside it, as
+# banda.pdb.
 licenses=(--notices target/release/THIRD-PARTY-NOTICES.txt)
 if [[ ${OS:-} == Windows_NT ]]; then
   # The engine links Microsoft's C runtime in (.cargo/config.toml): one
@@ -40,6 +41,13 @@ if [[ ${OS:-} == Windows_NT ]]; then
     exit 1
   fi
   platform=win-x64
+  node scripts/node.mjs "$platform"
+  licenses+=(--node "target/node/$platform")
+else
+  # Elsewhere the engine bundle carries a Node (scripts/engine.mjs, ADR
+  # 0115 step 1b), and so the notices name it: the app's, which the bundle
+  # takes as they are.
+  platform=$(node -p 'process.platform + "-" + process.arch')
   node scripts/node.mjs "$platform"
   licenses+=(--node "target/node/$platform")
 fi
