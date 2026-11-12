@@ -462,6 +462,16 @@ function Piece({
         </FadeText>
       )
     }
+    case "diff":
+      // In grey, as Git says it, with a true minus (decision 8).
+      return (
+        <span
+          data-diff=""
+          className="shrink-0 text-xs text-muted-foreground/60 tabular-nums"
+        >
+          +{slot.added} −{slot.removed}
+        </span>
+      )
     case "project": {
       const name = projectLabel(slot.project)
       const sign = (

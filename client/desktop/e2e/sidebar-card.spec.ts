@@ -25,6 +25,10 @@
  * 0099, M3b): line 2's words where the card has the lines, its time at a
  * usage limit, and what a screen reader hears. The Working tab with its
  * Agents each at something else is shot as `sidebar-m3b-working-*`.
+ *
+ * F1b: a Done card shows on line 2's right how many lines its last work
+ * added and removed, `+2 −1` in grey; a Failed card nothing there. Shot as
+ * `sidebar-f1b-diff-*`.
  */
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
@@ -657,6 +661,31 @@ const GOES_ON = String.raw`([A-Z][a-z]{2} )?\d{1,2}:\d\d`
 // does, by the same hold as its Mark. A card in Working has one line
 // (ADR 0098, decision 9), so these are drawn in Your turn's three, where
 // the list holds each under the pointer as its Agent starts work again.
+test("a Done card shows on line 2's right how many lines its last work added and removed, in grey; a Failed card nothing there (ADR 0098, decision 8; F1b)", async () => {
+  test.setTimeout(180_000)
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  await leaveSidebar(page)
+  // The fake Agent's edit takes notes.md from three lines to four, one of
+  // them changed: two added, one removed.
+  for (const text of ["edit the notes", "fail now"])
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+  const done = cardOf(panel, "edit the notes")
+  const failed = cardOf(panel, "fail now")
+  await expect(done.getByRole("img", { name: "Done" })).toBeVisible()
+  await expect(failed.getByRole("img", { name: "Failed" })).toBeVisible()
+  const diff = done.locator("[data-diff]")
+  await expect(diff).toHaveText("+2 −1")
+  // In grey: the text's muted colour, never a call's.
+  expect(await colourOf(diff)).not.toBe(await markColourOf(done))
+  await expect(failed.locator("[data-diff]")).toHaveCount(0)
+  await shots(window, "diff", { done, failed }, "f1b")
+})
+
 test("a working card says what its Agent does as its Mark shows it: the command it runs, no events for 3m once it says nothing, and at its usage limit when it goes on, on line 1's right too (ADR 0099, M3b)", async () => {
   test.setTimeout(180_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
