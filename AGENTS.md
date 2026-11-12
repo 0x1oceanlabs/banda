@@ -11,10 +11,15 @@ UNIX composition + deep modules + explicit contracts.
 
 ## Before you change things
 
+- What we build: [`docs/what-we-build.md`](docs/what-we-build.md). Read it
+  first. Every ADR and PR serves one of its principles or stories and names
+  it; a change that goes against it is Roma's call first.
 - The words: [`GLOSSARY.md`](GLOSSARY.md). Use its terms exactly.
 - The shape: [`docs/architecture.md`](docs/architecture.md).
 - Where it is going: [the architecture vision](docs/research/2026-11-06-architecture-vision.md),
-  accepted on 2026-11-06, with its roadmap and PR plan.
+  accepted on 2026-11-06, and the order of the work in
+  [the roadmap](docs/research/2026-11-08-roadmap-in-slices.md). Where they
+  differ from what we build, what we build wins.
 - The decisions: [`docs/adr/`](docs/adr/). A change that contradicts an ADR
   needs a new ADR first.
 

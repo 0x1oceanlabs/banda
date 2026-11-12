@@ -202,6 +202,7 @@ wall).
    - Not now: quorum schemes, Sigstore.
 
 7. **The fence lands before pairing** (Roma, 2026-11-06).
+   _Amended by [ADR 0123](0123-the-door-comes-with-the-session-that-follows-the-person-and-isolating-agents-waits.md): no listener leaves loopback before the door (device keys, pairing, revocation, one access rule), which comes with story 1; isolating Agents waits._
    - The fence (F0) lands before ADR 0081's step 2, keys and pairing.
    - No listener leaves loopback (ADR 0081 step 5) before the fence, one
      access rule (B14), the browser wall (F1) and hardened bookkeeping
