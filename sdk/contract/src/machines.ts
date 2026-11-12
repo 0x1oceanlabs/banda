@@ -13,6 +13,7 @@ export type { MachineIcon } from "./generated/MachineIcon"
 export type { Named } from "./generated/Named"
 export type { Naming } from "./generated/machines/Naming"
 export type { Power } from "./generated/machines/Power"
+export type { TakeUpdates } from "./generated/machines/TakeUpdates"
 
 /** The stream of this machine's name and icon: a stream of the machine's,
  * which names no Project. Its first piece is the `Named` it is now, and

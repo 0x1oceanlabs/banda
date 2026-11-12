@@ -76,6 +76,9 @@ pub struct Release {
     pub draft: bool,
     #[serde(default)]
     pub prerelease: bool,
+    /// When it was published, as GitHub says it: `2026-11-12T05:17:00Z`.
+    #[serde(default)]
+    pub published_at: Option<String>,
     #[serde(default)]
     pub assets: Vec<Asset>,
 }
@@ -89,6 +92,11 @@ pub struct Asset {
 }
 
 impl Release {
+    /// When it was published, in ms since the epoch.
+    pub fn published(&self) -> Option<i64> {
+        utc_ms(self.published_at.as_deref()?)
+    }
+
     /// Its file `name`, once it is all there.
     pub fn file(&self, name: &str) -> Option<&Asset> {
         (self.assets.iter()).find(|asset| asset.name == name && asset.state == "uploaded")
@@ -263,6 +271,29 @@ pub fn limited(
     })
 }
 
+/// `2026-11-12T05:17:00Z`, as GitHub writes a time, in ms since the
+/// epoch; none for any other form.
+pub fn utc_ms(text: &str) -> Option<i64> {
+    let bytes = text.as_bytes();
+    if bytes.len() != 20 || bytes[19] != b'Z' {
+        return None;
+    }
+    let number = |from: usize, to: usize| text.get(from..to)?.parse::<i64>().ok();
+    let (year, month, day) = (number(0, 4)?, number(5, 7)?, number(8, 10)?);
+    let (hour, minute, second) = (number(11, 13)?, number(14, 16)?, number(17, 19)?);
+    if !(1..=12).contains(&month) || !(1..=31).contains(&day) || hour > 23 || minute > 59 {
+        return None;
+    }
+    // Days since 1970-01-01 of a date of the proleptic Gregorian calendar.
+    let y = if month <= 2 { year - 1 } else { year };
+    let era = y.div_euclid(400);
+    let of_era = y - era * 400;
+    let of_year = (153 * ((month + 9) % 12) + 2) / 5 + day - 1;
+    let of_cycle = of_era * 365 + of_era / 4 - of_era / 100 + of_year;
+    let days = era * 146_097 + of_cycle - 719_468;
+    Some(((days * 24 + hour) * 60 + minute) * 60_000 + second * 1000)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -288,6 +319,7 @@ mod tests {
             name: Some(name.to_owned()),
             draft: false,
             prerelease,
+            published_at: None,
             assets: vec![],
         }
     }
@@ -339,5 +371,14 @@ mod tests {
                 .unwrap()
                 .contains("this hour")
         );
+    }
+
+    #[test]
+    fn github_s_times_read_as_ms() {
+        assert_eq!(utc_ms("1970-01-01T00:00:00Z"), Some(0));
+        assert_eq!(utc_ms("2026-11-12T05:17:00Z"), Some(1_794_460_620_000));
+        assert_eq!(utc_ms("2024-02-29T23:59:59Z"), Some(1_709_251_199_000));
+        assert_eq!(utc_ms("2026-11-12 05:17:00"), None);
+        assert_eq!(utc_ms("2026-13-12T05:17:00Z"), None);
     }
 }

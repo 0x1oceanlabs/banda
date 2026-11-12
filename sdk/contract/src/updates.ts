@@ -5,6 +5,7 @@
  */
 export type { Moving } from "./generated/updates/Moving"
 export type { Taking } from "./generated/updates/Taking"
+export type { Updated } from "./generated/updates/Updated"
 export type { UpdateState } from "./generated/updates/UpdateState"
 export type { Waits } from "./generated/updates/Waits"
 

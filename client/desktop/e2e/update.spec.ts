@@ -54,13 +54,12 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     down: 11_800_000,
     size: 31_000_000,
   })
+  // Until it is down the window has no row of its own (ADR 0115, the
+  // chosen mock): the icon's ring says how far.
   await downloading.click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText("12 of 31 MB")
-  await expect(popover.getByRole("progressbar")).toHaveAttribute(
-    "aria-valuenow",
-    "38"
-  )
+  await expect(popover).toBeVisible()
+  await expect(popover.locator('[data-machine="window"]')).toHaveCount(0)
   await page.keyboard.press("Escape")
 
   // Ready, while a Thread works: the version stands beside the icon, and
@@ -85,14 +84,15 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   })
   await expect(ready).toHaveText("dev.66")
   await ready.click()
-  await expect(popover).toContainText("dev.62→dev.66")
-  await expect(popover).toContainText("2 versions newer · ready to install")
-  await expect(popover).toContainText("Newbarthe hook")
-  await expect(popover).toContainText("Otherdev.65the README")
-  await expect(popover).toContainText(
-    "Agents keep working: only the window restarts."
+  const windowRow = popover.locator('[data-machine="window"]')
+  await expect(windowRow).toContainText(
+    "dev.62 → dev.66. Agents keep working: only the window restarts."
   )
-  await expect(popover.getByRole("button", { name: "Restart" })).toBeVisible()
+  await expect(popover).toContainText("the hook")
+  await expect(popover).toContainText("the README")
+  await expect(
+    windowRow.getByRole("button", { name: "Restart window" })
+  ).toBeVisible()
   await expect(
     popover.getByRole("button", { name: "Restart when idle" })
   ).toHaveCount(0)
@@ -110,7 +110,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   await expect(page.getByRole("button", { name: /cannot update/ })).toBeHidden()
 })
 
-test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () => {
+test("Banda Dev's widget stays on the bar and looks now (ADR 0045)", async () => {
   window = await startWindow()
   const { page, app } = window
   const tell = (value: object) =>
@@ -123,7 +123,7 @@ test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () 
   await app.evaluate(({ ipcMain }) => {
     const asked: string[] = []
     ;(globalThis as { asked?: string[] }).asked = asked
-    for (const name of ["now", "later"]) {
+    for (const name of ["check", "now", "later"]) {
       ipcMain.removeAllListeners(`update.${name}`)
       ipcMain.on(`update.${name}`, () => asked.push(name))
     }
@@ -137,38 +137,36 @@ test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () 
   const widget = page.getByRole("button", { name: "Banda Dev 0.1.0-dev.101" })
   await widget.click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText("You have the newest · looked 4m ago")
-  await popover.getByRole("button", { name: "Update now" }).click()
-  await expect.poll(asked).toEqual(["now"])
+  // Check now looks for this window's app, and each machine's engine.
+  await popover.getByRole("button", { name: "Check now" }).click()
+  await expect.poll(asked).toEqual(["check"])
 
-  // The popover stays open, and follows the look and the download.
+  // The bar follows the look and the download; the window has a row once
+  // its app is down.
+  await page.keyboard.press("Escape")
   await tell({ ...known, state: "looking" })
-  await expect(popover).toContainText("Looking for a new version…")
-  await expect(
-    popover.getByRole("button", { name: "Update now" })
-  ).toBeDisabled()
+  await expect(page.locator('[data-update="looking"]')).toHaveAccessibleName(
+    "Looking for a new Banda Dev…"
+  )
   await tell({
     ...known,
     state: "downloading",
     version: "0.1.0-dev.104",
     share: 0.38,
-    notes: [
-      { version: "0.1.0-dev.104", text: "Built from 1ceb27c: the README" },
-    ],
-    restarts: true,
+    notes: [],
+    restarts: false,
   })
-  await expect(popover).toContainText("Restarts when it is down")
-  await expect(popover).toContainText("dev.101→dev.104")
-  await expect(popover).toContainText("Otherdev.104the README")
-  await page.screenshot({ path: "test-results/8-update-now.png" })
-  await popover.getByRole("button", { name: "Don't restart" }).click()
-  await expect.poll(asked).toEqual(["now", "later"])
+  await expect(
+    page.locator('[data-update="downloading"]')
+  ).toHaveAccessibleName("Downloading dev.104 · 38%")
 
+  // A look the Person asked for that failed says why, at the foot.
   await tell({
     ...known,
     state: "none",
     missed: "net::ERR_INTERNET_DISCONNECTED",
   })
+  await widget.click()
   await expect(popover).toContainText(
     "Could not update: net::ERR_INTERNET_DISCONNECTED"
   )
@@ -198,15 +196,15 @@ test("on macOS the widget says a version is out, with its brew command (ADR 0033
     .getByRole("button", { name: "dev.66 is out · install it with brew" })
     .click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText("dev.62→dev.66")
-  await expect(popover).toContainText("install it with brew")
-  await expect(popover).toContainText("Otherdev.66the hook")
-  await expect(popover.getByText(command)).toBeVisible()
-  // brew installs it: no Restart, no Update now.
-  await expect(popover.getByRole("button", { name: "Restart" })).toHaveCount(0)
-  await expect(popover.getByRole("button", { name: "Update now" })).toHaveCount(
-    0
+  await expect(popover).toContainText(
+    "dev.62 → dev.66. Its app updates with Homebrew:"
   )
+  await expect(popover).toContainText("the hook")
+  await expect(popover.getByText(command)).toBeVisible()
+  // brew installs it: no Restart window.
+  await expect(
+    popover.getByRole("button", { name: "Restart window" })
+  ).toHaveCount(0)
   await popover.getByRole("button", { name: "Copy" }).click()
   await expect(popover.getByRole("button", { name: "Copied" })).toBeVisible()
   expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(
@@ -252,7 +250,7 @@ test("Banda's window restarts at once while a Thread works, and the new one says
     .getByRole("button", { name: "0.3.0 is ready · click to restart" })
     .click()
   const popover = page.locator("[data-slot=popover-content]")
-  await popover.getByRole("button", { name: "Restart", exact: true }).click()
+  await popover.getByRole("button", { name: "Restart window" }).click()
   await expect.poll(asked).toEqual(["restart"])
 
   // The new Banda says it updated, and what changed, until the Person
@@ -267,9 +265,10 @@ test("Banda's window restarts at once while a Thread works, and the new one says
   const updated = page.getByRole("button", { name: "Updated to 0.3.0" })
   await expect(updated).toHaveText("0.3.0")
   await updated.click()
-  await expect(popover).toContainText("0.2.0→0.3.0")
-  await expect(popover).toContainText("Fixedsidebara new row comes last")
+  await expect(popover).toContainText("Updated from 0.2.0")
+  await expect(popover).toContainText("a new row comes last")
   await page.screenshot({ path: "test-results/8-update-updated.png" })
-  await popover.getByRole("button", { name: "Got it" }).click()
+  // Closed, what changed was seen.
+  await page.keyboard.press("Escape")
   await expect.poll(asked).toEqual(["restart", "seen"])
 })

@@ -3,6 +3,7 @@
  * label, what the label says of its state, and its lines in the list of
  * Projects; beside `MachineCard`, the card its name opens.
  */
+import { useOpenUpdates } from "../bar/heard"
 import { type ReactNode, useCallback, useContext } from "react"
 import type { Named } from "@banda/contract/machines"
 import { MachineMark } from "@banda/ui/components/machine-icon"
@@ -65,6 +66,7 @@ export function HostPart({
   onFold: () => void
   children?: ReactNode
 }) {
+  const openUpdates = useOpenUpdates()
   const run = useRun()
   const other = otherBuild(host.state)
   const { name } = host.named
@@ -135,12 +137,14 @@ export function HostPart({
         </DropdownMenu>
       </div>
       {other && !folded && (
-        <p
-          className="px-2 pb-1 text-meta text-muted-foreground tabular-nums"
-          title={`${name} runs another build of Banda than this window`}
+        <button
+          type="button"
+          className="self-start px-2 pb-1 text-left text-meta text-muted-foreground tabular-nums hover:text-foreground"
+          title={`${name} runs another build of Banda than this window: its updates`}
+          onClick={() => openUpdates(host.name)}
         >
           {other}
-        </p>
+        </button>
       )}
       {children && !folded && (
         <div
@@ -184,6 +188,7 @@ export function HerePart({
  * the window's own words; away or stopped, what its rows are as of, once
  * here and on no row. */
 function HostWords({ host }: { host: Shown }) {
+  const openUpdates = useOpenUpdates()
   const { state } = host
   switch (state.state) {
     case "connecting":
@@ -201,7 +206,16 @@ function HostWords({ host }: { host: Shown }) {
         </a>
       )
     case "live":
-      return otherBuild(state) ? <span>other build</span> : null
+      return otherBuild(state) ? (
+        <button
+          type="button"
+          className="hover:text-foreground"
+          title={`${host.named.name}'s updates`}
+          onClick={() => openUpdates(host.name)}
+        >
+          other build
+        </button>
+      ) : null
     case "away":
       return <Away host={host} why={state.why} />
     case "stopped":
