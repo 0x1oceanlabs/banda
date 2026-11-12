@@ -25,6 +25,11 @@ pub use theme::{Layer, Listed, Origin, Picked, Places, Theme, Wrong};
 use ts_rs::TS;
 pub use wallpaper::path_of;
 
+/// `v` to three decimals, as CSS gets every number.
+pub fn thousandths(v: f64) -> f64 {
+    (v * 1000.0).round() / 1000.0
+}
+
 /// Light or dark.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]

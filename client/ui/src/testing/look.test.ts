@@ -135,6 +135,9 @@ test("the check sees a size as a number, and not a level, a colour or a size wor
   expect(instead(`"text-[10.5px]"`)).toContain("`text-small`")
   expect(instead(`"text-[20px]"`)).toContain("`text-heading`")
   expect(instead(`"text-[40px]"`)).toContain("`text-figure`")
+  expect(instead(`"text-[24px]"`)).toContain(
+    "`text-figure` for the one number a Pane is about, else `text-heading`"
+  )
   expect(instead(`"text-[12.5px]"`)).not.toContain("`text-code`")
   expect(instead(`"text-(length:--prose-size)"`)).toContain("`text-prose`")
 })
