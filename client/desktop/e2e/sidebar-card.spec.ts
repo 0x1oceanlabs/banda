@@ -607,7 +607,7 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   // The counts' list draws each as a one-line card: its mark, its title,
   // arc's icon where it is arc's, and its time; no Project's sign.
   const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
-  const waiting = page.getByRole("group", { name: "Wait for you" })
+  const waiting = page.getByRole("group", { name: "Your turn" })
   const items = waiting.getByRole("menuitem")
   const item = (title: string) =>
     waiting.getByRole("menuitem", { name: new RegExp(`^${title},`) })

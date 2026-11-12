@@ -30,9 +30,9 @@ preset = "inbox"
 # [later]
 # presets = ["1h", "3h", "18:00", "tomorrow 9:00", "mon 9:00"]  # the picker's, up to eight
 
-# [bar]                              # who waits for you and who works, in the bar's middle
+# [bar]                              # your turn and who is at work, in the bar's middle
 # show = "closed"                    # "closed" (while the sidebar is), "always" or "never"
-# counts = ["asking", "done", "working"]  # in this order: "asking" (asks or failed), "done", "waiting" (both), "working"
+# counts = ["asking", "done", "working"]  # in this order: "asking" (asks or failed), "done", "waiting" (both: your turn), "working" (at work)
 # color = true                       # a question in orange, a failure in red, done in green
 # words = false                      # words beside the numbers
 # empty = "mark"                     # nothing to count: the calm square ("mark"), or nothing ("hide")

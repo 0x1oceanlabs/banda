@@ -41,12 +41,13 @@ import {
 } from "./tally"
 import { useCard } from "./useCard"
 
-/** Each count's words, after its number. */
+/** Each count's words, after its number: the sidebar's own, its Your
+ * turn and "7 at work" (ADR 0098), as the bar's count says them. */
 const WORDS: Record<Count, string> = {
   asking: "ask you",
   done: "done",
-  waiting: "wait for you",
-  working: "working",
+  waiting: "your turn",
+  working: "at work",
 }
 
 /** A count's colour, by its loudest mark: work is muted; what calls is in
@@ -164,7 +165,7 @@ function Counts({ projects }: WidgetProps) {
 export const countsWidget: Widget = {
   id: "sidebar.counts",
   about:
-    "Who waits for you and who works, by their marks; click for them in the sidebar's order.",
+    "Your turn and who is at work, by their marks; click for them in the sidebar's order.",
   Widget: Counts,
   compact: true,
 }
@@ -209,7 +210,7 @@ export function List({
     <CutTips edge={EDGE}>
       {waiting.length > 0 && (
         <DropdownMenuGroup>
-          <DropdownMenuLabel>Wait for you</DropdownMenuLabel>
+          <DropdownMenuLabel>Your turn</DropdownMenuLabel>
           {cards(waiting)}
         </DropdownMenuGroup>
       )}

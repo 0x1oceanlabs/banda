@@ -2560,7 +2560,7 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
   const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
   await expect(counts).toHaveAccessibleName("3 done")
   await counts.click()
-  const waiting = page.getByRole("group", { name: "Wait for you" })
+  const waiting = page.getByRole("group", { name: "Your turn" })
   await expect(waiting.getByRole("menuitem")).toHaveCount(3)
   await shot(page, "order-elsewhere-counts")
   await expect(waiting.getByRole("menuitem")).toHaveText(titles)
