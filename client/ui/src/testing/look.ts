@@ -437,7 +437,8 @@ function typeIn(code: string): Case[] {
 // Shadows (decision 4).
 
 /** Tailwind's shadow sizes, of each kind of shadow; any other word is an
- * elevation (`float`, `lift`, `none`) or a colour (`shadow-black/10`). */
+ * elevation (`float`, `lift`, the Window's `tile`, `focus` and `panel`),
+ * `none` or a colour (`shadow-black/10`). */
 const SIZES = new Set(["2xs", "xs", "sm", "md", "lg", "xl", "2xl"])
 
 /** Whether `shadow`, one of a list as CSS or a class's brackets write
@@ -445,7 +446,7 @@ const SIZES = new Set(["2xs", "xs", "sm", "md", "lg", "xl", "2xl"])
  * round the box, as Tailwind's `ring` draws it (`0 0 0 1px …`). A ring in
  * a literal colour is that colour's case. */
 function ring(shadow: string): boolean {
-  const parts = split(shadow.trim(), /[\s_]/).filter(Boolean)
+  const parts = split(shadow, /[\s_]/).filter(Boolean)
   const lengths = parts.filter((part) => LITERAL.test(part))
   const [x, y, blur = 0, spread = 0] = lengths.map(Number.parseFloat)
   return (
@@ -475,7 +476,9 @@ function split(value: string, by: string | RegExp): string[] {
  * elevation over a tile's line). */
 const drawn = (value: string) =>
   value !== "none" &&
-  split(value, ",").some((shadow) => !byName(shadow.trim()) && !ring(shadow))
+  split(value, ",")
+    .map((shadow) => shadow.trim())
+    .some((shadow) => !byName(shadow) && !ring(shadow))
 
 const SHADOW_CLASS = new RegExp(
   `${START}(?:inset-|drop-|text-)?shadow(?:-(${ARBITRARY}|[\\w.]+))?(?:/[\\w.\\[\\]%]+)?(?![\\w./(-]|\\s*:)`,

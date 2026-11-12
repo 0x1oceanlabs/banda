@@ -106,8 +106,9 @@ Every key, with its default:
 - "Shadow under the windows": `[tile]` `shadow = 0.4`; none under the
   sidebar: `[desk]` `sidebar-shadow = 0`.
 - "Darker shadows under menus", "no shadow under menus": `[shadow]`
-  `float = 0.2` or `float = 0`; what is carried, a Pane being moved or a
-  Peek: `lift`.
+  `float = 0.2` or `float = 0`, which dialogs, toasts, floating bars and
+  a switch's thumb share; what is carried, a Pane being moved or a Peek:
+  `lift`.
 - "Sidebar right on the glass": `[desk]` `sidebar = "desk"`; a floating
   panel is `"panel"`.
 - "Hide that on the bar", "put it in the middle": `[bar]` lists each

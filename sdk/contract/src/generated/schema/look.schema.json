@@ -353,7 +353,7 @@
       "type": "object",
       "properties": {
         "float": {
-          "description": "The shadow of what floats: menus, popovers, dialogs, toasts and a\nPane's own floating bar, from 0 (none) to 1 (the darkest).",
+          "description": "The shadow of what floats: menus, popovers, dialogs, toasts, a\nPane's own floating bar and a control's thumb, from 0 (none) to 1\n(the darkest).",
           "type": "number",
           "format": "double",
           "minimum": 0,

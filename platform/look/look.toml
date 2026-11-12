@@ -70,7 +70,7 @@
 
 # The elevations' strengths (ADR 0113): their shapes are Banda's.
 # [shadow]
-# float = 0.1                        # menus, dialogs, toasts, a Pane's floating bar
+# float = 0.1                        # menus, dialogs, toasts, a floating bar, a thumb
 # lift = 0.45                        # what you carry: a Pane being moved, a Peek
 
 # A column's width is a share of the screen; Alt+R goes round the presets.

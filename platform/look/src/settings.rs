@@ -253,8 +253,9 @@ pub struct Focus {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Shadows {
-    /// The shadow of what floats: menus, popovers, dialogs, toasts and a
-    /// Pane's own floating bar, from 0 (none) to 1 (the darkest).
+    /// The shadow of what floats: menus, popovers, dialogs, toasts, a
+    /// Pane's own floating bar and a control's thumb, from 0 (none) to 1
+    /// (the darkest).
     #[schemars(range(min = 0, max = 1))]
     pub float: Option<f64>,
     /// The shadow of what the Person carries: a Pane being moved, a Peek,

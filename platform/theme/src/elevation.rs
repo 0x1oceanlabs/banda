@@ -8,43 +8,19 @@
 
 use crate::thousandths;
 
-/// One shadow in black, at the elevation's strength: its offset across
-/// and down, its blur and its spread, in pixels.
-#[derive(Clone, Copy, Debug)]
-pub struct Shadow {
-    pub x: f64,
-    pub y: f64,
-    pub blur: f64,
-    pub spread: f64,
-}
-
-const fn shadow(x: f64, y: f64, blur: f64, spread: f64) -> Shadow {
-    Shadow { x, y, blur, spread }
-}
-
-/// What floats: close and soft, a menu's.
-pub const FLOAT: &[Shadow] = &[shadow(0.0, 4.0, 6.0, -1.0), shadow(0.0, 2.0, 4.0, -2.0)];
+/// What floats: close and soft, a menu's. Each shadow's offset across
+/// and down, its blur and its spread, in black at the strength.
+pub const FLOAT: &[&str] = &["0 4px 6px -1px", "0 2px 4px -2px"];
 /// What the Person carries: far and deep, a Peek's.
-pub const LIFT: &[Shadow] = &[shadow(0.0, 30.0, 80.0, -12.0)];
+pub const LIFT: &[&str] = &["0 30px 80px -12px"];
 
-/// `shadows` at `strength`, from 0 to 1, as CSS's `box-shadow` says them.
+/// `shapes` at `strength`, from 0 to 1, as CSS's `box-shadow` says them.
 /// Never `none`: Tailwind lays an elevation into a list of shadows, rings
 /// with it, where `none` is no value.
-pub fn css(shadows: &[Shadow], strength: f64) -> String {
-    let px = |v: f64| {
-        let v = thousandths(v);
-        if v == 0.0 {
-            "0".to_owned()
-        } else {
-            format!("{v}px")
-        }
-    };
-    let alpha = thousandths(strength.clamp(0.0, 1.0));
-    (shadows.iter())
-        .map(|s| {
-            let (x, y, blur, spread) = (px(s.x), px(s.y), px(s.blur), px(s.spread));
-            format!("{x} {y} {blur} {spread} rgb(0 0 0 / {alpha})")
-        })
+pub fn css(shapes: &[&str], strength: f64) -> String {
+    let alpha = thousandths(strength);
+    (shapes.iter())
+        .map(|shape| format!("{shape} rgb(0 0 0 / {alpha})"))
         .collect::<Vec<_>>()
         .join(", ")
 }
