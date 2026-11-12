@@ -9,6 +9,7 @@ import { clock } from "@banda/clock-pane"
 import { harnesses } from "@banda/harnesses-pane"
 import { files } from "@banda/files-pane"
 import { git } from "@banda/git-pane"
+import { pulls } from "@banda/pulls-pane"
 import { terminal } from "@banda/terminal-pane"
 import { notifications } from "@banda/notifications-pane"
 import type { Module } from "@banda/ui/module"
@@ -20,6 +21,7 @@ export const modules: readonly Module[] = [
   browser,
   git,
   files,
+  pulls,
   notifications,
   clock,
 ]

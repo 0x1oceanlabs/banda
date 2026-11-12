@@ -1,4 +1,5 @@
 import { expect, test } from "vitest"
+import type { Pull } from "@banda/contract/pulls"
 import type { Listed } from "@banda/ui/pane"
 import { folded } from "./fold"
 
@@ -55,5 +56,39 @@ test("a child's call stays on its own card: its parent takes none of it, and wha
   expect(folded([parent, idle, stopped])).toEqual([
     parent,
     { ...child, changed: 5, calls: "Stopped on a tab" },
+  ])
+})
+
+test("the pull requests a module lists of a Thread go on its row, and make no row of their own; its quiet mark leaves the Thread's (ADR 0076; ADR 0098, decision 8)", () => {
+  const pull = (number: number): Pull => ({
+    host: "github.com",
+    repo: "o/r",
+    number,
+    url: `https://github.com/o/r/pull/${number}`,
+    threads: ["t1"],
+    owner: "t1",
+    by: "agent",
+    auto_fix: true,
+    need: "running",
+    turn: "waiting",
+  })
+  const linked: Listed = {
+    id: "pulls:t1",
+    title: "#1061, #1062",
+    mark: "rest",
+    changed: 9,
+    on: "a1",
+    pane,
+    pulls: [pull(1061), pull(1062)],
+  }
+  expect(
+    folded([thread("t1", "a1", "done"), thread("t2", "a2", "rest"), linked])
+  ).toEqual([
+    { ...thread("t1", "a1", "done"), pulls: [pull(1061), pull(1062)] },
+    thread("t2", "a2", "rest"),
+  ])
+  // On a Thread the list does not hold, they go nowhere.
+  expect(folded([thread("t2", "a2", "rest"), linked])).toEqual([
+    thread("t2", "a2", "rest"),
   ])
 })
