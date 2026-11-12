@@ -44,7 +44,7 @@ import {
   widthIn,
   type Workspaces,
 } from "./model"
-import { pagerStateOf } from "./pager/pager"
+import { pagerStateOf } from "./pager/rules"
 
 const A = "project-a"
 const B = "project-b"

@@ -1,12 +1,12 @@
 /**
- * The Pager's rules (`pager.ts`), as plain data: which workspaces stand on
+ * The Pager's rules (`rules.ts`), as plain data: which workspaces stand on
  * it, and what each cell shows, is called and is reached by.
  */
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import type { Column, Workspaces } from "../model"
-import { cellsOf, pagerStateOf } from "./pager"
+import { cellsOf, pagerStateOf } from "./rules"
 
 const brand: ProjectSummary = {
   id: "brand",
