@@ -178,13 +178,9 @@ impl Profiles {
     }
 
     fn folder(&self, harness: &Harness) -> Option<PathBuf> {
-        let (variable, default) = variable(harness.harness())?;
-        harness
-            .env
-            .get(variable)
-            .map(PathBuf::from)
-            .or_else(|| std::env::var_os(variable).map(PathBuf::from))
-            .or_else(|| self.home.as_ref().map(|h| h.join(default)))
+        crate::kinds::Kind::of(harness)?
+            .row()
+            .home(&harness.env, self.home.as_deref())
     }
 
     fn connected(&self, harnesses: &[Harness]) -> HashMap<PathBuf, String> {
@@ -221,13 +217,6 @@ fn check_colour(colour: u8) -> Result<(), Refusal> {
         )));
     }
     Ok(())
-}
-
-/// The variable that names an account of `harness`'s home, and its home
-/// in the Person's by default.
-pub(super) fn variable(harness: &str) -> Option<(&'static str, &'static str)> {
-    let row = crate::kinds::Kind::named(harness)?.row();
-    Some((row.home, row.default_home))
 }
 
 /// Both automatic discovery and the connect picker use the same XDG rule.
@@ -328,7 +317,8 @@ impl Profiles {
                 "An Account ID is 1–80 lowercase letters, digits and hyphens, starting with a letter or digit.",
             ));
         }
-        let (variable, _) = variable(&account.harness).ok_or_else(|| {
+        let variable = crate::kinds::Kind::named(&account.harness).map(|kind| kind.row().home);
+        let variable = variable.ok_or_else(|| {
             Refusal::invalid("Accounts can be connected to Claude Code or Codex.")
         })?;
         let harness = self

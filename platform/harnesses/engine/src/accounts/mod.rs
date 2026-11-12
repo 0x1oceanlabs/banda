@@ -250,7 +250,7 @@ impl Accounts {
             .harnesses
             .get(&args.harness)
             .map_err(Refusal::invalid)?;
-        if !row(&harness).is_some_and(|row| row.api_way.is_none()) {
+        if !harness.row().is_some_and(|row| row.api_way.is_none()) {
             return Err(Refusal::invalid(
                 "Only Codex takes an API key here: Claude Code signs in to Anthropic Console itself.",
             ));
@@ -415,7 +415,7 @@ impl Accounts {
         let entry = self.harnesses.find(&harness);
         let device_code = entry
             .as_ref()
-            .and_then(row)
+            .and_then(Harness::row)
             .is_some_and(|row| row.device_code);
         if account.account.cli.is_some() && device_code {
             ways.insert(
@@ -445,7 +445,7 @@ impl Accounts {
             .harnesses
             .get(&args.harness)
             .map_err(Refusal::invalid)?;
-        if row(&selected).is_none() {
+        if selected.row().is_none() {
             return Err(Refusal::invalid(
                 "Managed sign-in supports Claude Code and Codex Accounts.",
             ));
@@ -457,7 +457,7 @@ impl Accounts {
         }
         let (harness, asker, held) = self.asker(&call, &args.harness).await?;
         let ways = asker.process.ways();
-        let device_code = row(&harness).is_some_and(|row| row.device_code);
+        let device_code = harness.row().is_some_and(|row| row.device_code);
         let way = if args.way.as_deref() == Some("device-code") && device_code {
             let (_, cli) = crate::cli::find(&*call.project().environment(), &harness).await?;
             let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
@@ -654,19 +654,13 @@ async fn heard(project: &ModuleProject, harness: &str) {
     }
 }
 
-/// What the Harness `harness` is an account of does its own way, when
-/// Banda knows it.
-fn row(harness: &Harness) -> Option<&'static crate::kinds::Row> {
-    Some(Kind::named(harness.harness())?.row())
-}
-
 /// Whether the way `way` signs in an account of `harness`'s kind (ADR
 /// 0078, decision 1): an API key account of Claude Code signs in to
 /// Anthropic Console, and one of Codex takes its key (`api_key`), with no
 /// way of its Harness's; any other account every way.
 fn fits(harness: &Harness, way: &str) -> bool {
     match harness.kind {
-        AccountKind::Api => row(harness).and_then(|row| row.api_way) == Some(way),
+        AccountKind::Api => harness.row().and_then(|row| row.api_way) == Some(way),
         AccountKind::Subscription | AccountKind::Gateway => true,
     }
 }

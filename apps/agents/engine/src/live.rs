@@ -47,7 +47,7 @@ use crate::model::{ItemId, SubagentId, ThreadId, TurnId, Values};
 use crate::touching::Touches;
 use crate::{Pipe, kept};
 use banda_harnesses::hosts::{Held, Hosts};
-use banda_harnesses::{Failed, Harness};
+use banda_harnesses::{Failed, Harness, Place};
 use banda_kernel::{
     AgentId, AtWork, Holes, Listener, ModuleProject, Pass, Program, ProjectId, Refusal, Working,
 };
@@ -339,14 +339,23 @@ impl Live {
             reads: kept::roots(data),
             ..Holes::default()
         };
-        let mut started = harness.in_project(id, data, &folder, holes, &pass, trusted);
-        if let Some(pipe) = &self.pipe {
-            pipe.first_on_path(&mut started.env);
-        }
         // The Person's GitHub token, which `gh` behind the fence cannot
         // read from the keyring, and their SSH agent go only to a Project
         // the Person said they trust (ADR 0083, F0-3).
-        started.set_trust_said(project.trust_said()).await;
+        let said = project.trust_said();
+        let mut started = harness.launch(Place {
+            project: id,
+            data,
+            folder: &folder,
+            holes,
+            shells: &pass,
+            trusted,
+            said,
+            credentials: banda_harnesses::github::credentials(said).await,
+        });
+        if let Some(pipe) = &self.pipe {
+            pipe.first_on_path(&mut started.env);
+        }
         let connection = (self.hosts)
             .get(project.id(), project.environment(), &started)
             .await?;

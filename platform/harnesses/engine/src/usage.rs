@@ -42,18 +42,10 @@ fn sources(harnesses: &[Harness]) -> Vec<Source> {
         .filter_map(|h| {
             let kind = Kind::of(h)?;
             let row = kind.row();
-            let (variable, default, folder, prefix) =
-                (row.home, row.default_home, row.journals, row.id);
             let home = h.env.get("HOME").map(PathBuf::from).or_else(dirs::home_dir);
-            let config = h
-                .env
-                .get(variable)
-                .map(PathBuf::from)
-                .or_else(|| std::env::var_os(variable).map(PathBuf::from))
-                .or_else(|| home.map(|home| home.join(default)))?;
-            let root = config.join(folder);
+            let root = row.home(&h.env, home.as_deref())?.join(row.journals);
             let root = dunce::canonicalize(&root).unwrap_or(root);
-            let id = format!("{prefix}:{}", root.display());
+            let id = format!("{}:{}", row.id, root.display());
             if !seen.insert(id.clone()) {
                 return None;
             }

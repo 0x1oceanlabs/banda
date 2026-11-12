@@ -5,6 +5,8 @@
 
 use crate::Harness;
 use serde_json::{Map, Value};
+use std::collections::BTreeMap;
+use std::path::{Path, PathBuf};
 
 /// What Codex's adapter takes as Codex's configuration for each of its
 /// sessions: a JSON object, whose keys may be dotted paths, as Codex's
@@ -47,6 +49,32 @@ pub(crate) struct Row {
     pub key_helper: bool,
     /// Whether its CLI signs in with a code shown on another computer.
     pub device_code: bool,
+    /// The variable that names to its adapter the folder in a Project's
+    /// `data` its sessions go in, one for every account of it, so any of
+    /// them goes on with a Thread's session (ADR 0078, decision 3); else
+    /// they stay in each account's home.
+    pub sessions: Option<&'static str>,
+    /// The variable of its configuration that sets what its shells get,
+    /// which its shells do not inherit from its own environment.
+    pub shells: Option<&'static str>,
+    /// Whether an account's home of its own shadows its Harness's, to share
+    /// its sessions ([`crate::shadow`]; ADR 0078, decision 3).
+    pub shadows: bool,
+}
+
+impl Row {
+    /// The home `env` names: its variable, else the engine's own, else its
+    /// folder in `person`'s home.
+    pub(crate) fn home(
+        &self,
+        env: &BTreeMap<String, String>,
+        person: Option<&Path>,
+    ) -> Option<PathBuf> {
+        let named = |home: Option<String>| home.filter(|home| !home.is_empty()).map(PathBuf::from);
+        (named(env.get(self.home).cloned()))
+            .or_else(|| named(std::env::var(self.home).ok()))
+            .or_else(|| Some(person?.join(self.default_home)))
+    }
 }
 
 pub(crate) const CLAUDE: Row = Row {
@@ -58,6 +86,9 @@ pub(crate) const CLAUDE: Row = Row {
     api_way: Some("console-login"),
     key_helper: true,
     device_code: false,
+    sessions: Some("BANDA_CLAUDE_SESSIONS"),
+    shells: None,
+    shadows: false,
 };
 
 pub(crate) const CODEX: Row = Row {
@@ -69,6 +100,9 @@ pub(crate) const CODEX: Row = Row {
     api_way: None,
     key_helper: false,
     device_code: true,
+    sessions: None,
+    shells: Some(CODEX_CONFIG),
+    shadows: true,
 };
 
 impl Kind {
