@@ -480,7 +480,6 @@ export function Shell({
   // The action context (ADR 0088, decision 7): made afresh with each
   // drawing, and held steady, so the keys' listener, the Tiles' frame and
   // the widgets that hold it are never made again.
-  const hostsNow = useContext(HostsContext)
   const parts = useSteady<Parts>({
     change,
     home,
@@ -600,13 +599,13 @@ export function Shell({
         .catch(() => undefined),
     run: (action, args) => runAction(parts, action, args),
     engine,
-    hosts: hostsNow,
-    ...useTops(hostsNow),
+    hosts: kept,
+    ...useTops(kept),
     sessionOf: engineOf,
-    waiting: hostsNow.waiting,
+    waiting: kept.waiting,
     writeSetting: device.settings.set,
     attach: (chips) =>
-      attachChips(chips, focused(drawnNow()), hostsNow, (entry) =>
+      attachChips(chips, focused(drawnNow()), kept, (entry) =>
         change((w) => focusEntry(w, entry))
       ),
   })
