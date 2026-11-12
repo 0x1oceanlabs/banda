@@ -233,7 +233,14 @@ export function listedIn(
 export function workingIn(lists: Lists): number {
   return Object.values(lists)
     .flat()
-    .filter((listed) => works(listed.mark)).length
+    .filter(
+      // One that asks while its sub-agents or its Crew work on still works
+      // (ADR 0103, decision 19).
+      (listed) =>
+        works(listed.mark) ||
+        (listed.subagents?.working ?? 0) > 0 ||
+        listed.crew !== undefined
+    ).length
 }
 
 /** How many Agents work on this machine now: those Quit and a restart

@@ -8,6 +8,8 @@ import {
   knownItem,
   type Body,
   type Can,
+  type Crew,
+  type CrewAgent,
   type Fact,
   type HarnessOption,
   type Item,
@@ -57,6 +59,8 @@ export type ThreadState = {
   /** Its sub-agents, nested ones with their parent, in the order they
    * started (ADR 0103, decision 10). */
   subagents: Subagent[]
+  /** Its Crews, in the order they started (ADR 0103, step 4). */
+  crews: Crew[]
   /** Its sub-agents' calls that edit, delete or move files, the one part
    * of their work its turns' changes count (ADR 0103, decision 8). */
   edits: Item[]
@@ -90,6 +94,7 @@ export const EMPTY: ThreadState = {
   offer: NO_OFFER,
   held: false,
   subagents: [],
+  crews: [],
   edits: [],
 }
 
@@ -113,6 +118,7 @@ export function fromView(view: ThreadView): ThreadState {
     forkedFrom,
     // An engine from before sub-agents says neither.
     subagents: view.subagents ?? [],
+    crews: view.crews ?? [],
     edits: (view.edits ?? []).filter(knownItem),
   }
 }
@@ -203,7 +209,8 @@ export function apply(state: ThreadState, event: Event): ThreadState {
   const next = project(state, event)
   return next.turns === state.turns &&
     next.held === state.held &&
-    next.subagents === state.subagents
+    next.subagents === state.subagents &&
+    next.crews === state.crews
     ? next
     : withCan(next)
 }
@@ -224,8 +231,10 @@ function withCan(state: ThreadState): ThreadState {
   const begun = counted.findLast((turn) => turn.state !== "queued")?.id
   const works = state.turns.some((turn) => turn.state === "running")
   const anyWaits = state.turns.some((turn) => turn.state === "queued")
-  // Fork and rewind wait for any sub-agent at work (ADR 0103).
-  const lanes = state.subagents.some(atWork)
+  // Fork and rewind wait for any sub-agent or Crew at work (ADR 0103).
+  const lanes =
+    state.subagents.some(atWork) ||
+    state.crews.some((crew) => crew.state === "working")
   // The messages a Person wrote, not an Agent.
   const persons = new Set(
     state.items
@@ -422,6 +431,7 @@ function project(state: ThreadState, event: Event): ThreadState {
           (item) => !messages.has(item.id) && stays(item)
         ),
         subagents: state.subagents.filter((lane) => !turns.has(lane.turn)),
+        crews: state.crews.filter((crew) => !turns.has(crew.turn)),
         edits: state.edits.filter(stays),
       }
     }
@@ -510,6 +520,43 @@ function project(state: ThreadState, event: Event): ThreadState {
           laneEnded(lane, fact.payload)
         ),
       }
+    case "crew.started": {
+      const { item: id, crew } = fact.payload
+      const anchor = item(id, { kind: "crew", crew: crew.id }, crew.turn)
+      return {
+        ...next,
+        crews: [...state.crews, crew],
+        items: [...state.items, anchor],
+      }
+    }
+    case "crew.progressed": {
+      const { crew: id, phases, agents, log, tokens, went_on } = fact.payload
+      return {
+        ...next,
+        crews: changeOne(state.crews, id, (crew) => ({
+          ...crew,
+          phases: phases ?? crew.phases,
+          agents: withAgents(crew.agents, agents ?? []),
+          log: log ?? crew.log,
+          tokens: tokens ?? crew.tokens,
+          went_on: went_on ?? crew.went_on,
+        })),
+      }
+    }
+    case "crew.ended": {
+      const { crew: id, state: ended, why, result, tokens } = fact.payload
+      return {
+        ...next,
+        crews: changeOne(state.crews, id, (crew) => ({
+          ...crew,
+          state: ended,
+          why,
+          result,
+          tokens: tokens ?? crew.tokens,
+          ended: fact.payload.ended,
+        })),
+      }
+    }
     case "visual.shown": {
       const { item: id, turn, visual, title, height, heights } = fact.payload
       const body = { kind: "visual", visual, title, height, heights } as const
@@ -531,6 +578,18 @@ function project(state: ThreadState, event: Event): ThreadState {
       // It runs on another account of its Harness from its next turn.
       return { ...next, harness: fact.payload.harness }
   }
+}
+
+/** A Crew's `agents` with each of `changed` in its place, whole: by its
+ * phase, then its index there. */
+function withAgents(agents: CrewAgent[], changed: CrewAgent[]): CrewAgent[] {
+  if (changed.length === 0) return agents
+  const key = (agent: CrewAgent) => `${agent.phase}.${agent.index}`
+  const all = new Map(agents.map((agent) => [key(agent), agent]))
+  for (const agent of changed) all.set(key(agent), agent)
+  return [...all.values()].sort(
+    (a, b) => a.phase - b.phase || a.index - b.index
+  )
 }
 
 /** The Question the Agent waits on, if any: the first of its own still

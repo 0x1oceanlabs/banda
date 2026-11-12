@@ -337,6 +337,10 @@ export type Listed = {
    * Mark's satellites, and what its card's line 2 says of those at work,
    * "3 sub-agents at work". */
   subagents?: ListedSubagents
+  /** Its Crew at work, the latest started (ADR 0103, step 4): its title,
+   * the phase it is in, and how many of that phase's agents are done of
+   * those called so far. None while no Crew of it works. */
+  crew?: ListedCrew
   /**
    * What calls the Person, in a few words: what it asks, why it failed.
    * A toast or a system notification says it too.
@@ -411,6 +415,14 @@ export type Answering = {
  */
 /** A listed Thread's direct sub-agents (`Listed.subagents`). */
 export type ListedSubagents = { working: number; failed: number; said?: string }
+
+/** A listed Thread's Crew at work (`Listed.crew`). */
+export type ListedCrew = {
+  title: string
+  phase: string
+  done: number
+  of: number
+}
 
 export type ListedLater = {
   /** When it was put off, in ms since the epoch. */

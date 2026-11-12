@@ -36,6 +36,7 @@ function wordsOf({ body }: Item): string {
     // Find reads a sub-agent's record, not its anchor (ADR 0103, Open
     // questions): see `has`.
     case "subagent":
+    case "crew":
       return ""
     case "messaged":
       return body.text ?? ""

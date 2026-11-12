@@ -130,6 +130,7 @@ export function listedOf(
       : {}),
     ...(thread.changed_lines ? { changedLines: thread.changed_lines } : {}),
     ...(thread.subagents ? { subagents: subagentsOf(thread.subagents) } : {}),
+    ...(thread.crew ? { crew: thread.crew } : {}),
     ...(calls ? { calls } : {}),
     ...(asker ? { asker } : {}),
     ...(answers.length ? { answers } : {}),

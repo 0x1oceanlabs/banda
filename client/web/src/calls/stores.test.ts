@@ -150,6 +150,15 @@ test("what the bar reads of the lists: who works, and a Pane's own", () => {
     [q]: [thread("c", { mark: "working" }), thread("d", { mark: "done" })],
   }
   expect(workingIn(lists)).toBe(2)
+  // One that asks while its sub-agents or its Crew work on still works.
+  const asks = (more: Partial<Listed>) => ({
+    [p]: [thread("e", { mark: "asking", ...more })],
+  })
+  expect(workingIn(asks({ subagents: { working: 1, failed: 0 } }))).toBe(1)
+  expect(
+    workingIn(asks({ crew: { title: "audit", phase: "Fix", done: 1, of: 3 } }))
+  ).toBe(1)
+  expect(workingIn(asks({ subagents: { working: 0, failed: 1 } }))).toBe(0)
 
   const shows = (pane: { args?: unknown }) =>
     (pane.args as { thread?: string } | undefined)?.thread ?? null

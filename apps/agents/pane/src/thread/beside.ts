@@ -352,6 +352,8 @@ export function laneThread(thread: Followed, lane: LaneState): Followed {
     held: false,
     subagents:
       fresh.length > 0 ? [...thread.subagents, ...fresh] : thread.subagents,
+    // A lane holds no Crews of its own.
+    crews: [],
     edits: NO_EDITS,
     ...(thread.heard && { heard: thread.heard }),
   }

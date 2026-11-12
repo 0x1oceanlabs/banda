@@ -69,6 +69,15 @@ export type { WokeSeen } from "./generated/agents/WokeSeen"
 export type { SeeWokeAsk } from "./generated/agents/SeeWokeAsk"
 export type { StepState } from "./generated/agents/StepState"
 export type { OneSubagent } from "./generated/agents/OneSubagent"
+export type { OneCrew } from "./generated/agents/OneCrew"
+export type { Crew } from "./generated/agents/Crew"
+export type { CrewAgent } from "./generated/agents/CrewAgent"
+export type { CrewBrief } from "./generated/agents/CrewBrief"
+export type { CrewId } from "./generated/agents/CrewId"
+export type { CrewStart } from "./generated/agents/CrewStart"
+export type { CrewState } from "./generated/agents/CrewState"
+export type { CrewView } from "./generated/agents/CrewView"
+export type { Phase } from "./generated/agents/Phase"
 export type { Subagent } from "./generated/agents/Subagent"
 export type { SubagentId } from "./generated/agents/SubagentId"
 export type { Subagents } from "./generated/agents/Subagents"
@@ -151,6 +160,9 @@ const KINDS: ReadonlySet<string> = new Set(
     "subagent.changed": true,
     "subagent.ended": true,
     "subagent.messaged": true,
+    "crew.started": true,
+    "crew.progressed": true,
+    "crew.ended": true,
     "visual.shown": true,
     "issue.drafted": true,
     "issue.answered": true,
@@ -172,6 +184,7 @@ export const BODY_KINDS: ReadonlySet<Body["kind"]> = new Set(
     visual: true,
     subagent: true,
     messaged: true,
+    crew: true,
   } satisfies Record<Body["kind"], true>) as Body["kind"][]
 )
 
