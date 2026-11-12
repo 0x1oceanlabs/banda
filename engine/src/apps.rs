@@ -95,6 +95,9 @@ mod build {
             .piped(host.pipe.clone())
             .counted_in(host.working.clone())
             .served_by(host.bytes.clone())
+            // `BANDA_AUTO_TITLE=off` keeps the first message's titles, for
+            // the end-to-end tests (ADR 0118).
+            .names_new_threads(std::env::var("BANDA_AUTO_TITLE").map_or(true, |said| said != "off"))
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {

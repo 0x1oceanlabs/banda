@@ -201,6 +201,7 @@ function newArc({ mac = false } = {}): Arc {
     ...folders,
     BANDA_LOG: "warn",
     BANDA_FENCE: "off",
+    BANDA_AUTO_TITLE: "off",
   }
   delete env.BANDA_TOKEN
   delete env.BANDA_ENGINE

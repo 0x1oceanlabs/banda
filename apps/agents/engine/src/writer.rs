@@ -218,6 +218,9 @@ fn end(
         changed_lines,
     };
     emit(tx, author, turn.thread, &ended)?;
+    if state == TurnState::Done {
+        crate::titles::after_first(tx, turn.thread)?;
+    }
     // The answer goes back by itself, as a message from this Thread's
     // Agent, and waits its turn there (ADR 0019), unless that Thread is
     // gone.

@@ -7187,6 +7187,36 @@ async fn a_threads_small_model_suggests_a_title_and_renames_nothing() {
 }
 
 #[tokio::test]
+async fn a_new_thread_is_named_once_after_its_first_turn_and_never_over_its_persons_title() {
+    let root = tempfile::tempdir().unwrap();
+    let harnesses = harnesses_with(&[("FAKE_AGENT_MINI", "1")]);
+    let agents = Agents::new(harnesses).names_new_threads(true);
+    let world = World::new_with(root.path(), agents).await;
+    // The fake answers the title's prompt with its first words.
+    let named = "You said: Name this";
+
+    // Its first turn done, the small model names it, as the Person's rename.
+    let (thread, _) = world.finish(None, "hello").await;
+    let view = world.until(&thread, |v| v.thread.title == named).await;
+    assert_eq!(view.thread.was.as_deref(), Some("hello"));
+    assert_eq!(world.renamed(&thread).await.len(), 1);
+
+    // Never again, as the work moves on.
+    world.finish(Some(&thread), "which settings").await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(world.listed(&thread).await.thread.title, named);
+    assert_eq!(world.renamed(&thread).await.len(), 1);
+
+    // Off, a new Thread keeps its first message's title.
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    tokio::time::sleep(Duration::from_millis(500)).await;
+    assert_eq!(world.listed(&thread).await.thread.title, "hello");
+    assert!(world.renamed(&thread).await.is_empty());
+}
+
+#[tokio::test]
 async fn a_title_is_suggested_in_a_folder_of_the_engines_not_the_projects() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
