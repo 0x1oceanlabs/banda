@@ -4,7 +4,7 @@
  * Pure, so plain tests cover it.
  */
 import type { Bar, Problem, Setting } from "@banda/contract/look"
-import { WORKSPACES } from "../tiling/widget-ids"
+import { WORKSPACES } from "../../tiling/widget-ids"
 
 export const PARTS = ["left", "center", "right"] as const
 
