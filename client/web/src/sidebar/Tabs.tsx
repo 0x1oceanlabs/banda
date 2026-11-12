@@ -126,7 +126,7 @@ export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
             {counted && count > 0 && (
               <span
                 className={cn(
-                  "shrink-0 text-xs tabular-nums",
+                  "shrink-0 text-meta tabular-nums",
                   calls
                     ? "font-semibold text-attention"
                     : "text-muted-foreground"

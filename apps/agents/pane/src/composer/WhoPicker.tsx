@@ -85,7 +85,7 @@ export function WhoPicker({
 
 export function Heading({ children }: { children: React.ReactNode }) {
   return (
-    <div className="px-2.5 pt-2 pb-1 text-xs font-medium text-muted-foreground">
+    <div className="px-2.5 pt-2 pb-1 text-meta font-medium text-muted-foreground">
       {children}
     </div>
   )
@@ -93,7 +93,7 @@ export function Heading({ children }: { children: React.ReactNode }) {
 
 function Note({ children }: { children: React.ReactNode }) {
   return (
-    <p className="px-2.5 pt-0.5 pb-1.5 pl-9 text-xs text-muted-foreground">
+    <p className="px-2.5 pt-0.5 pb-1.5 pl-9 text-meta text-muted-foreground">
       {children}
     </p>
   )
@@ -112,7 +112,7 @@ export function Row({
       type="button"
       disabled={idle}
       aria-current={move.on || undefined}
-      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left text-sm outline-none focus-visible:bg-accent enabled:hover:bg-accent"
+      className="flex w-full items-center gap-2.5 rounded-control px-2.5 py-1.5 text-left text-ui outline-none focus-visible:bg-accent enabled:hover:bg-accent"
       onClick={() => onPick(row)}
     >
       {/* Beside its name, the emblem only decorates the row. */}
@@ -126,14 +126,14 @@ export function Row({
           {move.harness.name}
         </span>
         {about && (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="truncate text-meta text-muted-foreground">
             {about}
           </span>
         )}
       </span>
       <span
         className={cn(
-          "flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums",
+          "flex shrink-0 items-center gap-1.5 text-meta text-muted-foreground tabular-nums",
           warns && "text-warning"
         )}
       >
@@ -178,7 +178,7 @@ export function Handoff({
         if (event.key === "Escape") onStay()
       }}
     >
-      <div className="flex items-center gap-1.5 text-xs font-semibold">
+      <div className="flex items-center gap-1.5 text-meta font-semibold">
         <Emblem of={move.harness} />
         Hand this Thread to {to}?
       </div>

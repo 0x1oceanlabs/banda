@@ -131,7 +131,7 @@ export function LimitsWidget({ engine }: WidgetProps) {
                 aria-label={`Usage limits: ${words}`}
                 title={words}
                 className={cn(
-                  "flex h-6 items-center gap-1.5 rounded-control px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
+                  "flex h-6 items-center gap-1.5 rounded-control px-2 text-meta text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
                   staleOf(share.best, now) && "opacity-50"
                 )}
               />
@@ -156,7 +156,7 @@ export function LimitsWidget({ engine }: WidgetProps) {
             {error && (
               <p
                 role="alert"
-                className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
+                className="border-t border-border px-4 py-2 text-meta text-muted-foreground"
               >
                 {error}
               </p>
@@ -323,7 +323,7 @@ function Account({
           <Emblem of={emblem} named nameClassName="truncate font-medium" />
         </span>
         <span
-          className="truncate text-xs text-muted-foreground/70"
+          className="truncate text-meta text-muted-foreground/70"
           title={limits.email}
         >
           {what}
@@ -343,13 +343,13 @@ function Account({
       {limits.windows.slice(0, 2).map((w) => (
         <WindowRow key={w.id} window={w} now={now} warn={warn} />
       ))}
-      {pace && <p className="mt-2 text-xs text-warning">{pace}</p>}
+      {pace && <p className="mt-2 text-meta text-warning">{pace}</p>}
       {limits.note && (
-        <p className="text-xs text-muted-foreground">{limits.note}</p>
+        <p className="text-meta text-muted-foreground">{limits.note}</p>
       )}
       {limits.failed && (
         <p
-          className="mt-1 text-xs text-muted-foreground"
+          className="mt-1 text-meta text-muted-foreground"
           title={fullDate(limits.failed.at)}
         >
           {limits.failed.why}
@@ -383,7 +383,7 @@ function WindowRow({
   const loud = loudOf(used, warn)
   return (
     <div
-      className="grid h-5 grid-cols-[56px_1fr_34px] items-center gap-2.5 text-xs"
+      className="grid h-5 grid-cols-[56px_1fr_34px] items-center gap-2.5 text-meta"
       title={`${window.label}: ${resetWords(window, now)}${window.resets_at === undefined ? "" : `, ${fullDate(window.resets_at)}`}`}
     >
       <span className="truncate text-muted-foreground">{window.label}</span>
@@ -437,7 +437,7 @@ function Foot({
   const read = readAtOf(limits)
   const since = read === undefined ? undefined : ago(read, now)
   return (
-    <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-xs text-muted-foreground/70">
+    <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-meta text-muted-foreground/70">
       <div className="flex min-w-0 flex-col tabular-nums">
         {today && <span className="truncate">{today}</span>}
         {read !== undefined && (

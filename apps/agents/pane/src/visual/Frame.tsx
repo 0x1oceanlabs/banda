@@ -192,7 +192,7 @@ export function VisualFrame({
   // Its machine's engine gave no page for it.
   if (address === null)
     return (
-      <p className="flex items-center gap-2 text-sm text-muted-foreground">
+      <p className="flex items-center gap-2 text-ui text-muted-foreground">
         <ChartLineIcon className="size-4 shrink-0" />
         <span className="min-w-0 truncate">
           {place.host} gave no page for this Visual.

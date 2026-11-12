@@ -200,7 +200,7 @@ function CrumbButton({
       aria-label={label}
       aria-current={last ? "location" : undefined}
       className={cn(
-        "flex h-6 min-w-0 shrink items-center rounded-control px-1.5 text-xs text-muted-foreground hover:bg-foreground/7 hover:text-foreground",
+        "flex h-6 min-w-0 shrink items-center rounded-control px-1.5 text-meta text-muted-foreground hover:bg-foreground/7 hover:text-foreground",
         last && "shrink-0 text-foreground"
       )}
       {...rest}
@@ -331,7 +331,7 @@ function PathField({
           }
         }}
         className={cn(
-          "h-6 min-w-0 flex-1 rounded-control border bg-transparent px-2 font-mono text-xs outline-none focus:border-ring",
+          "h-6 min-w-0 flex-1 rounded-control border bg-transparent px-2 font-mono text-meta outline-none focus:border-ring",
           wrong && "border-destructive/60"
         )}
       />
@@ -343,7 +343,7 @@ function PathField({
           onMouseDown={(event) => event.preventDefault()}
         >
           {wrong ? (
-            <p className="px-2 py-1 text-xs text-muted-foreground">{wrong}</p>
+            <p className="px-2 py-1 text-meta text-muted-foreground">{wrong}</p>
           ) : (
             shown.map((name, n) => (
               <div
@@ -355,7 +355,7 @@ function PathField({
                   field.current?.focus()
                 }}
                 className={cn(
-                  "flex h-6 cursor-default items-center gap-2 rounded-control px-2 font-mono text-xs",
+                  "flex h-6 cursor-default items-center gap-2 rounded-control px-2 font-mono text-meta",
                   n === picked && "bg-foreground/8"
                 )}
               >

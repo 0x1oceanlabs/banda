@@ -729,7 +729,7 @@ function FindBar({
         <InputGroupAddon align="inline-end" className="gap-0.5">
           <span
             aria-live="polite"
-            className="px-1 text-xs font-normal tabular-nums"
+            className="px-1 text-meta font-normal tabular-nums"
           >
             {!query
               ? ""

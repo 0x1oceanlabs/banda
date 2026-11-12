@@ -49,8 +49,8 @@ export function SharingSettings({ engine }: SectionProps) {
       <Rows>
         <div className="flex items-center gap-3 px-4 py-3">
           <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <span className="text-sm">Your ID</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-ui">Your ID</span>
+            <span className="text-meta text-muted-foreground">
               {shared?.id ? (
                 <>
                   <span className="font-mono" title={shared.id}>
@@ -65,7 +65,7 @@ export function SharingSettings({ engine }: SectionProps) {
               )}
             </span>
             {(problem ?? refused) && (
-              <span role="alert" className="text-xs text-destructive">
+              <span role="alert" className="text-meta text-destructive">
                 {problem ?? refused}
               </span>
             )}
@@ -89,7 +89,7 @@ export function SharingSettings({ engine }: SectionProps) {
               <SentRow key={`${sent.made}:${sent.event}`} sent={sent} />
             ))
           ) : (
-            <p className="px-4 py-3 text-sm text-muted-foreground">
+            <p className="px-4 py-3 text-ui text-muted-foreground">
               Nothing sent. Each event shows here before it goes, exactly as it
               goes.
             </p>
@@ -97,7 +97,7 @@ export function SharingSettings({ engine }: SectionProps) {
         </Rows>
       </Group>
       {shared?.never && (
-        <p className="rounded-control border border-dashed px-4 py-2 text-xs text-muted-foreground">
+        <p className="rounded-control border border-dashed px-4 py-2 text-meta text-muted-foreground">
           {NEVER[shared.never]}
         </p>
       )}
@@ -119,14 +119,14 @@ function SentRow({ sent }: { sent: Sent }) {
         onClick={() => setOpen(!open)}
         className="flex items-center gap-2.5 px-4 py-2.5 text-left outline-none focus-visible:ring-2 focus-visible:ring-ring"
       >
-        <span className="font-mono text-xs">{sent.event}</span>
-        <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+        <span className="font-mono text-meta">{sent.event}</span>
+        <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
           {sent.about}
         </span>
         <span className="rounded-control border px-1.5 py-px text-small text-muted-foreground">
           {sent.sent === null ? "waiting" : `sent ${clock(sent.sent)}`}
         </span>
-        <span className="w-12 text-right text-xs text-muted-foreground tabular-nums">
+        <span className="w-12 text-right text-meta text-muted-foreground tabular-nums">
           {(size / 1024).toFixed(1)} KB
         </span>
       </button>

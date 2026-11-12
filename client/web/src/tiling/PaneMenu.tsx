@@ -212,7 +212,7 @@ export function PaneMenu({
         act={() => run("pane.consume-right")}
       />
       {own > 0 && stand.targets.length <= 9 && (
-        <div className="flex items-center gap-1.5 px-1.5 py-0.5 text-sm">
+        <div className="flex items-center gap-1.5 px-1.5 py-0.5 text-ui">
           <LayersIcon className="size-4 shrink-0 text-muted-foreground" />
           <span className="flex-1">To workspace</span>
           {stand.targets.map(({ owner, refused }, i) => {
@@ -324,7 +324,7 @@ function Steps({
             key={step}
             aria-label={`${picture === "width" ? "Width" : "Height"} ${step}`}
             data-on={lit || undefined}
-            className="flex-1 flex-col gap-1 rounded-control border border-transparent py-1.5 text-xs text-muted-foreground data-on:border-border data-on:bg-muted data-on:text-foreground"
+            className="flex-1 flex-col gap-1 rounded-control border border-transparent py-1.5 text-meta text-muted-foreground data-on:border-border data-on:bg-muted data-on:text-foreground"
             onClick={() => choose(step)}
             disabled={passed}
             onPointerEnter={point && (() => point(seen))}

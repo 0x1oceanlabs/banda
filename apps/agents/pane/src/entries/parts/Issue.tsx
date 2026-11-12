@@ -94,7 +94,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
           : `Add this to issue #${comment_on} on GitHub?`
       }
       action={
-        <span className="font-mono text-xs text-muted-foreground">
+        <span className="font-mono text-meta text-muted-foreground">
           {fingerprint}
         </span>
       }
@@ -111,7 +111,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
             )}
             <Textarea
               aria-label="Body"
-              className="max-h-80 min-h-40 font-mono text-xs"
+              className="max-h-80 min-h-40 font-mono text-meta"
               value={body}
               onChange={(event) => setBody(event.target.value)}
             />
@@ -126,7 +126,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
             </pre>
           </div>
         )}
-        <p className="text-xs text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           What goes is exactly this text: no paths, no Pane's args, no Thread's
           words. With gh signed in, Banda files it; else GitHub opens with it
           filled in.
@@ -153,7 +153,7 @@ function Draft({ engine, project, item, issue, openLink }: Props) {
           </Button>
         </div>
         {problem && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-meta text-destructive">
             {problem}
           </p>
         )}

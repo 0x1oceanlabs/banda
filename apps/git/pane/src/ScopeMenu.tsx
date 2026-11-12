@@ -169,7 +169,7 @@ export function ScopeMenu({
                           value === `turn:${turn.turn}` && "bg-accent"
                         )}
                       >
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                        <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
                           {turn.n}
                         </span>
                         <span className="truncate">{turn.said || "Turn"}</span>
@@ -201,7 +201,7 @@ export function ScopeMenu({
                         value === `commit:${commit.sha}` && "bg-accent"
                       )}
                     >
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
+                      <span className="shrink-0 font-mono text-meta text-muted-foreground">
                         {commit.short}
                       </span>
                       <span className="truncate">{commit.subject}</span>
@@ -231,7 +231,7 @@ function Choice({
     <DropdownMenuRadioItem value={value} closeOnClick>
       <span className="flex flex-col">
         <span>{name}</span>
-        <span className="text-xs text-muted-foreground">{about}</span>
+        <span className="text-meta text-muted-foreground">{about}</span>
       </span>
     </DropdownMenuRadioItem>
   )
@@ -298,7 +298,7 @@ export function BaseMenu({
                     value={branch.name}
                     closeOnClick
                   >
-                    <span className="truncate font-mono text-xs">
+                    <span className="truncate font-mono text-meta">
                       {branch.name}
                     </span>
                   </DropdownMenuRadioItem>

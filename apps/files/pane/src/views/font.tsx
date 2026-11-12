@@ -134,7 +134,7 @@ export default function FontView(props: PreviewProps) {
           >
             {name}
           </h2>
-          <p className="text-xs text-muted-foreground">
+          <p className="text-meta text-muted-foreground">
             {facts.family === null &&
               (/\.woff2$/i.test(file.name)
                 ? "Its names and characters are packed with Brotli, which this window cannot unpack yet. "
@@ -165,7 +165,7 @@ export default function FontView(props: PreviewProps) {
         <section aria-label="Sizes" className="flex flex-col gap-3">
           {SIZES.map((size) => (
             <div key={size} className="flex items-baseline gap-4">
-              <span className="w-8 shrink-0 text-right text-xs text-muted-foreground tabular-nums">
+              <span className="w-8 shrink-0 text-right text-meta text-muted-foreground tabular-nums">
                 {size}
               </span>
               <p
@@ -189,7 +189,7 @@ export default function FontView(props: PreviewProps) {
         </section>
         {glyphs.length > 0 && (
           <section aria-label="Characters" className="flex flex-col gap-2">
-            <h3 className="text-xs font-medium text-muted-foreground">
+            <h3 className="text-meta font-medium text-muted-foreground">
               Characters
             </h3>
             <div className="grid grid-cols-[repeat(auto-fill,minmax(3.25rem,1fr))] gap-px overflow-hidden rounded-card bg-border">
@@ -215,7 +215,7 @@ export default function FontView(props: PreviewProps) {
               })}
             </div>
             {more > 0 && (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 And {more.toLocaleString("en")} more.
               </p>
             )}

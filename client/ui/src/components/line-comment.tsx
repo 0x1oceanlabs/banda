@@ -55,7 +55,7 @@ export function LineComment({
         value={words}
         placeholder="Add a comment…"
         aria-label={`Comment on lines ${lines}`}
-        className="min-h-14 bg-background text-xs md:text-xs"
+        className="min-h-14 bg-background text-meta md:text-meta"
         onChange={(event) => setWords(event.target.value)}
       />
       <div className="mt-1.5 flex items-center gap-1">

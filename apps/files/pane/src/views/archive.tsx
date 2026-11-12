@@ -35,7 +35,7 @@ export default function ArchiveView({ file, engine, project }: PreviewProps) {
   const entry = picked === null ? undefined : tree.entries.get(picked)
   return (
     <div className="flex min-h-0 flex-1 flex-col">
-      <p className="shrink-0 border-b px-3 py-1.5 text-xs text-muted-foreground">
+      <p className="shrink-0 border-b px-3 py-1.5 text-meta text-muted-foreground">
         {summaryOf(archive, file.size)}
         {archive.truncated &&
           ` · only its first ${archive.entries.length.toLocaleString("en")} names are listed`}
@@ -52,7 +52,7 @@ export default function ArchiveView({ file, engine, project }: PreviewProps) {
           className="min-h-0 flex-1 px-1 py-1"
         />
       )}
-      <p className="shrink-0 truncate border-t px-3 py-1 text-xs text-muted-foreground">
+      <p className="shrink-0 truncate border-t px-3 py-1 text-meta text-muted-foreground">
         {entry
           ? [
               entry.path,

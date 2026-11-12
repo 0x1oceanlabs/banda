@@ -136,7 +136,7 @@ export function Edge({
       <span className="pointer-events-none absolute inset-y-3 left-px w-0.5 rounded-full bg-(--focus) opacity-0 transition-opacity duration-150 group-hover/edge:opacity-60 group-hover/edge:delay-150 group-focus-visible/edge:opacity-100 group-data-dragging/edge:opacity-100 group-data-dragging/edge:delay-0" />
       {drag && (
         <span
-          className="pointer-events-none absolute left-full ml-2 rounded-small bg-foreground px-2 py-0.5 text-xs whitespace-nowrap text-background tabular-nums shadow-md"
+          className="pointer-events-none absolute left-full ml-2 rounded-small bg-foreground px-2 py-0.5 text-meta whitespace-nowrap text-background tabular-nums shadow-md"
           style={{ top: Math.max(0, drag.top - 12) }}
         >
           {drag.hides

@@ -672,7 +672,7 @@ function Menu({
         {path.map((branch) => (
           <span
             key={branch.id}
-            className="shrink-0 rounded-small bg-secondary px-1.5 py-0.5 text-xs text-secondary-foreground"
+            className="shrink-0 rounded-small bg-secondary px-1.5 py-0.5 text-meta text-secondary-foreground"
           >
             {branchName(branch)}
           </span>
@@ -705,7 +705,7 @@ function Menu({
       {(said || asked?.line) && (
         <div
           role="status"
-          className="flex items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
+          className="flex items-center gap-2 border-b px-3 py-1.5 text-meta text-muted-foreground"
         >
           {said ?? (
             <>
@@ -718,7 +718,7 @@ function Menu({
       {asked && (
         <div className="flex flex-col gap-1 px-3.5 pt-3">
           <h3 className="text-title font-semibold">{ASK}</h3>
-          <p className="mb-1 text-xs text-muted-foreground">{ASK_ABOUT}</p>
+          <p className="mb-1 text-meta text-muted-foreground">{ASK_ABOUT}</p>
           <Waits waits={asked.waits} />
         </div>
       )}
@@ -734,7 +734,7 @@ function Menu({
             aria-label={group.label || undefined}
           >
             {group.label && (
-              <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+              <div className="px-2 pt-2 pb-1 text-meta text-muted-foreground">
                 {group.label}
               </div>
             )}
@@ -768,7 +768,7 @@ function Menu({
           onChoose={(act) => choose(act.row)}
         />
       )}
-      <div className="flex items-center gap-4 border-t px-3 py-2 text-xs text-muted-foreground">
+      <div className="flex items-center gap-4 border-t px-3 py-2 text-meta text-muted-foreground">
         <KbdGroup>
           <Kbd>↑</Kbd>
           <Kbd>↓</Kbd>
@@ -996,7 +996,7 @@ function RowView({
         <>
           {icon}
           <span className="min-w-0 truncate">{title}</span>
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
             {detail}
           </span>
         </>
@@ -1016,7 +1016,7 @@ function RowView({
         <>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="min-w-0 truncate">{branchName(row)}</span>
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
             {SOURCES[row.source].about}
           </span>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
@@ -1043,7 +1043,7 @@ function RowView({
         <>
           <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="shrink-0">{title}</span>
-          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+          <span className="min-w-0 flex-1 truncate text-meta text-muted-foreground">
             {detail}
           </span>
         </>
@@ -1089,7 +1089,9 @@ function TwoLines({
       <Icon className="size-4 shrink-0 text-muted-foreground" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate">{title}</span>
-        <span className="truncate text-xs text-muted-foreground">{about}</span>
+        <span className="truncate text-meta text-muted-foreground">
+          {about}
+        </span>
       </span>
     </>
   )
@@ -1100,7 +1102,7 @@ function TwoLines({
  * 13). It is no answer, so the keys pass it by. */
 function Isolated({ cloned }: { cloned: boolean }) {
   return (
-    <div className="mx-1.5 mb-1.5 flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-sm text-muted-foreground">
+    <div className="mx-1.5 mb-1.5 flex items-center gap-2.5 rounded-control px-2.5 py-1.5 text-ui text-muted-foreground">
       <TwoLines
         icon={BoxIcon}
         title={ISOLATED.title}
@@ -1133,7 +1135,7 @@ const NO_ROWS: readonly MenuRow[] = []
 
 function Detail({ children }: { children: React.ReactNode }) {
   return (
-    <span className="shrink-0 text-xs text-muted-foreground">{children}</span>
+    <span className="shrink-0 text-meta text-muted-foreground">{children}</span>
   )
 }
 

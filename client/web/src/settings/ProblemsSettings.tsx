@@ -39,7 +39,7 @@ export function ProblemsSettings({ engine, lit, run }: SectionProps) {
 
   if (live.state === "loading") return <Spinner />
   if (live.state === "refused")
-    return <p className="text-sm text-destructive">{live.refusal.message}</p>
+    return <p className="text-ui text-destructive">{live.refusal.message}</p>
   const { problems } = live.view
   if (problems.length === 0)
     return (
@@ -81,7 +81,7 @@ export function ProblemsSettings({ engine, lit, run }: SectionProps) {
           ))}
         </Rows>
       </Group>
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="px-1 text-meta text-muted-foreground">
         A report holds what broke, where it broke, the system, and the last log
         lines. Your Panes appear by kind only, never by what they show.
       </p>
@@ -148,15 +148,15 @@ function ProblemRow({
           )}
         />
         <span className="flex min-w-0 flex-1 flex-col gap-0.5">
-          <span className="truncate text-sm font-medium">
+          <span className="truncate text-ui font-medium">
             {problem.kind}{" "}
-            <span className="font-mono text-xs font-normal text-muted-foreground">
+            <span className="font-mono text-meta font-normal text-muted-foreground">
               {problem.message}
             </span>
           </span>
-          <span className="text-xs text-muted-foreground">{when}</span>
+          <span className="text-meta text-muted-foreground">{when}</span>
         </span>
-        <span className="min-w-8 text-right text-xs text-muted-foreground tabular-nums">
+        <span className="min-w-8 text-right text-meta text-muted-foreground tabular-nums">
           ×{problem.times}
         </span>
       </button>
@@ -190,11 +190,11 @@ function ProblemRow({
               Open logs folder
             </Button>
             {copied === "failed" && (
-              <span role="alert" className="text-xs text-destructive">
+              <span role="alert" className="text-meta text-destructive">
                 The report could not be copied.
               </span>
             )}
-            <span className="ml-auto font-mono text-xs text-muted-foreground">
+            <span className="ml-auto font-mono text-meta text-muted-foreground">
               {problem.fingerprint}
             </span>
           </div>

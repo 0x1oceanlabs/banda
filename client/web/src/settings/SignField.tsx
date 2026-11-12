@@ -166,7 +166,7 @@ export function SignField({
               aria-selected={way === one}
               onClick={() => setWay(one)}
               className={cn(
-                "flex-1 rounded-control py-1 text-xs text-muted-foreground",
+                "flex-1 rounded-control py-1 text-meta text-muted-foreground",
                 way === one && "bg-background text-foreground shadow-xs"
               )}
             >
@@ -175,7 +175,7 @@ export function SignField({
           ))}
         </div>
         {way === "auto" && (
-          <div className="flex flex-col gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-col gap-2 text-meta text-muted-foreground">
             <p>
               A file named as the Project, a favicon, a logo, or an app's icon
               in its folder; else letters from its name.
@@ -279,7 +279,7 @@ export function SignField({
           </div>
         )}
         {way === "picture" && (
-          <div className="flex flex-col items-start gap-2 text-xs text-muted-foreground">
+          <div className="flex flex-col items-start gap-2 text-meta text-muted-foreground">
             <p>SVG, PNG, WebP or ICO, at most 256 KB.</p>
             {refused && (
               <p role="alert" className="text-destructive">

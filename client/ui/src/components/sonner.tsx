@@ -26,8 +26,8 @@ const OPTIONS: ToasterProps["toastOptions"] = {
     default: "border-l-foreground!",
     warning: "border-l-attention!",
     error: "border-l-destructive!",
-    title: "line-clamp-2 text-sm",
-    description: "text-xs text-muted-foreground!",
+    title: "line-clamp-2 text-ui",
+    description: "text-meta text-muted-foreground!",
   },
 }
 

@@ -110,8 +110,8 @@ export function ModCard() {
   return (
     <Card className="gap-3 px-4 py-3">
       <div>
-        <h3 className="text-sm font-medium">Main key</h3>
-        <p className="text-xs text-muted-foreground">
+        <h3 className="text-ui font-medium">Main key</h3>
+        <p className="text-meta text-muted-foreground">
           Held for every Banda key and the mouse's moves. Pick one your desktop
           leaves free.
         </p>
@@ -156,12 +156,12 @@ export function ModCard() {
         </div>
       )}
       {[...new Set(refused)].map((one) => (
-        <p key={one} role="alert" className="text-xs text-destructive">
+        <p key={one} role="alert" className="text-meta text-destructive">
           {withoutPlace(one)}
         </p>
       ))}
       {asked && (
-        <div className="flex flex-col gap-2 rounded-control border bg-muted/40 px-3 py-2 text-xs">
+        <div className="flex flex-col gap-2 rounded-control border bg-muted/40 px-3 py-2 text-meta">
           <p>
             {asked.moves.length === 1
               ? "One of your keys holds"
@@ -202,7 +202,7 @@ export function ModCard() {
           </div>
         </div>
       )}
-      <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-6 gap-y-1 text-xs">
+      <div className="grid grid-cols-[repeat(auto-fill,minmax(15rem,1fr))] gap-x-6 gap-y-1 text-meta">
         {SHOWN.map(([action, title]) => {
           const key = keyFor(action)
           return (
@@ -250,7 +250,7 @@ function Pick({
         on && "border-foreground/60 bg-secondary text-foreground"
       )}
     >
-      <span className="text-sm font-medium">{title}</span>
+      <span className="text-ui font-medium">{title}</span>
       <span className="w-full truncate text-meta text-muted-foreground">
         {detail}
       </span>

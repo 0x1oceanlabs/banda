@@ -145,7 +145,7 @@ function WorkspaceList({
                 ? keyFor("workspace.new", name)
                 : `${whose}${keyFor(`workspace.go-${number}`, name)}`
             }
-            className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-control text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
+            className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-control text-meta text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
             onClick={() => onPick(w.index)}
           >
             {w.bottom ? (

@@ -35,7 +35,7 @@ export function Tabs({
       role="tablist"
       data-handle=""
       data-focused={focused}
-      className="group/tabs flex h-6 shrink-0 gap-1 text-xs"
+      className="group/tabs flex h-6 shrink-0 gap-1 text-meta"
     >
       {entries.map((entry, e) => {
         const { title } = labelOf(entry.pane, said.get(entry.id))

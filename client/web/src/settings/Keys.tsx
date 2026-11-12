@@ -28,7 +28,7 @@ export function Keys({ lit }: { lit?: string }) {
     <div className="flex flex-col gap-3">
       <ModCard />
       <div className="flex items-center gap-3 px-1">
-        <p className="flex-1 text-xs text-muted-foreground">
+        <p className="flex-1 text-meta text-muted-foreground">
           Choose an action in the key sheet, press Tab, then Add a key. Assign a
           key to another action to change what it runs. Change or reset your
           keys below.
@@ -44,7 +44,7 @@ export function Keys({ lit }: { lit?: string }) {
       </div>
       <Card className="gap-0 divide-y py-0">
         {keys.binds.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
+          <p className="px-4 py-3 text-ui text-muted-foreground">
             No keys of your own: Banda's are all there are.
           </p>
         ) : (
@@ -59,7 +59,7 @@ export function Keys({ lit }: { lit?: string }) {
           ))
         )}
       </Card>
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="px-1 text-meta text-muted-foreground">
         <Kbd>{keyLabel(RESET_KEY)}</Kbd> brings the window's own keys back until
         keys.toml changes, and opens this page. No file binds it.
       </p>
@@ -109,7 +109,7 @@ function Line({
         bind.action ? (
           <span>
             <span className="font-normal">runs</span>{" "}
-            <span className="font-mono text-xs">{bind.action}</span>
+            <span className="font-mono text-meta">{bind.action}</span>
           </span>
         ) : (
           <span className="font-normal text-muted-foreground">

@@ -195,7 +195,7 @@ function shownOf(fence: Fence, quit: string): Shown {
       return off(
         "Ubuntu doesn't let apps use user namespaces, which the fence needs.",
         <>
-          <p className="text-xs">
+          <p className="text-meta">
             Run this once in a Terminal to let Banda use them. Then quit Banda
             {quit && ` (${quit})`} and open it again.
           </p>
@@ -260,7 +260,7 @@ function Links({ fence }: { fence: Fence & { fence: "holds" } }) {
 function Details({ words }: { words: string }) {
   return (
     <Collapsible className="flex min-w-0 flex-col gap-1.5">
-      <CollapsibleTrigger className="group self-start text-xs text-muted-foreground hover:text-foreground">
+      <CollapsibleTrigger className="group self-start text-meta text-muted-foreground hover:text-foreground">
         <span className="group-data-panel-open:hidden">▸</span>
         <span className="hidden group-data-panel-open:inline">▾</span> Details
       </CollapsibleTrigger>
@@ -276,7 +276,7 @@ function Details({ words }: { words: string }) {
 function Copyable({ text, label }: { text: string; label: string }) {
   return (
     <div className="flex items-start gap-1.5">
-      <code className="min-w-0 flex-1 rounded-control bg-muted px-2 py-1 font-mono text-xs break-all whitespace-pre-wrap select-text">
+      <code className="min-w-0 flex-1 rounded-control bg-muted px-2 py-1 font-mono text-meta break-all whitespace-pre-wrap select-text">
         {text}
       </code>
       <CopyButton text={text} label={label} />
@@ -308,10 +308,10 @@ export function FenceRow({
     >
       <ItemContent>
         <ItemTitle>Fence</ItemTitle>
-        <ItemDescription className="text-xs">{shown.about}</ItemDescription>
+        <ItemDescription className="text-meta">{shown.about}</ItemDescription>
       </ItemContent>
       <ItemActions
-        className="font-mono text-xs text-muted-foreground"
+        className="font-mono text-meta text-muted-foreground"
         title={shown.layers}
       >
         {shown.word}
@@ -360,7 +360,7 @@ function Lists({ kept, caveat }: { kept: boolean; caveat?: string }) {
       <List title="An Agent gets" items={GETS} />
       <div>
         <List title={kept ? "Kept from it" : "It never gets"} items={NEVER} />
-        {caveat && <p className="mt-1.5 text-xs text-attention">{caveat}</p>}
+        {caveat && <p className="mt-1.5 text-meta text-attention">{caveat}</p>}
       </div>
     </div>
   )
@@ -375,12 +375,12 @@ function List({
 }) {
   return (
     <div>
-      <h5 className="mb-1 text-xs font-medium text-muted-foreground">
+      <h5 className="mb-1 text-meta font-medium text-muted-foreground">
         {title}
       </h5>
       <ul aria-label={title}>
         {items.map(([Icon, words]) => (
-          <li key={words} className="flex items-start gap-2 py-0.75 text-xs">
+          <li key={words} className="flex items-start gap-2 py-0.75 text-meta">
             <Icon className="mt-px size-3.5 shrink-0 text-muted-foreground" />
             <span>{words}</span>
           </li>
@@ -399,7 +399,7 @@ function Note({
   children: React.ReactNode
 }) {
   return (
-    <p className="flex items-start gap-1.5 text-xs text-muted-foreground">
+    <p className="flex items-start gap-1.5 text-meta text-muted-foreground">
       <Icon className="mt-px size-3.5 shrink-0" />
       <span className="min-w-0">{children}</span>
     </p>
@@ -412,7 +412,7 @@ function Attention({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="status"
-      className="flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-xs text-attention"
+      className="flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-meta text-attention"
     >
       <span
         aria-hidden

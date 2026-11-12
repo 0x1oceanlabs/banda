@@ -27,7 +27,7 @@ export function ZoomBar({
 }) {
   return (
     <div
-      className="absolute bottom-2.5 left-1/2 flex -translate-x-1/2 cursor-default items-center gap-0.5 rounded-control bg-popover/80 p-0.5 text-xs text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur"
+      className="absolute bottom-2.5 left-1/2 flex -translate-x-1/2 cursor-default items-center gap-0.5 rounded-control bg-popover/80 p-0.5 text-meta text-muted-foreground shadow-sm ring-1 ring-foreground/10 backdrop-blur"
       onPointerDown={(event) => event.stopPropagation()}
       onDoubleClick={(event) => event.stopPropagation()}
     >

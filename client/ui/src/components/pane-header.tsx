@@ -100,7 +100,7 @@ function PaneHeader({
     <header
       data-handle=""
       className={cn(
-        "flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-sm",
+        "flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-ui",
         className
       )}
       onDoubleClick={(event) => {

@@ -129,7 +129,7 @@ export function GroupHeader({
       <span
         data-head-rollup={plus || menu ? "" : undefined}
         className={cn(
-          "flex shrink-0 items-center justify-end gap-1.5 text-xs tabular-nums",
+          "flex shrink-0 items-center justify-end gap-1.5 text-meta tabular-nums",
           (plus || menu) && "min-w-11"
         )}
       >

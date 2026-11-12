@@ -44,7 +44,7 @@ export function Audio({ file, local }: PreviewProps) {
   if (url === null) return <Unplayable file={file} local={local} />
   return (
     <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-4 p-6">
-      <p className="max-w-full truncate text-sm text-muted-foreground">
+      <p className="max-w-full truncate text-ui text-muted-foreground">
         {file.name}
       </p>
       <audio

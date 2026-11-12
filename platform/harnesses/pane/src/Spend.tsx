@@ -122,7 +122,7 @@ export function Spend({
         )}
       </div>
       {!cost && <Split tokens={total.tokens} />}
-      <div className="mt-[22px] flex items-center justify-between text-xs text-muted-foreground">
+      <div className="mt-[22px] flex items-center justify-between text-meta text-muted-foreground">
         <span>
           {period === "24h"
             ? "By account, last 24 hours"
@@ -164,7 +164,7 @@ export function Spend({
       )}
       <div className="mt-[22px] grid grid-cols-1 gap-7 border-t border-border pt-5 @[40rem]/usage:grid-cols-2">
         <div>
-          <p className="mb-2.5 text-xs text-muted-foreground">By account</p>
+          <p className="mb-2.5 text-meta text-muted-foreground">By account</p>
           {accountsBy.map(({ account, total, value, share }) => {
             const plan = plans.get(account.id)
             return (
@@ -204,7 +204,7 @@ export function Spend({
           })}
         </div>
         <div>
-          <p className="mb-2.5 text-xs text-muted-foreground">By model</p>
+          <p className="mb-2.5 text-meta text-muted-foreground">By model</p>
           {byModel(rows, accounts, measure).map((m) => (
             <div
               key={m.model}
@@ -249,7 +249,7 @@ function Split({ tokens }: { tokens: Counted["total"]["tokens"] }) {
             />
           ))}
       </div>
-      <div className="flex flex-wrap gap-x-[22px] gap-y-1 text-xs text-muted-foreground">
+      <div className="flex flex-wrap gap-x-[22px] gap-y-1 text-meta text-muted-foreground">
         {parts.map(([name, value]) => (
           <span key={name}>
             {name}

@@ -120,7 +120,7 @@ function Rendered({
     <div className="min-h-0 flex-1 overflow-auto select-text">
       <div className="mx-auto max-w-3xl px-6 py-5">
         {front && front.facts.length > 0 && (
-          <p className="mb-4 flex flex-wrap gap-x-3 text-xs text-muted-foreground">
+          <p className="mb-4 flex flex-wrap gap-x-3 text-meta text-muted-foreground">
             {front.facts.map(([key, value]) => (
               <span key={key}>
                 {key}: <span className="text-foreground/80">{value}</span>

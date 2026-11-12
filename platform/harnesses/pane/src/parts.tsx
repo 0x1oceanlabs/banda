@@ -36,7 +36,7 @@ export function Segment({
       type="button"
       aria-pressed={pressed}
       className={cn(
-        "rounded-control px-2 py-0.5 text-xs text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground/10 aria-pressed:text-foreground",
+        "rounded-control px-2 py-0.5 text-meta text-muted-foreground transition-colors hover:text-foreground aria-pressed:bg-foreground/10 aria-pressed:text-foreground",
         className
       )}
       {...props}
@@ -66,5 +66,5 @@ export function Dot({
 
 /** A quiet line in place of what is not there yet, or at all. */
 export function Quiet({ children }: { children: React.ReactNode }) {
-  return <p className="text-sm text-muted-foreground">{children}</p>
+  return <p className="text-ui text-muted-foreground">{children}</p>
 }

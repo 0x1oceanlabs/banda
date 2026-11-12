@@ -274,7 +274,7 @@ export function Composer({
       }}
     >
       {images.problem && (
-        <p role="alert" className="px-1 text-xs text-destructive">
+        <p role="alert" className="px-1 text-meta text-destructive">
           {images.problem}
         </p>
       )}
@@ -399,7 +399,7 @@ export function Composer({
         </div>
       </div>
       {over > 0 && (
-        <p role="alert" className="px-1 text-xs text-destructive">
+        <p role="alert" className="px-1 text-meta text-destructive">
           The message is {over.toLocaleString("en-US")}{" "}
           {over === 1 ? "character" : "characters"} over the{" "}
           {LONGEST.toLocaleString("en-US")}-character limit. Shorten or split it

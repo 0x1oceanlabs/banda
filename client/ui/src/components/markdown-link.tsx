@@ -108,7 +108,7 @@ export function MarkdownLink({
         {children}
       </span>
       {url && !bare && (
-        <span className="ml-1 text-xs font-normal text-muted-foreground select-none">
+        <span className="ml-1 text-meta font-normal text-muted-foreground select-none">
           ({url.host})
         </span>
       )}

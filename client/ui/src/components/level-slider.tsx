@@ -95,7 +95,7 @@ export function LevelSlider({
           </SliderPrimitive.Track>
         </SliderPrimitive.Control>
       </div>
-      <div className="flex justify-between px-1 pt-1.5 text-xs">
+      <div className="flex justify-between px-1 pt-1.5 text-meta">
         <span className={cn("transition-colors", end(0))}>{names[0]}</span>
         <span className={cn("transition-colors", end(last))}>
           {names[last]}

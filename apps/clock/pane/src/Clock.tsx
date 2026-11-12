@@ -42,7 +42,7 @@ export function ClockWidget() {
             type="button"
             aria-label={`${words.whole}, ${words.time}`}
             title={words.whole}
-            className="flex h-6 items-center gap-2 rounded-control px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
+            className="flex h-6 items-center gap-2 rounded-control px-2 text-meta text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
           />
         }
       >
@@ -66,14 +66,14 @@ function Calendar({ day }: { day: Day }) {
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-0.5 pb-1 pl-1.5">
-        <span className="mr-auto text-sm font-semibold first-letter:uppercase">
+        <span className="mr-auto text-ui font-semibold first-letter:uppercase">
           {monthTitle(shown)}
         </span>
         {away && (
           <Button
             variant="ghost"
             size="sm"
-            className="h-6 px-2 text-xs text-muted-foreground"
+            className="h-6 px-2 text-meta text-muted-foreground"
             onClick={() => setShown(day)}
           >
             Today
@@ -116,7 +116,7 @@ function Calendar({ day }: { day: Day }) {
           <Row key={week.number} week={week} day={day} />
         ))}
       </div>
-      <div className="mt-1 flex gap-1.5 border-t border-border px-2 pt-2 pb-0.5 text-xs text-muted-foreground">
+      <div className="mt-1 flex gap-1.5 border-t border-border px-2 pt-2 pb-0.5 text-meta text-muted-foreground">
         <span className="font-medium text-foreground first-letter:uppercase">
           {dayTitle(day)}
         </span>

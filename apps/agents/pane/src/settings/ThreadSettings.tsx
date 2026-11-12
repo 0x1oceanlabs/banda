@@ -102,7 +102,7 @@ function ChoiceItems({
           <span className="flex flex-col">
             <span className="font-medium">{name}</span>
             {about && (
-              <span className="text-xs text-muted-foreground">{about}</span>
+              <span className="text-meta text-muted-foreground">{about}</span>
             )}
           </span>
         </DropdownMenuRadioItem>
@@ -530,7 +530,7 @@ function ModeItems({
           <DropdownMenuSeparator />
           {/* Wraps within the menu's width, never widening it. */}
           <DropdownMenuItem
-            className="w-0 min-w-full items-start py-1.5 pl-2.5 text-xs text-muted-foreground"
+            className="w-0 min-w-full items-start py-1.5 pl-2.5 text-meta text-muted-foreground"
             title="Settings → General → Fence"
             onClick={onLearn}
           >

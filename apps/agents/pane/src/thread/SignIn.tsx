@@ -122,7 +122,7 @@ export function Ways({
   return (
     <div className="flex flex-col gap-2">
       {ways.length === 0 && (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-meta text-muted-foreground">
           {elsewhere
             ? `Sign in to ${elsewhere.name} on ${elsewhere.on}, then try again.`
             : "Sign in from a terminal, then try again."}
@@ -153,7 +153,7 @@ export function Ways({
         )
       )}
       {elsewhere && ways.some((way) => !way.terminal) && (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-meta text-muted-foreground">
           {elsewhere.name} signs in on a web page in a browser on {elsewhere.on}
           &apos;s own computer. Sign in on {elsewhere.on} for now.
         </span>
@@ -180,7 +180,9 @@ function Way({
         Sign in with {way.name}
       </Button>
       {way.description && (
-        <span className="text-xs text-muted-foreground">{way.description}</span>
+        <span className="text-meta text-muted-foreground">
+          {way.description}
+        </span>
       )}
     </div>
   )
@@ -267,12 +269,12 @@ function TerminalWay({
               Sign in with {way.name}
             </Button>
             {way.description && (
-              <span className="text-xs text-muted-foreground">
+              <span className="text-meta text-muted-foreground">
                 {way.description}
               </span>
             )}
           </div>
-          <span className="text-xs text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             It runs in a terminal below.{" "}
             {turn
               ? "Once you signed in there, this turn goes again."
@@ -281,13 +283,13 @@ function TerminalWay({
           </span>
         </>
       ) : (
-        <span className="text-xs text-muted-foreground">
+        <span className="text-meta text-muted-foreground">
           {what}: run this in a terminal{where}, sign in, then come back.
         </span>
       )}
       {starting.problem && <Problem>{starting.problem}</Problem>}
       <div className="flex items-center gap-1.5">
-        <code className="min-w-0 flex-1 truncate rounded-control bg-muted px-2 py-1 font-mono text-xs">
+        <code className="min-w-0 flex-1 truncate rounded-control bg-muted px-2 py-1 font-mono text-meta">
           {line}
         </code>
         <CopyButton text={line} label="Copy the command" />
@@ -303,7 +305,7 @@ function TerminalWay({
 
 export function Problem({ children }: { children: React.ReactNode }) {
   return (
-    <p role="alert" className="text-xs text-destructive">
+    <p role="alert" className="text-meta text-destructive">
       {children}
     </p>
   )
@@ -315,7 +317,7 @@ export function Warning({ children }: { children: React.ReactNode }) {
   return (
     <p
       role="status"
-      className="flex items-start gap-1.5 text-xs text-muted-foreground"
+      className="flex items-start gap-1.5 text-meta text-muted-foreground"
     >
       <CircleAlertIcon className="mt-px size-3.5 shrink-0" />
       <span>{children}</span>

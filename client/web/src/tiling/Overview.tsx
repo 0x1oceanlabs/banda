@@ -868,7 +868,7 @@ function Row({
                   {/* What the Apps show of it at a size to read: how its
                       Thread is, and what it asks when it calls. With
                       nothing to show, no label. */}
-                  <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-control border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm empty:hidden">
+                  <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-control border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-meta text-popover-foreground shadow-sm empty:hidden">
                     <PaneSlot
                       project={entry.project}
                       pane={entry.pane}
@@ -968,7 +968,7 @@ function WorkspaceLabel({
     .filter(Boolean)
     .join(", ")
   const look = cn(
-    "group/number shrink-0 self-start rounded-control pt-0.5 pb-1 text-center text-sm font-medium tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
+    "group/number shrink-0 self-start rounded-control pt-0.5 pb-1 text-center text-ui font-medium tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
     current
       ? "text-overview-foreground"
       : "text-overview-foreground/50 group-hover/place:text-overview-foreground/80"

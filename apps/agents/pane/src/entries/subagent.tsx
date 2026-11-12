@@ -134,7 +134,7 @@ export function SubagentEntry({ item, subagentRow }: EntryProps<"subagent">) {
       </div>
       {/* It opens at once, as the kit's does: what it holds shows whole
           below it, and nothing above it moves. */}
-      <CollapsibleContent className="flex min-w-0 flex-col gap-2.5 pt-1 pb-2 pl-6 text-sm wrap-break-word text-muted-foreground">
+      <CollapsibleContent className="flex min-w-0 flex-col gap-2.5 pt-1 pb-2 pl-6 text-ui wrap-break-word text-muted-foreground">
         <Opened row={subagentRow} />
       </CollapsibleContent>
     </Collapsible>

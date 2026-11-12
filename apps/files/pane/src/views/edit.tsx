@@ -317,7 +317,7 @@ function Bar({ label, children }: { label: string; children: ReactNode }) {
     <div
       role="alert"
       aria-label={label}
-      className="flex shrink-0 animate-in flex-wrap items-center gap-x-2 gap-y-1 border-b border-warning/30 bg-warning/10 px-3 py-1.5 text-xs fade-in-0 motion-reduce:animate-none"
+      className="flex shrink-0 animate-in flex-wrap items-center gap-x-2 gap-y-1 border-b border-warning/30 bg-warning/10 px-3 py-1.5 text-meta fade-in-0 motion-reduce:animate-none"
     >
       {children}
     </div>

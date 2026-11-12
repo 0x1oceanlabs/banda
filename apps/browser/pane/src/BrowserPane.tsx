@@ -673,7 +673,7 @@ function Pill({
       role="status"
       aria-label={label}
       className={cn(
-        "pointer-events-auto absolute flex items-center bg-popover text-xs text-popover-foreground shadow-lg ring-1",
+        "pointer-events-auto absolute flex items-center bg-popover text-meta text-popover-foreground shadow-lg ring-1",
         PLACES[at],
         className
       )}
@@ -1011,7 +1011,7 @@ function TabItem({
         if (event.key === "Enter" || event.key === " ") onShow()
       }}
       className={cn(
-        "group/tab flex min-w-0 cursor-default items-center gap-2 overflow-hidden rounded-control px-2 text-sm text-muted-foreground select-none hover:bg-muted",
+        "group/tab flex min-w-0 cursor-default items-center gap-2 overflow-hidden rounded-control px-2 text-ui text-muted-foreground select-none hover:bg-muted",
         shown && "bg-muted text-foreground",
         iconOnly && "justify-center px-0",
         className
@@ -1139,7 +1139,7 @@ function Downloads() {
           >
             <DownloadIcon />
             <span className="min-w-0 flex-1 truncate">{each.name}</span>
-            <span className="text-xs text-muted-foreground">
+            <span className="text-meta text-muted-foreground">
               {downloadState(each)}
             </span>
           </DropdownMenuItem>
@@ -1199,7 +1199,7 @@ function Address({
       onBlur={() => setEditing(null)}
       onChange={(event) => setEditing(event.target.value)}
       onKeyDown={onKey}
-      className="h-full min-w-0 flex-1 bg-transparent px-2 text-sm text-muted-foreground outline-none group-data-[selected=true]/tile:text-foreground placeholder:text-muted-foreground/70 focus:text-foreground"
+      className="h-full min-w-0 flex-1 bg-transparent px-2 text-ui text-muted-foreground outline-none group-data-[selected=true]/tile:text-foreground placeholder:text-muted-foreground/70 focus:text-foreground"
     />
   )
 }

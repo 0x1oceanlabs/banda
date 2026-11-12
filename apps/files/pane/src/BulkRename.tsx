@@ -145,7 +145,7 @@ function Renamer({
         )}
       </div>
       {problem && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-meta text-destructive">
           {problem}
         </p>
       )}

@@ -45,7 +45,7 @@ export function Facts({
   const Icon = stat.kind === "folder" ? FolderIcon : FileIcon
   return (
     <Card icon={<Icon />} title={nameAndFolder(stat.path).name} note={note}>
-      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-left text-xs">
+      <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-1 text-left text-meta">
         {facts.map(([term, value]) =>
           value == null ? null : (
             <div key={term} className="contents">
@@ -64,7 +64,7 @@ export function Facts({
 export function Gone({ path }: { path: string }) {
   return (
     <Card icon={<FileXIcon />} title="This file is gone">
-      <p className="text-xs break-all text-muted-foreground select-text">
+      <p className="text-meta break-all text-muted-foreground select-text">
         {path}
       </p>
     </Card>
@@ -93,7 +93,7 @@ export function Card({
         <EmptyTitle className="max-w-full truncate">{title}</EmptyTitle>
         {children}
         {note && (
-          <EmptyDescription className="text-xs">{note}</EmptyDescription>
+          <EmptyDescription className="text-meta">{note}</EmptyDescription>
         )}
       </EmptyHeader>
     </Empty>

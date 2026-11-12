@@ -366,9 +366,9 @@ export function Table({
             {cells(header, true)}
           </div>
         }
-        className="flex-1 text-xs outline-none select-text"
+        className="flex-1 text-meta outline-none select-text"
       />
-      <div className="flex shrink-0 flex-wrap items-center gap-x-3 border-t px-3 py-1 text-xs text-muted-foreground">
+      <div className="flex shrink-0 flex-wrap items-center gap-x-3 border-t px-3 py-1 text-meta text-muted-foreground">
         {foot}
       </div>
     </div>

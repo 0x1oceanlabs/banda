@@ -107,7 +107,7 @@ function Launcher({ engine, open, runs }: PaneProps<Args>) {
       ref={scope}
       className="flex h-full flex-col items-center justify-center gap-3 p-6"
     >
-      <p className="text-sm text-muted-foreground">
+      <p className="text-ui text-muted-foreground">
         What should this tile show?
       </p>
       <Choices
@@ -165,7 +165,7 @@ export function Choices({
           <div className="flex flex-wrap justify-center gap-2">
             {dimmed.map(button)}
           </div>
-          <p className="text-xs text-muted-foreground">{dimmed[0]!.why}</p>
+          <p className="text-meta text-muted-foreground">{dimmed[0]!.why}</p>
         </div>
       )}
     </>

@@ -49,7 +49,7 @@ export function SearchHint({
       onMouseDown={(event) => event.preventDefault()}
       className="absolute inset-x-2 top-full z-float -mt-0.5 rounded-card bg-popover p-1 text-popover-foreground shadow-float ring-1 ring-foreground/10"
     >
-      <div className="px-2 py-1 text-xs text-muted-foreground">Filters</div>
+      <div className="px-2 py-1 text-meta text-muted-foreground">Filters</div>
       {rows.map(([filter, offered]) => (
         <div
           key={filter}
@@ -59,7 +59,7 @@ export function SearchHint({
             type="button"
             tabIndex={-1}
             onClick={() => say(completed(text, filter))}
-            className="shrink-0 font-mono text-xs text-foreground hover:underline"
+            className="shrink-0 font-mono text-meta text-foreground hover:underline"
           >
             {filter}:
           </button>

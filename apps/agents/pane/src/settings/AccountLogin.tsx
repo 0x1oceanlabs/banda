@@ -111,24 +111,24 @@ export function AccountLogin({
         </p>
       )}
       {notice && !who?.signed_in && (
-        <p role="status" className="text-sm text-muted-foreground">
+        <p role="status" className="text-ui text-muted-foreground">
           {notice}
         </p>
       )}
       {job ? (
         <>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-ui text-muted-foreground">
             Complete the provider’s sign-in below. You can open its verification
             link on another computer.
           </p>
           <pre
             aria-label="Sign-in output"
-            className="max-h-48 overflow-auto rounded-control border p-3 text-xs [overflow-wrap:anywhere] whitespace-pre-wrap select-text"
+            className="max-h-48 overflow-auto rounded-control border p-3 text-meta [overflow-wrap:anywhere] whitespace-pre-wrap select-text"
           >
             {output.text || "Waiting for the sign-in instructions…"}
           </pre>
           {output.links.map((link) => (
-            <div key={link} className="flex items-center gap-2 text-sm">
+            <div key={link} className="flex items-center gap-2 text-ui">
               <span>Sign-in link · {new URL(link).hostname}</span>
               <CopyButton text={link} label="Copy sign-in link" />
             </div>

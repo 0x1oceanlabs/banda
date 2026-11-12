@@ -357,7 +357,7 @@ function Connection({ status }: { status: Status }) {
   return (
     <div
       role="status"
-      className="flex items-center gap-2 px-2 text-xs text-muted-foreground"
+      className="flex items-center gap-2 px-2 text-meta text-muted-foreground"
     >
       {status.state === "refused" ? (
         <span className="size-2 rounded-full bg-destructive" />
@@ -390,7 +390,7 @@ function LookProblems({ more }: { more: readonly Problem[] }) {
       role="status"
       aria-label={`The look: ${words}`}
       title={`The look keeps its last good state:\n${words}`}
-      className="flex items-center gap-1 px-2 text-xs text-destructive"
+      className="flex items-center gap-1 px-2 text-meta text-destructive"
     >
       <TriangleAlertIcon className="size-3.5" />
       {problems[0].path.split("/").at(-1)}

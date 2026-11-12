@@ -94,7 +94,7 @@ if (host && engine) {
   else show()
 } else {
   root.render(
-    <p className="p-6 text-sm text-muted-foreground">
+    <p className="p-6 text-ui text-muted-foreground">
       Open Banda from its desktop app: this page needs it to reach the engine.
     </p>
   )

@@ -28,7 +28,7 @@ export function AsidePill({ engine, aside }: { engine: Engine; aside: Aside }) {
     <div
       role="status"
       title={problem}
-      className="mr-1 flex items-center gap-2 rounded-full border border-attention/50 bg-attention/10 py-0.5 pr-0.5 pl-2.5 text-xs"
+      className="mr-1 flex items-center gap-2 rounded-full border border-attention/50 bg-attention/10 py-0.5 pr-0.5 pl-2.5 text-meta"
     >
       <span>
         <span className="font-medium">Workspaces set aside</span>

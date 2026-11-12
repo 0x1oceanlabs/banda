@@ -63,7 +63,7 @@ export function InfoPane({
     <section
       aria-label="Info"
       className={cn(
-        "@container flex min-h-0 flex-col gap-3 overflow-y-auto p-3 text-xs",
+        "@container flex min-h-0 flex-col gap-3 overflow-y-auto p-3 text-meta",
         className
       )}
     >
@@ -299,7 +299,7 @@ function FolderSize({
         <Button
           variant="link"
           size="xs"
-          className="h-auto p-0 text-xs"
+          className="h-auto p-0 text-meta"
           onClick={() => setCounting(null)}
         >
           Stop
@@ -309,7 +309,7 @@ function FolderSize({
           <Button
             variant="link"
             size="xs"
-            className="h-auto p-0 text-xs"
+            className="h-auto p-0 text-meta"
             onClick={() => setCounting({ path, counted: null })}
           >
             Count

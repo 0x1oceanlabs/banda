@@ -118,7 +118,7 @@ export function AskToShare({ engine }: { engine: Engine }) {
           ))}
         </div>
         <Collapsible className="flex min-w-0 flex-col gap-2">
-          <CollapsibleTrigger className="group self-start text-xs text-primary hover:underline">
+          <CollapsibleTrigger className="group self-start text-meta text-primary hover:underline">
             <span className="group-data-panel-open:hidden">▸</span>
             <span className="hidden group-data-panel-open:inline">▾</span> See
             exactly what is sent
@@ -134,20 +134,20 @@ export function AskToShare({ engine }: { engine: Engine }) {
                 </pre>
               ))
             ) : (
-              <p className="text-xs text-muted-foreground">
+              <p className="text-meta text-muted-foreground">
                 {example.state === "refused"
                   ? example.refusal.message
                   : "Reading the examples…"}
               </p>
             )}
-            <p className="text-xs text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               To PostHog (US) with a random ID that is not you. No IP, no
               location, no profile.
             </p>
           </CollapsibleContent>
         </Collapsible>
         {problem && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-meta text-destructive">
             {problem}
           </p>
         )}

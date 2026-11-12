@@ -133,7 +133,7 @@ export function BulkBar() {
         buttons?.[to]?.focus({ preventScroll: true })
       }}
     >
-      <span className="mr-auto truncate text-xs text-muted-foreground tabular-nums">
+      <span className="mr-auto truncate text-meta text-muted-foreground tabular-nums">
         {count} selected
       </span>
       {tools.map((tool, index) => {

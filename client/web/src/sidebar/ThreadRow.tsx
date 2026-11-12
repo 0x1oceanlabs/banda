@@ -96,7 +96,7 @@ export function ThreadRow({
         project={project}
         listed={row.listed}
         naming={naming}
-        className="-my-0.5 -ml-1.5 h-6 text-sm"
+        className="-my-0.5 -ml-1.5 h-6 text-ui"
       />
     )
   return <CardMenu row={row}>{drawn()}</CardMenu>

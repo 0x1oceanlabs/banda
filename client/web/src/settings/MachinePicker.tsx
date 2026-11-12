@@ -55,7 +55,7 @@ export function MachinePicker({
     <div className="flex flex-col gap-2.5">
       <div>
         <div className="text-ui font-medium">Name and icon</div>
-        <div className="text-xs text-muted-foreground">{about}</div>
+        <div className="text-meta text-muted-foreground">{about}</div>
       </div>
       <Input
         aria-label="Machine name"
@@ -106,13 +106,13 @@ export function MachinePicker({
         })}
       </div>
       {holders.length > 0 && (
-        <p className="text-xs text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           Grey: another machine has it ({holders.join(", ")}).
         </p>
       )}
       <div
         aria-label="How it shows"
-        className="flex flex-col gap-1.5 rounded-control border px-2.5 py-2 text-xs"
+        className="flex flex-col gap-1.5 rounded-control border px-2.5 py-2 text-meta"
       >
         <div className="flex items-center gap-2">
           <span className="w-10 shrink-0 text-muted-foreground">Label</span>

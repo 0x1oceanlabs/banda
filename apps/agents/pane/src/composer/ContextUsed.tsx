@@ -27,7 +27,7 @@ export function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
     <span
       title={words}
       data-full={share >= NEARLY_FULL || undefined}
-      className="flex h-7 shrink-0 items-center gap-1.5 px-1.5 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
+      className="flex h-7 shrink-0 items-center gap-1.5 px-1.5 text-meta text-muted-foreground tabular-nums data-full:text-destructive"
     >
       <RingMeter
         className="size-3.5"

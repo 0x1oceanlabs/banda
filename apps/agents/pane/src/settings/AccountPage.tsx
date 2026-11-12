@@ -140,7 +140,7 @@ export function AccountPage({
           <Reading {...props} />
         </>
       ) : (
-        <p className="text-sm text-muted-foreground">
+        <p className="text-ui text-muted-foreground">
           Off: no new Thread starts on it.
         </p>
       )}
@@ -224,7 +224,7 @@ function Hero({
             if (event.key === "Enter") commit(event.currentTarget.value)
           }}
         />
-        <p className="text-xs text-muted-foreground">
+        <p className="text-meta text-muted-foreground">
           {of} · {KIND_WORDS[harness.kind]}
         </p>
       </div>
@@ -317,7 +317,7 @@ function Reading(props: PageProps) {
       }
     >
       {read.state === "loading" && (
-        <span className="flex items-center gap-2 text-sm text-muted-foreground">
+        <span className="flex items-center gap-2 text-ui text-muted-foreground">
           <Spinner /> Starting {harness.name}…
         </span>
       )}
@@ -360,7 +360,7 @@ function AccountState({
     )
   return (
     <div className="flex flex-col gap-2">
-      <p className="text-sm text-muted-foreground">
+      <p className="text-ui text-muted-foreground">
         {who
           ? "Not signed in."
           : `${harness.name} does not say who is signed in.`}
@@ -385,7 +385,7 @@ function AccountState({
 function LimitRows({ limits, now }: { limits?: Limits; now: number }) {
   if (!limits || limits.windows.length === 0)
     return (
-      <p className="text-sm text-muted-foreground">
+      <p className="text-ui text-muted-foreground">
         {limits?.note ?? "Banda reads no limits of it."}
       </p>
     )
@@ -397,11 +397,11 @@ function LimitRows({ limits, now }: { limits?: Limits; now: number }) {
         return (
           <div
             key={window.id}
-            className="grid grid-cols-[7rem_1fr_auto] items-center gap-3 text-sm"
+            className="grid grid-cols-[7rem_1fr_auto] items-center gap-3 text-ui"
           >
             <span className="truncate">{window.label}</span>
             <Meter label={window.label} used={used} />
-            <span className="text-xs text-muted-foreground tabular-nums">
+            <span className="text-meta text-muted-foreground tabular-nums">
               {Math.round(used)}%
               {window.resets_at !== undefined &&
                 ` · ${clock(window.resets_at, now)}`}
@@ -410,7 +410,7 @@ function LimitRows({ limits, now }: { limits?: Limits; now: number }) {
         )
       })}
       {out && (
-        <p className="text-xs text-destructive">
+        <p className="text-meta text-destructive">
           Out{out.until === undefined ? "" : ` until ${clock(out.until, now)}`}.
         </p>
       )}
@@ -458,7 +458,7 @@ export function EmblemPicker({
     <div className="flex flex-col gap-2">
       {iconGroupsOf(harness.harness).map(({ group, icons }) => (
         <div key={group} role="group" aria-label={group}>
-          <p className="mb-1 text-xs text-muted-foreground">{group}</p>
+          <p className="mb-1 text-meta text-muted-foreground">{group}</p>
           <div className="flex flex-wrap gap-1">
             {icons.map((icon) => (
               <Button
@@ -510,7 +510,7 @@ function Section({
 }) {
   return (
     <section aria-label={title} className="flex flex-col gap-2">
-      <h3 className="flex h-6 items-center justify-between text-xs font-medium text-muted-foreground uppercase">
+      <h3 className="flex h-6 items-center justify-between text-meta font-medium text-muted-foreground uppercase">
         {title}
         {action}
       </h3>
@@ -523,7 +523,7 @@ function Section({
  * A third value is the value's tooltip. */
 function Facts({ rows }: { rows: [string, string | undefined, string?][] }) {
   return (
-    <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 text-sm">
+    <dl className="grid grid-cols-[7rem_1fr] gap-x-3 gap-y-1 text-ui">
       {rows
         .filter(([, value]) => value)
         .map(([name, value, title]) => (
@@ -645,7 +645,7 @@ function HowItStarts({
           key={line}
           aria-label={`${harness.name} command`}
           defaultValue={line}
-          className="h-8 w-72 max-w-full font-mono text-xs"
+          className="h-8 w-72 max-w-full font-mono text-meta"
           onBlur={(event) => commit(event.target.value)}
           onKeyDown={(event) => {
             if (event.key === "Enter") commit(event.currentTarget.value)
@@ -683,7 +683,7 @@ export function Row({
     <Item className="rounded-none px-0">
       <ItemContent className="min-w-40">
         <ItemTitle>{title}</ItemTitle>
-        <ItemDescription className="text-xs">{about}</ItemDescription>
+        <ItemDescription className="text-meta">{about}</ItemDescription>
       </ItemContent>
       <ItemActions>{children}</ItemActions>
     </Item>

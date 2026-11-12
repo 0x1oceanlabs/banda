@@ -312,7 +312,7 @@ function Picking({
   }
   return (
     <>
-      <div className="truncate px-1.5 pt-0.5 pb-1.5 text-xs text-muted-foreground">
+      <div className="truncate px-1.5 pt-0.5 pb-1.5 text-meta text-muted-foreground">
         Later ·{" "}
         <span className="text-foreground/80">
           {targets.length === 1 && one
@@ -321,7 +321,7 @@ function Picking({
         </span>
       </div>
       {asking > 0 && (
-        <p className="px-1.5 pb-1.5 text-xs text-muted-foreground">
+        <p className="px-1.5 pb-1.5 text-meta text-muted-foreground">
           {targets.length === 1
             ? "It waits with its question"
             : asking === targets.length
@@ -356,14 +356,14 @@ function Picking({
       {passed !== undefined ? (
         <p
           role="status"
-          className="px-1.5 pt-1.5 text-xs text-muted-foreground"
+          className="px-1.5 pt-1.5 text-meta text-muted-foreground"
         >
           {clock(passed, now)} has passed. Pick another time.
         </p>
       ) : (
         text.trim() &&
         typed === undefined && (
-          <p className="px-1.5 pt-1.5 text-xs text-muted-foreground">
+          <p className="px-1.5 pt-1.5 text-meta text-muted-foreground">
             Not a time yet: try 45m, 3h, 18, tomorrow 10, fri.
           </p>
         )
@@ -390,7 +390,7 @@ function Picking({
               </span>
             )}
             <span className="min-w-0 flex-1 truncate">{choice.label}</span>
-            <SuggestionDescription className="flex-none text-xs tabular-nums">
+            <SuggestionDescription className="flex-none text-meta tabular-nums">
               {choice.note}
             </SuggestionDescription>
           </Suggestion>

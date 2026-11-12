@@ -210,7 +210,7 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
         </CardHeader>
         <CardContent className="flex flex-col border-t px-0">
           {hosts.length === 0 && (
-            <p className="px-(--card-spacing) py-3 text-sm text-muted-foreground">
+            <p className="px-(--card-spacing) py-3 text-ui text-muted-foreground">
               No other machine yet. Add one below, and its Projects show under
               its name.
             </p>
@@ -386,7 +386,7 @@ function ThisMachine({
               <Undo2Icon />
             </Button>
           )}
-          <div className="ml-auto text-right text-xs leading-5 text-muted-foreground">
+          <div className="ml-auto text-right text-meta leading-5 text-muted-foreground">
             {facts && <div>{facts}</div>}
             {build && (
               <div
@@ -411,7 +411,7 @@ function ThisMachine({
           />
         ))}
         {got?.battery === true && (
-          <p className="flex items-center gap-2 border-t px-(--card-spacing) pt-2.5 text-xs text-muted-foreground">
+          <p className="flex items-center gap-2 border-t px-(--card-spacing) pt-2.5 text-meta text-muted-foreground">
             <LaptopIcon className="size-3.5 shrink-0" />
             {lidWords(now.name, got.system)}
           </p>
@@ -419,7 +419,7 @@ function ThisMachine({
         {problem && (
           <p
             role="alert"
-            className="px-(--card-spacing) pt-2 text-xs text-destructive"
+            className="px-(--card-spacing) pt-2 text-meta text-destructive"
           >
             {problem}
           </p>
@@ -454,8 +454,8 @@ function SwitchRow({
       className={cn("flex items-center gap-3", className)}
     >
       <div className="min-w-0 flex-1">
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{about}</div>
+        <div className="text-ui font-medium">{title}</div>
+        <div className="text-meta text-muted-foreground">{about}</div>
       </div>
       <BusySwitch label={title} on={on} busy={busy} onChange={onChange} />
     </div>
@@ -559,7 +559,7 @@ function EntryField({
       placeholder={placeholder}
       title={value || undefined}
       spellCheck={false}
-      className="h-8 w-64 font-mono text-xs"
+      className="h-8 w-64 font-mono text-meta"
       onBlur={(event) => {
         if (enterOnly) event.currentTarget.value = value
         else commit(event.currentTarget)
@@ -666,7 +666,7 @@ function HostRow({
         aria-expanded={open}
         onClick={() => setToggled({ lit, open: !open })}
         className={cn(
-          "flex min-h-11 items-center gap-2 px-(--card-spacing) text-left text-sm hover:bg-accent/40",
+          "flex min-h-11 items-center gap-2 px-(--card-spacing) text-left text-ui hover:bg-accent/40",
           lit === key && "bg-accent/60"
         )}
       >
@@ -678,15 +678,15 @@ function HostRow({
         <MachineMark
           named={named}
           form="full"
-          className="text-sm text-foreground [&_svg]:text-muted-foreground"
+          className="text-ui text-foreground [&_svg]:text-muted-foreground"
         />
         {ssh !== name && (
-          <span className="min-w-0 truncate font-mono text-xs text-muted-foreground">
+          <span className="min-w-0 truncate font-mono text-meta text-muted-foreground">
             {ssh}
           </span>
         )}
         <span
-          className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-muted-foreground tabular-nums"
+          className="ml-auto flex shrink-0 items-center gap-1.5 text-meta text-muted-foreground tabular-nums"
           title={why}
         >
           {battery && <BatteryIcon battery={battery} />}
@@ -699,12 +699,12 @@ function HostRow({
       {open && (
         <div className="flex flex-col pb-1 pl-6">
           {why && (
-            <p className="px-4 pt-1 pb-2 text-xs text-muted-foreground">
+            <p className="px-4 pt-1 pb-2 text-meta text-muted-foreground">
               {name}: {why}
             </p>
           )}
           {state.state === "signin" && (
-            <p className="px-4 pt-1 pb-2 text-xs">
+            <p className="px-4 pt-1 pb-2 text-meta">
               <SignIn url={state.url}>
                 Sign in to Tailscale to reach {name}
               </SignIn>
@@ -760,7 +760,7 @@ function HostRow({
                 about={awake.about}
               >
                 {battery && (
-                  <span className="flex items-center gap-1.5 text-sm tabular-nums">
+                  <span className="flex items-center gap-1.5 text-ui tabular-nums">
                     <BatteryIcon battery={battery} />
                     {batteryWords(battery)}
                   </span>
@@ -807,7 +807,7 @@ function HostRow({
             </RowFrame>
             {build && (
               <RowFrame dataKey={`${key}.build`} title="Build">
-                <span className="text-xs text-muted-foreground tabular-nums">
+                <span className="text-meta text-muted-foreground tabular-nums">
                   {build}
                 </span>
               </RowFrame>
@@ -851,7 +851,7 @@ function HostRow({
             </div>
           </div>
           {doing && !shownTest && (
-            <p className="flex items-center gap-2 px-4 pb-2 text-xs text-muted-foreground">
+            <p className="flex items-center gap-2 px-4 pb-2 text-meta text-muted-foreground">
               <Spinner className="size-3" />
               {doing}
             </p>
@@ -874,7 +874,7 @@ function HostRow({
             />
           )}
           {problem && (
-            <p role="alert" className="px-4 pb-2 text-xs text-destructive">
+            <p role="alert" className="px-4 pb-2 text-meta text-destructive">
               {problem}
             </p>
           )}
@@ -889,7 +889,7 @@ function HostRow({
             <DialogTitle>Remove {name}?</DialogTitle>
             <DialogDescription>Its Projects stay on {name}.</DialogDescription>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">
+          <p className="text-ui text-muted-foreground">
             This window stops showing its Projects and Threads, and Banda goes
             on running there. Add it again to see them.
           </p>
@@ -1007,7 +1007,7 @@ function TestFound({
     <div
       role="status"
       className={cn(
-        "mx-2.5 mb-2 flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-sm",
+        "mx-2.5 mb-2 flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-ui",
         !words.found && "text-muted-foreground"
       )}
     >
@@ -1027,7 +1027,7 @@ function TestFound({
           )}
         </div>
         {words.detail && (
-          <div className="text-xs text-muted-foreground">{words.detail}</div>
+          <div className="text-meta text-muted-foreground">{words.detail}</div>
         )}
         {children}
       </div>
@@ -1093,7 +1093,7 @@ function Installing({
   return (
     <div
       role="status"
-      className="flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-sm"
+      className="flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-ui"
     >
       <MachineIcon
         icon="server"
@@ -1103,7 +1103,7 @@ function Installing({
       <div className="flex min-w-0 flex-1 flex-col gap-1">
         <div className="font-medium">Installing Banda on {name}</div>
         {steps.length === 0 && (
-          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+          <div className="flex items-center gap-2 text-meta text-muted-foreground">
             <Spinner className="size-3" />
             Reaching {name}
           </div>
@@ -1112,7 +1112,7 @@ function Installing({
           <div
             key={step.words}
             className={cn(
-              "flex items-center gap-2 text-xs",
+              "flex items-center gap-2 text-meta",
               step.done ? "text-muted-foreground" : "text-foreground"
             )}
           >
@@ -1242,8 +1242,8 @@ function AddMachine({
   return (
     <div className="flex flex-col gap-2.5 border-t px-(--card-spacing) pt-3 pb-1">
       <div className="flex flex-wrap items-baseline gap-x-2">
-        <span className="text-sm font-medium">Add a machine</span>
-        <span className="text-xs text-muted-foreground">
+        <span className="text-ui font-medium">Add a machine</span>
+        <span className="text-meta text-muted-foreground">
           Banda reads its name and icon.
         </span>
       </div>
@@ -1251,7 +1251,7 @@ function AddMachine({
         <div
           role="group"
           aria-label="From ~/.ssh/config"
-          className="flex flex-wrap items-center gap-1.5 text-xs text-muted-foreground"
+          className="flex flex-wrap items-center gap-1.5 text-meta text-muted-foreground"
         >
           From ~/.ssh/config:
           {chips.map((chip) => (
@@ -1265,7 +1265,7 @@ function AddMachine({
                 connect(chip)
               }}
               className={cn(
-                "rounded-control border px-2 py-0.5 font-mono text-xs text-foreground hover:bg-accent disabled:opacity-50",
+                "rounded-control border px-2 py-0.5 font-mono text-meta text-foreground hover:bg-accent disabled:opacity-50",
                 address === chip && "border-ring"
               )}
             >
@@ -1286,7 +1286,7 @@ function AddMachine({
           placeholder="user@machine"
           value={address}
           spellCheck={false}
-          className="h-8 flex-1 font-mono text-xs"
+          className="h-8 flex-1 font-mono text-meta"
           onChange={(event) => {
             // What Connect found is of the address it looked at.
             setAddress(event.target.value)
@@ -1302,7 +1302,7 @@ function AddMachine({
         </Button>
       </form>
       {doing && !installing && (
-        <p className="flex items-center gap-2 text-xs text-muted-foreground">
+        <p className="flex items-center gap-2 text-meta text-muted-foreground">
           <Spinner className="size-3" />
           {doing}
         </p>
@@ -1349,13 +1349,13 @@ function AddMachine({
             }
           >
             {already && (
-              <div className="text-xs text-muted-foreground">
+              <div className="text-meta text-muted-foreground">
                 {already.named.name} is added already.
               </div>
             )}
             {settled &&
               settleWords(settled).map((line) => (
-                <div key={line} className="text-xs text-muted-foreground">
+                <div key={line} className="text-meta text-muted-foreground">
                   {line}
                 </div>
               ))}
@@ -1363,12 +1363,12 @@ function AddMachine({
         </div>
       )}
       {added && (
-        <p role="status" className="text-xs text-muted-foreground">
+        <p role="status" className="text-meta text-muted-foreground">
           {addedWords(added.name, added.settled, added.failed)}
         </p>
       )}
       {problem && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-meta text-destructive">
           {problem}
         </p>
       )}

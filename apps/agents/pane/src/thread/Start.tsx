@@ -102,7 +102,7 @@ export function Start({
         {where}
       </div>
       {(why || asks) && (
-        <p className="-mt-2 max-w-md text-center text-xs text-muted-foreground">
+        <p className="-mt-2 max-w-md text-center text-meta text-muted-foreground">
           {why ?? "It asks you before anything that needs your yes."}
         </p>
       )}
@@ -152,7 +152,7 @@ function Recent({
   const now = useNow(60_000)
   return (
     <div className="flex w-full max-w-md flex-col gap-px">
-      <div className="flex justify-between px-2 pb-1 text-xs text-muted-foreground">
+      <div className="flex justify-between px-2 pb-1 text-meta text-muted-foreground">
         <span>Recent</span>
         {count > threads.length && <span>{count} in all</span>}
       </div>
@@ -160,7 +160,7 @@ function Recent({
         <button
           key={thread.id}
           type="button"
-          className="flex items-center gap-2 rounded-control px-2 py-1 text-left text-sm outline-none hover:bg-accent focus-visible:bg-accent"
+          className="flex items-center gap-2 rounded-control px-2 py-1 text-left text-ui outline-none hover:bg-accent focus-visible:bg-accent"
           onClick={() => onOpen(threadPaneOf(thread))}
         >
           <MessageSquareIcon
@@ -170,7 +170,7 @@ function Recent({
           <span className="min-w-0 flex-1 truncate">
             {thread.title || "New Thread"}
           </span>
-          <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+          <span className="shrink-0 text-meta text-muted-foreground tabular-nums">
             {ago(thread.updated_at, now)}
           </span>
         </button>

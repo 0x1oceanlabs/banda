@@ -47,7 +47,7 @@ export function Soon({ className }: { className?: string }) {
  * a row each, quietly; or that nothing does yet. */
 export function Waits({ waits }: { waits: readonly Waiting[] }) {
   if (waits.length === 0)
-    return <p className="text-xs text-muted-foreground">{NOTHING_YET}</p>
+    return <p className="text-meta text-muted-foreground">{NOTHING_YET}</p>
   return (
     <ul
       aria-label="What waits"
@@ -58,7 +58,7 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
         return (
           <li
             key={name}
-            className="flex min-w-0 items-center gap-2 px-2.5 py-0.5 text-xs"
+            className="flex min-w-0 items-center gap-2 px-2.5 py-0.5 text-meta"
           >
             <Icon className="size-3.5 shrink-0 text-muted-foreground" />
             <code className="shrink-0 font-mono">{name}</code>
@@ -76,7 +76,7 @@ export function Waits({ waits }: { waits: readonly Waiting[] }) {
  * ssh-agent (ADR 0083), under what else waits for it. */
 function TokenLine() {
   return (
-    <p className="flex items-center gap-2 text-xs text-muted-foreground">
+    <p className="flex items-center gap-2 text-meta text-muted-foreground">
       <GitBranchIcon className="size-3.5 shrink-0" />
       {GITHUB_AND_SSH}
     </p>
@@ -180,7 +180,7 @@ function Card({
             <Waits waits={askedOf(read.value).waits} />
           )}
           {read.state === "refused" && (
-            <p className="text-xs text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               {UNSEEN} {read.refusal.message}
             </p>
           )}
@@ -188,7 +188,7 @@ function Card({
         </>
       )}
       {problem && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-meta text-destructive">
           {problem}
         </p>
       )}

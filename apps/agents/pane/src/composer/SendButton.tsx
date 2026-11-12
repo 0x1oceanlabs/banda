@@ -108,7 +108,7 @@ function SendWhenBack({
     <Button
       type="submit"
       size="sm"
-      className="ml-1 gap-1.5 rounded-full pr-3 pl-2.5 text-xs font-medium hover:bg-primary/90 disabled:pointer-events-auto disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
+      className="ml-1 gap-1.5 rounded-full pr-3 pl-2.5 text-meta font-medium hover:bg-primary/90 disabled:pointer-events-auto disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
       title={title(now)}
       disabled={disabled}
     >

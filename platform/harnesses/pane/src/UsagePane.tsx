@@ -344,7 +344,7 @@ function AccountLimits({
           {account.name}
         </span>
         {about.length > 0 && (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             {about.join(" · ")}
           </span>
         )}
@@ -356,13 +356,13 @@ function AccountLimits({
           ))}
         </div>
       )}
-      {pace && <p className="mt-3 text-xs text-warning">{pace}</p>}
+      {pace && <p className="mt-3 text-meta text-warning">{pace}</p>}
       {limits.note && (
-        <p className="text-xs text-muted-foreground">{limits.note}</p>
+        <p className="text-meta text-muted-foreground">{limits.note}</p>
       )}
       {limits.failed && (
         <p
-          className="mt-2 text-xs text-warning"
+          className="mt-2 text-meta text-warning"
           title={fullDate(limits.failed.at)}
         >
           {limits.failed.why}
@@ -403,11 +403,11 @@ function WindowLimit({
         )}
       >
         {Math.round(used)}
-        <small className="ml-px text-sm font-medium text-muted-foreground">
+        <small className="ml-px text-ui font-medium text-muted-foreground">
           %
         </small>
       </div>
-      <div className="mt-1.5 mb-2.5 flex justify-between gap-2 text-xs text-muted-foreground">
+      <div className="mt-1.5 mb-2.5 flex justify-between gap-2 text-meta text-muted-foreground">
         <span>{window.label}</span>
         {pace && <span className={pace.tone}>{pace.words}</span>}
       </div>

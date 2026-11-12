@@ -539,7 +539,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             </Centered>
           ) : live.state === "refused" ? (
             <Centered>
-              <p className="text-sm text-muted-foreground">
+              <p className="text-ui text-muted-foreground">
                 {live.refusal.message}
               </p>
             </Centered>
@@ -634,7 +634,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
           />
         )}
         {problem && (
-          <p role="alert" className="px-1 text-xs text-destructive">
+          <p role="alert" className="px-1 text-meta text-destructive">
             {problem}
           </p>
         )}

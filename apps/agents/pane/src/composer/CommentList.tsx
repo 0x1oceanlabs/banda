@@ -20,7 +20,7 @@ export function CommentList({
             key={one.id}
             data-comment
             title={`${commentAt(one)}${one.comment ? `: ${one.comment}` : ""}`}
-            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-control bg-raised pr-0.5 pl-1.5 text-xs"
+            className="flex h-6 max-w-full min-w-0 items-center gap-1 rounded-control bg-raised pr-0.5 pl-1.5 text-meta"
           >
             <MessageSquareIcon className="size-3.5 shrink-0 text-muted-foreground" />
             <span className="shrink-0 font-mono text-small">
