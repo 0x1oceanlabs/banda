@@ -5273,7 +5273,8 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   const { page } = window
   const { composer } = await firstThread(page)
   const bar = page.getByRole("banner")
-  const counts = bar.getByRole("button", { name: /working|done/ })
+  // Its numbers first: the logo's own name says "at work" too (S15).
+  const counts = bar.getByRole("button", { name: /^\d+ (at work|done)/ })
   await sendAndGoBelow(page, composer, "slow hello")
   // The sidebar shows the same, so the bar leaves it out.
   await expect(
@@ -5284,14 +5285,16 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   // Alt+A hides it; the bar's logo opens the Banda menu (ADR 0098,
   // decision 21).
   await page.keyboard.press("Alt+A")
-  await expect(bar.getByRole("button", { name: "1 working" })).toBeVisible()
+  await expect(
+    bar.getByRole("button", { name: "1 at work", exact: true })
+  ).toBeVisible()
   const done = bar.getByRole("button", { name: "1 done" })
   await expect(done).toBeVisible()
   await page.screenshot({ path: "test-results/25-bar-counts.png" })
 
   await done.click()
   const row = page.getByRole("menuitem", { name: /slow hello/ })
-  await expect(page.getByRole("group", { name: "Wait for you" })).toContainText(
+  await expect(page.getByRole("group", { name: "Your turn" })).toContainText(
     "slow hello"
   )
   await page.screenshot({ path: "test-results/25-bar-counts-list.png" })
