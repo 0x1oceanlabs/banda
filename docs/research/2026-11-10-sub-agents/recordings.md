@@ -681,3 +681,52 @@ Costs, as Claude Code says them: about $0.016 for the whole file (80, 170).
   entry with no text: a "Messaged ‹label›" row with no words, and no
   bubble. A SendMessage call that names no child of the Thread stays the
   call it is.
+
+## Part E: Crews, with the raw frames (ADR 0103, step 4)
+
+`claude-crew.jsonl`, 145 lines, 280 KB, made the same way with Banda
+asking for the five raw subtypes (`_meta.claudeCode.emitRawSDKMessages`,
+3, 98), on Haiku at low effort, one run. Claude Code says $0.043 for the
+first Thread, its Crew's 598,180 tokens among it (97), and $0.0065 for
+the second (145).
+
+| Thread | Lines | What was asked |
+|---|---|---|
+| Supervised | 3–97 | The Workflow tool with a three-phase script: Scan (2 agents), Fix (18 at once), Verify (1, `echo delta > d.txt`), a `log()` after each phase |
+| Full access | 98–145 | A one-agent script that throws after its first phase |
+
+**What Banda got:**
+
+- **The start asks** with the script (21): Banda's Question carries
+  `meta`'s name and phases; the turn ends at once, "launched" (33).
+- **Each Crew is announced twice**: `background_tasks_changed` (23) before
+  `task_started` (24).
+- **Queued is `start` with no `startedAt`.** Claude runs 16 agents at
+  once; the 17th and 18th come as `start` without a start time (38) until
+  a place frees.
+- **States are `start`, `progress` and `done`**; 55 `task_progress`
+  frames carry the whole tree each time. Banda wrote 26 facts.
+- **No frame carries what the script logs.** No `workflow_log` came; the
+  lines are only in the output file's `logs`.
+- **The output file is a JSON object**: `summary`, `agentCount`, `logs`,
+  `result` ("alpha, bravo; done"), `workflowProgress`, `totalTokens`. The
+  Result is its `result`; the last of `logs` is the log line.
+- **The last agent's command asks between turns** (85–86), on the parent's
+  session, naming no agent. With one Crew at work it is the Crew's: no turn
+  of the Agent's own opens for it. Its call ends Done.
+- **The end**: `task_updated` (91), `task_notification` with the output
+  file (92), an empty `background_tasks_changed` (93); then Claude goes on
+  by itself, and that turn's last usage names the run (97), which is how
+  `went_on` is learnt.
+- **A script that throws**: `status: failed`, its summary the error with a
+  JS stack (135), its output file empty. The Crew was so short that the
+  turn was still open (answered at 141): its agent's call came in the turn
+  (124), as the Agent's own, and Claude went on after all the same (145).
+- **The agents' reports** sometimes say they ignored "instructions to
+  create a Claude Docs document" in their Bash output: the recording
+  account's connectors, not the task. Harmless here; worth knowing when
+  reading a `resultPreview`.
+
+**Limits:** one run. The second script's `log('scanned')` is lost: a
+script that throws leaves its output file empty. A replay has no output file, so its Crews have no Result
+and no log line; the unit tests read Claude's object.
