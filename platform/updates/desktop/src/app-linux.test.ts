@@ -2,6 +2,7 @@ import { EventEmitter } from "node:events"
 import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
+import type { UpdateState } from "@banda/contract/updates"
 import { afterEach, beforeEach, expect, it, vi } from "vitest"
 
 const updater = vi.hoisted(() => ({
@@ -17,45 +18,41 @@ const electron = vi.hoisted(() => ({
   getPath: (): string => "/nowhere",
   on: (() => {}) as (event: string, listener: () => void) => void,
 }))
-const entry = vi.hoisted(() => ({
-  listApp: () => {},
-  listedImage: (): string | undefined => undefined,
-}))
-const power = vi.hoisted(() => ({
-  on: (() => {}) as (event: string, listener: () => void) => void,
-}))
 vi.mock("electron-updater", () => ({
   autoUpdater: updater,
   Provider: class {},
 }))
-vi.mock("electron", () => ({ app: electron, powerMonitor: power }))
+vi.mock("electron", () => ({ app: electron }))
 // A restart starts the new AppImage after this one: not in a test.
 vi.mock("node:child_process", () => ({
   spawn: () => ({ unref() {} }),
 }))
-vi.mock("./channel", () => {
-  const dev = { name: "Banda Dev", folder: "banda-dev" }
-  return { channel: dev, CHANNELS: { dev, local: {}, stable: {} } }
-})
-vi.mock("./entry", () => entry)
 
-import { updates } from "./update"
+import { type App, type Engine, updates } from "./app"
 
 const HOUR = 3_600_000
 let events: EventEmitter
 let quits: EventEmitter
-let wakes: EventEmitter
 let folder: string
+let listed: string | undefined
+let mine: App
+/** What the engine answers `updates.check` with, as it looks. */
+let engine: Engine & { check: ReturnType<typeof vi.fn> }
+
+/** What the engine says once it looked, at `at`, and found `newest`. */
+const looked = (newest = "0.1.0-dev.421", at = Date.now()): UpdateState => ({
+  running: "0.1.0-dev.420",
+  newest,
+  looked: at,
+})
 
 beforeEach(() => {
   vi.useFakeTimers()
   vi.spyOn(console, "warn").mockImplementation(() => {})
   events = new EventEmitter()
   quits = new EventEmitter()
-  wakes = new EventEmitter()
   Object.assign(updater, { on: events.on.bind(events) })
   electron.on = quits.on.bind(quits)
-  power.on = wakes.on.bind(wakes)
   for (const fn of [
     updater.checkForUpdates,
     updater.downloadUpdate,
@@ -67,7 +64,16 @@ beforeEach(() => {
   const image = join(folder, "banda-dev-0.1.0-dev.420-x86_64.AppImage")
   writeFileSync(image, "")
   electron.getPath = () => folder
-  entry.listedImage = () => image
+  listed = image
+  mine = {
+    name: "Banda Dev",
+    folder: "banda-dev",
+    which: "dev",
+    repository: { owner: "o", repo: "r" },
+    listApp: () => {},
+    listedImage: () => listed,
+  }
+  engine = { check: vi.fn(async () => looked()) }
   vi.stubEnv("APPIMAGE", image)
   vi.stubEnv("BANDA_UPDATES", "")
 })
@@ -85,10 +91,10 @@ const offer = (version: string) => ({
   releaseNotes: [{ version, note: `the change in ${version}` }],
 })
 
-/** Banda Dev with 0.1.0-dev.421 down and ready, a minute after its start. */
-async function ready() {
-  const update = updates(vi.fn())
-  await vi.advanceTimersByTimeAsync(60_000)
+/** Banda Dev with 0.1.0-dev.421 down and ready, once its engine looked. */
+function ready(leaving = vi.fn()) {
+  const update = updates(mine, engine, vi.fn(), leaving)
+  update.heard(looked())
   events.emit("update-available", offer("0.1.0-dev.421"))
   events.emit("update-downloaded", offer("0.1.0-dev.421"))
   expect(update.current()).toMatchObject({
@@ -109,33 +115,52 @@ function sleep(ms: number) {
   vi.setSystemTime(Date.now() + ms)
 }
 
-/** Whether Banda restarted into the version ready, once `before` ran. */
+/** Whether Banda restarted into the version ready. */
 async function restarted(): Promise<boolean> {
   await vi.advanceTimersByTimeAsync(0)
   return updater.quitAndInstall.mock.calls.length > 0
 }
 
-it("reads Banda Dev's own source, and looks a minute after the start, then hourly", async () => {
-  const update = updates(vi.fn())
-  expect(updater.setFeedURL).toHaveBeenCalledWith(
-    expect.objectContaining({ provider: "custom", which: "dev" })
-  )
+it("reads the release its engine found newest, once for each look the engine made", () => {
+  const update = updates(mine, engine, vi.fn())
+  const [source] = updater.setFeedURL.mock.calls[0] as [
+    { provider: string; which: string; folder: string; newest: () => unknown },
+  ]
+  expect(source).toMatchObject({
+    provider: "custom",
+    which: "dev",
+    folder: "banda-dev",
+  })
   expect(update.current()).toMatchObject({ state: "none", always: true })
-  await vi.advanceTimersByTimeAsync(60_000)
+  // It looks at nothing by itself: the engine looks.
+  vi.advanceTimersByTime(2 * HOUR)
+  expect(updater.checkForUpdates).not.toHaveBeenCalled()
+  const first = looked("0.1.0-dev.421", 1000)
+  update.heard(first)
+  expect(source.newest()).toBe("0.1.0-dev.421")
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
-  await vi.advanceTimersByTimeAsync(HOUR)
+  // A take's progress is no new look.
+  update.heard({
+    ...first,
+    taking: { version: "0.1.0-dev.421", share: 0.5, size: 1 },
+  })
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+  update.heard(looked("0.1.0-dev.422", 2000))
+  expect(source.newest()).toBe("0.1.0-dev.422")
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
+  expect(engine.check).not.toHaveBeenCalled()
 })
 
-it("downloads what a look offers, and installs it at the quit", async () => {
-  await ready()
+it("downloads what a look offers, and installs it at the quit", () => {
+  ready()
   expect(updater.downloadUpdate).toHaveBeenCalledTimes(1)
   expect(quitInstalls()).toBe(true)
 })
 
-it("keeps looking while a version is ready, and keeps it while it is offered", async () => {
-  const update = await ready()
-  await vi.advanceTimersByTimeAsync(HOUR)
+it("keeps reading while a version is ready, and keeps it while it is offered", () => {
+  const update = ready()
+  vi.advanceTimersByTime(HOUR)
+  update.heard(looked())
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
   events.emit("update-available", offer("0.1.0-dev.421"))
   expect(update.current()).toMatchObject({ state: "ready" })
@@ -144,15 +169,15 @@ it("keeps looking while a version is ready, and keeps it while it is offered", a
   expect(quitInstalls()).toBe(true)
 })
 
-it("downloads a newer version in place of the one ready, still restarting when idle", async () => {
-  const update = await ready()
-  update.wait()
-  await vi.advanceTimersByTimeAsync(HOUR)
+it("downloads a newer version in place of the one ready", () => {
+  const update = ready()
+  vi.advanceTimersByTime(HOUR)
+  update.heard(looked("0.1.0-dev.425"))
   events.emit("update-available", offer("0.1.0-dev.425"))
   expect(update.current()).toMatchObject({
     state: "downloading",
     version: "0.1.0-dev.425",
-    restarts: true,
+    restarts: false,
   })
   expect(updater.downloadUpdate).toHaveBeenCalledTimes(2)
   // Not while it downloads: the one ready went with its download.
@@ -161,14 +186,14 @@ it("downloads a newer version in place of the one ready, still restarting when i
   expect(update.current()).toMatchObject({
     state: "ready",
     version: "0.1.0-dev.425",
-    waits: true,
   })
   expect(quitInstalls()).toBe(true)
 })
 
-it("drops a version ready once a look finds it withdrawn (ADR 0092, decision 10)", async () => {
-  const update = await ready()
-  await vi.advanceTimersByTimeAsync(HOUR)
+it("drops a version ready once a look finds it withdrawn (ADR 0092, decision 10)", () => {
+  const update = ready()
+  vi.advanceTimersByTime(HOUR)
+  update.heard(looked("0.1.0-dev.420"))
   events.emit("update-not-available", { version: "0.1.0-dev.420" })
   expect(update.current()).toMatchObject({ state: "none" })
   expect(quitInstalls()).toBe(false)
@@ -177,56 +202,53 @@ it("drops a version ready once a look finds it withdrawn (ADR 0092, decision 10)
   expect(updater.quitAndInstall).not.toHaveBeenCalled()
 })
 
-it("installs nothing at the quit once the last look is over an hour old", async () => {
-  await ready()
+it("installs nothing at the quit once the last look is over an hour old", () => {
+  const update = ready()
   // Two hours with no answer: offline, or asleep.
-  await vi.advanceTimersByTimeAsync(2 * HOUR)
+  vi.advanceTimersByTime(2 * HOUR)
   expect(quitInstalls()).toBe(false)
+  update.heard(looked())
   events.emit("update-available", offer("0.1.0-dev.421"))
   expect(quitInstalls()).toBe(true)
 })
 
-it("looks a minute after a wake, so a quit after a sleep installs again", async () => {
-  await ready()
-  sleep(3 * HOUR)
-  expect(quitInstalls()).toBe(false)
-  wakes.emit("resume")
-  await vi.advanceTimersByTimeAsync(60_000)
-  expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
-  events.emit("update-available", offer("0.1.0-dev.421"))
-  expect(quitInstalls()).toBe(true)
-})
-
-it("restarts at once into a version the last look offered", async () => {
-  const update = await ready()
+it("restarts at once into a version the last look offered, and stops no engine", async () => {
+  const leaving = vi.fn()
+  const update = ready(leaving)
   update.restart()
   expect(await restarted()).toBe(true)
+  expect(leaving).toHaveBeenCalledTimes(1)
+  expect(engine.check).not.toHaveBeenCalled()
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
 })
 
-it("after a sleep, restarts only once a look offers the version again", async () => {
-  const update = await ready()
+it("after a sleep, asks the engine to look, and restarts once the look offers the version again", async () => {
+  const update = ready()
   sleep(3 * HOUR)
   update.restart()
   expect(await restarted()).toBe(false)
+  expect(engine.check).toHaveBeenCalledTimes(1)
+  // The engine's answer is read: the release it found newest.
   expect(updater.checkForUpdates).toHaveBeenCalledTimes(2)
   events.emit("update-available", offer("0.1.0-dev.421"))
   expect(await restarted()).toBe(true)
 })
 
 it("after a sleep, drops a version withdrawn since instead of restarting into it", async () => {
-  const update = await ready()
+  const update = ready()
   sleep(3 * HOUR)
   update.restart()
+  await vi.advanceTimersByTimeAsync(0)
   events.emit("update-not-available", { version: "0.1.0-dev.420" })
   expect(update.current()).toMatchObject({ state: "none" })
   expect(await restarted()).toBe(false)
 })
 
 it("after a sleep, a Restart whose look fails restarts nothing, and says why", async () => {
-  const update = await ready()
+  const update = ready()
   sleep(3 * HOUR)
   update.now()
+  await vi.advanceTimersByTimeAsync(0)
   events.emit("error", new Error("net::ERR_INTERNET_DISCONNECTED\nmore"))
   expect(update.current()).toMatchObject({
     state: "failed",
@@ -237,108 +259,116 @@ it("after a sleep, a Restart whose look fails restarts nothing, and says why", a
   expect(quitInstalls()).toBe(false)
   // The next look readies it again, from the file already down, and
   // restarts nothing by itself: "Update now" ended with the failure.
+  update.heard(looked())
   events.emit("update-available", offer("0.1.0-dev.421"))
   events.emit("update-downloaded", offer("0.1.0-dev.421"))
-  expect(update.current()).toMatchObject({ state: "ready", waits: false })
+  expect(update.current()).toMatchObject({ state: "ready" })
   expect(await restarted()).toBe(false)
   expect(quitInstalls()).toBe(true)
 })
 
-it("after a sleep, Restart when idle outlasts a look that fails, and the window asks again once a look offers the version", async () => {
-  const update = await ready()
-  update.wait()
+it("after a sleep, a Restart while the engine is away says so", async () => {
+  engine.check.mockRejectedValue(new Error("Banda's engine is not running"))
+  const update = ready()
   sleep(3 * HOUR)
-  // The window, once no Thread works.
   update.restart()
-  events.emit("error", new Error("net::ERR_INTERNET_DISCONNECTED"))
-  // Not waiting while Banda cannot tell the version is still out.
-  expect(update.current()).toMatchObject({ state: "ready", waits: false })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(update.current()).toMatchObject({
+    state: "failed",
+    reason:
+      "Could not check that 0.1.0-dev.421 is still out: Banda's engine is not running",
+  })
   expect(await restarted()).toBe(false)
-  // The look a minute after the wake: Banda waits again, and the window
-  // asks for the restart once no Thread works, not main by itself.
-  wakes.emit("resume")
-  await vi.advanceTimersByTimeAsync(60_000)
-  events.emit("update-available", offer("0.1.0-dev.421"))
-  expect(update.current()).toMatchObject({ state: "ready", waits: true })
-  expect(await restarted()).toBe(false)
-  update.restart()
-  expect(await restarted()).toBe(true)
 })
 
-it("Restart when idle outlasts a newer version's download that fails", async () => {
-  const update = await ready()
-  update.wait()
-  await vi.advanceTimersByTimeAsync(HOUR)
-  events.emit("update-available", offer("0.1.0-dev.425"))
-  events.emit("error", new Error("net::ERR_CONNECTION_RESET"))
-  expect(update.current()).toMatchObject({ state: "none" })
-  await vi.advanceTimersByTimeAsync(HOUR)
-  events.emit("update-available", offer("0.1.0-dev.425"))
+it("Update now asks the engine to look, and restarts once the version is down", async () => {
+  const update = updates(mine, engine, vi.fn())
+  update.now()
+  expect(update.current()).toMatchObject({ state: "looking" })
+  expect(engine.check).toHaveBeenCalledTimes(1)
+  await vi.advanceTimersByTimeAsync(0)
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+  events.emit("update-available", offer("0.1.0-dev.421"))
   expect(update.current()).toMatchObject({
     state: "downloading",
     restarts: true,
   })
-  events.emit("update-downloaded", offer("0.1.0-dev.425"))
-  expect(update.current()).toMatchObject({
-    state: "ready",
-    version: "0.1.0-dev.425",
-    waits: true,
-  })
+  events.emit("update-downloaded", offer("0.1.0-dev.421"))
+  expect(await restarted()).toBe(true)
 })
 
 it("Update now whose download fails restarts nothing later", async () => {
-  const update = updates(vi.fn())
+  const update = updates(mine, engine, vi.fn())
   update.now()
+  await vi.advanceTimersByTimeAsync(0)
   events.emit("update-available", offer("0.1.0-dev.421"))
   expect(update.current()).toMatchObject({ restarts: true })
   events.emit("error", new Error("net::ERR_CONNECTION_RESET"))
-  await vi.advanceTimersByTimeAsync(HOUR)
+  vi.advanceTimersByTime(HOUR)
+  update.heard(looked())
   events.emit("update-available", offer("0.1.0-dev.421"))
   events.emit("update-downloaded", offer("0.1.0-dev.421"))
-  expect(update.current()).toMatchObject({ state: "ready", waits: false })
+  expect(update.current()).toMatchObject({ state: "ready" })
+  expect(await restarted()).toBe(false)
 })
 
-it("ignores looks while it restarts, so nothing deletes the version it installs", async () => {
-  let stopped = () => {}
-  const before = vi.fn(
-    () =>
-      new Promise<void>((resolve) => {
-        stopped = resolve
-      })
-  )
-  const update = updates(vi.fn(), before)
-  await vi.advanceTimersByTimeAsync(60_000)
-  events.emit("update-available", offer("0.1.0-dev.421"))
-  events.emit("update-downloaded", offer("0.1.0-dev.421"))
-  update.restart()
-  expect(before).toHaveBeenCalledTimes(1)
-  // The engine takes its time to stop; the hourly look comes back meanwhile
-  // with a newer version, then with the one ready withdrawn.
-  await vi.advanceTimersByTimeAsync(HOUR)
-  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
+it("a look the Person asks for says what it found", async () => {
+  const update = updates(mine, engine, vi.fn())
   update.check()
-  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
-  events.emit("update-available", offer("0.1.0-dev.425"))
+  expect(update.current()).toMatchObject({ state: "looking" })
+  await vi.advanceTimersByTimeAsync(0)
   events.emit("update-not-available", { version: "0.1.0-dev.420" })
+  expect(update.current()).toMatchObject({
+    state: "none",
+    looked: Date.now(),
+  })
+})
+
+it("takes nothing where the engine takes nothing, and says why when asked", async () => {
+  const off = {
+    running: "0.1.0-dev.420",
+    off: 'machine.toml says updates = "off"',
+  }
+  engine.check.mockResolvedValue(off)
+  const update = updates(mine, engine, vi.fn())
+  update.heard(off)
+  expect(updater.checkForUpdates).not.toHaveBeenCalled()
+  update.check()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(updater.checkForUpdates).not.toHaveBeenCalled()
+  expect(update.current()).toMatchObject({
+    state: "none",
+    missed: 'machine.toml says updates = "off"',
+  })
+})
+
+it("ignores looks while it restarts, so nothing deletes the version it installs", () => {
+  const update = ready()
+  updater.quitAndInstall.mockImplementationOnce(() => {
+    // The engine's next look comes as the app quits.
+    update.heard(looked("0.1.0-dev.425"))
+    update.check()
+    events.emit("update-available", offer("0.1.0-dev.425"))
+    events.emit("update-not-available", { version: "0.1.0-dev.420" })
+  })
+  update.restart()
+  expect(updater.checkForUpdates).toHaveBeenCalledTimes(1)
   expect(updater.downloadUpdate).toHaveBeenCalledTimes(1)
   expect(update.current()).toMatchObject({
     state: "ready",
     version: "0.1.0-dev.421",
   })
-  expect(await restarted()).toBe(false)
-  stopped()
-  expect(await restarted()).toBe(true)
   expect(updater.quitAndInstall).toHaveBeenCalledTimes(1)
 })
 
 // Root writes anywhere, and Windows has no such modes.
 it.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
   "downloads nothing into an AppImage it cannot replace",
-  async () => {
+  () => {
     chmodSync(folder, 0o555)
     try {
-      const update = updates(vi.fn())
-      await vi.advanceTimersByTimeAsync(60_000)
+      const update = updates(mine, engine, vi.fn())
+      update.heard(looked())
       events.emit("update-available", offer("0.1.0-dev.421"))
       expect(updater.downloadUpdate).not.toHaveBeenCalled()
       expect(update.current()).toMatchObject({
@@ -351,28 +381,30 @@ it.skipIf(process.getuid?.() === 0 || process.platform === "win32")(
   }
 )
 
-it("installs nothing at the quit at or below the version the launcher's entry starts", async () => {
-  await ready()
-  entry.listedImage = () =>
-    join(folder, "banda-dev-0.1.0-dev.421-x86_64.AppImage")
+it("installs nothing at the quit at or below the version the launcher's entry starts", () => {
+  ready()
+  listed = join(folder, "banda-dev-0.1.0-dev.421-x86_64.AppImage")
   expect(quitInstalls()).toBe(false)
-  entry.listedImage = () => join(folder, "Banda Dev.AppImage")
+  listed = join(folder, "Banda Dev.AppImage")
   expect(quitInstalls()).toBe(true)
 })
 
 it("a look while one is ready shows nothing and drops nothing when it fails", async () => {
-  const update = await ready()
+  const update = ready()
   update.check()
+  await vi.advanceTimersByTimeAsync(0)
   expect(update.current()).toMatchObject({ state: "ready" })
   events.emit("error", new Error("net::ERR_INTERNET_DISCONNECTED"))
   expect(update.current()).toMatchObject({ state: "ready" })
 })
 
-it("looks for nothing with BANDA_UPDATES=off, for trials and CI", async () => {
+it("looks for nothing with BANDA_UPDATES=off, for trials and CI", () => {
   vi.stubEnv("BANDA_UPDATES", "off")
-  const update = updates(vi.fn())
+  const update = updates(mine, engine, vi.fn())
   expect(update.current()).toMatchObject({ state: "none", always: false })
-  await vi.advanceTimersByTimeAsync(2 * HOUR)
+  update.heard(looked())
+  update.check()
   expect(updater.setFeedURL).not.toHaveBeenCalled()
   expect(updater.checkForUpdates).not.toHaveBeenCalled()
+  expect(engine.check).not.toHaveBeenCalled()
 })

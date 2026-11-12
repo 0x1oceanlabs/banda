@@ -9,11 +9,6 @@ import type { Note, Update } from "@banda/core"
  * by a few blocks is down sooner, and the bar would only flicker. */
 export const SHOW_AFTER = 2000
 
-/** How long no Thread works before Banda restarts into a version that
- * waits for them (ADR 0072, decision 3): a Thread's next turn may follow
- * its last at once. */
-export const IDLE_FOR = 2000
-
 /** How long a Banda that restarted into a new version says so on its own
  * (ADR 0072, decision 4). */
 export const UPDATED_FOR = 6000
@@ -28,9 +23,7 @@ export function lineOf(update: Update): string {
     case "downloading":
       return `Downloading ${shortOf(update.version)} · ${percentOf(update.share)}`
     case "ready":
-      return update.waits
-        ? `Restarts into ${shortOf(update.version)} once Threads and terminals are idle`
-        : `${shortOf(update.version)} is ready · click to restart`
+      return `${shortOf(update.version)} is ready · click to restart`
     case "out":
       return `${shortOf(update.version)} is out · install it with brew`
     case "updated":
@@ -64,44 +57,6 @@ export function shortOf(version: string): string {
  * only when there are several. */
 export function versionsWords(notes: readonly Note[]): string | undefined {
   return notes.length > 1 ? `${notes.length} versions newer` : undefined
-}
-
-/** How the popover says that Threads work and that this machine's
- * terminals run programs, which a restart stops. */
-export function workingWords(working: number, running = 0): string | undefined {
-  const threads = working === 1 ? "A Thread is" : `${working} Threads are`
-  const programs =
-    running === 1
-      ? "a program runs in a terminal"
-      : `${running} programs run in terminals`
-  if (working === 0 && running === 0) return undefined
-  if (running === 0)
-    return working === 1
-      ? "A Thread is working. A restart stops its turn."
-      : `${threads} working. A restart stops their turns.`
-  if (working === 0)
-    return `${programs[0]!.toUpperCase()}${programs.slice(1)}. A restart stops ${running === 1 ? "it" : "them"}.`
-  return `${threads} working and ${programs}. A restart stops them.`
-}
-
-/** What a version that waits waits for, the Threads' turns and the
- * programs in this machine's terminals (ADR 0106, decision 4): `running`
- * is none until the terminals have answered, which the restart waits for
- * too. */
-export function waitWords(working: number, running?: number): string {
-  const turns =
-    working === 1
-      ? "a Thread to finish its turn"
-      : `${working} Threads to finish their turns`
-  const programs =
-    running === 1
-      ? "a program in a terminal to finish"
-      : `${running} programs in terminals to finish`
-  const what = [working > 0 && turns, running && programs].filter(Boolean)
-  if (what.length > 0) return `Waits for ${what.join(" and for ")}`
-  return running === undefined
-    ? "Restarts once Threads and terminals are idle"
-    : "Restarts in a moment"
 }
 
 /** What the popover says of a look while nothing new is known

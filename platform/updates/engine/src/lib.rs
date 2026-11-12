@@ -4,7 +4,10 @@
 //! takes the newest engine alone, as the release's engine feed names it
 //! ([`feed`]); and puts it in place beside the running one, in the data
 //! folder's `engine/`, as the window's copy is laid out ([`take`]). The
-//! stream `updates.state` says what it found and took.
+//! stream `updates.state` says what it found and took. A newer copy
+//! already in place, as the one a window put there as its app updated,
+//! is ready at the next look, as one it took: the newest copy wins,
+//! whoever put it there.
 //!
 //! It takes nothing from a checkout's build (Banda Local), where a package
 //! manager owns Banda (`package-type` beside the running program), with
@@ -39,8 +42,8 @@ use ts_rs::TS;
 
 /// Banda's releases, as GitHub's REST API serves them.
 const RELEASES: &str = "https://api.github.com/repos/0x1oceanlabs/banda";
-/// The first look, after the engine starts, and each after it: as the
-/// window's updater looks (`client/desktop/src/update.ts`).
+/// The first look, after the engine starts, and each after it; the
+/// window's app reads what each found (`platform/updates/desktop`).
 const FIRST: Duration = Duration::from_secs(60);
 const EVERY: Duration = Duration::from_secs(60 * 60);
 /// The Devs read at each look: more than are ever above a running one.
@@ -253,9 +256,10 @@ impl Updates {
             });
             return self.0.state.borrow().clone();
         }
+        let chosen = chosen(&self.0.banda.engine);
+        self.found_in_place(chosen.as_deref());
         let found = self.find().await;
         let looked = banda_kernel::now_ms();
-        let chosen = chosen(&self.0.banda.engine);
         match found {
             Err(why) => self.0.state.send_modify(|state| {
                 state.off = None;
@@ -277,6 +281,31 @@ impl Updates {
             }
         }
         self.0.state.borrow().clone()
+    }
+
+    /// Takes a copy above the running one that is already in place as
+    /// ready, as the one a window put there when its app updated
+    /// (`client/desktop/src/program.ts`): the engine moves onto it as onto
+    /// one it took, and downloads it no more. Nothing while the Person
+    /// chose a version.
+    fn found_in_place(&self, chosen: Option<&str>) {
+        if chosen.is_some() {
+            return;
+        }
+        let running = &self.0.banda.version;
+        let Some(newest) = (take::copies(&self.0.banda.engine).into_iter())
+            .find(|copy| feed::is_above(copy, running))
+        else {
+            return;
+        };
+        self.0.state.send_if_modified(|state| {
+            let above = (state.ready.as_deref()).is_none_or(|ready| feed::is_above(&newest, ready));
+            if above {
+                tracing::info!(version = %newest, "a newer engine is in place");
+                state.ready = Some(newest);
+            }
+            above
+        });
     }
 
     /// The newest version its channel has, and the engine to take, when

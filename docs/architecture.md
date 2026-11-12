@@ -1588,8 +1588,8 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   the machine-scope module `updates` (`platform/updates/engine`) looks
   at its channel's releases a minute after the engine starts, then
   hourly, and on `updates.check` (`banda update --check`). Banda Dev
-  reads every Dev, Banda only a Stable, by the window's rules
-  (`releases.ts`, ported in `feed.rs`). A release carries an engine feed,
+  reads every Dev, Banda only a Stable (`feed.rs`); the window's app
+  reads the release it found newest. A release carries an engine feed,
   `<dev|latest>-engine-<linux|mac>.yml`, naming one bundle,
   `<folder>-<version>-engine-<os>-<arch>.tar.gz`, with its size and
   SHA-512. The module downloads the newest above the running and the
@@ -1632,6 +1632,22 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   and the engine moves onto it by the same rule; the looks take nothing
   above a version chosen, and `--version newest` drops the choice. A copy
   older than this step neither reads `chosen` nor moves by itself.
+- **The window only swaps its own app** (ADR 0115, decisions 2 and 4;
+  `platform/updates/desktop`, `@banda/updates-desktop`). It follows its
+  engine's `updates.state` and, at each look the engine made, reads the
+  release the engine found newest with electron-updater: that release's
+  app update file, naming only this app's files, and the notes since the
+  running version (`releases.ts`). It downloads at once and installs on
+  Restart, or at the quit while a look at most an hour old still offered
+  it. "Check now" is the engine's `updates.check`. Where the engine
+  takes nothing (`off`), the app takes nothing. The restart stops no
+  engine: the engine and its Agents go on, as when the window closes,
+  and a window's packed copy put in place beside the running engine
+  (`program.ts`) is ready to it at its next look, which the window asks
+  for at once when the engine runs another version than the app. One
+  rule, the engine's: the newest copy in place wins, whoever put it
+  there, and the engine moves onto it once nothing runs. An engine older
+  than step 3, which answers no `updates.state`, leaves the app as it is.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
   0115, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a

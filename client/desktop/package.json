@@ -28,6 +28,7 @@
     "@banda/core": "workspace:*",
     "@banda/desktop-kit": "workspace:*",
     "@banda/ui": "workspace:*",
+    "@banda/updates-desktop": "workspace:*",
     "@effect/vitest": "4.1.1",
     "@playwright/test": "1.64.1",
     "@types/node": "^24",

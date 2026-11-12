@@ -62,10 +62,12 @@ type Answers = Record<
 >
 
 /** The source as electron-updater makes it, for `which` running `have` on
- * `platform`, over `answers` in place of the network. */
+ * `platform`, its engine having found `newest`, over `answers` in place of
+ * the network. */
 function source(
   which: "dev" | "stable",
   have: string,
+  newest: string | undefined,
   answers: Answers,
   platform: "linux" | "darwin" = "linux"
 ) {
@@ -90,7 +92,12 @@ function source(
     }),
   }
   const releases = new Releases(
-    { which },
+    {
+      which,
+      folder: which === "dev" ? "banda-dev" : "banda",
+      repository: { owner: "0x1oceanlabs", repo: "banda" },
+      newest: () => newest,
+    },
     { currentVersion: { version: have } },
     {
       platform,
@@ -178,14 +185,19 @@ describe("versions", () => {
 })
 
 describe("Banda Dev's source", () => {
-  it("takes the highest version above its own, a Dev's or the first plain one", async () => {
+  it("takes the version its engine found newest, with what changed since its own", async () => {
     const list = [
       devRelease("0.750.0"),
       devRelease("0.1.0-dev.421"),
       devRelease("0.1.0-dev.420"),
       devRelease("0.1.0-dev.419"),
     ]
-    const { releases, asked } = source("dev", "0.1.0-dev.420", devAnswers(list))
+    const { releases, asked } = source(
+      "dev",
+      "0.1.0-dev.420",
+      "0.750.0",
+      devAnswers(list)
+    )
     const found = await releases.getLatestVersion()
     expect(found.version).toBe("0.750.0")
     expect(found.releaseName).toBe("Banda Dev 0.750.0")
@@ -209,58 +221,76 @@ describe("Banda Dev's source", () => {
     ])
   })
 
-  it("takes a Dev that was promoted, as every release is a Dev", async () => {
-    const list = [
-      devRelease("0.761.0", { prerelease: false, name: "Banda 0.761.0" }),
-    ]
-    const { releases } = source("dev", "0.750.0", devAnswers(list))
-    expect((await releases.getLatestVersion()).version).toBe("0.761.0")
-  })
-
-  it("answers its own version with nothing above it", async () => {
-    const list = [devRelease("0.1.0-dev.420"), devRelease("0.1.0-dev.419")]
-    const { releases } = source("dev", "0.1.0-dev.420", devAnswers(list))
-    expect(await releases.getLatestVersion()).toMatchObject({
-      version: "0.1.0-dev.420",
-      files: [],
-    })
-  })
-
-  it("never sees a withdrawn release or a bare tag: neither is in the list", async () => {
-    // 0.1.0-dev.425 was withdrawn: its release is gone, its tag kept, and
-    // only the releases' list is read, never the tags or releases.atom.
-    const list = [devRelease("0.1.0-dev.421")]
-    const answers = devAnswers(list)
-    answers[`${DOWNLOAD}/v0.1.0-dev.425/dev-linux.yml`] = yml(
-      "0.1.0-dev.425",
-      "banda-dev-0.1.0-dev.425-x86_64.AppImage"
-    )
-    const { releases, asked } = source("dev", "0.1.0-dev.420", answers)
-    expect((await releases.getLatestVersion()).version).toBe("0.1.0-dev.421")
-    expect(asked.some((url) => url.includes("425"))).toBe(false)
-  })
-
-  it("never takes Banda's files, nor a release with only Banda's update file", async () => {
-    const list = [
-      // A release that holds only Banda's: no dev-linux.yml.
-      release("0.762.0", ["banda-0.762.0-x86_64.AppImage", "latest-linux.yml"]),
-      // Its dev-linux.yml names Banda's AppImage.
-      devRelease("0.761.0"),
-      devRelease("0.750.0"),
-    ]
-    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
-    const { releases, asked } = source(
+  it("takes no other version than the engine's newest, below it too", async () => {
+    const list = [devRelease("0.1.0-dev.422"), devRelease("0.1.0-dev.421")]
+    const { releases } = source(
       "dev",
       "0.1.0-dev.420",
-      devAnswers(list, {
+      "0.1.0-dev.421",
+      devAnswers(list)
+    )
+    expect((await releases.getLatestVersion()).version).toBe("0.1.0-dev.421")
+  })
+
+  it("reads nothing before its engine looked, or with nothing above its own", async () => {
+    const list = [devRelease("0.1.0-dev.420"), devRelease("0.1.0-dev.419")]
+    for (const newest of [undefined, "0.1.0-dev.420", "0.1.0-dev.419"]) {
+      const { releases, asked } = source(
+        "dev",
+        "0.1.0-dev.420",
+        newest,
+        devAnswers(list)
+      )
+      expect(await releases.getLatestVersion()).toMatchObject({
+        version: "0.1.0-dev.420",
+        files: [],
+      })
+      expect(asked).toEqual([])
+    }
+  })
+
+  it("reads a newest past the list's hundred by its tag", async () => {
+    const answers = devAnswers([devRelease("0.1.0-dev.421")])
+    const far = devRelease("0.1.0-dev.530")
+    answers[`${API}/releases/tags/v0.1.0-dev.530`] = JSON.stringify(far)
+    answers[`${DOWNLOAD}/v0.1.0-dev.530/dev-linux.yml`] = yml(
+      "0.1.0-dev.530",
+      "banda-dev-0.1.0-dev.530-x86_64.AppImage"
+    )
+    const { releases } = source(
+      "dev",
+      "0.1.0-dev.420",
+      "0.1.0-dev.530",
+      answers
+    )
+    const found = await releases.getLatestVersion()
+    expect(found.version).toBe("0.1.0-dev.530")
+    expect(found.releaseNotes).toEqual([
+      {
+        version: "0.1.0-dev.530",
+        note: "Built from abc1234: the change in 0.1.0-dev.530",
+      },
+      {
+        version: "0.1.0-dev.421",
+        note: "Built from abc1234: the change in 0.1.0-dev.421",
+      },
+    ])
+  })
+
+  it("never takes Banda's files", async () => {
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
+    const { releases } = source(
+      "dev",
+      "0.1.0-dev.420",
+      "0.761.0",
+      devAnswers([devRelease("0.761.0")], {
         "0.761.0/dev-linux.yml": yml(
           "0.761.0",
           "banda-0.761.0-x86_64.AppImage"
         ),
       })
     )
-    expect((await releases.getLatestVersion()).version).toBe("0.750.0")
-    expect(asked).not.toContain(`${DOWNLOAD}/v0.762.0/latest-linux.yml`)
+    expect((await releases.getLatestVersion()).version).toBe("0.1.0-dev.420")
     expect(warn).toHaveBeenCalledWith(
       "Banda does not take 0.761.0: dev-linux.yml banda-0.761.0-x86_64.AppImage is not banda-dev's"
     )
@@ -272,6 +302,7 @@ describe("Banda Dev's source", () => {
     const { releases } = source(
       "dev",
       "0.1.0-dev.420",
+      "0.750.0",
       devAnswers([devRelease("0.750.0")], {
         "0.750.0/dev-linux.yml": yml(
           "0.751.0",
@@ -294,6 +325,7 @@ describe("Banda Dev's source", () => {
     const { releases } = source(
       "dev",
       "0.1.0-dev.420",
+      "0.1.0-dev.421",
       devAnswers(list),
       "darwin"
     )
@@ -323,41 +355,25 @@ describe("Banda Dev's source", () => {
       source(
         "dev",
         "0.1.0-dev.420",
+        "0.1.0-dev.421",
         answers,
         "darwin"
       ).releases.getLatestVersion()
     ).rejects.toMatchObject({ code: "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND" })
-
-    // A release below one still coming is taken.
-    const done = mac("0.1.0-dev.421", [
-      "banda-dev-0.1.0-dev.421-arm64.zip",
-      "dev-mac.yml",
-    ])
-    const both = devAnswers([mac("0.1.0-dev.422", []), done])
-    both[`${DOWNLOAD}/v0.1.0-dev.421/dev-mac.yml`] = yml(
-      "0.1.0-dev.421",
-      "banda-dev-0.1.0-dev.421-arm64.zip"
-    )
-    const found = await source(
-      "dev",
-      "0.1.0-dev.420",
-      both,
-      "darwin"
-    ).releases.getLatestVersion()
-    expect(found.version).toBe("0.1.0-dev.421")
   })
 
   it("finds nothing for a version Banda does not publish, as a PR's build", async () => {
     const { releases } = source(
       "dev",
       "0.1.0-local",
+      "0.750.0",
       devAnswers([devRelease("0.750.0")])
     )
     expect((await releases.getLatestVersion()).version).toBe("0.1.0-local")
   })
 
   it("fails a look when GitHub does, as the next look tries again", async () => {
-    const { releases } = source("dev", "0.1.0-dev.420", {
+    const { releases } = source("dev", "0.1.0-dev.420", "0.1.0-dev.421", {
       [`${API}/releases?per_page=100`]: 403,
     })
     await expect(releases.getLatestVersion()).rejects.toMatchObject({
@@ -369,7 +385,7 @@ describe("Banda Dev's source", () => {
     const at = Date.parse("2026-11-08T12:00:00Z")
     vi.useFakeTimers({ now: at })
     try {
-      const { releases } = source("dev", "0.1.0-dev.420", {
+      const { releases } = source("dev", "0.1.0-dev.420", "0.1.0-dev.421", {
         [`${API}/releases?per_page=100`]: {
           status: 403,
           headers: {
@@ -440,25 +456,22 @@ describe("Banda's source", () => {
       ],
       { name: `Banda ${version}`, prerelease: false, ...more }
     )
-  const answers = (latest: Release | number): Answers => {
-    const all: Answers = {
-      [`${API}/releases/latest`]:
-        typeof latest === "number" ? latest : JSON.stringify(latest),
-    }
-    if (typeof latest !== "number") {
-      const version = latest.tag_name.slice(1)
-      all[`${DOWNLOAD}/v${version}/latest-linux.yml`] = yml(
+  const answers = (newest: Release): Answers => {
+    const version = newest.tag_name.slice(1)
+    return {
+      [`${API}/releases/tags/v${version}`]: JSON.stringify(newest),
+      [`${DOWNLOAD}/v${version}/latest-linux.yml`]: yml(
         version,
         `banda-${version}-x86_64.AppImage`
-      )
+      ),
     }
-    return all
   }
 
-  it("takes the Stable marked Latest, Banda's files only", async () => {
+  it("takes the Stable its engine found newest, Banda's files only", async () => {
     const { releases, asked } = source(
       "stable",
       "0.750.0",
+      "0.761.0",
       answers(stable("0.761.0"))
     )
     const found = await releases.getLatestVersion()
@@ -470,36 +483,25 @@ describe("Banda's source", () => {
       `${DOWNLOAD}/v0.761.0/banda-0.761.0-x86_64.AppImage`
     )
     expect(asked).toEqual([
-      `${API}/releases/latest`,
+      `${API}/releases/tags/v0.761.0`,
       `${DOWNLOAD}/v0.761.0/latest-linux.yml`,
     ])
   })
 
-  it("finds nothing before the first Stable", async () => {
-    const { releases } = source("stable", "0.750.0", answers(404))
+  it("finds nothing before its engine found a Stable above its own", async () => {
+    const { releases, asked } = source("stable", "0.750.0", "0.750.0", {})
     expect((await releases.getLatestVersion()).version).toBe("0.750.0")
-  })
-
-  it("refuses a Latest that is no Stable", async () => {
-    for (const latest of [
-      stable("0.761.0", { prerelease: true }),
-      stable("0.761.0", { name: "Banda Dev 0.761.0" }),
-    ]) {
-      await expect(
-        source("stable", "0.750.0", answers(latest)).releases.getLatestVersion()
-      ).rejects.toMatchObject({ code: "ERR_BANDA_NOT_STABLE" })
-    }
+    expect(asked).toEqual([])
   })
 
   it("never takes Banda Dev's files", async () => {
-    const latest = stable("0.761.0")
-    const all = answers(latest)
+    const all = answers(stable("0.761.0"))
     all[`${DOWNLOAD}/v0.761.0/latest-linux.yml`] = yml(
       "0.761.0",
       "banda-dev-0.761.0-x86_64.AppImage"
     )
     const warn = vi.spyOn(console, "warn").mockImplementation(() => {})
-    const { releases } = source("stable", "0.750.0", all)
+    const { releases } = source("stable", "0.750.0", "0.761.0", all)
     expect((await releases.getLatestVersion()).version).toBe("0.750.0")
     warn.mockRestore()
   })

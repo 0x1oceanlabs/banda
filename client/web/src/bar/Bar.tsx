@@ -20,7 +20,7 @@ import {
 } from "react"
 import type { Problem } from "@banda/contract/look"
 import { useQuiet } from "../calls/quiet"
-import { barAttention, useCalls, useWorkingHere } from "../calls/stores"
+import { barAttention, useCalls } from "../calls/stores"
 import { useLookProblems } from "../look"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part } from "./placed"
@@ -49,7 +49,7 @@ export function Bar({
   listed,
   onArrange,
 }: {
-  /** This machine's engine: its connection, and what its update waits for. */
+  /** This machine's engine: its connection. */
   engine: Engine
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
@@ -63,10 +63,8 @@ export function Bar({
   const status = useStatus(engine)
   const keyFor = useKeyLabel()
   const run = useRun()
-  // What the modules' work calls the Person for, for the mark to show,
-  // and how many Threads work now, which a restart into an update stops.
+  // What the modules' work calls the Person for, for the mark to show.
   const attention = useCalls(barAttention)
-  const working = useWorkingHere()
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
   const quiet = useQuiet() !== "off"
@@ -173,7 +171,7 @@ export function Bar({
         <div data-part="right" className={zone("right")}>
           {draw("right")}
         </div>
-        <UpdateWidget engine={engine} working={working} />
+        <UpdateWidget />
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

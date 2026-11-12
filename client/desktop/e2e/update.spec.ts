@@ -1,6 +1,5 @@
 import { expect, test } from "@playwright/test"
-import { shot } from "./arc"
-import { firstThread, newTerminal, startWindow, type Window } from "./window"
+import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
 
@@ -65,8 +64,8 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   await page.keyboard.press("Escape")
 
   // Ready, while a Thread works: the version stands beside the icon, and
-  // the popover says where Banda goes, what changed by kind, and that a
-  // restart stops the turn (ADR 0072).
+  // the popover says where Banda goes, what changed by kind (ADR 0072),
+  // and that only the window restarts (ADR 0115, decision 4).
   await composer.fill("slow please")
   await composer.press("Enter")
   await tell({
@@ -80,7 +79,6 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
       },
       { version: "0.1.0-dev.65", text: "Built from 1ceb27c: the README" },
     ],
-    waits: false,
   })
   const ready = page.getByRole("button", {
     name: "dev.66 is ready · click to restart",
@@ -92,11 +90,12 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   await expect(popover).toContainText("Newbarthe hook")
   await expect(popover).toContainText("Otherdev.65the README")
   await expect(popover).toContainText(
-    "A Thread is working. A restart stops its turn."
+    "Agents keep working: only the window restarts."
   )
+  await expect(popover.getByRole("button", { name: "Restart" })).toBeVisible()
   await expect(
     popover.getByRole("button", { name: "Restart when idle" })
-  ).toBeVisible()
+  ).toHaveCount(0)
   await page.screenshot({ path: "test-results/8-update-ready.png" })
   await page.keyboard.press("Escape")
   await expect(popover).toBeHidden()
@@ -216,7 +215,7 @@ test("on macOS the widget says a version is out, with its brew command (ADR 0033
   await page.screenshot({ path: "test-results/8-update-out.png" })
 })
 
-test("the update waits for a program in a terminal, says so, and restarts once it ended (ADR 0106)", async () => {
+test("Banda's window restarts at once while a Thread works, and the new one says it updated (ADR 0072, ADR 0115)", async () => {
   window = await startWindow()
   const { page, app } = window
   const tell = (value: object) =>
@@ -228,61 +227,7 @@ test("the update waits for a program in a terminal, says so, and restarts once i
   await app.evaluate(({ ipcMain }) => {
     const asked: string[] = []
     ;(globalThis as { asked?: string[] }).asked = asked
-    ipcMain.removeAllListeners("update.restart")
-    ipcMain.on("update.restart", () => asked.push("restart"))
-  })
-  const asked = () =>
-    app.evaluate(() => (globalThis as { asked?: string[] }).asked)
-  const screen = await newTerminal(page)
-  await screen.click()
-  await page.keyboard.type("sleep 600")
-  await page.keyboard.press("Enter")
-  // The terminal shows the program in front once the engine heard it.
-  await expect(
-    page.locator("section[data-tile]").filter({ has: screen }).locator("header")
-  ).toContainText("sleep")
-
-  await tell({
-    name: "Banda",
-    have: "0.2.0",
-    always: false,
-    state: "ready",
-    version: "0.3.0",
-    notes: [],
-    waits: true,
-  })
-  const waiting = page.getByRole("button", {
-    name: "Restarts into 0.3.0 once Threads and terminals are idle",
-  })
-  await waiting.click()
-  const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText(
-    "Waits for a program in a terminal to finish"
-  )
-  await shot(page, "update-waits-terminal")
-  // Longer than the wait after idle: the program still holds it.
-  await page.waitForTimeout(3_000)
-  await expect.poll(asked).toEqual([])
-
-  await page.keyboard.press("Escape")
-  await screen.click()
-  await page.keyboard.press("Control+KeyC")
-  await expect.poll(asked, { timeout: 15_000 }).toEqual(["restart"])
-})
-
-test("Banda restarts once no Thread works, and the new one says it updated (ADR 0072)", async () => {
-  window = await startWindow()
-  const { page, app } = window
-  const tell = (value: object) =>
-    app.evaluate(({ BrowserWindow, ipcMain }, value) => {
-      ipcMain.removeHandler("update.current")
-      ipcMain.handle("update.current", () => value)
-      BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
-    }, value)
-  await app.evaluate(({ ipcMain }) => {
-    const asked: string[] = []
-    ;(globalThis as { asked?: string[] }).asked = asked
-    for (const name of ["wait", "later", "restart", "seen"]) {
+    for (const name of ["later", "restart", "seen"]) {
       ipcMain.removeAllListeners(`update.${name}`)
       ipcMain.on(`update.${name}`, () => asked.push(name))
     }
@@ -295,11 +240,11 @@ test("Banda restarts once no Thread works, and the new one says it updated (ADR 
     state: "ready",
     version: "0.3.0",
     notes: [{ version: "0.3.0", text: "fix(sidebar): a new row comes last" }],
-    waits: false,
   }
   const { composer } = await firstThread(page)
 
-  // A Thread works: "Restart when idle" waits for it.
+  // A Thread works: the window restarts all the same, as only the window
+  // restarts; nothing waits for the turn.
   await composer.fill("slow please")
   await composer.press("Enter")
   await tell(ready)
@@ -307,24 +252,8 @@ test("Banda restarts once no Thread works, and the new one says it updated (ADR 
     .getByRole("button", { name: "0.3.0 is ready · click to restart" })
     .click()
   const popover = page.locator("[data-slot=popover-content]")
-  await popover.getByRole("button", { name: "Restart when idle" }).click()
-  await expect.poll(asked).toEqual(["wait"])
-  await tell({ ...ready, waits: true })
-  const waiting = page.getByRole("button", {
-    name: "Restarts into 0.3.0 once Threads and terminals are idle",
-  })
-  // The popover stays open, and says it waits.
-  await expect(waiting).toBeVisible()
-  await expect(popover).toContainText("Then it restarts by itself")
-  await popover.getByRole("button", { name: "Cancel" }).click()
-  await expect.poll(asked).toEqual(["wait", "later"])
-  await page.keyboard.press("Escape")
-
-  // Waiting again, the window asks for the restart once the turn is over.
-  await tell({ ...ready, waits: true })
-  await expect
-    .poll(asked, { timeout: 15_000 })
-    .toEqual(["wait", "later", "restart"])
+  await popover.getByRole("button", { name: "Restart", exact: true }).click()
+  await expect.poll(asked).toEqual(["restart"])
 
   // The new Banda says it updated, and what changed, until the Person
   // closes it.
@@ -342,5 +271,5 @@ test("Banda restarts once no Thread works, and the new one says it updated (ADR 
   await expect(popover).toContainText("Fixedsidebara new row comes last")
   await page.screenshot({ path: "test-results/8-update-updated.png" })
   await popover.getByRole("button", { name: "Got it" }).click()
-  await expect.poll(asked).toEqual(["wait", "later", "restart", "seen"])
+  await expect.poll(asked).toEqual(["restart", "seen"])
 })

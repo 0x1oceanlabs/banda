@@ -5,7 +5,7 @@ import {
   installsAtQuit,
   needsPerson,
   notesOf,
-} from "./update"
+} from "./app"
 
 const info = (releaseNotes: unknown) =>
   ({ version: "0.1.0-dev.66", releaseNotes }) as Parameters<typeof notesOf>[0]

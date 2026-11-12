@@ -15,7 +15,8 @@
  * "Processes"). The modules' parts in main run here too, as the
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
- * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
+ * (settings.ts, ADR 0016). It swaps its own app for the release its
+ * engine says is newest (`@banda/updates-desktop`, ADR 0115).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -73,8 +74,15 @@ import { openDoor } from "./door"
 import { engineLayer, Stop } from "./engine"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
-import { modules } from "./modules"
-import { channel, configFolder, dataFolder, stateFolder } from "./channel"
+import { appUpdates, modules } from "./modules"
+import {
+  CHANNELS,
+  channel,
+  configFolder,
+  dataFolder,
+  REPOSITORY,
+  stateFolder,
+} from "./channel"
 import {
   asksOnQuit,
   type Closing,
@@ -86,7 +94,7 @@ import {
   quitAsking,
   startsHidden,
 } from "./closing"
-import { listApp, listShortcut } from "./entry"
+import { listApp, listedImage, listShortcut } from "./entry"
 import { hasMenuBar } from "./menubar"
 import { Status, statusLayer } from "./status"
 import { menuBar } from "./tray"
@@ -97,7 +105,6 @@ import { Editors } from "./editors"
 import { dragOut, exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
-import { updates } from "./update"
 import { ensure } from "./sidebar"
 import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
 
@@ -248,8 +255,7 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-/** Set as an update restarts Banda: the engine it stops leaves the quit
- * to the update. */
+/** Set as an update restarts Banda's app: the quit is the update's. */
 let updating = false
 /** Set once Banda quits: closing the window hides nothing then, and a
  * quit goes through (closing.ts). */
@@ -356,7 +362,7 @@ const LOOK_WAIT = 300
 
 if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
   // electron-updater runs the AppImage it moved in once. It has the old
-  // one's APPIMAGE, so the old Banda lists the new file (update.ts), and
+  // one's APPIMAGE, so the old Banda lists the new file (@banda/updates-desktop), and
   // nothing starts here (ADR 0041, decision 3).
   app.exit(0)
 } else if (!app.requestSingleInstanceLock()) {
@@ -442,15 +448,37 @@ async function ready(): Promise<void> {
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
 
-  const update = updates(
+  // The app's own update, the updates module's part here (ADR 0115,
+  // decision 2): the engine's updates module says what is newest, and
+  // this window swaps its app. Its restart leaves the engine and its
+  // Agents running: the engine moves onto its new copy once nothing runs.
+  const engineClient = () =>
+    runtime.runPromise(Engine.use((engine) => engine.client))
+  const update = appUpdates.updates(
+    {
+      name: channel.name,
+      folder: channel.folder,
+      which:
+        channel === CHANNELS.dev
+          ? "dev"
+          : channel === CHANNELS.stable
+            ? "stable"
+            : "local",
+      repository: REPOSITORY,
+      listApp,
+      listedImage,
+    },
+    {
+      check: () =>
+        engineClient().then((client) => client.call("updates.check", {})),
+    },
     (now) => tellPage(window?.webContents, BRIDGE.update.listen, now),
-    // The engine restarts with the window, from the new version's copy,
-    // until the engine updates by itself (ADR 0086, plan step 6): the
-    // restart comes once no Thread works, or as the Person says.
     () => {
       updating = true
-      return runtime.runPromise(Stop.use((stop) => stop.engine))
     }
+  )
+  void engineClient().then((client) =>
+    appUpdates.followEngine(client, app.getVersion(), update.heard)
   )
   /** An engine's address, with the tests' latency. */
   const late = <E, R>(address: Effect.Effect<Address, E, R>) =>
@@ -663,7 +691,6 @@ async function ready(): Promise<void> {
       restart: [none, () => Effect.sync(update.restart)],
       now: [none, () => Effect.sync(update.now)],
       later: [none, () => Effect.sync(update.later)],
-      wait: [none, () => Effect.sync(update.wait)],
       seen: [none, () => Effect.sync(update.seen)],
     },
     // Panes in windows of their own (ADR 0025, decision 9): the window

@@ -1,8 +1,8 @@
 //! What a channel's releases offer: the versions Banda publishes, in
 //! order, and each release's engine feed (ADR 0115, decision 5), as
-//! `scripts/engine.mjs` writes it. The rules are the window's
-//! (`client/desktop/src/releases.ts`), so the engine and the app agree on
-//! what is newer.
+//! `scripts/engine.mjs` writes it. The rules are this machine's one copy:
+//! the window's app reads the release they find newest
+//! (`platform/updates/desktop/src/releases.ts`).
 
 use serde::Deserialize;
 use std::cmp::Ordering;
