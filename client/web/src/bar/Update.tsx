@@ -241,8 +241,24 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
   const updated = update?.state === "updated"
   useEffect(() => {
     if (!updated || open) return
-    const timer = setTimeout(() => host()?.seen(), UPDATED_FOR)
-    return () => clearTimeout(timer)
+    // Only while the window has the focus: a Mac's Banda that updated
+    // unseen opens with no window (ADR 0121), and says so once the Person
+    // comes to it. A window opened hidden is not, to its page, hidden.
+    let timer: ReturnType<typeof setTimeout> | undefined
+    const follow = () => {
+      clearTimeout(timer)
+      timer = document.hasFocus()
+        ? setTimeout(() => host()?.seen(), UPDATED_FOR)
+        : undefined
+    }
+    follow()
+    addEventListener("focus", follow)
+    addEventListener("blur", follow)
+    return () => {
+      clearTimeout(timer)
+      removeEventListener("focus", follow)
+      removeEventListener("blur", follow)
+    }
   }, [updated, open])
 }
 

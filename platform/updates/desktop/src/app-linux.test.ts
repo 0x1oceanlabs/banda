@@ -72,6 +72,8 @@ beforeEach(() => {
     repository: { owner: "o", repo: "r" },
     listApp: () => {},
     listedImage: () => listed,
+    alone: () => false,
+    quits: () => false,
   }
   engine = { check: vi.fn(async () => looked()) }
   vi.stubEnv("APPIMAGE", image)

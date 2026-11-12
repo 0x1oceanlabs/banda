@@ -86,12 +86,14 @@ import {
 import {
   asksOnQuit,
   type Closing,
+  type Counted,
   DOCK_SETTLES,
   dockShows,
   dockStep,
   hidesOnClose,
   onDock,
   quitAsking,
+  unseen,
   startsHidden,
 } from "./closing"
 import { listApp, listedImage, listShortcut } from "./entry"
@@ -467,6 +469,8 @@ async function ready(): Promise<void> {
       repository: REPOSITORY,
       listApp,
       listedImage,
+      alone: () => unseen(process.platform, counted(), docked),
+      quits: () => quitting || poweringOff,
     },
     {
       check: () =>
@@ -893,12 +897,16 @@ function inFront(shown = window): BrowserWindow | null {
 /** On macOS the Dock shows Banda's icon only while a window is open (ADR
  * 0086, decision 4): with none, Banda lives in the menu bar. */
 function followDock(): void {
-  const windows = BrowserWindow.getAllWindows()
+  const hidden = process.platform === "darwin" && app.isHidden()
+  const wanted = dockShows(process.platform, counted(), hidden)
+  if (wanted !== null) void dockTo(wanted)
+}
+
+/** Banda's windows, as the Dock counts them. */
+function counted(): Counted[] {
+  return BrowserWindow.getAllWindows()
     .filter((one) => !one.isDestroyed())
     .map((one) => ({ visible: one.isVisible(), minimized: one.isMinimized() }))
-  const hidden = process.platform === "darwin" && app.isHidden()
-  const wanted = dockShows(process.platform, windows, hidden)
-  if (wanted !== null) void dockTo(wanted)
 }
 
 /** What the Dock's icon was last set to, shown as Banda starts, and when
