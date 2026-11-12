@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest"
 import { DEFAULT_BAR } from "@banda/contract/look"
 import { type Known, placed } from "./placed"
 
+/** The Bar's own widgets that stand last on the right when no part lists
+ * them. */
+const OWN = ["window.update", "window.problems", "window.connection"]
+
 const known =
   (theirs: Record<string, Known>) =>
   (id: string): Known =>
@@ -25,7 +29,7 @@ describe("the bar's widgets", () => {
     expect(parts).toEqual({
       left: ["workspaces.list", "window.flow"],
       center: ["sidebar.counts"],
-      right: ["git.branch", "harnesses.limits"],
+      right: ["git.branch", "harnesses.limits", ...OWN],
     })
     expect(problems).toEqual([])
   })
@@ -43,7 +47,7 @@ describe("the bar's widgets", () => {
         "workspaces.aside": "shown",
       })
     )
-    expect(parts.right).toEqual(["workspaces.aside"])
+    expect(parts.right).toEqual(["workspaces.aside", ...OWN])
     expect(problems).toEqual([])
   })
 
@@ -62,7 +66,7 @@ describe("the bar's widgets", () => {
         },
       }
     )
-    expect(parts.right).toEqual([])
+    expect(parts.right).toEqual(OWN)
     expect(problems).toEqual([
       {
         path: "/home/me/.config/banda/look.toml",
@@ -86,6 +90,27 @@ describe("the bar's widgets", () => {
     )
     expect(unlisted.parts.left).toEqual(["workspaces.list", "harnesses.limits"])
     expect(unlisted.problems).toEqual([])
+  })
+
+  it("keep the update, the look's problems and the connection, last on the right when no part lists them, where a part does lists them", () => {
+    // Banda's right lists them last.
+    expect(DEFAULT_BAR.right.slice(-3)).toEqual(OWN)
+    expect(placed(DEFAULT_BAR, known({})).parts.right.slice(-3)).toEqual(OWN)
+    // A right of the Person's own, written before they were widgets, hides
+    // none of them.
+    const theirs = placed(
+      { ...DEFAULT_BAR, right: ["harnesses.limits"] },
+      known({ "window.flow": "shown", "harnesses.limits": "shown" })
+    )
+    expect(theirs.parts.right).toEqual(["harnesses.limits", ...OWN])
+    expect(theirs.problems).toEqual([])
+    // Listed, one stands where its part says, and only there.
+    const moved = placed(
+      { ...DEFAULT_BAR, left: ["window.connection"], right: ["window.update"] },
+      known({})
+    )
+    expect(moved.parts.left).toEqual(["workspaces.list", "window.connection"])
+    expect(moved.parts.right).toEqual(["window.update", "window.problems"])
   })
 
   it("show the Flow after the workspaces, as Banda's left lists it, and not where a left of the Person's own leaves it out", () => {

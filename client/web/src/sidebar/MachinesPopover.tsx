@@ -30,7 +30,7 @@ import {
   useNowOf,
 } from "@banda/core/react"
 import { SettingsIcon } from "lucide-react"
-import { useOpenUpdates } from "../bar/heard"
+import { useOpenUpdates } from "../bar/update/heard"
 import { useTurnsOn } from "../calls/battery"
 import {
   footWords,

@@ -427,7 +427,7 @@ const DESKTOP_READS: Record<string, number> = {
   "apps/browser/pane/src/host.ts": 1,
   "client/ui/src/desktop.ts": 1,
   "client/web/src/actions/actions.ts": 1,
-  "client/web/src/bar/Update.tsx": 1,
+  "client/web/src/bar/update/Update.tsx": 1,
   "client/web/src/main.tsx": 1,
   "client/web/src/menu/browse.ts": 1,
   "client/web/src/settings/Agents.tsx": 1,
@@ -899,7 +899,7 @@ const LAYOUT_MOTION = [
   "client/ui/src/components/trace.tsx: transition-[height]",
   "client/ui/src/styles/globals.css: @keyframes update-in",
   "client/ui/src/styles/globals.css: @keyframes update-out",
-  "client/web/src/bar/Update.tsx: transition-[width]",
+  "client/web/src/bar/update/Update.tsx: transition-[width]",
   "client/web/src/tiling/PaneMenu.tsx: transition-[width]",
   "client/web/src/window/Peek.tsx: transition-[width,height]",
 ]

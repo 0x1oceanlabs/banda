@@ -20,9 +20,9 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { MINUTE } from "@banda/ui/lib/words"
 import type { Named } from "@banda/contract/machines"
-import { useHeard } from "../bar/heard"
-import { rowOf, TAKES } from "../bar/machines"
-import { useRestartThere } from "../bar/Update"
+import { useHeard } from "../bar/update/heard"
+import { rowOf, TAKES } from "../bar/update/machines"
+import { useRestartThere } from "../bar/update/Update"
 import { RowFrame } from "./SettingRow"
 
 /** The line of machine `host`'s updates, this machine's where none:

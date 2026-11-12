@@ -27,7 +27,10 @@ import { toast } from "@banda/ui/components/sonner"
 import { memo, useCallback, useSyncExternalStore } from "react"
 import { type Kinds, launcher } from "./launcher"
 import { machineHeader } from "./window/named"
+import { connectionWidget } from "./bar/connection/Connection"
 import { flowWidget } from "./bar/Flow"
+import { problemsWidget } from "./bar/problems/Problems"
+import { updateWidget } from "./bar/update/Update"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -90,7 +93,14 @@ export const windowModule = defineModule({
   ],
   scopes: [LAUNCHER, SETTINGS, SIDEBAR_SCOPE],
   slots: [machineHeader],
-  bar: [countsWidget, flowWidget, ...tilingWidgets],
+  bar: [
+    countsWidget,
+    flowWidget,
+    ...tilingWidgets,
+    updateWidget,
+    problemsWidget,
+    connectionWidget,
+  ],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]
