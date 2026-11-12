@@ -173,7 +173,7 @@ banda_kernel::methods! {
         call written(WrittenAsk) -> Message, Read;
         /// What this Project's folder is to a Thread that moves between
         /// machines (ADR 0116, decision 8): whether it is a repository,
-        /// `HEAD` and its remotes' branches as commits, which of
+        /// `HEAD`, its line before it and its remotes' branches as commits, which of
         /// `commits` it has, and whether it is free, with nothing changed
         /// and not committed. Only a Person asks.
         call folder_for(FolderAsk) -> FolderFor, Read;

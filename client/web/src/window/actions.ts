@@ -16,8 +16,10 @@ import {
   linkOf,
   linkRefused,
   routeAct,
+  type Store,
 } from "@banda/core"
 import { useState } from "react"
+import type { TopAsked } from "./top"
 import { toast } from "@banda/ui/components/sonner"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { updateProject } from "@banda/ui/lib/projects"
@@ -120,6 +122,9 @@ import {
 /** What the window's own actions can change: its parts, more than a
  * module's get (`WindowApi`). */
 export type Shell = WindowApi & {
+  /** What the Top layer was asked to show of an App's (`WindowApi.top`),
+   * which `TopPart` draws. */
+  tops: Store<TopAsked>
   /** Changes the workspaces. */
   change: (how: Change) => void
   toggleSidebar: () => void
@@ -200,6 +205,8 @@ export function windowApiOf(shell: Shell): WindowApi {
     waiting: shell.waiting,
     sight: shell.sight,
     projects: shell.projects,
+    machines: shell.machines,
+    top: shell.top,
     look: shell.look,
     quiet: shell.quiet,
     writeSetting: shell.writeSetting,

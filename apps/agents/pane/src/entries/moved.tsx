@@ -2,7 +2,9 @@
  * The Thread's divider where it moved to another account or Harness (ADR
  * 0078, decisions 4 and 5), as the accounts mockup draws it: a thin line
  * with both emblems. A handoff to another Harness unfolds what went, what
- * was left out and what did not go.
+ * was left out and what did not go. A Thread that came from another
+ * machine, where its Harness's session stayed, is handed its history by
+ * the same account (ADR 0116, decision 5): the line names it once.
  */
 import { useState } from "react"
 import { ArrowRightIcon } from "lucide-react"
@@ -19,6 +21,8 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
   const was = emblemOf(harnesses, from)
   const now = emblemOf(harnesses, to)
   const handed = how.kind === "same" ? undefined : how
+  // The same account on another machine: a session of its own here.
+  const here = from === to && how.kind === "handoff"
   // A Thread with nothing before its move hands nothing: a new session.
   const unfolds = how.kind === "handoff" && how.messages + how.tools > 0
   const what =
@@ -27,12 +31,16 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
       : how.kind === "back"
         ? `back to its session · ${plural(how.messages + how.tools, "new entry", "new entries")}`
         : unfolds
-          ? `handed ${plural(how.messages, "message", "messages")}`
+          ? `${here ? "a new session here · " : ""}handed ${plural(how.messages, "message", "messages")}`
           : "a new session"
   const line = (
     <>
-      <Emblem of={was} named />
-      <ArrowRightIcon className="size-3 text-muted-foreground/70" />
+      {!here && (
+        <>
+          <Emblem of={was} named />
+          <ArrowRightIcon className="size-3 text-muted-foreground/70" />
+        </>
+      )}
       <Emblem of={now} named />
       <span className="text-muted-foreground/70">· {what}</span>
       {unfolds && (
@@ -83,8 +91,14 @@ export function MovedEntry({ item }: EntryProps<"moved">) {
           </dd>
           <dt className="text-muted-foreground/70">Did not go</dt>
           <dd>{was.name}'s hidden reasoning, its cache, its tools' state</dd>
-          <dt className="text-muted-foreground/70">Back</dt>
-          <dd>on {was.name} its session goes on, and gets only what is new</dd>
+          {!here && (
+            <>
+              <dt className="text-muted-foreground/70">Back</dt>
+              <dd>
+                on {was.name} its session goes on, and gets only what is new
+              </dd>
+            </>
+          )}
         </dl>
       )}
     </div>

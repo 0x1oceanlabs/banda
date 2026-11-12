@@ -54,6 +54,7 @@ function fake(item: Listed, title: string | Error = "", view?: unknown) {
   const asked: { host: string | undefined; name: string }[] = []
   const sent: [string, unknown][] = []
   const ran: [string, Args | undefined][] = []
+  const tops: [string | null, Args | undefined][] = []
   const command = (host: string | undefined) => {
     return (name: string, args: { title?: string }) => {
       asked.push({ host, name })
@@ -108,8 +109,14 @@ function fake(item: Listed, title: string | Error = "", view?: unknown) {
         typeof pane?.args.host === "string" ? pane.args.host : undefined
       ),
     run: (action: string, args?: Args) => void ran.push([action, args]),
+    // This machine has s1 and s2, and arc has a1.
+    machines: () => [
+      { state: "live", projects: [{ id: S1 }, { id: "s2" }] },
+      { host: "arc", state: "live", projects: [{ id: "a1" }] },
+    ],
+    top: (part: string | null, args?: Args) => void tops.push([part, args]),
   } as unknown as WindowApi
-  return { window, named, asked, sent, ran, here, engineOf }
+  return { window, named, asked, sent, ran, tops, here, engineOf }
 }
 
 const action = (id: string) => {
@@ -491,19 +498,49 @@ test("Delete goes to the Thread's host for the Thread it names, and puts it away
 
 test("Move asks the Thread's host to move it whole, and puts its Panes here away once it moved", async () => {
   const move = action("agents.move-thread")
-  expect(move.row(listed(), AT)).toBeNull()
+  expect(move.row(listed(), AT)?.title).toBe("Move to Project…")
+  expect(move.row(listed({ archived: true }), AT)).toBeNull()
+  // Its dialog takes the focus once the menu closed.
+  expect(move.later).toBe(true)
   const at = { project: "s1", item: "t1" }
-  const { window, sent, ran } = fake(listed())
-  // Asked for no Project, or the one it is in, it does nothing.
-  move.run(window, at)
+  const { window, sent, ran, tops } = fake(listed())
+  // Asked for the Project it is in, it does nothing.
   move.run(window, { ...at, to: "s1" })
-  expect(sent).toEqual([])
+  expect([sent, tops]).toEqual([[], []])
   move.run(window, { ...at, to: "s2" })
   expect(sent).toEqual([
     ["agents.move_thread", { thread: "t1", project: "s2" }],
   ])
   await vi.waitFor(() => expect(ran).toEqual([["pane.put-away", at]]))
   expect(said.errors).toEqual([])
+  expect(tops).toEqual([])
+})
+
+test("Move with no Project, or one on another machine, opens Move Thread, and sends nothing yet", () => {
+  const move = action("agents.move-thread")
+  const at = { project: "s1", item: "t1" }
+  const { window, sent, tops } = fake(listed())
+  move.run(window, at)
+  // arc's Project: the dialog says first what goes and what stays.
+  move.run(window, { ...at, to: "a1" })
+  // One no machine the Window reaches has is not this machine's either.
+  move.run(window, { ...at, to: "gone" })
+  expect(tops).toEqual([
+    ["agents.move", at],
+    ["agents.move", { ...at, to: "a1" }],
+    ["agents.move", { ...at, to: "gone" }],
+  ])
+  expect(sent).toEqual([])
+
+  // arc's Thread moves at once to another Project of arc's.
+  const theirs = listed({
+    host: "arc",
+    pane: { kind: "agents.thread", args: { host: "arc" } },
+  })
+  const arc = fake(theirs)
+  move.run(arc.window, { ...at, to: "a1" })
+  expect(arc.asked).toEqual([{ host: "arc", name: "agents.move_thread" }])
+  expect(arc.tops).toEqual([])
 })
 
 test("a delete its host refuses keeps the Thread's Panes with a toast, and one whose host is away is not sent", async () => {

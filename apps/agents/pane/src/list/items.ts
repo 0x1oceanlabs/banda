@@ -41,6 +41,7 @@ import {
   AlarmClockIcon,
   CircleDotIcon,
   CircleIcon,
+  FolderInputIcon,
   FolderPlusIcon,
   PencilIcon,
   SparklesIcon,
@@ -48,6 +49,7 @@ import {
 } from "lucide-react"
 import { THREAD } from "../scopes"
 import { markdownOf } from "./copy"
+import { MOVE } from "./moving"
 import { SHOW } from "./rows"
 import { actOf, mark } from "./sent"
 
@@ -484,36 +486,62 @@ const remove: ItemAction = {
   },
 }
 
+/** The machine a Project is on, as the Window lists them: its key in
+ * `hosts.toml`, `undefined` for this machine; `null` when no machine the
+ * Window reaches has it. */
+function hostOf(window: WindowApi, project: string): string | undefined | null {
+  const on = window
+    .machines()
+    .find((machine) => machine.projects.some((one) => one.id === project))
+  return on ? on.host : null
+}
+
 /**
- * Moves the Thread to another Project of its host, `to`, whole (ADR 0098,
- * decision 14): what picks the Project asks it so, as the card's "Move to
- * Project…" will. It has no row of its own. Once the host moved it, its
+ * Moves the Thread to another Project, whole (ADR 0098, decision 14; ADR
+ * 0116): "Move to Project…" in the Thread menu. With no `to` it opens
+ * "Move Thread", which lists the Projects of every machine the Window
+ * reaches and moves it to the one picked. With `to`, a Project of the
+ * Thread's own machine, it moves at once: once that machine moved it, its
  * Panes here are put away, as they show a Thread this Project no longer
- * has; the other Project's list has it now. One the host refuses, as a
- * Thread at work, stays as it was, Panes and all, and a toast says why.
- * Without `to`, or with the Project it is in, nothing. It goes `once`, as
- * a delete does, so a move said to have failed never lands later (ADR
- * 0096, decision 8). Only the Person binds a key to it (ADR 0083,
- * decision 3): it takes a Thread across the wall between Projects, where
- * the other Project's Agents read it.
+ * has; the other Project's list has it now. One the machine refuses, as
+ * a Thread at work, stays as it was, Panes and all, and a toast says
+ * why. With `to` a Project on another machine, the dialog opens with it
+ * picked, as it says first what goes and what stays. With the Project it
+ * is in, nothing. It goes `once`, as a delete does, so a move said to
+ * have failed never lands later (ADR 0096, decision 8). Only the Person
+ * binds a key to it (ADR 0083, decision 3): it takes a Thread across the
+ * wall between Projects, where the other Project's Agents read it.
  */
 const move: ItemAction = {
   id: "agents.move-thread",
   section: "Threads",
-  title: "Move a Thread to another Project on its host",
+  title: "Move a Thread to another Project",
   unlisted: true,
-  args: {
-    ...itemArgs({ to: "the Project it moves to, on the same host" }),
-    required: ["to"],
-  },
+  args: itemArgs({
+    to: "the Project it moves to, on its machine or another; none asks",
+  }),
   runsAsPerson: true,
   group: "other",
   does: "move",
-  row: () => null,
+  // It opens a dialog, which takes the focus once the menu closed.
+  later: true,
+  row: (item) =>
+    item.archived ? null : { title: "Move to Project…", icon: FolderInputIcon },
   run: (window, args) => {
     const at = threadAt(window, args)
     const to = args?.to
-    if (!at || typeof to !== "string" || to === at.project) return
+    if (!at || to === at.project) return
+    if (
+      typeof to !== "string" ||
+      hostOf(window, to) !== (at.listed.host ?? undefined)
+    ) {
+      window.top(MOVE, {
+        project: at.project,
+        item: at.listed.id,
+        ...(typeof to === "string" && { to }),
+      })
+      return
+    }
     const thread = at.listed.id as ThreadId
     const asked = { thread, project: to as ProjectId }
     reached(window, at, "Move to Project")

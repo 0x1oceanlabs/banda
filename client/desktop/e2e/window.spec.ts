@@ -6105,6 +6105,7 @@ test("the Person renames a Thread in place: a double click on its title, F2, and
     /Previous title/,
     /Mark as unread\s*Alt\+Shift\+U/,
     /Later…\s*Alt\+Z/,
+    /Move to Project…/,
     /Archive thread\s*Alt\+S/,
   ])
   await page.screenshot({ path: "test-results/27-thread-menu.png" })

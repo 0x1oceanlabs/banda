@@ -28,7 +28,9 @@ use std::path::PathBuf;
 /// Where a move's snapshot is kept.
 const ROOT: &str = "refs/banda/moves";
 
-/// The most tips a folder names of itself.
+/// The most commits a folder names of itself: so many of `HEAD`'s own
+/// line, the newest first, and so many of its remotes' branches. A folder
+/// that has not fetched for a while still has one of them.
 const TIPS: usize = 200;
 
 pub fn person_only(call: &Call) -> Result<(), Refusal> {
@@ -98,7 +100,7 @@ pub async fn folder_for(
         });
     };
     let mut has = Vec::new();
-    for named in commits.iter().filter(|named| commit(named)).take(TIPS) {
+    for named in commits.iter().filter(|named| commit(named)).take(2 * TIPS) {
         let known = format!("{named}^{{commit}}");
         let there = ["rev-parse", "--verify", "--quiet", known.as_str()];
         if repo.verified(there).await?.is_some() {
@@ -107,9 +109,16 @@ pub async fn folder_for(
     }
     let listed = ["for-each-ref", "--format=%(objectname)", "refs/remotes"];
     let listed = repo.run(listed, Opts::default()).await?.text();
-    let mut tips: Vec<String> = repo.head().await?.into_iter().collect();
+    let mut tips: Vec<String> = Vec::new();
+    if repo.head().await?.is_some() {
+        let most = format!("--max-count={TIPS}");
+        let line = ["rev-list", "--first-parent", most.as_str(), "HEAD"];
+        let line = repo.run(line, Opts::default()).await?.text();
+        tips.extend(line.lines().map(str::to_owned));
+    }
+    let own = tips.len();
     for tip in listed.lines() {
-        if tips.len() < TIPS && !tips.iter().any(|known| known == tip) {
+        if tips.len() < own + TIPS && !tips.iter().any(|known| known == tip) {
             tips.push(tip.to_owned());
         }
     }
@@ -154,7 +163,7 @@ pub async fn pack(
     let mut args = vec!["bundle".to_owned(), "create".to_owned()];
     args.push(path.display().to_string());
     args.push(reference.clone());
-    for known in have.iter().filter(|named| commit(named)).take(TIPS) {
+    for known in have.iter().filter(|named| commit(named)).take(2 * TIPS) {
         let named = format!("{known}^{{commit}}");
         let here = ["rev-parse", "--verify", "--quiet", named.as_str()];
         if repo.verified(here).await?.is_some() {

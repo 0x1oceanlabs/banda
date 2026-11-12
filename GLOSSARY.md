@@ -93,6 +93,8 @@ messages, the Agent's thoughts, tool calls, its plans, Visuals, notices,
 Issues and Questions.
 A Harness keeps a session of its own for it, which a Thread holds as
 evidence.
+Its Person may move it to another Project, on its machine or another's:
+it goes whole, and is in one Project (ADR 0098, ADR 0116).
 _Avoid_: chat.
 
 **Entry**:

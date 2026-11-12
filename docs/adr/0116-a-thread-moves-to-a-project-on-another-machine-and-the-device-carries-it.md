@@ -265,6 +265,28 @@ Each step is its own PR.
   on; else its first account that is. `pack_thread` answers the account
   the Thread ran on, so the window asks before it carries.
 
+- **Step 5, the submenu and the dialog.** "Move to Project" on a card
+  lists this machine's other Projects, then each other machine's under
+  its name, as decision 1 has it. "Move to Project…" in the Pane's
+  Thread menu opens Move Thread: the Projects by machine, what goes and
+  what stays for the one picked, and the message box. Both run one
+  action with the Project: on the Thread's machine it moves at once, on
+  another the dialog opens with it picked. A card of another machine's
+  Thread has no menu yet, so that Thread moves from its Pane.
+- **Step 5, the Window's Top layer part.** An App's dialog is a part the
+  Window draws when an action asks (`WindowApi.top`, `Module.top`), and
+  the Window keeps what was asked: the App keeps no store.
+  `WindowApi.machines` lists the machines with their Projects, this one
+  by its name.
+- **Step 5, a folder names its own line.** `git.folder_for` answers
+  `HEAD` and the commits before it, so a folder that has not fetched for
+  a while still has one of them.
+- **Step 5, at work.** A Thread at work moves once its turn ends, while
+  the window is open: the toast says so, and its Cancel stops the wait.
+- **Step 5, not built:** the size of what goes before it is packed, in
+  the dialog; and the files a Thread's turns changed, listed where the
+  folder is no repository.
+
 ## Roma's calls (2026-11-11)
 
 1. A move copies the Thread whole into the other machine's store, and it

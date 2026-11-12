@@ -105,14 +105,19 @@ pub fn notice_across(
     let came = format!("Moved here from {from} on {from_machine}.");
     let work = match folder {
         true => format!(
-            "what was not committed there came with it, but for ignored files, which stay              on {from_machine}"
+            "what was not committed there came with it, but for ignored files, which stay \
+             on {from_machine}"
         ),
         false => format!("what it changed there stays on {from_machine}"),
     };
+    // The same path on both machines says it once.
+    let not_in = match from_folder == to_folder {
+        true => String::new(),
+        false => format!(", not in {}", from_folder.display()),
+    };
     let named = format!(
-        "{came} Its Agent works in {} on {to_machine} from now on, not in {}; {work}.",
-        to_folder.display(),
-        from_folder.display()
+        "{came} Its Agent works in {} on {to_machine} from now on{not_in}; {work}.",
+        to_folder.display()
     );
     let plain = !named.contains(['\n', '\r']);
     if plain && named.chars().count() <= most {
@@ -159,6 +164,31 @@ mod tests {
             ..Stands::default()
         };
         assert!(refused(forks).contains("send it a message"));
+    }
+
+    #[test]
+    fn a_thread_from_another_machine_names_both_and_says_whether_its_folders_work_came() {
+        let (mac, server) = (Path::new("/Users/roma/banda"), Path::new("/work/banda"));
+        let from = ("banda", "m1pro", mac);
+        assert_eq!(
+            notice_across(from, ("devbox", server), true, 500),
+            "Moved here from “banda” on m1pro. Its Agent works in /work/banda on devbox from \
+             now on, not in /Users/roma/banda; what was not committed there came with it, but \
+             for ignored files, which stay on m1pro."
+        );
+        // The same path on both says it once; a folder that did not come
+        // stays there.
+        assert_eq!(
+            notice_across(("banda", "m1pro", server), ("devbox", server), false, 500),
+            "Moved here from “banda” on m1pro. Its Agent works in /work/banda on devbox from \
+             now on; what it changed there stays on m1pro."
+        );
+        // Past the most it names no folder.
+        assert_eq!(
+            notice_across(from, ("devbox", server), false, 60),
+            "Moved here from “banda” on m1pro. Its Agent works in this Project's folder on \
+             devbox from now on; what it changed there stays on m1pro."
+        );
     }
 
     #[test]

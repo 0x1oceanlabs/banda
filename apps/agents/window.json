@@ -562,7 +562,7 @@
     },
     {
       "id": "agents.move-thread",
-      "title": "Move a Thread to another Project on its host",
+      "title": "Move a Thread to another Project",
       "section": "Threads",
       "keys": [],
       "unlisted": true,
@@ -579,13 +579,10 @@
           },
           "to": {
             "type": "string",
-            "description": "the Project it moves to, on the same host"
+            "description": "the Project it moves to, on its machine or another; none asks"
           }
         },
-        "additionalProperties": false,
-        "required": [
-          "to"
-        ]
+        "additionalProperties": false
       },
       "runsAsPerson": true
     },

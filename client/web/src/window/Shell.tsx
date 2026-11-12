@@ -148,6 +148,7 @@ import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
+import { TopPart, useTops } from "./top"
 
 /** The modules' sources, as a route names one for the menu to show alone. */
 const menuSources = sources.map(({ source }) => source)
@@ -590,6 +591,7 @@ export function Shell({
     run: (action, args) => runAction(parts, action, args),
     engine,
     hosts: hostsNow,
+    ...useTops(hostsNow),
     sessionOf: engineOf,
     waiting: hostsNow.waiting,
     writeSetting: device.settings.set,
@@ -805,6 +807,7 @@ export function Shell({
         run={parts.run}
       >
         <ThreadMenus engine={engine} projects={projects}>
+          <TopPart shell={parts} />
           <div className="flex h-svh flex-col bg-desk text-foreground">
             <Watches engine={engine} modules={modules} projects={open} />
             <Bar

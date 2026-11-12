@@ -71,6 +71,7 @@ test("the Thread menu's rows, as it stands", () => {
     "Rename…",
     "Suggest a title",
     "Later…",
+    "Move to Project…",
     "Archive thread",
   ])
   expect(
@@ -86,6 +87,7 @@ test("the Thread menu's rows, as it stands", () => {
     // Its Person may put off a question; not archive it (ADR 0098,
     // decision 11).
     "Later…",
+    "Move to Project…",
     "Archive thread (off)",
   ])
   expect(
