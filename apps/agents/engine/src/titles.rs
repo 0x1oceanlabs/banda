@@ -4,13 +4,68 @@
 //! a name in a short run apart from the Thread ([`crate::aside`]), on its
 //! small model, in an empty folder of the engine's ([`folder`]), and
 //! renames nothing: the window does, with what comes back.
+//!
+//! Once, as a Thread's first turn ends done, the engine names it with
+//! what the small model suggests, quietly, unless its Person renamed it
+//! before (ADR 0118): [`after_first`] queues it, [`auto`] writes it.
 
 use crate::images::blocking;
-use crate::model::{Fact, Settings, ThreadId};
+use crate::model::{Fact, Settings, ThreadId, TurnState};
 use crate::rules::{message, title};
 use crate::{emit, store};
 use banda_kernel::{Error, Participant, Refusal, Tx};
+use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
+
+/// The effect that names a Thread after its first turn (ADR 0118).
+pub const AUTO: &str = "thread.title";
+
+/// What [`AUTO`] names.
+#[derive(Serialize, Deserialize)]
+pub struct AutoTitle {
+    pub thread: ThreadId,
+}
+
+/// Queues [`AUTO`] for `thread` as its first turn ends done, once: none
+/// for a Thread its Person renamed, nor after a later turn. Its key is
+/// its own, so the Thread's next turn does not wait for it.
+pub fn after_first(tx: &mut Tx<'_>, thread: ThreadId) -> Result<(), Error> {
+    let Some(summary) = store::thread(tx.sql(), thread)? else {
+        return Ok(());
+    };
+    let done = store::turns(tx.sql(), thread)?
+        .iter()
+        .filter(|turn| turn.state == TurnState::Done)
+        .count();
+    if summary.was.is_some() || done != 1 {
+        return Ok(());
+    }
+    tx.enqueue(AUTO, &format!("title:{thread}"), &AutoTitle { thread })
+}
+
+/// Names `thread` `title`, for its Person, unless it was renamed since
+/// its first turn ended: a title the Person gave is never taken over.
+pub fn auto(
+    tx: &mut Tx<'_>,
+    person: Participant,
+    thread: ThreadId,
+    title: String,
+) -> Result<(), Error> {
+    let Some(summary) = store::thread(tx.sql(), thread)? else {
+        return Ok(());
+    };
+    if summary.was.is_some() || summary.title == title {
+        return Ok(());
+    }
+    store::rename(tx.sql(), thread, &title, &summary.title)?;
+    let was = summary.title;
+    emit(
+        tx,
+        person,
+        thread,
+        &Fact::ThreadRenamed { thread, title, was },
+    )
+}
 
 /// Renames `thread` to `title`, or, with none or a blank one, to its
 /// first message's title again. A title it has already writes nothing.

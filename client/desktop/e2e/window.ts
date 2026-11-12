@@ -183,6 +183,8 @@ export async function startWindow({
     // A new Thread's mode follows the fence (ADR 0083): off here, so it
     // starts Supervised on every machine the tests run on.
     BANDA_FENCE: "off",
+    // A new Thread keeps its first message's title (ADR 0118).
+    BANDA_AUTO_TITLE: "off",
     BANDA_BLOCK_LIST: join(dir, "blocker.txt"),
     // Notices go to a list the tests read, never to the Person's screen.
     BANDA_DESKTOP: "recorded",

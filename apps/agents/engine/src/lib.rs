@@ -146,6 +146,9 @@ pub struct Agents {
     /// page is served by (ADR 0106, decision 6); its own, served nowhere,
     /// in a test that gives none.
     bytes: Bytes,
+    /// It names a new Thread after its first turn (ADR 0118); not in a
+    /// test that does not ask, whose titles stay its first messages.
+    names: bool,
 }
 
 /// How an Agent reaches Banda from its session: the engine's own program
@@ -238,7 +241,13 @@ impl Agents {
             pipe: None,
             working,
             bytes: Bytes::new(),
+            names: false,
         }
+    }
+
+    /// Names each new Thread after its first turn, or not (ADR 0118).
+    pub fn names_new_threads(self, names: bool) -> Self {
+        Self { names, ..self }
     }
 
     /// Gives a Visual's page its token from `bytes`, the engine's, whose
@@ -355,6 +364,57 @@ impl Agents {
         let harness = self.harness(id)?;
         let connection = self.live.connection(project, &harness).await;
         connection.map_err(Refusal::from)
+    }
+
+    /// A title for `thread`, from its Harness's small model, in a run apart
+    /// from it (ADR 0077, decision 4); it renames nothing. A caller that
+    /// goes away stops the run: its turn and its session.
+    async fn title_for(
+        &self,
+        project: &ModuleProject,
+        thread: ThreadId,
+    ) -> Result<String, Refusal> {
+        let found = project.read(move |sql| titles::asking(sql, thread)).await?;
+        let (harness, settings, prompt) =
+            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        if harness.is_empty() {
+            return Err(Refusal::conflict("This Thread's Harness is gone."));
+        }
+        let connection = self.running(project, &harness).await?;
+        let name = connection.process().name().to_owned();
+        let folder = titles::folder(project.data()).await.map_err(Error::from)?;
+        let (_held, let_go) = tokio::sync::oneshot::channel::<()>();
+        let ran = tokio::spawn(async move {
+            let stopped = async {
+                let _ = let_go.await;
+            };
+            let small = aside::Model::Small;
+            aside::write(connection, &folder, &settings, small, prompt, stopped).await
+        });
+        let reply = ran.await.map_err(|_| Refusal::internal())??;
+        rules::title::suggested(&reply)
+            .ok_or_else(|| Refusal::conflict(format!("{name} suggested no title.")))
+    }
+
+    /// Names a Thread after its first turn, for its Person (ADR 0118). A
+    /// title that does not come is no failure: the Thread keeps its own.
+    async fn auto_title(&self, project: ModuleProject, effect: &Effect) -> Outcome {
+        let Ok(titles::AutoTitle { thread }) = serde_json::from_value(effect.payload.clone())
+        else {
+            return Outcome::Fail("The title could not be read.".to_owned());
+        };
+        if !self.names {
+            return Outcome::Done;
+        }
+        let title = match self.title_for(&project, thread).await {
+            Ok(title) => title,
+            Err(refusal) => {
+                tracing::info!(%thread, %refusal, "no title came for a new Thread");
+                return Outcome::Done;
+            }
+        };
+        let person = Participant::Person(project.owner());
+        Outcome::done_writing(move |tx| titles::auto(tx, person, thread, title.clone()))
     }
 }
 
@@ -1570,32 +1630,7 @@ impl Agents {
         call: Call,
         OneThread { thread }: OneThread,
     ) -> Result<String, Refusal> {
-        let found = call
-            .project()
-            .read(move |sql| titles::asking(sql, thread))
-            .await?;
-        let (harness, settings, prompt) =
-            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-        if harness.is_empty() {
-            return Err(Refusal::conflict("This Thread's Harness is gone."));
-        }
-        let connection = self.running(call.project(), &harness).await?;
-        let name = connection.process().name().to_owned();
-        let folder = titles::folder(call.project().data())
-            .await
-            .map_err(Error::from)?;
-        // A caller that goes away stops the run: its turn and its session.
-        let (_held, let_go) = tokio::sync::oneshot::channel::<()>();
-        let ran = tokio::spawn(async move {
-            let stopped = async {
-                let _ = let_go.await;
-            };
-            let small = aside::Model::Small;
-            aside::write(connection, &folder, &settings, small, prompt, stopped).await
-        });
-        let reply = ran.await.map_err(|_| Refusal::internal())??;
-        rules::title::suggested(&reply)
-            .ok_or_else(|| Refusal::conflict(format!("{name} suggested no title.")))
+        self.title_for(call.project(), thread).await
     }
 
     async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {
@@ -1756,6 +1791,7 @@ impl Module for Agents {
             effects::STOP => effects::stop(&self.live, project, &effect).await,
             questions::REPLY => questions::reply(&self.live, &effect),
             effects::STEER => effects::steer(&self.live, project, &effect).await,
+            titles::AUTO => self.auto_title(project, &effect).await,
             other => Outcome::Fail(format!("agents runs no effect of kind {other}")),
         }
     }
