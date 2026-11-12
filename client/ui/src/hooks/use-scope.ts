@@ -5,7 +5,7 @@
  * sends the action to the element, whose handler runs it, or leaves the
  * key to the widget, as an arrow inside a text.
  */
-import { useCallback, useEffect, useRef } from "react"
+import { useCallback, useLayoutEffect, useRef } from "react"
 import type { Args } from "../module"
 import { focusedTile } from "../pane"
 
@@ -96,7 +96,10 @@ export function useScope(
   { owns, tile = false }: Taking = {}
 ): (element: HTMLElement | null) => (() => void) | undefined {
   const latest = useRef({ handlers, owns })
-  useEffect(() => {
+  // As the render commits, before a key can come: a key pressed as soon
+  // as the screen changed, as a second Esc, runs the handlers of what it
+  // shows now, never those of the render before.
+  useLayoutEffect(() => {
     latest.current = { handlers, owns }
   })
   return useCallback(
