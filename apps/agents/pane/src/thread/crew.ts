@@ -6,10 +6,11 @@
  * (ADR 0089, decision 1); the views draw what this says. Pure, so plain
  * tests cover it.
  */
-import type { Crew, CrewAgent, CrewStart, Phase } from "@banda/contract/agents"
+import type { Crew, CrewAgent, Phase } from "@banda/contract/agents"
 import { SATELLITE_WORDS, type SatelliteState } from "@banda/ui/lib/satellite"
 import { ago, duration } from "@banda/ui/lib/words"
 import { firstLine } from "../entries/parts/messageText"
+import type { Count } from "./subagents"
 
 /** A phase with more agents than this is a bar of shares, so the strip
  * stays one line at 500 agents (decision 18). */
@@ -154,10 +155,6 @@ export function dotTip(agent: CrewAgent): string {
   const label = agent.label.trim() || `Agent ${agent.index}`
   return `${label} · ${SATELLITE_WORDS[lookOfAgent(agent)]}`
 }
-
-/** One count of the foot: only the failed take red, and the asking the
- * attention's colour. */
-export type Count = { words: string; tone?: "asks" | "failed" }
 
 /** The counts at work, each that is not none: "3 working", "1 asks", "2
  * done", "1 failed", "20 waiting". */
@@ -312,6 +309,15 @@ export function afterCrew(
   }
 }
 
+/** How a Crew ended, in a word after its name. */
+const HOW: Record<Crew["state"], string> = {
+  working: "works",
+  done: "finished",
+  failed: "failed",
+  stopped: "stopped",
+  lost: "stopped",
+}
+
 /** The words of a Crew's end, after its turn: "Crew audit-routes
  * finished · 14m", then, once Claude went on with it, "Claude went on by
  * itself" (decision 19). */
@@ -319,12 +325,7 @@ export function endedWords(
   crew: Crew,
   short: string
 ): { words: string; then?: string } {
-  const how =
-    crew.state === "done"
-      ? "finished"
-      : crew.state === "failed"
-        ? "failed"
-        : "stopped"
+  const how = HOW[crew.state]
   const took =
     crew.ended === undefined ? "" : ` · ${duration(crew.ended - crew.started)}`
   return {
@@ -342,9 +343,7 @@ export function endedNote(
   state: Crew["state"],
   failed: number
 ): string {
-  const how =
-    state === "done" ? "finished" : state === "failed" ? "failed" : "stopped"
-  return `Crew ${title} ${how}${failed > 0 ? ` · ${failed} failed` : ""}`
+  return `Crew ${title} ${HOW[state]}${failed > 0 ? ` · ${failed} failed` : ""}`
 }
 
 /** The message Ask Claude to go on puts in the composer (decision 26):
@@ -371,17 +370,4 @@ export const START_NOTE =
 /** What the Question to start a Crew heads with. */
 export function startHead(name: string): string {
   return `${name} wants to start a Crew`
-}
-
-/** A Crew start's title, with its description when it says one. */
-export function startTitle(start: CrewStart): {
-  title: string
-  description?: string
-} {
-  return {
-    title: start.title,
-    ...(start.description?.trim() && {
-      description: start.description.trim(),
-    }),
-  }
 }

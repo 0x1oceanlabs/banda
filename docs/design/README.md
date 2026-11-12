@@ -616,8 +616,8 @@ The kit draws where the ADRs go; the window is on its way there.
 | the Pane header | 40 px | 36 px (`pane-header.tsx`) |
 | the Mark | ADR 0099's seven looks, doings, satellites | the eight states before ADR 0099 |
 | `--woke` | `#f5c542` | not a token yet |
-| the effort's top level | magenta, `--effort-top` ([0031] d3) | not drawn: no token holds it |
-| satellites, Crews, the status bar | drawn | satellites and the sub-agents' rows in the Thread built ([0103] step 1); Crews and the status bar not yet: the mocks of 2026-11-10 |
+| the effort's top level | magenta, `--effort-top` ([0031] d3) | drawn: the theme's token `effort-top`, on Ultracode and Ultra ([0103] d31) |
+| satellites, Crews, the status bar | drawn | satellites, the sub-agents' rows and their Pane's status bar built ([0103] steps 1–2); a Crew's card, its live line and the Question to start it built ([0103] steps 4 and 6) |
 
 A mock follows the kit. A change to the window follows the ADRs, and says
 in its PR which of these it closes.
