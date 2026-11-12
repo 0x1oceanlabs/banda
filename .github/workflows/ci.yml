@@ -101,8 +101,9 @@ jobs:
         with:
           persist-credentials: false
           # `ts` compares the contract with main's and reads the branch's
-          # Contract-Break trailers (scripts/contract.mjs).
-          fetch-depth: ${{ matrix.parts == 'rust ts' && 0 || 1 }}
+          # Contract-Break trailers (scripts/contract.mjs). 0 is false in an
+          # expression, so `rust ts` takes 0 last.
+          fetch-depth: ${{ matrix.parts != 'rust ts' && 1 || 0 }}
       # The Node ci/Dockerfile pins, and package.json's pnpm.
       - id: node
         run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
