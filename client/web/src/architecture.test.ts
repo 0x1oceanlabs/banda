@@ -2442,12 +2442,6 @@ const REACHING: Record<string, { places: number; until: string }> = {
     places: 1,
     until: "3c",
   },
-  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: window.open": {
-    places: 1,
-    until: "3c",
-  },
-  "agents.thread: apps/agents/pane/src/entries/parts/Issue.tsx: navigator.clipboard":
-    { places: 1, until: "3c" },
   "agents.thread: apps/agents/pane/src/desktop.ts: @banda/ui/desktop": {
     places: 1,
     until: "4c",
@@ -2658,8 +2652,8 @@ test("a file is stamped with its Project or its device only in the places listed
  * (`Listed.host`), with the directory (1a″).
  */
 const ASKING_WHERE: Record<string, number> = {
-  "apps/agents/pane/src/ThreadPane.tsx": 5,
-  "apps/agents/pane/src/thread/Thread.tsx": 18,
+  "apps/agents/pane/src/ThreadPane.tsx": 1,
+  "apps/agents/pane/src/thread/Thread.tsx": 17,
   "apps/agents/pane/src/thread/session.ts": 1,
 }
 

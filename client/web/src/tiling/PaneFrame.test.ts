@@ -187,7 +187,7 @@ test("the gate of a Pane on arc reads arc's Apps, as its welcome lists them, nev
   )
   // A kind that does not open elsewhere is not on arc yet, whatever arc
   // runs; New Pane, which has no App, opens there.
-  expect(shows("files.tree", { arc: ["files"] })).toBe("Not on arc yet")
+  expect(shows("browser.browser", { arc: ["browser"] })).toBe("Not on arc yet")
   expect(shows("window.launcher", { arc: [] })).toBe(true)
   // On this machine, its engine's modules, as before.
   expect(shows("terminal.terminal", { here: ["terminal"] })).toBe(true)

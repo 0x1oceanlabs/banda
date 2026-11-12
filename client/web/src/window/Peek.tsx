@@ -154,7 +154,7 @@ export function Peek({
             {/* As a Frame's: arc going away shows on what it shows, which
                 needs the machine's session to show anything. */}
             {there && reach.engine && (
-              <div className="relative z-10 h-0 shrink-0">
+              <div className="relative z-float h-0 shrink-0">
                 <div className="pointer-events-none absolute inset-x-2 top-1 flex justify-center">
                   <PaneSlot project={project} pane={pane} at="pill" />
                 </div>
