@@ -12,7 +12,8 @@ import type { PaneState } from "@banda/ui/pane"
 import { renderToStaticMarkup } from "react-dom/server"
 import { beforeEach, expect, test, vi } from "vitest"
 import { TilingContext } from "./kept"
-import { fresh, go, inBar, move, open, start, type Workspaces } from "./model"
+import { pagerStateOf } from "./pager/pager"
+import { fresh, go, move, open, start, type Workspaces } from "./model"
 import { WORKSPACES } from "./widget-ids"
 import { tilingWidgets } from "./widgets"
 
@@ -81,7 +82,7 @@ test("the numbers draw the workspaces the bar shows from the Tiling's store, pas
   expect(markup).toContain('aria-label="Workspace 11" title="Workspace 11"')
 })
 
-test("a Project's workspace shows its Sign, faint once emptied; one of a Project the window does not know, its number; the bottom one, its +", () => {
+test("each face is drawn: a Sign, faint once emptied; a number; the bottom one's +", () => {
   const known: ProjectSummary = {
     id: "p1",
     name: "Brand",
@@ -139,6 +140,6 @@ test("a key that moves only the focus draws the numbers not again", () => {
   for (const state of [grown, go(grown, 0)]) {
     asked.length = 0
     draw(state)
-    expect(asked).toContainEqual({ list: inBar(state), current: state.current })
+    expect(asked).toContainEqual(pagerStateOf(state))
   }
 })

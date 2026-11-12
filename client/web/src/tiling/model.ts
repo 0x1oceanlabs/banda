@@ -489,39 +489,6 @@ export function shownIn(
     : column.entries
 }
 
-/** A workspace as the bar shows it. */
-export type InBar = {
-  id: string
-  index: number
-  /** It holds no Pane: the current one, emptied, or the one at the bottom. */
-  empty: boolean
-  /** The empty one at the bottom, which the bar shows as its `+`. */
-  bottom: boolean
-  /** The Project whose Agents open here (ADR 0065, decision 9). */
-  project?: ProjectId
-}
-
-/** The workspaces the bar shows: those that hold Panes, the current one,
- * and the empty one at the bottom. */
-export function inBar(state: Workspaces): InBar[] {
-  const last = state.list.length - 1
-  return state.list.flatMap((workspace, index) => {
-    const empty = workspace.columns.length === 0
-    if (
-      empty &&
-      !workspace.project &&
-      index !== state.current &&
-      index !== last
-    )
-      return []
-    const bottom = index === last
-    const project = bottom ? undefined : workspace.project
-    return [
-      { id: workspace.id, index, empty, bottom, ...(project && { project }) },
-    ]
-  })
-}
-
 export type Spot = { workspace: number; column: number; entry: number }
 
 /** Where an entry stands, by its ID. */

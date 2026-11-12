@@ -804,12 +804,13 @@ test("the parts the Window draws on every move stay memoized", () => {
 test("the Tiling's widgets make no context of their own and name no change of the Tiling", () => {
   const widgets = join(app, "web/src/tiling/widgets.tsx")
   const names = ["createContext", "change", "Change"]
-  expect(
-    hasNode(
-      widgets,
-      (node) => ts.isIdentifier(node) && names.includes(node.text)
-    )
-  ).toBe(false)
+  for (const file of [widgets, join(app, "web/src/tiling/pager/Pager.tsx")])
+    expect(
+      hasNode(
+        file,
+        (node) => ts.isIdentifier(node) && names.includes(node.text)
+      )
+    ).toBe(false)
   // By context they read only the aside: the workspaces come
   // by selector (`useTiled`).
   const read: string[] = []

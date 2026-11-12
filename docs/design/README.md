@@ -298,8 +298,8 @@ something ([0099] d4):
 One row, 36 px, text at the meta size in muted ([0024], [0098] d20–22):
 
 - **Left**: the Mark as the logo (it opens the Banda menu; `Alt+A`
-  shows and hides the sidebar), the workspaces' numbers `1 2 3` and
-  `+`, the current one on a faint fill, then the Flow's icon
+  shows and hides the sidebar), the Pager: the workspaces' numbers
+  `1 2 3` and `+`, the current one on a faint fill, then the Flow's icon
   (`columns-3`, [0098] d20). In the row and solo, a Project's workspace
   shows by its Sign alone, faint while it is empty and keeps its place
   ([0102]). A number is the workspace's place, its `Alt+N`; a click goes

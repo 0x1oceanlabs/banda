@@ -1,13 +1,13 @@
 /**
- * The bar's workspaces as they move (ADR 0024), on the look's `workspace`
+ * The Pager's cells as they move (ADR 0024), on the look's `workspace`
  * move, with the screen: one that comes in widens from nothing, one that
  * goes narrows to nothing where it was, and the mark of the one on screen
  * goes to it. Widths are in rem, so they grow with `[font] size`.
  */
-import { moveOf } from "../look"
-import { Moving } from "../motion"
+import { moveOf } from "../../look"
+import { Moving } from "../../motion"
 
-/** A workspace's place in the bar, and how wide it is drawn, in rem. */
+/** A workspace's place in the Pager, and how wide it is drawn, in rem. */
 type Cell = { id: string; width: number }
 
 /** A Moving that writes `write` and remembers where it is. */
@@ -24,7 +24,7 @@ function moving(at: number, write: (value: number) => void): Moving {
 
 type Moved = { element: HTMLElement; size: Moving; gone?: true }
 
-export class BarMotion {
+export class PagerMotion {
   #cells = new Map<string, Moved>()
   #mark: Moving | undefined
 
