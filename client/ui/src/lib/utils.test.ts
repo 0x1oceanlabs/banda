@@ -40,6 +40,22 @@ test("a corner's level replaces another", () => {
 })
 
 test("an elevation replaces another, and keeps a ring beside it", () => {
+  const theme = defines(
+    readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8"),
+    "@theme inline"
+  )
+  // Each elevation `@theme` makes, by its own shadow, not Tailwind's sizes.
+  const elevations = [...theme].flatMap(([name, value]) => {
+    const elevation = /^shadow-([a-z]+)$/.exec(name)?.[1]
+    return elevation && value === `var(--${elevation}-shadow)`
+      ? [elevation]
+      : []
+  })
+  expect(elevations).toEqual(["float", "lift", "tile", "focus", "panel"])
+  for (const elevation of elevations)
+    expect(cn("shadow-md ring-1", `shadow-${elevation}`)).toBe(
+      `ring-1 shadow-${elevation}`
+    )
   expect(cn("shadow-md", "shadow-float")).toBe("shadow-float")
   expect(cn("shadow-float", "shadow-lift")).toBe("shadow-lift")
   expect(cn("shadow-tile", "shadow-none")).toBe("shadow-none")
