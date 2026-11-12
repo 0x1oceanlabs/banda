@@ -28,7 +28,7 @@ Every key, with its default:
   background = { light = "#f7fbfb", dark = "#0e1a1c" }
   [tokens]                   # a colour token: a palette name, a token's name or a colour
   card = { dark = "#101418" }
-  [shape]                    # look.toml's [shape], gaps, tile, focus and bar.height
+  [shape]                    # look.toml's [shape], gaps, tile, focus, shadow and bar.height
   window = 12                # the window's corner; a tile's and a card's follow
   control = 4                # a button's; a chip's is 0.6 of it
   [font]                     # as look.toml's [font]
@@ -105,6 +105,9 @@ Every key, with its default:
   Banda's next start).
 - "Shadow under the windows": `[tile]` `shadow = 0.4`; none under the
   sidebar: `[desk]` `sidebar-shadow = 0`.
+- "Darker shadows under menus", "no shadow under menus": `[shadow]`
+  `float = 0.2` or `float = 0`; what is carried, a Pane being moved or a
+  Peek: `lift`.
 - "Sidebar right on the glass": `[desk]` `sidebar = "desk"`; a floating
   panel is `"panel"`.
 - "Hide that on the bar", "put it in the middle": `[bar]` lists each
