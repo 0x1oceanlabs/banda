@@ -200,7 +200,10 @@ test("a terminal closed while arc is away closes on arc once it is back, as the 
   await expect(pillOf(page, screen)).toHaveText("arc is away", {
     timeout: 60_000,
   })
-  await tile.getByRole("button", { name: /^Close / }).first().click()
+  await tile
+    .getByRole("button", { name: /^Close / })
+    .first()
+    .click()
   await expect(tile).toHaveCount(0)
   await expect(
     page
