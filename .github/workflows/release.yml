@@ -30,6 +30,7 @@ on:
       - scripts/package.sh
       - scripts/release.mjs
       - scripts/engine.mjs
+      - scripts/install.sh
       - client/desktop/electron-builder.config.mjs
       - client/desktop/src/channel.ts
       - client/desktop/package.json
@@ -164,6 +165,7 @@ jobs:
           client/desktop/dist/*.AppImage
           client/desktop/dist/*-engine-linux-*.tar.gz
           client/desktop/dist/*-linux.yml
+          scripts/install.sh
       - name: keep what was packed
         if: needs.which.outputs.publish != 'true'
         uses: actions/upload-artifact@v4

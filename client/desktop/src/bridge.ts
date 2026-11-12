@@ -75,6 +75,15 @@ export const BRIDGE = bridge({
   /** What is at `ssh`, with `banda` or this build's own, starting nothing
    * there: Test connection, and Add's Connect. An empty `banda` is none. */
   hostTest: invoke<[ssh: string, banda: string | null], HostTest>(),
+  /** Install: this build's engine put on the machine at `ssh`, where Test
+   * found none, by this build's `install.sh` run there over ssh (ADR 0115,
+   * decision 8). The version in place and its folder there; fails with
+   * why not. */
+  hostInstall: invoke<[ssh: string], { version: string; path: string }>(),
+  /** Cancel: ends the Install running at `ssh`. */
+  hostInstallCancel: invoke<[ssh: string]>(),
+  /** Each line `install.sh` says there while Install runs, as it comes. */
+  hostInstalling: { listen: push<{ ssh: string; line: string }>() },
   /** Stop Banda on host `name`: its own `banda stop` there, which stops
    * its engine; the host shows stopped, live or away before, and nothing
    * starts it until `hostStart`. `working` while Agents work there and

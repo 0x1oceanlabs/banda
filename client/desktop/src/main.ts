@@ -205,6 +205,11 @@ const where = whereOf({
   // goes as it stops.
   electron: process.env.APPIMAGE || ownNode ? undefined : process.execPath,
 })
+// What Install runs on another machine (ADR 0115, decision 8): the app's
+// own copy, or the checkout's.
+const installScript = app.isPackaged
+  ? join(process.resourcesPath, "install.sh")
+  : resolve(here, "../../scripts/install.sh")
 // The Node the app provides for the ACP adapters it carries: its own,
 // or else this Electron, which the engine it starts runs as Node (ADR
 // 0059). The engine finds the adapters itself, beside its program or in
@@ -308,7 +313,9 @@ const runtime = ManagedRuntime.make(
       )
     ),
     Layer.merge(
-      Hosts.layer(join(configFolder(app.getPath("appData")), "hosts.toml"))
+      Hosts.layer(join(configFolder(app.getPath("appData")), "hosts.toml"), {
+        install: installScript,
+      })
     ),
     // A packed Banda that cannot run a copy of its own says why.
     Layer.provide(
@@ -487,6 +494,24 @@ async function ready(): Promise<void> {
       ([ssh, banda]) =>
         Hosts.use((hosts) => hosts.test(ssh, banda || undefined)),
     ],
+    hostInstall: [
+      text,
+      ([ssh], event) =>
+        Hosts.use((hosts) =>
+          hosts.install(ssh, (line) =>
+            tellPage(event.sender, BRIDGE.hostInstalling.listen, {
+              ssh,
+              line,
+            })
+          )
+        ),
+    ],
+    hostInstallCancel: [
+      text,
+      ([ssh]) => Hosts.use((hosts) => hosts.cancelInstall(ssh)),
+    ],
+    // Its lines go to the page that asked, as they come.
+    hostInstalling: {},
     hostStop: [
       Schema.Tuple([Schema.String, Schema.Boolean]),
       ([name, force]) => Hosts.use((hosts) => hosts.stop(name, force)),

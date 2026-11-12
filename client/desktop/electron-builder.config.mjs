@@ -47,7 +47,12 @@ export default {
   linux: {
     category: "Development",
     target: ["AppImage"],
-    extraResources: [{ from: "../../target/release/banda", to: "banda" }],
+    extraResources: [
+      { from: "../../target/release/banda", to: "banda" },
+      // What Install in Settings → Machines runs on another machine over
+      // ssh, of this build (ADR 0115, decision 8; src/hosts.ts).
+      { from: "../../scripts/install.sh", to: "install.sh" },
+    ],
   },
   // Apple silicon, signed ad hoc until there is a certificate (ADR 0033,
   // decision 6): a zip of the app. Ad hoc, the hardened runtime would
@@ -62,6 +67,7 @@ export default {
     extraResources: [
       { from: "../../target/release/banda", to: "banda" },
       { from: "../../target/release/banda.dSYM", to: "banda.dSYM" },
+      { from: "../../scripts/install.sh", to: "install.sh" },
     ],
   },
   // x64, unsigned until signing comes (ADR 0090, decision 8): a per-user

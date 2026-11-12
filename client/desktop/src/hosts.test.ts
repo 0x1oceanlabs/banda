@@ -23,8 +23,11 @@ import {
   followerArgs,
   forwardArgs,
   forwardsIn,
+  failedIn,
   foundIn,
   Hosts,
+  installCommand,
+  installedIn,
   hostsOf,
   linesOf,
   listenersIn,
@@ -811,7 +814,7 @@ if (args[0] === "-G") {
 }
 const kind = args.includes("-N")
   ? "forward"
-  : / (status|stop)\\b/.test(args.at(-1))
+  : / (status|stop)\\b|\\| sh -s --/.test(args.at(-1))
     ? "command"
     : "follower"
 const runs = play[kind + "s"] ?? [[kind === "command" ? { exit: 0 } : { listen: true }]]
@@ -876,7 +879,7 @@ function fakeSsh(play: Play) {
     runs: (kind: "-G" | "-N" | "follower" | "command", ssh?: string) =>
       calls().filter(({ args }) => {
         if (ssh !== undefined && !args.includes(ssh)) return false
-        const command = / (status|stop)\b/.test(args.at(-1)!)
+        const command = / (status|stop)\b|\| sh -s --/.test(args.at(-1)!)
         if (kind === "command") return args[0] !== "-G" && command
         return kind === "follower"
           ? args[0] !== "-G" && !args.includes("-N") && !command
@@ -923,13 +926,15 @@ const DEVBOX_AT = { ssh: "devbox", banda: "~/.local/bin/banda-dev" }
 function hostsOn(
   fake: ReturnType<typeof fakeSsh>,
   times: Partial<Times> = {},
-  toml = DEVBOX_TOML
+  toml = DEVBOX_TOML,
+  install?: string
 ) {
   const file = join(fake.dir, "hosts.toml")
   writeFileSync(file, toml)
   return Hosts.layer(file, {
     env: fake.env,
     times: { ...FAST, ...times },
+    install,
   }).pipe(
     Layer.provide(
       Program.layer({
@@ -2079,4 +2084,117 @@ it.live("the suggestions leave out the machines hosts.toml reaches", () =>
       yield* Hosts.use((hosts) => hosts.suggestions).pipe(Effect.provide(layer))
     ).toEqual(["pi5"])
   })
+)
+
+it("Install's command runs the script through sh, quotes and backslashes kept, whatever the shell", () => {
+  const script = `printf '%s|' "$@"; echo "it's \\\\ $(printf '\\101')"`
+  const command = installCommand(script, ["--check", "0.1.0-dev.660", "o'k"])
+  for (const shell of ["sh", "bash", "zsh", "fish"]) {
+    const ran = spawnSync(shell, ["-c", command], { encoding: "utf8" })
+    if (ran.error) continue // not on this machine
+    expect(ran.stdout).toBe("--check|0.1.0-dev.660|ok|it's \\ A\n")
+  }
+})
+
+it("what install.sh says is read by its first words; its last failed line is why", () => {
+  expect(
+    installedIn([
+      "machine linux x86_64 Ubuntu 24.04",
+      "version 0.1.0-dev.660",
+      "installed 0.1.0-dev.660 /home/r/.local/share/banda-dev/engine/0.1.0-dev.660",
+    ])
+  ).toEqual({
+    machine: { os: "linux", arch: "x86_64", system: "Ubuntu 24.04" },
+    installed: {
+      version: "0.1.0-dev.660",
+      path: "/home/r/.local/share/banda-dev/engine/0.1.0-dev.660",
+    },
+  })
+  expect(installedIn(["noise"])).toEqual({})
+  expect(failedIn(["Warning: x", "failed no Banda for riscv64"])).toBe(
+    "no Banda for riscv64"
+  )
+  expect(failedIn(["Warning: x"])).toBeUndefined()
+})
+
+it.live(
+  "with no Banda there, Test says what Install would put there, and Install runs install.sh there, saying each line",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh({
+        followers: [],
+        commands: [
+          [{ err: "no Banda Local here", exit: 127 }],
+          [
+            { out: "machine linux x86_64 Ubuntu 24.04" },
+            { out: "version 0.1.0-dev.1" },
+            {
+              out: "would 0.1.0-dev.1 /home/r/.local/share/banda-dev/engine/0.1.0-dev.1",
+            },
+            { exit: 0 },
+          ],
+          [
+            { out: "machine linux x86_64 Ubuntu 24.04" },
+            { out: "version 0.1.0-dev.1" },
+            {
+              out: "downloading banda-dev-0.1.0-dev.1-engine-linux-x86_64.tar.gz 5",
+            },
+            { out: "checked banda-dev-0.1.0-dev.1-engine-linux-x86_64.tar.gz" },
+            {
+              out: "installed 0.1.0-dev.1 /home/r/.local/share/banda-dev/engine/0.1.0-dev.1",
+            },
+            { exit: 0 },
+          ],
+          [
+            { out: "machine linux riscv64 Debian" },
+            { err: "failed no Banda for riscv64" },
+            { exit: 1 },
+          ],
+          [{ until: "never" }],
+        ],
+      })
+      const install = join(fake.dir, "install.sh")
+      writeFileSync(install, "echo installs\n")
+      yield* Effect.gen(function* () {
+        const hosts = yield* Hosts
+        expect(yield* hosts.test("devbox", undefined)).toEqual({
+          state: "missing",
+          system: "Ubuntu 24.04",
+          arch: "x86_64",
+          version: "0.1.0-dev.1",
+        })
+        expect(fake.runs("command").at(-1)!.args.at(-1)).toBe(
+          installCommand("echo installs\n", ["--check", "0.1.0-dev.1"])
+        )
+        const told: string[] = []
+        expect(
+          yield* hosts.install("devbox", (line) => told.push(line))
+        ).toEqual({
+          version: "0.1.0-dev.1",
+          path: "/home/r/.local/share/banda-dev/engine/0.1.0-dev.1",
+        })
+        expect(told).toHaveLength(5)
+        expect(fake.runs("command").at(-1)!.args.at(-1)).toBe(
+          installCommand("echo installs\n", ["0.1.0-dev.1"])
+        )
+        expect(
+          (yield* Effect.flip(hosts.install("devbox", () => {}))).message
+        ).toBe("no Banda for riscv64")
+        // Cancel ends it, and its ssh.
+        const running = yield* Effect.forkScoped(
+          Effect.flip(hosts.install("devbox", () => {}))
+        )
+        yield* until(() => fake.runs("command").length === 5)
+        expect(
+          (yield* Effect.flip(hosts.install("devbox", () => {}))).message
+        ).toMatch(/being installed on devbox already/)
+        yield* hosts.cancelInstall("devbox")
+        expect((yield* Fiber.join(running)).message).toBe(
+          "Install was cancelled"
+        )
+        const pid = fake.runs("command").at(-1)!.pid
+        yield* until(() => !alive(pid))
+      }).pipe(Effect.scoped, Effect.provide(hostsOn(fake, {}, "", install)))
+    }),
+  20_000
 )

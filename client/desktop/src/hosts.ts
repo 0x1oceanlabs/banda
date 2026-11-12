@@ -656,6 +656,45 @@ export const probeCommand = (banda: string | undefined, own: Own = channel) =>
     `${b} --version && exec ${RUNTIME} ${b} status`,
   ])
 
+/** What Install runs there: `install.sh`, this build's own copy, through
+ * `sh` whatever the login shell is, with `args` (ADR 0115, decision 8).
+ * The script goes in the command itself, in base64, which every shell
+ * takes as it is, fish's quotes too; so ssh needs no stdin. `args` are a
+ * version and flags: letters, digits and `.+_-`. */
+export const installCommand = (script: string, args: readonly string[]) =>
+  [
+    `echo ${Buffer.from(script).toString("base64")}`,
+    "base64 -d",
+    ["sh -s --", ...args.map((arg) => arg.replace(/[^\w.+-]/g, ""))].join(" "),
+  ].join(" | ")
+
+/** What `install.sh` said, line by line, each line's first word what it
+ * is (scripts/install.sh): the machine, and once it is in place, its
+ * version and folder. */
+export function installedIn(lines: readonly string[]): {
+  machine?: { os: string; arch: string; system: string }
+  installed?: { version: string; path: string }
+} {
+  const said: ReturnType<typeof installedIn> = {}
+  for (const line of lines) {
+    const [word, ...rest] = line.split(" ")
+    if (word === "machine" && rest.length >= 2) {
+      const [os, arch, ...system] = rest
+      said.machine = { os: os!, arch: arch!, system: system.join(" ") }
+    }
+    if ((word === "installed" || word === "present") && rest.length >= 2)
+      said.installed = { version: rest[0]!, path: rest.slice(1).join(" ") }
+  }
+  return said
+}
+
+/** Why `install.sh` failed, from its last `failed <why>` line. */
+export const failedIn = (errors: readonly string[]) =>
+  errors
+    .findLast((line) => line.startsWith("failed "))
+    ?.slice("failed ".length)
+    .trim()
+
 /** What Stop Banda runs there (`throughSh`): its own `banda stop`, which
  * refuses while Agents work, unless `force`. */
 export const stopCommand = (
@@ -1053,6 +1092,17 @@ export class Hosts extends Context.Service<
     ) => Effect.Effect<"stopped" | "working", Refused>
     /** The Hosts of the ssh config to suggest for Add (`suggestionsOf`). */
     readonly suggestions: Effect.Effect<string[]>
+    /** Install: this build's engine put on the machine at `ssh`, where
+     * Test found none, by `install.sh` there (ADR 0115, decision 8); each
+     * line it says goes to `told` as it comes. The version in place and
+     * its folder there. */
+    readonly install: (
+      ssh: string,
+      told: (line: string) => void
+    ) => Effect.Effect<{ version: string; path: string }, Refused>
+    /** Cancel: ends the Install running at `ssh`, its ssh and so its
+     * `install.sh` there, which leaves nothing half put in place. */
+    readonly cancelInstall: (ssh: string) => Effect.Effect<void>
   }
 >()("banda/Hosts") {
   /** The hosts of `file`, each run by ssh from `env`'s PATH, or the
@@ -1063,7 +1113,14 @@ export class Hosts extends Context.Service<
       env,
       times = TIMES,
       sshConfig = join(homedir(), ".ssh", "config"),
-    }: { env?: Record<string, string>; times?: Times; sshConfig?: string } = {}
+      install,
+    }: {
+      env?: Record<string, string>
+      times?: Times
+      sshConfig?: string
+      /** This build's `install.sh`, which Install runs there. */
+      install?: string
+    } = {}
   ) =>
     Layer.effect(Hosts)(
       Effect.gen(function* () {
@@ -1082,7 +1139,20 @@ export class Hosts extends Context.Service<
             )
           )
         )
-        const run: Run = { spawner, env, times, own }
+        const script = yield* Effect.cached(
+          Effect.sync(() => {
+            try {
+              return install === undefined
+                ? undefined
+                : readFileSync(install, "utf8")
+            } catch {
+              return undefined
+            }
+          })
+        )
+        const run: Run = { spawner, env, times, own, install: script }
+        // The Installs running, by address, each with its Cancel.
+        const installing = new Map<string, Deferred.Deferred<void>>()
         /** The hosts reached now, by name: each one's entry, and the fiber
          * that keeps it reached. */
         const reached = new Map<
@@ -1309,6 +1379,34 @@ export class Hosts extends Context.Service<
                 ? Effect.fail(new Refused({ message: why }))
                 : probe({ name: ssh, ssh, banda }, run)
             }),
+          install: (ssh, told) =>
+            Effect.gen(function* () {
+              const why =
+                addressRefusal(ssh, undefined) ??
+                (installing.has(ssh)
+                  ? `Banda is being installed on ${ssh} already`
+                  : undefined)
+              if (why) return yield* Effect.fail(new Refused({ message: why }))
+              const cancel = yield* Deferred.make<void>()
+              installing.set(ssh, cancel)
+              const cancelled = Deferred.await(cancel).pipe(
+                Effect.andThen(
+                  Effect.fail(new Refused({ message: "Install was cancelled" }))
+                )
+              )
+              // Ended, the ssh ends too, and with it install.sh there.
+              return yield* installThere({ name: ssh, ssh }, run, told).pipe(
+                Effect.raceFirst(cancelled),
+                Effect.ensuring(Effect.sync(() => installing.delete(ssh)))
+              )
+            }),
+          cancelInstall: (ssh) =>
+            Effect.suspend(() => {
+              const cancel = installing.get(ssh)
+              return cancel
+                ? Deferred.succeed(cancel, undefined).pipe(Effect.asVoid)
+                : Effect.void
+            }),
           stop: (name, force) =>
             Effect.gen(function* () {
               const host = reached.get(name)?.entry
@@ -1394,6 +1492,8 @@ type Run = {
   readonly env: Record<string, string> | undefined
   readonly times: Times
   readonly own: Effect.Effect<{ build: string | null; version: string | null }>
+  /** This build's `install.sh`, read once; none where it carries none. */
+  readonly install: Effect.Effect<string | undefined>
 }
 
 /** Keeps `host` reached for good: a go, and after one that ended, another
@@ -1706,11 +1806,19 @@ const LINES_KEPT = 8
 /** What came of a command run there over ssh: the lines it printed, up
  * to `LINES_KEPT`, and the code it ended with; Tailscale's sign-in link,
  * as ssh waits for the Person before it is in; or `late`. */
-type Ran = { lines: string[]; code: number } | { url: string } | "late"
+type Ran =
+  { lines: string[]; errors: string[]; code: number } | { url: string } | "late"
 
 /** Runs `remote` on `host` over ssh, as the follower's ssh runs it, for
- * at most `wait` ms (`Ran`). Its stderr is logged as the follower's. */
-const overSsh = (host: Entry, remote: string, run: Run, wait: number) =>
+ * at most `wait` ms (`Ran`). Its stderr is logged as the follower's, and
+ * its last lines kept; `told` hears each line of its stdout as it comes. */
+const overSsh = (
+  host: Entry,
+  remote: string,
+  run: Run,
+  wait: number,
+  told: (line: string) => void = () => {}
+) =>
   Effect.scoped(
     Effect.gen(function* () {
       const said = heard(host.name)
@@ -1718,12 +1826,15 @@ const overSsh = (host: Entry, remote: string, run: Run, wait: number) =>
         command("ssh", commandArgs(host, remote), run.env, "pipe")
       )
       const lines: string[] = []
+      const errors: string[] = []
       const signin = yield* Deferred.make<string>()
       yield* Effect.forkScoped(
         linesOf(child.stderr).pipe(
           Stream.runForEach((line) => {
             // Once it printed, ssh is in: a link is the other machine's.
             const url = lines.length === 0 ? signInOf(line) : undefined
+            errors.push(line)
+            if (errors.length > LINES_KEPT) errors.shift()
             return (url ? Deferred.succeed(signin, url) : Effect.void).pipe(
               Effect.andThen(said(line, undefined))
             )
@@ -1737,6 +1848,7 @@ const overSsh = (host: Entry, remote: string, run: Run, wait: number) =>
             Stream.runForEach((line) =>
               Effect.sync(() => {
                 if (lines.length < LINES_KEPT) lines.push(line)
+                told(line)
               })
             )
           ),
@@ -1745,7 +1857,7 @@ const overSsh = (host: Entry, remote: string, run: Run, wait: number) =>
         { concurrency: 2 }
       )
       return yield* Effect.raceAll([
-        Effect.map(ended, ([, code]): Ran => ({ lines, code })),
+        Effect.map(ended, ([, code]): Ran => ({ lines, errors, code })),
         Effect.map(Deferred.await(signin), (url): Ran => ({ url })),
         Effect.as(Effect.sleep(wait), "late" as Ran),
       ])
@@ -1775,8 +1887,7 @@ const probe = (host: Entry, run: Run): Effect.Effect<HostTest> =>
     if ("url" in ran) return { state: "signin", url: ran.url } as const
     const ssh = sshEnded(host, ran.code)
     if (ssh) return { state: "away", why: ssh } as const
-    if (ran.code === NOT_FOUND)
-      return { state: "refused", why: notFound(host) } as const
+    if (ran.code === NOT_FOUND) return yield* missing(host, run)
     return foundIn(ran.lines, ran.code, yield* run.own)
   }).pipe(
     Effect.catch((error: { message: string }) =>
@@ -1785,6 +1896,79 @@ const probe = (host: Entry, run: Run): Effect.Effect<HostTest> =>
       )
     )
   )
+
+/** A machine where Test found no Banda of this build: what Install would
+ * put there, as `install.sh --check` says it there (ADR 0115, decision
+ * 8), when this window can install its own version; else why not. A host
+ * whose `banda` names one is refused as before: the Person said where. */
+const missing = (host: Entry, run: Run) =>
+  Effect.gen(function* () {
+    const refused = { state: "refused", why: notFound(host) } as const
+    const script = yield* run.install
+    const { version } = yield* run.own
+    if (host.banda !== undefined || script === undefined || version === null)
+      return refused
+    const ran = yield* overSsh(
+      host,
+      installCommand(script, ["--check", version]),
+      run,
+      run.times.test
+    )
+    if (ran === "late" || "url" in ran) return refused
+    const found = installedIn(ran.lines)
+    if (ran.code !== 0 || !found.machine)
+      return {
+        state: "refused",
+        why: failedIn(ran.errors) ?? notFound(host),
+      } as const
+    return {
+      state: "missing",
+      system: cleaned(found.machine.system, 40),
+      arch: found.machine.arch,
+      version,
+    } as const
+  })
+
+/** Install: this build's engine put on `host` by `install.sh` there, each
+ * line it says handed to `told` as it comes; the version in place, or why
+ * not. */
+const installThere = (host: Entry, run: Run, told: (line: string) => void) =>
+  Effect.gen(function* () {
+    const refuse = (message: string) => Effect.fail(new Refused({ message }))
+    const script = yield* run.install
+    const { version } = yield* run.own
+    if (script === undefined)
+      return yield* refuse("this Banda carries no install.sh")
+    if (version === null)
+      return yield* refuse("this Banda says no version to install")
+    const ran = yield* overSsh(
+      host,
+      installCommand(script, [version]),
+      run,
+      INSTALL_WAIT,
+      told
+    ).pipe(
+      Effect.mapError(
+        (error: { message: string }) =>
+          new Refused({ message: `ssh did not start: ${error.message}` })
+      )
+    )
+    if (ran === "late")
+      return yield* refuse(`${host.ssh} did not finish in time`)
+    if ("url" in ran)
+      return yield* refuse(`sign in to Tailscale to reach ${host.ssh} first`)
+    const done = installedIn(ran.lines).installed
+    if (ran.code === 0 && done) return done
+    return yield* refuse(
+      sshEnded(host, ran.code) ??
+        failedIn(ran.errors) ??
+        `install.sh there ended with code ${ran.code}`
+    )
+  })
+
+/** How long Install has there: a download of some 50 MB, over a slow
+ * link too. */
+const INSTALL_WAIT = 10 * 60_000
 
 /** Stop Banda on `host`: its own `banda stop` there (`stopCommand`). */
 const stopThere = (host: Entry, force: boolean, run: Run) =>

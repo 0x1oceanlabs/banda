@@ -26,6 +26,7 @@ import {
   started,
   stateWords,
   testWords,
+  installSteps,
   Told,
 } from "./machines"
 
@@ -418,4 +419,72 @@ test("another machine says why it is awake under its Battery, or on its own as A
   })
   // Before its engine says it, from one older than it, or away: none.
   expect(powerRow(undefined, 2)).toBeUndefined()
+})
+
+test("a machine with no Banda says what Install would put there", () => {
+  expect(
+    testWords(
+      {
+        state: "missing",
+        system: "Ubuntu 24.04",
+        arch: "x86_64",
+        version: "0.1.0-dev.642",
+      },
+      "devbox"
+    )
+  ).toEqual({
+    found: true,
+    title: "Found devbox · Ubuntu 24.04 · x64",
+    detail:
+      "No Banda there yet. Banda dev.642 is put in devbox's own folder; it then updates itself.",
+  })
+  expect(
+    testWords(
+      { state: "missing", system: null, arch: "arm64", version: "0.2.0" },
+      "m1"
+    ).title
+  ).toBe("Found m1 · arm64")
+})
+
+test("Install's steps are its lines in words, the last still running", () => {
+  const said = [
+    "machine linux x86_64 Ubuntu 24.04",
+    "version 0.1.0-dev.642",
+    "downloading banda-dev-0.1.0-dev.642-engine-linux-x86_64.tar.gz 68123456",
+  ]
+  expect(installSteps(said, "devbox")).toEqual([
+    { words: "Downloading dev.642 (68 MB), on devbox", done: false },
+  ])
+  expect(
+    installSteps(
+      [...said, "checked banda-dev-0.1.0-dev.642-engine-linux-x86_64.tar.gz"],
+      "devbox"
+    )
+  ).toEqual([
+    { words: "Downloaded dev.642 (68 MB), on devbox", done: true },
+    { words: "Checked", done: true },
+    { words: "Putting it in place", done: false },
+  ])
+  expect(
+    installSteps(
+      [
+        ...said,
+        "checked banda-dev-0.1.0-dev.642-engine-linux-x86_64.tar.gz",
+        "installed 0.1.0-dev.642 /home/roma/.local/share/banda-dev/engine/0.1.0-dev.642",
+      ],
+      "devbox"
+    ).at(-1)
+  ).toEqual({ words: "Starting its engine", done: false })
+  expect(
+    installSteps(
+      [
+        "version 0.1.0-dev.642",
+        "present 0.1.0-dev.642 /home/r/.local/share/banda-dev/engine/0.1.0-dev.642",
+      ],
+      "devbox"
+    )
+  ).toEqual([
+    { words: "dev.642 is on devbox already", done: true },
+    { words: "Starting its engine", done: false },
+  ])
 })

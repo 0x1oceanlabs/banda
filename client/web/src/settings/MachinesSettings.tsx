@@ -55,6 +55,7 @@ import { cleanNamed, forgetNamed, useStatus } from "@banda/ui/hooks/use-status"
 import { shownProjects } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import {
+  CheckIcon,
   ChevronDownIcon,
   ChevronRightIcon,
   LaptopIcon,
@@ -89,6 +90,7 @@ import {
   factsWords,
   failedWords,
   foundNamed,
+  installSteps,
   lidWords,
   NAME_MOST,
   NO_ACTS,
@@ -1076,6 +1078,65 @@ async function settleAdded(
   }
 }
 
+/** Install running on machine `name`: each step its `install.sh` said
+ * so far, in words, the last with a spinner, and Cancel. */
+function Installing({
+  name,
+  lines,
+  cancel,
+}: {
+  name: string
+  lines: readonly string[]
+  cancel: () => void
+}) {
+  const steps = installSteps(lines, name)
+  return (
+    <div
+      role="status"
+      className="flex items-start gap-3 rounded-control bg-muted/50 px-3 py-2.5 text-sm"
+    >
+      <MachineIcon
+        icon="server"
+        size={20}
+        className="mt-0.5 text-muted-foreground"
+      />
+      <div className="flex min-w-0 flex-1 flex-col gap-1">
+        <div className="font-medium">Installing Banda on {name}</div>
+        {steps.length === 0 && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+            <Spinner className="size-3" />
+            Reaching {name}
+          </div>
+        )}
+        {steps.map((step) => (
+          <div
+            key={step.words}
+            className={cn(
+              "flex items-center gap-2 text-xs",
+              step.done ? "text-muted-foreground" : "text-foreground"
+            )}
+          >
+            {step.done ? (
+              <CheckIcon className="size-3" />
+            ) : (
+              <Spinner className="size-3" />
+            )}
+            {step.words}
+          </div>
+        ))}
+      </div>
+      <Button
+        size="sm"
+        variant="ghost"
+        className="self-center"
+        onClick={cancel}
+      >
+        Cancel
+      </Button>
+    </div>
+  )
+}
+
 /**
  * Add a machine: the Hosts of `~/.ssh/config` as chips, an address, and
  * Connect, which finds what is there and starts nothing; then Add, which
@@ -1129,22 +1190,53 @@ function AddMachine({
   const already = found && hosts.find((one) => one.state.ssh === found.address)
   const settled =
     named && !already ? settle(named, shownBeside(here, hosts)) : undefined
+  // By the name Connect found, until it answers with its own.
+  const addAt = async (ssh: string, name: string | undefined) => {
+    const entry = await device.hosts.add({ ssh })
+    setFound(undefined)
+    setAddress("")
+    setAdded({ name: name ?? entry.name })
+    // Written on it once it answers, whether Settings is open then or
+    // not; what was written, or why not, shows while it is.
+    void settleAdded(kept.engine(entry.name), entry.name, () =>
+      shown(entry.name)
+    ).then((done) => done && setAdded({ name: name ?? entry.name, ...done }))
+  }
   const add = () => {
     if (!found) return
     const ssh = found.address
-    // By the name Connect found, until it answers with its own.
     const name = named?.name
+    void ask(() => addAt(ssh, name), "Adding…")
+  }
+  // Install, where Connect found no Banda (ADR 0115, decision 8): the
+  // machine downloads it and puts it in place, saying each step; then
+  // Connect again, and Add, which starts its engine.
+  const [installing, setInstalling] = useState<{
+    address: string
+    lines: string[]
+  }>()
+  const install = () => {
+    if (!found || busy) return
+    const ssh = found.address
+    setAdded(undefined)
+    setInstalling({ address: ssh, lines: [] })
     void ask(async () => {
-      const entry = await device.hosts.add({ ssh })
-      setFound(undefined)
-      setAddress("")
-      setAdded({ name: name ?? entry.name })
-      // Written on it once it answers, whether Settings is open then or
-      // not; what was written, or why not, shows while it is.
-      void settleAdded(kept.engine(entry.name), entry.name, () =>
-        shown(entry.name)
-      ).then((done) => done && setAdded({ name: name ?? entry.name, ...done }))
-    }, "Adding…")
+      try {
+        await device.hosts.install(ssh, (line) =>
+          setInstalling((now) =>
+            now?.address === ssh
+              ? { address: ssh, lines: [...now.lines, line] }
+              : now
+          )
+        )
+        const test = await device.hosts.test(ssh, null)
+        setFound({ address: ssh, test })
+        if (test.state === "found")
+          await addAt(ssh, foundNamed(test, ssh)?.name)
+      } finally {
+        setInstalling(undefined)
+      }
+    }, `Installing Banda on ${ssh}…`)
   }
   const chips = suggested.state === "ready" ? suggested.value : []
   return (
@@ -1209,18 +1301,29 @@ function AddMachine({
           Connect
         </Button>
       </form>
-      {doing && (
+      {doing && !installing && (
         <p className="flex items-center gap-2 text-xs text-muted-foreground">
           <Spinner className="size-3" />
           {doing}
         </p>
       )}
-      {found && words && (
+      {installing && (
+        <Installing
+          name={installing.address}
+          lines={installing.lines}
+          cancel={() => void device.hosts.cancelInstall(installing.address)}
+        />
+      )}
+      {found && words && !installing && (
         <div className="-mx-2.5">
           <TestFound
             test={found.test}
             words={words}
-            icon={settled?.named.icon ?? named?.icon}
+            icon={
+              settled?.named.icon ??
+              named?.icon ??
+              (found.test.state === "missing" ? "server" : undefined)
+            }
             actions={
               <>
                 <Button
@@ -1230,10 +1333,17 @@ function AddMachine({
                 >
                   Cancel
                 </Button>
-                {words.found && !already && (
-                  <Button size="sm" disabled={busy} onClick={add}>
-                    Add
+                {found.test.state === "missing" ? (
+                  <Button size="sm" disabled={busy} onClick={install}>
+                    Install Banda on {found.address}
                   </Button>
+                ) : (
+                  words.found &&
+                  !already && (
+                    <Button size="sm" disabled={busy} onClick={add}>
+                      Add
+                    </Button>
+                  )
                 )}
               </>
             }

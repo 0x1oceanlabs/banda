@@ -133,6 +133,11 @@ export type HostTest =
         speaks: boolean
       } | null
     }
+  /** Reachable, with no Banda there: what Install would put there, this
+   * window's own `version`, by what the machine's `install.sh --check`
+   * says of it (ADR 0115, decision 8): its system, as found, and `arch`,
+   * "x86_64" or "arm64". */
+  | { state: "missing"; system: string | null; arch: string; version: string }
   | { state: "signin"; url: string }
   | { state: "away"; why: string }
   | { state: "refused"; why: string }
