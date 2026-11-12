@@ -1,0 +1,84 @@
+== claude (of claude, sessions claude, shadows None)
+/usr/bin/node ["/srv/banda/adapters/claude-agent-acp.mjs"] in Some("/work")
+  BANDA_CLAUDE_SESSIONS=/state/projects/p/sessions/claude
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  npm_config_omit=optional
+  unset []
+  writes ["/state/projects/p/sessions/claude"]
+== codex (of codex, sessions codex, shadows None)
+/usr/bin/node ["/srv/banda/adapters/codex-acp.mjs"] in Some("/work")
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CODEX_CONFIG={"shell_environment_policy.set.BANDA_TOKEN":"f00d"}
+  npm_config_omit=optional
+  unset []
+  writes []
+== work (of claude, sessions claude, shadows None)
+/usr/bin/node ["/srv/banda/adapters/claude-agent-acp.mjs"] in Some("/work")
+  BANDA_CLAUDE_SESSIONS=/state/projects/p/sessions/claude
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CLAUDE_CONFIG_DIR=/data/accounts/work
+  npm_config_omit=optional
+  unset []
+  writes ["/state/projects/p/sessions/claude"]
+== team (of codex, sessions codex, shadows Some("~/.codex"))
+/usr/bin/node ["/srv/banda/adapters/codex-acp.mjs"] in Some("/work")
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CODEX_CONFIG={"shell_environment_policy.set.BANDA_TOKEN":"f00d"}
+  CODEX_HOME=/data/accounts/team
+  npm_config_omit=optional
+  unset []
+  writes []
+== api (of claude, sessions claude, shadows None)
+/usr/bin/node ["/srv/banda/adapters/claude-agent-acp.mjs"] in Some("/work")
+  BANDA_CLAUDE_SESSIONS=/state/projects/p/sessions/claude
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  npm_config_omit=optional
+  unset []
+  writes ["/state/projects/p/sessions/claude"]
+== router (of claude, sessions claude, shadows None)
+/usr/bin/node ["/srv/banda/adapters/claude-agent-acp.mjs"] in Some("/work")
+  ANTHROPIC_BASE_URL=https://openrouter.ai/api
+  BANDA_CLAUDE_SESSIONS=/state/projects/p/sessions/claude
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CLAUDE_CONFIG_DIR=/data/accounts/router
+  npm_config_omit=optional
+  unset []
+  writes ["/state/projects/p/sessions/claude"]
+== kimi (of codex, sessions codex, shadows Some("~/.codex"))
+/usr/bin/node ["/srv/banda/adapters/codex-acp.mjs"] in Some("/work")
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  CODEX_CONFIG={"model_provider":"banda-gateway","model_providers.banda-gateway.name":"kimi","model_providers.banda-gateway.base_url":"https://gateway.example/v1","model_providers.banda-gateway.wire_api":"responses","model_providers.banda-gateway.auth.command":"banda","model_providers.banda-gateway.auth.args":["secret","get","kimi"],"model_providers.banda-gateway.auth.timeout_ms":60000,"shell_environment_policy.set.BANDA_TOKEN":"f00d"}
+  CODEX_HOME=/data/accounts/kimi
+  MODEL_PROVIDER=banda-gateway
+  npm_config_omit=optional
+  unset []
+  writes []
+== pi (of pi, sessions pi, shadows None)
+pi ["acp"] in Some("/work")
+  BANDA_PROJECT=<project>
+  BANDA_SPACE=<project>
+  BANDA_TOKEN=f00d
+  BANDA_UNTRUSTED=
+  unset []
+  writes []
