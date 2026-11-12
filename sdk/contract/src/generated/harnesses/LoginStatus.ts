@@ -4,9 +4,15 @@ export type LoginStatus = { login: string, harness: string,
 /**
  * The last 64 KiB of terminal output. No credential files are read.
  */
-output: string, done: boolean, 
+output: string, 
 /**
- * Set only when done. Ask account_status after login_finish to
- * confirm who signed in; a successful exit alone is not proof.
+ * How many bytes of output there were in all, the cut ones too: a
+ * watcher that saw `seen` of them prints the last `written - seen`.
+ */
+written: number, done: boolean, 
+/**
+ * Set only when done, once the engine read the Account again. Ask
+ * account_status to confirm who signed in; a successful exit alone
+ * is not proof.
  */
 succeeded?: boolean, };

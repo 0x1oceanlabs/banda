@@ -1249,6 +1249,13 @@ If Chat is removed, Agents still works through its own Thread.
   commands: the window and `banda account` call them on the engine of the
   machine the Account belongs to. What a Harness runs stays the Person's,
   written with `keys.settings_set` on that engine.
+- **The engine runs a sign-in to its end** (ADR 0108, decision 5): as it
+  ends the engine lets go of the Harness's processes and writes
+  `account_changed`, then says it is done. The window watches it on
+  `harnesses.login_watch` and may close; `banda account login` is one
+  process, stdin its input, stdout its events, the exit code its end. The
+  polling calls stay for Agents' tools; `login_finish` only lets go of
+  the report.
 - **`banda account` and `banda secret` are filters** (ADR 0108, decision
   3): the result alone on stdout, a list one JSON object a line narrowed
   by flags, IDs on stdin for `-`, a refusal as JSON on stderr

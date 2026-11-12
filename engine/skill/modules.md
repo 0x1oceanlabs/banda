@@ -213,7 +213,7 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `harnesses.limits`: The room left of each Harness's best account; click for each account's limits.
 
-Its methods, `banda call harnesses.<method>`: `list`, `accounts`, `account_profiles`, `connect_account`, `update_account`, `set_start`, `set_models`, `account`, `account_status`, `login_account`, `login_status`, `login_input`, `login_cancel`, `remove_account`, `login_finish`, `sign_in`, `sign_out`, `add_gateway`, `set_key`, `secret`, `api_key`, `limits`, `usage`.
+Its methods, `banda call harnesses.<method>`: `list`, `accounts`, `account_profiles`, `connect_account`, `update_account`, `set_start`, `set_models`, `account`, `account_status`, `login_account`, `login_status`, `login_watch`, `login_input`, `login_cancel`, `remove_account`, `login_finish`, `sign_in`, `sign_out`, `add_gateway`, `set_key`, `secret`, `api_key`, `limits`, `usage`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -224,9 +224,9 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `login_account`: Starts the Harness's own sign-in. The Person completes its browser or terminal step; poll login_status for its output.
 - `login_status`: Reads a sign-in's bounded terminal output and whether it ended.
 - `login_input`: Sends input to the running sign-in terminal, not to a shell.
-- `login_cancel`: Stops a running sign-in; finish it to refresh the Account.
+- `login_cancel`: Stops a running sign-in; the engine reads the Account again as it ends.
 - `remove_account`: Removes an Account from choices and moves its Threads to the default after their current Turn. Keeps profiles and history; refuses removing the default.
-- `login_finish`: Refreshes the Account after a completed sign-in. Then ask account_status to confirm the Harness's report.
+- `login_finish`: Lets go of an ended sign-in's report before it expires: the engine read the Account again as it ended. Ask account_status to confirm the Harness's report.
 - `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
 
 ## Keys (`keys`)

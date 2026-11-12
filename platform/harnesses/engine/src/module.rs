@@ -24,7 +24,7 @@ use crate::model::{HarnessView, Limits, LimitsLook};
 use crate::usage::UsageNow;
 use crate::{FILE, Harnesses};
 use banda_kernel::{
-    Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
+    Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Stream, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -115,16 +115,23 @@ banda_kernel::methods! {
         call login_account(LoginAccount) -> LoginStatus, Write, tool "login_account";
         /// Reads a sign-in's bounded terminal output and whether it ended.
         call login_status(LoginId) -> LoginStatus, Read, tool "login_status";
+        /// A sign-in's status as it changes, ending once it is done: the
+        /// engine runs it to its end and finishes it, so a watcher may go
+        /// (ADR 0108, decision 5). Any Agent's pass answers here, as
+        /// `banda account login` is theirs too.
+        stream login_watch(LoginId) -> LoginStatus, Read, pass;
         /// Sends input to the running sign-in terminal, not to a shell.
         call login_input(LoginInput) -> (), Write, tool "login_input";
-        /// Stops a running sign-in; finish it to refresh the Account.
+        /// Stops a running sign-in; the engine reads the Account again as
+        /// it ends.
         call login_cancel(LoginId) -> (), Write, tool "login_cancel";
         /// Removes an Account from choices and moves its Threads to the
         /// default after their current Turn. Keeps profiles and history;
         /// refuses removing the default.
         command remove_account(RemoveAccount) -> String, Write, tool "remove_account";
-        /// Refreshes the Account after a completed sign-in. Then ask
-        /// account_status to confirm the Harness's report.
+        /// Lets go of an ended sign-in's report before it expires: the
+        /// engine read the Account again as it ended. Ask account_status
+        /// to confirm the Harness's report.
         command login_finish(LoginId) -> (), Write, tool "login_finish";
         /// Signs in with one of the Harness's ways. A way in a terminal ran
         /// there already: the Person signed in in it.
@@ -259,6 +266,10 @@ impl Module for HarnessesModule {
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }
+
+    async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
+    }
 }
 
 impl HarnessesModule {
@@ -324,8 +335,11 @@ impl HarnessesModule {
     async fn login_cancel(&self, _: Call, args: LoginId) -> Result<(), Refusal> {
         self.accounts.login_cancel(args)
     }
-    async fn login_finish(&self, call: Call, args: LoginId) -> Result<(), Refusal> {
-        self.accounts.login_finish(call, args).await
+    async fn login_finish(&self, _: Call, args: LoginId) -> Result<(), Refusal> {
+        self.accounts.login_finish(args)
+    }
+    async fn login_watch(&self, _: Call, args: LoginId) -> Result<Stream, Refusal> {
+        self.accounts.login_watch(args)
     }
     async fn limits(
         &self,

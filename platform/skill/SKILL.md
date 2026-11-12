@@ -256,19 +256,23 @@ existing credentials; Add creates a private, empty profile. IDs stay;
 names can change. The same folder cannot be connected twice.
 
 For sign-in, use `banda account login ID --way WAY`, with the way from
-`account status` (omit it if there is only one). It returns a login ID.
-`banda account login-status LOGIN` reads its progress and terminal output;
-`banda account login-input LOGIN CODE` submits one line when needed.
+`account status` (omit it if there is only one). It is one process: it
+prints `{"login", "harness"}`, then each `{"output"}` the sign-in prints,
+then `{"done", "succeeded"}`, and exits 0 once signed in, 1 otherwise.
+Each line on its stdin goes to the sign-in, as a confirmation code.
 For Codex on a remote engine, `--way device-code` uses its own device
 login: the output gives the verification URL and one-time code for the
 Person to open on their computer.
 The Person completes the provider's browser step. Do not ask them for a
-password or copy credentials. `banda account login-cancel LOGIN` cancels.
-Once done, `banda account login-finish LOGIN` refreshes the Account; ask
+password or copy credentials. The engine runs a sign-in to its end and
+reads the Account again as it ends, even when nothing watches it; ask
 `banda account status ID` again to confirm who signed in. A successful
 program exit alone is not proof. A login lasts at most ten minutes, and
-only one runs for each Account. These commands print JSON and refuse
-unknown Accounts, unsupported ways and invalid changes.
+only one runs for each Account. The tools `login_account`, `login_status`,
+`login_input`, `login_cancel` and `login_finish` do the same by asking,
+as do `banda account login-status`, `login-input`, `login-cancel` and
+`login-finish LOGIN`. These commands refuse unknown Accounts, unsupported
+ways and invalid changes.
 
 A gateway account (OpenRouter, LiteLLM) and an API key are the Person's to
 add: in Settings → Agents → Add account, or in their own terminal with

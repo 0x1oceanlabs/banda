@@ -284,12 +284,17 @@ impl Client {
     /// what else this client follows: its pieces come as [`Client::heard`]
     /// frames of the stream this returns.
     pub async fn stream(&mut self, method: &str) -> Result<u64, Failure> {
+        self.stream_with(method, Value::Null).await
+    }
+
+    /// Hears the machine's stream `method`, asked with `params`.
+    pub async fn stream_with(&mut self, method: &str, params: Value) -> Result<u64, Failure> {
         let id = self.next_id();
         let frame = ClientFrame::Stream {
             id,
             project: None,
             method: method.to_owned(),
-            params: Value::Null,
+            params,
         };
         self.send(&frame).await.map(|()| id)
     }
