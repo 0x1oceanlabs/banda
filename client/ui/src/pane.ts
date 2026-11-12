@@ -332,6 +332,11 @@ export type Listed = {
    * which its card shows as "+38 −9" (ADR 0098, decision 8). None when
    * that work changed no line. */
   changedLines?: ChangedLines
+  /** Its direct sub-agents while it works (ADR 0103, decisions 13 and
+   * 32): how many work and how many failed since its turn began, the
+   * Mark's satellites, and what its card's line 2 says of those at work,
+   * "3 sub-agents at work". */
+  subagents?: ListedSubagents
   /**
    * What calls the Person, in a few words: what it asks, why it failed.
    * A toast or a system notification says it too.
@@ -404,6 +409,9 @@ export type Answering = {
  * module keeps it (ADR 0074; ADR 0098, decision 12). It sleeps until
  * `until`, unless `woke` says what woke it first.
  */
+/** A listed Thread's direct sub-agents (`Listed.subagents`). */
+export type ListedSubagents = { working: number; failed: number; said?: string }
+
 export type ListedLater = {
   /** When it was put off, in ms since the epoch. */
   at: number

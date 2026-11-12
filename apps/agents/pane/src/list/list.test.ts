@@ -10,6 +10,7 @@ import {
   type Doings,
   hearDoing,
   readsAgain,
+  subagentsKept,
   THREADS_FILTER,
   threadsSource,
   withDoing,
@@ -631,4 +632,65 @@ test("a reconnect takes what agents.doing says anew: a Thread it no longer names
   expect(withDoing(read, undefined), "before the stream says anything").toBe(
     read
   )
+})
+
+test("a sub-agent that starts, changes state or ends has the list read again, as only the engine counts them (ADR 0103, decision 10)", () => {
+  const lane = (parent?: string) => ({
+    id: "s1",
+    turn: "u1",
+    ...(parent ? { parent } : {}),
+    title: "Review it",
+    state: "running" as const,
+    can_stop: false,
+    started: 1,
+  })
+  const started = (thread: string, parent?: string) =>
+    event(
+      "subagent.started",
+      { item: "i1", subagent: lane(parent) },
+      { subject: thread }
+    )
+  expect(readsAgain(one, started("t1"))).toBe(true)
+  expect(readsAgain(one, started("t2"))).toBe(false)
+  // One its sub-agent started is not the Thread's to count.
+  expect(readsAgain(one, started("t1", "s0"))).toBe(false)
+  const changed = (more: object) =>
+    event("subagent.changed", { subagent: "s1", ...more }, { subject: "t1" })
+  expect(readsAgain(one, changed({ state: "failed" }))).toBe(true)
+  expect(readsAgain(one, changed({ title: "Review the schema" }))).toBe(false)
+  const ended = event(
+    "subagent.ended",
+    { subagent: "s1", turn: "u1", state: "done", ended: 2 },
+    { subject: "t1" }
+  )
+  expect(readsAgain(one, ended)).toBe(true)
+})
+
+test("a turn's start counts none failed before it, and its end with none at work lists no sub-agents (ADR 0103, decision 10)", () => {
+  const listed = (working: number, failed: number): ListedThread => ({
+    ...one.threads[0],
+    latest: { turn: "u1", state: "running", began: 1 },
+    subagents: { working, failed },
+  })
+  expect(subagentsKept(listed(1, 1), true).subagents).toEqual({
+    working: 1,
+    failed: 0,
+  })
+  expect(subagentsKept(listed(0, 1), true).subagents).toBeUndefined()
+  const kept = listed(2, 1)
+  expect(subagentsKept(kept, false)).toBe(kept)
+  expect(subagentsKept(listed(0, 1), false).subagents).toBeUndefined()
+
+  const list = { ...one, threads: [listed(0, 1)] }
+  const ends = event(
+    "turn.ended",
+    { turn: "u1", state: "done" },
+    { subject: "t1" }
+  )
+  expect(applyThreads(list, ends).threads[0].subagents).toBeUndefined()
+  const after = { ...one, threads: [listed(1, 0)] }
+  expect(applyThreads(after, ends).threads[0].subagents).toEqual({
+    working: 1,
+    failed: 0,
+  })
 })

@@ -109,6 +109,10 @@ export type CardModel = {
    * its time is at a usage limit (`timeShown`). Its card holds it as the
    * Mark holds what it shows (`heldDoing`), so they never disagree. */
   does?: Does
+  /** What its sub-agents at work say, which line 2 says at work in place
+   * of what its turn does (ADR 0103, decision 32): "3 sub-agents at
+   * work", "Waiting on Explore". */
+  subagents?: string
   /** It left the tab while the list held: where it went, shown in its
    * time's place (nothing where its Mark says it), and as a screen reader
    * hears it. */
@@ -196,6 +200,7 @@ export function cardOf(input: CardOf): CardModel {
   const { listed, stand } = row
   const { look } = lookOf(listed, now)
   const does = works(look) ? doesOf(listed, now) : undefined
+  const subagents = does && subagentsSaid(does, listed.subagents?.said)
   const tone = callColor(look)
   const count = linesOf(place, view, child)
   // The machine stands on line 3; with none, on line 1's right, by its
@@ -251,6 +256,7 @@ export function cardOf(input: CardOf): CardModel {
     ...(quiet ? { quiet } : {}),
     time: timeOf(row, at, tone),
     ...(does ? { does } : {}),
+    ...(subagents ? { subagents } : {}),
     ...(went
       ? {
           gone: {
@@ -383,6 +389,25 @@ export function worksWords(
   return verb ? verb(on) : on
 }
 
+/** What line 2 says of the sub-agents at work, `said`, while its Agent
+ * `does` what it does (ADR 0103, decision 32): before what its turn does,
+ * as it says more, but after a usage limit and no events, which say that
+ * the work does not go on. */
+function subagentsSaid(does: Does, said?: string): string | undefined {
+  return does.doing === "limit" || does.doing === "stuck" ? undefined : said
+}
+
+/** What line 2 says at work, as `card` holds it at `now`: its sub-agents
+ * at work, or what its Agent does (`worksWords`). */
+export function workSaid(
+  card: CardModel,
+  now: number,
+  ago?: (at: number, now: number) => string
+): string {
+  if (card.subagents) return card.subagents
+  return card.does ? worksWords(card.does, now, ago) : ""
+}
+
 /** The time `card` shows: at a usage limit, when it goes on (decision
  * 8); else its own. */
 export function timeShown({ does, time }: CardModel): Time {
@@ -458,7 +483,7 @@ export function spokenOf(card: CardModel, now: number): Spoken {
       : STAND_SAID[card.stand]
   const at = card.away?.since ?? now
   const name = [card.title, word, timeSaid(timeShown(card), at)].join(", ")
-  const said = card.does ? [worksWords(card.does, at, agoSaid)] : []
+  const said = card.does ? [workSaid(card, at, agoSaid)] : []
   for (const line of card.lines)
     for (const slot of [...line.left, ...line.right])
       said.push(...slotSaid(slot, at))

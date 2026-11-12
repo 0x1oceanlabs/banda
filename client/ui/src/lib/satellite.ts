@@ -229,3 +229,58 @@ export function motionOf(
   if (was === undefined || was === now || still) return "still"
   return FAMILIES[was] === FAMILIES[now] ? "blend" : "leap"
 }
+
+/** The Agent's tile alone, as a Mark draws it, is this many of its own
+ * units across (`viewBox="48 -6 56 56"`). */
+const MARK_UNITS = 56
+
+/** Where a Mark's red satellite stands, in the Mark's units: at the
+ * Agent's lower left, off its body, where no pose takes it. */
+const ORBIT_AT = { x: 54, y: 40 } as const
+
+/** From how wide a Mark, in px, its red satellite is an octagon: under
+ * that its shape would not read, so it is a dot. */
+export const OCTAGON_FROM = 32
+
+/** How wide the octagon is drawn, in px, whatever the Mark's size: the
+ * satellite's largest, where its cut corners read (ADR 0103, decisions 12
+ * and 13); and the dot, 3 px. */
+const OCTAGON_PX = 12
+const DOT_PX = 3
+
+/** What a Mark's orbit draws, in the Mark's units: a red dot, or the
+ * failed satellite's octagon moved and scaled into place. */
+export type Orbit =
+  | { form: "dot"; cx: number; cy: number; r: number }
+  | { form: "octagon"; transform: string; shape: SatelliteShape }
+
+/**
+ * What a Thread's Mark, drawn `px` wide, shows of its sub-agents (ADR
+ * 0103, decision 13; ADR 0099, decision 3): only a failed one takes
+ * colour, red, while its Thread `works`. An octagon on a large Mark, a
+ * 3 px dot on a small one, as at 16 px in the sidebar. None while none
+ * failed, or the Thread works no more. A Mark not yet measured (`px` 0)
+ * is taken as small. The grey satellites of those at work come with ADR
+ * 0099's.
+ */
+export function orbitOf(
+  works: boolean,
+  failed: number,
+  px: number
+): Orbit | undefined {
+  if (!works || failed <= 0) return undefined
+  const unit = MARK_UNITS / (px > 0 ? px : 16)
+  if (px < OCTAGON_FROM)
+    return {
+      form: "dot",
+      cx: ORBIT_AT.x,
+      cy: ORBIT_AT.y,
+      r: n2((DOT_PX / 2) * unit),
+    }
+  const half = (OCTAGON_PX / 2) * unit
+  return {
+    form: "octagon",
+    transform: `translate(${n2(ORBIT_AT.x - half)} ${n2(ORBIT_AT.y - half)}) scale(${n2(unit)})`,
+    shape: shapeOf("failed", OCTAGON_PX),
+  }
+}

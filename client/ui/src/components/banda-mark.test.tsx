@@ -1069,3 +1069,21 @@ test("the open Thread's mark stays calm as Quiet ends", async () => {
   vi.advanceTimersByTime(4400)
   expect(open.attributes()["data-calm"]).toBe("")
 })
+
+test("a working Thread's Mark shows a failed sub-agent as a red satellite, and only while it works (ADR 0103, decision 13)", () => {
+  const failed: Listed = {
+    ...listed,
+    mark: "working",
+    subagents: { working: 2, failed: 1 },
+  }
+  const red = renderToStaticMarkup(<ThreadMark listed={failed} />)
+  expect(red).toContain('data-satellite="failed"')
+  expect(red).toContain("var(--destructive)")
+  expect(
+    renderToStaticMarkup(<ThreadMark listed={failed} look="done" />)
+  ).not.toContain('data-satellite="failed"')
+  const none = { ...failed, subagents: { working: 2, failed: 0 } }
+  expect(renderToStaticMarkup(<ThreadMark listed={none} />)).not.toContain(
+    'data-satellite="failed"'
+  )
+})

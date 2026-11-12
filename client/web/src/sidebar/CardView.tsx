@@ -41,7 +41,7 @@ import {
   STRAYED,
   timeShown,
   timesOf,
-  worksWords,
+  workSaid,
 } from "./card"
 import { CardTime } from "./CardStatus"
 import { dueOf, useClock, useWakeAt } from "./clock"
@@ -452,7 +452,7 @@ function Piece({
     }
     case "works": {
       // As its time, muted a step more than a call's words (§2.5).
-      const words = card.does && worksWords(card.does, card.away?.since ?? now)
+      const words = workSaid(card, card.away?.since ?? now)
       return (
         <FadeText
           tip={words || undefined}
