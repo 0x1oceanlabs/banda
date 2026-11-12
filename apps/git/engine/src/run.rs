@@ -34,6 +34,16 @@ const TIME: Duration = Duration::from_secs(30);
 pub const LONG: Duration = Duration::from_secs(10 * 60);
 /// How long a git asked to stop has to end before it is killed.
 const STOPPING: Duration = Duration::from_secs(2);
+/// How long an act that found the index lock held waits before each try
+/// again ([`tries_again`]), about a second and a half in all: another
+/// git holds it a moment, as an editor's `status` beside the Person does.
+const LOCKED: [Duration; 5] = [
+    Duration::from_millis(50),
+    Duration::from_millis(100),
+    Duration::from_millis(200),
+    Duration::from_millis(400),
+    Duration::from_millis(800),
+];
 /// How long the pipes are read on after git ended: a child it left, as a
 /// hook's, may hold them open.
 const LEFT_OPEN: Duration = Duration::from_secs(1);
@@ -345,7 +355,9 @@ const UNTRUSTED: &str = "Git does not trust this folder, as another user owns it
 
 /// Runs `git args` in `folder`. A git that exits with another code than 0
 /// is no error here: [`Ran::checked`] makes it one, and a probe such as
-/// `show-ref --quiet` reads [`Ran::success`].
+/// `show-ref --quiet` reads [`Ran::success`]. An act asked for that found
+/// the index lock held by another git, and so did nothing, runs again
+/// after a moment, [`LOCKED`] times at most ([`tries_again`]).
 pub async fn git<I, S>(folder: &Path, args: I, opts: Opts<'_>) -> Result<Ran, Failure>
 where
     I: IntoIterator<Item = S>,
@@ -357,6 +369,31 @@ where
         .map(|a| a.to_string_lossy())
         .collect::<Vec<_>>()
         .join(" ");
+    let waits: &[Duration] = if opts.asked.is_some() && tries_again(&args) {
+        &LOCKED
+    } else {
+        &[]
+    };
+    let mut waits = waits.iter();
+    loop {
+        let ran = once(folder, &args, &said, &opts).await?;
+        match waits.next() {
+            Some(wait) if !ran.success && ran.reason() == Reason::Locked => {
+                tracing::info!(args = %said, "another git holds the index lock: trying again");
+                tokio::time::sleep(*wait).await;
+            }
+            _ => return Ok(ran),
+        }
+    }
+}
+
+/// Runs `git args` in `folder` once, `said` being its arguments as text.
+async fn once(
+    folder: &Path,
+    args: &[OsString],
+    said: &str,
+    opts: &Opts<'_>,
+) -> Result<Ran, Failure> {
     let _turn = match opts.pool {
         Pool::Shared => Some(
             RUNNING
@@ -371,22 +408,22 @@ where
         Failure(Reason::Other)
     };
     let feeds = opts.stdin.is_some();
-    let left = (cfg!(windows) && opts.asked.is_some() && takes_index(&args))
+    let left = (cfg!(windows) && opts.asked.is_some() && takes_index(args))
         .then(|| Left::of(folder, opts.index));
     // Stopped through its handle either way, which stops the hooks it runs
     // too. `opts`'s index and variables go over git's own, last.
     let mut started = match opts.asked {
         Some(environment) => {
-            let act = program(folder, &args, &opts).map_err(did_not_start)?;
+            let act = program(folder, args, opts).map_err(did_not_start)?;
             let input = if feeds { Input::Piped } else { Input::Null };
             environment.spawn(&act, input).map_err(did_not_start)?
         }
         None => {
             let command = match opts.signed {
                 Some((objects, sign_in)) => {
-                    banda_git_cli::signed_fetch(folder, objects, &args, sign_in).await
+                    banda_git_cli::signed_fetch(folder, objects, args, sign_in).await
                 }
-                None => banda_git_cli::bookkeeping_reading(folder, &args, opts.reads).await,
+                None => banda_git_cli::bookkeeping_reading(folder, args, opts.reads).await,
             };
             let mut command = command.map_err(did_not_start)?;
             command
@@ -415,9 +452,9 @@ where
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let ran = async {
         let feeding = async {
-            if let (Some(mut stdin), Some(bytes)) = (stdin, opts.stdin) {
+            if let (Some(mut stdin), Some(bytes)) = (stdin, opts.stdin.as_deref()) {
                 // A git that stops reading early says why on stderr.
-                let _ = stdin.write_all(&bytes).await;
+                let _ = stdin.write_all(bytes).await;
             }
         };
         let reading = capped(stdout, cap, false, &mut out);
@@ -464,7 +501,7 @@ where
         truncated,
         success,
         stderr: err,
-        args: said,
+        args: said.to_owned(),
     })
 }
 
@@ -561,6 +598,20 @@ async fn stopped(mut started: Started, left: Option<Left>) {
     }
 }
 
+/// The git command `args` run, the first of them that is no option, past
+/// each `-c`'s value, and the arguments after it.
+fn command(args: &[OsString]) -> Option<(&str, &[OsString])> {
+    let mut at = 0;
+    while let Some(arg) = args.get(at) {
+        match arg.as_encoded_bytes() {
+            b"-c" => at += 2,
+            option if option.starts_with(b"-") => at += 1,
+            _ => return Some((arg.to_str()?, &args[at + 1..])),
+        }
+    }
+    None
+}
+
 /// Whether git `args` may take the repository's index lock: an act that
 /// changes the index, or the work tree through it. A push, a config or an
 /// init takes none, so one killed leaves no lock of its own, and any lock
@@ -583,27 +634,24 @@ fn takes_index(args: &[OsString]) -> bool {
         "switch",
         "update-index",
     ];
-    // The command is the first that is no option, past each `-c`'s value.
-    let mut rest = args.iter();
-    let mut command = None;
-    while let Some(arg) = rest.next() {
-        match arg.as_encoded_bytes() {
-            b"-c" => {
-                rest.next();
-            }
-            option if option.starts_with(b"-") => {}
-            _ => {
-                command = arg.to_str();
-                break;
-            }
-        }
-    }
-    match command {
+    match command(args) {
         // `apply` changes the index only when told to.
-        Some("apply") => rest.any(|arg| arg == "--cached" || arg == "--index"),
-        Some(command) => TAKING.contains(&command),
+        Some(("apply", rest)) => rest.iter().any(|arg| arg == "--cached" || arg == "--index"),
+        Some((command, _)) => TAKING.contains(&command),
         None => false,
     }
+}
+
+/// Whether git `args`, an act that found the index lock held, did nothing
+/// and may simply run again: one that takes the lock before it changes
+/// anything, a hook's commit too, which takes it before the hook runs. A
+/// pull, a merge, a rebase, a cherry-pick, a revert or a stash go in
+/// steps, and are left to the Person to try again.
+fn tries_again(args: &[OsString]) -> bool {
+    const AT_ONCE: [&str; 9] = [
+        "add", "apply", "checkout", "commit", "mv", "reset", "restore", "rm", "switch",
+    ];
+    takes_index(args) && command(args).is_some_and(|(command, _)| AT_ONCE.contains(&command))
 }
 
 /// The index lock an act takes, which one killed on Windows leaves behind
@@ -851,6 +899,66 @@ mod tests {
         assert!(!takes(&["config", "branch.a.remote", "origin"]));
         assert!(!takes(&["init", "--quiet"]));
         assert!(!takes(&["-c", "commit", "status"]));
+    }
+
+    #[test]
+    fn only_an_act_that_takes_the_lock_before_it_changes_anything_tries_again() {
+        let tries = |args: &[&str]| {
+            let args: Vec<OsString> = args.iter().map(OsString::from).collect();
+            tries_again(&args)
+        };
+        assert!(tries(&["apply", "--unidiff-zero", "--cached"]));
+        assert!(tries(&["commit", "--quiet", "--file=-"]));
+        assert!(tries(&["--literal-pathspecs", "add", "--all"]));
+        assert!(tries(&[
+            "-c",
+            "core.preloadIndex=false",
+            "reset",
+            "--quiet"
+        ]));
+        assert!(!tries(&["apply", "--unidiff-zero", "--reverse"]));
+        assert!(!tries(&["pull", "--quiet"]));
+        assert!(!tries(&["rebase", "main"]));
+        assert!(!tries(&["stash", "push"]));
+        assert!(!tries(&["push", "--quiet", "--", "origin", "HEAD"]));
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_act_waits_out_a_lock_another_git_holds_a_moment() {
+        let folder = with_hook("#!/bin/sh\n");
+        let lock = folder.path().join(".git/index.lock");
+        std::fs::write(&lock, "").unwrap();
+        let freed = tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            std::fs::remove_file(lock).unwrap();
+        });
+        let ran = git(folder.path(), ["add", "a.txt"], Opts::asked(&Local))
+            .await
+            .unwrap();
+        freed.await.unwrap();
+        assert!(ran.success);
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn an_act_whose_lock_stays_held_says_so_after_its_tries() {
+        let folder = with_hook("#!/bin/sh\n");
+        std::fs::write(folder.path().join(".git/index.lock"), "").unwrap();
+        let began = std::time::Instant::now();
+        let ran = git(folder.path(), ["add", "a.txt"], Opts::asked(&Local))
+            .await
+            .unwrap();
+        assert!(!ran.success);
+        assert_eq!(ran.reason(), Reason::Locked);
+        assert!(began.elapsed() >= LOCKED.iter().sum());
+        // Banda's own git does not wait for it.
+        let began = std::time::Instant::now();
+        let own = git(folder.path(), ["add", "a.txt"], Opts::default())
+            .await
+            .unwrap();
+        assert_eq!(own.reason(), Reason::Locked);
+        assert!(began.elapsed() < LOCKED[0] * 4);
     }
 
     #[test]
