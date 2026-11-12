@@ -2208,4 +2208,97 @@ mod tests {
         );
         assert_eq!(problem.line, Some(4), "{problem}");
     }
+
+    /// What each kind of entry starts as, pinned before ADR 0108 step 5
+    /// moves what differs between Harnesses into one table: the program,
+    /// its arguments and folder, its environment, what it starts without,
+    /// the holes in its fence, its sessions and its shadow. `BANDA_BLESS=1`
+    /// writes it again. Unix paths: Windows joins them its own way.
+    #[cfg(unix)]
+    #[test]
+    fn what_each_kind_of_entry_starts_as_stays_as_it_was() {
+        use crate::carried::Node;
+        let text = "\
+[[harness]]
+id = \"claude\"
+[[harness]]
+id = \"codex\"
+[[harness]]
+id = \"work\"
+of = \"claude\"
+name = \"Work\"
+env = { CLAUDE_CONFIG_DIR = \"/data/accounts/work\" }
+[[harness]]
+id = \"team\"
+of = \"codex\"
+name = \"Team\"
+env = { CODEX_HOME = \"/data/accounts/team\" }
+[[harness]]
+id = \"api\"
+of = \"claude\"
+kind = \"api\"
+[[harness]]
+id = \"router\"
+of = \"claude\"
+kind = \"gateway\"
+url = \"https://openrouter.ai/api\"
+env = { CLAUDE_CONFIG_DIR = \"/data/accounts/router\" }
+[[harness]]
+id = \"kimi\"
+of = \"codex\"
+kind = \"gateway\"
+url = \"https://gateway.example/v1\"
+env = { CODEX_HOME = \"/data/accounts/kimi\" }
+[[harness]]
+id = \"pi\"
+name = \"Pi\"
+command = \"pi\"
+args = [\"acp\"]
+";
+        let list = Harnesses::new(listed_in(Path::new("h"), text).unwrap());
+        list.carry(Some(Carried {
+            node: Node {
+                program: "/usr/bin/node".into(),
+                electron: false,
+            },
+            adapters: "/srv/banda/adapters".into(),
+        }));
+        let shells = BTreeMap::from([("BANDA_TOKEN".to_owned(), "f00d".to_owned())]);
+        let (project, data) = (ProjectId::new(), Path::new("/state/projects/p"));
+        let mut said = String::new();
+        for harness in list.now().iter() {
+            let started =
+                harness.in_project(project, data, work(), Holes::default(), &shells, true);
+            let start = started.start();
+            let env: BTreeMap<_, _> = start.env.iter().collect();
+            said += &format!(
+                "== {} (of {}, sessions {}, shadows {:?})\n{} {:?} in {:?}\n",
+                harness.id,
+                harness.harness(),
+                harness.sessions(),
+                harness.shadows,
+                start.program,
+                start.args,
+                start.cwd,
+            );
+            for (key, value) in env {
+                said += &format!("  {key}={value}\n");
+            }
+            said += &format!(
+                "  unset {:?}\n  writes {:?}\n",
+                start.unset, started.holes.writes
+            );
+        }
+        let mut said = said.replace(&project.to_string(), "<project>");
+        if let Some(home) = dirs::home_dir() {
+            said = said.replace(&home.display().to_string(), "~");
+        }
+        let file = Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/launch.txt");
+        if std::env::var_os("BANDA_BLESS").is_some() {
+            std::fs::write(&file, &said).unwrap();
+        }
+        let pinned = std::fs::read_to_string(&file).unwrap_or_default();
+        assert!(pinned == said, "a launch changed: BANDA_BLESS=1 writes it\n{said}");
+    }
+
 }
