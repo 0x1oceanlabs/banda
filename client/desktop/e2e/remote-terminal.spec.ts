@@ -191,7 +191,7 @@ test("a terminal closed while arc is away closes on arc once it is back, as the 
   await screen.click()
   await run(page, "echo $$ > shell.pid")
   await expect.poll(() => inFolder(folder, "shell.pid")).toMatch(/^\d+\n$/)
-  const shell = inFolder(folder, "shell.pid").trim()
+  const shell = inFolder(folder, "shell.pid")!.trim()
   const runs = () => existsSync(`/proc/${shell}`)
   expect(runs()).toBe(true)
 
