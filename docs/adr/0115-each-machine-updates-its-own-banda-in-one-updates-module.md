@@ -171,7 +171,7 @@ Each step is its own PR, and Banda keeps updating after each.
 | 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart |
 | 5 | The desktop part: `update.ts` moved, the app swap asked of the engine part; the window stops no engine to update |
 | 6 | The widget over every machine, as the chosen mock |
-| 7 | Install Banda on another machine from Add → Connect |
+| 7 | Install Banda on another machine from Add → Connect: `scripts/install.sh`, published with each release and packed in the app, run over ssh (#1577): built; "Sign in to Claude on <name>" after it waits, as a machine just set up has no Project for its terminal |
 
 devbox runs on `4-banda.sh` until step 3, and is set up by step 7 after.
 
