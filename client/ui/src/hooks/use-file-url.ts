@@ -20,26 +20,38 @@ export type Use = Params<"bytes.issue">["use"]
 /** How long after one URL the next is asked for: within its hour. */
 const RENEW = 50 * 60 * 1000
 
-/** The sessions whose tokens the desktop relays (`relayBytesFrom`). */
-const relayed = new WeakSet<Engine>()
+/** The sessions whose tokens the desktop relays (`relayBytesFrom`), each
+ * with its machine's name in `hosts.toml`, or null for this machine. */
+const relayed = new WeakMap<Engine, string | null>()
 
 /**
- * The desktop relays the tokens of `engine`, this window's own engine
- * (ADR 0106, step 4b): a URL is made for its session alone. Another
- * machine's gives none until the desktop relays to that machine too (step
- * 4c), so no token of its goes to this machine's engine.
+ * The desktop relays the tokens of `engine` (ADR 0106, steps 4b and 4c):
+ * this window's own engine, or, with `machine`, that machine's by its name
+ * in `hosts.toml`, which the URL names so the desktop takes it to that
+ * machine's engine. A session not given here gets no URL, so no token of
+ * another machine's goes to this one's engine.
  */
-export function relayBytesFrom(engine: Engine): void {
-  relayed.add(engine)
+export function relayBytesFrom(
+  engine: Engine,
+  machine: string | null = null
+): void {
+  relayed.set(engine, machine)
 }
 
 /**
- * The URL that names the token `token` for `use`: `app://preview/<token>`
- * for a page, `app://files/<token>` for the rest. It is the one place a
- * URL is made, so a client with no desktop differs only here.
+ * The URL that names the token `token` for `use`, which machine `machine`'s
+ * engine gave, or this machine's with none: `app://preview/…` for a page,
+ * `app://files/…` for the rest. It is the one place a URL is made, so a
+ * client with no desktop differs only here. It is never kept (ADR 0106,
+ * law 2): the machine's name means nothing past this device.
  */
-export function bytesUrl(token: string, use: Use): string {
-  return `app://${use === "page" ? "preview" : "files"}/${token}`
+export function bytesUrl(
+  token: string,
+  use: Use,
+  machine: string | null = null
+): string {
+  const host = use === "page" ? "preview" : "files"
+  return `app://${host}/${machine === null ? "" : `${machine}/`}${token}`
 }
 
 /**
@@ -47,17 +59,18 @@ export function bytesUrl(token: string, use: Use): string {
  * Project `project`, for `use`: the path relative to the Project's folder
  * or whole, as the Person reads it; null when the engine refuses it. None
  * for a session the desktop does not relay (`relayBytesFrom`): with no
- * desktop, as in the browser build and in tests, and another machine's.
+ * desktop, as in the browser build and in tests.
  */
 export function fileMint(
   engine: Engine,
   project: ProjectId,
   use: Use = "file"
 ): Mint | null {
-  if (!relayed.has(engine)) return null
+  const machine = relayed.get(engine)
+  if (machine === undefined) return null
   return (path) =>
     engine.call("bytes.issue", { path, use }, { project }).then(
-      ({ token }) => bytesUrl(token, use),
+      ({ token }) => bytesUrl(token, use, machine),
       () => null
     )
 }

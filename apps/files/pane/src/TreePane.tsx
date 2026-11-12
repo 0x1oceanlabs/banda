@@ -1286,6 +1286,17 @@ function FolderView({
                     }
                   : undefined
               }
+              onSaveCopy={
+                local(wholeOf(dir, menu.row)) === undefined &&
+                !menu.row.endsWith("/") &&
+                device?.has("save_file")
+                  ? () =>
+                      run?.("file.save-copy", {
+                        file: wholeOf(dir, menu.row ?? ""),
+                        project,
+                      })
+                  : undefined
+              }
               onAttach={() => onAttach(rowsFor(menu.row).map(named))}
               onPin={onPin && ((on) => onPin(wholeOf(dir, menu.row ?? ""), on))}
               acts={{

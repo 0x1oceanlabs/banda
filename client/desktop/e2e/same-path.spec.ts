@@ -505,7 +505,7 @@ test("step 3c: a path arc's terminal prints opens arc's file", async () => {
   await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
 })
 
-test.fixme("step 4c: a picture in arc's reply is arc's", async () => {
+test("step 4c: a picture in arc's reply is arc's", async () => {
   const { thread, composer, there, here } = await opened()
   // Each machine's who.png is its own size: arc's 3×2, this one's 1×1.
   writeFileSync(
@@ -523,7 +523,7 @@ test.fixme("step 4c: a picture in arc's reply is arc's", async () => {
     .toBe(3)
 })
 
-test.fixme("step 4c: Quick Look previews arc's picture, not this machine's at the same path", async () => {
+test("step 4c: Quick Look previews arc's picture, not this machine's at the same path", async () => {
   const { page, composer, there, here } = await opened()
   writeFileSync(
     arc!.disk(join(there, "who.png")),

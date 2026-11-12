@@ -1943,12 +1943,12 @@ full text and `href` for copying. Local-file links are a separate contract.
 
 Markdown in a Thread shows local images, video and audio (ADR 0037,
 step 6). The agents Pane supplies the markdown renderer a resolver for
-its Project. The agents desktop part asks this machine's engine for a
-token for that path (`bytes.issue`, `media`), which the engine gives only
-for a picture, a video or a sound: a reply's paths are an Agent's to
-write. The Pane names the token with `bytesUrl`, as every byte URL is
-made. Until step 4c of ADR 0106 moves that ask into the page, it is the
-one ask of main's. Nothing plays automatically. Images open larger on a
+its Project. It asks its session, the engine of the machine that has the
+Project, for a token for that path (`bytes.issue`, `media`), which the
+engine gives only for a picture, a video or a sound: a reply's paths are
+an Agent's to write. The URL is made as every byte URL is (`fileMint`),
+so an arc Thread's pictures are arc's (ADR 0106, step 4c). Nothing plays
+automatically. Images open larger on a
 click; a missing or unsupported file stays a link.
 
 The bytes behind those URLs are the engine's (`platform/bytes`; ADR
@@ -1979,12 +1979,17 @@ through its forward as it listens now, so a link goes on working when
 ssh comes back on a new port (`client/desktop/src/bytes.ts`). Such a
 request waits while its machine is away, as a read may, and goes once
 it is back; it never has a refused machine tried again, which only the
-Person opening it does. Until the window half of step 4c, a session of
-another machine gets no URL. "Save a copy" is the device's `save_file`
-(`files.save` on the bridge): main shows the system's save dialog, then
-fetches the bytes by the same URL and writes them whole where the Person
-picked. It goes now or says why not, so a machine that is away is told
-at once.
+Person opening it does. The page knows which machine each session is:
+`KeptHosts` hands each host's engine to `relayBytesFrom` with its name
+as it makes it, and `bytesUrl` puts that name in the URL, which is never
+kept (ADR 0106, law 2). So Files' previewers, Quick Look and a Thread's
+media draw another machine's files from that machine. "Save a copy to
+this Mac" is the window's `file.save-copy`, on a row of another
+machine's in Files: the file's session gives the token, and the device's
+`save_file` (`files.save` on the bridge) shows the system's save
+dialog, then fetches the bytes by that URL and writes them whole where
+the Person picked. It goes now or says why not, so a machine that is
+away is told at once.
 
 A page among the Person's files, HTML or an SVG document, is shown by
 the sandbox host, `app://preview` (ADR 0073, decision 5), by a token

@@ -8,8 +8,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./settings": "./src/settings/AgentsSettings.tsx",
-    "./visual": "./src/visual/visual-frame.ts",
-    "./desktop": "./src/desktop.ts"
+    "./visual": "./src/visual/visual-frame.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

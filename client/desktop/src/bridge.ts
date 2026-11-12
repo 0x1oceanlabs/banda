@@ -11,7 +11,6 @@
  * its type, `Host`, in its device adapter (`client/web/src/boot/`), and
  * the words its channels carry are `@banda/core`'s (ADR 0089, decision 4).
  */
-import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
 import type { Address } from "@banda/contract"
@@ -109,7 +108,6 @@ export const BRIDGE = bridge({
   },
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BROWSER_BRIDGE,
-  agents: AGENTS_BRIDGE,
   /**
    * The settings' files (ADR 0016): the desktop changes them through
    * `banda settings`; the look brings each change back.

@@ -21,6 +21,9 @@ import {
 import { useState } from "react"
 import type { TopAsked } from "./top"
 import { toast } from "@banda/ui/components/sonner"
+import { fileMint } from "@banda/ui/hooks/use-file-url"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
+import { nameAndFolder } from "@banda/ui/lib/paths"
 import { seenNamed } from "@banda/ui/hooks/use-status"
 import { updateProject } from "@banda/ui/lib/projects"
 import {
@@ -818,6 +821,33 @@ function present(
     }, notDone)
 }
 
+/**
+ * Saves a copy of `file`, of `project`, on this device (`file.save-copy`):
+ * the Project's machine gives a token for its bytes, and the device fetches
+ * them once the Person picked where. A machine away is said at once.
+ */
+function saveCopy(
+  shell: Pick<Shell, "here" | "sessionOf">,
+  file: string,
+  project: ProjectId
+) {
+  const { name } = nameAndFolder(file)
+  const mint = fileMint(
+    shell.sessionOf(project, fromHere(shell).here.pane),
+    project
+  )
+  void (mint?.(file) ?? Promise.resolve(null))
+    .then((url) => {
+      if (url === null) throw new Error(`${name} was not saved.`)
+      return device.files.save(url, name)
+    })
+    .then((saved) => {
+      if (saved === "saved") toast.success(`Saved a copy of ${name}`)
+      else if (saved === "away")
+        notDone(`${name} was not saved: its machine went away.`)
+    }, notDone)
+}
+
 /** Does `then` with the device file `args` name, if it is there still,
  * for what reaches this device's disk alone; a toast
  * says when it has gone since its link was drawn (ADR 0063, decision 2).
@@ -1463,6 +1493,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
       ),
   },
   {
+    // Files' "Save a copy to this Mac", for a file of another machine's
+    // (ADR 0106, decision 6): its machine gives the bytes, the device
+    // saves them where the Person picks (`save_file`).
+    id: "file.save-copy",
+    args: takes({ file: FILE, project: "the Project it is in" }, ["file"]),
+    runsAsPerson: true,
+    section: "Banda",
+    title: `Save a copy to ${THIS_COMPUTER}`,
+    unlisted: true,
+    run: (shell, args) =>
+      present(shell, args, (file, project) => saveCopy(shell, file, project)),
+  },
+  {
     // A Thread menu's "Show in folder", for a path in a reply.
     id: "file.folder",
     args: takes({ file: FILE }, ["file"]),
@@ -1732,6 +1775,7 @@ const ON_ITS_MACHINE: ReadonlySet<string> = new Set([
   "file.open",
   "file.peek",
   "file.attach",
+  "file.save-copy",
 ])
 
 /**

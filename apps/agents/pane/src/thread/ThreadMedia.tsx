@@ -1,22 +1,26 @@
 import { useCallback } from "react"
+import type { Engine, ProjectId } from "@banda/contract"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
-import { bytesUrl } from "@banda/ui/hooks/use-file-url"
-import { agentsHost } from "../desktop"
+import { useFileMint } from "@banda/ui/hooks/use-file-url"
 
-/** Resolves paths in this Thread's Project to a token of this machine's
- * engine, through Banda's own bridge, and the URL that names it; none for
- * a Project of another host's (`project` null), whose paths are not this
- * machine's. */
+/** Resolves the media paths in this Thread's replies on `engine`, the
+ * Pane's session: the machine that has its Project gives a token for a
+ * picture, a video or a sound alone (`bytes.issue`, `media`), which the
+ * desktop relays to it (ADR 0106, step 4c). Asked again as that engine
+ * restarts. */
 export function ThreadMedia({
+  engine,
   project,
   children,
 }: {
-  project: string | null
+  engine: Engine
+  project: ProjectId
   children: React.ReactNode
 }) {
+  const mint = useFileMint(engine, project, "media")
   const resolve = useCallback(
     (path: string) => {
-      if (project === null) return Promise.resolve(null)
+      if (!mint) return Promise.resolve(null)
       // Markdown escapes spaces and Unicode in destinations once.
       let decoded: string
       try {
@@ -24,14 +28,9 @@ export function ThreadMedia({
       } catch {
         return Promise.resolve(null)
       }
-      return (
-        agentsHost()
-          ?.media(project, decoded)
-          .then((token) => (token ? bytesUrl(token, "media") : null)) ??
-        Promise.resolve(null)
-      )
+      return mint(decoded)
     },
-    [project]
+    [mint]
   )
   return <MarkdownMedia resolve={resolve}>{children}</MarkdownMedia>
 }

@@ -297,7 +297,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
             <Spinner />
           </Centered>
         ) : (
-          <ThreadMedia project={project}>
+          <ThreadMedia engine={engine} project={project}>
             <MarkdownLinks open={links.open} hint={links.title}>
               <MarkdownFiles key={sub} host={files}>
                 <ThreadAroundProvider

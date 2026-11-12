@@ -77,6 +77,7 @@ export const image = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/image"),
 })
 
@@ -91,6 +92,7 @@ export const pdf = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: true },
+  elsewhere: true,
   load: () => import("./views/pdf"),
 })
 
@@ -105,6 +107,7 @@ export const video = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/media").then(({ Video }) => ({ default: Video })),
 })
 
@@ -119,6 +122,7 @@ export const audio = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/media").then(({ Audio }) => ({ default: Audio })),
 })
 
@@ -134,6 +138,7 @@ export const page = definePreviewer({
   },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/page"),
 })
 
@@ -147,6 +152,7 @@ export const table = definePreviewer({
   },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/table"),
 })
 
@@ -160,6 +166,7 @@ export const json = definePreviewer({
   },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/json"),
 })
 
@@ -170,6 +177,7 @@ export const notebook = definePreviewer({
   match: { extensions: ["ipynb"], mimes: ["application/x-ipynb+json"] },
   priority: 10,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/notebook"),
 })
 
@@ -190,6 +198,7 @@ export const font = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/font"),
 })
 
@@ -216,6 +225,7 @@ export const archive = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/archive"),
 })
 
@@ -233,6 +243,7 @@ export const sheet = definePreviewer({
   },
   priority: 20,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/sheet"),
 })
 
@@ -243,6 +254,7 @@ export const hex = definePreviewer({
   match: { any: true },
   priority: 0,
   can: { quick: true, edit: false, find: false },
+  elsewhere: true,
   load: () => import("./views/hex"),
 })
 

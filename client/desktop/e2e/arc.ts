@@ -557,7 +557,10 @@ export function newArc({ latency = 0, account = false } = {}): Arc {
 }
 
 /** Writes `files`, by their paths in `folder`, each with its text. */
-export function put(folder: string, files: Record<string, string>) {
+export function put(
+  folder: string,
+  files: Record<string, string | Uint8Array>
+) {
   for (const [path, text] of Object.entries(files)) {
     mkdirSync(dirname(join(folder, path)), { recursive: true })
     writeFileSync(join(folder, path), text)

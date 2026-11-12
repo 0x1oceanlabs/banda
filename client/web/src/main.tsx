@@ -74,6 +74,7 @@ if (host && engine) {
             waiting: onDevice(() => localStorage, window),
             drains: false,
             directory: DIRECTORY,
+            relay: relayBytesFrom,
           })
           window.addEventListener("pagehide", hosts.follow())
           return (

@@ -19,6 +19,7 @@ import { copyText } from "@banda/ui/lib/clipboard"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import {
   FILE_MANAGER,
+  THIS_COMPUTER,
   openInEditor,
   openWithSystem,
   reveal,
@@ -30,6 +31,7 @@ import {
   ClipboardPasteIcon,
   CopyIcon,
   CopyPlusIcon,
+  DownloadIcon,
   EyeIcon,
   FilePlusIcon,
   FilesIcon,
@@ -119,6 +121,7 @@ export function RowMenu({
   onOpen,
   onPeek,
   onShow,
+  onSaveCopy,
   onAttach,
   onPin,
   acts,
@@ -139,6 +142,9 @@ export function RowMenu({
   onPeek?: () => void
   /** Shows it in its folder, from a list that is not its folder's. */
   onShow?: () => void
+  /** Saves a copy of another machine's file on this device, where the
+   * Person picks (ADR 0106, decision 6). */
+  onSaveCopy?: () => void
   /** Names it in a Thread's message, with the other rows picked. */
   onAttach: () => void
   onPin?: (pin: boolean) => void
@@ -167,6 +173,12 @@ export function RowMenu({
         <DropdownMenuItem onClick={onShow}>
           <FolderSearchIcon />
           Show in Files
+        </DropdownMenuItem>
+      )}
+      {onSaveCopy && (
+        <DropdownMenuItem onClick={onSaveCopy}>
+          <DownloadIcon />
+          Save a copy to {THIS_COMPUTER}
         </DropdownMenuItem>
       )}
       {local && editor && (
