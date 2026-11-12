@@ -6,6 +6,7 @@ import type { ChangedLines } from "./ChangedLines";
 import type { Doing } from "./Doing";
 import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
+import type { Subagents } from "./Subagents";
 import type { ThreadId } from "./ThreadId";
 import type { TurnId } from "./TurnId";
 
@@ -61,7 +62,13 @@ archived?: Archived,
  * decision 8). None when that turn changed no line, or ended before
  * turns kept it; while another runs, it is still the one before's.
  */
-changed_lines?: ChangedLines, id: ThreadId, 
+changed_lines?: ChangedLines, 
+/**
+ * Its direct sub-agents, while it works and one of them works or
+ * failed since its latest turn began (ADR 0103, decision 10): the
+ * card's line 2 and the Mark's red satellite. None otherwise.
+ */
+subagents?: Subagents, id: ThreadId, 
 /**
  * The Harness it runs on, by its ID in the Harness list; chosen when
  * it starts, it stays (ADR 0006). Empty for a Thread from before

@@ -243,3 +243,18 @@ test("a Thread put off Someday lists it, which no time tells from until done (AD
   const done = { at: 1, by: person, someday: false }
   expect(listedOf(thread({ later: done }), "Claude").later).toEqual({ at: 1 })
 })
+
+test("a Thread whose sub-agents work on after its turn lists as working, with line 2's words (ADR 0103, decisions 19 and 32)", () => {
+  const latest = { turn: "u1", state: "done" as const, began: 1 }
+  const listed = listedOf(
+    thread({ latest, subagents: { working: 1, failed: 1, only: "Reviewer" } }),
+    "Claude"
+  )
+  expect(listed.mark).toBe("working")
+  expect(listed.subagents).toEqual({
+    working: 1,
+    failed: 1,
+    said: "Waiting on Reviewer",
+  })
+  expect(listedOf(thread(), "Claude")).not.toHaveProperty("subagents")
+})

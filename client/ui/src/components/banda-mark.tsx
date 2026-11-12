@@ -1,4 +1,4 @@
-import { useEffect, useId, useRef } from "react"
+import { useCallback, useEffect, useId, useRef, useState } from "react"
 import { onDraw } from "../lib/frames"
 import {
   callLeft,
@@ -10,6 +10,7 @@ import {
   phaseOf,
   valueAt,
 } from "../lib/mark-rhythm"
+import { type Orbit, orbitOf } from "../lib/satellite"
 import { cn } from "../lib/utils"
 import type { Listed } from "../pane"
 import {
@@ -127,6 +128,7 @@ export function BandaMark({
   tone = true,
   beat = "",
   current = false,
+  failedSubagents = 0,
   label,
   className,
 }: {
@@ -162,6 +164,9 @@ export function BandaMark({
    * already looks at it, and stops at the end of the call it is in (ADR
    * 0099, decision 5). */
   current?: boolean
+  /** How many of its Thread's sub-agents failed while it works: the
+   * Agent's tile then shows a red satellite (ADR 0103, decision 13). */
+  failedSubagents?: number
   /** Names the mark for a screen reader; without it the mark is decoration. */
   label?: string
   className?: string
@@ -187,9 +192,21 @@ export function BandaMark({
   }, [state, doing, held, playful, news, beat, current, variant])
 
   const logo = variant === "logo"
+  // How wide it is drawn, in px, read as a failed sub-agent first shows:
+  // a Mark keeps the size its place gives it. 0 until then.
+  const [px, setPx] = useState(0)
+  const watch = !logo && failedSubagents > 0
+  const measured = useCallback(
+    (element: SVGSVGElement | null) => {
+      svg.current = element
+      if (watch && element) setPx(element.getBoundingClientRect().width)
+    },
+    [watch]
+  )
+  const orbit = logo ? undefined : orbitOf(works(state), failedSubagents, px)
   return (
     <svg
-      ref={svg}
+      ref={measured}
       viewBox={logo ? "0 0 100 100" : "48 -6 56 56"}
       data-slot="banda-mark"
       data-look={state}
@@ -324,11 +341,29 @@ export function BandaMark({
         {/* The slot of its sub-agents' satellites (ADR 0099, decision 3),
             which the sub-agents' work draws: in the Agent's colour, a
             working Mark's blue (ADR 0107, decision 3). */}
-        <g data-satellites />
+        <g data-satellites>{orbit && <OrbitShape orbit={orbit} />}</g>
       </g>
     </svg>
   )
 }
+
+/** A failed sub-agent on the Mark (ADR 0103, decision 13): red, in the
+ * look's `--destructive`, never dimmed with the Agent's working grey. */
+function OrbitShape({ orbit }: { orbit: Orbit }) {
+  if (orbit.form === "dot") {
+    const { cx, cy, r } = orbit
+    return <circle data-satellite="failed" cx={cx} cy={cy} r={r} style={RED} />
+  }
+  const { tag: Tag, attrs } = orbit.shape
+  return (
+    <g data-satellite="failed" transform={orbit.transform} style={RED}>
+      <Tag {...attrs} />
+    </g>
+  )
+}
+
+/** The failed satellite's colour, which its shape fills as `currentColor`. */
+const RED = { color: "var(--destructive)", fill: "currentColor" }
 
 // ---------------------------------------------------------------------------
 // The motion, in layers (ADR 0099, decision 4). A look's loops and calls
@@ -1336,6 +1371,7 @@ export function ThreadMark({
       playful={0}
       beat={listed.id}
       current={current}
+      failedSubagents={listed.subagents?.failed}
       label={MARK_WORDS[look]}
       className={cn("size-4 shrink-0", WEIGHT_OF[look], className)}
     />

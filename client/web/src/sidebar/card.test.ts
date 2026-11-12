@@ -16,6 +16,7 @@ import {
   timeOf,
   timeShown,
   timesOf,
+  workSaid,
   worksWords,
 } from "./card"
 import { atOf } from "./inbox"
@@ -690,5 +691,51 @@ describe("spokenOf (spec §2.8)", () => {
       words: "",
       said: "Moved to Your turn",
     })
+  })
+})
+
+describe("a working card's line 2 says its sub-agents at work (ADR 0103, decision 32)", () => {
+  const TWO: CardView = { density: 2, group: "none" }
+  const said = "3 sub-agents at work"
+  const at = (more: Partial<Listed>) =>
+    card(row("working", { mark: "working", ...more }), { view: TWO })
+
+  test("before what its turn does, as it says more", () => {
+    const one = at({
+      doing: { what: "execute", since: NOW - MINUTE, title: "pnpm test" },
+      subagents: { working: 3, failed: 0, said },
+    })
+    expect(kinds(one)[1]).toBe("works | ")
+    expect(workSaid(one, NOW)).toBe(said)
+    expect(spokenOf(one, NOW).description).toBe("3 sub-agents at work")
+  })
+
+  test("after its turn ended too, while they work on", () => {
+    const one = at({
+      subagents: { working: 1, failed: 0, said: "Waiting on Explore" },
+    })
+    expect(workSaid(one, NOW)).toBe("Waiting on Explore")
+  })
+
+  test("but a usage limit and silence come first: the work does not go on", () => {
+    const subagents = { working: 2, failed: 0, said: "2 sub-agents at work" }
+    expect(workSaid(at({ subagents, limitUntil: NOW + HOUR }), NOW)).toMatch(
+      /^Usage limit/
+    )
+    expect(workSaid(at({ subagents, stepped: NOW - 6 * MINUTE }), NOW)).toBe(
+      "No events for 6m"
+    )
+  })
+
+  test("one that failed alone says nothing of its own: the card does not move (decision 29)", () => {
+    const one = at({ subagents: { working: 0, failed: 1 } })
+    expect(one.subagents).toBeUndefined()
+    expect(workSaid(one, NOW)).toBe("Working")
+    // A card that calls says its call, never its sub-agents.
+    const done = card(
+      row("turn", { mark: "done", subagents: { working: 1, failed: 0, said } }),
+      { view: TWO }
+    )
+    expect(done.subagents).toBeUndefined()
   })
 })

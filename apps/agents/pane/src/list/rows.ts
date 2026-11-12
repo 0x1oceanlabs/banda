@@ -3,19 +3,25 @@
  * before it, its mark, what its work does now (ADR 0099), what calls its
  * Person (a Question, why it failed, or what its Agent told it of its
  * turn, ADR 0057), how many lines its last turn that ended changed (ADR
- * 0098, decision 8), whether they saw how it ended and whether they
- * archived it, what it was last asked, its Agent, the Thread whose Agent
+ * 0098, decision 8), its sub-agents (ADR 0103, decision 32), whether they
+ * saw how it ended and whether they archived it, what it was last asked, its Agent, the Thread whose Agent
  * started it (ADR 0098, decision 24), and the Pane a click opens.
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
 import type { ProjectId } from "@banda/contract"
-import type { Choice, ListedThread, Later } from "@banda/contract/agents"
+import type {
+  Choice,
+  ListedThread,
+  Later,
+  Subagents,
+} from "@banda/contract/agents"
 import { mayArchive } from "@banda/ui/status"
 import {
   type Answering,
   type Listed,
   type ListedLater,
+  type ListedSubagents,
   NO_REASON,
   paneOf,
   type PaneState,
@@ -23,6 +29,7 @@ import {
 import { archiveHolds } from "./list"
 import { markOf } from "./marks"
 import { threadPane } from "../ThreadPane"
+import { workWords } from "../thread/subagents"
 
 /** The agents module's actions a toast's buttons run (index.ts). */
 export const ANSWER = "agents.answer"
@@ -122,6 +129,7 @@ export function listedOf(
       ? { limitUntil: thread.limit_until }
       : {}),
     ...(thread.changed_lines ? { changedLines: thread.changed_lines } : {}),
+    ...(thread.subagents ? { subagents: subagentsOf(thread.subagents) } : {}),
     ...(calls ? { calls } : {}),
     ...(asker ? { asker } : {}),
     ...(answers.length ? { answers } : {}),
@@ -138,6 +146,13 @@ export function listedOf(
     pane: threadPaneOf(thread),
     ...(thread.later ? { later: laterOf(thread.later) } : {}),
   }
+}
+
+/** A Thread's direct sub-agents as the sidebar reads them (ADR 0103,
+ * decision 32): line 2's words are the live line's. */
+function subagentsOf({ working, failed, only }: Subagents): ListedSubagents {
+  const said = workWords(working, only)
+  return { working, failed, ...(said ? { said } : {}) }
 }
 
 /** A Thread's Later as the sidebar reads it (ADR 0074): Someday's too,

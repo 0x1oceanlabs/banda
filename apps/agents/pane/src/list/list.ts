@@ -54,6 +54,9 @@ export const THREADS_FILTER = {
     "marks.moved",
     "thread.left",
     "thread.arrived",
+    "subagent.started",
+    "subagent.changed",
+    "subagent.ended",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -84,10 +87,31 @@ export function readsAgain(state: ThreadList, event: Event): boolean {
   const fact = decodeFact(event)
   if (fact?.kind === "marks.moved" || fact?.kind === "thread.arrived")
     return true
+  if (fact && movesSubagents(fact))
+    return state.threads.some((thread) => thread.id === event.subject)
   return (
     fact?.kind === "thread.rewound" &&
     state.threads.some((thread) => thread.id === fact.payload.thread)
   )
+}
+
+/**
+ * Whether `fact` may change how many of a Thread's direct sub-agents work
+ * or failed, and which one works (ADR 0103, decision 10): one started, one
+ * ended, or one's state changed. Only the engine knows its lanes, so the
+ * list is read again.
+ */
+function movesSubagents(fact: Fact): boolean {
+  switch (fact.kind) {
+    case "subagent.started":
+      return fact.payload.subagent.parent === undefined
+    case "subagent.changed":
+      return fact.payload.state !== undefined
+    case "subagent.ended":
+      return true
+    default:
+      return false
+  }
 }
 
 /**
@@ -135,7 +159,8 @@ function applied(state: ThreadList, event: Event): ThreadList {
     case "turn.started": {
       const { turn } = fact.payload
       return change(state, event, (thread) => ({
-        ...thread,
+        // What failed in the turn before is no longer counted.
+        ...subagentsKept(thread, true),
         latest: { turn, state: "running", began: event.at },
       }))
     }
@@ -149,7 +174,7 @@ function applied(state: ThreadList, event: Event): ThreadList {
         event,
         (thread) => ({
           // What the turn before changed goes: this one says its own.
-          ...without(thread, "changed_lines"),
+          ...without(subagentsKept(thread, false), "changed_lines"),
           latest: {
             turn,
             state: ended,
@@ -260,11 +285,28 @@ function applied(state: ThreadList, event: Event): ThreadList {
 export const archiveHolds = ({ archived, updated_at }: ListedThread) =>
   archived !== undefined && updated_at <= archived.at
 
-/** `thread` with no `mark`, or no lines its last turn changed: the same
- * Thread when it had none. */
+/**
+ * `thread`'s sub-agents as its turn starts (`started`) or ends, while the
+ * list is not read again (ADR 0103, decision 10): a new turn counts none
+ * failed; a Thread none of whose sub-agents works then works no more, so
+ * the list says none. The same Thread when nothing changes.
+ */
+export function subagentsKept(
+  thread: ListedThread,
+  started: boolean
+): ListedThread {
+  const { subagents } = thread
+  if (!subagents) return thread
+  if (subagents.working === 0) return without(thread, "subagents")
+  if (!started || subagents.failed === 0) return thread
+  return { ...thread, subagents: { ...subagents, failed: 0 } }
+}
+
+/** `thread` with no `mark`, no lines its last turn changed, or no
+ * sub-agents: the same Thread when it had none. */
 export function without(
   thread: ListedThread,
-  mark: "seen" | "archived" | "changed_lines"
+  mark: "seen" | "archived" | "changed_lines" | "subagents"
 ): ListedThread {
   if (thread[mark] === undefined) return thread
   const unmarked = { ...thread }

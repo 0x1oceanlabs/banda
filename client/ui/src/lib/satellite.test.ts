@@ -5,6 +5,7 @@ import { imports } from "../testing/architecture"
 import {
   FAMILIES,
   motionOf,
+  orbitOf,
   SATELLITE_WORDS,
   type SatelliteState,
   shapeOf,
@@ -88,4 +89,18 @@ test("under reduced motion every change draws still", () => {
 test("its rules are pure: they import nothing, so the Mark's orbit and any client read them", () => {
   const source = readFileSync(join(import.meta.dirname, "satellite.ts"), "utf8")
   expect(imports(source)).toEqual([])
+})
+
+test("on the Mark only a failed sub-agent shows, red, while its Thread works: an octagon when large, a 3 px dot at 16 px (ADR 0103, decision 13)", () => {
+  expect(orbitOf(true, 0, 48)).toBeUndefined()
+  expect(orbitOf(false, 2, 48)).toBeUndefined()
+  const large = orbitOf(true, 1, 48)
+  expect(large?.form).toBe("octagon")
+  if (large?.form === "octagon")
+    expect(String(large.shape.attrs.points).split(" ")).toHaveLength(16)
+  const small = orbitOf(true, 1, 16)
+  // 3 px across at 16 px, in the Mark's 56 units.
+  expect(small).toEqual({ form: "dot", cx: 54, cy: 40, r: 5.25 })
+  // Not measured yet: taken as small.
+  expect(orbitOf(true, 1, 0)).toEqual(small)
 })

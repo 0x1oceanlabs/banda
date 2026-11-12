@@ -56,13 +56,15 @@ pub fn counted(thread: &ListedThread, now: i64) -> Option<CountedAs> {
     if !thread.asking.is_empty() {
         return Some(CountedAs::Asking);
     }
+    // A sub-agent at work after its turn ended keeps the Thread at work
+    // (ADR 0103, decision 19).
+    if thread.works() {
+        return Some(CountedAs::Working);
+    }
     let woke = woke_at(thread, now).map(|_| CountedAs::Woke);
     let Some(latest) = thread.latest.as_ref() else {
         return woke;
     };
-    if latest.state == TurnState::Running {
-        return Some(CountedAs::Working);
-    }
     if thread.seen == Some(latest.turn) {
         return woke;
     }
@@ -280,6 +282,7 @@ mod tests {
             archived: None,
             now: Default::default(),
             changed_lines: None,
+            subagents: None,
         }
     }
 

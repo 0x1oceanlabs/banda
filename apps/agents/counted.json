@@ -32,6 +32,42 @@
       "counted": "working"
     },
     {
+      "case": "a sub-agent works on after its turn ended (ADR 0103, decision 19)",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "subagents": { "working": 1, "failed": 0, "only": "Reviewer" }
+      },
+      "counted": "working"
+    },
+    {
+      "case": "a sub-agent failed, and none works on after its turn",
+      "thread": {
+        "id": "019a0000-0000-7000-8000-000000000001",
+        "harness": "fake",
+        "title": "One",
+        "updated_at": 100,
+        "agent": "019a0000-0000-7000-8000-000000000002",
+        "latest": {
+          "turn": "019a0000-0000-7000-8000-000000000010",
+          "state": "done",
+          "began": 100
+        },
+        "asking": [],
+        "subagents": { "working": 0, "failed": 1 }
+      },
+      "counted": "done"
+    },
+    {
       "case": "a Question waits while its turn runs",
       "thread": {
         "id": "019a0000-0000-7000-8000-000000000001",

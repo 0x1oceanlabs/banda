@@ -1052,18 +1052,45 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub changed_lines: Option<crate::changes::ChangedLines>,
+    /// Its direct sub-agents, while it works and one of them works or
+    /// failed since its latest turn began (ADR 0103, decision 10): the
+    /// card's line 2 and the Mark's red satellite. None otherwise.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub subagents: Option<Subagents>,
 }
 
 impl ListedThread {
+    /// Whether the Thread works: its latest turn runs, or a direct
+    /// sub-agent of it works on after that turn ended (ADR 0103, decision
+    /// 19). The list, the Mark, the bar and the sound all read it so.
+    pub fn works(&self) -> bool {
+        let runs = (self.latest.as_ref()).is_some_and(|latest| latest.state == TurnState::Running);
+        runs || self.subagents.as_ref().is_some_and(|subs| subs.working > 0)
+    }
+
     /// Whether the Thread is archived now, by the rule a window applies to
     /// the list it follows too.
     pub fn is_archived(&self) -> bool {
-        let latest = self.latest.as_ref();
-        let works = latest.is_some_and(|latest| latest.state == TurnState::Running);
         let asks = !self.asking.is_empty();
         let changed = self.thread.updated_at;
-        crate::rules::archive::holds(self.archived, changed, works, asks)
+        crate::rules::archive::holds(self.archived, changed, self.works(), asks)
     }
+}
+
+/// A Thread's direct sub-agents as its list says them (ADR 0103, decisions
+/// 10 and 32): how many work, running or asking, which are its Mark's
+/// satellites; how many failed since its latest turn began, its red one;
+/// and, when one works, what names it: "Waiting on Explore".
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Subagents {
+    pub working: u16,
+    pub failed: u16,
+    /// The label of the one at work, when it is one (`lanes::label`).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub only: Option<String>,
 }
 
 /// When its Person archived a Thread (ADR 0096, decision 4): by its

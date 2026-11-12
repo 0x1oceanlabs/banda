@@ -14,7 +14,9 @@ import {
   FREE,
   firstThread,
   plateOf,
+  leaveSidebar,
   setInFront,
+  sidebarOf,
   startWindow,
   type Window,
 } from "./window"
@@ -804,4 +806,58 @@ test("in the Drawer a sub-agent opens over its Thread, and Esc goes back without
   // Then Esc lifts it, as ever.
   await page.keyboard.press("Escape")
   await expect(drawer).not.toHaveAttribute("data-drawer")
+})
+
+/** The sidebar's card of the Thread named `title`, in its Working tab, and
+ * its lines, top down. */
+async function workingCard(window: Window, title: string) {
+  const sidebar = sidebarOf(window.page)
+  await sidebar.getByRole("tab", { name: /^Working/ }).click()
+  const card = sidebar
+    .getByRole("tabpanel")
+    .getByRole("option", { name: new RegExp(`^${title},`) })
+  return { card, lines: card.locator(":scope > span") }
+}
+
+/** Two lines a card, so a working one shows its line 2. */
+const TWO_LINES = "card = 2\n"
+
+test("a failed sub-agent shows red on its Thread's Mark while the Thread works, and line 2 counts those at work (ADR 0103, step 3)", async () => {
+  window = await startWindow({ look: LOOK, sidebar: TWO_LINES })
+  const { thread, composer } = await firstThread(window.page)
+  const title = "sub-agents three fails lingers"
+  await composer.fill(title)
+  await composer.press("Enter")
+  const row = thread.getByRole("button", { name: "Reviewer" })
+  await expect(row.getByRole("img", { name: "Failed" })).toBeVisible()
+  const { card, lines } = await workingCard(window, title)
+  await expect(card).toHaveAccessibleName(new RegExp(`^${title}, Working,`))
+  await expect(card.locator('[data-satellite="failed"]')).toBeAttached()
+  await expect(lines.nth(1)).toHaveText("2 sub-agents at work")
+  await shots(window, "sidebar-failed")
+})
+
+test("a sub-agent that outlives its turn keeps its card in Working, not Done, until it ends (ADR 0103, decision 19)", async () => {
+  window = await startWindow({
+    look: LOOK,
+    sidebar: TWO_LINES,
+    env: { FAKE_AGENT_OUTLIVES_BY: "6000" },
+  })
+  const { thread, composer } = await firstThread(window.page)
+  const title = "sub-agents outlive"
+  await composer.fill(title)
+  await composer.press("Enter")
+  await expect(thread.getByText(/^The sub-agents said:/)).toBeVisible()
+  const { card, lines } = await workingCard(window, title)
+  await expect(card).toHaveAccessibleName(new RegExp(`^${title}, Working,`))
+  await expect(lines.nth(1)).toHaveText("Waiting on Read a.txt one line")
+  await expect(card.locator('[data-satellite="failed"]')).toHaveCount(0)
+  await shots(window, "sidebar-outlive")
+  // It ends: the Thread works no more. Open in front of its Person, it is
+  // seen at once, so it rests.
+  await leaveSidebar(window.page)
+  await expect(card).toHaveAccessibleName(new RegExp(`^${title}, Open,`), {
+    timeout: 20_000,
+  })
+  await expect(lines.nth(1)).not.toHaveText(/at work|Waiting on/)
 })

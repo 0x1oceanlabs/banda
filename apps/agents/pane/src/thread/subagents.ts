@@ -382,10 +382,24 @@ function liveOf(lanes: readonly Subagent[]): Subagent[] {
  * is at work. */
 export function duringWords(lanes: readonly Subagent[]): string | undefined {
   const live = liveOf(lanes)
-  if (live.length === 0) return undefined
-  return live.length > 1
-    ? `${live.length} sub-agents at work`
-    : `Waiting on ${labelOf(live[0], siblingsOf(live[0], lanes))}`
+  return workWords(
+    live.length,
+    live[0] && labelOf(live[0], siblingsOf(live[0], lanes))
+  )
+}
+
+/** What `working` direct sub-agents at work say, `only` naming the one
+ * when it is one: "3 sub-agents at work", "Waiting on Explore". The live
+ * line says it during a turn, and a working card's line 2 too (ADR 0103,
+ * decision 32). None when none is at work. */
+export function workWords(
+  working: number,
+  only: string | undefined
+): string | undefined {
+  if (working === 0) return undefined
+  return working > 1 || only === undefined
+    ? `${working} sub-agent${working === 1 ? "" : "s"} at work`
+    : `Waiting on ${only}`
 }
 
 /** What the live line says of `lanes` once no turn runs, in the clock's

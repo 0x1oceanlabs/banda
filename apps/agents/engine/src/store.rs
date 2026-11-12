@@ -7,8 +7,8 @@ use crate::full_access::Chosen;
 use crate::model::{
     AccountUse, Archived, Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
     Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Subagent,
-    SubagentId, SubagentState, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState, TurnView,
-    Usage, VisualId,
+    SubagentId, SubagentState, Subagents, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState,
+    TurnView, Usage, VisualId,
 };
 use crate::rules::Lanes;
 use crate::search;
@@ -840,6 +840,7 @@ pub fn threads(sql: &Connection, doing: &AtWork) -> Result<Vec<ListedThread>, Er
             Ok(ListedThread {
                 agent,
                 parent,
+                subagents: listed_subagents(sql, thread.id, latest.as_ref())?,
                 latest,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
@@ -1873,6 +1874,48 @@ pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> 
         Ok(Asking { asker, ..question })
     })
     .collect()
+}
+
+/// The Thread's direct sub-agents as its list says them (ADR 0103,
+/// decision 10): how many work, and how many failed since `latest` began,
+/// while the Thread works, its turn running or one of them working on
+/// after it ended, and one of them works or failed. None otherwise.
+fn listed_subagents(
+    sql: &Connection,
+    thread: ThreadId,
+    latest: Option<&LatestTurn>,
+) -> Result<Option<Subagents>, Error> {
+    let Some(latest) = latest else {
+        return Ok(None);
+    };
+    let [running, asks] = at_work();
+    let (working, failed, one): (u16, u16, Option<SubagentId>) = sql.query_row(
+        "SELECT COALESCE(SUM(state IN (?2, ?3)), 0),
+                COALESCE(SUM(state = ?4 AND ended_at >= ?5), 0),
+                MAX(CASE WHEN state IN (?2, ?3) THEN id END)
+         FROM agents_subagents WHERE thread = ?1 AND parent IS NULL",
+        params![
+            thread,
+            running,
+            asks,
+            word(SubagentState::Failed),
+            latest.began
+        ],
+        |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)),
+    )?;
+    let works = latest.state == TurnState::Running || working > 0;
+    if !works || working + failed == 0 {
+        return Ok(None);
+    }
+    let only = match one {
+        Some(one) if working == 1 => lane_label(sql, one)?,
+        _ => None,
+    };
+    Ok(Some(Subagents {
+        working,
+        failed,
+        only,
+    }))
 }
 
 /// What names sub-agent `sub` (ADR 0103, decision 17), among those started
@@ -3537,6 +3580,81 @@ mod tests {
         assert_eq!(listed.len(), 1);
         assert_eq!(listed[0].thread, summary);
         assert!(!lanes_at_work(&sql, summary.id).unwrap().work);
+    }
+
+    #[test]
+    fn a_listed_thread_counts_its_direct_sub_agents_while_it_works() {
+        use crate::counts::{CountedAs, counted};
+        let kept = kept();
+        let (turn, _) = kept.turn("Review it");
+        let listed = || {
+            let all = threads(&kept.sql, &AtWork::new()).unwrap();
+            all.into_iter()
+                .find(|t| t.thread.id == kept.thread)
+                .unwrap()
+        };
+        let set = |lane: &mut Subagent, state: SubagentState, ended: Option<i64>| {
+            lane.state = state;
+            lane.ended = ended;
+            set_lane(&kept.sql, lane).unwrap();
+        };
+        let subs = |working, failed, only: Option<&str>| {
+            Some(Subagents {
+                working,
+                failed,
+                only: only.map(str::to_owned),
+            })
+        };
+
+        let mut reviewer = kept.lane(turn, None);
+        assert_eq!(listed().subagents, None, "it ended with its turn");
+
+        // It starts again after its turn ended: the Thread works, not Done.
+        set(&mut reviewer, SubagentState::Running, None);
+        let now = listed();
+        assert_eq!(now.subagents, subs(1, 0, Some("Explore")));
+        assert!(now.works());
+        assert_eq!(counted(&now, 0), Some(CountedAs::Working));
+
+        // One it started is not the Thread's to count.
+        let mut nested = kept.lane(turn, Some(reviewer.id));
+        set(&mut nested, SubagentState::Running, None);
+        assert_eq!(listed().subagents, subs(1, 0, Some("Explore")));
+
+        // A second one: they are counted, and none is named.
+        let mut second = kept.lane(turn, None);
+        set(&mut second, SubagentState::Asks, None);
+        assert_eq!(listed().subagents, subs(2, 0, None));
+
+        // It fails: counted as failed while the Thread works.
+        set(&mut second, SubagentState::Failed, Some(3));
+        assert_eq!(listed().subagents, subs(1, 1, Some("Explore")));
+
+        // The last ends: the Thread works no more, and its turn is Done.
+        set(&mut reviewer, SubagentState::Done, Some(4));
+        let now = listed();
+        assert_eq!(now.subagents, None);
+        assert!(!now.works());
+        assert_eq!(counted(&now, 0), Some(CountedAs::Done));
+
+        // A new turn runs: what failed before it began is not counted, what
+        // fails in it is.
+        let running = Turn {
+            id: TurnId::new(),
+            thread: kept.thread,
+            agent: kept.agent,
+            message: ItemId::new(),
+            state: TurnState::Running,
+            opener: Opener::Person,
+            from_thread: None,
+            stopping: false,
+        };
+        let author = Participant::Agent(kept.agent);
+        insert_turn(&kept.sql, &running, author, 10, &Settings::default()).unwrap();
+        assert_eq!(listed().subagents, None, "none works, none failed since");
+        let mut third = kept.lane(running.id, None);
+        set(&mut third, SubagentState::Failed, Some(12));
+        assert_eq!(listed().subagents, subs(0, 1, None));
     }
 
     #[test]

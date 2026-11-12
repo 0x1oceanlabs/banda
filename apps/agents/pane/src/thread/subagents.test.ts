@@ -21,6 +21,7 @@ import {
   roleOf,
   rowOf,
   wordsOf,
+  workWords,
 } from "./subagents"
 
 /** A sub-agent of turn `u` at work, started at 1 s. */
@@ -382,4 +383,12 @@ test("a message's chips find the Thread's sub-agents by their labels, the later 
   const labels = byLabel([first, second, general])
   expect([...labels.keys()]).toEqual(["Explore", "Fix the dots"])
   expect(labels.get("Explore")).toBe(second)
+})
+
+test("the count and the one name say the same words as the live line, for the card's line 2 (ADR 0103, decision 32)", () => {
+  expect(workWords(0, undefined)).toBeUndefined()
+  expect(workWords(3, undefined)).toBe("3 sub-agents at work")
+  expect(workWords(2, "Explore")).toBe("2 sub-agents at work")
+  expect(workWords(1, "Explore")).toBe("Waiting on Explore")
+  expect(workWords(1, undefined)).toBe("1 sub-agent at work")
 })

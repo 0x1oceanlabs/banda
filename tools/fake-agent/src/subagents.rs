@@ -75,6 +75,9 @@
 //! - `edit`: it edits `src/util.ts` in the session's folder and shows the
 //!   change, as `walk` does.
 //! - `dies`: the fake agent's process ends while it works.
+//! - `lingers`: with `three`, the two it does not act on work as `slow`
+//!   does, until their sessions are cancelled: so one that `fails` leaves
+//!   its Thread at work.
 
 use super::{After, Fake, allowed, choose, say, select, text, util_edit};
 use agent_client_protocol::schema::v1::{
@@ -647,7 +650,7 @@ impl Parent {
             tokio::time::sleep(Duration::from_millis(200)).await;
             std::process::exit(3);
         }
-        if self.on(sub, "slow") {
+        if self.on(sub, "slow") || (!sub.acted && self.asks_for("lingers")) {
             self.slow(sub).await?;
             return Ok(Ended::Stopped);
         }

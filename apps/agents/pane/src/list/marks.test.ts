@@ -64,3 +64,19 @@ test("the turn a Person sees settled is the latest that began and ended", () => 
     ])
   ).toBe("u1")
 })
+
+test("a sub-agent at work after its turn ended keeps the Thread working, not done (ADR 0103, decision 19)", () => {
+  const after = (working: number, failed = 0) =>
+    thread({
+      latest: { turn: "u1", state: "done", began: 1 },
+      subagents: { working, failed },
+    })
+  expect(markOf(after(1))).toBe("working")
+  expect(markOf({ ...after(2), seen: "u1" })).toBe("working")
+  // One that failed alone does not keep it at work.
+  expect(markOf(after(0, 1))).toBe("done")
+  // Its sub-agent asks: the Thread asks.
+  expect(markOf({ ...after(1), asking: [{ item: "q1", title: "Run?" }] })).toBe(
+    "asking"
+  )
+})
