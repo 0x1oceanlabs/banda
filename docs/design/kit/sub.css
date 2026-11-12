@@ -339,7 +339,6 @@
 [data-theme="light"] .s-statusbar,
 [data-theme="light"].s-statusbar {
   background: var(--background);
-  box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024);
 }
 .s-sb-text { flex: 1 1 auto; min-width: 0; overflow: hidden; display: flex; align-items: center; gap: 6px; }
 .s-sb-text > span { flex: none; }
@@ -376,7 +375,7 @@
   pointer-events: none;
   translate: -50% calc(-100% - 6px);
   white-space: nowrap;
-  box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.4);
+  box-shadow: var(--float-shadow);
 }
 .s-tipfloat[hidden] { display: none; }
 
