@@ -156,8 +156,21 @@ fn same(one: &CrewAgent, other: &CrewAgent) -> bool {
 /// What a Person would see change of an agent: not its tokens, its time or
 /// what it does now, which change with each frame.
 fn moved(was: &CrewAgent, now: &CrewAgent) -> bool {
-    (&was.label, was.state, &was.model, was.attempt, &was.result, &was.why)
-        != (&now.label, now.state, &now.model, now.attempt, &now.result, &now.why)
+    (
+        &was.label,
+        was.state,
+        &was.model,
+        was.attempt,
+        &was.result,
+        &was.why,
+    ) != (
+        &now.label,
+        now.state,
+        &now.model,
+        now.attempt,
+        &now.result,
+        &now.why,
+    )
 }
 
 /// The fact of Crew `was` becoming `now`, at work: only when an agent's
@@ -167,10 +180,12 @@ fn moved(was: &CrewAgent, now: &CrewAgent) -> bool {
 /// tokens as they are now.
 pub fn progress(was: &Crew, now: &Crew) -> Option<Fact> {
     let agents: Vec<CrewAgent> = (now.agents.iter())
-        .filter(|agent| match was.agents.iter().find(|one| same(one, agent)) {
-            Some(known) => moved(known, agent),
-            None => true,
-        })
+        .filter(
+            |agent| match was.agents.iter().find(|one| same(one, agent)) {
+                Some(known) => moved(known, agent),
+                None => true,
+            },
+        )
         .cloned()
         .collect();
     let phases = (now.phases != was.phases).then(|| now.phases.clone());
@@ -200,7 +215,9 @@ pub fn start(
     (task, run): (&str, Option<&str>),
 ) -> Result<Crew, Error> {
     let item = ItemId::new();
-    if let store::Upserted::Known(known) = store::insert_crew(tx.sql(), thread, &crew, item, (task, run))? {
+    if let store::Upserted::Known(known) =
+        store::insert_crew(tx.sql(), thread, &crew, item, (task, run))?
+    {
         return Ok(*known);
     }
     let anchor = Item {
@@ -224,7 +241,13 @@ pub fn start(
 }
 
 /// Keeps Crew `now` at work, and its fact, when it moved.
-fn keep_progress(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, was: &Crew, now: &Crew) -> Result<bool, Error> {
+fn keep_progress(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    was: &Crew,
+    now: &Crew,
+) -> Result<bool, Error> {
     let Some(fact) = progress(was, now) else {
         return Ok(false);
     };
@@ -239,7 +262,12 @@ fn keep_progress(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, was: &Cr
 /// Ends Crew `now`, as its `state` and `why` say, and its agents'
 /// Questions with it; its open calls end too, those it still keeps in the
 /// store, as after a restart. Nothing when it ended already.
-fn end(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, mut now: Crew) -> Result<Crew, Error> {
+fn end(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    mut now: Crew,
+) -> Result<Crew, Error> {
     let Some((_, was)) = store::crew(tx.sql(), now.id)? else {
         return Ok(now);
     };
@@ -383,7 +411,9 @@ pub async fn left_in(output: &Path) -> Left {
         _ => (Some(text.into_owned()), None),
     };
     Left {
-        result: result.map(capped).filter(|result| !result.trim().is_empty()),
+        result: result
+            .map(capped)
+            .filter(|result| !result.trim().is_empty()),
         log,
     }
 }
@@ -570,7 +600,9 @@ impl Hearer {
             return Ok(None);
         }
         let session = session.upgrade();
-        let native = session.as_ref().is_some_and(|session| session.running().native);
+        let native = session
+            .as_ref()
+            .is_some_and(|session| session.running().native);
         let run = session.map(|session| {
             self.live
                 .crew(self.project.id(), self.thread, record.id, &session)
@@ -651,7 +683,8 @@ mod tests {
             tokens: None,
             calls: None,
             took: None,
-            started: (state != SubagentState::Queued).then_some(i64::from(phase) * 100 + i64::from(index)),
+            started: (state != SubagentState::Queued)
+                .then_some(i64::from(phase) * 100 + i64::from(index)),
             prompt: None,
             result: None,
             last: None,
@@ -714,7 +747,13 @@ mod tests {
         let was = crew();
         // Its first agent: a count changed.
         let first = progressed(&was, &tree(vec![agent(1, 1, Running)], 10));
-        let Some(Fact::CrewProgressed { agents, phases, tokens, .. }) = progress(&was, &first) else {
+        let Some(Fact::CrewProgressed {
+            agents,
+            phases,
+            tokens,
+            ..
+        }) = progress(&was, &first)
+        else {
             panic!("a change");
         };
         assert_eq!(agents.len(), 1);

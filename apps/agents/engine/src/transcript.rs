@@ -22,8 +22,8 @@ use crate::doing::{Doer, Doings};
 use crate::full_access::{Chosen, runs_supervised};
 use crate::live::{CrewRun, LaneRun, TurnRun};
 use crate::model::{
-    Body, CrewId, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, SubagentId, ThreadId, ToolKind,
-    ToolStatus, TurnId, Usage,
+    Body, CrewId, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, SubagentId, ThreadId,
+    ToolKind, ToolStatus, TurnId, Usage,
 };
 use crate::touching::{Place, Toucher, Touches, diffed};
 use crate::{emit, lanes, plain, questions, store};
@@ -554,23 +554,24 @@ impl Transcript {
                 };
                 let tool = tool.unwrap_or(ToolKind::Other);
                 let (sub, crew) = (self.sub, self.crew);
-                let asker = self
-                    .project
-                    .read(move |sql| match (sub, crew) {
-                        (Some(sub), _) => store::lane_label(sql, sub),
-                        (None, Some(crew)) => Ok(store::crew_title(sql, crew)?
-                            .map(|title| crate::crews::asker(&title))),
-                        (None, None) => Ok(None),
-                    })
-                    .await
-                    .map_err(plain)?;
+                let asker =
+                    self.project
+                        .read(move |sql| match (sub, crew) {
+                            (Some(sub), _) => store::lane_label(sql, sub),
+                            (None, Some(crew)) => Ok(store::crew_title(sql, crew)?
+                                .map(|title| crate::crews::asker(&title))),
+                            (None, None) => Ok(None),
+                        })
+                        .await
+                        .map_err(plain)?;
                 let whose = questions::Whose {
                     sub: self.sub,
                     asker,
                     crew: self.crew,
                     start: start.map(|start| *start),
                 };
-                let asked = questions::ask(self.turn, by_mode, tool, title, offered, form, plan, whose);
+                let asked =
+                    questions::ask(self.turn, by_mode, tool, title, offered, form, plan, whose);
                 let (id, body, asked) = match asked {
                     Ok(questions::Asked::Open(opened)) => *opened,
                     Ok(questions::Asked::ByMode(once)) => {

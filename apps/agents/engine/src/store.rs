@@ -5,10 +5,10 @@ use crate::changes::ChangedLines;
 use crate::doing::AtWork;
 use crate::full_access::Chosen;
 use crate::model::{
-    AccountUse, Archived, Asking, Body, Crew, CrewBrief, CrewEnded, CrewId, CrewState, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE,
-    Later, LatestTurn, ListedThread, Offer, Opener, PlanStep, QuestionState, Settings, Subagent,
-    SubagentId, SubagentState, Subagents, ThreadId, ThreadSummary, ToolContent, TurnId, TurnState,
-    ToolStatus, TurnView, Usage, VisualId,
+    AccountUse, Archived, Asking, Body, Crew, CrewBrief, CrewEnded, CrewId, CrewState, Failure,
+    Image, ImageId, Item, ItemId, LISTED_MESSAGE, Later, LatestTurn, ListedThread, Offer, Opener,
+    PlanStep, QuestionState, Settings, Subagent, SubagentId, SubagentState, Subagents, ThreadId,
+    ThreadSummary, ToolContent, ToolStatus, TurnId, TurnState, TurnView, Usage, VisualId,
 };
 use crate::rules::Lanes;
 use crate::search;
@@ -2540,7 +2540,9 @@ fn read_crew(row: &Row<'_>) -> rusqlite::Result<Crew> {
         why: row.get(7)?,
         started: row.get(8)?,
         ended: row.get(9)?,
-        tokens: row.get::<_, Option<i64>>(10)?.map(|tokens| tokens.max(0) as u64),
+        tokens: row
+            .get::<_, Option<i64>>(10)?
+            .map(|tokens| tokens.max(0) as u64),
         log: row.get(11)?,
         script: row.get(12)?,
         result: row.get(13)?,
@@ -2696,7 +2698,9 @@ fn crew_went_on(
     thread: ThreadId,
     latest: Option<&LatestTurn>,
 ) -> Result<Option<CrewEnded>, Error> {
-    let Some(latest) = latest else { return Ok(None) };
+    let Some(latest) = latest else {
+        return Ok(None);
+    };
     let crew = sql
         .query_row(
             &format!("{CREW} WHERE thread = ?1 AND went_on = ?2 ORDER BY rowid DESC LIMIT 1"),

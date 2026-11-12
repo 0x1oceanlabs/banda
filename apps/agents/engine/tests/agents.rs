@@ -2,9 +2,9 @@
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
 use banda_agents::model::{
-    Body, Choice, Crew, CrewState, CrewView, Exit, Failure, Item, ItemId, Mode, OptionValue, QuestionState, Settings,
-    StepState, Subagent, SubagentId, SubagentState, SubagentView, ThreadList, ThreadView,
-    ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Wake,
+    Body, Choice, Crew, CrewState, CrewView, Exit, Failure, Item, ItemId, Mode, OptionValue,
+    QuestionState, Settings, StepState, Subagent, SubagentId, SubagentState, SubagentView,
+    ThreadList, ThreadView, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Wake,
 };
 use banda_agents::{Agents, Pipe, chosen_modes};
 #[cfg(unix)]
@@ -3949,7 +3949,8 @@ const CLAUDE_CREW: SubAgents = SubAgents {
     threads: &[
         Asked {
             mode: "supervised",
-            sends: &["Call the Workflow tool with this script, then answer `launched` and \
+            sends: &[
+                "Call the Workflow tool with this script, then answer `launched` and \
                       nothing else:\n\n```js\nexport const meta = { name: 'scan-fix-verify', \
                       description: 'Read, print and write small files', phases: [\n  { title: \
                       'Scan', detail: 'read a.txt and b.txt' },\n  { title: 'Fix', detail: \
@@ -3966,20 +3967,23 @@ const CLAUDE_CREW: SubAgents = SubAgents {
                       printed.filter(Boolean).length + ' files')\nphase('Verify')\nconst wrote = \
                       await agent('Run `echo delta > d.txt` with Bash, then answer `done` \
                       only.', { label: 'write d', model: 'haiku', effort: 'low' })\n\
-                      log('verified')\nreturn [scanned.join(', '), wrote].join('; ')\n```"],
+                      log('verified')\nreturn [scanned.join(', '), wrote].join('; ')\n```",
+            ],
             goes_on: true,
             always: false,
             steps: &[],
         },
         Asked {
             mode: "full_access",
-            sends: &["Call the Workflow tool with this script, then answer `launched` and \
+            sends: &[
+                "Call the Workflow tool with this script, then answer `launched` and \
                       nothing else:\n\n```js\nexport const meta = { name: 'scan-then-throw', \
                       description: 'Read a file, then fail', phases: [\n  { title: 'Scan', \
                       detail: 'read c.txt' },\n  { title: 'Never', detail: 'not reached' },\n] \
                       }\nphase('Scan')\nconst line = await agent('Read c.txt and answer with \
                       its first line only.', { label: 'read c', model: 'haiku', effort: 'low' \
-                      })\nlog('scanned')\nthrow new Error('stopped after Scan on purpose')\n```"],
+                      })\nlog('scanned')\nthrow new Error('stopped after Scan on purpose')\n```",
+            ],
             goes_on: true,
             always: false,
             steps: &[],
@@ -4320,9 +4324,10 @@ impl World {
         let scrubbed = private
             .iter()
             .filter_map(|(was, is)| Some((was.filter(|w| !w.is_empty())?, is)))
-            .fold(joined_replies(&without_personal_setup(&recorded)), |text, (was, is)| {
-                text.replace(was, is)
-            });
+            .fold(
+                joined_replies(&without_personal_setup(&recorded)),
+                |text, (was, is)| text.replace(was, is),
+            );
         let left = private.iter().filter_map(|(was, _)| *was);
         for was in left.filter(|was| !was.is_empty()) {
             assert!(!scrubbed.contains(was), "the recording still names it");
@@ -4575,7 +4580,12 @@ fn joined_replies(recorded: &str) -> String {
     let piece = |entry: &Value| {
         let update = entry.pointer("/frame/params/update")?;
         (update["sessionUpdate"] == "agent_message_chunk" && update["content"]["type"] == "text")
-            .then(|| (entry["frame"]["params"]["sessionId"].clone(), update["messageId"].clone()))
+            .then(|| {
+                (
+                    entry["frame"]["params"]["sessionId"].clone(),
+                    update["messageId"].clone(),
+                )
+            })
     };
     let mut lines: Vec<Value> = Vec::new();
     for line in recorded.lines() {
@@ -4584,8 +4594,14 @@ fn joined_replies(recorded: &str) -> String {
             && piece(last) == Some(of)
         {
             let more = entry.pointer("/frame/params/update/content/text").cloned();
-            let text = last.pointer_mut("/frame/params/update/content/text").unwrap();
-            let joined = format!("{}{}", text.as_str().unwrap_or(""), more.unwrap().as_str().unwrap_or(""));
+            let text = last
+                .pointer_mut("/frame/params/update/content/text")
+                .unwrap();
+            let joined = format!(
+                "{}{}",
+                text.as_str().unwrap_or(""),
+                more.unwrap().as_str().unwrap_or("")
+            );
             *text = Value::String(joined);
             continue;
         }
@@ -5079,7 +5095,10 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
         .collect();
     assert_eq!(
         kinds,
-        ["message", "tool", "question", "crew", "message", "tool", "question", "notice", "message"]
+        [
+            "message", "tool", "question", "crew", "message", "tool", "question", "notice",
+            "message"
+        ]
     );
     let lines = texts(supervised);
     assert_eq!(lines[1], "tool: Workflow (Done)");
@@ -5089,7 +5108,9 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
     assert_eq!(lines[7], "notice: Fake went on by itself.");
     // The Workflow call's Question carries what the Crew will be.
     let start = supervised.items.iter().find_map(|item| match &item.body {
-        Body::Question { start: Some(start), .. } => Some(start),
+        Body::Question {
+            start: Some(start), ..
+        } => Some(start),
         _ => None,
     });
     let start = start.expect("the Question to start it");
@@ -5120,9 +5141,17 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
     );
     let per_phase = |n: u16| crew.agents.iter().filter(|agent| agent.phase == n).count();
     assert_eq!((per_phase(1), per_phase(2), per_phase(3)), (2, 18, 1));
-    assert!(crew.agents.iter().all(|agent| agent.state == SubagentState::Done));
+    assert!(
+        crew.agents
+            .iter()
+            .all(|agent| agent.state == SubagentState::Done)
+    );
     assert_eq!(crew.agents[0].model.as_deref(), Some("claude-haiku-5-5"));
-    assert_eq!((crew.result.as_deref(), crew.log.as_deref()), (None, None), "no output file");
+    assert_eq!(
+        (crew.result.as_deref(), crew.log.as_deref()),
+        (None, None),
+        "no output file"
+    );
     let facts = world.crew_facts().await;
     let queued = (facts.iter())
         .filter(|(kind, _)| kind == "crew.progressed")
@@ -5131,14 +5160,19 @@ async fn claudes_crews_work_after_their_turn_ask_as_themselves_and_end() {
     assert!(queued, "past sixteen at once, some waited");
     // Written only as something a Person sees changed: far fewer than the
     // frames Claude sent.
-    let progressed = facts.iter().filter(|(kind, _)| kind == "crew.progressed").count();
+    let progressed = facts
+        .iter()
+        .filter(|(kind, _)| kind == "crew.progressed")
+        .count();
     assert!(progressed < 55, "{progressed} of 55 frames");
 
     let failed = the_crew(full);
     assert_eq!(failed.state, CrewState::Failed);
     assert_eq!(
         failed.why.as_deref(),
-        Some("Dynamic workflow \"Read a file, then fail\" failed: Error: stopped after Scan on purpose")
+        Some(
+            "Dynamic workflow \"Read a file, then fail\" failed: Error: stopped after Scan on purpose"
+        )
     );
     let agents: Vec<_> = (failed.agents.iter())
         .map(|agent| (agent.label.as_str(), agent.state, agent.result.as_deref()))
@@ -10887,7 +10921,10 @@ async fn a_sub_agents_writes_after_its_turn_move_the_thread_nowhere() {
     let world = World::new(root.path()).await;
     let (sent, _) = world.outlived(None, "sub-agents outlive").await;
     let thread = &sent["thread"];
-    let refused = world.archive(world.person(), thread, true).await.unwrap_err();
+    let refused = world
+        .archive(world.person(), thread, true)
+        .await
+        .unwrap_err();
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
     let changed = world.changed(thread).await;
     let (other, _) = world.finish(None, "hello").await;
@@ -12375,7 +12412,10 @@ async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
     assert_eq!(json!(crew.turn), sent["turn"]);
     assert_eq!(crew.title, "audit-routes");
-    assert_eq!(crew.description.as_deref(), Some("Find dead routes and fix them"));
+    assert_eq!(
+        crew.description.as_deref(),
+        Some("Find dead routes and fix them")
+    );
     let phases: Vec<_> = (crew.phases.iter())
         .map(|phase| (phase.index, phase.title.as_str(), phase.detail.as_deref()))
         .collect();
@@ -12391,14 +12431,27 @@ async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
     // The Thread works while its Crew does: listed, and not archived.
     let listed = world.listed(thread).await;
     assert!(listed.works(), "{listed:?}");
-    assert_eq!(listed.crew.as_ref().map(|brief| brief.title.as_str()), Some("audit-routes"));
-    let refused = world.archive(world.person(), thread, true).await.unwrap_err();
+    assert_eq!(
+        listed.crew.as_ref().map(|brief| brief.title.as_str()),
+        Some("audit-routes")
+    );
+    let refused = world
+        .archive(world.person(), thread, true)
+        .await
+        .unwrap_err();
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
 
-    let view = world.until(thread, |v| crews_ended(v, 1) && v.crews[0].went_on.is_some()).await;
+    let view = world
+        .until(thread, |v| {
+            crews_ended(v, 1) && v.crews[0].went_on.is_some()
+        })
+        .await;
     let crew = the_crew(&view);
     assert_eq!(crew.state, CrewState::Done);
-    assert_eq!(crew.result.as_deref(), Some("Fixed 3 dead routes; the build passes."));
+    assert_eq!(
+        crew.result.as_deref(),
+        Some("Fixed 3 dead routes; the build passes.")
+    );
     assert_eq!(crew.log.as_deref(), Some("phase 3 done"));
     let agents: Vec<_> = (crew.agents.iter())
         .map(|agent| (agent.phase, agent.index, agent.state))
@@ -12416,7 +12469,11 @@ async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
     );
     assert!(crew.ended.is_some());
     let went_on = view.turns.iter().find(|turn| Some(turn.id) == crew.went_on);
-    assert!(went_on.is_some(), "the turn it went on with: {:?}", view.turns);
+    assert!(
+        went_on.is_some(),
+        "the turn it went on with: {:?}",
+        view.turns
+    );
     assert!(texts(&view).contains(&"message: The Crew fixed the routes.".to_owned()));
     let listed = world.listed(thread).await;
     assert!(listed.crew.is_none());
@@ -12427,8 +12484,14 @@ async fn a_crew_works_after_its_turn_and_ends_with_its_result() {
     let facts = world.crew_facts().await;
     let kinds: Vec<_> = facts.iter().map(|(kind, _)| kind.as_str()).collect();
     assert_eq!(kinds.first(), Some(&"crew.started"));
-    assert_eq!(kinds.iter().filter(|kind| **kind == "crew.ended").count(), 1);
-    let progressed = kinds.iter().filter(|kind| **kind == "crew.progressed").count();
+    assert_eq!(
+        kinds.iter().filter(|kind| **kind == "crew.ended").count(),
+        1
+    );
+    let progressed = kinds
+        .iter()
+        .filter(|kind| **kind == "crew.progressed")
+        .count();
     // Each phase: its agents start, then end; and the turn it went on
     // with. Its log line comes with its end, from its output file.
     assert_eq!(progressed, 3 * 2 + 1, "{facts:#?}");
@@ -12450,7 +12513,11 @@ async fn a_big_crews_agents_wait_queued_and_all_end() {
         .flat_map(|(_, fact)| fact["agents"].as_array().cloned().unwrap_or_default())
         .any(|agent| agent["state"] == "queued");
     assert!(queued, "some waited");
-    assert!(crew.agents.iter().all(|agent| agent.state == SubagentState::Done));
+    assert!(
+        crew.agents
+            .iter()
+            .all(|agent| agent.state == SubagentState::Done)
+    );
 }
 
 /// What a Crew's agent asks between turns is the Crew's while it is the
@@ -12474,7 +12541,11 @@ async fn a_crews_agent_asks_between_turns_as_the_crew() {
     // No turn of the Agent's own opened for it.
     assert_eq!(view.turns.len(), 1, "{:?}", view.turns);
     let listed = world.listed(thread).await;
-    let asking: Vec<_> = listed.asking.iter().map(|asked| asked.asker.clone()).collect();
+    let asking: Vec<_> = listed
+        .asking
+        .iter()
+        .map(|asked| asked.asker.clone())
+        .collect();
     assert_eq!(asking, [Some("Crew audit-routes".to_owned())]);
     world.answer(question, "allow-once").await;
     let view = world.until(thread, |v| crews_ended(v, 1)).await;
@@ -12519,11 +12590,20 @@ async fn the_workflow_call_asks_with_what_its_script_says() {
     let view = world.until(thread, |v| asked(v).is_some()).await;
     let (question, _) = asked(&view).unwrap();
     let item = view.items.iter().find(|item| item.id == question).unwrap();
-    let Body::Question { start: Some(start), choices, .. } = &item.body else {
+    let Body::Question {
+        start: Some(start),
+        choices,
+        ..
+    } = &item.body
+    else {
         panic!("a Question to start a Crew: {:?}", item.body);
     };
     assert_eq!(start.title, "audit-routes");
-    let titles: Vec<_> = start.phases.iter().map(|phase| phase.title.as_str()).collect();
+    let titles: Vec<_> = start
+        .phases
+        .iter()
+        .map(|phase| phase.title.as_str())
+        .collect();
     assert_eq!(titles, ["Scan", "Fix", "Verify"]);
     assert!(start.script.starts_with("export const meta"));
     assert_eq!(choices.len(), 3, "\"Don't ask again\" kept: {choices:?}");
@@ -12551,7 +12631,10 @@ async fn a_crew_whose_script_throws_fails() {
         crew.why.as_deref(),
         Some("Dynamic workflow \"Audit the routes\" failed: Error: the script threw after Scan")
     );
-    assert_eq!(crew.result, None, "a script that threw leaves its file empty");
+    assert_eq!(
+        crew.result, None,
+        "a script that threw leaves its file empty"
+    );
     assert!(!world.listed(&sent["thread"]).await.works());
 }
 

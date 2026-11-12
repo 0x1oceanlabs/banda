@@ -325,8 +325,9 @@ mod tests {
 
     /// The recording of step 0, made with the capability on: it cannot be
     /// replayed, as its client was not Banda, but its frames are Claude's.
-    const WORKFLOW: &str =
-        include_str!("../../../../../docs/research/2026-11-10-sub-agents/acp-with-subagents/claude-workflow.jsonl");
+    const WORKFLOW: &str = include_str!(
+        "../../../../../docs/research/2026-11-10-sub-agents/acp-with-subagents/claude-workflow.jsonl"
+    );
 
     /// The raw message on line `n` of [`WORKFLOW`].
     fn line(n: usize) -> Value {
@@ -431,7 +432,10 @@ mod tests {
         let Some(Sdk::Updated { task, end }) = read(&line(57)) else {
             panic!("an update");
         };
-        assert_eq!((task.as_str(), end), ("wu8k0p16z", Some(TaskEnd::Completed)));
+        assert_eq!(
+            (task.as_str(), end),
+            ("wu8k0p16z", Some(TaskEnd::Completed))
+        );
         let Some(Sdk::Notified(notified)) = read(&line(58)) else {
             panic!("a notification");
         };
@@ -442,7 +446,10 @@ mod tests {
         let Some(Sdk::Notified(stopped)) = read(&line(105)) else {
             panic!("a notification");
         };
-        assert_eq!((stopped.end, stopped.output), (Some(TaskEnd::Stopped), None));
+        assert_eq!(
+            (stopped.end, stopped.output),
+            (Some(TaskEnd::Stopped), None)
+        );
     }
 
     #[test]
@@ -489,7 +496,10 @@ mod tests {
             "type": "system", "subtype": "task_progress", "task_id": "t",
             "workflow_progress": "?",
         });
-        assert!(matches!(read(&flat), Some(Sdk::Progress(Progress { tree: None, .. }))));
+        assert!(matches!(
+            read(&flat),
+            Some(Sdk::Progress(Progress { tree: None, .. }))
+        ));
     }
 
     #[test]

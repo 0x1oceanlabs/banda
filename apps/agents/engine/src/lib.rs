@@ -27,9 +27,9 @@ mod acp;
 mod aside;
 mod between;
 mod changes;
-mod crews;
 pub mod chosen_modes;
 pub mod counts;
+mod crews;
 mod deleting;
 mod doing;
 mod drive;
@@ -86,9 +86,9 @@ use laters::{LaterAsk, SeeWokeAsk, WakeAsk};
 use live::{Hold, Live};
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
-    AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, SubagentId,
-    SubagentView, ThreadId, CrewId, CrewView, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
-    VisualId,
+    AccountUse, Body, CrewId, CrewView, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener,
+    Settings, SubagentId, SubagentView, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId,
+    TurnState, VERSION, VisualId,
 };
 use notes::Notify;
 use rules::Event;

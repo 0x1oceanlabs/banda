@@ -66,13 +66,13 @@ pub use said::{
     Announced, Answer, IdleWhy, LaneSaid, LaneState, Said, StartedRx, Tie, ToolChange, ToolPart,
     unstarted,
 };
-pub use sdk::{Background, Notified, Progress, Sdk, Started, TaskEnd, TaskKind};
-#[cfg(test)]
-pub use sdk::Tree;
-use sdk::SdkMessage;
 /// What a Workflow's script says of the Crew it starts (ADR 0103, decision
 /// 30).
 pub use script::start as crew_meta;
+use sdk::SdkMessage;
+#[cfg(test)]
+pub use sdk::Tree;
+pub use sdk::{Background, Notified, Progress, Sdk, Started, TaskEnd, TaskKind};
 use session::*;
 pub use session::{CrewSaid, Prompt, PromptImage, Session, Steered, WeakSession};
 

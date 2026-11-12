@@ -18,8 +18,8 @@
 
 use crate::live::Live;
 use crate::model::{
-    Body, Choice, CrewId, CrewStart, Fact, Field, FieldValue, Input, Item, ItemId, Mode, QuestionState, SubagentId,
-    ThreadId, ToolKind, TurnId, Values,
+    Body, Choice, CrewId, CrewStart, Fact, Field, FieldValue, Input, Item, ItemId, Mode,
+    QuestionState, SubagentId, ThreadId, ToolKind, TurnId, Values,
 };
 use crate::{emit, store};
 use banda_kernel::{Effect, Error, Outcome, Participant, Refusal, Tx};
