@@ -298,7 +298,7 @@ function Branches({
         <GitAlert className="px-2 pt-1">{acting.problem}</GitAlert>
       )}
       {cut && !words && (
-        <p className="px-2 pt-1.5 pb-0.5 text-small text-muted-foreground">
+        <p className="px-2 pt-1.5 pb-0.5 text-meta text-muted-foreground">
           Showing {listed.length} branches: search to find others.
         </p>
       )}
