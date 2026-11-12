@@ -112,9 +112,13 @@ test("each built-in theme draws as it did, light and dark, solid and over glass"
   }
 })
 
+/** The bar's right as Banda's, but the clock, whose day and time change
+ * how wide the bar's right is as they pass. */
+const RIGHT = `["workspaces.aside", "terminal.ports", "harnesses.limits", "notifications.recent"]`
+
 /** look.toml of a theme in a mode, glass or solid, still. */
 function lookToml(theme: string, mode: string, glass: boolean): string {
-  return `theme = "${theme}"\nmode = "${mode}"\n[motion]\noff = true\n[desk]\nglass = ${glass}\nwallpaper = "wall.png"\n`
+  return `theme = "${theme}"\nmode = "${mode}"\n[motion]\noff = true\n[desk]\nglass = ${glass}\nwallpaper = "wall.png"\n[bar]\nright = ${RIGHT}\n`
 }
 
 /** Waits until the page shows the look `banda look` resolves now: its
