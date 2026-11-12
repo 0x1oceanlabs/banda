@@ -500,6 +500,13 @@ round trip.
      - In the end shape it is `pane.left@1`, sent by the engine that holds
        the arrangement and carried by its window to arc (ADR 0101,
        decision 5).
+     - _Amended 2026-11-12, with step 1d part 2:_ it is kept beside H5e's
+       messages, not among them: the same device storage under keys of its
+       own (`client/core/src/left.ts`), so the messages' edit, hold and
+       Keep for stay theirs alone. It keeps the Pane that left, its kind,
+       Project and args, which is `pane.left`'s shape, and its App lets go
+       of it as on any close (`PaneKind.closed`), which now answers its
+       act for the Window to watch. The pill counts both.
    - The away pill's band comes out of the size the Tile gives the Pane
      (ADR 0088), so the prompt stays in view.
    - Nothing from another machine writes this device's clipboard: no OSC

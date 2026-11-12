@@ -31,6 +31,7 @@ import { type DirectoryMemory, inWindow, type Placed } from "./directory"
 import { paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
+import { Left, type Leaving } from "./left"
 import { inMemory, Waiting, type WaitingStorage } from "./queue"
 import { type Readable, sameData, sameEach, Store } from "./store"
 
@@ -293,6 +294,13 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * once the Window reaches that host again, as it is live and its engine
    * open and answering. */
   readonly waiting: Waiting
+  /** The Panes closed while their machine was away, which their Apps let
+   * go of there once it is back (ADR 0106, decision 4). */
+  readonly left: Left
+  /** The boot each host's engine said last, by its key. */
+  readonly #boots = new Map<string, string>()
+  /** Who lets go of a Pane closed while away, once its machine is back. */
+  readonly #letters = new Set<(one: Leaving, engine: Engine) => void>()
 
   /** Which machine has each Project, as this device found it last. */
   readonly #directory: DirectoryMemory
@@ -330,6 +338,21 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       drains,
     })
     this.waiting.subscribe(() => this.#sendWaiting())
+    this.left = new Left(waiting, { drains })
+  }
+
+  /** The boot host `host`'s engine said last, none if it said none yet:
+   * what a Pane closed while it is away ran under. */
+  bootOf(host: string): string | undefined {
+    return this.#boots.get(host)
+  }
+
+  /** Hears each Pane closed while away whose machine is back, with that
+   * machine's engine, for its App to let go of it there; returns how to
+   * stop. */
+  onLeft(letGo: (one: Leaving, engine: Engine) => void): () => void {
+    this.#letters.add(letGo)
+    return () => this.#letters.delete(letGo)
   }
 
   readonly get = (): readonly Shown[] => this.#shown.get()
@@ -342,6 +365,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * stop. */
   follow(): () => void {
     const waiting = this.waiting.start()
+    const left = this.left.follow()
     const hosts = this.#device.follow((hosts) => this.take(hosts))
     const here =
       this.#here &&
@@ -351,6 +375,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return () => {
       hosts?.()
       waiting()
+      left()
       here?.()
     }
   }
@@ -496,12 +521,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
           onStale: () => this.take(this.#told),
         }
       )
+      const made = engine
       this.#engines.set(name, engine)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
         if (status.state !== "open") return
         if (status.machine) this.#scope(name, status.machine)
-        // What waits for the host goes as its engine is open again.
+        this.#boots.set(name, status.boot)
+        // What waits for the host goes as its engine is open again: the
+        // Panes closed meanwhile first, before anything new.
+        for (const one of this.left.take(name, status.boot))
+          for (const letGo of this.#letters) letGo(one, made)
         this.#sendWaiting()
       })
       this.#hearPowers()

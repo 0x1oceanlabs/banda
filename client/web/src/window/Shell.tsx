@@ -69,6 +69,8 @@ import { modules as known } from "../modules"
 import {
   closedOf,
   identityOf,
+  keptAway,
+  letGoWhenBack,
   runs,
   sheetsOf,
   showsOf,
@@ -268,12 +270,18 @@ export function Shell({
   // A Pane that leaves every workspace lets its module let go, as a
   // terminal stops its program; one moved, or drawn still, has not left.
   const engineOf = useEngineOf()
+  const kept = useContext(HostsContext)
   const before = useRef(standing)
   useEffect(() => {
     for (const entry of left(before.current, standing, identityOf))
-      closedOf(() => engineOf(entry.project, entry.pane), entry)
+      closedOf(
+        () => engineOf(entry.project, entry.pane),
+        entry,
+        keptAway(kept, entry)
+      )
     before.current = standing
-  }, [engineOf, standing])
+  }, [engineOf, kept, standing])
+  useEffect(() => letGoWhenBack(kept), [kept])
 
   // What the Apps list and what calls the Person (`stores`), for the Marks,
   // the rings and Alt+U, kept outside React: a list that changes draws

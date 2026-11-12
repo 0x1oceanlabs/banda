@@ -184,6 +184,44 @@ test("a key while arc is away says it was not sent and goes nowhere; arc back, t
   expect(existsSync(arc!.disk(join(folder, "away.txt")))).toBe(false)
 })
 
+test("a terminal closed while arc is away closes on arc once it is back, as the toast says and the pill counts (ADR 0106, decision 4)", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  await run(page, "echo $$ > shell.pid")
+  await expect.poll(() => inFolder(folder, "shell.pid")).toMatch(/^\d+\n$/)
+  const shell = inFolder(folder, "shell.pid").trim()
+  const runs = () => existsSync(`/proc/${shell}`)
+  expect(runs()).toBe(true)
+
+  arc!.blackhole(true)
+  const tile = page.locator("section[data-tile]").filter({ has: screen })
+  await expect(pillOf(page, screen)).toHaveText("arc is away", {
+    timeout: 60_000,
+  })
+  await tile.getByRole("button", { name: /^Close / }).first().click()
+  await expect(tile).toHaveCount(0)
+  await expect(
+    page
+      .getByRole("region", { name: "Notifications" })
+      .getByText("Closes on arc once it is back")
+  ).toBeVisible()
+  // arc's pill elsewhere counts it: the Thread's, which stays.
+  await expect(
+    page.locator("[data-machine-pill=arc]").getByText("1 waiting")
+  ).toBeVisible()
+  await shot(page, "close-while-away", { toasts: true })
+  // Still away, the shell runs on there.
+  expect(runs()).toBe(true)
+
+  arc!.blackhole(false)
+  await expect.poll(runs, { timeout: 90_000 }).toBe(false)
+  await expect(page.locator("[data-machine-pill=arc]")).toHaveCount(0, {
+    timeout: 30_000,
+  })
+})
+
 test("a key refused in a stall that ends on the same connection stops being said, and the shell takes the next key", async () => {
   test.setTimeout(120_000)
   const { page, composer, folder } = await onArc()

@@ -23,6 +23,7 @@ import {
   useHostsBy,
   useNamedOf,
   useThisNamed,
+  useLeftFor,
   useWaiting,
 } from "@banda/core/react"
 import { useLookSidebar } from "../look"
@@ -53,7 +54,7 @@ export function MachinePill({
   onStart: () => void
 }) {
   const long = useAwayFor(shown)
-  const waiting = useWaiting(shown.name).length
+  const waiting = useWaiting(shown.name).length + useLeftFor(shown.name)
   const words = reachWords(shown.name, shown, seenNamed)
   if (!words) return null
   const stopped = shown.state.state === "stopped"

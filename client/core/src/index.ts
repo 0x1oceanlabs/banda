@@ -58,6 +58,7 @@ export {
   Unreachable,
 } from "./hosts"
 export { KeptHere } from "./kept-here"
+export { LEFT_FOR, Left, type Leaving } from "./left"
 export { type Link, linkOf, linkRefused } from "./link"
 export { paneHost, type PaneState, type Place, withHost } from "./pane"
 export { openProjects, shownProjects } from "./projects"

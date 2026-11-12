@@ -28,4 +28,4 @@ export {
 export { MachinesContext, useMachines } from "./machines"
 export { RunContext, useRun } from "./run"
 export { useSelected, useStore } from "./store"
-export { useQueue, useWaiting } from "./waiting"
+export { useLeftFor, useQueue, useWaiting } from "./waiting"
