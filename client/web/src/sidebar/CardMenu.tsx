@@ -35,14 +35,17 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import {
+  DropdownMenuGroup,
   DropdownMenuItem,
+  DropdownMenuLabel,
   DropdownMenuSeparator,
   DropdownMenuSub,
   DropdownMenuSubContent,
   DropdownMenuSubTrigger,
 } from "@banda/ui/components/dropdown-menu"
+import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { useRun } from "@banda/core/react"
+import { type Machine, useMachines, useRun } from "@banda/core/react"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { projectLabel } from "@banda/ui/lib/projects"
 import type { Listed } from "@banda/ui/pane"
@@ -102,7 +105,8 @@ export type Entry =
  * when done and Stop. One that asks has no Mark as unread, as `U` leaves a
  * question until it is answered, and one at work or that asks neither
  * forks nor moves, which its host refuses then; Move to Project only
- * where `moves`, another Project to go to; one in No Project (`scratch`)
+ * where `moves`, another Project to go to, on this machine or another
+ * (ADR 0116, decision 1); one in No Project (`scratch`)
  * has Make a Project from it… (ADR 0046), whatever it does. Pure, so
  * plain tests cover it.
  */
@@ -177,6 +181,26 @@ function movesTo(
   )
 }
 
+/** Another machine a Thread may move to (ADR 0116, decision 1): its name
+ * and icon, whether it is away, and its Projects, none while it is. */
+export type There = Pick<Machine, "host" | "named" | "projects"> & {
+  away: boolean
+}
+
+/** The other machines the Window reaches, as "Move to Project" lists
+ * them under this machine's Projects: each under its name, an away one
+ * with no Projects. Pure, so a plain test covers it. */
+export function machinesTo(machines: readonly Machine[] | undefined): There[] {
+  return (machines ?? [])
+    .filter((machine) => machine.host !== undefined)
+    .map(({ host, named, state, projects }) => ({
+      host,
+      named,
+      away: state === "away",
+      projects: state === "away" ? [] : projects,
+    }))
+}
+
 /**
  * Asks whether to delete a card's Thread, the one picked by `Delete` or
  * the one whose menu's Delete… was chosen; none takes the question away.
@@ -232,6 +256,7 @@ function Entries({
   const actOn = useActs(holding)
   const ask = useContext(AskDelete)
   const projects = movesTo(useMenuProjects(), row.project.id)
+  const there = machinesTo(useMachines())
   const { listed } = row
   const project = row.project.id
   // As the Person's last input in the list was: a right click, or a key.
@@ -264,7 +289,7 @@ function Entries({
     delete: () => later(() => ask(row)),
   }
   const groups = entriesOf(row.stand, listed, {
-    moves: projects.length > 0,
+    moves: projects.length > 0 || there.length > 0,
     scratch: row.project.scratch,
   })
   return groups.map((group, at) => (
@@ -291,6 +316,36 @@ function Entries({
                     <ProjectSign project={to} size={14} />
                     <span className="truncate">{projectLabel(to)}</span>
                   </DropdownMenuItem>
+                ))}
+                {/* Each other machine under its name (ADR 0116, decision
+                    1): its Project opens Move Thread, which says first
+                    what goes and what stays. */}
+                {there.map((machine, at) => (
+                  <DropdownMenuGroup key={machine.host}>
+                    {(at > 0 || projects.length > 0) && (
+                      <DropdownMenuSeparator />
+                    )}
+                    <DropdownMenuLabel className="flex items-center">
+                      {machine.named && (
+                        <MachineMark named={machine.named} form="full" />
+                      )}
+                      {machine.away && (
+                        <span className="ml-auto pl-4">away</span>
+                      )}
+                    </DropdownMenuLabel>
+                    {machine.projects.map((to) => (
+                      <DropdownMenuItem
+                        key={to.id}
+                        // Its dialog takes the focus once the menu has gone.
+                        onClick={() =>
+                          later(() => doing(row, "move", { to: to.id }))
+                        }
+                      >
+                        <ProjectSign project={to} size={14} />
+                        <span className="truncate">{projectLabel(to)}</span>
+                      </DropdownMenuItem>
+                    ))}
+                  </DropdownMenuGroup>
                 ))}
               </DropdownMenuSubContent>
             </DropdownMenuSub>

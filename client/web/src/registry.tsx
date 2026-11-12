@@ -17,6 +17,7 @@ import {
   scoped,
   type Source,
   takes,
+  type TopPart,
   type Widget,
 } from "@banda/ui/module"
 import { type Label, type PaneState, paneOf, type Watch } from "@banda/ui/pane"
@@ -92,6 +93,11 @@ export const windowModule = defineModule({
 })
 
 const all: readonly Module[] = [windowModule, ...modules]
+
+/** What the modules draw in the Window's Top layer when asked, by id. */
+export const tops: ReadonlyMap<string, TopPart> = new Map(
+  all.flatMap((m) => m.top).map((part) => [part.id, part])
+)
 
 /** The Panes the modules offer, after the window's launcher. */
 export const kinds: readonly AnyPaneKind[] = all.flatMap((m) => m.panes)

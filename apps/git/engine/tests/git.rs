@@ -2179,24 +2179,18 @@ async fn a_folders_work_goes_to_another_folder_as_a_snapshot_and_the_old_one_is_
     let there = |method: &'static str, params: Value| {
         (world.kernel).call(person, method, Some(home), None, params)
     };
+    // It names its own line, the newest first: the other folder has
+    // `main`, and not the commit never pushed.
+    let main = world.git(&["rev-parse", "main"]);
     let ours: Value = world.call("git.folder_for", json!({})).await.unwrap();
-    assert_eq!(ours["tips"], json!([head]));
-    let theirs = there("git.folder_for", json!({ "commits": ours["tips"] }))
+    assert_eq!(ours["tips"], json!([head, main]));
+    let known = there("git.folder_for", json!({ "commits": ours["tips"] }))
         .await
         .unwrap();
     assert_eq!(
-        (&theirs["git"], &theirs["free"]),
+        (&known["git"], &known["free"]),
         (&json!(true), &json!(true))
     );
-    assert_eq!(
-        theirs["has"],
-        json!([]),
-        "the commit never pushed is not there"
-    );
-    let main = world.git(&["rev-parse", "main"]);
-    let known = there("git.folder_for", json!({ "commits": [main] }))
-        .await
-        .unwrap();
     assert_eq!(known["has"], json!([main]));
 
     let id = "01234567-89ab-cdef-0123-456789abcdef";

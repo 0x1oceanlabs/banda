@@ -436,7 +436,8 @@ pub struct FolderFor {
     /// Whether nothing in it is changed and not committed, and no command
     /// of Banda's writes in it now.
     pub free: bool,
-    /// `HEAD` and its remotes' branches, as commits: what a folder it
+    /// `HEAD` and the commits before it on its own line, the newest
+    /// first, then its remotes' branches, as commits: what a folder it
     /// moves to is asked for.
     pub tips: Vec<String>,
     /// The commits asked for that it has.

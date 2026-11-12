@@ -23,6 +23,7 @@ import { askSource } from "./list/sources"
 import { NEW_THREAD } from "./thread/session"
 import { hearBack } from "./thread/WhenBack"
 import { threadItems } from "./list/items"
+import { moveThread } from "./list/MoveThread"
 import { threadHeader } from "./list/header"
 import { waitingThreads } from "./list/waiting"
 import { move } from "./list/marks-moved"
@@ -158,6 +159,7 @@ export const agents = defineModule({
   ],
   sources: [askSource],
   items: threadItems,
+  top: [moveThread],
   slots: [threadHeader, waitingThreads],
   // This machine's window moves the marks it kept to their host, once
   // (ADR 0096, decision 9): its own engine's, never another host's, the

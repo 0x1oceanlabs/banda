@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
-import { type Entry, entriesOf } from "./CardMenu"
+import type { ProjectSummary } from "@banda/contract"
+import { type Entry, entriesOf, machinesTo } from "./CardMenu"
 
 /** Another Project to move to, from one of the Person's own. */
 const MOVES = { moves: true }
@@ -83,4 +84,23 @@ test("in No Project: Make a Project from it…, last of its names, whatever it d
     "rename",
     "make",
   ])
+})
+
+test("Move to Project lists each other machine under its name, an away one with no Projects", () => {
+  const project = (id: string) => ({ id, name: id }) as ProjectSummary
+  const arc = { name: "arc", icon: "server" as const }
+  const mini = { name: "mini", icon: "desktop" as const }
+  expect(
+    machinesTo([
+      { state: "live", projects: [project("s1")] },
+      { host: "arc", named: arc, state: "live", projects: [project("a1")] },
+      { host: "mini", named: mini, state: "away", projects: [project("m1")] },
+    ])
+  ).toEqual([
+    { host: "arc", named: arc, away: false, projects: [project("a1")] },
+    { host: "mini", named: mini, away: true, projects: [] },
+  ])
+  // With this machine alone, or outside a Window, there is none.
+  expect(machinesTo([{ state: "live", projects: [] }])).toEqual([])
+  expect(machinesTo(undefined)).toEqual([])
 })

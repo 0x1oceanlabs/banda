@@ -6,7 +6,7 @@
  */
 import type { ComponentType, ReactNode } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Args, HereStore, Queue, Readable } from "@banda/core"
+import type { Args, HereStore, Machine, Queue, Readable } from "@banda/core"
 import type { Key } from "./lib/keys"
 import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
@@ -149,6 +149,17 @@ export type WindowApi = {
   sight: (thing?: Thing) => Sight
   /** The Projects open in the window. */
   projects: () => readonly ProjectSummary[]
+  /** The machines the Window reaches, with their Projects, as a new
+   * Thread's picker groups them (`KeptHosts.machines`): this machine
+   * first, with no `host` and the name its engine says it has, once it
+   * said one; then each other machine it shows, live or away. What an
+   * act that goes from one machine to another reads, as a Thread's move
+   * (ADR 0116). */
+  machines: () => readonly Machine[]
+  /** Shows a part of an App's in the Window's Top layer (`Module.top`),
+   * by its id, with `args`: a dialog an action opens, one at a time, as
+   * the Top layer holds one (ADR 0087). `null` takes it away. */
+  top: (part: string | null, args?: Args) => void
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
   look: () => { notify: Notify; sound: SoundSettings }
   /** Whether Banda's Quiet is on (ADR 0098, decision 21): nothing is told
@@ -507,6 +518,15 @@ export type Widget = {
   compact?: true
 }
 
+/** A part of an App the Window draws in its Top layer while an action
+ * asked for it (`WindowApi.top`): a dialog. The Window keeps what was
+ * asked, so the App keeps no store for it. */
+export type TopPart = { id: string; Part: ComponentType<TopProps> }
+
+/** What a Top layer part is drawn with: what the Window offers a module,
+ * the args it was asked with, and how it goes away. */
+export type TopProps = { window: WindowApi; args: Args; onClose: () => void }
+
 export type Module = {
   /**
    * The module's one id: its engine module's name, its `app.toml`'s
@@ -548,6 +568,10 @@ export type Module = {
    * decision 12): its rows in the Thread menu, the Pane menu and the
    * Banda menu, in their order; actions all the same, by a key too. */
   items: readonly ItemAction[]
+  /** What it draws in the Window's Top layer, over any Pane, when one
+   * of its actions asks (`WindowApi.top`): a dialog, as moving a Thread
+   * (ADR 0116, decision 7). */
+  top: readonly TopPart[]
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -571,6 +595,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   slots?: readonly Filler[]
   previewers?: readonly Previewer[]
   items?: readonly ItemAction[]
+  top?: readonly TopPart[]
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -588,6 +613,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     slots: module.slots ?? [],
     previewers: module.previewers ?? [],
     items: module.items ?? [],
+    top: module.top ?? [],
     start: module.start,
   }
 }

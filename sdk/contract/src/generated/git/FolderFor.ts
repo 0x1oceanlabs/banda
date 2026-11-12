@@ -14,7 +14,8 @@ git: boolean,
  */
 free: boolean, 
 /**
- * `HEAD` and its remotes' branches, as commits: what a folder it
+ * `HEAD` and the commits before it on its own line, the newest
+ * first, then its remotes' branches, as commits: what a folder it
  * moves to is asked for.
  */
 tips: Array<string>, 

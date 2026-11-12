@@ -61,6 +61,46 @@ Panes for its Projects say "Not on <name> yet"; in its replies a path or
 an image opens nothing, a code block has no Run, and a Visual shows only
 its title.
 
+## Moving a Thread to another machine
+
+A Thread moves from two places. "Move to Project" on its card in the
+sidebar lists this machine's other Projects, then each other machine's
+under its name; "Move to Project…" in the Thread menu, a click on its
+title in its Pane, opens Move Thread, which lists the Projects of every
+machine this window reaches, the Thread's own machine first. A machine
+that is away shows its name and no Projects. A Project of the Thread's
+own machine takes it at once. One on another machine opens Move Thread
+with it picked, which first says what goes (ADR 0116):
+
+- **The Thread, whole**: its conversation, images and Visuals, its marks
+  and its Later. Claude Code goes on there in the same session; another
+  Harness, whose session stays on the old machine, starts one there and
+  is handed the Thread's history.
+- **The folder's work**, when both folders are the same git repository
+  and the other one has nothing of its own to commit: the branch, its
+  commits that were never pushed and the files changed and not
+  committed, as a git snapshot, with no push. The other folder comes out
+  on the same branch at the same commit, the changes not committed.
+  Ignored files stay, as `.env` and `node_modules`.
+- Where a folder is no git repository, or the other has none of the
+  branch's commits, the Thread moves alone, and the dialog says the code
+  stays.
+- A folder there with changes that are not committed refuses the move:
+  commit or stash them there first.
+
+The box under it takes a message for the Agent on the other machine. It
+is sent once the Thread arrived, so the work goes on there and this
+machine may close. A Thread at work moves once its turn ends, while this
+window is open.
+
+The window carries it: it reads the Thread from its machine and writes it
+to the other, and a toast says how far it is. Cancel there stops it
+while nothing changed yet. Once the other machine unpacks, it goes
+through; then the Thread's Pane shows it where it went, and its line
+says where it came from. Both machines must be live, and run a Banda
+that keeps a Thread the same way; one that does not says which to
+update. A machine with none of the Thread's Harness refuses it.
+
 ## hosts.toml
 
 `hosts.toml` sits in Banda's config folder, beside `agents.toml`: for
