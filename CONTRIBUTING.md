@@ -32,7 +32,7 @@ Those rules hold for you too.
   TypeScript tests, and the window's end-to-end tests.
 - One change per PR, its title saying what it does.
 - The engine's methods stay good for the last Dev's windows, as machines
-  update apart (ADR 0115, decision 6): `scripts/check.sh` compares them
+  update apart (ADR 0119, decision 6): `scripts/check.sh` compares them
   with main's (`scripts/contract.mjs`). Keep an old method or field
   beside its new one, or make a new field optional. A break you mean, say
   in a commit of the PR, one trailer per method:

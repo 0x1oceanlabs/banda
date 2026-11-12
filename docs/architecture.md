@@ -1584,7 +1584,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   engine where it was packed, and a Problem says why. A `banda` that a
   package manager owns, as the AUR's, says so in `package-type` beside it
   and runs where it was put; a checkout's runs where cargo built it.
-- **The engine updates itself** (ADR 0115), with or without a window:
+- **The engine updates itself** (ADR 0119), with or without a window:
   the machine-scope module `updates` (`platform/updates/engine`) looks
   at its channel's releases a minute after the engine starts, then
   hourly, and on `updates.check` (`banda update --check`). Banda Dev
@@ -1604,7 +1604,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   stream `updates.state` says what it runs, the newest found, a take's
   progress, what is ready, what that waits for and why not (`banda
   update --follow`).
-- **The engine moves onto a ready copy once nothing runs** (ADR 0115,
+- **The engine moves onto a ready copy once nothing runs** (ADR 0119,
   decision 3; `platform/updates/engine/src/restart.rs`): no Turn runs
   (the kernel's `Working`), no terminal is open, as a restart still ends
   them (#462), and no key reached one for ten minutes (the kernel's
@@ -1632,7 +1632,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   and the engine moves onto it by the same rule; the looks take nothing
   above a version chosen, and `--version newest` drops the choice. A copy
   older than this step neither reads `chosen` nor moves by itself.
-- **The window only swaps its own app** (ADR 0115, decisions 2 and 4;
+- **The window only swaps its own app** (ADR 0119, decisions 2 and 4;
   `platform/updates/desktop`, `@banda/updates-desktop`). It follows its
   engine's `updates.state` and, at each look the engine made, reads the
   release the engine found newest with electron-updater: that release's
@@ -1649,7 +1649,7 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   there, and the engine moves onto it once nothing runs. An engine older
   than step 3, which answers no `updates.state`, leaves the app as it is.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
-  0115, decision 8), one POSIX sh script, published with each release
+  0119, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a
   version in place as the module does, as the Person, and says each step
   on a line whose first word is what it is. Add → Connect runs the app's

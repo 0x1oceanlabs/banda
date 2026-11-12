@@ -183,7 +183,7 @@ pub enum EngineFrame {
         #[ts(optional)]
         named: Option<crate::Named>,
         /// Banda's version this engine was built as, and its build id
-        /// (ADR 0115, decision 6). A window of another build still
+        /// (ADR 0119, decision 6). A window of another build still
         /// attaches while it speaks this protocol, and does without what
         /// this engine lacks. An engine that says none is older than both.
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -779,7 +779,7 @@ mod tests {
         assert_eq!(named(""), None);
     }
 
-    /// An engine from before ADR 0115 says no version, and its welcome
+    /// An engine from before ADR 0119 says no version, and its welcome
     /// still reads; a newer one says both.
     #[test]
     fn a_welcome_says_its_version_and_build_when_it_knows_them() {

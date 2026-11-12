@@ -1,4 +1,4 @@
-//! When the engine moves onto a copy in place (ADR 0115, decision 3): the
+//! When the engine moves onto a copy in place (ADR 0119, decision 3): the
 //! policy, one pure function of what holds now ([`next`], and [`now`] for
 //! the Person's Restart now), apart from the mechanism, which is the
 //! engine's ([`Restart`]: the module asks, the engine stops as a TERM

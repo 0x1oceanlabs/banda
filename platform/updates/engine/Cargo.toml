@@ -1,6 +1,6 @@
 [package]
 name = "banda-updates"
-description = "The updates module: each machine's engine looks at its channel's releases, takes the newest engine alone, checks it and puts it in place beside the running one (ADR 0115)."
+description = "The updates module: each machine's engine looks at its channel's releases, takes the newest engine alone, checks it and puts it in place beside the running one (ADR 0119)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

@@ -1,4 +1,4 @@
-//! The updates module (ADR 0115): each machine updates its own Banda, and
+//! The updates module (ADR 0119): each machine updates its own Banda, and
 //! its engine decides. It looks at its channel's releases a minute after
 //! the engine starts, then every hour, and when asked (`updates.check`);
 //! takes the newest engine alone, as the release's engine feed names it
@@ -100,7 +100,7 @@ pub struct UpdateState {
     #[ts(optional, type = "number")]
     pub published: Option<i64>,
     /// How this engine came to run its version, when it moved onto it
-    /// from another (ADR 0115, decision 3); none for one started so.
+    /// from another (ADR 0119, decision 3); none for one started so.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub updated: Option<Updated>,

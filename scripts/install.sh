@@ -1,6 +1,6 @@
 #!/bin/sh
 # Installs Banda's engine on the machine it runs on, as the Person, no root
-# (ADR 0115, decision 8): what a machine with no window needs for another
+# (ADR 0119, decision 8): what a machine with no window needs for another
 # machine's Banda to reach it, and what Install in Settings → Machines runs
 # there over ssh. From then on that machine's engine updates itself
 # (platform/updates).
@@ -172,7 +172,7 @@ mv "$fresh" "$kept"
 fresh=
 
 # The Node its Agents' adapters run on (platform/harnesses' carried.rs):
-# the bundle's own node/node from ADR 0115 step 1b; before it, a Node 22
+# the bundle's own node/node from ADR 0119 step 1b; before it, a Node 22
 # or newer on PATH, which here is ssh's and may lack the login shell's.
 if [ ! -x "$kept/node/node" ]; then
   major=$(node --version 2>/dev/null | sed -n 's/^v\([0-9][0-9]*\).*/\1/p')

@@ -1,5 +1,5 @@
 /**
- * The update widget over every machine (ADR 0115, decision 7), as the
+ * The update widget over every machine (ADR 0119, decision 7), as the
  * chosen mock's variant A draws it: this window's row, then each machine,
  * what each waits for, Restart now's warning, Settings → Machines' rows,
  * and the sidebar's other build opening it. What each engine says on

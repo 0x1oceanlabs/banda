@@ -1,7 +1,7 @@
 // The Node that Banda carries, which runs the ACP adapters where no Electron
 // does: the Windows app's (ADR 0090, decision 5), never the installed app's
 // Electron, which has no console and which Windows locks while it runs;
-// and the engine bundle's on Linux and macOS (ADR 0115, step 1b), for a
+// and the engine bundle's on Linux and macOS (ADR 0119, step 1b), for a
 // machine with no window, as a server is.
 //
 //   node scripts/node.mjs [win-x64|win-arm64|linux-x64|darwin-arm64]

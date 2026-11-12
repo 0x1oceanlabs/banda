@@ -262,7 +262,7 @@ export function MachinesSettings({ engine, lit, run }: SectionProps) {
   )
 }
 
-/** What opens "Sign in to Claude on <name>" (ADR 0115, decision 8): a
+/** What opens "Sign in to Claude on <name>" (ADR 0119, decision 8): a
  * shell of this machine's `project` in a terminal Pane, where `ssh -t
  * <ssh> claude` is typed, with Banda's own options but free to ask, and
  * the Person signs in with /login. None where there is no Project here,
@@ -1363,7 +1363,7 @@ function AddMachine({
     const name = named?.name
     void ask(() => addAt(ssh, name), "Adding…")
   }
-  // Install, where Connect found no Banda (ADR 0115, decision 8): the
+  // Install, where Connect found no Banda (ADR 0119, decision 8): the
   // machine downloads it and puts it in place, saying each step; then
   // Connect again, and Add, which starts its engine.
   const [installing, setInstalling] = useState<{

@@ -88,7 +88,7 @@ export const device = {
     test: (ssh: string, banda: string | null): Promise<HostTest> =>
       desktop()?.hostTest(ssh, banda) ?? elsewhere(),
     /** Install: this build's Banda put on the machine at `ssh`, where Test
-     * found none (ADR 0115, decision 8); `told` hears each line its
+     * found none (ADR 0119, decision 8); `told` hears each line its
      * `install.sh` says there, as it comes. The version in place. */
     install: async (
       ssh: string,
@@ -109,7 +109,7 @@ export const device = {
     cancelInstall: (ssh: string): Promise<void> =>
       desktop()?.hostInstallCancel(ssh) ?? elsewhere(),
     /** ssh's arguments to run `remote` at `ssh` on a terminal there, as
-     * Banda's own ssh but free to ask (ADR 0115, decision 8). */
+     * Banda's own ssh but free to ask (ADR 0119, decision 8). */
     terminalArgs: (ssh: string, remote: string): Promise<string[]> =>
       desktop()?.hostTerminal(ssh, remote) ?? elsewhere(),
     /** The Hosts of `~/.ssh/config` to suggest for Add; none without the

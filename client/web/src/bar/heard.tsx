@@ -1,6 +1,6 @@
 /**
  * What each machine's engine says of its updates on `updates.state` (ADR
- * 0115, decision 7), as the window heard it last: the bar's widget
+ * 0119, decision 7), as the window heard it last: the bar's widget
  * follows this machine and every host it shows, and Settings → Machines
  * reads the same. A host away keeps what it last said, so its row still
  * names its version.
@@ -95,7 +95,7 @@ export const useHeard = (): ReadonlyMap<string, Heard> =>
   useStore(useKeptUpdates().heard, itself)
 
 /** Opens the bar's widget, at host `host`'s row, as the sidebar's "other
- * build" does (ADR 0115, decision 7). */
+ * build" does (ADR 0119, decision 7). */
 export function useOpenUpdates() {
   const { opened } = useKeptUpdates()
   return (host?: string) => opened.set({ host, n: opened.get().n + 1 })

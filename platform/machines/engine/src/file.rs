@@ -59,7 +59,7 @@ pub(crate) struct MachineFile {
     pub updates: Option<TakeUpdates>,
 }
 
-/// Whether this machine takes Banda's updates by itself (ADR 0115,
+/// Whether this machine takes Banda's updates by itself (ADR 0119,
 /// decision 3).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
 #[serde(rename_all = "kebab-case")]

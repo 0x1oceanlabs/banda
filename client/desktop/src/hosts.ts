@@ -657,7 +657,7 @@ export const probeCommand = (banda: string | undefined, own: Own = channel) =>
   ])
 
 /** What Install runs there: `install.sh`, this build's own copy, through
- * `sh` whatever the login shell is, with `args` (ADR 0115, decision 8).
+ * `sh` whatever the login shell is, with `args` (ADR 0119, decision 8).
  * The script goes in the command itself, in base64, which every shell
  * takes as it is, fish's quotes too; so ssh needs no stdin. `args` are a
  * version and flags: letters, digits and `.+_-`. */
@@ -725,7 +725,7 @@ export const followerArgs = (host: Entry) =>
 /** A terminal's arguments: `remote` run at `ssh` on a terminal there,
  * with every option Banda's own ssh has but `-T` and BatchMode, so ssh
  * may ask what it needs, as a passphrase, and the program there has a
- * terminal: "Sign in to Claude on <name>" runs `claude` so (ADR 0115,
+ * terminal: "Sign in to Claude on <name>" runs `claude` so (ADR 0119,
  * decision 8). */
 export const terminalArgs = (ssh: string, remote: string) => [
   "-t",
@@ -1112,7 +1112,7 @@ export class Hosts extends Context.Service<
     /** The Hosts of the ssh config to suggest for Add (`suggestionsOf`). */
     readonly suggestions: Effect.Effect<string[]>
     /** Install: this build's engine put on the machine at `ssh`, where
-     * Test found none, by `install.sh` there (ADR 0115, decision 8); each
+     * Test found none, by `install.sh` there (ADR 0119, decision 8); each
      * line it says goes to `told` as it comes. The version in place and
      * its folder there. */
     readonly install: (
@@ -1917,7 +1917,7 @@ const probe = (host: Entry, run: Run): Effect.Effect<HostTest> =>
   )
 
 /** A machine where Test found no Banda of this build: what Install would
- * put there, as `install.sh --check` says it there (ADR 0115, decision
+ * put there, as `install.sh --check` says it there (ADR 0119, decision
  * 8), when this window can install its own version; else why not. A host
  * whose `banda` names one is refused as before: the Person said where. */
 const missing = (host: Entry, run: Run) =>

@@ -75,7 +75,7 @@ export const BRIDGE = bridge({
    * there: Test connection, and Add's Connect. An empty `banda` is none. */
   hostTest: invoke<[ssh: string, banda: string | null], HostTest>(),
   /** Install: this build's engine put on the machine at `ssh`, where Test
-   * found none, by this build's `install.sh` run there over ssh (ADR 0115,
+   * found none, by this build's `install.sh` run there over ssh (ADR 0119,
    * decision 8). The version in place and its folder there; fails with
    * why not. */
   hostInstall: invoke<[ssh: string], { version: string; path: string }>(),
@@ -83,7 +83,7 @@ export const BRIDGE = bridge({
   hostInstallCancel: invoke<[ssh: string]>(),
   /** ssh's arguments to run `remote` at `ssh` on a terminal there, as
    * Banda's own ssh reaches it but free to ask: "Sign in to Claude on
-   * <name>" (ADR 0115, decision 8). */
+   * <name>" (ADR 0119, decision 8). */
   hostTerminal: invoke<[ssh: string, remote: string], string[]>(),
   /** Each line `install.sh` says there while Install runs, as it comes. */
   hostInstalling: { listen: push<{ ssh: string; line: string }>() },
@@ -199,7 +199,7 @@ export const BRIDGE = bridge({
    * asks first when Agents are working. Closing the window only closes
    * it. */
   quit: send<[]>(),
-  /** Banda's own app's update (ADR 0041; ADR 0115, decision 2): the
+  /** Banda's own app's update (ADR 0041; ADR 0119, decision 2): the
    * engine says what is newest, and main downloads it and installs it on
    * Restart or on quit. */
   update: {
@@ -215,7 +215,7 @@ export const BRIDGE = bridge({
     /** Keeps the version that downloads for the quit, with no restart. */
     later: send<[]>(),
     /** Installs the version that is ready and starts it, at once: the
-     * engine and its Agents go on (ADR 0115, decision 4); nothing if none
+     * engine and its Agents go on (ADR 0119, decision 4); nothing if none
      * is. */
     restart: send<[]>(),
     /** The Person saw that Banda updated: the update is `none` again. */

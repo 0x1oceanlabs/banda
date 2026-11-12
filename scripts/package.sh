@@ -45,7 +45,7 @@ if [[ ${OS:-} == Windows_NT ]]; then
   licenses+=(--node "target/node/$platform")
 else
   # Elsewhere the engine bundle carries a Node (scripts/engine.mjs, ADR
-  # 0115 step 1b), and so the notices name it: the app's, which the bundle
+  # 0119 step 1b), and so the notices name it: the app's, which the bundle
   # takes as they are.
   platform=$(node -p 'process.platform + "-" + process.arch')
   node scripts/node.mjs "$platform"
@@ -73,7 +73,7 @@ for file in "${carried[@]}"; do
 done
 
 # The engine alone, for a machine with no window and for each machine's
-# engine to update itself (ADR 0115, decision 5). Not on Windows yet, whose
+# engine to update itself (ADR 0119, decision 5). Not on Windows yet, whose
 # engine is no service (ADR 0090).
 if [[ ${OS:-} != Windows_NT ]]; then
   node scripts/engine.mjs "$resources"

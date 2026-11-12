@@ -1,5 +1,5 @@
 // Packs the engine alone beside the app scripts/package.sh packed (ADR
-// 0115, decision 5): what a machine needs to run Banda's engine with no
+// 0119, decision 5): what a machine needs to run Banda's engine with no
 // window and no Electron, as a server does, and what each machine's engine
 // takes to update itself.
 //
@@ -10,7 +10,7 @@
 //
 // - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda`, its line tables
 //   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the Node they
-//   run on (`node/node`, ADR 0115 step 1b: scripts/node.mjs put it in
+//   run on (`node/node`, ADR 0119 step 1b: scripts/node.mjs put it in
 //   target/node/<platform>/) and the licenses, laid out as the engine's
 //   own copy is (client/desktop/src/program.ts), so its files go into
 //   <data>/engine/<version>/ as they are;

@@ -21,7 +21,7 @@ const MANY: Said = Said {
 pub const QUIT: &str = "Quit anyway";
 
 /// What Restart now says under Quit's title, for one Agent and for more,
-/// and its button (ADR 0115, decision 3): the engine's restart onto a new
+/// and its button (ADR 0119, decision 3): the engine's restart onto a new
 /// copy stops them as Quit does.
 const RESTART_ONE: &str = "Restarting Banda's engine stops it too.";
 const RESTART_MANY: &str = "Restarting Banda's engine stops them too.";

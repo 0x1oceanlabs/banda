@@ -68,7 +68,7 @@ pub struct Terminals {
     #[cfg(unix)]
     servers: Arc<Scanner>,
     /// Told how many terminals are open and when a key reached one, so
-    /// the engine restarts on a new copy only with none (ADR 0115,
+    /// the engine restarts on a new copy only with none (ADR 0119,
     /// decision 3).
     hands: Hands,
 }
