@@ -29,8 +29,14 @@
  * F1b: a Done card shows on line 2's right how many lines its last work
  * added and removed, `+2 −1` in grey; a Failed card nothing there. Shot as
  * `sidebar-f1b-diff-*`.
+ *
+ * F2: a Thread that links a pull request shows its chip there instead,
+ * `#1061 ✓`, its glyph alone in a colour; several show how many. The
+ * engine reads them through a `gh` of the test's own. Shot as
+ * `sidebar-f2-chips-*`.
  */
-import { writeFileSync } from "node:fs"
+import { chmodSync, mkdtempSync, writeFileSync } from "node:fs"
+import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, withArc } from "./arc"
@@ -688,6 +694,138 @@ test("a Done card shows on line 2's right how many lines its last work added and
   expect(await colourOf(diff)).not.toBe(await markColourOf(done))
   await expect(failed.locator("[data-diff]")).toHaveCount(0)
   await shots(window, "diff", { done, failed }, "f1b")
+})
+
+/** How a fake pull request stands on GitHub: its one check's end, or
+ * merged. */
+type Look = "SUCCESS" | "FAILURE" | "RUNNING" | "MERGED"
+
+/**
+ * A folder with a `gh` of the test's own, for the engine's PATH: it
+ * answers the pulls App's query (ADR 0076, decision 2) for each pull
+ * request of `o/r` it is asked, as `looks` says that number stands.
+ */
+function fakeGh(looks: Readonly<Record<number, Look>>): string {
+  const bin = mkdtempSync(join(tmpdir(), "banda-gh-"))
+  const script = String.raw`#!${process.execPath}
+const looks = ${JSON.stringify(looks)}
+const query = (process.argv.find((arg) => arg.startsWith("query=")) || "").slice(6)
+const now = new Date().toISOString()
+const node = (number, look) => ({
+  number, url: "https://github.com/o/r/pull/" + number, title: "PR " + number,
+  state: look === "MERGED" ? "MERGED" : "OPEN", isDraft: false,
+  headRefName: "feat/" + number, baseRefName: "main", additions: 1, deletions: 0,
+  updatedAt: now, mergedAt: look === "MERGED" ? now : null, closedAt: null,
+  mergeable: "MERGEABLE", reviewDecision: null, autoMergeRequest: null,
+  reviewRequests: { nodes: [] },
+  commits: { nodes: [{ commit: { statusCheckRollup: { contexts: { nodes: [{
+    __typename: "CheckRun", name: "ci", startedAt: now,
+    status: look === "RUNNING" ? "IN_PROGRESS" : "COMPLETED",
+    conclusion: look === "RUNNING" ? null : look === "MERGED" ? "SUCCESS" : look,
+    checkSuite: { workflowRun: { workflow: { name: "CI" } } },
+  }] } } } }] },
+})
+const data = { viewer: { login: "roma" } }
+let repo = {}
+for (const [, r, p, n] of query.matchAll(/(r\d+): repository|(p\d+): pullRequest\(number: (\d+)\)/g)) {
+  if (r) data[r] = repo = {}
+  else repo[p] = node(Number(n), looks[n] || "SUCCESS")
+}
+process.stdout.write(JSON.stringify({ data }))
+`
+  writeFileSync(join(bin, "gh"), script)
+  chmodSync(join(bin, "gh"), 0o755)
+  return bin
+}
+
+// F2: line 2's right of a Thread that links a pull request (ADR 0098,
+// decision 8; ADR 0076).
+test("a Thread that links pull requests shows them on line 2's right, its glyph alone in a colour, several as how many; a Failed card nothing there; they make no row of their own (ADR 0098, decision 8; F2)", async () => {
+  test.setTimeout(240_000)
+  const bin = fakeGh({
+    1061: "SUCCESS",
+    1062: "RUNNING",
+    1063: "FAILURE",
+    1064: "MERGED",
+    1065: "FAILURE",
+    1066: "SUCCESS",
+    1067: "MERGED",
+    1068: "FAILURE",
+  })
+  window = await startWindow({
+    look: 'mode = "dark"\n',
+    env: { PATH: `${bin}:${process.env.PATH ?? ""}` },
+  })
+  const { page } = window
+  await firstThread(page)
+  await wide(window)
+  const sidebar = sidebarOf(page)
+  const panel = sidebar.getByRole("tabpanel")
+  await leaveSidebar(page)
+  // Each Thread, its title, and the pull requests it links.
+  const threads = [
+    ["chip one", "Ship the PR chip", [1061]],
+    ["chip two", "Run the window tests", [1062]],
+    ["chip three", "Mend the e2e on CI", [1063]],
+    ["chip four", "Land the card lines", [1064]],
+    ["chip five", "Split the sidebar work", [1065, 1066, 1067]],
+    ["fail now", "Bump the engine", [1068]],
+  ] as const
+  for (const [text, title] of threads) {
+    call(window, "agents.send", { harness: "fake", text, settings: null })
+    await expect.poll(() => threadNamed(window, text)?.id).toBeTruthy()
+    call(window, "agents.rename", { thread: idOf(window, text), title })
+  }
+  for (const [, title, pulls] of threads)
+    for (const number of pulls)
+      call(window, "pulls.link", {
+        pull: `https://github.com/o/r/pull/${number}`,
+        thread: idOf(window, title),
+      })
+  const [passed, running, failing, merged, several, failed] = threads.map(
+    ([, title]) => cardOf(panel, title)
+  )
+  await expect(failed!.getByRole("img", { name: "Failed" })).toBeVisible()
+  const chipOf = (card: Locator) => card.locator("[data-pull]")
+  for (const [card, text, state] of [
+    [passed, "#1061 ✓", "passed"],
+    [running, "#1062 •", "running"],
+    [failing, "#1063 ✗", "failed"],
+    [merged, "#1064 merged", "merged"],
+    // The first, failing, most needs the Person.
+    [several, "3 PRs ✗", "failed"],
+  ] as const) {
+    await expect(chipOf(card!)).toHaveText(text)
+    await expect(chipOf(card!)).toHaveAttribute("data-pull", state)
+  }
+  // Only the glyph takes a colour, its checks' own; the rest is grey.
+  const glyph = (card: Locator) => chipOf(card).locator("span")
+  expect(await colourOf(glyph(passed!))).toBe(await tokenOf(page, "--added"))
+  expect(await colourOf(glyph(failing!))).toBe(
+    await tokenOf(page, "--destructive")
+  )
+  expect(await colourOf(chipOf(passed!))).not.toBe(
+    await colourOf(glyph(passed!))
+  )
+  // A screen reader hears it in words.
+  await expect(passed!).toHaveAttribute(
+    "aria-description",
+    /Pull request 1061, checks passed/
+  )
+  await expect(several!).toHaveAttribute(
+    "aria-description",
+    /3 pull requests\. Pull request 1065, checks failed/
+  )
+  // Failed keeps nothing on the right; the items on the Threads are no
+  // rows of their own.
+  await expect(chipOf(failed!)).toHaveCount(0)
+  await expect(panel.getByRole("option", { name: /^#10/ })).toHaveCount(0)
+  await shots(
+    window,
+    "chips",
+    { passed, running, failing, merged, several } as Record<string, Locator>,
+    "f2"
+  )
 })
 
 test("a working card says what its Agent does as its Mark shows it: the command it runs, no events for 3m once it says nothing, and at its usage limit when it goes on, on line 1's right too (ADR 0099, M3b)", async () => {

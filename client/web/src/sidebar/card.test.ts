@@ -1,5 +1,6 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
+import type { Pull, Snapshot } from "@banda/contract/pulls"
 import { type Listed, NO_REASON } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
@@ -13,6 +14,9 @@ import {
   cardOf,
   type CardView,
   linesOf,
+  pullStateOf,
+  type PullChip,
+  pullWords,
   spokenOf,
   timeOf,
   timeShown,
@@ -47,6 +51,34 @@ const row = (stand: Stand, more: Partial<Listed> = {}, host?: string): Row => ({
   ...(host === undefined ? {} : { host }),
 })
 const AUTO: CardView = { density: "auto", group: "none" }
+
+/** Pull request `number` of `o/r`, open and read as `snapshot` says. */
+const pull = (number: number, snapshot: Partial<Snapshot> = {}): Pull => ({
+  host: "github.com",
+  repo: "o/r",
+  number,
+  url: `https://github.com/o/r/pull/${number}`,
+  threads: ["t"],
+  owner: "t",
+  by: "agent",
+  auto_fix: true,
+  snapshot: {
+    state: "open",
+    draft: false,
+    title: "feat: the chip",
+    head: "feat/chip",
+    base: "main",
+    counted: { passed: 0, failed: 0, running: 0, total: 0 },
+    asked_of_you: false,
+    conflicts: false,
+    auto_merge: false,
+    additions: 1,
+    deletions: 0,
+    updated_at: NOW,
+    synced_at: NOW,
+    ...snapshot,
+  },
+})
 
 /** The card of `row` drawn in its own place, its time from `at`. */
 const card = (of: Row, more: Partial<Omit<CardOf, "row">> = {}): CardModel =>
@@ -299,6 +331,60 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
       view: { density: 2, group: "none" },
     })
     expect(working.lines[1]).toEqual({ left: [{ kind: "works" }], right: [] })
+  })
+
+  test("a Thread that links a pull request shows its chip on the right in the diff's place: its number and how its checks stand; Failed shows nothing (F2)", () => {
+    const changedLines = { added: 38, removed: 9 }
+    const pulls = [pull(1061, { checks: "passing" })]
+    const done = row("turn", { mark: "done", changedLines, pulls })
+    expect(says(done).right).toEqual([
+      { kind: "pull", number: 1061, of: 1, state: "passed" },
+    ])
+    expect(spokenOf(card(done, { place: "turn" }), NOW).description).toContain(
+      "Pull request 1061, checks passed"
+    )
+    expect(says(row("turn", { mark: "failed", pulls })).right).toEqual([])
+    // At work too: how its checks stand is not stale, as a diff is.
+    const working = card(row("working", { mark: "working", pulls }), {
+      view: { density: 2, group: "none" },
+    })
+    expect(working.lines[1]!.right).toEqual([
+      { kind: "pull", number: 1061, of: 1, state: "passed" },
+    ])
+  })
+
+  test("a pull request stands as its checks do, until it lands; one not read yet, or with no checks, has no glyph (F2)", () => {
+    const state = (snapshot?: Partial<Snapshot>) =>
+      pullStateOf(pull(1, snapshot))
+    expect(state({ checks: "passing" })).toBe("passed")
+    expect(state({ checks: "failing" })).toBe("failed")
+    expect(state({ checks: "running" })).toBe("running")
+    expect(state({ state: "merged", checks: "failing" })).toBe("merged")
+    expect(state({ state: "closed" })).toBe("closed")
+    expect(state({})).toBeUndefined()
+    expect(pullStateOf({ ...pull(1), snapshot: undefined })).toBeUndefined()
+    const unread = row("turn", {
+      mark: "done",
+      pulls: [{ ...pull(7), snapshot: undefined }],
+    })
+    expect(says(unread).right).toEqual([{ kind: "pull", number: 7, of: 1 }])
+  })
+
+  test("several pull requests show how many, with the glyph of the first, which most needs the Person (F2)", () => {
+    const pulls = [
+      pull(1063, { checks: "failing" }),
+      pull(1061, { checks: "passing" }),
+      pull(1062, { state: "merged" }),
+    ]
+    const done = row("turn", { mark: "done", pulls })
+    const chip = says(done).right
+    expect(chip).toEqual([
+      { kind: "pull", number: 1063, of: 3, state: "failed" },
+    ])
+    expect(pullWords(chip[0] as PullChip)).toBe("3 PRs")
+    expect(spokenOf(card(done, { place: "turn" }), NOW).description).toContain(
+      "3 pull requests. Pull request 1063, checks failed"
+    )
   })
 
   test("Woke says who put it off, and what it said", () => {

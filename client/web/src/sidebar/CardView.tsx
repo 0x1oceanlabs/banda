@@ -37,6 +37,9 @@ import { type Act, actsWidth } from "./acts"
 import {
   type CardModel,
   type CardRow,
+  PULL_GLYPHS,
+  type PullState,
+  pullWords,
   saysWords,
   type Slot,
   spokenOf,
@@ -486,6 +489,25 @@ function Piece({
           +{slot.added} −{slot.removed}
         </span>
       )
+    case "pull":
+      // In the diff's grey, its glyph alone in a colour (F2): "#1061 ✓",
+      // "3 PRs ✗".
+      return (
+        <span
+          data-pull={slot.state ?? ""}
+          className="shrink-0 text-meta text-muted-foreground/60 tabular-nums"
+        >
+          {pullWords(slot)}
+          {slot.state && (
+            <>
+              {" "}
+              <span className={GLYPH_COLOUR[slot.state]}>
+                {PULL_GLYPHS[slot.state]}
+              </span>
+            </>
+          )}
+        </span>
+      )
     case "project": {
       const name = projectLabel(slot.project)
       const sign = (
@@ -538,6 +560,14 @@ function Piece({
       )
     }
   }
+}
+
+/** The colour of a pull request's glyph, as its need's on the bar (ADR
+ * 0076, decision 3); one that landed keeps the text's. */
+const GLYPH_COLOUR: Readonly<Partial<Record<PullState, string>>> = {
+  passed: "text-added",
+  failed: "text-destructive",
+  running: "text-mark-working",
 }
 
 /**
