@@ -168,7 +168,7 @@ Each step is its own PR, and Banda keeps updating after each.
 | 1b | The bundle carries a pinned Node, as Windows' app does: `node/node`, from `scripts/node.mjs`'s checked pins for Linux x64 and macOS arm64; `install.sh` warns while a release carries none (#1586, about 52 MB to 101 MB): done |
 | 2 | The contract's check against main, `scripts/contract.mjs` (#1537); `welcome` names version and build |
 | 3 | `platform/updates`' engine part: reads the feed, takes and checks the bundle, puts it in place; `updates.state`; `banda update --check/--follow`. It restarts nothing yet (#1541): built |
-| 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart |
+| 4 | The restart once nothing runs, Restart now; `machine.toml`'s `updates` reaches the restart (#1602): built. The engine `exec`s the new copy in its own place, so its unit or job and the state's lock stay; the input that holds it is a key in this machine's terminals; `--version` keeps its choice in `engine/chosen` |
 | 5 | The desktop part: `update.ts` moved, the app swap asked of the engine part; the window stops no engine to update |
 | 6 | The widget over every machine, as the chosen mock |
 | 7 | Install Banda on another machine from Add → Connect: `scripts/install.sh`, published with each release and packed in the app, run over ssh (#1577): built; "Sign in to Claude on <name>" after it, and on a machine whose Claude is signed out: `ssh -t <ssh> claude` typed into a shell of a Project here (#1587): built |
