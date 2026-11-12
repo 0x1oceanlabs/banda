@@ -29,7 +29,8 @@ function PagerWidget({ projects }: WidgetProps) {
   )
 }
 
-/** The pill, while the workspaces are set aside (ADR 0039, decision 2). */
+/** The pill, while the workspaces are set aside (ADR 0039, decision 2):
+ * what it takes, draws and runs is written at the top of `AsidePill.tsx`. */
 function AsideWidget({ engine }: WidgetProps) {
   const aside = useContext(AsideContext)
   return aside ? <AsidePill engine={engine} aside={aside} /> : null

@@ -673,7 +673,7 @@ test("one place answers a pick, and only the action reaches it", () => {
  * use.
  */
 const APP_STRINGS = [
-  "web/src/bar/Flow.tsx: AGENTS_FILE",
+  "web/src/bar/flow/Flow.tsx: AGENTS_FILE",
   "web/src/sidebar/open.ts: thread.new",
   "web/src/window/Shell.tsx: AGENTS_FILE",
   "web/src/window/Shell.tsx: thread.new",

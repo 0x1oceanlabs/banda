@@ -61,7 +61,7 @@ import {
 import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
-import { isFlow, nextFlow } from "../bar/Flow"
+import { isFlow, nextFlow } from "../bar/flow/Flow"
 import { archiving } from "../sidebar/items"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { makeProject } from "../titles/MakeProject"

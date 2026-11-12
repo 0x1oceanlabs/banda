@@ -1,3 +1,31 @@
+/**
+ * The sidebar list's counts in the bar's middle (ADR 0035): who waits for
+ * the Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
+ * says. A click lists them in the sidebar's order; a row goes to its
+ * Thread, as the sidebar's does (`pane.pick`). While the Sidebar is
+ * hidden they are the switcher, and name the Thread the Pane in focus
+ * shows, an Agent's (ADR 0065, decision 9). What every module lists it
+ * reads from the Window's items, and where the Person is from Here.
+ *
+ *   in    lists      what every App lists, from the Window's items
+ *                    (`useLists`), and the Later clock (`useLaterClock`)
+ *         Here       whether the Sidebar shows, and the Project and the
+ *                    one thing the Pane in focus shows (`useHere`)
+ *         settings   `sidebar.toml`'s `[bar]`: what it counts, when it
+ *                    shows, colour, words and what shows with nothing
+ *                    to count; and `machines`, for the list's cards
+ *                    (`useLookSidebar`)
+ *         projects   the Projects, for the list's order and its cards
+ *         elsewhere  the other machines, where the list places their
+ *                    Threads (`useElsewhere`)
+ *   draws nothing where `[bar]`'s `show` says not to; with nothing to
+ *         count, the calm Mark, or nothing; else each count's Mark, its
+ *         number and its words, after the title of the Agent's Thread
+ *         the Pane in focus shows while the Sidebar is hidden. A click
+ *         opens the list: Wait for you, then Working, a one-line card
+ *         each
+ *   runs  `pane.pick` on a row of the list
+ */
 import type { ProjectSummary } from "@banda/contract"
 import type { Count, Machines } from "@banda/contract/sidebar"
 import {
@@ -66,15 +94,7 @@ const aheadThingOf = (here: Here) => here.pane?.subject
 const aheadProjectOf = (here: Here) =>
   here.pane?.subject ? here.pane.project : undefined
 
-/**
- * The sidebar list's counts in the bar's middle (ADR 0035): who waits for
- * the Person and who works, each by its mark, as `[bar]` in `sidebar.toml`
- * says. A click lists them in the sidebar's order; a row goes to its
- * Thread, as the sidebar's does (`pane.pick`). While the Sidebar is
- * hidden they are the switcher, and name the Thread the Pane in focus
- * shows, an Agent's (ADR 0065, decision 9). What every module lists it
- * reads from the Window's items, and where the Person is from Here.
- */
+/** The counts, as the top of this file says. */
 function Counts({ projects }: WidgetProps) {
   const sidebarShown = useHere(sidebarOf)
   const aheadProject = useHere(aheadProjectOf)

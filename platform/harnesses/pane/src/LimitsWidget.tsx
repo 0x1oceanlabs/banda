@@ -1,3 +1,32 @@
+/**
+ * The usage limits on the bar, the widget `harnesses.limits` (ADR 0043;
+ * ADR 0055): the room left of the best account of each Harness, in the
+ * look the Person picked. A click shows each account's limits; a right
+ * click picks the look.
+ *
+ *   in    engine     this machine's engine: `harnesses.limits`, the
+ *                    limits as last read with harnesses.toml's
+ *                    `[limits] warn` and `look`, read again on each
+ *                    `limits_changed` and each minute; as the popover
+ *                    opens, the same with `read`, which reads them anew,
+ *                    and `harnesses.usage` for today's usage; each
+ *                    account's Emblem (`useHarnesses`)
+ *         picked     what a look picked came to, from its action
+ *                    (`look.ts`): read again, or why it was refused
+ *         Slot       `limits.account`: what the modules put beside a
+ *                    spent account, as Threads' "Move all"
+ *   draws nothing until a Harness has a window; else the share spent of
+ *         the fullest best account, as an icon, a meter and share, a
+ *         share, or each Harness's share, in `--warning` from `warn`
+ *         and `--destructive` when spent; a dot while an account is out
+ *         and another of its Harness has room; faint while the last read
+ *         failed and the last good one is over half an hour old. The
+ *         popover: each account by Harness, with its Emblem, its windows
+ *         and their pace, and the Slot's fill beside a spent one; today's
+ *         usage, when the limits were read, and Usage →
+ *   runs  `harnesses.limits.look` from the right click's menu;
+ *         `harnesses.usage` from Usage →, which opens the Usage Pane
+ */
 import type {
   Limits,
   LimitsLook,
