@@ -223,7 +223,7 @@ pub fn utc_date(ms: i64) -> String {
 #[cfg(test)]
 mod tests {
     #[test]
-    fn a_date_is_read_from_the_clock_by_utc() {
+    fn a_date_is_read_by_utc_from_the_clock() {
         for (ms, date) in [
             (0, "1970-01-01"),
             (-1_000, "1969-12-31"),
