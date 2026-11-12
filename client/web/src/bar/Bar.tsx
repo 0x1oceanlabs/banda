@@ -2,7 +2,6 @@ import type { Engine, Status } from "@banda/contract"
 import {
   BandaMark,
   loudest,
-  MARK_WORDS,
   type MarkState,
 } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -28,7 +27,9 @@ import {
 } from "../calls/stores"
 import { useLookProblems } from "../look"
 import { type Layout, moved, same, written } from "./arrange"
+import { logoName, logoWords } from "./count"
 import { PARTS, type Part } from "./placed"
+import { SmallInbox, useInboxCount } from "./SmallInbox"
 import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
 import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
@@ -46,9 +47,11 @@ import { awayAtWork } from "@banda/ui/status"
 /**
  * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
  * the left, which opens the Banda menu (ADR 0098, decision 21) and shows
- * the loudest state of the work, with how many things wait for the Person
- * when more than one does, and a crossed bell while Quiet is on; `Alt+A`,
- * and the menu's action, show and hide the sidebar. The widgets, the
+ * the loudest state of the work, and a crossed bell while Quiet is on;
+ * `Alt+A`, and the menu's action, show and hide the sidebar. While it is
+ * hidden, the count beside the mark says whose turn it is and who works,
+ * and opens the small inbox (decision 22); the mark's name says it too,
+ * "Banda: 3 your turn, 7 at work". The widgets, the
  * Tiling's workspaces among them, stand on the left, in the middle,
  * centred on the window whatever the sides hold, and on the right before
  * the engine's connection, as the look's `[bar]` lists them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
@@ -81,15 +84,18 @@ export function Bar({
   // What the modules' work calls the Person for, for the mark to show.
   const attention = useCalls(barAttention)
   const mark = loudest([attention.mark, markOf(status)])
-  const { waiting } = attention
   const quiet = useQuiet() !== "off"
+  // Who is the Person's turn and who works, beside the logo while the
+  // sidebar is hidden, and in its name (ADR 0098, decision 22), with
+  // another machine away while its Agents were at work (decision 18).
+  const count = useInboxCount()
   const away = useAwayAtWork()
-  const words =
-    (mark === "rest"
-      ? ""
-      : ` · ${status.state === "open" && away ? away : MARK_WORDS[mark]}`) +
-    (waiting > 1 ? ` · ${waiting} wait for you` : "") +
-    (quiet ? " · Quiet on" : "")
+  const words = logoWords(
+    mark,
+    count,
+    quiet,
+    status.state === "open" ? away : undefined
+  )
   const nodes = useMemo(
     () =>
       new Map(
@@ -145,34 +151,23 @@ export function Bar({
       <Button
         variant="ghost"
         size="icon-sm"
-        aria-label={`Banda menu${words}`}
+        aria-label={logoName(words)}
         aria-haspopup="dialog"
-        title={`${keyFor("menu.open", "Banda menu")}${words}`}
+        title={`${keyFor("menu.open", "Banda menu")}${words && ` · ${words}`}`}
         className="relative"
         onClick={() => run("menu.at")}
       >
         <BandaMark state={mark} className="size-5" />
-        {/* Quiet (ADR 0098, decision 21): at the prototype's corner, or
-          above the count where it shows. */}
+        {/* Quiet (ADR 0098, decision 21): at the prototype's corner. */}
         {quiet && (
           <BellOffIcon
             aria-hidden
             data-quiet
-            className={cn(
-              "absolute -right-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0",
-              waiting > 1 ? "-top-0.5" : "-bottom-1"
-            )}
+            className="absolute -right-1 -bottom-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0"
           />
         )}
-        {waiting > 1 && (
-          <span
-            aria-hidden
-            className="absolute -right-0.5 -bottom-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-attention px-0.5 text-small leading-none font-semibold text-white tabular-nums"
-          >
-            {waiting > 9 ? "9+" : waiting}
-          </span>
-        )}
       </Button>
+      <SmallInbox engine={engine} count={count} />
       <div data-part="left" className={zone("left")}>
         {draw("left")}
       </div>

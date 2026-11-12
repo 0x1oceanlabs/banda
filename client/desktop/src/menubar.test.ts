@@ -74,7 +74,7 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
     expect(lookOf(oneWorking)).toEqual({
       sign: "working",
       count: "1",
-      said: "1 working",
+      said: "1 at work",
     })
   })
 
@@ -82,7 +82,7 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
     expect(lookOf(twoWorkingOneWaiting)).toEqual({
       sign: "asking",
       count: "1",
-      said: "1 wait for you",
+      said: "1 your turn",
     })
     // One asks, one is done: two wait, lit while one asks (frame 1).
     const asksAndDone = running(
@@ -98,7 +98,7 @@ describe("the menu bar icon (ADR 0086, decision 4)", () => {
     expect(lookOf(done)).toEqual({
       sign: "done",
       count: "1",
-      said: "1 wait for you",
+      said: "1 your turn",
     })
   })
 
@@ -176,7 +176,7 @@ describe("its menu", () => {
 
   it("lists who waits first, then who works, each under its heading", () => {
     expect(labels(twoWorkingOneWaiting)).toEqual([
-      "Wait for you",
+      "Your turn",
       "Pricing page copy (bandaso-site · Asks you)",
       "Working",
       "Fix tile resize (banda · Working)",
@@ -192,7 +192,7 @@ describe("its menu", () => {
       "Fix tile resize (banda · Working)",
     ])
     expect(labels(failed).slice(0, 2)).toEqual([
-      "Wait for you",
+      "Your turn",
       "Run the tests (banda · Failed)",
     ])
   })
@@ -271,13 +271,13 @@ describe("setting its menu", () => {
     const menu = menuSetter((items: string[]) => set.push(items))
     menu.items(["Working", "Fix the login"])
     menu.opened()
-    menu.items(["Wait for you", "Fix the login"])
-    menu.items(["Wait for you", "Fix the login", "Working", "Docs"])
+    menu.items(["Your turn", "Fix the login"])
+    menu.items(["Your turn", "Fix the login", "Working", "Docs"])
     expect(set).toHaveLength(1)
     menu.closed()
     expect(set).toEqual([
       ["Working", "Fix the login"],
-      ["Wait for you", "Fix the login", "Working", "Docs"],
+      ["Your turn", "Fix the login", "Working", "Docs"],
     ])
     // Opened and closed with nothing new: nothing is set.
     menu.opened()

@@ -55,7 +55,7 @@ const sidebarOf = (page: Page) =>
 /** The bar's Mark: the logo, in the loudest look. */
 const logoOf = (page: Page) =>
   page
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
     .locator('[data-slot="banda-mark"]')
 /** The row of the Thread named `title`, in the Sidebar. */
 const rowOf = (page: Page, title: string) =>
@@ -288,7 +288,7 @@ test("the bar's Mark and each row draw ADR 0099's looks still, the loudest on th
   ).toBeVisible()
   await expect(logo).toHaveAttribute("data-look", "woke")
   await expect(
-    page.getByRole("button", { name: /^Banda menu/ })
+    page.getByRole("button", { name: /^Banda(:|$)/ })
   ).toHaveAccessibleName(/Woke/)
   const woke = await colorsOf(logo)
   expect(woke.agent).toBe("rgb(245, 197, 66)")

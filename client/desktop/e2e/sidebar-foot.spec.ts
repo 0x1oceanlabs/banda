@@ -314,7 +314,7 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   // E2); its tooltip names the menu's key in force.
   const logo = page
     .getByRole("banner")
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
   await expect(logo).toHaveAttribute("title", /^Banda menu \(Alt\+Space\)/)
   await logo.click()
   const banda = page.getByRole("dialog", { name: "Banda menu" })
@@ -413,7 +413,7 @@ test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast a
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   const logo = page
     .getByRole("banner")
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
   const { composer } = await firstThread(page)
   const notes = await countNotes(page)
 
@@ -452,7 +452,7 @@ test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast a
   await expect(bell.locator("svg").first()).toHaveCSS("opacity", "0")
   await expect(bell.locator("svg").last()).toHaveCSS("opacity", "1")
   await expect(html).toHaveAttribute("data-quiet", "")
-  await expect(logo).toHaveAccessibleName(/ · Quiet on$/)
+  await expect(logo).toHaveAccessibleName(/^Banda: (.+, )?Quiet on$/)
   await expect(logo.locator("svg[data-quiet]")).toBeVisible()
   const until = Number(
     await page.evaluate(() => localStorage.getItem("banda.quiet"))

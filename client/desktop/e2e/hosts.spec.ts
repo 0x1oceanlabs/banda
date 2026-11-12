@@ -2548,7 +2548,12 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
     })
   ).toHaveText(titles)
 
-  // The counts list them in the sidebar list's order, arc's newest last.
+  // The counts list them in the sidebar list's order, arc's newest last:
+  // the Person lists them in the bar's middle (ADR 0098, decision 22).
+  writeFileSync(
+    join(window.dir, "config/look.toml"),
+    'mode = "dark"\n[bar]\ncenter = ["sidebar.counts"]\n'
+  )
   await expect(
     page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
   ).toHaveCount(0, { timeout: 30_000 })

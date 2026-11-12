@@ -66,6 +66,7 @@ import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { makeProject } from "../titles/MakeProject"
 import { pickLater } from "../sidebar/LaterPicker"
 import { logged } from "../sidebar/write-setting"
+import { askTab, isTab } from "../sidebar/showing"
 import {
   type Change,
   closableAt,
@@ -1710,11 +1711,18 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "sidebar.show",
+    args: takes({
+      tab: "the tab it shows, with the focus in its list: inbox, working, later or archive",
+    }),
     section: "Threads",
     title: "Show the sidebar",
-    // The notice of many calls shows it, which lists them all.
+    // The notice of many calls shows it, which lists them all; the small
+    // inbox's "7 at work ›", on Working (ADR 0098, decision 22).
     unlisted: true,
-    run: (shell) => shell.showSidebar(),
+    run: (shell, args) => {
+      if (isTab(args?.tab)) askTab(args.tab)
+      shell.showSidebar()
+    },
   },
   // The sidebar's own keys, while the focus is in it (ADR 0098, decision
   // 13): the Sidebar runs them on its pick.

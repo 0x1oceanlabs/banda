@@ -279,8 +279,9 @@ pub struct Bar {
     /// workspaces, `"workspaces.list"` (ADR 0024, ADR 0064), and the Flow,
     /// `"window.flow"` (ADR 0098).
     pub left: Option<Vec<String>>,
-    /// The widgets in the bar's middle, by id, in order: the sidebar's
-    /// counts, `"sidebar.counts"`.
+    /// The widgets in the bar's middle, by id, in order: none by default;
+    /// the sidebar's counts, `"sidebar.counts"`, where the Person lists
+    /// them.
     pub center: Option<Vec<String>>,
     /// The widgets on the bar's right, by id, in order, before the
     /// engine's connection: the workspaces set aside, `"workspaces.aside"`.
@@ -290,9 +291,11 @@ pub struct Bar {
 /// Banda's widgets in each part of the bar, by id (ADR 0024, decision 4).
 /// The Flow stands beside the workspaces, as it arranges the desk (ADR
 /// 0098, decision 20); a `left` of the Person's own replaces this list,
-/// so one written before the Flow came has no Flow.
+/// so one written before the Flow came has no Flow. The middle is empty:
+/// with the sidebar hidden, the count beside the Mark says whose turn it
+/// is and who works (ADR 0098, decision 22).
 pub const BAR_LEFT: &[&str] = &["workspaces.list", "window.flow"];
-pub const BAR_CENTER: &[&str] = &["sidebar.counts"];
+pub const BAR_CENTER: &[&str] = &[];
 pub const BAR_RIGHT: &[&str] = &[
     "workspaces.aside",
     "terminal.ports",

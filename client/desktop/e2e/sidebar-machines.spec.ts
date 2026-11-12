@@ -191,7 +191,7 @@ test("with arc away, its cards stay where they are, dimmed, saying 'arc · away 
   const tops = await topsOf(cards)
   const logo = page
     .getByRole("banner")
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
   await expect(logo).not.toHaveAccessibleName(/away/)
 
   // arc goes into a black hole: the window hears nothing from it, and

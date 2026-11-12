@@ -385,7 +385,7 @@
           }
         },
         "center": {
-          "description": "The widgets in the bar's middle, by id, in order: the sidebar's\ncounts, `\"sidebar.counts\"`.",
+          "description": "The widgets in the bar's middle, by id, in order: none by default;\nthe sidebar's counts, `\"sidebar.counts\"`, where the Person lists\nthem.",
           "type": "array",
           "items": {
             "type": "string"

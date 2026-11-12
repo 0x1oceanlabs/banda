@@ -38,6 +38,7 @@ import { useOpen } from "./open"
 import type { Ordered } from "./order"
 import type { Checks } from "./pick"
 import { checkedSaid, said, tabSaid, zeroSaid } from "./said"
+import { useAskedTab } from "./showing"
 import { valuesOf } from "./search"
 import { PANEL, tabId } from "./Tabs"
 import { undoLast } from "./undo"
@@ -96,7 +97,9 @@ export function useSidebarKeys(
     searchFor: (text: string) => void
   },
   isCurrent: (project: ProjectId, pane: PaneState) => boolean,
-  onDismiss: (() => void) | undefined
+  onDismiss: (() => void) | undefined,
+  /** The small inbox's list (decision 22): its tab alone, no Search. */
+  small = false
 ) {
   // Each card's row, by its key, and the open Thread's, which the pick
   // follows while the list has no focus.
@@ -255,6 +258,7 @@ export function useSidebarKeys(
         }
         if (tab || does === "search" || does === "undo") {
           if (target instanceof Element && target.closest(FIELDS)) return false
+          if (small && does !== "undo") return false
           // All is there only while a search runs.
           if (tab === "all" && !searching) return false
           if (tab) {
@@ -280,6 +284,8 @@ export function useSidebarKeys(
     ])
   )
   const scope = useScope(SIDEBAR, handlers)
+  // `sidebar.show {tab}` shows its tab, with the focus here.
+  useAskedTab(view.tab, view.show, listbox, !small)
   const aside = useRef<HTMLElement>(null)
   useEffect(() => scope(aside.current), [scope])
   useLayoutEffect(() => {

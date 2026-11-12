@@ -31,7 +31,8 @@ export function hasMenuBar(platform: NodeJS.Platform): boolean {
 export type Sign = "rest" | "working" | "asking" | "done" | "asleep"
 
 /** What the menu bar shows: the sign, the number beside it, and the
- * same in words, for the tooltip and a screen reader. */
+ * same in words, for the tooltip and a screen reader, as the window's
+ * logo says them: "3 your turn", "7 at work" (ADR 0098, decision 22). */
 export type Look = { sign: Sign; count: string; said: string }
 
 /** The icon for `status`, none when no line came or the follower died. */
@@ -43,12 +44,12 @@ export function lookOf(status: EngineStatus | null): Look {
     return {
       sign: agents.asking > 0 ? "asking" : "done",
       count,
-      said: `${count} wait for you`,
+      said: `${count} your turn`,
     }
   }
   if (agents && agents.working > 0) {
     const count = String(agents.working)
-    return { sign: "working", count, said: `${count} working` }
+    return { sign: "working", count, said: `${count} at work` }
   }
   return { sign: "rest", count: "", said: "Nothing runs" }
 }
@@ -131,7 +132,7 @@ export function menuOf(
   } else if (agents) {
     let heading: string | undefined
     for (const one of agents.threads) {
-      const now = one.state === "working" ? "Working" : "Wait for you"
+      const now = one.state === "working" ? "Working" : "Your turn"
       if (now !== heading) items.push({ kind: "heading", label: now })
       heading = now
       items.push({

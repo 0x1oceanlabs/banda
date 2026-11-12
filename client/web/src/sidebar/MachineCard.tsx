@@ -27,9 +27,9 @@ import {
 import { useTurnsOn } from "../calls/battery"
 import { buildWords, factsWords, stateWords } from "../machines/words"
 
-/** What a card's popups stand beside: the sidebar, or the menu it is
- * drawn in, as the counts' list. */
-export const EDGE = 'aside[data-sidebar], [role="menu"]'
+/** What a card's popups stand beside: the sidebar, the small inbox, or
+ * the menu it is drawn in, as the counts' list. */
+export const EDGE = 'aside[data-sidebar], [data-small-inbox], [role="menu"]'
 
 /** `children`, the machine `host`'s label or mark, with its card as the
  * pointer rests on it. */

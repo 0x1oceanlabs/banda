@@ -105,7 +105,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   // opens the Banda menu (ADR 0098, decision 21).
   const row = sidebar.getByRole("option", { name: /hello/ })
   await expect(row).toContainText("Asks Run a check")
-  const mark = page.getByRole("button", { name: /^Banda menu/ })
+  const mark = page.getByRole("button", { name: /^Banda(:|$)/ })
   await expect(mark).toHaveAccessibleName(/Asks you/)
   // In its header, Threads' Mark stands in the icon's place, before its
   // Project and its title (ADR 0031; ADR 0062, decision 17).
@@ -129,7 +129,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   // The Person watched it finish, so nothing calls for them: its Mark in
   // the header rests, faint.
   await expect(row).not.toContainText("Asks")
-  await expect(mark).toHaveAccessibleName("Banda menu")
+  await expect(mark).toHaveAccessibleName("Banda")
   await expect(head.getByRole("img", { name: "Nothing runs" })).toHaveClass(
     /\bopacity-40\b/
   )
@@ -5263,8 +5263,13 @@ test("Alt+U goes to the Thread that calls", async () => {
   await expect(calls).toBeHidden()
 })
 
-test("the bar's middle counts who works and who waits while the sidebar is closed, and a row opens its Thread", async () => {
-  window = await startWindow()
+/** The sidebar's counts in the bar's middle, where the Person lists them:
+ * with the sidebar hidden, the count beside the logo says it by default
+ * (ADR 0098, decision 22). */
+const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
+
+test("the bar's middle counts who works and who waits while the sidebar is closed, where the Person lists them, and a row opens its Thread", async () => {
+  window = await startWindow({ look: COUNTS })
   const { page } = window
   const { composer } = await firstThread(page)
   const bar = page.getByRole("banner")
@@ -5325,13 +5330,13 @@ test("the bar's widgets stand where look.toml's [bar] lists them, and an id it h
 })
 
 test("with Alt held, the mouse moves a widget along the bar, the workspaces too, and writes [bar] (ADR 0064)", async () => {
-  window = await startWindow()
+  window = await startWindow({ look: COUNTS })
   const { page, dir } = window
   const file = join(dir, "config/look.toml")
   const written = () => (existsSync(file) ? readFileSync(file, "utf8") : "")
   await firstThread(page)
   const bar = page.getByRole("banner")
-  const mark = bar.getByRole("button", { name: /^Banda menu/ })
+  const mark = bar.getByRole("button", { name: /^Banda(:|$)/ })
   await page.keyboard.press("Alt+A")
   // A key waits for nothing, as a click on the Mark did: the Banda menu
   // that made Work is gone, its backdrop with it, before the mouse presses.
@@ -5979,7 +5984,7 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
     () =>
       page
         .getByRole("banner")
-        .getByRole("button", { name: /^Banda menu/ })
+        .getByRole("button", { name: /^Banda(:|$)/ })
         .click(),
     menu.getByRole("combobox", { name: "Search" }),
     "by-logo.txt"
@@ -6000,7 +6005,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await sidebar.screenshot({ path: "test-results/26-sidebar-search.png" })
   await page
     .getByRole("banner")
-    .getByRole("button", { name: /^Banda menu/ })
+    .getByRole("button", { name: /^Banda(:|$)/ })
     .click()
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await expect(
