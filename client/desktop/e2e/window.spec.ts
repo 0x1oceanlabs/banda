@@ -7877,21 +7877,10 @@ test("a Pane gets a URL for any file the Person opens, served as what it is and 
       ok: { id: string; folder: string }[]
     }
   ).ok.find((one) => one.folder === folder)!
-  type Desktop = {
-    agents: { media: (project: string, path: string) => Promise<string | null> }
-  }
-  // A Pane's URL from its session's engine, a reply's from the agents
-  // module's channel.
+  // A Pane's URL, and a reply's, from its session's engine: a reply's
+  // asks for media alone (ADR 0106, step 4c).
   const ask = async (leaf: "files" | "agents", path: string) =>
-    leaf === "files"
-      ? bytesUrl(window, project.id, path)
-      : page.evaluate(
-          ([project, path]) => {
-            const { banda } = globalThis as unknown as { banda: Desktop }
-            return banda.agents.media(project, path)
-          },
-          [project.id, path] as const
-        )
+    bytesUrl(window!, project.id, path, leaf === "files" ? "file" : "media")
   const served = (url: string) =>
     app.evaluate(async ({ net }, url) => {
       const response = await net.fetch(url)
