@@ -907,6 +907,31 @@
       ]
     },
     {
+      "id": "file.save-copy",
+      "title": "Save a copy to this machine",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "file": {
+            "type": "string",
+            "description": "the file's absolute path"
+          },
+          "project": {
+            "type": "string",
+            "description": "the Project it is in"
+          }
+        },
+        "required": [
+          "file"
+        ],
+        "additionalProperties": false
+      },
+      "runsAsPerson": true
+    },
+    {
       "id": "file.folder",
       "title": "Show a file in its folder",
       "section": "Banda",
