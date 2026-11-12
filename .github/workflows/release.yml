@@ -153,19 +153,20 @@ jobs:
           feed=$([[ $CHANNEL == dev ]] && echo dev || echo latest)
           ls client/desktop/dist/$feed-linux.yml client/desktop/dist/$feed-engine-linux.yml \
             client/desktop/dist/*-engine-linux-*.tar.gz
+      # A Dev runs main's copy of this file on the commit whose `ci` passed,
+      # which may be older than it (v0.1.0-dev.689 had no install.sh yet):
+      # a file this copy names that the commit has not is left out, never
+      # failed on.
       - name: publish
         if: needs.which.outputs.publish == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: >-
-          node scripts/release.mjs
-          ${{ needs.which.outputs.channel }}
-          ${{ needs.which.outputs.version }}
-          ${{ needs.which.outputs.commit }}
-          client/desktop/dist/*.AppImage
-          client/desktop/dist/*-engine-linux-*.tar.gz
-          client/desktop/dist/*-linux.yml
-          scripts/install.sh
+        run: |
+          files=(client/desktop/dist/*.AppImage client/desktop/dist/*-engine-linux-*.tar.gz
+            client/desktop/dist/*-linux.yml)
+          [[ -f scripts/install.sh ]] && files+=(scripts/install.sh)
+          node scripts/release.mjs "${{ needs.which.outputs.channel }}" \
+            "${{ needs.which.outputs.version }}" "${{ needs.which.outputs.commit }}" "${files[@]}"
       - name: keep what was packed
         if: needs.which.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
