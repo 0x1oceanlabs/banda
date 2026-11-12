@@ -10,6 +10,7 @@ import {
   hidesOnClose,
   onDock,
   quitAsking,
+  unseen,
   startsHidden,
 } from "./closing"
 
@@ -86,6 +87,31 @@ describe("on macOS, where Banda lives in the menu bar", () => {
     expect(startsHidden("darwin", opened, true)).toBe(true)
     // Opened by the Person, from the Finder, Spotlight or the Dock.
     expect(startsHidden("darwin", opened, false)).toBe(false)
+  })
+})
+
+describe("a new version, unseen (ADR 0121)", () => {
+  const shown = [{ visible: true, minimized: false }]
+  const minimized = [{ visible: false, minimized: true }]
+  const closed = [{ visible: false, minimized: false }]
+
+  it("restarts Banda in the menu bar, its window closed or never shown", () => {
+    expect(unseen("darwin", closed, false)).toBe(true)
+    // Opened by the engine, `open -g -j`: hidden, and no Dock icon.
+    expect(unseen("darwin", [], false)).toBe(true)
+  })
+
+  it("holds while a window shows or waits in the Dock, or Banda is hidden by ⌘H", () => {
+    expect(unseen("darwin", shown, true)).toBe(false)
+    expect(unseen("darwin", minimized, true)).toBe(false)
+    // A Pane in its own window, the main one closed.
+    expect(unseen("darwin", [...closed, ...shown], true)).toBe(false)
+    // ⌘H: no window visible, the Dock icon still there.
+    expect(unseen("darwin", closed, true)).toBe(false)
+  })
+
+  it("holds off macOS", () => {
+    expect(unseen("linux", closed, false)).toBe(false)
   })
 })
 

@@ -76,7 +76,27 @@ export function dockShows(
   hidden: boolean
 ): boolean | null {
   if (platform !== "darwin" || hidden) return null
+  return anyShown(windows)
+}
+
+/** Whether a window shows, or waits minimized in the Dock. */
+function anyShown(windows: readonly Counted[]): boolean {
   return windows.some((one) => one.visible || one.minimized)
+}
+
+/**
+ * Whether no window of Banda's is there for the Person, so it may restart
+ * into its new version unseen (ADR 0121): on macOS, with no window shown
+ * or minimized and its Dock icon gone, as it lives in the menu bar,
+ * opened so by the engine too. ⌘H hides its windows and leaves the Dock
+ * icon, `docked`: that holds it.
+ */
+export function unseen(
+  platform: NodeJS.Platform,
+  windows: readonly Counted[],
+  docked: boolean
+): boolean {
+  return platform === "darwin" && !docked && !anyShown(windows)
 }
 
 /** A little over the second after the Dock's icon shows in which

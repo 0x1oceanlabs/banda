@@ -63,15 +63,18 @@ then every hour. The Banda menu's **Check for updates** checks at once.
 - **Linux AppImage:** downloads a new version in the background and
   installs it when you quit. **Update now** in the widget downloads and
   restarts at once; the popover warns that a restart stops active turns.
-- **macOS:** tells you when a new version is out and offers a command to
-  copy. Homebrew installs it:
+- **macOS:** Homebrew downloads a new version in the background. **Restart
+  window** in the widget installs it and opens Banda again; with no window
+  open, only the menu bar icon, Banda does that by itself. Agents keep
+  working either way. A Banda that Homebrew did not install, or a Homebrew
+  that fails, offers the command instead:
 
   ```sh
   brew update && brew upgrade --cask banda-dev
   ```
 
-  Quit Banda Dev before upgrading, then open it again. If the Mac's files
-  are still being published, Banda checks again in a minute.
+  If the Mac's files are still being published, Banda checks again in a
+  minute.
 
 Banda Dev keeps its data and settings apart from the future Stable app
 and from Banda Local, which runs from a checkout.

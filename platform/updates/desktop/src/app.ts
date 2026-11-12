@@ -8,10 +8,12 @@
  * for its app (releases.ts) with electron-updater, downloads it at once,
  * and installs it on Restart, or when Banda quits, if a look at most an
  * hour old still offered it (ADR 0041, decision 2; ADR 0092, decision
- * 12). Only an AppImage updates. On macOS, where an app signed ad hoc
- * cannot, it only says that a version is out, with the brew command that
- * installs it (ADR 0033, decision 6). Banda Local, run from a checkout,
- * has none, and says nothing; nor does a Banda run with
+ * 12). An AppImage updates so. On macOS, where an app signed ad hoc
+ * cannot swap itself, brew takes it while Banda runs, and installs it on
+ * Restart, or by itself once no window shows (ADR 0121); a Banda brew
+ * did not install only says that a version is out, with the brew command
+ * that installs it (ADR 0033, decision 6). Banda Local, run from a
+ * checkout, has none, and says nothing; nor does a Banda run with
  * `BANDA_UPDATES=off`, for trials and CI; and where the engine takes
  * nothing (`off`: `updates = "off"`, a package manager's Banda), the app
  * takes nothing either.
@@ -28,7 +30,6 @@
  * out. A look the Person asks for says what it found, and "Update now"
  * restarts into the new version once it is down (ADR 0045).
  */
-import { spawn } from "node:child_process"
 import {
   accessSync,
   constants,
@@ -46,6 +47,8 @@ import {
 } from "@banda/contract/updates"
 import { app } from "electron"
 import { autoUpdater, type UpdateInfo } from "electron-updater"
+import { startAfter } from "./after"
+import { type Brew, brewOf } from "./brew"
 import { isAbove, sourceOf, versionInName, type Which } from "./releases"
 
 /** How long after a Mac's files are found missing it reads again. */
@@ -56,6 +59,9 @@ const FRESH = 3_600_000 + RETRY
 /** How many looks a minute apart wait for a Mac's files, which come
  * within ten minutes of the release: a pack that failed sends none. */
 const RETRIES = 15
+/** How often a Mac's Banda with a version ready looks whether a window
+ * shows: two looks with none, and it restarts into it. */
+const ALONE = 30_000
 
 /** The app this window is, as main knows it. */
 export type App = {
@@ -71,7 +77,15 @@ export type App = {
   listApp: (image: string) => void
   /** The AppImage the launcher's entry starts, if it names one. */
   listedImage: () => string | undefined
+  /** Whether no window of it shows, on macOS, as it lives in the menu
+   * bar: it may restart into a new version unseen. */
+  alone: () => boolean
+  /** Whether it quits now, as the Person or macOS asked. */
+  quits: () => boolean
 }
+
+/** What the window says of its app whatever its state. */
+type Known = { name: string; have: string; always: boolean }
 
 /** What it asks of this machine's engine: a look now, as the Person
  * asked, which answers the state it found (`updates.check`). */
@@ -116,7 +130,7 @@ export function updates(
     which !== undefined &&
     process.env.BANDA_UPDATES !== "off" &&
     Boolean(image || brew)
-  const known = {
+  const known: Known = {
     name: mine.name,
     have: app.getVersion(),
     always: looks && which === "dev",
@@ -145,15 +159,22 @@ export function updates(
       newest: () => said?.newest,
     })
   )
-  // Banda downloads what a look offers itself, or brew installs it: a look
+  // Banda downloads what a look offers itself, or brew takes it: a look
   // while a version is ready offers it again, and downloading it again
   // would start it over.
   autoUpdater.autoDownload = false
   autoUpdater.fullChangelog = true
   autoUpdater.logger = { info() {}, debug() {}, warn: console.warn, error() {} }
   const looking = engineLooks(engine)
+  // The Banda this one restarted from left what it was (ADR 0072,
+  // decision 4).
+  const left = leftBehind(have)
   if (!image) {
-    const brewed = brewUpdates(mine, known, looking, tell)
+    const brewed = brewUpdates(mine, known, looking, tell, {
+      brew: brewOf(mine.folder, process.execPath),
+      leaving,
+      left,
+    })
     return {
       ...brewed,
       heard(state) {
@@ -162,11 +183,8 @@ export function updates(
       },
     }
   }
-  // The Banda this one restarted from left what it was (ADR 0072,
-  // decision 4).
-  const left = leftBehind(have)
   if (left) now = { ...known, state: "updated", ...left }
-  const set = (next: DistributiveOmit<Update, keyof typeof known>) => {
+  const set = (next: DistributiveOmit<Update, keyof Known>) => {
     now = { ...known, ...next }
     tell(now)
   }
@@ -341,7 +359,7 @@ export function updates(
     leave({ from: have, to: ready.version, notes: ready.notes })
     // Installed by the time it returns; the app quits right after.
     autoUpdater.quitAndInstall(true, false)
-    startAfter(installed)
+    startAfterImage(installed)
   }
   return {
     current: () => now,
@@ -510,18 +528,36 @@ export function arrivedAt(
 }
 
 /**
- * macOS's: electron-updater only reads the release the engine says is
- * newest, and a version out is `out`, with the brew command that installs
- * it. "Update now" is a look the Person asked for.
+ * macOS's (ADR 0121): electron-updater only reads the release the engine
+ * says is newest, and brew takes it. Once the tap's cask has that
+ * version, its zip comes into brew's cache while Banda runs, and the
+ * version is `ready`: Restart installs it with `brew upgrade` and opens
+ * Banda again, the engine and its Agents going on. With no window shown,
+ * as Banda lives in the menu bar, it restarts so by itself, unseen, and
+ * opens again with no window; never under the Person's hands. A Banda
+ * brew did not install, or a brew that fails, says the version is `out`,
+ * with the command that installs it. "Update now" is a look the Person
+ * asked for, and a restart once its version is down.
  */
 export function brewUpdates(
-  mine: Pick<App, "folder">,
-  known: { name: string; have: string; always: boolean },
+  mine: Pick<App, "folder" | "alone" | "quits">,
+  known: Known,
   looking: ReturnType<typeof engineLooks>,
-  tell: (now: Update) => void
+  tell: (now: Update) => void,
+  hands: {
+    /** The cask that installed this Banda, if brew did. */
+    brew: Brew | undefined
+    /** Called as Banda quits to install it. */
+    leaving: () => void
+    /** What the Banda this one restarted from left. */
+    left?: Omit<Left, "to">
+  }
 ): Updates {
-  let now: Update = { ...known, state: "none" }
-  const set = (next: DistributiveOmit<Update, keyof typeof known>) => {
+  const { brew, leaving, left } = hands
+  let now: Update = left
+    ? { ...known, state: "updated", ...left }
+    : { ...known, state: "none" }
+  const set = (next: DistributiveOmit<Update, keyof Known>) => {
     now = { ...known, ...next }
     tell(now)
   }
@@ -531,45 +567,154 @@ export function brewUpdates(
   let asked = false
   let looked: number | undefined
   let retry: ReturnType<typeof setTimeout> | undefined
-  let retries = 0
+  /** The reads a minute apart that wait for the Mac's files, and for the
+   * tap's cask of `version`: each waits at most RETRIES times. */
+  const files = { tries: 0 }
+  const tap = { version: "", tries: 0 }
+  // The Person asked for a restart once its version is down.
+  let restarts = false
+  // A restart waits for the look that runs to offer the version ready
+  // again, as the last one is over an hour old.
+  let confirms = false
+  // brew installs the version ready, and Banda quits.
+  let restarting = false
+  /** The version brew takes now, while it does. */
+  let taking: string | undefined
+  /** The version the last look offered, and when. */
+  let offered: Offered | undefined
+  /** A version brew could not install: it waits for the Person, not
+   * restarting unseen again. */
+  let refused: string | undefined
+  let watch: ReturnType<typeof setInterval> | undefined
   autoUpdater.autoInstallOnAppQuit = false
-  autoUpdater.on("update-available", (info: UpdateInfo) => {
-    asked = false
-    retries = 0
+
+  /** Says `info`'s version is out, with the command that installs it. */
+  const out = (info: UpdateInfo) => {
+    asked = restarts = confirms = false
     set({
       state: "out",
       version: info.version,
       notes: notesOf(info, known.have),
       command,
     })
+  }
+  const fail = (reason: string) => {
+    asked = restarts = confirms = false
+    set({ state: "failed", reason })
+  }
+  /** Reads the release again in a minute, as its Mac's files and the
+   * tap's cask come a few minutes after it, while `wait` has tries left;
+   * whether it will. */
+  const again = (wait: { tries: number }) => {
+    if (retry === undefined && wait.tries < RETRIES) {
+      wait.tries += 1
+      retry = setTimeout(read, RETRY)
+    }
+    return retry !== undefined
+  }
+  /** Why a look found nothing to take yet, and whether it reads again. */
+  const publishing = (soon: boolean) =>
+    `The macOS release is still publishing${soon ? "; checking again in a minute" : ""}`
+
+  autoUpdater.on("update-available", (info: UpdateInfo) => {
+    if (restarting) return
+    files.tries = 0
+    offered = { version: info.version, at: Date.now() }
+    if (!brew) {
+      out(info)
+      return
+    }
+    if (now.state === "ready" && now.version === info.version) {
+      asked = false
+      if (confirms) restart()
+      return
+    }
+    // The Restart that looked first goes on to the newer version.
+    if (now.state === "ready" && confirms) restarts = true
+    confirms = false
+    // One brew at a time: the next look offers what came meanwhile.
+    if (taking === undefined) take(info)
   })
-  // Nothing above `have`: a version out was withdrawn, and goes (ADR
-  // 0092, decision 10).
-  autoUpdater.on("update-not-available", () => {
+  /** A version brew could not take: one ready stays as it is; else the
+   * command, which still installs it by hand. */
+  const drop = (info: UpdateInfo) => {
+    if (now.state !== "ready") out(info)
+    else asked = restarts = false
+  }
+  /** brew takes `info`'s version: ready once its zip is down. */
+  const take = (info: UpdateInfo) => {
+    if (!brew) return
+    taking = info.version
+    const notes = notesOf(info, known.have)
+    brew
+      .newest()
+      .then((cask) => {
+        if (cask !== info.version) return false
+        return brew.fetch().then(() => true)
+      })
+      .then(
+        (down) => {
+          taking = undefined
+          if (!down) {
+            // The tap's cask comes after the release's files: a version
+            // waits for it once, and then each look tries brew once.
+            if (tap.version !== info.version)
+              Object.assign(tap, { version: info.version, tries: 0 })
+            if (again(tap)) missed(publishing(true))
+            else drop(info)
+            return
+          }
+          asked = false
+          set({ state: "ready", version: info.version, notes })
+          if (restarts) restart()
+          else watchAlone()
+        },
+        (error: Error) => {
+          taking = undefined
+          console.warn("brew could not take Banda's update:", error.message)
+          drop(info)
+        }
+      )
+  }
+  // Nothing above `have`: a version ready or out was withdrawn, and goes
+  // (ADR 0092, decision 10).
+  autoUpdater.on("update-not-available", (info: UpdateInfo) => {
+    if (restarting) return
     looked = Date.now()
+    offered = { version: info.version, at: looked }
     asked = false
-    retries = 0
-    set({ state: "none", looked })
+    files.tries = 0
+    if (now.state === "ready")
+      console.warn(`Banda ${now.version} is no longer out: it will not install`)
+    if (now.state !== "updated") {
+      confirms = restarts = false
+      set({ state: "none", looked })
+    }
   })
   const missed = (why: string) => {
+    if (confirms && now.state === "ready") {
+      // No look says the version ready is still out, so no restart into
+      // it: the Restart says why nothing happened.
+      confirms = false
+      fail(`Could not check that ${now.version} is still out: ${why}`)
+      return
+    }
+    // A Restart waits only for a look that runs again soon.
+    if (retry === undefined) restarts = false
     if (!asked) return
     asked = false
     looked = Date.now()
-    if (now.state !== "out") set({ state: "none", looked, missed: why })
+    if (now.state === "looking" || now.state === "none")
+      set({ state: "none", looked, missed: why })
   }
   autoUpdater.on("error", (error: Error & { code?: string }) => {
     console.warn("Banda could not look for its update:", error.message)
     // Linux publishes first; the Mac's files arrive a few minutes later.
     // Read again soon, even when this was a background look, until ADR
     // 0092's step 5 publishes a release with all its files.
-    const publishing = error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
-    if (publishing && retry === undefined && retries < RETRIES) {
-      retries += 1
-      retry = setTimeout(read, RETRY)
-    }
     missed(
-      publishing
-        ? `The macOS release is still publishing${retry ? "; checking again in a minute" : ""}`
+      error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
+        ? publishing(again(files))
         : firstLine(error.message)
     )
   })
@@ -577,6 +722,7 @@ export function brewUpdates(
   function read() {
     clearTimeout(retry)
     retry = undefined
+    if (restarting) return
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
   }
@@ -585,22 +731,105 @@ export function brewUpdates(
     if (state.off) missed(state.off)
     else read()
   }
-  const look = () => {
-    if (known.always) {
+  /** Asks the engine to look now, as the Person did, or as a restart
+   * after an hour with no look does. */
+  const look = (byPerson: boolean) => {
+    if (restarting) return
+    if (byPerson && known.always) {
       asked = true
-      if (now.state !== "out") set({ state: "looking" })
+      if (now.state !== "out" && now.state !== "ready")
+        set({ state: "looking" })
     }
     looking.now(heard, missed)
   }
-  const nothing = () => {}
+  /** With the version ready, restarts into it unseen once no window has
+   * shown for two looks in a row, half a minute apart. */
+  function watchAlone() {
+    if (watch !== undefined) return
+    let alone = 0
+    watch = setInterval(() => {
+      if (now.state !== "ready" || restarting) {
+        clearInterval(watch)
+        watch = undefined
+        return
+      }
+      alone = mine.alone() && !mine.quits() ? alone + 1 : 0
+      if (alone >= 2) restart(true)
+    }, ALONE)
+  }
+  /** Restarts into the version ready: `unseen`, by itself, with no
+   * window shown, or as the Person asked. */
+  function restart(unseen = false) {
+    if (now.state !== "ready" || restarting || !brew) return
+    const ready = now
+    const fresh = isOffered(offered, ready.version, Date.now())
+    // Unseen, only into a version the last look offered and brew did not
+    // refuse, with none coming down: it never looks first, nor says a
+    // failure the Person did not ask about.
+    if (unseen && (!fresh || refused === ready.version || taking)) return
+    // A newer version comes down meanwhile: the restart waits for it.
+    if (taking !== undefined) {
+      restarts = true
+      return
+    }
+    // After a sleep or looks that failed, a look first: the version may
+    // have been withdrawn since (ADR 0092, decision 10).
+    if (!fresh) {
+      confirms = true
+      look(false)
+      return
+    }
+    confirms = restarts = false
+    restarting = true
+    brew.upgrade(ready.version).then(
+      (upgraded) => {
+        if (!upgraded) {
+          // The tap moved since: the engine looks, and brew takes the
+          // version it finds.
+          restarting = false
+          if (!unseen) restarts = true
+          look(false)
+          return
+        }
+        const left = { from: known.have, to: ready.version, notes: ready.notes }
+        leave(left)
+        // Quit as the Person or macOS asked meanwhile: the next start is
+        // the new version, and says so.
+        if (mine.quits()) return
+        leaving()
+        // As it is now: a window shown since opens again shown.
+        brew.reopen(mine.alone())
+        app.quit()
+      },
+      (error: Error) => {
+        restarting = false
+        refused = ready.version
+        console.warn("brew could not install Banda's update:", error.message)
+        fail(
+          `brew could not install ${ready.version}: ${firstLine(error.message)}`
+        )
+      }
+    )
+  }
   return {
     current: () => now,
     heard,
-    check: look,
-    now: look,
-    later: nothing,
-    restart: nothing,
-    seen: nothing,
+    check: () => look(true),
+    now() {
+      restarts = true
+      refused = undefined
+      if (now.state === "ready") restart()
+      else if (taking === undefined) look(true)
+    },
+    // Nothing downloads for the quit.
+    later() {},
+    restart() {
+      refused = undefined
+      restart()
+    },
+    seen() {
+      if (now.state === "updated") set({ state: "none", looked })
+    },
   }
 }
 
@@ -614,31 +843,14 @@ export function firstLine(message: string): string {
  * Starts the AppImage at `image`, with this Banda's arguments, once this
  * Banda is gone, so the new one gets the window and its lock. Not
  * `app.relaunch`: its helper runs from this AppImage, unmounted as Banda
- * exits. The shell closes what it got open from Banda (its profile's
- * locks, this AppImage's folder) before it starts the new one; an
- * AppImage keeps the APPIMAGE and APPDIR it is given, so the new one gets
- * none, and sets its own.
+ * exits. An AppImage keeps the APPIMAGE and APPDIR it is given, so the
+ * new one gets none, and sets its own.
  */
-function startAfter(image: string) {
+function startAfterImage(image: string) {
   const env = { ...process.env }
   for (const name of ["APPIMAGE", "APPDIR", "ARGV0", "OWD"]) delete env[name]
-  spawn(
-    "/bin/bash",
-    ["-c", START_AFTER, String(process.pid), image, ...process.argv.slice(1)],
-    {
-      detached: true,
-      stdio: "ignore",
-      env,
-    }
-  ).unref()
+  startAfter([image, ...process.argv.slice(1)], env)
 }
-
-/** `bash -c START_AFTER PID IMAGE ARGS…`: what `startAfter` runs. */
-const START_AFTER = [
-  'for fd in /proc/self/fd/*; do n=${fd##*/}; ((n > 2)) && eval "exec $n>&-"; done 2>/dev/null',
-  'while kill -0 "$0" 2>/dev/null; do sleep 0.2; done',
-  'exec "$@"',
-].join("; ")
 
 /** Omit, over each member of a union. */
 type DistributiveOmit<T, K extends PropertyKey> = T extends unknown
