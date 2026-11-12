@@ -5,8 +5,8 @@
  * and another machine's name. A Pane or a Watch runs only while the
  * engine runs its module.
  */
-import type { Engine } from "@banda/contract"
-import type { Act } from "@banda/core"
+import { type Engine, Unreachable } from "@banda/contract"
+import type { Act, KeptHosts } from "@banda/core"
 import {
   type AnyPaneKind,
   defineModule,
@@ -23,6 +23,7 @@ import {
 import { type Label, type PaneState, paneOf, type Watch } from "@banda/ui/pane"
 import type { Filler, Fillers } from "@banda/ui/slots"
 import type { LucideIcon } from "lucide-react"
+import { toast } from "@banda/ui/components/sonner"
 import { memo, useCallback, useSyncExternalStore } from "react"
 import { type Kinds, launcher } from "./launcher"
 import { machineHeader } from "./window/named"
@@ -338,20 +339,64 @@ export function labelOf(
 }
 
 /** Lets a Pane's module let go of it (`PaneKind.closed`), on the session
- * `engineOf` gives; nothing while that refuses, as for a host out of
- * reach: nothing waits to run there once it is back. */
-export function closedOf(engineOf: () => Engine, entry: Entry): void {
+ * `engineOf` gives. Where its machine is out of reach, as that session
+ * refuses or the act it answers does, or it may not have heard as it
+ * went, `away` hears why: the Window keeps it to let go of once that
+ * machine is back (ADR 0106, decision 4). Any other failure is the
+ * module's, and is let be. */
+export function closedOf(
+  engineOf: () => Engine,
+  entry: Pick<Entry, "project" | "pane">,
+  away: (why: Unreachable) => void = () => undefined
+): void {
   const kind = kindOf(entry.pane.kind)
   if (!kind?.closed) return
+  const missed = (error: unknown) => {
+    if (error instanceof Unreachable && error.host) away(error)
+  }
   let engine: Engine
   try {
     engine = engineOf()
-  } catch {
-    return
+  } catch (error) {
+    return missed(error)
   }
   const { project, pane } = entry
-  told(() => kind.closed?.({ engine, project, args: pane.args }), undefined)
+  const act = told(
+    () => kind.closed?.({ engine, project, args: pane.args }),
+    undefined
+  )
+  if (act instanceof Promise) act.catch(missed)
 }
+
+/** What hears a Pane closed while its machine was away (`closedOf`): it
+ * waits on this device for that machine, said in a toast (ADR 0106,
+ * decision 4). */
+export function keptAway(
+  hosts: KeptHosts,
+  { project, pane }: Pick<Entry, "project" | "pane">
+) {
+  return (why: Unreachable) => {
+    hosts.left.add({
+      host: why.host,
+      boot: hosts.bootOf(why.host),
+      project,
+      pane,
+    })
+    toast(`Closes on ${why.machine} once it is back`)
+  }
+}
+
+/** Lets go of each Pane closed while away once its machine is back, on
+ * that machine's engine; one it cannot hear again waits again. Returns
+ * how to stop. */
+export const letGoWhenBack = (hosts: KeptHosts) =>
+  hosts.onLeft((one, engine) =>
+    closedOf(
+      () => engine,
+      one,
+      (why) => hosts.left.add({ ...one, host: why.host })
+    )
+  )
 
 /** Whether `module` runs: always, with no engine part; else while the
  * engine runs it. */

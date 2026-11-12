@@ -1325,6 +1325,14 @@ If Chat is removed, Agents still works through its own Thread.
     again when its engine lost it and has not restarted since. Under a
     new boot of the engine it says Ended and waits for "New shell here"
     (ADR 0106, decision 4).
+  - Closed, it stops its shell (`PaneKind.closed`). Closed while its
+    machine is away, it says "Closes on arc once it is back": the close
+    waits on this device (`client/core/src/left.ts`), beside the messages
+    that wait, counted in the pill's "· N waiting", across a restart of
+    the window, for 7 days. Once arc's engine is open again under the boot
+    the shell ran under, the main window lets go of it there before
+    anything new goes; under another boot it is dropped, as the shell
+    ended with it.
   - Another Pane that started a program opens it on that terminal, as a
     sign-in does: `{kind: "terminal.terminal", args: {terminal, title,
     shell: false, done}}`. `done` is a list of commands the Pane sends

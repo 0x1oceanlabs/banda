@@ -123,12 +123,12 @@ export const terminalPane = definePane<TerminalArgs>({
   // The shell runs on its Project's machine and this device only draws
   // it (ADR 0106, decision 4).
   elsewhere: true,
-  closed: ({ engine, project, args }) => {
-    if (args.terminal === null) return
-    engine
-      .call("terminal.close", { terminal: args.terminal }, { project })
-      .catch(() => undefined)
-  },
+  // Its shell stops with it; one its machine did not hear, as it was
+  // away, stops there once it is back (ADR 0106, decision 4).
+  closed: ({ engine, project, args }) =>
+    args.terminal === null
+      ? undefined
+      : engine.call("terminal.close", { terminal: args.terminal }, { project }),
   Pane: TerminalPane,
 })
 

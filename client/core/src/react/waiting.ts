@@ -4,6 +4,7 @@
  * drawn again only as they change.
  */
 import { useCallback, useContext } from "react"
+import type { Leaving } from "../left"
 import type { Queue, Wait } from "../queue"
 import { sameEach } from "../store"
 import { HostsContext } from "./hosts"
@@ -40,4 +41,16 @@ export function useWaiting(
     [host, item]
   )
   return useStore(useContext(HostsContext).waiting, select, sameEach)
+}
+
+/** How many Panes closed while host `host` was away wait to be let go of
+ * there (ADR 0106, decision 4), which the pill counts beside the
+ * messages; none for no host. */
+export function useLeftFor(host: string | undefined): number {
+  const select = useCallback(
+    (left: readonly Leaving[]) =>
+      host === undefined ? 0 : left.filter((one) => one.host === host).length,
+    [host]
+  )
+  return useStore(useContext(HostsContext).left, select)
 }

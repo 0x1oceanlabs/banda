@@ -245,9 +245,16 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
    * What its module lets go of once the Pane leaves every workspace: it
    * closed, or its place shows another Pane or the same with other args. A
    * program in a terminal stops then. A Pane drawn again, as when it moves
-   * to another column or workspace, has not left.
+   * to another column or workspace, has not left. What it answers, its
+   * act, the Window watches: one its machine could not hear, as it was
+   * away, waits for that machine and goes once it is back (ADR 0106,
+   * decision 4).
    */
-  closed?: (left: { engine: Engine; project: ProjectId; args: A }) => void
+  closed?: (left: {
+    engine: Engine
+    project: ProjectId
+    args: A
+  }) => Promise<unknown> | void
   Pane: ComponentType<PaneProps<A>>
 }
 
