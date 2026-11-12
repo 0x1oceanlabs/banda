@@ -660,10 +660,12 @@ function HowItStarts({
             : `${harness.env.join(", ")}: their values stay in the file.`
         }
       >
-        <Button variant="outline" size="sm" onClick={file.reveal}>
-          <FileCogIcon />
-          Edit in harnesses.toml
-        </Button>
+        {file.reveal && (
+          <Button variant="outline" size="sm" onClick={file.reveal}>
+            <FileCogIcon />
+            Edit in harnesses.toml
+          </Button>
+        )}
       </Row>
     </div>
   )

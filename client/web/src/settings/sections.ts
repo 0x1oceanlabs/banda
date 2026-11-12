@@ -97,7 +97,11 @@ export type Section = {
 
 /** What a section's own Body is drawn with. */
 export type SectionProps = {
+  /** The engine of the machine it shows: this one's, or the machine
+   * picked under "Settings for" (ADR 0106, step 5b). */
   engine: Engine
+  /** That other machine, by its key in `hosts.toml`; none for this one. */
+  on?: string
   /** The part of it a link names. */
   lit?: string
   /** Runs a window's action, as the Pane's `run`; none in a dialog of

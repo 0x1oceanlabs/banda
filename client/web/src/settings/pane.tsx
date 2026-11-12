@@ -8,8 +8,10 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { definePane } from "@banda/ui/pane"
 import { SettingsIcon } from "lucide-react"
 
-/** Where the Pane is: a section and a row, `appearance/radius`. */
-export type SettingsArgs = { link: string }
+/** Where the Pane is: a section and a row, `appearance/radius`; and the
+ * machine whose parts it shows, by its key in `hosts.toml`, none for this
+ * one (ADR 0106, step 5b). */
+export type SettingsArgs = { link: string; on?: string }
 
 const Settings = lazy(() =>
   import("./Settings").then(({ Settings }) => ({ default: Settings }))

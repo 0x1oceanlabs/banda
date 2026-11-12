@@ -2,7 +2,8 @@
  * The one row (ADR 0016, decision 4): any key of any file, drawn from its
  * schema; what it is now and where that comes from beside it (decision 6);
  * and a ↶ for a key the Person's file sets. A change applies at once:
- * `banda settings set` writes it, and the look brings it back.
+ * `banda settings set` writes it, and the look brings it back; a key of
+ * another machine's, its engine (ADR 0106, step 5b).
  */
 import type { JsonValue } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
@@ -28,6 +29,7 @@ import {
 } from "@banda/ui/components/select"
 import { cn } from "@banda/ui/lib/utils"
 import { FileCogIcon, Undo2Icon } from "lucide-react"
+import { onThisDevice, type SettingsWriter } from "./machine-settings"
 import type { CustomRow } from "./sections"
 
 export function SettingRow({
@@ -36,9 +38,16 @@ export function SettingRow({
   problems,
   lit,
   Custom,
+  writer = onThisDevice,
+  where,
 }: {
   row: Row
   setting?: Setting
+  /** Where it is written: this device's file, or a machine's engine. */
+  writer?: SettingsWriter
+  /** Whose copy it is, said beside it where Settings shows another
+   * machine's: "on this Mac". */
+  where?: string
   /** What is wrong in the file at this key. */
   problems: Problem[]
   /** A link named it: it shows lit. */
@@ -46,13 +55,18 @@ export function SettingRow({
   /** The section's own control, instead of the schema's. */
   Custom?: CustomRow
 }) {
-  // Written through the desktop; what was wrong when it refused.
+  // What was wrong when it was refused.
   const { refused, write } = useWrite({ against: setting?.value })
-  const settings = window.banda?.settings
-  const set = (value: string) =>
-    settings && write(settings.set(row.file, row.key, value))
-  const reset = () => settings && write(settings.reset(row.file, row.key))
-  const control = <Control row={row} value={setting?.value} onSet={set} />
+  const set = (value: string) => write(writer.set(row.file, row.key, value))
+  const reset = () => write(writer.reset(row.file, row.key))
+  const control = (
+    <Control
+      row={row}
+      value={setting?.value}
+      onSet={set}
+      here={writer === onThisDevice}
+    />
+  )
   return (
     <RowFrame
       dataKey={row.key}
@@ -60,6 +74,7 @@ export function SettingRow({
       title={row.title}
       about={row.about}
       file={row.file}
+      where={where}
       from={setting?.from}
       onReset={reset}
       wrong={[...problems.map((p) => p.message), ...refused]}
@@ -110,6 +125,7 @@ export function RowFrame({
   about,
   file,
   from,
+  where,
   onReset,
   wrong,
   children,
@@ -123,6 +139,8 @@ export function RowFrame({
   /** Its file; none for a row of the engine's, as a Project's name. */
   file?: string
   from?: From
+  /** Whose copy it is, where Settings shows another machine's. */
+  where?: string
   /** Takes the Person's line out; shown when the value is theirs. */
   onReset?: () => void
   /** What was wrong, a message a line; each once. */
@@ -150,6 +168,11 @@ export function RowFrame({
             )}
             {title}
             {file && <Origin from={from} file={file} />}
+            {where && (
+              <span className="text-meta font-normal text-muted-foreground">
+                {where}
+              </span>
+            )}
           </div>
           {about && (
             <div className="text-meta text-muted-foreground">{about}</div>
@@ -198,10 +221,13 @@ function Control({
   row,
   value,
   onSet,
+  here,
 }: {
   row: Row
   value?: JsonValue
   onSet: (value: string) => void
+  /** Its file is this computer's, to open here. */
+  here: boolean
 }) {
   const control = row.control
   switch (control.kind) {
@@ -255,6 +281,13 @@ function Control({
         />
       )
     case "file":
+      // Another machine's file is edited there.
+      if (!here)
+        return (
+          <span className="text-xs text-muted-foreground">
+            In {row.file} there
+          </span>
+        )
       return (
         <Button
           variant="outline"

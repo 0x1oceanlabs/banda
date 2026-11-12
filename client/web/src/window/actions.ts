@@ -181,7 +181,7 @@ export type Shell = WindowApi & {
    * open at Keys to mend it (ADR 0005, decision 11). */
   ownKeys: () => void
   /** Opens the settings at `link`, a section and a row (ADR 0016). */
-  settings: (link?: string) => void
+  settings: (link?: string, on?: string) => void
   /** Asks an Agent to look into a Problem, in a new Thread (ADR 0039). */
   lookInto: (fingerprint: string) => void
   /** Quits Banda: stops the engine and its Agents, asking first while
@@ -1621,9 +1621,14 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Open the settings",
     keys: [{ code: "Comma", mod: true }],
-    // A Problem's toast opens it there: its `link` (ADR 0039).
+    // A Problem's toast opens it there: its `link` (ADR 0039). From a
+    // Pane of another machine's, it shows that machine's parts (ADR 0106,
+    // step 5b).
     run: (shell, args) =>
-      shell.settings(typeof args?.link === "string" ? args.link : undefined),
+      shell.settings(
+        typeof args?.link === "string" ? args.link : undefined,
+        shell.here.get().pane?.host
+      ),
   },
   {
     // Another machine's label, its ⋯ (ADR 0095, decision 6).

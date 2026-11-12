@@ -445,7 +445,7 @@ test("a row of arc's Files dragged into arc's Message box names arc's file to ar
   await expect(thread.getByText("only-arc.txt holds arc.")).toBeVisible()
 })
 
-test.fixme("step 5b: a folder pinned in arc's Files opens arc's folder again", async () => {
+test("step 5b: a folder pinned in arc's Files opens arc's folder again", async () => {
   const { page, composer, there } = await opened()
   put(arc!.disk(there), { "kept/only-arc-kept.txt": "arc\n" })
   put(join(arc!.code.here, "Same"), { "kept/only-mac-kept.txt": "mac\n" })
@@ -464,6 +464,9 @@ test.fixme("step 5b: a folder pinned in arc's Files opens arc's folder again", a
   await expect(
     tree.getByRole("treeitem", { name: "only-mac-kept.txt" })
   ).toHaveCount(0)
+  // The pin is arc's, in arc's files.toml; this machine's has none.
+  expect(read(join(arc!.dir, "config/files.toml"))).toMatch(/kept/)
+  expect(read(join(window!.dir, "config/files.toml")) ?? "").not.toMatch(/kept/)
 })
 
 test("step 3c: a path in arc's reply opens arc's file", async () => {

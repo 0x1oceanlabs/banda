@@ -171,6 +171,10 @@ export const device = {
     set: (file: string, key: string, value: string) =>
       desktop()?.settings.set(file, key, value) ??
       Promise.resolve(["Only Banda's app writes the settings."]),
+    /** Takes `key` out of `file`; what was wrong, if refused. */
+    reset: (file: string, key: string) =>
+      desktop()?.settings.reset(file, key) ??
+      Promise.resolve(["Only Banda's app writes the settings."]),
     /** The themes there are, as `banda look themes` lists them (ADR
      * 0007); none without the desktop. */
     themes: (): Promise<Listed[]> =>

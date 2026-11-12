@@ -65,8 +65,9 @@ export type SettingsFile = {
   /** Takes `key` out; in `harnesses.toml`, `harness.codex` takes the
    * whole entry out. */
   reset: (key: string) => Promise<string[]>
-  /** Opens the file in the Person's editor. */
-  reveal: () => void
+  /** Opens the file in the Person's editor; none for another machine's,
+   * which this computer cannot open (ADR 0106, decision 7). */
+  reveal?: () => void
 }
 
 export type Props = {
