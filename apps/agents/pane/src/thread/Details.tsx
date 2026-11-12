@@ -82,7 +82,7 @@ export function ThreadDetails({
           <aside
             aria-label="Thread details"
             style={{ width: CARD, top: GAP / 2, right: GAP }}
-            className="absolute z-10 rounded-card bg-popover/80 p-1.5 shadow-sm ring-1 ring-foreground/10 backdrop-blur"
+            className="absolute z-10 rounded-card bg-popover/80 p-1.5 shadow-float ring-1 ring-foreground/10 backdrop-blur"
           >
             {card}
           </aside>

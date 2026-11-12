@@ -562,7 +562,7 @@ function GroupHandle({
       title="Drag to move the Group"
       className={cn(
         PILL,
-        "cursor-grab gap-1 opacity-0 shadow-sm transition-opacity duration-150 data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
+        "cursor-grab gap-1 opacity-0 transition-opacity duration-150 data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
       )}
     >
       <GripHorizontalIcon aria-hidden className="size-2.5" />

@@ -48,7 +48,7 @@ export function ProjectsList({
             }
             className={cn(
               "flex min-w-0 flex-1 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-left text-ui outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
-              only === project.id && "border-border bg-tile shadow-xs"
+              only === project.id && "border-border bg-tile"
             )}
             onClick={() =>
               project.missing

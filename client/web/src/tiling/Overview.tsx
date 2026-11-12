@@ -771,7 +771,7 @@ function Row({
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
       // An empty one is a slim place to drop a Pane, not a whole screen.
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-plate) [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] data-empty:relative data-empty:items-center data-empty:justify-center data-empty:bg-overview-foreground/4 data-empty:text-overview-foreground/40 data-empty:transition-colors data-empty:hover:bg-overview-foreground/8 motion-reduce:transition-none"
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-plate) [scrollbar-width:none] group-data-lifted/place:shadow-lift data-empty:relative data-empty:items-center data-empty:justify-center data-empty:bg-overview-foreground/4 data-empty:text-overview-foreground/40 data-empty:transition-colors data-empty:hover:bg-overview-foreground/8 motion-reduce:transition-none"
       style={
         {
           width,
@@ -868,7 +868,7 @@ function Row({
                   {/* What the Apps show of it at a size to read: how its
                       Thread is, and what it asks when it calls. With
                       nothing to show, no label. */}
-                  <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-control border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-meta text-popover-foreground shadow-sm empty:hidden">
+                  <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-control border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-meta text-popover-foreground empty:hidden">
                     <PaneSlot
                       project={entry.project}
                       pane={entry.pane}
@@ -928,7 +928,7 @@ function Cross({
       aria-label={label}
       title={title}
       className={cn(
-        "absolute right-1.5 z-1 rounded-control border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 shadow-sm transition-opacity duration-150 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100",
+        "absolute right-1.5 z-1 rounded-control border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 transition-opacity duration-150 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100",
         className
       )}
       onMouseDown={(event) => event.preventDefault()}

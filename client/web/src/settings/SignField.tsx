@@ -167,7 +167,7 @@ export function SignField({
               onClick={() => setWay(one)}
               className={cn(
                 "flex-1 rounded-control py-1 text-meta text-muted-foreground",
-                way === one && "bg-background text-foreground shadow-xs"
+                way === one && "bg-background text-foreground"
               )}
             >
               {title}

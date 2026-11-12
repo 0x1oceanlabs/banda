@@ -63,7 +63,7 @@ function ThumbnailRemove({
       type="button"
       data-slot="thumbnail-remove"
       className={cn(
-        "absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-popover text-popover-foreground opacity-0 shadow-sm ring-1 ring-foreground/10 transition-opacity outline-none group-hover/thumbnail:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3",
+        "absolute top-0.5 right-0.5 flex size-5 items-center justify-center rounded-full bg-popover text-popover-foreground opacity-0 shadow-float ring-1 ring-foreground/10 transition-opacity outline-none group-hover/thumbnail:opacity-100 focus-visible:opacity-100 focus-visible:ring-2 focus-visible:ring-ring [&_svg]:size-3",
         className
       )}
       {...props}

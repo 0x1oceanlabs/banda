@@ -673,7 +673,7 @@ function Pill({
       role="status"
       aria-label={label}
       className={cn(
-        "pointer-events-auto absolute flex items-center bg-popover text-meta text-popover-foreground shadow-lg ring-1",
+        "pointer-events-auto absolute flex items-center bg-popover text-meta text-popover-foreground shadow-float ring-1",
         PLACES[at],
         className
       )}
@@ -894,7 +894,7 @@ function LeftTabs(tabs: TabsProps) {
           <div
             data-browser-titles=""
             style={{ top: over.top, left: over.left, height: over.height }}
-            className="fixed z-50 flex w-60 flex-col border-r bg-popover shadow-lg"
+            className="fixed z-50 flex w-60 flex-col border-r bg-popover shadow-float"
           >
             <TabStrip {...tabs} side="titles" />
           </div>

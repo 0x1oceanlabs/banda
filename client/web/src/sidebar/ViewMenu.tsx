@@ -142,7 +142,7 @@ export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
                   className={cn(
                     "h-6 rounded-small px-2 text-meta outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                     picked
-                      ? "bg-background text-foreground shadow-xs"
+                      ? "bg-background text-foreground"
                       : "text-muted-foreground hover:text-foreground"
                   )}
                   onClick={() => {

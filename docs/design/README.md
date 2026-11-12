@@ -223,17 +223,26 @@ Five levels ([0080] d6), each inside the one above it:
 
 None, mostly: a thing stands apart by a 1 px line (`--border`, inset) and
 a step of fill (block 3.5%, raised 7%), not by a shadow. Shadows are only
-for what floats: the window over the desktop, the glass sidebar's panel
-(`sidebar-shadow` 0.45), the focused tile's soft lift ([0075] d5), the
-light message box's hairline and haze, copied from Codex ([0031] d1), and
-the Top layer. There is no shadow under the current card ([0098] d8), no
-glow and no coloured ring.
+for what floats or is carried: the window over the desktop, the glass
+sidebar's panel (`sidebar-shadow` 0.45), the focused tile's soft lift
+([0075] d5), the Top layer and a Pane's own floating bar, a Pane being
+moved and a Peek. The message box stands apart by its line, light or
+dark, as the window draws it: the haze [0031] d1 copied from Codex is
+gone. There is no shadow under the current card ([0098] d8), under a
+picked segment, a label or a pill, no glow and no coloured ring.
 
 The elevations by name ([0113] d4): `shadow-float` for what floats (the
-Top layer, a Pane's own floating bar: Find, a quote's button, a zoom
-badge), `shadow-lift` for what the Person carries (a Pane being moved, a
-Peek), and the Window's own: a tile over glass, the focused tile, the
-glass sidebar.
+Top layer: menus, popovers, dialogs, toasts; a Pane's own floating bar:
+Find, a quote's button, a zoom badge; a switch's and a slider's thumb, a
+button over a picture, a PDF's page), `shadow-lift` for what the Person
+carries (a Pane being moved, a widget on the Bar, a workspace in the
+Overview, a Peek), and the Window's own: `shadow-tile`, `shadow-focus`,
+`shadow-panel`. Float and lift are tokens, `--float-shadow` and
+`--lift-shadow`: their shape is Banda's, their strength a theme's
+(`shadow.float` 0.1, `shadow.lift` 0.45, in `[shape]` or `look.toml`).
+Tailwind's sizes (`shadow-md`) land on float for what comes as it is;
+inset and drop shadows are cleared. Two stay of their own, over a page
+an Agent drives: the glow at its edge and the shadow under its pointer.
 
 ### Motion and rhythm
 

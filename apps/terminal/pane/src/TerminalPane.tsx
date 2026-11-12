@@ -691,7 +691,7 @@ function Screen({
           <div
             role="status"
             title={notSent.note}
-            className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-meta whitespace-nowrap shadow-md"
+            className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-meta whitespace-nowrap shadow-float"
           >
             <KeyboardOffIcon className="size-3.5 text-attention" />
             <span>{notSent.said}</span>

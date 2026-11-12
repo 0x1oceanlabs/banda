@@ -244,96 +244,14 @@ const LISTED: Listed[] = [
     ],
   },
 
-  // Shadows (design.11, decision 4): all move in step 3.
+  // Shadows (design.11, decision 4): each other is an elevation since
+  // step 3.
   {
     rule: "design.11",
-    why: "Step 3: the Top layer's components become `float`: menus, a hover card, a popover, a select, the suggestions, a chart's tooltip, the browser's titles.",
-    cases: [
-      "apps/browser/pane/src/BrowserPane.tsx: shadow-lg",
-      "client/ui/src/components/chart.tsx: shadow-xl",
-      "client/ui/src/components/context-menu.tsx: shadow-md",
-      "client/ui/src/components/dropdown-menu.tsx: shadow-lg",
-      "client/ui/src/components/dropdown-menu.tsx: shadow-md",
-      "client/ui/src/components/hover-card.tsx: shadow-md",
-      "client/ui/src/components/popover.tsx: shadow-md",
-      "client/ui/src/components/select.tsx: shadow-md",
-      "client/ui/src/components/suggestions.tsx: shadow-md",
-    ],
-  },
-  {
-    rule: "design.11",
-    why: "Step 3: what floats in a Pane or the Window becomes `float`: Find, a quote's button, the zoom badge and bars, a diff's hunk actions, a menu, a dialog, a tooltip, the Thread's details.",
-    cases: [
-      "apps/agents/pane/src/settings/ThreadSettings.tsx: shadow-md",
-      "apps/agents/pane/src/thread/Details.tsx: shadow-sm",
-      "apps/agents/pane/src/thread/Find.tsx: shadow-md",
-      "apps/agents/pane/src/thread/Quote.tsx: shadow-md",
-      "apps/agents/pane/src/thread/Transcript.tsx: shadow-md",
-      "apps/agents/pane/src/visual/Visual.tsx: shadow-sm",
-      "apps/browser/pane/src/BrowserPane.tsx: shadow-lg",
-      "apps/browser/pane/src/PageDialog.tsx: shadow-xl",
-      "apps/files/pane/src/PathBar.tsx: shadow-md",
-      "apps/files/pane/src/views/code.tsx: shadow-sm",
-      "apps/files/pane/src/views/hex.tsx: shadow-md",
-      "apps/files/pane/src/views/pdf.tsx: shadow-md",
-      "apps/files/pane/src/views/zoom-bar.tsx: shadow-sm",
-      "apps/terminal/pane/src/TerminalPane.tsx: shadow-md",
-      "client/ui/src/components/code-diff.tsx: shadow-md",
-      "client/ui/src/components/zoom-badge.tsx: shadow-sm",
-      "client/web/src/safe/Broke.tsx: shadow-lg",
-      "client/web/src/sidebar/Edge.tsx: shadow-md",
-    ],
-  },
-  {
-    rule: "design.11",
-    why: "Step 3: what the Person carries becomes `lift`: a Pane being moved, a widget dragged on the Bar, a workspace lifted in the Overview, a Peek.",
-    cases: [
-      "client/web/src/bar/Bar.tsx: shadow-lg",
-      "client/web/src/tiling/Overview.tsx: shadow-[0_12px_28px_rgb(0_0_0/0.4)]",
-      "client/web/src/tiling/useMoving.ts: shadow-md",
-      "client/web/src/window/Peek.tsx: shadow-[0_30px_80px_-12px_rgb(0_0_0/0.45)]",
-    ],
-  },
-  {
-    rule: "design.11",
-    why: "Step 3: what does not float loses its shadow, or floats: a picked segment, the sidebar's view menu's, the Projects list's pick, the Overview's labels on its tiles, a thumbnail's button, a Group's handle, a machine's pill, a switch's and a slider's thumb.",
-    cases: [
-      "client/ui/src/components/level-slider.tsx: shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_2px_rgb(0_0_0/0.22),0_2px_6px_rgb(0_0_0/0.12)]",
-      "client/ui/src/components/level-slider.tsx: shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_3px_rgb(0_0_0/0.28),0_3px_10px_rgb(0_0_0/0.16)]",
-      "client/ui/src/components/switch.tsx: shadow",
-      "client/ui/src/components/thumbnail.tsx: shadow-sm",
-      "client/web/src/settings/SignField.tsx: shadow-xs",
-      "client/web/src/sidebar/ProjectsList.tsx: shadow-xs",
-      "client/web/src/sidebar/ViewMenu.tsx: shadow-xs",
-      "client/web/src/tiling/Overview.tsx: shadow-sm",
-      "client/web/src/tiling/Overview.tsx: shadow-sm",
-      "client/web/src/tiling/Strip.tsx: shadow-sm",
-      "client/web/src/window/named.tsx: shadow-sm",
-    ],
-  },
-  {
-    rule: "design.11",
-    why: "Step 3 decides: shadows of their own, the browser's inset glow while an Agent drives it, the Agent's pointer's shadow, a PDF page's lift off its ground.",
+    why: "Stays: what an Agent's hand draws over a page it drives, which is no height: the glow at the browser's edge, in the primary's colour, says the page is driven; the shadow under the Agent's pointer follows the pointer's shape, as the system's pointer has its own, and a box's shadow cannot.",
     cases: [
       "apps/browser/pane/src/BrowserPane.tsx: drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.3)]",
       "apps/browser/pane/src/BrowserPane.tsx: shadow-[inset_0_0_30px_color-mix(in_srgb,var(--primary)_40%,transparent)]",
-      "apps/files/pane/src/views/pdf.tsx: shadow-[0_4px_18px_rgb(0_0_0/0.18)]",
-    ],
-  },
-
-  {
-    rule: "design.11",
-    why: "Step 3: the kit's shadows, drawn by hand, go onto the elevations as the Window's do: the window over the desktop, a tile, the focused tile, the glass sidebar's panel, the light message box's haze, the Top layer, a floating tip.",
-    cases: [
-      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px var(--window-line), inset 0 1px 0 var(--window-highlight), 0 30px 70px -20px rgb(0 0 0 / 0.55), 0 10px 24px -12px rgb(0 0 0 / 0.3)",
-      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--border), var(--tile-shadow)",
-      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--focus), var(--focus-shadow), var(--tile-shadow)",
-      "docs/design/kit/kit.css: box-shadow: inset 0 0 0 1px var(--border), var(--panel-shadow)",
-      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024)",
-      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08)",
-      "docs/design/kit/kit.css: box-shadow: 0 0 0 1px var(--border), 0 12px 32px -12px rgb(0 0 0 / 0.4)",
-      "docs/design/kit/sub.css: box-shadow: 0 0 0 1px rgb(0 0 0 / 0.04), 0 2px 8px rgb(0 0 0 / 0.04), 0 4px 40px 8px rgb(0 0 0 / 0.024)",
-      "docs/design/kit/sub.css: box-shadow: 0 6px 16px -6px rgb(0 0 0 / 0.4)",
     ],
   },
 
@@ -512,7 +430,7 @@ const KIT_DIFFERS: Partial<Record<Token, string>> = {
     "a tile over glass: 95% in the kit, solid in the window (ADR 0075, decision 3)",
 }
 
-test("the kit's tokens are the theme's: its colours, its type scale and its corners", () => {
+test("the kit's tokens are the theme's: its colours, its type scale, its corners and its elevations", () => {
   const schemes = {
     dark: kitDefines(':root,\n[data-theme="dark"]'),
     light: kitDefines('[data-theme="light"]'),
@@ -531,11 +449,13 @@ test("the kit's tokens are the theme's: its colours, its type scale and its corn
     )
   )
   expect(off).toEqual([])
-  // The kit names every level, so a mock draws each as the window does.
+  // The kit names every level and elevation, so a mock draws each as the
+  // window does.
   const levels = Object.entries(TOKENS)
     .filter(
       ([, { kind, group }]) =>
-        kind === "length" && (group === "radius" || group === "font")
+        (kind === "length" && (group === "radius" || group === "font")) ||
+        group === "elevation"
     )
     .map(([name]) => name)
   expect(levels.filter((name) => !both.has(name))).toEqual([])
