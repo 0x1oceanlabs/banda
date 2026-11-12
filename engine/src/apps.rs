@@ -629,6 +629,10 @@ mod tests {
                 "an Agent may choose the default and the fallback (ADR 0104, decision 4)",
             ),
             (
+                "harnesses.login_watch",
+                "an Agent's `banda account login` watches a sign-in by its ID, as the `login_status` tool reads one",
+            ),
+            (
                 "harnesses.secret",
                 "a gateway account's own Harness asks for its key",
             ),

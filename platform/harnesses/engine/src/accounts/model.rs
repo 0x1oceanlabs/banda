@@ -198,9 +198,14 @@ pub struct LoginStatus {
     pub harness: String,
     /// The last 64 KiB of terminal output. No credential files are read.
     pub output: String,
+    /// How many bytes of output there were in all, the cut ones too: a
+    /// watcher that saw `seen` of them prints the last `written - seen`.
+    #[ts(type = "number")]
+    pub written: u64,
     pub done: bool,
-    /// Set only when done. Ask account_status after login_finish to
-    /// confirm who signed in; a successful exit alone is not proof.
+    /// Set only when done, once the engine read the Account again. Ask
+    /// account_status to confirm who signed in; a successful exit alone
+    /// is not proof.
     #[ts(optional)]
     pub succeeded: Option<bool>,
 }

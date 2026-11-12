@@ -15,7 +15,7 @@ use crate::{Failed, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
 pub use answer::{AccountList, HarnessOf, NewAccount};
-use banda_kernel::{Call, Environment, EventFilter, ModuleProject, Participant, Refusal};
+use banda_kernel::{Call, Environment, EventFilter, ModuleProject, Participant, Refusal, Stream};
 use logins::Logins;
 pub use model::*;
 pub(crate) use omarchy::Omarchy;
@@ -23,6 +23,7 @@ use profiles::Profiles;
 use secrets::{Kept, Secrets};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::future::Future;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -486,10 +487,13 @@ impl Accounts {
                 },
             );
             match started {
-                Ok((process, pty)) => {
-                    self.logins
-                        .terminal(&status.login, process.holding(held), pty, cancel)
-                }
+                Ok((process, pty)) => self.logins.terminal(
+                    &status.login,
+                    process.holding(held),
+                    pty,
+                    cancel,
+                    self.finish(&call, &harness.id),
+                ),
                 Err(error) => {
                     self.logins.forget(&status.login);
                     return Err(Refusal::conflict(format!(
@@ -505,6 +509,7 @@ impl Accounts {
                     asker.process.sign_in(&way.id).await.map_err(Into::into)
                 },
                 cancel,
+                self.finish(&call, &harness.id),
             );
         }
         Ok(status)
@@ -518,14 +523,60 @@ impl Accounts {
     pub(crate) fn login_cancel(&self, args: LoginId) -> Result<(), Refusal> {
         self.logins.cancel(&args.login)
     }
-    pub(crate) async fn login_finish(&self, call: Call, args: LoginId) -> Result<(), Refusal> {
-        let status = self.logins.status(&args.login)?;
-        if !status.done {
+    /// A sign-in's status as it changes, one piece each, ending once it
+    /// is done (ADR 0108, decision 5).
+    pub(crate) fn login_watch(&self, args: LoginId) -> Result<Stream, Refusal> {
+        let mut status = self.logins.watch(&args.login)?;
+        let (say, said) = tokio::sync::mpsc::channel(1);
+        tokio::spawn(async move {
+            loop {
+                let (now, done) = {
+                    let now = status.borrow_and_update();
+                    (serde_json::to_value(&*now), now.done)
+                };
+                let Ok(now) = now else { return };
+                if say.send(now).await.is_err() || done {
+                    return;
+                }
+                // Till it changes, or its watcher goes.
+                tokio::select! {
+                    changed = status.changed() => if changed.is_err() { return },
+                    () = say.closed() => return,
+                }
+            }
+        });
+        Ok(said)
+    }
+
+    /// Lets go of an ended sign-in's report before it expires: the engine
+    /// finished the sign-in as it ended, so the Account is read again
+    /// already. It stays for Agents' tools (ADR 0108, decision 5).
+    pub(crate) fn login_finish(&self, args: LoginId) -> Result<(), Refusal> {
+        if !self.logins.status(&args.login)?.done {
             return Err(Refusal::conflict("Sign-in is still running."));
         }
-        self.changed(&call, &status.harness).await?;
         self.logins.forget(&args.login);
         Ok(())
+    }
+
+    /// What the engine does as a sign-in of `harness` ends, before it says
+    /// so: lets go of the Harness's processes and says its account changed,
+    /// so nothing waits for a window to finish it (ADR 0108, decision 5).
+    fn finish(&self, call: &Call, harness: &str) -> impl Future<Output = ()> + Send + 'static {
+        let hosts = self.hosts.clone();
+        let project = call.project().downgrade();
+        let (by, subject) = (call.participant(), harness.to_owned());
+        async move {
+            let Some(project) = project.upgrade() else {
+                return;
+            };
+            hosts.let_go(project.id(), Some(&subject));
+            let told = subject.clone();
+            match project.write(move |tx| tell_changed(tx, by, &told)).await {
+                Ok(()) => heard(&project, &subject).await,
+                Err(error) => tracing::warn!(%error, "a sign-in's end was not told"),
+            }
+        }
     }
 
     pub(crate) async fn sign_in(
@@ -571,22 +622,29 @@ impl Accounts {
     /// and the kernel answers the same command, sent again, from it.
     async fn changed(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
         self.hosts.let_go(call.project().id(), Some(harness));
-        let (author, subject) = (call.participant(), harness.to_owned());
-        call.command(move |tx| {
-            tx.emit(
-                ACCOUNT_CHANGED,
-                VERSION,
-                Some(&subject),
-                author,
-                &Value::Null,
-            )
-            .map(|_| ())
-        })
-        .await?;
-        if !call.project().reacted(REACTED).await {
-            tracing::warn!(harness, "an account changed before all heard it");
-        }
+        let (by, subject) = (call.participant(), harness.to_owned());
+        call.command(move |tx| tell_changed(tx, by, &subject))
+            .await?;
+        heard(call.project(), harness).await;
         Ok(())
+    }
+}
+
+/// Says that `harness`'s sign-in changed: every process of it goes.
+fn tell_changed(
+    tx: &mut banda_kernel::Tx<'_>,
+    by: Participant,
+    harness: &str,
+) -> Result<(), banda_kernel::Error> {
+    let changed = tx.emit(ACCOUNT_CHANGED, VERSION, Some(harness), by, &Value::Null);
+    changed.map(|_| ())
+}
+
+/// Waits a while for everything that lets go of `harness`'s processes to
+/// hear it changed.
+async fn heard(project: &ModuleProject, harness: &str) {
+    if !project.reacted(REACTED).await {
+        tracing::warn!(harness, "an account changed before all heard it");
     }
 }
 

@@ -32,6 +32,7 @@ mod windows;
 /// The engine listens on this machine only.
 pub const HOST: &str = "127.0.0.1";
 
+#[derive(Clone)]
 pub struct Places {
     pub root: PathBuf,
     pub data: PathBuf,

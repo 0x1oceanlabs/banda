@@ -13,6 +13,7 @@ use banda_harnesses::accounts::AccountList;
 use banda_harnesses::model::{AccountKind, HarnessView};
 use banda_kernel::CommandId;
 use banda_kernel::Refusal;
+use banda_kernel::api::EngineFrame;
 use clap::{Subcommand, ValueEnum};
 use serde_json::{Value, json};
 use std::path::PathBuf;
@@ -80,7 +81,11 @@ pub enum AccountCommand {
     /// Ask the Harness whether this Account is signed in. Returns no
     /// credentials. `-` reads the IDs from stdin.
     Status { id: String },
-    /// Start sign-in. The Person completes the browser step or supplies a code.
+    /// Sign in, as one process: it prints `{"login", "harness"}`, then
+    /// each `{"output"}` the sign-in prints, then `{"done", "succeeded"}`,
+    /// and exits 0 once signed in. Each line on stdin goes to the sign-in,
+    /// as a confirmation code. The Person completes the browser step; the
+    /// engine finishes the sign-in even if this stops.
     Login {
         id: String,
         #[arg(long)]
@@ -92,7 +97,8 @@ pub enum AccountCommand {
     LoginInput { login: String, text: String },
     /// Cancel a running sign-in.
     LoginCancel { login: String },
-    /// Refresh after sign-in ends; use account status to confirm the identity.
+    /// Let go of an ended sign-in's report; the engine read the Account
+    /// again as it ended. Use account status to confirm the identity.
     LoginFinish { login: String },
     /// Remove an Account; its Threads move to the default after their
     /// Turn. `-` reads the IDs from stdin.
@@ -177,6 +183,10 @@ pub async fn account(places: &Places, what: AccountCommand) -> Result<(), Failur
             }
         }
         Plan::One(method, params) => print(&one(&mut client, method, params).await?),
+        Plan::Login(params) => {
+            let status = one(&mut client, "harnesses.login_account", params).await?;
+            return login(places, client, status).await;
+        }
         Plan::Each(id, method, mut params) => {
             let ids = match id.as_str() {
                 "-" => read_ids()?,
@@ -214,6 +224,7 @@ enum Plan {
     },
     Discover,
     One(&'static str, Value),
+    Login(Value),
     Each(String, &'static str, Value),
 }
 
@@ -270,10 +281,7 @@ fn plan(what: AccountCommand) -> Result<Plan, Failure> {
             "harnesses.connect_account",
             json!({ "harness": harness, "id": id, "folder": folder, "name": name }),
         ),
-        AccountCommand::Login { id, way } => Plan::One(
-            "harnesses.login_account",
-            json!({ "harness": id, "way": way }),
-        ),
+        AccountCommand::Login { id, way } => Plan::Login(json!({ "harness": id, "way": way })),
         AccountCommand::LoginStatus { login } => {
             Plan::One("harnesses.login_status", json!({ "login": login }))
         }
@@ -300,6 +308,92 @@ fn plan(what: AccountCommand) -> Result<Plan, Failure> {
             json!({ "role": "fallback", "harness": id }),
         ),
     })
+}
+
+/// A sign-in the engine started, followed to its end: its events on
+/// stdout, stdin's lines its input, its end the exit code (ADR 0108,
+/// decisions 3 and 5).
+async fn login(places: &Places, mut client: Client, status: Value) -> Result<(), Failure> {
+    let login = plain(&status["login"]);
+    println!(
+        "{}",
+        json!({ "login": login, "harness": status["harness"] })
+    );
+    let typing = tokio::spawn(type_into(places.clone(), login.clone()));
+    let watched = watch(&mut client, &login).await;
+    typing.abort();
+    let signed_in = watched?;
+    println!("{}", json!({ "done": true, "succeeded": signed_in }));
+    match signed_in {
+        true => Ok(()),
+        false => Err(Failure::Refused(Refusal::conflict(
+            "The sign-in ended without signing in.",
+        ))),
+    }
+}
+
+/// Each line on stdin, sent to the sign-in `login` on a connection of its
+/// own, made once a line comes.
+async fn type_into(places: Places, login: String) {
+    use tokio::io::AsyncBufReadExt;
+    let mut lines = tokio::io::BufReader::new(tokio::io::stdin()).lines();
+    let mut input = None;
+    while let Ok(Some(line)) = lines.next_line().await {
+        let client = match &mut input {
+            Some(client) => client,
+            None => match Client::connect(&places).await {
+                Ok(client) => input.insert(client),
+                Err(failure) => return eprintln!("banda: {}", failure.words()),
+            },
+        };
+        let text = format!("{line}\n");
+        let sent = one(
+            client,
+            "harnesses.login_input",
+            json!({ "login": login, "text": text }),
+        );
+        if let Err(Failure::Refused(refusal)) = sent.await {
+            eprintln!("{}", Failure::said(&refusal));
+        }
+    }
+}
+
+/// Prints what the sign-in `login` prints, as it comes, till it is done:
+/// whether it signed in.
+async fn watch(client: &mut Client, login: &str) -> Result<bool, Failure> {
+    let params = json!({ "login": login });
+    let watch = client.stream_with("harnesses.login_watch", params).await?;
+    let mut seen = 0;
+    loop {
+        match client.heard().await? {
+            EngineFrame::Piece { stream, data } if stream == watch => {
+                let output = plain(&data["output"]);
+                let written = data["written"].as_u64().unwrap_or_default();
+                // The last of it this has not printed: all that is left
+                // once the oldest is cut.
+                let unseen = usize::try_from(written - seen).unwrap_or(usize::MAX);
+                let new = &output[output.len().saturating_sub(unseen)..];
+                if !new.is_empty() {
+                    println!("{}", json!({ "output": new }));
+                }
+                seen = written;
+                if data["done"] == true {
+                    return Ok(data["succeeded"] == true);
+                }
+            }
+            EngineFrame::Result {
+                id,
+                error: Some(refusal),
+                ..
+            } if id == watch => return Err(Failure::Refused(refusal)),
+            EngineFrame::Ended { stream } if stream == watch => {
+                return Err(Failure::broken(
+                    "The engine stopped telling of the sign-in.",
+                ));
+            }
+            _ => {}
+        }
+    }
 }
 
 /// `--kind`, as `AccountKind` names itself.

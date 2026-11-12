@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { StreamMethod } from "../StreamMethod";
 import type { AccountKey } from "./AccountKey";
 import type { AccountList } from "./AccountList";
 import type { AccountProfile } from "./AccountProfile";
@@ -89,11 +90,19 @@ login_account: CallMethod<LoginAccount, LoginStatus>,
  */
 login_status: CallMethod<LoginId, LoginStatus>, 
 /**
+ * A sign-in's status as it changes, ending once it is done: the
+ * engine runs it to its end and finishes it, so a watcher may go
+ * (ADR 0108, decision 5). Any Agent's pass answers here, as
+ * `banda account login` is theirs too.
+ */
+login_watch: StreamMethod<LoginId, LoginStatus>, 
+/**
  * Sends input to the running sign-in terminal, not to a shell.
  */
 login_input: CallMethod<LoginInput, null>, 
 /**
- * Stops a running sign-in; finish it to refresh the Account.
+ * Stops a running sign-in; the engine reads the Account again as
+ * it ends.
  */
 login_cancel: CallMethod<LoginId, null>, 
 /**
@@ -103,8 +112,9 @@ login_cancel: CallMethod<LoginId, null>,
  */
 remove_account: CommandMethod<RemoveAccount, string>, 
 /**
- * Refreshes the Account after a completed sign-in. Then ask
- * account_status to confirm the Harness's report.
+ * Lets go of an ended sign-in's report before it expires: the
+ * engine read the Account again as it ended. Ask account_status
+ * to confirm the Harness's report.
  */
 login_finish: CommandMethod<LoginId, null>, 
 /**

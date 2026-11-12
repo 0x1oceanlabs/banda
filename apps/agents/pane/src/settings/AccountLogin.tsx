@@ -1,6 +1,6 @@
 /** The engine owns sign-in, including when Settings has no Project (ADR 0103). */
 import { useCallback, useEffect, useState } from "react"
-import { Refused, type Engine } from "@banda/contract"
+import type { Engine } from "@banda/contract"
 import type { LoginStatus } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
@@ -39,46 +39,32 @@ export function AccountLogin({
     () => onRunning?.(busy || login !== undefined),
     [busy, login, onRunning]
   )
+  // The engine runs the sign-in to its end and finishes it; the window
+  // only watches it (ADR 0108, decision 5).
   useEffect(() => {
     if (!login) return
-    let stopped = false
-    let timer: ReturnType<typeof setTimeout>
-    const poll = async () => {
-      try {
-        const next = await engine.call("harnesses.login_status", { login })
-        if (stopped) return
-        setJob(next)
-        if (next.done) {
-          await engine.command("harnesses.login_finish", { login })
-          if (stopped) return
-          setJob(undefined)
-          setNotice(
-            next.succeeded
-              ? "Sign-in finished. Checking the account…"
-              : "Sign-in ended without completing. You can try again."
-          )
-          setRound((n) => n + 1)
-          return
-        }
-      } catch (error) {
-        if (stopped) return
-        setRefused(problem(error))
-        if (
-          error instanceof Refused &&
-          ["not_found", "forbidden"].includes(error.refusal.code)
-        ) {
-          setJob(undefined)
-          setRound((n) => n + 1)
-          return
-        }
+    return engine.stream(
+      undefined,
+      "harnesses.login_watch",
+      { login },
+      (next) => {
+        if (!next.done) return setJob(next)
+        setJob(undefined)
+        setNotice(
+          next.succeeded
+            ? "Sign-in finished. Checking the account…"
+            : "Sign-in ended without completing. You can try again."
+        )
+        setRound((n) => n + 1)
+      },
+      (refusal, error) => {
+        if (!refusal && !error) return
+        // The engine runs on with it: Check again says how it ended.
+        setRefused(refusal?.message ?? problem(error))
+        setJob(undefined)
+        setRound((n) => n + 1)
       }
-      if (!stopped) timer = setTimeout(() => void poll(), 1000)
-    }
-    void poll()
-    return () => {
-      stopped = true
-      clearTimeout(timer)
-    }
+    )
   }, [engine, login])
   const act = async (run: () => Promise<void>) => {
     setBusy(true)
@@ -154,13 +140,13 @@ export function AccountLogin({
               autoComplete="off"
               onChange={(event) => setReply(event.target.value)}
             />
-            <Button type="submit" disabled={busy || !reply || job.done}>
+            <Button type="submit" disabled={busy || !reply}>
               Send
             </Button>
           </form>
           <Button
             variant="outline"
-            disabled={busy || job.done}
+            disabled={busy}
             onClick={() =>
               void act(async () => {
                 await engine.call("harnesses.login_cancel", {
