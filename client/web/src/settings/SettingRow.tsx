@@ -284,7 +284,7 @@ function Control({
       // Another machine's file is edited there.
       if (!here)
         return (
-          <span className="text-xs text-muted-foreground">
+          <span className="text-meta text-muted-foreground">
             In {row.file} there
           </span>
         )
