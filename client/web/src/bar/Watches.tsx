@@ -10,6 +10,7 @@ import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { openProjects } from "@banda/ui/lib/projects"
 import {
+  awayIn,
   emptyIn,
   HostsContext,
   type KeptHosts,
@@ -19,7 +20,7 @@ import {
   useHostsBy,
 } from "@banda/core/react"
 import type { Listed, Report, Watch } from "@banda/ui/pane"
-import { dropHost, StoresContext, takeLists } from "../calls/stores"
+import { dropHost, markAway, StoresContext, takeLists } from "../calls/stores"
 import { useLowBattery } from "../calls/battery"
 import { runs, watches } from "../registry"
 import { useListedOn } from "../window/machines"
@@ -113,16 +114,19 @@ export const Watches = memo(function Watches({
  * One Watches for each other host that is live (ADR 0081, decision 4),
  * so what its engine's Apps list flows into the Window's stores under its
  * name. A host that goes away, answers nothing or is stopped keeps what
- * it listed last; one the Window shows no rows of lets go of it.
+ * it listed last, marked away until it lists again (ADR 0098, decision
+ * 18); one the Window shows no rows of lets go of it.
  */
 function Elsewhere() {
   const hosts = useContext(HostsContext)
   const stores = useContext(StoresContext)
   const live = useHostsBy(liveIn, sameEach)
   const empty = useHostsBy(emptyIn, sameEach)
+  const away = useHostsBy(awayIn, sameEach)
   useEffect(() => {
     for (const name of empty) dropHost(stores, name)
   }, [stores, empty])
+  useEffect(() => markAway(stores, away), [stores, away])
   // A machine low on battery while its Agents work there warns once
   // (ADR 0097, decision 8).
   useLowBattery(hosts, stores)

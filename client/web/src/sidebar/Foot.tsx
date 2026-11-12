@@ -13,6 +13,7 @@ import { BellIcon, BellOffIcon, SettingsIcon } from "lucide-react"
 import { type ContextType, useState } from "react"
 import { choicesAt, quiet, quietWords, useQuiet } from "../calls/quiet"
 import { BulkBar } from "./BulkBar"
+import { MachinesPopover } from "./MachinesPopover"
 import { useOpen } from "./open"
 import { Bulk } from "./PickList"
 import { ViewMenu } from "./ViewMenu"
@@ -20,11 +21,12 @@ import { ViewMenu } from "./ViewMenu"
 /**
  * The sidebar's foot (ADR 0098, decision 21): Banda's settings, the view
  * menu and Quiet, as icons with no words, each tooltip with its key in
- * force where it has one. The key sheet and the theme went to the Banda
- * menu, which the bar's logo opens, and Add Project to ✎'s menu. While
- * cards are checked, the selection's bar lies over it, at its height, and
- * it goes under the bar (ADR 0098, decision 15): `bulk` is what the bar
- * acts on, and how.
+ * force where it has one; on the right, with another machine, a dot for
+ * each machine (decision 18). The key sheet and the theme went to the
+ * Banda menu, which the bar's logo opens, and Add Project to ✎'s menu.
+ * While cards are checked, the selection's bar lies over it, at its
+ * height, and it goes under the bar (ADR 0098, decision 15): `bulk` is
+ * what the bar acts on, and how.
  */
 export function Foot({ bulk }: { bulk: ContextType<typeof Bulk> }) {
   const checking = bulk.rows.length > 0
@@ -51,7 +53,7 @@ export function Foot({ bulk }: { bulk: ContextType<typeof Bulk> }) {
         </Button>
         <ViewMenu />
         <QuietBell />
-        {/* The machines come on the right (S13). */}
+        <MachinesPopover />
       </div>
       <Bulk value={bulk}>
         <BulkBar />

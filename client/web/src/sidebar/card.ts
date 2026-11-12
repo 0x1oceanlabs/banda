@@ -86,6 +86,10 @@ export type Slot =
   | { kind: "machine"; host?: string; machine: Named; named: boolean }
   /** Its Harness's emblem. */
   | { kind: "harness"; id: string; name: string }
+  /** On line 3, that its machine is out of reach, and since when
+   * (`CardModel.away`, `awayShort`): after a dot where the machine shows
+   * before it, "arc · away 12m" (decision 18). */
+  | { kind: "away"; dot: boolean }
 
 export type Says = Extract<Slot, { kind: "says" }>
 
@@ -235,6 +239,7 @@ export function cardOf(input: CardOf): CardModel {
           : [{ kind: "project", project: row.project }],
       right: [
         ...(on ? [machineSlot(row, on, true)] : []),
+        ...(away === undefined ? [] : [{ kind: "away" as const, dot: !!on }]),
         ...(listed.harness
           ? [
               {
@@ -529,7 +534,9 @@ function slotSaid(slot: Slot, now: number): string[] {
       return [
         `${slot.added} ${slot.added === 1 ? "line" : "lines"} added, ${slot.removed} removed`,
       ]
-    // Said with who started it, after the lines.
+    // Said with who started it, and that its machine is away, after the
+    // lines.
+    case "away":
     case "parent":
     case "mark":
     case "title":

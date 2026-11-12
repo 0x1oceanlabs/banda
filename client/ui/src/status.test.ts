@@ -3,12 +3,14 @@ import type { Listed } from "./pane"
 import type { MarkDoing, MarkState } from "./lib/mark-state"
 import {
   attentionOf,
+  awayAtWork,
   callsOf,
   type Does,
   doesOf,
   type Held,
   heldDoing,
   headerLookOf,
+  hostsAway,
   lookOf,
   mayArchive,
   nextStuck,
@@ -306,6 +308,38 @@ test("the bar's Mark shows the loudest look: a failure over a Thread that woke",
   expect(attentionOf(lists, 100)).toEqual({ mark: "woke", waiting: 2 })
   const failing = { s: [...lists.s, thing({ id: "c", mark: "failed" })] }
   expect(attentionOf(failing, 100)).toEqual({ mark: "failed", waiting: 3 })
+})
+
+test("at work on a machine out of reach, a Thread sleeps where it stands, and the bar's Mark with it; what asks there is still the Person's turn (ADR 0098, decision 18)", () => {
+  const working = thing({ id: "a", mark: "working", host: "arc", away: true })
+  const asks = thing({ id: "b", mark: "asking", host: "arc", away: true })
+  const later = thing({
+    id: "c",
+    mark: "working",
+    host: "arc",
+    away: true,
+    later: { at: 0, until: 1e3 },
+  })
+  const there = thing({ id: "d", mark: "working", host: "mac" })
+  expect(standOf(working, 0)).toBe("working")
+  expect(lookOf(working, 0)).toEqual({ look: "offline" })
+  expect(standOf(asks, 0)).toBe("turn")
+  expect(lookOf(asks, 0)).toEqual({ look: "asking" })
+  expect(lookOf(later, 0)).toEqual({ look: "later" })
+  expect(lookOf(there, 0).look).toBe("working")
+  // The logo sleeps only for a machine away with Agents at work.
+  expect(attentionOf({ s: [working, asks, there] }, 0)).toEqual({
+    mark: "offline",
+    waiting: 1,
+  })
+  expect(attentionOf({ s: [asks, later, there] }, 0)).toEqual({
+    mark: "asking",
+    waiting: 1,
+  })
+  const lists = { s: [working, asks, later, there] }
+  expect(awayAtWork(lists, 0)).toEqual(new Map([["arc", 1]]))
+  expect(hostsAway(lists)).toEqual(new Set(["arc"]))
+  expect(hostsAway({ s: [there] }).size).toBe(0)
 })
 
 test("waiting is the Person's turn: what asks, failed, is done, or woke", () => {

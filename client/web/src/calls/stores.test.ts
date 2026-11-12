@@ -9,6 +9,7 @@ import {
   itemsOf,
   keptLists,
   listedIn,
+  markAway,
   newStores,
   takeLists,
   threadlessIn,
@@ -237,6 +238,44 @@ test("a host stopped there keeps its lists, as one away does: only a host the Wi
   told({ ...arc, state: "refused", why: "another protocol" })
   expect(stores.items.get()[r]).toBeUndefined()
   expect(Object.keys(stores.items.get())).toEqual([p])
+})
+
+test("a host out of reach stands marked away, where it was, until its Watches list again; its Agents at work sleep on the bar's Mark (ADR 0098, decision 18)", () => {
+  const stores = newStores(0)
+  const stop = followCalls(stores)
+  takeLists(stores, { [p]: [thread("a", { mark: "working" })] })
+  takeLists(stores, { [r]: [thread("b", { mark: "working" })] }, "arc")
+  const heard = vi.fn()
+  stores.items.subscribe(heard)
+  const marks = () =>
+    Object.values(stores.items.get())
+      .flat()
+      .map((one) => [one.id, one.away ?? false])
+  // This machine and a host with no list yet have nothing to mark.
+  markAway(stores, ["this", "devbox"])
+  expect(heard).not.toHaveBeenCalled()
+  markAway(stores, ["arc"])
+  expect(heard).toHaveBeenCalledTimes(1)
+  expect(marks()).toEqual([
+    ["a", false],
+    ["b", true],
+  ])
+  expect(stores.calls.get().attention.mark).toBe("offline")
+  // Still away, it is marked once; back, the mark stays until it lists.
+  markAway(stores, ["arc"])
+  markAway(stores, [])
+  expect(heard).toHaveBeenCalledTimes(1)
+  takeLists(stores, { [r]: [thread("b", { mark: "done" })] }, "arc")
+  expect(marks()).toEqual([
+    ["a", false],
+    ["b", false],
+  ])
+  expect(stores.calls.get().attention.mark).toBe("done")
+  // Away again, and let go of: nothing of it stays.
+  markAway(stores, ["arc"])
+  dropHost(stores, "arc")
+  expect(stores.away.size).toBe(0)
+  stop()
 })
 
 test("the bar's Mark is every host's lists' loudest, and their turns in all, put away left out", () => {

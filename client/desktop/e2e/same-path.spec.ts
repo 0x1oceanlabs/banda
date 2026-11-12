@@ -45,6 +45,13 @@ const arcOf = (page: Page) =>
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("group", { name: "arc", exact: true })
 
+/** arc's dot in the sidebar's foot, which says how it stands: `live`, or
+ * `away` (ADR 0098, decision 18). */
+const dotOf = (page: Page) =>
+  page
+    .getByRole("complementary", { name: "Sidebar" })
+    .locator('[data-machine-dot="arc"]')
+
 /**
  * "Same" on both machines, each with its own who.txt and a file only it
  * has, and arc's with a Thread done, open in the window from arc's part
@@ -206,7 +213,7 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
   // away, as a reset would have it at once.
   await page.waitForTimeout(1_500)
   await expect(toasts.filter({ hasText: "Stop" })).toHaveCount(0)
-  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0)
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "live")
   const told = toasts.filter({
     hasText:
       /arc (went away; Stop may have gone through|is away: Stop was not sent)\./,
@@ -220,7 +227,7 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
   await expect(told).toContainText(
     sent ? "went away; Stop may have gone through" : "Stop was not sent"
   )
-  await expect(arcOf(page).getByText(/^away/)).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "away")
   runs()
   // Pressed while arc is away, it is refused at once.
   const refused = toasts.filter({ hasText: "arc is away: Stop was not sent." })
@@ -232,7 +239,7 @@ test("arc in a black hole: Stop sent into it waits for no answer, then says what
   // Out of the hole, and heard again: what went into it, and what was
   // refused, never lands there by itself.
   arc!.blackhole(false)
-  await expect(arcOf(page).getByText(/^away/)).toHaveCount(0, {
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "live", {
     timeout: 90_000,
   })
   for (const until = Date.now() + 5_000; Date.now() < until;) {
@@ -382,7 +389,9 @@ test("quick-look: a file of arc's shows in Quick Look naming arc; a file gone fr
 
   // Away: refused at once in its pill's words, never shown later.
   arc!.blackhole(true)
-  await expect(arcOf(page).getByText(/^away/)).toBeVisible({ timeout: 60_000 })
+  await expect(dotOf(page)).toHaveAttribute("data-standing", "away", {
+    timeout: 60_000,
+  })
   await page.keyboard.press(QUICK_LOOK)
   await expect(notes.getByText("arc is away")).toBeVisible()
   await expect(peek).toHaveCount(0)

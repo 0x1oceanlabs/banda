@@ -6,6 +6,7 @@
  * while the machine is live; away, the card says only what still holds.
  */
 import { type ReactNode, useCallback, useContext, useMemo, useRef } from "react"
+import type { Battery } from "@banda/contract/machines"
 import { BatteryIcon } from "@banda/ui/components/battery-icon"
 import {
   HoverCard,
@@ -24,7 +25,7 @@ import {
   useShownOf,
 } from "@banda/core/react"
 import { useTurnsOn } from "../calls/battery"
-import { buildWords, factsWords, stateWords } from "../settings/machines"
+import { buildWords, factsWords, stateWords } from "../machines/words"
 
 /** What a card's popups stand beside: the sidebar, or the menu it is
  * drawn in, as the counts' list. */
@@ -98,13 +99,7 @@ function Drawn({ shown }: { shown: Shown }) {
   const rows: [term: string, value: ReactNode][] = []
   if (facts) rows.push(["Machine", facts])
   if (power?.battery)
-    rows.push([
-      "Battery",
-      <span className="flex items-center gap-1.5">
-        <BatteryIcon battery={power.battery} />
-        {batteryWords(power.battery)}
-      </span>,
-    ])
+    rows.push(["Battery", <BatteryFact battery={power.battery} />])
   if (power) rows.push(["Awake", awakeWords(power.awake, turns).short])
   if (build) rows.push(["Build", build])
   rows.push(["Address", <span className="font-mono">{state.ssh}</span>])
@@ -127,5 +122,16 @@ function Drawn({ shown }: { shown: Shown }) {
         ))}
       </dl>
     </div>
+  )
+}
+
+/** A machine's battery, its icon and its words, as its card and the
+ * foot's machines say it (ADR 0097, decision 7). */
+export function BatteryFact({ battery }: { battery: Battery }) {
+  return (
+    <span className="flex items-center gap-1.5">
+      <BatteryIcon battery={battery} />
+      {batteryWords(battery)}
+    </span>
   )
 }

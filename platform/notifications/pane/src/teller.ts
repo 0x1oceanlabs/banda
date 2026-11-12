@@ -9,7 +9,7 @@ import type { ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import type { Thing, WindowApi } from "@banda/ui/module"
 import type { Call, Lists, PaneState } from "@banda/ui/pane"
-import { callsOf } from "@banda/ui/status"
+import { callsOf, hostsAway } from "@banda/ui/status"
 import { type Chime, player } from "@banda/ui/sound"
 import { type Desktop, desktopOf } from "./desktop"
 import { keep } from "./recent"
@@ -50,6 +50,10 @@ export function startTelling(
   let calling: readonly Call[] = []
   // The Projects already listed: a Project's first list is what already was.
   let known = new Set<string>()
+  // The other machines out of reach as they last listed: what they did
+  // meanwhile comes in one list as they are heard again, and their cards
+  // update silently (ADR 0098, decision 18).
+  let away: ReadonlySet<string> = new Set()
   let gathered: Call[] = []
   let last: Played | undefined
   let timer: ReturnType<typeof setTimeout> | undefined
@@ -210,8 +214,13 @@ export function startTelling(
     // either (ADR 0098, decision 21).
     const news = window.quiet()
       ? []
-      : fresh.filter((call) => known.has(call.project))
+      : fresh.filter(
+          (call) =>
+            known.has(call.project) &&
+            (call.host === undefined || !away.has(call.host))
+        )
     known = projects
+    away = hostsAway(lists)
     withdraw(gone.map((call) => call.key))
     gathered.push(...news)
     seen()

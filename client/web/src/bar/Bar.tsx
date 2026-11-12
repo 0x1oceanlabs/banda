@@ -20,15 +20,28 @@ import {
 } from "react"
 import type { Problem } from "@banda/contract/look"
 import { useQuiet } from "../calls/quiet"
-import { barAttention, useCalls } from "../calls/stores"
+import {
+  barAttention,
+  useCalls,
+  useItems,
+  useLaterClock,
+} from "../calls/stores"
 import { useLookProblems } from "../look"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part } from "./placed"
 import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
 import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
-import { useRun } from "@banda/core/react"
+import {
+  keyNamed,
+  namedIn,
+  type Shown,
+  useHosts,
+  useRun,
+} from "@banda/core/react"
 import { useStatus } from "@banda/ui/hooks/use-status"
+import type { Lists } from "@banda/ui/pane"
+import { awayAtWork } from "@banda/ui/status"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): Banda's mark on
@@ -40,7 +53,9 @@ import { useStatus } from "@banda/ui/hooks/use-status"
  * centred on the window whatever the sides hold, and on the right before
  * the engine's connection, as the look's `[bar]` lists them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
  * What calls, for its Mark, and how many Agents work, it reads from the
- * Window's stores.
+ * Window's stores. Another machine away shows on the Mark only while its
+ * Agents were at work as it was last heard: then it sleeps, offline, and
+ * its name says which (ADR 0098, decision 18).
  */
 export function Bar({
   engine,
@@ -68,8 +83,11 @@ export function Bar({
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
   const quiet = useQuiet() !== "off"
+  const away = useAwayAtWork()
   const words =
-    (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
+    (mark === "rest"
+      ? ""
+      : ` · ${status.state === "open" && away ? away : MARK_WORDS[mark]}`) +
     (waiting > 1 ? ` · ${waiting} wait for you` : "") +
     (quiet ? " · Quiet on" : "")
   const nodes = useMemo(
@@ -335,6 +353,25 @@ function useArranging(
     dragging: drag?.id,
     over: drag && !drag.away ? drag.part : undefined,
   }
+}
+
+/** Which other machines out of reach had Agents at work, as the logo's
+ * name says them: "arc is away with Agents at work"; none while none. */
+function useAwayAtWork(): string | undefined {
+  const now = useLaterClock()
+  const hosts = useHosts()
+  const said = useItems(
+    useCallback((lists: Lists) => awayNames(lists, now, hosts), [now, hosts])
+  )
+  return said || undefined
+}
+
+function awayNames(lists: Lists, now: number, hosts: readonly Shown[]): string {
+  const names = [...awayAtWork(lists, now).keys()].map(
+    (key) => namedIn(hosts, key, keyNamed).name
+  )
+  if (names.length === 0) return ""
+  return `${names.join(", ")} ${names.length === 1 ? "is" : "are"} away with Agents at work`
 }
 
 /** The mark sleeps while the engine does not answer, and fails if it refused. */

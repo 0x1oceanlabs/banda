@@ -44,6 +44,10 @@ export type Stores = {
   /** What each host's Watches listed last, by its name, this machine's as
    * `HERE`: `items` merges them. */
   hosts: Map<string, Lists>
+  /** The other hosts out of the Window's reach since they last listed,
+   * whose lists stand marked as last heard (`markAway`), until their
+   * Watches list again. */
+  away: Set<string>
 }
 
 /** This machine, as the stores name the host of what it lists: a name
@@ -55,6 +59,7 @@ export function newStores(now = Date.now()): Stores {
     items: new Store<Lists>({}),
     calls: new Store<Calls>({ attention: QUIET, now, list: [] }),
     hosts: new Map(),
+    away: new Set(),
   }
 }
 
@@ -105,14 +110,36 @@ function mergedLists(hosts: ReadonlyMap<string, Lists>): Lists {
 
 /** Takes what host `host`'s Watches list now: the items hold it with
  * every other host's, another host's marked as that host's (`onHost`). */
-export function takeLists(
-  { items, hosts }: Stores,
-  lists: Lists,
-  host = HERE
-): void {
+export function takeLists(stores: Stores, lists: Lists, host = HERE): void {
   const placed = host === HERE ? lists : onHost(lists, host)
-  hosts.set(host, placed)
+  stores.hosts.set(host, placed)
+  stores.away.delete(host)
+  merge(stores)
+}
+
+/** The items again, as every host listed last. */
+function merge({ items, hosts }: Stores): void {
   items.set(keptLists(items.get(), mergedLists(hosts)))
+}
+
+/**
+ * Marks what each host of `names` listed last as out of the Window's
+ * reach (`Listed.away`, ADR 0098, decision 18): it stands as it was, where
+ * it was, until that host's Watches list again, which takes the mark off
+ * (`takeLists`). So what changed there meanwhile comes in one list, as
+ * the host is heard again, never as news one by one. A host with no list
+ * yet has nothing to mark.
+ */
+export function markAway(stores: Stores, names: readonly string[]): void {
+  let marked = false
+  for (const name of names) {
+    const said = stores.hosts.get(name)
+    if (name === HERE || !said || stores.away.has(name)) continue
+    stores.away.add(name)
+    stores.hosts.set(name, withAll(said, { away: true }))
+    marked = true
+  }
+  if (marked) merge(stores)
 }
 
 /** What host `host` lists, each marked as that host's (`Listed.host`, ADR
@@ -121,10 +148,13 @@ export function takeLists(
  * it there, and an answer's action sends it there, by its Project, as the
  * directory places it (ADR 0106, decision 1), never to this machine's
  * engine. */
-function onHost(lists: Lists, host: string): Lists {
+const onHost = (lists: Lists, host: string) => withAll(lists, { host })
+
+/** `lists`, each Listed with `more`. */
+function withAll(lists: Lists, more: Partial<Listed>): Lists {
   const placed: Record<ProjectId, readonly Listed[]> = {}
   for (const [project, listed] of Object.entries(lists))
-    placed[project as ProjectId] = listed.map((one) => ({ ...one, host }))
+    placed[project as ProjectId] = listed.map((one) => ({ ...one, ...more }))
   return placed
 }
 

@@ -26,10 +26,10 @@ type Placed = Omit<CardOf, "row" | "machine" | "away" | "stopped"> & {
 
 /**
  * A Thread's card, the same on every machine (ADR 0098, decision 18),
- * named as `[machines]` asks (`useCard`): another machine's dims, where
- * no label above names it, while the Window does not reach it, its time
- * standing as of when it was last heard, and has its Harness's emblem
- * from that machine's engine. This machine's has its menu (`CardMenu`,
+ * named as `[machines]` asks (`useCard`): another machine's dims where it
+ * stands while the Window does not reach it, its time standing as of when
+ * it was last heard (`Card`), and has its Harness's emblem from that
+ * machine's engine. This machine's has its menu (`CardMenu`,
  * ADR 0098, decision 14), whose Rename… opens the field in the card
  * itself. Every card has its acts under the pointer (ADR 0098, decision
  * 10), which go to its host's engine; another machine's has no menu yet,
@@ -82,14 +82,7 @@ export function ThreadRow({
       field={field}
     />
   )
-  // Away from it, another machine's card dims where no label above does.
-  if (!mine)
-    return !named && card.away ? (
-      <div className="opacity-45">{drawn()}</div>
-    ) : (
-      drawn()
-    )
-  if (left) return drawn()
+  if (!mine || left) return drawn()
   if (naming)
     return drawn(
       <TitleField

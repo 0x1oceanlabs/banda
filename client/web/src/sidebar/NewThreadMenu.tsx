@@ -45,6 +45,7 @@ import {
   FoldersIcon,
   SquarePenIcon,
 } from "lucide-react"
+import { THIS_MACHINE } from "../machines/words"
 import {
   clickOf,
   NEW_THREAD,
@@ -391,9 +392,6 @@ function OnGroup({ on }: { on: OnPick[] }) {
     </DropdownMenuGroup>
   )
 }
-
-/** This machine before its engine says its name. */
-const THIS_MACHINE: Named = { name: "This machine", icon: "desktop" }
 
 /** The menu's "with": the Harnesses of the machine a click starts on,
  * this one's by `engine`, read as the menu opens, each starting where a

@@ -1,24 +1,20 @@
 /**
  * Settings → Machines' own rules and words (ADR 0095): the ten icons in
  * the picker's order, how Add numbers a name another machine shown has
- * and moves a server's icon on (decision 3), what a machine's state, its
- * build and a Test say, when a machine stays awake, why another is awake
+ * and moves a server's icon on (decision 3), what a Test says, when a
+ * machine stays awake, why another is awake
  * now and what its lid does (ADR 0097), and what the Person's acts show
- * while several run. Its state's words are Settings' own small list; the
- * sidebar's label keeps its own (`HostWords`). Pure, so plain tests cover
- * it.
+ * while several run. A machine's state, its build and what it says it
+ * is are the Window's words (`../machines/words`). Pure, so plain tests
+ * cover it.
  */
 import type { Awake, MachineIcon, Named, Power } from "@banda/contract/machines"
 import { type Row, rowsOf, type Setting } from "@banda/contract/settings"
-import { cleanNamed, cleanText } from "@banda/ui/hooks/use-status"
+import { cleanNamed } from "@banda/ui/hooks/use-status"
 import { problem } from "@banda/ui/lib/words"
-import {
-  awakeWords,
-  type HostState,
-  type HostTest,
-  otherBuild,
-} from "@banda/core"
+import { awakeWords, type HostTest } from "@banda/core"
 import { ELSEWHERE } from "../boot"
+import { buildName, factsWords, sameBuild } from "../machines/words"
 
 /** The ten icons, in the picker's order (decision 1). */
 export const ICONS: readonly MachineIcon[] = [
@@ -155,43 +151,6 @@ export function addedWords(
   return `Added ${named.name}. Written on it: ${written.join(" and ")}. Change it in its row.`
 }
 
-/** A machine's state in a word or two, on its row in Settings. */
-export function stateWords(state: HostState): string {
-  switch (state.state) {
-    case "connecting":
-      return "connecting"
-    case "signin":
-      return "sign in to Tailscale"
-    case "live":
-      return otherBuild(state) ? "live · other build" : "live · same build"
-    case "away":
-      return "away"
-    case "stopped":
-      return "stopped"
-    case "refused":
-      return "refused"
-  }
-}
-
-type Build = { build: string | null; version: string | null }
-
-/** A build as its words: `dev.421`, a version's, else its build's. */
-const short = ({ build, version }: Build) =>
-  version === null
-    ? (build?.slice(0, 7) ?? "?")
-    : (/-(dev\.\d+)$/.exec(version)?.[1] ?? version)
-
-const sameBuild = (a: Build, b: Build) =>
-  a.build === b.build && a.version === b.version
-
-/** A live machine's build beside this window's: "dev.421, same as here",
- * or both (`otherBuild`); none while it is not live, as only then is it
- * known. */
-export function buildWords(state: HostState): string | undefined {
-  if (state.state !== "live") return undefined
-  return otherBuild(state) ?? `${short(state)}, same as here`
-}
-
 /** Why another machine's name and icon cannot be changed now: only its
  * engine writes them, and only while it is live. */
 export const renameWords = (name: string) => `Rename ${name} when it is back`
@@ -211,17 +170,6 @@ export function foundNamed(test: HostTest, name: string): Named | undefined {
     : undefined
 }
 
-/** The most characters a machine's model or system shows. */
-const FACT_MOST = 40
-
-/** What a machine says it is, its model and its system, each cleaned
- * as its name is, on one line; empty where it says neither. */
-export const factsWords = (said: readonly unknown[]): string =>
-  said
-    .map((one) => cleanText(one, FACT_MOST))
-    .filter(Boolean)
-    .join(" · ")
-
 /**
  * What a Test, or Add's Connect, found, named `name` where the machine
  * says no name of its own: found, with its system, cleaned again as its
@@ -238,11 +186,11 @@ export function testWords(
       const system = said ? ` · ${said}` : ""
       const build = sameBuild(test.banda, test.own)
         ? "same build"
-        : `${short(test.own)} here`
+        : `${buildName(test.own)} here`
       return {
         found: true,
         title: `Found ${foundNamed(test, name)?.name ?? name}${system}`,
-        detail: `banda ${short(test.banda)}, ${build}`,
+        detail: `banda ${buildName(test.banda)}, ${build}`,
       }
     }
     case "missing": {
@@ -250,7 +198,7 @@ export function testWords(
       return {
         found: true,
         title: `Found ${name}${said ? ` · ${said}` : ""}`,
-        detail: `No Banda there yet. Banda ${short({ build: null, version: test.version })} is put in ${name}'s own folder; it then updates itself.`,
+        detail: `No Banda there yet. Banda ${buildName({ build: null, version: test.version })} is put in ${name}'s own folder; it then updates itself.`,
       }
     }
     case "signin":
@@ -290,7 +238,7 @@ export function installSteps(
     const [word, ...rest] = line.split(" ")
     switch (word) {
       case "version":
-        version = short({ build: null, version: rest[0] ?? "" })
+        version = buildName({ build: null, version: rest[0] ?? "" })
         break
       case "downloading": {
         const bytes = Number(rest[1])

@@ -390,6 +390,11 @@ export type Listed = {
    * decision 1); a notice and the Banda menu name that machine by it (ADR
    * 0095, decision 8). */
   host?: string
+  /** Its machine, another of `hosts.toml`, is out of the Window's reach,
+   * away or stopped, and it stands as that machine last said it, until it
+   * says it again (ADR 0098, decision 18). The Window marks it; its App
+   * never says it. */
+  away?: true
   /** Its latest Later (ADR 0074): the sidebar puts it away while it
    * sleeps. */
   later?: ListedLater
