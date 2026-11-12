@@ -463,6 +463,7 @@ fn entries(items: &[Item]) -> Vec<String> {
                 subagent,
                 text: None,
             } => format!("messaged {subagent}"),
+            Body::Crew { crew } => format!("crew: {crew}"),
         })
         .collect()
 }
@@ -10687,15 +10688,17 @@ async fn the_threads_changes_card_and_diff_agree_on_a_sub_agents_edits() {
 }
 
 /// What a sub-agent writes after its turn moves its Thread nowhere: the
-/// list's order and what is archived stay; the Agent's next reply moves it
-/// (ADR 0103, decision 8).
+/// list's order stays; the Agent's next reply moves it (ADR 0103, decision
+/// 8). Its Thread works while it does, so it is not archived until it ends
+/// (decision 19).
 #[tokio::test]
 async fn a_sub_agents_writes_after_its_turn_move_the_thread_nowhere() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (sent, _) = world.outlived(None, "sub-agents outlive").await;
     let thread = &sent["thread"];
-    world.archive(world.person(), thread, true).await.unwrap();
+    let refused = world.archive(world.person(), thread, true).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
     let changed = world.changed(thread).await;
     let (other, _) = world.finish(None, "hello").await;
     let order = || async {
@@ -10706,13 +10709,12 @@ async fn a_sub_agents_writes_after_its_turn_move_the_thread_nowhere() {
     world.until(thread, |v| lanes_ended(v, 1)).await;
     let listed = world.listed(thread).await;
     assert_eq!(listed.thread.updated_at, changed);
-    assert!(listed.is_archived(), "{listed:?}");
+    assert!(!listed.works(), "{listed:?}");
     assert_eq!(order().await, before);
 
     world.finish(Some(thread), "hello again").await;
     let listed = world.listed(thread).await;
     assert!(listed.thread.updated_at > changed);
-    assert!(!listed.is_archived());
     assert!(world.changed(&other).await <= listed.thread.updated_at);
 }
 

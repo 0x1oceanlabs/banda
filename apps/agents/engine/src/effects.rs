@@ -25,6 +25,7 @@
 
 use crate::acp::{self, Opened, Prompt, PromptImage, Running, Session, Steered};
 use crate::between;
+use crate::crews;
 use crate::doing::Doer;
 use crate::drive::drive;
 use crate::handoff;
@@ -703,6 +704,15 @@ async fn work(
         harness: harness.name.clone(),
     };
     lanes.hear(&session);
+    // So are its Crews, from Claude's raw frames (ADR 0103, step 4).
+    let crews = crews::Hearer {
+        live: live.clone(),
+        project: project.clone(),
+        thread,
+        agent: turn.agent,
+        harness: harness.name.clone(),
+    };
+    crews.hear(&session);
     let (mut hear, done) = session.prompt(&prompt);
     // The prompt holds it now.
     drop(opening);

@@ -27,6 +27,7 @@ mod acp;
 mod aside;
 mod between;
 mod changes;
+mod crews;
 pub mod chosen_modes;
 pub mod counts;
 mod deleting;
@@ -86,7 +87,7 @@ use live::{Hold, Live};
 use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
     AccountUse, Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, SubagentId,
-    SubagentView, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    SubagentView, ThreadId, CrewId, CrewView, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
     VisualId,
 };
 use notes::Notify;
@@ -432,6 +433,10 @@ banda_kernel::methods! {
         /// Questions it asked, and the sub-agents it started (ADR 0103,
         /// decision 21).
         call subagent(OneSubagent) -> SubagentView, Read;
+        /// One Crew of a Thread, read only, as its Pane shows it: its
+        /// phases and agents, its Result, and what its agents did between
+        /// turns (ADR 0103, step 4).
+        call crew(OneCrew) -> CrewView, Read;
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
         /// How much this Project's Threads use each account, a Harness
@@ -753,6 +758,13 @@ struct OneThread {
 struct OneSubagent {
     /// The sub-agent's ID, as its Thread's `subagents` lists it.
     subagent: SubagentId,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct OneCrew {
+    /// The Crew's ID, as its Thread's `crews` lists it.
+    crew: CrewId,
 }
 
 /// A message in a Thread, or the first one of a new Thread on a Harness.
@@ -1134,6 +1146,7 @@ impl Agents {
                     forked_from: store::forked_from(sql, thread)?,
                     unfenced,
                     subagents: store::subagents(sql, thread)?,
+                    crews: store::crews(sql, thread)?,
                     edits: store::edits(sql, thread)?,
                     thread: summary,
                 }))
@@ -1165,6 +1178,25 @@ impl Agents {
             .await?;
         let view = found.ok_or_else(|| Refusal::not_found("There is no such sub-agent."))?;
         Ok(SubagentView { at, ..view })
+    }
+
+    async fn crew(&self, call: Call, OneCrew { crew }: OneCrew) -> Result<CrewView, Refusal> {
+        let (at, found) = call
+            .project()
+            .view(move |sql| {
+                let Some((thread, kept)) = store::crew(sql, crew)? else {
+                    return Ok(None);
+                };
+                Ok(Some(CrewView {
+                    at: 0,
+                    thread,
+                    crew: kept,
+                    items: store::crew_items(sql, crew)?,
+                }))
+            })
+            .await?;
+        let view = found.ok_or_else(|| Refusal::not_found("There is no such Crew."))?;
+        Ok(CrewView { at, ..view })
     }
 
     async fn changes(
@@ -1804,7 +1836,8 @@ impl Module for Agents {
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;
                 between::cut_short(tx)?;
-                lanes::lost(tx)
+                lanes::lost(tx)?;
+                crews::lost(tx)
             })
             .await?;
         let harnesses = self.harnesses.clone();

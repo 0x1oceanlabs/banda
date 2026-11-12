@@ -31,6 +31,15 @@ pub(super) struct Routes {
     /// The messages between sessions, as far as they came, by the session
     /// they came on and their ID there.
     messages: Arc<Mutex<HashMap<(acp::SessionId, String), Message>>>,
+    /// Whoever hears the Crews of each Thread's session (ADR 0103,
+    /// decision 9).
+    crews: Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<CrewSaid>>>>,
+    /// What goes on in the background of each Thread's session, as Claude
+    /// last listed it.
+    background: Arc<Mutex<HashMap<acp::SessionId, Vec<Background>>>>,
+    /// What Claude's raw frames tie each sub-agent to, by its root session
+    /// and the tool use that launched it.
+    ties: Arc<Mutex<HashMap<(acp::SessionId, String), Tie>>>,
 }
 
 /// A sub-agent's child session, as Banda maps it.
@@ -109,6 +118,9 @@ impl Routes {
         self.turns.lock().unwrap().remove(session);
         self.between.lock().unwrap().remove(session);
         self.lanes.lock().unwrap().remove(session);
+        self.crews.lock().unwrap().remove(session);
+        self.background.lock().unwrap().remove(session);
+        (self.ties.lock().unwrap()).retain(|(root, _), _| root != session);
         let gone: Vec<acp::SessionId> = (self.children.lock().unwrap())
             .extract_if(|_, child| child.root == *session)
             .map(|(gone, _)| gone)
@@ -122,9 +134,87 @@ impl Routes {
         self.turns.lock().unwrap().contains_key(session)
     }
 
-    /// Whether a turn's prompt runs in any session.
+    /// Whether a turn's prompt runs in any session, or work of a Thread's
+    /// goes on in the background that is not Claude's own housekeeping
+    /// (ADR 0103, decision 11).
     pub(super) fn busy(&self) -> bool {
-        !self.turns.lock().unwrap().is_empty()
+        if !self.turns.lock().unwrap().is_empty() {
+            return true;
+        }
+        let background = self.background.lock().unwrap();
+        background.values().flatten().any(|task| !task.ambient)
+    }
+
+    /// What goes on in the background of `session` now, as Claude lists it.
+    pub(super) fn set_background(&self, session: &acp::SessionId, tasks: Vec<Background>) {
+        let mut background = self.background.lock().unwrap();
+        if tasks.is_empty() {
+            background.remove(session);
+        } else {
+            background.insert(session.clone(), tasks);
+        }
+    }
+
+    /// The task of the one Crew at work in the background of `session`, if
+    /// exactly one is: what its agents ask between turns is its own (ADR
+    /// 0103, decision 28).
+    pub(super) fn crew_alone(&self, session: &acp::SessionId) -> Option<String> {
+        let background = self.background.lock().unwrap();
+        let mut crews = (background.get(session).into_iter().flatten())
+            .filter(|task| task.kind == TaskKind::Workflow && !task.ambient);
+        let alone = crews.next()?;
+        crews.next().is_none().then(|| alone.task.clone())
+    }
+
+    /// Hears what the Crews of `root`, a Thread's session, say, from now
+    /// on; `None` while someone already hears them.
+    pub(super) fn hear_crews(
+        &self,
+        root: &acp::SessionId,
+    ) -> Option<mpsc::UnboundedReceiver<CrewSaid>> {
+        let mut crews = self.crews.lock().unwrap();
+        if crews.get(root).is_some_and(|heard| !heard.is_closed()) {
+            return None;
+        }
+        let (said, hear) = mpsc::unbounded_channel();
+        crews.insert(root.clone(), said);
+        Some(hear)
+    }
+
+    /// Whoever hears the Crews of `root`, while someone does.
+    pub(super) fn crews_of(
+        &self,
+        root: &acp::SessionId,
+    ) -> Option<mpsc::UnboundedSender<CrewSaid>> {
+        let crews = self.crews.lock().unwrap();
+        crews.get(root).filter(|heard| !heard.is_closed()).cloned()
+    }
+
+    /// Keeps what Claude's raw frames tie a sub-agent of `root` to.
+    pub(super) fn keep_tie(&self, root: &acp::SessionId, tie: Tie) {
+        let key = (root.clone(), tie.launch.clone());
+        self.ties.lock().unwrap().insert(key, tie);
+    }
+
+    /// What ties the sub-agent launched by tool use `launch`, briefed on
+    /// `on`, if Claude's raw frames said it already.
+    pub(super) fn tie(&self, on: &acp::SessionId, launch: &str) -> Option<Tie> {
+        let root = self.announce(on)?;
+        let ties = self.ties.lock().unwrap();
+        ties.get(&(root, launch.to_owned())).cloned()
+    }
+
+    /// The child the tool use `launch` briefed, among `root`'s, once its
+    /// brief came.
+    pub(super) fn briefed(&self, root: &acp::SessionId, launch: &str) -> Option<acp::SessionId> {
+        let messages = self.messages.lock().unwrap();
+        let mut briefs = messages.iter().filter(|((on, id), message)| {
+            id == launch && message.sender.as_ref() == Some(on) && message.recipient.is_some()
+        });
+        let found = briefs.find_map(|(_, message)| message.recipient.clone())?;
+        drop(messages);
+        let child = self.child(&found)?;
+        (child.root == *root).then_some(found)
     }
 
     /// Hears what `session` says between turns, from now on; `None` while
@@ -238,6 +328,9 @@ impl Routes {
         self.lanes.lock().unwrap().clear();
         self.children.lock().unwrap().clear();
         self.messages.lock().unwrap().clear();
+        self.crews.lock().unwrap().clear();
+        self.background.lock().unwrap().clear();
+        self.ties.lock().unwrap().clear();
     }
 }
 

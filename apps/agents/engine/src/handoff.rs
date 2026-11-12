@@ -169,12 +169,14 @@ fn line(item: &Item) -> Option<Line> {
                 false,
             )
         }
-        // A sub-agent stays out, with what it asked and what it was told
-        // after: the Agent's own reply after it says what it found (ADR
-        // 0103, decisions 10 and 25).
-        Body::Subagent { .. } | Body::Messaged { .. } | Body::Question { sub: Some(_), .. } => {
-            return None;
-        }
+        // A sub-agent or a Crew stays out, with what it asked and what it
+        // was told after: the Agent's own reply after it says what it found
+        // (ADR 0103, decisions 10 and 25).
+        Body::Subagent { .. }
+        | Body::Messaged { .. }
+        | Body::Crew { .. }
+        | Body::Question { sub: Some(_), .. }
+        | Body::Question { crew: Some(_), .. } => return None,
         Body::Question { title, answer, .. } => {
             let answer = answer.as_deref().unwrap_or("not answered");
             (
@@ -335,6 +337,8 @@ mod tests {
                 answer: Some("allow".into()),
                 values: None,
                 sub,
+                crew: None,
+                start: None,
             },
             ..message(false, "")
         };

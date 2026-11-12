@@ -9,6 +9,7 @@ import type { AnswerIssue } from "./AnswerIssue";
 import type { Attach } from "./Attach";
 import type { ChangesAsk } from "./ChangesAsk";
 import type { Configure } from "./Configure";
+import type { CrewView } from "./CrewView";
 import type { Defaults } from "./Defaults";
 import type { DraftIssue } from "./DraftIssue";
 import type { Edit } from "./Edit";
@@ -25,6 +26,7 @@ import type { LaterAsk } from "./LaterAsk";
 import type { Leave } from "./Leave";
 import type { MoveThread } from "./MoveThread";
 import type { Notify } from "./Notify";
+import type { OneCrew } from "./OneCrew";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
 import type { OneMove } from "./OneMove";
@@ -80,6 +82,12 @@ thread: CallMethod<OneThread, ThreadView>,
  * decision 21).
  */
 subagent: CallMethod<OneSubagent, SubagentView>, 
+/**
+ * One Crew of a Thread, read only, as its Pane shows it: its
+ * phases and agents, its Result, and what its agents did between
+ * turns (ADR 0103, step 4).
+ */
+crew: CallMethod<OneCrew, CrewView>, 
 /**
  * What a new Thread on a Harness starts with.
  */

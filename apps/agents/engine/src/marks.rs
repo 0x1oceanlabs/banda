@@ -215,12 +215,14 @@ fn takes(sql: &Connection, thread: ThreadId, at: i64) -> Result<bool, Error> {
     ))
 }
 
-/// Whether `thread` works, and whether it asks its Person.
+/// Whether `thread` works, and whether it asks its Person. It works while
+/// its turn runs, and while a direct sub-agent or a Crew of it works on
+/// after that turn ended (ADR 0103, decision 19), as its list says
+/// (`ListedThread::works`).
 pub(crate) fn state(sql: &Connection, thread: ThreadId) -> Result<(bool, bool), Error> {
-    Ok((
-        store::running(sql, thread)?.is_some(),
-        store::asks(sql, thread)?,
-    ))
+    let runs = store::running(sql, thread)?.is_some();
+    let outlives = store::lanes_at_work(sql, thread)?.direct;
+    Ok((runs || outlives, store::asks(sql, thread)?))
 }
 
 fn no_thread() -> Refusal {

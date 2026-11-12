@@ -19,7 +19,7 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Choice, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
+    Choice, Cost, CrewStart, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
     OptionChoice, OptionValue, PlanStep, Settings, Skill, SlashCommand, StepState, Subagent,
     TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
@@ -50,6 +50,8 @@ mod opening;
 mod options;
 mod routes;
 mod said;
+mod script;
+mod sdk;
 mod session;
 
 use asking::*;
@@ -61,11 +63,18 @@ pub use routes::Between;
 use routes::*;
 use said::*;
 pub use said::{
-    Announced, Answer, IdleWhy, LaneSaid, LaneState, Said, StartedRx, ToolChange, ToolPart,
+    Announced, Answer, IdleWhy, LaneSaid, LaneState, Said, StartedRx, Tie, ToolChange, ToolPart,
     unstarted,
 };
+pub use sdk::{Background, Notified, Progress, Sdk, Started, TaskEnd, TaskKind};
+#[cfg(test)]
+pub use sdk::Tree;
+use sdk::SdkMessage;
+/// What a Workflow's script says of the Crew it starts (ADR 0103, decision
+/// 30).
+pub use script::start as crew_meta;
 use session::*;
-pub use session::{Prompt, PromptImage, Session, Steered, WeakSession};
+pub use session::{CrewSaid, Prompt, PromptImage, Session, Steered, WeakSession};
 
 pub use banda_harnesses::acp::STARTING;
 
@@ -142,7 +151,9 @@ impl Host for Connection {
         self.process.alive()
     }
 
-    /// Since when no turn runs here, or `None` while one does.
+    /// Since when no turn runs here, or `None` while one does, or while
+    /// Claude says work of a Thread's goes on in the background that is no
+    /// housekeeping of its own (ADR 0103, decision 11).
     fn idle_since(&self) -> Option<Instant> {
         if self.routes.busy() {
             return None;
@@ -208,10 +219,20 @@ fn handlers(
     activity: Activity,
 ) -> Builder<Client, impl HandleDispatchFrom<Agent> + 'static> {
     let heard = routes.clone();
+    let raw = routes.clone();
     let asked = routes;
     let filling = asked.clone();
     Client
         .builder()
+        .on_receive_notification(
+            async move |frame: SdkMessage, _cx: ConnectionTo<Agent>| {
+                if let Some(said) = sdk::read(&frame.message) {
+                    raw_frame(&raw, &frame.session_id, said);
+                }
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
         .on_receive_notification(
             async move |note: acp::SessionNotification, _cx: ConnectionTo<Agent>| {
                 let session = note.session_id;
@@ -256,6 +277,7 @@ fn handlers(
                     offered: request.options.iter().map(offered).collect(),
                     form: None,
                     plan: proposed(fields),
+                    start: crew_start(fields).map(Box::new),
                     answer,
                 };
                 let route = asked.of(&request.session_id);
@@ -328,6 +350,7 @@ fn handlers(
                     offered: vec![choice(SUBMIT, "Submit", true), choice(SKIP, "Skip", false)],
                     form: Some(fields.clone()),
                     plan: None,
+                    start: None,
                     answer,
                 };
                 if !route.send(question) {
@@ -535,10 +558,12 @@ fn told(routes: &Routes, on: &acp::SessionId, id: &str, message: Message) {
     };
     let (child, message) = (to.0.to_string(), id.to_owned());
     if routes.briefs(&to, id) {
+        let tie = routes.tie(on, id);
         let _ = lane.send(LaneSaid::Brief {
             child,
             message,
             text,
+            tie,
         });
         return;
     }
@@ -574,6 +599,47 @@ fn said_in(routes: &Routes, session: &acp::SessionId, update: acp::SessionUpdate
         });
     }
     said(update)
+}
+
+/// The Crew a permission request asks to start: Claude's Workflow call,
+/// whose input carries its script (ADR 0103, decision 30).
+fn crew_start(fields: &acp::ToolCallUpdateFields) -> Option<CrewStart> {
+    let script = fields.raw_input.as_ref()?.get("script")?.as_str()?;
+    script::start(script)
+}
+
+/// A raw frame Claude sent on `session`, a Thread's (ADR 0103, decision 9):
+/// what goes on in the background holds its process; a sub-agent's task
+/// ties to its lane by the tool use that launched it; and all of it goes
+/// to whoever hears the session's Crews.
+fn raw_frame(routes: &Routes, session: &acp::SessionId, said: Sdk) {
+    match &said {
+        Sdk::Background(tasks) => routes.set_background(session, tasks.clone()),
+        Sdk::Started(started) if started.kind == TaskKind::Agent => {
+            if let Some(launch) = &started.tool_use {
+                let tie = Tie {
+                    launch: launch.clone(),
+                    background: started.background,
+                    task: started.parent.clone(),
+                };
+                // Its brief came first: its lane hears the tie now.
+                if let Some(child) = routes.briefed(session, launch)
+                    && let Some(lane) = routes.lane_of(&child)
+                {
+                    let child = child.0.to_string();
+                    let _ = lane.send(LaneSaid::Tied {
+                        child,
+                        tie: tie.clone(),
+                    });
+                }
+                routes.keep_tie(session, tie);
+            }
+        }
+        _ => {}
+    }
+    if let Some(crews) = routes.crews_of(session) {
+        let _ = crews.send(CrewSaid::Raw(said));
+    }
 }
 
 /// What the engine declares it can show, sub-agents among it (ADR 0103,

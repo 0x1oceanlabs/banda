@@ -162,13 +162,7 @@ fn same(recorded: &Value, live: &Value) -> bool {
     match recorded.get("method").and_then(Value::as_str) {
         Some("initialize") => true,
         Some(_) => match (recorded.get("params"), live.get("params")) {
-            (Some(was), Some(Value::Object(is)))
-                if was.get(ROOTS).is_none() && is.contains_key(ROOTS) =>
-            {
-                let mut is = is.clone();
-                is.remove(ROOTS);
-                *was == Value::Object(is)
-            }
+            (Some(was), Some(Value::Object(is))) => *was == Value::Object(newer(was, is)),
             (was, is) => was == is,
         },
         None => {
@@ -180,6 +174,32 @@ fn same(recorded: &Value, live: &Value) -> bool {
 
 /// A session's extra roots, in its params.
 const ROOTS: &str = "additionalDirectories";
+
+/// Live params `is` without what Banda asks of a session that a
+/// recording made before it holds none of: its extra roots, and Claude's
+/// raw frames (`_meta.claudeCode.emitRawSDKMessages`, ADR 0103, step 4),
+/// with the objects that held only them.
+fn newer(was: &Value, is: &Map<String, Value>) -> Map<String, Value> {
+    let mut is = is.clone();
+    if was.get(ROOTS).is_none() {
+        is.remove(ROOTS);
+    }
+    let raw = &was["_meta"]["claudeCode"]["emitRawSDKMessages"];
+    if raw.is_null()
+        && let Some(Value::Object(meta)) = is.get_mut("_meta")
+    {
+        if let Some(Value::Object(claude)) = meta.get_mut("claudeCode") {
+            claude.remove("emitRawSDKMessages");
+            if claude.is_empty() && was["_meta"].get("claudeCode").is_none() {
+                meta.remove("claudeCode");
+            }
+        }
+        if meta.is_empty() && was.get("_meta").is_none() {
+            is.remove("_meta");
+        }
+    }
+    is
+}
 
 /// A session's extra roots, as its params name them.
 fn roots(params: &Value) -> impl Iterator<Item = String> + '_ {

@@ -37,7 +37,13 @@ pub enum Said {
     Steps(Vec<PlanStep>),
     /// What it has used now, and, when the account reached its limit, the
     /// time it may be used again, in milliseconds since the epoch.
-    Used { usage: Usage, resets: Option<i64> },
+    /// `origin` is the task run whose end the Harness went on with, as
+    /// Claude Code names it (`_claude/origin`): a Crew's (ADR 0103).
+    Used {
+        usage: Usage,
+        resets: Option<i64>,
+        origin: Option<String>,
+    },
     /// The Harness asks a Person to decide, and waits for `answer`.
     Asks {
         call: String,
@@ -49,6 +55,9 @@ pub enum Said {
         form: Option<Vec<Field>>,
         /// The plan it asks to carry out, when it asks to leave plan mode.
         plan: Option<String>,
+        /// The Crew it asks to start, as its script's `meta` says it (ADR
+        /// 0103, decision 30).
+        start: Option<Box<CrewStart>>,
         answer: oneshot::Sender<Answer>,
     },
     /// The Harness no longer waits for the answer to what it asked.
@@ -127,12 +136,16 @@ pub enum LaneSaid {
         model: Option<String>,
         role: Option<String>,
     },
-    /// A message its parent sent it, `message`, all of it so far.
+    /// A message its parent sent it, `message`, all of it so far, and
+    /// what Claude's raw frames tie it to, when they came first.
     Brief {
         child: String,
         message: String,
         text: String,
+        tie: Option<Tie>,
     },
+    /// What Claude's raw frames tie it to, when they came after its brief.
+    Tied { child: String, tie: Tie },
     /// Its report to its parent, all of it so far, as [`report`] cleans it.
     Report { child: String, text: String },
 }
@@ -146,9 +159,29 @@ impl LaneSaid {
             | LaneSaid::Said { child, .. }
             | LaneSaid::Runs { child, .. }
             | LaneSaid::Brief { child, .. }
+            | LaneSaid::Tied { child, .. }
             | LaneSaid::Report { child, .. } => child,
         }
     }
+}
+
+/// What Claude's raw `task_started` says of a sub-agent, by the tool use
+/// that launched it, which its brief's message is named by (ADR 0103,
+/// decision 7): whether it runs in the background, and the task that
+/// started it, a Crew's when it is one.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Tie {
+    pub launch: String,
+    pub background: bool,
+    pub task: Option<String>,
+}
+
+/// The run a usage update's `_meta._claude/origin` names, when the Harness
+/// went on with a task's end.
+fn origin(meta: Option<&acp::Meta>) -> Option<String> {
+    let origin = meta?.get("_claude/origin")?;
+    let run = origin.get("runId")?.as_str()?;
+    (!run.is_empty()).then(|| run.to_owned())
 }
 
 /// How a sub-agent's work stands, as its Harness says it (the RFD's
@@ -384,6 +417,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
         )),
         acp::SessionUpdate::UsageUpdate(update) => Some(Said::Used {
             resets: resets(update.meta.as_ref()),
+            origin: origin(update.meta.as_ref()),
             usage: usage(update),
         }),
         acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {

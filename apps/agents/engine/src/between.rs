@@ -63,6 +63,8 @@ impl Listener {
     }
 
     async fn listen(self, session: WeakSession, mut hear: mpsc::UnboundedReceiver<Between>) {
+        // The calls a Crew's agents made between turns, which are its own.
+        let mut crew_calls = HashSet::new();
         while let Some(heard) = hear.recv().await {
             let Between::Said(said) = heard else {
                 continue;
@@ -71,6 +73,9 @@ impl Listener {
                 return;
             };
             session.touch();
+            let Some(said) = to_crew(&session, &mut crew_calls, said) else {
+                continue;
+            };
             let (thread, agent) = (self.thread, Participant::Agent(self.agent));
             let written = match said {
                 Said::Used { usage, .. } => self
@@ -126,6 +131,9 @@ impl Listener {
             doer,
         );
         let (to_writer, mut written) = mpsc::unbounded_channel();
+        // The runs of the background tasks whose end it went on with.
+        let origins = std::sync::Mutex::new(Vec::new());
+        let went_on_with = &origins;
         let mut calls = Calls::default();
         calls.hear(&first);
         let _ = to_writer.send(first);
@@ -141,6 +149,9 @@ impl Listener {
                         Some(Between::Said(said)) => {
                             if !calls.hear(&said) {
                                 continue;
+                            }
+                            if let Said::Used { origin: Some(run), .. } = &said {
+                                went_on_with.lock().unwrap().push(run.clone());
                             }
                             // Each time it goes on, it ends with what that cost.
                             let done = matches!(&said, Said::Used { usage, .. } if usage.cost.is_some());
@@ -165,8 +176,15 @@ impl Listener {
         // if a Person asked, however the Harness ended it: the rules read
         // that from the turn.
         drop(run);
+        let runs = origins.into_inner().unwrap();
+        let thread = self.thread;
         self.project
             .write(move |tx| {
+                // A Crew whose end it went on with names this turn (ADR
+                // 0103, decision 19).
+                for run in &runs {
+                    crate::crews::went_on(tx, thread, run, turn.id)?;
+                }
                 // Unless it ended already, as one a turn the outbox
                 // started took over.
                 let agent = Participant::Agent(turn.agent);
@@ -211,6 +229,28 @@ impl Listener {
                 opened => return opened.map_err(plain),
             }
         }
+    }
+}
+
+/// Hands `said`, heard between turns, to the Crew at work when it is the
+/// one Crew at work: a call it starts or a Question it asks, and what
+/// changes of a call it started, are its agents' (ADR 0103, decision 28).
+/// What is not the Crew's comes back.
+fn to_crew(session: &Session, calls: &mut HashSet<String>, said: Said) -> Option<Said> {
+    let call = match &said {
+        Said::ToolStarted { call, .. } | Said::Asks { call, .. } => call.clone(),
+        Said::ToolChanged { call, .. } if calls.contains(call) => call.clone(),
+        _ => return Some(said),
+    };
+    let Some(task) = session.crew_alone() else {
+        return Some(said);
+    };
+    match session.tell_crew(task, said) {
+        Ok(()) => {
+            calls.insert(call);
+            None
+        }
+        Err(said) => Some(*said),
     }
 }
 
