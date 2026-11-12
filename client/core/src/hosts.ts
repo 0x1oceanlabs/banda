@@ -255,6 +255,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly #names: Names
   readonly #shown = new Store<readonly Shown[]>([])
   readonly #engines = new Map<string, Engine>()
+  readonly #relay: (engine: Engine, name: string) => void
   /** Each host's Projects as its engine listed them last. */
   readonly #listed = new Map<string, readonly ProjectSummary[]>()
   #ourIds: ReadonlySet<ProjectId> = new Set()
@@ -311,12 +312,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       waiting = inMemory(),
       drains = true,
       directory = inWindow(),
+      relay = () => undefined,
     }: {
       waiting?: WaitingStorage
       drains?: boolean
       directory?: DirectoryMemory
+      /** Tells the desktop's byte relay of each host's engine as it is
+       * made, by its name in `hosts.toml` (ADR 0106, step 4c). */
+      relay?: (engine: Engine, name: string) => void
     } = {}
   ) {
+    this.#relay = relay
     this.#device = device
     this.#names = names
     this.#here = here
@@ -497,6 +503,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         }
       )
       this.#engines.set(name, engine)
+      this.#relay(engine, name)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
         if (status.state !== "open") return

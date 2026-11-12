@@ -40,8 +40,8 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   const project = props.args.scratch ?? props.project
   const { run, runs, engine } = props
   // The machine that has its Project, as Send reads it (ADR 0095,
-  // decision 7): on another (ADR 0081), no media from its paths yet, and
-  // its links go through the router to this device (ADR 0106, law 2).
+  // decision 7): on another (ADR 0081), its media come from that machine
+  // and its links go through the router to this device (ADR 0106, law 2).
   const { host, shown } = usePlaced(project, props.args.host)
   const here = host === undefined
   const { state: status } = useStatus(engine)
@@ -60,7 +60,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     [run, runs, project]
   )
   return (
-    <ThreadMedia project={here ? project : null}>
+    <ThreadMedia engine={engine} project={project}>
       <MarkdownLinks open={links.open} hint={links.title}>
         <MarkdownShell run={runLine}>
           <Thread {...props} project={project} />

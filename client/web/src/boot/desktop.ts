@@ -164,6 +164,9 @@ export const device = {
     outside: (file: string): void => desktop()?.files.outside(file),
     /** Shows the file in its folder, in the system's file manager. */
     show: (file: string): void => desktop()?.files.show(file),
+    /** Saves a copy of the file the byte URL `url` names where the Person
+     * picks, offered as `name` (`save_file`); none without the desktop. */
+    save: (url: string, name: string) => desktop()?.files.save(url, name),
   },
   /** Editing in the page, as the system's menu does (ADR 0063, decision
    * 3): the page never reads the clipboard itself. */

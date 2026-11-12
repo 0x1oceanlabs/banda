@@ -43,7 +43,7 @@ function Url({ engine, path }: { engine: Engine; path: string | null }) {
 const urlOf = (engine: Engine, path: string | null) =>
   renderToStaticMarkup(<Url engine={engine} path={path} />)
 
-test("a session the desktop does not relay gets no URL and asks its engine nothing: with no desktop, and another machine's", () => {
+test("a session the desktop does not relay gets no URL and asks its engine nothing, as with no desktop", () => {
   const { engine, call } = session()
   expect(fileMint(engine, "p")).toBeNull()
   expect(urlOf(engine, "/tmp/shot.png")).toBe("null")
@@ -79,10 +79,27 @@ test("the window's own session asks its engine for a token in the Pane's Project
   expect(urlOf(engine, null)).toBe("null")
 })
 
-test("one function makes the URL: a page's on the sandbox host, the rest on the byte host", () => {
+test("another machine's session asks its own engine, and the URL names that machine for the desktop to relay to (ADR 0106, step 4c)", async () => {
+  const { engine, call } = session()
+  relayBytesFrom(engine, "arc")
+  expect(await fileMint(engine, "p", "media")!("shot.png")).toBe(
+    "app://files/arc/a5e"
+  )
+  expect(call).toHaveBeenLastCalledWith(
+    "bytes.issue",
+    { path: "shot.png", use: "media" },
+    { project: "p" }
+  )
+  expect(await fileMint(engine, "p", "page")!("index.html")).toBe(
+    "app://preview/arc/a5e"
+  )
+})
+
+test("one function makes the URL: a page's on the sandbox host, the rest on the byte host, another machine's named in it", () => {
   expect(bytesUrl("f00d", "page")).toBe("app://preview/f00d")
   expect(bytesUrl("f00d", "file")).toBe("app://files/f00d")
   expect(bytesUrl("f00d", "media")).toBe("app://files/f00d")
+  expect(bytesUrl("f00d", "file", "arc")).toBe("app://files/arc/f00d")
 })
 
 test("a restart of the engine is heard once its boot changes, not as it first opens or comes back from a break", () => {

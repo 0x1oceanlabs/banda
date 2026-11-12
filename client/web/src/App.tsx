@@ -21,6 +21,7 @@ import { Shell } from "./window/Shell"
 import { DIRECTORY } from "./directory"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
+import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 
 /**
  * The page: the engine's Projects, then the window. With no Project, a new
@@ -44,7 +45,11 @@ export function App({ engine }: { engine: Engine }) {
         device.hosts,
         { seen: seenNamed, follow: followNamed, followHere: followThisNamed },
         engine,
-        { waiting: onDevice(() => localStorage, window), directory: DIRECTORY }
+        {
+          waiting: onDevice(() => localStorage, window),
+          directory: DIRECTORY,
+          relay: relayBytesFrom,
+        }
       )
   )
   useEffect(() => hosts.follow(), [hosts])

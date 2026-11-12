@@ -17,6 +17,7 @@ import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, shot, withArc } from "./arc"
+import { pdfOf } from "./pdf"
 import { projectId, setInFront, type Window } from "./window"
 
 let window: Window | undefined
@@ -54,7 +55,7 @@ const arcOf = (page: Page) =>
  * arc's part of the sidebar; this machine has its own "Same" at the same
  * path where the two share one, whose files never change.
  */
-async function onArc(files: Record<string, string> = {}) {
+async function onArc(files: Record<string, string | Uint8Array> = {}) {
   arc = newArc({ latency: 40 })
   stopArc = await arc.start()
   const there = join(arc.code.arc, "Same")
@@ -71,6 +72,7 @@ async function onArc(files: Record<string, string> = {}) {
     "only-mac.txt": "mac\n",
     "src/util.ts": "// mac\n",
     "notes.md": "# Mac\n",
+    "pic.png": Buffer.from(PNG_1X1, "base64"),
   })
   const project = JSON.parse(arc.banda("project", "add", there)).ok.id as string
   arc.send(project, TITLE)
@@ -245,9 +247,10 @@ test("Alt+P: quick open finds arc's files and opens arc's file", async () => {
   await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
 })
 
-test("a markdown of arc's is drawn, its picture as words until 4c, its links open outside or say whose they are; a JSON draws as text, and a PDF shows its facts", async () => {
+test("a markdown of arc's is drawn with arc's picture, its links open outside or say whose they are; arc's JSON and PDF draw from arc's bytes (ADR 0106, step 4c)", async () => {
   const { page, composer } = await onArc({
-    "manual.pdf": "%PDF-1.4 not really",
+    "pic.png": Buffer.from(PNG_3X2, "base64"),
+    "manual.pdf": pdfOf([["Chapter 1", "From arc."]]),
     "data.json": '{ "from": "arc" }\n',
   })
   const { app } = window!
@@ -265,9 +268,13 @@ test("a markdown of arc's is drawn, its picture as words until 4c, its links ope
   await expect(
     notes.getByRole("heading", { name: "Notes", exact: true })
   ).toBeVisible()
-  // Its picture is arc's bytes, which come with 4c: its words show.
-  await expect(notes.getByText("the diagram")).toBeVisible()
-  await expect(notes.getByRole("img", { name: "the diagram" })).toHaveCount(0)
+  // Its picture is arc's, not this machine's at the same path.
+  const picture = notes.getByRole("img", { name: "the diagram" })
+  await expect
+    .poll(() =>
+      picture.evaluate((image: HTMLImageElement) => image.naturalWidth)
+    )
+    .toBe(3)
   // A public page goes to this device's browser on a plain click, and
   // arc's own address says whose it is and opens nothing here.
   await notes.getByRole("link", { name: /the site/ }).click()
@@ -279,14 +286,44 @@ test("a markdown of arc's is drawn, its picture as words until 4c, its links ope
       .getByText("localhost:3000 is arc's")
   ).toBeVisible()
   expect(await external()).toEqual(["https://example.com/page"])
-  // JSON's view reads bytes, which come with 4c: it draws as text.
-  const data = await opened(page, row("data.json"), "data.json", "arc")
-  await expect(data.locator('[data-line="1"]').first()).toContainText('"from"')
+  // JSON's view and the PDF's read arc's bytes, in ranges for the PDF.
+  await row("data.json").dblclick()
+  const data = page.getByRole("region", { name: "data.json", exact: true })
+  await expect(data.getByRole("tree", { name: "data.json" })).toBeVisible()
   await expect(data.getByText("does not parse")).toHaveCount(0)
   await row("manual.pdf").dblclick()
   const pdf = page.getByRole("region", { name: "manual.pdf", exact: true })
-  await expect(pdf.getByText("Preview comes soon")).toBeVisible()
-  await shot(page, "files-arc-pdf-facts")
+  await expect(
+    pdf.locator('[data-pdf-page="1"] [data-pdf-text]')
+  ).toContainText("From arc.")
+  await shot(page, "files-arc-pdf")
+})
+
+test("Save a copy of arc's file puts arc's bytes where the Person picks on this machine (ADR 0106, step 4c)", async () => {
+  const { page, composer } = await onArc()
+  const { row } = await filesOf(page, composer)
+  // The system's save dialog, as the Person answers it: a place of this
+  // machine's, in the test's folder.
+  const to = join(window!.dir, "saved-only-arc.txt")
+  await window!.app.evaluate(({ dialog }, path) => {
+    dialog.showSaveDialog = (async () => ({
+      canceled: false,
+      filePath: path,
+    })) as typeof dialog.showSaveDialog
+  }, to)
+  await row("only-arc.txt").click({ button: "right" })
+  const menu = page.getByRole("menu", { name: "Row" })
+  await menu
+    .getByRole("menuitem", { name: /^Save a copy to this (Mac|machine)$/ })
+    .click()
+  await expect
+    .poll(() => (existsSync(to) ? readFileSync(to, "utf8") : null))
+    .toBe("arc\n")
+  await expect(
+    page
+      .getByRole("region", { name: "Notifications" })
+      .getByText("Saved a copy of only-arc.txt")
+  ).toBeVisible()
 })
 
 test("a file of this machine dropped on arc's tree is refused in words, and nothing moves", async () => {
@@ -548,3 +585,9 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
   await shot(page, "localhost-on-arc-refused", { toasts: true })
   expect(await opens()).toEqual(["https://example.com/page"])
 })
+
+/** Two grey PNGs, told apart by their sizes. */
+const PNG_3X2 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAMAAAACCAIAAAASFvFNAAAADklEQVR4nGNogAEGOAsAWhQJAbISPYcAAAAASUVORK5CYII="
+const PNG_1X1 =
+  "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGNoaGgAAAMEAYFL09IQAAAAAElFTkSuQmCC"

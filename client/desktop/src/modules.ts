@@ -40,7 +40,6 @@ export const modules = {
   /** Under where the bridge's table takes each module in. */
   answers: {
     browser: browserDesktop.answers,
-    agents: agentsDesktop.answers,
     notifications: notificationsDesktop.answers,
   },
   asked,
