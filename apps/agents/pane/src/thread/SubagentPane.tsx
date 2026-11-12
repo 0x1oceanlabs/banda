@@ -135,8 +135,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
     close,
     label,
     focused,
-  } =
-    props
+  } = props
   const { thread: threadId, sub } = args
   const thread = useThread(engine, project, threadId)
   const lane = useSubagent(engine, project, threadId, sub)
