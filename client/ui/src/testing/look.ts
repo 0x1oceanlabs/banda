@@ -64,14 +64,15 @@ const STYLES = new URL("../styles/", import.meta.url)
 /** The design kit, whose stylesheets draw the mocks (docs/design/kit). */
 const KIT = new URL("../../../../docs/design/kit/", import.meta.url)
 
+const NAMING = [STYLES, KIT].map((folder) => fileURLToPath(folder))
+
 /** Whether `file` is one of `@banda/ui`'s stylesheets or the kit's, where
  * a custom property defined is a name, not a case: Banda UI makes its
  * names in the one, and the other copies the theme's tokens, which a test
  * holds to the theme's values (`look.test.ts`). */
 export function makesNames(file: string): boolean {
   return (
-    [STYLES, KIT].some((folder) => file.startsWith(fileURLToPath(folder))) &&
-    file.endsWith(".css")
+    NAMING.some((folder) => file.startsWith(folder)) && file.endsWith(".css")
   )
 }
 
@@ -94,19 +95,27 @@ const uncommented = (code: string) =>
     )
     .replace(/(^|[^:"'`])\/\/.*$/gm, "$1")
 
-/** The names `@banda/ui`'s `@theme` makes, each with its value. */
-const THEME = (() => {
-  const sheet = uncommented(
-    readFileSync(new URL("globals.css", STYLES), "utf8")
-  )
-  const theme = /@theme inline \{([^}]*)\}/.exec(sheet)?.[1]
-  if (!theme) throw new Error("globals.css has no @theme inline block")
+/** The custom properties `sheet` defines in its rules headed `selector`,
+ * however the head is spaced, each by its name without `--`. */
+export function defines(sheet: string, selector: string): Map<string, string> {
+  const spaced = (head: string) => head.replace(/\s+/g, " ").trim()
   return new Map(
-    [...theme.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)].map(
-      ([, name, value]) => [name, value.trim()] as const
-    )
+    [...uncommented(sheet).matchAll(/([^{};]+)\{([^}]*)\}/g)]
+      .filter(([, head]) => spaced(head) === spaced(selector))
+      .flatMap(([, , body]) =>
+        [...body.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)].map(
+          ([, name, value]) => [name, value.trim()] as const
+        )
+      )
   )
-})()
+}
+
+/** The names `@banda/ui`'s `@theme` makes, each with its value. */
+const THEME = defines(
+  readFileSync(new URL("globals.css", STYLES), "utf8"),
+  "@theme inline"
+)
+if (THEME.size === 0) throw new Error("globals.css has no @theme inline block")
 
 /** The names `@theme` makes of one namespace (`text`, `z-index`), each
  * with its value; a level's line height, after a second `--`, is no name. */
@@ -288,15 +297,20 @@ function corners(code: string): string[] {
 
 // Type (decision 3).
 
-/** Tailwind's own size names, which `@theme` maps onto the levels for
- * what comes as it is (decision 8); `xs` and `sm` stay allowed in Banda's
- * code until step 1b (ADR 0113) renames them to `text-meta` and `text-ui`. */
-const TAILWIND = new Set(
-  "xs sm base lg xl 2xl 3xl 4xl 5xl 6xl 7xl 8xl 9xl".split(" ")
+/** Banda's type levels, each with its value, as `@theme` makes them: a
+ * level is its own size's token (`--text-meta: var(--meta-size)`). */
+const TYPE = named("text").filter(
+  ([name, value]) => value === `var(--${name}-size)`
 )
-const REFUSED = [...TAILWIND].filter((name) => name !== "xs" && name !== "sm")
-/** Banda's type levels, each with its value, as `@theme` makes them. */
-const TYPE = named("text").filter(([name]) => !TAILWIND.has(name))
+/** Tailwind's size names `@theme` maps onto the levels for what comes as
+ * it is (decision 8), refused in Banda's code but `xs` and `sm`, which
+ * stay until step 1b (ADR 0113) renames them to `text-meta` and `text-ui`. */
+const REFUSED = named("text")
+  .map(([name]) => name)
+  .filter(
+    (name) =>
+      !TYPE.some(([level]) => level === name) && name !== "xs" && name !== "sm"
+  )
 /** The pixels a size is, a literal or a token's as Banda's own theme has
  * it (`var(--meta-size)`). */
 function pixelsOf(size: string): number | undefined {
@@ -308,37 +322,59 @@ function pixelsOf(size: string): number | undefined {
   const [, number, unit] = /^([\d.]+)(px|rem)$/.exec(value ?? "") ?? []
   return number ? px(number, unit) : undefined
 }
-/** The levels a literal size is written as instead, by their size in px;
- * code's and prose's are for code and replies alone, so they are offered
- * for no other size. */
+/** The levels for some things only, each with them: offered as `text-…`
+ * with the nearest other level else (Roma's answers, Q1 and Q3); code's
+ * and prose's are for code and replies alone, offered for no other size. */
+const ONLY: Readonly<Record<string, string | null>> = {
+  small: "inside a key, a tag, a count on an icon or a menu's label",
+  figure: "for the one number a Pane is about",
+  code: null,
+  prose: null,
+}
+/** The levels a literal size is written as instead, each with its size in
+ * px and what it is only for. */
 const SCALE = TYPE.flatMap(([name, value]) => {
   const pixels = pixelsOf(value)
-  return pixels !== undefined && name !== "code" && name !== "prose"
-    ? [[`text-${name}`, pixels] as const]
+  const only = ONLY[name]
+  return pixels !== undefined && only !== null
+    ? [{ level: `text-${name}`, pixels, only }]
     : []
 })
+type Level = (typeof SCALE)[number]
 
 /** A length or a number, alone: `11px`, `0.8rem`, `1.5`. */
 const LITERAL = /^-?[\d.]+(?:px|rem|em|pt|%)?$/
 
-/** The level a size is written as: the one that is its custom property
- * (`text-prose` for `--prose-size`), or the nearest a literal one, the
- * larger on a tie; none for another value. */
+/** Of `levels`, the nearest `pixels`, the larger on a tie. */
+function nearest(levels: Level[], pixels: number): Level {
+  const off = (level: Level) => Math.abs(level.pixels - pixels)
+  return levels.reduce((best, level) =>
+    off(level) < off(best) ||
+    (off(level) === off(best) && level.pixels > best.pixels)
+      ? level
+      : best
+  )
+}
+
+/** What to write for a size: the level that is its custom property
+ * (`text-prose` for `--prose-size`), or the nearest a literal one, and
+ * the nearest level for any use when that one is for some things only;
+ * none for another value. */
 function levelOf(size: string): string | undefined {
   const property = /--[\w-]+/.exec(size)?.[0]
   if (property) {
     const level = TYPE.find(([, value]) => value === `var(${property})`)
-    return level && `text-${level[0]}`
+    return level && `\`text-${level[0]}\``
   }
-  const [, number, unit] = /^([\d.]+)(px|rem)$/.exec(size) ?? []
-  if (!number || SCALE.length === 0) return undefined
-  const pixels = px(number, unit)
-  const off = (level: (typeof SCALE)[number]) => Math.abs(level[1] - pixels)
-  return SCALE.reduce((best, level) =>
-    off(level) < off(best) || (off(level) === off(best) && level[1] > best[1])
-      ? level
-      : best
-  )[0]
+  const pixels = pixelsOf(size)
+  if (pixels === undefined) return undefined
+  const { level, only } = nearest(SCALE, pixels)
+  if (only === undefined) return `\`${level}\``
+  const any = nearest(
+    SCALE.filter((each) => each.only === undefined),
+    pixels
+  )
+  return `\`${level}\` ${only}, else \`${any.level}\``
 }
 
 const TEXT_ARBITRARY = new RegExp(`${START}text-(${ARBITRARY})(?![\\w.-])`, "g")
@@ -354,16 +390,11 @@ function typeIn(code: string): Case[] {
   const cases: Case[] = []
   const size = (what: string, value: string, off = "is off the scale") => {
     const level = levelOf(value)
-    // The small level is only for small things (Roma's answer, Q1).
-    const write =
-      level === "text-small"
-        ? "write `text-small` inside a key, a tag, a count on an icon or a menu's label, else `text-meta`"
-        : `write \`${level}\``
     cases.push(
       found(
         "type",
         what,
-        level && `${off}: ${write}, or add a level to the theme`
+        level && `${off}: write ${level}, or add a level to the theme`
       )
     )
   }

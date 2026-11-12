@@ -18,6 +18,7 @@ import { join, relative } from "node:path"
 import { BANDA, TOKENS, type Token } from "@banda/contract/look"
 import { beyond, drawingFiles } from "@banda/ui/testing/architecture"
 import {
+  defines,
   kitSheets,
   look,
   makesNames,
@@ -495,21 +496,13 @@ test("each group of the list says why, and holds a case", () => {
   }
 })
 
-/** The custom properties the kit defines in its rules of `selector`, by
- * their names without `--`. */
+const KIT_SHEET = readFileSync(join(root, "docs/design/kit/kit.css"), "utf8")
+
+/** The custom properties the kit defines in its rules of `selector`. */
 function kitDefines(selector: string): Map<string, string> {
-  const sheet = readFileSync(join(root, "docs/design/kit/kit.css"), "utf8")
-  const rules = [
-    ...sheet.replace(/\/\*[\s\S]*?\*\//g, "").matchAll(/([^{}]+)\{([^}]*)\}/g),
-  ].filter(([, head]) => head.trim() === selector)
-  expect(rules.length, selector).toBeGreaterThan(0)
-  return new Map(
-    rules.flatMap(([, , body]) =>
-      [...body.matchAll(/--([\w-]+)\s*:\s*([^;]+);/g)].map(
-        ([, name, value]) => [name, value.trim()] as const
-      )
-    )
-  )
+  const found = defines(KIT_SHEET, selector)
+  expect(found.size, selector).toBeGreaterThan(0)
+  return found
 }
 
 /** Where the kit draws otherwise on purpose: the design reference's

@@ -32,7 +32,7 @@ use banda_theme::color::{is_css_color, is_hex};
 pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
 use banda_theme::readable::Under;
-use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, tokens, wallpaper};
+use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, thousandths, tokens, wallpaper};
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{Class, OneFile, SettingsFile};
 use motion::Motion;
@@ -1148,11 +1148,6 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
     put_share("focus-shadow-strength", all.focus.shadow, false);
     put_share("desk-grain", all.desk.grain, false);
     vars
-}
-
-/// `v` to three decimals, as CSS gets every number.
-fn thousandths(v: f64) -> f64 {
-    (v * 1000.0).round() / 1000.0
 }
 
 /// Prints the look, then again each time a file it reads, or one in

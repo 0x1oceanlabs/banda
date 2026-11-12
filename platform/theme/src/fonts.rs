@@ -28,9 +28,8 @@ pub struct FontSettings {
 }
 
 pub const SIZES: std::ops::RangeInclusive<f64> = 8.0..=32.0;
-/// shadcn's usual text is `text-sm`, 0.875 of the root's.
-const TEXT_SM: f64 = 0.875;
-/// The usual text the type scale is drawn at, in pixels: the UI level's.
+/// The usual text, in pixels, where the root is 16: the UI level's, and
+/// shadcn's `text-sm`. The type scale is drawn at it.
 const USUAL: f64 = 14.0;
 /// The type scale (ADR 0113, decision 3): each level's size token and
 /// line height token, and their pixels where the usual text is 14. Each
@@ -74,7 +73,7 @@ impl FontSettings {
         FontSettings {
             sans: Some("Inter Variable".to_owned()),
             mono: Some("monospace".to_owned()),
-            size: Some(14.0),
+            size: Some(USUAL),
         }
     }
 
@@ -105,9 +104,10 @@ impl FontSettings {
         let size = self
             .size
             .filter(|s| s.is_finite() && SIZES.contains(s))
-            .unwrap_or(14.0);
-        let px = |at: f64| format!("{}px", (at * 1000.0).round() / 1000.0);
-        let mut vars = vec![
+            .unwrap_or(USUAL);
+        let px = |at: f64| format!("{}px", crate::thousandths(at));
+        let mut vars = Vec::with_capacity(3 + 2 * SCALE.len());
+        vars.extend([
             (
                 "font-family-sans",
                 family(self.sans.as_deref(), "sans-serif", system),
@@ -116,8 +116,8 @@ impl FontSettings {
                 "font-family-mono",
                 family(self.mono.as_deref(), "monospace", system),
             ),
-            ("text-root", px(size / TEXT_SM)),
-        ];
+            ("text-root", px(size * 16.0 / USUAL)),
+        ]);
         for (size_token, leading_token, at, leading) in SCALE {
             vars.push((size_token, px(size * at / USUAL)));
             vars.push((leading_token, px(size * leading / USUAL)));
