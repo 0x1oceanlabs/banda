@@ -215,10 +215,7 @@ function Opened({ row: { lane, said, asker } }: { row: SubagentRow }) {
 function Brief({ asker, text }: { asker: string; text: string }) {
   const [all, setAll] = useState(false)
   return (
-    <div
-      data-clamp-scope
-      className="flex min-w-0 items-end gap-2 text-ui"
-    >
+    <div data-clamp-scope className="flex min-w-0 items-end gap-2 text-ui">
       <p
         data-clamped={all ? undefined : "brief"}
         className={cn(

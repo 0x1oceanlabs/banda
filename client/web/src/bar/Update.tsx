@@ -137,9 +137,7 @@ export function UpdateWidget({
         >
           <UpdateIcon update={drawn} />
           {pill && (
-            <span className="font-mono text-small tracking-tight">
-              {pill}
-            </span>
+            <span className="font-mono text-small tracking-tight">{pill}</span>
           )}
         </PopoverTrigger>
         <PopoverContent className="w-84 gap-0 p-0">
@@ -399,9 +397,7 @@ function Head({
         {corner}
       </p>
       <p className="mt-0.5 flex items-baseline gap-1.5 font-mono">
-        <span className="text-ui text-muted-foreground">
-          {shortOf(from)}
-        </span>
+        <span className="text-ui text-muted-foreground">{shortOf(from)}</span>
         <span aria-hidden className="text-muted-foreground">
           →
         </span>

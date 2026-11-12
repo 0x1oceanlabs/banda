@@ -61,7 +61,7 @@
   --added: oklch(0.723 0.192 149.579);        /* done; +lines */
   --removed: oklch(0.704 0.191 22.216);       /* −lines */
   --woke: #f5c542;                            /* woke from Later; the same in both themes, no outline */
-  --warning: oklch(0.8 0.15 80);
+  --warning: #facc15;
   --working: oklch(0.72 0.13 255);            /* an Agent at work: a Group's plate, a working Mark (ADR 0107); never a row */
   --account-claude: #d97757;                  /* Claude's emblem */
   --effort: color-mix(in oklab, var(--foreground) 70%, transparent); /* the effort word: lighter text (ADR 0058 d8) */
@@ -122,7 +122,7 @@
   --added: oklch(0.527 0.137 150.069);
   --removed: oklch(0.577 0.245 27.325);
   --woke: #f5c542;
-  --warning: oklch(0.65 0.16 70);
+  --warning: #ca8a04;
   --working: oklch(0.6 0.15 255);
   --account-claude: #c96442;
   --effort: color-mix(in oklab, var(--foreground) 70%, transparent);
@@ -181,26 +181,53 @@
 :root {
   --font-sans: "Inter Variable", Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", "Noto Sans", sans-serif;
   --font-mono: "JetBrains Mono Variable", "JetBrains Mono", "JetBrainsMono Nerd Font", ui-monospace, "SF Mono", "Cascadia Mono", monospace;
-  /* ADR 0058 d1: ui 14/20, meta 12/16, code 12.5/20, prose 14/22 (15/24 wide). */
-  --text-ui: 14px;
-  --text-ui-lh: 20px;
-  --text-meta: 12px;
-  --text-meta-lh: 16px;
-  --text-code: 12.5px;
-  --text-code-lh: 20px;
+  /* The type scale (ADR 0113 d3), at Banda's 14: the theme's tokens by
+     their names, which a test holds to the theme's (client/web/src/look.test.ts).
+     small only inside a key, a tag, a count on an icon, a menu's label;
+     figure only for the one number a Pane is about. */
+  --text-root: 16px;
+  --heading-size: 18px;
+  --heading-leading: 26px;
+  --title-size: 16px;
+  --title-leading: 24px;
   --prose-size: 14px;
   --prose-leading: 22px;
+  --prose-wide-size: 15px;
+  --prose-wide-leading: 24px;
+  --ui-size: 14px;
+  --ui-leading: 20px;
+  --code-size: 12.5px;
+  --code-leading: 20px;
+  --meta-size: 12px;
+  --meta-leading: 16px;
+  --small-size: 11px;
+  --small-leading: 14px;
+  --figure-size: 28px;
+  --figure-leading: 32px;
   --chat-gutter: 16px;
   /* Five concentric levels (ADR 0080 d6, Banda shape): window 30, gap 8,
-     tile = window − gap, card = tile − pad, control 10, small = 0.6 × control. */
-  --r-window: 30px;
-  --r-tile: 22px;
-  --r-card: 14px;
-  --r-control: 10px;
-  --r-small: 6px;
-  --r-row: 10px;      /* a row in a panel: min(control, tile − 6) */
-  --r-item: 10px;     /* a menu item: min(control, card − 4) */
-  --r-round: 999px;
+     tile = window − gap, card = tile − pad, control 10, small = 0.6 × control.
+     A row in a panel and a menu's item are a control's. */
+  --window-radius: 30px;
+  --tile-radius: 22px;
+  --card-radius: 14px;
+  --control-radius: 10px;
+  --small-radius: 6px;
+  /* The kit's first names for them, for the mocks written before. */
+  --text-ui: var(--ui-size);
+  --text-ui-lh: var(--ui-leading);
+  --text-meta: var(--meta-size);
+  --text-meta-lh: var(--meta-leading);
+  --text-code: var(--code-size);
+  --text-code-lh: var(--code-leading);
+  --r-window: var(--window-radius);
+  --r-tile: var(--tile-radius);
+  --r-card: var(--card-radius);
+  --r-control: var(--control-radius);
+  --r-small: var(--small-radius);
+  --r-row: var(--control-radius);
+  --r-item: var(--control-radius);
+  --r-round: 9999px;
   --gap: 8px;
   --pad: 8px;
   --bar-height: 36px;
@@ -217,7 +244,7 @@
   --dur-fast: 120ms;
   --dur: 200ms;
   font-family: var(--font-sans);
-  font-size: 16px;
+  font-size: var(--text-root);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
 }
@@ -239,7 +266,7 @@
   margin: 0;
   background: var(--desk-solid);
   color: var(--foreground);
-  font: var(--text-ui) / var(--text-ui-lh) var(--font-sans);
+  font: var(--ui-size) / var(--ui-leading) var(--font-sans);
 }
 :where(.b-kit, .b-window) :where(button) {
   font: inherit;
@@ -321,9 +348,9 @@
   display: flex;
   flex-direction: column;
   min-height: 0;
-  border-radius: var(--r-window);
+  border-radius: var(--window-radius);
   color: var(--foreground);
-  font: var(--text-ui) / var(--text-ui-lh) var(--font-sans);
+  font: var(--ui-size) / var(--ui-leading) var(--font-sans);
   background: var(--desk-solid);
   box-shadow:
     0 0 0 1px var(--window-line),
@@ -411,7 +438,7 @@
   align-items: center;
   gap: 4px;
   padding: 0 10px 0 12px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
 }
 .b-bar-logo {
@@ -419,7 +446,7 @@
   place-items: center;
   width: 28px;
   height: 28px;
-  border-radius: var(--r-control);
+  border-radius: var(--control-radius);
   position: relative;
 }
 .b-bar-logo:hover { background: var(--hover); }
@@ -441,8 +468,8 @@
   min-width: 24px;
   height: 24px;
   padding: 0 4px;
-  border-radius: var(--r-control);
-  font-size: var(--text-meta);
+  border-radius: var(--control-radius);
+  font-size: var(--meta-size);
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
 }
@@ -475,8 +502,8 @@
   gap: 5px;
   height: 26px;
   padding: 0 6px;
-  border-radius: var(--r-control);
-  font-size: var(--text-meta);
+  border-radius: var(--control-radius);
+  font-size: var(--meta-size);
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
   white-space: nowrap;
@@ -500,7 +527,7 @@
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   font-variant-numeric: tabular-nums;
 }
 .b-badge {
@@ -509,10 +536,10 @@
   min-width: 14px;
   height: 14px;
   padding: 0 3px;
-  border-radius: var(--r-round);
+  border-radius: 9999px;
   background: var(--attention);
   color: #fff;
-  font-size: 9px;
+  font-size: var(--small-size);
   font-weight: 600;
   line-height: 1;
 }
@@ -528,7 +555,7 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  border-radius: var(--r-tile);
+  border-radius: var(--tile-radius);
   background: var(--tile);
   box-shadow: inset 0 0 0 1px var(--border), var(--tile-shadow);
   container: tile / inline-size;
@@ -546,7 +573,7 @@
   gap: 8px;
   padding: 0 8px 0 14px;
   border-bottom: 1px solid var(--border);
-  font-size: var(--text-ui);
+  font-size: var(--ui-size);
   white-space: nowrap;
   min-width: 0;
 }
@@ -559,7 +586,7 @@
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
 }
 /* "The capsule": the buttons at the header's end, with no plate (amended
@@ -600,7 +627,7 @@
   gap: var(--gap);
   padding: calc(var(--gap) / 2);
   margin: calc(var(--gap) / -2);
-  border-radius: calc(var(--r-tile) + var(--gap) / 2);
+  border-radius: calc(var(--tile-radius) + var(--gap) / 2);
   background: color-mix(in oklab, var(--group-color) var(--group-fill), transparent);
   box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--group-color) var(--group-line), transparent);
   flex: 1;
@@ -621,12 +648,12 @@
   flex-direction: column;
   min-height: 0;
   overflow: hidden;
-  border-radius: var(--r-tile);
+  border-radius: var(--tile-radius);
   background: var(--panel);
   box-shadow: inset 0 0 0 1px var(--border), var(--panel-shadow);
   -webkit-backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
   backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
-  font-size: var(--text-ui);
+  font-size: var(--ui-size);
 }
 /* The header: Search (quiet, no frame, its key on hover) and ✎. */
 .b-sb-head {
@@ -644,13 +671,13 @@
   height: 28px;
   padding: 0 8px;
   margin-right: 4px;
-  border-radius: var(--r-control);
-  font-size: 13px;
+  border-radius: var(--control-radius);
+  font-size: var(--ui-size);
   color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
 }
 .b-search:hover { background: var(--hover); color: var(--muted-foreground); }
 .b-search .b-icon { width: 14px; height: 14px; }
-.b-search .b-key { margin-left: auto; font-size: 11px; opacity: 0; transition: opacity var(--dur) var(--ease); }
+.b-search .b-key { margin-left: auto; font-size: var(--small-size); opacity: 0; transition: opacity var(--dur) var(--ease); }
 .b-search:hover .b-key { opacity: 0.6; }
 /* Tabs under the search: Inbox, Working, Later, and Archive as an icon. */
 .b-tabs {
@@ -665,14 +692,14 @@
   gap: 6px;
   height: 28px;
   padding: 0 8px;
-  border-radius: var(--r-control);
-  font-size: 13px;
+  border-radius: var(--control-radius);
+  font-size: var(--ui-size);
   color: color-mix(in oklab, var(--muted-foreground) 70%, transparent);
   white-space: nowrap;
 }
 .b-tab:hover { color: var(--foreground); }
 .b-tab.is-current { background: var(--current); color: var(--foreground); }
-.b-tab .b-n { font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.b-tab .b-n { font-size: var(--meta-size); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .b-tab .b-n.is-turn { color: var(--attention); font-weight: 600; }
 .b-tab.b-end { margin-left: auto; padding: 0 6px; }
 .b-tab .b-icon { width: 14px; height: 14px; }
@@ -695,11 +722,11 @@
   align-items: baseline;
   justify-content: space-between;
   padding: 10px 8px 4px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   font-weight: 500;
   color: var(--muted-foreground);
 }
-.b-section .b-hint { font-weight: 400; font-size: 11px; opacity: 0.6; }
+.b-section .b-hint { font-weight: 400; font-size: var(--small-size); opacity: 0.6; }
 .b-proj {
   display: flex;
   align-items: center;
@@ -707,8 +734,8 @@
   height: 28px;
   margin-top: 4px;
   padding: 0 8px;
-  border-radius: var(--r-row);
-  font-size: 13px;
+  border-radius: var(--control-radius);
+  font-size: var(--ui-size);
 }
 .b-proj:hover { background: var(--hover); }
 .b-proj-name { font-weight: 500; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
@@ -718,7 +745,7 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   font-variant-numeric: tabular-nums;
 }
 .b-roll .b-w { color: color-mix(in oklab, var(--muted-foreground) 60%, transparent); }
@@ -738,7 +765,7 @@
   gap: 2px;
   min-width: 0;
   padding: 6px 8px;
-  border-radius: var(--r-row);
+  border-radius: var(--control-radius);
   color: var(--foreground);
   cursor: default;
   transition: background-color var(--dur-fast) var(--ease);
@@ -758,11 +785,11 @@
   white-space: nowrap;
 }
 .b-line + .b-line { padding-left: 22px; }  /* under the title, past the mark */
-.b-title { flex: 1; min-width: 0; font-size: var(--text-ui); }
+.b-title { flex: 1; min-width: 0; font-size: var(--ui-size); }
 .b-card .b-title { font-weight: 500; }
 .b-time {
   flex: none;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   font-variant-numeric: tabular-nums;
   color: var(--muted-foreground);
 }
@@ -772,7 +799,7 @@
 .b-card[data-look="failed"] .b-time { color: var(--destructive); }
 .b-card[data-look="done"] .b-time { color: var(--added); }
 .b-card[data-look="woke"] .b-time { color: var(--woke); }
-.b-say { flex: 1; min-width: 0; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-say { flex: 1; min-width: 0; font-size: var(--meta-size); color: var(--muted-foreground); }
 .b-word { margin-right: 4px; font-weight: 500; color: color-mix(in oklab, var(--foreground) 85%, transparent); }
 .b-where {
   flex: 1;
@@ -780,13 +807,13 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
 }
-.b-pr { flex: none; display: inline-flex; gap: 4px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.b-pr { flex: none; display: inline-flex; gap: 4px; font-size: var(--meta-size); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 .b-pr .is-ok { color: var(--added); }
 .b-pr .is-bad { color: var(--destructive); }
-.b-diffgrey { flex: none; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); font-variant-numeric: tabular-nums; }
+.b-diffgrey { flex: none; font-size: var(--meta-size); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); font-variant-numeric: tabular-nums; }
 /* Quiet rows: working is grey so it does not pull the eye; later and
    archived are a step dimmer still. Open rows keep the normal colour. */
 .b-row.is-working .b-title,
@@ -800,7 +827,7 @@
 .b-row.is-later .b-time { color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
 .b-row.is-later svg[data-banda-mark] { color: var(--row-later-mark); opacity: var(--row-later-mark-opacity); }
 .b-row.is-away { opacity: 0.5; }
-.b-indent { flex: none; width: 10px; text-align: center; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-indent { flex: none; width: 10px; text-align: center; font-size: var(--meta-size); color: var(--muted-foreground); }
 /* Hover actions: inline at line 1's right; the time hides. */
 .b-acts {
   position: absolute;
@@ -819,12 +846,12 @@
   place-items: center;
   width: 20px;
   height: 20px;
-  border-radius: 5px;
+  border-radius: var(--small-radius);
   color: var(--muted-foreground);
 }
 .b-act:hover { background: color-mix(in oklab, var(--foreground) 10%, transparent); color: var(--foreground); }
 .b-act .b-icon { width: 14px; height: 14px; }
-.b-more { padding: 4px 8px; font-size: var(--text-meta); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
+.b-more { padding: 4px 8px; font-size: var(--meta-size); color: color-mix(in oklab, var(--muted-foreground) 70%, transparent); }
 /* Inbox zero, and any empty place: what goes here, one way to fill it. */
 .b-empty {
   display: flex;
@@ -833,10 +860,10 @@
   gap: 4px;
   padding: 36px 16px 28px;
   text-align: center;
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
 }
-.b-empty b { font-size: var(--text-ui); font-weight: 500; color: var(--foreground); margin-top: 8px; }
+.b-empty b { font-size: var(--ui-size); font-weight: 500; color: var(--foreground); margin-top: 8px; }
 /* The foot: Settings, View, Quiet | the machines. No words. */
 .b-sb-foot {
   display: flex;
@@ -851,8 +878,8 @@
   gap: 6px;
   height: 28px;
   padding: 0 6px;
-  border-radius: var(--r-control);
-  font-size: var(--text-meta);
+  border-radius: var(--control-radius);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
 }
 .b-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--added); flex: none; display: inline-block; }
@@ -861,13 +888,14 @@
 /* A Project's sign: a small tile with letters, tinted in its colour. */
 .b-sign {
   --sign: var(--muted-foreground);
+  --sign-size: 14px;
   display: inline-grid;
   place-items: center;
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: var(--sign-size);
+  height: var(--sign-size);
   border-radius: 4px;
-  font-size: 8.5px;
+  font-size: calc(var(--sign-size) * 0.6);
   font-weight: 700;
   line-height: 1;
   color: var(--sign);
@@ -875,14 +903,14 @@
 }
 .b-sign.is-plain { color: var(--muted-foreground); background: color-mix(in oklab, var(--foreground) 10%, transparent); }
 .b-sign.is-none { background: none; box-shadow: inset 0 0 0 1px color-mix(in oklab, var(--muted-foreground) 60%, transparent); border-radius: 4px; }
-.b-sign.is-16 { width: 16px; height: 16px; font-size: 10px; }
+.b-sign.is-16 { --sign-size: 16px; }
 .b-sign[data-color="violet"] { --sign: var(--sign-violet); }
 .b-sign[data-color="magenta"] { --sign: var(--sign-magenta); }
 .b-sign[data-color="yellow"] { --sign: var(--sign-yellow); }
 .b-sign[data-color="teal"] { --sign: var(--sign-teal); }
 .b-sign[data-color="sand"] { --sign: var(--sign-sand); }
 /* A machine: its icon and name, quiet. */
-.b-machine { display: inline-flex; align-items: center; gap: 3px; font-size: 11.5px; color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
+.b-machine { display: inline-flex; align-items: center; gap: 3px; font-size: var(--meta-size); color: color-mix(in oklab, var(--muted-foreground) 80%, transparent); }
 .b-machine .b-icon { width: 12px; height: 12px; }
 
 /* ------------------------------------------------------------------ */
@@ -911,14 +939,14 @@
   line-height: var(--prose-leading);
 }
 @container thread (width >= 40rem) {
-  .b-chat { --prose-size: 15px; --prose-leading: 24px; --chat-gutter: 24px; }
+  .b-chat { --prose-size: var(--prose-wide-size); --prose-leading: var(--prose-wide-leading); --chat-gutter: 24px; }
 }
 /* The Person's message: a flat grey bubble on the right. No avatar. */
 .b-you {
   align-self: flex-end;
   max-width: 80%;
   padding: 8px 14px;
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--raised);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -927,8 +955,8 @@
 /* The Agent's reply: well-set text, no bubble, no avatar. */
 .b-prose { color: var(--foreground); overflow-wrap: anywhere; }
 .b-prose > * + * { margin-top: 10px; }
-.b-prose h1 { font-size: 18px; line-height: 26px; font-weight: 600; letter-spacing: -0.01em; margin-top: 24px; }
-.b-prose h2 { font-size: 16px; line-height: 24px; font-weight: 600; margin-top: 20px; }
+.b-prose h1 { font-size: var(--heading-size); line-height: var(--heading-leading); font-weight: 600; letter-spacing: -0.01em; margin-top: 24px; }
+.b-prose h2 { font-size: var(--title-size); line-height: var(--title-leading); font-weight: 600; margin-top: 20px; }
 .b-prose h3 { font-size: inherit; font-weight: 600; margin-top: 16px; }
 .b-prose ul,
 .b-prose ol { padding-left: 20px; }
@@ -939,10 +967,10 @@
 .b-prose code,
 .b-code-inline {
   padding: 1px 5px;
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   background: var(--raised);
   font-family: var(--font-mono);
-  font-size: 0.875em;
+  font-size: var(--code-size);
 }
 .b-prose blockquote { margin: 12px 0; padding-left: 14px; border-left: 2px solid var(--border); color: var(--muted-foreground); }
 /* A run of work, a tool call: one muted line, its icon (15px), a past-tense
@@ -956,10 +984,10 @@
   width: fit-content;
   max-width: 100%;
   min-width: 0;
-  font-size: var(--text-ui);
-  line-height: var(--text-ui-lh);
+  font-size: var(--ui-size);
+  line-height: var(--ui-leading);
   color: var(--muted-foreground);
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   transition: color var(--dur-fast) var(--ease);
 }
 .b-tl:hover { color: var(--foreground); }
@@ -976,8 +1004,8 @@
   align-items: center;
   height: 18px;
   padding: 0 6px;
-  border-radius: var(--r-small);
-  font-size: 11px;
+  border-radius: var(--small-radius);
+  font-size: var(--small-size);
   font-weight: 500;
   white-space: nowrap;
   color: var(--muted-foreground);
@@ -1009,7 +1037,7 @@
 .b-spin { animation: b-spin 1s linear infinite; }
 /* "Waiting for you: …" where a Question docks on the composer. */
 .b-waiting { color: var(--attention); }
-.b-diff { display: inline-flex; gap: 4px; flex: none; font-family: var(--font-mono); font-size: var(--text-code); font-variant-numeric: tabular-nums; }
+.b-diff { display: inline-flex; gap: 4px; flex: none; font-family: var(--font-mono); font-size: var(--code-size); font-variant-numeric: tabular-nums; }
 .b-diff .is-add { color: var(--added); }
 .b-diff .is-del { color: var(--removed); }
 
@@ -1022,11 +1050,11 @@
   flex-direction: column;
   min-width: 0;
   overflow: hidden;
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--block);
   box-shadow: inset 0 0 0 1px var(--border);
-  font-size: var(--text-ui);
-  line-height: var(--text-ui-lh);
+  font-size: var(--ui-size);
+  line-height: var(--ui-leading);
 }
 .b-block-head {
   display: flex;
@@ -1045,8 +1073,8 @@
   padding: 6px 12px;
   border-top: 1px solid var(--border);
   font-family: var(--font-mono);
-  font-size: var(--text-code);
-  line-height: var(--text-code-lh);
+  font-size: var(--code-size);
+  line-height: var(--code-leading);
 }
 .b-block-rows > *:hover { background: var(--raised); }
 .b-file { display: flex; flex: 1; min-width: 0; }
@@ -1056,24 +1084,24 @@
 .b-code {
   padding: 32px 16px 14px;
   font-family: var(--font-mono);
-  font-size: var(--text-code);
-  line-height: var(--text-code-lh);
+  font-size: var(--code-size);
+  line-height: var(--code-leading);
   white-space: pre;
   overflow: hidden;
 }
-.b-code-label { position: absolute; top: 0; left: 0; height: 32px; padding-left: 14px; display: flex; align-items: center; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-code-label { position: absolute; top: 0; left: 0; height: 32px; padding-left: 14px; display: flex; align-items: center; font-size: var(--meta-size); color: var(--muted-foreground); }
 .b-console {
   padding: 8px 12px;
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   background: var(--block);
   box-shadow: inset 0 0 0 1px var(--border);
   font-family: var(--font-mono);
-  font-size: var(--text-code);
-  line-height: var(--text-code-lh);
+  font-size: var(--code-size);
+  line-height: var(--code-leading);
   white-space: pre-wrap;
   color: var(--foreground);
 }
-.b-console-foot { margin-top: 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-family: var(--font-sans); }
+.b-console-foot { margin-top: 6px; font-size: var(--meta-size); color: var(--muted-foreground); font-family: var(--font-sans); }
 /* Syntax: a few of the terminal's colours, kept to 3:1. */
 .b-k1 { color: var(--ansi-blue); }
 .b-k2 { color: var(--ansi-green); }
@@ -1097,7 +1125,7 @@
 .b-composer {
   display: flex;
   flex-direction: column;
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--block);
   box-shadow: inset 0 0 0 1px var(--border);
   transition: box-shadow var(--dur) var(--ease);
@@ -1112,8 +1140,8 @@
 .b-composer-text {
   min-height: 44px;
   padding: 12px 14px 6px;
-  font-size: var(--prose-size, 14px);
-  line-height: var(--prose-leading, 22px);
+  font-size: var(--prose-size);
+  line-height: var(--prose-leading);
   color: var(--foreground);
 }
 .b-composer-text.is-empty,
@@ -1132,8 +1160,8 @@
   gap: 6px;
   height: 28px;
   padding: 0 8px;
-  border-radius: var(--r-control);
-  font-size: var(--text-meta);
+  border-radius: var(--control-radius);
+  font-size: var(--meta-size);
   color: var(--muted-foreground);
   white-space: nowrap;
 }
@@ -1159,12 +1187,12 @@
 .b-send.is-empty { background: color-mix(in oklab, var(--foreground) 10%, transparent); color: var(--muted-foreground); }
 .b-send.is-stop::before { content: ""; width: 10px; height: 10px; border-radius: 2.5px; background: currentColor; }
 /* The context ring, shown from half full; warns from 80%. */
-.b-ctx { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px; font-size: var(--text-meta); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
+.b-ctx { display: inline-flex; align-items: center; gap: 6px; height: 28px; padding: 0 6px; font-size: var(--meta-size); color: var(--muted-foreground); font-variant-numeric: tabular-nums; }
 /* A new Thread's Space, bare under the card. */
-.b-under { display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-under { display: flex; align-items: center; gap: 6px; padding: 0 6px; font-size: var(--meta-size); color: var(--muted-foreground); }
 /* What docks on the composer: a Question, a permission, a plan. */
 .b-docked {
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--block);
   box-shadow: inset 0 0 0 1px var(--border);
   padding: 12px 14px;
@@ -1172,16 +1200,16 @@
   flex-direction: column;
   gap: 8px;
 }
-.b-docked-head { font-size: var(--text-meta); font-weight: 600; color: var(--attention); }
+.b-docked-head { font-size: var(--meta-size); font-weight: 600; color: var(--attention); }
 .b-choice {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 34px;
   padding: 6px 10px;
-  border-radius: var(--r-control);
+  border-radius: var(--control-radius);
   box-shadow: inset 0 0 0 1px var(--border);
-  font-size: var(--text-ui);
+  font-size: var(--ui-size);
   text-align: left;
 }
 .b-choice:hover { background: var(--hover); }
@@ -1197,8 +1225,8 @@
   gap: 6px;
   height: 28px;
   padding: 0 10px;
-  border-radius: var(--r-control);
-  font-size: 13px;
+  border-radius: var(--control-radius);
+  font-size: var(--ui-size);
   font-weight: 500;
   white-space: nowrap;
   color: var(--foreground);
@@ -1212,7 +1240,7 @@
 .b-btn.is-ghost:hover { background: var(--hover); }
 .b-btn.is-ghost { color: var(--muted-foreground); }
 .b-btn.is-ghost:hover { color: var(--foreground); }
-.b-btn.is-sm { height: 24px; padding: 0 8px; font-size: var(--text-meta); }
+.b-btn.is-sm { height: 24px; padding: 0 8px; font-size: var(--meta-size); }
 .b-btn.is-danger { color: var(--destructive); }
 /* Icon buttons: 24 in headers (xs), 28 in rows (sm). */
 .b-ib {
@@ -1221,13 +1249,13 @@
   flex: none;
   width: 28px;
   height: 28px;
-  border-radius: var(--r-control);
+  border-radius: var(--control-radius);
   color: var(--muted-foreground);
 }
 .b-ib:hover { background: var(--hover); color: var(--foreground); }
 .b-ib.is-on { background: var(--current); color: var(--foreground); }
 .b-ib .b-icon { width: 16px; height: 16px; }
-.b-ib.is-xs { width: 24px; height: 24px; border-radius: 8px; }
+.b-ib.is-xs { width: 24px; height: 24px; border-radius: var(--control-radius); }
 .b-ib.is-xs .b-icon { width: 14px; height: 14px; }
 .b-chip {
   display: inline-flex;
@@ -1235,15 +1263,15 @@
   gap: 5px;
   height: 22px;
   padding: 0 8px;
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   background: var(--raised);
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
   color: var(--foreground);
   white-space: nowrap;
 }
 .b-chip .b-icon { width: 13px; height: 13px; color: var(--muted-foreground); }
 .b-chip.is-quiet { background: none; box-shadow: inset 0 0 0 1px var(--border); color: var(--muted-foreground); }
-.b-pill { border-radius: var(--r-round); }
+.b-pill { border-radius: 9999px; }
 .b-kbd {
   display: inline-flex;
   align-items: center;
@@ -1252,11 +1280,11 @@
   height: 20px;
   min-width: 20px;
   padding: 0 4px;
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   box-shadow: inset 0 0 0 1px var(--border);
   background: var(--muted);
   font-family: var(--font-sans);
-  font-size: 11px;
+  font-size: var(--small-size);
   font-weight: 500;
   color: var(--muted-foreground);
   white-space: nowrap;
@@ -1265,25 +1293,25 @@
 .b-menu {
   min-width: 220px;
   padding: 4px;
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--floating);
   color: var(--foreground);
   box-shadow: 0 0 0 1px color-mix(in oklab, var(--foreground) 12%, transparent), 0 16px 40px -12px rgb(0 0 0 / 0.35), 0 2px 8px rgb(0 0 0 / 0.08);
-  font-size: 13px;
+  font-size: var(--ui-size);
 }
-.b-menu-label { padding: 6px 8px 2px; font-size: 11px; font-weight: 500; color: var(--muted-foreground); }
+.b-menu-label { padding: 6px 8px 2px; font-size: var(--small-size); font-weight: 500; color: var(--muted-foreground); }
 .b-menu-item {
   display: flex;
   align-items: center;
   gap: 8px;
   height: 30px;
   padding: 0 8px;
-  border-radius: var(--r-item);
+  border-radius: var(--control-radius);
 }
 .b-menu-item:hover,
 .b-menu-item.is-hl { background: color-mix(in oklab, var(--foreground) 8%, var(--floating)); }
 .b-menu-item .b-icon { width: 16px; height: 16px; color: var(--muted-foreground); }
-.b-menu-item .b-key { margin-left: auto; font-size: var(--text-meta); color: var(--muted-foreground); }
+.b-menu-item .b-key { margin-left: auto; font-size: var(--meta-size); color: var(--muted-foreground); }
 .b-menu-sep { height: 1px; margin: 4px 6px; background: var(--border); }
 .b-toast {
   display: flex;
@@ -1291,20 +1319,20 @@
   gap: 10px;
   min-width: 300px;
   padding: 12px 14px;
-  border-radius: var(--r-card);
+  border-radius: var(--card-radius);
   background: var(--floating);
   box-shadow: 0 0 0 1px var(--border), 0 12px 32px -12px rgb(0 0 0 / 0.4);
-  font-size: 13px;
+  font-size: var(--ui-size);
 }
 .b-toast .b-btn { margin-left: auto; }
 /* A tooltip. */
 .b-tip {
   display: inline-block;
   padding: 4px 8px;
-  border-radius: var(--r-small);
+  border-radius: var(--small-radius);
   background: var(--foreground);
   color: var(--background);
-  font-size: var(--text-meta);
+  font-size: var(--meta-size);
 }
 
 /* ------------------------------------------------------------------ */

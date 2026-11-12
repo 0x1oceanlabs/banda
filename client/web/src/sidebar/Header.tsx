@@ -10,9 +10,7 @@ import { useOpen } from "./open"
 function MenuKey() {
   const key = useKeyOf()("menu.open")
   if (!key) return null
-  return (
-    <Kbd className="h-4.5 px-0.5">{keyCaps(key).join(" ")}</Kbd>
-  )
+  return <Kbd className="h-4.5 px-0.5">{keyCaps(key).join(" ")}</Kbd>
 }
 
 /**

@@ -237,7 +237,9 @@ export function Settings({
                 <>
                   <div className="flex items-start gap-4">
                     <div className="flex-1">
-                      <h1 className="text-heading font-semibold">{section.title}</h1>
+                      <h1 className="text-heading font-semibold">
+                        {section.title}
+                      </h1>
                       <p className="text-sm text-muted-foreground">
                         {section.about}
                       </p>

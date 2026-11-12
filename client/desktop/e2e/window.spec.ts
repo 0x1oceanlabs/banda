@@ -2857,8 +2857,11 @@ test("columns and the text size come from look.toml", async () => {
   })
   const { page } = window
   const root = page.locator("html")
-  // 16px text: the root grows by 16/14, and the rest with it.
+  // 16px text: the root grows by 16/14, and the rest with it, each level
+  // of the type scale too (ADR 0113, decision 3).
   await expect(root).toHaveCSS("--text-root", "18.286px")
+  await expect(root).toHaveCSS("--ui-size", "16px")
+  await expect(root).toHaveCSS("--meta-size", "13.714px")
   const size = await root.evaluate((e) =>
     parseFloat(getComputedStyle(e).fontSize)
   )
