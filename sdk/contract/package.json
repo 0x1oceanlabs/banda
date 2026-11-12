@@ -18,6 +18,7 @@
     "./pulls": "./src/pulls.ts",
     "./sharing": "./src/sharing.ts",
     "./workspaces": "./src/workspaces.ts",
+    "./updates": "./src/updates.ts",
     "./look": "./src/look.ts",
     "./tokens.css": "./src/generated/look/tokens.css",
     "./sidebar": "./src/sidebar.ts",

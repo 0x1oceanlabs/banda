@@ -15,7 +15,7 @@ import type { Args } from "./run"
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
  * nothing to say, a look the Person asked for, a version downloading, one
- * ready to install on quit (or once the Threads stop), one out that the Person installs with
+ * ready to install on quit or on Restart, one out that the Person installs with
  * `command` (on macOS, through brew: ADR 0033, decision 6), or one that
  * cannot install until the Person mends something. `name` is the app's, `Banda Dev`, and `have` the
  * version that runs. `always` keeps the widget on the bar with nothing to
@@ -35,21 +35,18 @@ export type Update = { name: string; have: string; always: boolean } & (
       version: string
       share: number
       notes: Note[]
-      /** Banda restarts into it once it is down (`update.now`), and
-       * once no Thread works and no program runs in this machine's
-       * terminals (ADR 0072, decision 3; ADR 0106, decision 4). */
+      /** Banda restarts into it once it is down (`update.now`). */
       restarts: boolean
       /** Bytes down, and of how many, when electron-updater says. */
       down?: number
       size?: number
     }
   | {
+      /** Down: Restart starts it at once, and the engine and its Agents
+       * go on (ADR 0115, decision 4); or the quit installs it. */
       state: "ready"
       version: string
       notes: Note[]
-      /** Banda waits for the Threads to stop, then restarts into it
-       * (ADR 0072, decision 3); the window asks for the restart. */
-      waits: boolean
     }
   | {
       /** The first moments of a Banda that restarted into a new version

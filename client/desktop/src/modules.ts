@@ -9,6 +9,7 @@
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
 import { notificationsDesktop } from "@banda/notifications-desktop"
+import { followEngine, updates } from "@banda/updates-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
 
@@ -47,3 +48,8 @@ export const modules = {
   served: agentsDesktop.served,
   opened: browserDesktop.opened,
 }
+
+/** The updates module's part (ADR 0115, decision 2): the swap of the
+ * window's own app, which main wires to the bridge's `update` and to its
+ * engine's `updates.state`. */
+export const appUpdates = { updates, followEngine }

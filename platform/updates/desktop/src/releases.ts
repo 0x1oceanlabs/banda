@@ -1,20 +1,18 @@
 /**
- * Where each Banda finds its next version: a source of its own,
- * electron-updater's `custom` provider (ADR 0092, decision 12). GitHub's
- * own takes only a tag with the running version's word, `dev`, so it would
- * never see a plain `0.750.0`; and it falls back from `dev-linux.yml` to
- * `latest-linux.yml`, which would install Banda over Banda Dev once a
- * release holds both apps' files.
+ * Where the window's app finds its next version: a source of its own,
+ * electron-updater's `custom` provider (ADR 0092, decision 12; ADR 0115,
+ * decision 2). Which version that is, the engine decides: its updates
+ * module reads the channel's releases by its rules (`feed.rs`), and says
+ * the newest on `updates.state`. This source only reads that release:
+ * its update file for this app (`dev-linux.yml`, `dev-mac.yml`,
+ * `latest-linux.yml`), which must name only this app's own files,
+ * `<folder>-<version>-…`, all there; and the notes of the releases since
+ * the running version.
  *
- * Banda Dev reads GitHub's list of releases, which holds no bare tag, so a
- * withdrawn release's kept tag is never seen. It takes the highest version
- * above its own whose release has its update file (`dev-linux.yml`,
- * `dev-mac.yml`, `dev.yml` on Windows) and only `banda-dev-<version>-…`
- * files. Banda reads the release marked Latest, refuses one that is no
- * Stable, reads `latest-linux.yml` or `latest-mac.yml`, and takes only
- * `banda-<version>-…`. Both know today's `0.1.0-dev.N` and the plain
- * `MAJOR.N.PATCH` that follows it (decision 5). Neither look needs a
- * token: one call to GitHub's API an hour.
+ * electron-updater's GitHub provider would read another release: it takes
+ * only a tag with the running version's word, `dev`, and falls back from
+ * `dev-linux.yml` to `latest-linux.yml`, which would install Banda over
+ * Banda Dev once a release holds both apps' files.
  */
 import { Schema } from "effect"
 import {
@@ -26,15 +24,24 @@ import {
   type ProviderRuntimeOptions,
   parseUpdateInfo,
 } from "electron-updater/out/providers/Provider"
-import { CHANNELS, REPOSITORY } from "./channel"
 
-/** Which Banda looks: Banda Dev reads every release, Banda the Stable
- * marked Latest. */
+/** Which Banda looks: Banda Dev, whose notes are every Dev's since its
+ * own, or Banda, whose are the Stable's. */
 export type Which = "dev" | "stable"
 
-/** What `autoUpdater.setFeedURL` takes for `which`'s source. */
-export function sourceOf(which: Which) {
-  return { provider: "custom", updateProvider: Releases, which } as const
+/** What the source reads: for which app, at which repository, and the
+ * version the engine found newest, when it has looked. */
+export type Source = {
+  which: Which
+  /** The app's folder, which its files' names start with. */
+  folder: string
+  repository: { owner: string; repo: string }
+  newest: () => string | undefined
+}
+
+/** What `autoUpdater.setFeedURL` takes for `source`. */
+export function sourceOf(source: Source) {
+  return { provider: "custom", updateProvider: Releases, ...source } as const
 }
 
 /** A version Banda publishes, in numbers: `0.1.0-dev.N` until ADR 0092's
@@ -227,58 +234,72 @@ type Updater = { readonly currentVersion: { readonly version: string } }
  * `allowDowngrade` is off.
  */
 export class Releases extends Provider<Found> {
-  private readonly which: Which
+  private readonly source: Source
   private readonly updater: Updater
 
   constructor(
-    options: { which: Which },
+    options: Source,
     updater: Updater,
     runtime: ProviderRuntimeOptions
   ) {
     // GitHub keeps release files where a request takes one range.
     super({ ...runtime, isUseMultipleRangeRequest: false })
-    this.which = options.which
+    this.source = options
     this.updater = updater
   }
 
   async getLatestVersion(): Promise<Found> {
     const have = this.updater.currentVersion.version
-    const { folder } = CHANNELS[this.which]
-    const file = `${this.getCustomChannelName(this.which === "dev" ? "dev" : "latest")}.yml`
-    const releases =
-      this.which === "dev"
-        ? readReleases(await this.api("/releases?per_page=100"))
-        : await this.latest()
+    const { which, folder } = this.source
+    const newest = this.source.newest()
+    if (newest === undefined || !isAbove(newest, have))
+      return nothingAbove(have)
+    const file = `${this.getCustomChannelName(which === "dev" ? "dev" : "latest")}.yml`
+    // Banda Dev's notes are every Dev's since its own: one call for the
+    // list, which holds the newest too.
+    const above =
+      which === "dev"
+        ? releasesAbove(
+            readReleases(await this.api("/releases?per_page=100")),
+            have
+          )
+        : []
+    const listed = above.find((one) => one.version === newest)
+    const release =
+      listed?.release ??
+      readRelease(await this.api(`/releases/tags/v${newest}`))
     // A release published before its files for this platform, as a Mac's
     // are today (ADR 0033, decision 6): a look again soon finds them.
-    let coming: string | undefined
-    const above = releasesAbove(releases, have)
-    for (const { release, version } of above) {
-      const update = fileOf(release, file)
-      if (!update) {
-        coming ??= `${version} has no ${file} yet`
-        continue
-      }
-      const url = new URL(update.browser_download_url)
-      const info = parseUpdateInfo(await this.httpRequest(url), file, url)
-      const files = filesOf(info, release, version, folder)
-      if ("refused" in files) {
-        console.warn(`Banda does not take ${version}: ${file} ${files.refused}`)
-        continue
-      }
-      if ("missing" in files) {
-        coming ??= `${version} has no ${files.missing} yet`
-        continue
-      }
-      return {
-        ...info,
-        urls: files.urls,
-        releaseName: release.name,
-        releaseNotes: notesUpTo(above, version),
-      }
+    const update = fileOf(release, file)
+    if (!update)
+      throw coded(
+        `${newest} has no ${file} yet`,
+        "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
+      )
+    const url = new URL(update.browser_download_url)
+    const info = parseUpdateInfo(await this.httpRequest(url), file, url)
+    const files = filesOf(info, release, newest, folder)
+    if ("refused" in files) {
+      console.warn(`Banda does not take ${newest}: ${file} ${files.refused}`)
+      return nothingAbove(have)
     }
-    if (coming) throw coded(coming, "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND")
-    return nothingAbove(have)
+    if ("missing" in files)
+      throw coded(
+        `${newest} has no ${files.missing} yet`,
+        "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
+      )
+    return {
+      ...info,
+      urls: files.urls,
+      releaseName: release.name,
+      // A newest past the list's hundred says its own notes first.
+      releaseNotes: [
+        ...(listed
+          ? []
+          : [{ version: newest, note: release.body_text ?? null }]),
+        ...notesUpTo(above, newest),
+      ],
+    }
   }
 
   resolveFiles(info: Found): ResolvedUpdateFileInfo[] {
@@ -290,30 +311,10 @@ export class Releases extends Provider<Found> {
     })
   }
 
-  /** Banda's release: the one marked Latest, when it is a Stable, named
-   * `Banda <version>` (ADR 0092, decision 1); none before the first. */
-  private async latest(): Promise<Release[]> {
-    let text: string
-    try {
-      text = await this.api("/releases/latest")
-    } catch (error) {
-      if ((error as { statusCode?: number }).statusCode === 404) return []
-      throw error
-    }
-    const release = readRelease(text)
-    const version = release.tag_name.slice(1)
-    if (release.prerelease || release.name !== `Banda ${version}`)
-      throw coded(
-        `${release.tag_name}, marked Latest, is not a Stable`,
-        "ERR_BANDA_NOT_STABLE"
-      )
-    return [release]
-  }
-
   /** GitHub's REST API at `path` of Banda's repository, with each
    * release's notes as text. */
   private async api(path: string): Promise<string> {
-    const { owner, repo } = REPOSITORY
+    const { owner, repo } = this.source.repository
     let text: string | null
     try {
       text = await this.httpRequest(

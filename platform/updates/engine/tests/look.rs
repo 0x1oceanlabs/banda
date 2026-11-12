@@ -377,3 +377,38 @@ async fn a_version_chosen_older_is_put_in_place_and_held_to() {
     assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.12"), "{state:?}");
     assert!(!machine.engine.join("chosen").exists());
 }
+
+#[tokio::test]
+async fn a_newer_copy_the_window_put_in_place_is_ready_with_no_download() {
+    let machine = machine_running(
+        "dev",
+        "0.1.0-dev.10",
+        |at, served| {
+            // The window's app is a release the feed does not have yet.
+            let one = publish(
+                served,
+                at,
+                "0.1.0-dev.10",
+                bundle("banda 0.1.0-dev.10 (build a)"),
+                None,
+            );
+            format!("[{one}]")
+        },
+        |_| None,
+    )
+    .await;
+    let copy = machine.engine.join("0.1.0-dev.11");
+    std::fs::create_dir_all(&copy).unwrap();
+    std::fs::write(copy.join("banda"), "").unwrap();
+    std::fs::write(copy.join("version"), "banda 0.1.0-dev.11 (build w)\n").unwrap();
+    let state = machine.updates.look().await;
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.11"), "{state:?}");
+    assert_eq!((state.taking, state.failed), (None, None));
+    // An older copy is never ready.
+    let older = machine_running("dev", "0.1.0-dev.10", |_, _| "[]".to_owned(), |_| None).await;
+    let copy = older.engine.join("0.1.0-dev.9");
+    std::fs::create_dir_all(&copy).unwrap();
+    std::fs::write(copy.join("banda"), "").unwrap();
+    std::fs::write(copy.join("version"), "banda 0.1.0-dev.9 (build o)\n").unwrap();
+    assert_eq!(older.updates.look().await.ready, None);
+}

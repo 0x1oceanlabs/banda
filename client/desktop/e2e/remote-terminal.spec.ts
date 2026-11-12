@@ -367,41 +367,6 @@ test("Banda restarted on arc: the terminal says Ended, starts nothing by itself,
   await expect(foot).toHaveCount(0)
 })
 
-test("a program in arc's terminal does not hold this machine's update: its update waits only for this machine's", async () => {
-  const { page, composer, folder } = await onArc()
-  const screen = await terminalOn(page, composer)
-  await screen.click()
-  await run(page, "echo on > front; sleep 600")
-  await expect.poll(() => inFolder(folder, "front")).toBe("on\n")
-  // Banda's update, as main would tell it: a version ready, and a window
-  // asked to restart once nothing works.
-  await window!.app.evaluate(({ BrowserWindow, ipcMain }) => {
-    const value = {
-      name: "Banda",
-      have: "0.2.0",
-      always: false,
-      state: "ready",
-      version: "0.3.0",
-      notes: [],
-      waits: true,
-    }
-    ipcMain.removeHandler("update.current")
-    ipcMain.handle("update.current", () => value)
-    const asked: string[] = []
-    ;(globalThis as { asked?: string[] }).asked = asked
-    ipcMain.removeAllListeners("update.restart")
-    ipcMain.on("update.restart", () => asked.push("restart"))
-    BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
-  })
-  await expect
-    .poll(
-      () =>
-        window!.app.evaluate(() => (globalThis as { asked?: string[] }).asked),
-      { timeout: 15_000 }
-    )
-    .toEqual(["restart"])
-})
-
 test("paths: a path arc's terminal prints opens arc's file at its line; Ctrl and the menu offer no app of this computer's", async () => {
   const { page, composer, folder } = await onArc()
   put(arc!.disk(folder), {

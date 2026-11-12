@@ -1,0 +1,28 @@
+{
+  "name": "@banda/updates-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The updates module's part in the window's main process (ADR 0115, decision 2): it swaps the window's own app for the release the engine says is newest, with electron-updater, or says the brew command on macOS. The engine decides; this part only carries out.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/core": "workspace:*",
+    "effect": "4.1.1",
+    "electron-updater": "6.8.11"
+  },
+  "devDependencies": {
+    "@banda/ui": "workspace:*",
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
+  }
+}

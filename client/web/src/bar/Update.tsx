@@ -3,8 +3,9 @@
  * an arrow in a circle, in the bar's muted text, only while there is
  * something to say. The circle fills as a version downloads, once that
  * has run two seconds; once one is ready, the version stands beside it,
- * and a click shows what changed and restarts into it, or waits for the
- * Threads to stop. The new Banda says it updated, six seconds. In
+ * and a click shows what changed and restarts into it: only the window
+ * restarts, and the engine and its Agents go on (ADR 0115, decision 4).
+ * The new Banda says it updated, six seconds. In
  * `--destructive` only when the Person has to mend something. Banda
  * Dev's stays on the bar, dimmed, with "Update now" (ADR 0045). On macOS
  * a version out shows the same, with the brew command to copy.
@@ -20,12 +21,10 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE } from "@banda/ui/lib/words"
 import { type ReactNode, useEffect, useState } from "react"
-import type { Engine } from "@banda/contract"
 import type { Note, Update } from "@banda/core"
 import {
   firstOf,
   groupsOf,
-  IDLE_FOR,
   lineOf,
   lookedWords,
   percentOf,
@@ -35,10 +34,7 @@ import {
   sizeWords,
   UPDATED_FOR,
   versionsWords,
-  waitWords,
-  workingWords,
 } from "./updating"
-import { useRunningHere } from "./running"
 
 /** The notes the popover lists before "Show all". */
 const NOTES = 6
@@ -73,15 +69,8 @@ function useUpdate(): Update | undefined {
 const shown = (update: Update | undefined): update is Update =>
   update !== undefined && (update.state !== "none" || update.always)
 
-/** The update's widget, on this machine's `engine`; `working` is how many
- * Threads work now. */
-export function UpdateWidget({
-  engine,
-  working,
-}: {
-  engine: Engine
-  working: number
-}) {
+/** The update's widget. */
+export function UpdateWidget() {
   const update = useUpdate()
   // What it last showed, while it shrinks out of the bar.
   const [last, setLast] = useState<Update>()
@@ -93,9 +82,6 @@ export function UpdateWidget({
     const timer = setTimeout(() => setLast(undefined), LEAVES_IN)
     return () => clearTimeout(timer)
   }, [now])
-  // Only a version ready to restart into waits for them.
-  const running = useRunningHere(engine, now?.state === "ready")
-  useRestartWhenIdle(now, working, running)
   useUpdatedFor(now, open)
   const drawn = now ?? last
   if (!drawn) return null
@@ -127,10 +113,7 @@ export function UpdateWidget({
                 pill &&
                   "h-7 gap-1.5 bg-added/14 ps-1.5 pe-2 text-foreground hover:bg-added/22",
                 // The check is drawn in the colour of what was added.
-                drawn.state === "updated" && "[&_svg]:text-added",
-                drawn.state === "ready" &&
-                  drawn.waits &&
-                  "bg-attention/14 hover:bg-attention/22"
+                drawn.state === "updated" && "[&_svg]:text-added"
               )}
             />
           }
@@ -141,7 +124,7 @@ export function UpdateWidget({
           )}
         </PopoverTrigger>
         <PopoverContent className="w-84 gap-0 p-0">
-          <About update={drawn} working={working} running={running} />
+          <About update={drawn} />
         </PopoverContent>
       </Popover>
     </span>
@@ -153,24 +136,6 @@ export function UpdateWidget({
   ) : (
     widget
   )
-}
-
-/** Restarts into a version that waits for the Threads and this machine's
- * terminals, once no Thread has worked, and no program run in front, for
- * `IDLE_FOR` (ADR 0072, decision 3): `running` is none until its terminals
- * have answered, so it waits for that too. */
-function useRestartWhenIdle(
-  update: Update | undefined,
-  working: number,
-  running: number | undefined
-) {
-  const waits = update?.state === "ready" && update.waits
-  const idle = working === 0 && running === 0
-  useEffect(() => {
-    if (!waits || !idle) return
-    const timer = setTimeout(() => host()?.restart(), IDLE_FOR)
-    return () => clearTimeout(timer)
-  }, [waits, idle])
 }
 
 /** Says that Banda updated `UPDATED_FOR`, unless the Person opened what
@@ -185,17 +150,8 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
 }
 
 /** What the popover says. */
-function About({
-  update,
-  working,
-  running,
-}: {
-  update: Update
-  working: number
-  running: number | undefined
-}) {
+function About({ update }: { update: Update }) {
   const at = useNow(MINUTE)
-  const warning = workingWords(working, running)
   switch (update.state) {
     case "downloading": {
       const size = sizeWords(update)
@@ -240,25 +196,6 @@ function About({
       )
     }
     case "ready":
-      if (update.waits)
-        return (
-          <>
-            <Head
-              update={update}
-              to={update.version}
-              words={waitWords(working, running)}
-            />
-            <div className="px-3.5">
-              <Notes notes={update.notes} />
-            </div>
-            <Foot words="Then it restarts by itself">
-              <Button variant="ghost" size="sm" onClick={() => host()?.later()}>
-                Cancel
-              </Button>
-              <Restart>Restart now</Restart>
-            </Foot>
-          </>
-        )
       return (
         <>
           <Head
@@ -271,21 +208,9 @@ function About({
           <div className="px-3.5">
             <Notes notes={update.notes} />
           </div>
-          <Warning words={warning} />
-          <Foot>
-            {warning ? (
-              <>
-                <Restart variant="ghost">Restart now</Restart>
-                <Button size="sm" onClick={() => host()?.wait()}>
-                  Restart when idle
-                </Button>
-              </>
-            ) : (
-              <>
-                <Later />
-                <Restart>Restart</Restart>
-              </>
-            )}
+          <Foot words="Agents keep working: only the window restarts.">
+            <Later />
+            <Restart>Restart</Restart>
           </Foot>
         </>
       )
@@ -437,31 +362,11 @@ function Meter({ share }: { share: number }) {
   )
 }
 
-/** That a restart stops the turns of the Threads that work, if any do. */
-function Warning({ words }: { words: string | undefined }) {
-  return words ? (
-    <p className="mx-3.5 mt-2.5 flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-meta text-attention">
-      <span
-        aria-hidden
-        data-update-breath
-        className="mt-1.5 size-1.5 shrink-0 rounded-full bg-attention"
-      />
-      {words}
-    </p>
-  ) : null
-}
-
 /** Installs the version that is ready and restarts into it now. */
-function Restart({
-  variant,
-  children,
-}: {
-  variant?: "ghost"
-  children: ReactNode
-}) {
+function Restart({ children }: { children: ReactNode }) {
   return (
     <PopoverClose
-      render={<Button size="sm" variant={variant} />}
+      render={<Button size="sm" />}
       onClick={() => host()?.restart()}
     >
       {children}
