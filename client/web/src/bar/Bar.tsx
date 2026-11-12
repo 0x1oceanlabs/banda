@@ -103,7 +103,7 @@ export function Bar({
         className={cn(
           "flex items-center",
           dragging === id &&
-            "relative z-10 cursor-grabbing rounded-control bg-popover shadow-lg ring-1 ring-ring/60"
+            "relative z-10 cursor-grabbing rounded-control bg-popover shadow-lift ring-1 ring-ring/60"
         )}
       >
         {nodes.get(id)}

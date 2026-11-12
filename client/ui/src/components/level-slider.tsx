@@ -86,7 +86,7 @@ export function LevelSlider({
                 "focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none",
                 unset
                   ? "inset-ring-[1.5px] inset-ring-foreground/30"
-                  : "bg-primary-foreground shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_2px_rgb(0_0_0/0.22),0_2px_6px_rgb(0_0_0/0.12)] group-hover/level:shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_3px_rgb(0_0_0/0.28),0_3px_10px_rgb(0_0_0/0.16)]",
+                  : "bg-primary-foreground shadow-float",
                 glide
                   ? `transition-[inset-inline-start,scale,box-shadow] ${GLIDE}`
                   : "transition-[scale,box-shadow] duration-150"

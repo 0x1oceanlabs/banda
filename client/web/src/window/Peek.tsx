@@ -198,7 +198,7 @@ export function Peek({
  * the Sheet: as the window's menus, their fill and hairline, a deep
  * shadow, and a blur of what is under it. */
 export const FLOATING =
-  "rounded-card bg-popover/95 text-popover-foreground shadow-[0_30px_80px_-12px_rgb(0_0_0/0.45)] ring-1 ring-foreground/10 backdrop-blur-xl backdrop-saturate-150"
+  "rounded-card bg-popover/95 text-popover-foreground shadow-lift ring-1 ring-foreground/10 backdrop-blur-xl backdrop-saturate-150"
 
 /** A Pane drawn over the desk, in no workspace, on its card's own fill:
  * a view that paints the page's background, as code does, paints the

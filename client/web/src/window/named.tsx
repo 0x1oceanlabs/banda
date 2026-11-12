@@ -62,7 +62,7 @@ export function MachinePill({
     <p
       data-machine-pill={shown.name}
       className={cn(
-        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full border bg-tile px-2.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground shadow-sm",
+        "flex max-w-full min-w-0 items-center gap-1.5 rounded-full border bg-tile px-2.5 py-0.5 text-meta whitespace-nowrap text-muted-foreground",
         stopped && "pointer-events-auto"
       )}
     >

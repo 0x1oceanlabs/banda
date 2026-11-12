@@ -412,7 +412,7 @@ function Page({
       ref={box}
       data-pdf-page={number}
       aria-label={`Page ${number}`}
-      className="relative shrink-0 overflow-hidden rounded-small bg-white shadow-[0_4px_18px_rgb(0_0_0/0.18)]"
+      className="relative shrink-0 overflow-hidden rounded-small bg-white shadow-float"
       style={
         {
           width: size.width * scale,
@@ -706,7 +706,7 @@ function FindBar({
   onClose: () => void
 }) {
   return (
-    <div className="absolute top-2 right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-card bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
+    <div className="absolute top-2 right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-card bg-popover text-popover-foreground shadow-float ring-1 ring-foreground/10">
       <InputGroup className="h-9 border-transparent bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
         <InputGroupInput
           ref={field}

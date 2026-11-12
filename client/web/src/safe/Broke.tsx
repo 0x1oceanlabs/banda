@@ -72,7 +72,7 @@ export function BrokeCard({
     <main className="grid h-dvh place-items-center p-6">
       <section
         aria-labelledby={title}
-        className="flex w-full max-w-md flex-col gap-2 rounded-card border bg-popover p-5 text-popover-foreground shadow-lg"
+        className="flex w-full max-w-md flex-col gap-2 rounded-card border bg-popover p-5 text-popover-foreground shadow-float"
       >
         {page && (
           <BandaMark

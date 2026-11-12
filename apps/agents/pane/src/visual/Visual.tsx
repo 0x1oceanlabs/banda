@@ -44,7 +44,7 @@ export function Visual({
       {/* Keep the actions above the page, with their space reserved so
           revealing them never covers content or moves the frame. */}
       <div className="mb-1 flex justify-end">
-        <div className="flex gap-0.5 rounded-control bg-popover p-0.5 text-popover-foreground opacity-0 shadow-sm ring-1 ring-foreground/10 transition-opacity group-hover/visual:opacity-100 focus-within:opacity-100">
+        <div className="flex gap-0.5 rounded-control bg-popover p-0.5 text-popover-foreground opacity-0 shadow-float ring-1 ring-foreground/10 transition-opacity group-hover/visual:opacity-100 focus-within:opacity-100">
           <Button variant="ghost" size="xs" onClick={() => setPreviewing(true)}>
             <Maximize2Icon />
             Preview

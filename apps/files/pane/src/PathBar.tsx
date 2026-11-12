@@ -339,7 +339,7 @@ function PathField({
         <div
           role="listbox"
           aria-label="Folders"
-          className="absolute top-7 right-0 left-0 z-20 rounded-card bg-popover p-1 text-popover-foreground shadow-md ring-1 ring-foreground/10"
+          className="absolute top-7 right-0 left-0 z-20 rounded-card bg-popover p-1 text-popover-foreground shadow-float ring-1 ring-foreground/10"
           onMouseDown={(event) => event.preventDefault()}
         >
           {wrong ? (

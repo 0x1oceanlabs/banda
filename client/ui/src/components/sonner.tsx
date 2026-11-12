@@ -18,11 +18,13 @@ const TOKENS = {
 } as CSSProperties
 
 /** The edge says each toast's kind at a glance, as the Mark's colours do:
- * an error is `failed`'s, a warning `asking`'s. Sonner's own rules
- * outrank a class, hence the `!`. */
+ * an error is `failed`'s, a warning `asking`'s. A toast floats, as the
+ * Top layer does (ADR 0113, decision 4), its focus a ring over it.
+ * Sonner's own rules outrank a class, hence the `!`. */
 const OPTIONS: ToasterProps["toastOptions"] = {
   classNames: {
-    toast: "border-l-4! text-left",
+    toast:
+      "border-l-4! text-left shadow-float! focus-visible:ring-2 focus-visible:ring-ring/50",
     default: "border-l-foreground!",
     warning: "border-l-attention!",
     error: "border-l-destructive!",

@@ -347,7 +347,7 @@ function HunkPlate({
     <div data-hunk-actions className="relative h-0">
       <div
         className={cn(
-          "absolute right-2 bottom-0 flex items-center gap-0.5 rounded-control bg-popover font-sans text-meta text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,visibility] duration-100 [&_[data-slot=button]]:h-5",
+          "absolute right-2 bottom-0 flex items-center gap-0.5 rounded-control bg-popover font-sans text-meta text-popover-foreground shadow-float ring-1 ring-foreground/10 transition-[opacity,visibility] duration-100 [&_[data-slot=button]]:h-5",
           !on &&
             "invisible opacity-0 has-data-popup-open:visible has-data-popup-open:opacity-100"
         )}

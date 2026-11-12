@@ -107,7 +107,7 @@ const TAB = "[data-handle] > [data-pane]"
 const GROUP_HANDLE = "[data-group-handle]"
 
 const GHOST_LOOK =
-  "pointer-events-none fixed top-0 left-0 z-50 flex max-w-60 flex-col rounded-control border bg-popover px-2.5 py-1.5 text-ui text-popover-foreground shadow-md"
+  "pointer-events-none fixed top-0 left-0 z-50 flex max-w-60 flex-col rounded-control border bg-popover px-2.5 py-1.5 text-ui text-popover-foreground shadow-lift"
 /** The note under the ghost's name: whether the Group goes too. */
 const NOTE_LOOK = "truncate text-meta text-muted-foreground empty:hidden"
 const HINT_LOOK =
