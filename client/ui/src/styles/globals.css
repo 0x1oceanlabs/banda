@@ -114,8 +114,9 @@
      sized from its font size (platform/theme/src/fonts.rs). Prose is
      sized by its Pane (ADR 0058). Tailwind's own sizes are cleared; its
      names land on a level, for what comes as it is, as streamdown and
-     shadcn's components (decision 8): xs meta, sm UI, base title, lg and
-     up heading. */
+     shadcn's components as `shadcn add` brings them (decision 8): xs
+     meta, sm UI, base title, lg and up heading. Banda's code writes the
+     level's name: the look check refuses Tailwind's. */
   --text-*: initial;
   --text-heading: var(--heading-size);
   --text-heading--line-height: var(--heading-leading);

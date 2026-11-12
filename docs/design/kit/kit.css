@@ -1152,7 +1152,7 @@
   padding: 4px 8px 8px;
 }
 .b-composer-row .b-spacer { flex: 1; }
-/* A footer control: 28px, text-xs, muted; quiet until hovered. */
+/* A footer control: 28px, text-meta, muted; quiet until hovered. */
 .b-ctl {
   display: inline-flex;
   align-items: center;

@@ -189,7 +189,7 @@ pub const TOKENS: &[Token] = list! {
         "small-radius",
     ];
     // `[font]`: the two families, and the root's size that makes the
-    // usual text (`text-sm`) the size said. Everything in rem grows with it.
+    // usual text (`text-ui`) the size said. Everything in rem grows with it.
     Font Font ["font-family-sans", "font-family-mono"];
     Font Length ["text-root"];
     // The type scale (ADR 0113, decision 3): each level's size and line
