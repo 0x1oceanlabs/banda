@@ -12,7 +12,6 @@ import { useLookSidebar } from "../look"
 import { Dismiss } from "../sidebar/open"
 import { NO_CHECKS, type Checks } from "../sidebar/pick"
 import { PickList, useSidebarKeys } from "../sidebar/PickList"
-import type { WithMenu } from "../sidebar/ProjectMenu"
 import { regionsOf } from "../sidebar/regions"
 import { SectionView } from "../sidebar/SectionView"
 import type { Settings } from "../sidebar/settings"
@@ -181,9 +180,6 @@ export function SmallInbox({
 const NONE: ReadonlySet<string> = new Set()
 const NOTHING = () => {}
 
-/** A Project's menu is the sidebar's: here a row is drawn as it is. */
-const noMenu: WithMenu = (_, row) => row
-
 /** The workspaces as they are, whole. */
 const same = <T,>(value: T) => value
 
@@ -271,8 +267,6 @@ function SmallList({
             strayed={NONE}
             onToggle={NOTHING}
             engine={engine}
-            withMenu={noMenu}
-            only={undefined}
             projects={projects}
             holds={ordering.holds}
           />

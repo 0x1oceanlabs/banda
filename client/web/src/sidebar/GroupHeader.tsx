@@ -13,6 +13,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { ChevronRightIcon, EllipsisIcon, PlusIcon } from "lucide-react"
 import { useState } from "react"
 import { TONES } from "./CardStatus"
+import { HOVER_FILL } from "./CardView"
 import { newThread, useOpen } from "./open"
 import type { GroupBlock } from "./regions"
 import type { Settings } from "./settings"
@@ -25,11 +26,13 @@ import { pickProps } from "./usePick"
  * call and how many work in grey, and, folded, the loudest one's mark
  * too. The pointer over it, or the keyboard's focus in it, shows **+**, a
  * New Thread there, and **⋯**, the Project's menu its right click opens,
- * in the rollup's place. A machine's group has the machine's icon and
- * name. Another machine's Project has neither yet: each act would go to
- * this machine's engine. Inside the list, which keys pick (decision 13),
- * none of it is a Tab stop: folded, the header is a stop of the pick
- * (`stop`), which → or Enter unfolds.
+ * in the rollup's place (decision 16). A machine's group has the
+ * machine's icon and name. Another machine's Project has neither yet:
+ * each act would go to this machine's engine. Inside the list, which keys
+ * pick (decision 13), none of it is a Tab stop: the header is a stop of
+ * the pick (`stop`), folded or not, which ← folds and → or Enter unfolds,
+ * Enter folding it again; Shift+F10 or the Menu key on it opens the
+ * Project's menu, as ⋯ does, and picked by a key it shows + and ⋯ too.
  */
 export function GroupHeader({
   group,
@@ -45,8 +48,8 @@ export function GroupHeader({
   /** This machine's No Project, where its group's + starts a Thread;
    * none until the engine names it. */
   machine?: ProjectId
-  /** Its key as a stop of the pick, while it is folded. */
-  stop?: string
+  /** Its key as a stop of the pick. */
+  stop: string
   /** The list's keys act on it. */
   picked?: boolean
   /** The list is in check mode (decision 15), where a header is never
@@ -78,17 +81,16 @@ export function GroupHeader({
       onPointerLeave={() => setClicked(false)}
       className={cn(
         "relative isolate flex h-7 items-center gap-1.5 rounded-control px-2 text-ui",
-        // The hover's fill, as a card's: at once in, over 100 ms out
-        // (`globals.css`, by plain :hover, as the cards' acts).
-        "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit)"
+        // The hover's fill, as a card's (by plain :hover, as the cards'
+        // acts).
+        HOVER_FILL
       )}
     >
       <button
         type="button"
         aria-expanded={!folded}
         data-group={group.key}
-        {...(stop !== undefined &&
-          pickProps(stop, picked, checking ? false : undefined))}
+        {...pickProps(stop, picked, checking ? false : undefined)}
         tabIndex={-1}
         title={project?.folder}
         className="flex min-w-0 flex-1 items-center gap-1.5 rounded-control text-left outline-none"

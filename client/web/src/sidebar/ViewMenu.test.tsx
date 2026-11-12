@@ -107,14 +107,11 @@ test("its switches show the Inbox's parts and the hold as they are, and a click 
   ])
 })
 
-test("under the places preset the list is one list, and a group picked leaves the preset for Banda's own first", () => {
+test("under the places preset the list groups by Project, and a group picked is one write (ADR 0098, decision 16)", () => {
   draw({ ...DEFAULT_SIDEBAR, preset: "places", group: "project" })
-  expect(picked("Group by")).toEqual(["None"])
-  act(() => option("Group by", "Project").click())
-  expect(writes()).toEqual([
-    ["sidebar.toml", "preset", '"inbox"'],
-    ["sidebar.toml", "group", '"project"'],
-  ])
+  expect(picked("Group by")).toEqual(["Project"])
+  act(() => option("Group by", "None").click())
+  expect(writes()).toEqual([["sidebar.toml", "group", '"none"']])
 })
 
 test("Edit sidebar.toml opens the file", () => {

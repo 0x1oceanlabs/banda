@@ -21,42 +21,37 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { type Inbox, inboxOf, type InboxView } from "./inbox"
-import {
-  type Elsewhere,
-  type ProjectLine,
-  projectLines,
-  type Row,
-  rowsOf,
-} from "./rows"
-import { groupOf, listsProjects, type Settings } from "./settings"
+import { type Inbox, inboxOf, type InboxView, projectCallsOf } from "./inbox"
+import { type Elsewhere, type Row, rowsOf } from "./rows"
+import type { Settings } from "./settings"
 
-/** What of the order the sidebar list shows: one Project's rows alone,
- * as a click in the list of Projects asks; the tab in view, a cut list
- * whole, the groups the Person folded and when inbox zero last told of
- * Someday, which the counts and Alt+U leave as they come, their keys the
- * same whatever these say; and the other machines' Projects, whose rows
- * it places among this one's, which they hand too. `settings` are the
- * look's, as the Person arranged the sidebar, unless a test hands its
- * own: how the list is grouped, and what the Inbox shows in what order. */
+/** What of the order the sidebar list shows: the tab in view, a cut list
+ * whole, the groups the Person folded, when inbox zero last told of
+ * Someday and the Projects whose trust the Person put off, which the
+ * counts and Alt+U leave as they come, their keys the same whatever these
+ * say; and the other machines' Projects, whose rows it places among this
+ * one's, which they hand too. `settings` are the look's, as the Person
+ * arranged the sidebar, unless a test hands its own: how the list is
+ * grouped, and what the Inbox shows in what order. */
 export type View = Partial<
   Pick<InboxView, "tab" | "more" | "folded" | "someday">
 > & {
   settings?: Settings
-  only?: ProjectId
   elsewhere?: readonly Elsewhere[]
   /** A search in place while one runs (decision 17): its words, and the
    * rows it finds, which the tabs and their counts take alone. */
   search?: { words: string; found: (row: Row) => boolean }
+  /** The Projects whose trust the Person put off on this device. */
+  putOff?: ReadonlySet<ProjectId>
 }
 
-/** The sidebar as it is drawn: the Inbox, every row it was made of, and
- * the list of Projects when the settings ask for it. */
-export type Ordered = Inbox & { rows: Row[]; projects?: ProjectLine[] }
+/** The sidebar as it is drawn: the Inbox, and every row it was made of. */
+export type Ordered = Inbox & { rows: Row[] }
 
 /**
  * The sidebar's Inbox of every Project's list, as the Person's settings
- * say, each Thread where it stands at `now`, the Later clock.
+ * say, each Thread where it stands at `now`, the Later clock; this
+ * machine's Projects that wait for the Person first in Your turn.
  */
 export function order(
   lists: Lists,
@@ -64,40 +59,32 @@ export function order(
   now: number,
   {
     settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
-    only,
     elsewhere = [],
     search,
+    putOff,
     ...shown
   }: View = {}
 ): Ordered {
-  const mine = rowsOf(lists, projects, now)
-  const others = elsewhere.map((host) => ({
-    ...host,
-    rows: rowsOf(lists, host.projects, now, host.name),
-  }))
-  const rows = [...mine, ...others.flatMap((host) => host.rows)].filter(
-    (row) => only === undefined || row.project.id === only
-  )
+  const rows = [
+    ...rowsOf(lists, projects, now),
+    ...elsewhere.flatMap((host) =>
+      rowsOf(lists, host.projects, now, host.name)
+    ),
+  ]
   const view: InboxView = {
     tab: "inbox",
-    group: groupOf(settings),
+    group: settings.group,
     ...settings.inbox,
     ...shown,
     ...(search && { search: search.words }),
   }
+  const heard = {
+    calls: projectCallsOf(projects, putOff),
+    none: projects.every((project) => project.scratch),
+  }
   return {
-    ...inboxOf(search ? rows.filter(search.found) : rows, view, now),
+    ...inboxOf(search ? rows.filter(search.found) : rows, view, now, heard),
     rows,
-    ...(listsProjects(settings)
-      ? {
-          projects: [
-            ...projectLines(mine, projects, settings),
-            ...others.flatMap((host) =>
-              projectLines(host.rows, host.projects, settings, host.name)
-            ),
-          ],
-        }
-      : {}),
   }
 }
 

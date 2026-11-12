@@ -4,7 +4,7 @@ import {
   type RefObject,
   useState,
 } from "react"
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectSummary } from "@banda/contract"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 import { keyCaps } from "@banda/ui/lib/keys"
@@ -63,22 +63,18 @@ function SearchKey() {
  * The sidebar's header (ADR 0098, decisions 17 and 19): Search, a quiet
  * field with no frame, its key shown under the pointer, which filters the
  * list in place and moves its pick, a combobox of the list; and ✎, which
- * starts a Thread in the Project whose rows alone the list shows, or else
- * where the Person is, as Alt+Enter starts one (`Here.starts`), or, by its
- * menu, elsewhere. While a search runs ✎ goes, as in concept-v7. The hint
+ * starts a Thread where the Person is, as Alt+Enter starts one
+ * (`Here.starts`), or, by its menu, elsewhere. While a search runs ✎ goes, as in concept-v7. The hint
  * of the filters shows in an empty field and as one is typed. The Flow
  * went to the bar (decision 20): it arranges the desk, not the list.
  */
 export function Header({
   engine,
-  only,
   projects,
   search: { field, ...search },
 }: {
   /** This machine's engine. */
   engine: Engine
-  /** The Project whose rows alone the list shows, if one. */
-  only?: ProjectId
   projects: ProjectSummary[]
   search: SearchField
 }) {
@@ -121,9 +117,7 @@ export function Header({
         />
         {!focused && !searching && <SearchKey />}
       </label>
-      {!searching && (
-        <NewThreadMenu engine={engine} only={only} projects={projects} />
-      )}
+      {!searching && <NewThreadMenu engine={engine} projects={projects} />}
       {hinting && <SearchHint search={search} />}
     </div>
   )

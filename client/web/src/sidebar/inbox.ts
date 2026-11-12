@@ -1,12 +1,13 @@
 /**
  * The sidebar as the Person's inbox of their Agents' work (ADR 0098,
  * decisions 1–5, 12 and 24): the rows in, each where `status.ts` says it
- * stands (`rowsOf`); out, each tab's count, the blocks the list draws for
- * the tab in view, what inbox zero says, and the one order of what calls,
- * which `Alt+U` and the counts go by. A Thread another Agent started is
- * its child: at work, it sits under its parent. It never works out where
- * a Thread stands, only where it goes in its place. Pure, with no DOM and
- * no React, so plain tests cover it.
+ * stands (`rowsOf`), and this machine's Projects that wait for the Person
+ * (decision 16); out, each tab's count, the blocks the list draws for the
+ * tab in view, what inbox zero or the first run says (decision 25), and
+ * the one order of what calls, which `Alt+U` and the counts go by. A
+ * Thread another Agent started is its child: at work, it sits under its
+ * parent. It never works out where a Thread stands, only where it goes in
+ * its place. Pure, with no DOM and no React, so plain tests cover it.
  */
 import type { ProjectSummary } from "@banda/contract"
 import type { GroupBy } from "@banda/contract/sidebar"
@@ -71,8 +72,55 @@ export type Entry = { row: Row; at: number; child?: Child }
 export type Child = { parent: string; under?: true }
 
 /** What inbox zero says (decision 4): how many work, when the next one
- * wakes by its time, and, once a week, how many sleep until Someday. */
-export type Zero = { working: number; next?: number; someday?: number }
+ * wakes by its time, and, once a week, how many sleep until Someday; or,
+ * on the first run, that a Project starts it all (decision 25). */
+export type Zero = {
+  working: number
+  next?: number
+  someday?: number
+  first?: true
+}
+
+/** What a Project waits for the Person to do (decision 16): trust it, or
+ * find the folder it was in. */
+export type ProjectAsks = "trust" | "missing"
+
+/** A Project of this machine that waits for the Person: a card of its
+ * own in Your turn, with what it asks. */
+export type ProjectCall = { project: ProjectSummary; asks: ProjectAsks }
+
+/** The look a Project's card shows: one to trust asks, as a question
+ * does; one whose folder is gone stops all its work, as a failure does. */
+export const PROJECT_LOOK: Readonly<Record<ProjectAsks, MarkState>> = {
+  trust: "asking",
+  missing: "failed",
+}
+
+/**
+ * This machine's Projects that wait for the Person, in their order: one
+ * whose folder is missing, or else one not trusted whose trust the Person
+ * did not put off (`putOff`, ADR 0083, decision 5). A Thread's own No
+ * Project asks nothing.
+ */
+export function projectCallsOf(
+  projects: readonly ProjectSummary[],
+  putOff: ReadonlySet<string> = new Set()
+): ProjectCall[] {
+  return projects.flatMap((project): ProjectCall[] => {
+    if (project.scratch || project.archived) return []
+    if (project.missing) return [{ project, asks: "missing" }]
+    return project.trusted || putOff.has(project.id)
+      ? []
+      : [{ project, asks: "trust" }]
+  })
+}
+
+/** What the Inbox hears of this machine's Projects: those that wait for
+ * the Person, and whether none of its own is there yet, the first run. */
+export type ProjectsHeard = {
+  calls?: readonly ProjectCall[]
+  none?: boolean
+}
 
 /** One block of the list, top down. Each has a key that stays its own. */
 export type Block =
@@ -95,6 +143,9 @@ export type Block =
     }
   /** The hairline above Open (decision 3). */
   | { kind: "divider"; key: string }
+  /** A Project that waits for the Person, first in Your turn (decision
+   * 16). */
+  | ({ kind: "project"; key: string } & ProjectCall)
   /** Cards of one place, in their order. */
   | { kind: "rows"; key: string; stand: Stand; rows: Entry[] }
   /** What a cut list leaves out: the shelf's "+ N more", the Archive's
@@ -198,12 +249,16 @@ const newest = (a: Entry, b: Entry) => b.at - a.at
 
 /**
  * The Inbox of `rows` as `view` has it, at `now`, the Later clock by
- * which each row stands where it does.
+ * which each row stands where it does, and of what it `heard` of this
+ * machine's Projects: those that wait for the Person go first in Your
+ * turn, and with no Project and no Thread at all, inbox zero is the first
+ * run.
  */
 export function inboxOf(
   rows: readonly Row[],
   view: InboxView,
-  now: number
+  now: number,
+  heard: ProjectsHeard = {}
 ): Inbox {
   const by: Record<Stand, Row[]> = {
     turn: [],
@@ -232,7 +287,10 @@ export function inboxOf(
   const turn = view.order === "newest" ? [...calling].reverse() : calling
   const shown = view.open === false ? [] : open
   const { search } = view
-  const zeroed = search === undefined && turn.length + shown.length === 0
+  // A Project's call is no Thread a search finds: while one runs, none.
+  const asks = search === undefined ? (heard.calls ?? []) : []
+  const yours = turn.length + asks.length
+  const zeroed = search === undefined && yours + shown.length === 0
   const all = view.tab === "all"
   // Later and the Archive are put in order only where they are read: the
   // Archive has no bound (ADR 0088, decision 7), and the tabs count them
@@ -241,7 +299,12 @@ export function inboxOf(
     zeroed || all || view.tab === "later" ? entries("later", oldest) : []
   const archived =
     all || view.tab === "archive" ? entries("archived", newest) : []
-  const zero = zeroed ? zeroOf(working.length, later, view, now) : undefined
+  const zero = zeroed
+    ? {
+        ...zeroOf(working.length, later, view, now),
+        ...(heard.none && rows.length === 0 ? { first: true as const } : {}),
+      }
+    : undefined
   // A tab where a search finds nothing says so, as the search's place.
   const none = (tab: EmptyAt) =>
     search === undefined ? empty(tab) : { ...empty("search"), words: search }
@@ -275,8 +338,8 @@ export function inboxOf(
         const blocks = [
           ...(zero ? [{ kind: "zero" as const, key: "zero", ...zero }] : []),
           ...(group === "none"
-            ? inbox(parts, view.more === true, folded)
-            : grouped(parts, group, folded, now, rootOf)),
+            ? inbox(parts, view.more === true, folded, asks)
+            : grouped(parts, group, folded, now, rootOf, asks)),
         ]
         return blocks.length === 0 ? [none("search")] : blocks
       }
@@ -299,7 +362,7 @@ export function inboxOf(
         ? {}
         : // The Inbox's count says whose turn it is; All's only counts.
           { all: { count: rows.length, calls: false } }),
-      inbox: { count: turn.length + shown.length, calls: turn.length > 0 },
+      inbox: { count: yours + shown.length, calls: yours > 0 },
       working: { count: working.length, calls: false },
       later: { count: by.later.length, calls: false },
       archive: { count: by.archived.length, calls: false },
@@ -338,21 +401,24 @@ function zeroOf(
   }
 }
 
-/** The Inbox with no groups: Your turn under its heading, Open under a
- * divider, and the Working shelf, its first few families unless `whole`,
- * each parent's children past three folded unless `unfolded` has it. */
+/** The Inbox with no groups: Your turn under its heading, the Projects
+ * that `asks` first, Open under a divider, and the Working shelf, its
+ * first few families unless `whole`, each parent's children past three
+ * folded unless `unfolded` has it. */
 function inbox(
   parts: Parts,
   whole: boolean,
-  unfolded: ReadonlySet<string>
+  unfolded: ReadonlySet<string>,
+  asks: readonly ProjectCall[]
 ): Block[] {
   const { turn = [], working = [] } = parts
   const families = familiesOf(working)
   const shelf = whole ? families : families.slice(0, SHELF)
   const shown = shelf.reduce((n, { children }) => n + 1 + children.length, 0)
+  const yours = turn.length + asks.length
   return [
-    ...(turn.length > 0 ? [head("turn", STAND_WORDS.turn, turn.length)] : []),
-    ...partsOf({ turn, open: parts.open }, "", unfolded),
+    ...(yours > 0 ? [head("turn", STAND_WORDS.turn, yours)] : []),
+    ...partsOf({ turn, open: parts.open }, "", unfolded, asks),
     ...(working.length > 0
       ? [
           head("working", STAND_WORDS.working, working.length),
@@ -438,33 +504,47 @@ function workingOf(
   return rows.length > 0 ? [...blocks, cards(part, "working", rows)] : blocks
 }
 
+/** Where a group is: its Project and the other machine it is on. */
+type Place = Pick<Row, "project" | "host">
+
 /** Each group with something to show: its header, then, unless it is
- * folded, its rows by place, Open under a divider. Projects go by name,
- * with no Project's last; machines by name, this one's first. A child
- * goes in its parent's group, the group of the first of its parents that
- * `rootOf` finds. A header's mark is the loudest look of what calls in it,
- * as its cards draw them at `now`. */
+ * folded, the Projects of it that `asks`, and its rows by place, Open
+ * under a divider. Projects go by name, with no Project's last; machines
+ * by name, this one's first. A child goes in its parent's group, the
+ * group of the first of its parents that `rootOf` finds. A header's mark
+ * is the loudest look of what calls in it, as its cards draw them at
+ * `now`. */
 function grouped(
   parts: Parts,
   by: InboxGroup,
   folded: ReadonlySet<string>,
   now: number,
-  rootOf: (row: Row) => Row
+  rootOf: (row: Row) => Row,
+  asks: readonly ProjectCall[] = []
 ): Block[] {
-  const groups = new Map<string, { first: Row; parts: Parts }>()
+  type Group = { first: Place; parts: Parts; asks: ProjectCall[] }
+  const groups = new Map<string, Group>()
+  const groupOf = (place: Place) => {
+    const key = groupKey(place, by)
+    const group = groups.get(key) ?? { first: place, parts: {}, asks: [] }
+    groups.set(key, group)
+    return group
+  }
+  for (const call of asks) groupOf({ project: call.project }).asks.push(call)
   for (const part of PARTS)
     for (const entry of parts[part] ?? []) {
-      const root = rootOf(entry.row)
-      const key = groupKey(root, by)
-      const group = groups.get(key) ?? { first: root, parts: {} }
+      const group = groupOf(rootOf(entry.row))
       ;(group.parts[part] ??= []).push(entry)
-      groups.set(key, group)
     }
   return [...groups]
     .sort(([, a], [, b]) => groupOrder(a.first, b.first, by))
     .flatMap(([key, group]): Block[] => {
       const { turn = [], working = [] } = group.parts
       const shut = folded.has(key)
+      const looks = [
+        ...group.asks.map(({ asks }) => PROJECT_LOOK[asks]),
+        ...turn.map(({ row }) => lookOf(row.listed, now).look),
+      ]
       return [
         {
           kind: "group",
@@ -472,18 +552,18 @@ function grouped(
           by,
           ...placeOf(group.first, by),
           folded: shut,
-          mark: loudest(turn.map(({ row }) => lookOf(row.listed, now).look)),
-          waiting: turn.length,
+          mark: loudest(looks),
+          waiting: looks.length,
           working: working.length,
         },
-        ...(shut ? [] : partsOf(group.parts, `${key}:`, folded)),
+        ...(shut ? [] : partsOf(group.parts, `${key}:`, folded, group.asks)),
       ]
     })
 }
 
 /** A group's key: its Project's, another machine's after its name, and
  * one for every Thread with no Project; or its machine's. */
-function groupKey({ project, host }: Row, by: InboxGroup): string {
+function groupKey({ project, host }: Place, by: InboxGroup): string {
   if (by === "machine") return `machine:${host ?? ""}`
   if (project.scratch) return "project:none"
   return `project:${host === undefined ? "" : `${host}/`}${project.id}`
@@ -493,7 +573,7 @@ function groupKey({ project, host }: Row, by: InboxGroup): string {
  * is on; or its machine, none for this one. The group of no Project
  * names neither. */
 function placeOf(
-  { project, host }: Row,
+  { project, host }: Place,
   by: InboxGroup
 ): { project?: ProjectSummary; host?: string } {
   if (by === "project" && project.scratch) return {}
@@ -505,7 +585,7 @@ function placeOf(
 
 /** The groups' order, by the first row of each: by name, Projects with
  * no Project's last; this machine's first, then the others by name. */
-function groupOrder(a: Row, b: Row, by: InboxGroup): number {
+function groupOrder(a: Place, b: Place, by: InboxGroup): number {
   const machines =
     Number(a.host !== undefined) - Number(b.host !== undefined) ||
     (a.host ?? "").localeCompare(b.host ?? "")
@@ -517,18 +597,26 @@ function groupOrder(a: Row, b: Row, by: InboxGroup): number {
   )
 }
 
-/** The rows of each place in `parts`, Open under a divider when Your
- * turn is above it, each block keyed after `prefix`; at work, each child
- * under its parent, past three unless `unfolded` has it. */
+/** The rows of each place in `parts`, the Projects that `asks` first in
+ * Your turn, Open under a divider when Your turn is above it, each block
+ * keyed after `prefix`; at work, each child under its parent, past three
+ * unless `unfolded` has it. */
 function partsOf(
   parts: Parts,
   prefix: string,
-  unfolded: ReadonlySet<string>
+  unfolded: ReadonlySet<string>,
+  asks: readonly ProjectCall[] = []
 ): Block[] {
   const { turn = [], open = [], working = [] } = parts
+  const yours = turn.length + asks.length > 0
   return [
+    ...asks.map((call): Block => ({
+      kind: "project",
+      key: `project-card:${call.project.id}`,
+      ...call,
+    })),
     ...(turn.length > 0 ? [cards(`${prefix}turn`, "turn", turn)] : []),
-    ...(turn.length > 0 && open.length > 0
+    ...(yours && open.length > 0
       ? [{ kind: "divider" as const, key: `${prefix}divider` }]
       : []),
     ...(open.length > 0 ? [cards(`${prefix}open`, "open", open)] : []),

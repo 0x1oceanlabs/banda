@@ -30,8 +30,8 @@ import {
 } from "./pick"
 
 /** The attribute of a stop of the pick in the list: its key. A card has
- * `data-card` too; a folded group `data-group`, its key; "+ N more"
- * `data-more`. */
+ * `data-card` too, a Project's card among them; a group's header
+ * `data-group`, its key, and `aria-expanded`; "+ N more" `data-more`. */
 export const PICK = "data-pick"
 
 /** What the list's items read of the pick: the key picked in the tab in
@@ -45,8 +45,9 @@ export const PickContext = createContext<{
   check: (key: string) => void
 }>({ expand: () => {}, checked: new Set(), check: () => {} })
 
-/** The key of a stop that is no card, a folded group or "+ N more": its
- * machine's, as its region's, and its item's in the list. */
+/** The key of a stop that is no Thread's card, a group's header, "+ N
+ * more" or a Project's card: its machine's, as its region's, and its
+ * item's in the list. */
 export function pieceKey(host: string | undefined, item: string): string {
   return `${host ?? ""}#${item}`
 }
@@ -77,13 +78,20 @@ function stopsIn(list: Element): HTMLElement[] {
 
 const keyOf = (stop: Element) => stop.getAttribute(PICK)!
 const isCard = (stop: Element) => stop.hasAttribute("data-card")
+/** Whether `stop` is a group's header that shows what it holds. */
+const unfolded = (stop: Element) =>
+  stop.getAttribute("aria-expanded") === "true"
 
 /** `stops` as the selection reads them: a card that left the tab while
- * the list held is no card to check. */
+ * the list held is no card to check, nor is a Project's (`data-asks`),
+ * which is no Thread. */
 const checkable = (stops: readonly Element[]): Stop[] =>
   stops.map((stop) => ({
     key: keyOf(stop),
-    card: isCard(stop) && !stop.hasAttribute("data-went"),
+    card:
+      isCard(stop) &&
+      !stop.hasAttribute("data-went") &&
+      !stop.hasAttribute("data-asks"),
   }))
 
 /** The keys that move the pick, which Shift makes a range of. */
@@ -117,8 +125,9 @@ function pageOf(view: Element | null, stops: readonly Element[]): number {
  * which the keys act on; the DOM focus stays on the list, which names it
  * by `aria-activedescendant`. The arrows, Home, End and the pages move it
  * from stop to stop, never round the ends; `←` folds the picked card's
- * group and picks it, `→` unfolds a folded group, or shows the rest of a
- * cut list, and picks its first card (`expand`). Coming in, a pick no
+ * group and picks its header, or the header picked; `→` unfolds a folded
+ * group, or shows the rest of a cut list, and picks its first card
+ * (`expand`), and from an unfolded header goes on to it. Coming in, a pick no
  * longer drawn gives way to the open Thread's card, `open`, else the
  * first; gone to a Pane, the pick goes back to `open`. While the list has
  * no focus, the pick follows what opens a Thread; a card picked that
@@ -223,6 +232,12 @@ export function usePick({
     if (first) moveTo(keyOf(first))
   }
 
+  /** Folds the group whose header is `stop`: the pick stays on it. */
+  const shut = (stop: Element) => {
+    const group = stop.getAttribute("data-group")
+    if (group !== null) toggle(group)
+  }
+
   /** Folds the group of the card `stop`, where it has one, and picks it. */
   const fold = (stop: Element) => {
     const own = list.current
@@ -287,9 +302,11 @@ export function usePick({
         break
       case "ArrowLeft":
         if (at && isCard(at)) fold(at)
+        else if (at && unfolded(at)) shut(at)
         break
       case "ArrowRight":
-        if (at && !isCard(at)) expand(at)
+        if (at && unfolded(at)) to(1)
+        else if (at && !isCard(at)) expand(at)
         break
       default:
         return
@@ -444,6 +461,9 @@ export function usePick({
     step: to,
     /** Search's field, which names the pick as the list does. */
     field,
+    /** What Enter does on a stop that is no card: a group's header folds
+     * or unfolds, and "+ N more" shows the rest (`expand`). */
+    enter: (stop: Element) => (unfolded(stop) ? shut(stop) : expand(stop)),
     /** What goes on the list. */
     list: {
       ref: list,

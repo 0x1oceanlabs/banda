@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from "react"
-import type { ProjectId } from "@banda/contract"
 import type { Tab } from "./inbox"
 import { type Checks, NO_CHECKS } from "./pick"
 import { tabId } from "./Tabs"
@@ -45,22 +44,21 @@ const scrollerOf = (list: HTMLElement | null) =>
 
 /**
  * How the Person has the sidebar list in view, while the window draws it:
- * the tab (ADR 0098, decision 2), each where it was scrolled to; one
- * Project's rows alone (`only`, which `pick` sets or clears); a cut list
- * whole (`more`), until the tab changes; the groups (`folded`) and the
+ * the tab (ADR 0098, decision 2), each where it was scrolled to; a cut
+ * list whole (`more`), until the tab changes; the groups (`folded`) and the
  * other machines (`foldedHosts`) folded, each flipped by its key; when
  * inbox zero last told of Someday; the cards checked (`checks`, ADR 0098,
  * decision 15), which another tab, a search begun or ended, a group
- * folded and another preset clear, as hiding the sidebar does; and what Search has typed (decision
- * 17), which shows All while it runs and the tab it began on once it is
- * cleared. Another `preset` starts afresh, on the same tab.
+ * folded and another preset clear, as hiding the sidebar does; and what
+ * Search has typed (decision 17), which shows All while it runs and the
+ * tab it began on once it is cleared. Another `preset` starts afresh, on
+ * the same tab.
  */
 export function useSidebarView(preset: string) {
   const [tab, setTab] = useState<Tab>("inbox")
   const [search, setSearch] = useState("")
   // The tab a search began on, which its end brings back.
   const [began, setBegan] = useState<Tab>("inbox")
-  const [only, setOnly] = useState<ProjectId>()
   const [more, setMore] = useState(false)
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
   const [foldedHosts, setFoldedHosts] = useState<ReadonlySet<string>>(new Set())
@@ -91,11 +89,10 @@ export function useSidebarView(preset: string) {
         scroller.getBoundingClientRect().top
       : (scrolls.current.get(tab) ?? 0)
   }, [tab, list])
-  // Another preset starts afresh: no filter, nothing folded by hand.
+  // Another preset starts afresh: nothing folded by hand.
   const [arrangedBy, setArrangedBy] = useState(preset)
   if (arrangedBy !== preset) {
     setArrangedBy(preset)
-    setOnly(undefined)
     setMore(false)
     setFolded(new Set())
     setFoldedHosts(new Set())
@@ -126,7 +123,6 @@ export function useSidebarView(preset: string) {
       if (runs) setBegan(tab)
       setTab(runs ? "all" : began)
     },
-    only,
     more,
     folded,
     foldedHosts,
@@ -159,9 +155,6 @@ export function useSidebarView(preset: string) {
       )
         document.getElementById(tabId(next))?.focus()
     },
-    /** Shows only `project`'s rows, or all again. */
-    pick: (project: ProjectId) =>
-      setOnly((was) => (was === project ? undefined : project)),
     toggle: (key: string) => {
       if (!folded.has(key)) setChecks(NO_CHECKS)
       setFolded((set) => flip(set, key))

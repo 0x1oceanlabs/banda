@@ -53,32 +53,26 @@ export function newThread(
 }
 
 /**
- * What the sidebar's own buttons start: in `only`, the Project whose rows
- * alone the list shows, if one, else in `starts`, where Alt+Enter starts
- * one (`Here.starts`, ADR 0102). A Project whose folder is missing is
- * found first.
+ * What the sidebar's own buttons start: in `starts`, where Alt+Enter
+ * starts one (`Here.starts`, ADR 0102). A Project whose folder is missing
+ * is found first.
  */
 export function clickOf(
   starts: ProjectId,
-  only: ProjectId | undefined,
   projects: readonly ProjectSummary[]
 ): NewThread {
-  const project = only ?? starts
-  const { missing } = projects.find((one) => one.id === project) ?? {}
-  return { project, ...(missing && { missing }) }
+  const { missing } = projects.find((one) => one.id === starts) ?? {}
+  return { project: starts, ...(missing && { missing }) }
 }
 
 /**
  * How the sidebar's own buttons start a Thread, ✎ and the Working tab's
  * when empty: where `clickOf` says, read as it is pressed.
  */
-export function useNewThread(
-  only: ProjectId | undefined,
-  projects: readonly ProjectSummary[]
-): () => void {
+export function useNewThread(projects: readonly ProjectSummary[]): () => void {
   const open = useOpen()
   const here = useContext(HereContext)
-  return () => newThread(open, clickOf(here.get().starts, only, projects))
+  return () => newThread(open, clickOf(here.get().starts, projects))
 }
 
 /**

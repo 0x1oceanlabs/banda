@@ -46,7 +46,6 @@ import {
   read,
   workspaceNames,
   groupBy,
-  showPlaces,
   viewMenuOf,
 } from "./window"
 
@@ -2725,9 +2724,10 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(sidebar.getByRole("option", { name: /hello/ })).toBeVisible()
   await page.keyboard.press("Escape")
 
-  // Under the places preset the list of Projects shows above, until it
-  // goes (decision 16).
-  await showPlaces(window)
+  // The places preset groups by Project, as "projects" does (decision
+  // 16).
+  writeFileSync(file, 'preset = "places"\n')
+  await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
   await page.screenshot({ path: "test-results/23-sidebar-places.png" })
 
   // A key no longer used is named by its line, and the rest of the file
@@ -2738,7 +2738,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
     "aria-label",
     /sidebar\.toml:2:2: \[row\] is no longer used/
   )
-  await expect(sidebar.getByRole("group", { name: "Projects" })).toBeVisible()
+  await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
 
   // A preset of the Person's own is a file, and reads as its keys say.
   mkdirSync(join(dir, "config/sidebars"))
@@ -2748,7 +2748,6 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   )
   writeFileSync(file, 'preset = "flat"\n')
   await expect(problem).toBeHidden()
-  await expect(sidebar.getByRole("group", { name: "Projects" })).toHaveCount(0)
   await expect(
     placeOf(sidebar.getByRole("tabpanel"), "Work").getByRole("option", {
       name: /hello/,
@@ -6610,7 +6609,7 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
   )
 })
 
-test("Add Project asks in the menu whether to trust a folder that looks foreign, and the Project's menu and settings change it later", async () => {
+test("Add Project asks in the menu whether to trust a folder that looks foreign, Not yet puts its card off, and its settings change it later", async () => {
   window = await startWindow()
   const { page, dir, banda } = window
   await firstThread(page)
@@ -6626,6 +6625,26 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
       }
     ).ok.find((one) => one.name === name)
   const trusted = () => listed("widget")?.trusted
+  /** The settings at the Project `name`, by ✎'s Projects… (ADR 0098,
+   * decision 16). */
+  const projectSettings = async (name: string) => {
+    await page
+      .getByRole("complementary", { name: "Sidebar" })
+      .getByRole("button", { name: "New Thread", exact: true })
+      .click({ button: "right" })
+    await page
+      .getByRole("menu", { name: "New Thread" })
+      .getByRole("menuitem", { name: "Projects…" })
+      .click()
+    const pane = page.getByRole("main").filter({ hasText: "Settings" })
+    const picker = pane.getByRole("combobox", { name: "Project" })
+    await picker.click()
+    await page
+      .getByRole("option", { name: new RegExp(`(^| )${name}$`) })
+      .click()
+    await expect(picker).toContainText(name)
+    return pane
+  }
 
   // Add on a folder that holds what a Harness loads asks first, in the
   // menu: what waits, Not yet then Trust, and isolation greyed for now.
@@ -6672,16 +6691,13 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   expect(trusted()).toBe(false)
   await expect(page.locator("[data-untrusted]").first()).toBeVisible()
 
-  // A screen reader hears it before the Project's name. The Project's
-  // menu trusts it, on a card that says what will load.
+  // Not yet puts off its card in Your turn, on this device (ADR 0098,
+  // decision 16). Its settings trust it, on a card that says what will
+  // load.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await showPlaces(window)
-  const row = sidebar
-    .getByRole("group", { name: "Projects" })
-    .getByRole("button", { name: /^(Not trusted )?widget$/ })
-  await expect(row).toHaveAccessibleName("Not trusted widget")
-  await row.click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Trust Project…" }).click()
+  await expect(sidebar.locator("[data-project-card]")).toHaveCount(0)
+  const settings = await projectSettings("widget")
+  await settings.getByRole("button", { name: "Trust…" }).click()
   const card = page.getByRole("dialog", { name: "Trust widget?" })
   await expect(card).toContainText(".claude/")
   await expect(card).toContainText(
@@ -6692,7 +6708,6 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect.poll(trusted).toBe(true)
   expect(listed("widget")?.trust_said).toBe(true)
   await expect(page.locator("[data-untrusted]")).toHaveCount(0)
-  await expect(row).toHaveAccessibleName("widget")
 
   // Added again, a folder that already is a Project asks nothing, and
   // keeps the trust it has.
@@ -6705,10 +6720,9 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await expect(menu).toBeHidden()
   expect(trusted()).toBe(true)
 
-  // Its settings take the trust back, and offer it again.
-  await row.click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Project settings" }).click()
-  const settings = page.getByRole("main").filter({ hasText: "Settings" })
+  // Its settings take the trust back, and offer it again; its card in
+  // Your turn stays off.
+  await projectSettings("widget")
   await expect(
     settings.getByRole("switch", { name: "Isolated" })
   ).toBeDisabled()
@@ -6716,6 +6730,7 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   await settings.getByRole("button", { name: "Stop trusting" }).click()
   await expect(settings.getByRole("button", { name: "Trust…" })).toBeVisible()
   await expect.poll(trusted).toBe(false)
+  await expect(sidebar.locator("[data-project-card]")).toHaveCount(0)
 
   // A Project of the Person's own folder is trusted, as nothing marked
   // it foreign, and its Agents get the ssh-agent only once the Person says
@@ -6729,11 +6744,7 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   expect(listed("mine")?.trust_said).toBeFalsy()
   await setInFront(page, false)
   await setInFront(page, true)
-  await sidebar
-    .getByRole("group", { name: "Projects" })
-    .getByRole("button", { name: "mine", exact: true })
-    .click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Project settings" }).click()
+  await projectSettings("mine")
   const trust = page.locator('[data-key="trust"]')
   await expect(trust).toContainText(
     "Trusted, as nothing marked it foreign: its settings, hooks and MCP servers load. Its Agents get your ssh-agent once you say you trust it."
@@ -6794,9 +6805,9 @@ test("Open in Files adds the folder picked in the system's picker, opened where 
   ).toBe(work)
 })
 
-test("a Project is pinned, named, archived and removed from its row's menu and the settings, as in T3 Code", async () => {
+test("a Project's menu opens its settings, where it is pinned, named, archived and removed, as in T3 Code (ADR 0098, decision 16)", async () => {
   window = await startWindow()
-  const { page, dir, app, banda } = window
+  const { page, dir, banda } = window
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
@@ -6806,43 +6817,41 @@ test("a Project is pinned, named, archived and removed from its row's menu and t
   banda("project", "add", lab)
   await setInFront(page, false)
   await setInFront(page, true)
-  // The places view lists every Project, each a row with its menu.
+  // Grouped by Project, a right click on its header opens its menu.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await showPlaces(window)
-  const projects = sidebar.getByRole("group", { name: "Projects" })
-  const header = projects.getByRole("button", { name: /^Work/ })
-
-  // The row's menu: Copy path, and Pin Project, which turns to Unpin.
-  await header.click({ button: "right" })
+  await groupBy(page, "Project")
+  await placeOf(sidebar, "Work")
+    .getByRole("option", { name: "Work", exact: true })
+    .click({ button: "right" })
+  const menu = page.getByRole("menu", { name: "Project menu" })
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    "New Thread here",
+    "Open folder",
+    "Project settings…",
+    "Archive its Threads",
+    "Remove from Banda…",
+  ])
   await page.screenshot({ path: "test-results/32-project-menu.png" })
-  await page.getByRole("menuitem", { name: "Copy path" }).click()
-  await expect
-    .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
-    .toMatch(/\/Work$/)
-  await header.click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Pin Project" }).click()
-  await header.click({ button: "right" })
-  await expect(
-    page.getByRole("menuitem", { name: "Unpin Project" })
-  ).toBeVisible()
 
-  // Project settings opens the settings at the Project, pinned.
-  await page.getByRole("menuitem", { name: "Project settings" }).click()
+  // Project settings… opens the settings at the Project, which pin it.
+  await menu.getByRole("menuitem", { name: "Project settings…" }).click()
   const settings = page.getByRole("main").filter({ hasText: "Settings" })
   await expect(
     settings.getByRole("heading", { name: "Projects" })
   ).toBeVisible()
   const picker = settings.getByRole("combobox", { name: "Project" })
   await expect(picker).toContainText("Work")
-  await expect(
-    settings.getByRole("switch", { name: "Pin Project" })
-  ).toBeChecked()
+  const pin = settings.getByRole("switch", { name: "Pin Project" })
+  await pin.click()
+  await expect(pin).toBeChecked()
 
   // A new name shows in the sidebar.
   const name = settings.getByRole("textbox", { name: "Project name" })
   await name.fill("Home")
   await name.press("Enter")
-  await expect(projects.getByRole("button", { name: /^Home/ })).toBeVisible()
+  await expect(
+    placeOf(sidebar, "Home").getByRole("option", { name: "Home", exact: true })
+  ).toBeVisible()
 
   // Archived, lab stays only in the settings, where it can come back.
   await picker.click()
@@ -6871,7 +6880,7 @@ test("a Project is pinned, named, archived and removed from its row's menu and t
   expect(existsSync(lab)).toBe(true)
 })
 
-test("a Project whose folder is gone shows as missing, and Locate folder opens it where its work is now", async () => {
+test("a Project whose folder is gone is a card in Your turn, and Locate folder opens it where its work is now (ADR 0098, decision 16)", async () => {
   // A Project from before, whose folder is no longer there.
   const id = "01a192e5-5e2b-76a7-931a-79a494cb1801"
   const manifest = {
@@ -6891,33 +6900,35 @@ test("a Project whose folder is gone shows as missing, and Locate folder opens i
   const moved = join(dir, "moved")
   mkdirSync(moved)
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await showPlaces(window)
-  const old = sidebar
-    .getByRole("group", { name: "Projects" })
-    .getByRole("button", { name: /^old/ })
-  await expect(old).toContainText("Missing")
+  const old = sidebar.getByRole("option", { name: "“old” is missing" })
+  await expect(old).toContainText("Project /nonexistent/banda-old")
 
   // Its menu's Locate folder, in New Thread's place, opens "Locate
   // folder" where the folder was.
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
   await old.click({ button: "right" })
-  await expect(page.getByRole("menuitem", { name: "New Thread" })).toBeHidden()
+  await expect(
+    page.getByRole("menuitem", { name: "New Thread here" })
+  ).toBeHidden()
   await page.getByRole("menuitem", { name: "Locate folder" }).click()
   await expect(search).toHaveValue("/nonexistent/")
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
-  // So does its row.
-  await old.click()
+  // So does its card's Locate….
+  await old.getByText("Locate…", { exact: true }).click()
   await expect(search).toHaveValue("/nonexistent/")
   await search.fill(moved)
   await expect(menu.getByRole("option").first()).toHaveText(/^Locate/)
   await page.screenshot({ path: "test-results/35-locate-folder.png" })
   await search.press("Enter")
   await expect(menu).toBeHidden()
-  await expect(old).not.toContainText("Missing")
   await expect(page.getByRole("button", { name: "Project: old" })).toBeVisible()
+  // Found, its card goes once the list no longer holds still under the
+  // pointer (ADR 0098, decision 6).
+  await leaveSidebar(page)
+  await expect(old).toHaveCount(0)
 })
 
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
@@ -7338,34 +7349,16 @@ test("the sidebar's New Thread buttons and a Project's menu start a Thread where
   await newProject(page, "lab")
   await startsIn("lab")
 
-  // Listed as places, a Project picked: ✎ starts in it, though the
-  // Person is in lab.
-  await showPlaces(window)
-  const projects = sidebar.getByRole("group", { name: "Projects" })
-  const lab = projects.getByRole("button", { name: /^lab/ })
-  const workLine = projects.getByRole("button", { name: /^Work/ })
-  await workLine.click()
-  await expect(workLine).toHaveAttribute("aria-pressed", "true")
-  await header.click()
-  await startsIn("Work")
-  await workLine.click()
-  await expect(workLine).toHaveAttribute("aria-pressed", "false")
-  // A Project's own, at its line, and its menu's.
-  await projects.getByRole("button", { name: "New Thread in Work" }).click()
-  await startsIn("Work")
-  await lab.click({ button: "right" })
-  await page.getByRole("menuitem", { name: "New Thread" }).click()
-  await startsIn("lab")
-
-  // Listed by Project: a section's own, its menu's, and No Project's.
+  // Grouped by Project: a header's own +, its menu's New Thread here,
+  // and No Project's (ADR 0098, decision 16).
   await groupBy(page, "Project")
   const section = placeOf(sidebar, "Work")
   await section.getByRole("button", { name: "New Thread in Work" }).click()
   await startsIn("Work")
-  await section.getByRole("button", { name: "Work", exact: true }).click({
+  await section.getByRole("option", { name: "Work", exact: true }).click({
     button: "right",
   })
-  await page.getByRole("menuitem", { name: "New Thread" }).click()
+  await page.getByRole("menuitem", { name: "New Thread here" }).click()
   await startsIn("Work")
   await sidebar
     .getByRole("button", { name: "New Thread in No Project" })
@@ -8017,11 +8010,6 @@ test("No Project creates a folder only on the first message", async () => {
   await expect(
     placeOf(page, "No Project").filter({ hasText: "scratch hello" })
   ).toHaveCount(1)
-  await showPlaces(window)
-  await expect(placeOf(page, "No Project")).toHaveCount(0)
-  await expect(
-    page.getByRole("complementary", { name: "Sidebar" })
-  ).toContainText("scratch hello")
 })
 
 test("a No Project Thread starts in the mode the engine gives its Harness there, not the Pane's (ADR 0083)", async () => {

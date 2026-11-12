@@ -57,7 +57,7 @@ import {
   settingsLinkOf,
 } from "../menu/menu"
 import { writeLook } from "../menu/theme"
-import { writeGroup } from "../sidebar/write-setting"
+import { writeSidebar } from "../sidebar/write-setting"
 import {
   columnsOf,
   useLookColumns,
@@ -80,6 +80,7 @@ import { Edge } from "../sidebar/Edge"
 import { toSearch } from "../sidebar/Header"
 import { Sidebar } from "../sidebar/Sidebar"
 import { LaterPicker } from "../sidebar/LaterPicker"
+import { RemovingProject } from "../settings/RemoveProject"
 import { SaidRegion } from "../sidebar/SaidRegion"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
@@ -224,11 +225,9 @@ export function Shell({
   useEffect(() => keepSidebarWidth(sidebarWidth), [sidebarWidth])
   // Its edge dragged past the narrowest: letting go hides it.
   const [hiding, setHiding] = useState(false)
-  // A narrow window hides the sidebar, and shows it over the Strip only
-  // when asked; what the Person chose for a wide one is kept (ADR 0025,
-  // decision 10).
-  const lookColumns = useLookColumns()
-  const columnMin = lookColumns.min
+  // Narrow, the window hides the sidebar and shows it over the Strip when
+  // asked; wide, it keeps the Person's choice (ADR 0025, decision 10).
+  const columnMin = useLookColumns().min
   const narrow = useNarrow(columnMin, sidebarWidth)
   const [over, setOver] = useState(false)
   if (over && !narrow) setOver(false)
@@ -720,7 +719,7 @@ export function Shell({
             item: row.listed.id,
           })
         case "group":
-          return writeGroup(parts.writeSetting, row.group)
+          return writeSidebar(parts.writeSetting, "group", row.group)
         case "look":
           return writeLook(parts.writeSetting, row)
         case "found":
@@ -889,6 +888,7 @@ export function Shell({
                 <Toaster />
                 <SaidRegion />
                 <LaterPicker />
+                <RemovingProject engine={engine} />
                 <QuitDialog
                   working={quitting}
                   onQuit={device.quit}

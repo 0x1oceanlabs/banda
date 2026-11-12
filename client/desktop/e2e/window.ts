@@ -966,18 +966,6 @@ export async function groupBy(
 }
 
 /**
- * The sidebar under the `places` preset, as sidebar.toml names it: the
- * list of Projects above the Threads, until it goes (ADR 0098, decision
- * 16). The view menu no longer picks a preset.
- */
-export async function showPlaces(window: Window): Promise<void> {
-  writeFileSync(join(window.dir, "config/sidebar.toml"), 'preset = "places"\n')
-  await expect(
-    sidebarOf(window.page).getByRole("group", { name: "Projects" })
-  ).toBeVisible()
-}
-
-/**
  * The Banda menu, opened by its key from where the focus is (ADR 0017,
  * decision 1). While the sidebar shows, Alt+Space goes to its Search
  * first, and pressed there again with nothing typed opens the menu (ADR

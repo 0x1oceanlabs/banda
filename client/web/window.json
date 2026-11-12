@@ -1064,6 +1064,51 @@
       }
     },
     {
+      "id": "projects.trust",
+      "title": "Ask whether to trust a Project, or stop trusting it",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project"
+          },
+          "trusted": {
+            "type": "boolean",
+            "description": "true asks whether to trust it, false stops"
+          }
+        },
+        "required": [
+          "project",
+          "trusted"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "projects.remove",
+      "title": "Ask whether to remove a Project from Banda",
+      "section": "Banda",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "the Project"
+          }
+        },
+        "required": [
+          "project"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
       "id": "settings.open",
       "title": "Open the settings",
       "section": "Banda",

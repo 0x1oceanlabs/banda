@@ -1,6 +1,4 @@
 # Banda's "places" preset, kept so a file that names it still reads: it
-# groups by Project, as "projects" does (ADR 0098). Until the list of
-# Projects goes (decision 16), the window shows that list above, and the
-# Threads as one list.
+# groups by Project, as "projects" does (ADR 0098, decision 16).
 
 group = "project"

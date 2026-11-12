@@ -1,135 +1,208 @@
-import { type ReactElement, useRef, useState } from "react"
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import {
+  createContext,
+  Fragment,
+  type ReactElement,
+  type RefObject,
+  useContext,
+  useRef,
+  useState,
+} from "react"
+import type { ProjectSummary } from "@banda/contract"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
   useAfterMenu,
 } from "@banda/ui/components/context-menu"
-import { DropdownMenuItem } from "@banda/ui/components/dropdown-menu"
+import {
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+} from "@banda/ui/components/dropdown-menu"
 import { useRun } from "@banda/core/react"
-import { copyText } from "@banda/ui/lib/clipboard"
 import {
   BadgeCheckIcon,
+  CheckCheckIcon,
   CircleDashedIcon,
-  CopyIcon,
+  FolderOpenIcon,
   FolderSearchIcon,
-  PinIcon,
-  PinOffIcon,
+  type LucideIcon,
   SettingsIcon,
   SquarePenIcon,
+  Trash2Icon,
 } from "lucide-react"
 import { LOCATE } from "../menu/menu"
+import { MenuRow } from "../titles/ThreadMenu"
+import { notNow } from "../trust/not-now"
+import { actsOf } from "./acts"
+import type { ProjectAsks } from "./inbox"
+import type { Row } from "./rows"
 import { newThread, useOpen } from "./open"
-import { useHoldWhile } from "./useHold"
+import { useActs } from "./useActs"
+import { HoldingContext, useHoldWhile } from "./useHold"
 
-/** A Project's row with its right-click menu around it, which takes
- * `className` as the row's place in its line. */
-export type WithMenu = (
-  project: ProjectSummary,
-  row: ReactElement,
-  className?: string
-) => ReactElement
+/** Every row the sidebar list was made of, from which a Project's menu
+ * archives its Threads; none outside the list. */
+export const ProjectRows = createContext<readonly Row[]>([])
 
-/** A Project's right-click menu, in T3 Code's words (ADR 0026, decision
- * 5), with its trust (ADR 0083, decision 5). */
+/** The rows of `project`'s Threads, this machine's, that its cards may
+ * archive: Done, Failed, Woke and Open, not one that asks or works. */
+export function archivableIn(
+  rows: readonly Row[],
+  project: ProjectSummary
+): Row[] {
+  return rows.filter(
+    (row) =>
+      row.host === undefined &&
+      row.project.id === project.id &&
+      actsOf(row.stand, row.listed).includes("archive")
+  )
+}
+
+/**
+ * A Project's menu (ADR 0098, decision 16), around what opens it: its
+ * group header, whose ⋯ opens it as a right click does, Shift+F10 and the
+ * Menu key on that header picked, a card's Project sign, and a Project's
+ * own card, whose Trust… and Not now come first, for the keys. New Thread
+ * here, or Locate folder for a Project whose folder is missing; Open
+ * folder; Project settings…; then Archive its Threads,
+ * those its cards may archive, told in the one Archived toast whose Undo
+ * takes them all back; and Remove from Banda…, which asks first. Each runs
+ * by the Window's actions, as their keys would. Open, it holds the list
+ * still (decision 6). It is this machine's Projects' alone: another's acts
+ * would go to this machine's engine.
+ */
 export function ProjectMenu({
   project,
-  onTrust,
-  onStopTrusting,
+  asks,
   className,
   children,
 }: {
   project: ProjectSummary
-  /** Its row's place in its line. */
+  /** What its card asks, on a Project's own card. */
+  asks?: ProjectAsks
+  /** Its trigger's place in its line. */
   className?: string
-  /** Asks on a card by `row` whether to trust the Project. */
-  onTrust: (project: ProjectId, row: Element) => void
-  onStopTrusting: (project: ProjectId) => void
   children: ReactElement
 }) {
-  const row = useRef<HTMLDivElement>(null)
-  // A pin changes the list in place; the rest open a Pane or a menu.
-  const run = useRun()
-  const open = useOpen()
-  // Open, it holds the list still (ADR 0098, decision 6).
   const [shown, setShown] = useState(false)
   useHoldWhile(shown)
+  const trigger = useRef<HTMLDivElement>(null)
   return (
     <ContextMenu onOpenChange={setShown}>
-      <ContextMenuTrigger ref={row} className={className}>
+      <ContextMenuTrigger ref={trigger} className={className}>
         {children}
       </ContextMenuTrigger>
-      <ContextMenuContent>
-        {project.missing ? (
-          <DropdownMenuItem
-            onClick={() => open("projects.locate", { project: project.id })}
-          >
-            <FolderSearchIcon />
-            {LOCATE}
-          </DropdownMenuItem>
-        ) : (
-          <DropdownMenuItem
-            onClick={() => newThread(open, { project: project.id })}
-          >
-            <SquarePenIcon />
-            New Thread
-          </DropdownMenuItem>
-        )}
-        <DropdownMenuItem onClick={() => copyText(project.folder)}>
-          <CopyIcon />
-          Copy path
-        </DropdownMenuItem>
-        <DropdownMenuItem
-          onClick={() =>
-            run("projects.pin", {
-              project: project.id,
-              pinned: !project.pinned,
-            })
-          }
-        >
-          {project.pinned ? <PinOffIcon /> : <PinIcon />}
-          {project.pinned ? "Unpin Project" : "Pin Project"}
-        </DropdownMenuItem>
-        {!project.scratch && (
-          <TrustItem
-            trusted={project.trusted}
-            onTrust={() => row.current && onTrust(project.id, row.current)}
-            onStopTrusting={() => onStopTrusting(project.id)}
-          />
-        )}
-        <DropdownMenuItem
-          onClick={() => open("projects.settings", { project: project.id })}
-        >
-          <SettingsIcon />
-          Project settings
-        </DropdownMenuItem>
+      <ContextMenuContent aria-label="Project menu" className="min-w-56">
+        <Entries project={project} asks={asks} trigger={trigger} />
       </ContextMenuContent>
     </ContextMenu>
   )
 }
 
-/** Trust Project…, which asks on a card by the row once the menu has
- * gone, or Stop trusting, at once. */
-function TrustItem({
-  trusted,
-  onTrust,
-  onStopTrusting,
+/** A row of a Project's menu, by what it does. */
+export type ProjectEntry =
+  | "trust"
+  | "not-now"
+  | "new"
+  | "locate"
+  | "folder"
+  | "settings"
+  | "archive"
+  | "remove"
+
+/** Each row's icon and title. */
+const LOOK: Record<ProjectEntry, { icon: LucideIcon; title: string }> = {
+  trust: { icon: BadgeCheckIcon, title: "Trust…" },
+  "not-now": { icon: CircleDashedIcon, title: "Not now" },
+  new: { icon: SquarePenIcon, title: "New Thread here" },
+  locate: { icon: FolderSearchIcon, title: LOCATE },
+  folder: { icon: FolderOpenIcon, title: "Open folder" },
+  settings: { icon: SettingsIcon, title: "Project settings…" },
+  archive: { icon: CheckCheckIcon, title: "Archive its Threads" },
+  remove: { icon: Trash2Icon, title: "Remove from Banda…" },
+}
+
+/**
+ * A Project's menu in groups a line apart (ADR 0098, decision 16): on its
+ * own card that `asks` for trust, Trust… and Not now first; then New
+ * Thread here, or Locate folder where its folder is `missing`, Open folder
+ * and Project settings…; then Archive its Threads and Remove from Banda….
+ * Pure, so plain tests cover it.
+ */
+export function entriesOf(
+  { missing }: Pick<ProjectSummary, "missing">,
+  asks?: ProjectAsks
+): ProjectEntry[][] {
+  return [
+    ...(asks === "trust" ? [["trust", "not-now"] as ProjectEntry[]] : []),
+    [missing ? "locate" : "new", "folder", "settings"],
+    ["archive", "remove"],
+  ]
+}
+
+/** The menu's rows, worked out only while it is open, as its popup is
+ * there only then; `trigger` is what it opened on. Open folder is off
+ * where the folder is missing, and Archive its Threads where none would
+ * go. */
+function Entries({
+  project,
+  asks,
+  trigger,
 }: {
-  trusted: boolean
-  onTrust: () => void
-  onStopTrusting: () => void
+  project: ProjectSummary
+  asks?: ProjectAsks
+  trigger: RefObject<HTMLDivElement | null>
 }) {
+  // Settings and a new Thread open a Pane or a menu; the rest act in place.
+  const open = useOpen()
+  const run = useRun()
   const later = useAfterMenu()
-  return trusted ? (
-    <DropdownMenuItem onClick={onStopTrusting}>
-      <CircleDashedIcon />
-      Stop trusting
-    </DropdownMenuItem>
-  ) : (
-    <DropdownMenuItem onClick={() => later(onTrust)}>
-      <BadgeCheckIcon />
-      Trust Project…
-    </DropdownMenuItem>
-  )
+  const actOn = useActs(useContext(HoldingContext))
+  const archivable = archivableIn(useContext(ProjectRows), project)
+  const { id, missing } = project
+  const runs: Record<ProjectEntry, () => void> = {
+    // The trust card and the question take the focus once the menu has
+    // gone.
+    trust: () =>
+      later(() => run("projects.trust", { project: id, trusted: true })),
+    "not-now": () => notNow(id),
+    new: () => newThread(open, { project: id }),
+    locate: () => open("projects.locate", { project: id }),
+    folder: () => run("file.outside", { file: project.folder }),
+    settings: () => open("projects.settings", { project: id }),
+    archive: () => {
+      const card = trigger.current ?? document.documentElement
+      for (const row of archivable) actOn(row, "archive", { card })
+    },
+    remove: () => later(() => run("projects.remove", { project: id })),
+  }
+  const off = (entry: ProjectEntry) =>
+    (entry === "folder" && missing) ||
+    (entry === "archive" && archivable.length === 0)
+  return entriesOf(project, asks).map((group, at) => (
+    <Fragment key={group.join()}>
+      {at > 0 && <DropdownMenuSeparator />}
+      <DropdownMenuGroup>
+        {at === 0 && (
+          <DropdownMenuLabel className="flex min-w-0 gap-1.5">
+            <span className="truncate text-foreground">{project.name}</span>
+            <span className="min-w-0 truncate font-normal">
+              {project.folder}
+            </span>
+          </DropdownMenuLabel>
+        )}
+        {group.map((entry) => (
+          <MenuRow
+            key={entry}
+            icon={LOOK[entry].icon}
+            title={LOOK[entry].title}
+            off={off(entry)}
+            danger={entry === "remove"}
+            onClick={runs[entry]}
+          />
+        ))}
+      </DropdownMenuGroup>
+    </Fragment>
+  ))
 }

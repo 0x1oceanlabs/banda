@@ -3,7 +3,7 @@
  * list of what waits for it, the card that trusts a Project later, from
  * its menu or its settings, and the "soon" of what is not built yet.
  */
-import { useCallback } from "react"
+import { useCallback, useEffect, useState } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -85,6 +85,60 @@ function TokenLine() {
 
 /** A Project to trust, and what the card stands by. */
 export type Trusting = { project: ProjectId; anchor: Element }
+
+/** The attribute a Project's card in the sidebar carries, its id (ADR
+ * 0098, decision 16): the trust card stands by it. */
+export const PROJECT_CARD = "data-project-card"
+
+/** What `askTrust` sends a Project's card, for the sidebar's trust card
+ * to hear: a Window's own, as its page is. */
+const ASKED = "banda:trust"
+
+/**
+ * Asks on a card whether to trust `project` (ADR 0083, decision 5), by
+ * its card in the sidebar; whether that card is drawn and its sidebar
+ * heard, as one folded away or in another tab is not, and asks nothing.
+ */
+export function askTrust(project: ProjectId): boolean {
+  const card = document.querySelector(
+    `[${PROJECT_CARD}="${CSS.escape(project)}"]`
+  )
+  const asked = new Event(ASKED, { bubbles: true, cancelable: true })
+  card?.dispatchEvent(asked)
+  return asked.defaultPrevented
+}
+
+/** The card `askTrust` opened, by the sidebar's Projects: it closes as
+ * it trusts, or as the Person cancels. */
+export function AskedTrust({
+  engine,
+  projects,
+}: {
+  engine: Engine
+  projects: readonly ProjectSummary[]
+}) {
+  const [target, setTarget] = useState<Trusting>()
+  useEffect(() => {
+    const ask = (event: Event) => {
+      const anchor = event.target
+      const project =
+        anchor instanceof Element ? anchor.getAttribute(PROJECT_CARD) : null
+      if (!(anchor instanceof Element) || !project) return
+      event.preventDefault()
+      setTarget({ project: project as ProjectId, anchor })
+    }
+    document.addEventListener(ASKED, ask)
+    return () => document.removeEventListener(ASKED, ask)
+  }, [])
+  return (
+    <TrustCard
+      engine={engine}
+      projects={projects}
+      target={target}
+      onClose={() => setTarget(undefined)}
+    />
+  )
+}
 
 /**
  * The card that trusts a Project after it was added: what its Harnesses

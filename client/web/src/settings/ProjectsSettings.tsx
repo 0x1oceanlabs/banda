@@ -10,14 +10,6 @@ import { useState } from "react"
 import type { Engine, ProjectSummary, UpdateProject } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@banda/ui/components/dialog"
-import {
   Select,
   SelectContent,
   SelectItem,
@@ -46,14 +38,12 @@ import {
 } from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
 import { AsideRow } from "../safe/AsideRow"
+import { RemoveProjectDialog, type Removing, removingOf } from "./RemoveProject"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
+import { notNow } from "../trust/not-now"
 import { Soon, TrustCard, type Trusting } from "../trust/TrustCard"
 import { ISOLATED, offersSaying, trustAbout } from "../trust/trust"
-
-/** The Project a removal asks about, and how many Threads go with it, if
- * the agents module said. */
-type Removing = { project: ProjectSummary; threads?: number }
 
 type Props = {
   engine: Engine
@@ -100,20 +90,7 @@ function Project({ engine, lit }: Props) {
   const change = (how: Omit<UpdateProject, "project">) =>
     void act(() => updateProject(engine, { project: project.id, ...how }))
   // The Threads that go with it are the agents module's.
-  const ask = async () => {
-    const threads = await engine
-      .call("agents.threads", {}, { project: project.id })
-      .then(
-        (list) => list.threads.length,
-        () => undefined
-      )
-    setRemoving({ project, threads })
-  }
-  const remove = () => {
-    if (!removing) return
-    setRemoving(undefined)
-    void act(() => removeProject(engine, removing.project.id))
-  }
+  const ask = async () => setRemoving(await removingOf(engine, project))
 
   return (
     <>
@@ -237,9 +214,11 @@ function Project({ engine, lit }: Props) {
                     size="sm"
                     variant={saying ? "ghost" : "outline"}
                     disabled={busy}
-                    onClick={() =>
+                    // Taken back here, it asks nothing in the sidebar.
+                    onClick={() => {
+                      notNow(project.id)
                       void act(() => trustProject(engine, project.id, false))
-                    }
+                    }}
                   >
                     Stop trusting
                   </Button>
@@ -304,35 +283,14 @@ function Project({ engine, lit }: Props) {
         align="end"
         onClose={() => setTrusting(undefined)}
       />
-      <Dialog
-        open={removing !== undefined}
-        onOpenChange={(open) => !open && setRemoving(undefined)}
-      >
-        {removing && (
-          <DialogContent showCloseButton={false}>
-            <DialogHeader>
-              <DialogTitle>{questionOf(removing)}</DialogTitle>
-              <DialogDescription className="font-mono text-meta break-all">
-                {removing.project.folder}
-              </DialogDescription>
-            </DialogHeader>
-            <div className="flex flex-col gap-1 text-ui text-muted-foreground">
-              <p>
-                This removes only the Project entries, not the files on disk.
-              </p>
-              <p>This action cannot be undone.</p>
-            </div>
-            <DialogFooter>
-              <Button variant="outline" onClick={() => setRemoving(undefined)}>
-                Cancel
-              </Button>
-              <Button variant="destructive" onClick={remove}>
-                Remove Project
-              </Button>
-            </DialogFooter>
-          </DialogContent>
-        )}
-      </Dialog>
+      <RemoveProjectDialog
+        removing={removing}
+        onClose={() => setRemoving(undefined)}
+        onRemove={(removed) => {
+          setRemoving(undefined)
+          void act(() => removeProject(engine, removed))
+        }}
+      />
     </>
   )
 }
@@ -341,13 +299,4 @@ function Project({ engine, lit }: Props) {
 function nameOf(project: ProjectSummary | undefined): string {
   if (!project) return ""
   return project.archived ? `${project.name} (archived)` : project.name
-}
-
-/** What a removal asks, as T3 Code does. */
-function questionOf({ project, threads }: Removing): string {
-  const what =
-    threads === undefined
-      ? "its Threads"
-      : `its ${threads} ${threads === 1 ? "Thread" : "Threads"}`
-  return `Remove Project "${project.name}" and delete ${what}?`
 }
