@@ -80,6 +80,7 @@ pub const WINDOWS: &[(&str, &str)] = &[
     ("browser", include_str!("../../../apps/browser/window.json")),
     ("git", include_str!("../../../apps/git/window.json")),
     ("files", include_str!("../../../apps/files/window.json")),
+    ("pulls", include_str!("../../../apps/pulls/window.json")),
     (
         "harnesses",
         include_str!("../../../platform/harnesses/window.json"),

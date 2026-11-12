@@ -38,7 +38,11 @@ test("a Pane shows while the engine runs its module, or always for a module with
   expect(kindRuns("browser.browser", [])).toBe(true)
   expect(kindRuns("window.launcher", [])).toBe(true)
   expect(kindRuns("nobody.knows", ["nobody"])).toBe(false)
-  expect(watches.map(({ module }) => module.id)).toEqual(["agents", "browser"])
+  expect(watches.map(({ module }) => module.id)).toEqual([
+    "agents",
+    "browser",
+    "pulls",
+  ])
 })
 
 test("the launcher and an empty workspace offer every Pane a Person can start but Usage, which comes as the Sheet (ADR 0102, decision 5)", () => {

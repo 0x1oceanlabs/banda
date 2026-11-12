@@ -20,6 +20,7 @@
     "@banda/files-pane": "workspace:*",
     "@banda/git-pane": "workspace:*",
     "@banda/notifications-pane": "workspace:*",
+    "@banda/pulls-pane": "workspace:*",
     "@banda/terminal-pane": "workspace:*",
     "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",

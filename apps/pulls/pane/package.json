@@ -1,0 +1,28 @@
+{
+  "name": "@banda/pulls-pane",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The pulls App's window part: each Thread's pull requests, listed on that Thread for its card to show (ADR 0076).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/core": "workspace:*",
+    "@banda/ui": "workspace:*",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

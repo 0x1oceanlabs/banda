@@ -11,6 +11,7 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { ChangedLines, Doing } from "@banda/contract/agents"
+import type { Pull } from "@banda/contract/pulls"
 import {
   type Device,
   paneHost,
@@ -332,6 +333,11 @@ export type Listed = {
    * which its card shows as "+38 −9" (ADR 0098, decision 8). None when
    * that work changed no line. */
   changedLines?: ChangedLines
+  /** The pull requests it links, the most urgent first, as the pulls App
+   * lists them (ADR 0076): its card shows them on line 2's right (ADR
+   * 0098, decision 8). The App's item on a Thread carries them, and the
+   * sidebar puts them on that Thread's row. None while it links none. */
+  pulls?: readonly Pull[]
   /** Its direct sub-agents while it works (ADR 0103, decisions 13 and
    * 32): how many work and how many failed since its turn began, the
    * Mark's satellites, and what its card's line 2 says of those at work,
