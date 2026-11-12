@@ -1,8 +1,8 @@
 //! What a message may hold: its text, its images, the files it carries
 //! and the settings it is sent with, and the Thread's title it gives.
 
-use crate::model::{Image, ImageId};
-use banda_kernel::{Participant, Refusal};
+use crate::model::{Image, ImageId, WrittenFrom};
+use banda_kernel::{Participant, Refusal, clean_name};
 use std::collections::HashSet;
 
 /// How freely an Agent acts is a Person's choice: an Agent sends a message
@@ -151,9 +151,89 @@ pub fn without_images(harness: &str, text: &str) -> Result<String, String> {
     ))
 }
 
+/// Where a Person's message says it was written from, as the engine keeps
+/// it (ADR 0122, decision 2): the machine's name cleaned as a window cleans
+/// it; none when nothing is left of it, or an Agent wrote it.
+pub fn written_from(author: Participant, from: Option<WrittenFrom>) -> Option<WrittenFrom> {
+    if !matches!(author, Participant::Person(_)) {
+        return None;
+    }
+    let WrittenFrom { machine, here } = from?;
+    let machine = clean_name(&machine);
+    (!machine.is_empty()).then_some(WrittenFrom { machine, here })
+}
+
+/// The line the Agent reads before a message written from `now`, when its
+/// session was last told of `before` (ADR 0122, decision 3): none when it
+/// did not change, and none for the Thread's own machine unless it was
+/// told of another. The name is quoted as Rust quotes a string, so a `"`
+/// in it is no end of it.
+pub fn from_machine(now: Option<&WrittenFrom>, before: Option<&WrittenFrom>, text: &str) -> String {
+    let Some(now) = now.filter(|&now| Some(now) != before) else {
+        return text.to_owned();
+    };
+    let machine = &now.machine;
+    let said = if !now.here {
+        format!(
+            "Your Person writes this from their machine {machine:?}, not from this one: \
+             a file or path they name is there, not here, and a setting you change here \
+             does not change theirs."
+        )
+    } else if before.is_some_and(|before| !before.here) {
+        format!("Your Person writes this from this machine, {machine:?}, again.")
+    } else {
+        return text.to_owned();
+    };
+    format!("{said}\n\n{text}")
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_persons_machine_is_kept_clean_and_an_agents_not_at_all() {
+        let from = |machine: &str| {
+            Some(WrittenFrom {
+                machine: machine.to_owned(),
+                here: false,
+            })
+        };
+        let person = Participant::Person(banda_kernel::PersonId::new());
+        let kept = written_from(
+            person,
+            from(" Mac\u{202E}Book\u{7} Pro\u{2028} and a long tail "),
+        );
+        assert_eq!(kept.unwrap().machine, "MacBook Pro and");
+        assert_eq!(written_from(person, from("\u{200B} ")), None);
+        let agent = Participant::Agent(banda_kernel::AgentId::new());
+        assert_eq!(written_from(agent, from("arc")), None);
+    }
+
+    #[test]
+    fn the_line_goes_only_when_the_machine_changed() {
+        let mac = WrittenFrom {
+            machine: "Mac".into(),
+            here: false,
+        };
+        let arc = WrittenFrom {
+            machine: "arc".into(),
+            here: true,
+        };
+        let line = |now, before| from_machine(now, before, "hi");
+        assert!(
+            line(Some(&mac), None)
+                .starts_with("Your Person writes this from their machine \"Mac\"")
+        );
+        assert!(line(Some(&mac), Some(&arc)).ends_with("\n\nhi"));
+        assert_eq!(line(Some(&mac), Some(&mac)), "hi");
+        assert_eq!(line(Some(&arc), None), "hi");
+        assert_eq!(line(None, Some(&mac)), "hi");
+        assert_eq!(
+            line(Some(&arc), Some(&mac)),
+            "Your Person writes this from this machine, \"arc\", again.\n\nhi"
+        );
+    }
 
     #[test]
     fn a_kept_file_is_named_so_its_path_reads_back_whole() {

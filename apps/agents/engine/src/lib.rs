@@ -88,7 +88,7 @@ use marks::{ImportMarks, Imported, ReadAsk};
 use model::{
     AccountUse, Body, CrewId, CrewView, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener,
     Settings, SubagentId, SubagentView, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId,
-    TurnState, VERSION, VisualId,
+    TurnState, VERSION, VisualId, WrittenFrom,
 };
 use notes::Notify;
 use rules::Event;
@@ -800,6 +800,12 @@ struct Send {
     #[ts(as = "Option<bool>", optional)]
     #[schemars(skip)]
     steer: bool,
+    /// Where the Person writes it from: their window's machine, and
+    /// whether that is the Thread's (ADR 0122). A window says it.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    #[schemars(skip)]
+    from: Option<WrittenFrom>,
 }
 
 /// A waiting message's new text, by the turn it waits for.
@@ -1347,6 +1353,7 @@ impl Agents {
             images,
             settings,
             steer,
+            from: written,
         } = params;
         rules::message::may_send(&text, &images)?;
         let target = self.target(thread, harness)?;
@@ -1354,6 +1361,7 @@ impl Agents {
         if settings.is_some() {
             rules::message::may_choose(author)?;
         }
+        let written = rules::message::written_from(author, written);
         let message = Message { text, images };
         let fence = call.project().environment().fence();
         call.command(move |tx| {
@@ -1365,7 +1373,11 @@ impl Agents {
                 }
                 Participant::Person(_) => None,
             };
-            send(tx, author, target, message, settings, steer, by, &fence)
+            let sent = send(tx, author, target, message, settings, steer, by, &fence)?;
+            if let Some(written) = &written {
+                store::keep_written_from(tx.sql(), sent.item, written)?;
+            }
+            Ok(sent)
         })
         .await
     }
@@ -2265,6 +2277,9 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     store::set_forked_from(tx.sql(), thread, from)?;
     store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
     store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
+    // Its session goes on from its source's, told of what that was.
+    let told = store::told_from(tx.sql(), from)?;
+    store::set_told_from(tx.sql(), thread, told.as_ref())?;
     let forked = evidence.forked_at(acp::ForkAt {
         message: Some(message),
     });

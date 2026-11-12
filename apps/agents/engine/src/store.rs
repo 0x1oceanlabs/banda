@@ -9,6 +9,7 @@ use crate::model::{
     Image, ImageId, Item, ItemId, LISTED_MESSAGE, Later, LatestTurn, ListedThread, Offer, Opener,
     PlanStep, QuestionState, Settings, Subagent, SubagentId, SubagentState, Subagents, ThreadId,
     ThreadSummary, ToolContent, ToolStatus, TurnId, TurnState, TurnView, Usage, VisualId,
+    WrittenFrom,
 };
 use crate::rules::Lanes;
 use crate::search;
@@ -332,6 +333,14 @@ ALTER TABLE agents_subagents ADD COLUMN launch TEXT;
 -- turns: it ends as the Crew ends.
 ALTER TABLE agents_items ADD COLUMN crew TEXT;
 CREATE INDEX agents_items_by_crew ON agents_items (crew) WHERE crew IS NOT NULL;
+"#,
+    r#"
+-- Where the Person wrote a message from, as JSON (ADR 0122): their
+-- window's machine, and whether it was the Thread's. NULL when no window
+-- said, and for every item but a Person's message. And the one the
+-- Thread's session was last told of: NULL while it was told of none.
+ALTER TABLE agents_items ADD COLUMN written_from TEXT;
+ALTER TABLE agents_threads ADD COLUMN told_from TEXT;
 "#,
 ];
 
@@ -1378,6 +1387,55 @@ pub fn insert_item(
     if matches!(item.body, Body::Message { .. }) {
         search::index(sql, item.id)?;
     }
+    Ok(())
+}
+
+/// Keeps where the Person wrote `item` from (ADR 0122).
+pub fn keep_written_from(sql: &Connection, item: ItemId, from: &WrittenFrom) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_items SET written_from = ?2 WHERE id = ?1",
+        params![item, json(from)?],
+    )?;
+    Ok(())
+}
+
+/// Where the Person wrote `item` from (ADR 0122).
+pub fn written_from(sql: &Connection, item: ItemId) -> Result<Option<WrittenFrom>, Error> {
+    let from = sql
+        .query_row(
+            "SELECT written_from FROM agents_items WHERE id = ?1",
+            params![item],
+            |row| maybe_column(row, 0),
+        )
+        .optional()?;
+    Ok(from.flatten())
+}
+
+/// Where the Thread's session was last told its Person writes from (ADR
+/// 0122).
+pub fn told_from(sql: &Connection, thread: ThreadId) -> Result<Option<WrittenFrom>, Error> {
+    let told = sql
+        .query_row(
+            "SELECT told_from FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| maybe_column(row, 0),
+        )
+        .optional()?;
+    Ok(told.flatten())
+}
+
+/// Keeps where the Thread's session was told its Person writes from; none
+/// for a session told nothing.
+pub fn set_told_from(
+    sql: &Connection,
+    thread: ThreadId,
+    told: Option<&WrittenFrom>,
+) -> Result<(), Error> {
+    let told = told.map(json).transpose()?;
+    sql.execute(
+        "UPDATE agents_threads SET told_from = ?2 WHERE id = ?1",
+        params![thread, told],
+    )?;
     Ok(())
 }
 

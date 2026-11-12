@@ -475,6 +475,16 @@ fn asked(said: &str) -> &str {
     }
 }
 
+/// The prompt past Banda's line of the machine its Person writes from
+/// (ADR 0122), which it reads and does not say back: "what did you read"
+/// shows it.
+fn past_machine(said: &str) -> &str {
+    match said.starts_with("Your Person writes this from") {
+        true => said.split_once("\n\n").map_or(said, |(_, rest)| rest),
+        false => said,
+    }
+}
+
 /// What it says of the images it was shown, if it was shown any.
 fn seen(prompt: &[ContentBlock]) -> Option<String> {
     let kinds: Vec<&str> = prompt
@@ -749,6 +759,7 @@ async fn turn(
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(&seen)))?;
     }
     let said = words_of(&prompt.prompt);
+    let said = past_machine(&said).to_owned();
     let words = asked(&said).to_owned();
     // Before the words its own words hold: `fails` holds `fail`.
     if words.split_whitespace().any(|word| word == "crew") {

@@ -318,7 +318,8 @@ impl Whose {
 
 /// What `message` sends `harness`, in order: who wrote it, when another
 /// Thread's Agent did; the skills it names, run as commands; and, unless
-/// the Harness runs it as a command, the notices it takes before it. And
+/// the Harness runs it as a command, the notices it takes before it and
+/// the machine the Person writes from, when that changed. And
 /// what Banda tells the Person it left out; why nothing of it can go, if
 /// nothing can.
 async fn prompt_of(
@@ -347,11 +348,22 @@ async fn prompt_of(
     // What the Person did meanwhile, as a commit from the Thread's card,
     // goes before it.
     if !runs_command(project, thread, running, &prompt).await? {
-        let notices = project
-            .write(move |tx| store::notices_of(tx.sql(), thread, item, true))
+        // And which machine the Person writes from, once it is not the
+        // one the session was told of (ADR 0122).
+        let (notices, now, told) = project
+            .write(move |tx| {
+                let notices = store::notices_of(tx.sql(), thread, item, true)?;
+                let now = store::written_from(tx.sql(), item)?;
+                let told = store::told_from(tx.sql(), thread)?;
+                if now.is_some() && now != told {
+                    store::set_told_from(tx.sql(), thread, now.as_ref())?;
+                }
+                Ok((notices, now, told))
+            })
             .await
             .map_err(plain)?;
         prompt.text = crate::notices::before(&notices, &prompt.text);
+        prompt.text = rules::message::from_machine(now.as_ref(), told.as_ref(), &prompt.text);
     }
     let mut refused = Vec::new();
     if running.offer.no_images && !images.is_empty() {
@@ -633,6 +645,8 @@ async fn work(
         project
             .write(move |tx| {
                 store::set_evidence(tx.sql(), thread, &evidence)?;
+                // A new session was told of no machine (ADR 0122).
+                store::set_told_from(tx.sql(), thread, None)?;
                 if lost {
                     notice(tx, agent, thread, Some(id), afresh)?;
                 }

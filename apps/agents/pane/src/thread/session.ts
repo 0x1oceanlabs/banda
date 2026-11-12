@@ -13,6 +13,7 @@ import { newId, type Engine, type ProjectId } from "@banda/contract"
 import {
   KEEP,
   Unreachable,
+  useHereNamed,
   useQueue,
   usePlaced,
   useWaiting,
@@ -309,6 +310,11 @@ export function useThreadSession({
   // The machine is the one the directory says has its Project, by its
   // hosts.toml name, as the queue keeps it (ADR 0106, decision 1).
   const { host, shown } = usePlaced(project, args.host)
+  // Which machine the Person writes from, for the Agent (ADR 0122): this
+  // window's, once its engine said its name, and whether it is the
+  // Thread's.
+  const here = useHereNamed()
+  const from = here ? { machine: here.name, here: host === undefined } : null
   const waitsHere = useWaiting(host, thread)
   const shows = waitsHere.find((wait) => wait.shows)?.shows
   const name = harnessName(harnesses, harness, shows?.to) || "the Agent"
@@ -478,6 +484,7 @@ export function useThreadSession({
                   : (settings ?? null)
                 : (next ?? null),
             steer,
+            from,
           },
           target
         )
@@ -544,6 +551,7 @@ export function useThreadSession({
           images: images.map(({ id }) => id),
           settings: null,
           steer: false,
+          from,
         },
         // Fixed now: each send of it is this one command.
         command: newId(),

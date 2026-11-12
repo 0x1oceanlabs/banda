@@ -1396,6 +1396,60 @@ async fn what_git_did_from_the_card_shows_at_once_and_goes_before_the_next_promp
     assert_eq!(last_reply(&view), "message: You said: again", "only once");
 }
 
+/// Which machine the Person writes from goes before the message only
+/// when it is not the one the session was told of, and the Thread shows
+/// the message as written (ADR 0122).
+#[tokio::test]
+async fn the_agent_reads_which_machine_its_person_writes_from_once_it_changes() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let mac = json!({ "machine": "MacBook\u{202E} Pro\u{7}", "here": false });
+    let arc = json!({ "machine": "arc", "here": true });
+    let said = async |text: &str, from: Option<&Value>| {
+        let mut params = json!({ "thread": thread, "text": text });
+        if let Some(from) = from {
+            params["from"] = from.clone();
+        }
+        let sent = world
+            .call(world.person(), "agents.send", params)
+            .await
+            .unwrap();
+        let view = world
+            .until(&thread, |v| {
+                state(v, &sent["turn"]) == Some(TurnState::Done)
+            })
+            .await;
+        let shown = texts(&view).contains(&format!("message: {text}"));
+        (shown, last_reply(&view))
+    };
+
+    // A command runs as it is, and tells the session of no machine.
+    let (_, read) = said("/compact", Some(&mac)).await;
+    assert_eq!(read, "message: You said: /compact");
+    let (shown, read) = said("what did you read", Some(&mac)).await;
+    assert!(shown, "the Thread shows it as written");
+    assert!(
+        read.contains(
+            " read: Your Person writes this from their machine \"MacBook Pro\", not from this one"
+        ),
+        "{read}"
+    );
+    assert!(read.ends_with("\n\nwhat did you read"), "{read}");
+    let (_, read) = said("what did you read", Some(&mac)).await;
+    assert!(
+        read.ends_with(" read: what did you read"),
+        "the same machine says nothing: {read}"
+    );
+    let (_, read) = said("what did you read", Some(&arc)).await;
+    assert!(
+        read.ends_with(
+            " read: Your Person writes this from this machine, \"arc\", again.\n\nwhat did you read"
+        ),
+        "{read}"
+    );
+}
+
 /// A tab the Person lent the Thread, as the browser says it: the Thread
 /// shows its line at once, and its Agent reads it before its next message
 /// (ADR 0083, decision 4).

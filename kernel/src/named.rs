@@ -20,6 +20,27 @@ pub struct Named {
     pub icon: MachineIcon,
 }
 
+/// A machine's name as a window cleans one it draws (ADR 0095, decision 2;
+/// `cleanText` in `client/ui`): no control, format, line or paragraph
+/// separator characters, at most [`NAME_MOST`] characters, trimmed.
+pub fn clean_name(said: &str) -> String {
+    let hidden = |c: char| {
+        c.is_control()
+            || matches!(c, '\u{00AD}' | '\u{0600}'..='\u{0605}' | '\u{061C}' | '\u{06DD}'
+                | '\u{070F}' | '\u{0890}'..='\u{0891}' | '\u{08E2}' | '\u{180E}'
+                | '\u{200B}'..='\u{200F}' | '\u{2028}'..='\u{202E}' | '\u{2060}'..='\u{206F}'
+                | '\u{FEFF}' | '\u{FFF9}'..='\u{FFFB}' | '\u{110BD}' | '\u{110CD}'
+                | '\u{13430}'..='\u{1343F}' | '\u{1BCA0}'..='\u{1BCA3}'
+                | '\u{1D173}'..='\u{1D17A}' | '\u{E0001}' | '\u{E0020}'..='\u{E007F}')
+    };
+    let name: String = said
+        .chars()
+        .filter(|&c| !hidden(c))
+        .take(NAME_MOST)
+        .collect();
+    name.trim().to_owned()
+}
+
 /// `named` as a `welcome` says it, read by a client that may be older
 /// than the engine: an icon it has not reads as `desktop`, and what it
 /// cannot read at all as none, so a newer engine's icon never stops it

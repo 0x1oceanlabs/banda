@@ -90,7 +90,7 @@ pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode, present};
 pub use methods::{Does, Kind, Method, Nothing, Picture, Tool};
 pub use module::Other;
 pub use module::{Call, Module, Scope, Stream, Wall};
-pub use named::{MachineIcon, NAME_MOST, Named};
+pub use named::{MachineIcon, NAME_MOST, Named, clean_name};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
 pub use project::{Committed, ModuleProject, Project, Tally, WeakModuleProject};

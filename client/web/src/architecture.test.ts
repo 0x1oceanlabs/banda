@@ -2023,6 +2023,8 @@ const HOSTS_FOR_APPS = [
   "Unreachable",
   "heldWords",
   "unreachedWords",
+  // This machine's name, which a Thread says it writes from (ADR 0122).
+  "useHereNamed",
   "useMachines",
   "useNamedOf",
   "usePlaced",
