@@ -65,6 +65,11 @@
       "$ref": "#/$defs/Focus",
       "x-class": "device"
     },
+    "shadow": {
+      "description": "How dark what floats and what the Person carries are (ADR 0113,\ndecision 4).",
+      "$ref": "#/$defs/Shadows",
+      "x-class": "device"
+    },
     "bar": {
       "$ref": "#/$defs/Bar",
       "x-class": "device"
@@ -335,6 +340,27 @@
         },
         "shadow": {
           "description": "The soft shadow the focused tile casts, glass or not, from 0 (none)\nto 1 (the darkest).",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "Shadows": {
+      "description": "The elevations' strengths (ADR 0113, decision 4): their shapes are\nBanda's, and a theme says only how dark each is.",
+      "type": "object",
+      "properties": {
+        "float": {
+          "description": "The shadow of what floats: menus, popovers, dialogs, toasts and a\nPane's own floating bar, from 0 (none) to 1 (the darkest).",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "lift": {
+          "description": "The shadow of what the Person carries: a Pane being moved, a Peek,\nfrom 0 (none) to 1 (the darkest).",
           "type": "number",
           "format": "double",
           "minimum": 0,
