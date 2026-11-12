@@ -31,7 +31,7 @@
       "x-class": "machine"
     },
     "updates": {
-      "description": "Take Banda's updates: when-idle takes each new engine and restarts\non it once no Agent works here; ask takes it and waits for you to\nrestart; off takes none. when-idle by default.",
+      "description": "Take Banda's updates: when-idle takes each new engine and restarts\non it once no Agent works here, no terminal is open and no key\nreached one for ten minutes; ask takes it and waits for you to\nrestart; off takes none. when-idle by default.",
       "$ref": "#/$defs/TakeUpdates",
       "x-class": "machine"
     }

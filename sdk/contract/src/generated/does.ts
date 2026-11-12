@@ -184,6 +184,8 @@ export const DOES = {
   "sharing.example": "read",
   "updates.check": "act",
   "updates.state": "read",
+  "updates.restart": "act",
+  "updates.take": "act",
   "workspaces.list": "read",
   "workspaces.open": "act",
   "workspaces.close": "act",

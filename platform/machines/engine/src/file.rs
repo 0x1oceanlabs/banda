@@ -53,7 +53,8 @@ pub(crate) struct MachineFile {
     /// no battery is always on power. Off by default.
     pub awake_plugged_in: Option<bool>,
     /// Take Banda's updates: when-idle takes each new engine and restarts
-    /// on it once no Agent works here; ask takes it and waits for you to
+    /// on it once no Agent works here, no terminal is open and no key
+    /// reached one for ten minutes; ask takes it and waits for you to
     /// restart; off takes none. when-idle by default.
     pub updates: Option<TakeUpdates>,
 }

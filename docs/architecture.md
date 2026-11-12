@@ -1602,8 +1602,36 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   `package-type` sits beside the program, with `BANDA_UPDATES=off`, or
   with `updates = "off"` in machine.toml (default `when-idle`). The
   stream `updates.state` says what it runs, the newest found, a take's
-  progress, what is ready and why not (`banda update --follow`).
-  Restarting on a ready copy is ADR 0115's step 4; until then it waits.
+  progress, what is ready, what that waits for and why not (`banda
+  update --follow`).
+- **The engine moves onto a ready copy once nothing runs** (ADR 0115,
+  decision 3; `platform/updates/engine/src/restart.rs`): no Turn runs
+  (the kernel's `Working`), no terminal is open, as a restart still ends
+  them (#462), and no key reached one for ten minutes (the kernel's
+  `Hands`, which the terminal module tells: the keys typed into this
+  machine's terminals are the Person's one input the engine receives).
+  One pure function, `restart::next`, decides from those, machine.toml's
+  `updates` and how the engine moves; `when-idle` moves by itself, `ask`
+  waits for the Person, `off` neither takes nor moves. `updates.state`'s
+  `waits` says for what: `turns`, `terminals`, `typed_until`, `person`, or
+  `restart`, why it does not move by itself. Restart now
+  (`updates.restart`, `banda update --now`) asks first while Turns run,
+  in Quit's words (`quit::restart_asks`), and moves anyway with `force`;
+  open terminals and keys hold it not. The mechanism is the engine's
+  (`engine/src/moving.rs`): the module asks through `Restart`, the engine
+  stops as a TERM stops it, and once its runtime and the children that
+  die with it are gone, ends what is left in its unit's cgroup (TERM, then
+  KILL after 15 s, as systemd's `KillMode=mixed` does) and `exec`s the
+  copy's `banda` with its own arguments: the same process, so the same
+  unit or launchd job and one holder of the state's lock throughout. A
+  transient unit's program cannot change, so a crash starts the copy the
+  unit was started with, which moves again once idle. The window's child,
+  and Windows, do not move: they restart with Banda.
+  `banda update --version <v>` (`updates.take`, Manage) puts that
+  version in place, an older one too, keeps it in `<data>/engine/chosen`,
+  and the engine moves onto it by the same rule; the looks take nothing
+  above a version chosen, and `--version newest` drops the choice. A copy
+  older than this step neither reads `chosen` nor moves by itself.
 - **A machine with no Banda is set up by `scripts/install.sh`** (ADR
   0115, decision 8), one POSIX sh script, published with each release
   and packed in the app's resources: it puts the engine bundle of a

@@ -27,7 +27,13 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 16] = [
+const ON_THE_HOST: [(&str, usize, &str); 17] = [
+    (
+        "engine/src/moving.rs",
+        1,
+        "runs the engine's new copy in the engine's own place, with exec, once it stopped to move \
+         onto it (ADR 0115, decision 3)",
+    ),
     (
         "platform/updates/engine/src/take.rs",
         1,

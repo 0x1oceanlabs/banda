@@ -32,6 +32,18 @@ fn serve(listener: tokio::net::TcpListener, served: Served) {
             get(|State(s): State<Arc<Served>>| async move { s.releases.clone() }),
         )
         .route(
+            "/releases/tags/{tag}",
+            get(
+                |State(s): State<Arc<Served>>, Url(tag): Url<String>| async move {
+                    let list: Vec<serde_json::Value> = serde_json::from_str(&s.releases).unwrap();
+                    match list.into_iter().find(|release| release["tag_name"] == tag) {
+                        Some(release) => (axum::http::StatusCode::OK, release.to_string()),
+                        None => (axum::http::StatusCode::NOT_FOUND, String::new()),
+                    }
+                },
+            ),
+        )
+        .route(
             "/files/{name}",
             get(
                 |State(s): State<Arc<Served>>, Url(name): Url<String>| async move {
@@ -292,4 +304,76 @@ fn take_left(engine: &Path) -> Vec<String> {
                 .collect()
         })
         .unwrap_or_default()
+}
+
+#[tokio::test]
+async fn a_version_chosen_older_is_put_in_place_and_held_to() {
+    let machine = machine_running(
+        "dev",
+        "0.1.0-dev.11",
+        |at, served| {
+            let newest = publish(
+                served,
+                at,
+                "0.1.0-dev.12",
+                bundle("banda 0.1.0-dev.12 (build b)"),
+                None,
+            );
+            let older = publish(
+                served,
+                at,
+                "0.1.0-dev.10",
+                bundle("banda 0.1.0-dev.10 (build a)"),
+                None,
+            );
+            format!("[{newest},{older}]")
+        },
+        |_| None,
+    )
+    .await;
+    let updates = &machine.updates;
+    let refused = updates.choose("the old one").await.unwrap_err();
+    assert!(refused.message.contains("not a version"), "{refused:?}");
+    let refused = updates.choose("0.1.0-dev.9").await.unwrap_err();
+    assert!(
+        refused.message.contains("no release 0.1.0-dev.9"),
+        "{refused:?}"
+    );
+
+    let state = updates.choose("0.1.0-dev.10").await.unwrap();
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.10"), "{state:?}");
+    assert_eq!(state.chosen.as_deref(), Some("0.1.0-dev.10"));
+    assert!(machine.engine.join("0.1.0-dev.10/banda").is_file());
+    assert_eq!(
+        std::fs::read_to_string(machine.engine.join("chosen")).unwrap(),
+        "0.1.0-dev.10\n"
+    );
+
+    // A look finds the newest, and takes nothing above the one chosen.
+    let state = updates.look().await;
+    assert_eq!(state.newest.as_deref(), Some("0.1.0-dev.12"));
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.10"));
+    assert!(!machine.engine.join("0.1.0-dev.12").exists());
+
+    // The engine started again on it waits for nothing above it either.
+    let banda = Banda {
+        channel: "dev",
+        folder: "banda-dev",
+        version: "0.1.0-dev.10".to_owned(),
+        program: None,
+        engine: machine.engine.clone(),
+    };
+    let (_, take) = watch::channel(TakeUpdates::WhenIdle);
+    let moved = Updates::new(banda, take);
+    let state = moved.watch().borrow().clone();
+    assert_eq!(
+        (state.ready, state.chosen.as_deref()),
+        (None, Some("0.1.0-dev.10"))
+    );
+
+    // `newest` drops the choice, and takes the newest again.
+    let state = updates.choose("newest").await.unwrap();
+    assert_eq!(state.chosen, None);
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.12"), "{state:?}");
+    assert!(!machine.engine.join("chosen").exists());
 }

@@ -175,11 +175,12 @@ pub fn copies(engine: &Path) -> Vec<String> {
     copies
 }
 
-/// Removes the copies past the two newest, but never `running`'s, and what
+/// Removes the copies past the two newest, but never one in `keep`: the
+/// running one, whatever its age, and the one chosen; and what
 /// a take that broke off left (`.<version>.new`, `.<version>.tar.gz`).
-pub fn prune(engine: &Path, running: &str) {
+pub fn prune(engine: &Path, keep: &[&str]) {
     for old in copies(engine).into_iter().skip(2) {
-        if old != running {
+        if !keep.contains(&old.as_str()) {
             let _ = std::fs::remove_dir_all(engine.join(&old));
             tracing::info!(version = %old, "an old copy of the engine went");
         }
@@ -221,7 +222,7 @@ mod tests {
         std::fs::write(engine.path().join(".0.1.0-dev.12.tar.gz"), "").unwrap();
         // Not a copy: half made, or not a version.
         std::fs::create_dir_all(engine.path().join("0.1.0-dev.7")).unwrap();
-        prune(engine.path(), "0.1.0-dev.8");
+        prune(engine.path(), &["0.1.0-dev.8"]);
         assert_eq!(
             copies(engine.path()),
             ["0.1.0-dev.11", "0.1.0-dev.10", "0.1.0-dev.8"]
