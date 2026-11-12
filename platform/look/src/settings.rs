@@ -55,6 +55,10 @@ pub struct Settings {
     pub tile: Tile,
     #[serde(default)]
     pub focus: Focus,
+    /// How dark what floats and what the Person carries are (ADR 0113,
+    /// decision 4).
+    #[serde(default)]
+    pub shadow: Shadows,
     #[serde(default)]
     pub bar: Bar,
     /// The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
@@ -244,6 +248,21 @@ pub struct Focus {
     pub shadow: Option<f64>,
 }
 
+/// The elevations' strengths (ADR 0113, decision 4): their shapes are
+/// Banda's, and a theme says only how dark each is.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Shadows {
+    /// The shadow of what floats: menus, popovers, dialogs, toasts and a
+    /// Pane's own floating bar, from 0 (none) to 1 (the darkest).
+    #[schemars(range(min = 0, max = 1))]
+    pub float: Option<f64>,
+    /// The shadow of what the Person carries: a Pane being moved, a Peek,
+    /// from 0 (none) to 1 (the darkest).
+    #[schemars(range(min = 0, max = 1))]
+    pub lift: Option<f64>,
+}
+
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Bar {
@@ -422,6 +441,8 @@ struct ThemeShape {
     #[serde(default)]
     focus: Focus,
     #[serde(default)]
+    shadow: Shadows,
+    #[serde(default)]
     bar: BarShape,
 }
 
@@ -454,6 +475,7 @@ impl ThemeFile {
             gaps: shape.gaps,
             tile: shape.tile,
             focus: shape.focus,
+            shadow: shape.shadow,
             bar: Bar {
                 height: shape.bar.height,
                 ..Bar::default()
@@ -613,6 +635,10 @@ impl Settings {
                 ring: self.focus.ring.or(under.focus.ring),
                 shadow: self.focus.shadow.or(under.focus.shadow),
             },
+            shadow: Shadows {
+                float: self.shadow.float.or(under.shadow.float),
+                lift: self.shadow.lift.or(under.shadow.lift),
+            },
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
                 _workspaces: None,
@@ -723,6 +749,10 @@ impl Settings {
                 ring: Some(0.0),
                 shadow: Some(0.25),
             },
+            shadow: Shadows {
+                float: Some(0.1),
+                lift: Some(0.45),
+            },
             bar: Bar {
                 height: Some(36.0),
                 _workspaces: None,
@@ -780,6 +810,8 @@ impl Settings {
             ("desk.opacity", self.desk.opacity),
             ("desk.grain", self.desk.grain),
             ("desk.sidebar-shadow", self.desk.sidebar_shadow),
+            ("shadow.float", self.shadow.float),
+            ("shadow.lift", self.shadow.lift),
             ("drawer.height", self.drawer.height),
             ("overview.zoom", self.overview.zoom),
         ]

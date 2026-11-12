@@ -10,6 +10,7 @@
 //! theme and works out its colours, and the look its sizes.
 
 pub mod color;
+pub mod elevation;
 pub mod file;
 pub mod fonts;
 pub mod hyprland;

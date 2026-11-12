@@ -120,6 +120,8 @@
   --small-leading: 14px;
   --figure-size: 28px;
   --figure-leading: 32px;
+  --float-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --lift-shadow: 0 30px 80px -12px rgb(0 0 0 / 0.45);
 }
 
 .dark {

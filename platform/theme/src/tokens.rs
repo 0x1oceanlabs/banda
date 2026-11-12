@@ -34,6 +34,8 @@ pub enum Kind {
     Percentage,
     /// A list of font families, as CSS's `font-family` says it.
     Font,
+    /// A list of shadows, as CSS's `box-shadow` says it.
+    Shadow,
 }
 
 /// What a token is for.
@@ -66,6 +68,8 @@ pub enum Group {
     Radius,
     /// The type.
     Font,
+    /// What floats, and what the Person carries (ADR 0113, decision 4).
+    Elevation,
 }
 
 impl Kind {
@@ -76,6 +80,7 @@ impl Kind {
             Kind::Number => "number",
             Kind::Percentage => "percentage",
             Kind::Font => "font",
+            Kind::Shadow => "shadow",
         }
     }
 }
@@ -96,6 +101,7 @@ impl Group {
             Group::Layout => "layout",
             Group::Radius => "radius",
             Group::Font => "font",
+            Group::Elevation => "elevation",
         }
     }
 }
@@ -202,6 +208,11 @@ pub const TOKENS: &[Token] = list! {
         "meta-leading", "small-size", "small-leading", "figure-size",
         "figure-leading",
     ];
+    // The elevations (ADR 0113, decision 4): what floats, the Top layer and
+    // a Pane's own floating bar; what the Person carries, a Pane being
+    // moved and a Peek. Each is its shadows at the strength the theme says
+    // (`elevation`).
+    Elevation Shadow ["float-shadow", "lift-shadow"];
 };
 
 /// Tokens renamed: each old name, and the token it is now. A theme that

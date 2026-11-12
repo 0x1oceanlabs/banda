@@ -32,7 +32,9 @@ use banda_theme::color::{is_css_color, is_hex};
 pub use banda_theme::hyprland::{Hyprland, Windows};
 use banda_theme::palette::Palette;
 use banda_theme::readable::Under;
-use banda_theme::{Device, Mode, Picked, Theme, Wrong, fonts, thousandths, tokens, wallpaper};
+use banda_theme::{
+    Device, Mode, Picked, Theme, Wrong, elevation, fonts, thousandths, tokens, wallpaper,
+};
 pub use banda_theme::{Origin, Places, path_of};
 pub use file::{Class, OneFile, SettingsFile};
 use motion::Motion;
@@ -1143,6 +1145,16 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
     // The focused tile's, glass or not (ADR 0075, decision 5).
     put_share("focus-shadow-strength", all.focus.shadow, false);
     put_share("desk-grain", all.desk.grain, false);
+    // The elevations, each its shadows at the strength the theme says
+    // (ADR 0113, decision 4).
+    for (name, shadows, strength) in [
+        ("float-shadow", elevation::FLOAT, all.shadow.float),
+        ("lift-shadow", elevation::LIFT, all.shadow.lift),
+    ] {
+        if let Some(strength) = strength.filter(|v| settings::is_share(*v)) {
+            vars.insert(format!("--{name}"), elevation::css(shadows, strength));
+        }
+    }
     vars
 }
 
