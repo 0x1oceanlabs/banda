@@ -141,6 +141,7 @@
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
 
+mod crew;
 mod replay;
 mod subagents;
 
@@ -723,6 +724,12 @@ async fn turn(
     let said = words_of(&prompt.prompt);
     let words = asked(&said).to_owned();
     // Before the words its own words hold: `fails` holds `fail`.
+    if words.split_whitespace().any(|word| word == "crew") {
+        if !fake.signed_in.load(Ordering::Relaxed) {
+            return Err(Error::auth_required());
+        }
+        return crew::turn(&fake, &cx, &session, &words, then).await;
+    }
     if words.contains("sub-agents") {
         if !fake.signed_in.load(Ordering::Relaxed) {
             return Err(Error::auth_required());
@@ -1752,6 +1759,7 @@ async fn main() -> Result<(), Error> {
                     }
                     tell_shells(request.meta.as_ref());
                     let id = fake.new_session();
+                    crew::asked(&id, request.meta.as_ref());
                     fake.at_folder(id.clone(), request.cwd.clone());
                     let options = fake.options(&id);
                     responder
@@ -1770,6 +1778,7 @@ async fn main() -> Result<(), Error> {
                             cx: ConnectionTo<Client>| {
                     tell_shells(request.meta.as_ref());
                     let id = fake.new_session();
+                    crew::asked(&id, request.meta.as_ref());
                     let at = request
                         .meta
                         .as_ref()
@@ -1806,6 +1815,7 @@ async fn main() -> Result<(), Error> {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
                     tell_shells(request.meta.as_ref());
+                    crew::asked(&request.session_id, request.meta.as_ref());
                     let options = fake.options(&request.session_id);
                     responder.respond(ResumeSessionResponse::new().config_options(options))
                 }
@@ -1822,6 +1832,7 @@ async fn main() -> Result<(), Error> {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
                     tell_shells(request.meta.as_ref());
+                    crew::asked(&request.session_id, request.meta.as_ref());
                     fake.at_folder(request.session_id.clone(), request.cwd.clone());
                     // As a load replays the conversation, before it answers.
                     subagents::replay(&cx, &request.session_id)?;
@@ -1909,6 +1920,7 @@ async fn main() -> Result<(), Error> {
                     fake.setups.lock().unwrap().remove(&session);
                     fake.kept.lock().unwrap().remove(&session);
                     subagents::forget(&session);
+                    crew::forget(&session);
                     fake.closed.fetch_add(1, Ordering::Relaxed);
                     responder.respond(CloseSessionResponse::new())
                 }
