@@ -114,9 +114,9 @@ test("New Pane on arc's Project lists what opens on arc and dims the rest, not o
   ).toBeVisible()
   await shot(page, "new-pane-arc")
   // A dimmed one's letter opens nothing.
-  await launcher.press("KeyF")
+  await launcher.press("KeyB")
   await expect(launcher).toBeVisible()
-  await expect(page.getByRole("region", { name: "Files" })).toHaveCount(0)
+  await expect(page.getByRole("region", { name: "Browser" })).toHaveCount(0)
 
   // arc away: the Frame's pill says so, and nothing is picked, its letters
   // neither.
