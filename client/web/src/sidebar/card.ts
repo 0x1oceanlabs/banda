@@ -10,6 +10,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { DoingKind } from "@banda/contract/agents"
 import type { Named } from "@banda/contract/machines"
+import type { Checks, Pull } from "@banda/contract/pulls"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
 import { type MarkDoing, type MarkState, works } from "@banda/ui/lib/mark-state"
 import { type Listed, NO_REASON } from "@banda/ui/pane"
@@ -76,6 +77,10 @@ export type Slot =
   /** Line 2's right: the lines its last work that ended added and
    * removed, in grey (decision 8). */
   | { kind: "diff"; added: number; removed: number }
+  /** Line 2's right in its place, once the Thread links a pull request
+   * (decision 8; F2): its number, or how many with `of`, and how the one
+   * that most needs the Person stands. */
+  | { kind: "pull"; number: number; of: number; state?: PullState }
   /** Its Project's sign and name, on line 3. */
   | { kind: "project"; project: ProjectSummary }
   /** In the Project's place on line 3, a child's parent: ↳ and its
@@ -92,6 +97,12 @@ export type Slot =
   | { kind: "away"; dot: boolean }
 
 export type Says = Extract<Slot, { kind: "says" }>
+
+export type PullChip = Extract<Slot, { kind: "pull" }>
+
+/** How a pull request stands, as its chip's glyph says it (F2): its
+ * checks passed ✓, failed ✗ or run •; merged; closed. */
+export type PullState = "passed" | "failed" | "running" | "merged" | "closed"
 
 /** One line of a card: what stands at its left, and at its right. */
 export type Line = { left: Slot[]; right: Slot[] }
@@ -220,14 +231,19 @@ export function cardOf(input: CardOf): CardModel {
     },
   ]
   if (count >= 2) {
-    // Its right: the diff of its last work that ended, but at work, where
-    // the work since has none yet; Failed's stays empty (decision 8). The
-    // PR waits for F2.
-    const changed =
-      does || tone === "destructive" ? undefined : listed.changedLines
+    // Its right: its pull requests, once it links one (F2); else the
+    // diff of its last work that ended, but at work, where the work since
+    // has none yet. Failed's stays empty (decision 8).
+    const failed = tone === "destructive"
+    const pulls = failed ? undefined : listed.pulls
+    const changed = does || failed ? undefined : listed.changedLines
     lines.push({
       left: [does ? { kind: "works" } : saysOf(row, tone && WORDS[tone])],
-      right: changed ? [{ kind: "diff", ...changed }] : [],
+      right: pulls?.[0]
+        ? [pullSlot(pulls[0], pulls.length)]
+        : changed
+          ? [{ kind: "diff", ...changed }]
+          : [],
     })
   }
   if (count >= 3)
@@ -300,6 +316,53 @@ function machineSlot(
     machine,
     named: named && !alone,
   }
+}
+
+/** The chip of a Thread's `of` pull requests (F2): the `first`, which
+ * the pulls App lists as the one that most needs the Person (ADR 0076,
+ * decision 6), gives its glyph to them all. */
+function pullSlot(first: Pull, of: number): Slot {
+  const state = pullStateOf(first)
+  return { kind: "pull", number: first.number, of, ...(state && { state }) }
+}
+
+/** How `pull` stands, by GitHub's last read: merged or closed, else its
+ * checks summed up (ADR 0076, decision 2). None before it was read, or
+ * with no checks. */
+export function pullStateOf({ snapshot }: Pull): PullState | undefined {
+  if (snapshot?.state === "merged" || snapshot?.state === "closed")
+    return snapshot.state
+  return snapshot?.checks && CHECKS[snapshot.checks]
+}
+
+/** Each sum of a pull request's checks, as its chip says it. */
+const CHECKS: Readonly<Record<Checks, PullState>> = {
+  passing: "passed",
+  failing: "failed",
+  running: "running",
+}
+
+/** What a pull request's chip shows at its state's place: a glyph for its
+ * checks, a word once it landed. Only it takes a colour (F2). */
+export const PULL_GLYPHS: Readonly<Record<PullState, string>> = {
+  passed: "✓",
+  failed: "✗",
+  running: "•",
+  merged: "merged",
+  closed: "closed",
+}
+
+/** The words of a pull request's chip: `#1061`, or `3 PRs`. */
+export const pullWords = ({ number, of }: PullChip) =>
+  of > 1 ? `${of} PRs` : `#${number}`
+
+/** What a screen reader hears of each state: "checks passed". */
+const PULL_SAID: Readonly<Record<PullState, string>> = {
+  passed: "checks passed",
+  failed: "checks failed",
+  running: "checks running",
+  merged: "merged",
+  closed: "closed",
 }
 
 /**
@@ -534,6 +597,14 @@ function slotSaid(slot: Slot, now: number): string[] {
       return [
         `${slot.added} ${slot.added === 1 ? "line" : "lines"} added, ${slot.removed} removed`,
       ]
+    case "pull": {
+      // "Pull request 1061, checks passed"; with several, how many first,
+      // then how the one that most needs the Person stands.
+      const state = slot.state && PULL_SAID[slot.state]
+      const one = `Pull request ${slot.number}${state ? `, ${state}` : ""}`
+      if (slot.of === 1) return [one]
+      return [`${slot.of} pull requests${state ? ` · ${one}` : ""}`]
+    }
     // Said with who started it, and that its machine is away, after the
     // lines.
     case "away":

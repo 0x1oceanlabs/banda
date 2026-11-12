@@ -121,6 +121,54 @@ test("Done's note is never red", () => {
   expect(noted).not.toContain("text-destructive")
 })
 
+test("a PR's chip is in grey, its glyph alone in a colour: green passed, red failed, a still blue dot while its checks run; merged in grey (F2)", () => {
+  const chip = (state: "passing" | "failing" | "running" | "merged") => {
+    const pull = {
+      host: "github.com",
+      repo: "o/r",
+      number: 1061,
+      url: "https://github.com/o/r/pull/1061",
+      threads: ["t1"],
+      owner: "t1",
+      by: "agent" as const,
+      auto_fix: true,
+      snapshot: {
+        state: state === "merged" ? ("merged" as const) : ("open" as const),
+        draft: false,
+        title: "feat: the chip",
+        head: "feat/chip",
+        base: "main",
+        ...(state === "merged" ? {} : { checks: state }),
+        counted: { passed: 0, failed: 0, running: 0, total: 0 },
+        asked_of_you: false,
+        conflicts: false,
+        auto_merge: false,
+        additions: 1,
+        deletions: 0,
+        updated_at: NOW,
+        synced_at: NOW,
+      },
+    }
+    const html = drawn(
+      rowOf("turn", { mark: "done", calls: "Shipped", pulls: [pull] })
+    )
+    return /<span data-pull="[^"]*" class="([^"]*)">(.*?)<\/span><\/span>/.exec(
+      html
+    )
+  }
+  for (const [state, glyph, colour] of [
+    ["passing", "✓", "text-added"],
+    ["failing", "✗", "text-destructive"],
+    ["running", "•", "text-mark-working"],
+  ] as const) {
+    const [, grey, inside] = chip(state)!
+    expect(grey).toContain("text-muted-foreground/60")
+    expect(inside).toBe(`#1061 <span class="${colour}">${glyph}`)
+  }
+  const [, , merged] = chip("merged")!
+  expect(merged).toBe("#1061 <span>merged")
+})
+
 test("a woke card's time is the darker yellow small text takes; its mark keeps its own", () => {
   const html = drawn(
     rowOf("turn", {
