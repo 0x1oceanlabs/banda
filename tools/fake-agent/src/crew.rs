@@ -25,6 +25,12 @@
 //! - `long`: each agent works 600 ms, not 60.
 //! - `dies`: the fake agent's process ends in its second phase.
 //! - `two`: two Crews at once, the second without `asks`.
+//!
+//! With `FAKE_AGENT_CREW_CUE` naming a file, a Crew holds in its Fix phase,
+//! some of its agents done and some at work, until that file is there:
+//! a test sees it at work as long as it needs.
+//! - `ultracode`: Ultracode turns on first, as the session's options say,
+//!   so a window names it.
 
 use super::{After, Fake, allowed, say, text};
 use agent_client_protocol::schema::v1::{
@@ -243,6 +249,7 @@ impl Crew {
         let mut agents: Vec<Agent> = Vec::new();
         let mut tokens = 0;
         let mut logs = Vec::new();
+        let mut cued = false;
         for (phase, count) in [(1u16, 2u32), (2, fix), (3, 1)] {
             if phase == 2 && self.on("fails") {
                 return self.end("failed", tokens, &logs).await;
@@ -270,13 +277,19 @@ impl Crew {
                 if at_work.is_empty() {
                     break;
                 }
-                for at in at_work.iter().take(8) {
+                // Held on cue, Fix ends one agent first.
+                let holds = phase == 2 && !cued && cueing();
+                for at in at_work.iter().take(if holds { 1 } else { 8 }) {
                     agents[*at].state = "done";
                 }
-                for at in at_work.iter().skip(8).take(8) {
+                for at in at_work.iter().skip(8).take(if holds { 0 } else { 8 }) {
                     agents[*at].state = "start";
                 }
                 self.progress(&agents, tokens)?;
+                if phase == 2 && !cued {
+                    cued = true;
+                    cue().await;
+                }
             }
             if self.on("log") {
                 logs.push(format!("phase {phase} done"));
@@ -362,6 +375,21 @@ impl Crew {
     }
 }
 
+/// Whether a Crew waits for a cue.
+fn cueing() -> bool {
+    std::env::var_os("FAKE_AGENT_CREW_CUE").is_some()
+}
+
+/// Waits for the file `FAKE_AGENT_CREW_CUE` names, if it names one.
+async fn cue() {
+    let Some(path) = std::env::var_os("FAKE_AGENT_CREW_CUE") else {
+        return;
+    };
+    while !std::path::Path::new(&path).exists() {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+}
+
 /// One agent of a Crew, as its tree says it.
 #[derive(Clone)]
 struct Agent {
@@ -433,6 +461,11 @@ pub(super) async fn turn(
             asks,
         }
     };
+    if words.iter().any(|word| word == "ultracode")
+        && let Some(update) = fake.ultracode(session)
+    {
+        say(cx, session, update)?;
+    }
     let first = crew(words.iter().any(|word| word == "asks"));
     if !first.launch().await? {
         say(cx, session, SessionUpdate::AgentMessageChunk(text("I did not start it.")))?;

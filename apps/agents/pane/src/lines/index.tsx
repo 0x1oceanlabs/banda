@@ -4,6 +4,7 @@
  * until it has a row here.
  */
 import { AtWorkLine } from "./at-work"
+import { BackLine } from "./back"
 import { ChangesLine } from "./changes"
 import { EndedLine } from "./ended"
 import { EntryLine } from "./entry"
@@ -22,6 +23,7 @@ const VIEWS: { [K in Line["kind"]]: LineView<K> } = {
   fold: FoldLine,
   working: WorkingLine,
   "at-work": AtWorkLine,
+  back: BackLine,
   plan: ProposedPlanLine,
   changes: ChangesLine,
   ended: EndedLine,
@@ -42,6 +44,7 @@ export function key(line: Line): string {
     case "work":
     case "subagents":
     case "fold":
+    case "back":
       return line.id
     case "working":
       return `working-${line.turn.id}`

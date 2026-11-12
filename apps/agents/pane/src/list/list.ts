@@ -116,7 +116,12 @@ function movesSubagents(fact: Fact): boolean {
     case "crew.ended":
       return true
     case "crew.progressed":
-      return (fact.payload.agents ?? []).length > 0
+      // A Crew's count moved, or the turn Claude went on with names it:
+      // that turn's call says the Crew (decision 33).
+      return (
+        (fact.payload.agents ?? []).length > 0 ||
+        fact.payload.went_on !== undefined
+      )
     default:
       return false
   }
@@ -167,8 +172,9 @@ function applied(state: ThreadList, event: Event): ThreadList {
     case "turn.started": {
       const { turn } = fact.payload
       return change(state, event, (thread) => ({
-        // What failed in the turn before is no longer counted.
-        ...subagentsKept(thread, true),
+        // What failed in the turn before is no longer counted, nor the
+        // Crew it went on from.
+        ...without(subagentsKept(thread, true), "crew_ended"),
         latest: { turn, state: "running", began: event.at },
       }))
     }
@@ -314,7 +320,7 @@ export function subagentsKept(
  * sub-agents: the same Thread when it had none. */
 export function without(
   thread: ListedThread,
-  mark: "seen" | "archived" | "changed_lines" | "subagents"
+  mark: "seen" | "archived" | "changed_lines" | "subagents" | "crew_ended"
 ): ListedThread {
   if (thread[mark] === undefined) return thread
   const unmarked = { ...thread }

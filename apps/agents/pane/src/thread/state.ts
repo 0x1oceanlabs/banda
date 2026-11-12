@@ -593,6 +593,13 @@ function withAgents(agents: CrewAgent[], changed: CrewAgent[]): CrewAgent[] {
   )
 }
 
+/** Whether a sub-agent or a Crew's agent asks, not the Agent itself: the
+ * Thread's Question all the same, about a call of its own (ADR 0103,
+ * decision 28). */
+export function byOther(question: Pick<QuestionBody, "sub" | "crew">): boolean {
+  return question.sub !== undefined || question.crew !== undefined
+}
+
 /** The Question the Agent waits on, if any: the first of its own still
  * open, or else the first a sub-agent asks (ADR 0103, decision 28). */
 export function asked(state: ThreadState): Asked | undefined {
@@ -600,7 +607,7 @@ export function asked(state: ThreadState): Asked | undefined {
     (item): item is Asked =>
       item.body.kind === "question" && item.body.state === "open"
   )
-  return open.find((item) => item.body.sub === undefined) ?? open[0]
+  return open.find((item) => !byOther(item.body)) ?? open[0]
 }
 
 /** The answer a message says to the Question docked, when it says one:
@@ -610,7 +617,7 @@ export function declined(
   state: ThreadState
 ): { item: string; choice: string } | undefined {
   const asking = asked(state)
-  if (!asking || asking.body.sub !== undefined) return undefined
+  if (!asking || byOther(asking.body)) return undefined
   const choice = declineOnce(asking.body)
   return choice === undefined ? undefined : { item: asking.id, choice }
 }

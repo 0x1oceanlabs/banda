@@ -107,3 +107,28 @@ export function resetOf(
   }
   return next === settings ? undefined : next
 }
+
+/** Claude's switch that starts a Crew for every big task. */
+const ULTRACODE = "ultracode"
+/** Codex's top effort level, which hands work to sub-agents. */
+const ULTRA = "ultra"
+
+/**
+ * The effort word the picker's label shows after the model, and whether
+ * it is the top level, drawn in its magenta (ADR 0103, decision 31):
+ * "Ultracode" while Claude's switch of that name is on, whatever the
+ * level; Codex's "Ultra", its last level; else the level chosen. The
+ * switch stays in the mode menu (call 12): this only names it.
+ */
+export function effortShown(
+  settings: Settings,
+  options: HarnessOption[],
+  level: OptionChoice | undefined
+): { name: string; top: boolean } | undefined {
+  const ultracode = options.find(
+    (o) => o.id === ULTRACODE && o.choices.length === 0
+  )
+  if (ultracode && chosen(settings, ultracode) === true)
+    return { name: ultracode.name, top: true }
+  return level && { name: level.name, top: level.value === ULTRA }
+}

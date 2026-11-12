@@ -4,6 +4,7 @@ import type { Archived } from "./Archived";
 import type { Asking } from "./Asking";
 import type { ChangedLines } from "./ChangedLines";
 import type { CrewBrief } from "./CrewBrief";
+import type { CrewEnded } from "./CrewEnded";
 import type { Doing } from "./Doing";
 import type { Later } from "./Later";
 import type { LatestTurn } from "./LatestTurn";
@@ -74,7 +75,13 @@ subagents?: Subagents,
  * Its Crew at work, after its turn too (ADR 0103, decision 10): line
  * 2's "Crew audit-routes · Fix 4/7". None while none works.
  */
-crew?: CrewBrief, id: ThreadId, 
+crew?: CrewBrief, 
+/**
+ * The Crew its latest turn went on from, once it ended (ADR 0103,
+ * decision 33): what its call says, "Crew audit-routes finished · 2
+ * failed". None for a turn that went on from none.
+ */
+crew_ended?: CrewEnded, id: ThreadId, 
 /**
  * The Harness it runs on, by its ID in the Harness list; chosen when
  * it starts, it stays (ADR 0006). Empty for a Thread from before

@@ -232,6 +232,8 @@ struct Setup {
     effort: String,
     fast: bool,
     brief: bool,
+    /// Claude's Ultracode: a Crew for every big task.
+    ultracode: bool,
     /// The folder it works in.
     folder: std::path::PathBuf,
 }
@@ -244,6 +246,7 @@ impl Default for Setup {
             effort: "medium".into(),
             fast: false,
             brief: false,
+            ultracode: false,
             folder: Default::default(),
         }
     }
@@ -329,7 +332,30 @@ impl Fake {
             );
             options.push(SessionConfigOption::boolean("brief", "Brief", setup.brief));
         }
+        // Offered once the `ultracode` word turned it on, so the options
+        // other runs read stay as they were.
+        if setup.ultracode {
+            options.push(
+                SessionConfigOption::boolean("ultracode", "Ultracode", true)
+                    .category(SessionConfigOptionCategory::Other("model_config".into())),
+            );
+        }
         options
+    }
+
+    /// Turns Ultracode on, as Claude Code's `--effort ultracode` does: the
+    /// options to tell the client, if they changed.
+    fn ultracode(&self, session: &SessionId) -> Option<SessionUpdate> {
+        {
+            let mut setups = self.setups.lock().unwrap();
+            let setup = setups.entry(session.clone()).or_default();
+            if setup.ultracode {
+                return None;
+            }
+            setup.ultracode = true;
+        }
+        let update = ConfigOptionUpdate::new(self.options(session));
+        Some(SessionUpdate::ConfigOptionUpdate(update))
     }
 
     /// Sets one option, if the session offers it and the value is one of
@@ -368,6 +394,7 @@ impl Fake {
             "model" => setup.model = choose(models(), &request.value)?,
             "effort" => setup.effort = choose(&EFFORTS, &request.value)?,
             "fast" => setup.fast = on_off(&request.value)?,
+            "ultracode" => setup.ultracode = on_off(&request.value)?,
             _ => setup.brief = on_off(&request.value)?,
         }
         Ok(())

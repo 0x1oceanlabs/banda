@@ -157,9 +157,13 @@ export function Transcript({
   )
   // What the Thread knows that its lines show (ADR 0091, decision 3).
   const known = useMemo(() => knownOf(state), [state])
+  const crews = useMemo(
+    () => new Map(state.crews.map((crew) => [crew.id, crew])),
+    [state.crews]
+  )
   const of = useMemo(
-    () => factsOf(known, writers, rows, subagentFacts),
-    [known, writers, rows, subagentFacts]
+    () => factsOf(known, writers, rows, subagentFacts, crews),
+    [known, writers, rows, subagentFacts, crews]
   )
   const facts: LineFacts = {
     of,

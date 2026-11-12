@@ -76,6 +76,7 @@
   --color-sub-grey: var(--sub-grey);
   --color-sub-faint: var(--sub-faint);
   --color-sub-rule: var(--sub-rule);
+  --color-effort-top: var(--effort-top);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -1035,6 +1036,13 @@ html[data-still] [data-sonner-toast] {
   --sub-faint: color-mix(in oklab, var(--foreground) 38%, transparent);
   /* The rule beside a report opened in place. */
   --sub-rule: color-mix(in oklab, var(--foreground) 12%, transparent);
+  /* The effort's top level, the one colour the effort takes: Claude's
+     Ultracode and Codex's Ultra (ADR 0031, decision 3; ADR 0103, decision
+     31), as the design reference has it (docs/design/kit/kit.css). */
+  --effort-top: #c026d3;
+}
+.dark {
+  --effort-top: #e879f9;
 }
 /* A satellite has no motion of its own: a change within its shape blends
    in 0.45 s, one to another shape leaps in 0.6 s, as the Mark's do. */

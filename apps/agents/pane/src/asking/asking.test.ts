@@ -1,6 +1,7 @@
 import type { Choice, Item } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import {
+  aboutWords,
   aboutOf,
   answersOf,
   choiceAt,
@@ -289,4 +290,37 @@ test("Esc says no from anywhere in the Pane but what took it", () => {
 test("other keys answer nothing from the Pane", () => {
   expect(keyAnswer(press({ key: "1" }))).toBeUndefined()
   expect(keyAnswer(press({ key: "a", on: "composer" }))).toBeUndefined()
+})
+
+test("the Question to start a Crew waits and folds as the Crew, not Claude's tool for it (ADR 0103, decision 30)", () => {
+  const start = {
+    title: "audit-routes",
+    phases: [{ index: 1, title: "Scan" }],
+    script: "export const meta = {}",
+  }
+  const question: QuestionBody = {
+    kind: "question",
+    title: "Workflow",
+    choices: [
+      { id: "yes", name: "Yes", allows: true, always: false },
+      {
+        id: "always",
+        name: "Yes, and don't ask again",
+        allows: true,
+        always: true,
+      },
+      { id: "no", name: "No", allows: false, always: false },
+    ],
+    state: "answered",
+    answer: "yes",
+    start,
+  }
+  expect(aboutWords(question)).toBe("Crew audit-routes")
+  expect(foldedOf(question)).toEqual({
+    kind: "allowed",
+    text: "Allowed: Crew audit-routes",
+  })
+  expect(foldedOf({ ...question, answer: "no" }).text).toBe(
+    "Declined: Crew audit-routes"
+  )
 })

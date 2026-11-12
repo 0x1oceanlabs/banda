@@ -17,6 +17,7 @@ import {
 } from "react"
 import type { Engine, ProjectId } from "@banda/contract"
 import type {
+  CrewId,
   Item,
   ListedThread,
   SubagentId,
@@ -61,6 +62,14 @@ export type ThreadActs = {
    * the Thread's Pane is alone, over it, as a screen (ADR 0103, decision
    * 21, {@link useOpens}). None where it cannot. */
   openSubagent?: (sub: SubagentId) => void
+  /** Opens Crew `crew` beside, in the Crew Pane, on one of its agents if
+   * `agent` names it by its phase and index (ADR 0103, decision 22). None
+   * where it cannot. */
+  openCrew?: (crew: CrewId, agent?: { phase: number; index: number }) => void
+  /** Puts a ready message in the composer, after what is written there,
+   * for the Person to send or change: Ask Claude to go on (ADR 0103,
+   * decision 26). None where nothing is sent. */
+  draft?: (text: string) => void
 }
 
 export type ThreadAround = {
@@ -164,6 +173,8 @@ export function ThreadAroundProvider({
   const canPutOff = acts.putOff !== undefined
   const canSet = acts.accounts !== undefined
   const canOpen = acts.openSubagent !== undefined
+  const canOpenCrew = acts.openCrew !== undefined
+  const canDraft = acts.draft !== undefined
   const stable = useMemo<ThreadActs>(
     () => ({
       openDiff: (turn, path) => latest.current.openDiff(turn, path),
@@ -182,8 +193,12 @@ export function ThreadAroundProvider({
       openSubagent: canOpen
         ? (sub) => latest.current.openSubagent?.(sub)
         : undefined,
+      openCrew: canOpenCrew
+        ? (crew, agent) => latest.current.openCrew?.(crew, agent)
+        : undefined,
+      draft: canDraft ? (text) => latest.current.draft?.(text) : undefined,
     }),
-    [canPutOff, canSet, canOpen]
+    [canPutOff, canSet, canOpen, canOpenCrew, canDraft]
   )
   // Kept by sub-agent IDs, which no other Thread has.
   const [opened] = useState(openedRows)
