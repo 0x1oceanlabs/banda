@@ -21,14 +21,17 @@ pub fn start(script: &str) -> Option<CrewStart> {
     let meta = meta(script)?;
     let title = string(&meta, "name").or_else(|| string(&meta, "title"))?;
     let phases = meta.get("phases").and_then(Value::as_array);
-    let phases = phases.into_iter().flatten().filter_map(|phase| match phase {
-        Value::String(title) => Some((title.trim().to_owned(), None)),
-        Value::Object(_) => Some((
-            string(phase, "title").or_else(|| string(phase, "name"))?,
-            string(phase, "detail").or_else(|| string(phase, "description")),
-        )),
-        _ => None,
-    });
+    let phases = phases
+        .into_iter()
+        .flatten()
+        .filter_map(|phase| match phase {
+            Value::String(title) => Some((title.trim().to_owned(), None)),
+            Value::Object(_) => Some((
+                string(phase, "title").or_else(|| string(phase, "name"))?,
+                string(phase, "detail").or_else(|| string(phase, "description")),
+            )),
+            _ => None,
+        });
     let phases = phases
         .filter(|(title, _)| !title.is_empty())
         .enumerate()
@@ -249,7 +252,10 @@ mod tests {
             .collect();
         assert_eq!(
             phases,
-            [(1, "Read", Some("read a.txt")), (2, "Check", Some("cat b.txt"))]
+            [
+                (1, "Read", Some("read a.txt")),
+                (2, "Check", Some("cat b.txt"))
+            ]
         );
         assert_eq!(start.script, script);
     }
@@ -277,11 +283,23 @@ export const meta = {
     #[test]
     fn code_or_no_name_reads_as_no_meta() {
         assert_eq!(start("phase('Read')"), None, "no meta");
-        assert_eq!(start("export const meta = { description: 'x' }"), None, "no name");
+        assert_eq!(
+            start("export const meta = { description: 'x' }"),
+            None,
+            "no name"
+        );
         assert_eq!(start("export const meta = { name: NAME }"), None, "a name");
-        assert_eq!(start("export const meta = { name: `a-${b}` }"), None, "a template");
+        assert_eq!(
+            start("export const meta = { name: `a-${b}` }"),
+            None,
+            "a template"
+        );
         assert_eq!(start("export const meta = { name: 'a'"), None, "cut short");
-        let deep = format!("export const meta = {{ name: 'a', x: {}1{} }}", "[".repeat(40), "]".repeat(40));
+        let deep = format!(
+            "export const meta = {{ name: 'a', x: {}1{} }}",
+            "[".repeat(40),
+            "]".repeat(40)
+        );
         assert_eq!(start(&deep), None, "too deep");
     }
 }
