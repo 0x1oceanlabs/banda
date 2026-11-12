@@ -15,7 +15,7 @@ import { CrewGlyph } from "../entries/crew"
 import { answersOf, plain } from "./asking"
 import { KeyHint } from "./QuestionForm"
 import type { Answer } from "./Questions"
-import { START_NOTE, startTitle } from "../thread/crew"
+import { START_NOTE } from "../thread/crew"
 
 export function CrewStartBody({
   start,
@@ -29,7 +29,8 @@ export function CrewStartBody({
   onAnswer: Answer
 }) {
   const [script, setScript] = useState(false)
-  const { title, description } = startTitle(start)
+  const { title } = start
+  const description = start.description?.trim()
   const { decline, main, others, kept } = answersOf(choices)
   const number = (choice: Choice) => String(choices.indexOf(choice) + 1)
   const row = (choice: Choice, name: string, key: string, enter = false) => (

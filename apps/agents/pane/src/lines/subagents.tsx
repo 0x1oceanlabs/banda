@@ -19,7 +19,7 @@ import { type Count, groupOf, lanesOf } from "../thread/subagents"
 import type { LineProps } from "./types"
 
 /** The colour a count takes: only what asks, and what failed. */
-const TONES: Record<NonNullable<Count["tone"]>, string> = {
+export const TONES: Record<NonNullable<Count["tone"]>, string> = {
   asks: "text-attention",
   failed: "text-destructive",
 }

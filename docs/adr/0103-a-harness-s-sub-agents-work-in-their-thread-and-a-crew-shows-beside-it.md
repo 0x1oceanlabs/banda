@@ -1212,6 +1212,27 @@ Decided for steps 4–6, and what the recording
   held and kept awake, counted by the Mark, refused archive, and an
   update waits; so do a Thread's sub-agents that outlive their turn,
   which archive and updates had missed.
+- **The window** (decisions 18, 19, 26, 30, 31 and 33):
+  - The strip's count is the current phase's agents done of those called
+    so far, "Fix 4/7", as line 2 counts them; the mock counted those
+    settled. Past phases take a ✓ only when all their agents are done.
+  - "↩ Crew audit-routes finished · 14m · Claude went on by itself" takes
+    the place of the turn's own "went on by itself", once `went_on` names
+    it; before that, it stands where the Crew ended, naming no one. A
+    sub-agent that outlived its turn comes back as "↩ Reviewer finished".
+    A Lost one, Crew or sub-agent, says so on its card or row alone:
+    nothing goes on by itself after it.
+  - The turn Claude goes on with after a Crew calls with the Crew's end,
+    "Crew audit-routes finished · 2 failed", from
+    `ListedThread.crew_ended`; it sounds as that turn's done does.
+  - The Question to start a Crew names the Crew where it waits and once
+    answered ("Allowed: Crew audit-routes"); Claude's Workflow call before
+    it stays a call, as Claude makes it.
+  - Ask Claude to go on puts its message in the composer, after what is
+    written there; the Person sends it.
+  - `--effort-top` is a theme token (`effort-top`), so a theme may set it.
+  - A dot and Open open the Crew Pane (step 5); where none opens, the
+    card offers neither.
 
 ## Roma's calls
 

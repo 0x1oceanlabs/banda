@@ -18,8 +18,9 @@ import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
 import type { EntryProps } from "./types"
 import { useThreadAround } from "../thread/context"
+import { TONES } from "../lines/subagents"
+import type { Count } from "../thread/subagents"
 import {
-  type Count,
   footOf,
   footWords,
   goOnMessage,
@@ -121,12 +122,6 @@ export function CrewEntry({ crew }: EntryProps<"crew">) {
       </div>
     </div>
   )
-}
-
-/** The colour a count takes: only what asks, and what failed. */
-const TONES: Record<NonNullable<Count["tone"]>, string> = {
-  asks: "text-attention",
-  failed: "text-destructive",
 }
 
 function Counts({ counts }: { counts: Count[] }) {

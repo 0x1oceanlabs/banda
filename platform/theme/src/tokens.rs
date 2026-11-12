@@ -139,8 +139,11 @@ pub const TOKENS: &[Token] = list! {
     ];
     // What waits for the Person, such as a Question: Banda's one signal
     // colour; a Thread back from Later by itself; an Agent at work; a
-    // warning; a change's lines.
-    State Colour ["attention", "woke", "working", "warning", "added", "removed"];
+    // warning; a change's lines; the effort's top level, Ultracode and
+    // Ultra (ADR 0103, decision 31).
+    State Colour [
+        "attention", "woke", "working", "warning", "added", "removed", "effort-top",
+    ];
     // The focused tile's border, and every other tile's: `[focus]`'s,
     // else the accent and the border.
     Focus Colour ["focus", "focus-inactive"];
@@ -272,6 +275,10 @@ const FIXED: &[(&str, &str, &str)] = &[
     // A Thread back from Later by itself: its Mark's yellow, the same in
     // both themes and plain, with no outline (ADR 0099, decision 1).
     ("woke", "#f5c542", "#f5c542"),
+    // The effort's top level, the one colour the effort takes: Claude's
+    // Ultracode and Codex's Ultra, as the design reference has it (ADR
+    // 0031, decision 3; ADR 0103, decision 31).
+    ("effort-top", "#c026d3", "#e879f9"),
     // An Agent at work, as its Group's plate shows it (ADR 0065).
     ("working", "oklch(0.6 0.15 255)", "oklch(0.72 0.13 255)"),
     // A Project's sign, when the Person picks a colour: a quiet palette
