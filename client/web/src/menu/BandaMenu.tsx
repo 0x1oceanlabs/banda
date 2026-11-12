@@ -74,7 +74,7 @@ import { useLookSidebar, useThemes } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
-import { GROUP_WORDS, groupOf } from "../sidebar/settings"
+import { GROUP_WORDS } from "../sidebar/settings"
 import { itemActionsOf } from "../sidebar/items"
 import {
   type Act,
@@ -114,6 +114,7 @@ import {
   themeNowOf,
   THEMES_ROW,
 } from "./theme"
+import { notNow } from "../trust/not-now"
 import { Soon, Waits } from "../trust/TrustCard"
 import { ASK, ASK_ABOUT, askedOf, ISOLATED } from "../trust/trust"
 import { useKeyOf } from "@banda/ui/hooks/use-key-of"
@@ -385,7 +386,7 @@ function Menu({
   const hosts = useHosts()
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
-  const group = groupOf(useLookSidebar())
+  const group = useLookSidebar().group
   const uses = useOpened()
   const [now] = useState(Date.now)
   const { at } = opening
@@ -534,7 +535,10 @@ function Menu({
             })
           : engine.command("projects.add", how)
     )
-    if (project) onAdded(project)
+    if (!project) return
+    // Not yet puts its trust off, as Not now on its card in the sidebar.
+    if ("create" in how && how.trusted === false) notNow(project.id)
+    onAdded(project)
   }
   // The system's folder picker: the folder picked is added at once, as
   // T3 Code does; the field takes the keys back when it is cancelled.

@@ -3209,19 +3209,6 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await expect(scratch.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
   await shot(page, "show-this-too-scratch")
 
-  // In the list of Projects too, this machine's stand under its label;
-  // another machine's Threads stand among the cards (ADR 0098, decision
-  // 18), not in the list.
-  writeFileSync(shownIn, 'preset = "places"\n[machines]\nthis-too = true\n')
-  const listed = sidebar.getByRole("group", { name: "Projects", exact: true })
-  await expect(
-    listed.getByRole("group", { name: "mac", exact: true }).getByText("Work")
-  ).toBeVisible()
-  await expect(
-    listed.getByRole("group", { name: "arc", exact: true })
-  ).toHaveCount(0)
-  await shot(page, "show-this-too-places")
-
   // Turned off, this machine's name goes everywhere; its Pane's too.
   writeFileSync(shownIn, 'preset = "projects"\n')
   await expect(macOf).toHaveCount(0)

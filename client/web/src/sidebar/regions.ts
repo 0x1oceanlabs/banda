@@ -75,11 +75,13 @@ export function regionsOf(blocks: readonly Block[]): Region[] {
         if (last?.group) last.blocks.push(block)
         else above.push(block)
         break
+      case "project":
       case "rows": {
         // Keyed by its place, not by its first block: the Person's
         // Threads stay the same region as Your turn empties, and Later as
-        // its first day does, so the cards in it are not drawn anew.
-        const label = PLACES[block.stand]
+        // its first day does, so the cards in it are not drawn anew. A
+        // Project that waits for the Person is among them, in Your turn.
+        const label = PLACES[block.kind === "rows" ? block.stand : "turn"]
         if (last && (last.group || last.label === label))
           last.blocks.push(...above, block)
         else

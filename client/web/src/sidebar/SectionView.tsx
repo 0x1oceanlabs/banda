@@ -1,4 +1,4 @@
-import { useContext, useRef } from "react"
+import { type ReactElement, useContext, useRef } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { CutTips } from "@banda/ui/components/fade-text"
 import { Separator } from "@banda/ui/components/separator"
@@ -19,9 +19,10 @@ import { EDGE } from "./MachineCard"
 import { HerePart } from "./HostPart"
 import { GroupHeader } from "./GroupHeader"
 import { gapAbove, type Item, itemsOf, useListMotion } from "./motion"
+import { ProjectCard } from "./ProjectCard"
+import { ProjectMenu } from "./ProjectMenu"
 import type { Region } from "./regions"
-import type { WithMenu } from "./ProjectMenu"
-import { groupOf, type Settings } from "./settings"
+import type { Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
 import { putBack } from "./undo"
 import { useActs, useSetActs } from "./useActs"
@@ -32,6 +33,13 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** Your turn's head's key (`inbox.ts`). */
 const TURN_HEAD = "turn:head"
+
+/** A card's Project sign in its Project's menu, as the list hands it. */
+const signMenu = (project: ProjectSummary, sign: ReactElement) => (
+  <ProjectMenu project={project} className="flex min-w-0 flex-1">
+    {sign}
+  </ProjectMenu>
+)
 
 /**
  * The regions of the tab in view (ADR 0098, decisions 3–6 and 24), as one
@@ -49,7 +57,9 @@ const TURN_HEAD = "turn:head"
  * decision 10), is their own act, which the list draws at once; for a
  * moment after one by key closed a slot, the acts take no click.
  * Under the pointer, Your turn's head offers to archive every card there
- * that is done (decision 15).
+ * that is done (decision 15). A Project that waits for the Person is a
+ * card of its own first in Your turn, and this machine's Project's header
+ * and sign have its menu (decision 16).
  */
 export function SectionView({
   regions,
@@ -60,8 +70,6 @@ export function SectionView({
   onToggle,
   engine,
   machine,
-  withMenu,
-  only,
   projects,
   holds,
 }: {
@@ -79,9 +87,6 @@ export function SectionView({
   engine: Engine
   /** This machine's No Project, once the engine named it. */
   machine?: ProjectId
-  withMenu: WithMenu
-  /** The Project whose rows alone the list shows, if one. */
-  only: ProjectId | undefined
   projects: readonly ProjectSummary[]
   holds: Holds
 }) {
@@ -94,7 +99,7 @@ export function SectionView({
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
   // Grouped, a header names what each card then leaves out.
-  const view: CardView = { density: settings.card, group: groupOf(settings) }
+  const view: CardView = { density: settings.card, group: settings.group }
   // Grouped by Project, this machine's groups stand under its own label,
   // as another's do, where the Person asked it named too (ADR 0095,
   // decision 4). The label names only this machine's cards: another's,
@@ -278,27 +283,47 @@ export function SectionView({
       }
       case "zero":
       case "empty":
-        return <EmptyPlace place={block} only={only} projects={projects} />
+        return (
+          <EmptyPlace
+            place={block}
+            projects={projects}
+            {...(machine ? { machine } : {})}
+          />
+        )
+      case "project": {
+        const stop = pieceKey(host, item.key)
+        return (
+          <ProjectCard
+            call={block}
+            stop={stop}
+            picked={stop === picked}
+            checking={checking}
+          />
+        )
+      }
       case "group": {
         const { project } = block
-        // Folded, it is a stop of the pick, which → or Enter unfolds.
-        const stop = block.folded ? pieceKey(host, item.key) : undefined
+        // A stop of the pick, which ← and → fold and unfold, and whose
+        // menu Shift+F10 opens.
+        const stop = pieceKey(host, item.key)
         const head = (
           <GroupHeader
             group={block}
             settings={settings}
             {...(machine ? { machine } : {})}
-            {...(stop !== undefined
-              ? { stop, picked: stop === picked, checking }
-              : {})}
+            stop={stop}
+            picked={stop === picked}
+            checking={checking}
             onFold={() => onToggle(block.key)}
           />
         )
         // Another machine's Project has no menu yet: each act would go to
         // this machine's engine.
-        return project && block.host === undefined
-          ? withMenu(project, head)
-          : head
+        return project && block.host === undefined ? (
+          <ProjectMenu project={project}>{head}</ProjectMenu>
+        ) : (
+          head
+        )
       }
     }
   }
@@ -336,7 +361,7 @@ export function SectionView({
     // One tooltip shows any cut text whole, beside the sidebar; a card's
     // Project sign has the Project's menu.
     <CutTips edge={EDGE}>
-      <SignMenu value={withMenu}>
+      <SignMenu value={signMenu}>
         {label ? <HerePart named={label}>{shown}</HerePart> : shown}
       </SignMenu>
     </CutTips>

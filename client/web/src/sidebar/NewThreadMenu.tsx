@@ -181,19 +181,15 @@ const TICK = <CheckIcon aria-hidden className="ml-auto" />
 /** ✎ and its menu. */
 export function NewThreadMenu({
   engine,
-  only,
   projects,
 }: {
   /** This machine's engine. */
   engine: Engine
-  /** The Project whose rows alone the list shows, if one: a click starts
-   * there. */
-  only?: ProjectId
   projects: readonly ProjectSummary[]
 }) {
   const keyFor = useKeyLabel()
   // Read as ✎ is pressed: a move of the focus draws ✎ not.
-  const startHere = useNewThread(only, projects)
+  const startHere = useNewThread(projects)
   const [shown, setShown] = useState(false)
   const button = useRef<HTMLButtonElement>(null)
   // How the menu closed: a press elsewhere leaves the focus where it went.
@@ -281,7 +277,7 @@ export function NewThreadMenu({
             reason.current === "escape-key" ? (button.current ?? true) : false
           }
         >
-          <Picks engine={engine} only={only} projects={projects} />
+          <Picks engine={engine} projects={projects} />
         </DropdownMenuContent>
       </DropdownMenu>
     </>
@@ -292,18 +288,16 @@ export function NewThreadMenu({
  * there only then. */
 function Picks({
   engine,
-  only,
   projects,
 }: {
   engine: Engine
-  only?: ProjectId
   projects: readonly ProjectSummary[]
 }) {
   const open = useOpen()
   const shortcut = useKeyLabel()(NEW_THREAD)
   const all = useMachines() ?? []
   const starts = useHere(startsOf)
-  const start = startOf(clickOf(starts, only, projects), all)
+  const start = startOf(clickOf(starts, projects), all)
   const parts = inParts(all, start)
   // This machine's Projects under "in"; each other's under its label.
   const mine = parts.find((part) => part.host === undefined)

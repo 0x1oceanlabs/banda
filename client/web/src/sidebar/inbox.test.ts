@@ -12,6 +12,8 @@ import {
   type Inbox,
   inboxOf,
   type InboxView,
+  PROJECT_LOOK,
+  projectCallsOf,
   SHELF,
 } from "./inbox"
 
@@ -127,10 +129,13 @@ function line(block: Block): string {
       const next = block.next === undefined ? "" : `, next ${block.next}`
       const someday =
         block.someday === undefined ? "" : `, ${block.someday} someday`
-      return `zero: ${block.working} at work${next}${someday}`
+      const first = block.first ? ", first run" : ""
+      return `zero: ${block.working} at work${next}${someday}${first}`
     }
     case "empty":
       return `empty: ${block.tab}`
+    case "project":
+      return `project ${block.asks}: ${block.project.name}`
   }
 }
 
@@ -437,6 +442,90 @@ test("a tab with nothing says so; the Inbox with nothing is inbox zero", () => {
   expect(blocks("working")).toEqual(["empty: working"])
   expect(blocks("later")).toEqual(["empty: later"])
   expect(blocks("archive")).toEqual(["empty: archive"])
+})
+
+/** A Project to trust, one whose folder is missing, and one archived. */
+const client = { ...project("p4", "Client"), trusted: false }
+const gone = { ...project("p5", "Old"), missing: true }
+const shelved = { ...project("p6", "Shelved"), trusted: false, archived: true }
+
+test("this machine's Projects that wait for the Person: one missing, or one not trusted and not put off (ADR 0098, decision 16)", () => {
+  const asked = (put: string[] = []) =>
+    projectCallsOf([banda, client, gone, loose, shelved], new Set(put)).map(
+      ({ project: { name }, asks }) => `${asks}: ${name}`
+    )
+  expect(asked()).toEqual(["trust: Client", "missing: Old"])
+  // Not now puts off the trust; a missing folder asks still.
+  expect(asked(["p4", "p5"])).toEqual(["missing: Old"])
+  // One missing is missing first, trusted or not.
+  expect(
+    projectCallsOf([{ ...gone, trusted: false }]).map(({ asks }) => asks)
+  ).toEqual(["missing"])
+  expect(PROJECT_LOOK).toEqual({ trust: "asking", missing: "failed" })
+})
+
+test("a Project that waits is a card first in Your turn, which it counts and calls by (ADR 0098, decision 16)", () => {
+  const calls = projectCallsOf([client, gone])
+  const inbox = inboxOf(ROWS, { tab: "inbox" }, NOW, { calls })
+  expect(shape(inbox)).toEqual([
+    "# Your turn · 8",
+    "project trust: Client",
+    "project missing: Old",
+    ...INBOX.slice(1),
+  ])
+  expect(inbox.blocks[1]).toMatchObject({
+    key: "project-card:p4",
+    project: client,
+    asks: "trust",
+  })
+  expect(inbox.tabs.inbox).toEqual({ count: 10, calls: true })
+  // With no Thread of the Person's, it is still their turn: no inbox zero.
+  const alone = inboxOf([], { tab: "inbox" }, NOW, { calls: [calls[0]] })
+  expect(shape(alone)).toEqual(["# Your turn · 1", "project trust: Client"])
+  expect(alone.zero).toBeUndefined()
+  expect(alone.tabs.inbox).toEqual({ count: 1, calls: true })
+  // The other tabs show none.
+  expect(shape(inboxOf(ROWS, { tab: "later" }, NOW, { calls }))).toEqual(LATER)
+})
+
+test("grouped, a Project's card is first in its group, whose header calls with its look", () => {
+  const view: InboxView = { tab: "inbox", group: "project" }
+  const calls = projectCallsOf([{ ...work, missing: true }, client])
+  const blocks = inboxOf(ROWS, view, NOW, { calls }).blocks
+  expect(shape({ blocks })).toEqual([
+    ...BY_PROJECT.slice(0, 8),
+    "[project:p4] 1 wait, 0 work",
+    "project trust: Client",
+    "[project:p2] 2 wait, 1 work",
+    "project missing: Work",
+    ...BY_PROJECT.slice(9),
+  ])
+  expect(blocks.find((block) => block.key === "project:p4")).toMatchObject({
+    mark: "asking",
+  })
+  // Folded, its group keeps the call in its rollup.
+  const folded = inboxOf(
+    ROWS,
+    { ...view, folded: new Set(["project:p4"]) },
+    NOW,
+    { calls }
+  )
+  expect(shape(folded)).toContain("[project:p4] 1 wait, 0 work, folded")
+  expect(shape(folded)).not.toContain("project trust: Client")
+})
+
+test("with no Project and no Thread at all, inbox zero is the first run (ADR 0098, decision 25)", () => {
+  const first = inboxOf([], { tab: "inbox" }, NOW, { none: true })
+  expect(first.zero).toEqual({ working: 0, first: true })
+  expect(shape(first)).toEqual(["zero: 0 at work, first run"])
+  // A Project, or a Thread even archived, and it is plain inbox zero.
+  expect(inboxOf([], { tab: "inbox" }, NOW, {}).zero).toEqual({ working: 0 })
+  const archived = rowsIn({
+    p3: [listed("old", "rest", ago(HOUR), { archived: true })],
+  })
+  expect(inboxOf(archived, { tab: "inbox" }, NOW, { none: true }).zero).toEqual(
+    { working: 0 }
+  )
 })
 
 test("inbox zero says how many work and when the next wakes by its time", () => {

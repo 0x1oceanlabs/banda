@@ -66,16 +66,11 @@ const mac: Machine = {
 
 const machines = [ours, arc, mac]
 
-test("a click starts where Alt+Enter does, unless the list shows one Project's rows alone", () => {
+test("a click starts where Alt+Enter does", () => {
   const listed = [project("Work"), project("lab", { missing: true })]
-  expect(clickOf("Work", undefined, listed)).toEqual({ project: "Work" })
-  // The Project picked in the sidebar wins, as before ✎ had a menu.
-  expect(clickOf("Work", "banda", listed)).toEqual({ project: "banda" })
+  expect(clickOf("Work", listed)).toEqual({ project: "Work" })
   // One whose folder is missing is found first.
-  expect(clickOf("Work", "lab", listed)).toEqual({
-    project: "lab",
-    missing: true,
-  })
+  expect(clickOf("lab", listed)).toEqual({ project: "lab", missing: true })
 })
 
 test("a click's Project is on the machine that lists it, this one first", () => {

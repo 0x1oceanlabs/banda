@@ -23,21 +23,8 @@ export type Settings = Pick<
 export const PRESET_WORDS: Readonly<Record<string, string>> = {
   inbox: "What needs you first",
   projects: "Threads under their Projects",
-  places: "Projects above, Threads by need",
+  places: "As projects: Threads under their Projects",
 }
-
-/** Whether the list of Projects shows above the Threads: as the `places`
- * preset showed it, whose `[projects] list` is no longer read, until the
- * list goes (ADR 0098, decision 16). */
-export const listsProjects = (settings: Pick<Settings, "preset">) =>
-  settings.preset === "places"
-
-/** What the list is grouped by as the window draws it (ADR 0098, decision
- * 7): `group`, but under the list of Projects, where the Threads are one
- * list. */
-export const groupOf = (
-  settings: Pick<Settings, "preset" | "group">
-): GroupBy => (listsProjects(settings) ? "none" : settings.group)
 
 /** Each way to group the list, in the view menu's words. */
 export const GROUP_WORDS: Readonly<Record<GroupBy, string>> = {

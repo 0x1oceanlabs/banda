@@ -31,6 +31,7 @@ import { order, useElsewhere } from "./order"
 import type { Checks } from "./pick"
 import { finds, type Names, queryOf } from "./search"
 import type { Settings } from "./settings"
+import { useNotNow } from "../trust/not-now"
 import type { Undoable } from "./undo"
 import { type Holding, useHold, useOwnKeys } from "./useHold"
 
@@ -79,8 +80,9 @@ export type Holds = {
 /**
  * The sidebar list as it is drawn: what every module lists, in the one
  * order the counts and Alt+U take too, as the Person has it in view: the
- * tab, one Project's rows alone (`only`), a cut list whole (`more`), the
- * groups folded, and when inbox zero last told of Someday. While the list
+ * tab, a cut list whole (`more`), the groups folded, and when inbox zero
+ * last told of Someday; and this machine's Projects that wait for the
+ * Person, but those whose trust they put off on this device. While the list
  * holds (`useHold`), what is drawn holds still and what moves waits; left
  * alone, the changes of a quarter of a second land together; the
  * Person's own acts, those on the Thread in view (`isCurrent`) by its
@@ -96,7 +98,6 @@ export function useOrdered(
   settings: Settings,
   {
     tab,
-    only,
     more,
     folded,
     someday,
@@ -104,7 +105,6 @@ export function useOrdered(
     search,
   }: {
     tab: Tab
-    only?: ProjectId
     more: boolean
     folded: ReadonlySet<string>
     someday?: number
@@ -128,12 +128,13 @@ export function useOrdered(
     [search]
   )
   const names = useNames()
+  const putOff = useNotNow()
   const fresh = useMemo(
     () =>
       order(lists, projects, now, {
         settings,
-        only,
         elsewhere,
+        putOff,
         tab,
         more,
         folded,
@@ -150,8 +151,8 @@ export function useOrdered(
       projects,
       now,
       settings,
-      only,
       elsewhere,
+      putOff,
       tab,
       more,
       folded,
@@ -167,25 +168,26 @@ export function useOrdered(
   // What is drawn, as its blocks, and what the Person did while it held.
   const [drawn, setDrawn] = useState<readonly Block[]>(fresh.blocks)
   const [mine, setMine] = useState<Mine>(NO_ACTS)
-  // Another view, by the Person's hand, draws its order straight away.
+  // Another view, by the Person's hand, draws its order straight away;
+  // so does a Project's trust they put off, which only their hand does.
   const words = query?.text
   const [scene, setScene] = useState({
     tab,
-    only,
     more,
     folded,
     settings,
     words,
+    putOff,
   })
   if (
     scene.tab !== tab ||
-    scene.only !== only ||
     scene.more !== more ||
     scene.folded !== folded ||
     scene.settings !== settings ||
-    scene.words !== words
+    scene.words !== words ||
+    scene.putOff !== putOff
   ) {
-    setScene({ tab, only, more, folded, settings, words })
+    setScene({ tab, more, folded, settings, words, putOff })
     setDrawn(fresh.blocks)
     setMine(NO_ACTS)
   }

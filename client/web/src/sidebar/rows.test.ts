@@ -74,14 +74,8 @@ const arrange = (
   all: readonly ProjectSummary[],
   settings: Settings,
   now: number,
-  only?: string,
   elsewhere: readonly Elsewhere[] = []
-) =>
-  order(held, all, now, {
-    settings,
-    elsewhere,
-    ...(only === undefined ? {} : { only }),
-  })
+) => order(held, all, now, { settings, elsewhere })
 
 /** Banda's presets, as platform/look/sidebars/*.toml group the list. */
 const PRESETS = {
@@ -103,13 +97,11 @@ const resolve = (preset: Preset, keys: Partial<Settings> = {}): Settings => ({
 const of = (
   preset: Preset,
   keys?: Partial<Settings>,
-  only?: string,
   archived: readonly string[] = []
-) =>
-  arrange(archive(lists, archived), projects, resolve(preset, keys), NOW, only)
+) => arrange(archive(lists, archived), projects, resolve(preset, keys), NOW)
 
 test("every Project's rows, each where it stands, the archived among them", () => {
-  expect(ids(of("inbox", {}, undefined, ["logo"]))).toEqual([
+  expect(ids(of("inbox", {}, ["logo"]))).toEqual([
     ["form", "turn"],
     ["headers", "working"],
     ["logo", "archived"],
@@ -118,23 +110,21 @@ test("every Project's rows, each where it stands, the archived among them", () =
     ["letters", "turn"],
   ])
   // A Thread at work is never archived.
-  expect(ids(of("inbox", {}, undefined, ["headers"]))).toContainEqual([
+  expect(ids(of("inbox", {}, ["headers"]))).toContainEqual([
     "headers",
     "working",
   ])
 })
 
-test("the list is grouped as `group` says, the preset's or the Person's, and one list under the list of Projects (ADR 0098, decision 7)", () => {
+test("the list is grouped as `group` says, the preset's or the Person's; places groups by Project, as the list of Projects went (ADR 0098, decisions 7 and 16)", () => {
   expect(groupedBy(of("inbox"))).toBe("none")
-  expect(groupedBy(of("places"))).toBe("none")
+  expect(groupedBy(of("places"))).toBe("project")
   expect(groupedBy(of("projects"))).toBe("project")
   // The Person's key wins over the preset's.
   expect(groupedBy(of("projects", { group: "none" }))).toBe("none")
   expect(groupedBy(of("inbox", { group: "project" }))).toBe("project")
   expect(groupedBy(of("projects", { group: "machine" }))).toBe("machine")
-  // Under the list of Projects, the Threads stay one list.
-  expect(groupedBy(of("places", { group: "machine" }))).toBe("none")
-  expect(of("inbox").projects).toBeUndefined()
+  expect(groupedBy(of("places", { group: "machine" }))).toBe("machine")
 })
 
 test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+U keep theirs (ADR 0098, decision 3)", () => {
@@ -146,7 +136,7 @@ test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+
           ]
         : []
     )
-  const inbox = of("inbox", {}, undefined, ["logo"])
+  const inbox = of("inbox", {}, ["logo"])
   expect(shown(inbox)).toEqual([
     "turn: form migration letters",
     "working: release headers",
@@ -154,42 +144,18 @@ test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+
   const newest = of(
     "inbox",
     { inbox: { order: "newest", open: true, working: false } },
-    undefined,
     ["logo"]
   )
   expect(shown(newest)).toEqual(["turn: letters migration form"])
   expect(newest.keys).toEqual(inbox.keys)
 })
 
-test("places: the Projects listed above, and a click on one shows its rows alone", () => {
-  const places = of("places", {}, undefined, ["logo"])
-  expect(
-    places.projects?.map((s) => [s.project.name, s.mark, s.waiting, s.count])
-  ).toEqual([
-    ["API", "failed", 2, 3],
-    ["Landing", "asking", 1, 3],
-    ["Quiet", "rest", 0, 0],
-  ])
-  const landingOnly = of("places", {}, "s1", ["logo"])
-  expect(landingOnly.rows.map((row) => row.listed.id)).toEqual([
-    "form",
-    "headers",
-    "logo",
-  ])
-  // The list of Projects still lists them all.
-  expect(landingOnly.projects).toEqual(places.projects)
-})
-
-test("scratch Threads are rows as others are, and stay out of the list of Projects", () => {
+test("scratch Threads are rows as others are", () => {
   const scratch = { ...project("scratch", "", "/scratch"), scratch: true }
   const allProjects = [...projects, scratch]
   const allLists = { ...lists, scratch: [listed("loose", "rest", 7)] }
-  const settings = resolve("places")
-  const result = arrange(allLists, allProjects, settings, NOW)
-  expect(result.projects?.some((line) => line.project.scratch)).toBe(false)
+  const result = arrange(allLists, allProjects, resolve("places"), NOW)
   expect(ids(result)).toContainEqual(["loose", "open"])
-  const filtered = arrange(allLists, allProjects, settings, NOW, landing.id)
-  expect(filtered.rows.every((r) => r.project.id === landing.id)).toBe(true)
 })
 
 test("a Thread that woke stands with what calls, as of when it woke", () => {
@@ -215,19 +181,17 @@ const withArc = {
   r2: [listed("idea", "asking", 9)],
 }
 const elsewhere = (preset: Preset) =>
-  arrange(withArc, projects, resolve(preset), NOW, undefined, [arc])
+  arrange(withArc, projects, resolve(preset), NOW, [arc])
 
 test("with no other host, every preset arranges as it did, and no row names one", () => {
   for (const preset of Object.keys(PRESETS) as Preset[]) {
     const none = arrange(lists, projects, resolve(preset), NOW)
-    expect(
-      arrange(lists, projects, resolve(preset), NOW, undefined, [])
-    ).toEqual(none)
+    expect(arrange(lists, projects, resolve(preset), NOW, [])).toEqual(none)
     expect(JSON.stringify(none)).not.toContain('"host"')
   }
 })
 
-test("another host's rows join this machine's, each with its name, and its Projects follow in the list of Projects", () => {
+test("another host's rows join this machine's, each with its name", () => {
   const inbox = elsewhere("inbox")
   const hostOf = (id: string) =>
     inbox.rows.find((row) => row.listed.id === id)?.host
@@ -237,13 +201,4 @@ test("another host's rows join this machine's, each with its name, and its Proje
     undefined,
   ])
   expect(inbox.rows.at(-1)?.listed.id).toBe("idea")
-  const places = elsewhere("places")
-  expect(
-    places.projects?.map((line) => [line.project.name, line.host])
-  ).toEqual([
-    ["API", undefined],
-    ["Landing", undefined],
-    ["Quiet", undefined],
-    ["banda", "arc"],
-  ])
 })

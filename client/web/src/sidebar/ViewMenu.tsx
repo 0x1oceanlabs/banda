@@ -13,8 +13,8 @@ import { cn } from "@banda/ui/lib/utils"
 import { FileCogIcon, ListFilterIcon } from "lucide-react"
 import { device } from "../boot"
 import { useLookSidebar } from "../look"
-import { GROUP_WORDS, groupOf } from "./settings"
-import { writeGroup, writeSidebar } from "./write-setting"
+import { GROUP_WORDS } from "./settings"
+import { writeSidebar } from "./write-setting"
 
 /** A choice of the view, a key of `sidebar.toml`, its options in words. */
 type Choice = {
@@ -32,7 +32,7 @@ export const CHOICES: readonly Choice[] = [
     label: "Group by",
     key: "group",
     options: Object.entries(GROUP_WORDS),
-    value: groupOf,
+    value: ({ group }) => group,
   },
   {
     label: "Card",
@@ -117,10 +117,8 @@ export function ViewMenu() {
 /** The view menu's rows for `sidebar` as the look has it. */
 export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
   const write = device.settings.set
-  const pick = (key: string, value: JsonValue) => {
-    if (key === "group") writeGroup(write, value as Sidebar["group"])
-    else writeSidebar(write, key, value)
-  }
+  const pick = (key: string, value: JsonValue) =>
+    writeSidebar(write, key, value)
   return (
     <>
       <div className="px-1 pb-1 text-meta text-muted-foreground">View</div>

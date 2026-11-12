@@ -234,7 +234,8 @@ function emptied(
   const kept = held.filter(
     (block) => block.kind !== "rows" || block.rows.length > 0
   )
-  const cards = (block: Block | undefined) => block?.kind === "rows"
+  const cards = (block: Block | undefined) =>
+    block?.kind === "rows" || block?.kind === "project"
   // A head stands over its cards, "+ N more" under them, and the hairline
   // between two parts.
   const blocks = kept.filter((block, i) => {

@@ -81,8 +81,9 @@ async function openedHere() {
   window = await withArc(arc)
   const { page } = window
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  // This machine's engine runs once the window's list is drawn.
-  await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
+  // This machine's engine runs once the window's list is drawn: no Project
+  // of its own yet, the first run (ADR 0098, S11).
+  await expect(sidebar.getByText("Add a project to start")).toBeVisible()
   const project = JSON.parse(window.banda("project", "add", here)).ok
     .id as string
   window.banda(

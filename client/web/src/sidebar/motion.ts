@@ -66,6 +66,7 @@ export const HEIGHTS: Readonly<Record<string, number>> = {
   "card:1": 28,
   "card:2": 50,
   "card:3": 68,
+  project: 80,
   head: 30,
   group: 28,
   divider: 13,

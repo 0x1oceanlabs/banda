@@ -25,7 +25,8 @@ import { fileMint } from "@banda/ui/hooks/use-file-url"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { seenNamed } from "@banda/ui/hooks/use-status"
-import { updateProject } from "@banda/ui/lib/projects"
+import { trustProject, updateProject } from "@banda/ui/lib/projects"
+import { problem } from "@banda/ui/lib/words"
 import {
   type Action,
   type Args,
@@ -67,6 +68,9 @@ import { makeProject } from "../titles/MakeProject"
 import { pickLater } from "../sidebar/LaterPicker"
 import { logged } from "../sidebar/write-setting"
 import { askTab, isTab } from "../sidebar/showing"
+import { askRemoval } from "../settings/RemoveProject"
+import { notNow } from "../trust/not-now"
+import { askTrust } from "../trust/TrustCard"
 import {
   type Change,
   closableAt,
@@ -1614,6 +1618,53 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (shell, args) => {
       if (typeof args?.project === "string")
         shell.settings(`projects/${args.project}`)
+    },
+  },
+  {
+    // The Person's Trust (#947), as the sidebar's Project card runs it:
+    // trusting asks first, on the card by that card (ADR 0083, decision
+    // 5), or where it is not drawn, in the Project's settings; taking it
+    // back is at once, and puts the card off on this device, with a toast
+    // where the engine refuses. The engine's own `projects.trust` only
+    // the Person's gesture sends.
+    id: "projects.trust",
+    args: takes(
+      {
+        project: "the Project",
+        trusted: { flag: "true asks whether to trust it, false stops" },
+      },
+      ["project", "trusted"]
+    ),
+    section: "Banda",
+    title: "Ask whether to trust a Project, or stop trusting it",
+    unlisted: true,
+    run: (shell, args) => {
+      const { project, trusted } = args ?? {}
+      if (typeof project !== "string" || typeof trusted !== "boolean") return
+      const id = project as ProjectId
+      if (trusted) {
+        if (!askTrust(id)) shell.settings(`projects/${id}`)
+        return
+      }
+      notNow(id)
+      trustProject(shell.engine, id, false).catch((error: unknown) =>
+        toast.error(problem(error))
+      )
+    },
+  },
+  {
+    // The Person's Remove from Banda: it asks first, as the Project's
+    // settings do, then sends the engine's own `projects.remove`.
+    id: "projects.remove",
+    args: takes({ project: "the Project" }, ["project"]),
+    section: "Banda",
+    title: "Ask whether to remove a Project from Banda",
+    unlisted: true,
+    run: (shell, args) => {
+      if (typeof args?.project !== "string") return
+      const project = shell.projectOf(args.project as ProjectId)
+      if (project && !askRemoval(project))
+        shell.settings(`projects/${project.id}`)
     },
   },
   {

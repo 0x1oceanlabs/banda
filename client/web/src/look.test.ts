@@ -316,7 +316,6 @@ const LISTED: Listed[] = [
       "client/ui/src/styles/globals.css: z-index: 1",
       "client/web/src/bar/Bar.tsx: z-10",
       "client/web/src/sidebar/CardView.tsx: -z-10",
-      "client/web/src/sidebar/GroupHeader.tsx: -z-10",
       "client/web/src/tiling/Overview.tsx: z-1",
       "client/web/src/tiling/Overview.tsx: z-1",
       "client/web/src/tiling/Overview.tsx: z-1",

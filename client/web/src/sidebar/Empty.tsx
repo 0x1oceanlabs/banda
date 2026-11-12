@@ -15,10 +15,10 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import type { MarkState } from "@banda/ui/lib/mark-state"
 import { cn } from "@banda/ui/lib/utils"
 import { wakes } from "@banda/ui/lib/words"
-import { SquarePenIcon } from "lucide-react"
+import { FolderPlusIcon, SquarePenIcon } from "lucide-react"
 import type { Block, EmptyAt, Zero } from "./inbox"
 import { actionDoing, archiving } from "./items"
-import { useNewThread } from "./open"
+import { newThread, useNewThread, useOpen } from "./open"
 import { ShowTab } from "./Tabs"
 import { ToldSomeday } from "./useSidebarView"
 
@@ -86,27 +86,71 @@ export type EmptyBlock = Extract<Block, { kind: "zero" | "empty" }>
 /**
  * An empty place as the list draws it (ADR 0098, decision 25): every one
  * says what goes there, and `Empty.test.tsx` walks each tab and each part
- * of the Inbox, grouped or not, for one that does not.
+ * of the Inbox, grouped or not, for one that does not. Inbox zero with no
+ * Project and no Thread yet is the first run.
  */
 export function EmptyPlace({
   place,
-  only,
   projects,
+  machine,
 }: {
   place: EmptyBlock
-  /** The Project whose rows alone the list shows, if one. */
-  only: ProjectId | undefined
   projects: readonly ProjectSummary[]
+  /** This machine's No Project, once the engine named it. */
+  machine?: ProjectId
 }) {
-  return place.kind === "zero" ? (
-    <InboxZero zero={place} />
+  if (place.kind === "empty")
+    return <EmptyTab tab={place.tab} words={place.words} projects={projects} />
+  return place.first ? (
+    <FirstRun {...(machine ? { machine } : {})} />
   ) : (
-    <EmptyTab
-      tab={place.tab}
-      words={place.words}
-      only={only}
-      projects={projects}
-    />
+    <InboxZero zero={place} />
+  )
+}
+
+/**
+ * The first run (ADR 0098, decision 25; spec §2.6): no Project and no
+ * Thread yet. Add Project… opens the Banda menu at Add Project; the link
+ * under it starts a Thread in this machine's No Project, once the engine
+ * named it.
+ */
+export function FirstRun({ machine }: { machine?: ProjectId }) {
+  const open = useOpen()
+  return (
+    <Place
+      mark={
+        <BandaMark
+          variant="logo"
+          state="rest"
+          playful={0}
+          className="size-10 text-muted-foreground"
+        />
+      }
+      big="Add a project to start"
+      small="A folder your Agents work in."
+    >
+      <Button
+        variant="outline"
+        size="sm"
+        className="mt-1.5"
+        onClick={() => open("project.add", {})}
+      >
+        <FolderPlusIcon />
+        Add Project…
+      </Button>
+      {machine && (
+        <p className="text-meta text-muted-foreground">
+          or{" "}
+          <button
+            type="button"
+            className="rounded-control underline underline-offset-2 outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+            onClick={() => newThread(open, { project: machine })}
+          >
+            start a Thread with no project
+          </button>
+        </p>
+      )}
+    </Place>
   )
 }
 
@@ -184,17 +228,14 @@ function useSearchedOn(): string[] {
 export function EmptyTab({
   tab,
   words = "",
-  only,
   projects,
 }: {
   tab: EmptyAt
   words?: string | undefined
-  /** The Project whose rows alone the list shows, if one. */
-  only: ProjectId | undefined
   projects: readonly ProjectSummary[]
 }) {
   const keyFor = useKeyLabel()
-  const startThread = useNewThread(only, projects)
+  const startThread = useNewThread(projects)
   const on = useSearchedOn()
   // The key of whatever App puts a Thread off, and the list's Archive's.
   const action =

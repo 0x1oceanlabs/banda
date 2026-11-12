@@ -520,13 +520,11 @@ test("only the Window gives run to what it draws", () => {
  * declared, so a `Dispatch<…>` is code and a row's props brought from
  * Row's are read. The rest it does by the actions' ids, as their keys would
  * (`useRun`): opening a Pane, a New Thread, the menu, the settings and a
- * Project's verbs. What stays is the Window's area (`onDismiss`, and the
- * sidebar's width and hiding by its `Edge`), which Pane has the focus
- * (`isCurrent`, #827), the list's own folding and filter, a Project's menu
- * around its row (`withMenu`), the trust card the Sidebar anchors by a row
- * (ADR 0083, decision 5), until trust is an action too (#947), and what is
- * picked in the Later's picker, which the picker runs as its App's action
- * by its id. Each list only falls, and no prop, whatever its type, is a
+ * Project's verbs, its trust among them (`projects.trust`, #947). What
+ * stays is the Window's area (`onDismiss`, and the sidebar's width and
+ * hiding by its `Edge`), which Pane has the focus (`isCurrent`, #827), the
+ * list's own folding, and what is picked in the Later's picker, which the
+ * picker runs as its App's action by its id. Each list only falls, and no prop, whatever its type, is a
  * Project's or a Thread's verb.
  */
 const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
@@ -537,17 +535,10 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
     Sidebar: ["onDismiss", "isCurrent"],
   },
   "web/src/sidebar/SectionView.tsx": {
-    SectionView: ["isCurrent", "onToggle", "withMenu"],
+    SectionView: ["isCurrent", "onToggle"],
   },
   "web/src/sidebar/GroupHeader.tsx": {
     GroupHeader: ["onFold"],
-  },
-  "web/src/sidebar/ProjectsList.tsx": {
-    ProjectsList: ["onPick", "withMenu"],
-  },
-  "web/src/sidebar/ProjectMenu.tsx": {
-    ProjectMenu: ["onTrust", "onStopTrusting"],
-    TrustItem: ["onTrust", "onStopTrusting"],
   },
   "web/src/sidebar/HostPart.tsx": {
     HostPart: ["onFold"],
@@ -737,12 +728,12 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
 
 /**
  * The ceiling on the sidebar's frame, in lines (ADR 0098, plan step 4):
- * its header, foot, sections, rows, list of Projects, Project menu and
+ * its header, foot, sections, rows, Project cards, Project menu and
  * hosts' labels are parts of their own, and what the sidebar gains goes
  * into a part, not the frame. It only falls, as the Window's does: a PR
  * that cuts the file more than `SLACK` lines below it lowers it.
  */
-const SIDEBAR_LINES = 227
+const SIDEBAR_LINES = 174
 
 test("the sidebar's frame keeps under its ceiling, and the ceiling follows it down", () => {
   const text = readFileSync(join(app, "web/src/sidebar/Sidebar.tsx"), "utf8")
@@ -1184,7 +1175,6 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
   const drawing = [
     "Sidebar.tsx",
     "SectionView.tsx",
-    "ProjectsList.tsx",
     "HostPart.tsx",
     "ThreadRow.tsx",
   ].map((file) => `web/src/sidebar/${file}`)
@@ -1337,7 +1327,7 @@ test("@banda/ui holds no global of a Thread's details card", () => {
  * leaves it.
  */
 const APP_METHODS = [
-  "web/src/settings/ProjectsSettings.tsx: agents.threads",
+  "web/src/settings/RemoveProject.tsx: agents.threads",
   // The read a window's file act checks its file with, on the machine of
   // the file's Project, in place of this device's disk (ADR 0106, step 3a);
   // it moves into the Files App (#1441).

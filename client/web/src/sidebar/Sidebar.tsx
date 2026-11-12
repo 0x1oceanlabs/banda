@@ -1,25 +1,20 @@
-import { type ReactNode, useState } from "react"
+import type { ReactNode } from "react"
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
-import { toast } from "@banda/ui/components/sonner"
-import { trustProject } from "@banda/ui/lib/projects"
 import { type Shown, useHosts } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
-import { problem } from "@banda/ui/lib/words"
 import type { PaneState } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
 import { Dismiss } from "./open"
-import { TrustCard, type Trusting } from "../trust/TrustCard"
+import { AskedTrust } from "../trust/TrustCard"
 import { Foot } from "./Foot"
 import { Header } from "./Header"
 import { HostPart } from "./HostPart"
 import { regionsOf } from "./regions"
 import { DeleteDialog } from "./CardMenu"
-import { ProjectMenu, type WithMenu } from "./ProjectMenu"
-import { ProjectsList } from "./ProjectsList"
+import { ProjectRows } from "./ProjectMenu"
 import { SectionView } from "./SectionView"
 import { PickList, useSidebarKeys } from "./PickList"
-import { groupOf } from "./settings"
 import { ShowTab, Tabs } from "./Tabs"
 import { HoldingContext } from "./useHold"
 import { useOrdered } from "./useOrdered"
@@ -83,27 +78,6 @@ export function Sidebar({
     isCurrent,
     onDismiss
   )
-  // The Project whose trust a card by its row asks about (ADR 0083,
-  // decision 5); taking it back needs no card, and says when it failed.
-  const [trusting, setTrusting] = useState<Trusting>()
-  const onTrust = (project: ProjectId, anchor: Element) =>
-    setTrusting({ project, anchor })
-  const onStopTrusting = (project: ProjectId) => {
-    trustProject(engine, project, false).catch((error: unknown) =>
-      toast.error(problem(error))
-    )
-  }
-  // A Project's row, wherever it shows, has its right-click menu.
-  const withMenu: WithMenu = (project, row, className) => (
-    <ProjectMenu
-      project={project}
-      className={className}
-      onTrust={onTrust}
-      onStopTrusting={onStopTrusting}
-    >
-      {row}
-    </ProjectMenu>
-  )
   const regions = regionsOf(ordered.blocks)
   // The regions of `host`, another machine, or this one's: grouped,
   // another machine's groups follow under its label.
@@ -120,8 +94,6 @@ export function Sidebar({
           onToggle={view.toggle}
           engine={engine}
           machine={machine}
-          withMenu={withMenu}
-          only={view.only}
           projects={projects}
           holds={holds}
         />
@@ -159,51 +131,40 @@ export function Sidebar({
               "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
           )}
         >
-          <Header {...{ engine, projects, search }} only={view.only} />
+          <Header {...{ engine, projects, search }} />
           <Tabs tabs={ordered.tabs} tab={view.tab} />
-          {/* What is in the list holds it, and so does the trust card. */}
+          {/* What is in the list holds it, and so does the trust card; a
+          Project's menu archives its Threads by their rows. */}
           <HoldingContext value={ordering.holder}>
-            {/* Where more Threads are below, the list fades out at its foot
+            <ProjectRows value={ordered.rows}>
+              {/* Where more Threads are below, the list fades out at its foot
             instead of a line. */}
-            <ScrollArea
-              ref={scrollsIn}
-              {...list}
-              className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
-            >
-              <div className="flex flex-col gap-1 px-1.5 pb-2">
-                {ordered.projects && (
-                  <ProjectsList
-                    lines={ordered.projects.filter((line) => !line.host)}
-                    settings={settings}
-                    only={view.only}
-                    onPick={view.pick}
-                    withMenu={withMenu}
-                  />
-                )}
-                <PickList
-                  tab={view.tab}
-                  picking={keys.picking}
-                  deleting={keys.deleting}
-                >
-                  {/* This machine's list, where inbox zero tells the view it
+              <ScrollArea
+                ref={scrollsIn}
+                {...list}
+                className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
+              >
+                <div className="flex flex-col gap-1 px-1.5 pb-2">
+                  <PickList
+                    tab={view.tab}
+                    picking={keys.picking}
+                    deleting={keys.deleting}
+                  >
+                    {/* This machine's list, where inbox zero tells the view it
                   told of Someday. */}
-                  <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
-                  {/* Grouped by Project, each host's groups follow under its
+                    <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
+                    {/* Grouped by Project, each host's groups follow under its
                   label; grouped otherwise, its cards are among this
                   machine's, and the foot says how it stands. */}
-                  {groupOf(settings) === "project" &&
-                    hosts.map((host) => part(host, drawn(host.name)))}
-                </PickList>
-              </div>
-            </ScrollArea>
-            <Foot bulk={keys.bulk} />
-            <TrustCard
-              engine={engine}
-              projects={projects}
-              target={trusting}
-              onClose={() => setTrusting(undefined)}
-            />
-            <DeleteDialog deleting={keys.deleting} />
+                    {settings.group === "project" &&
+                      hosts.map((host) => part(host, drawn(host.name)))}
+                  </PickList>
+                </div>
+              </ScrollArea>
+              <Foot bulk={keys.bulk} />
+              <AskedTrust engine={engine} projects={projects} />
+              <DeleteDialog deleting={keys.deleting} />
+            </ProjectRows>
           </HoldingContext>
         </aside>
       </ShowTab>

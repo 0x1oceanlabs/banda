@@ -6,17 +6,16 @@ import { expect, test } from "vitest"
 import { useNewThread } from "./open"
 
 const IN_FRONT = "in-front" as ProjectId
-const PICKED = "picked" as ProjectId
 
 const project = (id: ProjectId, missing = false) =>
   ({ id, name: id, missing }) as ProjectSummary
 
 /** What pressing the sidebar's New Thread runs. */
-function pressed(only: ProjectId | undefined, projects: ProjectSummary[]) {
+function pressed(projects: ProjectSummary[]) {
   const ran: unknown[] = []
   let press = () => {}
   function Button() {
-    press = useNewThread(only, projects)
+    press = useNewThread(projects)
     return null
   }
   const here = new Store({ starts: IN_FRONT } as Here)
@@ -32,19 +31,11 @@ function pressed(only: ProjectId | undefined, projects: ProjectSummary[]) {
 }
 
 test("New Thread starts in the Project in front, as Alt+Enter does", () => {
-  expect(pressed(undefined, [])).toEqual([
-    ["thread.new", { project: IN_FRONT }],
-  ])
-})
-
-test("a Project picked in the sidebar still wins", () => {
-  expect(pressed(PICKED, [project(PICKED)])).toEqual([
-    ["thread.new", { project: PICKED }],
-  ])
+  expect(pressed([])).toEqual([["thread.new", { project: IN_FRONT }]])
 })
 
 test("one whose folder is missing still asks to be located", () => {
-  expect(pressed(PICKED, [project(PICKED, true)])).toEqual([
-    ["projects.locate", { project: PICKED }],
+  expect(pressed([project(IN_FRONT, true)])).toEqual([
+    ["projects.locate", { project: IN_FRONT }],
   ])
 })

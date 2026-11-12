@@ -4,6 +4,7 @@ import { Emblem, emblemOf, type EmblemOf } from "@banda/ui/components/emblem"
 import { FadeText } from "@banda/ui/components/fade-text"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
+import type { ProjectSummary } from "@banda/contract"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
@@ -27,6 +28,7 @@ import {
   createContext,
   type CSSProperties,
   Fragment,
+  type ReactElement,
   type ReactNode,
   useContext,
   useState,
@@ -49,7 +51,6 @@ import { dueOf, useClock, useWakeAt } from "./clock"
 import { keyOf } from "./hold"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
-import type { WithMenu } from "./ProjectMenu"
 import { PickContext, pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
@@ -66,8 +67,17 @@ export type CardAct = {
 }
 
 /** The Project's menu its sign on a card's line 3 has (ADR 0098, decision
- * 14), this machine's alone; none outside the sidebar's list. */
-export const SignMenu = createContext<WithMenu | undefined>(undefined)
+ * 14), this machine's alone; none outside the sidebar's list, which hands
+ * it, so the counts' list draws a card with no menu's code. */
+export const SignMenu = createContext<
+  ((project: ProjectSummary, sign: ReactElement) => ReactElement) | undefined
+>(undefined)
+
+/** The hover's fill, a layer under a card or a group's header that fades
+ * (globals.css): at once in, over 100 ms out, by its opacity alone (ADR
+ * 0088, decision 2). */
+export const HOVER_FILL =
+  "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit)"
 
 /** Each act's icon and name (ADR 0098, decision 10), on the card and in
  * its menu. */
@@ -152,10 +162,8 @@ export function Card({
         // --dur-slow, and comes back alike (decision 18; spec §2.1).
         "transition-opacity duration-(--dur-slow) ease-(--ease)",
         card.away && "opacity-55",
-        // The hover's fill is a layer under the card that fades
-        // (globals.css): at once in, over 100 ms out, by its opacity alone
-        // (ADR 0088, decision 2); it stays while the pointer is on an act.
-        "before:pointer-events-none before:absolute before:inset-0 before:-z-10 before:rounded-[inherit] before:bg-foreground/5 before:opacity-0 before:transition-opacity before:duration-100 before:ease-(--ease-exit)",
+        // It stays while the pointer is on an act.
+        HOVER_FILL,
         one ? "py-1" : "py-1.5",
         // The open Thread's card: a fill, with no shadow and no border.
         current && "bg-foreground/8 before:hidden"
@@ -405,7 +413,7 @@ function Piece({
   checked?: boolean
   harnesses: readonly EmblemOf[]
 }) {
-  const signMenu = useContext(SignMenu)
+  const withMenu = useContext(SignMenu)
   switch (slot.kind) {
     case "mark":
       // Its look's colour, or its weight for what calls no one (ADR 0099,
@@ -486,9 +494,10 @@ function Piece({
           <FadeText tip={name}>{name}</FadeText>
         </span>
       )
-      // This machine's has the Project's menu (ADR 0098, decision 14).
-      return signMenu && row.host === undefined
-        ? signMenu(slot.project, sign, "flex min-w-0 flex-1")
+      // This machine's has the Project's menu (ADR 0098, decision 14); a
+      // Thread's own No Project has none.
+      return withMenu && row.host === undefined && !slot.project.scratch
+        ? withMenu(slot.project, sign)
         : sign
     }
     case "parent":

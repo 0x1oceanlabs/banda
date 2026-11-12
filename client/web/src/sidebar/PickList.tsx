@@ -18,12 +18,13 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { type Handler, useScope } from "@banda/ui/hooks/use-scope"
 import { FIELDS } from "@banda/ui/lib/keys"
 import { focusedTile, type PaneState } from "@banda/ui/pane"
+import { PROJECT_CARD } from "../trust/TrustCard"
 import { actsOf } from "./acts"
 import type { Row } from "./rows"
 import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
 import { LIST, type SearchField } from "./Header"
 import { itemKey, keyOf } from "./hold"
-import type { Tab } from "./inbox"
+import type { ProjectAsks, Tab } from "./inbox"
 import { refused } from "./items"
 import {
   type Does,
@@ -37,6 +38,7 @@ import {
 import { useOpen } from "./open"
 import type { Ordered } from "./order"
 import type { Checks } from "./pick"
+import { firstAct } from "./ProjectCard"
 import { checkedSaid, said, tabSaid, zeroSaid } from "./said"
 import { useAskedTab } from "./showing"
 import { valuesOf } from "./search"
@@ -163,8 +165,12 @@ export function useSidebarKeys(
   }, [zero, acted])
 
   /**
-   * What a key does on the pick. On a folded group or "+ N more", Enter
-   * shows what it holds. On a card: Enter opens it and its Pane takes the
+   * What a key does on the pick. On a group's header, Enter folds or
+   * unfolds it, and Shift+F10 opens its Project's menu, as ⋯ does; on "+
+   * N more", Enter shows what it holds. On a Project's card (ADR 0098,
+   * decision 16), Enter does its first act, Trust… or Locate…, Shift+F10
+   * opens its Project's menu, and the rest do nothing. On a card: Enter
+   * opens it and its Pane takes the
    * focus, or, on the one already open, goes to where its unseen begins;
    * Shift+Enter opens it beside; S archives it, or brings it back in the
    * Archive; Z puts it off, at the card; U marks it unread or read; F2
@@ -188,8 +194,13 @@ export function useSidebarKeys(
       return
     }
     if (!at) return
-    if (!at.hasAttribute("data-card")) {
-      if (does === "open") picking.expand(at)
+    const asks = at.getAttribute("data-asks") as ProjectAsks | null
+    if (asks || !at.hasAttribute("data-card")) {
+      if (does === "menu") openCardMenu(at)
+      else if (does !== "open") return
+      else if (asks)
+        firstAct(run, openIt, at.getAttribute(PROJECT_CARD) as ProjectId, asks)
+      else picking.enter(at)
       return
     }
     const key = at.getAttribute(PICK)!
