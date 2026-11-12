@@ -377,7 +377,7 @@ const LISTED: Listed[] = [
       "client/ui/src/components/input-group.tsx: mr-[-0.15rem]",
       "client/ui/src/components/input-group.tsx: mr-[-0.3rem]",
       "client/ui/src/components/trace.tsx: size-[0.9375rem]",
-      "client/web/src/tiling/widgets.tsx: left-[0.0625rem]",
+      "client/web/src/tiling/pager/Pager.tsx: left-[0.0625rem]",
     ],
   },
 ]

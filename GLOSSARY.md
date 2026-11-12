@@ -886,8 +886,7 @@ as a Person's `group.bottom` asks; none of Banda's presets has one.
 **Bar**:
 The Window's line across its top: the Mark, which opens the Banda menu
 (ADR 0098, decision 21), at its left edge, then widgets on its left, in
-its middle and on its right, the workspaces' numbers and their `+` among
-them (ADR 0024, ADR 0064). On a phone it is a header with at most two
+its middle and on its right, the Pager among them (ADR 0024, ADR 0064). On a phone it is a header with at most two
 compact widgets (ADR 0089).
 
 **Widget**:
@@ -897,6 +896,18 @@ has something to say. It reads Here for where the Person is, and a click runs an
 opens its own list. The look's `[bar]` says which widgets stand on the
 left, in the middle and on the right, and in what order; with Alt held,
 the mouse moves one there and writes it (ADR 0064, ADR 0087).
+
+**Pager**:
+The Tiling's widget on the Bar that shows the workspaces, one cell each,
+and takes the Person to one: a free workspace by its number, a Project's
+by its Sign, faint while it is emptied and keeps its place, and the empty
+one at the bottom as `+`. A number is the workspace's place, its `Alt+N`.
+It takes what the Tiling holds and the Projects the window knows, gives
+a cell for each workspace, and runs `workspace.go` on a click, nothing
+else (`client/web/src/tiling/pager/`; ADR 0024, ADR 0102). Its id in
+`[bar]` is `workspaces.list`.
+_Avoid_: pager for a program that shows text a page at a time, as `less`;
+a switcher (that was the agents widget, ADR 0065).
 
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and

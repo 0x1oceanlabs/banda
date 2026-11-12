@@ -33,7 +33,6 @@ import {
   projectIn,
   send,
   shift,
-  inBar,
   keepsPlace,
   start,
   step,
@@ -45,6 +44,7 @@ import {
   widthIn,
   type Workspaces,
 } from "./model"
+import { pagerStateOf } from "./pager/pager"
 
 const A = "project-a"
 const B = "project-b"
@@ -86,7 +86,7 @@ describe("a start", () => {
     const state = start()
     expect(state.list).toHaveLength(1)
     expect(focused(state)).toBeUndefined()
-    expect(inBar(state)).toEqual([
+    expect(pagerStateOf(state).list).toEqual([
       { id: state.list[0]!.id, index: 0, empty: true, bottom: true },
     ])
   })
@@ -107,7 +107,9 @@ describe("a Project's workspace", () => {
     expect(kept.list.map((w) => w.id).slice(0, 3)).toEqual(["w0", "w1", "w2"])
     expect(kept.list).toHaveLength(4)
     expect(new Set(kept.list.map((w) => w.id)).size).toBe(4)
-    expect(inBar(kept).map((w) => w.id)).toEqual(kept.list.map((w) => w.id))
+    expect(pagerStateOf(kept).list.map((w) => w.id)).toEqual(
+      kept.list.map((w) => w.id)
+    )
   })
 
   test("keeps its place emptied in the row and solo, but when its Project has no Threads; in the Flow free none does (ADR 0102)", () => {
@@ -274,7 +276,10 @@ describe("the empty workspace at the bottom", () => {
     let state = open(start(), A, thread("t1"))
     state = fresh(state)
     expect(state.current).toBe(1)
-    expect(inBar(state).at(-1)).toMatchObject({ index: 1, bottom: true })
+    expect(pagerStateOf(state).list.at(-1)).toMatchObject({
+      index: 1,
+      bottom: true,
+    })
     expect(fresh(state)).toBe(state)
     // From an empty one above others, it goes down, and the empty one
     // goes.
@@ -307,7 +312,7 @@ describe("moving between workspaces", () => {
     let state = open(start(), A, thread("t1"))
     state = go(state, 8)
     expect(state.current).toBe(1)
-    expect(inBar(state).map((w) => w.index)).toEqual([0, 1])
+    expect(pagerStateOf(state).list.map((w) => w.index)).toEqual([0, 1])
   })
 
   test("steps up and down, and stops at the ends", () => {

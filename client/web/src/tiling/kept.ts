@@ -37,7 +37,7 @@ export const AsideContext = createContext<Aside | null>(null)
 /**
  * `select` of the workspaces as the Tiling drew them last, drawn again
  * only as what it selects changes, as `equal` tells, by default when it
- * is another value: a selection made afresh each time, as `inBar`'s, is
+ * is another value: a selection made afresh each time, as `pagerStateOf`'s, is
  * told by `sameData`. A `select` made once, not at each drawing, spares
  * React a read.
  */
