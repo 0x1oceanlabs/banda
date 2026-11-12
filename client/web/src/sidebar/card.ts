@@ -73,6 +73,9 @@ export type Slot =
   | { kind: "says"; word?: Word; putOff?: PutOff; text?: string }
   /** Line 2 at work: what its Agent does (`CardModel.does`). */
   | { kind: "works" }
+  /** Line 2's right: the lines its last work that ended added and
+   * removed, in grey (decision 8). */
+  | { kind: "diff"; added: number; removed: number }
   /** Its Project's sign and name, on line 3. */
   | { kind: "project"; project: ProjectSummary }
   /** In the Project's place on line 3, a child's parent: ↳ and its
@@ -207,13 +210,17 @@ export function cardOf(input: CardOf): CardModel {
       ],
     },
   ]
-  if (count >= 2)
-    // Its right waits for the PR and the diff (F1b, F2); Failed's stays
-    // empty (decision 8).
+  if (count >= 2) {
+    // Its right: the diff of its last work that ended, but at work, where
+    // the work since has none yet; Failed's stays empty (decision 8). The
+    // PR waits for F2.
+    const changed =
+      does || tone === "destructive" ? undefined : listed.changedLines
     lines.push({
       left: [does ? { kind: "works" } : saysOf(row, tone && WORDS[tone])],
-      right: [],
+      right: changed ? [{ kind: "diff", ...changed }] : [],
     })
+  }
   if (count >= 3)
     lines.push({
       left: child
@@ -493,6 +500,10 @@ function slotSaid(slot: Slot, now: number): string[] {
       return [slot.machine.name]
     case "harness":
       return [slot.name]
+    case "diff":
+      return [
+        `${slot.added} ${slot.added === 1 ? "line" : "lines"} added, ${slot.removed} removed`,
+      ]
     // Said with who started it, after the lines.
     case "parent":
     case "mark":

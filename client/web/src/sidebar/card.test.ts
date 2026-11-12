@@ -241,9 +241,27 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
     ).toEqual([{ kind: "says", word: "Failed" }])
   })
 
-  test("Failed has nothing on the right, nor has anything before the PR and the diff come", () => {
+  test("with no lines changed, nothing on the right until the PR comes", () => {
     for (const mark of ["failed", "done", "asking"] as const)
       expect(says(row("turn", { mark })).right).toEqual([])
+  })
+
+  test("a Done card shows its last work's diff on the right, in grey; Failed shows nothing; at work, none (F1b)", () => {
+    const changedLines = { added: 38, removed: 9 }
+    const done = row("turn", { mark: "done", changedLines, calls: undefined })
+    expect(says(done).right).toEqual([{ kind: "diff", added: 38, removed: 9 }])
+    // Heard in words, not signs.
+    expect(spokenOf(card(done, { place: "turn" }), NOW).description).toContain(
+      "Done. 38 lines added, 9 removed"
+    )
+    expect(says(row("turn", { mark: "failed", changedLines })).right).toEqual(
+      []
+    )
+    // At work, line 2 says what it does; the work since has no diff yet.
+    const working = card(row("working", { mark: "working", changedLines }), {
+      view: { density: 2, group: "none" },
+    })
+    expect(working.lines[1]).toEqual({ left: [{ kind: "works" }], right: [] })
   })
 
   test("Woke says who put it off, and what it said", () => {
