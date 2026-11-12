@@ -114,11 +114,11 @@ function Drawn({ shown }: { shown: Shown }) {
         <MachineMark
           named={named}
           form="full"
-          className="text-sm font-medium text-foreground [&_svg]:text-muted-foreground"
+          className="text-ui font-medium text-foreground [&_svg]:text-muted-foreground"
         />
-        <span className="ml-auto text-xs text-muted-foreground">{words}</span>
+        <span className="ml-auto text-meta text-muted-foreground">{words}</span>
       </div>
-      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 px-3 pb-3 text-xs">
+      <dl className="grid grid-cols-[auto_1fr] gap-x-5 gap-y-1.5 px-3 pb-3 text-meta">
         {rows.map(([term, value]) => (
           <div key={term} className="contents">
             <dt className="text-muted-foreground">{term}</dt>

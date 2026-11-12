@@ -378,7 +378,7 @@ function TreePane(props: PaneProps<TreeArgs>) {
           />
         ) : recent ? (
           <>
-            <div className="flex h-8 shrink-0 items-center border-b px-2.5 text-xs">
+            <div className="flex h-8 shrink-0 items-center border-b px-2.5 text-meta">
               Recent
             </div>
             <div className="min-h-0 flex-1">
@@ -1395,7 +1395,7 @@ function FolderView({
                 tree.current?.focus()
               }
             }}
-            className="h-6 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+            className="h-6 min-w-0 flex-1 bg-transparent text-meta outline-none placeholder:text-muted-foreground"
           />
           {found && found.paths.length >= MATCHES && (
             <span className="shrink-0 text-meta text-muted-foreground">
@@ -1564,5 +1564,5 @@ function Loading() {
 }
 
 function Quiet({ children }: { children: ReactNode }) {
-  return <p className="px-4 py-3 text-xs text-muted-foreground">{children}</p>
+  return <p className="px-4 py-3 text-meta text-muted-foreground">{children}</p>
 }

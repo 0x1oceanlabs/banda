@@ -77,7 +77,7 @@ export function Queue({
             <Button
               variant="outline"
               size="sm"
-              className="text-xs"
+              className="text-meta"
               disabled={busy}
               onClick={actions.onContinue}
             >
@@ -172,7 +172,7 @@ function WaitingMessage({
         {!open && (
           // Quiet, as a sent message's own actions are: meta words, muted
           // until pointed at.
-          <div className="-mt-1.5 flex justify-end gap-3 text-xs text-muted-foreground">
+          <div className="-mt-1.5 flex justify-end gap-3 text-meta text-muted-foreground">
             <span>Queued</span>
             {steerable && (
               <Action
@@ -259,12 +259,12 @@ export function EditWaiting({
           type="button"
           variant="ghost"
           size="sm"
-          className="text-xs"
+          className="text-meta"
           onClick={onCancel}
         >
           Cancel
         </Button>
-        <Button type="submit" size="sm" className="text-xs" disabled={busy}>
+        <Button type="submit" size="sm" className="text-meta" disabled={busy}>
           Save
         </Button>
       </div>

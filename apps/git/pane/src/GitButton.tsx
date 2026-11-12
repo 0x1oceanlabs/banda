@@ -301,7 +301,7 @@ function Why({
 function Elapsed({ since }: { since: number }) {
   const now = useNow(1000)
   return (
-    <span className="text-xs text-muted-foreground tabular-nums">
+    <span className="text-meta text-muted-foreground tabular-nums">
       {duration(now - since)}
     </span>
   )

@@ -115,7 +115,7 @@ function Edits({ edits }: { edits: Label["edits"] }) {
     return (
       <span
         role="status"
-        className="shrink-0 animate-in text-xs text-muted-foreground fade-in-0 motion-reduce:animate-none"
+        className="shrink-0 animate-in text-meta text-muted-foreground fade-in-0 motion-reduce:animate-none"
       >
         Saved
       </span>
@@ -439,14 +439,14 @@ export const PaneFrame = memo(function PaneFrame({
               {/* The detail takes what room the title leaves: a long
                   one, as a folder's path, gives way first. */}
               {detail && (
-                <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
+                <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-meta text-muted-foreground">
                   {detail}
                 </span>
               )}
               {/* New Pane on another machine says where what it opens
                   opens: "in banda on arc", the machine in the Slot. */}
               {launches && (
-                <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-xs text-muted-foreground">
+                <span className="flex min-w-0 shrink-0 items-center gap-1.5 text-meta text-muted-foreground">
                   in
                   <ProjectName project={summary} />
                   on
@@ -455,7 +455,7 @@ export const PaneFrame = memo(function PaneFrame({
               {mixed && !item && !launches && summary && (
                 <ProjectName
                   project={summary}
-                  className="shrink-0 gap-1 rounded-small bg-muted px-1.5 text-xs text-muted-foreground"
+                  className="shrink-0 gap-1 rounded-small bg-muted px-1.5 text-meta text-muted-foreground"
                 />
               )}
               {!item && <PaneSlot {...slot} at="project" />}
@@ -463,7 +463,7 @@ export const PaneFrame = memo(function PaneFrame({
                 <button
                   type="button"
                   title={keyFor("pane.zoom", "Back in its column")}
-                  className="flex shrink-0 items-center gap-1 rounded-small bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                  className="flex shrink-0 items-center gap-1 rounded-small bg-muted px-1.5 text-meta text-muted-foreground hover:text-foreground"
                   onClick={() => frame.run("pane.zoom")}
                 >
                   <Minimize2Icon className="size-3" />
@@ -480,7 +480,7 @@ export const PaneFrame = memo(function PaneFrame({
               <button
                 type="button"
                 title="Go to its window"
-                className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none hover:text-foreground"
+                className="flex size-full flex-col items-center justify-center gap-2 text-ui text-muted-foreground outline-none hover:text-foreground"
                 onClick={() => popOut?.(entry.id)}
               >
                 <SquareArrowOutUpRightIcon className="size-5" />
@@ -494,7 +494,7 @@ export const PaneFrame = memo(function PaneFrame({
               machine ? (
                 <Elsewhere machine={machine}>{gate.why}</Elsewhere>
               ) : (
-                <p className="p-4 text-sm text-muted-foreground">{gate.why}</p>
+                <p className="p-4 text-ui text-muted-foreground">{gate.why}</p>
               )
             ) : !reach.engine ? (
               <Elsewhere machine={machine}>{words}</Elsewhere>
@@ -539,7 +539,7 @@ export function Elsewhere({
   children: ReactNode
 }) {
   return (
-    <p className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-sm text-muted-foreground">
+    <p className="flex size-full flex-col items-center justify-center gap-2 p-4 text-center text-ui text-muted-foreground">
       {machine && <MachineIcon icon={machine.icon} size={20} />}
       {children}
     </p>

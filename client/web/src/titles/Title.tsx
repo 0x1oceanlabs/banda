@@ -283,7 +283,7 @@ export function TitleField({
       {thinking && (
         <span
           data-shimmer=""
-          className="pointer-events-none absolute inset-y-0 left-1.5 flex items-center text-xs"
+          className="pointer-events-none absolute inset-y-0 left-1.5 flex items-center text-meta"
         >
           {THINKING}
         </span>

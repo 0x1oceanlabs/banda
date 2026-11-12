@@ -105,7 +105,7 @@ function FlowWidget() {
                   <Each />
                   <span className="flex flex-col">
                     <span>{title}</span>
-                    <span className="text-xs text-muted-foreground">
+                    <span className="text-meta text-muted-foreground">
                       {about}
                     </span>
                   </span>

@@ -15,7 +15,7 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
       icon={<ListTodoIcon />}
       title="Plan"
       action={
-        <span className="text-xs text-muted-foreground tabular-nums">
+        <span className="text-meta text-muted-foreground tabular-nums">
           {done} of {steps.length}
         </span>
       }

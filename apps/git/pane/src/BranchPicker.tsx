@@ -310,7 +310,7 @@ function Branches({
 function Distance({ ahead, behind }: { ahead?: number; behind?: number }) {
   if (!ahead && !behind) return null
   return (
-    <span className="text-xs text-muted-foreground tabular-nums">
+    <span className="text-meta text-muted-foreground tabular-nums">
       {[ahead && `↑${ahead}`, behind && `↓${behind}`].filter(Boolean).join(" ")}
     </span>
   )

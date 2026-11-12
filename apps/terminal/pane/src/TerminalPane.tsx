@@ -691,7 +691,7 @@ function Screen({
           <div
             role="status"
             title={notSent.note}
-            className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-xs whitespace-nowrap shadow-md"
+            className="absolute right-2.5 bottom-2 z-10 inline-flex h-5 items-center gap-1.5 rounded-small border border-input bg-popover px-1.5 text-meta whitespace-nowrap shadow-md"
           >
             <KeyboardOffIcon className="size-3.5 text-attention" />
             <span>{notSent.said}</span>
@@ -757,7 +757,7 @@ function Status({
   return (
     <footer
       role="status"
-      className="flex shrink-0 items-center gap-2 border-t px-2.5 py-1.5 text-xs text-muted-foreground"
+      className="flex shrink-0 items-center gap-2 border-t px-2.5 py-1.5 text-meta text-muted-foreground"
     >
       {now.is === "restarted" && <PowerIcon className="size-3.5 shrink-0" />}
       <span className="min-w-0 flex-1">{said}</span>

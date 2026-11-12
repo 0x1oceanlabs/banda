@@ -66,7 +66,7 @@ export function useClashes(): { ask: Asker; dialog: ReactNode } {
           </DialogDescription>
         </DialogHeader>
         {left > 1 && (
-          <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <label className="flex items-center gap-2 text-meta text-muted-foreground">
             <Checkbox
               checked={forAll}
               onCheckedChange={(on) => setForAll(on === true)}

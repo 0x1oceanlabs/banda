@@ -93,7 +93,7 @@ function LocalMedia({ path, alt }: { path: string; alt: string }) {
   if (kind === "audio")
     return (
       <span className="my-2 flex max-w-full flex-col gap-1">
-        <span className="text-xs text-muted-foreground">{name}</span>
+        <span className="text-meta text-muted-foreground">{name}</span>
         <audio
           src={url}
           aria-label={name}

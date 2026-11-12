@@ -33,7 +33,7 @@ function TraceLine({
       data-slot="trace-line"
       data-status={status}
       className={cn(
-        "flex w-fit max-w-full min-w-0 items-center gap-2 text-sm text-muted-foreground transition-colors in-[a,button]:cursor-pointer in-[a:hover,button:hover]:text-foreground data-[status=error]:*:data-[slot=trace-icon]:text-destructive data-[status=pending]:opacity-60 data-[status=running]:*:data-[slot=trace-title]:shimmer",
+        "flex w-fit max-w-full min-w-0 items-center gap-2 text-ui text-muted-foreground transition-colors in-[a,button]:cursor-pointer in-[a:hover,button:hover]:text-foreground data-[status=error]:*:data-[slot=trace-icon]:text-destructive data-[status=pending]:opacity-60 data-[status=running]:*:data-[slot=trace-title]:shimmer",
         className
       )}
       {...props}
@@ -146,7 +146,7 @@ function TraceCollapsibleContent({
         data-slot="trace-collapsible-content-inner"
         data-inset={inset || undefined}
         className={cn(
-          "mt-2 mb-1 min-w-0 text-sm wrap-break-word text-muted-foreground",
+          "mt-2 mb-1 min-w-0 text-ui wrap-break-word text-muted-foreground",
           inset ? "ml-6" : "ml-[calc(--spacing(2)-1px)] border-l pr-1 pl-4",
           className
         )}

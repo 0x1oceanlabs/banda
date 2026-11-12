@@ -118,7 +118,7 @@ function Counts({ projects }: WidgetProps) {
             type="button"
             aria-label={words}
             title={words}
-            className="flex h-6 items-center gap-2.5 rounded-control px-2 text-xs font-semibold tabular-nums outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted"
+            className="flex h-6 items-center gap-2.5 rounded-control px-2 text-meta font-semibold tabular-nums outline-none hover:bg-muted focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted"
           />
         }
       >

@@ -204,7 +204,7 @@ export default function HexView({ file, read, mode, local }: PreviewProps) {
           )
           if (at) setMarked(Number(at.dataset.offset))
         }}
-        className="flex-1 font-mono text-xs outline-none select-text"
+        className="flex-1 font-mono text-meta outline-none select-text"
       />
       {going && (
         <div className="absolute top-12 right-4 z-20 w-64 max-w-[calc(100%-2rem)] rounded-card bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10">
@@ -229,7 +229,7 @@ export default function HexView({ file, read, mode, local }: PreviewProps) {
             />
             <InputGroupAddon align="inline-end" className="gap-0.5">
               {lost && (
-                <span role="alert" className="px-1 text-xs font-normal">
+                <span role="alert" className="px-1 text-meta font-normal">
                   {lost}
                 </span>
               )}
@@ -274,7 +274,7 @@ function HexFacts({
   return (
     <div
       aria-label="Facts"
-      className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs text-muted-foreground"
+      className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-meta text-muted-foreground"
     >
       <BinaryIcon className="size-4 shrink-0" />
       <span className="min-w-0 flex-1 truncate">{facts.join(" · ")}</span>

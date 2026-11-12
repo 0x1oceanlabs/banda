@@ -290,7 +290,7 @@ function SubagentPane(props: PaneProps<SubagentArgs>) {
       <div className="relative min-h-0 flex-1">
         {refusal !== undefined ? (
           <Centered>
-            <p className="text-sm text-muted-foreground">{refusal}</p>
+            <p className="text-ui text-muted-foreground">{refusal}</p>
           </Centered>
         ) : !drawn || !said ? (
           <Centered>

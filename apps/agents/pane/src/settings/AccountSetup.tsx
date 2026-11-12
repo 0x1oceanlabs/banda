@@ -293,7 +293,7 @@ export function AccountSetup({
                 </Field>
               </>
             ) : (
-              <p className="text-sm text-muted-foreground">
+              <p className="text-ui text-muted-foreground">
                 Banda creates a private profile for this account. Sign in with
                 your subscription in the last step.
               </p>
@@ -354,7 +354,7 @@ export function AccountSetup({
           kind &&
           (kind === "api" && codex && !keyed ? (
             <>
-              <p className="text-sm">
+              <p className="text-ui">
                 {made.name} is connected. Give it its OpenAI key.
               </p>
               <ApiKeyForm
@@ -366,7 +366,7 @@ export function AccountSetup({
             </>
           ) : (
             <>
-              <p className="text-sm">{madeWords?.[kind]}</p>
+              <p className="text-ui">{madeWords?.[kind]}</p>
               <AccountLogin
                 engine={engine}
                 harness={made.id}

@@ -314,7 +314,7 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
   return (
     <MessageScrollerButton
       size={says ? "sm" : "icon-sm"}
-      className="gap-1.5 rounded-full border-transparent bg-popover px-3 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent data-[size=icon-sm]:px-0"
+      className="gap-1.5 rounded-full border-transparent bg-popover px-3 text-meta text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent data-[size=icon-sm]:px-0"
     >
       <ArrowDownIcon />
       <span className="sr-only">Scroll to end{says && " · "}</span>

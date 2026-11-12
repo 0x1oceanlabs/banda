@@ -47,7 +47,7 @@ export const CodeBlock = Node.create({
       const pick = document.createElement("select")
       pick.ariaLabel = "Language"
       pick.className =
-        "cursor-pointer rounded-small bg-transparent text-xs text-muted-foreground outline-none hover:text-foreground"
+        "cursor-pointer rounded-small bg-transparent text-meta text-muted-foreground outline-none hover:text-foreground"
       pick.append(
         new Option("Plain text", ""),
         ...LANGUAGES.map(({ id, name }) => new Option(name, id))
@@ -62,7 +62,7 @@ export const CodeBlock = Node.create({
       })
       head.append(pick)
       const pre = document.createElement("pre")
-      pre.className = "overflow-x-auto px-2.5 py-1.5 font-mono text-sm"
+      pre.className = "overflow-x-auto px-2.5 py-1.5 font-mono text-ui"
       const contentDOM = document.createElement("code")
       pre.append(contentDOM)
       dom.append(head, pre)

@@ -29,11 +29,11 @@ export function General({ engine, lit, run }: SectionProps) {
       <Item className="rounded-none px-4">
         <ItemContent>
           <ItemTitle>Engine</ItemTitle>
-          <ItemDescription className="text-xs">
+          <ItemDescription className="text-meta">
             Banda's engine, which runs the Projects.
           </ItemDescription>
         </ItemContent>
-        <ItemActions className="font-mono text-xs text-muted-foreground">
+        <ItemActions className="font-mono text-meta text-muted-foreground">
           {status.state === "open" ? status.engine : status.state}
         </ItemActions>
       </Item>
@@ -47,7 +47,7 @@ export function General({ engine, lit, run }: SectionProps) {
       <Item className="rounded-none px-4">
         <ItemContent>
           <ItemTitle>Settings folder</ItemTitle>
-          <ItemDescription className="font-mono text-xs break-all">
+          <ItemDescription className="font-mono text-meta break-all">
             {folder}
           </ItemDescription>
         </ItemContent>
@@ -65,7 +65,7 @@ export function General({ engine, lit, run }: SectionProps) {
       <Item className="rounded-none px-4">
         <ItemContent>
           <ItemTitle>These settings</ItemTitle>
-          <ItemDescription className="text-xs">
+          <ItemDescription className="text-meta">
             Comes in over the tiles, from the Banda menu
             {settingsKey && ` or with ${settingsKey}`}; Esc, a click on the
             tiles or its × takes it away.

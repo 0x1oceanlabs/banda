@@ -85,9 +85,9 @@ export function BrokeCard({
         <h1 id={title} className="text-title font-semibold">
           {text.title}
         </h1>
-        <p className="text-sm text-muted-foreground">{text.body}</p>
+        <p className="text-ui text-muted-foreground">{text.body}</p>
         {page && (
-          <p className="truncate rounded-control bg-muted px-2 py-1.5 font-mono text-xs text-muted-foreground">
+          <p className="truncate rounded-control bg-muted px-2 py-1.5 font-mono text-meta text-muted-foreground">
             {broke.said}
           </p>
         )}
@@ -95,7 +95,7 @@ export function BrokeCard({
           {page ? [again, without] : [without, again]}
         </div>
         {problem && (
-          <p role="alert" className="text-xs text-destructive">
+          <p role="alert" className="text-meta text-destructive">
             {problem}
           </p>
         )}

@@ -87,11 +87,11 @@ function Project({ engine, lit }: Props) {
 
   if (listed.state === "loading") return <Spinner />
   if (listed.state === "refused")
-    return <p className="text-sm text-destructive">{listed.refusal.message}</p>
+    return <p className="text-ui text-destructive">{listed.refusal.message}</p>
   const projects = listed.value
   const project = projects.find((one) => one.id === picked) ?? projects[0]
   if (!project)
-    return <p className="text-sm text-muted-foreground">No Projects yet.</p>
+    return <p className="text-ui text-muted-foreground">No Projects yet.</p>
 
   // Trusted only as nothing marked it foreign, as a Project of the
   // Person's own folder is: saying so here gives its Agents the ssh-agent,
@@ -118,7 +118,7 @@ function Project({ engine, lit }: Props) {
   return (
     <>
       <div className="flex items-center gap-3">
-        <span className="text-sm font-medium">Project</span>
+        <span className="text-ui font-medium">Project</span>
         <Select
           value={project.id}
           onValueChange={(id) => setPick({ lit, id: id as string })}
@@ -139,7 +139,7 @@ function Project({ engine, lit }: Props) {
         </Select>
         <span
           className={cn(
-            "min-w-0 truncate font-mono text-xs text-muted-foreground",
+            "min-w-0 truncate font-mono text-meta text-muted-foreground",
             project.missing && "text-attention line-through"
           )}
           title={project.folder}
@@ -148,7 +148,7 @@ function Project({ engine, lit }: Props) {
         </span>
       </div>
       {problem && (
-        <p role="alert" className="text-xs text-destructive">
+        <p role="alert" className="text-meta text-destructive">
           {problem}
         </p>
       )}
@@ -312,11 +312,11 @@ function Project({ engine, lit }: Props) {
           <DialogContent showCloseButton={false}>
             <DialogHeader>
               <DialogTitle>{questionOf(removing)}</DialogTitle>
-              <DialogDescription className="font-mono text-xs break-all">
+              <DialogDescription className="font-mono text-meta break-all">
                 {removing.project.folder}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-1 text-sm text-muted-foreground">
+            <div className="flex flex-col gap-1 text-ui text-muted-foreground">
               <p>
                 This removes only the Project entries, not the files on disk.
               </p>

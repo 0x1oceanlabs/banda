@@ -234,7 +234,7 @@ function MoveThread({
                   {machines.length > 1 && (
                     <div
                       className={cn(
-                        "flex items-center px-2 pt-2 pb-1 text-xs text-muted-foreground",
+                        "flex items-center px-2 pt-2 pb-1 text-meta text-muted-foreground",
                         machine.state === "away" && "opacity-60"
                       )}
                     >
@@ -277,7 +277,7 @@ function MoveThread({
                         <span className="shrink-0 truncate">{place.name}</span>
                         <span
                           dir="rtl"
-                          className="ml-auto min-w-0 truncate pl-4 font-mono text-xs text-muted-foreground"
+                          className="ml-auto min-w-0 truncate pl-4 font-mono text-meta text-muted-foreground"
                         >
                           <bdi>{place.folder}</bdi>
                         </span>
@@ -376,7 +376,7 @@ function Folder({ said, from }: { said: Said; from: string }) {
       return (
         <>
           {branch && (
-            <span className="mr-1.5 inline-flex items-center gap-1 rounded-small bg-muted px-1.5 py-0.5 align-middle font-mono text-xs">
+            <span className="mr-1.5 inline-flex items-center gap-1 rounded-small bg-muted px-1.5 py-0.5 align-middle font-mono text-meta">
               <GitBranchIcon className="size-3" />
               {branch}
             </span>

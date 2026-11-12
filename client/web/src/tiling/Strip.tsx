@@ -415,7 +415,7 @@ export const Strip = memo(function Strip({
           here, over these words. */}
       {empty && (
         <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 pl-[calc(--spacing(6)+var(--sidebar-inset))]">
-          <p className="text-center text-sm text-balance text-muted-foreground">
+          <p className="text-center text-ui text-balance text-muted-foreground">
             {kept
               ? `${whose ?? "This Project"}'s workspace is empty. It keeps its place until you close it.`
               : "This workspace is empty. Open a Pane:"}

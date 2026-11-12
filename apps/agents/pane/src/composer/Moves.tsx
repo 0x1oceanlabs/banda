@@ -23,8 +23,8 @@ export function MoveConfirm({
 }) {
   const to = move.harness.name
   return (
-    <div className="flex flex-col gap-2 p-1.5 text-sm">
-      <div className="flex items-center gap-1 text-xs text-muted-foreground">
+    <div className="flex flex-col gap-2 p-1.5 text-ui">
+      <div className="flex items-center gap-1 text-meta text-muted-foreground">
         <Button
           variant="ghost"
           size="icon-xs"

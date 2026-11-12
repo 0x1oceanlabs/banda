@@ -173,7 +173,7 @@ export function ModelPicker({
         className="w-72 gap-0 rounded-card p-1"
       >
         {out && (
-          <p className="px-2.5 pt-1.5 pb-1 text-xs text-warning">
+          <p className="px-2.5 pt-1.5 pb-1 text-meta text-warning">
             {name} is out of its limits
             {out.until === undefined ? "" : ` until ${clock(out.until)}`}. A
             fallback in Settings → Agents starts new Threads there meanwhile.
@@ -308,7 +308,7 @@ function Models({
   const headed = groups.length > 1
   return (
     <div className="flex flex-col">
-      <div className="flex h-8 items-center gap-1 px-1 text-xs text-muted-foreground">
+      <div className="flex h-8 items-center gap-1 px-1 text-meta text-muted-foreground">
         {onBack && (
           <Button
             variant="ghost"
@@ -339,7 +339,7 @@ function Models({
               {headed && group.model && (
                 <div
                   className={cn(
-                    "flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-muted-foreground",
+                    "flex items-center gap-2 px-2.5 pt-2 pb-1 text-meta text-muted-foreground",
                     i > 0 && "mt-1 border-t border-border/60"
                   )}
                 >
@@ -400,7 +400,7 @@ function Row({
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="truncate font-medium">{name}</span>
         {about && (
-          <span className="truncate text-xs text-muted-foreground">
+          <span className="truncate text-meta text-muted-foreground">
             {about}
           </span>
         )}

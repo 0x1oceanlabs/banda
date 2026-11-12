@@ -98,7 +98,7 @@ export default function JsonView(props: PreviewProps) {
       {source ? (
         <>
           {(big || why !== null) && (
-            <p className="shrink-0 border-b px-3 py-1 text-xs text-muted-foreground">
+            <p className="shrink-0 border-b px-3 py-1 text-meta text-muted-foreground">
               {big
                 ? "Past 5 MB a JSON shows as code."
                 : `It does not parse as JSON: ${why}`}
@@ -333,7 +333,7 @@ function Tree({
       onFocus={() => {
         if (picked === null && rows[0]) setPicked(rows[0].id)
       }}
-      className="flex-1 py-1 font-mono text-xs outline-none"
+      className="flex-1 py-1 font-mono text-meta outline-none"
     />
   )
 }

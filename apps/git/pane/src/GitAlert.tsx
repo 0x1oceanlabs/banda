@@ -24,7 +24,7 @@ export function GitAlert({
     <div
       role="alert"
       className={cn(
-        "flex items-start gap-2 text-xs",
+        "flex items-start gap-2 text-meta",
         quiet ? "text-muted-foreground" : "text-destructive",
         className
       )}

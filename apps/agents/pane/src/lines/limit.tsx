@@ -79,7 +79,7 @@ export function LimitCard({
     <div
       role="group"
       aria-label={title}
-      className="my-1 max-w-160 rounded-card border border-border bg-warning/5 px-3 pt-2.5 pb-3 text-sm"
+      className="my-1 max-w-160 rounded-card border border-border bg-warning/5 px-3 pt-2.5 pb-3 text-ui"
     >
       <div className="flex items-center gap-2 font-medium">
         <PauseMark />
@@ -117,7 +117,7 @@ export function LimitCard({
         />
       </div>
       {!waits && ways.length > 0 && (
-        <p className="mt-2 pl-6 text-xs text-muted-foreground/80">
+        <p className="mt-2 pl-6 text-meta text-muted-foreground/80">
           {ways.map(noteOf).join(" ")}
         </p>
       )}
@@ -142,7 +142,7 @@ export function LimitPassed({ turn }: { turn: TurnView }) {
     ? harnessName(harnesses, turn.harness)
     : "The account"
   return (
-    <div className="my-1 flex items-center gap-2 text-sm text-muted-foreground">
+    <div className="my-1 flex items-center gap-2 text-ui text-muted-foreground">
       <PauseMark quiet />
       {account}'s limit ran out
     </div>
@@ -203,7 +203,7 @@ function WayOn({
       <Emblem of={harness} />
       {main ? `Go on ${waits ? "now " : ""}with ${harness.name}` : harness.name}
       {fullest !== undefined && (
-        <span className="text-xs tabular-nums opacity-60">{fullest}%</span>
+        <span className="text-meta tabular-nums opacity-60">{fullest}%</span>
       )}
     </Button>
   )

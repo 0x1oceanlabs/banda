@@ -89,7 +89,7 @@ export function Group({
   return (
     <div className="flex flex-col gap-1.5">
       {title && (
-        <h2 className="px-1 text-xs font-medium text-muted-foreground">
+        <h2 className="px-1 text-meta font-medium text-muted-foreground">
           {title}
         </h2>
       )}
@@ -141,7 +141,7 @@ export function RowFrame({
     >
       <div className="flex items-center gap-3">
         <div className="min-w-40 flex-1">
-          <div className="flex flex-wrap items-baseline gap-x-1.5 text-sm font-medium">
+          <div className="flex flex-wrap items-baseline gap-x-1.5 text-ui font-medium">
             {mine && (
               <span
                 aria-label="Set in your file"
@@ -152,7 +152,7 @@ export function RowFrame({
             {file && <Origin from={from} file={file} />}
           </div>
           {about && (
-            <div className="text-xs text-muted-foreground">{about}</div>
+            <div className="text-meta text-muted-foreground">{about}</div>
           )}
         </div>
         {mine && onReset && (
@@ -170,7 +170,7 @@ export function RowFrame({
         <div className="flex shrink-0 items-center">{children}</div>
       </div>
       {[...new Set(wrong ?? [])].map((message) => (
-        <p key={message} role="alert" className="text-xs text-destructive">
+        <p key={message} role="alert" className="text-meta text-destructive">
           {message}
         </p>
       ))}
@@ -311,7 +311,7 @@ export function Choice({
             title={option.about}
             onClick={() => onPick(option.value)}
             className={cn(
-              "rounded-small px-2.5 py-0.5 text-xs text-muted-foreground",
+              "rounded-small px-2.5 py-0.5 text-meta text-muted-foreground",
               option.value === value && "bg-accent text-foreground"
             )}
           >
@@ -376,7 +376,7 @@ function Many({
               )
             }
             className={cn(
-              "rounded-control border px-2 py-0.5 text-xs text-muted-foreground",
+              "rounded-control border px-2 py-0.5 text-meta text-muted-foreground",
               on && "border-primary bg-accent text-foreground"
             )}
           >
@@ -414,7 +414,7 @@ export function Field({
       aria-label={label}
       defaultValue={shown}
       className={cn(
-        "h-8 text-right font-mono text-xs",
+        "h-8 text-right font-mono text-meta",
         input.type === "number" ? "w-24" : "w-36"
       )}
       onBlur={(event) => commit(event.currentTarget.value)}

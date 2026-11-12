@@ -100,7 +100,7 @@ export function MakeProject({
               The Thread, its files and history stay together.
             </DialogDescription>
           </DialogHeader>
-          <label className="flex flex-col gap-2 text-sm">
+          <label className="flex flex-col gap-2 text-ui">
             Name
             <Input
               autoFocus
@@ -111,7 +111,7 @@ export function MakeProject({
           </label>
           <fieldset
             disabled={busy}
-            className="flex min-w-0 flex-col gap-3 text-sm"
+            className="flex min-w-0 flex-col gap-3 text-ui"
           >
             <legend className="mb-2 font-medium">Folder</legend>
             <label className="flex items-start gap-2">
@@ -137,19 +137,19 @@ export function MakeProject({
               />
               <span>
                 Keep it where it is
-                <span className="block text-xs break-all text-muted-foreground">
+                <span className="block text-meta break-all text-muted-foreground">
                   {project.folder}
                 </span>
               </span>
             </label>
           </fieldset>
           {move && name.trim() && !plain && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-ui text-destructive">
               Use a name without slashes or a leading dot to make a new folder.
             </p>
           )}
           {problem && (
-            <p role="alert" className="text-sm text-destructive">
+            <p role="alert" className="text-ui text-destructive">
               {problem}
             </p>
           )}

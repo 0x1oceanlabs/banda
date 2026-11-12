@@ -48,12 +48,12 @@ export function HarnessGroup({
       aria-label={`${name} accounts`}
       className="@container flex flex-col gap-2"
     >
-      <h3 className="text-sm font-semibold">{name}</h3>
+      <h3 className="text-ui font-semibold">{name}</h3>
       <div className="grid grid-cols-1 gap-2 @md:grid-cols-2">
         {children}
         <button
           type="button"
-          className="flex min-h-20 items-center justify-center gap-1.5 rounded-card border border-dashed text-sm text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
+          className="flex min-h-20 items-center justify-center gap-1.5 rounded-card border border-dashed text-ui text-muted-foreground outline-none hover:border-foreground/30 hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring"
           onClick={onAdd}
         >
           <PlusIcon className="size-4" />
@@ -70,7 +70,7 @@ export function AccountCard(props: CardProps) {
     <Reading {...props} />
   ) : (
     <Frame {...props} dim>
-      <p className="text-xs text-muted-foreground">
+      <p className="text-meta text-muted-foreground">
         Off: no new Thread starts on it.
       </p>
     </Frame>
@@ -87,10 +87,10 @@ function Reading(props: CardProps) {
   const windows = cardWindows(limits)
   const middle =
     read.state === "refused" ? (
-      <p className="text-xs text-destructive">Does not start</p>
+      <p className="text-meta text-destructive">Does not start</p>
     ) : signedOut ? (
       <div className="flex items-center justify-between gap-2">
-        <span className="text-xs text-destructive">Not signed in</span>
+        <span className="text-meta text-destructive">Not signed in</span>
         <Button size="xs" className="relative" onClick={onOpen}>
           Sign in
         </Button>
@@ -102,7 +102,7 @@ function Reading(props: CardProps) {
           return (
             <div
               key={window.id}
-              className="flex flex-col gap-1 text-xs"
+              className="flex flex-col gap-1 text-meta"
               title={
                 window.resets_at === undefined
                   ? undefined
@@ -129,7 +129,7 @@ function Reading(props: CardProps) {
     >
       {middle}
       {!signedOut && read.state !== "refused" && (
-        <p className="flex justify-between gap-2 text-xs text-muted-foreground">
+        <p className="flex justify-between gap-2 text-meta text-muted-foreground">
           {out ? (
             <span className="text-destructive">
               Out{out.until === undefined ? "" : ` until ${clock(out.until)}`}
@@ -178,8 +178,10 @@ function Frame({
       <div className="flex min-w-0 items-center gap-2.5">
         <Emblem of={harness} className="size-6" />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-semibold">{harness.name}</p>
-          <p className="truncate text-xs text-muted-foreground">{who ?? " "}</p>
+          <p className="truncate text-ui font-semibold">{harness.name}</p>
+          <p className="truncate text-meta text-muted-foreground">
+            {who ?? " "}
+          </p>
         </div>
         {role && (
           <span

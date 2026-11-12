@@ -63,7 +63,7 @@ export function QuoteSelection({
       ref={button}
       variant="ghost"
       size="sm"
-      className="absolute z-20 rounded-full bg-popover px-2.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent dark:hover:bg-accent"
+      className="absolute z-20 rounded-full bg-popover px-2.5 text-meta text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent dark:hover:bg-accent"
       style={{ left: shown.x, top: shown.y }}
       // The selection stays while the button is pressed.
       onPointerDown={(event) => event.preventDefault()}

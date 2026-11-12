@@ -73,7 +73,7 @@ export function App({ engine }: { engine: Engine }) {
   }
   if (listed.state === "refused") {
     return (
-      <p role="alert" className="p-6 text-sm text-muted-foreground">
+      <p role="alert" className="p-6 text-ui text-muted-foreground">
         {listed.refusal.message}
       </p>
     )

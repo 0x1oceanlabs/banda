@@ -380,7 +380,7 @@ function OnGroup({ on }: { on: OnPick[] }) {
               className="text-inherit"
             />
             {one.away && (
-              <span className="ml-auto pl-4 text-xs text-muted-foreground">
+              <span className="ml-auto pl-4 text-meta text-muted-foreground">
                 away
               </span>
             )}

@@ -123,7 +123,7 @@ export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
   }
   return (
     <>
-      <div className="px-1 pb-1 text-xs text-muted-foreground">View</div>
+      <div className="px-1 pb-1 text-meta text-muted-foreground">View</div>
       {CHOICES.map(({ label, key, options, value }) => (
         <Line key={key} label={label}>
           <div
@@ -140,7 +140,7 @@ export function ViewRows({ sidebar }: { sidebar: Sidebar }) {
                   role="radio"
                   aria-checked={picked}
                   className={cn(
-                    "h-6 rounded-small px-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                    "h-6 rounded-small px-2 text-meta outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                     picked
                       ? "bg-background text-foreground shadow-xs"
                       : "text-muted-foreground hover:text-foreground"

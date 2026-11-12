@@ -296,7 +296,7 @@ test('a card\'s text fades where it does not fit, never with "…"; the title is
   // The title, what line 2 says, and the Project's name.
   expect(html.match(/data-slot="fade-text"/g)).toHaveLength(3)
   expect(html).toMatch(
-    /<span data-slot="fade-text" class="min-w-0 overflow-hidden whitespace-nowrap text-sm[^"]*"><span>Bench/
+    /<span data-slot="fade-text" class="min-w-0 overflow-hidden whitespace-nowrap text-ui[^"]*"><span>Bench/
   )
   // Outside a CutTips, none is a tooltip's trigger.
   expect(html).not.toContain("data-base-ui-tooltip-trigger")

@@ -213,7 +213,7 @@ function About({
           <div className="px-3.5">
             <Meter share={update.share} />
             {size && (
-              <p className="mt-1.5 text-xs text-muted-foreground tabular-nums">
+              <p className="mt-1.5 text-meta text-muted-foreground tabular-nums">
                 {size}
               </p>
             )}
@@ -302,7 +302,7 @@ function About({
           <div className="px-3.5">
             <Notes notes={update.notes} />
             <div className="mt-2.5 flex items-center gap-1.5 rounded-control bg-muted py-1 pr-1 pl-2.5">
-              <code className="min-w-0 flex-1 truncate text-xs">
+              <code className="min-w-0 flex-1 truncate text-meta">
                 {update.command}
               </code>
               <Copy text={update.command} />
@@ -336,9 +336,9 @@ function About({
         <>
           <div className="px-3.5 pt-3 pb-2.5">
             <p className="text-meta text-muted-foreground">{update.name}</p>
-            <p className="mt-0.5 text-sm font-medium">Cannot update itself</p>
+            <p className="mt-0.5 text-ui font-medium">Cannot update itself</p>
           </div>
-          <p className="mx-3.5 rounded-control bg-destructive/10 px-2.5 py-2 font-mono text-xs break-words text-destructive">
+          <p className="mx-3.5 rounded-control bg-destructive/10 px-2.5 py-2 font-mono text-meta break-words text-destructive">
             {update.reason}
           </p>
           <Foot>
@@ -356,10 +356,10 @@ function About({
         <>
           <div className="px-3.5 pt-3 pb-1">
             <p className="text-meta text-muted-foreground">{update.name}</p>
-            <p className="mt-0.5 font-mono text-sm font-medium">
+            <p className="mt-0.5 font-mono text-ui font-medium">
               {shortOf(update.have)}
             </p>
-            <p className="mt-1 line-clamp-3 text-xs break-words text-muted-foreground">
+            <p className="mt-1 line-clamp-3 text-meta break-words text-muted-foreground">
               {looking ? "Looking for a new version…" : lookedWords(update, at)}
             </p>
           </div>
@@ -401,9 +401,9 @@ function Head({
         <span aria-hidden className="text-muted-foreground">
           →
         </span>
-        <span className="text-sm font-medium">{shortOf(to)}</span>
+        <span className="text-ui font-medium">{shortOf(to)}</span>
       </p>
-      {words && <p className="mt-1 text-xs text-muted-foreground">{words}</p>}
+      {words && <p className="mt-1 text-meta text-muted-foreground">{words}</p>}
     </div>
   )
 }
@@ -413,7 +413,7 @@ function Foot({ words, children }: { words?: string; children: ReactNode }) {
   return (
     <div className="flex items-center justify-end gap-1.5 px-3.5 pt-3 pb-3">
       {words && (
-        <span className="mr-auto text-xs text-muted-foreground">{words}</span>
+        <span className="mr-auto text-meta text-muted-foreground">{words}</span>
       )}
       {children}
     </div>
@@ -440,7 +440,7 @@ function Meter({ share }: { share: number }) {
 /** That a restart stops the turns of the Threads that work, if any do. */
 function Warning({ words }: { words: string | undefined }) {
   return words ? (
-    <p className="mx-3.5 mt-2.5 flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-xs text-attention">
+    <p className="mx-3.5 mt-2.5 flex gap-2 rounded-control bg-attention/10 px-2.5 py-2 text-meta text-attention">
       <span
         aria-hidden
         data-update-breath
@@ -517,7 +517,7 @@ function Notes({ notes }: { notes: readonly Note[] }) {
             {group.lines.map((line) => (
               <li
                 key={`${line.version}-${line.text}`}
-                className="flex gap-2 text-xs leading-snug"
+                className="flex gap-2 text-meta leading-snug"
                 title={line.version}
               >
                 <span className="w-16 shrink-0 truncate pt-px font-mono text-meta text-muted-foreground">
@@ -532,7 +532,7 @@ function Notes({ notes }: { notes: readonly Note[] }) {
       {!all && notes.length > NOTES && (
         <button
           type="button"
-          className="mt-1.5 text-xs text-muted-foreground hover:text-foreground"
+          className="mt-1.5 text-meta text-muted-foreground hover:text-foreground"
           onClick={() => setAll(true)}
         >
           Show all {notes.length}

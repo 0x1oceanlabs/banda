@@ -48,7 +48,7 @@ export function ChangedFiles({
             >
               <FilePath path={file.path} />
               {file.old === undefined && (
-                <span className="shrink-0 font-sans text-xs text-muted-foreground">
+                <span className="shrink-0 font-sans text-meta text-muted-foreground">
                   new
                 </span>
               )}

@@ -136,7 +136,7 @@ export function Popped({ engine, pane }: { engine: Engine; pane: string }) {
             </Slots>
           </Previewers>
         ) : (
-          <p className="m-auto text-sm text-muted-foreground">
+          <p className="m-auto text-ui text-muted-foreground">
             {live.state === "ready"
               ? "This Pane was closed."
               : "Banda's engine is starting…"}

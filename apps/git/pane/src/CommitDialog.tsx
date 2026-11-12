@@ -89,7 +89,7 @@ export function CommitDialog({
         </DialogHeader>
         <ul
           aria-label="Files"
-          className="max-h-52 overflow-y-auto rounded-control border font-mono text-xs"
+          className="max-h-52 overflow-y-auto rounded-control border font-mono text-meta"
         >
           {files.map((file) => {
             const takes = !out.has(file.path)
@@ -114,7 +114,7 @@ export function CommitDialog({
             )
           })}
         </ul>
-        <label className="flex flex-col gap-1.5 text-sm font-medium">
+        <label className="flex flex-col gap-1.5 text-ui font-medium">
           {writer === null
             ? "Message"
             : `Message (optional) — ${writer} writes it`}
@@ -125,7 +125,9 @@ export function CommitDialog({
           />
         </label>
         {/* A disabled button hears no hover: the reason shows here. */}
-        {blocked && <p className="text-xs text-muted-foreground">{blocked}</p>}
+        {blocked && (
+          <p className="text-meta text-muted-foreground">{blocked}</p>
+        )}
         <DialogFooter className="flex-wrap">
           <Button
             variant="outline"

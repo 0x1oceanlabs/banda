@@ -63,7 +63,7 @@ export function PageDialog({
         aria-modal={false}
         aria-labelledby={title}
         aria-describedby={message}
-        className="grid max-h-full w-full max-w-sm gap-4 overflow-y-auto rounded-card border bg-popover p-5 text-sm text-popover-foreground shadow-xl"
+        className="grid max-h-full w-full max-w-sm gap-4 overflow-y-auto rounded-card border bg-popover p-5 text-ui text-popover-foreground shadow-xl"
         onSubmit={(event) => {
           event.preventDefault()
           void answer(true)
@@ -71,7 +71,7 @@ export function PageDialog({
       >
         <div
           id={title}
-          className="flex items-center gap-2 text-xs text-muted-foreground"
+          className="flex items-center gap-2 text-meta text-muted-foreground"
         >
           <GlobeIcon className="size-3.5 shrink-0" />
           {siteOf(dialog.url)} says
@@ -94,7 +94,7 @@ export function PageDialog({
           />
         )}
         {error && (
-          <p role="alert" className="text-xs break-words text-destructive">
+          <p role="alert" className="text-meta break-words text-destructive">
             {error}
           </p>
         )}

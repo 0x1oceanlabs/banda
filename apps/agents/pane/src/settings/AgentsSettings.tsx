@@ -258,7 +258,7 @@ function StartAccounts({
           />
         </Row>
         {now && (
-          <p role="status" className="py-2 text-xs text-warning">
+          <p role="status" className="py-2 text-meta text-warning">
             {now}
           </p>
         )}

@@ -139,7 +139,7 @@ export function More({
   return (
     <div
       ref={box}
-      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground"
+      className="flex h-12 items-center justify-center gap-2 text-meta text-muted-foreground"
     >
       {loading && <Spinner className="size-3" />}
       {left === 1 ? "1 more file" : `${left} more files`}

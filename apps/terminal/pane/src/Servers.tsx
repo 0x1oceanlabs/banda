@@ -76,7 +76,7 @@ function List({
             type="button"
             aria-label={`Servers: ${words}`}
             title={words}
-            className="flex h-6 items-center gap-1 rounded-control px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
+            className="flex h-6 items-center gap-1 rounded-control px-2 text-meta text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground"
           />
         }
       >
@@ -140,7 +140,7 @@ function Row({
       <GlobeIcon className="text-muted-foreground" />
       <span className="flex min-w-0 flex-1 flex-col">
         <span className="font-medium">{address(server.port)}</span>
-        <span className="truncate text-xs text-muted-foreground">
+        <span className="truncate text-meta text-muted-foreground">
           {server.program ? `${by} · ${server.program}` : by}
         </span>
       </span>

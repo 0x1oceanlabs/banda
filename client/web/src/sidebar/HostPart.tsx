@@ -74,7 +74,7 @@ export function HostPart({
           needs first, up to most of the label; its words, on the right,
           what is left; Start and ⋯, each in its own column, never give
           way. Short of room, the words go first, then the name. */}
-      <div className="group/label relative grid min-h-8 grid-flow-col grid-cols-[fit-content(60%)_minmax(0,1fr)] items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
+      <div className="group/label relative grid min-h-8 grid-flow-col grid-cols-[fit-content(60%)_minmax(0,1fr)] items-center gap-1.5 px-2 pt-3.5 pb-0.5 text-meta whitespace-nowrap text-muted-foreground">
         <h3 className="flex min-w-0">
           <MachineCard host={host.name}>
             <MachineMark named={host.named} form="full" className="shrink" />
@@ -136,7 +136,7 @@ export function HostPart({
       </div>
       {other && !folded && (
         <p
-          className="px-2 pb-1 text-xs text-muted-foreground tabular-nums"
+          className="px-2 pb-1 text-meta text-muted-foreground tabular-nums"
           title={`${name} runs another build of Banda than this window`}
         >
           {other}
@@ -170,7 +170,7 @@ export function HerePart({
 }) {
   return (
     <div role="group" aria-label={named.name} className="flex flex-col">
-      <div className="flex min-h-8 items-center px-2 pt-3.5 pb-0.5 text-xs whitespace-nowrap text-muted-foreground">
+      <div className="flex min-h-8 items-center px-2 pt-3.5 pb-0.5 text-meta whitespace-nowrap text-muted-foreground">
         <h3 className="flex min-w-0">
           <MachineMark named={named} form="full" className="shrink" />
         </h3>
@@ -303,7 +303,7 @@ export function HostLines({
     <div
       key={project.id}
       title={project.folder}
-      className="flex min-w-0 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-sm"
+      className="flex min-w-0 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-ui"
     >
       <ProjectSign project={project} />
       <span className="min-w-0 flex-1 truncate">{project.name}</span>

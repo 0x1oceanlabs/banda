@@ -267,7 +267,7 @@ export function RenameField({
         event.stopPropagation()
       }}
       onBlur={(event) => finish(event.currentTarget.value.trim())}
-      className="h-5 min-w-0 flex-1 rounded-small bg-background px-1 text-xs ring-1 ring-ring/70 outline-none"
+      className="h-5 min-w-0 flex-1 rounded-small bg-background px-1 text-meta ring-1 ring-ring/70 outline-none"
     />
   )
 }

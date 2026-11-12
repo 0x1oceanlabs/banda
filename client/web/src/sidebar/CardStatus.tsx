@@ -58,7 +58,7 @@ export function CardTime({
     <span
       data-time=""
       className={cn(
-        "shrink-0 text-xs tabular-nums",
+        "shrink-0 text-meta tabular-nums",
         tone
           ? cn("font-medium", TONES[tone])
           : quiet

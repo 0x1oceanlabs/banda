@@ -145,7 +145,7 @@ export function Peek({
             >
               <h2 className="min-w-0 truncate font-medium">{title}</h2>
               {detail && (
-                <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-xs text-muted-foreground">
+                <span className="max-w-fit min-w-0 flex-[1_1_0] truncate text-meta text-muted-foreground">
                   {detail}
                 </span>
               )}
@@ -243,7 +243,7 @@ export function FloatingPane({
   return (
     <div className="min-h-0 flex-1 [--background:var(--popover)]">
       {"why" in gate ? (
-        <p className="p-4 text-sm text-muted-foreground">{gate.why}</p>
+        <p className="p-4 text-ui text-muted-foreground">{gate.why}</p>
       ) : (
         <PaneMount
           kind={gate.opens}

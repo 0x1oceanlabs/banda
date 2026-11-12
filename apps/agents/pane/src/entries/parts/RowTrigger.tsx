@@ -23,7 +23,7 @@ export function RowTrigger({
   return (
     <CollapsibleTrigger
       className={cn(
-        "group/row -mx-2 flex h-7 min-w-0 cursor-pointer items-center gap-2 rounded-control px-2 text-left text-sm whitespace-nowrap transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+        "group/row -mx-2 flex h-7 min-w-0 cursor-pointer items-center gap-2 rounded-control px-2 text-left text-ui whitespace-nowrap transition-colors outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
         className
       )}
       onClick={(event) => {

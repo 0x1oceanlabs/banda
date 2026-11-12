@@ -19,12 +19,12 @@ afterEach(() => {
 
 test('the text is its own scroll box, cut with no "…", and outside a CutTips no tooltip\'s trigger', () => {
   const html = renderToStaticMarkup(
-    <FadeText tip="A long title" className="text-sm">
+    <FadeText tip="A long title" className="text-ui">
       A long title
     </FadeText>
   )
   expect(html).toBe(
-    '<span data-slot="fade-text" class="min-w-0 overflow-hidden whitespace-nowrap text-sm">A long title</span>'
+    '<span data-slot="fade-text" class="min-w-0 overflow-hidden whitespace-nowrap text-ui">A long title</span>'
   )
 })
 

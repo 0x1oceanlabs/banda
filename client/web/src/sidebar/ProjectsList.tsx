@@ -47,7 +47,7 @@ export function ProjectsList({
                 : project.folder
             }
             className={cn(
-              "flex min-w-0 flex-1 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+              "flex min-w-0 flex-1 items-center gap-2 rounded-control border border-transparent px-2 py-1 text-left text-ui outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
               only === project.id && "border-border bg-tile shadow-xs"
             )}
             onClick={() =>
@@ -59,7 +59,7 @@ export function ProjectsList({
             <ProjectSign project={project} />
             <span className="min-w-0 flex-1 truncate">{project.name}</span>
             {project.missing && (
-              <span className="shrink-0 text-xs text-attention">Missing</span>
+              <span className="shrink-0 text-meta text-attention">Missing</span>
             )}
             {settings.projects.rollup && (
               <Rollup mark={mark} waiting={waiting} />
@@ -78,7 +78,7 @@ export function ProjectsList({
       aria-label="Projects"
       className="flex flex-col gap-px pb-1"
     >
-      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
+      <div className="px-2 pt-2 pb-1 text-meta text-muted-foreground">
         Projects
       </div>
       {here ? <HerePart named={here}>{mine}</HerePart> : mine}

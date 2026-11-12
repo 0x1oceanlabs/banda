@@ -167,7 +167,7 @@ export function Settings({
                 aria-current={s === section && !words ? "page" : undefined}
                 onClick={() => go(s)}
                 className={cn(
-                  "flex shrink-0 items-center gap-2 rounded-control px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/60",
+                  "flex shrink-0 items-center gap-2 rounded-control px-2 py-1.5 text-left text-ui text-muted-foreground hover:bg-accent/60",
                   s === section && !words && "bg-accent text-foreground"
                 )}
               >
@@ -183,7 +183,7 @@ export function Settings({
           </div>
           <div
             className={cn(
-              "mt-auto hidden items-center gap-2 px-2 pt-2 text-xs text-muted-foreground @3xl:flex",
+              "mt-auto hidden items-center gap-2 px-2 pt-2 text-meta text-muted-foreground @3xl:flex",
               first && "text-attention"
             )}
           >
@@ -214,7 +214,7 @@ export function Settings({
               {words ? (
                 <Rows>
                   {found.length === 0 ? (
-                    <p className="px-4 py-3 text-sm text-muted-foreground">
+                    <p className="px-4 py-3 text-ui text-muted-foreground">
                       No setting says “{words.trim()}”.
                     </p>
                   ) : (
@@ -225,8 +225,8 @@ export function Settings({
                         className="flex w-full flex-col px-4 py-2 text-left hover:bg-accent/60"
                         onClick={() => go(s, r.key)}
                       >
-                        <span className="text-sm">{r.title}</span>
-                        <span className="text-xs text-muted-foreground">
+                        <span className="text-ui">{r.title}</span>
+                        <span className="text-meta text-muted-foreground">
                           {s.title} · {r.file} · {r.key}
                         </span>
                       </button>
@@ -240,7 +240,7 @@ export function Settings({
                       <h1 className="text-heading font-semibold">
                         {section.title}
                       </h1>
-                      <p className="text-sm text-muted-foreground">
+                      <p className="text-ui text-muted-foreground">
                         {section.about}
                       </p>
                     </div>
@@ -256,7 +256,7 @@ export function Settings({
                   {above.length > 0 && (
                     <div
                       role="alert"
-                      className="order-first rounded-control border border-destructive/40 px-4 py-2 text-xs text-destructive"
+                      className="order-first rounded-control border border-destructive/40 px-4 py-2 text-meta text-destructive"
                     >
                       {above.map((p) => (
                         <p key={problemWords(p)}>{problemWords(p)}</p>
@@ -268,7 +268,7 @@ export function Settings({
               )}
             </div>
           </ScrollArea>
-          <footer className="border-t px-4 py-2 text-xs text-muted-foreground">
+          <footer className="border-t px-4 py-2 text-meta text-muted-foreground">
             Changes apply as you make them, written to the file with its
             comments kept. Edit a file by hand and the settings follow.
           </footer>
@@ -307,8 +307,8 @@ function Files({ wrong }: { wrong: Map<string, Problem[]> }) {
               )}
             />
             <div className="flex-1">
-              <div className="font-mono text-sm">{file}</div>
-              <div className="text-xs text-muted-foreground">
+              <div className="font-mono text-ui">{file}</div>
+              <div className="text-meta text-muted-foreground">
                 {first ? problemWords(first) : aboutOf(file)}
               </div>
             </div>

@@ -164,7 +164,7 @@ export function SearchView({
               else list.current?.focus()
             }
           }}
-          className="h-6 min-w-0 flex-1 bg-transparent text-xs outline-none placeholder:text-muted-foreground"
+          className="h-6 min-w-0 flex-1 bg-transparent text-meta outline-none placeholder:text-muted-foreground"
         />
         {toggle("case", "Match case", <CaseSensitiveIcon />)}
         {toggle("word", "Whole words", <WholeWordIcon />)}
@@ -205,7 +205,7 @@ export function SearchView({
             onClick: () => setAt(index),
             onDoubleClick: () => open(index),
             className: cn(
-              "flex cursor-default items-center gap-1.5 rounded-small pr-2 text-xs",
+              "flex cursor-default items-center gap-1.5 rounded-small pr-2 text-meta",
               on && "bg-foreground/10"
             ),
           } as const

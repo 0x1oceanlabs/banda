@@ -153,7 +153,7 @@ export function InboxZero({ zero }: { zero: Zero }) {
       {someday !== undefined && (
         <button
           type="button"
-          className="rounded-control px-1 text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
+          className="rounded-control px-1 text-meta text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
           onClick={() => show?.("later", SOMEDAY_HEAD)}
         >
           {someday} someday ›
@@ -260,7 +260,7 @@ function Place({
         <EmptyMedia>{mark}</EmptyMedia>
         <EmptyTitle>{big}</EmptyTitle>
         {small && (
-          <EmptyDescription className="text-xs tabular-nums">
+          <EmptyDescription className="text-meta tabular-nums">
             {small}
           </EmptyDescription>
         )}

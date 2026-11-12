@@ -87,7 +87,7 @@ function Cells(props: PreviewProps) {
       aria-label="Cells"
     >
       <div className="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-4">
-        <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+        <p className="flex items-center gap-1.5 text-meta text-muted-foreground">
           <ShieldCheckIcon className="size-3.5" />
           Saved outputs only. Code is never executed.
         </p>
@@ -158,7 +158,7 @@ function CellView({
     return (
       <pre
         data-cell="raw"
-        className="rounded-card bg-muted/40 px-3 py-2 font-mono text-xs whitespace-pre-wrap"
+        className="rounded-card bg-muted/40 px-3 py-2 font-mono text-meta whitespace-pre-wrap"
       >
         {cell.source}
       </pre>
@@ -166,7 +166,7 @@ function CellView({
   return (
     <div data-cell="code" className="flex flex-col gap-2">
       <div className="flex gap-2">
-        <span className="w-10 shrink-0 pt-1.5 text-right font-mono text-xs text-muted-foreground">
+        <span className="w-10 shrink-0 pt-1.5 text-right font-mono text-meta text-muted-foreground">
           [{cell.count ?? " "}]
         </span>
         <CodeLines
@@ -198,7 +198,7 @@ function OutputView({ output }: { output: Output }) {
       )
     case "markdown":
       return (
-        <div className="min-w-0 flex-1 text-sm">
+        <div className="min-w-0 flex-1 text-ui">
           <Markdown>{output.text}</Markdown>
         </div>
       )
@@ -207,7 +207,7 @@ function OutputView({ output }: { output: Output }) {
         return (
           <div className="flex min-w-0 flex-1 flex-col gap-1">
             <Text text={output.text} />
-            <p className="text-xs text-muted-foreground">
+            <p className="text-meta text-muted-foreground">
               This output needs its scripts, which Files does not run.
             </p>
           </div>
@@ -215,7 +215,7 @@ function OutputView({ output }: { output: Output }) {
       return (
         <div
           data-output="html"
-          className="min-w-0 flex-1 overflow-x-auto text-xs"
+          className="min-w-0 flex-1 overflow-x-auto text-meta"
         >
           <Markdown>{outputHtml(output.html)}</Markdown>
         </div>
@@ -235,7 +235,7 @@ function Text({
   return (
     <pre
       className={cn(
-        "min-w-0 flex-1 overflow-x-auto rounded-small px-2 py-1 font-mono text-xs whitespace-pre-wrap",
+        "min-w-0 flex-1 overflow-x-auto rounded-small px-2 py-1 font-mono text-meta whitespace-pre-wrap",
         stream === "stderr" && "bg-amber-500/10",
         stream === "error" && "bg-destructive/10 text-destructive"
       )}

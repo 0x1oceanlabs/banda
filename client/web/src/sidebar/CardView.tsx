@@ -281,7 +281,7 @@ export function CardLines({
     const right =
       first && card.gone
         ? card.gone.words && (
-            <span className="shrink-0 text-xs text-muted-foreground">
+            <span className="shrink-0 text-meta text-muted-foreground">
               {card.gone.words}
             </span>
           )
@@ -361,7 +361,7 @@ export function ChildArrow({ className }: { className: string }) {
     <span
       aria-hidden
       className={cn(
-        "shrink-0 text-center text-xs text-muted-foreground",
+        "shrink-0 text-center text-meta text-muted-foreground",
         className
       )}
     >
@@ -433,7 +433,7 @@ function Piece({
       return (
         <FadeText
           tip={[slot.word, rest].filter(Boolean).join(" ")}
-          className="flex-1 text-xs text-muted-foreground"
+          className="flex-1 text-meta text-muted-foreground"
         >
           {slot.word && (
             <span
@@ -456,7 +456,7 @@ function Piece({
       return (
         <FadeText
           tip={words || undefined}
-          className="flex-1 text-xs text-muted-foreground/60"
+          className="flex-1 text-meta text-muted-foreground/60"
         >
           {words}
         </FadeText>
@@ -467,7 +467,7 @@ function Piece({
       return (
         <span
           data-diff=""
-          className="shrink-0 text-xs text-muted-foreground/60 tabular-nums"
+          className="shrink-0 text-meta text-muted-foreground/60 tabular-nums"
         >
           +{slot.added} −{slot.removed}
         </span>
@@ -475,7 +475,7 @@ function Piece({
     case "project": {
       const name = projectLabel(slot.project)
       const sign = (
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-meta text-muted-foreground">
           <ProjectSign project={slot.project} size={14} />
           <FadeText tip={name}>{name}</FadeText>
         </span>
@@ -488,7 +488,7 @@ function Piece({
     case "parent":
       // ↳ where the Project's sign stands, then its parent's title.
       return (
-        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-xs text-muted-foreground">
+        <span className="flex min-w-0 flex-1 items-center gap-1.5 text-meta text-muted-foreground">
           <ChildArrow className="w-3.5" />
           <FadeText tip={slot.title}>{slot.title}</FadeText>
         </span>
@@ -558,7 +558,7 @@ function Title({ row, card }: { row: CardRow; card: CardModel }) {
     <FadeText
       tip={thinking ? undefined : card.title}
       className={cn(
-        "text-sm",
+        "text-ui",
         card.place === "turn" && "font-medium",
         card.quiet === "working"
           ? "text-foreground/45"

@@ -232,7 +232,7 @@ function DiffPane({
           />
         )}
         {count > 0 && (
-          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+          <span className="flex shrink-0 items-center gap-1 text-meta text-muted-foreground tabular-nums">
             {filesOf(count)}
             {added + removed > 0 && <span aria-hidden>·</span>}
             <DiffCounts added={added} removed={removed} />
@@ -285,7 +285,7 @@ function DiffPane({
         <div className="flex min-h-0 flex-1">
           {view.tree && tree.length > 1 && (
             <aside className="flex w-56 shrink-0 flex-col border-r">
-              <div className="flex h-8 shrink-0 items-center px-3 text-xs">
+              <div className="flex h-8 shrink-0 items-center px-3 text-meta">
                 <span className="font-medium">Files</span>
                 <span className="ml-auto text-muted-foreground tabular-nums">
                   {tree.length}

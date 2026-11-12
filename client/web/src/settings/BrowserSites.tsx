@@ -21,7 +21,7 @@ export function BrowserSites({ lit }: SectionProps) {
     <div className="flex flex-col gap-1.5">
       <Group title="Sites for Agents">
         {all.length === 0 ? (
-          <p className="px-4 py-3 text-sm text-muted-foreground">
+          <p className="px-4 py-3 text-ui text-muted-foreground">
             No sites yet: an Agent asks on the tab before it first uses one.
           </p>
         ) : (
@@ -30,7 +30,7 @@ export function BrowserSites({ lit }: SectionProps) {
           ))
         )}
       </Group>
-      <p className="px-1 text-xs text-muted-foreground">
+      <p className="px-1 text-meta text-muted-foreground">
         A site covers its subdomains. “Once” lasts for its Thread until Banda
         restarts; localhost never asks.
       </p>

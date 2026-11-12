@@ -155,7 +155,7 @@ export function MarkdownFileLink({
   return (
     <FileLink at={at} found={found} kind="named" written={href}>
       <span className="underline underline-offset-2">{children}</span>
-      <span className="ml-1 text-xs font-normal text-muted-foreground select-none">
+      <span className="ml-1 text-meta font-normal text-muted-foreground select-none">
         ({nameAndFolder(found.file).name})
       </span>
     </FileLink>

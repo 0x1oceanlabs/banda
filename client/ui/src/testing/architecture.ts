@@ -75,9 +75,13 @@ export function sources(
  * and the Panes', with their stylesheets, as the layout-motion check and
  * the look check read them (ADR 0113, decision 9): `client/web`,
  * `client/core`, `client/ui` and `client/ghostty`, and each App's and
- * platform part's `pane/src`; not tests, nor `@banda/ui/testing`.
+ * platform part's `pane/src`; not `@banda/ui/testing`, and tests only with
+ * `tests`, as `scripts/look-names.mjs` renames in them too.
  */
-export function drawingFiles(root: string): string[] {
+export function drawingFiles(
+  root: string,
+  { tests = false }: { tests?: boolean } = {}
+): string[] {
   const client = join(root, "client")
   return [
     ...["web/src", "core/src", "ui/src", "ghostty/src"].map((folder) =>
@@ -87,7 +91,7 @@ export function drawingFiles(root: string): string[] {
       .map((folder) => join(folder, "pane/src"))
       .filter((folder) => existsSync(folder)),
   ]
-    .flatMap((folder) => sources(folder, { tests: false, styles: true }))
+    .flatMap((folder) => sources(folder, { tests, styles: true }))
     .filter((file) => !file.startsWith(join(client, "ui/src/testing")))
 }
 

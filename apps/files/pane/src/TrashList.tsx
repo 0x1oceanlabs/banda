@@ -183,7 +183,7 @@ export function TrashList({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div className="flex h-8 shrink-0 items-center gap-0.5 border-b pr-1 pl-2.5 text-xs">
+      <div className="flex h-8 shrink-0 items-center gap-0.5 border-b pr-1 pl-2.5 text-meta">
         <span className="min-w-0 flex-1 truncate text-muted-foreground">
           {chosen.length > 0
             ? `${chosen.length} of ${items.length}`
@@ -266,7 +266,7 @@ export function TrashList({
                   event.preventDefault()
                 }}
                 className={cn(
-                  "flex h-6 w-full items-center gap-2 rounded-control px-2 text-left text-xs outline-none hover:bg-foreground/7 focus-visible:ring-1 focus-visible:ring-ring",
+                  "flex h-6 w-full items-center gap-2 rounded-control px-2 text-left text-meta outline-none hover:bg-foreground/7 focus-visible:ring-1 focus-visible:ring-ring",
                   on && "bg-foreground/10"
                 )}
               >

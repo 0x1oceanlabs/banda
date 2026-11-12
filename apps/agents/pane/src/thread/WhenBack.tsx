@@ -92,7 +92,7 @@ export function WaitsAlone({
   return (
     <div className="flex h-full flex-col">
       <div className="flex min-h-0 flex-1 items-center justify-center p-6">
-        {why && <p className="text-sm text-muted-foreground">{why}</p>}
+        {why && <p className="text-ui text-muted-foreground">{why}</p>}
       </div>
       <div
         data-chat
@@ -166,7 +166,7 @@ function WaitFor({
           )}
         </div>
         {!editing && (
-          <div className="-mt-1.5 flex items-center justify-end gap-3 text-xs whitespace-nowrap text-muted-foreground tabular-nums">
+          <div className="-mt-1.5 flex items-center justify-end gap-3 text-meta whitespace-nowrap text-muted-foreground tabular-nums">
             <span className="inline-flex items-center gap-1.5">
               <ClockIcon className="size-3" />
               <span>

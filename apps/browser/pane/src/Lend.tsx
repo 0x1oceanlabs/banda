@@ -148,7 +148,7 @@ export function LendButton({
               <span className="min-w-0 flex-1 truncate">{thread.title}</span>
               <span
                 className={cn(
-                  "shrink-0 pl-1 text-xs tabular-nums",
+                  "shrink-0 pl-1 text-meta tabular-nums",
                   thread.mark === "asking"
                     ? "text-attention"
                     : "text-muted-foreground"
@@ -162,7 +162,7 @@ export function LendButton({
             <DropdownMenuItem disabled>No Thread here yet</DropdownMenuItem>
           )}
         </DropdownMenuGroup>
-        <p className="mt-1 border-t px-1.5 pt-1.5 pb-1 text-xs leading-snug text-muted-foreground">
+        <p className="mt-1 border-t px-1.5 pt-1.5 pb-1 text-meta leading-snug text-muted-foreground">
           It sees and drives only this tab, until you take it back.
         </p>
       </DropdownMenuContent>
@@ -215,12 +215,12 @@ export function LentChip({
           <span
             data-lent
             data-state={groupState(mark)}
-            className="shrink-0 text-xs text-(--group-color)"
+            className="shrink-0 text-meta text-(--group-color)"
           >
             {(thread && wordOf(thread)) ?? "Idle"}
           </span>
         </div>
-        <p className="mb-2.5 text-xs leading-normal text-muted-foreground">
+        <p className="mb-2.5 text-meta leading-normal text-muted-foreground">
           This Thread sees and drives this tab. The lend ends when you take it
           back, close the tab, or its session ends.
         </p>

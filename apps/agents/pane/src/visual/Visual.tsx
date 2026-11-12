@@ -61,7 +61,7 @@ export function Visual({
         // The page's own gutter sits in the Thread's margin.
         className="-mx-2"
       />
-      <figcaption className="mt-1.5 text-xs text-muted-foreground">
+      <figcaption className="mt-1.5 text-meta text-muted-foreground">
         {visual.title}
       </figcaption>
       <VisualPreview
@@ -118,7 +118,7 @@ function VisualPreview({
             type="button"
             title="Actual size"
             onClick={() => by(0)}
-            className="w-12 text-center text-xs text-muted-foreground tabular-nums"
+            className="w-12 text-center text-meta text-muted-foreground tabular-nums"
           >
             {Math.round(zoom * 100)} %
           </button>

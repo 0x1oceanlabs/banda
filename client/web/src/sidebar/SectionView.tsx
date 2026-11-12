@@ -182,7 +182,7 @@ export function SectionView({
           {drawn}
         </div>
         {item.ghost && (
-          <p className="absolute inset-0 flex items-center justify-center gap-1 text-xs text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0">
+          <p className="absolute inset-0 flex items-center justify-center gap-1 text-meta text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0">
             {said}
             {undo && (
               <>
@@ -214,7 +214,7 @@ export function SectionView({
         return (
           <div
             data-block={block.key}
-            className="flex items-baseline gap-1 px-2 pt-2.5 pb-1 text-xs font-medium text-muted-foreground"
+            className="flex items-baseline gap-1 px-2 pt-2.5 pb-1 text-meta font-medium text-muted-foreground"
           >
             {block.label}
             {block.count !== undefined && (
@@ -258,7 +258,7 @@ export function SectionView({
             data-unfold={children ? block.parent : undefined}
             tabIndex={-1}
             className={cn(
-              "w-full rounded-control px-2 py-1 text-left text-xs text-muted-foreground/70 outline-none hover:text-foreground",
+              "w-full rounded-control px-2 py-1 text-left text-meta text-muted-foreground/70 outline-none hover:text-foreground",
               children && "flex items-center gap-1.5"
             )}
             onMouseDown={(event) => event.preventDefault()}

@@ -112,7 +112,7 @@ function FoldedLine({ folded }: { folded: Folded }) {
       <TraceCollapsible>
         <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-meta">
             {folded.values.map(({ id, title, value, own }) => (
               <Fragment key={id}>
                 <dt>{title}</dt>
@@ -200,7 +200,7 @@ export function QuestionDrawer({
             <span className="truncate">{`${asker} asks · ${short(item.at)}`}</span>
           </span>
         ) : (
-          <span className="flex shrink-0 items-center gap-1.5 text-xs text-attention">
+          <span className="flex shrink-0 items-center gap-1.5 text-meta text-attention">
             <span aria-hidden className="size-1.5 rounded-full bg-attention" />
             Needs you
           </span>

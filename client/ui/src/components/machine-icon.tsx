@@ -4,7 +4,7 @@
  * colour of its own, as colour is the account's; and its name, as its
  * engine said it and the page cleaned it (`cleanNamed`), drawn as text.
  * The compact form, on a row: the icon at 12 px and the name in
- * `text-xs`. The full form, on a label or a Pane's header: the icon at
+ * `text-meta`. The full form, on a label or a Pane's header: the icon at
  * 14 px and the name.
  */
 import type { MachineIcon as Icon, Named } from "@banda/contract/machines"
@@ -80,7 +80,7 @@ export function MachineMark({
       title={title ?? (form === "icon" ? named.name : undefined)}
       className={cn(
         "inline-flex min-w-0 shrink-0 items-center text-muted-foreground",
-        form === "full" ? "gap-1.5" : "gap-1 text-xs",
+        form === "full" ? "gap-1.5" : "gap-1 text-meta",
         className
       )}
     >
