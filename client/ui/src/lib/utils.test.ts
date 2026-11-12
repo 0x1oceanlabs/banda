@@ -38,3 +38,13 @@ test("a corner's level replaces another", () => {
   expect(cn("rounded-small", "rounded-full")).toBe("rounded-full")
   expect(cn("rounded-t-card", "rounded-t-none")).toBe("rounded-t-none")
 })
+
+test("an elevation replaces another, and keeps a ring beside it", () => {
+  expect(cn("shadow-md", "shadow-float")).toBe("shadow-float")
+  expect(cn("shadow-float", "shadow-lift")).toBe("shadow-lift")
+  expect(cn("shadow-tile", "shadow-none")).toBe("shadow-none")
+  expect(cn("shadow-float ring-1", "shadow-panel")).toBe("ring-1 shadow-panel")
+  expect(cn("shadow-float shadow-black/10")).toBe(
+    "shadow-float shadow-black/10"
+  )
+})
