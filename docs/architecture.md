@@ -486,6 +486,10 @@ The kernel holds only what every module needs, and it names no module.
   once, each told `revoked`: the port says each removal
   (`Devices::removals`), and a session asks whether its own is still
   paired.
+  The door also serves the window's page to a browser that asks for
+  one, from the page's build beside the engine's program
+  (`engine/src/page.rs`; SE5): itself only, by a policy that lets it load
+  nothing from elsewhere, and never on the API's port.
   The contract's client speaks both ways in (`sdk/contract/src/engine.ts`,
   `door.ts`): its `Address` says the owner's secret, for the API, or a
   `DoorKey`, for the door: the device, the host key it paired with, and

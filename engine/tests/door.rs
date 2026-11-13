@@ -72,6 +72,13 @@ impl Engine {
             .expect("the engine has a door")
     }
 
+    /// The API's port, for programs on this machine.
+    fn port(&self) -> u64 {
+        self.running["port"]
+            .as_u64()
+            .expect("the engine says its port")
+    }
+
     fn host_key(&self) -> &str {
         self.running["host_key"].as_str().unwrap()
     }
@@ -96,6 +103,9 @@ fn banda(dir: &tempfile::TempDir, args: &[&str]) -> Command {
         .env("BANDA_CACHE", at("cache"))
         .env("BANDA_THUMBNAILS", "")
         .env("BANDA_LOG", "warn")
+        // The page is the test's own, where it makes one: never what a
+        // checkout happens to have built.
+        .env("BANDA_PAGE_FILES", at("page"))
         .env_remove("BANDA_TOKEN")
         .env_remove("BANDA_ENGINE")
         .env_remove("BANDA_PROJECT")
@@ -160,6 +170,44 @@ fn get(port: u64, path: &str, headers: &str) -> (String, String) {
         head.lines().next().unwrap_or_default().to_owned(),
         body.to_owned(),
     )
+}
+
+#[test]
+fn the_door_gives_a_browser_the_window_s_page_and_curl_its_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let page = dir.path().join("page");
+    std::fs::create_dir_all(page.join("assets")).unwrap();
+    std::fs::write(
+        page.join("index.html"),
+        "<!doctype html><title>Banda</title>",
+    )
+    .unwrap();
+    std::fs::write(page.join("assets/index-abc123.js"), "export {}").unwrap();
+    let engine = Engine::start_in(dir);
+    // A browser asks for a page, and gets Banda's.
+    let (status, body) = get(engine.door(), "/", "Accept: text/html,*/*;q=0.8\r\n");
+    assert!(status.contains("200"), "{status}");
+    assert!(body.contains("<title>Banda</title>"), "{body}");
+    let (status, body) = get(engine.door(), "/assets/index-abc123.js", "");
+    assert!(status.contains("200"), "{status}");
+    assert_eq!(body, "export {}");
+    // `curl` still reads who the door is, and nothing leaves the folder.
+    let (_, line) = get(engine.door(), "/", "");
+    assert!(line.starts_with("Banda on "), "{line}");
+    let (status, _) = get(engine.door(), "/../state/engine.json", "");
+    assert!(status.contains("404"), "{status}");
+    // The page stands behind the door's own roads, never over them: the
+    // WebSocket and a file's bytes answer for themselves.
+    let (status, _) = get(engine.door(), "/ws", "");
+    assert!(
+        !status.contains("404") && !status.contains("200"),
+        "{status}"
+    );
+    let (status, body) = get(engine.door(), "/b/no-such-token", "Accept: text/html\r\n");
+    assert!(!body.contains("<title>Banda</title>"), "{status} {body}");
+    // The API's port, for programs on this machine, serves no page.
+    let (status, body) = get(engine.port(), "/", "Accept: text/html\r\n");
+    assert!(!body.contains("<title>Banda</title>"), "{status} {body}");
 }
 
 #[tokio::test(flavor = "multi_thread")]

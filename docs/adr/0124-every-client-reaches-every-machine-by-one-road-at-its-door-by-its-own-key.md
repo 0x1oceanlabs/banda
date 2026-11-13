@@ -198,6 +198,19 @@ repository), with an adversarial check.
   pairs again only at its next start, or its engine's; and a pairing the
   engine refuses falls back to the secret, where it could remove what is
   in its way and pair again.
+- **The door serves the window's page (SE5, PR 1).** A browser that
+  asks the door for a page gets the same page Banda's app shows; `curl`
+  still gets the machine's one line. The files are the page's build,
+  `web/dist` beside the engine's program, where a packed app has it for
+  its own window, or `client/web/dist` in a checkout
+  (`engine/src/page.rs`). Each answer says what the page may load: its
+  own files and its own door, no script written into it, nothing that
+  frames it. A file is read from that folder only. The API's port serves
+  no page. The page alone is nobody: what it does, it does as a paired
+  device on the door's WebSocket. Not yet: the engine's own copy and its
+  tarball do not carry the page, so only an engine run from the app or a
+  checkout has one; and without the desktop the page says it needs
+  Banda's app, until the browser's adapter and its pairing screen.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

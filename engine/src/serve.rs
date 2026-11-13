@@ -293,8 +293,17 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // The door serves a file's bytes and a page as the API's port does,
     // so a pipe that carries only the door carries them too.
     let at_door = devices::router(kernel.clone(), paired.clone(), engine.clone())
-        .merge(api::bytes(bytes.clone()))
-        .route("/", axum::routing::get(door_says(&machine, &paired)));
+        .merge(api::bytes(bytes.clone()));
+    // And the window's page, where this engine carries it, for a browser
+    // that comes to the door (ADR 0124; SE5).
+    let says = door_says(&machine, &paired);
+    let at_door = match crate::page::Page::find(&pipe.program, from_checkout()) {
+        Some(page) => {
+            tracing::info!(files = %page.root().display(), "the door serves the window's page");
+            at_door.merge(page.router(says))
+        }
+        None => at_door.route("/", axum::routing::get(says)),
+    };
     let router = api::router(kernel.clone(), identity, engine).merge(api::bytes(bytes));
     // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
