@@ -316,6 +316,65 @@ fn a_resend_with_its_command_id_answers_what_it_did() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// `banda app` installs an App from a folder, lists it and removes it, and
+/// `banda modules` prints it after Banda's own (ADR 0126, decision 5).
+#[test]
+fn banda_app_installs_an_app_from_a_folder_lists_it_and_removes_it() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let folder = places._dir.path().join("clients");
+    std::fs::create_dir_all(folder.join("migrations")).unwrap();
+    let write = |file: &str, text: &str| std::fs::write(folder.join(file), text).unwrap();
+    write(
+        "app.toml",
+        "id = \"clients\"\nname = \"Clients\"\nabout = \"The people I work with.\"\nversion = \"0.1.0\"\napi = 1\nentry = \"worker.mjs\"\n",
+    );
+    write(
+        "methods.json",
+        r#"{ "find": { "kind": "call", "about": "The clients in a city." } }"#,
+    );
+    write(
+        "migrations/001.sql",
+        "CREATE TABLE clients_people (name TEXT)",
+    );
+    write("worker.mjs", "export const methods = {}\n");
+    let lines = |output: Output| -> Vec<Value> {
+        assert!(output.status.success(), "{output:?}");
+        (output.stdout.split(|byte| *byte == b'\n'))
+            .filter(|line| !line.is_empty())
+            .map(|line| serde_json::from_slice(line).unwrap())
+            .collect()
+    };
+    let banda = |args: &[&str]| places.banda(args).output().unwrap();
+
+    // From where it runs, with no folder named.
+    let installed = (places.banda(&["app", "install"]).current_dir(&folder))
+        .output()
+        .unwrap();
+    let installed = lines(installed);
+    assert_eq!(installed[0]["id"], "clients");
+    assert_eq!(installed[0]["runs"], false);
+    assert_eq!(lines(banda(&["app", "list"])), installed);
+    let modules = lines(banda(&["modules"]));
+    let clients = modules.last().unwrap();
+    assert_eq!(clients["id"], "clients");
+    assert_eq!(clients["fromBanda"], false);
+    assert_eq!(clients["engine"][0]["tool"], "clients_find");
+    assert!(modules.iter().any(|module| module["id"] == "apps"));
+
+    // What is wrong in the folder is said, and nothing changes.
+    write("methods.json", "{}x");
+    let wrong = banda(&["app", "install", folder.to_str().unwrap()]);
+    assert_eq!(refusal(&wrong), "invalid");
+    assert_eq!(lines(banda(&["app", "list"])), installed);
+
+    assert!(banda(&["app", "remove", "clients"]).status.success());
+    assert!(lines(banda(&["app", "list"])).is_empty());
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 /// What the engine at `port` answers `GET path`, asked with `headers`:
 /// its status line, its headers, and what follows them.
 fn get(port: u64, path: &str, headers: &[&str]) -> (String, String, String) {

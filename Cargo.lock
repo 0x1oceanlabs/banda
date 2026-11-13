@@ -361,6 +361,7 @@ dependencies = [
  "async-trait",
  "axum",
  "banda-agents",
+ "banda-apps",
  "banda-browser",
  "banda-bytes",
  "banda-environments",
@@ -425,6 +426,23 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+]
+
+[[package]]
+name = "banda-apps"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "dunce",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "toml",
+ "tracing",
+ "ts-rs",
 ]
 
 [[package]]

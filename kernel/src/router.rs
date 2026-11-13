@@ -3,7 +3,6 @@
 //! access decision allow it.
 
 use crate::access::{self, Caller, Right};
-use crate::apps::Apps;
 use crate::kernel::Kernel;
 use crate::methods::{Kind, needs_command_id};
 use crate::module::{Call, Module, Scope, Stream};
@@ -26,9 +25,8 @@ pub(crate) enum Queue {
 }
 
 /// The prefixes of the kernel's own methods, which no module takes:
-/// `projects.*`, the window's road (ADR 0029, decision 2), and `apps.*`,
-/// what this engine runs (ADR 0082, decision 2).
-pub(crate) const OWN: [&str; 3] = ["projects", "window", "apps"];
+/// `projects.*` and the window's road (ADR 0029, decision 2).
+pub(crate) const OWN: [&str; 2] = ["projects", "window"];
 
 /// A method of the kernel's own `projects.*` without its prefix, or of
 /// `spaces.*`, their name before ADR 0069 (grace).
@@ -177,12 +175,6 @@ impl Kernel {
         {
             access::decide(&participant, right, self.owner)?;
             return self.window.call(participant, own, params).await.map(plain);
-        }
-        if let Some(own) = method.strip_prefix("apps.")
-            && let Some(right) = Apps::right(own)
-        {
-            access::decide(&participant, right, self.owner)?;
-            return self.apps.call(participant, own, params).await.map(plain);
         }
         if let Some(own) = own_method(method)
             && let Some(right) = Self::own_right(own)

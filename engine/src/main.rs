@@ -47,6 +47,7 @@
 //! logs out at its screen (`control.rs`).
 
 mod account;
+mod app;
 mod apps;
 mod build_id;
 // macOS's engine stops what a crashed one left; Linux's unit does (ADR
@@ -238,6 +239,12 @@ enum Command {
         /// For a window that follows the look: stops when stdin closes.
         #[arg(long, requires = "follow")]
         with_parent: bool,
+    },
+    /// The Apps installed on this machine from a folder, which a Person's
+    /// Agent writes: install one, list them, remove one.
+    App {
+        #[command(subcommand)]
+        what: app::AppCommand,
     },
     /// Connect and manage Accounts through the engine, as this caller.
     Account {
@@ -807,6 +814,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             });
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
+        Command::App { what } => app::app(&places, what).await,
         Command::Account { what } => account::account(&places, what).await,
         Command::Secret { what } => account::secret(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
@@ -1008,9 +1016,13 @@ async fn machine(places: &Places, json: bool) -> Result<(), Failure> {
     Ok(())
 }
 
-/// `banda modules`: what each module offers, no engine.
+/// `banda modules`: what each module offers, no engine: Banda's own, then
+/// the Apps installed from a folder, which hold no unstable mark.
 fn print_modules(unstable: bool) -> ExitCode {
-    let offers = modules::offers();
+    let mut offers = modules::offers();
+    if !unstable && let Ok(places) = Places::from_env() {
+        offers.extend(modules::installed(&places.installed()));
+    }
     let mut out = std::io::stdout().lock();
     let lines: Vec<String> = if unstable {
         let marks = modules::marks(&offers);

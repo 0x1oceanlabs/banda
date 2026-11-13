@@ -281,6 +281,15 @@ impl Call {
         projects.get(&project).map(|entry| entry.scratch())
     }
 
+    /// The folder of the Project its caller's pass walls it in, for a call
+    /// to a module of the machine ([`Reach::of_machine`](crate::Reach));
+    /// none for the owner, and when this machine does not know the Project.
+    pub(crate) async fn walled_folder(&self) -> Option<std::path::PathBuf> {
+        let wall = self.wall?;
+        let projects = self.projects.as_ref()?.read().await;
+        projects.get(&wall.project).map(|entry| entry.folder())
+    }
+
     /// This module in `project`, another open Project of this machine, for
     /// a call of their owner's that moves the module's own data there, as
     /// a Person moves a Thread to another Project (ADR 0098, decision 14).

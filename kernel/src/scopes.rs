@@ -2,14 +2,13 @@
 //! every Project the data holds, and where a module's method runs.
 
 use crate::access;
-use crate::apps::{AppMethods, Apps};
+use crate::apps::App;
 use crate::environment::{Environment, Nowhere};
 use crate::kernel::{Entry, Kernel, PowerStreams, Projects};
 use crate::module::{Module, Scope, Stream, Wall};
 use crate::outbox::Boot;
 use crate::passes::{self, Passes};
 use crate::project::{GONE, Manifest, Project, Shared, UNFINISHED};
-use crate::router::OWN;
 use crate::window::Window;
 use crate::{CommandId, Error, Named, Participant, PersonId, ProjectId, Refusal};
 use std::collections::HashMap;
@@ -28,7 +27,7 @@ pub struct KernelBuilder {
     pass_term: std::time::Duration,
     named: Option<watch::Receiver<Named>>,
     power: Option<PowerStreams>,
-    apps: Vec<AppMethods>,
+    apps: Vec<App>,
 }
 
 impl KernelBuilder {
@@ -81,11 +80,10 @@ impl KernelBuilder {
         self
     }
 
-    /// The Apps this engine runs, each with the methods its engine part
-    /// gives, as the engine's scan of their manifests found them: the
-    /// `welcome` lists them, and `apps.describe` answers them (ADR 0082,
-    /// decisions 2 and 14). With none, it lists none.
-    pub fn apps(mut self, apps: Vec<AppMethods>) -> Self {
+    /// The Apps this engine runs, as the engine's scan of their manifests
+    /// found them: the `welcome` lists them (ADR 0082, decision 14). With
+    /// none, it lists none.
+    pub fn apps(mut self, apps: Vec<App>) -> Self {
         self.apps = apps;
         self
     }
@@ -96,12 +94,6 @@ impl KernelBuilder {
     pub async fn open(self) -> Result<Arc<Kernel>, Error> {
         for (index, module) in self.modules.iter().enumerate() {
             let name = module.name();
-            let valid = !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase());
-            if !valid || OWN.contains(&name) || name == crate::store::KERNEL {
-                return Err(
-                    Refusal::invalid(format!("\"{name}\" cannot be a module's name.")).into(),
-                );
-            }
             if self.modules[..index].iter().any(|m| m.name() == name) {
                 return Err(Refusal::invalid(format!("Two modules are named \"{name}\".")).into());
             }
@@ -167,7 +159,7 @@ impl KernelBuilder {
             environment: self.environment,
             named: self.named,
             power: self.power,
-            apps: Apps::new(self.apps),
+            apps: self.apps,
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))

@@ -11,6 +11,7 @@
 use crate::places::{Places, channel, from_checkout};
 use banda_agents::sending::{self, AgentsSettings};
 use banda_agents::{Agents, Pipe};
+use banda_apps::Apps;
 use banda_browser::Browser;
 use banda_bytes::Bytes;
 use banda_files::Files;
@@ -104,6 +105,12 @@ mod build {
             // `BANDA_AUTO_TITLE=off` keeps the first message's titles, for
             // the end-to-end tests (ADR 0118).
             .names_new_threads(std::env::var("BANDA_AUTO_TITLE").map_or(true, |said| said != "off"))
+    }
+
+    /// What this engine runs, as the scan found it, and the Apps
+    /// installed from a folder, in Banda's data (ADR 0126).
+    pub fn apps(host: &HostContext<'_>) -> Apps {
+        Apps::new(crate::modules::described(), host.places.installed())
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
@@ -617,6 +624,22 @@ mod tests {
     #[test]
     fn only_these_methods_a_pass_reaches_that_are_no_tools() {
         let marked = [
+            (
+                "apps.describe",
+                "an Agent reads what this machine's Apps give, as `banda call` and a window do",
+            ),
+            (
+                "apps.installed",
+                "an Agent's `banda app list` reads the Apps installed from a folder",
+            ),
+            (
+                "apps.install",
+                "an Agent installs the App it wrote, from its own Project's folder, with no click (ADR 0126, decision 5)",
+            ),
+            (
+                "apps.remove",
+                "an Agent takes back an App it installed (ADR 0126, decision 5)",
+            ),
             (
                 "harnesses.accounts",
                 "an Agent's `banda account list` reads what `list` gives it as a tool",

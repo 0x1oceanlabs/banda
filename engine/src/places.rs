@@ -258,6 +258,12 @@ impl Places {
         self.cache.join("thumbnails")
     }
 
+    /// The Apps installed on this machine from a folder, each a copy of
+    /// the folder it came from (ADR 0126, decision 5).
+    pub fn installed(&self) -> PathBuf {
+        self.data.join("apps")
+    }
+
     /// This machine's scope: the store and log of its modules, as the
     /// workspaces (ADR 0025, decision 1). It is laid out as a Project's data
     /// is (ADR 0026): the manifest, the store and the lock.

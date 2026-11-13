@@ -28,6 +28,28 @@ impl Reach {
         Reach::resolve(&call.project().folder(), asked, call.wall().is_some())
     }
 
+    /// The path `asked` of a call to a module of this machine, which has
+    /// no Project's folder of its own. An Agent's call reaches only inside
+    /// the folder of the Project its pass walls it in, where a relative
+    /// path starts. The Person names any path, whole.
+    pub async fn of_machine(call: &Call, asked: impl AsRef<Path>) -> Result<Reach, Refusal> {
+        let asked = asked.as_ref();
+        if call.wall().is_some() {
+            let folder = call.walled_folder().await.ok_or_else(|| {
+                Refusal::not_found("The Project this Agent works in is not on this machine.")
+            })?;
+            return Reach::resolve(&folder, asked, true);
+        }
+        if !asked.is_absolute() {
+            return Err(Refusal::invalid(format!(
+                "{} is not a whole path: name it from the root.",
+                asked.display()
+            )));
+        }
+        // Whole, it starts nowhere: it is read as the system reads it.
+        Reach::resolve(asked, asked, false)
+    }
+
     /// The path `asked`, from `folder` when it is relative. `walled` holds
     /// it inside `folder`, as an Agent's call is.
     pub fn resolve(folder: &Path, asked: impl AsRef<Path>, walled: bool) -> Result<Reach, Refusal> {
