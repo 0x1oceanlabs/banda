@@ -5,8 +5,8 @@ use banda_kernel::api::Identity;
 use banda_kernel::{
     AgentId, App, Call, Caller, Code, CommandId, Effect, Error, Event, EventFilter, Kernel, Kind,
     Lease, Listener, Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId,
-    ProjectId, ProjectSummary, Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode,
-    now_ms,
+    ProjectId, ProjectSummary, Refusal, Registry, Retry, Right, Scope, Settled, SignKind, Stream,
+    TurnedOff, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -4690,4 +4690,168 @@ async fn the_engine_does_not_start_with_a_module_of_the_machine_turned_off() {
         "{}",
         refusal.message
     );
+}
+
+/// A module is added to the running engine, put in the place of itself
+/// and taken away, as an App installed from a folder is (ADR 0126,
+/// decision 5).
+#[tokio::test]
+async fn a_module_is_added_to_the_running_engine_replaced_and_taken_away() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let registry = Registry::new();
+    let kernel = Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
+        .module(Notes::default())
+        .module(Desk)
+        .machine(dir.path().join("state").join("machine"))
+        .registry(registry.clone())
+        .open()
+        .await
+        .unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    let app = |version: &str| App {
+        id: "tally".to_owned(),
+        version: version.to_owned(),
+        api: 1,
+    };
+    let call = |method: &'static str, project: &ProjectSummary| {
+        let command = method.ends_with("mark").then(CommandId::new);
+        kernel.call(person, method, Some(project.id), command, Value::Null)
+    };
+    let no_method = call("tally.count", &work).await.unwrap_err();
+    assert_eq!(no_method.code, Code::Invalid);
+
+    // Added, every open Project takes it at once, and a Project made after.
+    let first = Tally::with(&[Tally::MARKS]);
+    let off = registry.add(first.clone(), app("0.1.0")).await.unwrap();
+    assert_eq!(off, []);
+    assert_eq!(first.opened.lock().unwrap().as_slice(), [work.id]);
+    call("tally.mark", &work).await.unwrap();
+    assert_eq!(call("tally.count", &work).await.unwrap(), json!(1));
+    eventually(|| async { first.rang.load(Ordering::SeqCst) == 1 }).await;
+    assert_eq!(kernel.apps(), [app("0.1.0")]);
+    assert!(kernel.modules().contains(&"tally"));
+    let home = create(&kernel, owner, "Home").await;
+    assert_eq!(call("tally.count", &home).await.unwrap(), json!(0));
+
+    // Put in its own place with a step that fails, it is turned off where
+    // the step failed, and the rest go on.
+    let broken = Tally::with(&[
+        Tally::MARKS,
+        "ALTER TABLE tally_markz ADD COLUMN at INTEGER",
+    ]);
+    let off = registry.add(broken, app("0.2.0")).await.unwrap();
+    let projects: Vec<_> = off.iter().map(|off| off.project).collect();
+    assert_eq!(projects.len(), 2);
+    assert!(projects.contains(&work.id) && projects.contains(&home.id));
+    assert!(
+        off[0].why.starts_with("Step 2 of its tables failed"),
+        "{off:?}"
+    );
+    let refused = call("tally.count", &work).await.unwrap_err();
+    assert_eq!(refused.code, Code::AppUnavailable);
+    add(&kernel, person, &work, "kept").await.unwrap();
+    // Put right, it runs again with what it kept, and the list says its
+    // version.
+    let mended = Tally::with(&[
+        Tally::MARKS,
+        "ALTER TABLE tally_marks ADD COLUMN at INTEGER",
+    ]);
+    let off = registry.add(mended.clone(), app("0.3.0")).await.unwrap();
+    assert_eq!(off, Vec::<TurnedOff>::new());
+    assert_eq!(call("tally.count", &work).await.unwrap(), json!(1));
+    assert_eq!(kernel.apps(), [app("0.3.0")]);
+
+    // A module the engine was built with keeps its name, and the machine's
+    // scope takes none while it runs.
+    let taken = registry.add(
+        Notes::default(),
+        App {
+            id: "notes".to_owned(),
+            ..app("1")
+        },
+    );
+    assert_eq!(taken.await.unwrap_err().code, Code::Conflict);
+    let of_machine = Tally {
+        scope: Scope::Machine,
+        ..Tally::with(&[])
+    };
+    let refused = registry.add(of_machine, app("1")).await.unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+
+    // Taken away, it has no method; what it kept stays, for the next one.
+    registry.remove("tally").await.unwrap();
+    assert_eq!(
+        call("tally.count", &work).await.unwrap_err().code,
+        Code::Invalid
+    );
+    assert_eq!(kernel.apps(), []);
+    assert_eq!(
+        registry.remove("tally").await.unwrap_err().code,
+        Code::NotFound
+    );
+    assert_eq!(
+        registry.remove("notes").await.unwrap_err().code,
+        Code::NotFound
+    );
+    registry.add(mended, app("0.3.0")).await.unwrap();
+    assert_eq!(call("tally.count", &work).await.unwrap(), json!(1));
+}
+
+/// A module the engine names as added as it starts, an App installed
+/// before, is replaced and taken away while it runs as one added then.
+#[tokio::test]
+async fn a_module_the_engine_started_with_as_added_is_replaced_while_it_runs() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, data) = (dir.path().join("root"), dir.path().join("data"));
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let app = |version: &str| App {
+        id: "tally".to_owned(),
+        version: version.to_owned(),
+        api: 1,
+    };
+    let registry = Registry::new();
+    let kernel = Kernel::builder(&root, &data, owner)
+        .module(Notes::default())
+        .added(Tally::with(&[Tally::MARKS]), app("0.1.0"))
+        .registry(registry.clone())
+        .open()
+        .await
+        .unwrap();
+    assert_eq!(kernel.apps(), [app("0.1.0")]);
+    let work = create(&kernel, owner, "Work").await;
+    let mark = Some(CommandId::new());
+    let marked = kernel.call(person, "tally.mark", Some(work.id), mark, Value::Null);
+    marked.await.unwrap();
+
+    let next: &[&str] = &[
+        Tally::MARKS,
+        "ALTER TABLE tally_marks ADD COLUMN at INTEGER",
+    ];
+    let off = registry.add(Tally::with(next), app("0.2.0")).await.unwrap();
+    assert_eq!(off, []);
+    assert_eq!(kernel.apps(), [app("0.2.0")]);
+    let count = kernel.call(person, "tally.count", Some(work.id), None, Value::Null);
+    assert_eq!(count.await.unwrap(), json!(1));
+    registry.remove("tally").await.unwrap();
+    assert_eq!(kernel.apps(), []);
+    drop(kernel);
+
+    // The machine's scope takes none it could not add while it runs.
+    let of_machine = Tally {
+        scope: Scope::Machine,
+        ..Tally::with(&[])
+    };
+    let refused = Kernel::builder(
+        dir.path().join("other"),
+        dir.path().join("other/data"),
+        owner,
+    )
+    .added(of_machine, app("1"))
+    .machine(dir.path().join("state").join("machine"))
+    .open()
+    .await;
+    assert!(matches!(refused, Err(Error::Refused(refusal)) if refusal.code == Code::Invalid));
 }

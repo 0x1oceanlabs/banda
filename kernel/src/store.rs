@@ -171,8 +171,9 @@ pub(crate) struct Store {
     published: broadcast::Sender<Arc<Event>>,
     outbox: Arc<Notify>,
     running: Runs,
-    /// The modules turned off here, as it opened: see [`Off`].
-    off: Vec<Off>,
+    /// The modules turned off here, as it opened or as each was added: see
+    /// [`Off`].
+    off: std::sync::RwLock<Vec<Arc<Off>>>,
 }
 
 /// A module turned off in one store: its tables there did not come up to
@@ -348,7 +349,6 @@ impl Store {
     /// here ([`Store::off`]), and the store opens with the rest; the
     /// kernel's own must, or it does not open.
     pub(crate) fn open(path: &Path, modules: &[Tables]) -> Result<Store, Error> {
-        let owners: Arc<[Tables]> = modules.into();
         let mut writer = Connection::open(path)?;
         writer.execute_batch(
             "PRAGMA journal_mode = WAL;
@@ -357,20 +357,16 @@ impl Store {
              PRAGMA busy_timeout = 5000;
              PRAGMA trusted_schema = OFF;",
         )?;
-        let writer_authorizer = Authorizer::install(&mut writer, owners.clone())?;
+        let writer_authorizer = Authorizer::install(&mut writer, modules)?;
         migrate(&mut writer, KERNEL, KERNEL_MIGRATIONS)?;
-        let mut off = Vec::new();
-        for tables in modules {
-            let of = Some((&*writer_authorizer, tables));
-            if let Err(stuck) = migrate_in(&mut writer, tables.module, tables.migrations, of) {
-                off.push(stuck);
-            }
-        }
+        let off: Vec<Off> = (modules.iter())
+            .filter_map(|tables| bring_up(&mut writer, &writer_authorizer, tables))
+            .collect();
         let mut reader = Connection::open(path)?;
         reader.execute_batch(
             "PRAGMA query_only = ON; PRAGMA busy_timeout = 5000; PRAGMA trusted_schema = OFF;",
         )?;
-        let reader_authorizer = Authorizer::install(&mut reader, owners)?;
+        let reader_authorizer = Authorizer::install(&mut reader, modules)?;
 
         let (jobs, inbox) = mpsc::channel::<Job>();
         std::thread::Builder::new()
@@ -391,18 +387,40 @@ impl Store {
             published,
             outbox: Arc::new(Notify::new()),
             running: Runs::default(),
-            off,
+            off: std::sync::RwLock::new(off.into_iter().map(Arc::new).collect()),
         })
     }
 
-    /// The modules turned off here, as it opened.
-    pub(crate) fn off(&self) -> &[Off] {
-        &self.off
+    /// The modules turned off here now.
+    pub(crate) fn off(&self) -> Vec<Arc<Off>> {
+        self.off.read().unwrap().clone()
     }
 
     /// Why `module` is turned off here; none when it runs.
-    pub(crate) fn off_of(&self, module: &str) -> Option<&Off> {
-        self.off.iter().find(|off| off.module == module)
+    pub(crate) fn off_of(&self, module: &str) -> Option<Arc<Off>> {
+        let off = self.off.read().unwrap();
+        off.iter().find(|off| off.module == module).cloned()
+    }
+
+    /// Takes `tables`, a module's added while the engine runs, or put in
+    /// the place of those of its name: both connections let it reach
+    /// them, and its steps this store has not seen run, each as
+    /// [`Store::open`] runs them. Why it is turned off here, when they do
+    /// not come up to date; one turned off before runs again when they do.
+    pub(crate) async fn add(&self, tables: Tables) -> Result<Option<Arc<Off>>, Error> {
+        self.reader.lock().unwrap().authorizer.put(tables);
+        let authorizer = self.writer_authorizer.clone();
+        let stuck = self
+            .on_writer(move |writer| {
+                authorizer.put(tables);
+                Ok(bring_up(writer, &authorizer, &tables))
+            })
+            .await?;
+        let stuck = stuck.map(Arc::new);
+        let mut off = self.off.write().unwrap();
+        off.retain(|off| off.module != tables.module);
+        off.extend(stuck.clone());
+        Ok(stuck)
     }
 
     /// Runs `change` in one transaction on the writer, as `module`, or as
@@ -1045,6 +1063,13 @@ fn seen(sql: &Connection, ledger: &str, known: usize, module: bool) -> Result<us
     .into())
 }
 
+/// Brings a module's tables up to date on the writer: why it is turned
+/// off, when they do not come.
+fn bring_up(writer: &mut Connection, authorizer: &Authorizer, tables: &Tables) -> Option<Off> {
+    let of = Some((authorizer, tables));
+    migrate_in(writer, tables.module, tables.migrations, of).err()
+}
+
 /// Runs one step of `ledger` and writes it in the ledger, in one
 /// transaction.
 fn apply(
@@ -1107,7 +1132,7 @@ mod tests {
     /// reason `why` holds of.
     fn off_as(opened: &Result<Store, Error>, why: impl Fn(&Error) -> bool) -> bool {
         let Ok(store) = opened else { return false };
-        matches!(store.off(), [off] if off.module == "notes" && why(&off.why))
+        matches!(&store.off()[..], [off] if off.module == "notes" && why(&off.why))
     }
 
     fn author() -> Participant {
@@ -1696,7 +1721,8 @@ mod tests {
             "CREATE TABLE notes_tags (tag TEXT); INSERT INTO notes_tagz VALUES ('x')",
         ]);
         let store = Store::open(&path, &broken).unwrap();
-        let [off] = store.off() else {
+        let off = store.off();
+        let [off] = &off[..] else {
             panic!("notes alone is off");
         };
         assert_eq!((off.module, off.step), ("notes", Some(2)));

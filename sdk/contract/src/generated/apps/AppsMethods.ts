@@ -5,6 +5,7 @@ import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Install } from "./Install";
 import type { InstalledApp } from "./InstalledApp";
+import type { Installing } from "./Installing";
 import type { Remove } from "./Remove";
 
 export type AppsMethods = { 
@@ -19,20 +20,24 @@ describe: CallMethod<Nothing, Array<AppMethods>>,
 /**
  * The Apps installed on this machine from a folder, by id: each
  * with its version, where it was installed from and when, and
- * whether this engine runs that version yet.
+ * whether this engine serves that version.
  */
 installed: CallMethod<Nothing, Array<InstalledApp>>, 
 /**
  * Installs the App in a folder on this machine, or installs it
  * again after a change: reads its app.toml, methods.json,
- * migrations and entry, says what is wrong in them, and copies
- * the folder into Banda's data. Every Project of this machine
- * gets it, each with its own tables. It runs from the engine's
- * next start.
+ * migrations and entry, says what is wrong in them, copies the
+ * folder into Banda's data, and adds it to the running engine.
+ * Every Project of this machine gets it at once, each with its
+ * own tables, and its methods are Agents' tools from then. A
+ * Project where its tables did not come up to date is answered in
+ * `off`, with why: there it is turned off, and the rest have it.
+ * Refused, the App installed before goes on as it ran.
  */
-install: CommandMethod<Install, InstalledApp>, 
+install: CommandMethod<Install, Installing>, 
 /**
- * Removes an App installed from a folder. What it kept in each
- * Project stays there, and installing it again brings it back.
+ * Removes an App installed from a folder: it runs nothing from
+ * then. What it kept in each Project stays there, and installing
+ * it again brings it back.
  */
 remove: CommandMethod<Remove, null>, };

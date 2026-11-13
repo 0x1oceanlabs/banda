@@ -18,6 +18,42 @@ use uuid::Uuid;
 /// keeps.
 pub type Stream = mpsc::Receiver<Value>;
 
+/// What `watched` holds now, then again each time it changes, until the one
+/// who hears it stops: the stream of a value its module keeps current.
+pub fn watching<T>(watched: tokio::sync::watch::Receiver<T>) -> Stream
+where
+    T: Serialize + Send + Sync + 'static,
+{
+    watching_as(watched, |value| serde_json::to_value(value).ok())
+}
+
+/// [`watching`], each value said as `say` says it; the stream ends at one
+/// it says nothing of.
+pub fn watching_as<T>(
+    mut watched: tokio::sync::watch::Receiver<T>,
+    say: impl Fn(&T) -> Option<Value> + Send + 'static,
+) -> Stream
+where
+    T: Send + Sync + 'static,
+{
+    let (send, hear) = mpsc::channel(1);
+    tokio::spawn(async move {
+        loop {
+            let Some(now) = say(&*watched.borrow_and_update()) else {
+                break;
+            };
+            if send.send(now).await.is_err() {
+                break;
+            }
+            tokio::select! {
+                changed = watched.changed() => if changed.is_err() { break },
+                () = send.closed() => break,
+            }
+        }
+    });
+    hear
+}
+
 /// Where a module keeps its data and runs its methods (ADR 0025,
 /// decision 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

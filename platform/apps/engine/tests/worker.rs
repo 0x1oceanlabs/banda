@@ -37,7 +37,8 @@ struct Host {
     dir: tempfile::TempDir,
 }
 
-/// Installs `apps`, each from its folder, in a new machine's data.
+/// Installs `apps`, each from its folder, in a machine's data, as an
+/// install does while no engine runs there.
 fn install(dir: &Path, owner: PersonId, apps: &[&Path]) {
     let installed = Installed::in_folder(dir.join("data/apps"));
     for from in apps {
@@ -45,25 +46,28 @@ fn install(dir: &Path, owner: PersonId, apps: &[&Path]) {
             from: from.to_path_buf(),
             by: Participant::Person(owner),
             project: None,
-            at: 0,
+            at: banda_kernel::now_ms(),
         };
-        installed
-            .install(&Folder::read(&from.from).unwrap(), &from)
-            .unwrap();
+        let app = Folder::read(&from.from).unwrap();
+        let copy = installed.stage(&app, &from).unwrap();
+        installed.commit(&app, &from, &copy).unwrap();
     }
 }
 
 /// Starts an engine's kernel over `dir`, serving what is installed there,
 /// as the engine does as it starts.
 async fn serve(dir: &Path, owner: PersonId, node: Option<Node>) -> Arc<Kernel> {
-    let (apps, served) = Apps::new(Vec::new(), dir.join("data/apps")).serving(node);
-    let mut kernel = Kernel::builder(dir.join("root"), dir.join("data"), owner)
+    let registry = banda_kernel::Registry::new();
+    let apps = Apps::new(Vec::new(), dir.join("data/apps"))
+        .serving(registry.clone(), node)
+        .answering_within(Duration::from_secs(2));
+    let kernel = Kernel::builder(dir.join("root"), dir.join("data"), owner)
         .machine(dir.join("state/machine"))
         .environment(banda_environments::Local)
-        .module(apps);
-    for app in served {
-        kernel = kernel.module(app.answering_within(Duration::from_secs(2)));
-    }
+        .registry(registry)
+        .module(apps.clone());
+    let kernel = (apps.at_start().into_iter())
+        .fold(kernel, |kernel, (served, app)| kernel.added(served, app));
     kernel.open().await.unwrap()
 }
 
@@ -430,4 +434,120 @@ async fn an_installed_app_on_a_machine_with_no_node_is_listed_and_says_why_it_do
     assert_eq!(described[0]["methods"][1]["tool"], "clients_find");
     let installed = (host.kernel).call(person, "apps.installed", None, None, json!({}));
     assert_eq!(installed.await.unwrap()[0]["runs"], true);
+}
+
+/// An App installed while the engine runs is there at once, in every
+/// Project, and so is one installed again or removed (ADR 0126, decision
+/// 5): nothing restarts, and each change is said.
+#[tokio::test]
+async fn an_app_installed_while_the_engine_runs_is_there_at_once_and_is_replaced_and_removed() {
+    needs_node!();
+    let host = host(&[]).await;
+    let work = host.project("Work").await;
+    let machine = |method: &'static str, params: Value| {
+        let command = Some(CommandId::new());
+        (host.kernel).call(host.person(), method, None, command, params)
+    };
+    // The engine says its Apps now, and again as they change.
+    let changes = (host.kernel).stream(host.person(), "machine.apps", None, json!({}));
+    let mut changes = changes.await.unwrap();
+    assert_eq!(changes.recv().await.unwrap(), json!([]));
+
+    // The clients App, written in the Project's folder with its first step
+    // alone, and installed.
+    let written = Path::new(&work.folder).join("clients");
+    let copy = |file: &str| {
+        std::fs::create_dir_all(written.join(file).parent().unwrap()).unwrap();
+        std::fs::copy(folder("clients").join(file), written.join(file)).unwrap();
+    };
+    for file in [
+        "app.toml",
+        "methods.json",
+        "worker.mjs",
+        "migrations/001.sql",
+    ] {
+        copy(file);
+    }
+    let install = || machine("apps.install", json!({ "folder": written }));
+    let installed = install().await.unwrap();
+    assert_eq!(
+        (&installed["runs"], &installed["off"]),
+        (&json!(true), &json!([]))
+    );
+    let listed = json!([{ "id": "clients", "version": "0.1.0", "api": 1 }]);
+    assert_eq!(changes.recv().await.unwrap(), listed);
+    // It runs, its methods are tools, and the welcome's list has it.
+    let anna = json!({ "name": "Anna", "city": "Berlin" });
+    host.call(&work, "clients.add", anna).await.unwrap();
+    assert!(
+        host.tools()
+            .await
+            .iter()
+            .any(|tool| tool.name == "clients_add")
+    );
+    assert_eq!(host.kernel.apps()[0].id, "clients");
+    // Its notes wait for their table: the second step is not installed.
+    let early = host
+        .call(&work, "clients.notes", json!({ "client": 1 }))
+        .await;
+    assert_eq!(early.unwrap_err().code, Code::Internal);
+
+    // Installed again with a step that fails, it is off where it failed,
+    // and says so as it is installed; a Project made then has it off too.
+    std::fs::write(
+        written.join("migrations/002.sql"),
+        "CREATE TABEL clients_notes (id)",
+    )
+    .unwrap();
+    let broken = install().await.unwrap();
+    assert_eq!(broken["off"][0]["project"], json!(work.id));
+    let why = broken["off"][0]["why"].as_str().unwrap();
+    assert!(why.starts_with("Step 2 of its tables failed"), "{why}");
+    let off = host
+        .call(&work, "clients.find", json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(off.code, Code::AppUnavailable);
+
+    // Put right and installed again, it has what it kept, and its new
+    // table, with no restart.
+    copy("migrations/002.sql");
+    let mended = install().await.unwrap();
+    assert_eq!(mended["off"], json!([]));
+    let found = host.call(&work, "clients.find", json!({ "city": "Berlin" }));
+    assert_eq!(found.await.unwrap()[0]["name"], "Anna");
+    let noted = host.call(
+        &work,
+        "clients.note",
+        json!({ "client": 1, "text": "Tea." }),
+    );
+    noted.await.unwrap();
+    let home = host.project("Home").await;
+    assert_eq!(
+        host.call(&home, "clients.find", json!({})).await.unwrap(),
+        json!([])
+    );
+
+    // Removed, it has no method and no tool; installed again, its data is
+    // there.
+    machine("apps.remove", json!({ "id": "clients" }))
+        .await
+        .unwrap();
+    let gone = host
+        .call(&work, "clients.find", json!({}))
+        .await
+        .unwrap_err();
+    assert_eq!(gone.code, Code::Invalid);
+    assert!(
+        host.tools()
+            .await
+            .iter()
+            .all(|tool| tool.name != "clients_add")
+    );
+    assert!(host.kernel.apps().is_empty());
+    install().await.unwrap();
+    let notes = host
+        .call(&work, "clients.notes", json!({ "client": 1 }))
+        .await;
+    assert_eq!(notes.unwrap()[0]["text"], "Tea.");
 }

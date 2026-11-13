@@ -38,7 +38,7 @@ pub(crate) const RUNNER: &str = include_str!("runner.mjs");
 /// How long a worker has to say it is ready, once started.
 const READY_WITHIN: Duration = Duration::from_secs(20);
 /// How long a method has to answer.
-const ANSWERS_WITHIN: Duration = Duration::from_secs(60);
+pub(crate) const ANSWERS_WITHIN: Duration = Duration::from_secs(60);
 /// How long a worker that did not start is left before it is tried again,
 /// so a broken entry is not started once a call.
 const TRIED_AGAIN_AFTER: Duration = Duration::from_secs(2);

@@ -224,14 +224,19 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // Its battery and why it is awake, for other machines' windows: read
     // only while one hears `machine.power`.
     let power = banda_machines::power::Meter::new(awake.why());
-    // The Apps installed from a folder, each a module of its own, run by
-    // its worker on the Node this host has (ADR 0126).
-    let (installed, served) =
-        banda_apps::Apps::new(crate::modules::described(), places.installed()).serving(node);
+    // The apps module hands the kernel each App installed from a folder,
+    // a module of its own run by its worker on the Node this host has
+    // (ADR 0126): those installed before as it is built, and each
+    // installed later through the registry, while it runs.
+    let registry = banda_kernel::Registry::new();
+    let own = crate::modules::described();
+    let listed = own.iter().map(|app| app.app.clone()).collect();
+    let installed = banda_apps::Apps::new(own, places.installed()).serving(registry.clone(), node);
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
-        .apps(installed.runs().iter().map(|app| app.app.clone()).collect())
+        .apps(listed)
+        .registry(registry)
         .power(move || power.stream())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084), a Harness's behind the fence where it holds (ADR
@@ -259,10 +264,12 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         apps: &installed,
         devices: &paired,
     };
-    let builder = apps::serve(builder, &host);
-    let opening = (served.into_iter())
-        .fold(builder, |builder, app| builder.module(app))
-        .open();
+    // The Apps installed before this start come after Banda's own.
+    let builder = (installed.at_start().into_iter())
+        .fold(apps::serve(builder, &host), |builder, (served, app)| {
+            builder.added(served, app)
+        });
+    let opening = builder.open();
     let kernel = tokio::select! {
         opened = opening => opened.map_err(Failure::broken)?,
         () = terminated(&mut term) => {
@@ -271,6 +278,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
             return Ok(());
         }
     };
+
     let identity = OwnerSecret {
         secret: running.secret.clone(),
         owner,

@@ -365,7 +365,7 @@ pub(crate) async fn recover(project: &Arc<Project>) -> Result<(), Error> {
 /// settled meanwhile is left as it is.
 async fn cut_short(project: &Arc<Project>, claimed: Claimed, cut: Cut) -> Result<(), Error> {
     let (id, worker) = (claimed.effect.id, claimed.worker.clone());
-    let Some(module) = find(project.modules(), &claimed.module).cloned() else {
+    let Some(module) = find(&project.modules(), &claimed.module).cloned() else {
         tracing::warn!(module = %claimed.module, id, "an effect of a module this engine lacks stays as it is");
         // It no longer counts among the leases to wait for.
         return project
@@ -511,7 +511,7 @@ async fn start_ready(project: &Arc<Project>) -> Result<Duration, Error> {
 fn start(project: &Arc<Project>, claimed: Claimed) {
     let project = project.clone();
     tokio::spawn(async move {
-        let Some(module) = find(project.modules(), &claimed.module).cloned() else {
+        let Some(module) = find(&project.modules(), &claimed.module).cloned() else {
             tracing::error!(module = %claimed.module, "a claimed effect has no module");
             return;
         };
@@ -664,7 +664,7 @@ pub(crate) async fn finish_leased(
     claim: Claim,
     outcome: Outcome,
 ) -> Result<(), Refusal> {
-    let Some(of) = find(project.modules(), module).cloned() else {
+    let Some(of) = find(&project.modules(), module).cloned() else {
         return Err(Refusal::not_found(format!("No module is named {module}.")));
     };
     let held = project

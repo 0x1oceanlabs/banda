@@ -4,14 +4,20 @@
 //! ```text
 //! <data>/apps/
 //!   clients/
-//!     app/              the folder, as it was copied
-//!     installed.json    who installed it, from where, and when
+//!     installed.json    who installed it, from where and when, and its copy
+//!     1794588292418/    the folder, as it was copied at that install
 //! ```
 //!
 //! An install copies the folder, so what runs is what was installed, and a
 //! change to the folder it came from changes nothing until it is installed
-//! again. The copy is made beside its place and renamed into it, so a copy
-//! cut short leaves the App as it was.
+//! again. It goes in three steps, so the engine never runs a copy it did
+//! not take: the copy is made in a folder of its own ([`Installed::stage`]),
+//! the engine takes the App from there, and only then does
+//! `installed.json` name it ([`Installed::commit`]). One the engine
+//! refused is taken away ([`Installed::discard`]), and the App goes on from
+//! the copy it had. The copies no install names go as the engine next
+//! starts ([`Installed::sweep`]): one may still be read by a worker that
+//! ends as its last call does.
 
 use crate::folder::Folder;
 use crate::folder::is_id;
@@ -20,14 +26,10 @@ use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use ts_rs::TS;
 
-/// The copy of the App's folder, inside its place.
-const COPY: &str = "app";
-/// Who installed it, beside the copy.
+/// Who installed it and which copy runs, beside the copies.
 const KEPT: &str = "installed.json";
-/// A copy while it is made, and the one it replaces until that is gone:
-/// no App's id has a dot, so none is taken for an App.
-const NEW: &str = ".new";
-const OLD: &str = ".old";
+/// The copy's folder in an install from before each had its own.
+const FIRST_COPY: &str = "app";
 
 /// The most an App's folder holds: its files, and their bytes together.
 const FILES_MOST: usize = 2000;
@@ -50,6 +52,27 @@ pub struct InstalledFrom {
     pub project: Option<ProjectId>,
     /// When, in ms since the epoch.
     pub at: i64,
+}
+
+/// What `installed.json` holds.
+#[derive(Serialize, Deserialize)]
+struct Kept {
+    #[serde(flatten)]
+    from: InstalledFrom,
+    /// The folder of the copy that runs, beside it.
+    #[serde(default = "first_copy")]
+    copy: String,
+}
+
+fn first_copy() -> String {
+    FIRST_COPY.to_owned()
+}
+
+/// An App installed: as its copy reads, who installed it, and its copy.
+pub struct Install {
+    pub app: Folder,
+    pub from: InstalledFrom,
+    pub copy: PathBuf,
 }
 
 /// Where this machine keeps its installed Apps: `<data>/apps`.
@@ -84,15 +107,10 @@ impl Installed {
         file
     }
 
-    /// Where the App `id` runs from: the copy of its folder.
-    pub fn copy_of(&self, id: &str) -> PathBuf {
-        self.root.join(id).join(COPY)
-    }
-
     /// Every installed App, by id, as its copy reads now. One whose copy
     /// does not read is logged and left out: it runs nothing until it is
     /// installed again.
-    pub fn list(&self) -> Vec<(Folder, InstalledFrom)> {
+    pub fn list(&self) -> Vec<Install> {
         let Ok(entries) = std::fs::read_dir(&self.root) else {
             return Vec::new();
         };
@@ -105,59 +123,87 @@ impl Installed {
         ids.iter().filter_map(|id| self.read(id)).collect()
     }
 
-    fn read(&self, id: &str) -> Option<(Folder, InstalledFrom)> {
-        let folder = match Folder::read(&self.copy_of(id)) {
-            Ok(folder) if folder.id == id => folder,
-            Ok(folder) => {
-                tracing::error!(id, named = folder.id, "an installed App names another id");
-                return None;
+    fn kept(&self, id: &str) -> Option<Kept> {
+        let bytes = std::fs::read(self.root.join(id).join(KEPT)).ok()?;
+        serde_json::from_slice(&bytes).ok()
+    }
+
+    fn read(&self, id: &str) -> Option<Install> {
+        let Some(Kept { from, copy }) = self.kept(id) else {
+            tracing::error!(id, "an installed App does not say who installed it");
+            return None;
+        };
+        let copy = self.root.join(id).join(copy);
+        match Folder::read(&copy) {
+            Ok(app) if app.id == id => Some(Install { app, from, copy }),
+            Ok(app) => {
+                tracing::error!(id, named = app.id, "an installed App names another id");
+                None
             }
             Err(refusal) => {
                 tracing::error!(id, why = %refusal.message, "an installed App does not read");
-                return None;
+                None
             }
-        };
-        let kept = std::fs::read(self.root.join(id).join(KEPT))
-            .ok()
-            .and_then(|bytes| serde_json::from_slice(&bytes).ok());
-        if kept.is_none() {
-            tracing::error!(id, "an installed App does not say who installed it");
         }
-        Some((folder, kept?))
     }
 
-    /// Copies `app`, read from the folder `kept.from`, into its place,
-    /// over the copy installed before.
-    pub fn install(&self, app: &Folder, kept: &InstalledFrom) -> Result<(), Refusal> {
+    /// Copies `app`, read from the folder `from.from`, into a folder of
+    /// its own beside the copy that runs: where the copy is, for the
+    /// engine to take the App from.
+    pub fn stage(&self, app: &Folder, from: &InstalledFrom) -> Result<PathBuf, Refusal> {
         let place = self.root.join(&app.id);
-        let new = self.root.join(format!("{}{NEW}", app.id));
-        let old = self.root.join(format!("{}{OLD}", app.id));
-        for left in [&new, &old] {
-            if left.exists() {
-                host::remove_all(left).map_err(|e| broke("an install left before stays", e))?;
-            }
-        }
-        let made = (|| {
-            let mut copied = Copied::default();
-            copy(&kept.from, &new.join(COPY), &mut copied)?;
-            let kept = serde_json::to_vec_pretty(kept).map_err(|_| Refusal::internal())?;
-            std::fs::write(new.join(KEPT), kept).map_err(|e| broke("an install was not kept", e))
-        })();
-        if let Err(refusal) = made {
-            let _ = host::remove_all(&new);
+        // By when it was installed, and apart from one made that moment.
+        let copy = (0..)
+            .map(|again| place.join(format!("{}{}", from.at, "-".repeat(again))))
+            .find(|copy| !copy.exists())
+            .expect("a name not taken");
+        let mut copied = Copied::default();
+        if let Err(refusal) = copy_folder(&from.from, &copy, &mut copied) {
+            self.discard(&copy);
             return Err(refusal);
         }
-        let swap = || -> std::io::Result<()> {
-            if place.exists() {
-                host::rename(&place, &old)?;
-            }
-            host::rename(&new, &place)?;
-            if old.exists() {
-                host::remove_all(&old)?;
-            }
-            Ok(())
+        Ok(copy)
+    }
+
+    /// Names `copy`, staged and taken by the engine, as the App's that
+    /// runs, installed as `from` says.
+    pub fn commit(&self, app: &Folder, from: &InstalledFrom, copy: &Path) -> Result<(), Refusal> {
+        let kept = Kept {
+            from: from.clone(),
+            copy: (copy.file_name().unwrap_or_default().to_string_lossy()).into_owned(),
         };
-        swap().map_err(|e| broke("an install was not put in place", e))
+        let place = self.root.join(&app.id);
+        let written = || -> std::io::Result<()> {
+            let new = place.join(format!("{KEPT}.new"));
+            std::fs::write(&new, serde_json::to_vec_pretty(&kept)?)?;
+            host::rename(&new, &place.join(KEPT))
+        };
+        written().map_err(|e| broke("an install was not kept", e))
+    }
+
+    /// Takes away `copy`, staged and not taken: its App is as it was, and
+    /// one never installed before is not installed.
+    pub fn discard(&self, copy: &Path) {
+        let _ = host::remove_all(copy);
+        if let Some(place) = copy.parent() {
+            // Only when nothing else is in it.
+            let _ = std::fs::remove_dir(place);
+        }
+    }
+
+    /// Takes away the copies no install names, left by an install put in
+    /// another's place or cut short: as the engine starts, when no worker
+    /// reads one.
+    pub fn sweep(&self) {
+        for Install { app, copy, .. } in self.list() {
+            let place = self.root.join(&app.id);
+            let others = std::fs::read_dir(&place).into_iter().flatten().flatten();
+            for other in others.map(|entry| entry.path()) {
+                if other.is_dir() && other != copy {
+                    let _ = host::remove_all(&other);
+                }
+            }
+        }
     }
 
     /// Takes the installed App `id` away. Its data stays in each Project
@@ -182,7 +228,7 @@ struct Copied {
 
 /// Copies the folder `from` to `to`: its files and its folders, but git's
 /// own. A link is refused: an App's folder holds its own files.
-fn copy(from: &Path, to: &Path, copied: &mut Copied) -> Result<(), Refusal> {
+fn copy_folder(from: &Path, to: &Path, copied: &mut Copied) -> Result<(), Refusal> {
     let unread = |error: std::io::Error| {
         Refusal::invalid(format!("{} could not be read: {error}.", from.display()))
     };
@@ -199,7 +245,7 @@ fn copy(from: &Path, to: &Path, copied: &mut Copied) -> Result<(), Refusal> {
         }
         if kind.is_dir() {
             if name != ".git" {
-                copy(&path, &to.join(&name), copied)?;
+                copy_folder(&path, &to.join(&name), copied)?;
             }
             continue;
         }

@@ -15,8 +15,9 @@
 use banda_kernel::{Does, Kind, Method, Refusal, Right, Tool};
 use serde::Deserialize;
 use serde_json::{Value, json};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, BTreeSet};
 use std::path::Path;
+use std::sync::Mutex;
 
 /// The file an App declares itself in, as Banda's own do (ADR 0022).
 pub const MANIFEST: &str = "app.toml";
@@ -129,10 +130,34 @@ fn method_name(name: &str) -> bool {
 }
 
 /// `text` kept for as long as the engine runs: the kernel takes a module's
-/// name, its steps and its methods' names so, and an installed App's are
-/// read once as the engine starts.
+/// name, its steps and its methods' names so. A text kept before is the
+/// same one again, so an App installed again keeps only what changed.
 pub(crate) fn kept(text: String) -> &'static str {
-    Box::leak(text.into_boxed_str())
+    static KEPT: Mutex<BTreeSet<&'static str>> = Mutex::new(BTreeSet::new());
+    let mut kept = KEPT.lock().unwrap();
+    match kept.get(text.as_str()) {
+        Some(had) => had,
+        None => {
+            let leaked: &'static str = Box::leak(text.into_boxed_str());
+            kept.insert(leaked);
+            leaked
+        }
+    }
+}
+
+/// `steps` kept so too: an App installed again with the steps it had
+/// keeps the same list.
+pub(crate) fn kept_steps(steps: Vec<&'static str>) -> &'static [&'static str] {
+    static KEPT: Mutex<Vec<&'static [&'static str]>> = Mutex::new(Vec::new());
+    let mut kept = KEPT.lock().unwrap();
+    match kept.iter().find(|had| ***had == steps[..]) {
+        Some(had) => had,
+        None => {
+            let leaked: &'static [&'static str] = Box::leak(steps.into_boxed_slice());
+            kept.push(leaked);
+            leaked
+        }
+    }
 }
 
 /// Whether `id` may be an App's from a folder: a module's name

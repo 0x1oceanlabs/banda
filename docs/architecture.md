@@ -913,12 +913,15 @@ this machine (ADR 0126).
   entry, the code a worker runs. Each method is an Agent's tool,
   `<app>_<method>`, unless it says `"tool": false`.
 - **`apps.install {folder}`** reads the folder, checks it and says what is
-  wrong by its file, then copies it into Banda's data,
-  `apps/<id>/app/`, with who installed it beside it (`installed.json`).
-  What runs is the copy. The copy is made beside its place and renamed
-  into it, so one cut short leaves the App as it was. An id the engine
-  runs or the kernel keeps is refused, and so is a tool's name another
-  tool has. It writes the fact `installed` in the machine's log.
+  wrong by its file, then installs it in three steps, so the engine never
+  runs a copy it did not take. It copies the folder into Banda's data, a
+  folder of its own for each install (`apps/<id>/<when>/`); the engine
+  takes the App from there; and only then does `apps/<id>/installed.json`
+  name that copy, with who installed it. Refused, the copy goes and the
+  App installed before runs on as it was. The copies no install names go
+  as the engine next starts. An id the engine runs or the kernel keeps is
+  refused, and so is a tool's name another tool has. It writes the fact
+  `installed` in the machine's log.
 - **Who may.** It needs the right to write, and a pass reaches it: an
   Agent installs from a folder inside its own Project, with no click, for
   the App runs as the Person's user, as the Agent's shell does. The Person
@@ -961,8 +964,35 @@ this machine (ADR 0126).
   a write is `internal`, with its words, for it is the App's to put
   right; but a write its table's own rules refuse is `conflict`.
   `banda app new <id>` writes a folder to start from.
-- An installed App runs from the engine's next start; adding it to the
-  running engine is the module's next step.
+- **Added while the engine runs.** `apps.install` adds the App to the
+  running engine through the kernel's `Registry`, a handle the engine
+  makes and the kernel binds as it opens. Every open Project takes the
+  module at once: both of its store's connections let it reach its
+  tables, and its steps the store has not seen run, as when a Project
+  opens; where they fail, or it does not open, it is turned off, there
+  alone, and the install answers each such Project in `off`, with why.
+  Then what the kernel runs is swapped whole: its modules, its tools and
+  the Apps its `welcome` says.
+- **Put in the place of itself.** An App installed again is each
+  Project's as that Project took it: the Project waits for the calls the
+  old one runs there to end, lets none begin, runs the new steps, and
+  only then has the new module; the router calls a module, and reads a
+  method's right, as the call's Project has it. So the App it replaces
+  never writes the tables its steps changed. Its commands keep their
+  turns, and its worker is let go of once its last call ends.
+  `apps.remove` takes it out the same way, and what it kept stays. Only
+  what was added so is replaced or taken away: a module the engine was
+  built with keeps its name. What the kernel ends for a module it lets
+  go of is its calls: one added so queues no effect, opens no stream and
+  starts nothing as it opens. The Apps installed before a start are
+  handed to the kernel as it is built, named as added, so their steps
+  run as each Project opens.
+- **A session hears its tools change.** `machine.apps` is the kernel's
+  stream of the Apps it runs, as the `welcome` lists them: the list now,
+  then again at each change. `banda mcp` hears it on a connection of its
+  own, reads the tools again and tells its client
+  `notifications/tools/list_changed`, so the Agent that installed an App
+  calls it in the same Thread.
 
 ### agents
 

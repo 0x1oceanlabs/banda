@@ -11,10 +11,9 @@ use crate::projects::Own;
 use crate::scopes::outside_machine;
 use crate::store::{Answer, Begun};
 use crate::window::Window;
-use crate::{CommandId, Named, ProjectId, Refusal};
+use crate::{CommandId, ProjectId, Refusal};
 use serde_json::Value;
 use std::sync::Arc;
-use tokio::sync::{mpsc, watch};
 use uuid::Uuid;
 
 /// One of a session's queues ([`Kernel::queue`]): of commands, by the scope
@@ -43,29 +42,16 @@ fn own_method(method: &str) -> Option<&str> {
 /// is there whatever modules run.
 const NAMED: &str = "machine.named";
 
+/// The stream of the Apps this host's engine runs, as its `welcome` lists
+/// them: the list now, then again each time one is added, replaced or
+/// taken away while it runs (ADR 0126, decision 5). A session's tools are
+/// read again as it says so. A stream of the machine's, as
+/// `machine.named` is.
+const APPS: &str = "machine.apps";
+
 /// The stream of this host's battery and why it is held awake (ADR 0097,
 /// decision 6), a stream of the machine's as `machine.named` is.
 const POWER: &str = "machine.power";
-
-/// What `named` is now, then again each time it changes, until the one
-/// who hears it stops.
-fn named_stream(mut named: watch::Receiver<Named>) -> Stream {
-    let (send, hear) = mpsc::channel(1);
-    tokio::spawn(async move {
-        loop {
-            let now = serde_json::to_value(&*named.borrow_and_update());
-            let Ok(now) = now else { break };
-            if send.send(now).await.is_err() {
-                break;
-            }
-            tokio::select! {
-                changed = named.changed() => if changed.is_err() { break },
-                () = send.closed() => break,
-            }
-        }
-    });
-    hear
-}
 
 /// Whether a command may still run by `not_after`, by this machine's clock
 /// (ADR 0105): refused `expired` once past it.
@@ -80,6 +66,28 @@ fn in_time(not_after: Option<i64>) -> Result<(), Refusal> {
 
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
+}
+
+/// The module of `method` as `project` runs it now, and the right its
+/// method `rest` needs there. One the engine runs may be another in a
+/// Project, put in its place while the engine runs and not taken there
+/// yet; or none: turned off there, which is refused as such to who may
+/// call it by `right`, or taken away.
+fn served(
+    project: &Project,
+    participant: &crate::Participant,
+    module: &dyn Module,
+    method: &str,
+    rest: &str,
+    right: Right,
+) -> Result<(Arc<dyn Module>, Right), Refusal> {
+    let Some(here) = project.serving(module.name()) else {
+        access::decide(participant, right, project.owner())?;
+        project.available(module.name())?;
+        return Err(no_method(method));
+    };
+    let right = here.right(rest).ok_or_else(|| no_method(method))?;
+    Ok((here, right))
 }
 
 impl Kernel {
@@ -195,13 +203,13 @@ impl Kernel {
             return self.own_call(ask, own, params).await.map(plain);
         }
         let (module, rest, right) = self.method(method)?;
-        let kind = module.kind(rest).ok_or_else(|| no_method(method))?;
-        let (project, wall) = self.place(&**module, method, rest, project, only).await?;
+        let (project, wall) = self.place(&*module, method, rest, project, only).await?;
         let _moving = project.moving.read().await;
+        let (module, right) = served(&project, &participant, &*module, method, rest, right)?;
+        let kind = module.kind(rest).ok_or_else(|| no_method(method))?;
         let scope = project.module(module.name());
         if kind != Kind::Command {
             access::decide(&participant, right, project.owner())?;
-            project.available(module.name())?;
             let call = Call::new(
                 participant,
                 scope,
@@ -222,11 +230,9 @@ impl Kernel {
             Begun::Answered(answer) => return answer,
         };
         // A refusal made before the handler runs is the command's answer
-        // too (ADR 0002, decision 2): one past its time, not allowed, or
-        // for an App turned off here, which its receipt does not keep.
-        let allowed = in_time(not_after)
-            .and_then(|()| access::decide(&participant, right, project.owner()))
-            .and_then(|()| project.available(module.name()));
+        // too (ADR 0002, decision 2): one past its time, or not allowed.
+        let allowed =
+            in_time(not_after).and_then(|()| access::decide(&participant, right, project.owner()));
         let answer = match allowed {
             Ok(()) => {
                 let call = Call::new(
@@ -325,7 +331,12 @@ impl Kernel {
             && let Some(named) = &self.named
         {
             access::decide(&participant, Right::Read, self.owner)?;
-            return Ok(named_stream(named.clone()));
+            return Ok(crate::module::watching(named.clone()));
+        }
+        if method == APPS {
+            access::decide(&participant, Right::Read, self.owner)?;
+            let listed = |runs: &Arc<crate::kernel::Runs>| serde_json::to_value(&*runs.apps).ok();
+            return Ok(crate::module::watching_as(self.runs.subscribe(), listed));
         }
         if method == POWER
             && let Some(power) = &self.power
@@ -334,9 +345,9 @@ impl Kernel {
             return Ok(power());
         }
         let (module, rest, right) = self.method(method)?;
-        let (project, wall) = self.place(&**module, method, rest, project, only).await?;
+        let (project, wall) = self.place(&*module, method, rest, project, only).await?;
+        let (module, right) = served(&project, &participant, &*module, method, rest, right)?;
         access::decide(&participant, right, project.owner())?;
-        project.available(module.name())?;
         let call = Call::new(
             participant,
             project.module(module.name()),
@@ -352,15 +363,14 @@ impl Kernel {
 
     /// The module of `method`, the method without its prefix, and the
     /// right it needs.
-    fn method<'a>(&self, method: &'a str) -> Result<(&Arc<dyn Module>, &'a str, Right), Refusal> {
+    fn method<'a>(&self, method: &'a str) -> Result<(Arc<dyn Module>, &'a str, Right), Refusal> {
         let (prefix, rest) = method.split_once('.').ok_or_else(|| no_method(method))?;
-        let module = self
-            .modules
-            .iter()
+        let runs = self.runs();
+        let module = (runs.modules.iter())
             .find(|m| m.name() == prefix)
             .ok_or_else(|| no_method(method))?;
         let right = module.right(rest).ok_or_else(|| no_method(method))?;
-        Ok((module, rest, right))
+        Ok((module.clone(), rest, right))
     }
 
     /// The Project `caller` follows, once the Project wall and the access

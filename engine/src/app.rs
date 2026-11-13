@@ -22,8 +22,10 @@ pub enum AppCommand {
     },
     /// Installs the App in FOLDER on this machine, or installs it again
     /// after a change: checks its app.toml, methods.json, migrations and
-    /// entry, says what is wrong in them, and copies the folder into
-    /// Banda's data. It runs from the engine's next start.
+    /// entry, says what is wrong in them, copies the folder into Banda's
+    /// data and adds it to the running engine. It runs at once, in every
+    /// Project; `off` names those where its tables did not come up to
+    /// date, with why.
     Install {
         /// The App's folder; where this runs when left out.
         #[arg(default_value = ".")]
@@ -31,7 +33,7 @@ pub enum AppCommand {
     },
     /// Lists the Apps installed from a folder, one JSON object per line:
     /// each with its version, where it came from, and whether the engine
-    /// runs that version yet.
+    /// serves that version.
     List,
     /// Removes an installed App. What it kept in each Project stays.
     Remove {

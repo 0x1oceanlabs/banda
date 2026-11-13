@@ -351,9 +351,12 @@ fn banda_app_installs_an_app_from_a_folder_lists_it_and_removes_it() {
     let installed = (places.banda(&["app", "install"]).current_dir(&folder))
         .output()
         .unwrap();
-    let installed = lines(installed);
+    let mut installed = lines(installed);
     assert_eq!(installed[0]["id"], "clients");
-    assert_eq!(installed[0]["runs"], false);
+    // The engine serves it at once, in every Project.
+    assert_eq!(installed[0]["runs"], true);
+    assert_eq!(installed[0]["off"], json!([]));
+    installed[0].as_object_mut().unwrap().remove("off");
     assert_eq!(lines(banda(&["app", "list"])), installed);
     let modules = lines(banda(&["modules"]));
     let clients = modules.last().unwrap();
@@ -375,16 +378,17 @@ fn banda_app_installs_an_app_from_a_folder_lists_it_and_removes_it() {
     assert!(engine.wait().unwrap().success());
 }
 
-/// Story 2's road (ADR 0126): an Agent writes an App in its Project and
-/// installs it from its shell, with no click; from the engine's next start
-/// the App runs, the Person calls it, and an Agent calls it as its tools.
+/// Story 2's road (ADR 0126): in one Thread an Agent writes an App in its
+/// Project and installs it from its shell, with no click and no restart;
+/// its own session hears its tools change and calls them, the Person
+/// calls it as any App, and it is there after the engine starts again.
 #[cfg(unix)]
 #[test]
-fn an_agent_writes_an_app_installs_it_and_agents_call_it_after_a_restart() {
+fn an_agent_writes_an_app_and_installs_it_and_its_session_calls_it_at_once() {
     let places = Places::new();
     let node = node();
     let node = [(NODE_VARIABLE, node.to_str().unwrap())];
-    let (mut engine, stdin, first) = places.serve_with(&node);
+    let (mut engine, stdin, _) = places.serve_with(&node);
     let work = places.ok("projects.create", None, json!({ "name": "Work" }));
     let (work, folder) = (
         text(&work["id"]).to_owned(),
@@ -407,8 +411,23 @@ fn an_agent_writes_an_app_installs_it_and_agents_call_it_after_a_restart() {
         serde_json::from_slice(&output.stdout).unwrap()
     };
 
+    // The session's tools, before: none of the App's.
+    let mut mcp = Mcp::start(&servers[0]);
+    let hello = json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } });
+    let welcome = mcp.ask(1, "initialize", hello)["result"].clone();
+    assert_eq!(welcome["capabilities"]["tools"]["listChanged"], true);
+    let names = |tools: &Value| -> Vec<String> {
+        let tools = tools["result"]["tools"].as_array().unwrap();
+        tools
+            .iter()
+            .map(|tool| text(&tool["name"]).to_owned())
+            .collect()
+    };
+    let before = names(&mcp.ask(2, "tools/list", json!({})));
+    assert!(!before.iter().any(|name| name.starts_with("habits_")));
+
     // In its shell, in its Project's folder: a new App, as written, and
-    // installed under its pass.
+    // installed under its pass. It runs at once.
     let in_shell = |args: &[&str]| {
         let mut banda = places.agent(&shells["session"], args);
         banda.current_dir(&folder).output().unwrap()
@@ -416,64 +435,57 @@ fn an_agent_writes_an_app_installs_it_and_agents_call_it_after_a_restart() {
     let written = said(in_shell(&["app", "new", "habits"]));
     assert_eq!(written["folder"], format!("{folder}/habits"));
     let installed = said(in_shell(&["app", "install", "habits"]));
+    assert_eq!(installed["id"], "habits");
     assert_eq!(
-        (&installed["id"], &installed["runs"]),
-        (&json!("habits"), &json!(false))
+        (&installed["runs"], &installed["off"]),
+        (&json!(true), &json!([]))
     );
     assert_eq!(installed["project"], json!(work));
-    // It runs nothing yet.
-    let early = places.call("habits.list", Some(&work), json!({}));
-    assert_eq!(refusal(&early), "invalid");
 
-    drop(stdin);
-    assert!(engine.wait().unwrap().success());
-    let (mut engine, stdin, again) = places.serve_with(&node);
-    let address = format!("ws://127.0.0.1:{}/ws", again["port"]);
-    if again["port"] != first["port"] {
-        eprintln!("another engine took port {}", first["port"]);
-    }
-
-    // The engine lists it, and the Person calls it as any App.
-    let status = said(places.banda(&["status"]).output().unwrap());
-    let apps = status["apps"].as_array().unwrap();
-    assert_eq!(
-        apps.last().unwrap(),
-        &json!({ "id": "habits", "version": "0.1.0", "api": 1 })
-    );
-    let listed = said(places.banda(&["app", "list"]).output().unwrap());
-    assert_eq!(listed["runs"], true);
-    let added = places.ok("habits.add", Some(&work), json!({ "text": "walk" }));
-    assert_eq!(added, json!({ "text": "walk" }));
-    let empty = places.call("habits.add", Some(&work), json!({ "text": " " }));
-    assert_eq!(refusal(&empty), "invalid");
-
-    // An Agent's session lists its methods among its tools, each with its
+    // Its session is told its tools changed, lists them, each with its
     // words and its schema, and calls them.
-    let mut server = servers[0].clone();
-    for variable in server["env"].as_array_mut().unwrap() {
-        if variable["name"] == "BANDA_ENGINE" {
-            variable["value"] = json!(address);
-        }
-    }
-    let mut mcp = Mcp::start(&server);
-    let hello = json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } });
-    mcp.ask(1, "initialize", hello);
-    let tools = mcp.ask(2, "tools/list", json!({}))["result"]["tools"].clone();
-    let tool = (tools.as_array().unwrap().iter())
+    let told = mcp.hears();
+    assert_eq!(told["method"], "notifications/tools/list_changed");
+    let tools = mcp.ask(3, "tools/list", json!({}));
+    let tool = (tools["result"]["tools"].as_array().unwrap().iter())
         .find(|tool| tool["name"] == "habits_add")
         .expect("the App's command is a tool");
     assert!(text(&tool["description"]).starts_with("Adds an item"));
     assert_eq!(tool["inputSchema"]["required"], json!(["text"]));
-    let (failed, kept) = mcp.call(3, "habits_add", json!({ "text": "read" }));
+    let (failed, kept) = mcp.call(4, "habits_add", json!({ "text": "walk" }));
     assert!(!failed, "{kept}");
-    let (failed, listed) = mcp.call(4, "habits_list", json!({}));
-    assert!(!failed, "{listed}");
-    let listed: Value = serde_json::from_str(&listed).unwrap();
-    let texts: Vec<_> = (listed.as_array().unwrap().iter())
+    mcp.end();
+
+    // The engine lists it, and the Person calls it as any App.
+    let status = said(places.banda(&["status"]).output().unwrap());
+    let apps = status["apps"].as_array().unwrap();
+    let habits = json!({ "id": "habits", "version": "0.1.0", "api": 1 });
+    assert_eq!(apps.last().unwrap(), &habits);
+    let added = places.ok("habits.add", Some(&work), json!({ "text": "read" }));
+    assert_eq!(added, json!({ "text": "read" }));
+    let empty = places.call("habits.add", Some(&work), json!({ "text": " " }));
+    assert_eq!(refusal(&empty), "invalid");
+
+    // It is there after the engine starts again, with what it kept.
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+    let (mut engine, stdin, _) = places.serve_with(&node);
+    let listed = said(places.banda(&["app", "list"]).output().unwrap());
+    assert_eq!(listed["runs"], true);
+    let kept = places.ok("habits.list", Some(&work), json!({}));
+    let texts: Vec<_> = (kept.as_array().unwrap().iter())
         .map(|item| text(&item["text"]))
         .collect();
     assert_eq!(texts, ["walk", "read"]);
-    mcp.end();
+    assert!(
+        places
+            .banda(&["app", "remove", "habits"])
+            .status()
+            .unwrap()
+            .success()
+    );
+    let gone = places.call("habits.list", Some(&work), json!({}));
+    assert_eq!(refusal(&gone), "invalid");
 
     drop(stdin);
     assert!(engine.wait().unwrap().success());
@@ -825,6 +837,14 @@ impl Mcp {
         let answer: Value = serde_json::from_str(&line).unwrap();
         assert_eq!(answer["id"], id, "{answer}");
         answer
+    }
+
+    /// What it says next by itself: a notification.
+    #[cfg(unix)]
+    fn hears(&mut self) -> Value {
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).unwrap();
+        serde_json::from_str(&line).unwrap()
     }
 
     /// Calls a tool: whether it was an error, and its text.

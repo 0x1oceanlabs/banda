@@ -72,6 +72,7 @@ mod project;
 mod projects;
 mod pty;
 mod reach;
+mod registry;
 mod router;
 mod scopes;
 mod sign;
@@ -95,13 +96,14 @@ pub use ids::{AgentId, CommandId, DeviceId, EventId, Participant, PersonId, Proj
 pub use kernel::{Kernel, ProjectSummary, decode, present};
 pub use methods::{Does, Kind, Method, Nothing, Picture, Tool};
 pub use module::Other;
-pub use module::{Call, Module, Scope, Stream, Wall};
+pub use module::{Call, Module, Scope, Stream, Wall, watching, watching_as};
 pub use named::{MachineIcon, NAME_MOST, Named, clean_name};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
 pub use project::{Committed, ModuleProject, Project, Tally, WeakModuleProject};
 pub use pty::{Pty, PtyControl, PtySize};
 pub use reach::Reach;
+pub use registry::{Registry, TurnedOff};
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
 pub use scopes::KernelBuilder;
