@@ -272,6 +272,11 @@ From the audit (`2-code.md`):
       menu, which the bar's logo opens too; the theme stays in Settings →
       Appearance.
     - No button hides the sidebar (ADR 0067, decision 5).
+
+    _Amended 2026-11-13 by Roma ("the Mark does not close the sidebar"):
+    a click on the bar's logo shows or hides the sidebar, as `Alt+A`
+    does and as ADR 0005's decision 9 had it. `Alt+Space` opens the
+    Banda menu; no click on the bar does._
 22. **The sidebar hidden** (`Alt+A`): the bar's logo shows the loudest
     state (ADR 0099), and beside it a count, Your turn in its colour and
     the working in grey ("3 · 7"); nothing when nothing calls. A click
@@ -343,6 +348,8 @@ From the audit (`2-code.md`):
 - **ADR 0005, decision 9** (an erratum, added with step 9: this list first
   left it out): the bar's logo opens the Banda menu (decision 21), not the
   sidebar; `Alt+A`, and the Banda menu's action, show and hide it.
+  _Taken back 2026-11-13 by Roma: the logo shows and hides the sidebar,
+  and ADR 0005's decision 9 stands as it was (decision 21, as amended)._
 - **ADR 0069** and **ADR 0074, decision 6**: Archive and Later are
   tabs, not shelves. **ADR 0074, decision 1**: a Thread that asks may be
   put off. **ADR 0074 as a whole**: its Snooze is called Later.

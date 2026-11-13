@@ -6,7 +6,8 @@
  * workspaces, as it arranges the desk, not the list (decision 20, S9b).
  * The foot keeps Settings and View, each tooltip with its key; the key
  * sheet, the theme and Add Project are the Banda menu's, which the bar's
- * logo opens now, not the sidebar (decision 21, S9c). Quiet's bell is the
+ * key opens (decision 21, S9c); the logo shows and hides the sidebar.
+ * Quiet's bell is the
  * foot's third: on for 30 minutes, nothing calls, and both bells are
  * crossed (S9d). Pictures for Roma, dark and light, with glass and
  * without, at 1440×900: `test-results/sidebar-s9b-*.png`,
@@ -119,7 +120,7 @@ test("the Flow on the bar, and its menu: the one in force checked, its key besid
   await shots(window, "s9b-menu")
 })
 
-test("the foot keeps the gear and the view; the bar's logo opens the Banda menu, whose root holds the sidebar's toggle, the key sheet and the theme, and the theme writes look.toml", async () => {
+test("the foot keeps the gear and the view; the bar's logo shows and hides the sidebar; the Banda menu's root holds the sidebar's toggle, the key sheet and the theme, and the theme writes look.toml", async () => {
   const { window, page, sidebar } = await withTwoProjects()
   const html = page.locator("html")
   const file = join(window.dir, "config/look.toml")
@@ -138,13 +139,19 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   await page.mouse.move(900, 450)
   await shots(window, "s9c-foot")
 
-  // The bar's logo opens the Banda menu, not the sidebar's toggle (§5
-  // E2); its tooltip names the menu's key in force.
+  // The bar's logo shows and hides the sidebar, as its key does
+  // (decision 21, as amended); its tooltip names that key in force.
   const logo = page
     .getByRole("banner")
     .getByRole("button", { name: /^Banda(:|$)/ })
-  await expect(logo).toHaveAttribute("title", /^Banda menu \(Alt\+Space\)/)
+  await expect(logo).toHaveAttribute("title", /^Sidebar \(Alt\+A\)/)
   await logo.click()
+  await expect(sidebar).toBeHidden()
+  await logo.click()
+  await expect(sidebar).toBeVisible()
+  // The Banda menu, by its key.
+  const openMenu = () => page.keyboard.press("Alt+Space")
+  await openMenu()
   const banda = page.getByRole("dialog", { name: "Banda menu" })
   const actions = banda.getByRole("group", { name: "Actions" })
   await expect(
@@ -154,7 +161,7 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
     actions.getByRole("option", { name: /^Every action and its key/ })
   ).toBeVisible()
   await expect(actions.getByRole("option", { name: /^Theme/ })).toBeVisible()
-  // The click left the sidebar shown. The menu is modal, so the page
+  // The key left the sidebar shown. The menu is modal, so the page
   // behind it is hidden from the accessibility tree: the sidebar is
   // found by its element, not its role.
   await expect(page.locator('aside[aria-label="Sidebar"]')).toBeVisible()
@@ -169,7 +176,7 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   await expect(banda).toBeHidden()
 
   // The toggle's row hides the sidebar, and Alt+A shows it again.
-  await logo.click()
+  await openMenu()
   await actions
     .getByRole("option", { name: /^Show or hide the sidebar/ })
     .click()
@@ -181,7 +188,7 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   // The theme: Light, Dark and As the system, the one in force ticked by
   // look.toml, then Themes…; Dark writes look.toml, and the window darkens.
   await expect(html).not.toHaveClass(/dark/)
-  await logo.click()
+  await openMenu()
   await actions.getByRole("option", { name: /^Theme/ }).click()
   await expect(banda.getByRole("option")).toHaveText([
     /^Light/,
@@ -201,7 +208,7 @@ test("the foot keeps the gear and the view; the bar's logo opens the Banda menu,
   // theme takes; then Banda's own pairs, by the names the menu gives them
   // (ADR 0100, decision 2). A pick writes look.toml's theme.
   const themes = async () => {
-    await logo.click()
+    await openMenu()
     await actions.getByRole("option", { name: /^Theme/ }).click()
     await banda.getByRole("option", { name: /^Themes…/ }).click()
   }

@@ -11,10 +11,9 @@
  *   draws the Mark in the loudest state of the work, a crossed bell while
  *         Quiet is on; while the sidebar is hidden, the count beside it
  *         and the small inbox it opens (`SmallInbox.tsx`)
- *   runs  `menu.at` on the Mark: the Banda menu at its root, not
- *         Alt+Space's own action, which would fill the desk with Quick
- *         Look's tile where one shows; the small inbox runs what its
- *         rows do
+ *   runs  `sidebar.toggle` on the Mark: a click shows or hides the
+ *         sidebar, as Alt+A does (decision 21, as amended); the small
+ *         inbox runs what its rows do
  *   says  in its name what it shows, "Banda: 3 your turn, 7 at work", and
  *         which machine is away with Agents at work: then it sleeps,
  *         offline (decision 18)
@@ -70,10 +69,9 @@ export function Mark({ engine }: { engine: Engine }) {
         variant="ghost"
         size="icon-sm"
         aria-label={logoName(words)}
-        aria-haspopup="dialog"
-        title={`${keyFor("menu.open", "Banda menu")}${words && ` · ${words}`}`}
+        title={`${keyFor("sidebar.toggle", "Sidebar")}${words && ` · ${words}`}`}
         className="relative"
-        onClick={() => run("menu.at")}
+        onClick={() => run("sidebar.toggle")}
       >
         <BandaMark state={mark} className="size-5" />
         {/* Quiet (ADR 0098, decision 21): at the prototype's corner. */}

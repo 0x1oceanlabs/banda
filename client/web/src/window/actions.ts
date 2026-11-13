@@ -1354,7 +1354,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.menu("actions"),
   },
   {
-    // The bar's logo and the key sheet's button: the menu opens there
+    // The key sheet's button and a module's link: the menu opens there
     // whatever shows, as `banda menu` opens it. Alt+Space is
     // menu.open's, which fills Quick Look where it shows, and Alt+K
     // closes the menu at its Actions. A route is a row's id in the menu

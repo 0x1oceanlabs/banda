@@ -408,10 +408,10 @@ export type Browsing = Browsed & { partial: string }
 /** The rows one source found, under its heading. */
 export type Found = { id: string; label: string; rows: readonly MenuRow[] }
 
-/** What the bar's logo did before it opened the menu, and what the
- * sidebar's foot held (ADR 0098, decision 21): the sidebar shown or
- * hidden, the key sheet and the theme. No button is left for them, so the
- * empty menu always offers them: what is chosen often pushes out T3
+/** What the bar's logo does, and what the sidebar's foot held (ADR 0098,
+ * decision 21): the sidebar shown or hidden, the key sheet and the theme.
+ * The last two have no button left, so the empty menu always offers them
+ * all: what is chosen often pushes out T3
  * Code's rows, never these. */
 const KEPT = ["sidebar.toggle", "menu.keys", "theme"]
 

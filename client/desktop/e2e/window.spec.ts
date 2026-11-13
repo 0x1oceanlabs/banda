@@ -101,8 +101,7 @@ test("a Person makes a Project, starts a Thread in it, and works with it", async
   const question = thread.getByRole("group", { name: "Run a check" })
   await expect(question).toContainText("Allow Fake AI to run a command?")
   await expect(thread.getByText("Waiting for you: Run a check")).toBeVisible()
-  // The Thread's Mark, and the bar's, say it asks the Person. The bar's
-  // opens the Banda menu (ADR 0098, decision 21).
+  // The Thread's Mark, and the bar's, say it asks the Person.
   const row = sidebar.getByRole("option", { name: /hello/ })
   await expect(row).toContainText("Asks Run a check")
   const mark = page.getByRole("button", { name: /^Banda(:|$)/ })
@@ -802,7 +801,7 @@ test("with Ctrl+Alt the mod, Banda's keys hold it and Alt keys are the shell's (
     files: { "config/keys.toml": 'mod = "Ctrl+Alt"\n' },
   })
   const { page, dir } = window
-  await firstThread(page)
+  await firstThread(page, "Control+Alt")
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Control+Alt+KeyN")
   await page
@@ -5395,8 +5394,7 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   ).toBeVisible()
   await expect(counts).toBeHidden()
 
-  // Alt+A hides it; the bar's logo opens the Banda menu (ADR 0098,
-  // decision 21).
+  // Alt+A hides it.
   await page.keyboard.press("Alt+A")
   await expect(
     bar.getByRole("button", { name: "1 at work", exact: true })
@@ -5454,7 +5452,7 @@ test("with Alt held, the mouse moves a widget along the bar, the workspaces too,
   const bar = page.getByRole("banner")
   const mark = bar.getByRole("button", { name: /^Banda(:|$)/ })
   await page.keyboard.press("Alt+A")
-  // A key waits for nothing, as a click on the Mark did: the Banda menu
+  // A key waits for nothing: the Banda menu
   // that made Work is gone, its backdrop with it, before the mouse presses.
   await expect(page.locator('[data-slot="dialog-overlay"]')).toHaveCount(0)
   const calm = bar.getByRole("img", {
@@ -5492,14 +5490,8 @@ test("with Alt held, the mouse moves a widget along the bar, the workspaces too,
     })
     .toBeLessThan(40)
   expect((await mark.boundingBox())!.x).toBeLessThan(40)
-  // Without Alt, a click is a click: the Mark opens the Banda menu, and
-  // Alt+A shows the sidebar again.
+  // Without Alt, a click is a click: the Mark shows the sidebar again.
   await mark.click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
-  await expect(menu).toBeVisible()
-  await page.keyboard.press("Escape")
-  await expect(menu).toBeHidden()
-  await page.keyboard.press("Alt+A")
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })
   ).toBeVisible()
@@ -6087,16 +6079,8 @@ test("what closes over a Pane leaves its keys: typed on a Thread with the Drawer
       .poll(() => read(join(dir, "root", "Work", file)))
       .toBe("back\n")
   }
-  // Alt+Space opens it, the sidebar shown, and so does the bar's logo.
+  // Alt+Space opens it, the sidebar shown.
   await typedAfter(() => page.keyboard.press("Alt+Space"), "by-key.txt")
-  await typedAfter(
-    () =>
-      page
-        .getByRole("banner")
-        .getByRole("button", { name: /^Banda(:|$)/ })
-        .click(),
-    "by-logo.txt"
-  )
 })
 
 test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts one with the words", async () => {
@@ -6108,13 +6092,10 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await expect(thread).not.toHaveAccessibleName("New Thread")
   const hello = await ownTile(page, thread)
 
-  // The bar's logo opens it, and Esc closes it.
+  // Its key opens it, and Esc closes it.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await sidebar.screenshot({ path: "test-results/26-sidebar.png" })
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: /^Banda(:|$)/ })
-    .click()
+  await page.keyboard.press("Alt+Space")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await expect(
     menu.getByRole("group", { name: "Recent Threads" })
