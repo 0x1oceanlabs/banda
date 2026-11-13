@@ -166,10 +166,11 @@ export function useSheet(where: () => ProjectId) {
  * shows on the tiles behind it at once. It is the top layer, and has the
  * keys while it shows: `Esc`, `Alt+W`, a press on the tiles, a pick, or
  * the focus going to a Pane or the overview takes it away, and the keys go
- * back where they were; there is one at a time. Its Pane is this
- * machine's, on this machine's engine, whatever machine's Project the
- * Person is in, until a machine's settings are read through its engine
- * (ADR 0106, decision 1, step 5b).
+ * back where they were; there is one at a time. Its Pane is on this
+ * machine's engine, whatever machine's Project the Person is in. Usage is
+ * this machine's; Settings are the window's, as each of their sections
+ * acts for the machine whose parts it shows (ADR 0106, decision 1, step
+ * 5b).
  */
 export function Sheet({
   state,
@@ -182,7 +183,8 @@ export function Sheet({
 }) {
   const panel = useRef<HTMLElement>(null)
   const { sheet, asked, close, update } = state
-  const owner = useOwnMachine()
+  const machine = useOwnMachine()
+  const owner = sheet?.pane.kind === settingsPane.kind ? "window" : machine
   const showing = sheet !== null
   // It takes the keys as it comes in, before it listens, as a toast's
   // button gives them back to a composer as it blurs; as it goes, it gives

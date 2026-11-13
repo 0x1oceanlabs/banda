@@ -118,6 +118,16 @@ export function Group({
  * where its value comes from, a ↶ for the Person's line, its control, and
  * what is wrong.
  */
+/** Whose copy a row is, beside its title, where Settings shows another
+ * machine's: "on this Mac". */
+export function Whose({ children }: { children: ReactNode }) {
+  return (
+    <span className="text-meta font-normal text-muted-foreground">
+      {children}
+    </span>
+  )
+}
+
 export function RowFrame({
   dataKey,
   lit,
@@ -168,11 +178,7 @@ export function RowFrame({
             )}
             {title}
             {file && <Origin from={from} file={file} />}
-            {where && (
-              <span className="text-meta font-normal text-muted-foreground">
-                {where}
-              </span>
-            )}
+            {where && <Whose>{where}</Whose>}
           </div>
           {about && (
             <div className="text-meta text-muted-foreground">{about}</div>

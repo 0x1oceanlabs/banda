@@ -1,8 +1,9 @@
 /**
  * The Problems section (ADR 0039, decision 1): what broke in Banda
- * itself, the newest first, as the engine keeps it on this computer. A
- * Problem opens to where it broke, and its report copies for an issue or
- * an Agent. A dot marks the ones new since the section was last open.
+ * itself, the newest first, as the engine keeps it on its machine: this
+ * one, or the one picked under "Settings for". A Problem opens to where it
+ * broke, and its report copies for an issue or an Agent. A dot marks the
+ * ones new since the section was last open on that machine.
  */
 import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
@@ -10,6 +11,8 @@ import type { Problem } from "@banda/contract/problems"
 import { Button } from "@banda/ui/components/button"
 import { Empty, EmptyDescription, EmptyTitle } from "@banda/ui/components/empty"
 import { Spinner } from "@banda/ui/components/spinner"
+import { useMachine } from "@banda/ui/hooks/use-status"
+import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/core/react"
 import { PLACES, useProblems } from "../problems/live"
@@ -17,23 +20,37 @@ import { lookingInto } from "../problems/look"
 import type { SectionProps } from "./sections"
 import { Group, Rows } from "./SettingRow"
 
-/** Where the window keeps when the section was last open. */
+/** Where the window keeps when the section was last open: for this
+ * machine, and for each other by its key in `hosts.toml`. */
 const SEEN = "banda.problems.seen"
 
-export function ProblemsSettings({ engine, lit, run }: SectionProps) {
+export function ProblemsSettings({
+  engine,
+  on,
+  there,
+  lit,
+  run,
+}: SectionProps) {
   const live = useProblems(engine)
-  // A new Thread is the agents module's action, as its key's.
+  // A new Thread is the agents module's action, as its key's. Another
+  // machine's starts on that machine, in its No Project where no Project
+  // is Banda's checkout, so not before its engine named it.
+  const theirs = useMachine(engine)
+  const otherwise = on === undefined ? undefined : theirs
   const lookInto =
-    run &&
-    ((fingerprint: string) =>
-      void lookingInto(engine, fingerprint)
-        .then((thread) => run("thread.new", thread))
-        .catch(() => undefined))
+    run && (on === undefined || theirs !== undefined)
+      ? (fingerprint: string) =>
+          void lookingInto(engine, fingerprint, otherwise)
+            .then((thread) => run("thread.new", thread))
+            .catch(() => undefined)
+      : undefined
   // What was new stays marked while the section is open.
-  const [seen] = useState(() => Number(localStorage.getItem(SEEN)) || 0)
+  const seenKey = on === undefined ? SEEN : `${SEEN}.${on}`
+  const [seen] = useState(() => Number(localStorage.getItem(seenKey)) || 0)
   useEffect(() => {
-    if (live.state === "ready") localStorage.setItem(SEEN, String(Date.now()))
-  }, [live])
+    if (live.state === "ready")
+      localStorage.setItem(seenKey, String(Date.now()))
+  }, [live, seenKey])
   const [pick, setPick] = useState<{ lit?: string; open?: string }>()
   const open = pick && pick.lit === lit ? pick.open : lit
 
@@ -47,7 +64,8 @@ export function ProblemsSettings({ engine, lit, run }: SectionProps) {
         <Empty>
           <EmptyTitle>Nothing broke</EmptyTitle>
           <EmptyDescription>
-            If something in Banda breaks, it shows here, kept on this computer.
+            If something in Banda breaks, it shows here, kept on{" "}
+            {there ?? THIS_COMPUTER}.
           </EmptyDescription>
         </Empty>
       </Rows>
@@ -64,6 +82,7 @@ export function ProblemsSettings({ engine, lit, run }: SectionProps) {
             <ProblemRow
               key={problem.fingerprint}
               engine={engine}
+              here={on === undefined}
               problem={problem}
               fresh={problem.first > seen}
               open={open === problem.fingerprint}
@@ -91,6 +110,7 @@ export function ProblemsSettings({ engine, lit, run }: SectionProps) {
 
 function ProblemRow({
   engine,
+  here,
   problem,
   fresh,
   open,
@@ -98,6 +118,8 @@ function ProblemRow({
   onToggle,
 }: {
   engine: Engine
+  /** The Problem is this machine's, whose logs this device opens. */
+  here: boolean
   problem: Problem
   fresh: boolean
   open: boolean
@@ -182,13 +204,15 @@ function ProblemRow({
             <Button size="sm" variant="secondary" onClick={() => void copy()}>
               {copied === "copied" ? "Copied" : "Copy report"}
             </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => void window.banda?.problems.logs()}
-            >
-              Open logs folder
-            </Button>
+            {here && (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => void window.banda?.problems.logs()}
+              >
+                Open logs folder
+              </Button>
+            )}
             {copied === "failed" && (
               <span role="alert" className="text-meta text-destructive">
                 The report could not be copied.

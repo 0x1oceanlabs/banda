@@ -44,4 +44,12 @@ describe("looking into a Problem", () => {
     const gone = [project("banda", "/home/p/code/banda", true)]
     expect(lookInto("3124", "/home/p/code/banda", gone).project).toBeUndefined()
   })
+
+  it("starts another machine's in the Project of its checkout, else in that machine's No Project", () => {
+    const theirs = "arc-machine" as ProjectId
+    expect(
+      lookInto("3124", "/home/p/code/banda", projects, theirs).project
+    ).toBe("banda")
+    expect(lookInto("3124", null, projects, theirs).project).toBe(theirs)
+  })
 })

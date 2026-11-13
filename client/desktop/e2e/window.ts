@@ -1157,3 +1157,24 @@ export async function headerShows(tile: Locator): Promise<string[]> {
       )
     )
 }
+
+/** A Problem as a part of Banda records it on a machine, through that
+ * machine's CLI: the window's own, or arc's. */
+export const recordProblem = (
+  on: { banda: (...args: string[]) => string },
+  message: string,
+  at = "banda_git::watch"
+) =>
+  on.banda(
+    "call",
+    "problems.record",
+    "--params",
+    JSON.stringify({
+      source: "engine",
+      kind: "panic",
+      message,
+      frames: [
+        { file: "apps/git/engine/src/watch.rs", function: at, line: 40 },
+      ],
+    })
+  )

@@ -223,10 +223,15 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   (ADR 0106, decision 7). Settings shows it under "Settings for: This Mac
   / arc", a switch under the crumb in each section with a part of the
   machine's but Machines, set to the machine of the Pane it was opened
-  from (`SettingsArgs.on`). The machine's rows read through
+  from (`SettingsArgs.on`). General, Projects and Problems switch too:
+  they show what a machine's engine keeps, in no file (`Section.machine`,
+  `switches`; ADR 0124). The machine's rows read through
   `useMachineSettings` and write through that engine (`keys.settings_set`,
-  `throughEngine`), the section's own Body and Foot take that engine, and
-  the rest say "on this Mac". While that machine is away its pill shows
+  `throughEngine`), the section's own Body and Foot take that engine and
+  act for that machine through the router, and the rest say "on this
+  Mac": so Look into it on arc's Problem starts its Thread on arc, and
+  Locate, which picks with this device's picker, says "Not on arc yet".
+  While that machine is away its pill shows
   and a change is refused at once; its file shows its path there, with
   Copy, in place of Open file. Files on arc reads and pins arc's
   `pinned` the same way (`apps/files/pane/src/pins.ts`).

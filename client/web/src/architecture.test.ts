@@ -436,7 +436,6 @@ const DESKTOP_READS: Record<string, number> = {
   "client/web/src/settings/Keys.tsx": 2,
   "client/web/src/settings/Mod.tsx": 1,
   "client/web/src/settings/ProblemsSettings.tsx": 1,
-  "client/web/src/settings/ProjectsSettings.tsx": 1,
   "client/web/src/settings/SettingRow.tsx": 1,
   "client/web/src/settings/Settings.tsx": 1,
   "client/web/src/sharing/AskToShare.tsx": 1,

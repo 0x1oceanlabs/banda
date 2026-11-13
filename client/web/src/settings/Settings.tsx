@@ -5,6 +5,7 @@
  * every value is the look's, as `banda look --follow` read the files.
  */
 import { useContext, useEffect, useMemo, useRef, useState } from "react"
+import type { Owner } from "@banda/core"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -26,6 +27,7 @@ import { copyText } from "@banda/ui/lib/clipboard"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import type { PaneProps } from "@banda/ui/pane"
 import { useScope } from "@banda/ui/hooks/use-scope"
+import { useMachine } from "@banda/ui/hooks/use-status"
 import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react"
 import { problemWords } from "../bar/problems/Problems"
 import { useLookProblems, useLookSettings } from "../look"
@@ -36,17 +38,14 @@ import {
   search,
   type Section,
   SECTIONS,
+  switches,
 } from "./sections"
 import type { SettingsArgs } from "./pane"
 import { Group, Rows, SettingRow } from "./SettingRow"
 import { SettingsFor } from "./SettingsFor"
+import { usePaneHandles } from "../tiling/mount"
 import { MachinePill } from "../window/named"
-import {
-  classOf,
-  hasMachinePart,
-  throughEngine,
-  useMachineSettings,
-} from "./machine-settings"
+import { classOf, throughEngine, useMachineSettings } from "./machine-settings"
 
 const NONE: Problem[] = []
 
@@ -102,17 +101,15 @@ export function Settings({
   const section = at.section
   const others = useAnyHost()
   // Whose parts it shows (ADR 0106, step 5b): in a section with a part of
-  // the machine's, the machine picked, by its engine; the rest is this
-  // device's, as the look reads it. Machines shows every machine itself.
+  // the machine's, a file's or what its engine keeps, the machine picked,
+  // by its engine; the rest is this device's, as the look reads it.
+  // Machines shows every machine itself.
   const kept = useContext(HostsContext)
   const hosts = useHosts()
   const fileNames = (section.files ?? []).map((file) => file.name)
-  const switches =
-    hosts.length > 0 &&
-    section.id !== "machines" &&
-    fileNames.some(hasMachinePart)
+  const switching = hosts.length > 0 && switches(section)
   const on =
-    switches && hosts.some((host) => host.name === args.on)
+    switching && hosts.some((host) => host.name === args.on)
       ? args.on
       : undefined
   const shownOn = useShownOf(on)
@@ -120,6 +117,23 @@ export function Settings({
     () => (on === undefined ? engine : kept.engine(on)),
     [on, engine, kept]
   )
+  // What a section runs, it runs for the machine it shows, by that
+  // machine's Host scope's ID once its engine said it (ADR 0106, law 3):
+  // the router places it there, or says why not.
+  const shownMachine = useMachine(machineEngine)
+  const owner = useMemo<Owner>(
+    () => (shownMachine ? { machine: shownMachine } : "window"),
+    [shownMachine]
+  )
+  const acts = usePaneHandles(owner, run)
+  const body = {
+    engine: machineEngine,
+    on,
+    there: on === undefined ? undefined : (shownOn?.named.name ?? on),
+    lit: at.key,
+    run: acts.run,
+    runs: acts.runs,
+  }
   const machine = useMachineSettings(
     on === undefined ? undefined : machineEngine,
     fileNames
@@ -260,7 +274,7 @@ export function Settings({
               {words ? "Search" : section.title}
             </b>
           </PaneHeader>
-          {switches && !words && (
+          {switching && !words && (
             <SettingsFor
               hosts={hosts}
               on={on}
@@ -318,22 +332,12 @@ export function Settings({
                     )}
                   </div>
                   {section.Body && (
-                    <section.Body
-                      engine={machineEngine}
-                      on={on}
-                      lit={at.key}
-                      run={run}
-                    />
+                    // What it kept of one machine does not show as
+                    // another's.
+                    <section.Body key={on ?? ""} {...body} />
                   )}
                   {groups}
-                  {section.Foot && (
-                    <section.Foot
-                      engine={machineEngine}
-                      on={on}
-                      lit={at.key}
-                      run={run}
-                    />
-                  )}
+                  {section.Foot && <section.Foot {...body} />}
                   {above.length > 0 && (
                     <div
                       role="alert"
