@@ -53,8 +53,8 @@
 use crate::access::Caller;
 use crate::cursors::Heard;
 use crate::events::{Event, EventFilter};
-use crate::kernel::Queue;
 use crate::module::Stream;
+use crate::router::Queue;
 use crate::{
     Answer, Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal, now_ms,
 };
