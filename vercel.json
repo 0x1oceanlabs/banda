@@ -1,0 +1,8 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "framework": "astro",
+  "installCommand": "npx --yes pnpm@11.28.9 install --frozen-lockfile --filter @banda/site...",
+  "buildCommand": "npx --yes pnpm@11.28.9 --filter @banda/site run build",
+  "outputDirectory": "site/dist",
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- site client/ui docs/design/kit/mark.js sdk/contract/src/generated/look pnpm-lock.yaml pnpm-workspace.yaml vercel.json"
+}
