@@ -7,6 +7,13 @@ that start arc, a second engine, whose tests are slow) on GitHub's own `ubuntu-2
 a public repository. One status, `ci`, sums them up. A PR that changes
 only Markdown or `docs/` passes it without running them.
 
+`site`, `scripts/check.sh site`, checks banda.so (ADR 0128): the format
+and lints of `site/`, its types, and its build, with no Rust and no
+Electron. It runs when a PR changes the site or what it is built of
+(`client/ui`, the tokens, the Mark's kit, the lockfile; the list is
+`vercel.json`'s), and on every push to main. A PR that changes only
+`site/`, `vercel.json` and docs runs it alone: the other parts skip.
+
 Each job is a VM of its own, 4 CPUs and 16 GB, which GitHub throws away
 after it. What a run builds on is only the caches main's runs save
 (below): main's `rust ts` saves the dependencies every Linux part reads,

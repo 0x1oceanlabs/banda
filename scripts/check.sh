@@ -2,8 +2,10 @@
 # Every check a change must pass, in the order a failure is cheapest to
 # find. CI runs the parts side by side (.github/workflows/ci.yml).
 #
-#   scripts/check.sh               every part: rust, ts, window
+#   scripts/check.sh               every part: rust, ts, site, window
 #   scripts/check.sh --no-window   all but the desktop window's end-to-end tests
+#   scripts/check.sh site          banda.so alone: what a PR that changes only
+#                                  the site needs (ADR 0128)
 #   scripts/check.sh PART...       only these parts, in this order
 #   scripts/check.sh windows       the Rust for Windows: only by its name, as on
 #                                  Linux it builds every crate a second time
@@ -13,12 +15,12 @@ cd "$(dirname "$0")/.."
 parts=()
 for arg in "$@"; do
   case "$arg" in
-    --no-window) parts+=(rust ts) ;;
-    rust | ts | window | windows) parts+=("$arg") ;;
-    *) echo "check.sh: unknown argument $arg (rust, ts, window, windows, --no-window)" >&2; exit 2 ;;
+    --no-window) parts+=(rust ts site) ;;
+    rust | ts | site | window | windows) parts+=("$arg") ;;
+    *) echo "check.sh: unknown argument $arg (rust, ts, site, window, windows, --no-window)" >&2; exit 2 ;;
   esac
 done
-((${#parts[@]})) || parts=(rust ts window)
+((${#parts[@]})) || parts=(rust ts site window)
 
 step() { printf '\n== %s\n' "$*"; }
 
@@ -111,6 +113,17 @@ ts() {
   node scripts/licenses.mjs
   # And for Windows, whose engine is built of crates of its own (ADR 0090).
   node scripts/licenses.mjs --target x86_64-pc-windows-msvc
+}
+
+# banda.so, as Vercel builds it (vercel.json): its files' format and
+# lints, its types, and its build. It needs neither Rust nor Electron.
+site() {
+  step "banda.so: format, lints, types, build"
+  quiet pnpm install --frozen-lockfile
+  pnpm exec prettier --check site --log-level warn
+  pnpm exec eslint site
+  quiet pnpm --filter @banda/site typecheck
+  quiet pnpm --filter @banda/site build
 }
 
 window() {
