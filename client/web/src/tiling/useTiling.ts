@@ -6,13 +6,7 @@ import {
   useRef,
   useState,
 } from "react"
-import {
-  type Engine,
-  Lost,
-  newId,
-  type ProjectId,
-  Refused,
-} from "@banda/contract"
+import { type Engine, newId, notDone, type ProjectId } from "@banda/contract"
 import type { Flow } from "@banda/contract/agents"
 import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
@@ -37,10 +31,8 @@ import { useArranged } from "./useArranged"
 /** A change the engine refused is logged: the window draws what it says.
  * One whose answer was lost may have run: its fact draws it, if it did. */
 function refused(error: unknown): void {
-  const lost =
-    error instanceof Lost ||
-    (error instanceof Refused && error.refusal.code === "may_have_run")
-  if (lost) console.warn("A change of the workspaces may have run:", error)
+  if (notDone(error)?.outcome === "may_have_run")
+    console.warn("A change of the workspaces may have run:", error)
   else console.warn("The workspaces did not change:", error)
 }
 

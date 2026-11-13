@@ -3,7 +3,7 @@
  * so a test can break the connection exactly where it wants to.
  */
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import { Engine, Lost, PROTOCOL } from "../src/index"
+import { Engine, Lost, outcome, PROTOCOL, Refused } from "../src/index"
 
 type Frame = { [key: string]: unknown }
 
@@ -140,6 +140,65 @@ test("a command sent once fails as the connection breaks and is not sent again, 
   ])
   second.say({ type: "result", id: again[0].id, ok: { thread: "t2" }, at: 3 })
   await expect(plain).resolves.toEqual({ answer: { thread: "t2" }, at: 3 })
+  engine.close()
+})
+
+test("a read says when it was so: by the engine's as_of, or as it came from an engine that says none", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const socket = Socket.made[0]
+  socket.welcome()
+  const said = engine.read("projects.list", {})
+  const older = engine.read("projects.list", {})
+  await flush()
+  const [first, second] = socket.sent.slice(1)
+  socket.say({ type: "result", id: first.id, ok: [], as_of: { at: 1_000 } })
+  socket.say({ type: "result", id: second.id, ok: [] })
+  await expect(said).resolves.toEqual({ value: [], as_of: 1_000 })
+  await expect(older).resolves.toEqual({ value: [], as_of: Date.now() })
+  // A call that acts is no read: its outcome is what it says.
+  // @ts-expect-error terminal.open acts
+  void (() => engine.read("terminal.open", {} as never))
+  engine.close()
+})
+
+test("an act comes to done, refused, or may have run, and never throws one of them", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const socket = Socket.made[0]
+  socket.welcome()
+  const send = (text: string) =>
+    outcome(engine.command("agents.send", { text }, "project"))
+  const [done, refused, went] = [send("a"), send("b"), send("c")]
+  const once = outcome(
+    engine.commandAt("agents.read", { thread: "t1" }, "project", undefined, {
+      once: true,
+    })
+  )
+  await flush()
+  const [a, b, c] = socket.sent.slice(1)
+  socket.say({ type: "result", id: a.id, ok: { thread: "t" } })
+  const no = { code: "conflict", message: "Not now." }
+  socket.say({ type: "result", id: b.id, error: no })
+  const cut = { code: "may_have_run", message: "Cut short." }
+  socket.say({ type: "result", id: c.id, error: cut })
+  await expect(done).resolves.toEqual({
+    outcome: "done",
+    value: { thread: "t" },
+  })
+  const refusal = await refused
+  expect(refusal).toMatchObject({ outcome: "refused", error: { refusal: no } })
+  expect(refusal.outcome !== "done" && refusal.error).toBeInstanceOf(Refused)
+  await expect(went).resolves.toMatchObject({ outcome: "may_have_run" })
+  // One on its way as the connection broke may have run too.
+  socket.close()
+  const lost = await once
+  expect(lost.outcome).toBe("may_have_run")
+  expect(lost.outcome !== "done" && lost.error).toBeInstanceOf(Lost)
+  // An error no engine gave is no outcome: it is thrown.
+  await expect(outcome(Promise.reject(new TypeError("a bug")))).rejects.toThrow(
+    "a bug"
+  )
   engine.close()
 })
 

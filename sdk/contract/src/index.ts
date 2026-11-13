@@ -42,12 +42,24 @@ export {
   PROTOCOL,
   Refused,
   Unreachable,
+  notDone,
+  outcome,
   type Address,
   type Answered,
   type CommandOptions,
+  type NotDone,
+  type Outcome,
   type Ping,
+  type Read,
   type Status,
 } from "./engine"
 export { newId } from "./ids"
 export { quitAsks, type QuitAsks } from "./quit"
-export type { Answer, CommandCall, MethodOf, Methods, Params } from "./methods"
+export type {
+  Answer,
+  CommandCall,
+  MethodOf,
+  Methods,
+  Params,
+  ReadMethod,
+} from "./methods"

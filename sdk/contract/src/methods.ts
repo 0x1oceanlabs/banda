@@ -6,6 +6,7 @@
  * decision 11).
  */
 import type { CommandId } from "./generated/CommandId"
+import type { DOES } from "./generated/does"
 import type { Methods } from "./generated/Methods"
 
 export type { Methods }
@@ -16,6 +17,13 @@ type Kind = Methods[keyof Methods]["kind"]
 export type MethodOf<K extends Kind> = {
   [M in keyof Methods]: Methods[M] extends { kind: K } ? M : never
 }[keyof Methods]
+
+/** The calls that read (ADR 0106, law 4): `Engine.read` takes these, and
+ * answers each with when it was so. The rest of the calls, and every
+ * command, act: `outcome()` says what each came to. */
+export type ReadMethod = {
+  [M in MethodOf<"call">]: (typeof DOES)[M] extends "read" ? M : never
+}[MethodOf<"call">]
 
 export type Params<M extends keyof Methods> = Methods[M]["params"]
 
