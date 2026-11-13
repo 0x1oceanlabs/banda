@@ -102,6 +102,10 @@ One owner per file. The other track asks first.
 - A week that slips is corrected here, in the PR that slips.
 - A finding that blocks no slice becomes an issue, not a step.
 
+## After the three tracks
+
+What the tracks leave out, found on the way or put off on purpose, is kept in [the backlog](2026-11-13-backlog.md): the engine from the inside, the deferred leftovers, the window's candidates until its plan, the other stories and parked ideas. After week 10, Roma goes through it and chooses what comes next.
+
 ## What waits for Roma
 
 | What | It holds | By | Recommended |
