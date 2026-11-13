@@ -3,8 +3,8 @@
 //! their own keys.
 
 use banda_kernel::devices::{
-    self, Device, Devices, PROTOCOLS, challenge_message, goodbye_message, hello_message,
-    welcome_message,
+    self, Asked, Asking, Device, Devices, PROTOCOLS, ask_message, challenge_message, code,
+    goodbye_message, hello_message, paired_message, welcome_message,
 };
 use banda_kernel::{
     Call, DeviceId, Kernel, Kind, Module, PROTOCOL, PersonId, Refusal, Right, Scope,
@@ -40,9 +40,23 @@ struct Paired {
     host: Arc<Ed25519KeyPair>,
     known: Arc<Mutex<HashMap<DeviceId, Device>>>,
     removals: Arc<tokio::sync::watch::Sender<u64>>,
+    /// The devices that ask, each with who hears its answer.
+    asking: Arc<Mutex<Vec<Waiting>>>,
+    /// The codes the door said wait no more.
+    left: Arc<Mutex<Vec<String>>>,
 }
 
+/// A device's asking, and who hears the Person's answer to it.
+type Waiting = (Asking, tokio::sync::oneshot::Sender<Option<DeviceId>>);
+
 impl Paired {
+    /// The asking with `code`, taken out to be answered.
+    fn asked(&self, code: &str) -> Waiting {
+        let mut asking = self.asking.lock().unwrap();
+        let at = asking.iter().position(|(one, _)| one.code == code);
+        asking.remove(at.expect("a device asks with this code"))
+    }
+
     fn pair(&self, key: &Ed25519KeyPair, person: PersonId, origin: Option<&str>) -> DeviceId {
         let id = DeviceId::new();
         let device = Device {
@@ -78,6 +92,22 @@ impl Devices for Paired {
 
     fn removals(&self) -> tokio::sync::watch::Receiver<u64> {
         self.removals.subscribe()
+    }
+
+    fn ask(&self, asking: Asking) -> Result<Asked, Refusal> {
+        if asking.name == "one too many" {
+            return Err(Refusal::conflict("Too many devices ask."));
+        }
+        let (answer, heard) = tokio::sync::oneshot::channel();
+        self.asking.lock().unwrap().push((asking, answer));
+        Ok(Asked {
+            until: banda_kernel::now_ms() + 60_000,
+            answer: heard,
+        })
+    }
+
+    fn left(&self, code: &str) {
+        self.left.lock().unwrap().push(code.to_owned());
     }
 }
 
@@ -130,6 +160,8 @@ async fn world() -> World {
         host: Arc::new(key()),
         known: Default::default(),
         removals: Arc::new(tokio::sync::watch::channel(0).0),
+        asking: Default::default(),
+        left: Default::default(),
     };
     let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
         .machine(root.path().join(".machine"))
@@ -441,4 +473,185 @@ async fn a_device_removed_as_it_comes_in_gets_no_session_that_outlives_it() {
     )
     .await;
     assert_eq!(next(&mut socket).await["reason"]["code"], "revoked");
+}
+
+/// The `ask` of a device that holds `key`, named `name`, a `kind`, for a
+/// page of `origin`, signed over what `challenge` said.
+fn ask(key: &Ed25519KeyPair, name: &str, kind: &str, challenge: &Value, origin: &str) -> Value {
+    let said = URL_SAFE_NO_PAD.encode(public(key));
+    let message = ask_message(
+        challenge["nonce"].as_str().unwrap(),
+        challenge["host_key"].as_str().unwrap(),
+        origin,
+        &said,
+        kind,
+        name,
+    );
+    json!({
+        "type": "ask",
+        "key": said,
+        "name": name,
+        "kind": kind,
+        "sig": URL_SAFE_NO_PAD.encode(key.sign(message.as_bytes())),
+    })
+}
+
+const BROWSER: &str = "https://arc.example";
+
+#[tokio::test]
+async fn a_device_asks_at_the_door_and_is_paired_once_the_person_allows_its_code() {
+    let world = world().await;
+    let host = world.paired.host_key();
+    let phone = key();
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(
+        &mut socket,
+        ask(
+            &phone,
+            "Safari on Roma's Mac",
+            "browser",
+            &challenge,
+            BROWSER,
+        ),
+    )
+    .await;
+    // The door keeps it, and says the code both screens show: eight
+    // letters from its key and this connection's nonce.
+    let asked = next(&mut socket).await;
+    assert_eq!(asked["type"], "asked");
+    let said = asked["code"].as_str().unwrap().to_owned();
+    assert_eq!(
+        said,
+        code(&public(&phone), challenge["nonce"].as_str().unwrap())
+    );
+    assert_eq!(said.len(), 9);
+    assert!(
+        said.chars()
+            .all(|letter| letter == '-' || "0123456789ABCDEFGHJKMNPQRSTVWXYZ".contains(letter)),
+        "{said}"
+    );
+    assert!(asked["until"].as_i64().unwrap() > banda_kernel::now_ms());
+    let (asking, answer) = world.paired.asked(&said);
+    assert_eq!(asking.name, "Safari on Roma's Mac");
+    assert_eq!(asking.kind, "browser");
+    assert_eq!(asking.key, public(&phone));
+    assert_eq!(asking.origin.as_deref(), Some(BROWSER));
+
+    // Allowed: it hears the device it is here, in the machine's own word.
+    let device = world.paired.pair(&phone, world.owner, Some(BROWSER));
+    answer.send(Some(device)).unwrap();
+    let paired = next(&mut socket).await;
+    assert_eq!(paired["type"], "paired");
+    assert_eq!(paired["device"], json!(device));
+    let message = paired_message(
+        challenge["nonce"].as_str().unwrap(),
+        &URL_SAFE_NO_PAD.encode(public(&phone)),
+        device,
+    );
+    assert!(signed(host, &message, &paired["sig"]));
+
+    // And comes in again, as any paired device does.
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(&mut socket, hello(device, &phone, &challenge, BROWSER)).await;
+    assert_eq!(next(&mut socket).await["type"], "welcome");
+}
+
+#[tokio::test]
+async fn an_asking_refused_or_out_of_time_or_not_its_own_gets_a_goodbye_and_one_that_leaves_is_forgotten()
+ {
+    let world = world().await;
+    let phone = key();
+    let asks = |challenge: &Value| ask(&phone, "iPhone", "phone", challenge, BROWSER);
+
+    // Refused by the Person.
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(&mut socket, asks(&challenge)).await;
+    let said = next(&mut socket).await["code"].as_str().unwrap().to_owned();
+    world.paired.asked(&said).1.send(None).unwrap();
+    let goodbye = next(&mut socket).await;
+    assert_eq!(goodbye["type"], "goodbye");
+    assert_eq!(goodbye["reason"]["code"], "forbidden");
+
+    // Let go of unanswered, as its time ran out where it was kept.
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(&mut socket, asks(&challenge)).await;
+    let said = next(&mut socket).await["code"].as_str().unwrap().to_owned();
+    drop(world.paired.asked(&said));
+    assert_eq!(next(&mut socket).await["reason"]["code"], "expired");
+
+    // Kept by no one: the machine's own word why.
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(
+        &mut socket,
+        ask(&phone, "one too many", "phone", &challenge, BROWSER),
+    )
+    .await;
+    assert_eq!(next(&mut socket).await["reason"]["code"], "conflict");
+
+    // Each of these asks in a way the door does not take: signed for
+    // another page, by another key, as a kind that is no word, or by a
+    // name that is no name.
+    let other = key();
+    type Wrong = fn(&Ed25519KeyPair, &Ed25519KeyPair, &Value) -> Value;
+    let wrongs: [Wrong; 7] = [
+        |phone, _, challenge| ask(phone, "iPhone ", "phone", challenge, BROWSER),
+        // A mark that turns the text's direction, hidden in the name.
+        |phone, _, challenge| ask(phone, "iPhone\u{202E}enohPi", "phone", challenge, BROWSER),
+        |phone, _, challenge| {
+            ask(
+                phone,
+                "iPhone",
+                "phone",
+                challenge,
+                "https://elsewhere.example",
+            )
+        },
+        |phone, other, challenge| {
+            let mut asks = ask(other, "iPhone", "phone", challenge, BROWSER);
+            asks["key"] = json!(URL_SAFE_NO_PAD.encode(public(phone)));
+            asks
+        },
+        |phone, _, challenge| ask(phone, "iPhone", "two words", challenge, BROWSER),
+        |phone, _, challenge| ask(phone, "  ", "phone", challenge, BROWSER),
+        |phone, _, challenge| ask(phone, "two\nlines", "phone", challenge, BROWSER),
+    ];
+    for wrong in wrongs {
+        let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+        say(&mut socket, wrong(&phone, &other, &challenge)).await;
+        let goodbye = next(&mut socket).await;
+        assert_eq!(goodbye["reason"]["code"], "invalid", "{goodbye}");
+    }
+    assert!(world.paired.asking.lock().unwrap().is_empty());
+    // A page of an origin too long to be one is not heard either.
+    let long = format!("https://{}.example", "a".repeat(200));
+    let (mut socket, challenge) = knock(world.address, Some(&long)).await;
+    say(
+        &mut socket,
+        ask(&phone, "iPhone", "phone", &challenge, &long),
+    )
+    .await;
+    assert_eq!(next(&mut socket).await["reason"]["code"], "invalid");
+
+    // What keeps a connection alive does not end its asking; the device
+    // going does, and the door says so to who keeps it.
+    let (mut socket, challenge) = knock(world.address, Some(BROWSER)).await;
+    say(&mut socket, asks(&challenge)).await;
+    let said = next(&mut socket).await["code"].as_str().unwrap().to_owned();
+    futures::SinkExt::send(&mut socket, Message::Ping(Vec::new().into()))
+        .await
+        .unwrap();
+    tokio::time::sleep(Duration::from_millis(200)).await;
+    assert!(!world.paired.left.lock().unwrap().contains(&said));
+    drop(socket);
+    let (_, mut answer) = world.paired.asked(&said);
+    tokio::time::timeout(Duration::from_secs(5), answer.closed())
+        .await
+        .expect("the door lets go of an asking whose device went");
+    for _ in 0..100 {
+        if world.paired.left.lock().unwrap().contains(&said) {
+            return;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    panic!("the door says an asking whose device went waits no more");
 }

@@ -617,6 +617,10 @@ mod tests {
                 "devices.list",
                 "it lists the devices, which only the Person may see",
             ),
+            (
+                "devices.asking",
+                "it says which devices ask to be paired, for the Person alone",
+            ),
             ("harnesses.account", "it asks a Harness who is signed in"),
         ];
         let mut read_by_mark = Vec::new();

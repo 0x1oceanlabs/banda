@@ -31,6 +31,17 @@
 //!    client does not take for the machine's word, and a device forgets
 //!    a key or pairs again only on that word.
 //!
+//! A device this machine has not paired asks to be, in place of `hello`
+//! (decision 6): `ask`, with its public key, the name the Person reads it
+//! by and its kind, signed by that key so no one asks in another's name.
+//! It is the door's one frame that needs no pairing. The door answers
+//! `asked` with a short code, made from the key and the door's nonce,
+//! which both screens show, and keeps the connection until a device that
+//! is the Person here allows it, `paired`, signed by the host key, or
+//! refuses it, or its time is out, `goodbye`. Paired, it comes in again
+//! with `hello`. The engine keeps the askings ([`Devices::ask`]): a few
+//! at a time, each for a few minutes.
+//!
 //! After `welcome` the frames are the API's. A device's session acts as
 //! the Person it was paired by, and every act of it names the device
 //! ([`Caller::device`]). Removing a device ends its sessions at once, each
@@ -54,8 +65,9 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use futures::{SinkExt, StreamExt};
 use ring::signature::{ED25519, UnparsedPublicKey};
 use serde::{Deserialize, Serialize};
+use sha2::{Digest, Sha256};
 use std::sync::Arc;
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use ts_rs::TS;
 
 /// The protocols this engine speaks at its door. A client says the range
@@ -97,13 +109,90 @@ pub trait Devices: Send + Sync + 'static {
     /// device has open then asks whether it is still paired, and ends if
     /// not.
     fn removals(&self) -> watch::Receiver<u64>;
+    /// Keeps `asking`, a device that asks to be paired, until the Person
+    /// answers it or its time is out; or says why it keeps none, as where
+    /// too many ask at once. A machine that pairs none at its door
+    /// refuses each.
+    fn ask(&self, _asking: Asking) -> Result<Asked, Refusal> {
+        Err(Refusal::forbidden(
+            "This machine pairs no device at its door.",
+        ))
+    }
+    /// The asking kept under `code` waits no more at the door: its device
+    /// went, or its time ran out. Said after its answer is let go of.
+    fn left(&self, _code: &str) {}
 }
 
-/// The door's first frame, before any of the client's.
+/// A device this machine has not paired, as it asks to be (ADR 0124,
+/// decision 6).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Asking {
+    /// Its public key, which it proved it holds.
+    pub key: [u8; 32],
+    /// What the Person reads it by, as the device says it.
+    pub name: String,
+    /// What kind of client it says it is, as the engine names them: the
+    /// kernel only carries the word.
+    pub kind: String,
+    /// The origin of the page that asks; none for a program with no page.
+    pub origin: Option<String>,
+    /// The code both screens show, which the Person compares ([`code`]).
+    pub code: String,
+}
+
+/// An asking the port kept.
+pub struct Asked {
+    /// When its time is out, in ms since the epoch.
+    pub until: i64,
+    /// Hears the Person's answer: the device it is here now, or none
+    /// where they refused. Let go of unanswered, the asking is forgotten.
+    pub answer: oneshot::Receiver<Option<DeviceId>>,
+}
+
+/// The letters of a code: digits and capitals, none that reads as
+/// another (no I, L, O or U).
+const CODE_LETTERS: &[u8; 32] = b"0123456789ABCDEFGHJKMNPQRSTVWXYZ";
+
+/// The code of a device's asking on one connection: eight letters, as
+/// `4F7K-92QD`, from its key and the door's nonce. The Person compares it
+/// on the device that asks and on the one that allows, so what they allow
+/// is what they see ask.
+pub fn code(key: &[u8; 32], door_nonce: &str) -> String {
+    let hash = Sha256::new()
+        .chain_update(b"banda-door/code/1\n")
+        .chain_update(key)
+        .chain_update(door_nonce.as_bytes())
+        .finalize();
+    // Five bits a letter, from the hash's first forty.
+    let bits = hash[..5]
+        .iter()
+        .fold(0u64, |bits, byte| bits << 8 | u64::from(*byte));
+    let letter = |at: u32| CODE_LETTERS[(bits >> (35 - 5 * at) & 31) as usize] as char;
+    let half = |from: u32| (from..from + 4).map(letter).collect::<String>();
+    format!("{}-{}", half(0), half(4))
+}
+
+/// What the door says before a session: its `challenge`, first, and its
+/// answers to a device that asks to be paired.
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[serde(tag = "type", rename_all = "snake_case")]
 #[ts(export)]
 pub enum DoorFrame {
+    /// The door kept a device's `ask`: the code the Person compares, and
+    /// until when it waits for their answer.
+    Asked {
+        code: String,
+        #[ts(type = "number")]
+        until: i64,
+    },
+    /// The Person allowed the device that asked: what it is here from now
+    /// on. It comes in again, with `hello`.
+    Paired {
+        device: DeviceId,
+        /// The host key's signature over the door's nonce, the device's
+        /// key and `device` ([`paired_message`]).
+        sig: String,
+    },
     Challenge {
         /// 32 random bytes, used for this connection alone.
         nonce: String,
@@ -126,6 +215,18 @@ pub enum DoorFrame {
 #[serde(tag = "type", rename_all = "snake_case")]
 #[ts(export)]
 pub enum DeviceFrame {
+    /// A device this machine has not paired asks to be.
+    Ask {
+        /// Its public key: Ed25519, 32 bytes.
+        key: String,
+        /// What the Person reads it by: "Safari on Roma's Mac".
+        name: String,
+        /// What kind of client it is, by a word the engine knows.
+        kind: String,
+        /// That key's signature over the door's nonce, the host key, the
+        /// origin, the key, the kind and the name ([`ask_message`]).
+        sig: String,
+    },
     Hello {
         /// The protocols the client speaks; the door picks one.
         protocol: Protocols,
@@ -162,6 +263,27 @@ pub struct Proved {
     pub sig: String,
 }
 
+/// What a device key signs in an `ask`: the door's nonce, the host key it
+/// asks, the origin of the page that asks, none as the empty line, then
+/// its own key, its kind and its name, the name last as it is the
+/// Person's words.
+pub fn ask_message(
+    door_nonce: &str,
+    host_key: &str,
+    origin: &str,
+    key: &str,
+    kind: &str,
+    name: &str,
+) -> String {
+    format!("banda-door/ask/1\n{door_nonce}\n{host_key}\n{origin}\n{key}\n{kind}\n{name}")
+}
+
+/// What a host key signs in a `paired`: the door's nonce, the key of the
+/// device that asked, and the device it is here.
+pub fn paired_message(door_nonce: &str, key: &str, device: DeviceId) -> String {
+    format!("banda-door/paired/1\n{door_nonce}\n{key}\n{device}")
+}
+
 /// What a host key signs in a `challenge`.
 pub fn challenge_message(nonce: &str, host_key: &str, time: i64, protocol: Protocols) -> String {
     let Protocols { min, max } = protocol;
@@ -191,12 +313,16 @@ pub fn goodbye_message(
     hello: &DeviceFrame,
     reason: &Refusal,
 ) -> String {
+    // Only a `hello` is answered so: an `ask` proved no device.
     let DeviceFrame::Hello {
         protocol: Protocols { min, max },
         device,
         nonce,
         sig,
-    } = hello;
+    } = hello
+    else {
+        return String::new();
+    };
     let Refusal { code, message, .. } = reason;
     format!(
         "banda-door/goodbye/1\n{door_nonce}\n{origin}\n{device}\n{nonce}\n{min}\n{max}\n{sig}\n{code}\n{message}"
@@ -268,12 +394,18 @@ async fn serve(door: Arc<Door>, origin: Option<String>, socket: WebSocket) {
     // Heard from before its record is read, so no removal is missed.
     let mut removals = door.devices.removals();
     // The API's `hello`, with the owner's secret or a pass, is none here.
-    let hello = api::first::<DeviceFrame>(&mut stream).await;
+    let hello = match api::first::<DeviceFrame>(&mut stream).await {
+        // One this machine has not paired asks to be.
+        Some(asks @ DeviceFrame::Ask { .. }) => {
+            return asked(&door, &nonce, origin, asks, sink, stream).await;
+        }
+        hello => hello,
+    };
     // What its `goodbye` is signed over, should it get one: none for a
     // `hello` that cannot be signed as text.
-    let heard = hello
-        .clone()
-        .filter(|DeviceFrame::Hello { nonce, sig, .. }| fits(nonce) && fits(sig));
+    let heard = hello.clone().filter(
+        |hello| matches!(hello, DeviceFrame::Hello { nonce, sig, .. } if fits(nonce) && fits(sig)),
+    );
     let admitted = match hello {
         Some(hello) => admit(&door, &nonce, origin.as_deref(), hello),
         None => Err(Refusal::forbidden(
@@ -300,6 +432,156 @@ async fn serve(door: Arc<Door>, origin: Option<String>, socket: WebSocket) {
         }
     };
     api::session(kernel, &door.engine, caller, welcome, sink, stream, removed).await
+}
+
+/// How long a name a device asks by may be, in characters.
+const NAME_MOST: usize = 64;
+
+/// A device's `ask` on a connection the door gave `door_nonce`, from a
+/// page of `origin`: the asking the engine is to keep, with its code; or
+/// why not, as where it does not prove the key it names.
+fn asking(
+    door: &Door,
+    door_nonce: &str,
+    origin: Option<String>,
+    asks: DeviceFrame,
+) -> Result<(Asking, String), Refusal> {
+    let invalid = || {
+        Refusal::invalid(
+            "A device asks by its Ed25519 key, a name of 1 to 64 characters on one line, \
+             and its kind in one word.",
+        )
+    };
+    let DeviceFrame::Ask {
+        key: said,
+        name,
+        kind,
+        sig,
+    } = asks
+    else {
+        return Err(invalid());
+    };
+    // As it was sent and signed: no space around it, and nothing that
+    // draws as something else beside the Person's Allow.
+    let named = !name.is_empty()
+        && name == name.trim()
+        && name.chars().count() <= NAME_MOST
+        && !name.chars().any(hidden);
+    // An origin is a scheme and a host: one longer than a name is none.
+    if origin.as_deref().is_some_and(|origin| !fits(origin)) {
+        return Err(invalid());
+    }
+    let key: [u8; 32] = (URL_SAFE_NO_PAD.decode(&said).ok())
+        .and_then(|key| key.try_into().ok())
+        .ok_or_else(invalid)?;
+    // What kinds there are is the engine's to say ([`Devices::ask`]).
+    if !named || !fits(&kind) {
+        return Err(invalid());
+    }
+    // It holds the key it names, here and now: none asks in another's.
+    let message = ask_message(
+        door_nonce,
+        &door.host_key,
+        origin.as_deref().unwrap_or_default(),
+        &said,
+        &kind,
+        &name,
+    );
+    let sig = URL_SAFE_NO_PAD.decode(sig).map_err(|_| invalid())?;
+    UnparsedPublicKey::new(&ED25519, key)
+        .verify(message.as_bytes(), &sig)
+        .map_err(|_| invalid())?;
+    let code = code(&key, door_nonce);
+    let asking = Asking {
+        key,
+        name,
+        kind,
+        origin,
+        code,
+    };
+    Ok((asking, said))
+}
+
+/// Whether `letter` does not show as itself in a name: a control, a mark
+/// that turns the text's direction, or one of no width.
+fn hidden(letter: char) -> bool {
+    letter.is_control()
+        || matches!(
+            letter,
+            '\u{200B}'..='\u{200F}'
+                | '\u{2028}'..='\u{202E}'
+                | '\u{2060}'..='\u{2069}'
+                | '\u{FEFF}'
+        )
+}
+
+/// Answers a device's `ask`: `asked` with its code, then the Person's
+/// word as it comes, `paired` or `goodbye`; `goodbye` too as its time is
+/// out. A device that goes meanwhile is forgotten.
+async fn asked(
+    door: &Door,
+    door_nonce: &str,
+    origin: Option<String>,
+    asks: DeviceFrame,
+    mut sink: futures::stream::SplitSink<WebSocket, axum::extract::ws::Message>,
+    mut stream: futures::stream::SplitStream<WebSocket>,
+) {
+    let refuse = |reason| api::Farewell { reason, sig: None };
+    let kept = asking(door, door_nonce, origin, asks)
+        .and_then(|(asking, key)| Ok((asking.code.clone(), key, door.devices.ask(asking)?)));
+    let (code, key, Asked { until, answer }) = match kept {
+        Ok(kept) => kept,
+        Err(reason) => return api::refuse(sink, refuse(reason)).await,
+    };
+    let said = DoorFrame::Asked {
+        code: code.clone(),
+        until,
+    };
+    if sink.send(api::text(&said)).await.is_err() {
+        drop(answer);
+        return door.devices.left(&code);
+    }
+    let left = std::time::Duration::from_millis((until - now_ms()).max(0).unsigned_abs());
+    // It says nothing more while it waits, but what keeps a connection
+    // alive: gone, or saying more, its asking goes with it.
+    let gone = async {
+        use axum::extract::ws::Message;
+        while let Some(Ok(Message::Ping(_) | Message::Pong(_))) = stream.next().await {}
+    };
+    let answered = tokio::select! {
+        // An answer that came as its time ran out counts.
+        biased;
+        answer = answer => match answer {
+            Ok(Some(device)) => Ok(device),
+            Ok(None) => Err(Some(Refusal::forbidden(
+                "This device was not allowed to join this machine.",
+            ))),
+            Err(_) => Err(Some(Refusal::expired(
+                "This device asks no more here: it asked again, or its time ran out.",
+            ))),
+        },
+        () = tokio::time::sleep(left) => {
+            Err(Some(Refusal::expired("Nobody allowed this device in time. Ask again.")))
+        }
+        () = gone => Err(None),
+    };
+    match answered {
+        Ok(device) => {
+            let said = paired_message(door_nonce, &key, device);
+            let sig = URL_SAFE_NO_PAD.encode(door.devices.sign(said.as_bytes()));
+            let _ = sink
+                .send(api::text(&DoorFrame::Paired { device, sig }))
+                .await;
+            let _ = sink.close().await;
+        }
+        Err(reason) => {
+            // Its answer is let go of by now: the engine forgets it.
+            door.devices.left(&code);
+            if let Some(reason) = reason {
+                api::refuse(sink, refuse(reason)).await;
+            }
+        }
+    }
 }
 
 impl Door {
@@ -330,14 +612,17 @@ fn admit(
     origin: Option<&str>,
     hello: DeviceFrame,
 ) -> Result<(Caller, DeviceId, api::Welcomed), Refusal> {
+    let forbidden =
+        || Refusal::forbidden("This machine has not paired this device, or its key does not fit.");
     let DeviceFrame::Hello {
         protocol,
         device,
         nonce,
         sig,
-    } = hello;
-    let forbidden =
-        || Refusal::forbidden("This machine has not paired this device, or its key does not fit.");
+    } = hello
+    else {
+        return Err(forbidden());
+    };
     let paired = door.devices.device(device).ok_or_else(forbidden)?;
     if !fits(&nonce) || paired.origin.as_deref() != origin {
         return Err(forbidden());

@@ -2,7 +2,10 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { StreamMethod } from "../StreamMethod";
 import type { Add } from "./Add";
+import type { Answer } from "./Answer";
+import type { Ask } from "./Ask";
 import type { Listed } from "./Listed";
 import type { PairedDevice } from "./PairedDevice";
 import type { Remove } from "./Remove";
@@ -23,4 +26,20 @@ add: CommandMethod<Add, PairedDevice>,
  * Removes a device: its sessions end at once, and it opens none
  * until it is paired again.
  */
-remove: CommandMethod<Remove, null>, };
+remove: CommandMethod<Remove, null>, 
+/**
+ * The devices that ask at the door to be paired now, then again
+ * as one asks, is answered or runs out of time: each with the
+ * code its own screen shows.
+ */
+asking: StreamMethod<Nothing, Array<Ask>>, 
+/**
+ * Pairs the device that asks with this code, so it comes in at
+ * this machine's door as the Person. Allow it only where its
+ * screen shows the same code.
+ */
+allow: CommandMethod<Answer, PairedDevice>, 
+/**
+ * Sends the device that asks with this code away.
+ */
+refuse: CommandMethod<Answer, null>, };

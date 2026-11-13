@@ -5,7 +5,24 @@ import type { Protocols } from "./Protocols";
 /**
  * A device's first frame at the door, in answer to its challenge.
  */
-export type DeviceFrame = { "type": "hello", 
+export type DeviceFrame = { "type": "ask", 
+/**
+ * Its public key: Ed25519, 32 bytes.
+ */
+key: string, 
+/**
+ * What the Person reads it by: "Safari on Roma's Mac".
+ */
+name: string, 
+/**
+ * What kind of client it is, by a word the engine knows.
+ */
+kind: string, 
+/**
+ * That key's signature over the door's nonce, the host key, the
+ * origin, the key, the kind and the name ([`ask_message`]).
+ */
+sig: string, } | { "type": "hello", 
 /**
  * The protocols the client speaks; the door picks one.
  */

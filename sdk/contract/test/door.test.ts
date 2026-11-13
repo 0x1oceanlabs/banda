@@ -11,8 +11,8 @@ import {
   helloMessage,
   signed,
   welcomeMessage,
+  type Hello,
 } from "../src/door"
-import type { DeviceFrame } from "../src/generated/DeviceFrame"
 import type { Refusal } from "../src/generated/Refusal"
 import { type DoorKey, Engine, PROTOCOL, type Status } from "../src/index"
 
@@ -262,7 +262,7 @@ test("a goodbye the host key signed to this client's own hello is the machine's 
     type: "goodbye",
     reason,
     sig: await signer.sign(
-      goodbyeMessage(NONCE, "", hello as DeviceFrame, reason as Refusal)
+      goodbyeMessage(NONCE, "", hello as Hello, reason as Refusal)
     ),
   })
   const door = doorOf(host)

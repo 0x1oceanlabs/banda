@@ -210,7 +210,7 @@ Its methods, `banda call bytes.<method>`: `issue`.
 
 The devices this machine lets in at its door, and the host key it proves itself to them by (ADR 0124): a desktop's window, a browser, a phone or a CLI on another machine, each by a key of its own that never leaves it. Only the Person pairs or removes one, and a device removed loses its sessions at once.
 
-Its methods, `banda call devices.<method>`: `list`, `add`, `remove`.
+Its methods, `banda call devices.<method>`: `list`, `add`, `remove`, `asking`, `allow`, `refuse`.
 
 ## Harnesses (`harnesses`)
 
