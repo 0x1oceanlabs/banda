@@ -229,8 +229,10 @@ banda_kernel::methods! {
         /// args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
         /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
         /// `"file": "<path>"` to show one), a file (`files.file`, args
-        /// `{"path": "<path>", "line": <n>}`), or a browser at a web
-        /// address (`browser.browser`, args `{"url": "https://…"}` alone).
+        /// `{"path": "<path>", "line": <n>}`), a browser at a web
+        /// address (`browser.browser`, args `{"url": "https://…"}` alone),
+        /// or an App's screen (`apps.view`, args `{"app": "<id>", "view":
+        /// "<name>"}`, with `"args": {…}` when the view takes any).
         /// Only the args that choose what a Pane shows are yours to give;
         /// the rest are your Person's. Beside a Pane `panes` lists; left
         /// out, right of your Thread, in its Group, when your Thread is
@@ -268,6 +270,7 @@ const AGENT_KINDS: &[(&str, ArgsRule)] = &[
     ("git.diff", |_| Ok(())),
     ("files.file", |_| Ok(())),
     ("browser.browser", web_address),
+    ("apps.view", a_screen),
 ];
 
 /// What an Agent does instead of giving a Thread's Pane words to send.
@@ -293,6 +296,22 @@ fn a_thread(args: &Value) -> Result<(), Refusal> {
         "A Thread's Pane shows one of your Project's Threads: args \
          {{\"thread\": \"<id>\"}}, an ID as `threads` lists it. {SEND}"
     )))
+}
+
+/// Refuses an App's screen an Agent opens without saying which: the App
+/// and its view, by name. The screen reads; what its controls send, the
+/// Person's click sends, as the Person.
+fn a_screen(args: &Value) -> Result<(), Refusal> {
+    shows_only(args, &["app", "view", "args"])?;
+    let named = |arg: &str| args.get(arg).is_some_and(Value::is_string);
+    let takes = args.get("args").is_none_or(Value::is_object);
+    if named("app") && named("view") && takes {
+        return Ok(());
+    }
+    Err(Refusal::invalid(
+        "An App's screen is one of its views: args {\"app\": \"<id>\", \"view\": \"<name>\"}, \
+         with \"args\": {…} when the view takes any.",
+    ))
 }
 
 /// Refuses any arg but `shows`, the ones an Agent gives a kind of Pane.
@@ -374,7 +393,8 @@ pub struct SeenPane {
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "workspaces/")]
 pub struct OpenPane {
-    /// The kind: `agents.thread`, `git.diff`, `files.file` or `browser.browser`.
+    /// The kind: `agents.thread`, `git.diff`, `files.file`, `browser.browser`
+    /// or `apps.view`.
     pub kind: String,
     /// The kind's own, an object, only those that choose what it shows:
     /// a Thread's ID alone for a Thread's Pane, a web address alone for a

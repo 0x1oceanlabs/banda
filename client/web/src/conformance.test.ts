@@ -168,6 +168,28 @@ const GIVEN: Record<
     answers: filesAnswers,
     gestures: {},
   },
+  // The screen of an App arc runs: its Tree, with a button that sends
+  // one of the App's commands at a click.
+  "apps.view": {
+    modules: ["apps"],
+    args: { app: "clients", view: "home" },
+    answers: (method) =>
+      method === "clients.home"
+        ? {
+            at: 0,
+            title: "Clients",
+            about: null,
+            children: [
+              {
+                node: "Button",
+                label: "Add Anna",
+                command: "add",
+                params: { name: "Anna" },
+              },
+            ],
+          }
+        : undefined,
+  },
 }
 
 /** Each kind as the Window mounts it: New Pane with the kinds the Window

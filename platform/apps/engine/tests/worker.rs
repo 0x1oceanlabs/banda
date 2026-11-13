@@ -333,64 +333,18 @@ async fn what_goes_wrong_in_an_app_stays_in_that_app() {
     );
 }
 
-/// The clients App with a screen: its folder, copied, with `add` marked
-/// for a screen and a view `home` that lists the clients and adds one.
-fn clients_with_a_screen(dir: &Path) -> PathBuf {
-    let (from, to) = (folder("clients"), dir.join("clients"));
-    std::fs::create_dir_all(to.join("migrations")).unwrap();
-    for file in ["app.toml", "migrations/001.sql", "migrations/002.sql"] {
-        std::fs::copy(from.join(file), to.join(file)).unwrap();
-    }
-    std::fs::copy(from.join("worker.mjs"), to.join("clients.mjs")).unwrap();
-    let methods = std::fs::read_to_string(from.join("methods.json")).unwrap();
-    let mut methods: Value = serde_json::from_str(&methods).unwrap();
-    methods["add"]["ui"] = json!(true);
-    methods["home"] = json!({
-        "kind": "view",
-        "about": "The clients, and a form to add one.",
-        "params": { "type": "object", "properties": { "city": { "type": "string" } } }
-    });
-    std::fs::write(to.join("methods.json"), methods.to_string()).unwrap();
-    let worker = r#"
-        import { methods as clients } from "./clients.mjs"
-        export const methods = {
-          ...clients,
-          async home({ city }, call) {
-            const { answer: rows } = await clients.find({ city }, call)
-            return {
-              answer: {
-                title: "Clients",
-                about: "The people I work with.",
-                children: [
-                  { node: "Table", rows, empty: "No clients yet",
-                    columns: [{ key: "name", title: "Name" }, { key: "city", title: "City" }] },
-                  { node: "Card", title: "Add a client",
-                    children: [{ node: "Form", command: "add", submit: "Add client" }] },
-                ],
-              },
-            }
-          },
-        }
-    "#;
-    std::fs::write(to.join("worker.mjs"), worker).unwrap();
-    to
-}
-
 #[tokio::test]
 async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
     needs_node!();
-    let dir = tempfile::tempdir().unwrap();
-    let owner = PersonId::new();
-    let app = clients_with_a_screen(&dir.path().join("written"));
-    install(dir.path(), owner, &[&app]);
-    let kernel = serve(dir.path(), owner, node()).await;
-    let host = Host { kernel, owner, dir };
+    let host = host(&["clients"]).await;
     let work = host.project("Work").await;
     let anna = json!({ "name": "Anna", "city": "Berlin" });
     host.call(&work, "clients.add", anna).await.unwrap();
     host.call(&work, "clients.add", json!({ "name": "Boris" }))
         .await
         .unwrap();
+    let note = json!({ "client": 1, "text": "Likes tea." });
+    host.call(&work, "clients.note", note).await.unwrap();
 
     // The view is listed as one, and is no Agent's tool.
     let described = (host.kernel).call(host.person(), "apps.describe", None, None, json!({}));
@@ -411,7 +365,9 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
     let log = (host.kernel.follow(host.person(), work.id).await).unwrap();
     let said = log.events_after(0, Default::default(), 10).await.unwrap();
     let at = said.last().unwrap().seq;
-    let tree = host.call(&work, "clients.home", json!({ "city": "Berlin" }));
+    let tree = host.call(&work, "clients.home", json!({}));
+    let column =
+        |key: &str, title: &str, shown: &str| json!({ "key": key, "title": title, "as": shown });
     let field = |name: &str, label: &str, required: bool| {
         json!({ "name": name, "label": label, "kind": "text", "required": required,
             "placeholder": null, "options": [] })
@@ -419,15 +375,17 @@ async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
     assert_eq!(
         tree.await.unwrap(),
         json!({
-            // The log's place after the two clients were added.
+            // The log's place after what was added and noted.
             "at": at,
             "title": "Clients",
-            "about": "The people I work with.",
+            "about": "The people I work with: who they are, where, and notes on each.",
             "children": [
                 { "node": "Table", "empty": "No clients yet",
-                  "columns": [{ "key": "name", "title": "Name", "as": "text" },
-                              { "key": "city", "title": "City", "as": "text" }],
-                  "rows": [{ "id": 1, "name": "Anna", "city": "Berlin", "email": null }] },
+                  "columns": [column("name", "Name", "text"), column("city", "City", "text"),
+                              column("email", "Email", "text"), column("notes", "Notes", "badge")],
+                  "rows": [
+                    { "name": "Anna", "city": "Berlin", "email": null, "notes": 1 },
+                    { "name": "Boris", "city": null, "email": null, "notes": null } ] },
                 { "node": "Card", "title": "Add a client", "children": [
                     { "node": "Form", "title": null, "command": "add", "submit": "Add client",
                       "fields": [field("name", "Name", true), field("city", "City", false),

@@ -98,6 +98,7 @@ pub const WINDOWS: &[(&str, &str)] = &[
         "workspaces",
         include_str!("../../../platform/workspaces/window.json"),
     ),
+    ("apps", include_str!("../../../platform/apps/window.json")),
     ("window", include_str!("../../../client/web/window.json")),
 ];
 

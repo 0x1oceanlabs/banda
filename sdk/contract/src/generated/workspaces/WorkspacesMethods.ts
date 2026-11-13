@@ -153,8 +153,10 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
  * `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with
  * `"file": "<path>"` to show one), a file (`files.file`, args
- * `{"path": "<path>", "line": <n>}`), or a browser at a web
- * address (`browser.browser`, args `{"url": "https://…"}` alone).
+ * `{"path": "<path>", "line": <n>}`), a browser at a web
+ * address (`browser.browser`, args `{"url": "https://…"}` alone),
+ * or an App's screen (`apps.view`, args `{"app": "<id>", "view":
+ * "<name>"}`, with `"args": {…}` when the view takes any).
  * Only the args that choose what a Pane shows are yours to give;
  * the rest are your Person's. Beside a Pane `panes` lists; left
  * out, right of your Thread, in its Group, when your Thread is
