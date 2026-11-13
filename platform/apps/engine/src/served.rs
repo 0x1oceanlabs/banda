@@ -74,10 +74,7 @@ impl Served {
     }
 
     fn declared(&self, method: &str) -> Option<&Declared> {
-        self.app
-            .methods
-            .iter()
-            .find(|declared| declared.name == method)
+        self.app.declared(method)
     }
 
     /// The turn of the App's commands in `project`: one runs at a time.
@@ -127,6 +124,12 @@ impl Module for Served {
             "by": call.participant(),
             "project": { "id": project.id(), "folder": project.folder().display().to_string() },
         });
+        // A view shows the log's place it had before it read: what lands
+        // while it reads comes after it, and is read again.
+        let at = match kind {
+            Kind::View => project.at().await?,
+            _ => 0,
+        };
         let Answered {
             answer,
             write,
@@ -137,12 +140,21 @@ impl Module for Served {
         let amiss = |why: String| Refusal::new(Code::Internal, format!("{named} failed: {why}"));
         if kind != Kind::Command {
             if !(write.is_empty() && emit.is_empty()) {
-                return Err(amiss(
-                    "it is a call, and a call writes nothing: declare it a command in methods.json."
-                        .into(),
-                ));
+                let what = if kind == Kind::View { "view" } else { "call" };
+                return Err(amiss(format!(
+                    "it is a {what}, and a {what} writes nothing: declare it a command in methods.json."
+                )));
             }
-            return Ok(answer);
+            return match kind {
+                // Its screen: read here, so no client draws what is no
+                // Tree.
+                Kind::View => {
+                    let tree = crate::tree::resolved(answer, &self.app, at)
+                        .map_err(|why| amiss(format!("its Tree does not read. {why}")))?;
+                    banda_kernel::methods::answer(tree)
+                }
+                _ => Ok(answer),
+            };
         }
         let author = call.participant();
         call.command(move |tx| {

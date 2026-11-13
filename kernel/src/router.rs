@@ -282,7 +282,7 @@ impl Kernel {
         // What a call keeps its order by; none for a command.
         let by = match module.kind(rest)? {
             Kind::Command if !module.runs_on(rest) => None,
-            Kind::Call => Some(module.in_order(rest, params)?),
+            Kind::Call | Kind::View => Some(module.in_order(rest, params)?),
             _ => return None,
         };
         let scope = if module.scope() == Scope::Machine {

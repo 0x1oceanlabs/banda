@@ -33,6 +33,7 @@ pub mod folder;
 pub mod installed;
 pub mod new;
 pub mod served;
+pub mod tree;
 mod worker;
 
 use banda_kernel::host::Node;
