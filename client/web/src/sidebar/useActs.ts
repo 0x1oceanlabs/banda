@@ -5,15 +5,15 @@ import type { ItemAction } from "@banda/ui/module"
 import { type Act, actsOf } from "./acts"
 import type { Row } from "./rows"
 import { type By, itemKey } from "./hold"
+import { itemActionOf } from "../window/items"
 import {
-  itemActionOf,
   type Left,
   leftSaid,
   REFUSED,
   refusalOf,
   refused,
   setRefusalOf,
-} from "./items"
+} from "./refusals"
 import { keyId } from "./keys"
 import { pickLater } from "./LaterPicker"
 import { keep, toldArchived, type Undoable, undoOf } from "./undo"

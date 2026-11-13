@@ -10,7 +10,7 @@ import { Button } from "@banda/ui/components/button"
 import { type Chime, player } from "@banda/ui/sound"
 import { PlayIcon } from "lucide-react"
 import { useLookSidebar, useLookSound } from "../look"
-import { PRESET_WORDS } from "../sidebar/settings"
+import { PRESET_WORDS } from "../sidebar"
 import type { CustomRow } from "./sections"
 import { Choice } from "./SettingRow"
 

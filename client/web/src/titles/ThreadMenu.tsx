@@ -22,7 +22,7 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { useRun } from "@banda/core/react"
 import type { Listed } from "@banda/ui/pane"
-import { rowsOf, type Shown } from "../sidebar/items"
+import { rowsOf, type Shown } from "../window/items"
 import { Making } from "./MakeProject"
 
 /** The window's Projects, for the Thread menu wherever it opens; it runs

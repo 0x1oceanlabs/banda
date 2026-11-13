@@ -13,8 +13,8 @@ import {
   works,
 } from "@banda/ui/components/banda-mark"
 import type { Lists } from "@banda/ui/pane"
-import { TONES } from "../../sidebar/CardStatus"
-import { tally } from "../../sidebar/tally"
+import { TONES } from "./CardStatus"
+import { tally } from "./tally"
 
 /** What the count says: the Person's turn, the loudest look of it, and
  * how many work. */

@@ -23,7 +23,7 @@ import {
   QUIET,
 } from "@banda/ui/pane"
 import { attentionOf, callsOf, mayArchive, nextStuck } from "@banda/ui/status"
-import { nextWake, wakeAfter } from "../sidebar/later"
+import { nextWake, wakeAfter } from "./later"
 
 /** What calls the Person now. */
 export type Calls = {

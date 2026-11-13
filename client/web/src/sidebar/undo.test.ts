@@ -14,7 +14,7 @@ import {
 } from "./undo"
 
 // Each step runs its Thread's App's item action, found by what it does.
-vi.mock("./items", () => ({
+vi.mock("../window/items", () => ({
   itemActionOf: (_listed: Listed, does: string) => ({ id: `agents.${does}` }),
 }))
 

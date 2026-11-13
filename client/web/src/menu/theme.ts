@@ -9,7 +9,7 @@
 import type { Listed, Look } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
 import type { WindowApi } from "@banda/ui/module"
-import { logged } from "../sidebar/write-setting"
+import { logged } from "../settings/write"
 
 /** Which scheme shows: one, or the system's. */
 export type Shown = Look["mode"]

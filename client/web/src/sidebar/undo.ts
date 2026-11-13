@@ -18,7 +18,7 @@ import type { Args } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
 import { asleep } from "@banda/ui/status"
 import type { Act } from "./acts"
-import { itemActionOf } from "./items"
+import { itemActionOf } from "../window/items"
 
 /** One step that puts back what an act changed: what it does, by the
  * Thread's item actions, and with what. */

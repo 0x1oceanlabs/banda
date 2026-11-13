@@ -34,8 +34,8 @@ import {
 } from "lucide-react"
 import { type ReactNode, useId, useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
-import { itemActionOf } from "./items"
-import { type Preset, presets, whenOf } from "./later-time"
+import { itemActionOf } from "../window/items"
+import { type Preset, presets, whenOf } from "../calls/later-time"
 
 /** A Thread whose Later is being picked. */
 export type LaterThread = { project: ProjectId; listed: Listed }
