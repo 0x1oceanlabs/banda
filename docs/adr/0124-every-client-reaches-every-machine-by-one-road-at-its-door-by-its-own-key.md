@@ -166,8 +166,10 @@ repository), with an adversarial check.
   has an entry as each host has (`KeptHosts.shown`), judged by its own
   engine's connection, as no one else says whether that machine is in
   reach. A client makes such an engine with `staleOnLoss`: once heard, a
-  connection that ends leaves it answering nothing until it is heard
-  again, and it tries again all the while. Then the one rule holds for it
+  connection that ends, and is not heard again within 3 s, leaves it
+  answering nothing until it is heard again, and it tries again all the
+  while. Back sooner, as after a blip or a quick restart, it was never
+  out of reach, and a command cut off goes again. Then the one rule holds for it
   as for arc: an act is refused at once, in words that name no machine
   ("Banda is restarting on this machine"), a message waits for it, and a
   Pane closed meanwhile is let go of once it is back. A window that
