@@ -24,8 +24,15 @@ export {
   useShownNow,
   useShownOf,
   useThisNamed,
+  useWrittenFrom,
 } from "./hosts"
 export { MachinesContext, useMachines } from "./machines"
 export { RunContext, useRun } from "./run"
 export { useSelected, useStore } from "./store"
-export { useLeftFor, useQueue, useWaiting } from "./waiting"
+export {
+  useLeftFor,
+  useQueue,
+  useWaiting,
+  useWaitingFor,
+  useWaitsOn,
+} from "./waiting"

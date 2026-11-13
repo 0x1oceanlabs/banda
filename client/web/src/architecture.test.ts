@@ -2023,12 +2023,12 @@ const HOSTS_FOR_APPS = [
   "Unreachable",
   "heldWords",
   "unreachedWords",
-  // This machine's name, which a Thread says it writes from (ADR 0122).
-  "useHereNamed",
   "useMachines",
   "useNamedOf",
   "usePlaced",
   "useShownOf",
+  // Which machine a Thread says it is written from (ADR 0122).
+  "useWrittenFrom",
 ]
 
 /** The names the core's hosts files export: the store, its words and
@@ -2637,7 +2637,6 @@ test("a file is stamped with its Project or its device only in the places listed
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 1,
   "apps/agents/pane/src/thread/Thread.tsx": 15,
-  "apps/agents/pane/src/thread/session.ts": 1,
 }
 
 const askingWhere = Object.fromEntries(

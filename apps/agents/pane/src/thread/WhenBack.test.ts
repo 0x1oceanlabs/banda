@@ -43,7 +43,6 @@ const message = (text: string, images: string[] = []) => ({
     params: { thread: "t1", text, images, settings: null, steer: false },
     command: "c1",
   } as CommandCall,
-  host: "arc",
   project: PROJECT,
   item: "t1",
   text,
@@ -55,6 +54,7 @@ const message = (text: string, images: string[] = []) => ({
 /** Message `text` as it waits until 14:42, the first queued. */
 const waiting = (text: string, images: string[] = []) => ({
   ...message(text, images),
+  host: "arc",
   until: at1442,
   notAfter: at1442,
   seq: 1,
@@ -158,7 +158,7 @@ test("a message that did not go in its time goes back into its draft with a toas
   waiting.add({
     ...message("a terminal's"),
     item: "t9",
-    pane: { kind: "terminal", args: {} },
+    pane: { kind: "terminal", args: { host: "arc" } },
     at: Date.now(),
   })
   await vi.advanceTimersByTimeAsync(KEEP)

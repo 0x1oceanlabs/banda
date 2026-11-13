@@ -181,7 +181,6 @@ test("the pill counts every message this device has waiting for its machine, fro
         },
         command: `${host}-${item}`,
       },
-      host,
       project: "r1" as ProjectId,
       item,
       text: "hi",
