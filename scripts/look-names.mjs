@@ -51,7 +51,7 @@ const KEEP = new Set(["client/ui/src/lib/utils.test.ts"])
  * size's token (`--text-meta: var(--meta-size)`). */
 const LEVELS = [
   ...readFileSync(
-    join(root, "client/ui/src/styles/globals.css"),
+    join(root, "client/ui/src/styles/theme.css"),
     "utf8"
   ).matchAll(/--text-([\w-]+):\s*var\(--\1-size\)/g),
 ].map(([, level]) => level)

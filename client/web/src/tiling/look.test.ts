@@ -7,9 +7,10 @@ import { expect, test } from "vitest"
 // The tiles' look is a set of CSS variables that the look module sets
 // (ADR 0007). Every one the window uses must have Banda's default: the
 // tokens' in tokens.css, written from the token list (ADR 0080, decision
-// 7), and what the page works out of them in globals.css.
+// 7), and what the page works out of them in theme.css and globals.css.
 const here = import.meta.dirname
 const css = [
+  join(here, "../../../ui/src/styles/theme.css"),
   join(here, "../../../ui/src/styles/globals.css"),
   createRequire(import.meta.url).resolve("@banda/contract/tokens.css"),
 ]
