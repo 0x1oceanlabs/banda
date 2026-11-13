@@ -5,3 +5,153 @@
 /* The components a page takes from @banda/ui, which Tailwind does not
    find from here: it reads the site's own files by itself. */
 @source "../../../client/ui/src/components";
+
+/*
+ * The site's own palette. The home page is two worlds: a gallery wall
+ * with the painting "BANDA" on it, and Banda's dark desk under it. The
+ * wall's colours are fixed, whatever the system's theme: the painting is
+ * the same by day and by night. The desk takes Banda's dark tokens by the
+ * `dark` class on its part of the page.
+ */
+:root {
+  /* The gallery: a plaster wall, its labels and the ink on them. */
+  --gallery-wall: #f2f1ed;
+  --gallery-plate: #fbfaf7;
+  --gallery-ink: #141414;
+  --gallery-ink-2: #3b3b3d;
+  --gallery-muted: #6e6e70;
+  --gallery-line: rgb(20 20 20 / 0.12);
+  --gallery-focus: #2550c9;
+
+  /* The painting's paints, as the museum piece has them. */
+  --paint-ground: #f5f3ee;
+  --paint-ground-2: #e8e5de;
+  --paint-gesso: #fbfaf7;
+  --paint-cadmium: #f08a24;
+  --paint-cobalt: #2550c9;
+  --paint-soot: #1c1c1f;
+  --paint-cloud: #3a3b40;
+  --paint-cloud-2: #45464c;
+  --paint-slate: #4a4c52;
+  --paint-graphite: #2a2b2f;
+  --paint-ash: #55575c;
+  --paint-green: #2c8f55;
+  --paint-yellow: #f6c434;
+
+  /* Each of the gang wears its state: the Mark's shapes, in paint. */
+  --gang-calm: #161616;
+  --gang-working: #8ea6db;
+  --gang-asks: #f28a1e;
+  --gang-failed: #e3392c;
+  --gang-done: #2fa77f;
+  --gang-woke: #f6c434;
+  --gang-later: #c4c3be;
+
+  /* The desk at night: the painting's palette turned into light. The
+     cadmium disc is the ember, cobalt deepens to violet, the green strip
+     leaves a teal hint. */
+  --night: #07081a;
+  --night-violet: #170f3c;
+  --glow-ember: rgb(255 122 69);
+  --glow-flare: rgb(255 92 60);
+  --glow-violet: rgb(91 60 196);
+  --glow-teal: rgb(14 116 144);
+
+  /* A plaster grain for the wall, and a finer one for glass. */
+  --plaster: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='240'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  0 0 0 .07 0'/%3E%3C/filter%3E%3Crect width='240' height='240' filter='url(%23n)'/%3E%3C/svg%3E");
+  --grain: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='0.04'/%3E%3C/svg%3E");
+
+  /* A document's own page in the window's browser: white. */
+  --paper: #ffffff;
+
+  --page-pad: clamp(16px, 4.4vw, 64px);
+  --page-max: 1312px;
+}
+
+/* The home page's body is the wall, whatever the system's theme. */
+body.gallery {
+  background: var(--gallery-wall) var(--plaster);
+  color: var(--gallery-ink);
+  font-feature-settings: "cv11", "ss01";
+  overflow-x: clip;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+}
+
+.wrap {
+  max-width: var(--page-max);
+  margin-inline: auto;
+  padding-inline: var(--page-pad);
+}
+
+/* The gallery's keyboard focus: the painting's cobalt. */
+.gallery :focus-visible {
+  outline: 2px solid var(--gallery-focus);
+  outline-offset: 3px;
+  border-radius: 6px;
+}
+/* The desk's: Banda's ring. */
+.gallery .dark :focus-visible {
+  outline-color: var(--ring);
+}
+
+/* The Mark's looks that do not call, on the desk (theme.css's tokens):
+   the kit colours only the calls. */
+.night svg[data-banda-mark][data-look="working"] {
+  color: var(--mark-working);
+}
+.night svg[data-banda-mark][data-look="open"] {
+  color: var(--mark-open);
+}
+.night svg[data-banda-mark][data-look="later"] {
+  color: var(--mark-later);
+}
+
+/* The desk's glass: a window's surface over the night, and the tiles on
+   it. No backdrop blur: the glow behind is soft already, and a blur
+   would be drawn again on every frame of the scroll. */
+.glass {
+  border-radius: var(--window-radius);
+  padding: var(--gap-outer);
+  background-color: color-mix(in oklab, var(--background) 46%, transparent);
+  background-image: var(--grain);
+  box-shadow:
+    0 0 0 1px rgb(255 255 255 / 0.12),
+    inset 0 1px 0 rgb(255 255 255 / 0.05),
+    0 40px 80px -40px rgb(0 0 0 / 0.6);
+}
+.tile {
+  border-radius: var(--tile-radius);
+  background: color-mix(in oklab, var(--background) 90%, transparent);
+  box-shadow: inset 0 0 0 1px var(--border);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+  min-width: 0;
+}
+.tile h3 {
+  margin: 0 0 6px;
+  font-size: 20px;
+  line-height: 26px;
+  letter-spacing: -0.02em;
+  font-weight: 620;
+}
+.tile p {
+  margin: 0;
+  color: color-mix(in oklab, var(--foreground) 72%, transparent);
+  font-size: 15px;
+  line-height: 23px;
+  text-wrap: pretty;
+}
+@media (max-width: 720px) {
+  .tile {
+    padding: 20px;
+  }
+}

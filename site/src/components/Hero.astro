@@ -1,0 +1,330 @@
+---
+// The first screen: the gallery wall, "Lead the gang.", and the painting
+// with the gang in it. A museum's wall label says what the piece is.
+import Painting from "./Painting.astro"
+
+const repo = "https://github.com/0x1oceanlabs/banda"
+---
+
+<header class="wrap nav">
+  <a class="brand" href="#top" aria-label="Banda, top of the page">
+    <span class="logo" data-mark="open" data-logo data-size="30"></span>
+    Banda
+  </a>
+  <nav aria-label="Sections">
+    <ul>
+      <li class="wide">
+        <a href="#cast">The cast</a>
+      </li>
+      <li class="wide">
+        <a href="#desk">The desk</a>
+      </li>
+      <li class="wide">
+        <a href="#machines">Machines</a>
+      </li>
+      <li>
+        <a class="gh" href={repo}>
+          GitHub
+        </a>
+      </li>
+      <li>
+        <a class="install" href="#install">
+          Install
+        </a>
+      </li>
+    </ul>
+  </nav>
+</header>
+
+<section class="wrap hero" id="top" aria-labelledby="hero-title">
+  <div class="copy">
+    <p class="eyebrow">
+      <b>banda</b>
+      <i></i>
+      <span>the gang</span>
+    </p>
+    <h1 id="hero-title" data-headline>
+      <span>Lead the</span> <span>gang.</span>
+    </h1>
+    <p class="lede">
+      A tiling workspace for working with <b>many Agents at once</b>: Claude
+      Code and Codex beside your terminal, browser, files and diff. On your own
+      machines.
+    </p>
+    <div class="ctas">
+      <a class="btn primary" href="#install">
+        Install Banda Dev
+      </a>
+      <a class="btn ghost" href={repo}>
+        Star on GitHub <span class="k">Apache-2.0</span>
+      </a>
+    </div>
+    <div class="label">
+      <div class="plate" role="note" aria-label="Wall label">
+        <div class="by">0x1oceanlabs</div>
+        <div class="t">
+          <em>Banda</em>, 2026
+        </div>
+        <div class="m">
+          Agents, terminal, browser, files and git in Panes, on the Person's own
+          machines
+        </div>
+        <div class="m">Dimensions variable: one laptop to many servers</div>
+        <div class="c">Open source, Apache-2.0</div>
+      </div>
+    </div>
+  </div>
+  <div class="frame">
+    <Painting />
+  </div>
+</section>
+
+<script>
+  import { liveGang } from "../lib/gang"
+  import { playBubble } from "../lib/hero"
+  import { stillOffscreen } from "../lib/mark"
+
+  liveGang(document.querySelector("[data-headline]"))
+  playBubble(document.querySelector<HTMLElement>(".canvas")!)
+  stillOffscreen(document.querySelector(".nav")!)
+</script>
+
+<style>
+  .nav {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    height: 76px;
+  }
+  .brand {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    text-decoration: none;
+    font-weight: 750;
+    font-size: 19px;
+    letter-spacing: -0.02em;
+    color: var(--gallery-ink);
+  }
+  .logo {
+    display: grid;
+    width: 30px;
+    height: 30px;
+    place-items: center;
+    color: var(--gallery-ink);
+    --logo-tiles: var(--gallery-ink);
+  }
+  .logo :global(svg) {
+    color: var(--gallery-ink) !important;
+  }
+  .nav ul {
+    display: flex;
+    gap: 26px;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    align-items: center;
+  }
+  .nav ul a {
+    text-decoration: none;
+    font-size: 14px;
+    color: var(--gallery-ink-2);
+  }
+  .nav ul a:hover {
+    color: var(--gallery-ink);
+  }
+  .nav ul .gh,
+  .nav ul .install {
+    font-family: var(--font-family-mono);
+    font-size: 12.5px;
+    border: 1px solid var(--gallery-ink);
+    border-radius: 999px;
+    padding: 7px 14px;
+    color: var(--gallery-ink);
+  }
+  .nav ul .install {
+    background: var(--gallery-ink);
+    color: var(--gallery-plate);
+  }
+  .nav ul .gh:hover {
+    background: var(--gallery-ink);
+    color: var(--gallery-plate);
+  }
+  @media (max-width: 760px) {
+    .nav .wide {
+      display: none;
+    }
+    .nav ul {
+      gap: 8px;
+    }
+  }
+
+  .hero {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: clamp(32px, 4vw, 64px);
+    align-items: stretch;
+    padding-top: clamp(8px, 2vh, 24px);
+    padding-bottom: clamp(56px, 8vw, 112px);
+  }
+  .copy {
+    display: flex;
+    flex-direction: column;
+    min-width: 0;
+  }
+  .eyebrow {
+    margin: 0;
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gallery-muted);
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .eyebrow b {
+    color: var(--gallery-ink);
+    font-weight: 600;
+  }
+  .eyebrow i {
+    width: 28px;
+    height: 1px;
+    background: var(--gallery-ink);
+  }
+  h1 {
+    font-size: clamp(64px, 9.2vw, 148px);
+    line-height: 0.86;
+    letter-spacing: -0.062em;
+    font-weight: 820;
+    margin: 0.28em 0 0.32em;
+    text-wrap: balance;
+  }
+  h1 span {
+    display: inline-block;
+  }
+  .lede {
+    font-size: clamp(18px, 1.45vw, 21px);
+    line-height: 1.5;
+    color: var(--gallery-ink-2);
+    max-width: 34ch;
+    margin: 0;
+    letter-spacing: -0.008em;
+  }
+  .lede b {
+    color: var(--gallery-ink);
+    font-weight: 600;
+  }
+  .ctas {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    margin-top: 32px;
+    align-items: center;
+  }
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    height: 48px;
+    padding: 0 22px;
+    border-radius: 999px;
+    font-weight: 600;
+    font-size: 15px;
+    text-decoration: none;
+    letter-spacing: -0.005em;
+    border: 1px solid var(--gallery-ink);
+    transition:
+      transform 0.15s ease,
+      background 0.15s;
+  }
+  .btn.primary {
+    background: var(--gallery-ink);
+    color: var(--gallery-plate);
+  }
+  .btn.primary:hover {
+    transform: translateY(-1px);
+  }
+  .btn.ghost {
+    color: var(--gallery-ink);
+  }
+  .btn.ghost:hover {
+    background: rgb(20 20 20 / 0.05);
+  }
+  .btn .k {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    font-weight: 500;
+    opacity: 0.6;
+  }
+
+  /* The museum wall label */
+  .label {
+    margin-top: auto;
+    padding-top: 32px;
+  }
+  .plate {
+    background: var(--gallery-plate);
+    width: min(300px, 100%);
+    padding: 13px 16px 12px;
+    box-shadow:
+      0 1px 0 rgb(0 0 0 / 0.05),
+      0 6px 18px -8px rgb(0 0 0 / 0.18);
+    font-size: 12.5px;
+    line-height: 1.4;
+    color: var(--gallery-ink-2);
+  }
+  .plate .by,
+  .plate .t {
+    color: var(--gallery-ink);
+    font-size: 13.5px;
+  }
+  .plate .by {
+    font-weight: 700;
+  }
+  .plate em {
+    font-style: italic;
+    font-weight: 600;
+  }
+  .plate .m {
+    margin-top: 6px;
+  }
+  .plate .c {
+    margin-top: 8px;
+    font-family: var(--font-family-mono);
+    font-size: 10.5px;
+    letter-spacing: 0.02em;
+    color: var(--gallery-muted);
+  }
+
+  .frame {
+    height: min(780px, calc(100svh - 120px));
+    min-height: 560px;
+    aspect-ratio: 4 / 5;
+    justify-self: end;
+  }
+  @media (max-width: 980px) {
+    .hero {
+      grid-template-columns: 1fr;
+      gap: 0;
+    }
+    .copy {
+      display: contents;
+    }
+    .frame {
+      order: 2;
+      height: auto;
+      min-height: 0;
+      width: 100%;
+      margin-top: 40px;
+    }
+    .label {
+      order: 3;
+      margin-top: 22px;
+      padding-top: 0;
+    }
+    h1 {
+      font-size: clamp(64px, 20vw, 148px);
+    }
+  }
+</style>

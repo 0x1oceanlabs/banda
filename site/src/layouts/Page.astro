@@ -4,9 +4,11 @@ import "../styles/site.css"
 interface Props {
   title: string
   description: string
+  /** The body's class: the home page draws its own wall. */
+  bodyClass?: string
 }
 
-const { title, description } = Astro.props
+const { title, description, bodyClass } = Astro.props
 ---
 
 <!doctype html>
@@ -28,7 +30,7 @@ const { title, description } = Astro.props
       dark.addEventListener("change", follow)
     </script>
   </head>
-  <body class="min-h-dvh antialiased">
+  <body class:list={["min-h-dvh antialiased", bodyClass]}>
     <slot />
   </body>
 </html>

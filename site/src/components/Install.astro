@@ -1,0 +1,299 @@
+---
+// Back on the wall: the night above ends in drips of paint, as the dive
+// began, and the gang asks the reader to join. macOS by Homebrew, Linux by AppImage.
+import Icon from "./Icon.astro"
+
+const brew = "brew install --cask 0x1oceanlabs/banda/banda-dev"
+---
+
+<section class="install" id="install" aria-labelledby="install-title">
+  <svg
+    class="edge"
+    viewBox="0 0 1440 200"
+    preserveAspectRatio="none"
+    aria-hidden="true"
+  >
+    <g filter="url(#flood)">
+      <path
+        style="fill:var(--night)"
+        d="M-40 -60 H1480 V52 C1360 74 1250 44 1130 66 C1010 88 900 50 780 70 C660 90 540 56 420 76 C300 96 190 60 80 78 C30 86 -10 74 -40 80 Z"
+      ></path>
+    </g>
+    <g
+      filter="url(#wob)"
+      style="fill:var(--night);stroke:var(--night)"
+      stroke-linecap="round"
+    >
+      <path d="M230 70 V150" stroke-width="10"></path>
+      <circle cx="230" cy="154" r="8" stroke="none"></circle>
+      <path d="M520 70 V118" stroke-width="8"></path>
+      <circle cx="520" cy="121" r="6.5" stroke="none"></circle>
+      <path d="M860 66 V170" stroke-width="11"></path>
+      <circle cx="860" cy="174" r="9" stroke="none"></circle>
+      <path d="M1240 60 V128" stroke-width="9"></path>
+      <circle cx="1240" cy="131" r="7" stroke="none"></circle>
+    </g>
+    <g filter="url(#wob)" stroke-linecap="round">
+      <path
+        d="M640 80 V140"
+        style="stroke:var(--paint-cadmium)"
+        stroke-width="6"
+      ></path>
+      <path
+        d="M1060 76 V112"
+        style="stroke:var(--paint-cobalt)"
+        stroke-width="6"
+      ></path>
+    </g>
+  </svg>
+
+  <div class="wrap grid">
+    <div class="join">
+      <p class="num">
+        <span>07</span>
+        <i></i>
+        <span>Install</span>
+      </p>
+      <h2 id="install-title">Join the gang.</h2>
+      <p>
+        Banda Dev is the build published today. Install it, open a Thread, and
+        start your first Agent.
+      </p>
+    </div>
+    <div class="os">
+      <div>
+        <h3>
+          macOS <span>Apple silicon · Homebrew</span>
+        </h3>
+        <div class="cmd">
+          <span class="pr" aria-hidden="true">
+            $
+          </span>
+          <code data-cmd>{brew}</code>
+          <button
+            class="copy"
+            type="button"
+            aria-label="Copy the install command"
+            data-copy
+          >
+            <Icon name="copy" size={15} class="i-copy" />
+            <Icon name="check" size={15} class="i-check" />
+            <span data-copy-label>Copy</span>
+          </button>
+        </div>
+      </div>
+      <div>
+        <h3>
+          Linux <span>x64 · AppImage</span>
+        </h3>
+        <a class="dl" href="https://github.com/0x1oceanlabs/banda/releases">
+          <span>GitHub Releases</span>
+          <span class="go">Download</span>
+        </a>
+        <p class="note">Only Banda Dev is published now.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  const button = document.querySelector<HTMLButtonElement>("[data-copy]")!
+  const label = button.querySelector("[data-copy-label]")!
+  const command = document.querySelector("[data-cmd]")!.textContent ?? ""
+  let reset = 0
+  button.addEventListener("click", async () => {
+    try {
+      await navigator.clipboard.writeText(command)
+      label.textContent = "Copied"
+      button.classList.add("ok")
+    } catch {
+      // No clipboard (an insecure page, a refusal): select the command,
+      // so the reader can copy it by hand.
+      const range = document.createRange()
+      range.selectNodeContents(document.querySelector("[data-cmd]")!)
+      getSelection()?.removeAllRanges()
+      getSelection()?.addRange(range)
+      label.textContent = "Selected"
+    }
+    clearTimeout(reset)
+    reset = window.setTimeout(() => {
+      label.textContent = "Copy"
+      button.classList.remove("ok")
+    }, 1800)
+  })
+</script>
+
+<style>
+  .install {
+    position: relative;
+    padding-bottom: clamp(72px, 9vw, 128px);
+  }
+  /* Where the night ends: its paint runs down onto the wall. */
+  .edge {
+    display: block;
+    width: 100%;
+    height: clamp(90px, 11vw, 160px);
+    margin-bottom: clamp(32px, 4vw, 64px);
+    overflow: visible;
+    will-change: transform;
+  }
+  .grid {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: clamp(32px, 5vw, 80px);
+    align-items: start;
+  }
+  @media (max-width: 900px) {
+    .grid {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .num {
+    font-family: var(--font-family-mono);
+    font-size: 12px;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--gallery-muted);
+    margin: 0 0 18px;
+    display: flex;
+    gap: 12px;
+    align-items: center;
+  }
+  .num i {
+    width: 28px;
+    height: 1px;
+    background: var(--gallery-ink);
+  }
+  h2 {
+    font-size: clamp(44px, 6.2vw, 96px);
+    line-height: 0.9;
+    letter-spacing: -0.055em;
+    font-weight: 800;
+    margin: 0;
+  }
+  .join > p:last-child {
+    font-size: clamp(17px, 1.3vw, 19px);
+    line-height: 1.55;
+    color: var(--gallery-ink-2);
+    margin: 22px 0 0;
+    max-width: 34ch;
+  }
+  .os {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+  }
+  h3 {
+    margin: 0 0 10px;
+    font-size: 15px;
+    font-weight: 650;
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    gap: 12px;
+  }
+  h3 span {
+    font-family: var(--font-family-mono);
+    font-weight: 400;
+    font-size: 11.5px;
+    color: var(--gallery-muted);
+  }
+  .cmd {
+    background: var(--gallery-ink);
+    color: var(--gallery-wall);
+    border-radius: 14px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 8px 8px 20px;
+    font-family: var(--font-family-mono);
+    font-size: clamp(12.5px, 1.15vw, 15px);
+    min-height: 60px;
+  }
+  .cmd code {
+    flex: 1;
+    min-width: 0;
+    overflow-x: auto;
+    white-space: nowrap;
+    scrollbar-width: none;
+    padding: 8px 0;
+  }
+  .cmd code::-webkit-scrollbar {
+    display: none;
+  }
+  .pr {
+    color: var(--gallery-muted);
+    user-select: none;
+  }
+  .copy {
+    flex: none;
+    height: 44px;
+    padding: 0 16px;
+    border-radius: 10px;
+    border: 0;
+    background: color-mix(
+      in oklab,
+      var(--gallery-wall) 14%,
+      var(--gallery-ink)
+    );
+    color: var(--gallery-wall);
+    font: 500 13px var(--font-family-sans);
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .copy:hover {
+    background: color-mix(
+      in oklab,
+      var(--gallery-wall) 22%,
+      var(--gallery-ink)
+    );
+  }
+  .copy:global(.ok) {
+    background: var(--gang-done);
+    color: var(--gallery-ink);
+  }
+  .copy :global(.i-check),
+  .copy:global(.ok) :global(.i-copy) {
+    display: none;
+  }
+  .copy:global(.ok) :global(.i-check) {
+    display: block;
+  }
+  .cmd :focus-visible {
+    outline-color: var(--gallery-wall);
+  }
+  .dl {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    border: 1px solid var(--gallery-ink);
+    border-radius: 14px;
+    padding: 0 8px 0 20px;
+    min-height: 60px;
+    text-decoration: none;
+    color: var(--gallery-ink);
+    font-family: var(--font-family-mono);
+    font-size: 14px;
+  }
+  .dl:hover {
+    background: color-mix(in oklab, var(--gallery-ink) 4%, transparent);
+  }
+  .go {
+    height: 44px;
+    display: inline-flex;
+    align-items: center;
+    padding: 0 16px;
+    border-radius: 10px;
+    background: var(--gallery-ink);
+    color: var(--gallery-plate);
+    font: 500 13px var(--font-family-sans);
+  }
+  .note {
+    margin: 10px 0 0;
+    font-size: 14px;
+    color: var(--gallery-muted);
+  }
+</style>

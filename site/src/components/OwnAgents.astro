@@ -1,0 +1,151 @@
+---
+// Bring your own Agents: Banda reaches the Harnesses the Person already
+// has, keeps what matters as text, and is open source.
+import DeskSection from "./DeskSection.astro"
+import Icon from "./Icon.astro"
+---
+
+<DeskSection
+  id="own"
+  num="06"
+  label="House rules"
+  quiet="Bring your own"
+  loud="Agents."
+>
+  <p slot="say">
+    Banda does not replace the Agents you already have. It gives them a place to
+    work together, with you in charge.
+  </p>
+  <div class="glass">
+    <div class="tiles">
+      <div class="tile">
+        <div class="vis">
+          <div class="row">
+            <Icon name="term" size={15} />
+            Claude Code<span>in a Thread</span>
+          </div>
+          <div class="row">
+            <Icon name="term" size={15} />
+            Codex<span>in a Thread</span>
+          </div>
+        </div>
+        <h3>An adapter, not a Harness.</h3>
+        <p>
+          Claude Code and Codex are the Harnesses you already have. Banda shows
+          their Agents, joins them and obeys them. It is not a model, and it
+          does not replace one.
+        </p>
+      </div>
+      <div class="tile">
+        <div class="vis top">
+          <div class="files">
+            <span>plan.md</span>
+            <span>report.html</span>
+            <span>sidebar.json</span>
+          </div>
+          <div class="json">
+            <span class="k">{"{"}</span>
+            <span class="s">"sidebar"</span>: <span class="k">{"{"}</span>
+            <br />
+            &nbsp;&nbsp;<span class="s">"oldestFirst"</span>:{" "}
+            <span class="v">true</span>,<br />
+            &nbsp;&nbsp;<span class="s">"showLater"</span>:{" "}
+            <span class="v">false</span>
+            <br />
+            <span class="k">{"}}"}</span>
+          </div>
+        </div>
+        <h3>Text is the common language.</h3>
+        <p>
+          You and an Agent talk in markdown. What is kept is md, html and json:
+          files a Person and an Agent can both read, with or without Banda.
+        </p>
+      </div>
+      <div class="tile">
+        <div class="vis">
+          <div class="row">
+            <Icon name="github" size={15} />
+            0x1oceanlabs/banda<span>GitHub</span>
+          </div>
+          <div class="row">
+            <Icon name="file" size={15} />
+            LICENSE<span>Apache-2.0</span>
+          </div>
+        </div>
+        <h3>Open source, all of it.</h3>
+        <p>
+          Apache-2.0, on GitHub. Read it, run it on your own machines, change
+          it. An Agent can write a new App for it in a Thread.
+        </p>
+      </div>
+    </div>
+  </div>
+</DeskSection>
+
+<style>
+  .tiles {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: var(--gap-outer);
+  }
+  @media (max-width: 1000px) {
+    .tiles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .vis {
+    height: 168px;
+    margin: -8px -8px 20px;
+    border-radius: var(--card-radius);
+    background: var(--block);
+    box-shadow: inset 0 0 0 1px var(--border);
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 16px;
+    overflow: hidden;
+  }
+  .vis.top {
+    justify-content: flex-start;
+  }
+  .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: var(--control-radius);
+    background: var(--raised);
+    font-size: 14px;
+  }
+  .row span {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .files {
+    display: flex;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+  .files span {
+    font: 12.5px/20px var(--font-family-mono);
+    padding: 2px 8px;
+    border-radius: var(--small-radius);
+    background: var(--raised);
+  }
+  .json {
+    font: 12.5px/20px var(--font-family-mono);
+    color: var(--muted-foreground);
+  }
+  .json .k {
+    color: var(--foreground);
+  }
+  .json .s {
+    color: var(--sign-teal);
+  }
+  .json .v {
+    color: var(--sign-sand);
+  }
+</style>

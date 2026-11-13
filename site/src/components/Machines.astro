@@ -1,0 +1,363 @@
+---
+// The machines: the engine keeps the Agents working on each of the
+// Person's machines, and the window only shows. Here the laptop's
+// window closes and opens again, and nothing on either machine stops.
+import DeskSection from "./DeskSection.astro"
+import Icon from "./Icon.astro"
+---
+
+<DeskSection
+  id="machines"
+  num="05"
+  label="Your machines"
+  quiet="Close the window."
+  loud="The gang keeps working."
+>
+  <p slot="say">
+    Banda runs on your own machines, a laptop and a server like devbox, joined
+    into one network with no centre. Banda Cloud is a convenience, never a part
+    Banda needs.
+  </p>
+  <div class="glass">
+    <div class="tiles">
+      <div class="tile net-tile">
+        <div class="net" data-net>
+          <svg class="links" aria-hidden="true">
+            <line data-l="ab" class="solid"></line>
+            <line data-l="ac"></line>
+            <line data-l="bc"></line>
+            <circle r="3" class="packet" data-packet></circle>
+          </svg>
+          <div class="node" data-node="a">
+            <div class="nh">
+              <Icon name="laptop" size={16} />
+              mac
+              <span class="st" data-st>
+                window open
+              </span>
+            </div>
+            <div class="wbox">
+              <Icon name="app" size={14} />
+              Banda window
+            </div>
+            <div class="ag">
+              <span data-mark="working" data-doing="edit" data-size="16"></span>
+              Landing page for banda.so
+            </div>
+            <div class="ag">
+              <span data-mark="working" data-doing="read" data-size="16"></span>
+              Audit the sidebar code
+            </div>
+          </div>
+          <div class="node" data-node="b">
+            <div class="nh">
+              <Icon name="server" size={16} />
+              devbox<span class="st">no window</span>
+            </div>
+            <div class="ag">
+              <span
+                data-mark="working"
+                data-doing="execute"
+                data-size="16"
+              ></span>
+              Import March invoices
+            </div>
+            <div class="ag">
+              <span
+                data-mark="working"
+                data-doing="fetch"
+                data-size="16"
+              ></span>
+              Research: Hyprland sockets
+            </div>
+            <div class="ag">
+              <span
+                data-mark="working"
+                data-doing="reply"
+                data-size="16"
+              ></span>
+              Reconcile February bank
+            </div>
+          </div>
+          <div class="node cloud" data-node="c">
+            <Icon name="cloud" size={15} />
+            Banda Cloud, optional
+          </div>
+        </div>
+      </div>
+      <div class="tile words">
+        <div>
+          <h3>The engine works. The window only shows.</h3>
+          <p>
+            All work and all state live in the engine on each machine. Open the
+            window on your laptop and you land in devbox's Threads and terminals
+            as if they stood on your desk. Close it, and every Agent keeps
+            going.
+          </p>
+        </div>
+        <ul class="peers">
+          <li>
+            <Icon name="laptop" size={15} />
+            Your laptop<span>a peer</span>
+          </li>
+          <li>
+            <Icon name="server" size={15} />A server like devbox
+            <span>a peer</span>
+          </li>
+          <li class="opt">
+            <Icon name="cloud" size={15} />
+            Banda Cloud<span>a convenience</span>
+          </li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</DeskSection>
+
+<script>
+  import { reduced, stillOffscreen, whileVisible } from "../lib/mark"
+
+  const section = document.getElementById("machines")!
+  stillOffscreen(section)
+  const net = section.querySelector<HTMLElement>("[data-net]")!
+  const node = (k: string) =>
+    net.querySelector<HTMLElement>(`[data-node="${k}"]`)!
+  const [a, b, c] = ["a", "b", "c"].map(node)
+  const packet = net.querySelector("[data-packet]")!
+  const state = net.querySelector("[data-st]")!
+  let ends: [number, number][] = []
+
+  // The nodes stand apart, the lines join their centres.
+  function layout() {
+    const w = net.clientWidth
+    const h = net.clientHeight
+    if (w < 560) {
+      Object.assign(a.style, { left: "12px", top: "12px" })
+      Object.assign(b.style, {
+        left: `${w - b.offsetWidth - 12}px`,
+        top: `${h - b.offsetHeight - 64}px`,
+      })
+      Object.assign(c.style, { left: "12px", top: `${h - 50}px` })
+    } else {
+      Object.assign(a.style, { left: `${w * 0.06}px`, top: `${h * 0.1}px` })
+      Object.assign(b.style, {
+        left: `${w * 0.94 - b.offsetWidth}px`,
+        top: `${h * 0.34}px`,
+      })
+      Object.assign(c.style, {
+        left: `${w * 0.5 - c.offsetWidth / 2}px`,
+        top: `${h - 56}px`,
+      })
+    }
+    const centre = (n: HTMLElement): [number, number] => [
+      n.offsetLeft + n.offsetWidth / 2,
+      n.offsetTop + n.offsetHeight / 2,
+    ]
+    const [pa, pb, pc] = [a, b, c].map(centre)
+    const line = (k: string, p: [number, number], q: [number, number]) => {
+      const l = net.querySelector(`[data-l="${k}"]`)!
+      l.setAttribute("x1", String(p[0]))
+      l.setAttribute("y1", String(p[1]))
+      l.setAttribute("x2", String(q[0]))
+      l.setAttribute("y2", String(q[1]))
+    }
+    line("ab", pa, pb)
+    line("ac", pa, pc)
+    line("bc", pb, pc)
+    ends = [pa, pb]
+    move(0)
+  }
+
+  // A message goes back and forth between the machines.
+  function move(t: number) {
+    if (!ends.length) return
+    const u = (t / 2400) % 1
+    const v = u < 0.5 ? u * 2 : 2 - u * 2
+    const [p, q] = ends
+    packet.setAttribute("cx", String(p[0] + (q[0] - p[0]) * v))
+    packet.setAttribute("cy", String(p[1] + (q[1] - p[1]) * v))
+  }
+
+  addEventListener("resize", layout)
+  layout()
+  if (!reduced) {
+    let frame = 0
+    let closing = 0
+    const tick = (t: number) => {
+      move(t)
+      frame = requestAnimationFrame(tick)
+    }
+    whileVisible(
+      net,
+      () => {
+        frame = requestAnimationFrame(tick)
+        closing = window.setInterval(() => {
+          const closed = net.classList.toggle("closed")
+          state.textContent = closed ? "window closed" : "window open"
+        }, 3200)
+      },
+      () => {
+        cancelAnimationFrame(frame)
+        clearInterval(closing)
+      }
+    )
+  }
+</script>
+
+<style>
+  .tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+    gap: var(--gap-outer);
+  }
+  @media (max-width: 900px) {
+    .tiles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .net-tile {
+    padding: 8px;
+  }
+  .net {
+    position: relative;
+    height: 100%;
+    min-height: 380px;
+  }
+  @media (max-width: 720px) {
+    .net {
+      min-height: 470px;
+    }
+  }
+  .links {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+  }
+  .links line {
+    stroke: rgb(255 255 255 / 0.14);
+    stroke-width: 1;
+    stroke-dasharray: 3 5;
+  }
+  .links line.solid {
+    stroke: rgb(255 255 255 / 0.24);
+    stroke-dasharray: none;
+  }
+  .packet {
+    fill: var(--working);
+  }
+  .node {
+    position: absolute;
+    width: 220px;
+    border-radius: var(--card-radius);
+    background: color-mix(in oklab, var(--sidebar) 92%, transparent);
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      0 18px 40px -20px rgb(0 0 0 / 0.7);
+    padding: 12px;
+  }
+  .nh {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 560;
+    font-size: 14px;
+    margin-bottom: 8px;
+  }
+  .st {
+    margin-left: auto;
+    font-weight: 400;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    transition: color 0.4s;
+  }
+  .ag {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    line-height: 26px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .wbox {
+    height: 44px;
+    border-radius: var(--control-radius);
+    box-shadow: inset 0 0 0 1px var(--input);
+    background: var(--block);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+    transition:
+      opacity 0.6s,
+      transform 0.6s;
+  }
+  /* The window closes; the Agents under it do not stop. */
+  .net:global(.closed) .wbox {
+    opacity: 0.22;
+    transform: scale(0.96);
+  }
+  .net:global(.closed) .st {
+    color: var(--foreground);
+  }
+  .node.cloud {
+    width: auto;
+    padding: 8px 12px;
+    background: transparent;
+    box-shadow: none;
+    outline: 1px dashed color-mix(in oklab, var(--foreground) 30%, transparent);
+    outline-offset: -1px;
+    border-radius: var(--control-radius);
+    font-size: 12px;
+    color: var(--muted-foreground);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+  }
+  .words {
+    display: flex;
+    flex-direction: column;
+    gap: 28px;
+    justify-content: space-between;
+  }
+  .peers {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    display: grid;
+    gap: 8px;
+  }
+  .peers li {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 36px;
+    padding: 0 12px;
+    border-radius: var(--control-radius);
+    background: var(--block);
+    box-shadow: inset 0 0 0 1px var(--border);
+    font-size: 14px;
+  }
+  .peers li.opt {
+    background: transparent;
+    box-shadow: none;
+    outline: 1px dashed color-mix(in oklab, var(--foreground) 30%, transparent);
+    outline-offset: -1px;
+  }
+  .peers span {
+    margin-left: auto;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .wbox,
+    .st {
+      transition: none;
+    }
+  }
+</style>

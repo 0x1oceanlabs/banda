@@ -1,0 +1,402 @@
+---
+// The inbox: many Agents, sorted by who waits for you. The colour can be
+// taken away to show that the shapes alone tell the states apart.
+import DeskSection from "./DeskSection.astro"
+import Icon from "./Icon.astro"
+
+interface Row {
+  mark: string
+  doing?: string
+  title: string
+  line?: string
+  time: string
+  machine: "mac" | "devbox"
+}
+
+const groups: { name: string; rows: Row[]; cards?: boolean }[] = [
+  {
+    name: "Your turn",
+    cards: true,
+    rows: [
+      {
+        mark: "asks",
+        title: "Move sidebar settings to sidebar.toml",
+        line: "<b>Asks</b> Reviewer: allow pnpm vitest sidebar",
+        time: "1m",
+        machine: "mac",
+      },
+      {
+        mark: "failed",
+        title: "Fix the flaky e2e test",
+        line: "<b>Failed</b> exit code 1",
+        time: "4m",
+        machine: "devbox",
+      },
+      {
+        mark: "done",
+        title: "Fix blank window on reload",
+        line: "<b>Done</b> Reloads after a render · #1061",
+        time: "9m",
+        machine: "mac",
+      },
+    ],
+  },
+  {
+    name: "Working",
+    rows: [
+      {
+        mark: "working",
+        doing: "fetch",
+        title: "Research: Hyprland sockets",
+        time: "47m",
+        machine: "devbox",
+      },
+      {
+        mark: "working",
+        doing: "read",
+        title: "Audit the sidebar code",
+        time: "16m",
+        machine: "mac",
+      },
+      {
+        mark: "working",
+        doing: "edit",
+        title: "Landing page for banda.so",
+        time: "12m",
+        machine: "mac",
+      },
+    ],
+  },
+  {
+    name: "Later",
+    rows: [
+      {
+        mark: "later",
+        title: "macOS Tahoe theme",
+        time: "1d",
+        machine: "mac",
+      },
+    ],
+  },
+]
+---
+
+<DeskSection
+  id="inbox"
+  num="03"
+  label="The inbox"
+  quiet="Many Agents."
+  loud="One inbox."
+>
+  <p slot="say">
+    Run as many Agents as you like. The sidebar sorts them by who waits for you,
+    and the bar counts who waits and who works. You stop checking on them; they
+    come to you.
+  </p>
+  <div class="glass">
+    <div class="tiles">
+      <div class="tile facts">
+        <h3>Who waits for you, first.</h3>
+        <p>
+          The sidebar is an inbox, not a list of chats. Colour lands on the Mark
+          and the time, never on the row.
+        </p>
+        <ul>
+          <li>
+            <span class="k">Your turn</span>
+            <span>An Agent asks, finished, or failed. It is yours.</span>
+          </li>
+          <li>
+            <span class="k">Working</span>
+            <span>Quiet and muted. It needs nothing from you.</span>
+          </li>
+          <li>
+            <span class="k">Later</span>
+            <span>Asleep until you wake it.</span>
+          </li>
+        </ul>
+        <button class="swtch" type="button" aria-pressed="false" data-grey>
+          <span class="tog"></span>See it without colour
+        </button>
+      </div>
+      <div class="tile list-tile">
+        <div class="side" data-side>
+          <div class="bar">
+            <span class="tab on">
+              Inbox <b>3</b>
+            </span>
+            <span class="tab">
+              Working <b>3</b>
+            </span>
+            <span class="tab">
+              Later <b>1</b>
+            </span>
+          </div>
+          {groups.map((group) => (
+            <>
+              <div class="sec">
+                <span>{group.name}</span>
+                <span>{group.rows.length}</span>
+              </div>
+              {group.rows.map((row) => (
+                <div
+                  class:list={["it", { card: group.cards }]}
+                  data-look={row.mark}
+                >
+                  <div class="it-1">
+                    <span
+                      class="mk"
+                      data-mark={row.mark}
+                      data-doing={row.doing}
+                      data-size="18"
+                    />
+                    <span class="tt">{row.title}</span>
+                    <span class="tm">{row.time}</span>
+                  </div>
+                  {row.line && (
+                    <div class="it-2">
+                      <span set:html={row.line} />
+                      <span class="m">
+                        <Icon
+                          name={row.machine === "mac" ? "laptop" : "server"}
+                          size={12}
+                        />
+                        {row.machine}
+                      </span>
+                    </div>
+                  )}
+                </div>
+              ))}
+            </>
+          ))}
+        </div>
+      </div>
+    </div>
+  </div>
+</DeskSection>
+
+<script>
+  import { stillOffscreen } from "../lib/mark"
+
+  const section = document.getElementById("inbox")!
+  stillOffscreen(section)
+  const button = section.querySelector<HTMLButtonElement>("[data-grey]")!
+  const side = section.querySelector("[data-side]")!
+  button.addEventListener("click", () => {
+    const on = button.getAttribute("aria-pressed") !== "true"
+    button.setAttribute("aria-pressed", String(on))
+    side.classList.toggle("grey", on)
+  })
+</script>
+
+<style>
+  .tiles {
+    display: grid;
+    grid-template-columns: minmax(0, 5fr) minmax(0, 7fr);
+    gap: var(--gap-outer);
+  }
+  @media (max-width: 900px) {
+    .tiles {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+  .facts {
+    display: flex;
+    flex-direction: column;
+  }
+  .facts ul {
+    list-style: none;
+    margin: 24px 0 28px;
+    padding: 0;
+    border-top: 1px solid var(--border);
+  }
+  .facts li {
+    display: grid;
+    grid-template-columns: 96px 1fr;
+    gap: 14px;
+    padding: 14px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 14px;
+    line-height: 20px;
+    color: color-mix(in oklab, var(--foreground) 76%, transparent);
+  }
+  .facts .k {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    padding-top: 1px;
+  }
+  .swtch {
+    margin-top: auto;
+    align-self: flex-start;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    font: inherit;
+    font-size: 13px;
+    color: var(--muted-foreground);
+    cursor: pointer;
+    background: none;
+    border: 0;
+    padding: 6px 8px;
+    margin-left: -8px;
+    border-radius: var(--control-radius);
+  }
+  .swtch:hover {
+    color: var(--foreground);
+  }
+  .tog {
+    width: 28px;
+    height: 16px;
+    border-radius: 99px;
+    background: var(--input);
+    position: relative;
+    transition: background 0.35s;
+  }
+  .tog::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--foreground);
+    transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .swtch[aria-pressed="true"] .tog {
+    background: var(--foreground);
+  }
+  .swtch[aria-pressed="true"] .tog::after {
+    transform: translateX(12px);
+    background: var(--background);
+  }
+
+  .list-tile {
+    padding: 8px;
+  }
+  .side {
+    border-radius: var(--card-radius);
+    background: color-mix(in oklab, var(--sidebar) 80%, transparent);
+    box-shadow: inset 0 0 0 1px var(--border);
+    padding: 8px;
+    font-size: 14px;
+    line-height: 20px;
+    height: 100%;
+  }
+  /* Without colour, the shapes still tell who waits. */
+  .side.grey :global(svg[data-banda-mark]) {
+    filter: grayscale(1) brightness(1.15);
+  }
+  .side.grey .tm {
+    color: var(--muted-foreground) !important;
+  }
+  .bar {
+    display: flex;
+    gap: 2px;
+    padding: 2px 0 6px;
+    font-size: 13px;
+  }
+  .tab {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: var(--control-radius);
+    color: var(--muted-foreground);
+  }
+  .tab b {
+    font-weight: 500;
+  }
+  .tab.on {
+    background: var(--raised);
+    color: var(--foreground);
+  }
+  .tab.on b {
+    color: var(--attention);
+  }
+  .side.grey .tab.on b {
+    color: inherit;
+  }
+  .sec {
+    display: flex;
+    justify-content: space-between;
+    padding: 12px 8px 4px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .it {
+    border-radius: var(--control-radius);
+    padding: 5px 8px;
+  }
+  .it.card {
+    border-radius: var(--card-radius);
+    padding: 8px 8px 9px;
+  }
+  .it.card:first-of-type {
+    background: var(--raised);
+  }
+  .it-1 {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 22px;
+  }
+  .mk {
+    width: 18px;
+    height: 18px;
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .tt {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  }
+  .it:not(.card) .tt {
+    color: var(--muted-foreground);
+  }
+  .tm {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    flex: none;
+  }
+  .it[data-look="asks"] .tm {
+    color: var(--attention);
+  }
+  .it[data-look="failed"] .tm {
+    color: var(--destructive);
+  }
+  .it[data-look="done"] .tm {
+    color: var(--added);
+  }
+  .it-2 {
+    display: flex;
+    gap: 8px;
+    padding-left: 28px;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .it-2 > span:first-child {
+    overflow: hidden;
+    min-width: 0;
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  }
+  .it-2 :global(b) {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+  .it-2 .m {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+</style>

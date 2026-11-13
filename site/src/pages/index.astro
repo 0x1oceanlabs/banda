@@ -1,28 +1,39 @@
 ---
-import { buttonVariants } from "@banda/ui/components/button"
+import Cast from "../components/Cast.astro"
+import Dive from "../components/Dive.astro"
+import Footer from "../components/Footer.astro"
+import Hero from "../components/Hero.astro"
+import Inbox from "../components/Inbox.astro"
+import Install from "../components/Install.astro"
+import Machines from "../components/Machines.astro"
+import Night from "../components/Night.astro"
+import OwnAgents from "../components/OwnAgents.astro"
+import PaintBox from "../components/PaintBox.astro"
+import Panes from "../components/Panes.astro"
 import Page from "../layouts/Page.astro"
 
-// What stands here until the site's design is chosen from its mocks
-// (AGENTS.md, "Show it first"): the thesis of docs/what-we-build.md.
+// banda.so's home: two worlds. The gallery wall, where the gang hangs as
+// a painting, and Banda's dark desk, where the same gang works as Marks.
+// The page dives from one into the other and comes back to install.
 ---
 
 <Page
-  title="Banda"
-  description="Banda is the Person's workspace in the age of AI: the Person, their Agents and their machines work together, in text."
+  title="Banda: lead the gang"
+  description="Banda is a tiling workspace for working with many Agents at once: Claude Code and Codex beside your terminal, browser, files and diff, on your own machines. Open source."
+  bodyClass="gallery"
 >
-  <main class="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-6 px-6">
-    <h1 class="text-4xl font-semibold tracking-tight">Banda</h1>
-    <p class="text-lg text-muted-foreground">
-      The Person's workspace in the age of AI. The Person, their Agents and
-      their machines work together, and they talk in text.
-    </p>
-    <div class="flex gap-2">
-      <a
-        class={buttonVariants({ size: "lg" })}
-        href="https://github.com/0x1oceanlabs/banda"
-      >
-        GitHub
-      </a>
-    </div>
+  <PaintBox />
+  <Hero />
+  <main>
+    <Cast />
+    <Night>
+      <Dive slot="dive" />
+      <Inbox />
+      <Panes />
+      <Machines />
+      <OwnAgents />
+    </Night>
+    <Install />
   </main>
+  <Footer />
 </Page>

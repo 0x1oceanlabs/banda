@@ -1,0 +1,1202 @@
+---
+// A Banda window, built and not a picture: the inbox in the sidebar, a
+// Thread whose Agent splits the work in three sub-agents, a terminal and
+// a browser. Its script plays a few minutes of real work folded into
+// seconds: one Agent finishes, a sub-agent fails, another asks, the
+// Person allows. It is drawn at 1200 by 740 and scaled by its stage.
+import Icon from "./Icon.astro"
+import { satelliteSvg } from "../lib/satellite"
+
+interface Item {
+  key: string
+  title: string
+  time: string
+  mark: string
+  doing?: string
+  satellites?: string
+  machine: "mac" | "devbox"
+  project?: [string, string, string]
+  line?: string
+}
+
+const items: Record<"turn" | "work" | "later", Item[]> = {
+  turn: [
+    {
+      key: "inv",
+      title: "Import March invoices",
+      time: "2m",
+      mark: "woke",
+      machine: "devbox",
+      project: ["W", "t", "Work"],
+      line: "<b>Woke</b> from Later · statements are in",
+    },
+  ],
+  work: [
+    {
+      key: "move",
+      title: "Move sidebar settings to sidebar.toml",
+      time: "1m",
+      mark: "working",
+      doing: "subagents",
+      satellites: "working,working,working",
+      machine: "mac",
+      project: ["B", "", "banda"],
+      line: "<b>Working</b> 3 sub-agents",
+    },
+    {
+      key: "fix",
+      title: "Fix blank window on reload",
+      time: "9m",
+      mark: "working",
+      doing: "execute",
+      machine: "mac",
+      project: ["B", "", "banda"],
+      line: "<b>Done</b> Reloads after a render · #1061",
+    },
+    {
+      key: "hyp",
+      title: "Research: Hyprland sockets",
+      time: "47m",
+      mark: "working",
+      doing: "fetch",
+      machine: "devbox",
+    },
+    {
+      key: "aud",
+      title: "Audit the sidebar code",
+      time: "16m",
+      mark: "working",
+      doing: "read",
+      machine: "mac",
+    },
+    {
+      key: "lan",
+      title: "Landing page for banda.so",
+      time: "12m",
+      mark: "working",
+      doing: "edit",
+      machine: "mac",
+    },
+    {
+      key: "rec",
+      title: "Reconcile February bank statements",
+      time: "9m",
+      mark: "working",
+      doing: "think",
+      machine: "devbox",
+    },
+  ],
+  later: [
+    {
+      key: "tah",
+      title: "macOS Tahoe theme",
+      time: "1d",
+      mark: "later",
+      machine: "mac",
+    },
+  ],
+}
+
+const subs = [
+  {
+    id: "s1",
+    name: "Map where [row] keys are read",
+    doing: 'Reading <span class="mono">client/web/src/</span>…',
+    time: "4m",
+  },
+  {
+    id: "s2",
+    name: "Check the settings tests",
+    doing: "Running settings.test.ts",
+    time: "5m",
+  },
+  {
+    id: "s3",
+    name: "Review the sidebar.toml schema",
+    doing: "Reading sidebar.toml",
+    time: "1m",
+  },
+]
+---
+
+<div class="win" data-win aria-hidden="true">
+  <div class="reflect"></div>
+  <div class="wbar">
+    <span
+      class="wlogo"
+      data-mark="woke"
+      data-logo
+      data-size="20"
+      data-wlogo
+    ></span>
+    <span class="wnum on">1</span>
+    <span class="wnum">2</span>
+    <span class="wnum">3</span>
+    <Icon name="plus" size={14} style="margin:0 4px" />
+    <Icon name="cols" size={14} />
+    <span class="sp"></span>
+    <Icon name="globe" size={14} />
+    <span style="margin-right:8px">:5173</span>
+    <span class="spin small"></span>
+    <Icon name="bell" size={14} />
+  </div>
+  <div class="wbody">
+    <aside class="panel">
+      <div class="srch">
+        <Icon name="search" size={15} />
+        Search<span class="sp"></span>
+        <Icon name="pen" size={15} />
+      </div>
+      <div class="tabs">
+        <span class="tab on">
+          Inbox <b data-n-turn>1</b>
+        </span>
+        <span class="tab">
+          Working <b data-n-work>6</b>
+        </span>
+        <span class="tab">
+          Later <b>1</b>
+        </span>
+        <span class="sp"></span>
+        <span class="tab" style="padding:0 4px">
+          <Icon name="archive" size={14} />
+        </span>
+      </div>
+      {(["turn", "work", "later"] as const).map((group) => (
+        <>
+          <div class="sec">
+            {group === "turn" && (
+              <>
+                <span>Your turn</span>
+                <span>oldest first</span>
+              </>
+            )}
+            {group === "work" && (
+              <span>
+                Working · <span data-n-work2>6</span>
+              </span>
+            )}
+            {group === "later" && <span>Later · 1</span>}
+          </div>
+          <div class="list" data-list={group}>
+            {items[group].map((item) => (
+              <div
+                class:list={[
+                  "it",
+                  { card: group === "turn", later: group === "later" },
+                ]}
+                data-k={item.key}
+                data-look={item.mark}
+              >
+                <div class="it-1">
+                  <span
+                    class="mk"
+                    data-mark={item.mark}
+                    data-doing={item.doing}
+                    data-satellites={item.satellites}
+                    data-size="16"
+                  />
+                  <span class="tt">{item.title}</span>
+                  <span class="tm">{item.time}</span>
+                </div>
+                <div class="more">
+                  <div>
+                    <div class="it-2" set:html={item.line ?? ""} />
+                    <div class="it-3">
+                      {item.project && (
+                        <>
+                          <span class:list={["sign", item.project[1]]}>
+                            {item.project[0]}
+                          </span>
+                          {item.project[2]}
+                        </>
+                      )}
+                      <span class="m">
+                        <Icon
+                          name={item.machine === "mac" ? "laptop" : "server"}
+                          size={12}
+                        />
+                        {item.machine}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </>
+      ))}
+      <div class="pfoot">
+        <Icon name="gear" size={15} />
+        <Icon name="bell" size={15} />
+        <span class="on">devbox · mac</span>
+      </div>
+    </aside>
+    <div class="strip">
+      <div class="col" style="width:480px;flex:none">
+        <section class="pane focus" style="flex:1">
+          <div class="ph">
+            <span
+              class="tmark"
+              data-mark="working"
+              data-doing="subagents"
+              data-satellites="working,working,working"
+              data-calls="false"
+              data-size="16"
+              data-tmark
+            ></span>
+            <span class="chip">
+              <span class="sign">B</span>banda
+            </span>
+            <span class="pt">Move sidebar settings to sidebar.toml</span>
+            <span class="ic">
+              <Icon name="cols" size={15} />
+              <Icon name="x" size={15} />
+            </span>
+          </div>
+          <div class="tbody">
+            <div class="bubble">
+              Move the sidebar's settings into sidebar.toml. Keep the old keys
+              working.
+            </div>
+            <p class="prose">
+              I'll split it. Three sub-agents take the settings: where the old{" "}
+              <code>[row]</code> keys are read, the tests, and a review of the
+              new schema.
+            </p>
+            <div class="fold">
+              <Icon name="layers" size={15} />
+              <span data-fold>
+                Read 4 files, ran 2 commands, edited 1 file{" "}
+                <span class="add">+21</span> <span class="rem">−4</span>
+              </span>
+              <Icon name="chev" size={14} class="chev" />
+            </div>
+            <div class="subs">
+              <div class="subs-h">
+                <span class="sats" data-sats>
+                  <Fragment set:html={satelliteSvg("working", 8).repeat(3)} />
+                </span>
+                <span>3 sub-agents</span>
+                <span class="sum" data-ssum>
+                  · 3 working
+                </span>
+              </div>
+              {subs.map((s) => (
+                <div class="srow" data-sub={s.id} data-s="working">
+                  <span class="sat" set:html={satelliteSvg("working")} />
+                  <span class="sn">{s.name}</span>
+                  <span class="sa" set:html={s.doing} />
+                  <span class="stime">{s.time}</span>
+                </div>
+              ))}
+            </div>
+            <div class="live">
+              <span class="spin"></span>
+              <span>
+                Working for{" "}
+                <span class="clk" data-clock>
+                  6m 40s
+                </span>
+              </span>
+            </div>
+          </div>
+          <div class="askw" data-ask>
+            <div>
+              <div class="ask">
+                <div class="ask-h">
+                  <span set:html={satelliteSvg("asks")} />
+                  <span>Reviewer asks · now</span>
+                </div>
+                <div class="ask-q">
+                  Run a command in <span class="inl mono">~/code/banda</span>?
+                </div>
+                <div class="cmd">
+                  <span class="p">$ </span>pnpm vitest sidebar
+                </div>
+                <div class="opt" data-opt>
+                  <kbd>1</kbd>Allow once
+                  <span class="k">
+                    <Icon name="enter" size={14} />
+                  </span>
+                </div>
+                <div class="opt">
+                  <kbd>2</kbd>Allow for this Thread
+                </div>
+                <div class="opt">
+                  <kbd>Esc</kbd>Deny, and tell it what to do differently…
+                </div>
+                <div class="note">
+                  <Icon name="info" size={13} />
+                  "Allow for this Thread" covers Claude and all its sub-agents.
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="composer">
+            <div class="ph2">Steer this thread…</div>
+            <div class="row">
+              <Icon name="plus" size={15} />
+              <span class="model">
+                <Icon name="shield" size={14} style="margin-right:8px" />
+                Opus 5.5 <b>Ultracode</b>
+              </span>
+              <span class="stopb"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+      <div class="col" style="flex:1">
+        <section class="pane" style="flex:1.05">
+          <div class="ph">
+            <Icon name="term" size={15} class="dim" />
+            <span class="pt">zsh</span>
+            <span class="pm">~/code/banda</span>
+            <span class="ic">
+              <Icon name="x" size={15} />
+            </span>
+          </div>
+          <div class="term" data-term>
+            <div class="tline">
+              <span class="c">$ git switch -c feat/sidebar-toml</span>
+            </div>
+            <div class="tline">
+              Switched to a new branch 'feat/sidebar-toml'
+            </div>
+            <div class="tline">&nbsp;</div>
+            <div class="tline">
+              <span class="c">$ pnpm install</span>
+            </div>
+            <div class="tline">Done in 2.1s</div>
+            <div class="tline">&nbsp;</div>
+            <div class="tline">
+              <span class="c">$ pnpm dev</span>
+            </div>
+            <div class="tline">&nbsp;</div>
+            <div class="tline">
+              &nbsp; <span class="g">VITE</span> ready in 412 ms
+            </div>
+            <div class="tline">
+              &nbsp; → Local: <span class="b">http://localhost:5173/</span>
+            </div>
+            <div class="tline">
+              <span class="cur"></span>
+            </div>
+          </div>
+        </section>
+        <section class="pane" style="flex:1">
+          <div class="ph">
+            <Icon name="globe" size={15} class="dim" />
+            <span class="url">
+              <Icon name="reload" size={12} />
+              <b>localhost:5173</b>/settings/sidebar
+            </span>
+            <span class="ic">
+              <Icon name="x" size={15} />
+            </span>
+          </div>
+          <div class="page">
+            <h4>Sidebar</h4>
+            <div class="sub">Saved in sidebar.toml</div>
+            <div class="prow">
+              <span>Oldest first</span>
+              <span class="tog on"></span>
+            </div>
+            <div class="prow">
+              <span>Show Later</span>
+              <span class="tog" data-btog></span>
+            </div>
+            <div class="prow">
+              <span>Group by Project</span>
+              <span class="tog on"></span>
+            </div>
+          </div>
+        </section>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+  .win {
+    --fg-62: color-mix(in oklab, var(--foreground) 62%, transparent);
+    --fg-45: color-mix(in oklab, var(--foreground) 45%, transparent);
+    --fg-30: color-mix(in oklab, var(--foreground) 30%, transparent);
+    --hover: color-mix(in oklab, var(--foreground) 6%, transparent);
+    --glass: color-mix(in oklab, var(--foreground) 4%, transparent);
+    --raise: color-mix(in oklab, var(--foreground) 8%, transparent);
+    --window-line: rgb(255 255 255 / 0.12);
+    --gap: 8px;
+    position: relative;
+    isolation: isolate;
+    overflow: hidden;
+    width: 1200px;
+    height: 740px;
+    border-radius: var(--window-radius);
+    font: 14px/20px var(--font-family-sans);
+    color: var(--foreground);
+    display: flex;
+    flex-direction: column;
+    text-align: left;
+    box-shadow:
+      0 0 0 1px var(--window-line),
+      inset 0 1px 0 rgb(255 255 255 / 0.05),
+      0 60px 120px -30px rgb(0 0 0 / 0.7),
+      0 30px 60px -30px rgb(0 0 0 / 0.6);
+  }
+  /* The glass: the desk's glow, frosted. A still layer, blurred once. */
+  .win::before {
+    content: "";
+    position: absolute;
+    z-index: -2;
+    inset: -80px;
+    background:
+      radial-gradient(
+        30% 40% at 76% 30%,
+        var(--glow-ember) 0%,
+        transparent 70%
+      ),
+      radial-gradient(
+        55% 65% at 18% 82%,
+        var(--glow-violet) 0%,
+        transparent 66%
+      ),
+      radial-gradient(
+        45% 55% at 62% 104%,
+        var(--glow-teal) 0%,
+        transparent 62%
+      ),
+      linear-gradient(
+        180deg,
+        var(--night),
+        var(--night-violet) 58%,
+        var(--night)
+      );
+    filter: blur(40px) saturate(1.4);
+  }
+  .win::after {
+    content: "";
+    position: absolute;
+    z-index: -1;
+    inset: 0;
+    background-color: color-mix(in oklab, var(--background) 40%, transparent);
+    background-image: var(--grain);
+  }
+  .reflect {
+    position: absolute;
+    inset: 0;
+    border-radius: var(--window-radius);
+    pointer-events: none;
+    z-index: 5;
+    background: linear-gradient(
+      115deg,
+      transparent 30%,
+      rgb(255 255 255 / var(--sheen, 0)) 46%,
+      transparent 62%
+    );
+  }
+  .sp {
+    flex: 1;
+  }
+  .mono {
+    font-family: var(--font-family-mono);
+    font-size: 11.5px;
+  }
+  .dim {
+    color: var(--muted-foreground);
+  }
+  .wbar {
+    height: 36px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 0 10px 0 12px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .wlogo {
+    width: 28px;
+    height: 28px;
+    display: grid;
+    place-items: center;
+  }
+  .wnum {
+    min-width: 22px;
+    height: 22px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--small-radius);
+  }
+  .wnum.on {
+    background: var(--raise);
+    color: var(--foreground);
+  }
+  .wbody {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    gap: var(--gap);
+    padding: 0 var(--gap) var(--gap);
+  }
+  .panel {
+    width: 268px;
+    flex: none;
+    border-radius: var(--tile-radius);
+    background: color-mix(in oklab, var(--sidebar) 66%, transparent);
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      0 12px 32px -14px rgb(0 0 0 / 0.55);
+    display: flex;
+    flex-direction: column;
+    padding: 8px;
+    overflow: hidden;
+  }
+  .strip {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    gap: var(--gap);
+  }
+  .col {
+    display: flex;
+    flex-direction: column;
+    gap: var(--gap);
+    min-width: 0;
+  }
+  .pane {
+    border-radius: var(--tile-radius);
+    background: color-mix(in oklab, var(--background) 95%, transparent);
+    box-shadow:
+      inset 0 0 0 1px var(--border),
+      0 18px 40px -16px rgb(0 0 0 / 0.5);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    min-height: 0;
+    position: relative;
+  }
+  .pane.focus {
+    box-shadow:
+      0 0 0 1px color-mix(in oklab, var(--ring) 70%, transparent),
+      0 18px 40px -16px rgb(0 0 0 / 0.6);
+  }
+  .ph {
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 10px 0 14px;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .pt {
+    font-weight: 500;
+    overflow: hidden;
+    min-width: 0;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .pm {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .ic {
+    color: var(--muted-foreground);
+    display: flex;
+    gap: 10px;
+    margin-left: auto;
+    flex: none;
+  }
+  .tmark {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .sign {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    font: 600 9px/1 var(--font-family-sans);
+    color: var(--background);
+    background: var(--sign-violet);
+  }
+  .sign.t {
+    background: var(--sign-teal);
+  }
+
+  /* the sidebar */
+  .srch {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    padding: 0 6px 0 8px;
+    color: var(--muted-foreground);
+  }
+  .tabs {
+    display: flex;
+    gap: 2px;
+    padding: 6px 0 4px;
+    font-size: 13px;
+  }
+  .tab {
+    display: flex;
+    gap: 6px;
+    align-items: center;
+    height: 26px;
+    padding: 0 8px;
+    border-radius: var(--control-radius);
+    color: var(--muted-foreground);
+  }
+  .tab b {
+    font-weight: 500;
+  }
+  .tab.on {
+    background: var(--raise);
+    color: var(--foreground);
+  }
+  .tab.on b {
+    color: var(--attention);
+  }
+  .sec {
+    display: flex;
+    justify-content: space-between;
+    padding: 10px 8px 4px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .list {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .it {
+    border-radius: var(--control-radius);
+    padding: 4px 8px;
+    position: relative;
+  }
+  .it.card {
+    border-radius: var(--card-radius);
+    padding: 7px 8px 8px;
+  }
+  .it.sel {
+    background: var(--raise);
+  }
+  .it-1 {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 20px;
+  }
+  .mk {
+    width: 16px;
+    height: 16px;
+    display: grid;
+    place-items: center;
+    flex: none;
+  }
+  .tt {
+    flex: 1;
+    min-width: 0;
+    white-space: nowrap;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  }
+  .it:not(.card) .tt {
+    color: var(--muted-foreground);
+  }
+  .tm {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    flex: none;
+  }
+  .it[data-look="asks"] .tm {
+    color: var(--attention);
+  }
+  .it[data-look="done"] .tm {
+    color: var(--added);
+  }
+  .it[data-look="woke"] .tm {
+    color: var(--woke);
+  }
+  .it.later .mk {
+    opacity: 0.55;
+  }
+  .more {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.45s cubic-bezier(0.2, 0.7, 0.2, 1);
+  }
+  .it.card .more {
+    grid-template-rows: 1fr;
+  }
+  .more > div {
+    overflow: hidden;
+    min-height: 0;
+  }
+  .it-2 {
+    padding-left: 24px;
+    margin-top: 3px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 22px), transparent);
+  }
+  .it-2 :global(b) {
+    color: var(--foreground);
+    font-weight: 500;
+  }
+  .it-3 {
+    padding-left: 24px;
+    margin-top: 5px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .it-3 .m {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .pfoot {
+    margin-top: auto;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 6px 8px 2px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .pfoot .on {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-left: auto;
+  }
+  .pfoot .on::before {
+    content: "";
+    width: 6px;
+    height: 6px;
+    border-radius: 50%;
+    background: var(--added);
+  }
+
+  /* the Thread */
+  .tbody {
+    flex: 1;
+    min-height: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    gap: 16px;
+    padding: 0 18px 12px;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 28px);
+  }
+  .bubble {
+    align-self: flex-end;
+    max-width: 84%;
+    background: var(--raise);
+    border-radius: var(--card-radius);
+    padding: 8px 12px;
+    line-height: 22px;
+  }
+  .prose {
+    margin: 0;
+    line-height: 22px;
+  }
+  .prose code,
+  .inl {
+    font-family: var(--font-family-mono);
+    font-size: 12.5px;
+    background: var(--raise);
+    border-radius: var(--small-radius);
+    padding: 1px 5px;
+  }
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .fold :global(.add) {
+    color: var(--added);
+  }
+  .fold :global(.rem) {
+    color: var(--destructive);
+  }
+  .subs {
+    border-radius: var(--card-radius);
+    background: var(--glass);
+    box-shadow: inset 0 0 0 1px var(--border);
+    padding: 8px 10px 6px;
+  }
+  .subs-h {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    height: 24px;
+  }
+  .sats {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+  }
+  .sum {
+    color: var(--muted-foreground);
+  }
+  .sum :global(.a) {
+    color: var(--attention);
+  }
+  .sum :global(.f) {
+    color: var(--destructive);
+  }
+  .srow {
+    display: grid;
+    grid-template-columns: 16px minmax(0, auto) 1fr 32px;
+    align-items: center;
+    gap: 8px;
+    height: 30px;
+    white-space: nowrap;
+  }
+  .sat {
+    display: grid;
+    place-items: center;
+  }
+  .sn {
+    overflow: hidden;
+  }
+  .sa {
+    color: var(--muted-foreground);
+    font-size: 12px;
+    overflow: hidden;
+    mask-image: linear-gradient(to right, #000 calc(100% - 18px), transparent);
+  }
+  .sa :global(b) {
+    font-weight: 500;
+    color: var(--foreground);
+  }
+  .sa :global(.tag) {
+    font-size: 11px;
+    line-height: 14px;
+    padding: 1px 5px;
+    border-radius: var(--small-radius);
+    color: var(--destructive);
+    background: color-mix(in oklab, var(--destructive) 16%, transparent);
+    margin-right: 6px;
+  }
+  .stime {
+    font-size: 12px;
+    color: var(--muted-foreground);
+    text-align: right;
+  }
+  .srow[data-s="asks"] .stime {
+    color: var(--attention);
+  }
+  .srow[data-s="failed"] .stime {
+    color: var(--destructive);
+  }
+  .live {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-foreground);
+  }
+  .clk {
+    font-variant-numeric: tabular-nums;
+  }
+  .spin {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    border: 1.5px solid var(--fg-30);
+    border-top-color: var(--foreground);
+    animation: spin 1.6s linear infinite;
+  }
+  .spin.small {
+    width: 12px;
+    height: 12px;
+    margin-right: 8px;
+  }
+  @keyframes spin {
+    to {
+      transform: rotate(360deg);
+    }
+  }
+  .askw {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition: grid-template-rows 0.55s cubic-bezier(0.2, 0.7, 0.2, 1);
+    padding: 0 12px;
+  }
+  .askw.open {
+    grid-template-rows: 1fr;
+  }
+  .askw > div {
+    overflow: hidden;
+    min-height: 0;
+  }
+  .ask {
+    border-radius: var(--card-radius);
+    box-shadow: inset 0 0 0 1px var(--border);
+    background: var(--glass);
+    padding: 12px 12px 10px;
+    margin-bottom: 8px;
+  }
+  .ask-h {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 12px;
+    line-height: 16px;
+    font-weight: 600;
+    color: var(--attention);
+  }
+  .ask-q {
+    margin: 8px 0;
+  }
+  .cmd {
+    font: 12.5px/20px var(--font-family-mono);
+    background: var(--raise);
+    border-radius: var(--control-radius);
+    padding: 6px 10px;
+    margin-bottom: 8px;
+  }
+  .cmd .p {
+    color: var(--muted-foreground);
+  }
+  .opt {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    height: 34px;
+    padding: 0 8px 0 6px;
+    border-radius: var(--control-radius);
+    box-shadow: inset 0 0 0 1px var(--border);
+    margin-top: 6px;
+    transition:
+      background 0.25s,
+      box-shadow 0.25s;
+  }
+  .opt kbd {
+    font: 500 11px/14px var(--font-family-sans);
+    min-width: 20px;
+    height: 20px;
+    padding: 0 4px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--small-radius);
+    box-shadow: inset 0 0 0 1px var(--input);
+    color: var(--muted-foreground);
+  }
+  .opt .k {
+    margin-left: auto;
+    color: var(--muted-foreground);
+  }
+  .opt.press {
+    background: color-mix(in oklab, var(--ring) 14%, transparent);
+    box-shadow: inset 0 0 0 1px var(--ring);
+  }
+  .note {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    margin-top: 8px;
+    font-size: 12px;
+    line-height: 16px;
+    color: var(--muted-foreground);
+  }
+  .composer {
+    margin: 0 12px 12px;
+    border-radius: var(--card-radius);
+    box-shadow: inset 0 0 0 1px var(--input);
+    padding: 12px 12px 10px;
+    flex: none;
+  }
+  .ph2 {
+    color: var(--muted-foreground);
+    margin-bottom: 14px;
+  }
+  .composer .row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .model {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+    align-items: center;
+  }
+  .model b {
+    font-weight: 400;
+    color: var(--effort-top);
+  }
+  .stopb {
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    background: var(--raise);
+    display: grid;
+    place-items: center;
+  }
+  .stopb::before {
+    content: "";
+    width: 9px;
+    height: 9px;
+    border-radius: 2px;
+    background: var(--foreground);
+  }
+
+  /* the terminal and the browser */
+  .term {
+    flex: 1;
+    min-height: 0;
+    padding: 2px 14px 12px;
+    font: 12.5px/20px var(--font-family-mono);
+    color: var(--muted-foreground);
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    overflow: hidden;
+    mask-image: linear-gradient(to bottom, transparent 0, #000 24px);
+  }
+  .term :global(.c) {
+    color: var(--foreground);
+  }
+  .term :global(.g) {
+    color: var(--ansi-2);
+  }
+  .term :global(.b) {
+    color: var(--ansi-4);
+  }
+  .term :global(.t) {
+    color: var(--fg-45);
+  }
+  .term :global(.cur) {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--foreground);
+    vertical-align: -2px;
+    animation: cur 1.06s steps(1) infinite;
+  }
+  @keyframes cur {
+    50% {
+      opacity: 0;
+    }
+  }
+  .term :global(.tline) {
+    white-space: nowrap;
+    overflow: hidden;
+  }
+  .term :global(.tline.new) {
+    animation: tin 0.35s ease;
+  }
+  @keyframes tin {
+    from {
+      opacity: 0;
+      transform: translateY(4px);
+    }
+  }
+  .url {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 0 10px;
+    border-radius: var(--control-radius);
+    background: var(--glass);
+    color: var(--muted-foreground);
+    font-size: 12px;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .url b {
+    color: var(--foreground);
+    font-weight: 400;
+  }
+  .page {
+    flex: 1;
+    margin: 0 8px 8px;
+    border-radius: var(--card-radius);
+    background: var(--paper);
+    color: var(--gallery-ink);
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 18px;
+    overflow: hidden;
+  }
+  .page h4 {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .page .sub {
+    color: var(--gallery-muted);
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .prow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid rgb(0 0 0 / 0.08);
+  }
+  .tog {
+    width: 28px;
+    height: 16px;
+    border-radius: 99px;
+    background: color-mix(in oklab, var(--gallery-ink) 18%, var(--paper));
+    position: relative;
+    transition: background 0.35s;
+  }
+  .tog::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--paper);
+    transition: transform 0.35s cubic-bezier(0.2, 0.7, 0.2, 1);
+    box-shadow: 0 1px 2px rgb(0 0 0 / 0.2);
+  }
+  .tog.on {
+    background: var(--gallery-ink);
+  }
+  .tog.on::after {
+    transform: translateX(12px);
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .spin,
+    .term :global(.cur) {
+      animation: none;
+    }
+  }
+</style>
