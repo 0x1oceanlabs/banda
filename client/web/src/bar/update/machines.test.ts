@@ -2,12 +2,12 @@ import { describe, expect, it } from "vitest"
 import type { UpdateState } from "@banda/contract/updates"
 import type { Update } from "@banda/core"
 import {
-  allOn,
   lookedWords,
   type MachineUpdates,
   newestOf,
-  outWords,
+  plainOf,
   rowOf,
+  titleOf,
   waitWords,
   worstOf,
 } from "./machines"
@@ -27,14 +27,25 @@ const devbox = (more: Partial<MachineUpdates> = {}): MachineUpdates => ({
   ...more,
 })
 const waits = { turns: 0, terminals: 0, person: false }
+const app: Update = {
+  name: "Banda Dev",
+  have: "0.1.0-dev.640",
+  always: true,
+  state: "none",
+}
+const ready: Update = {
+  ...app,
+  state: "ready",
+  version: "0.1.0-dev.642",
+  notes: [],
+}
 
-describe("a machine's row says what its engine said", () => {
-  it("one away says it updates itself once back, with no acts", () => {
+describe("a machine's row: one word, at most one button", () => {
+  it("one away says Away, and nothing more", () => {
     expect(rowOf(devbox({ away: true, said: said() }), now)).toEqual({
       kind: "away",
       from: "dev.640",
-      say: "Updates itself once it is back.",
-      restarts: false,
+      status: "Away",
     })
   })
 
@@ -49,15 +60,14 @@ describe("a machine's row says what its engine said", () => {
     )
     expect(row).toMatchObject({
       kind: "taking",
-      from: "dev.640",
       to: "dev.642",
       share: 0.5,
-      size: "34 of 68 MB",
-      restarts: false,
+      status: "34 of 68 MB",
     })
+    expect(row.act).toBeUndefined()
   })
 
-  it("a copy ready waits for the Threads and terminals that hold it", () => {
+  it("a copy waiting for Agents says so, with no button: it updates by itself", () => {
     const row = rowOf(
       devbox({
         said: said({
@@ -69,14 +79,14 @@ describe("a machine's row says what its engine said", () => {
     )
     expect(row).toMatchObject({
       kind: "waits",
-      from: "dev.640",
       to: "dev.642",
-      say: "Restarts once 2 Threads finish and its terminal closes.",
-      restarts: true,
+      status: "After 2 Agents",
+      why: "Updates by itself once 2 Agents finish and its terminal closes.",
     })
+    expect(row.act).toBeUndefined()
   })
 
-  it("one set to ask says so, and whether Agents work there", () => {
+  it("one set to ask has its Update", () => {
     const row = rowOf(
       devbox({
         said: said({
@@ -87,74 +97,76 @@ describe("a machine's row says what its engine said", () => {
       }),
       now
     )
-    expect(row).toMatchObject({
-      kind: "ask",
-      say: "Ready. devbox asks before it restarts. Nothing works there now.",
-      restarts: true,
-    })
+    expect(row).toMatchObject({ kind: "ready", act: "update", engine: true })
   })
 
-  it("one that moves only as Banda restarts there says why, with no Restart now", () => {
-    const row = rowOf(
-      devbox({
-        said: said({
-          ready: "0.1.0-dev.642",
-          waits: { ...waits, restart: "Restarts with Banda's app" },
-        }),
-      }),
-      now
-    )
-    expect(row).toMatchObject({
-      kind: "waits",
-      say: "Restarts with Banda's app.",
-      restarts: false,
-    })
+  it("one on the newest is Up to date", () => {
+    expect(
+      rowOf(devbox({ said: said({ running: "0.1.0-dev.642" }) }), now)
+    ).toEqual({ kind: "ok", from: "dev.642", status: "Up to date" })
   })
 
-  it("one on the newest says when it moved, and whether between turns", () => {
-    const updated = { from: "0.1.0-dev.640", at: now - 4 * MINUTE, idle: true }
-    const row = rowOf(
-      devbox({ said: said({ running: "0.1.0-dev.642", updated }) }),
-      now
-    )
-    expect(row).toMatchObject({
-      kind: "ok",
-      from: "dev.642",
-      say: "Updated 4m ago, between turns.",
+  it("a failure says it in words, with the program's text behind Details", () => {
+    expect(
+      rowOf(devbox({ said: said({ failed: "fetch failed: ENOTFOUND" }) }), now)
+    ).toMatchObject({
+      kind: "failed",
+      status: "Couldn't update",
+      why: "Couldn't reach the releases. Check the connection.",
+      details: "fetch failed: ENOTFOUND",
+      act: "retry",
     })
-    expect(
-      rowOf(
-        devbox({
-          said: said({ updated: { ...updated, idle: false, at: now } }),
-        }),
-        now
-      ).say
-    ).toBe("Updated just now.")
-  })
-
-  it("failed and off say the engine's words as a sentence", () => {
-    expect(
-      rowOf(devbox({ said: said({ failed: "No network" }) }), now)
-    ).toMatchObject({ kind: "failed", say: "No network." })
-    expect(
-      rowOf(devbox({ said: said({ off: "The AUR updates Banda here." }) }), now)
-    ).toMatchObject({ kind: "off", say: "The AUR updates Banda here." })
   })
 
   it("an engine older than its own updates says to update it once by hand", () => {
-    expect(rowOf(devbox({ refused: true }), now).say).toBe(
-      "Its Banda is older than its own updates: update it on devbox once."
-    )
+    expect(rowOf(devbox({ refused: true }), now)).toMatchObject({
+      kind: "off",
+      status: "Update by hand",
+    })
+  })
+})
+
+describe("this machine's row holds this window's app", () => {
+  const here = devbox({ host: undefined, name: "M1PRO", icon: "laptop" })
+
+  it("an app ready is one Update, and the engine goes with it where it is ready", () => {
+    expect(rowOf(here, now, ready)).toMatchObject({
+      kind: "ready",
+      to: "dev.642",
+      act: "update",
+      app: true,
+      engine: false,
+    })
+    const engineReady = {
+      ...here,
+      said: said({ ready: "0.1.0-dev.642", waits }),
+    }
+    expect(rowOf(engineReady, now, ready)).toMatchObject({
+      act: "update",
+      app: true,
+      engine: true,
+    })
+  })
+
+  it("a look that failed is no engine text on the bar: words, and Details", () => {
+    const missed: Update = {
+      ...app,
+      state: "none",
+      missed: "The first frame must be hello with a token this engine knows.",
+    }
+    expect(rowOf({ ...here, said: said() }, now, missed)).toMatchObject({
+      kind: "failed",
+      why: "Banda lost touch with itself for a moment.",
+      details: "The first frame must be hello with a token this engine knows.",
+      act: "retry",
+    })
   })
 })
 
 describe("what a copy in place waits for", () => {
-  it("counts the Threads, the terminals and the keys", () => {
+  it("counts the Agents, the terminals and the keys", () => {
     expect(waitWords({ ...waits, turns: 1 }, now)).toBe(
-      "Restarts once its 1 Thread finishes."
-    )
-    expect(waitWords({ ...waits, terminals: 3 }, now)).toBe(
-      "Restarts once its 3 terminals close."
+      "Updates by itself once its Agent finishes."
     )
     const until = now + 7 * MINUTE
     const clock = new Date(until).toLocaleTimeString("en-GB", {
@@ -164,24 +176,18 @@ describe("what a copy in place waits for", () => {
     expect(
       waitWords({ ...waits, turns: 2, terminals: 1, typed_until: until }, now)
     ).toBe(
-      `Restarts once 2 Threads finish, its terminal closes and no key reaches it until ${clock}.`
+      `Updates by itself once 2 Agents finish, its terminal closes and no one types there until ${clock}.`
     )
   })
 
-  it("a key typed long ago holds nothing", () => {
+  it("nothing holding it needs no line", () => {
     expect(waitWords({ ...waits, typed_until: now - MINUTE }, now)).toBe(
-      "Restarts in a moment."
+      undefined
     )
   })
 })
 
-describe("the bar's word over the window and every machine", () => {
-  const app: Update = {
-    name: "Banda Dev",
-    have: "0.1.0-dev.640",
-    always: true,
-    state: "none",
-  }
+describe("the bar's icon and the title", () => {
   const row = (machine: MachineUpdates) => ({
     machine,
     row: rowOf(machine, now),
@@ -198,43 +204,45 @@ describe("the bar's word over the window and every machine", () => {
       said: said({ failed: "No network" }),
     })
   )
+  const ok = row(devbox({ said: said({ running: "0.1.0-dev.642" }) }))
 
-  it("says the worst: failed, then a machine that waits, then a version ready", () => {
-    const ready: Update = {
-      ...app,
-      state: "ready",
-      version: "0.1.0-dev.642",
-      notes: [],
-    }
+  it("says the worst: failed, then ready, and no pill", () => {
     expect(worstOf(ready, [waiting, failing])).toEqual({
       kind: "failed",
-      pill: "m1pro",
+      name: "m1pro",
     })
-    expect(worstOf(ready, [waiting])).toEqual({
-      kind: "waits",
-      pill: "devbox waits",
-    })
-    expect(worstOf(ready, [])).toEqual({
+    expect(worstOf(app, [waiting])).toEqual({
       kind: "ready",
-      pill: "dev.642",
-      app: true,
+      version: "dev.642",
     })
-    expect(worstOf(app, [])).toEqual({ kind: "quiet", app: true })
+    expect(worstOf(app, [ok])).toEqual({ kind: "quiet" })
   })
 
-  it("the header says when the newest was out, or that all run it", () => {
-    const here = devbox({
-      host: undefined,
-      said: said({ published: now - 20 * MINUTE }),
+  it("the title says it in one line", () => {
+    expect(titleOf([waiting, failing], undefined).title).toBe(
+      "Couldn't update m1pro"
+    )
+    expect(titleOf([waiting, ok], undefined).title).toBe(
+      "Banda dev.642 is ready"
+    )
+    expect(titleOf([ok], "0.1.0-dev.642")).toEqual({
+      title: "Banda is up to date",
+      say: "dev.642 on every machine.",
     })
-    const newest = newestOf(app, here)
-    expect(newest).toEqual({
-      version: "0.1.0-dev.642",
-      published: now - 20 * MINUTE,
-    })
-    expect(allOn(newest!.version, app, [here])).toBe(false)
-    expect(outWords(newest, false, now)).toBe("out 20m ago")
-    expect(outWords(newest, true, now)).toBe("the newest")
-    expect(lookedWords(now - 3 * MINUTE, now)).toBe("Looked 3m ago")
+  })
+
+  it("the newest is what this machine's engine found", () => {
+    expect(newestOf(app, devbox({ host: undefined, said: said() }))).toBe(
+      "0.1.0-dev.642"
+    )
+    expect(lookedWords(now - 3 * MINUTE, now)).toBe("Checked 3m ago")
+  })
+
+  it("words a few failures the Person can act on", () => {
+    expect(plainOf("no room on devbox (needs 180 MB)")).toBe(
+      "Not enough disk space."
+    )
+    expect(plainOf("sha512 mismatch")).toBe("The download was broken.")
+    expect(plainOf("odd")).toBe("Something went wrong.")
   })
 })

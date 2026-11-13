@@ -21,7 +21,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     }, value)
   const known = { name: "Banda Dev", have: "0.1.0-dev.62", always: false }
   const { composer } = await firstThread(page)
-  const downloading = page.getByRole("button", { name: /^Downloading/ })
+  const downloading = page.getByRole("button", { name: /^Updating/ })
 
   // A download that is over in two seconds never shows.
   await tell({
@@ -34,7 +34,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   })
   await page.waitForTimeout(1000)
   await expect(downloading).toBeHidden()
-  await expect(downloading).toHaveAccessibleName("Downloading dev.66 · 10%")
+  await expect(downloading).toHaveAccessibleName("Updating to dev.66 · 10%")
   await tell({
     ...known,
     state: "downloading",
@@ -43,7 +43,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     notes: [],
     restarts: false,
   })
-  await expect(downloading).toHaveAccessibleName("Downloading dev.66 · 38%")
+  await expect(downloading).toHaveAccessibleName("Updating to dev.66 · 38%")
   await tell({
     ...known,
     state: "downloading",
@@ -54,17 +54,17 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     down: 11_800_000,
     size: 31_000_000,
   })
-  // Until it is down the window has no row of its own (ADR 0119, the
-  // chosen mock): the icon's ring says how far.
+  // Its machine's row says how far (ADR 0131): no row of its own.
   await downloading.click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toBeVisible()
+  const here = popover.locator('[data-machine="here"]')
+  await expect(here).toContainText("12 of 31 MB")
   await expect(popover.locator('[data-machine="window"]')).toHaveCount(0)
   await page.keyboard.press("Escape")
 
-  // Ready, while a Thread works: the version stands beside the icon, and
-  // the popover says where Banda goes, what changed by kind (ADR 0072),
-  // and that only the window restarts (ADR 0119, decision 4).
+  // Ready, while a Thread works: the bar has its icon alone, and its
+  // machine's row one Update, which restarts only the window (ADR 0119,
+  // decision 4). No notes (ADR 0131).
   await composer.fill("slow please")
   await composer.press("Enter")
   await tell({
@@ -76,38 +76,38 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
         version: "0.1.0-dev.66",
         text: "Built from 6c3d557: feat(bar): the hook",
       },
-      { version: "0.1.0-dev.65", text: "Built from 1ceb27c: the README" },
     ],
   })
-  const ready = page.getByRole("button", {
-    name: "dev.66 is ready · click to restart",
-  })
-  await expect(ready).toHaveText("dev.66")
+  const ready = page.getByRole("button", { name: "Banda dev.66 is ready" })
+  await expect(ready).toHaveText("")
   await ready.click()
-  const windowRow = popover.locator('[data-machine="window"]')
-  await expect(windowRow).toContainText(
-    "dev.62 → dev.66. Agents keep working: only the window restarts."
+  await expect(popover.locator("[data-update-title]")).toHaveText(
+    "Banda dev.66 is ready"
   )
-  await expect(popover).toContainText("the hook")
-  await expect(popover).toContainText("the README")
-  await expect(
-    windowRow.getByRole("button", { name: "Restart window" })
-  ).toBeVisible()
-  await expect(
-    popover.getByRole("button", { name: "Restart when idle" })
-  ).toHaveCount(0)
+  await expect(here.getByRole("button", { name: "Update" })).toBeVisible()
+  await expect(popover).not.toContainText("the hook")
   await page.screenshot({ path: "test-results/8-update-ready.png" })
   await page.keyboard.press("Escape")
   await expect(popover).toBeHidden()
 
-  await tell({ ...known, state: "failed", reason: "Banda cannot write /opt" })
-  await expect(
-    page.getByRole("button", {
-      name: "Banda Dev cannot update itself: Banda cannot write /opt",
-    })
-  ).toBeVisible()
+  // Failed: the icon goes red, and the words are the Person's; the
+  // program's own stay behind Details.
+  await tell({
+    ...known,
+    state: "failed",
+    reason: "EACCES: Banda cannot write /opt",
+  })
+  const failed = page.getByRole("button", { name: /^Couldn't update/ })
+  await failed.click()
+  await expect(here).toContainText(
+    "Banda may not write where it keeps its copy."
+  )
+  await expect(here).not.toContainText("/opt")
+  await here.getByRole("button", { name: "Details" }).click()
+  await expect(here).toContainText("EACCES: Banda cannot write /opt")
+  await page.keyboard.press("Escape")
   await tell({ ...known, state: "none" })
-  await expect(page.getByRole("button", { name: /cannot update/ })).toBeHidden()
+  await expect(failed).toBeHidden()
 })
 
 test("Banda Dev's widget stays on the bar and looks now (ADR 0045)", async () => {
@@ -134,19 +134,18 @@ test("Banda Dev's widget stays on the bar and looks now (ADR 0045)", async () =>
   await firstThread(page)
 
   await tell({ ...known, state: "none", looked: Date.now() - 4 * 60_000 })
-  const widget = page.getByRole("button", { name: "Banda Dev 0.1.0-dev.101" })
+  const widget = page.locator("[data-update]")
   await widget.click()
   const popover = page.locator("[data-slot=popover-content]")
   // Check now looks for this window's app, and each machine's engine.
   await popover.getByRole("button", { name: "Check now" }).click()
   await expect.poll(asked).toEqual(["check"])
 
-  // The bar follows the look and the download; the window has a row once
-  // its app is down.
+  // The bar follows the look and the download.
   await page.keyboard.press("Escape")
   await tell({ ...known, state: "looking" })
   await expect(page.locator('[data-update="looking"]')).toHaveAccessibleName(
-    "Looking for a new Banda Dev…"
+    "Checking for updates…"
   )
   await tell({
     ...known,
@@ -158,18 +157,22 @@ test("Banda Dev's widget stays on the bar and looks now (ADR 0045)", async () =>
   })
   await expect(
     page.locator('[data-update="downloading"]')
-  ).toHaveAccessibleName("Downloading dev.104 · 38%")
+  ).toHaveAccessibleName("Updating to dev.104 · 38%")
 
-  // A look the Person asked for that failed says why, at the foot.
+  // A look that failed says why in words on its machine's row, with Try
+  // again; never at the foot, nor on the bar.
   await tell({
     ...known,
     state: "none",
     missed: "net::ERR_INTERNET_DISCONNECTED",
   })
   await widget.click()
-  await expect(popover).toContainText(
-    "Could not update: net::ERR_INTERNET_DISCONNECTED"
+  const here = popover.locator('[data-machine="here"]')
+  await expect(here).toContainText(
+    "Couldn't reach the releases. Check the connection."
   )
+  await here.getByRole("button", { name: "Try again" }).click()
+  await expect.poll(asked).toEqual(["check", "check"])
 })
 
 test("on macOS the widget says a version is out, with its brew command (ADR 0033, decision 6)", async () => {
@@ -192,18 +195,13 @@ test("on macOS the widget says a version is out, with its brew command (ADR 0033
     BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
   }, out)
 
-  await page
-    .getByRole("button", { name: "dev.66 is out · install it with brew" })
-    .click()
+  await page.getByRole("button", { name: "Banda dev.66 is ready" }).click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText(
-    "dev.62 → dev.66. Its app updates with Homebrew:"
-  )
-  await expect(popover).toContainText("the hook")
+  await expect(popover).toContainText("Run this in a terminal to update:")
   await expect(popover.getByText(command)).toBeVisible()
-  // brew installs it: no Restart window.
+  // brew installs it: no Update.
   await expect(
-    popover.getByRole("button", { name: "Restart window" })
+    popover.getByRole("button", { name: "Update", exact: true })
   ).toHaveCount(0)
   await popover.getByRole("button", { name: "Copy" }).click()
   await expect(popover.getByRole("button", { name: "Copied" })).toBeVisible()
@@ -246,15 +244,15 @@ test("Banda's window restarts at once while a Thread works, and the new one says
   await composer.fill("slow please")
   await composer.press("Enter")
   await tell(ready)
-  await page
-    .getByRole("button", { name: "0.3.0 is ready · click to restart" })
-    .click()
+  await page.getByRole("button", { name: "Banda 0.3.0 is ready" }).click()
   const popover = page.locator("[data-slot=popover-content]")
-  await popover.getByRole("button", { name: "Restart window" }).click()
+  await popover
+    .locator('[data-machine="here"]')
+    .getByRole("button", { name: "Update" })
+    .click()
   await expect.poll(asked).toEqual(["restart"])
 
-  // The new Banda says it updated, and what changed, until the Person
-  // closes it.
+  // The new Banda says it updated until the Person closes it.
   await tell({
     ...known,
     have: "0.3.0",
@@ -263,10 +261,9 @@ test("Banda's window restarts at once while a Thread works, and the new one says
     notes: ready.notes,
   })
   const updated = page.getByRole("button", { name: "Updated to 0.3.0" })
-  await expect(updated).toHaveText("0.3.0")
+  await expect(updated).toHaveText("")
   await updated.click()
-  await expect(popover).toContainText("Updated from 0.2.0")
-  await expect(popover).toContainText("a new row comes last")
+  await expect(popover).toContainText("Updated just now.")
   await page.screenshot({ path: "test-results/8-update-updated.png" })
   // Closed, what changed was seen.
   await page.keyboard.press("Escape")

@@ -1,7 +1,8 @@
 /**
- * The update widget over every machine (ADR 0119, decision 7), as the
- * chosen mock's variant A draws it: this window's row, then each machine,
- * what each waits for, Restart now's warning, Settings → Machines' rows,
+ * The update widget over every machine (ADR 0131, decision 1), as mock
+ * v2's variant A draws it: a row a machine, this one holding this
+ * window's app, one word or one button each, Update's question while
+ * Agents work, Settings → Machines' rows,
  * and the sidebar's other build opening it. What each engine says on
  * `updates.state` is answered here, on the page's own sockets: a
  * checkout's engine takes no update of its own. With `BANDA_E2E_SHOTS`,
@@ -39,15 +40,16 @@ function states(now: number): Record<string, object> {
       updated: { from: "0.1.0-dev.640", at: now - 4 * MINUTE, idle: true },
       takes: "when-idle",
     },
-    // arc has its copy in place, and two Threads and a terminal hold it.
+    // arc has its copy in place and asks the Person, while two Threads
+    // and a terminal run there.
     arc: {
       running: "0.1.0-dev.640",
       newest: "0.1.0-dev.642",
       published: now - 20 * MINUTE,
       looked: now - 3 * MINUTE,
       ready: "0.1.0-dev.642",
-      waits: { turns: 2, terminals: 1, person: false },
-      takes: "when-idle",
+      waits: { turns: 2, terminals: 1, person: true },
+      takes: "ask",
     },
   }
 }
@@ -142,7 +144,7 @@ async function look(page: Page, dir: string, mode: "light" | "dark") {
   )
 }
 
-test("the update widget shows this window and every machine, warns before a restart under Agents, and Settings → Machines says the same", async () => {
+test("the update widget shows every machine in a word, asks before it stops Agents, and Settings → Machines says the same", async () => {
   test.setTimeout(240_000)
   arc = newArc()
   stopArc = await arc.start()
@@ -150,7 +152,7 @@ test("the update widget shows this window and every machine, warns before a rest
   put(arc.disk(folder), { "who.txt": "arc\n" })
   const project = JSON.parse(arc.banda("project", "add", folder)).ok
     .id as string
-  // Two Agents work on arc, as Restart now's warning names them.
+  // Two Agents work on arc, as Update's question names them.
   arc.send(project, "Fix the mermaid diagram test, wait")
   arc.send(project, "Port the runner image to 26.04, wait")
   const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
@@ -165,29 +167,29 @@ test("the update widget shows this window and every machine, warns before a rest
   await answerUpdates(page, asked)
   await tellApp(window)
 
-  // The bar: arc waits, worse than a window ready.
+  // The bar: its icon alone, a dot for what is ready.
   const icon = page.locator("[data-update]")
-  await expect(icon).toHaveAttribute("data-update", "waits", {
+  await expect(icon).toHaveAttribute("data-update", "ready", {
     timeout: 30_000,
   })
-  await expect(icon).toHaveAccessibleName(/arc waits/)
+  await expect(icon).toHaveAccessibleName("Banda dev.642 is ready")
+  await expect(icon).toHaveText("")
   await icon.click()
   const popover = page.locator("[data-slot=popover-content]")
-  await expect(popover).toContainText("Banda Dev dev.642")
-  await expect(popover).toContainText("out 20m ago")
-  await expect(popover.locator('[data-machine="window"]')).toContainText(
-    "Restart window"
+  await expect(popover.locator("[data-update-title]")).toHaveText(
+    "Banda dev.642 is ready"
   )
+  // This window's app is in its machine's row: one Update.
+  await expect(popover.locator('[data-machine="window"]')).toHaveCount(0)
   const here = popover.locator('[data-machine="here"]')
   await expect(here).toContainText("laptop")
-  await expect(here).toContainText("Updated 4m ago, between turns.")
+  await expect(here.getByRole("button", { name: "Update" })).toBeVisible()
   const there = popover.locator('[data-machine="arc"]')
-  await expect(there).toContainText(
-    "Restarts once 2 Threads finish and its terminal closes."
-  )
-  await expect(popover).toContainText("Looked 3m ago")
+  await expect(there.getByRole("button", { name: "Update" })).toBeVisible()
+  await expect(popover).toContainText("Checked 3m ago")
   await expect(popover.getByRole("button", { name: "Check now" })).toBeVisible()
-  await expect(popover).not.toContainText("Update all when idle")
+  await expect(popover).not.toContainText("Restart")
+  await expect(popover).not.toContainText("New in")
 
   const shots = SHOTS ?? "test-results/updates"
   mkdirSync(shots, { recursive: true })
@@ -209,19 +211,17 @@ test("the update widget shows this window and every machine, warns before a rest
     }
   }
 
-  // Restart now while Agents work there warns, in Quit's words, and
-  // Cancel is where the keys are.
+  // Update while Agents work there asks once; arc takes nothing by
+  // itself, so waiting is a Cancel, where the keys are.
   await page.setViewportSize({ width: 1440, height: 900 })
-  await there.getByRole("button", { name: "Restart now" }).click()
+  await there.getByRole("button", { name: "Update" }).click()
   const dialog = page.getByRole("dialog")
-  await expect(dialog).toContainText("Restart Banda on arc now?")
-  await expect(dialog).toContainText(
-    "Agents work on arc. A restart stops their turns:"
-  )
+  await expect(dialog).toContainText("2 Agents are working on arc")
+  await expect(dialog).toContainText("Updating now stops them.")
   await expect(dialog).toContainText("Fix the mermaid diagram test")
   await expect(dialog.getByRole("button", { name: "Cancel" })).toBeFocused()
-  await take("restart-1440-light")
-  await dialog.getByRole("button", { name: "Restart anyway" }).click()
+  await take("update-1440-light")
+  await dialog.getByRole("button", { name: "Stop them and update" }).click()
   await expect.poll(() => asked).toEqual([{ machine: "arc", force: true }])
   await page.keyboard.press("Escape")
 
@@ -234,12 +234,11 @@ test("the update widget shows this window and every machine, warns before a rest
     .click()
   await settings.getByRole("button", { name: /^arc / }).click()
   const arcUpdates = settings.locator('[data-key="arc.updates"]')
-  await expect(arcUpdates).toContainText(
-    "dev.640 → dev.642. Restarts once 2 Threads finish and its terminal closes."
-  )
+  await expect(arcUpdates).toContainText("dev.640 → dev.642")
+  await expect(arcUpdates.getByRole("button", { name: "Update" })).toBeVisible()
   await expect(
     arcUpdates.getByRole("combobox", { name: "Restart for updates on arc" })
-  ).toContainText("When idle")
+  ).toContainText("Ask")
   await arcUpdates.scrollIntoViewIfNeeded()
   // Only the machines' rows: the ssh config's names below are this
   // computer's own.

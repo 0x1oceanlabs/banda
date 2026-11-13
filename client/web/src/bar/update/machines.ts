@@ -1,9 +1,9 @@
 /**
- * What the update widget says of each machine (ADR 0119, decision 7):
- * one row each, this machine's too, from what its engine says on
- * `updates.state`, and the bar's word over them all and this window's
- * app. Pure, so plain tests cover it; Update.tsx draws it, and Settings →
- * Machines draws the same line.
+ * What the update widget says of each machine (ADR 0131, decision 1):
+ * one row each, one word at its right, at most one act, and a second line
+ * only when the Person needs a why. This machine's row holds this
+ * window's app too: one Update does both. Pure, so plain tests cover it;
+ * Update.tsx draws it, and Settings → Machines draws the same line.
  */
 import type { MachineIcon } from "@banda/contract/machines"
 import type { UpdateState, Waits } from "@banda/contract/updates"
@@ -31,54 +31,69 @@ export type MachineUpdates = {
 export type RowKind =
   /** It runs the newest, or has not looked yet. */
   | "ok"
-  /** Its new engine downloads. */
+  /** A new version downloads. */
   | "taking"
-  /** A new engine is in place, and the engine moves onto it once
+  /** A new version is in place, and one Update takes it. */
+  | "ready"
+  /** A new version is in place, and the machine takes it by itself once
    * nothing runs. */
   | "waits"
-  /** A new engine is in place, and its machine.toml says "ask". */
-  | "ask"
   | "failed"
   | "away"
-  /** It takes nothing by itself, or says nothing of its updates. */
+  /** It takes nothing by itself. */
   | "off"
 
-/** A machine's row: its version, where it goes, what it says, and how
- * far its download is. */
+/** What a row's one button does. */
+export type Act =
+  /** Takes what is ready: this window's app, and the machine's engine. */
+  | "update"
+  /** Looks again: after a failure. */
+  | "retry"
+
+/** A machine's row. */
 export type Row = {
   kind: RowKind
   /** The version it runs, short. */
   from?: string
   /** The version it goes to, short, while one is on its way or ready. */
   to?: string
-  /** What the row says under its name. */
-  say?: string
-  /** The download's share, 0 to 1, and its words: `31 of 68 MB`. */
+  /** The one word at its right; none where its button stands. */
+  status?: string
+  /** The line under its name, only when it needs one. */
+  why?: string
+  /** What went wrong, as the program said it, behind Details. */
+  details?: string
+  /** Its one button. */
+  act?: Act
+  /** A download's share, 0 to 1, and its words: `31 of 68 MB`. */
   share?: number
   size?: string
-  /** Restart now restarts it at once; none where nothing is ready, or
-   * where it moves only as Banda restarts there. */
-  restarts: boolean
+  /** The command that installs this window's app (macOS, brew). */
+  command?: string
+  /** This window's app is part of what its Update takes. */
+  app?: boolean
+  /** The engine moves on its Update; else only the app restarts. */
+  engine?: boolean
 }
 
-/** Machine `machine`'s row at `now`. */
-export function rowOf(machine: MachineUpdates, now: number): Row {
+/** Machine `machine`'s row at `now`; this window's `app` on this
+ * machine's. */
+export function rowOf(machine: MachineUpdates, now: number, app?: Update): Row {
+  const engine = engineRow(machine, now)
+  return app ? withApp(engine, app) : engine
+}
+
+function engineRow(machine: MachineUpdates, now: number): Row {
   const { said, name } = machine
   const from = said && shortOf(said.running)
-  if (machine.away)
-    return {
-      kind: "away",
-      from,
-      say: "Updates itself once it is back.",
-      restarts: false,
-    }
+  if (machine.away) return { kind: "away", from, status: "Away" }
   if (machine.refused)
     return {
       kind: "off",
-      say: `Its Banda is older than its own updates: update it on ${name} once.`,
-      restarts: false,
+      status: "Update by hand",
+      why: `Banda on ${name} is too old to update itself: update it there once.`,
     }
-  if (!said) return { kind: "ok", restarts: false }
+  if (!said) return { kind: "ok" }
   if (said.taking) {
     const { version, share, size } = said.taking
     return {
@@ -87,77 +102,169 @@ export function rowOf(machine: MachineUpdates, now: number): Row {
       to: shortOf(version),
       share,
       size: sizeOf(share * size, size),
-      restarts: false,
+      status: sizeOf(share * size, size) ?? "Updating",
     }
   }
   if (said.ready) {
     const to = shortOf(said.ready)
     const waits = said.waits
     if (waits?.person || said.takes === "ask")
-      return {
-        kind: "ask",
-        from,
-        to,
-        say: `Ready. ${name} asks before it restarts. ${workingThere(waits)}`,
-        restarts: true,
-      }
+      return { kind: "ready", from, to, act: "update", engine: true }
+    // It moves only as Banda restarts there: this window's Update does.
     if (waits?.restart)
       return {
         kind: "waits",
         from,
         to,
-        say: `${waits.restart}.`,
-        restarts: false,
+        status: "Ready",
+        why: "Updates when Banda restarts.",
       }
     return {
       kind: "waits",
       from,
       to,
-      say: waitWords(waits, now),
-      restarts: true,
+      status: waitingWord(waits, now),
+      why: waitWords(waits, now),
     }
   }
   if (said.failed)
-    return { kind: "failed", from, say: endWith(said.failed), restarts: false }
+    return {
+      kind: "failed",
+      from,
+      status: "Couldn't update",
+      why: plainOf(said.failed),
+      details: said.failed,
+      act: "retry",
+    }
   if (said.off)
-    return { kind: "off", from, say: endWith(said.off), restarts: false }
-  return { kind: "ok", from, say: updatedWords(said, now), restarts: false }
+    return { kind: "off", from, status: "Off", why: endWith(said.off) }
+  return { kind: "ok", from, status: "Up to date" }
 }
 
-/** What a copy in place waits for, as its row says it: "Restarts once 2
- * Threads finish and a terminal closes." */
-export function waitWords(waits: Waits | undefined, now: number): string {
-  if (!waits) return "Restarts in a moment."
+/** This machine's row with this window's app in it: one Update takes
+ * both, the app at once and the engine once nothing runs. */
+function withApp(engine: Row, app: Update): Row {
+  const have = shortOf(app.have)
+  switch (app.state) {
+    case "failed":
+      return {
+        ...engine,
+        kind: "failed",
+        from: engine.from ?? have,
+        status: "Couldn't update",
+        why: plainOf(app.reason),
+        details: app.reason,
+        act: "retry",
+      }
+    case "none":
+      return app.missed && engine.kind !== "failed"
+        ? {
+            ...engine,
+            kind: "failed",
+            from: engine.from ?? have,
+            status: "Couldn't update",
+            why: plainOf(app.missed),
+            details: app.missed,
+            act: "retry",
+          }
+        : engine
+    case "downloading":
+      return engine.kind === "failed"
+        ? engine
+        : {
+            kind: "taking",
+            from: have,
+            to: shortOf(app.version),
+            share: app.share,
+            size: app.size ? sizeOf(app.down ?? 0, app.size) : undefined,
+            status: app.size ? sizeOf(app.down ?? 0, app.size) : "Updating",
+          }
+    case "ready":
+      return engine.kind === "failed" || engine.kind === "taking"
+        ? engine
+        : {
+            kind: "ready",
+            from: have,
+            to: shortOf(app.version),
+            act: "update",
+            app: true,
+            // The engine goes too where it is ready and may move now.
+            engine: engine.kind === "ready" || engine.kind === "waits",
+          }
+    case "out":
+      return {
+        kind: "ready",
+        from: have,
+        to: shortOf(app.version),
+        status: "Ready",
+        why: "Run this in a terminal to update:",
+        command: app.command,
+      }
+    case "updated":
+      return engine.kind === "failed" ||
+        engine.kind === "taking" ||
+        engine.kind === "ready"
+        ? engine
+        : {
+            kind: "ok",
+            from: have,
+            status: "Up to date",
+            why: "Updated just now.",
+          }
+    default:
+      return engine
+  }
+}
+
+/** The word at a waiting row's right: what holds it. */
+function waitingWord(waits: Waits | undefined, now: number): string {
+  const turns = waits?.turns ?? 0
+  if (turns === 1) return "After 1 Agent"
+  if (turns > 1) return `After ${turns} Agents`
+  if ((waits?.terminals ?? 0) > 0) return "After terminals"
+  if (waits?.typed_until !== undefined && waits.typed_until > now) return "Soon"
+  return "Updating"
+}
+
+/** What a copy in place waits for, in a line: "Updates by itself once 2
+ * Agents finish and its terminal closes." None where nothing holds it. */
+export function waitWords(
+  waits: Waits | undefined,
+  now: number
+): string | undefined {
+  if (!waits) return undefined
   const what: string[] = []
-  if (waits.turns === 1) what.push("its 1 Thread finishes")
-  else if (waits.turns > 1) what.push(`${waits.turns} Threads finish`)
+  if (waits.turns === 1) what.push("its Agent finishes")
+  else if (waits.turns > 1) what.push(`${waits.turns} Agents finish`)
   if (waits.terminals === 1) what.push("its terminal closes")
   else if (waits.terminals > 1)
     what.push(`its ${waits.terminals} terminals close`)
   if (waits.typed_until !== undefined && waits.typed_until > now)
-    what.push(`no key reaches it until ${clockOf(waits.typed_until)}`)
-  if (what.length === 0) return "Restarts in a moment."
+    what.push(`no one types there until ${clockOf(waits.typed_until)}`)
+  if (what.length === 0) return undefined
   const last = what.pop()!
-  return `Restarts once ${what.length > 0 ? `${what.join(", ")} and ${last}` : last}.`
+  return `Updates by itself once ${what.length > 0 ? `${what.join(", ")} and ${last}` : last}.`
 }
 
-/** Whether Agents work on a machine that asks, as its row says it. */
-function workingThere(waits: Waits | undefined): string {
-  const turns = waits?.turns ?? 0
-  if (turns === 0) return "Nothing works there now."
-  return turns === 1
-    ? "An Agent works there now."
-    : `${turns} Agents work there now.`
-}
-
-/** When a machine that runs the newest moved onto it, if it did: "Updated
- * 4m ago, between turns." */
-function updatedWords(said: UpdateState, now: number): string | undefined {
-  const { updated } = said
-  if (!updated) return undefined
-  const when = ago(updated.at, now)
-  const at = when === "now" ? "just now" : `${when} ago`
-  return updated.idle ? `Updated ${at}, between turns.` : `Updated ${at}.`
+/**
+ * What went wrong, in the Person's words: the program's own text stays
+ * behind Details.
+ */
+export function plainOf(raw: string): string {
+  if (/no room|no space|ENOSPC|disk/i.test(raw)) return "Not enough disk space."
+  if (/token|hello|forbidden|refused/i.test(raw))
+    return "Banda lost touch with itself for a moment."
+  if (/sha512|checksum|size|corrupt|broken/i.test(raw))
+    return "The download was broken."
+  if (
+    /network|internet|disconnected|fetch|ENOTFOUND|ECONN|EAI_AGAIN|timed? ?out|offline|unreach|github/i.test(
+      raw
+    )
+  )
+    return "Couldn't reach the releases. Check the connection."
+  if (/permission|EACCES|EPERM/i.test(raw))
+    return "Banda may not write where it keeps its copy."
+  return "Something went wrong."
 }
 
 /** `12:04`, by this machine's clock. */
@@ -179,38 +286,32 @@ function sizeOf(down: number, size: number): string | undefined {
   return `${mb(down).toFixed(digits)} of ${mb(size).toFixed(digits)} MB`
 }
 
-/** What the bar shows over this window's app and every machine: the
- * worst state, in this order (the chosen mock, ADR 0119); `app` where it
- * is this window's app's own, which the bar then words as before. */
-export type Worst = { app?: true } & (
-  | { kind: "failed"; pill: string }
-  | { kind: "updated"; pill: string }
-  | { kind: "waits"; pill: string }
-  | { kind: "ready"; pill: string }
+/** What the bar's icon shows over every row: the worst first. No pill,
+ * no words but its hover. */
+export type Worst =
+  | { kind: "failed"; name: string }
+  | { kind: "updated"; version: string }
+  | { kind: "ready"; version?: string }
   | { kind: "downloading"; share: number; version?: string }
   | { kind: "looking" }
   | { kind: "quiet" }
-)
 
-/** The bar's word over `app` and `machines`' `rows`. */
+/** The bar's icon over `rows`, with this window's `app`. */
 export function worstOf(
   app: Update | undefined,
   rows: readonly { machine: MachineUpdates; row: Row }[]
 ): Worst {
   const failed = rows.find(({ row }) => row.kind === "failed")
-  if (app?.state === "failed")
-    return { kind: "failed", pill: "window", app: true }
-  if (failed) return { kind: "failed", pill: failed.machine.name }
+  if (failed) return { kind: "failed", name: failed.machine.name }
+  if (app?.state === "failed") return { kind: "failed", name: "this window" }
   if (app?.state === "updated")
-    return { kind: "updated", pill: shortOf(app.have), app: true }
-  const waits = rows.find(({ row }) => row.kind === "waits")
-  if (waits) return { kind: "waits", pill: `${waits.machine.name} waits` }
+    return { kind: "updated", version: shortOf(app.have) }
+  const ready = rows.find(
+    ({ row }) => row.kind === "ready" || row.kind === "waits"
+  )
+  if (ready) return { kind: "ready", version: ready.row.to }
   if (app?.state === "ready" || app?.state === "out")
-    return { kind: "ready", pill: shortOf(app.version), app: true }
-  const asks = rows.find(({ row }) => row.kind === "ask")
-  if (asks?.row.to) return { kind: "ready", pill: asks.row.to }
-  if (app?.state === "downloading")
-    return { kind: "downloading", share: app.share, app: true }
+    return { kind: "ready", version: shortOf(app.version) }
   const taking = rows.find(({ row }) => row.kind === "taking")
   if (taking)
     return {
@@ -218,8 +319,14 @@ export function worstOf(
       share: taking.row.share ?? 0,
       version: taking.row.to,
     }
-  if (app?.state === "looking") return { kind: "looking", app: true }
-  return app ? { kind: "quiet", app: true } : { kind: "quiet" }
+  if (app?.state === "downloading")
+    return {
+      kind: "downloading",
+      share: app.share,
+      version: shortOf(app.version),
+    }
+  if (app?.state === "looking") return { kind: "looking" }
+  return { kind: "quiet" }
 }
 
 /** Whether the bar shows the widget at all: with something to say, or
@@ -227,32 +334,40 @@ export function worstOf(
 export const shownOn = (worst: Worst, app: Update | undefined): boolean =>
   worst.kind !== "quiet" || app?.always === true
 
-/** The newest version, as this machine's engine found it on its channel
- * (its engine decides; the window orders no versions), and when its
- * release was out; before its first look, the version this window's app
- * goes to, or runs. */
+/** The popover's title, and the line under it when one helps. */
+export function titleOf(
+  rows: readonly { machine: MachineUpdates; row: Row }[],
+  newest: string | undefined
+): { title: string; say?: string } {
+  const failed = rows.find(({ row }) => row.kind === "failed")
+  if (failed) return { title: `Couldn't update ${failed.machine.name}` }
+  const taking = rows.find(({ row }) => row.kind === "taking")
+  if (taking?.row.to) return { title: `Updating to ${taking.row.to}` }
+  const ready = rows.find(
+    ({ row }) => row.kind === "ready" || row.kind === "waits"
+  )
+  if (ready?.row.to) return { title: `Banda ${ready.row.to} is ready` }
+  const reached = rows.filter(({ row }) => row.kind !== "away")
+  if (reached.every(({ row }) => row.kind === "ok"))
+    return {
+      title: "Banda is up to date",
+      say:
+        newest && reached.length === rows.length
+          ? `${shortOf(newest)} on every machine.`
+          : undefined,
+    }
+  return { title: newest ? `Banda ${shortOf(newest)}` : "Banda" }
+}
+
+/** The newest version, as this machine's engine found it on its channel;
+ * before its first look, the version this window's app goes to, or runs. */
 export function newestOf(
   app: Update | undefined,
   here: MachineUpdates | undefined
-): { version: string; published?: number } | undefined {
-  const said = here?.said
-  if (said?.newest) return { version: said.newest, published: said.published }
-  if (app && "version" in app) return { version: app.version }
-  return app ? { version: app.have } : undefined
-}
-
-/** Whether every machine reached and this window's app run `version`. */
-export function allOn(
-  version: string,
-  app: Update | undefined,
-  machines: readonly MachineUpdates[]
-): boolean {
-  return (
-    (!app || app.have === version) &&
-    machines.every(
-      ({ said, away }) => away || !said || said.running === version
-    )
-  )
+): string | undefined {
+  if (here?.said?.newest) return here.said.newest
+  if (app && "version" in app) return app.version
+  return app?.have
 }
 
 /** The latest look of any machine reached, in ms since the epoch. */
@@ -265,24 +380,11 @@ export function lookedOf(
   return looks.length > 0 ? Math.max(...looks) : undefined
 }
 
-/** The header's corner: "out 20m ago", or "the newest". */
-export function outWords(
-  newest: { version: string; published?: number } | undefined,
-  everyOn: boolean,
-  now: number
-): string | undefined {
-  if (!newest) return undefined
-  if (everyOn) return "the newest"
-  if (newest.published === undefined) return undefined
-  const when = ago(newest.published, now)
-  return when === "now" ? "out just now" : `out ${when} ago`
-}
-
-/** "Looked 3m ago". */
+/** "Checked 3 min ago". */
 export function lookedWords(looked: number | undefined, now: number): string {
-  if (looked === undefined) return "Not looked yet"
+  if (looked === undefined) return "Not checked yet"
   const when = ago(looked, now)
-  return when === "now" ? "Looked just now" : `Looked ${when} ago`
+  return when === "now" ? "Checked just now" : `Checked ${when} ago`
 }
 
 /** What machine.toml's `updates` says, in words: "When idle". */
