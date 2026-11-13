@@ -130,6 +130,10 @@ every proposal:
        "Local folder".
      - A Space added elsewhere, as by `banda space add`, shows once the
        window comes to the front: it reads the Spaces again then.
+       _Changed by ADR 0127 (track 3, WS9): the kernel says each change
+       of a Project as a fact in the machine's log, and the window
+       follows it; nothing is read again as the window comes to the
+       front._
      - The window already lists pinned Spaces first and leaves out
        archived ones, though only step 6 lets a Person pin or archive.
      - A Pane runs "Add Space" through `PaneProps.run`, as a module's
@@ -193,7 +197,8 @@ every proposal:
        again once one is changed here, so the sidebar, the settings and
        "New Thread" follow at once. The engine has no event for it yet,
        so a change made elsewhere shows as the window comes to the
-       front.
+       front. _Changed by ADR 0127 (track 3, WS9), as above: the lists
+       follow the kernel's fact, and tell each other nothing._
      - "Copy path" needed the page to write to the clipboard: the window
        now grants it that one permission, and still not reading it.
 

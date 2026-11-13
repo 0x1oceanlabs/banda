@@ -103,6 +103,7 @@ pub use named::{MachineIcon, NAME_MOST, Named, clean_name};
 pub use outbox::{Claim, Effect, LONGEST_LEASE, Lease, OnRestart, Outcome, Retry, Settled};
 pub use passes::{Pass, secret};
 pub use project::{Committed, ModuleProject, Project, Tally, WeakModuleProject};
+pub use projects::{PROJECT_CHANGED, ProjectChange, ProjectChanged, ProjectList};
 pub use pty::{Pty, PtyControl, PtySize};
 pub use reach::Reach;
 pub use registry::{Registry, TurnedOff};

@@ -145,12 +145,17 @@ impl Machine {
         arranged.await.unwrap()
     }
 
+    /// The module's own facts in the machine's log, which holds the
+    /// kernel's of the Projects too.
     async fn events(&self) -> Vec<(String, Value)> {
         let machine = self.kernel.machine().unwrap();
         let person = Participant::Person(self.owner);
         let log = self.kernel.follow(person, machine).await.unwrap();
         let events = log.events_after(0, Default::default(), 100).await.unwrap();
-        events.into_iter().map(|e| (e.kind, e.payload)).collect()
+        (events.into_iter())
+            .filter(|e| e.module == "workspaces")
+            .map(|e| (e.kind, e.payload))
+            .collect()
     }
 }
 

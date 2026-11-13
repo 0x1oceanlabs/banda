@@ -10,6 +10,7 @@ export type Does = MethodDoes
  * and acts otherwise. */
 export const DOES = {
   "projects.list": "read",
+  "projects.listed": "read",
   "projects.create": "act",
   "projects.add": "act",
   "projects.browse": "read",

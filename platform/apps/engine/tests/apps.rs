@@ -175,12 +175,14 @@ async fn an_app_is_installed_from_a_folder_listed_installed_again_and_removed() 
     };
     assert!(copy().join("migrations/001.sql").is_file());
     assert!(copy().join("worker.mjs").is_file());
-    // The machine's log says it.
+    // The machine's log says it, after the kernel's own fact of the
+    // Project the test made.
     let machine = host.kernel.machine().unwrap();
     let log = host.kernel.follow(host.person(), machine).await.unwrap();
     let said = log.events_after(0, Default::default(), 10).await.unwrap();
-    let kinds: Vec<_> = said.iter().map(|e| (&*e.module, &*e.kind)).collect();
-    assert_eq!(kinds, [("apps", "installed")]);
+    let said: Vec<_> = (said.into_iter().filter(|e| e.module == "apps")).collect();
+    let kinds: Vec<_> = said.iter().map(|e| &*e.kind).collect();
+    assert_eq!(kinds, ["installed"]);
     assert_eq!(said[0].subject.as_deref(), Some("clients"));
 
     // Installed again after a change, the copy is the new one, whole.

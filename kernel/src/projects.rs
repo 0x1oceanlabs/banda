@@ -1,5 +1,6 @@
 //! The kernel's own `projects.*`: the Projects of this machine added,
-//! made, trusted, changed, located and removed, and their signs.
+//! made, trusted, changed, located and removed, and their signs; and the
+//! fact `changed`, which says each of those in this machine's log.
 
 use crate::access::{self, Right};
 use crate::cursors;
@@ -19,6 +20,9 @@ crate::methods! {
     Kernel(Own<'_>) as "ProjectsMethods" in "./" {
         /// This computer's Projects.
         call list(Nothing) -> Vec<ProjectSummary>, Read;
+        /// This computer's Projects as of its log's position `at`: who
+        /// follows them reads this again on a `changed` after it.
+        call listed(Nothing) -> ProjectList, Read;
         /// Makes a Project: a new folder under the root, by its name. A
         /// scratch one, for a Thread in No Project, takes no name: its folder
         /// is new under `scratch/`, and it is trusted. A named one is
@@ -196,6 +200,75 @@ struct TrustProject {
     trusted: bool,
 }
 
+/// This machine's Projects as of its log's position `at`: a client
+/// follows that log after it, and reads this again on each fact
+/// `changed` of `projects`.
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct ProjectList {
+    /// 0 from a kernel with no log of the machine's, which says no fact.
+    #[ts(type = "number")]
+    pub at: i64,
+    /// Every Project, as `projects.list` gives them.
+    pub projects: Vec<ProjectSummary>,
+}
+
+/// What the kernel writes its facts of the Projects as, in this machine's
+/// log: the prefix of its own methods, which no module takes.
+const PROJECTS: &str = "projects";
+
+/// The kernel's one fact of this machine's Projects (ADR 0127): one for
+/// each Project whose line in `projects.list` reads otherwise than the
+/// log last said, written as `projects` in this machine's log, its
+/// subject the Project's ID and its payload a [`ProjectChanged`].
+pub const PROJECT_CHANGED: &str = "changed";
+
+/// The version of [`PROJECT_CHANGED`]'s payload.
+const VERSION: u32 = 1;
+
+/// What the fact `changed` says: which Project, and what happened to it.
+/// It is no copy of the Project: `projects.list` says how it reads now.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export)]
+pub struct ProjectChanged {
+    pub project: ProjectId,
+    pub change: ProjectChange,
+}
+
+/// What happened to a Project of this machine.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum ProjectChange {
+    /// It is one of this machine's Projects now: made, or its folder added.
+    Added,
+    /// Its line in the list reads otherwise: its name, pin, archive,
+    /// trust or sign, what its Agents see, or a scratch one made a Project.
+    Updated,
+    /// Its missing folder was found: it is open again.
+    Located,
+    /// It was forgotten.
+    Removed,
+}
+
+/// What the list `now` says otherwise than `was`, a fact for each Project.
+fn changes(was: &[ProjectSummary], now: &[ProjectSummary]) -> Vec<ProjectChanged> {
+    let said = |project, change| ProjectChanged { project, change };
+    let removed = (was.iter())
+        .filter(|one| now.iter().all(|other| other.id != one.id))
+        .map(|one| said(one.id, ProjectChange::Removed));
+    let rest = now.iter().filter_map(|one| {
+        let change = match was.iter().find(|other| other.id == one.id) {
+            None => ProjectChange::Added,
+            Some(before) if before == one => return None,
+            Some(before) if before.missing && !one.missing => ProjectChange::Located,
+            Some(_) => ProjectChange::Updated,
+        };
+        Some(said(one.id, change))
+    });
+    removed.chain(rest).collect()
+}
+
 /// The most folders `projects.browse` answers.
 const BROWSED: usize = 200;
 
@@ -266,7 +339,54 @@ impl Kernel {
         name: &str,
         params: Value,
     ) -> Result<Value, Refusal> {
-        self.dispatch(ask, name, params).await
+        if Self::own_kind(name) != Some(Kind::Command) {
+            return self.dispatch(ask, name, params).await;
+        }
+        let author = ask.participant;
+        self.note().await;
+        let answer = self.dispatch(ask, name, params).await;
+        // Refused too: what it changed before it was refused is said.
+        self.tell(author).await;
+        answer
+    }
+
+    /// Keeps the Projects' list as it reads now as what this machine's
+    /// log last said, the first time it is asked: before the first change
+    /// [`Kernel::tell`] says.
+    async fn note(&self) {
+        let mut told = self.told.lock().await;
+        if told.is_none() {
+            *told = Some(self.projects().await);
+        }
+    }
+
+    /// Says in this machine's log what the Projects' list reads otherwise
+    /// than the log last said: one fact [`PROJECT_CHANGED`] for each such
+    /// Project, by `author`, written together. One caller at a time, so
+    /// each change is said once, whichever command made it. With no log
+    /// of the machine's, as while no module is its, nothing is said.
+    async fn tell(&self, author: Participant) {
+        let Some(machine) = &self.machine else {
+            return;
+        };
+        let mut told = self.told.lock().await;
+        let now = self.projects().await;
+        let changes = changes(told.as_deref().unwrap_or(&now), &now);
+        if !changes.is_empty() {
+            let write = machine.store().write(PROJECTS, move |tx| {
+                for said in &changes {
+                    let subject = said.project.to_string();
+                    tx.emit(PROJECT_CHANGED, VERSION, Some(&subject), author, said)?;
+                }
+                Ok(())
+            });
+            if let Err(error) = write.await {
+                // What the log last said stays, so the next one says it.
+                tracing::warn!(%error, "a change of the Projects was not said");
+                return;
+            }
+        }
+        *told = Some(now);
     }
 }
 
@@ -296,6 +416,11 @@ impl Kernel {
         drop(projects);
         let kernel = Arc::downgrade(self);
         tokio::spawn(async move {
+            // A sign found here is said as any change is.
+            match kernel.upgrade() {
+                Some(kernel) => kernel.note().await,
+                None => return,
+            }
             for project in open {
                 if kernel.strong_count() == 0 {
                     return;
@@ -312,6 +437,9 @@ impl Kernel {
                 if let Err(error) = project.keep_sign(found) {
                     tracing::warn!(%error, "a Project's sign was not kept");
                 }
+            }
+            if let Some(kernel) = kernel.upgrade() {
+                kernel.tell(Participant::Person(kernel.owner)).await;
             }
         });
     }
@@ -331,6 +459,16 @@ impl Kernel {
         // A pass sees only its own Project (ADR 0019, decision 2).
         projects.retain(|summary| access::within(ask.only, Some(summary.id)).is_ok());
         Ok(projects)
+    }
+
+    async fn listed(&self, ask: Own<'_>, nothing: Nothing) -> Result<ProjectList, Refusal> {
+        // Its place first: a change made meanwhile is heard after it.
+        let at = match &self.machine {
+            Some(machine) => machine.module(PROJECTS).at().await?,
+            None => 0,
+        };
+        let projects = self.list(ask, nothing).await?;
+        Ok(ProjectList { at, projects })
     }
 
     async fn tools(&self, _: Own<'_>, _: Nothing) -> Result<Vec<Tool>, Refusal> {

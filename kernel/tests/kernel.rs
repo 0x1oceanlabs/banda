@@ -4,9 +4,9 @@
 use banda_kernel::api::Identity;
 use banda_kernel::{
     AgentId, App, Call, Caller, Code, CommandId, Effect, Error, Event, EventFilter, Kernel, Kind,
-    Lease, Listener, Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId,
-    ProjectId, ProjectSummary, Refusal, Registry, Retry, Right, Scope, Settled, SignKind, Stream,
-    TurnedOff, Tx, decode, now_ms,
+    Lease, Listener, Module, ModuleProject, OnRestart, Outcome, PROJECT_CHANGED, Participant, Pass,
+    PersonId, ProjectChange, ProjectChanged, ProjectId, ProjectSummary, Refusal, Registry, Retry,
+    Right, Scope, Settled, SignKind, Stream, TurnedOff, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -2785,11 +2785,14 @@ async fn a_module_of_the_machine_names_no_project_and_keeps_its_own_log() {
             .all(|project| project.id != machine)
     );
 
-    // Its log is followed as a Project's is.
+    // Its log is followed as a Project's is: the kernel's own fact of the
+    // Project made is in it, and the module's.
     let log = kernel.follow(person, machine).await.unwrap();
     let events = log.events_after(0, Default::default(), 100).await.unwrap();
-    let kinds: Vec<_> = events.iter().map(|e| e.kind.as_str()).collect();
-    assert_eq!(kinds, ["opened"]);
+    let kinds: Vec<_> = (events.iter())
+        .map(|e| (e.module.as_str(), e.kind.as_str()))
+        .collect();
+    assert_eq!(kinds, [("projects", "changed"), ("desk", "opened")]);
 
     // An Agent's pass is for its Project: the machine is past its wall,
     // but for what its module says passes reach.
@@ -4944,4 +4947,166 @@ async fn an_export_is_every_row_as_a_line_and_says_when_it_is_whole() {
         assert_eq!(refused.code, Code::Invalid, "{name}");
     }
     drop(kernel);
+}
+
+/// What this machine's log says of its Projects after `after`: each fact
+/// `changed` of `projects`, by its Project and what happened to it.
+async fn told(kernel: &Kernel, owner: PersonId, after: i64) -> Vec<(ProjectId, ProjectChange)> {
+    let person = Participant::Person(owner);
+    let log = kernel.follow(person, kernel.machine().unwrap()).await;
+    let filter = EventFilter {
+        module: Some("projects".into()),
+        ..Default::default()
+    };
+    let events = log.unwrap().events_after(after, filter, 100).await.unwrap();
+    (events.into_iter())
+        .map(|event| {
+            assert_eq!(
+                (event.kind.as_str(), event.version, event.author),
+                (PROJECT_CHANGED, 1, person)
+            );
+            let said: ProjectChanged = serde_json::from_value(event.payload).unwrap();
+            assert_eq!(event.subject, Some(said.project.to_string()));
+            (said.project, said.change)
+        })
+        .collect()
+}
+
+/// The place `projects.listed` says its list is current at, which is the
+/// machine's log's head.
+async fn listed_at(kernel: &Kernel, owner: PersonId) -> i64 {
+    let listed = projects(kernel, owner, "listed", Value::Null)
+        .await
+        .unwrap();
+    let list = projects(kernel, owner, "list", Value::Null).await.unwrap();
+    assert_eq!(listed["projects"], list);
+    listed["at"].as_i64().unwrap()
+}
+
+/// ADR 0127 (WS9): who follows the Projects reads their list at a place in
+/// this machine's log, and hears each change after it once.
+#[tokio::test]
+async fn each_change_of_a_project_is_said_once_in_the_machines_log() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let data = root.path().join(".data");
+    let machine = root.path().join(".machine");
+    let open = || {
+        Kernel::builder(root.path(), &data, owner)
+            .module(Desk)
+            .machine(&machine)
+            .open()
+    };
+    let kernel = open().await.unwrap();
+    let start = listed_at(&kernel, owner).await;
+    // What `act` made the log say, and the list is current after it.
+    let said = async |kernel: &Kernel, method: &str, params: Value| {
+        let before = listed_at(kernel, owner).await;
+        let answer = projects(kernel, owner, method, params).await;
+        let facts = told(kernel, owner, before).await;
+        let after = listed_at(kernel, owner).await;
+        let wrote = i64::try_from(facts.len()).unwrap();
+        assert_eq!(after, before + wrote, "{method}");
+        (answer, facts)
+    };
+    use ProjectChange::{Added, Located, Removed, Updated};
+
+    // Made: said once, and the same command sent again says nothing.
+    let command = CommandId::new();
+    let work = create_project(&kernel, person, command, "Work")
+        .await
+        .unwrap();
+    assert_eq!(told(&kernel, owner, start).await, [(work.id, Added)]);
+    let again = create_project(&kernel, person, command, "Work")
+        .await
+        .unwrap();
+    assert_eq!(again.id, work.id);
+    assert_eq!(told(&kernel, owner, start).await, [(work.id, Added)]);
+
+    // Renamed, pinned, archived and trusted otherwise: each once, and
+    // what changes nothing says nothing.
+    for change in [
+        json!({ "name": "Play" }),
+        json!({ "pinned": true }),
+        json!({ "archived": true }),
+    ] {
+        let mut update = change.clone();
+        update["project"] = json!(work.id);
+        let (_, facts) = said(&kernel, "update", update.clone()).await;
+        assert_eq!(facts, [(work.id, Updated)], "{change}");
+        let (_, facts) = said(&kernel, "update", update).await;
+        assert_eq!(facts, [], "{change}, again");
+    }
+    let trust = json!({ "project": work.id, "trusted": false });
+    assert_eq!(
+        said(&kernel, "trust", trust.clone()).await.1,
+        [(work.id, Updated)]
+    );
+    assert_eq!(said(&kernel, "trust", trust).await.1, []);
+
+    // Its folder added again brings it back from the archive, which is a
+    // change; added once more, it is as it was.
+    let folder = json!({ "folder": root.path().join("Work") });
+    assert_eq!(
+        said(&kernel, "add", folder.clone()).await.1,
+        [(work.id, Updated)]
+    );
+    assert_eq!(said(&kernel, "add", folder).await.1, []);
+
+    // A folder added, and a Thread's own Project in No Project.
+    let other = root.path().join("elsewhere");
+    std::fs::create_dir(&other).unwrap();
+    let (added, facts) = said(&kernel, "add", json!({ "folder": other })).await;
+    let added: ProjectSummary = serde_json::from_value(added.unwrap()).unwrap();
+    assert_eq!(facts, [(added.id, Added)]);
+    let (scratch, facts) = said(&kernel, "create", json!({ "scratch": true })).await;
+    let scratch: ProjectSummary = serde_json::from_value(scratch.unwrap()).unwrap();
+    assert_eq!(facts, [(scratch.id, Added)]);
+
+    // A command refused says nothing, and a call never does.
+    let (refused, facts) = said(&kernel, "update", json!({ "project": ProjectId::new() })).await;
+    assert_eq!(refused.unwrap_err().code, Code::NotFound);
+    assert_eq!(facts, []);
+
+    // Removed: once; one already gone is what was asked for, and says
+    // nothing.
+    let remove = json!({ "project": added.id });
+    assert_eq!(
+        said(&kernel, "remove", remove.clone()).await.1,
+        [(added.id, Removed)]
+    );
+    assert_eq!(said(&kernel, "remove", remove).await.1, []);
+
+    // Its folder gone as the engine starts, it waits to be located: found,
+    // it is said located, by the engine that found it.
+    let_go(kernel, &data, &[&machine]).await;
+    std::fs::rename(root.path().join("Work"), root.path().join("Moved")).unwrap();
+    let kernel = open().await.unwrap();
+    let locate = json!({ "project": work.id, "folder": root.path().join("Moved") });
+    assert_eq!(
+        said(&kernel, "locate", locate).await.1,
+        [(work.id, Located)]
+    );
+
+    // An Agent's pass follows no log of the machine's, so hears none of it.
+    let agent = Caller::agent(AgentId::new(), work.id);
+    let followed = kernel.follow(agent, kernel.machine().unwrap()).await;
+    assert_eq!(followed.err().unwrap().code, Code::Forbidden);
+}
+
+/// A kernel with no module of the machine's has no log to say it in: its
+/// Projects change as before, and their list is current at 0.
+#[tokio::test]
+async fn with_no_log_of_the_machines_a_project_changes_and_nothing_is_said() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    assert_eq!(kernel.machine(), None);
+    let work = create(&kernel, owner, "Work").await;
+    let listed = projects(&kernel, owner, "listed", Value::Null)
+        .await
+        .unwrap();
+    assert_eq!(listed["at"], 0);
+    assert_eq!(listed["projects"][0]["id"], json!(work.id));
 }

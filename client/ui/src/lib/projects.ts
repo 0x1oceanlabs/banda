@@ -57,62 +57,37 @@ function sameSign(a: Sign, b: Sign): boolean {
   )
 }
 
-const hearing = new Set<() => void>()
-
-/** Tells every list of the Projects in the window to read them again: a
- * Project was added, changed or removed here. The engine has no event for
- * it yet, so a change made elsewhere shows as the window comes to the
- * front (`useProjects`). */
-export function projectsChanged(): void {
-  for (const hear of hearing) hear()
-}
-
-/** Calls `hear` each time `projectsChanged` is told; returns how to stop. */
-export function onProjectsChanged(hear: () => void): () => void {
-  hearing.add(hear)
-  return () => {
-    hearing.delete(hear)
-  }
-}
-
-/** Changes a Project in the engine, and the window's lists follow. */
-export async function updateProject(
+/** Changes a Project in the engine. The window's lists follow what its
+ * machine says of it, as they follow every change (`useProjects`). */
+export function updateProject(
   engine: Engine,
   how: UpdateProject
 ): Promise<ProjectSummary> {
-  const project = await engine.command("projects.update", how)
-  projectsChanged()
-  return project
+  return engine.command("projects.update", how)
 }
 
 /** Trusts a Project, or takes its trust back (ADR 0083, decision 5): only
- * the Person's gesture does, and the window's lists follow. */
-export async function trustProject(
+ * the Person's gesture does. */
+export function trustProject(
   engine: Engine,
   project: ProjectId,
   trusted: boolean
 ): Promise<ProjectSummary> {
-  const changed = await engine.command("projects.trust", { project, trusted })
-  projectsChanged()
-  return changed
+  return engine.command("projects.trust", { project, trusted })
 }
 
-/** Looks in a Project's folder for its sign's picture again (ADR 0070),
- * and the window's lists follow. */
-export async function findSign(
+/** Looks in a Project's folder for its sign's picture again (ADR 0070). */
+export function findSign(
   engine: Engine,
   project: ProjectId
 ): Promise<ProjectSummary> {
-  const found = await engine.command("projects.find_sign", { project })
-  projectsChanged()
-  return found
+  return engine.command("projects.find_sign", { project })
 }
 
-/** Removes a Project from the engine, and from the window's lists. */
+/** Removes a Project from the engine. */
 export async function removeProject(
   engine: Engine,
   project: ProjectId
 ): Promise<void> {
   await engine.command("projects.remove", { project })
-  projectsChanged()
 }

@@ -60,7 +60,7 @@ not wait for the window.
 | WS6 | `client/web/src/window/{Sheet,Drawer,Peek}.tsx`, `menu/BandaMenu.tsx`, a new `window/top/`; `client/ui/src/styles/globals.css` (the layers) | the look's session is told before the layers are named |
 | WS7 | `client/web/src/window/{actions,Shell}.tsx`, `tiling/`, each App's `pane/src/index.ts`, `client/core/src/` (new files) | after #1630 and SE1 |
 | WS8 | `client/web/src/settings/`, `menu/`, `registry.tsx`, `architecture.test.ts` | the Settings files after SE1's PR 3; the screen of an unknown App is track 2's (2c) |
-| WS9 | `kernel/src/project.rs`, `client/ui/src/hooks/use-projects.ts` | one hunk in the kernel |
+| WS9 | `kernel/src/projects.rs`, with one field in `kernel.rs`; `client/ui/src/hooks/use-projects.ts` | one hunk in the kernel |
 | WS10 | `client/desktop/src/main.ts`, `bridge.ts`, new files beside them; `client/core/src/device.ts` | after SE3's PR 4b; track 1's files (`hosts`, `engine`, `bytes`, `road`, `menubar`) are not touched |
 | WS11 | `platform/look`, `platform/theme`, `client/core/src/` (a new `look.ts`), `client/web/src/look.ts`, `client/desktop/src/look.ts` | the look's session (ADR 0113, steps 4 to 6) is told first; SE5 keeps a web client's device settings |
 

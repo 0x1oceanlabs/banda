@@ -10,6 +10,7 @@ import type { LocateProject } from "./LocateProject";
 import type { Nothing } from "./Nothing";
 import type { OneFolder } from "./OneFolder";
 import type { OneProject } from "./OneProject";
+import type { ProjectList } from "./ProjectList";
 import type { ProjectSummary } from "./ProjectSummary";
 import type { Tool } from "./Tool";
 import type { TrustProject } from "./TrustProject";
@@ -20,6 +21,11 @@ export type ProjectsMethods = {
  * This computer's Projects.
  */
 list: CallMethod<Nothing, Array<ProjectSummary>>, 
+/**
+ * This computer's Projects as of its log's position `at`: who
+ * follows them reads this again on a `changed` after it.
+ */
+listed: CallMethod<Nothing, ProjectList>, 
 /**
  * Makes a Project: a new folder under the root, by its name. A
  * scratch one, for a Thread in No Project, takes no name: its folder

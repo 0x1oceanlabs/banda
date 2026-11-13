@@ -36,6 +36,9 @@ pub struct Kernel {
     pub(crate) projects: Projects,
     /// Held while a Project is added, so one folder never becomes two.
     pub(crate) adding: tokio::sync::Mutex<()>,
+    /// The Projects' list as this machine's log last said it: what the
+    /// fact `changed` is told from (`projects.rs`). None until first asked.
+    pub(crate) told: tokio::sync::Mutex<Option<Vec<ProjectSummary>>>,
     /// This machine's scope (ADR 0025, decision 1): a store and a log like
     /// a Project's, for the modules of the machine. None while no module is.
     pub(crate) machine: Option<Arc<Project>>,
