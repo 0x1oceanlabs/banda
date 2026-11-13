@@ -130,3 +130,31 @@ repository), with an adversarial check.
   story 1, slices SE1 to SE13.
 - **Isolating Agents still waits** (ADR 0123). An Agent on a machine can do
   what its Person can there, as today; the door gives it no new way in.
+
+## As built
+
+- **The handshake (SE3, PRs 1 to 3).** The door's `challenge` also says
+  the protocols the engine speaks, so a client that speaks none of them
+  knows which side is the older. One protocol number names the frames at
+  the API and at the door; the door takes a range of it. The `welcome`
+  carries what the two ends proved as one field, `door`: the host key, the
+  device, and the host key's signature over the client's nonce. Keys,
+  nonces and signatures are base64url, and what is signed is text, one
+  field a line (`kernel/src/devices.rs`, `sdk/contract/src/door.ts`).
+- **A `goodbye` is not signed yet** (#1660). A client ends the connection
+  on one and does nothing else about it. Before a window forgets a key or
+  pairs again on `revoked` or `forbidden` (PR 4b), the door signs its
+  `goodbye` over the client's nonce.
+- **A removed device keeps its record,** marked, so only that device is
+  told `revoked`; whoever only knows its ID is told `forbidden`, as a
+  stranger is.
+- **The door's port** is 22632 for Banda and 22633 for Banda Dev, the one
+  its last run had when that is taken, else any, and any for a build from
+  a checkout. `engine.json` and `banda status` say it. Naming it in
+  `machine.toml` comes when a route first needs it chosen (SE5), as a new
+  key there shows in Settings.
+- **The API refuses what a proxy carried** by `Forwarded`, `X-Forwarded-*`
+  and `Tailscale-*`, and by a `Host` that is not this machine's loopback.
+- **What a client follows and hears goes with its `hello`,** at the API
+  and at the door, before the `welcome`: nothing that acts does.
+

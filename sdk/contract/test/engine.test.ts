@@ -17,6 +17,7 @@ import { join } from "node:path"
 import { createInterface } from "node:readline"
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest"
 import { decodeFact } from "../src/agents"
+import { base64url } from "../src/door"
 import { seeded } from "../src/workspaces"
 import {
   type Address,
@@ -122,6 +123,82 @@ function until(engine: Engine, state: Status["state"]): Promise<void> {
     })
   })
 }
+
+test("a device paired at the machine's console comes in at its door by its own key, and is refused once it is removed (ADR 0124)", async () => {
+  await serve()
+  const running = JSON.parse(
+    readFileSync(join(dir, "state/engine.json"), "utf8")
+  ) as { door: number; host_key: string }
+  const banda = (...args: string[]) =>
+    JSON.parse(
+      execFileSync(program("banda"), args, {
+        encoding: "utf8",
+        env: {
+          ...process.env,
+          BANDA_ROOT: join(dir, "root"),
+          BANDA_DATA: join(dir, "data"),
+          BANDA_STATE: join(dir, "state"),
+          BANDA_CONFIG: join(dir, "config"),
+          BANDA_LOG: "warn",
+        },
+      })
+    ) as { ok: { id: string } }
+  // The device's key never leaves it: the machine is told its public half.
+  const made = (await crypto.subtle.generateKey("Ed25519", true, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair
+  const publicKey = base64url(
+    new Uint8Array(await crypto.subtle.exportKey("raw", made.publicKey))
+  )
+  const device = banda(
+    "devices",
+    "add",
+    "--key",
+    publicKey,
+    "--name",
+    "A test's CLI",
+    "--kind",
+    "cli"
+  ).ok
+  const door = {
+    device: device.id,
+    hostKey: running.host_key,
+    sign: async (message: string) =>
+      base64url(
+        new Uint8Array(
+          await crypto.subtle.sign(
+            "Ed25519",
+            made.privateKey,
+            new TextEncoder().encode(message)
+          )
+        )
+      ),
+  }
+  const url = `ws://127.0.0.1:${running.door}/ws`
+  client = new Engine(async () => ({ url, door }))
+  await until(client, "open")
+  // It is the Person there: it makes a Project, and hears of it.
+  const project = await client.command("projects.create", { name: "Work" })
+  expect(project.name).toBe("Work")
+  expect((await client.call("devices.list", {})).devices).toMatchObject([
+    { id: device.id, kind: "cli" },
+  ])
+
+  // A client that paired with another machine's key gets no further than
+  // this door's challenge.
+  other = new Engine(async () => ({
+    url,
+    door: { ...door, hostKey: publicKey },
+  }))
+  await until(other, "refused")
+  expect(other.status).toMatchObject({ refusal: { code: "forbidden" } })
+
+  // Removed at the console, its session ends, told why.
+  banda("devices", "remove", device.id)
+  await until(client, "refused")
+  expect(client.status).toMatchObject({ refusal: { code: "revoked" } })
+})
 
 test("a window calls, follows and sees refusals by their code", async () => {
   await serve()

@@ -11,6 +11,7 @@ import type { Refusal } from "./generated/Refusal"
 import type { ProjectId } from "./generated/ProjectId"
 import { PROTOCOL } from "./generated/PROTOCOL"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
+import { AtDoor, type DoorKey } from "./door"
 import { newId } from "./ids"
 import type {
   Answer,
@@ -21,11 +22,15 @@ import type {
 } from "./methods"
 
 export { PROTOCOL }
+export type { DoorKey }
 
-/** Where the engine listens, and the secret that names its owner. */
-export type Address = {
+/**
+ * Where the engine listens, and how this client proves who it is there:
+ * at the API, by the secret that names the machine's owner, as a program
+ * on that machine holds it; at the door, by its device's key (`door`).
+ */
+export type Address = ({ secret: string } | { door: DoorKey }) & {
   url: string
-  secret: string
   /**
    * For tests only: how many ms later than it comes the client hears
    * what the engine says, its answers, events and stream pieces, in
@@ -375,6 +380,9 @@ const hostTime = (at: number | undefined, offset: number | undefined) =>
 export class Engine {
   readonly #address: () => Promise<Address>
   #socket: WebSocket | null = null
+  /** Its `hello` went on this connection: what it follows and hears from
+   * then on goes at once, before the engine's `welcome`. */
+  #helloed = false
   #status: Status = { state: "connecting" }
   readonly #watchers = new Set<(status: Status) => void>()
   #nextId = 1
@@ -665,9 +673,9 @@ export class Engine {
     const id = this.#nextId++
     const following = { project, last: after, filter, onEvent, onEnd }
     this.#following.set(id, following)
-    if (this.#status.state === "open") this.#subscribe(id, following)
+    if (this.#helloed) this.#subscribe(id, following)
     return () => {
-      if (this.#following.delete(id) && this.#status.state === "open") {
+      if (this.#following.delete(id) && this.#helloed) {
         this.#send({
           type: "unsubscribe",
           id: this.#nextId++,
@@ -714,7 +722,7 @@ export class Engine {
     let stopped = false
     if (!hearing.once) {
       this.#hearing.set(id, hearing)
-      if (this.#status.state === "open") this.#hear(id, hearing)
+      if (this.#helloed) this.#hear(id, hearing)
     } else {
       // It goes as an act call does, and nothing keeps it to go later by
       // itself: refused, it ends unsent, unless its caller stopped it first.
@@ -731,7 +739,7 @@ export class Engine {
     }
     return () => {
       stopped = true
-      if (this.#hearing.delete(id) && this.#status.state === "open") {
+      if (this.#hearing.delete(id) && this.#helloed) {
         this.#send({
           type: "unsubscribe",
           id: this.#nextId++,
@@ -776,6 +784,7 @@ export class Engine {
     clearTimeout(this.#next)
     const socket = this.#socket
     this.#socket = null
+    this.#helloed = false
     socket?.close()
     this.#lose(why)
     this.#set({ state: "away" })
@@ -907,6 +916,7 @@ export class Engine {
     if (go !== this.#go || this.#closed) return
     const socket = new WebSocket(address.url)
     this.#socket = socket
+    this.#helloed = false
     this.#pingEach()
     // What the engine says comes `latency` ms late, its close too, each
     // in the order it came: timers of one delay run in the order set. A
@@ -917,11 +927,77 @@ export class Engine {
       if (latency > 0) setTimeout(now, latency)
       else now()
     }
-    socket.onopen = () =>
-      this.#send({ type: "hello", protocol: PROTOCOL, token: address.secret })
-    socket.onmessage = (message) =>
+    const session = (message: { data: unknown }) =>
       later(() => this.#receive(String(message.data)))
+    if ("door" in address) {
+      // The door speaks first. Until its `welcome` proved the host key,
+      // what it says is taken one frame at a time (`AtDoor`), as proving
+      // takes a moment and nothing said meanwhile counts before it.
+      const at = new AtDoor(address.door)
+      let turn = Promise.resolve()
+      socket.onmessage = (message) =>
+        later(() => {
+          const text = String(message.data)
+          turn = turn
+            .then(() => this.#atDoor(socket, at, text, session))
+            .catch(() => socket.close())
+        })
+    } else {
+      const { secret } = address
+      socket.onopen = () => {
+        this.#send({ type: "hello", protocol: PROTOCOL, token: secret })
+        this.#said()
+      }
+      socket.onmessage = session
+    }
     socket.onclose = () => later(() => this.#drop())
+  }
+
+  /**
+   * Takes one frame of the door's on `socket`, before its session
+   * (`AtDoor`). Its `welcome` proved, what it says from then on is heard
+   * as any session's, `session`. A door that is not the machine this
+   * device paired with, or that says `goodbye`, is refused, as trying
+   * again would meet the same door; nothing it says after is heard.
+   */
+  async #atDoor(
+    socket: WebSocket,
+    at: AtDoor,
+    text: string,
+    session: (message: { data: unknown }) => void
+  ): Promise<void> {
+    if (this.#socket !== socket) return
+    // One that came while the `welcome` was proved is the session's.
+    if (at.proved) return this.#receive(text)
+    const said = await at.take(text)
+    if (this.#socket !== socket || said === undefined) return
+    this.#heardNow()
+    if (said === "proved") {
+      socket.onmessage = session
+      return this.#receive(text)
+    }
+    if (said === "lost") return socket.close()
+    if ("hello" in said) {
+      socket.send(JSON.stringify(said.hello))
+      return this.#said()
+    }
+    socket.onmessage = null
+    this.#set({ state: "refused", refusal: said.refused })
+    socket.close()
+  }
+
+  /**
+   * Says what the client follows and hears, right after its `hello` and
+   * before the engine's `welcome`: the engine reads them once it welcomed,
+   * so a connection costs one round trip less. A `hello` refused, they go
+   * unread.
+   */
+  #said(): void {
+    this.#helloed = true
+    for (const [id, following] of this.#following) {
+      this.#subscribe(id, following)
+    }
+    for (const [id, hearing] of this.#hearing) this.#hear(id, hearing)
   }
 
   #send(frame: ClientFrame): void {
@@ -972,10 +1048,6 @@ export class Engine {
           ...(frame.build && { build: frame.build }),
           ...(frame.apps && { apps: frame.apps }),
         })
-        for (const [id, following] of this.#following) {
-          this.#subscribe(id, following)
-        }
-        for (const [id, hearing] of this.#hearing) this.#hear(id, hearing)
         break
       case "goodbye":
         this.#set({ state: "refused", refusal: frame.reason })
@@ -1193,6 +1265,7 @@ export class Engine {
 
   #drop(): void {
     this.#socket = null
+    this.#helloed = false
     this.#lose()
     if (!this.#closed && this.#status.state !== "refused") this.#retry()
   }
