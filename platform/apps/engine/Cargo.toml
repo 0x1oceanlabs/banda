@@ -11,6 +11,7 @@ publish.workspace = true
 async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 dunce.workspace = true
+rusqlite.workspace = true
 schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
@@ -20,6 +21,8 @@ tracing.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]
+banda-environments = { path = "../../environments" }
+futures.workspace = true
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

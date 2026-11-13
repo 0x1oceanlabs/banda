@@ -76,6 +76,9 @@ pub enum Whose {
     /// A Harness's CLI asked about itself, as its version or an account's
     /// limits.
     HarnessProbe,
+    /// The worker of an App a Person's Agent wrote (ADR 0126): its code
+    /// is an Agent's, as what an Agent runs in its shell is.
+    Worker,
     /// A terminal the Person opened, a Harness's sign-in among them.
     Terminal,
     /// An act the Person asked for, on pipes: a git act, as a commit or a
@@ -87,7 +90,7 @@ pub enum Whose {
 impl Whose {
     /// Whether a program of it is one to start behind the fence.
     pub fn fenced(self) -> bool {
-        matches!(self, Whose::Harness | Whose::HarnessProbe)
+        matches!(self, Whose::Harness | Whose::HarnessProbe | Whose::Worker)
     }
 
     /// Whose a program read from a frame is, which says nothing of it: a
@@ -129,6 +132,12 @@ impl Program {
     /// behind the fence, with no holes in it.
     pub fn harness_probe(program: impl Into<String>, args: Vec<String>) -> Program {
         Program::of(Whose::HarnessProbe, program, args, Holes::default())
+    }
+
+    /// The worker of an App from a folder, `program` with `args`: to start
+    /// behind the fence, with `holes` in it for its own code.
+    pub fn worker(program: impl Into<String>, args: Vec<String>, holes: Holes) -> Program {
+        Program::of(Whose::Worker, program, args, holes)
     }
 
     /// The program of a terminal the Person opened: to start outside the

@@ -14,7 +14,7 @@ about: string, version: string,
  */
 api: number, 
 /**
- * Whether this engine runs the version installed: false from an
+ * Whether this engine serves the version installed: false from an
  * install until the engine starts again.
  */
 runs: boolean, 

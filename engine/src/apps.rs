@@ -72,6 +72,9 @@ pub struct HostContext<'a> {
     pub hands: &'a Hands,
     /// How the updates module asks the engine to move onto a new copy.
     pub restart: &'a Restart,
+    /// The apps module, over what this engine runs: Banda's own and the
+    /// installed Apps it serves, which the engine takes as modules too.
+    pub apps: &'a Apps,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -107,10 +110,11 @@ mod build {
             .names_new_threads(std::env::var("BANDA_AUTO_TITLE").map_or(true, |said| said != "off"))
     }
 
-    /// What this engine runs, as the scan found it, and the Apps
-    /// installed from a folder, in Banda's data (ADR 0126).
+    /// What this engine runs, and the Apps installed from a folder, in
+    /// Banda's data (ADR 0126): the engine makes it first, to take the
+    /// installed Apps it serves as modules.
     pub fn apps(host: &HostContext<'_>) -> Apps {
-        Apps::new(crate::modules::described(), host.places.installed())
+        host.apps.clone()
     }
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
@@ -260,6 +264,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         bytes: &Bytes::new(),
         hands: &Hands::new(),
         restart: &Restart::new(banda_updates::restart::Moves::Itself),
+        apps: &Apps::new(crate::modules::described(), places.installed()),
     })
 }
 

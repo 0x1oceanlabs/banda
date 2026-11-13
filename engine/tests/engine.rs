@@ -375,6 +375,110 @@ fn banda_app_installs_an_app_from_a_folder_lists_it_and_removes_it() {
     assert!(engine.wait().unwrap().success());
 }
 
+/// Story 2's road (ADR 0126): an Agent writes an App in its Project and
+/// installs it from its shell, with no click; from the engine's next start
+/// the App runs, the Person calls it, and an Agent calls it as its tools.
+#[cfg(unix)]
+#[test]
+fn an_agent_writes_an_app_installs_it_and_agents_call_it_after_a_restart() {
+    let places = Places::new();
+    let node = node();
+    let node = [(NODE_VARIABLE, node.to_str().unwrap())];
+    let (mut engine, stdin, first) = places.serve_with(&node);
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let (work, folder) = (
+        text(&work["id"]).to_owned(),
+        text(&work["folder"]).to_owned(),
+    );
+    places.ok(
+        "agents.send",
+        Some(&work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let read = |file: &Path| {
+        let bytes = std::fs::read(file).ok()?;
+        serde_json::from_slice::<Value>(&bytes).ok()
+    };
+    let shells = wait_for(Duration::from_secs(30), || read(&places.shells))
+        .expect("the session told what its shells get");
+    let servers = read(&places.mcp).expect("the session got its MCP servers");
+    let said = |output: Output| -> Value {
+        assert!(output.status.success(), "{output:?}");
+        serde_json::from_slice(&output.stdout).unwrap()
+    };
+
+    // In its shell, in its Project's folder: a new App, as written, and
+    // installed under its pass.
+    let in_shell = |args: &[&str]| {
+        let mut banda = places.agent(&shells["session"], args);
+        banda.current_dir(&folder).output().unwrap()
+    };
+    let written = said(in_shell(&["app", "new", "habits"]));
+    assert_eq!(written["folder"], format!("{folder}/habits"));
+    let installed = said(in_shell(&["app", "install", "habits"]));
+    assert_eq!(
+        (&installed["id"], &installed["runs"]),
+        (&json!("habits"), &json!(false))
+    );
+    assert_eq!(installed["project"], json!(work));
+    // It runs nothing yet.
+    let early = places.call("habits.list", Some(&work), json!({}));
+    assert_eq!(refusal(&early), "invalid");
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+    let (mut engine, stdin, again) = places.serve_with(&node);
+    let address = format!("ws://127.0.0.1:{}/ws", again["port"]);
+    if again["port"] != first["port"] {
+        eprintln!("another engine took port {}", first["port"]);
+    }
+
+    // The engine lists it, and the Person calls it as any App.
+    let status = said(places.banda(&["status"]).output().unwrap());
+    let apps = status["apps"].as_array().unwrap();
+    assert_eq!(
+        apps.last().unwrap(),
+        &json!({ "id": "habits", "version": "0.1.0", "api": 1 })
+    );
+    let listed = said(places.banda(&["app", "list"]).output().unwrap());
+    assert_eq!(listed["runs"], true);
+    let added = places.ok("habits.add", Some(&work), json!({ "text": "walk" }));
+    assert_eq!(added, json!({ "text": "walk" }));
+    let empty = places.call("habits.add", Some(&work), json!({ "text": " " }));
+    assert_eq!(refusal(&empty), "invalid");
+
+    // An Agent's session lists its methods among its tools, each with its
+    // words and its schema, and calls them.
+    let mut server = servers[0].clone();
+    for variable in server["env"].as_array_mut().unwrap() {
+        if variable["name"] == "BANDA_ENGINE" {
+            variable["value"] = json!(address);
+        }
+    }
+    let mut mcp = Mcp::start(&server);
+    let hello = json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } });
+    mcp.ask(1, "initialize", hello);
+    let tools = mcp.ask(2, "tools/list", json!({}))["result"]["tools"].clone();
+    let tool = (tools.as_array().unwrap().iter())
+        .find(|tool| tool["name"] == "habits_add")
+        .expect("the App's command is a tool");
+    assert!(text(&tool["description"]).starts_with("Adds an item"));
+    assert_eq!(tool["inputSchema"]["required"], json!(["text"]));
+    let (failed, kept) = mcp.call(3, "habits_add", json!({ "text": "read" }));
+    assert!(!failed, "{kept}");
+    let (failed, listed) = mcp.call(4, "habits_list", json!({}));
+    assert!(!failed, "{listed}");
+    let listed: Value = serde_json::from_str(&listed).unwrap();
+    let texts: Vec<_> = (listed.as_array().unwrap().iter())
+        .map(|item| text(&item["text"]))
+        .collect();
+    assert_eq!(texts, ["walk", "read"]);
+    mcp.end();
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
 /// What the engine at `port` answers `GET path`, asked with `headers`:
 /// its status line, its headers, and what follows them.
 fn get(port: u64, path: &str, headers: &[&str]) -> (String, String, String) {

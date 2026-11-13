@@ -203,12 +203,6 @@ pub fn described() -> Vec<AppMethods> {
         .collect()
 }
 
-/// Each App and platform part as the engine's `welcome` lists it: by its
-/// id, its version and the major of its App API.
-pub fn listed() -> Vec<App> {
-    described().into_iter().map(|app| app.app).collect()
-}
-
 /// The Pane kinds that open as a Group of their own, as the window parts
 /// in the list of Apps say: the workspaces take them as the engine
 /// starts. A window part that does not read is logged and left out, and

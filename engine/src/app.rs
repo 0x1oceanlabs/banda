@@ -1,7 +1,8 @@
 //! `banda app`: the Apps installed on this machine from a folder, which a
-//! Person's Agent writes (ADR 0126, decision 5). Each is one call to the
-//! engine's apps module, under whoever calls: an Agent's pass installs
-//! from its own Project's folder. stdout holds only the result, as JSON.
+//! Person's Agent writes (ADR 0126, decision 5). `new` writes a folder to
+//! start from. The rest are each one call to the engine's apps module,
+//! under whoever calls: an Agent's pass installs from its own Project's
+//! folder. stdout holds only the result, as JSON.
 
 use crate::Failure;
 use crate::client::Client;
@@ -13,6 +14,12 @@ use std::path::PathBuf;
 
 #[derive(Subcommand)]
 pub enum AppCommand {
+    /// Writes a new App named ID in the folder ID here: one table, one
+    /// command and one call, whole as it is, to change into your own.
+    New {
+        /// Its id: lowercase letters, as `clients`.
+        id: String,
+    },
     /// Installs the App in FOLDER on this machine, or installs it again
     /// after a change: checks its app.toml, methods.json, migrations and
     /// entry, says what is wrong in them, and copies the folder into
@@ -35,11 +42,19 @@ pub enum AppCommand {
 
 /// `banda app`: one call to the apps module, and its answer.
 pub async fn app(places: &Places, what: AppCommand) -> Result<(), Failure> {
+    // A new App is files, written here: no engine is asked.
+    if let AppCommand::New { id } = &what {
+        let folder = std::path::absolute(id).map_err(Failure::broken)?;
+        banda_apps::new::write(&folder, id).map_err(Failure::Refused)?;
+        println!("{}", json!({ "folder": folder }));
+        return Ok(());
+    }
     let mut client = Client::connect(places).await?;
     let mut call = async |method: &str, params: Value| {
         client.call(method, None, CommandId::new(), params).await
     };
     match what {
+        AppCommand::New { .. } => unreachable!("written above"),
         AppCommand::Install { folder } => {
             let folder = std::path::absolute(&folder).map_err(Failure::broken)?;
             let installed = call("apps.install", json!({ "folder": folder })).await?;

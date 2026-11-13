@@ -16,27 +16,37 @@
 //! Project: there is no click, for the App runs as the Person's user, as
 //! the Agent's shell does (what we build, Decided).
 //!
-//! An installed App runs from the engine's next start; the worker that
-//! runs it is this module's next step.
+//! An installed App runs from the engine's next start: the engine takes
+//! each as a module of its own ([`served::Served`], [`Apps::serving`]),
+//! whose calls go to the App's worker ([`worker`]).
 
 pub mod folder;
 pub mod installed;
+pub mod new;
+pub mod served;
+mod worker;
 
-use banda_kernel::{AppMethods, Call, Kind, Module, Nothing, Reach, Refusal, Right, Scope, now_ms};
+use banda_kernel::host::Node;
+use banda_kernel::{
+    App, AppMethods, Call, Kind, Module, Nothing, Reach, Refusal, Right, Scope, now_ms,
+};
 use folder::Folder;
 use installed::{Installed, InstalledFrom};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use served::Served;
 use std::path::PathBuf;
-use std::sync::Arc;
 use ts_rs::TS;
 
 /// The apps module.
 #[derive(Clone)]
 pub struct Apps {
-    /// What this engine runs, as it started.
-    runs: Arc<[AppMethods]>,
+    /// What this engine runs, as it started: Banda's own Apps and parts,
+    /// then the installed Apps it serves.
+    runs: Vec<AppMethods>,
+    /// How many of `runs` are Banda's own, which come first.
+    own: usize,
     installed: Installed,
 }
 
@@ -71,7 +81,7 @@ pub struct InstalledApp {
     #[serde(flatten)]
     #[ts(flatten)]
     pub installed: InstalledFrom,
-    /// Whether this engine runs the version installed: false from an
+    /// Whether this engine serves the version installed: false from an
     /// install until the engine starts again.
     pub runs: bool,
 }
@@ -106,9 +116,43 @@ impl Apps {
     /// `folder`: Banda's data's `apps`.
     pub fn new(runs: Vec<AppMethods>, folder: impl Into<PathBuf>) -> Apps {
         Apps {
-            runs: runs.into(),
+            own: runs.len(),
+            runs,
             installed: Installed::in_folder(folder),
         }
+    }
+
+    /// The module, and each installed App this engine serves, as a module
+    /// of its own for the kernel: run by its worker on `node`, or
+    /// installed and not running where this machine has none. An App whose
+    /// id or tools what runs already has taken is logged and left out.
+    pub fn serving(mut self, node: Option<Node>) -> (Apps, Vec<Served>) {
+        let runner = self.installed.runner();
+        let mut served = Vec::new();
+        for (app, _) in self.installed.list() {
+            if let Err(refusal) = self.fits(&app) {
+                tracing::error!(app = app.id, why = %refusal.message, "an installed App is not served");
+                continue;
+            }
+            let described = AppMethods {
+                app: App {
+                    id: app.id.clone(),
+                    version: app.version.clone(),
+                    api: app.api,
+                },
+                methods: app.described(),
+            };
+            self.runs.push(described);
+            let copy = self.installed.copy_of(&app.id);
+            served.push(Served::new(app, &copy, &runner, node.clone()));
+        }
+        (self, served)
+    }
+
+    /// What this engine runs: Banda's own Apps and parts, then the
+    /// installed Apps it serves.
+    pub fn runs(&self) -> &[AppMethods] {
+        &self.runs
     }
 
     fn listed(&self, app: &Folder, installed: InstalledFrom) -> InstalledApp {
@@ -125,16 +169,18 @@ impl Apps {
         }
     }
 
-    /// Refuses an App whose id or tools are taken by what this engine
-    /// runs.
+    /// Refuses an App whose id one of Banda's own has, or whose tools
+    /// another App that runs has. An installed App is installed again over
+    /// itself.
     fn fits(&self, app: &Folder) -> Result<(), Refusal> {
-        if self.runs.iter().any(|run| run.app.id == app.id) {
+        if self.runs[..self.own].iter().any(|run| run.app.id == app.id) {
             return Err(Refusal::conflict(format!(
                 "The id {} is taken on this machine: pick another in app.toml.",
                 app.id
             )));
         }
         let tools: Vec<&str> = (self.runs.iter())
+            .filter(|run| run.app.id != app.id)
             .flat_map(|run| run.methods.iter().filter_map(|method| method.tool))
             .collect();
         for tool in app.tools() {
@@ -149,7 +195,7 @@ impl Apps {
     }
 
     async fn describe(&self, _: Call, _: Nothing) -> Result<Vec<AppMethods>, Refusal> {
-        Ok(self.runs.to_vec())
+        Ok(self.runs.clone())
     }
 
     async fn installed(&self, _: Call, _: Nothing) -> Result<Vec<InstalledApp>, Refusal> {

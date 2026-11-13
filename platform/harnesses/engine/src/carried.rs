@@ -69,14 +69,8 @@ pub struct Carried {
     pub node: Node,
 }
 
-/// A program that runs an adapter as Node.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct Node {
-    pub program: PathBuf,
-    /// Whether it is an Electron, which runs as Node only with
-    /// `ELECTRON_RUN_AS_NODE`.
-    pub electron: bool,
-}
+/// A program that runs an adapter as Node: the host's.
+pub use banda_kernel::host::Node;
 
 /// Where the engine runs, as it says.
 pub struct Here<'a> {
@@ -118,34 +112,47 @@ impl Carried {
                 .flatten()
                 .find(|folder| folder.is_dir())?,
         };
-        let node = match var(NODE_VARIABLE) {
-            Some(named) => {
-                let program = PathBuf::from(named);
-                let name = program.file_stem().map(|name| name.to_string_lossy());
-                let electron = name.is_none_or(|name| !name.starts_with("node"));
-                Node { program, electron }
-            }
-            None => {
-                let node = |program| Node {
-                    program,
-                    electron: false,
-                };
-                let electron = |program| Node {
-                    program,
-                    electron: true,
-                };
-                carried_node(beside(NODE_FOLDER))
-                    .map(node)
-                    .or_else(|| {
-                        packed(here)
-                            .or_else(|| written(beside(ELECTRON)?))
-                            .map(electron)
-                    })
-                    .or_else(|| node_on(var("PATH"), guarded).map(node))?
-            }
-        };
+        let node = node_in(here, var, guarded)?;
         Some(Carried { adapters, node })
     }
+}
+
+/// The Node on this host, as the engine's environment and `here` say,
+/// whether it has the adapters or not: what runs an App's worker too
+/// (ADR 0126, decision 3).
+pub fn node(here: &Here) -> Option<Node> {
+    let var = |name: &str| match name {
+        "PATH" => Some(banda_kernel::host::path()),
+        name => std::env::var_os(name).filter(|value| !value.is_empty()),
+    };
+    node_in(here, var, banda_kernel::host::guarded())
+}
+
+/// As [`node`], with the engine's variables `var`, none of them empty.
+fn node_in(here: &Here, var: impl Fn(&str) -> Option<OsString>, guarded: bool) -> Option<Node> {
+    let beside = |name: &str| here.program.parent().map(|folder| folder.join(name));
+    if let Some(named) = var(NODE_VARIABLE) {
+        let program = PathBuf::from(named);
+        let name = program.file_stem().map(|name| name.to_string_lossy());
+        let electron = name.is_none_or(|name| !name.starts_with("node"));
+        return Some(Node { program, electron });
+    }
+    let node = |program| Node {
+        program,
+        electron: false,
+    };
+    let electron = |program| Node {
+        program,
+        electron: true,
+    };
+    carried_node(beside(NODE_FOLDER))
+        .map(node)
+        .or_else(|| {
+            packed(here)
+                .or_else(|| written(beside(ELECTRON)?))
+                .map(electron)
+        })
+        .or_else(|| node_on(var("PATH"), guarded).map(node))
 }
 
 /// What the harnesses' host package builds the adapters into, in the
