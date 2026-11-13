@@ -929,8 +929,8 @@ A section at the bottom of the sidebar, folded or open, with its count,
 as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
-The Window's line across its top: the Mark, which opens the Banda menu
-(ADR 0098, decision 21), at its left edge, then widgets on its left, in
+The Window's line across its top: the Mark, which shows and hides the
+sidebar (ADR 0098, decision 21, as amended), at its left edge, then widgets on its left, in
 its middle and on its right, the Pager among them (ADR 0024, ADR 0064).
 On a phone it is a header with at most two compact widgets (ADR 0089).
 It is a program that holds others: it draws the Mark and places the

@@ -518,7 +518,7 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   const command = vi.fn(() => Promise.resolve({}))
   const shell = shellOf({ route, settings, engine: { command } })
 
-  // The bar's logo opens the menu at its root, the key sheet's button at
+  // The menu opens at its root, and from the key sheet's button at
   // its Actions (`openingOf`), as `banda menu` does.
   runAction(shell, "menu.at")
   runAction(shell, "menu.at", { route: "actions" })

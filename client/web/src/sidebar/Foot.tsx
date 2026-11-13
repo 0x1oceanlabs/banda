@@ -23,7 +23,7 @@ import { ViewMenu } from "./ViewMenu"
  * menu and Quiet, as icons with no words, each tooltip with its key in
  * force where it has one; on the right, with another machine, a dot for
  * each machine (decision 18). The key sheet and the theme went to the
- * Banda menu, which the bar's logo opens, and Add Project to ✎'s menu.
+ * Banda menu, and Add Project to ✎'s menu.
  * While cards are checked, the selection's bar lies over it, at its
  * height, and it goes under the bar (ADR 0098, decision 15): `bulk` is
  * what the bar acts on, and how.
