@@ -39,6 +39,14 @@ fn modules() -> Vec<PathBuf> {
     found
 }
 
+/// Where the kernel's source holds a module's name and means something
+/// else, by file and what it holds, each with its reason.
+const NOT_THE_MODULE: [(&str, &str); 1] = [
+    // A monorepo's own `apps/` folder, where a Project's sign is looked
+    // for (ADR 0070): no App of Banda's.
+    ("sign.rs", "\"apps\""),
+];
+
 /// Every module's folder is a name the kernel's source must not contain:
 /// the kernel reaches modules only through the Module trait.
 #[test]
@@ -57,6 +65,10 @@ fn the_kernel_names_no_module() {
                 format!("\"{module}."),
                 format!("{module}_"),
             ] {
+                let name = file.file_name().unwrap().to_string_lossy();
+                if NOT_THE_MODULE.contains(&(&*name, &*needle)) {
+                    continue;
+                }
                 assert!(
                     !code.contains(&needle),
                     "{} names the module {module}",

@@ -1,0 +1,15 @@
+# The apps module, as it declares itself (ADR 0022). What its code says,
+# its methods, its code declares; this holds the rest.
+id = "apps"
+kind = "platform"
+name = "Apps"
+about = "The Apps on this machine: every App and platform part its engine runs, each with its methods, as apps.describe answers; and the Apps installed from a folder, which a Person's Agent writes (ADR 0126). apps.install checks an App's folder (its app.toml, its methods as data, its migrations and its entry) and copies it into Banda's data; apps.installed lists them, and apps.remove takes one away and keeps its data."
+version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
+from-banda = true
+settings = []
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

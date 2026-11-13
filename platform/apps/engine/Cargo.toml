@@ -1,0 +1,27 @@
+[package]
+name = "banda-apps"
+description = "The apps module: what this machine's engine runs, App by App with its methods, and the Apps installed from a folder that a Person's Agent writes: the folder read and checked, copied into Banda's data, listed and removed."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+async-trait.workspace = true
+banda-kernel = { path = "../../../kernel" }
+dunce.workspace = true
+schemars.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+tokio.workspace = true
+toml.workspace = true
+tracing.workspace = true
+ts-rs.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
+
+[lints]
+workspace = true

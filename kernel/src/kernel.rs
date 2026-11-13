@@ -3,7 +3,7 @@
 //! stores (`scopes.rs`), and serves its own `projects.*` (`projects.rs`).
 
 use crate::access::Caller;
-use crate::apps::{App, Apps};
+use crate::apps::App;
 use crate::environment::Environment;
 use crate::methods::Tool;
 use crate::module::{Module, Stream};
@@ -53,7 +53,7 @@ pub struct Kernel {
     /// power.
     pub(crate) power: Option<PowerStreams>,
     /// The Apps this engine runs, as the engine handed them.
-    pub(crate) apps: Apps,
+    pub(crate) apps: Vec<App>,
 }
 
 /// What opens a `machine.power` stream, each time a client hears it.
@@ -221,7 +221,7 @@ impl Kernel {
 
     /// The Apps this engine runs, as its `welcome` lists them.
     pub fn apps(&self) -> Vec<App> {
-        self.apps.listed()
+        self.apps.clone()
     }
 
     pub async fn project(&self, id: ProjectId) -> Result<Arc<Project>, Refusal> {

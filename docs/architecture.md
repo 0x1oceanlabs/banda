@@ -551,9 +551,9 @@ The kernel holds only what every module needs, and it names no module.
   and names the engine's boot, which another start changes: a window
   that hears a new one knows every session of the last ended. It lists
   the engine's Apps too, `apps`, each with its version and the major of
-  the App API it is written to, as their manifests say, and
-  `apps.describe` gives each App's methods (ADR 0082, decisions 2 and
-  14); `banda status` prints the list. The protocol's version is the
+  the App API it is written to, as their manifests say, and the apps
+  module's `apps.describe` gives each App's methods (ADR 0082, decisions
+  2 and 14); `banda status` prints the list. The protocol's version is the
   kernel's `PROTOCOL`, which the contract takes from its generated files.
 - **Streams.** A module can answer a window with live pieces that are not
   facts, such as what a terminal prints: the window asks for a stream
@@ -845,6 +845,40 @@ If Chat is removed, Agents still works through its own Thread.
 | files | any folder, a file in its Pane (ADR 0073) | first |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
+
+### apps
+
+The apps module (`platform/apps`) is the machine's: it holds the Apps on
+this machine (ADR 0126).
+
+- `apps.describe` answers every App and platform part the engine runs,
+  each with its methods, as the engine's scan of their manifests found
+  them.
+- **An App from a folder.** A Person's Agent writes an App as plain files:
+  `app.toml` (its id, name, about, version, `api` and `entry`),
+  `methods.json` (its methods as data: each with its `kind`, `call` or
+  `command`, its `right`, `about` in words and `params`, a JSON Schema),
+  `migrations/001.sql`, `002.sql`, … (its tables, one step a file) and its
+  entry, the code a worker runs. Each method is an Agent's tool,
+  `<app>_<method>`, unless it says `"tool": false`.
+- **`apps.install {folder}`** reads the folder, checks it and says what is
+  wrong by its file, then copies it into Banda's data,
+  `apps/<id>/app/`, with who installed it beside it (`installed.json`).
+  What runs is the copy. The copy is made beside its place and renamed
+  into it, so one cut short leaves the App as it was. An id the engine
+  runs or the kernel keeps is refused, and so is a tool's name another
+  tool has. It writes the fact `installed` in the machine's log.
+- **Who may.** It needs the right to write, and a pass reaches it: an
+  Agent installs from a folder inside its own Project, with no click, for
+  the App runs as the Person's user, as the Agent's shell does. The Person
+  names any folder, whole.
+- `apps.installed` lists them, each with whether the engine runs that
+  version yet, and `apps.remove {id}` takes one away; what it kept in
+  each Project stays (ADR 0085, decision 6). `banda app install | list |
+  remove` are these calls, and `banda modules` prints the installed Apps
+  after Banda's own.
+- An installed App runs from the engine's next start, by a worker: that is
+  the module's next step.
 
 ### agents
 
@@ -2010,6 +2044,7 @@ banda/
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
     browser/desktop/  Electron main: the browser's pages and profiles, extensions, blocker and tab sockets (ADR 0028)
   platform/           what the Apps stand on; it names no App (ADR 0062)
+    apps/             Rust: the Apps on this machine: what the engine runs, described, and the Apps installed from a folder (ADR 0126)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)

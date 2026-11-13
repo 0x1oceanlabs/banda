@@ -8,7 +8,7 @@ use crate::{AgentId, Participant, PersonId, ProjectId, Refusal};
 use uuid::Uuid;
 
 /// What a method needs.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, ts_rs::TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize, serde::Deserialize, ts_rs::TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export)]
 pub enum Right {

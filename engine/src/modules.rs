@@ -142,6 +142,31 @@ pub fn offers() -> Vec<Offer> {
     APPS.iter().chain([&WINDOW]).map(offer).collect()
 }
 
+/// The Apps installed from a folder in `apps`, Banda's data's, as `banda
+/// modules` prints them after Banda's own: each with its methods, as its
+/// `methods.json` declares them, and no window part (ADR 0126).
+pub fn installed(apps: &std::path::Path) -> Vec<Offer> {
+    let installed = banda_apps::installed::Installed::in_folder(apps);
+    let offer = |(app, _): (banda_apps::folder::Folder, _)| Offer {
+        engine: Some(app.described()),
+        window: None,
+        manifest: Manifest {
+            id: app.id,
+            kind: Some(Whose::App),
+            name: app.name,
+            about: app.about,
+            version: app.version,
+            api: Some(app.api),
+            from_banda: false,
+            settings: Vec::new(),
+            legacy_prefixes: Vec::new(),
+            needs: Some(Needs {}),
+            unstable: BTreeMap::new(),
+        },
+    };
+    installed.list().into_iter().map(offer).collect()
+}
+
 fn offer(part: &Part) -> Offer {
     let id = part.id;
     Offer {
@@ -176,6 +201,12 @@ pub fn described() -> Vec<AppMethods> {
             }
         })
         .collect()
+}
+
+/// Each App and platform part as the engine's `welcome` lists it: by its
+/// id, its version and the major of its App API.
+pub fn listed() -> Vec<App> {
+    described().into_iter().map(|app| app.app).collect()
 }
 
 /// The Pane kinds that open as a Group of their own, as the window parts

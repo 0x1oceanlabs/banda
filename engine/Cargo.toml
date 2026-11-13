@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 axum.workspace = true
 banda-agents = { path = "../apps/agents/engine" }
+banda-apps = { path = "../platform/apps/engine" }
 banda-browser = { path = "../apps/browser/engine" }
 banda-bytes = { path = "../platform/bytes/engine" }
 banda-environments = { path = "../platform/environments" }

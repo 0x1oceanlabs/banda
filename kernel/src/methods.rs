@@ -215,7 +215,6 @@ pub fn own() -> Vec<OwnTable> {
     vec![
         table::<crate::Kernel>("projects"),
         table::<crate::window::Window>("window"),
-        table::<crate::apps::Apps>("apps"),
     ]
 }
 

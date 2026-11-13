@@ -58,6 +58,22 @@ use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 /// `json_each`), which a real table of that name would stand in for.
 const RESERVED: [&str; 4] = [KERNEL, "sqlite", "pragma", "json"];
 
+/// What the router reads before any module's name: the kernel's own
+/// methods' prefixes, with the one `projects` had before ADR 0069, and the
+/// machine's streams' (`machine.named`).
+const ROUTED: [&str; 2] = ["spaces", "machine"];
+
+/// Whether `name` may be a module's, an App's id: lowercase letters, and
+/// no name the kernel keeps, [`RESERVED`] for its tables, or its router
+/// for its own methods and streams. Whoever takes an App from outside the
+/// build asks here before the kernel is given it.
+pub fn module_name(name: &str) -> bool {
+    let plain = !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase());
+    let kept =
+        RESERVED.contains(&name) || crate::router::OWN.contains(&name) || ROUTED.contains(&name);
+    plain && !kept
+}
+
 /// What SQL on a connection reaches while the kernel runs it: everything.
 const KERNEL_RUNS: usize = usize::MAX;
 
@@ -311,7 +327,7 @@ impl Drop for AsKernel<'_> {
 /// module's name, or two modules'.
 pub(crate) fn check(modules: &[Arc<dyn Module>]) -> Result<(), Refusal> {
     let mut taken: Vec<&str> = modules.iter().map(|module| module.name()).collect();
-    if let Some(name) = taken.iter().find(|name| RESERVED.contains(name)) {
+    if let Some(name) = taken.iter().find(|name| !module_name(name)) {
         return Err(Refusal::invalid(format!(
             "\"{name}\" cannot be a module's name."
         )));
@@ -341,6 +357,19 @@ mod tests {
         legacy: &["jots"],
         migrations: &[],
     };
+
+    #[test]
+    fn a_modules_name_is_lowercase_letters_the_kernel_does_not_keep() {
+        for name in ["notes", "clients", "z"] {
+            assert!(module_name(name), "{name}");
+        }
+        let kept = ["kernel", "sqlite", "pragma", "json", "projects", "window"];
+        let routed = ["spaces", "machine"];
+        let amiss = ["", "Notes", "my_app", "app2", "a.b"];
+        for name in kept.iter().chain(&routed).chain(&amiss) {
+            assert!(!module_name(name), "{name}");
+        }
+    }
 
     /// Whether the notes module may do `action` as it runs.
     fn allowed(action: AuthAction<'_>) -> bool {
