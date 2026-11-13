@@ -58,7 +58,7 @@ when the rest of the SDK lands.
    - **Every method is an Agent's tool by default**, named
      `<app>_<method>`; `"tool": false` leaves one out. A name another tool
      has is refused as the App is installed.
-   - A view (`kind: "view"`, whose answer is a Tree) comes with slice 2c.
+   - A view (`kind: "view"`) answers the App's screen: decision 8.
 
 3. **A worker runs it: one process an App on a machine, started by the
    engine.** The engine starts it when the App is first called, with the
@@ -134,9 +134,35 @@ when the rest of the SDK lands.
    `app_unavailable` and why. The Project, its Threads and the other Apps
    go on (ADR 0085, decision 8).
 
+8. **Its screen is a view that answers a Tree, and the engine reads the
+   Tree before a client draws it** (ADR 0062, decision 7).
+   - A view is a method of kind `view`: a read whose answer is the screen
+     as data, a title and nodes of a small catalogue (Card, Table, List,
+     Form, Button, Badge, Empty, Markdown). It writes nothing, and it is
+     no Agent's tool unless it says so.
+   - **A client is trusted and a Tree is not.** The engine reads what the
+     App's code answered, holds it to its limits (500 nodes; a Table 1,000
+     rows), and refuses what is wrong by where it is in the Tree, in words
+     the App's author puts right from.
+   - **A control sends only one of the App's own commands that
+     `methods.json` marks `"ui": true`**, as the Person, on their click.
+   - **A Form's fields come from its command's params**, in the order
+     `methods.json` writes them, so no App writes them twice and no client
+     reads JSON Schema. `fields` chooses among them, orders them, or says
+     more of one.
+   - The Tree carries the place in the Project's log it shows, taken
+     before the view read. A client follows the App's events from there
+     and reads the whole view again on one.
+   - **One Pane for every App**, `apps.view {app, view, args}`, compiled
+     into the window once. An Agent opens it with `open_pane`; the Person
+     finds it in the Banda menu by the App's name, where its view named
+     `home` is the one the name opens.
+
 ## Not now
 
-`[needs]` and capabilities; published facts and `listens`; effects in the
+A Form's values to start from and an act on a Table's row; a row drawn
+ahead of the machine's answer; a newer node's fallback for an older
+client; `[needs]` and capabilities; published facts and `listens`; effects in the
 outbox for workers; an App's own pass and `via = app`; WebAssembly
 handlers; a wall around the worker; installing from a git address; an
 App's files folder in the Project's data; `banda import`.
