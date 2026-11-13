@@ -5,8 +5,9 @@
  * which acts on the home Project at once, finds it this machine's on the
  * Window's first draw, never one no machine has, which fails closed.
  */
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { FORGETTING, KeptHosts, useOurs } from "@banda/core/react"
+import { ownEngine } from "@banda/core/testing"
 import { act, useEffect } from "react"
 import { createRoot } from "react-dom/client"
 import { expect, test } from "vitest"
@@ -14,7 +15,7 @@ import { expect, test } from "vitest"
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
 
 test("a module's start, as the Window first draws, acts on this machine's home Project on this machine's engine, not as one no machine has", async () => {
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const hosts = new KeptHosts(
     {
       follow: () => undefined,

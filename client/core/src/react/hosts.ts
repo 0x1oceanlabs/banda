@@ -115,7 +115,9 @@ export function useReach(project: ProjectId, named: string | undefined): Reach {
   const host = useHostOf(project, named)
   const shown = useShownOf(host ?? undefined)
   if (host === null) return { host }
-  if (host === undefined) return { engine: kept.sessionOf(project) }
+  // Drawn from this machine's too, while its engine is out of reach.
+  if (host === undefined)
+    return { engine: kept.sessionOf(project, undefined, { drawn: true }) }
   const pane = { args: { host } }
   return {
     host,
@@ -205,10 +207,7 @@ export function useEngineOf(): (
  * function while the Window's hosts stay. */
 export function useShownNow(): (name: string) => Shown | undefined {
   const kept = useContext(HostsContext)
-  return useCallback(
-    (name: string) => kept.get().find((one) => one.name === name),
-    [kept]
-  )
+  return useCallback((name: string) => kept.shown(name), [kept])
 }
 
 /** A Pane of a Project as a pick or a Pane opens it, with no host in its

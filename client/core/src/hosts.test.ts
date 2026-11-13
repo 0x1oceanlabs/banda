@@ -1,4 +1,4 @@
-import type { Engine, ProjectId, ProjectSummary, Status } from "@banda/contract"
+import type { ProjectId, ProjectSummary, Status } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
 import { afterEach, expect, test, vi } from "vitest"
 import type { HostState } from "./device"
@@ -26,9 +26,18 @@ import {
   Unreachable,
 } from "./hosts"
 import { inWindow, isPlaced } from "./directory"
+import { HERE } from "./pane"
 import type { Args } from "./run"
 import { clock } from "./time"
-import { away, desktop, live, project, Socket } from "./testing"
+import {
+  away,
+  desktop,
+  live,
+  welcomed,
+  ownEngine,
+  project,
+  Socket,
+} from "./testing"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -217,7 +226,7 @@ test("an act goes to the session of the machine that owns its Project, and never
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.follow()
   const on = (host: string) => ({ args: { thread: "t1", host } })
@@ -283,7 +292,7 @@ test("an act goes to the session of the machine that owns its Project, and never
 })
 
 test("a Project this machine's engine just answered as made is this machine's at once, before its list says so, and the Projects it had stay", () => {
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const { device } = desktop()
   const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.ours([project("mine")], "m0" as ProjectId)
@@ -300,7 +309,7 @@ test("this machine's Projects are read again from its engine for one the Window 
     project("mine"),
     project("added"),
   ])
-  const here = { call: () => listed } as unknown as Engine
+  const here = ownEngine({ call: () => listed }).engine
   const { device } = desktop()
   const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.ours([project("mine")], "m0" as ProjectId)
@@ -317,7 +326,7 @@ test("this machine's Projects are read again from its engine for one the Window 
 })
 
 test("an ID every object inherits is no place the device kept, and a kept place that names no machine is dropped, so neither reads as this machine", () => {
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const { device } = desktop()
   const hosts = new KeptHosts(device, FORGETTING, here, {
     directory: inWindow(),
@@ -356,7 +365,7 @@ test("the directory keeps on the device which machine has each Project: after a 
   Socket.opened = []
   // The device's storage, which outlives each window.
   const kept = inWindow()
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const before = desktop()
   const first = new KeptHosts(before.device, FORGETTING, here, {
     directory: kept,
@@ -1499,7 +1508,7 @@ test("this machine is named only with this-too and another machine", () => {
 
 test("the Window hears this machine's name from its own engine, the same one once, and stops with it", () => {
   const { device } = desktop()
-  const here = {} as Engine
+  const here = ownEngine().engine
   const stop = vi.fn()
   let take: ((named: Named) => void) | undefined
   const hosts = new KeptHosts(
@@ -1526,4 +1535,114 @@ test("the Window hears this machine's name from its own engine, the same one onc
   expect(heard).toHaveBeenCalledTimes(1)
   end()
   expect(stop).toHaveBeenCalled()
+})
+
+test("this machine has an entry as each host has: away while its own engine answers nothing, an act on it refused at once in its words, and a Pane drawn from it keeps its session", () => {
+  vi.useFakeTimers({ now: 10 })
+  const { device } = desktop()
+  const own = ownEngine()
+  const hosts = new KeptHosts(device, FORGETTING, own.engine)
+  hosts.follow()
+  const mine = "mine" as ProjectId
+  hosts.ours(
+    [project("mine"), project("old", { archived: true })],
+    "m0" as ProjectId
+  )
+  // A window that starts is in reach of its own machine; the list stays
+  // the other machines.
+  expect(hosts.shown(HERE)).toEqual({
+    name: HERE,
+    named: { name: "This machine", icon: "desktop" },
+    state: {
+      name: HERE,
+      ssh: "",
+      state: "live",
+      build: null,
+      version: null,
+      own: { build: null, version: null },
+    },
+    machine: "m0",
+    projects: [project("mine")],
+  })
+  expect(hosts.here.get()).toBe(hosts.shown(HERE))
+  expect(hosts.get()).toEqual([])
+  expect(hosts.sessionOf(mine)).toBe(own.engine)
+  expect(hosts.machines.get()[0]).toMatchObject({ state: "live" })
+  own.says({ ...welcomed(), build: "abc123", version: "0.1.0-dev.421" })
+  expect(otherBuild(hosts.shown(HERE)!.state)).toBeUndefined()
+
+  // Its engine's connection ended, last heard at 4: away, as of then.
+  const heard = vi.fn()
+  hosts.here.subscribe(heard)
+  own.answers(false, 4)
+  expect(heard).toHaveBeenCalledTimes(1)
+  const words = "Banda is restarting on this machine"
+  expect(hosts.shown(HERE)).toMatchObject({
+    state: { state: "away", why: words },
+    away: 10,
+    asOf: 4,
+    projects: [project("mine")],
+  })
+  expect(reachWords(HERE, hosts.shown(HERE), hosts.seen)).toBe(words)
+  expect(heldWords(HERE, hosts.shown(HERE), "lost", hosts.seen)).toBe(
+    `${words}. Send once it is back.`
+  )
+  expect(hosts.machines.get()[0]).toMatchObject({ state: "away", away: 10 })
+  let refused: unknown
+  try {
+    hosts.sessionOf(mine)
+  } catch (error) {
+    refused = error
+  }
+  expect(refused).toBeInstanceOf(Unreachable)
+  expect(refused).toMatchObject({ host: HERE, message: words, as_of: 10 })
+  expect(hosts.sessionOf(mine, undefined, { drawn: true })).toBe(own.engine)
+
+  // Another go is still away; heard again, it is live.
+  own.says({ state: "connecting" })
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "away" }, asOf: 4 })
+  own.answers(true)
+  own.says(welcomed("b2"))
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
+  expect(hosts.shown(HERE)).not.toHaveProperty("away")
+  expect(hosts.sessionOf(mine)).toBe(own.engine)
+  expect(hosts.bootOf(HERE)).toBe("b2")
+
+  // Once it said goodbye, in its words.
+  const refusal = { code: "conflict", message: "Banda is stopping" } as const
+  own.says({ state: "refused", refusal })
+  expect(hosts.shown(HERE)).toMatchObject({
+    state: { state: "refused", why: "Banda is stopping" },
+  })
+  expect(() => hosts.sessionOf(mine)).toThrow("Banda is stopping")
+})
+
+test("this machine goes by the name its engine says, and its words name no machine", () => {
+  const { device } = desktop()
+  const own = ownEngine()
+  let take: ((named: Named) => void) | undefined
+  const names = {
+    ...FORGETTING,
+    followHere: (_: unknown, said: (named: Named) => void) => {
+      take = said
+      return () => undefined
+    },
+  }
+  const hosts = new KeptHosts(device, names, own.engine)
+  hosts.follow()
+  take?.({ name: "mac", icon: "laptop" })
+  expect(hosts.shown(HERE)?.named).toEqual({ name: "mac", icon: "laptop" })
+  expect(
+    unreachedWords(HERE, hosts.shown(HERE), "connecting", hosts.seen)
+  ).toBe("Connecting to Banda on this machine")
+  expect(unreachedWords(HERE, hosts.shown(HERE), "refused", hosts.seen)).toBe(
+    "Banda on this machine refused this window"
+  )
+  expect(
+    unreachedWords(HERE, hosts.shown(HERE), "open", hosts.seen)
+  ).toBeUndefined()
+  // Outside a Window there is no engine of its own, and no entry.
+  const none = new KeptHosts(device, FORGETTING)
+  expect(none.shown(HERE)).toBeUndefined()
+  expect(none.machines.get()[0]).toMatchObject({ state: "live" })
 })

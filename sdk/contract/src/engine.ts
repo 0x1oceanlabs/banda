@@ -364,8 +364,7 @@ const hostTime = (at: number | undefined, offset: number | undefined) =>
  *   is in reach and the connection is only down, as a window starts or a
  *   live machine's link comes back, it waits for the connection and goes
  *   then, as a read does: it would go then had it been asked a moment
- *   later. This machine's own engine is never away from it, so an act
- *   asked as that engine restarts waits for it.
+ *   later.
  * - An act on its way as the connection breaks fails then, as one that
  *   may have run, and is never asked again; a stream that acts ends with
  *   `may_have_run`. A command alone goes again with its ID, which keeps it
@@ -377,9 +376,11 @@ const hostTime = (at: number | undefined, offset: number | undefined) =>
  *   delivered, so a Pane sees no gap and no repeat.
  * - A stream that reads is heard again after a reconnect, from its start;
  *   one that acts, or is heard `once`, ends instead.
- * - The engine of another machine is pinged (`ping`): one that answers
- *   nothing, its connection open or not, is stale until it is heard again,
- *   and an act to it fails as one to a machine away does.
+ * - An engine may be pinged (`ping`): one that answers nothing, its
+ *   connection open or not, is stale until it is heard again, and an act
+ *   to it fails as one to a machine away does. An engine no one else says
+ *   is away is stale as its connection ends too (`staleOnLoss`), so an act
+ *   asked as it restarts fails at once.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -404,7 +405,9 @@ export class Engine {
   #go = 0
   readonly #unreachable: (() => Unreachable) | undefined
   readonly #ping: Ping | undefined
-  readonly #onStale: ((stale: boolean) => void) | undefined
+  readonly #staleOnLoss: boolean
+  /** Who hears it go stale, and answer again (`watchStale`). */
+  readonly #staleWatchers = new Set<(stale: boolean) => void>()
   /** When it last heard the engine say anything, by this machine's clock. */
   #heard: number | undefined
   /** Whether it heard anything since its last ping. */
@@ -438,25 +441,28 @@ export class Engine {
    * connection lost fails with it, not `Lost`, as that machine may be gone
    * before the client is told so, and so does one while it is stale. With
    * `ping`, the engine is asked whether it still answers (ADR 0082,
-   * decision 11), and `onStale` hears as it is stale and as it answers
-   * again.
+   * decision 11). `staleOnLoss` is for an engine no one else says is
+   * away, as a device's own machine's (ADR 0124): its connection says
+   * it. Once it was heard, a connection that ends leaves it stale while
+   * it tries again, until it is heard again: an act fails at once, in
+   * its machine's words, and never waits for the engine to be back.
    */
   constructor(
     address: () => Promise<Address>,
     {
       unreachable,
       ping,
-      onStale,
+      staleOnLoss = false,
     }: {
       unreachable?: () => Unreachable
       ping?: Ping
-      onStale?: (stale: boolean) => void
+      staleOnLoss?: boolean
     } = {}
   ) {
     this.#address = address
     this.#unreachable = unreachable
     this.#ping = ping
-    this.#onStale = onStale
+    this.#staleOnLoss = staleOnLoss
     void this.#connect()
   }
 
@@ -466,13 +472,26 @@ export class Engine {
 
   /**
    * Whether the engine answers nothing (ADR 0082, decision 11): two pings
-   * in a row heard nothing after them, or an act asked first and heard
-   * nothing in time. Its connection may still be open: an act fails at
+   * in a row heard nothing after them, an act asked first and heard
+   * nothing in time, or its connection ended where that says so
+   * (`staleOnLoss`). Its connection may still be open: an act fails at
    * once, one on its way fails as one that may have run, and a read waits.
    * It is no more as soon as the engine says anything, or is away.
    */
   get stale(): boolean {
     return this.#stale
+  }
+
+  /** Hears the engine go stale (`stale`), and answer again; returns how
+   * to stop. Not as it is told away (`away`), which whoever tells it
+   * knows. */
+  watchStale(watcher: (stale: boolean) => void): () => void {
+    this.#staleWatchers.add(watcher)
+    return () => this.#staleWatchers.delete(watcher)
+  }
+
+  #sayStale(): void {
+    for (const watcher of this.#staleWatchers) watcher(this.#stale)
   }
 
   /** When the client last heard the engine say anything, in ms since the
@@ -645,7 +664,8 @@ export class Engine {
         if (error instanceof Unreachable && went && !error.may_have_run)
           throw error.sent()
         if (!(error instanceof Lost)) throw error
-        if (once) throw this.#gone(went)
+        // Stale, it does not wait to go again: an act never does.
+        if (once || this.#stale) throw this.#gone(went)
         if (attempt === ATTEMPTS) throw error
       }
     }
@@ -829,11 +849,11 @@ export class Engine {
         else resolve()
       }
       const ping = going === "read" ? undefined : this.#ping
-      if (ping) {
+      // Failed as the engine goes stale, by its pings or its connection.
+      if (going !== "read" && (ping || this.#staleOnLoss))
         this.#hushed.add(done)
-        if (this.#status.state === "connecting" && this.#quietFor(ping))
-          timer = setTimeout(() => this.#hush(), ping.within)
-      }
+      if (ping && this.#status.state === "connecting" && this.#quietFor(ping))
+        timer = setTimeout(() => this.#hush(), ping.within)
       const stop = this.watch((status) => {
         if (status.state === "open") done()
         else if (status.state === "refused" || this.#closed)
@@ -1218,7 +1238,7 @@ export class Engine {
     }
     if (!this.#stale) return
     this.#stale = false
-    this.#onStale?.(false)
+    this.#sayStale()
   }
 
   /**
@@ -1233,7 +1253,7 @@ export class Engine {
   #hush(): void {
     if (this.#stale || this.#closed) return
     this.#stale = true
-    this.#onStale?.(true)
+    this.#sayStale()
     const why = this.#unreachable?.()
     const unsent = this.#gone(false, why)
     const probe = this.#probe
@@ -1306,8 +1326,12 @@ export class Engine {
   #drop(): void {
     this.#socket = null
     this.#helloed = false
+    const again = !this.#closed && this.#status.state !== "refused"
+    // Its own connection says whether it answers: ended, it does not,
+    // until it is heard again. One never heard is still starting.
+    if (again && this.#staleOnLoss && this.#heard !== undefined) this.#hush()
     this.#lose()
-    if (!this.#closed && this.#status.state !== "refused") this.#retry()
+    if (again) this.#retry()
   }
 
   #retry(): void {

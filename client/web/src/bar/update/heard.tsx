@@ -5,6 +5,7 @@
  * reads the same. A host away keeps what it last said, so its row still
  * names its version.
  */
+import { HERE } from "@banda/core"
 import {
   createContext,
   type ReactNode,
@@ -56,9 +57,6 @@ export function useKeptUpdates(): KeptUpdates {
   const [own] = useState(keptUpdates)
   return useContext(UpdatesContext) ?? own
 }
-
-/** The key this machine is heard under. */
-const HERE = ""
 
 function tell(
   heard: KeptUpdates["heard"],

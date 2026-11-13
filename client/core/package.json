@@ -8,7 +8,8 @@
   "description": "The core every client shares: Here, the stores read by selector, what an action runs with, the words the page and the desktop say to each other, and the hosts the Window reaches. No DOM, no device, no App (ADR 0089).",
   "exports": {
     ".": "./src/index.ts",
-    "./react": "./src/react/index.ts"
+    "./react": "./src/react/index.ts",
+    "./testing": "./src/testing.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

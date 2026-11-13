@@ -29,7 +29,8 @@ const LEFT = "left."
 
 /** A Pane closed while its machine was away. */
 export type Leaving = {
-  /** The machine, by its key in `hosts.toml`. */
+  /** The machine, by its key in `hosts.toml`; `HERE` for this device's
+   * own. */
   host: string
   /** The boot of its engine as last heard, none if never. */
   boot?: string

@@ -1911,9 +1911,10 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   and `@banda/core/react` for what reads it from React): Here and the
   store the Window keeps it in, the store read by selector, what an
   action runs with, the words the page and the desktop say to each
-  other, and the hosts the Window reaches (`KeptHosts`, with the
+  other, and the machines the Window reaches (`KeptHosts`, with the
   machines a new Thread starts on), which take the names this device
-  remembers from the Window. It has no DOM, reads no device and names
+  remembers from the Window. This machine is one of them, with the
+  same rule while its engine is out of reach (ADR 0124). It has no DOM, reads no device and names
   no App (decision 1); an App or a platform part takes it only as
   `@banda/core/react`.
   The Window may import the Tiling; what the Tiling still imports of the

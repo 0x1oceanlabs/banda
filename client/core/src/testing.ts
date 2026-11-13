@@ -1,6 +1,6 @@
 /** What the core's hosts tests stand on: a Project, arc live and away, a
  * desktop the test tells, and a WebSocket the test drives. */
-import type { ProjectSummary } from "@banda/contract"
+import type { Engine, ProjectSummary, Status } from "@banda/contract"
 import { vi } from "vitest"
 import type { HostState } from "./device"
 import type { HostsDevice } from "./hosts"
@@ -54,6 +54,57 @@ export function desktop() {
     start: vi.fn(),
   } satisfies HostsDevice
   return { device, tell: (hosts: HostState[]) => tell(hosts) }
+}
+
+/** A welcome's status, as an engine open under boot `boot` says it. */
+export const welcomed = (boot = "b1") =>
+  ({ state: "open", engine: "0.1.0", modules: [], boot }) satisfies Status
+
+/**
+ * This machine's engine as the hosts read it, with `more` of an
+ * engine's: connecting until the test says what it `says`, and
+ * answering until it says it does not (`answers`), as one whose
+ * connection ended (`Engine.stale`), last heard at `heard`.
+ */
+export function ownEngine(more: object = {}) {
+  let status: Status = { state: "connecting" }
+  let stale = false
+  let last: number | undefined
+  const watchers = new Set<(status: Status) => void>()
+  const stales = new Set<(stale: boolean) => void>()
+  const engine = {
+    ...more,
+    get status() {
+      return status
+    },
+    get stale() {
+      return stale
+    },
+    get heard() {
+      return last
+    },
+    watch(watcher: (status: Status) => void) {
+      watchers.add(watcher)
+      watcher(status)
+      return () => watchers.delete(watcher)
+    },
+    watchStale(watcher: (stale: boolean) => void) {
+      stales.add(watcher)
+      return () => stales.delete(watcher)
+    },
+  } as unknown as Engine
+  return {
+    engine,
+    says(now: Status) {
+      status = now
+      for (const watcher of watchers) watcher(now)
+    },
+    answers(yes: boolean, heard?: number) {
+      stale = !yes
+      if (heard !== undefined) last = heard
+      for (const watcher of stales) watcher(stale)
+    },
+  }
 }
 
 /** A WebSocket that only notes where it was opened to and what was sent

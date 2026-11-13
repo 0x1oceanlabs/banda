@@ -1,7 +1,7 @@
 /**
- * What waits for another machine (ADR 0105): a message to a started
- * Thread the Person sent with "Send when back", while that machine was
- * away, stopped or on another build. Nothing else waits (Q1). It goes
+ * What waits for a machine (ADR 0105), this device's own too (ADR 0124):
+ * a message to a started Thread the Person sent with "Send when back",
+ * while that machine was away, stopped or on another build. Nothing else waits (Q1). It goes
  * once the Window reaches the machine again (`KeptHosts`), in the order
  * queued, by the ID it was given as it was queued, so the host runs it
  * once however often it goes (ADR 0082, decision 4). Past its time it is
@@ -92,7 +92,8 @@ export type Wait = {
   /** What goes, with the ID it was given as it was queued: each send of
    * it is this one command. */
   call: CommandCall
-  /** The machine it waits for, by its key in `hosts.toml`. */
+  /** The machine it waits for, by its key in `hosts.toml`; `HERE` for
+   * this device's own. */
   host: string
   project: ProjectId
   /** What it goes to, as its App lists it: a Thread. */
@@ -354,8 +355,9 @@ export class Waiting implements Readable<readonly Wait[]> {
 
   /**
    * `placed` says the machine that has a Pane of a Project, by its key in
-   * `hosts.toml`, none for this machine or one the Window does not know:
-   * with no Window's hosts, the one its args name. `named` says a
+   * `hosts.toml`, `HERE` for this machine where the Window has an engine
+   * of its own, and none for one the Window does not know: with no
+   * Window's hosts, the one its args name. `named` says a
    * machine's name, and `summary` a Project as that machine lists it;
    * `now` is this device's clock; `ahead` says how far a host's clock is
    * ahead of it, as its engine last heard; only the main window `drains`
@@ -416,8 +418,7 @@ export class Waiting implements Readable<readonly Wait[]> {
   /**
    * Queues `wait` for the machine that has the Pane it is written in,
    * `by`, after what waits already, and says whether it did: not where
-   * that is this machine, whose engine is there, or no machine the Window
-   * knows. Its time counts from its `at`, 7 days at most. What its Pane
+   * that is no machine the Window knows. Its time counts from its `at`, 7 days at most. What its Pane
    * shows before that machine answers, where it says any, keeps its
    * Project as that machine lists it, or as a message to it kept it
    * before (Q6).

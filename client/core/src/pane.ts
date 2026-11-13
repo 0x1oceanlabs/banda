@@ -22,6 +22,14 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 export type Place = "right" | "below" | "instead" | "group"
 
 /**
+ * The device's own machine, as the core keys what it keeps of a machine
+ * (ADR 0124): what waits for it, what was closed while it was away, and
+ * its entry among the machines. No key of `hosts.toml` is empty, and a
+ * Pane's args that name no host name it (`paneHost`).
+ */
+export const HERE = ""
+
+/**
  * The other host of `hosts.toml` a Pane's args name under `host`, by its
  * name; none for this machine's. The directory says which machine has a
  * Project (ADR 0106, decision 1), so nothing writes it into the

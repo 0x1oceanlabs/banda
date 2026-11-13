@@ -1146,8 +1146,8 @@ test("an engine that hears nothing after two pings is stale: a command fails at 
   client = new Engine(address, {
     unreachable: arcAway,
     ping: { every: 100, quiet: 1_000, within: 300 },
-    onStale: (stale) => said.push(stale),
   })
+  client.watchStale((stale) => said.push(stale))
   await until(client, "open")
   expect(client.stale).toBe(false)
   // It pings while open, and hears each pong.
@@ -1407,8 +1407,8 @@ test("an engine that never opens its connection is stale as long after: a comman
     client = new Engine(silent.at, {
       unreachable: arcAway,
       ping: { every: 100, quiet: 1_000, within: 60_000 },
-      onStale: (stale) => said.push(stale),
     })
+    client.watchStale((stale) => said.push(stale))
     // Waiting for the connection, a command fails as the engine is stale.
     const waiting = client.command("projects.create", { name: "Waiting" })
     await expect(waiting).rejects.toMatchObject({
@@ -1534,7 +1534,7 @@ test("an engine from before the ping answers one as a frame that does not fit, a
   ).toBeGreaterThan(1)
 })
 
-test("this machine's own engine is never pinged, nor stale", async () => {
+test("an engine with no ping is never pinged, nor stale", async () => {
   noting()
   await serve()
   client = new Engine(address)
@@ -1545,4 +1545,93 @@ test("this machine's own engine is never pinged, nor stale", async () => {
   expect(Noting.opened[0]!.frames.map((frame) => frame.type)).not.toContain(
     "ping"
   )
+})
+
+const restarting = () =>
+  new Unreachable("", "Banda is restarting on this machine")
+
+test("an engine no one else says is away is stale as its connection ends: an act on its way fails as one that may have run, one asked as it restarts fails at once, unsent, a read waits, and heard again it goes on", async () => {
+  holding()
+  await serve()
+  client = new Engine(address, { unreachable: restarting, staleOnLoss: true })
+  // One that names no machine says the same in the connection's words.
+  other = new Engine(address, { staleOnLoss: true })
+  const said: boolean[] = []
+  client.watchStale((stale) => said.push(stale))
+  await until(client, "open")
+  await until(other, "open")
+  // Each has a command on its way as the engine goes.
+  Holding.held = true
+  const [went, nameless] = [newId(), newId()]
+  const onItsWay = client.command(
+    "projects.create",
+    { name: "On its way" },
+    undefined,
+    went
+  )
+  const lost = other.command(
+    "projects.create",
+    { name: "Nameless" },
+    undefined,
+    nameless
+  )
+  const settled = Promise.allSettled([onItsWay, lost])
+  await expect
+    .poll(() => sentWith(went).length + sentWith(nameless).length)
+    .toBe(2)
+  await stop()
+  await until(client, "lost")
+  Holding.let()
+  expect(client.stale).toBe(true)
+  expect(said).toEqual([true])
+  expect(await settled).toMatchObject([
+    {
+      reason: {
+        name: "Unreachable",
+        message: "Banda is restarting on this machine",
+        may_have_run: true,
+      },
+    },
+    { reason: { name: "Lost", may_have_run: true } },
+  ])
+  expect(sentWith(went)).toHaveLength(1)
+  expect(sentWith(nameless)).toHaveLength(1)
+  // It tries again all the while, and an act now does not wait for that.
+  const unsent = newId()
+  await expect(
+    client.command("projects.create", { name: "Unsent" }, undefined, unsent)
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    message: "Banda is restarting on this machine",
+    may_have_run: false,
+  })
+  let read: string[] | undefined
+  void names(client).then((listed) => (read = listed))
+  await serve()
+  await until(client, "open")
+  expect(client.stale).toBe(false)
+  expect(said).toEqual([true, false])
+  await expect.poll(() => read).toBeDefined()
+  expect(read).not.toContain("Unsent")
+  expect(sentWith(unsent)).toEqual([])
+  await client.command("projects.create", { name: "Back" })
+  expect(await names(client)).toContain("Back")
+})
+
+test("an engine no one else says is away, not heard yet, is still starting: an act waits for its first connection", async () => {
+  // Nothing listens where it first asks.
+  let started = false
+  client = new Engine(
+    async () =>
+      started ? address() : { url: "ws://127.0.0.1:1/ws", secret: "" },
+    { unreachable: restarting, staleOnLoss: true }
+  )
+  await until(client, "lost")
+  expect(client.stale).toBe(false)
+  const made = client.command("projects.create", { name: "At the start" })
+  await serve()
+  started = true
+  client.wake()
+  await made
+  expect(await names(client)).toContain("At the start")
 })
