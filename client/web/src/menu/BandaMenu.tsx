@@ -74,8 +74,8 @@ import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../window/actions"
 import { useTop } from "../window/top/use-top"
 import { ThreadMark } from "@banda/ui/components/banda-mark"
-import { GROUP_WORDS } from "../sidebar/settings"
-import { itemActionsOf } from "../sidebar/items"
+import { GROUP_WORDS } from "../sidebar"
+import { itemActionsOf } from "../window/items"
 import {
   type Act,
   actsOf,

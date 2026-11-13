@@ -23,7 +23,7 @@ import {
   MOVING_KEYS,
   NO_HOLDERS,
 } from "./hold"
-import { itemActionsOf } from "./items"
+import { itemActionsOf } from "../window/items"
 import { useLaterAnchor } from "./LaterPicker"
 import type { Undoable } from "./undo"
 

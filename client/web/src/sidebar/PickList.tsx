@@ -24,7 +24,7 @@ import type { Row } from "./rows"
 import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
 import { itemKey, keyOf } from "./hold"
 import type { ProjectAsks, Tab } from "./inbox"
-import { refused } from "./items"
+import { refused } from "./refusals"
 import {
   type Does,
   hintOf,

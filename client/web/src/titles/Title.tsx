@@ -23,7 +23,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { focusedTile, type Listed, type Lists } from "@banda/ui/pane"
 import { ChevronDownIcon, SparklesIcon } from "lucide-react"
 import { itemIn, useItems } from "../calls/stores"
-import { itemActionOf } from "../sidebar/items"
+import { itemActionOf } from "../window/items"
 import { ThreadRows } from "./ThreadMenu"
 
 /** Why a menu closed, as Base UI says it. */

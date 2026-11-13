@@ -3,7 +3,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
-import { itemActionsOf } from "../sidebar/items"
+import { itemActionsOf } from "../window/items"
 import {
   actsOf,
   back,

@@ -12,7 +12,7 @@
  */
 import { type Readable, Store, useStore } from "@banda/core/react"
 import { HOUR, MINUTE, wakes } from "@banda/ui/lib/words"
-import { dayAt } from "../sidebar/later-time"
+import { dayAt } from "./later-time"
 
 /** Quiet until a time, in ms; until it is turned off; or off. */
 export type Quiet = number | "on" | "off"

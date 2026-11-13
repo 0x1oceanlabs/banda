@@ -17,7 +17,7 @@ import {
   type Width,
   type Workspaces,
 } from "./model"
-import { kept, WIDTH } from "../sidebar/width"
+import { kept, WIDTH } from "../sidebar"
 
 const WORKSPACES = "banda.workspaces"
 const VIEW = "banda.view"
