@@ -460,6 +460,28 @@ on and off, and has no auto-merge.
 5. **Layers and lengths.** The named layers, with ADR 0110 step 3; each
    Tile isolates. The 28 lengths onto steps. Shots where something
    moves.
+   _Built_, the Top layer's, with ADR 0110 step 3: names in place of
+   numbers, the values and the order on screen as they were. Their order
+   is written once, in `client/web/src/window/top/layers.ts`, and a test
+   holds the tokens to it. The Sheet and Quick Look took names of their
+   own, beside decision 5's.
+
+   | Name | Value | What is on it |
+   |---|---|---|
+   | `z-raised` | 10 | inside a Pane or a component: above its siblings |
+   | `z-float` | 20 | inside a Pane or a component: its floating bar, a sticky head |
+   | `z-sidebar` | 20 | the Sidebar over the Strip |
+   | `z-peek` | 20 | Quick Look's tile |
+   | `z-drawer` | 30 | the Drawer and its scrim |
+   | `z-sheet` | 30 | the Sheet |
+   | `z-top` | 50 | what Banda UI draws in the Top layer: menus, popovers, selects, hover cards, suggestions, dialogs and their scrims, the browser's titles |
+   | `z-carried` | 50 | what the Person carries: a Pane's ghost and its hint |
+
+   Where two have one value, the later drawn lies over: the Window draws
+   its own in the layers' order. Still numbers, in the check's list: the
+   Sidebar's `z-20` and its edge's `z-30` (the sidebar's steps), the place
+   a carried Pane would take, `z-40` (the Tiling's), and what is inside a
+   Pane or a component. Each Tile isolating, and the lengths, remain.
 6. **The catalogue page,** shot by `themes.spec.ts`.
 
 The SDK's parts wait for their own steps (decision 12).

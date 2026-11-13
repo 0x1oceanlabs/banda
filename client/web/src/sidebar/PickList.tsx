@@ -326,8 +326,10 @@ export function useSidebarKeys(
         picking.step(event.key === "ArrowDown" ? 1 : -1)
       } else if (event.key === "Escape") {
         // Its own layer: it clears what it says, and the focus goes back
-        // where it came from, a Pane's, else the list.
+        // where it came from, a Pane's, else the list. It keeps this Esc,
+        // so the Top layer hears none (`window/top/stack.ts`).
         event.preventDefault()
+        event.stopPropagation()
         view.searchFor("")
         const from = cameFrom.current
         if (from?.closest("[data-tile]")) toPane()
@@ -353,7 +355,9 @@ export function useSidebarKeys(
       // Not Esc in a menu it opened, drawn elsewhere in the page.
       const own = event.currentTarget.contains(event.target as Node)
       if (event.key !== "Escape" || !own || event.defaultPrevented) return
+      // The list keeps this Esc: the Top layer hears none.
       event.preventDefault()
+      event.stopPropagation()
       if (count > 0) picking.checkOnly([])
       else if (onDismiss) onDismiss()
       else toPane()

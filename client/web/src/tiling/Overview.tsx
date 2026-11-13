@@ -604,6 +604,8 @@ export function Overview({
     else if (direction) onArrow(direction)
     else return
     event.preventDefault()
+    // Its own: not the Top layer's, whose stack hears an Esc nothing kept.
+    if (key === "Escape") event.stopPropagation()
   }
 
   return (

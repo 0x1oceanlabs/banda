@@ -10,7 +10,7 @@ function Suggestions({ className, ...props }: React.ComponentProps<"div">) {
     <div
       data-slot="suggestions"
       className={cn(
-        "z-50 flex max-h-72 flex-col overflow-y-auto rounded-card bg-popover p-1 text-ui text-popover-foreground shadow-float ring-1 ring-foreground/10",
+        "z-top flex max-h-72 flex-col overflow-y-auto rounded-card bg-popover p-1 text-ui text-popover-foreground shadow-float ring-1 ring-foreground/10",
         className
       )}
       {...props}

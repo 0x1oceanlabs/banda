@@ -894,7 +894,7 @@ function LeftTabs(tabs: TabsProps) {
           <div
             data-browser-titles=""
             style={{ top: over.top, left: over.left, height: over.height }}
-            className="fixed z-50 flex w-60 flex-col border-r bg-popover shadow-float"
+            className="fixed z-top flex w-60 flex-col border-r bg-popover shadow-float"
           >
             <TabStrip {...tabs} side="titles" />
           </div>

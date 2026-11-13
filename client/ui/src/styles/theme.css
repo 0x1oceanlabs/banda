@@ -174,14 +174,20 @@
      dialog or the Drawer, behind a video. */
   --color-paper: #fff;
   --color-scrim: #000;
-  /* The layers, by name (decision 5), with today's values; their order is
-     ADR 0110 step 3's. Inside a Pane or a component: above its siblings,
-     and its floating bar or sticky head. The Window's own: the sidebar,
-     the Drawer and sheets, the Top layer, and what the Person carries. */
+  /* The layers, by name (decision 5), with the values they had as
+     numbers. Inside a Pane or a component: above its siblings, and its
+     floating bar or sticky head. The Window's own, the lowest first: the
+     sidebar, Quick Look's tile, the Drawer, the Sheet, what Banda UI
+     draws in the Top layer (menus, popovers, dialogs), and what the
+     Person carries. Their order is written once, in the Window's
+     `top/layers.ts` (ADR 0110, step 3), whose test holds these values to
+     it; where two have one value, the later drawn lies over. */
   --z-index-raised: 10;
   --z-index-float: 20;
   --z-index-sidebar: 20;
+  --z-index-peek: 20;
   --z-index-drawer: 30;
+  --z-index-sheet: 30;
   --z-index-top: 50;
   --z-index-carried: 50;
   --font-sans: var(--font-family-sans);

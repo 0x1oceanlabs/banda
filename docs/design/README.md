@@ -472,6 +472,11 @@ it the composer):
 ### The Top layer: menus, dialogs, toasts
 
 - **Solid** over glass, always (`--floating`, [0075] d3).
+- **Layers by name**, the lowest first: `z-sidebar` (20), `z-peek` (20,
+  Quick Look), `z-drawer` (30), `z-sheet` (30), `z-top` (50: menus,
+  popovers, dialogs), `z-carried` (50: a Pane being moved). Their order
+  is written once, in `client/web/src/window/top/layers.ts`; where two
+  have one value, the later lies over ([0110] step 3, [0113] d5).
 - **A menu**: the card radius, 4 px inside, items 30 px high at the
   control's radius, a 16 px icon in muted, the key on the right in muted,
   a label at `text-small`, separators as 1 px lines. The Pane menu shows each
@@ -770,6 +775,7 @@ kit's own demos. Each is a JPEG at quality 85.
 [0102]: ../adr/0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md
 [0103]: ../adr/0103-a-harness-s-sub-agents-work-in-their-thread-and-a-crew-shows-beside-it.md
 [0107]: ../adr/0107-a-working-mark-takes-the-group-plate-s-blue-muted.md
+[0110]: ../adr/0110-where-a-pane-opens-is-one-rule-in-the-workspaces-module.md
 [0111]: ../adr/0111-the-desk-s-density-is-measured-over-the-wallpaper-banda-draws.md
 [0113]: ../adr/0113-banda-ui-is-one-vocabulary-the-window-and-every-app-draw-with.md
 [0117]: ../adr/0117-what-loops-forever-steps-twelve-times-a-second.md

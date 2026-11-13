@@ -1992,10 +1992,12 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   (`client/web/src/tiling/`): the workspaces, or the overview over them
   (ADR 0005, decisions 7–9; ADR 0087). A popped-out Pane's window is the
   Window's too (`window/Popped.tsx`). The Window routes the keys
-  (`window/keys.ts`), and reaches the desktop only through the device's
-  desktop adapter, `boot/desktop.ts`, by `boot/index.ts`; at last the
-  adapter is the only reader of `window.banda` (ADR 0089, decisions 2
-  and 11). What every client shares is `client/core` (`@banda/core`,
+  (`window/keys.ts`). What lies over what in the Top layer, which part
+  an Esc takes away and where the keys go back as it goes is one stack,
+  `window/top/` (ADR 0110, step 3). The Window reaches the desktop only
+  through the device's desktop adapter, `boot/desktop.ts`, by
+  `boot/index.ts`; at last the adapter is the only reader of
+  `window.banda` (ADR 0089, decisions 2 and 11). What every client shares is `client/core` (`@banda/core`,
   and `@banda/core/react` for what reads it from React): Here and the
   store the Window keeps it in, the store read by selector, what an
   action runs with, the words the page and the desktop say to each
