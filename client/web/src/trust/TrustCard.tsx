@@ -19,7 +19,7 @@ import { useFence } from "@banda/ui/hooks/use-status"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderIcon, GitBranchIcon, PlugIcon } from "lucide-react"
-import { useHoldWhile } from "../sidebar/useHold"
+import { useHoldWhile } from "../sidebar"
 import {
   askedOf,
   GITHUB_AND_SSH,

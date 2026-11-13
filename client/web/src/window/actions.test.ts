@@ -29,7 +29,7 @@ import { hear, look, predict, unseen } from "../tiling/unheard"
 import { factsOf } from "../tiling/useTiling"
 import { quiet } from "../calls/quiet"
 import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
-import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
+import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar"
 import { handlesOf } from "../tiling/mount"
 import {
   type Column,

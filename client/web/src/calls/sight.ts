@@ -8,7 +8,7 @@ import type { ProjectId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
 import type { Sight } from "@banda/ui/module"
 import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
-import { byOrder, placeIn } from "../sidebar/order"
+import { byOrder, placeIn } from "../sidebar"
 import {
   type Column,
   current,

@@ -19,7 +19,7 @@ import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, ItemAction, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../window/actions"
-import { GROUP_WORDS } from "../sidebar/settings"
+import { GROUP_WORDS } from "../sidebar"
 import { type Answer, ANSWERS } from "../trust/trust"
 import {
   type LookRow,

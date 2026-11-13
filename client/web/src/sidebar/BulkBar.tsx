@@ -11,7 +11,7 @@ import {
   type LucideIcon,
   XIcon,
 } from "lucide-react"
-import { refusalOf, setRefusalOf } from "./items"
+import { refusalOf, setRefusalOf } from "./refusals"
 import { keyId } from "./keys"
 import { Bulk } from "./PickList"
 import { actOnRow, type SetAct } from "./useActs"

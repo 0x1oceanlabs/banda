@@ -63,12 +63,10 @@ import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { isFlow, nextFlow } from "../bar/flow/Flow"
-import { archiving } from "../sidebar/items"
-import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
+import { archiving } from "./items"
+import { askTab, isTab, pickLater, SIDEBAR, SIDEBAR_KEYS } from "../sidebar"
 import { makeProject } from "../titles/MakeProject"
-import { pickLater } from "../sidebar/LaterPicker"
-import { logged } from "../sidebar/write-setting"
-import { askTab, isTab } from "../sidebar/showing"
+import { logged } from "../settings/write"
 import { askRemoval } from "../settings/RemoveProject"
 import { notNow } from "../trust/not-now"
 import { askTrust } from "../trust/TrustCard"
@@ -357,13 +355,6 @@ export function arranging(
     // The Pane in front goes along to where it is put.
     want: focused(workspaces)?.id,
   }
-}
-
-/** Whether a Pane is the focused one of `workspaces`, by all its args. */
-export function focusedIn(workspaces: Workspaces) {
-  const entry = focused(workspaces)
-  return (project: ProjectId, pane: PaneState) =>
-    entry !== undefined && samePane(entry, { project, pane }, identityOf)
 }
 
 /** What the Threads away from their Project's workspace show, on a free

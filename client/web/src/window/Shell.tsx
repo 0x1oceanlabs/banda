@@ -35,7 +35,15 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { useOrderNow } from "../sidebar/order"
+import {
+  Edge,
+  LaterPicker,
+  SaidRegion,
+  Sidebar,
+  useOrderNow,
+  writeSidebar,
+} from "../sidebar"
+import { focusedIn } from "./focused"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -52,7 +60,6 @@ import {
   settingsLinkOf,
 } from "../menu/menu"
 import { writeLook } from "../menu/theme"
-import { writeSidebar } from "../sidebar/write-setting"
 import {
   columnsOf,
   useLookColumns,
@@ -71,14 +78,10 @@ import {
   showsOf,
   sources,
 } from "../registry"
-import { Edge } from "../sidebar/Edge"
-import { Sidebar } from "../sidebar/Sidebar"
-import { LaterPicker } from "../sidebar/LaterPicker"
 import { RemovingProject } from "../settings/RemoveProject"
-import { SaidRegion } from "../sidebar/SaidRegion"
 import { QuitDialog } from "./Quit"
 import { useWokeNote } from "../calls/woke"
-import { paneRowsOf } from "../sidebar/items"
+import { paneRowsOf } from "./items"
 import { attachChips, focusedOn } from "./attach"
 import { Kept, useKeptHere } from "./here"
 import { tilingShows } from "./shows"
@@ -128,7 +131,6 @@ import {
   openingFrom,
   picking,
   placed,
-  focusedIn,
   strayedIn,
   runAction,
   targetsOf,

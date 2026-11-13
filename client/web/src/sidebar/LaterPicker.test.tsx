@@ -3,7 +3,7 @@ import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { type Choice, choicesOf, passedAt } from "./LaterPicker"
-import { presets } from "./later-time"
+import { presets } from "../calls/later-time"
 
 /** Thursday 5 November 2026, 15:00, local time. */
 const NOW = new Date(2026, 10, 5, 15, 0).getTime()
