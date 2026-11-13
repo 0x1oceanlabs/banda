@@ -144,7 +144,10 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await expect(refused).rejects.toBeInstanceOf(Refused)
   await expect(refused).rejects.toMatchObject({ refusal: { code: "invalid" } })
 
+  // The facts up to the turn's end: a new Thread is named after its first
+  // turn (ADR 0118), so `thread.renamed` may follow `turn.ended` at once.
   const kinds: string[] = []
+  let ending = false
   const ended = new Promise<void>((done) =>
     client!.follow(
       project.id,
@@ -152,8 +155,12 @@ test("a window calls, follows and sees refusals by their code", async () => {
       { module: "agents" },
       (event: Event) => {
         const fact = decodeFact(event)
-        if (fact) kinds.push(fact.kind)
-        if (fact?.kind === "turn.ended") done()
+        if (!fact || ending) return
+        kinds.push(fact.kind)
+        if (fact.kind === "turn.ended") {
+          ending = true
+          done()
+        }
       },
       () => {}
     )
