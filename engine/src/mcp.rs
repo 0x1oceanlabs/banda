@@ -9,9 +9,12 @@
 //!
 //! It is a pipe: MCP on stdio, one JSON-RPC message per line, and the
 //! engine's API on the other side. Its tools are the engine's
-//! (`projects.tools`, from the methods marked `tool`), read once as it
+//! (`projects.tools`, from the methods marked `tool`), read as it
 //! connects, and `skill`, which it answers itself from the Banda skill, as
-//! `banda skill` does.
+//! `banda skill` does. The engine's tools change as an App is installed or
+//! removed (ADR 0126, decision 5): `banda mcp` hears the engine's list of
+//! Apps change (`machine.apps`), reads the tools again, and tells its
+//! client `notifications/tools/list_changed`.
 //!
 //! Each tool call carries a command ID that comes from this session of
 //! `banda mcp` and the request's ID (ADR 0082, decision 4). A tool whose
@@ -61,6 +64,8 @@ type Error = (i64, String);
 
 struct Mcp {
     pass: Pass,
+    /// Whether its client said `initialize`: none is told anything before.
+    initialized: bool,
     /// This session, new each time `banda mcp` starts and each time its
     /// client says `initialize`: what its tool calls' command IDs are
     /// derived from.
@@ -81,14 +86,36 @@ pub async fn serve() -> Result<(), Failure> {
             "banda mcp needs {TOKEN_VARIABLE} and {ENGINE_VARIABLE}: the agents module sets them for a Thread's session."
         ))
     })?;
+    let mut changed = changes(Pass {
+        engine: pass.engine.clone(),
+        token: pass.token.clone(),
+    });
     let mut mcp = Mcp {
         pass,
+        initialized: false,
         session: new_session(),
         connected: None,
     };
     let mut lines = BufReader::new(tokio::io::stdin()).lines();
     let mut out = tokio::io::stdout();
-    while let Some(line) = lines.next_line().await.map_err(Failure::broken)? {
+    loop {
+        let line = tokio::select! {
+            line = lines.next_line() => line.map_err(Failure::broken)?,
+            Some(()) = changed.recv() => {
+                // The tools are read again as they are next asked for, on
+                // a connection made then.
+                mcp.connected = None;
+                if mcp.initialized {
+                    let told = json!({ "jsonrpc": "2.0", "method": "notifications/tools/list_changed" });
+                    out.write_all(format!("{told}\n").as_bytes())
+                        .await
+                        .map_err(Failure::broken)?;
+                    out.flush().await.map_err(Failure::broken)?;
+                }
+                continue;
+            }
+        };
+        let Some(line) = line else { break };
         if line.trim().is_empty() {
             continue;
         }
@@ -104,6 +131,57 @@ pub async fn serve() -> Result<(), Failure> {
         }
     }
     Ok(())
+}
+
+/// Says once each time the Apps the engine runs changed, so its tools did:
+/// heard on a connection of its own, beside the one the calls go on. An
+/// engine heard again after it broke off counts as changed, as it may be
+/// another build. One with no `machine.apps`, an older engine, says
+/// nothing, and the tools stay as they were read.
+fn changes(pass: Pass) -> tokio::sync::mpsc::UnboundedReceiver<()> {
+    use banda_kernel::api::EngineFrame;
+    const AGAIN_AFTER: std::time::Duration = std::time::Duration::from_secs(2);
+    let (say, hears) = tokio::sync::mpsc::unbounded_channel();
+    tokio::spawn(async move {
+        let mut heard_before = false;
+        loop {
+            let mut client = match Client::connect_as(&pass).await {
+                Ok(client) => client,
+                // Its pass is over: so is its session.
+                Err(Failure::Refused(_)) => return,
+                Err(_) => {
+                    tokio::time::sleep(AGAIN_AFTER).await;
+                    continue;
+                }
+            };
+            let Ok(stream) = client.stream("machine.apps").await else {
+                tokio::time::sleep(AGAIN_AFTER).await;
+                continue;
+            };
+            // The first piece says how it is now: nothing changed yet,
+            // unless the engine was heard before.
+            let mut first = !heard_before;
+            loop {
+                match client.heard().await {
+                    Ok(EngineFrame::Piece { stream: of, .. }) if of == stream => {
+                        if !std::mem::take(&mut first) && say.send(()).is_err() {
+                            return;
+                        }
+                        heard_before = true;
+                    }
+                    // Refused, or ended: this engine says no changes.
+                    Ok(EngineFrame::Result {
+                        id, error: Some(_), ..
+                    }) if id == stream => return,
+                    Ok(EngineFrame::Ended { stream: of }) if of == stream => return,
+                    Ok(_) => {}
+                    Err(_) => break,
+                }
+            }
+            tokio::time::sleep(AGAIN_AFTER).await;
+        }
+    });
+    hears
 }
 
 fn reply(id: Value, answer: Result<Value, Error>) -> Value {
@@ -130,6 +208,7 @@ impl Mcp {
         let answer = match method.as_str() {
             "initialize" => {
                 self.session = new_session();
+                self.initialized = true;
                 Ok(initialize(&params))
             }
             "ping" => Ok(json!({})),
@@ -244,7 +323,7 @@ fn initialize(params: &Value) -> Value {
     let version = asked.filter(|v| VERSIONS.contains(v)).unwrap_or(VERSION);
     json!({
         "protocolVersion": version,
-        "capabilities": { "tools": {} },
+        "capabilities": { "tools": { "listChanged": true } },
         "serverInfo": { "name": "banda", "version": env!("BANDA_VERSION") },
         "instructions": banda_skill::brief(),
     })
@@ -459,6 +538,7 @@ mod tests {
     fn mcp(pass: Pass) -> Mcp {
         Mcp {
             pass,
+            initialized: false,
             session: new_session(),
             connected: None,
         }

@@ -13,8 +13,8 @@
 //! its commit, so what it read is still so as its writes land. Calls read
 //! beside it.
 
-use crate::folder::kept;
 use crate::folder::{Declared, Folder};
+use crate::folder::{kept, kept_steps};
 use crate::worker::{Answered, Worker, to_sql};
 use banda_kernel::host::Node;
 use banda_kernel::{Call, Code, Kind, Module, ProjectId, Refusal, Right, Tool};
@@ -32,21 +32,33 @@ pub struct Served {
     name: &'static str,
     steps: &'static [&'static str],
     worker: Worker,
-    /// The Projects one of its commands runs in now, each held by it.
-    turns: Mutex<HashMap<ProjectId, Arc<tokio::sync::Mutex<()>>>>,
+    turns: Turns,
 }
+
+/// The turns of one App's commands, by Project: one runs at a time in
+/// each. They are the App's, not one module's: the module put in its
+/// place as it is installed again takes them, so a command of the old one
+/// and one of the new never run side by side.
+pub type Turns = Arc<Mutex<HashMap<ProjectId, Arc<tokio::sync::Mutex<()>>>>>;
 
 impl Served {
     /// The App `app`, run from the `copy` of its folder by Banda's loop at
     /// `runner`, on `node`; with none, it is installed and does not run.
-    pub fn new(app: Folder, copy: &Path, runner: &Path, node: Option<Node>) -> Served {
-        let steps: Vec<&'static str> = app.migrations.iter().cloned().map(kept).collect();
+    /// Its commands take their turns in `turns`.
+    pub fn new(
+        app: Folder,
+        copy: &Path,
+        runner: &Path,
+        node: Option<Node>,
+        turns: Turns,
+    ) -> Served {
+        let steps = app.migrations.iter().cloned().map(kept).collect();
         Served {
             worker: Worker::new(&app, copy.to_owned(), runner.to_owned(), node),
             name: kept(app.id.clone()),
-            steps: Box::leak(steps.into_boxed_slice()),
+            steps: kept_steps(steps),
             app,
-            turns: Default::default(),
+            turns,
         }
     }
 

@@ -334,7 +334,7 @@ impl Kernel {
     }
 
     async fn tools(&self, _: Own<'_>, _: Nothing) -> Result<Vec<Tool>, Refusal> {
-        Ok(self.tools.clone())
+        Ok(self.runs().tools.to_vec())
     }
 
     async fn create(&self, ask: Own<'_>, create: CreateProject) -> Result<ProjectSummary, Refusal> {
@@ -625,7 +625,7 @@ impl Kernel {
         };
         drop(projects);
         if let Some(project) = changed {
-            for module in project.modules() {
+            for module in project.modules().iter() {
                 module.trust_changed(project.module(module.name())).await;
             }
         }
@@ -705,10 +705,10 @@ impl Kernel {
             let project = opened
                 .as_ref()
                 .ok_or_else(|| Refusal::conflict("Locate the missing folder before moving it."))?;
-            for module in project.modules() {
+            for module in project.modules().iter() {
                 module.can_move(project.module(module.name())).await?;
             }
-            for module in project.modules() {
+            for module in project.modules().iter() {
                 module.moving(project.module(module.name())).await;
             }
         }
@@ -843,7 +843,7 @@ impl Kernel {
         drop(reached);
         // What acts for it stops reaching Banda.
         self.passes.revoke_project(project.id());
-        for module in project.modules() {
+        for module in project.modules().iter() {
             module.closing(project.module(module.name())).await;
         }
         Ok(())

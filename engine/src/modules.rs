@@ -147,7 +147,7 @@ pub fn offers() -> Vec<Offer> {
 /// `methods.json` declares them, and no window part (ADR 0126).
 pub fn installed(apps: &std::path::Path) -> Vec<Offer> {
     let installed = banda_apps::installed::Installed::in_folder(apps);
-    let offer = |(app, _): (banda_apps::folder::Folder, _)| Offer {
+    let offer = |banda_apps::installed::Install { app, .. }| Offer {
         engine: Some(app.described()),
         window: None,
         manifest: Manifest {

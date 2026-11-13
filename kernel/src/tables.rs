@@ -202,7 +202,10 @@ pub(crate) struct Authorizer {
     now: AtomicUsize,
     /// Whether that module runs one of its migration steps.
     migrating: AtomicBool,
-    modules: Arc<[Tables]>,
+    /// Each module's tables. One added while the engine runs comes last,
+    /// and one put in the place of its name keeps its place, so `now`
+    /// names the same module throughout.
+    modules: std::sync::RwLock<Vec<Tables>>,
 }
 
 impl Authorizer {
@@ -211,16 +214,26 @@ impl Authorizer {
     /// with plain atomics.
     pub(crate) fn install(
         sql: &mut Connection,
-        modules: Arc<[Tables]>,
+        modules: &[Tables],
     ) -> Result<Arc<Authorizer>, Error> {
         let authorizer = Arc::new(Authorizer {
             now: AtomicUsize::new(KERNEL_RUNS),
             migrating: AtomicBool::new(false),
-            modules,
+            modules: std::sync::RwLock::new(modules.to_vec()),
         });
         let deciding = authorizer.clone();
         sql.authorizer(Some(move |asked: AuthContext<'_>| deciding.decide(&asked)))?;
         Ok(authorizer)
+    }
+
+    /// Takes `tables`, a module's added while the engine runs, or puts
+    /// them in the place of those of its name, as its steps grew.
+    pub(crate) fn put(&self, tables: Tables) {
+        let mut modules = self.modules.write().unwrap();
+        match modules.iter_mut().find(|had| had.module == tables.module) {
+            Some(had) => *had = tables,
+            None => modules.push(tables),
+        }
     }
 
     /// Runs what comes next on `sql` for `module`, the kernel's name
@@ -247,7 +260,7 @@ impl Authorizer {
         let who = if module == KERNEL {
             KERNEL_RUNS
         } else {
-            (self.modules.iter())
+            (self.modules.read().unwrap().iter())
                 .position(|tables| tables.module == module)
                 .unwrap_or(NOBODY)
         };
@@ -266,7 +279,7 @@ impl Authorizer {
         if now == KERNEL_RUNS {
             return Authorization::Allow;
         }
-        let tables = self.modules.get(now);
+        let tables = self.modules.read().unwrap().get(now).copied();
         let migrating = self.migrating.load(Ordering::Relaxed);
         if tables.is_some_and(|tables| tables.allows(&asked.action, migrating)) {
             return Authorization::Allow;
@@ -595,7 +608,7 @@ mod tests {
             "CREATE TABLE kernel_receipts (command TEXT); CREATE TABLE notes_items (text TEXT)",
         )
         .unwrap();
-        let authorizer = Authorizer::install(&mut sql, Arc::new([NOTES])).unwrap();
+        let authorizer = Authorizer::install(&mut sql, &[NOTES]).unwrap();
         let read = |table: &str| {
             sql.prepare(&format!("SELECT count(*) FROM {table}"))
                 .map(drop)
@@ -625,7 +638,7 @@ mod tests {
         let mut sql = Connection::open_in_memory().unwrap();
         sql.execute_batch("CREATE TABLE kernel_receipts (command TEXT)")
             .unwrap();
-        let authorizer = Authorizer::install(&mut sql, Arc::new([NOTES])).unwrap();
+        let authorizer = Authorizer::install(&mut sql, &[NOTES]).unwrap();
         // No value is bound, so SQLite would hand it back as it was.
         let cached = |sql: &Connection| {
             sql.prepare_cached("SELECT count(*) FROM kernel_receipts")
@@ -677,7 +690,7 @@ mod tests {
         bare.execute_batch(&make).unwrap();
         let mut gated = Connection::open_in_memory().unwrap();
         gated.execute_batch(&make).unwrap();
-        let authorizer = Authorizer::install(&mut gated, Arc::new([NOTES])).unwrap();
+        let authorizer = Authorizer::install(&mut gated, &[NOTES]).unwrap();
         let _notes = authorizer.enter(&gated, "notes");
         for (what, text) in [("a 12-column SELECT", &select), ("an INSERT", &insert)] {
             // Rounds side by side, the least of each: the rest is the

@@ -6,7 +6,7 @@ use crate::access::Caller;
 use crate::apps::App;
 use crate::environment::Environment;
 use crate::methods::Tool;
-use crate::module::{Module, Stream};
+use crate::module::{Module, Scope, Stream};
 use crate::outbox::Boot;
 use crate::passes::{Audience, Passes};
 use crate::project::{Manifest, Project};
@@ -30,9 +30,9 @@ pub struct Kernel {
     /// This boot of the engine. Outbox rows the engine claimed under another
     /// boot were cut short by a restart; workers' leases run on its clock.
     pub(crate) boot: Boot,
-    pub(crate) modules: Arc<[Arc<dyn Module>]>,
-    /// The modules each Project runs: those of the Project's scope.
-    pub(crate) in_projects: Arc<[Arc<dyn Module>]>,
+    /// The modules it runs now ([`Runs`]): one is added, replaced or taken
+    /// away while it runs through its [`Registry`](crate::Registry).
+    pub(crate) runs: watch::Sender<Arc<Runs>>,
     pub(crate) projects: Projects,
     /// Held while a Project is added, so one folder never becomes two.
     pub(crate) adding: tokio::sync::Mutex<()>,
@@ -44,16 +44,72 @@ pub struct Kernel {
     pub(crate) window: Arc<Window>,
     /// Where the Projects' programs run (ADR 0084).
     pub(crate) environment: Arc<dyn Environment>,
-    /// The tools of the modules in Projects, made once as it opens.
-    pub(crate) tools: Vec<Tool>,
     /// What this host is called and drawn by, as it is now; none when the
     /// engine names it nothing.
     pub(crate) named: Option<watch::Receiver<Named>>,
     /// What opens a `machine.power` stream; none when the engine says no
     /// power.
     pub(crate) power: Option<PowerStreams>,
-    /// The Apps this engine runs, as the engine handed them.
-    pub(crate) apps: Vec<App>,
+}
+
+/// What a kernel runs at one moment, each list swapped whole as it changes.
+#[derive(Clone)]
+pub(crate) struct Runs {
+    pub modules: Arc<[Arc<dyn Module>]>,
+    /// The modules each Project runs: those of the Project's scope.
+    pub in_projects: Arc<[Arc<dyn Module>]>,
+    /// The tools of the modules, for Agents.
+    pub tools: Arc<[Tool]>,
+    /// The Apps this engine runs, as the engine handed them and as each
+    /// was added: what its `welcome` lists.
+    pub apps: Arc<[App]>,
+    /// The names of the modules added while it runs: only these are
+    /// replaced or taken away.
+    pub added: Arc<[&'static str]>,
+}
+
+impl Runs {
+    /// What a kernel runs with `modules`, of which `added` may be
+    /// replaced or taken away, listed as `apps`.
+    pub(crate) fn of(
+        modules: Vec<Arc<dyn Module>>,
+        apps: Vec<App>,
+        added: Vec<&'static str>,
+    ) -> Runs {
+        let in_projects = modules.iter().filter(|m| m.scope() == Scope::Project);
+        Runs {
+            in_projects: in_projects.cloned().collect(),
+            tools: modules.iter().flat_map(|m| m.tools()).collect(),
+            modules: modules.into(),
+            apps: apps.into(),
+            added: added.into(),
+        }
+    }
+
+    /// What it runs but the module `name`, with its tools and its App.
+    pub(crate) fn without(&self, name: &str) -> Runs {
+        Runs::of(
+            (self
+                .modules
+                .iter()
+                .filter(|had| had.name() != name)
+                .cloned())
+            .collect(),
+            (self.apps.iter().filter(|had| had.id != name).cloned()).collect(),
+            (self.added.iter().copied().filter(|had| *had != name)).collect(),
+        )
+    }
+
+    /// What it runs with `module` too, added while the engine runs, listed
+    /// as the App `app`.
+    pub(crate) fn with(&self, module: Arc<dyn Module>, app: App) -> Runs {
+        let name = module.name();
+        Runs::of(
+            self.modules.iter().cloned().chain([module]).collect(),
+            self.apps.iter().cloned().chain([app]).collect(),
+            self.added.iter().copied().chain([name]).collect(),
+        )
+    }
 }
 
 /// What opens a `machine.power` stream, each time a client hears it.
@@ -166,7 +222,12 @@ impl Kernel {
 
     /// The names of the modules this engine runs: what a window may use.
     pub fn modules(&self) -> Vec<&'static str> {
-        self.modules.iter().map(|m| m.name()).collect()
+        self.runs().modules.iter().map(|m| m.name()).collect()
+    }
+
+    /// What it runs now.
+    pub(crate) fn runs(&self) -> Arc<Runs> {
+        self.runs.borrow().clone()
     }
 
     /// The Agent a pass names and the Project it works in, when the API
@@ -221,7 +282,7 @@ impl Kernel {
 
     /// The Apps this engine runs, as its `welcome` lists them.
     pub fn apps(&self) -> Vec<App> {
-        self.apps.clone()
+        self.runs().apps.to_vec()
     }
 
     pub async fn project(&self, id: ProjectId) -> Result<Arc<Project>, Refusal> {

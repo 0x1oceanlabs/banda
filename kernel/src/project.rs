@@ -282,7 +282,7 @@ pub struct Project {
     owner: PersonId,
     store: Store,
     /// The modules that run here: [`Project::modules`].
-    modules: Arc<[Arc<dyn Module>]>,
+    modules: std::sync::RwLock<Arc<[Arc<dyn Module>]>>,
     passes: Arc<Passes>,
     window: Arc<Window>,
     environment: Arc<dyn Environment>,
@@ -376,7 +376,7 @@ impl Project {
         }
         // What is turned off here runs nothing here: no call, no effect,
         // no listener, and it is told of nothing.
-        let modules = (modules.iter())
+        let modules: Arc<[_]> = (modules.iter())
             .filter(|module| store.off_of(module.name()).is_none())
             .cloned()
             .collect();
@@ -389,7 +389,7 @@ impl Project {
             removed: Default::default(),
             owner,
             store,
-            modules,
+            modules: std::sync::RwLock::new(modules),
             passes,
             window,
             environment,
@@ -403,7 +403,7 @@ impl Project {
         outbox::recover(&project).await?;
         // Each module picks up its work before any effect runs, so what it
         // finds is what the last boot left.
-        for module in project.modules.iter() {
+        for module in project.modules().iter() {
             module.opened(project.module(module.name())).await?;
         }
         tokio::spawn(outbox::work(Arc::downgrade(&project)));
@@ -628,10 +628,75 @@ impl Project {
         &self.store
     }
 
-    /// The modules that run here: every one of its scope but those turned
-    /// off here ([`Project::available`]).
-    pub(crate) fn modules(&self) -> &[Arc<dyn Module>] {
-        &self.modules
+    /// The modules that run here now: every one of its scope but those
+    /// turned off here ([`Project::available`]).
+    pub(crate) fn modules(&self) -> Arc<[Arc<dyn Module>]> {
+        self.modules.read().unwrap().clone()
+    }
+
+    /// The module `name` as this Project runs it now; none when it is
+    /// turned off here, or was taken away. One put in another's place
+    /// while the engine runs is each Project's as that Project took it,
+    /// so a call here never runs the old one over tables the new one's
+    /// steps changed.
+    pub(crate) fn serving(&self, name: &str) -> Option<Arc<dyn Module>> {
+        let here = self.modules.read().unwrap();
+        here.iter().find(|had| had.name() == name).cloned()
+    }
+
+    /// Takes `module`, added while the engine runs, or put in the place of
+    /// the one of its name: its tables come up to date here
+    /// ([`Store::add`]), and it is told it opened, as when the Project
+    /// does. One it replaces has ended its calls here first, and none
+    /// begins meanwhile: a module new here waits for nothing. Why it is
+    /// turned off here, when its tables do not come up to date or it does
+    /// not open.
+    pub(crate) async fn add(self: &Arc<Self>, module: &Arc<dyn Module>) -> Option<String> {
+        let name = module.name();
+        let _still = match self.serving(name) {
+            Some(_) => Some(self.moving.write().await),
+            None => None,
+        };
+        let taken = async {
+            if let Some(off) = self.store.add(Tables::of(&**module)).await? {
+                return Ok::<_, Error>(Some(off.words()));
+            }
+            module.opened(self.module(name)).await?;
+            Ok(None)
+        };
+        let off = match taken.await {
+            Ok(off) => off,
+            Err(error) => Some(Refusal::from(error).message),
+        };
+        let mut modules = self.modules.write().unwrap();
+        let others = modules.iter().filter(|had| had.name() != name).cloned();
+        match &off {
+            None => {
+                *modules = others.chain([module.clone()]).collect();
+                // What waited while it was off, or not there, may run.
+                self.store.outbox_signal().notify_one();
+            }
+            Some(why) => {
+                *modules = others.collect();
+                tracing::error!(
+                    module = name, project = %self.id, why,
+                    "a module added is turned off in a Project"
+                );
+            }
+        }
+        off
+    }
+
+    /// Lets go of the module `name`, taken away while the engine runs,
+    /// once its calls here have ended: it runs nothing here from then,
+    /// and what it kept stays.
+    pub(crate) async fn remove(&self, name: &str) {
+        let _still = self.moving.write().await;
+        let mut modules = self.modules.write().unwrap();
+        *modules = (modules.iter())
+            .filter(|had| had.name() != name)
+            .cloned()
+            .collect();
     }
 
     /// Refuses `app_unavailable`, with why, when `module` is turned off

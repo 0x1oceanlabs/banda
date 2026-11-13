@@ -4,11 +4,12 @@
 use crate::access;
 use crate::apps::App;
 use crate::environment::{Environment, Nowhere};
-use crate::kernel::{Entry, Kernel, PowerStreams, Projects};
+use crate::kernel::{Entry, Kernel, PowerStreams, Projects, Runs};
 use crate::module::{Module, Scope, Stream, Wall};
 use crate::outbox::Boot;
 use crate::passes::{self, Passes};
 use crate::project::{GONE, Manifest, Project, Shared, UNFINISHED};
+use crate::registry::Registry;
 use crate::window::Window;
 use crate::{CommandId, Error, Named, Participant, PersonId, ProjectId, Refusal};
 use std::collections::HashMap;
@@ -28,6 +29,10 @@ pub struct KernelBuilder {
     named: Option<watch::Receiver<Named>>,
     power: Option<PowerStreams>,
     apps: Vec<App>,
+    registry: Option<Registry>,
+    /// The names of the modules it opens with that may be replaced or
+    /// taken away while it runs.
+    added: Vec<&'static str>,
 }
 
 impl KernelBuilder {
@@ -88,6 +93,26 @@ impl KernelBuilder {
         self
     }
 
+    /// A module the kernel opens with that its [`Registry`] may replace or
+    /// take away while it runs, listed as the App `app`: an App from
+    /// outside the build, installed before this start. Refused as the
+    /// kernel opens when it could not be added while it runs.
+    pub fn added(mut self, module: impl Module, app: App) -> Self {
+        self.added.push(module.name());
+        self.apps.push(app);
+        self.modules.push(Arc::new(module));
+        self
+    }
+
+    /// The handle through which a module of the platform adds a module to
+    /// this kernel while it runs, an App's from outside the build: bound to
+    /// the kernel as it opens. With none, its modules are those it opens
+    /// with.
+    pub fn registry(mut self, registry: Registry) -> Self {
+        self.registry = Some(registry);
+        self
+    }
+
     /// Opens every Project the data holds, once the old Projects under the root
     /// have moved theirs out (ADR 0026). A Project that fails to open is
     /// logged and left closed, so it cannot keep the others shut.
@@ -98,14 +123,26 @@ impl KernelBuilder {
                 return Err(Refusal::invalid(format!("Two modules are named \"{name}\".")).into());
             }
         }
+        let of_machine = |module: &&Arc<dyn Module>| {
+            module.scope() == Scope::Machine && self.added.contains(&module.name())
+        };
+        if let Some(module) = self.modules.iter().find(of_machine) {
+            let name = module.name();
+            return Err(Refusal::invalid(format!(
+                "{name} is a module of the machine: it is not one to replace while the engine runs."
+            ))
+            .into());
+        }
         crate::tables::check(&self.modules)?;
         std::fs::create_dir_all(&self.root)?;
         let projects_data = self.data.join("projects");
         crate::old::from_spaces(&self.data, &projects_data, self.machine.as_deref());
         std::fs::create_dir_all(&projects_data)?;
         crate::old::move_out(&self.root, &projects_data);
-        let (of_machine, in_projects): (Vec<_>, Vec<_>) =
-            (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
+        let of_machine: Vec<_> = (self.modules.iter())
+            .filter(|module| module.scope() == Scope::Machine)
+            .cloned()
+            .collect();
         let boot = Boot::new();
         let passes_file = (self.passes.clone()).unwrap_or_else(|| self.data.join(PASSES));
         let term = self.pass_term;
@@ -148,9 +185,11 @@ impl KernelBuilder {
             projects_data,
             owner: self.owner,
             boot,
-            tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
-            modules: self.modules.into(),
-            in_projects: in_projects.into(),
+            runs: watch::Sender::new(Arc::new(Runs::of(
+                self.modules.clone(),
+                self.apps,
+                self.added,
+            ))),
             projects,
             adding: Default::default(),
             machine,
@@ -159,8 +198,10 @@ impl KernelBuilder {
             environment: self.environment,
             named: self.named,
             power: self.power,
-            apps: self.apps,
         });
+        if let Some(registry) = &self.registry {
+            registry.bind(&kernel);
+        }
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
@@ -266,6 +307,8 @@ impl Kernel {
             named: None,
             power: None,
             apps: Vec::new(),
+            registry: None,
+            added: Vec::new(),
         }
     }
 
@@ -307,7 +350,7 @@ impl Kernel {
         let wall = match only {
             None => None,
             Some(project)
-                if self.tools.iter().any(|tool| tool.method == method)
+                if self.runs().tools.iter().any(|tool| tool.method == method)
                     || module.passes_reach(rest) =>
             {
                 let sees_others = self.project(project).await?.sees_others();
@@ -334,7 +377,7 @@ impl Kernel {
             machine: self.machine.clone(),
             projects: None,
         };
-        let modules = self.in_projects.clone();
+        let modules = self.runs().in_projects.clone();
         Project::open(data, manifest, modules, engine, &self.boot).await
     }
 }

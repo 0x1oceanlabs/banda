@@ -158,12 +158,23 @@ async fn an_app_is_installed_from_a_folder_listed_installed_again_and_removed() 
     let installed = installed.await.unwrap();
     assert_eq!(installed["id"], "clients");
     assert_eq!(installed["version"], "0.1.0");
-    assert_eq!(installed["runs"], false, "from the engine's next start");
-    assert_eq!(host.installed().await, json!([installed]));
+    // This engine serves none: it is installed, and no more.
+    assert_eq!(
+        (&installed["runs"], &installed["off"]),
+        (&json!(false), &json!([]))
+    );
+    let mut listed = installed.clone();
+    listed.as_object_mut().unwrap().remove("off");
+    assert_eq!(host.installed().await, json!([listed]));
     // What runs is the copy: the folder it came from may change or go.
-    let copy = host.installed.join("clients/app");
-    assert!(copy.join("migrations/001.sql").is_file());
-    assert!(copy.join("worker.mjs").is_file());
+    let copy = || {
+        let place = host.installed.join("clients");
+        let kept = std::fs::read(place.join("installed.json")).unwrap();
+        let kept: Value = serde_json::from_slice(&kept).unwrap();
+        place.join(kept["copy"].as_str().unwrap())
+    };
+    assert!(copy().join("migrations/001.sql").is_file());
+    assert!(copy().join("worker.mjs").is_file());
     // The machine's log says it.
     let machine = host.kernel.machine().unwrap();
     let log = host.kernel.follow(host.person(), machine).await.unwrap();
@@ -178,7 +189,7 @@ async fn an_app_is_installed_from_a_folder_listed_installed_again_and_removed() 
     std::fs::remove_dir(folder.join("migrations")).unwrap();
     let again = host.call(host.person(), "apps.install", install).await;
     assert_eq!(again.unwrap()["version"], "0.2.0");
-    assert!(!copy.join("migrations").exists());
+    assert!(!copy().join("migrations").exists());
     assert_eq!(host.installed().await[0]["version"], "0.2.0");
 
     // Removed, it is listed no more; removing it twice is refused.
