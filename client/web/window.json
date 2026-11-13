@@ -957,14 +957,16 @@
       "title": "Paste",
       "section": "Banda",
       "keys": [],
-      "unlisted": true
+      "unlisted": true,
+      "runsAsPerson": true
     },
     {
       "id": "edit.paste-plain",
       "title": "Paste as plain text",
       "section": "Banda",
       "keys": [],
-      "unlisted": true
+      "unlisted": true,
+      "runsAsPerson": true
     },
     {
       "id": "edit.copy-image",

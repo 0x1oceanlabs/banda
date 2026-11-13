@@ -246,11 +246,12 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 Banda's keys (ADR 0071): every action with its keys in force, and the lines of keys.toml that bind them, written as `banda settings set` writes after the look's checks. `banda keys` is its command; an Agent has its methods as tools. It writes the rest of Banda's settings for an Agent too, whose files are read-only behind the fence, and refuses what only the Person changes (ADR 0083). It reads a machine's own part of each settings file, and says as it changes, for a window of another device (ADR 0106).
 
-Its methods, `banda call keys.<method>`: `list`, `bind`, `free`, `reset`, `set_mod`, `settings_set`, `settings_reset`, `settings_rename`, `settings_read`, `settings_changed`.
+Its methods, `banda call keys.<method>`: `list`, `act`, `bind`, `free`, `reset`, `set_mod`, `settings_set`, `settings_reset`, `settings_rename`, `settings_read`, `settings_changed`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
 - `keys_list`: Every action of Banda's window and its modules: its id, title, section, the scope its keys work in (none: everywhere), its keys in force, whose each is (the Person's line in keys.toml, or Banda's own), and what it takes. Find an action by its title here before binding it.
+- `act`: Runs one of Banda's actions in your Person's window by its id, as its key does: `overview.toggle` shows the Overview, `terminal.new` opens a terminal beside the Pane in focus. `keys_list` names every action, what it takes and the scope it works in: an action of a scope runs for the Pane in focus, when that Pane is of the scope. It refuses, with why, an action Banda has not, args it does not take, and what only your Person does: an action that sends words to an Agent, or runs or opens something outside Banda, as `thread.new` with `ask` does, and what is written and sent in a field, as the Composer's Send. With no window open, it says so.
 - `keys_bind`: Binds a key to an action, in keys.toml: `Alt+M` to `column.maximize`, with the args it takes when it takes any, in its scope's table for an action of a scope. Banda's keys hold the mod (Alt, unless keys.toml moved it). It refuses, with why, an action Banda has not, args it does not take, a key the window's fields would type, and a key only your Person binds: one that sends words to an Agent, or runs or opens something outside Banda, as `thread.new` with `ask` does. Tell your Person what changed, and that `keys_reset` undoes it.
 - `keys_free`: Frees a key, in keys.toml: it goes to the Pane, as Alt+F to a shell, and the action that had it keeps its other keys.
 - `keys_reset`: Takes the Person's line of a key out of keys.toml, so Banda's own key is back.

@@ -108,22 +108,26 @@ export function refused({ said, offer }: Refused): void {
  * Project no machine the Window knows has may be this machine's, added
  * since its list was read: that list is read once more, from this
  * machine's own engine, before the act is refused, so nothing fails closed
- * only because this window has not looked.
+ * only because this window has not looked. How it went, for what asked
+ * from outside the window and hears no toast (ADR 0127, decision 2).
  */
 export function actAs(
   hosts: Pick<KeptHosts, "reread">,
   route: () => Route,
   run: (args: Args | undefined) => void
-): void {
+): Promise<Route> {
+  const ran = (routed: Route): Route => {
+    if (routed.runs) run(routed.args)
+    else refused(routed)
+    return routed
+  }
   const first = route()
-  if (first.runs) return run(first.args)
-  if (first.why !== UNKNOWN) return refused(first)
-  void hosts.reread().then(() => {
+  if (first.runs || first.why !== UNKNOWN) return Promise.resolve(ran(first))
+  return hosts.reread().then(() => {
     const again = route()
-    if (!again.runs) return refused(again)
     // The rest of the window hears of the Project too.
-    projectsChanged()
-    run(again.args)
+    if (again.runs) projectsChanged()
+    return ran(again)
   })
 }
 

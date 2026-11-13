@@ -618,6 +618,20 @@ The kernel holds only what every module needs, and it names no module.
   time, the ask is refused, and says whether the work may have run.
   Each request carries that time, and the window stops its handler past
   it, so what the handler holds goes.
+- **An action runs from anywhere** (ADR 0127, decision 2). `banda act ID`
+  and an Agent's `act` tool run any action of the window or of an App by
+  its id, as its key does. Both call `keys.act` (`platform/keys/engine`),
+  which checks the id and the args against what the manifests declare, as
+  a line of `keys.toml` is checked, and refuses an Agent what acts as the
+  Person (`runsAsPerson`, ADR 0083, decision 3) and what a field's scope
+  does, as the Composer's Send; every other action is an Agent's to run.
+  An action that declares no args is given none. It asks the window by the road, and main hands the
+  action to its page and awaits the page's answer
+  (`client/desktop/src/acts.ts`, the one road by which main asks the page
+  to run an action; its menu bar goes by it too). The page runs it where
+  the Person is now and says it ran, or why not
+  (`client/web/src/window/asked.ts`): it has no such action, the focus is
+  not in the action's scope, or the router did not run it there.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path
@@ -1918,7 +1932,10 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   0005, decision 11); Ctrl+Alt+Shift+K (`keys.reset`) is no file's, and
   brings the window's own keys back until the file changes. The settings Pane's
   Keys section shows the file's lines, and opens the key sheet in the
-  window for the rest.
+  window for the rest. `runAction` runs each by its id, from a key, a
+  menu, a widget, a Pane, and from outside the window: `banda act` and an
+  Agent's `act` tool, through the engine (`window/asked.ts`; ADR 0127,
+  decision 2).
 - **The sidebar** lists every Thread of every Project, arranged as the
   Person's keys say (ADR 0008, as ADR 0098 amends it): grouped by Project,
   by machine or not at all; Your turn oldest or newest first; Open and the

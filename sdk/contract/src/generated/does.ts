@@ -175,6 +175,7 @@ export const DOES = {
   "harnesses.limits": "read",
   "harnesses.usage": "read",
   "keys.list": "read",
+  "keys.act": "act",
   "keys.bind": "act",
   "keys.free": "act",
   "keys.reset": "act",

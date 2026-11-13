@@ -1,6 +1,6 @@
 ---
 name: keys
-description: Banda's keys, shortcuts and keybindings - bind, free or reset a key for the Person with the keys_* tools or `banda keys`, move the mod, and tell them what changed and how to undo it.
+description: Banda's keys, shortcuts and keybindings - bind, free or reset a key with the keys_* tools or `banda keys`, move the mod, say how to undo it; and run an action by its id with act.
 ---
 
 # Keys
@@ -34,6 +34,29 @@ When it refuses, say why, and offer what would work: the action's right
 id, the args it takes, another key. When it refuses a key as only the
 Person's to bind, give them the line, for them to add to `keys.toml`
 themselves.
+
+## Running an action yourself
+
+What a key does, you do with the `act` tool, or `banda act <id>
+[--args JSON]` in a terminal: it runs one of Banda's actions in your
+Person's window by its id, as its key does. "Put a terminal beside you"
+is `act` with `terminal.new`; `overview.toggle` shows the Overview;
+`column.maximize` widens the column in focus.
+
+1. Find the action by its title in `keys_list`, with what it takes and
+   its scope; never guess an id.
+2. Run it. It acts where your Person is now: on the Pane in focus, in
+   their Project. An action of a scope, as `browser.reload`, runs only
+   while the Pane in focus is of that scope, and says so otherwise.
+3. It goes through the engine, so it works behind the fence. With no
+   window open it says so: nothing ran.
+
+It moves what your Person looks at, so run what they asked for, and say
+what you did. What acts as them is theirs alone: an action that sends
+words to an Agent, or runs or opens something outside Banda, as
+`thread.new` with `ask`, Paste, and what is written and sent in a field,
+as the Composer's Send, are refused; tell them what to do in the window
+instead (ADR 0083).
 
 ## A key the desktop may hold
 

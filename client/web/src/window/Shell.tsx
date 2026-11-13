@@ -147,6 +147,7 @@ import {
   type Shell as Parts,
   useWindowApi,
 } from "./actions"
+import { useAsked } from "./asked"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
@@ -594,7 +595,7 @@ export function Shell({
       void lookingInto(engine, fingerprint)
         .then((thread) => runAction(parts, "thread.new", thread))
         .catch(() => undefined),
-    run: (action, args) => runAction(parts, action, args),
+    run: (action, args) => void runAction(parts, action, args),
     engine,
     hosts: kept,
     ...useTops(kept),
@@ -790,19 +791,8 @@ export function Shell({
     }),
     [change, changing, update, parts, popOut, stores, drawnNow]
   )
-  // What a Pane in its own window asks, the window does, as for its own.
-  useEffect(
-    () =>
-      device.popped.asked((asked) => {
-        if ("open" in asked) {
-          const { project, pane, from, place } = asked.open
-          frame.open(project, pane, from, place)
-        } else if ("run" in asked) {
-          parts.run(asked.run.action, asked.run.args)
-        }
-      }),
-    [frame, parts]
-  )
+  // What is asked from outside the window, it does, as for its own.
+  useAsked(parts, frame.open)
   return (
     <KeysInForce.Provider value={keys}>
       <Kept

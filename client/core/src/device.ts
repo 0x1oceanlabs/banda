@@ -161,6 +161,19 @@ export type PoppedAsk =
   | { run: { action: string; args?: Args } }
 
 /**
+ * An action the device asks the Window to run, as its key does, for who
+ * asks from outside the page (ADR 0127, decision 2): the engine, for
+ * `banda act` and an Agent's `act` tool, or the device itself, as its
+ * menu bar. `id` names the ask in its answer.
+ */
+export type ActAsk = { id: number; action: string; args?: Args }
+
+/** The Window's answer to an `ActAsk`: it ran the action, or `refused`
+ * says why not, in words: it has no such action, the focus is not in the
+ * action's scope, or the action did not run there. */
+export type ActAnswer = { id: number; refused?: string }
+
+/**
  * Takes a channel's current value, then each new one it tells. A value
  * told while the first answer was on its way is the newer, so it wins.
  */

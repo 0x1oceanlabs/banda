@@ -11,6 +11,8 @@
 import type { Address } from "@banda/contract"
 import type { Listed } from "@banda/contract/look"
 import type {
+  ActAnswer,
+  ActAsk,
   Cap,
   HostEntry,
   HostState,
@@ -148,6 +150,17 @@ export const device = {
      * stopped. */
     asked: (listener: (asked: PoppedAsk) => void) =>
       desktop()?.popped.asked(listener),
+  },
+  /** Actions asked of the Window from outside the page (ADR 0127,
+   * decision 2): by the engine, for `banda act` and an Agent's `act`
+   * tool, and by the desktop itself, as its menu bar. */
+  act: {
+    /** Calls `listener` with each action the Window is asked to run,
+     * until it is stopped. */
+    asked: (listener: (asked: ActAsk) => void) =>
+      desktop()?.act.asked(listener),
+    /** Answers one: the Window ran it, or why not. */
+    answer: (answer: ActAnswer): void => desktop()?.act.answer(answer),
   },
   /** The Banda menu, as `banda menu ROUTE` opens it (ADR 0017, decision
    * 7). */

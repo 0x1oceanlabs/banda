@@ -7,6 +7,8 @@ test("without the desktop each part does nothing, and the settings say why they 
   vi.stubGlobal("window", {})
   expect(device.popped.follow(() => undefined)).toBeUndefined()
   expect(device.popped.asked(() => undefined)).toBeUndefined()
+  expect(device.act.asked(() => undefined)).toBeUndefined()
+  expect(() => device.act.answer({ id: 0 })).not.toThrow()
   expect(device.menu.listen(() => undefined)).toBeUndefined()
   expect(device.files.exists("/a")).toBeUndefined()
   expect(() => device.quit()).not.toThrow()
