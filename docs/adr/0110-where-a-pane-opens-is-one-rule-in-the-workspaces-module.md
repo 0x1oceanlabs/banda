@@ -115,6 +115,33 @@ Each step is its own PR, and the window keeps working after each.
    and the refusing left `moving` and `bringing` in `window/actions.ts`.
 3. The Top layer in the Window: one stack, the keys, one focus return, so
    a Pane's inner field gets them back whichever layer closes.
+   _Built_: `client/web/src/window/top/`. `layers.ts` is the one order of
+   what lies over what, the lowest first: `sidebar`, `peek`, `drawer`,
+   `sheet`, `top`, `carried`. Each is a token of Banda UI with the value
+   it had as a number (ADR 0113, decision 5), and the Window draws its
+   own parts in that order. `stack.ts` is the one stack. A part that
+   shows says its layer, whether it takes the keys and how it closes
+   (`useTop`), and its root says its name (`data-top`). The Sheet, the
+   Drawer, Quick Look, the Banda menu and the Quit dialog are on it.
+   - **Esc.** The stack hears it last, at the window, and takes away the
+     part on top, one for each Esc. Whoever keeps an Esc stops it, and
+     the stack never hears it: a field, a Pane's own key, which the
+     keys' router stops, a terminal's program, and Banda UI's menus,
+     selects and dialogs, which close themselves. Those are all on `top`,
+     over every part the stack closes, so they go first. An Esc an input
+     method composes with is the field's. No part keeps a test of what
+     is over it.
+   - **The keys.** The stack remembers where they last were in each part
+     that takes them, and under them all: in a Pane's tile, or a field of
+     the Sidebar, with the caret of a text edited in place. As a part
+     goes, they go back to the level now on top, at that place; with the
+     place gone, to that part's root or the tile of the Pane in front.
+     What took the focus meanwhile, as a Pane a menu's row opened, keeps
+     it.
+   - **Not yet.** An App's part (`WindowApi.top`) and Banda UI's other
+     popups keep the library's close and its return of the focus to what
+     opened them. The keys' router still reads `role=dialog` to leave a
+     dialog its keys, and `pane.close` still asks the Sheet by itself.
 4. Cleaning `arrange.ts`, `actions.ts` and `Shell.tsx`, and the Tiling
    driver into `client/core`.
 

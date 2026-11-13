@@ -254,40 +254,15 @@ const LISTED: Listed[] = [
     ],
   },
 
-  // Layers (design.12, decision 5): all move in step 5, with ADR 0110
-  // step 3.
+  // Layers (design.12, decision 5): the Top layer's took their names with
+  // ADR 0110 step 3; the rest move in step 5.
   {
     rule: "design.12",
-    why: "Step 5: the Top layer's 50, shadcn's menus, dialogs and popovers and the browser's titles, becomes `z-top`; a carried Pane's, `z-carried`.",
-    cases: [
-      "apps/browser/pane/src/BrowserPane.tsx: z-50",
-      "client/ui/src/components/context-menu.tsx: z-50",
-      "client/ui/src/components/context-menu.tsx: z-50",
-      "client/ui/src/components/dialog.tsx: z-50",
-      "client/ui/src/components/dialog.tsx: z-50",
-      "client/ui/src/components/dropdown-menu.tsx: z-50",
-      "client/ui/src/components/dropdown-menu.tsx: z-50",
-      "client/ui/src/components/hover-card.tsx: z-50",
-      "client/ui/src/components/hover-card.tsx: z-50",
-      "client/ui/src/components/popover.tsx: z-50",
-      "client/ui/src/components/popover.tsx: z-50",
-      "client/ui/src/components/select.tsx: z-50",
-      "client/ui/src/components/select.tsx: z-50",
-      "client/ui/src/components/suggestions.tsx: z-50",
-      "client/web/src/tiling/useMoving.ts: z-50",
-      "client/web/src/tiling/useMoving.ts: z-50",
-    ],
-  },
-  {
-    rule: "design.12",
-    why: "Step 5: the Window's areas take their layer's name: the sidebar and its edge, the Drawer and sheets, a Peek, a carried Pane's place.",
+    why: "Step 5: the rest of the Window's own takes its layer's name: the sidebar and its edge with the sidebar's steps, a carried Pane's place with the Tiling's. The Top layer's are named (ADR 0110, step 3).",
     cases: [
       "client/web/src/sidebar/Edge.tsx: z-30",
       "client/web/src/sidebar/Sidebar.tsx: z-20",
       "client/web/src/tiling/PaneMenu.tsx: z-40",
-      "client/web/src/window/Drawer.tsx: z-30",
-      "client/web/src/window/Peek.tsx: z-20",
-      "client/web/src/window/Sheet.tsx: z-30",
     ],
   },
   {

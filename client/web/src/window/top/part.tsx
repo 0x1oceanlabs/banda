@@ -7,8 +7,8 @@
 import { useState } from "react"
 import type { Args, KeptHosts } from "@banda/core"
 import { Store, useStore } from "@banda/core/react"
-import { tops } from "../registry"
-import { type Shell, useWindowApi } from "./actions"
+import { tops } from "../../registry"
+import { type Shell, useWindowApi } from "../actions"
 
 /** A part asked for, and its args; none while the Top layer holds none. */
 export type TopAsked = { part: string; args: Args } | null

@@ -27,15 +27,16 @@ import { gateOf, type Handle, PaneMount, usePaneHandles } from "../tiling/mount"
 import { Elsewhere } from "../tiling/PaneFrame"
 import { PaneSlot } from "../tiling/PaneSlot"
 import { opening, type Shell } from "./actions"
-import { usePeekEsc } from "./keys"
+import { useTop } from "./top"
 
 /** What peeks over the desk: a Pane of a Project, and whether it fills
  * the desk. */
 export type Peeked = { project: ProjectId; pane: PaneState; fill: boolean }
 
 /** Quick Look's tile over the desk (ADR 0073, decision 7): one Pane, in
- * no workspace, and whether it fills the desk. Esc closes it, unless a
- * menu or a dialog over it takes the Esc first. */
+ * no workspace, and whether it fills the desk. It is on its layer of the
+ * Top layer's stack, which closes it on an Esc nothing kept while it is on
+ * top, and takes no keys. */
 export function usePeek() {
   const [peek, setPeek] = useState<Peeked | null>(null)
   const peekNow = useRef(peek)
@@ -48,7 +49,12 @@ export function usePeek() {
     setPeek((was) => was && { ...was, fill: !was.fill })
     return true
   }, [])
-  usePeekEsc(peek !== null, closePeek)
+  useTop(peek !== null, {
+    part: "peek",
+    layer: "peek",
+    keys: false,
+    close: closePeek,
+  })
   return { peek, setPeek, peekNow, closePeek, fillPeek }
 }
 
@@ -127,10 +133,11 @@ export function Peek({
     </>
   )
   return (
-    <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center py-(--gap-outer) pr-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]">
+    <div className="pointer-events-none absolute inset-0 z-peek flex items-center justify-center py-(--gap-outer) pr-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]">
       <section
         aria-label={`Quick Look: ${title}`}
         data-peek=""
+        data-top="peek"
         data-fill={fill || undefined}
         data-selected="true"
         className={`${FLOATING} group/tile pointer-events-auto flex h-[82%] w-[min(100%,max(64%,36rem),56rem)] animate-in flex-col overflow-hidden transition-[width,height] duration-200 ease-out fade-in-0 zoom-in-95 data-fill:h-full data-fill:w-full motion-reduce:animate-none motion-reduce:transition-none`}

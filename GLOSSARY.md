@@ -687,7 +687,9 @@ _Avoid_: place (in code, where a Pane opens), dock.
 What sits over the tiles: the Banda menu, the launcher, the Drawer, the
 Sheet, Quick Look, dialogs, menus and toasts. There is one of each at a time, but
 toasts, which stack up to three. The Drawer and Quick Look each hold one
-Pane; the Window draws the toasts (ADR 0011, ADR 0087).
+Pane; the Window draws the toasts (ADR 0011, ADR 0087). Its layers have
+one order; `Esc` takes away the part on top, one for each press, and the
+keys go back where they were (ADR 0110).
 _Avoid_: overlay (that is the tiling's unsaved changes), float.
 
 **Here**:

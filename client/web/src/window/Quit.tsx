@@ -15,6 +15,7 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { isMac } from "@banda/ui/lib/keys"
+import { useTop } from "./top"
 
 /** Asks whether to stop `working` Agents and quit; none while it is null. */
 export function QuitDialog({
@@ -28,6 +29,9 @@ export function QuitDialog({
 }) {
   // One at least: the words stay as the dialog fades out.
   const asks = quitAsks(Math.max(working ?? 1, 1), isMac)
+  // A dialog on the Top layer's stack: it closes on its own Esc, and the
+  // stack gives the keys back where they were.
+  useTop(working !== null, { part: "quit", layer: "top", keys: true })
   return (
     <Dialog
       open={working !== null}
@@ -35,7 +39,7 @@ export function QuitDialog({
         if (!open) onClose()
       }}
     >
-      <DialogContent showCloseButton={false}>
+      <DialogContent data-top="quit" showCloseButton={false} finalFocus={false}>
         <DialogHeader>
           <DialogTitle>{asks?.title}</DialogTitle>
           <DialogDescription>{asks?.detail}</DialogDescription>

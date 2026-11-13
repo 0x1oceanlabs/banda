@@ -219,7 +219,9 @@ export function Settings({
               onChange={(event) => setWords(event.target.value)}
               onKeyDown={(event) => {
                 if (event.key !== "Escape" || !words) return
+                // Its own: not the Sheet's, which the next one takes away.
                 event.preventDefault()
+                event.stopPropagation()
                 setWords("")
               }}
               placeholder="Search settings"

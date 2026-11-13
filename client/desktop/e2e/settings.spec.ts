@@ -456,8 +456,8 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await expect(composer).toBeFocused()
 
   // The sidebar's gear goes to it where it is, and brings the keys back
-  // in; opened from the gear, Esc gives them to the Thread, which types
-  // in its composer.
+  // in; opened from the gear, a button pressed on the way, Esc gives them
+  // back to the Thread's composer, where they were (ADR 0110, step 3).
   const gear = page
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: "Settings" })
@@ -472,7 +472,7 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await expect(settings).toBeFocused()
   await page.keyboard.press("Escape")
   await expect(settings).toHaveCount(0)
-  await expect(tile).toBeFocused()
+  await expect(composer).toBeFocused()
   await page.keyboard.type("hi")
   await expect(composer).toHaveText("hi")
 
@@ -484,7 +484,7 @@ test("the Sheet is the one top layer: it has the keys while it shows, Esc and Al
   await expect(settings).toBeFocused()
   await page.keyboard.press("Escape")
   await expect(settings).toHaveCount(0)
-  await expect(tile).toBeFocused()
+  await expect(composer).toBeFocused()
 
   // The overview takes the keys, and the Sheet goes. Opened over the
   // overview, the Sheet gives them back to it as it goes.

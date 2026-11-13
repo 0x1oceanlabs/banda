@@ -7,12 +7,7 @@ import {
   useRef,
   useState,
 } from "react"
-import {
-  type Engine,
-  newId,
-  type ProjectId,
-  type ProjectSummary,
-} from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
@@ -112,7 +107,7 @@ import {
 import { unsoloing } from "../tiling/groups"
 import { TILING_FILE } from "@banda/contract/workspaces"
 import { useFile } from "@banda/ui/lib/look"
-import { Drawer } from "./Drawer"
+import { Drawer, useDrawer } from "./Drawer"
 import { Peek, usePeek } from "./Peek"
 import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
@@ -120,11 +115,9 @@ import { usePlacing } from "./placing"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
 import {
-  keepDrawer,
   keepLooked,
   keepSidebar,
   keepSidebarWidth,
-  loadDrawer,
   loadLooked,
   loadSidebar,
   loadSidebarWidth,
@@ -150,7 +143,7 @@ import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
-import { TopPart, useTops } from "./top"
+import { Layered, TopPart, useTopFollows, useTops } from "./top"
 
 /** The modules' sources, as a route names one for the menu to show alone. */
 const menuSources = sources.map(({ source }) => source)
@@ -321,50 +314,20 @@ export function Shell({
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
   )
-  // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
-  // whether it shows. Dropped with none, it gets a new Thread in the home
-  // Project, the agents module's, which opens it there (`drawer`).
-  const [drawer, setDrawer] = useState(loadDrawer)
-  const [drawerShown, setDrawerShown] = useState(false)
-  // Kept from the last run, it is drawn from its first drop in this one.
-  const [dropped, setDropped] = useState(false)
-  useEffect(() => keepDrawer(drawer), [drawer])
+  // The drawer (ADR 0025, decision 8). Dropped with none, it gets a new
+  // Thread in the home Project, the agents module's, which opens it there.
+  const drawer = useDrawer()
   const drawerLook = useLookDrawer()
-  const drawerNow = useRef(drawer)
-  useEffect(() => {
-    drawerNow.current = drawer
-  }, [drawer])
   const toggleDrawer = useCallback(
-    (parts: Parts) => {
-      const harness = drawerLook.harness
-      if (!drawerNow.current)
-        return parts.run("thread.new", {
+    (parts: Parts) =>
+      drawer.toggle(() =>
+        parts.run("thread.new", {
           project: home,
           place: "drawer",
-          ...(harness && { harness }),
+          ...(drawerLook.harness && { harness: drawerLook.harness }),
         })
-      setDrawerShown((shown) => !shown)
-      setDropped(true)
-    },
-    [home, drawerLook.harness]
-  )
-  // A Pane opened into the drawer, dropped, in place of what it held.
-  const intoDrawer = useCallback((pane: PaneState, project: ProjectId) => {
-    const entry = { id: newId(), project, pane }
-    drawerNow.current = entry
-    setDrawer(entry)
-    setDrawerShown(true)
-    setDropped(true)
-  }, [])
-  const liftDrawer = useCallback(() => setDrawerShown(false), [])
-  const closeDrawer = useCallback(() => {
-    setDrawerShown(false)
-    setDrawer(undefined)
-  }, [])
-  // Its entry as its Pane changes it; lifted or closed, the drawer stays so.
-  const changeDrawer = useCallback(
-    (how: (was: Entry) => Entry) => setDrawer((was) => was && how(was)),
-    []
+      ),
+    [drawer, home, drawerLook.harness]
   )
   // Quick Look's tile over the desk (ADR 0073, decision 7).
   const { peek, setPeek, peekNow, closePeek, fillPeek } = usePeek()
@@ -483,9 +446,9 @@ export function Shell({
     open: (
       pane,
       project,
-      { beside, again = true, update, toggle, drawer, ...how } = {}
+      { beside, again = true, update, toggle, drawer: inDrawer, ...how } = {}
     ) => {
-      if (drawer) return intoDrawer(pane, project ?? home)
+      if (inDrawer) return drawer.into(pane, project ?? home)
       if (sheetsOf(pane)) return sheet.show(pane, project, { toggle, again })
       // The Pane that peeks, opened in the workspace, peeks no more.
       const peeked = peekNow.current
@@ -621,14 +584,15 @@ export function Shell({
       .flatMap((module) => module.start?.(api) ?? [])
     return () => stops.forEach((stop) => stop())
   }, [running, api])
-  // The keys run the actions, before any Pane hears them (keys.ts).
+  // The keys run the actions, before any Pane hears them (keys.ts); an
+  // Esc none kept, the Top layer's stack hears last (top/stack.ts).
   useKeyRouter(parts, keyed, mod)
+  useTopFollows()
   // Pinned, the drawer's Thread is a column where the Flow says.
   const pinDrawer = useCallback(() => {
-    const entry = drawerNow.current
-    closeDrawer()
+    const entry = drawer.take()
     if (entry) change((w) => placed(w, entry.project, entry.pane, placing))
-  }, [closeDrawer, change, placing])
+  }, [drawer, change, placing])
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const startThread = useCallback(
     (project: ProjectId, ask?: string) =>
@@ -836,7 +800,7 @@ export function Shell({
                 {ready && (
                   <Workspaces
                     workspaces={workspaces}
-                    covered={overview || drawerShown}
+                    covered={overview || drawer.shown}
                     overview={overview}
                     modules={modules}
                     projectOf={projectOf}
@@ -853,17 +817,6 @@ export function Shell({
                     onStep={stepBy}
                     onGo={goTo}
                     onStart={startHere}
-                  />
-                )}
-                {peek && (
-                  <Peek
-                    peek={peek}
-                    shell={parts}
-                    onUpdate={(pane) =>
-                      setPeek((was) => was && { ...was, pane })
-                    }
-                    onFill={fillPeek}
-                    onClose={closePeek}
                   />
                 )}
                 <Toaster />
@@ -887,23 +840,38 @@ export function Shell({
                   actions={keyed}
                   binds={binds}
                 />
-                {drawer && dropped && (
-                  <Drawer
-                    entry={drawer}
-                    shown={drawerShown}
-                    height={drawerLook.height}
-                    modules={modules}
-                    shows={shows}
-                    projectOf={projectOf}
-                    frame={frame}
-                    onLift={liftDrawer}
-                    onPin={pinDrawer}
-                    onChange={changeDrawer}
-                    onClose={closeDrawer}
-                  />
-                )}
-                {/* After the drawer: the Sheet stands over it, dropped. */}
-                <Sheet state={sheet} shell={parts} />
+                {/* Each on its layer, in the layers' order (`top/layers.ts`). */}
+                <Layered
+                  parts={{
+                    peek: peek && (
+                      <Peek
+                        peek={peek}
+                        shell={parts}
+                        onUpdate={(pane) =>
+                          setPeek((was) => was && { ...was, pane })
+                        }
+                        onFill={fillPeek}
+                        onClose={closePeek}
+                      />
+                    ),
+                    drawer: drawer.drawn && (
+                      <Drawer
+                        entry={drawer.drawn}
+                        shown={drawer.shown}
+                        height={drawerLook.height}
+                        modules={modules}
+                        shows={shows}
+                        projectOf={projectOf}
+                        frame={frame}
+                        onLift={drawer.lift}
+                        onPin={pinDrawer}
+                        onChange={drawer.change}
+                        onClose={drawer.close}
+                      />
+                    ),
+                    sheet: <Sheet state={sheet} shell={parts} />,
+                  }}
+                />
                 {overview && (
                   <Overview
                     open={overviewState === "open"}

@@ -1162,11 +1162,14 @@ test("Threads Banda keeps Supervised: one notice on the machine for those from b
   await expect(fenceRow(page)).toBeVisible()
   await expect(again).toHaveCount(0)
   // Settings come as a Sheet over the Thread: Esc takes it away, and the
-  // keys go back to the Thread.
+  // keys go back to the Thread's composer, where they were (ADR 0110,
+  // step 3).
   await page.keyboard.press("Escape")
   await expect(fenceRow(page)).toHaveCount(0)
   await expect(
-    page.locator("section[data-tile][data-focused=true]")
+    page
+      .locator("section[data-tile][data-focused=true]")
+      .getByRole("textbox", { name: "Message to Fake AI" })
   ).toBeFocused()
   // Once on this machine, not once a Thread: a turn kept so again says
   // nothing, in the time a notice would take to show; nor as the window

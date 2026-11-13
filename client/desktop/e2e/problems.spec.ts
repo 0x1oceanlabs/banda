@@ -113,11 +113,14 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
   await expect(
     settings.getByRole("button", { name: /panic the index broke/ })
   ).toHaveAttribute("aria-expanded", "true")
-  // Esc gives the keys back to the Thread.
+  // Esc gives the keys back to the Thread's composer, where they were
+  // (ADR 0110, step 3).
   await page.keyboard.press("Escape")
   await expect(settings).toHaveCount(0)
   await expect(
-    page.locator("section[data-tile][data-focused=true]")
+    page
+      .locator("section[data-tile][data-focused=true]")
+      .getByRole("textbox", { name: "Message to Fake AI" })
   ).toBeFocused()
 })
 

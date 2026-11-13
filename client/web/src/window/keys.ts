@@ -2,9 +2,10 @@
  * How keys reach the Window's actions: the keys in force, as the Person
  * binds them (ADR 0071, decision 4); the router, which runs the action a
  * key is bound to before any Pane hears it, or hands the key on to a
- * program (ADR 0005, decision 10); the two keys a popped-out Pane's window
- * takes; and Quick Look's Esc. The Window routes the keys (ADR 0087,
- * decision 1): one matcher, `pressFor`, and no App takes another's keys.
+ * program (ADR 0005, decision 10); and the two keys a popped-out Pane's
+ * window takes. The Window routes the keys (ADR 0087, decision 1): one
+ * matcher, `pressFor`, and no App takes another's keys. An Esc no key
+ * here and no Pane kept is the Top layer's (`top/stack.ts`).
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
@@ -194,24 +195,4 @@ export function usePoppedKeys(
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [keyed, mod, close, back])
-}
-
-/** What takes an Esc before Quick Look's tile: a menu, a dialog or a
- * list of suggestions over it. */
-const OVER_PEEK = "[role=menu], [role=dialog], [role=listbox]"
-
-/** While Quick Look shows (ADR 0073, decision 7), Esc closes it, unless a
- * menu or a dialog over it takes the Esc first. */
-export function usePeekEsc(peeking: boolean, close: () => void): void {
-  useEffect(() => {
-    if (!peeking) return
-    const onKey = (event: KeyboardEvent) => {
-      const target = event.target instanceof Element ? event.target : null
-      if (event.key !== "Escape" || target?.closest(OVER_PEEK)) return
-      event.preventDefault()
-      close()
-    }
-    window.addEventListener("keydown", onKey)
-    return () => window.removeEventListener("keydown", onKey)
-  }, [peeking, close])
 }

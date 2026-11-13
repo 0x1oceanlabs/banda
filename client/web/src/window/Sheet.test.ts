@@ -1,58 +1,15 @@
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
 import { open, start } from "../tiling/model"
-import { awayTo, backTo, escAway, sheetEntries, take } from "./Sheet"
+import { awayTo, sheetEntries, take } from "./Sheet"
 
-/** An element as the Sheet's checks read it: in the page or gone, what
- * it is in, as `[data-tile]`, and whether it is a field. */
-const element = ({
-  connected = true,
-  inside = [] as string[],
-  field = false,
-} = {}) =>
+/** An element as the Sheet's check reads it: what it is in, as
+ * `[data-stack]`. */
+const element = ({ inside = [] as string[] } = {}) =>
   ({
-    isConnected: connected,
     closest: (selector: string) =>
       selector.split(", ").some((one) => inside.includes(one)) ? {} : null,
-    matches: () => field,
   }) as unknown as HTMLElement
-
-test("Esc takes the Sheet away wherever the focus is, but not from a menu over it, nor one a field in it took (ADR 0102, decision 5)", () => {
-  // In it, on nothing, or in a composer behind it that took the Esc.
-  expect(escAway("Escape", false, element({ inside: ["[data-sheet]"] }))).toBe(
-    true
-  )
-  expect(escAway("Escape", false, null)).toBe(true)
-  expect(escAway("Escape", true, element({ inside: ["[data-tile]"] }))).toBe(
-    true
-  )
-  // The search with words clears first; a menu, a dialog or suggestions
-  // over it take theirs.
-  expect(escAway("Escape", true, element({ inside: ["[data-sheet]"] }))).toBe(
-    false
-  )
-  const listed = element({ inside: ["[data-sheet]", "[role=listbox]"] })
-  expect(escAway("Escape", false, listed)).toBe(false)
-  expect(escAway("Escape", false, element({ inside: ["[role=dialog]"] }))).toBe(
-    false
-  )
-  expect(escAway("a", false, null)).toBe(false)
-})
-
-test("as the Sheet goes, the keys go back to the tile or field they came from, else to the focused Pane's tile", () => {
-  const tile = element({ inside: ["[data-tile]"] })
-  const composer = element({ inside: ["[data-tile]"], field: true })
-  expect(backTo(composer, tile)).toBe(composer)
-  // A field outside the tiles, as the sidebar's.
-  const field = element({ field: true })
-  expect(backTo(field, tile)).toBe(field)
-  // The gear, or a menu's row or the Sheet itself, gone as it went, give
-  // them to the focused Pane.
-  expect(backTo(element(), tile)).toBe(tile)
-  const gone = element({ connected: false, inside: ["[data-tile]"] })
-  expect(backTo(gone, tile)).toBe(tile)
-  expect(backTo(null, null)).toBeNull()
-})
 
 test("the keys going to a Pane take the Sheet away: a tile, the dropped drawer's, the overview, or a page a tile holds (ADR 0102, decision 5)", () => {
   expect(awayTo(element({ inside: ["[data-stack]"] }))).toBe(true)

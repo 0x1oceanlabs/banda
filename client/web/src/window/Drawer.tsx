@@ -1,5 +1,14 @@
-import { memo, useLayoutEffect, useMemo, useRef } from "react"
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { newId, type ProjectId, type ProjectSummary } from "@banda/contract"
+import type { PaneState } from "@banda/ui/pane"
 import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import { PinIcon } from "lucide-react"
@@ -7,13 +16,68 @@ import { boxOf } from "@banda/ui/lib/tile"
 import { type Shows, useItemShown } from "../tiling/shows"
 import type { Entry } from "../tiling/model"
 import { type Frame, PaneFrame } from "../tiling/PaneFrame"
+import { keepDrawer, loadDrawer } from "../tiling/store"
+import { useTop } from "./top"
+
+/**
+ * The drawer's state (ADR 0025, decision 8): its Pane, kept between runs,
+ * and whether it shows. Kept from the last run, it is `drawn` from its
+ * first drop in this one. `toggle` drops or lifts it, and with none has
+ * `start` open one in it; `into` drops a Pane in it, in place of what it
+ * held; `change` has its Pane change its entry; `take` closes it and
+ * gives what it held, as its pin does.
+ */
+export function useDrawer() {
+  const [entry, setEntry] = useState(loadDrawer)
+  const [shown, setShown] = useState(false)
+  const [dropped, setDropped] = useState(false)
+  useEffect(() => keepDrawer(entry), [entry])
+  const now = useRef(entry)
+  useEffect(() => {
+    now.current = entry
+  }, [entry])
+  const toggle = useCallback((start: () => void) => {
+    if (!now.current) return start()
+    setShown((shown) => !shown)
+    setDropped(true)
+  }, [])
+  const into = useCallback((pane: PaneState, project: ProjectId) => {
+    const entry = { id: newId(), project, pane }
+    now.current = entry
+    setEntry(entry)
+    setShown(true)
+    setDropped(true)
+  }, [])
+  const lift = useCallback(() => setShown(false), [])
+  // Lifted or closed, it stays so as its Pane changes its entry.
+  const close = useCallback(() => {
+    setShown(false)
+    setEntry(undefined)
+  }, [])
+  const change = useCallback(
+    (how: (was: Entry) => Entry) => setEntry((was) => was && how(was)),
+    []
+  )
+  const take = useCallback(() => {
+    const held = now.current
+    close()
+    return held
+  }, [close])
+  const drawn = dropped ? entry : undefined
+  return useMemo(
+    () => ({ drawn, shown, toggle, into, lift, close, change, take }),
+    [drawn, shown, toggle, into, lift, close, change, take]
+  )
+}
 
 /**
  * The drawer (ADR 0025, decision 8): a Thread that drops from the top
  * over the workspace, as a terminal that drops down does. Lifted, it is
  * kept drawn, so it stays as it was; its pin makes it a column of the
- * workspace on screen. It is the window's, in no workspace. The workspace
- * under it is covered, so its focus comes back when it is lifted.
+ * workspace on screen. It is the window's, in no workspace. Dropped, it
+ * is on its layer of the Top layer's stack, which lifts it on an Esc
+ * nothing in it kept, and gives the keys back to the workspace under it,
+ * where they were.
  */
 export const Drawer = memo(function Drawer({
   entry,
@@ -45,6 +109,7 @@ export const Drawer = memo(function Drawer({
   onClose: () => void
 }) {
   const item = useItemShown(shows, entry)
+  useTop(shown, { part: "drawer", layer: "drawer", keys: true, close: onLift })
   const own: Frame = useMemo(
     () => ({
       // The focus is the drawer's while it shows; the workspace keeps its own.
@@ -107,7 +172,7 @@ export const Drawer = memo(function Drawer({
     [onPin]
   )
   return (
-    <div className="pointer-events-none absolute inset-0 z-30 overflow-hidden">
+    <div className="pointer-events-none absolute inset-0 z-drawer overflow-hidden">
       <div
         aria-hidden
         onPointerDown={onLift}
@@ -124,11 +189,7 @@ export const Drawer = memo(function Drawer({
         aria-label="Drawer"
         inert={!shown}
         data-drawer={shown || undefined}
-        onKeyDown={(event) => {
-          // Esc lifts it, but for what in it keeps its Esc and stops it
-          // there: a text field's prevents its default always.
-          if (event.key === "Escape") onLift()
-        }}
+        data-top="drawer"
         style={{ height: `calc(${height * 100}% - var(--gap-outer))` }}
         className={cn(
           "pointer-events-auto absolute top-0 right-(--gap-outer) left-[calc(var(--gap-outer)+var(--sidebar-inset))] flex transition-transform duration-200 ease-out motion-reduce:transition-none",
