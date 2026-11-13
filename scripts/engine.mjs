@@ -10,9 +10,11 @@
 //
 // - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda` and its updater
 //   `banda-update` (ADR 0131), its line tables
-//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the Node they
-//   run on (`node/node`, ADR 0119 step 1b: scripts/node.mjs put it in
-//   target/node/<platform>/) and the licenses, laid out as the engine's
+//   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the window's
+//   page it serves at its door (`web/dist/`, ADR 0124, with no source
+//   maps), the Node the adapters run on (`node/node`, ADR 0119 step 1b:
+//   scripts/node.mjs put it in target/node/<platform>/) and the licenses,
+//   laid out as the engine's
 //   own copy is (client/desktop/src/program.ts), so its files go into
 //   <data>/engine/<version>/ as they are;
 // - <feed>-engine-<os>.yml, beside the app's own (dev-linux.yml): the
@@ -58,6 +60,7 @@ const carried = [
   "banda-update",
   ...(os === "mac" ? ["banda.dSYM"] : []),
   "adapters",
+  "web",
   "LICENSE",
   "NOTICE",
   "THIRD-PARTY-NOTICES.txt",
@@ -103,7 +106,19 @@ const file = join(dist, name)
 rmSync(file, { force: true })
 execFileSync(
   "tar",
-  ["-czf", file, "-C", resources, ...carried, "-C", nodes, "node/node"],
+  [
+    "-czf",
+    file,
+    // The page's source maps stay with the app: a machine with no window
+    // reads none.
+    "--exclude=web/dist/assets/*.map",
+    "-C",
+    resources,
+    ...carried,
+    "-C",
+    nodes,
+    "node/node",
+  ],
   { stdio: "inherit" }
 )
 
@@ -115,6 +130,7 @@ for (const name of [
   "banda-update",
   "adapters/claude-agent-acp.mjs",
   "adapters/codex-acp.mjs",
+  "web/dist/index.html",
   "node/node",
 ]) {
   if (!listed.includes(name))

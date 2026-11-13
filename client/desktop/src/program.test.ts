@@ -26,6 +26,7 @@ import {
   ELECTRON,
   NODE_FOLDER,
   ownCopy,
+  PAGE_FOLDER,
   Program,
   programsOf,
   prune,
@@ -246,6 +247,35 @@ describe("the copy and the adapters the app carries", () => {
         )
       ).toBe("// the adapter")
     })
+  )
+
+  it.live(
+    "takes the window's page, which the engine serves at its door, and is made again without it",
+    () =>
+      Effect.gen(function* () {
+        const copies = join(folder("data"), "engine")
+        const program = banda("banda 1.2.3 (build aa)")
+        const copy = yield* copyOf(program, copies)
+        const index = join(dirname(copy), PAGE_FOLDER, "dist/index.html")
+        expect(existsSync(index)).toBe(false)
+        // The app carries the page's build, a folder of folders.
+        const assets = join(dirname(program), PAGE_FOLDER, "dist/assets")
+        mkdirSync(assets, { recursive: true })
+        writeFileSync(join(assets, "../index.html"), "<title>Banda</title>")
+        writeFileSync(join(assets, "index-abc123.js"), "export {}")
+        expect(yield* copyOf(program, copies)).toBe(copy)
+        expect(readFileSync(index, "utf8")).toBe("<title>Banda</title>")
+        expect(
+          readFileSync(
+            join(dirname(copy), PAGE_FOLDER, "dist/assets/index-abc123.js"),
+            "utf8"
+          )
+        ).toBe("export {}")
+        // Whole now: asked again, it is kept as it is.
+        writeFileSync(index, "<title>Banda</title><!-- kept -->")
+        expect(yield* copyOf(program, copies)).toBe(copy)
+        expect(readFileSync(index, "utf8")).toContain("kept")
+      })
   )
 
   it.live("made before it carried them, or missing one, is made again", () =>
