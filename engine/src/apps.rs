@@ -240,8 +240,20 @@ mod build {
             host.working.count(),
             host.hands.now(),
         );
+        // It runs as its own service beside the engine's, which looks
+        // every hour and guards a move: a systemd user unit, or a launchd
+        // job, of this Banda's name.
+        let service = banda_updates::daemon::Service {
+            name: if cfg!(target_os = "macos") {
+                format!("{}.update", env!("BANDA_APP_ID"))
+            } else {
+                format!("{}-update", crate::places::FOLDER)
+            },
+            state: host.places.state.clone(),
+            config: host.places.config.clone(),
+        };
         match helper {
-            Some(helper) => updates.through(helper),
+            Some(helper) => updates.through(helper).serving(service),
             None => {
                 tracing::info!("no banda-update beside the engine: it looks for updates itself");
                 updates

@@ -113,6 +113,8 @@ fn publish(
 struct Machine {
     updates: Updates,
     engine: PathBuf,
+    /// Where the fake GitHub listens.
+    releases: String,
     _folder: tempfile::TempDir,
 }
 
@@ -147,6 +149,7 @@ async fn machine_running(
     Machine {
         updates,
         engine,
+        releases: at,
         _folder: folder,
     }
 }
@@ -444,4 +447,72 @@ async fn banda_update_takes_the_newest_in_a_process_of_its_own() {
     // A version chosen goes through it too, and one it has not is refused.
     let refused = updates.choose("0.1.0-dev.99").await;
     assert!(refused.is_err(), "{refused:?}");
+}
+
+/// `banda-update run`, the updater's service: it looks by itself and keeps
+/// what it found for the engine; a copy the engine moved onto that does not
+/// answer on its version in time is marked bad, never taken again.
+#[tokio::test]
+async fn banda_update_run_looks_by_itself_and_marks_a_copy_that_did_not_start() {
+    let machine = machine_running(
+        "dev",
+        "0.1.0-dev.10",
+        |at, served| {
+            let newest = publish(
+                served,
+                at,
+                "0.1.0-dev.12",
+                bundle("banda 0.1.0-dev.12 (build b)"),
+                None,
+            );
+            format!("[{newest}]")
+        },
+        |_| None,
+    )
+    .await;
+    let folder = machine.engine.parent().unwrap();
+    let (state, config) = (folder.join("state"), folder.join("config"));
+    std::fs::create_dir_all(&state).unwrap();
+    std::fs::create_dir_all(&config).unwrap();
+    std::fs::write(state.join("engine.json"), r#"{"version":"0.1.0-dev.10"}"#).unwrap();
+    // The engine moved onto dev.11 three minutes ago, and still runs dev.10.
+    std::fs::create_dir_all(&machine.engine).unwrap();
+    let at = banda_kernel::now_ms() - 3 * 60 * 1000;
+    std::fs::write(
+        machine.engine.join("moved"),
+        format!(r#"{{"to":"0.1.0-dev.11","from":"0.1.0-dev.10","at":{at},"idle":true}}"#),
+    )
+    .unwrap();
+    let mut run = tokio::process::Command::new(env!("CARGO_BIN_EXE_banda-update"));
+    run.args([
+        "run",
+        "--channel",
+        "dev",
+        "--folder",
+        "banda-dev",
+        "--first-look",
+        "0",
+    ])
+    .arg("--engine")
+    .arg(&machine.engine)
+    .arg("--state")
+    .arg(&state)
+    .arg("--config")
+    .arg(&config)
+    .args(["--releases", &machine.releases])
+    .kill_on_drop(true);
+    let _service = run.spawn().unwrap();
+    let mut kept = None;
+    for _ in 0..100 {
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        kept = banda_updates::guard::kept_state(&machine.engine)
+            .map(|(state, _)| state)
+            .filter(|state| state.ready.is_some());
+        if kept.is_some() && !banda_updates::guard::bad(&machine.engine).is_empty() {
+            break;
+        }
+    }
+    let kept = kept.expect("it looked by itself");
+    assert_eq!(kept.ready.as_deref(), Some("0.1.0-dev.12"));
+    assert_eq!(banda_updates::guard::bad(&machine.engine), ["0.1.0-dev.11"]);
 }

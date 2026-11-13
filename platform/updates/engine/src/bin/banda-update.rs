@@ -7,7 +7,11 @@
 //! ```text
 //! banda-update check --running <v> --channel <c> --folder <f> --engine <dir> [--program <p>] [--takes <t>]
 //! banda-update take <version|newest> (the same options)
+//! banda-update run --channel <c> --folder <f> --engine <dir> --state <dir> --config <dir>
 //! ```
+//!
+//! `run` is the updater's service, beside the engine's (`daemon.rs`): it
+//! runs until it is stopped.
 //!
 //! It prints what the updates are as one line of JSON (`UpdateState`) at
 //! each change, the last one when it is done, and exits 0; 2 when its
@@ -42,6 +46,32 @@ enum Command {
         #[command(flatten)]
         of: Of,
     },
+    /// The updater's service: it looks every hour, and puts back a copy
+    /// the engine moved onto that does not start.
+    Run(Serving),
+}
+
+/// The Banda `run` serves.
+#[derive(clap::Args)]
+struct Serving {
+    #[arg(long)]
+    channel: String,
+    #[arg(long)]
+    folder: String,
+    /// Its data folder's `engine/`.
+    #[arg(long)]
+    engine: PathBuf,
+    /// Its state folder, where `engine.json` is.
+    #[arg(long)]
+    state: PathBuf,
+    /// Its config folder, where `machine.toml` is.
+    #[arg(long)]
+    config: PathBuf,
+    #[arg(long, hide = true)]
+    releases: Option<String>,
+    /// Seconds before its first look: for the tests.
+    #[arg(long, hide = true)]
+    first_look: Option<u64>,
 }
 
 /// The Banda it updates.
@@ -72,12 +102,7 @@ struct Of {
 
 impl Of {
     fn updates(self) -> Result<Updates, String> {
-        let channel = match self.channel.as_str() {
-            "stable" => "stable",
-            "dev" => "dev",
-            "local" => "local",
-            other => return Err(format!("--channel is stable, dev or local, not {other}")),
-        };
+        let channel = channel_of(&self.channel)?;
         let folder: &'static str = Box::leak(self.folder.into_boxed_str());
         let takes: TakeUpdates = serde_json::from_value(self.takes.clone().into())
             .map_err(|_| format!("--takes is when-idle, ask or off, not {}", self.takes))?;
@@ -98,11 +123,22 @@ impl Of {
     }
 }
 
+/// A channel's name as the library takes it.
+fn channel_of(said: &str) -> Result<&'static str, String> {
+    match said {
+        "stable" => Ok("stable"),
+        "dev" => Ok("dev"),
+        "local" => Ok("local"),
+        other => Err(format!("--channel is stable, dev or local, not {other}")),
+    }
+}
+
 fn main() -> ExitCode {
     let cli = Cli::parse();
     let (of, version) = match cli.command {
         Command::Check(of) => (of, None),
         Command::Take { version, of } => (of, Some(version)),
+        Command::Run(serving) => return serve(serving),
     };
     let engine = of.engine.clone();
     let updates = match of.updates() {
@@ -136,7 +172,38 @@ fn main() -> ExitCode {
         };
         said.abort();
         say(&last);
+        banda_updates::guard::keep_state(&engine, &last);
     });
+    ExitCode::SUCCESS
+}
+
+/// `run`: until it is stopped.
+fn serve(serving: Serving) -> ExitCode {
+    tracing_subscriber::fmt()
+        .with_writer(std::io::stderr)
+        .init();
+    let channel = match channel_of(&serving.channel) {
+        Ok(channel) => channel,
+        Err(why) => {
+            eprintln!("banda-update: {why}");
+            return ExitCode::from(2);
+        }
+    };
+    let Ok(runtime) = tokio::runtime::Runtime::new() else {
+        eprintln!("banda-update: no runtime");
+        return ExitCode::FAILURE;
+    };
+    runtime.block_on(banda_updates::daemon::run(banda_updates::daemon::Serves {
+        channel,
+        folder: Box::leak(serving.folder.into_boxed_str()),
+        engine: serving.engine,
+        state: serving.state,
+        config: serving.config,
+        releases: serving.releases,
+        first: serving
+            .first_look
+            .map_or(banda_updates::daemon::FIRST_LOOK, Duration::from_secs),
+    }));
     ExitCode::SUCCESS
 }
 

@@ -1917,7 +1917,19 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   beside the engine's (ADR 0131, decision 2): the engine runs
   `banda-update check` or `take <v>` with the Banda it is for, and takes
   each line of JSON it prints, an `UpdateState`, into its own; a copy
-  that carries none looks in the engine's process. Banda Dev
+  that carries none looks in the engine's process. Where the engine is
+  its machine's service (its systemd user unit or launchd job) and takes
+  updates, it starts `banda-update run` as a service of its own beside
+  it, `<folder>-update` on Linux (`systemd-run`, `Restart=always`),
+  `<app id>.update` on macOS (`launchctl submit`), in place of one that
+  ran: that service looks a minute after it starts, then hourly, keeps
+  each look's state in `<data>/engine/state.json`, which the engine
+  follows, and guards a move (`daemon.rs`, `guard.rs`). A copy the engine
+  moved onto that does not answer on its version, in `engine.json`,
+  within two minutes is listed in `<data>/engine/bad`, never taken or
+  moved onto again, and the copy it moved from starts again with its
+  `banda start`, after `systemctl --user reset-failed` of a unit that
+  gave up. Banda Dev
   reads every Dev, Banda only a Stable (`feed.rs`); the window's app
   reads the release it found newest. A release carries an engine feed,
   `<dev|latest>-engine-<linux|mac>.yml`, naming one bundle,
