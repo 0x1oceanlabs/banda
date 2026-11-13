@@ -34,6 +34,7 @@ export default defineConfig([
     "**/dist",
     "**/out",
     "**/node_modules",
+    "**/.astro",
     "sdk/contract/src/generated",
     "target",
     "client/desktop/test-results",

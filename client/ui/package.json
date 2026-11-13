@@ -7,6 +7,7 @@
   "description": "Banda's look: shadcn/ui (preset b0) on Base UI, Banda's mark and sounds, and the Pane contract every Pane is built to.",
   "exports": {
     "./globals.css": "./src/styles/globals.css",
+    "./theme.css": "./src/styles/theme.css",
     "./pane": "./src/pane.ts",
     "./status": "./src/status.ts",
     "./module": "./src/module.ts",

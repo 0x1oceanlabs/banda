@@ -111,10 +111,10 @@ export function defines(sheet: string, selector: string): Map<string, string> {
 
 /** The names `@banda/ui`'s `@theme` makes, each with its value. */
 const THEME = defines(
-  readFileSync(new URL("globals.css", STYLES), "utf8"),
+  readFileSync(new URL("theme.css", STYLES), "utf8"),
   "@theme inline"
 )
-if (THEME.size === 0) throw new Error("globals.css has no @theme inline block")
+if (THEME.size === 0) throw new Error("theme.css has no @theme inline block")
 
 /** The names `@theme` makes of one namespace (`text`, `z-index`), each
  * with its value; a level's line height, after a second `--`, is no name. */

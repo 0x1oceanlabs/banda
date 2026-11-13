@@ -14,7 +14,7 @@ test("the chat's sizes merge as sizes, keeping a colour beside them", () => {
 
 test("each level of the type scale merges as a size, keeping a colour beside it", () => {
   const theme = defines(
-    readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8"),
+    readFileSync(new URL("../styles/theme.css", import.meta.url), "utf8"),
     "@theme inline"
   )
   const levels = [...theme].flatMap(([name, value]) => {
@@ -41,7 +41,7 @@ test("a corner's level replaces another", () => {
 
 test("an elevation replaces another, and keeps a ring beside it", () => {
   const theme = defines(
-    readFileSync(new URL("../styles/globals.css", import.meta.url), "utf8"),
+    readFileSync(new URL("../styles/theme.css", import.meta.url), "utf8"),
     "@theme inline"
   )
   // Each elevation `@theme` makes, by its own shadow, not Tailwind's sizes.

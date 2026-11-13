@@ -1,0 +1,278 @@
+/*
+ * Banda's theme without the window: shadcn's tokens on Banda's, the type
+ * and the base, for any page drawn with Banda UI. The window's
+ * globals.css takes it with what only the window needs; banda.so's site
+ * takes it alone (ADR 0128). It comes after `@import "tailwindcss"`.
+ */
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+@import "@fontsource-variable/inter";
+/* The monospace where the system names none, as on macOS (ADR 0047). */
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/jetbrains-mono/wght-italic.css";
+/* Banda's tokens before the first look comes, written from the token list
+   (platform/theme/src/tokens.rs, ADR 0080, decision 7). The look sets
+   each on the root as it resolves them. */
+@import "@banda/contract/tokens.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme inline {
+  --font-heading: var(--font-sans);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-desk: var(--desk);
+  --color-panel: var(--panel);
+  --color-tile: var(--tile);
+  --color-overview: var(--overview);
+  --color-overview-foreground: var(--overview-foreground);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-account-own: var(--account-own);
+  --color-account-claude: var(--account-claude);
+  --color-account-1: var(--account-1);
+  --color-account-2: var(--account-2);
+  --color-account-3: var(--account-3);
+  --color-account-4: var(--account-4);
+  --color-account-5: var(--account-5);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-attention: var(--attention);
+  --color-woke: var(--woke);
+  --color-woke-text: var(--woke-text);
+  --color-mark-open: var(--mark-open);
+  --color-mark-working: var(--mark-working);
+  --color-mark-later: var(--mark-later);
+  --color-warning: var(--warning);
+  --color-focus: var(--focus);
+  --color-focus-inactive: var(--focus-inactive);
+  --color-added: var(--added);
+  --color-removed: var(--removed);
+  --color-sub-grey: var(--sub-grey);
+  --color-sub-faint: var(--sub-faint);
+  --color-sub-rule: var(--sub-rule);
+  --color-effort-top: var(--effort-top);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--floating);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  /* The corners: five levels, each inside the one before (ADR 0080,
+     decision 6). Components round with these, `rounded-full` and
+     `rounded-none` only; shadcn's ladder lands on them, for what comes
+     from shadcn as it is: sm on small, md and lg on control, xl and up on
+     card (ADR 0100, decision 11). */
+  --radius-window: var(--window-radius);
+  --radius-tile: var(--tile-radius);
+  --radius-card: var(--card-radius);
+  --radius-control: var(--control-radius);
+  --radius-small: var(--small-radius);
+  --radius-xs: var(--small-radius);
+  --radius-sm: var(--small-radius);
+  --radius-md: var(--control-radius);
+  --radius-lg: var(--control-radius);
+  --radius-xl: var(--card-radius);
+  --radius-2xl: var(--card-radius);
+  --radius-3xl: var(--card-radius);
+  --radius-4xl: var(--card-radius);
+  --color-block: var(--block);
+  --color-raised: var(--raised);
+  /* The type scale (ADR 0113, decision 3): each level the theme's tokens,
+     sized from its font size (platform/theme/src/fonts.rs). Prose is
+     sized by its Pane (ADR 0058). Tailwind's own sizes are cleared; its
+     names land on a level, for what comes as it is, as streamdown and
+     shadcn's components as `shadcn add` brings them (decision 8): xs
+     meta, sm UI, base title, lg and up heading. Banda's code writes the
+     level's name: the look check refuses Tailwind's. */
+  --text-*: initial;
+  --text-heading: var(--heading-size);
+  --text-heading--line-height: var(--heading-leading);
+  --text-title: var(--title-size);
+  --text-title--line-height: var(--title-leading);
+  --text-prose: var(--prose-size);
+  --text-prose--line-height: var(--prose-leading);
+  --text-ui: var(--ui-size);
+  --text-ui--line-height: var(--ui-leading);
+  --text-code: var(--code-size);
+  --text-code--line-height: var(--code-leading);
+  --text-meta: var(--meta-size);
+  --text-meta--line-height: var(--meta-leading);
+  --text-small: var(--small-size);
+  --text-small--line-height: var(--small-leading);
+  --text-figure: var(--figure-size);
+  --text-figure--line-height: var(--figure-leading);
+  --text-xs: var(--meta-size);
+  --text-xs--line-height: var(--meta-leading);
+  --text-sm: var(--ui-size);
+  --text-sm--line-height: var(--ui-leading);
+  --text-base: var(--title-size);
+  --text-base--line-height: var(--title-leading);
+  --text-lg: var(--heading-size);
+  --text-lg--line-height: var(--heading-leading);
+  --text-xl: var(--heading-size);
+  --text-xl--line-height: var(--heading-leading);
+  --text-2xl: var(--heading-size);
+  --text-2xl--line-height: var(--heading-leading);
+  --text-3xl: var(--heading-size);
+  --text-3xl--line-height: var(--heading-leading);
+  --text-4xl: var(--heading-size);
+  --text-4xl--line-height: var(--heading-leading);
+  --text-5xl: var(--heading-size);
+  --text-5xl--line-height: var(--heading-leading);
+  --text-6xl: var(--heading-size);
+  --text-6xl--line-height: var(--heading-leading);
+  --text-7xl: var(--heading-size);
+  --text-7xl--line-height: var(--heading-leading);
+  --text-8xl: var(--heading-size);
+  --text-8xl--line-height: var(--heading-leading);
+  --text-9xl: var(--heading-size);
+  --text-9xl--line-height: var(--heading-leading);
+  /* The elevations (decision 4), tokens with their strengths the theme's:
+     what floats, the Top layer and a Pane's own floating bar; what the
+     Person carries, a Pane being moved or a Peek; and the Window's own, a
+     tile over glass, the focused tile, the glass sidebar. Tailwind's sizes
+     land on float, for what comes as it is (decision 8); inset and drop
+     shadows are cleared. */
+  --shadow-float: var(--float-shadow);
+  --shadow-lift: var(--lift-shadow);
+  --shadow-tile: var(--tile-shadow);
+  --shadow-focus: var(--focus-shadow);
+  --shadow-panel: var(--panel-shadow);
+  --shadow: var(--float-shadow);
+  --shadow-2xs: var(--float-shadow);
+  --shadow-xs: var(--float-shadow);
+  --shadow-sm: var(--float-shadow);
+  --shadow-md: var(--float-shadow);
+  --shadow-lg: var(--float-shadow);
+  --shadow-xl: var(--float-shadow);
+  --shadow-2xl: var(--float-shadow);
+  --shadow-inner: initial;
+  --inset-shadow-*: initial;
+  --drop-shadow-*: initial;
+  /* Two colours that are not the theme's (decision 6): a document's own
+     page, white in every theme, as a PDF's; and black that dims, under a
+     dialog or the Drawer, behind a video. */
+  --color-paper: #fff;
+  --color-scrim: #000;
+  /* The layers, by name (decision 5), with today's values; their order is
+     ADR 0110 step 3's. Inside a Pane or a component: above its siblings,
+     and its floating bar or sticky head. The Window's own: the sidebar,
+     the Drawer and sheets, the Top layer, and what the Person carries. */
+  --z-index-raised: 10;
+  --z-index-float: 20;
+  --z-index-sidebar: 20;
+  --z-index-drawer: 30;
+  --z-index-top: 50;
+  --z-index-carried: 50;
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
+}
+
+/*
+ * The tiles' look (ADR 0007): the gaps, the tiles' corners and borders,
+ * and how the focused tile stands out, as Hyprland shows it: its border
+ * takes the focus colour. Those are tokens the look sets from the theme
+ * and look.toml, with Banda's own in tokens.css until it comes; here is
+ * what the page still works out of them. Components read these
+ * variables, never constants of their own.
+ */
+:root {
+  /* [focus] shadow: the focused tile lifts a little off the desk, glass
+     or not; with a hairline border, the outline and this show the focus
+     (ADR 0075, decision 5). */
+  --focus-shadow:
+    0 6px 16px -4px rgb(0 0 0 / var(--focus-shadow-strength)),
+    0 1px 3px rgb(0 0 0 / calc(var(--focus-shadow-strength) * 0.5));
+  /* The three surfaces (ADR 0023), --desk, --panel and --tile, are
+     tokens: the look gives them solid, or thinned over glass (ADR 0100,
+     decision 4). The overview follows the desk's theme (ADR 0052). A
+     little of the text colour sets the miniature screens apart on a solid
+     desk. */
+  --overview: color-mix(in oklab, var(--desk) 94%, var(--foreground));
+  --overview-foreground: var(--foreground);
+  /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
+     Solid, on glass too (ADR 0075, decision 3). */
+  --floating: var(--popover);
+  /* Banda's own glass (ADR 0023): the wallpaper the desktop serves. Only
+     glass casts the shadows: a solid desk shows none, a clear shadow, as
+     `none` would void the list of shadows it joins. */
+  --desk-wallpaper: none;
+  --tile-shadow: 0 0 #0000;
+  --panel-shadow: 0 0 #0000;
+  --bar-rule: transparent;
+  /* The sidebar floats over the Strip's left: the Strip's columns start
+     past it, and scroll on under it. */
+  --sidebar-width: 16rem;
+  --sidebar-inset: 0px;
+  /* Scrollbars as T3 Code draws them: a thin thumb in the border's
+     colour on no track, as the ScrollArea's. The terminal's too. */
+  --app-scrollbar-width: 6px;
+  --app-scrollbar-thumb: var(--border);
+  --app-scrollbar-thumb-hover: var(--muted-foreground);
+  /* The Mark's looks that do not call, as a Thread's mark draws them (ADR
+     0099, decision 10), worked out from the text's tokens: black on white
+     weighs more than white on dark, so on a light theme open is the text
+     at 80%, and sleep the muted text at 55%. Work is the Group plate's
+     blue, muted to about the weight of a grey (ADR 0107), at 80% here. */
+  --mark-open: color-mix(in oklab, var(--foreground) 80%, transparent);
+  --mark-working: color-mix(in oklab, var(--working) 80%, transparent);
+  --mark-later: color-mix(in oklab, var(--muted-foreground) 55%, transparent);
+  /* Woke's yellow as small text, a card's time (ADR 0098, decision 8): on
+     a light theme darker, past 4.5:1 on the light glass, so it can be
+     read; the Mark keeps --woke. */
+  --woke-text: color-mix(in oklab, var(--woke) 60%, black);
+  /* How the sidebar's list moves (ADR 0098, S5c), by the design kit's
+     names: what is quick (a hover coming in, a row going, a ghost's
+     crossfade), a hover going, what comes (a row, a dim), and what is
+     slow (inbox zero's words, a machine away and back). What comes eases
+     in, what goes eases out; only opacity moves (ADR 0088, decision 2). */
+  --dur-fast: 120ms;
+  --dur-out: 80ms;
+  --dur: 200ms;
+  --dur-slow: 320ms;
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --ease-exit: cubic-bezier(0.3, 0, 1, 1);
+}
+
+.dark {
+  /* On a dark one open is the text's own; work is the plate's blue at
+     60%, sleep the text at 55%. */
+  --mark-open: var(--foreground);
+  --mark-working: color-mix(in oklab, var(--working) 60%, transparent);
+  --mark-later: color-mix(in oklab, var(--foreground) 55%, transparent);
+  /* On a dark one the yellow reads as it is. */
+  --woke-text: var(--woke);
+}
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  html {
+    font-size: var(--text-root);
+    @apply font-sans;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}

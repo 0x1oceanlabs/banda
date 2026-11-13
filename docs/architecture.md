@@ -2143,6 +2143,7 @@ banda/
     desktop/          Electron: the window and the engine's start; e2e tests
     desktop-kit/      what a module's part in main may use of main (ADR 0028)
   sdk/contract/       the engine's API for TypeScript: generated types and the client
+  site/               banda.so: static Astro pages drawn with Banda UI, served by Vercel (ADR 0128)
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
   scripts/try.sh      builds a tree and opens a window of its own from it, to click through

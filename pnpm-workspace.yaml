@@ -7,6 +7,8 @@ packages:
   - platform/*/desktop
   # The adapters Banda carries, which run on the host (ADR 0059).
   - platform/harnesses/adapters
+  # banda.so's site (ADR 0128).
+  - site
 
 allowBuilds:
   electron: true

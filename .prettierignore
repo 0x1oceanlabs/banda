@@ -1,6 +1,7 @@
 dist/
 out/
 node_modules/
+.astro/
 target/
 coverage/
 pnpm-lock.yaml

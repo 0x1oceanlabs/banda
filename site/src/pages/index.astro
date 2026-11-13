@@ -1,0 +1,28 @@
+---
+import { buttonVariants } from "@banda/ui/components/button"
+import Page from "../layouts/Page.astro"
+
+// What stands here until the site's design is chosen from its mocks
+// (AGENTS.md, "Show it first"): the thesis of docs/what-we-build.md.
+---
+
+<Page
+  title="Banda"
+  description="Banda is the Person's workspace in the age of AI: the Person, their Agents and their machines work together, in text."
+>
+  <main class="mx-auto flex min-h-dvh max-w-2xl flex-col justify-center gap-6 px-6">
+    <h1 class="text-4xl font-semibold tracking-tight">Banda</h1>
+    <p class="text-lg text-muted-foreground">
+      The Person's workspace in the age of AI. The Person, their Agents and
+      their machines work together, and they talk in text.
+    </p>
+    <div class="flex gap-2">
+      <a
+        class={buttonVariants({ size: "lg" })}
+        href="https://github.com/0x1oceanlabs/banda"
+      >
+        GitHub
+      </a>
+    </div>
+  </main>
+</Page>

@@ -1,0 +1,34 @@
+---
+import "../styles/site.css"
+
+interface Props {
+  title: string
+  description: string
+}
+
+const { title, description } = Astro.props
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="canonical" href={new URL(Astro.url.pathname, Astro.site)} />
+    <!-- Banda's dark theme is the `dark` class (theme.css): the site
+         follows the system's. Before the first paint, so it never flashes. -->
+    <script is:inline>
+      const dark = matchMedia("(prefers-color-scheme: dark)")
+      const follow = () =>
+        document.documentElement.classList.toggle("dark", dark.matches)
+      follow()
+      dark.addEventListener("change", follow)
+    </script>
+  </head>
+  <body class="min-h-dvh antialiased">
+    <slot />
+  </body>
+</html>
