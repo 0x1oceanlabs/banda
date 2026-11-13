@@ -4,7 +4,7 @@
 //! [`Module::right`](crate::Module::right) (ADR 0002, decision 9). The
 //! kernel asks here before it runs any of them.
 
-use crate::{AgentId, Participant, PersonId, ProjectId, Refusal};
+use crate::{AgentId, DeviceId, Participant, PersonId, ProjectId, Refusal};
 use uuid::Uuid;
 
 /// What a method needs.
@@ -61,6 +61,11 @@ pub struct Caller {
     /// What runs the process or the session that holds the pass, as the
     /// module that asked for it named it: an Agent's Harness entry.
     pub runs: Option<String>,
+    /// The device whose key opened the session, at the door (ADR 0124):
+    /// the machine keeps its record, so what it does names where the
+    /// Person sat. None for a program on this machine, which comes by the
+    /// API with the owner's secret or a pass.
+    pub device: Option<DeviceId>,
 }
 
 impl Caller {
@@ -72,6 +77,15 @@ impl Caller {
             only: Some(project),
             thread: None,
             runs: None,
+            device: None,
+        }
+    }
+
+    /// This caller, in a session `device`'s key opened at the door.
+    pub fn on(self, device: DeviceId) -> Caller {
+        Caller {
+            device: Some(device),
+            ..self
         }
     }
 
@@ -100,6 +114,7 @@ impl From<Participant> for Caller {
             only: None,
             thread: None,
             runs: None,
+            device: None,
         }
     }
 }

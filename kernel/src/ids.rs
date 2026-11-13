@@ -105,6 +105,11 @@ id!(
     EventId
 );
 id!(
+    /// A device the Person paired with this machine: its record there
+    /// keeps the device's key (ADR 0124).
+    DeviceId
+);
+id!(
     /// One command, chosen by its caller. A repeated command ID returns the
     /// first result (ADR 0002, decision 2).
     CommandId

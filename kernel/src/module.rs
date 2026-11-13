@@ -4,7 +4,7 @@ use crate::methods::{Kind, Tool, needs_command_id};
 use crate::outbox::{Effect, OnRestart, Outcome, Retry, Settled};
 use crate::project::ModuleProject;
 use crate::store::Receipt;
-use crate::{CommandId, Error, Participant, ProjectId, Refusal, Tx};
+use crate::{CommandId, DeviceId, Error, Participant, ProjectId, Refusal, Tx};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -207,6 +207,7 @@ pub struct Call {
     wall: Option<Wall>,
     thread: Option<Uuid>,
     runs: Option<String>,
+    device: Option<DeviceId>,
     /// Every Project of this machine, which a call of their owner's may
     /// reach ([`Call::other`]); none for a stream.
     projects: Option<Projects>,
@@ -248,8 +249,14 @@ impl Call {
             wall,
             thread,
             runs,
+            device: None,
             projects: None,
         }
+    }
+
+    /// The call, in a session that `device`'s key opened at the door.
+    pub(crate) fn on(self, device: Option<DeviceId>) -> Self {
+        Self { device, ..self }
     }
 
     /// The call, able to reach the other Projects of `projects`.
@@ -267,6 +274,13 @@ impl Call {
     /// The wall its caller's pass keeps it behind; none for the owner.
     pub fn wall(&self) -> Option<Wall> {
         self.wall
+    }
+
+    /// The device whose key opened its caller's session, at the door (ADR
+    /// 0124): where the Person sat as they did this. None for a program on
+    /// this machine, as the CLI and an Agent.
+    pub fn device(&self) -> Option<DeviceId> {
+        self.device
     }
 
     /// The Thread whose session its caller's pass was made for; none for

@@ -416,6 +416,32 @@ The kernel holds only what every module needs, and it names no module.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.
+- **Devices** (ADR 0124). A port beside Identity, for the door: this
+  machine's host key and the devices it paired, which the engine keeps
+  and hands to the door's router (`kernel/src/devices.rs`,
+  `devices::router`). The door is a second way in beside the API, over
+  the same session, for the Person's devices on any pipe; the API stays
+  for the programs on this machine, with the owner's secret and their
+  passes, and the door takes neither. Both ends prove a key on every
+  connection:
+  - the door speaks first, a `challenge` with a nonce, the host key, the
+    time and the protocols it speaks, signed by the host key;
+  - the device answers `hello` with the range of protocols it speaks, its
+    ID, a nonce of its own, and its key's signature over the door's
+    nonce, the host key, the origin its page came from and its own
+    nonce, so it opens no other connection, no other machine, and no
+    page elsewhere uses it;
+  - the door answers `welcome` with the protocol it picked and, as
+    `door`, the host key, the device and the host key's signature over
+    the device's nonce, which no pipe that repeats an old challenge can
+    make; or `goodbye`: `forbidden`, and to a device that proved itself,
+    `revoked` once this machine removed it, or `protocol`.
+
+  A device's session acts as the Person who paired it, and a module reads
+  the device as `Call::device`. Removing a device ends its sessions at
+  once, each told `revoked`: the port says each removal
+  (`Devices::removals`), and a session asks whether its own is still
+  paired.
 - **Environment** (ADR 0084, decision 1). A port beside Identity: where a
   Project's programs run. A module starts each through its Project's
   (`ModuleProject::environment`), never itself: a `Program` (its

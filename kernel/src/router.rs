@@ -173,6 +173,7 @@ impl Kernel {
             only,
             thread,
             runs,
+            device,
         } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
@@ -209,7 +210,8 @@ impl Kernel {
                 wall,
                 thread,
                 runs,
-            );
+            )
+            .on(device);
             let call = call.reaching(self.projects.clone());
             return module.call(call, rest, params).await.map(plain);
         }
@@ -235,7 +237,8 @@ impl Kernel {
                     wall,
                     thread,
                     runs,
-                );
+                )
+                .on(device);
                 let call = call.reaching(self.projects.clone());
                 module.call(call, rest, params).await
             }
@@ -310,6 +313,7 @@ impl Kernel {
             only,
             thread,
             runs,
+            device,
         } = caller.into();
         if let Some(own) = method.strip_prefix("window.")
             && let Some(right) = Window::right(own)
@@ -341,7 +345,8 @@ impl Kernel {
             wall,
             thread,
             runs,
-        );
+        )
+        .on(device);
         module.stream(call, rest, params).await
     }
 
