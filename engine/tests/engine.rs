@@ -481,6 +481,32 @@ fn an_agent_writes_an_app_and_installs_it_and_its_session_calls_it_at_once() {
         .map(|item| text(&item["text"]))
         .collect();
     assert_eq!(texts, ["walk", "read"]);
+
+    // What it keeps reads without it: printed as lines, the last saying
+    // it is whole, or written as the export's files.
+    let export = || places.banda(&["export", "--app", "habits", "--project", &work]);
+    let printed = export().output().unwrap();
+    assert!(printed.status.success(), "{printed:?}");
+    let lines: Vec<Value> = (printed.stdout.split(|byte| *byte == b'\n'))
+        .filter(|line| !line.is_empty())
+        .map(|line| serde_json::from_slice(line).unwrap())
+        .collect();
+    assert_eq!(lines[0]["file"], "app.json");
+    let rows: Vec<_> = (lines.iter())
+        .filter(|line| line["file"] == "habits_items.ndjson")
+        .map(|line| text(&line["line"]["text"]))
+        .collect();
+    assert_eq!(rows, ["walk", "read"]);
+    let done = json!({ "app.json": 1, "events.ndjson": 2, "habits_items.ndjson": 2 });
+    assert_eq!(lines.last().unwrap(), &json!({ "done": done }));
+    let to = places._dir.path().join("exported");
+    let written = said(export().arg("--to").arg(&to).output().unwrap());
+    assert_eq!(written["done"], done);
+    let kept = std::fs::read_to_string(to.join("habits/habits_items.ndjson")).unwrap();
+    assert_eq!(kept.lines().count(), 2);
+    let head = std::fs::read_to_string(to.join("habits/app.json")).unwrap();
+    assert!(serde_json::from_str::<Value>(&head).is_ok(), "{head}");
+
     assert!(
         places
             .banda(&["app", "remove", "habits"])

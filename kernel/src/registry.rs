@@ -1,3 +1,7 @@
+//! What the platform's apps module asks of the kernel for an App from
+//! outside the build: to add it to the running engine, to take it away,
+//! and to export what it keeps ([`Registry::export`]).
+//!
 //! Adding a module to the running engine (ADR 0126, decision 5): an App
 //! from outside the build, which a module of the platform reads from a
 //! folder and hands the kernel as a [`Module`]. The engine makes one
@@ -24,7 +28,8 @@ use crate::module::{Module, Scope};
 use crate::{App, ProjectId, Refusal, module_name};
 use std::sync::{Arc, OnceLock, Weak};
 
-/// The handle that adds modules to a running kernel.
+/// The handle through which the apps module adds an App's module to the
+/// running kernel, takes one away, and exports what one keeps.
 #[derive(Clone, Default)]
 pub struct Registry(Arc<OnceLock<Weak<Kernel>>>);
 
@@ -49,7 +54,7 @@ impl Registry {
 
     fn kernel(&self) -> Result<Arc<Kernel>, Refusal> {
         (self.0.get().and_then(Weak::upgrade))
-            .ok_or_else(|| Refusal::conflict("This engine takes no App while it runs."))
+            .ok_or_else(|| Refusal::conflict("This engine's kernel is not open."))
     }
 
     /// Adds `module` to the running engine as the App `app`, which its
@@ -58,6 +63,18 @@ impl Registry {
     /// turned off in are answered, with why.
     pub async fn add(&self, module: impl Module, app: App) -> Result<Vec<TurnedOff>, Refusal> {
         self.kernel()?.add_module(Arc::new(module), app).await
+    }
+
+    /// The export of the App `app` in `project`: its events and its
+    /// tables, in pieces, and last `done` ([`export`](crate::export)). It
+    /// reads what the App keeps there whether the engine runs the App or
+    /// not.
+    pub async fn export(
+        &self,
+        project: crate::ProjectId,
+        app: &str,
+    ) -> Result<crate::Stream, Refusal> {
+        self.kernel()?.export(project, app).await
     }
 
     /// Takes the module `name`, added before, out of the running engine.

@@ -612,6 +612,7 @@ mod tests {
             ("projects.foreign", "it looks at a folder for Add Project"),
             ("window.requests", "it listens for what to ask the window"),
             ("terminal.watch", "it says what a terminal shows"),
+            ("apps.export", "it reads what an App keeps in a Project"),
             (
                 "devices.list",
                 "it lists the devices, which only the Person may see",

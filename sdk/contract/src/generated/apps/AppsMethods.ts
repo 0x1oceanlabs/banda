@@ -3,6 +3,9 @@ import type { AppMethods } from "../AppMethods";
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { StreamMethod } from "../StreamMethod";
+import type { Export } from "./Export";
+import type { ExportPiece } from "./ExportPiece";
 import type { Install } from "./Install";
 import type { InstalledApp } from "./InstalledApp";
 import type { Installing } from "./Installing";
@@ -41,4 +44,15 @@ install: CommandMethod<Install, Installing>,
  * then. What it kept in each Project stays there, and installing
  * it again brings it back.
  */
-remove: CommandMethod<Remove, null>, };
+remove: CommandMethod<Remove, null>, 
+/**
+ * What an App keeps in a Project, as lines anyone can read (ADR
+ * 0085, decision 10), in pieces, each the lines of one file of
+ * the export: first `app.json`, with its ledger and each table's
+ * CREATE, then its events in the log's order, then each of its
+ * tables, a row a line by column; and last `done`, with each
+ * file's count of lines. It reads the data whether the engine
+ * runs the App or not. The Person's alone: it is all the App
+ * holds.
+ */
+export: StreamMethod<Export, ExportPiece>, };

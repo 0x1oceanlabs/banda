@@ -62,6 +62,7 @@ mod children;
 mod client;
 mod control;
 mod devices;
+mod export;
 mod fence;
 mod files;
 mod mcp;
@@ -251,6 +252,24 @@ enum Command {
     App {
         #[command(subcommand)]
         what: app::AppCommand,
+    },
+    /// Prints what an App keeps in a Project, as lines anyone can read:
+    /// its ledger and its tables' CREATE, its events, then each table a
+    /// row a line, each JSON line naming the file of the export it is of.
+    /// It reads the data whether the App is installed or not.
+    Export {
+        /// The App's id, as `clients`, or one of Banda's own.
+        #[arg(long)]
+        app: String,
+        /// The Project; `$BANDA_PROJECT` when left out, as in a terminal
+        /// Banda started.
+        #[arg(long)]
+        project: Option<ProjectId>,
+        /// Writes the export in this folder instead, as `<app>/app.json`,
+        /// `<app>/events.ndjson` and a `<app>/<table>.ndjson` for each
+        /// table.
+        #[arg(long)]
+        to: Option<PathBuf>,
     },
     /// Connect and manage Accounts through the engine, as this caller.
     Account {
@@ -850,6 +869,14 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
         Command::App { what } => app::app(&places, what).await,
+        Command::Export { app, project, to } => {
+            let project = project.or_else(banda_kernel::project_from_env).ok_or_else(|| {
+                Failure::Refused(Refusal::invalid(
+                    "Name the Project: --project <id>, as `banda call projects.list` lists them.",
+                ))
+            })?;
+            export::export(&places, app, project, to).await
+        }
         Command::Account { what } => account::account(&places, what).await,
         Command::Devices { what } => devices::devices(&places, what).await,
         Command::Secret { what } => account::secret(&places, what).await,

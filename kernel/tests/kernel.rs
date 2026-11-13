@@ -4855,3 +4855,93 @@ async fn a_module_the_engine_started_with_as_added_is_replaced_while_it_runs() {
     .await;
     assert!(matches!(refused, Err(Error::Refused(refusal)) if refusal.code == Code::Invalid));
 }
+
+/// An App's export reads what it keeps as lines (ADR 0085, decision 10):
+/// every row of a long table, a page at a time by its key; bytes in
+/// base64; a full-text index by its CREATE alone; and `done` last.
+#[tokio::test]
+async fn an_export_is_every_row_as_a_line_and_says_when_it_is_whole() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, data) = (dir.path().join("root"), dir.path().join("root/.data"));
+    let owner = PersonId::new();
+    let steps: &[&str] = &[
+        Tally::MARKS,
+        "CREATE TABLE tally_bytes (kept BLOB)",
+        "CREATE VIRTUAL TABLE tally_search USING fts5(text)",
+    ];
+    // A registry is its kernel's: each start has its own.
+    let open = |registry: &Registry| {
+        Kernel::builder(&root, &data, owner)
+            .module(Tally::with(steps))
+            .registry(registry.clone())
+            .open()
+    };
+    let kernel = open(&Registry::new()).await.unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    let_go(kernel, &data, &[]).await;
+    // Written beside the engine, as its tables would hold them: more marks
+    // than a page, with some gone from the middle.
+    let sql = sqlite(&data, &work);
+    sql.execute_batch(
+        "WITH RECURSIVE n(id) AS (SELECT 1 UNION ALL SELECT id + 1 FROM n WHERE id < 1203)
+         INSERT INTO tally_marks (id) SELECT id FROM n;
+         DELETE FROM tally_marks WHERE id IN (2, 500, 501);
+         INSERT INTO tally_bytes (kept) VALUES (x'000102');
+         INSERT INTO tally_search (text) VALUES ('a found note');",
+    )
+    .unwrap();
+    drop(sql);
+
+    let registry = Registry::new();
+    let kernel = open(&registry).await.unwrap();
+    let mut pieces = registry.export(work.id, "tally").await.unwrap();
+    let mut files: Vec<(String, Vec<Value>)> = Vec::new();
+    let mut done = Value::Null;
+    while let Some(piece) = pieces.recv().await {
+        if let Some(counts) = piece.get("done") {
+            done = counts.clone();
+            continue;
+        }
+        let (file, lines) = (
+            piece["file"].as_str().unwrap(),
+            piece["lines"].as_array().unwrap(),
+        );
+        match files.last_mut() {
+            Some((last, kept)) if last == file => kept.extend(lines.iter().cloned()),
+            _ => files.push((file.to_owned(), lines.clone())),
+        }
+    }
+    let names: Vec<&str> = files.iter().map(|(file, _)| &**file).collect();
+    assert_eq!(
+        names,
+        ["app.json", "tally_bytes.ndjson", "tally_marks.ndjson"]
+    );
+    let head = &files[0].1[0];
+    assert_eq!((&head["id"], &head["ledger"]), (&json!("tally"), &json!(3)));
+    let tables: Vec<&str> = (head["tables"].as_array().unwrap().iter())
+        .map(|table| table["name"].as_str().unwrap())
+        .collect();
+    assert_eq!(tables, ["tally_bytes", "tally_marks", "tally_search"]);
+    let index = head["tables"][2]["create"].as_str().unwrap();
+    assert!(
+        index.starts_with("CREATE VIRTUAL TABLE tally_search"),
+        "{index}"
+    );
+    assert_eq!(files[1].1, [json!({ "kept": { "$base64": "AAEC" } })]);
+    let marks: Vec<i64> = (files[2].1.iter())
+        .map(|mark| mark["id"].as_i64().unwrap())
+        .collect();
+    let kept: Vec<i64> = (1..=1203)
+        .filter(|id| ![2, 500, 501].contains(id))
+        .collect();
+    assert_eq!(marks, kept);
+    let whole = json!({ "app.json": 1, "tally_bytes.ndjson": 1, "tally_marks.ndjson": 1200 });
+    assert_eq!(done, whole);
+
+    // A name that is no App's exports nothing.
+    for name in ["kernel", "sqlite", "My App"] {
+        let refused = registry.export(work.id, name).await.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid, "{name}");
+    }
+    drop(kernel);
+}
