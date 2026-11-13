@@ -14,6 +14,9 @@ UNIX composition + deep modules + explicit contracts.
 - What we build: [`docs/what-we-build.md`](docs/what-we-build.md). Read it
   first. Every ADR and PR serves one of its principles or stories and names
   it; a change that goes against it is Roma's call first.
+- The window: [`docs/window.md`](docs/window.md), its six rules. A change
+  to what the Person sees or touches follows them: each thing in one
+  place, the engine decides, and no second door to a function.
 - The words: [`GLOSSARY.md`](GLOSSARY.md). Use its terms exactly.
 - The shape: [`docs/architecture.md`](docs/architecture.md).
 - Where it is going: [the architecture vision](docs/research/2026-11-06-architecture-vision.md),

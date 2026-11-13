@@ -70,9 +70,25 @@ The difference, on a second track beside story 1 (Roma, 2026-11-13). An App the 
 | 2b in one Thread, readable without it | it installs with no restart; `banda export --app clients` prints its rows |
 | 2c the default screen | a list and a form drawn from its Tree, on arc and in the Mac's window; on the phone after SE6 |
 
+### Beside stages 3 and 4: the window
+
+The third track (Roma, 2026-11-13). Its rules are [the window](../window.md), its decisions ADR 0127, and its slices, with what each waits for, [the window's plan](2026-11-13-window-plan.md). It goes in three passes: the structure, then the look, then the details.
+
+| Slice | What Roma tries |
+|---|---|
+| WS1 an action runs from anywhere | `banda act overview.toggle` opens the Overview; an Agent puts a terminal beside its Thread |
+| WS2 the window asks, the engine places (ADR 0110, step 1b) | a Pane lands in the same place from a key, from an Agent and from `banda` |
+| WS3 the engine refuses (ADR 0110, step 2) | a move the Person may not make is refused for an Agent and for `banda` in the same words |
+| WS4 the Tiling's file | a rule in `tiling.toml` holds on every client |
+| WS5 the view is the device's | Solo in one window leaves another as it was; each device keeps its own arrangement |
+| WS6 the Top layer is one stack (ADR 0110, step 3) | Esc gives the caret back to the field it left |
+| WS7 actions by their owner, WS8 the window names no App | nothing on the screen; an App turned off takes its Settings section with it |
+| WS9 changes come as events | `banda project add` shows in an open window at once |
+| WS10 the device is a port, WS11 the road of a theme | a theme picked in a browser tab is the one the desktop window shows |
+
 ### 5. The other stories
 
-A CRM as an App, an Agent asks an Agent, your Banda from a browser, no server of your own (Banda Cloud), a document for two. The look (M7, ADR 0080) may run beside them on the window track.
+A CRM as an App, an Agent asks an Agent, your Banda from a browser, no server of your own (Banda Cloud), a document for two. The look (M7, ADR 0080) is the window track's second pass.
 
 ## Rework we know of
 
