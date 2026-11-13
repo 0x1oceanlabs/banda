@@ -22,6 +22,7 @@ import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import { FenceRow } from "./Fence"
 import type { SectionProps } from "./sections"
 import { Whose } from "./SettingRow"
+import { device } from "../boot"
 
 export function General({ engine, there, lit, run }: SectionProps) {
   const settingsKey = useKeyLabel()("settings.open")
@@ -62,7 +63,7 @@ export function General({ engine, there, lit, run }: SectionProps) {
           <Button
             variant="outline"
             size="sm"
-            onClick={() => void window.banda?.settings.reveal("")}
+            onClick={() => device.settings.reveal("")}
           >
             <FolderOpenIcon />
             Open folder

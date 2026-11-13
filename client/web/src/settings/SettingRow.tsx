@@ -31,6 +31,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { FileCogIcon, Undo2Icon } from "lucide-react"
 import { onThisDevice, type SettingsWriter } from "./machine-settings"
 import type { CustomRow } from "./sections"
+import { device } from "../boot"
 
 export function SettingRow({
   row,
@@ -298,7 +299,7 @@ function Control({
         <Button
           variant="outline"
           size="sm"
-          onClick={() => void window.banda?.settings.reveal(row.file)}
+          onClick={() => device.settings.reveal(row.file)}
         >
           <FileCogIcon />
           Edit in {row.file}

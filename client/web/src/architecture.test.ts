@@ -426,19 +426,7 @@ const DEVICE = "client/web/src/boot/desktop.ts"
 const DESKTOP_READS: Record<string, number> = {
   "apps/browser/pane/src/host.ts": 1,
   "client/ui/src/desktop.ts": 1,
-  "client/web/src/actions/actions.ts": 1,
-  "client/web/src/bar/update/Update.tsx": 1,
   "client/web/src/main.tsx": 1,
-  "client/web/src/menu/browse.ts": 1,
-  "client/web/src/settings/Agents.tsx": 1,
-  "client/web/src/settings/BrowserSites.tsx": 1,
-  "client/web/src/settings/General.tsx": 1,
-  "client/web/src/settings/Keys.tsx": 2,
-  "client/web/src/settings/Mod.tsx": 1,
-  "client/web/src/settings/ProblemsSettings.tsx": 1,
-  "client/web/src/settings/SettingRow.tsx": 1,
-  "client/web/src/settings/Settings.tsx": 1,
-  "client/web/src/sharing/AskToShare.tsx": 1,
   "platform/notifications/pane/src/desktop.ts": 1,
 }
 

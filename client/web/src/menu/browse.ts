@@ -4,6 +4,7 @@ import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { useAct } from "@banda/ui/hooks/use-act"
 import type { Browsing } from "./menu"
+import { device } from "../boot"
 
 /** The path field's words before it is typed into (ADR 0026). */
 export const PATH_PLACEHOLDER = "Enter Project path (e.g. ~/code/my-app)"
@@ -20,10 +21,11 @@ export function usePickFolder(
   onPicked: (folder: string | null) => void
 ) {
   const { busy, problem, act } = useAct()
-  const picker = window.banda?.folder
-  if (!picker) return undefined
+  if (!device.has("pick_file")) return undefined
   const pick = async () =>
-    onPicked((await act(() => picker.pick(browsed?.parent ?? null))) ?? null)
+    onPicked(
+      (await act(() => device.folder.pick(browsed?.parent ?? null))) ?? null
+    )
   return { busy, problem, pick }
 }
 

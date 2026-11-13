@@ -11,6 +11,7 @@ import { useWrite } from "@banda/ui/hooks/use-write"
 import { useFile } from "@banda/ui/lib/look"
 import type { SectionProps } from "./sections"
 import { Choice, Group, RowFrame } from "./SettingRow"
+import { device } from "../boot"
 
 const RULES = [{ value: "allow" }, { value: "deny" }]
 
@@ -50,7 +51,7 @@ function Site({
   lit?: string
 }) {
   const { refused, write } = useWrite({ against: rule })
-  const settings = window.banda?.settings
+  const settings = device.settings.writes() ? device.settings : undefined
   const key = siteKey(site)
   return (
     <RowFrame

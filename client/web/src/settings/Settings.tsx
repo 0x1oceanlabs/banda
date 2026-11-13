@@ -46,6 +46,7 @@ import { SettingsFor } from "./SettingsFor"
 import { usePaneHandles } from "../tiling/mount"
 import { MachinePill } from "../window/named"
 import { classOf, throughEngine, useMachineSettings } from "./machine-settings"
+import { device } from "../boot"
 
 const NONE: Problem[] = []
 
@@ -369,7 +370,7 @@ function OpenFile({ file, words }: { file: string; words: string }) {
       variant="ghost"
       size="sm"
       className="text-muted-foreground"
-      onClick={() => void window.banda?.settings.reveal(file)}
+      onClick={() => device.settings.reveal(file)}
     >
       <ExternalLinkIcon />
       {words}

@@ -35,6 +35,7 @@ import {
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useRead } from "@banda/ui/hooks/use-read"
 import { useLook } from "@banda/ui/lib/look"
+import { device } from "../boot"
 
 const { name: FILE, before: NONE } = SHARING_FILE
 
@@ -68,7 +69,7 @@ export function AskToShare({ engine }: { engine: Engine }) {
   // What goes, as the engine makes each event: the same code sends them.
   const read = useCallback(() => engine.call("sharing.example", {}), [engine])
   const example = useRead(asked ? null : read)
-  const settings = window.banda?.settings
+  const settings = device.settings.writes() ? device.settings : undefined
   if (asked || !settings) return null
 
   const answer = (chosen: Shares) =>
