@@ -35,6 +35,7 @@ banda-skill = { path = "../platform/skill" }
 clap.workspace = true
 dirs.workspace = true
 dunce.workspace = true
+mime_guess.workspace = true
 futures.workspace = true
 rustix.workspace = true
 serde.workspace = true

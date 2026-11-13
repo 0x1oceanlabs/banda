@@ -68,6 +68,7 @@ mod files;
 mod mcp;
 mod modules;
 mod moving;
+mod page;
 mod parent;
 mod places;
 mod problems;

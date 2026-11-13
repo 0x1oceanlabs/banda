@@ -388,6 +388,7 @@ dependencies = [
  "dirs",
  "dunce",
  "futures",
+ "mime_guess",
  "ring",
  "rustix",
  "serde",
