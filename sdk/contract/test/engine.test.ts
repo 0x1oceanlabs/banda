@@ -17,7 +17,7 @@ import { join } from "node:path"
 import { createInterface } from "node:readline"
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest"
 import { decodeFact } from "../src/agents"
-import { base64url } from "../src/door"
+import { ask as askAtDoor, type Asking, base64url } from "../src/door"
 import type { Drawn } from "../src/terminal"
 import { seeded } from "../src/workspaces"
 import {
@@ -204,6 +204,104 @@ test("a device paired at the machine's console comes in at its door by its own k
     refusal: { code: "revoked" },
     signed: true,
   })
+})
+
+test("a device asks at the door, the Person allows it by its code from a session of theirs, and it comes in by its own key (ADR 0124, decision 6)", async () => {
+  await serve()
+  const running = JSON.parse(
+    readFileSync(join(dir, "state/engine.json"), "utf8")
+  ) as { door: number; host_key: string }
+  const url = `ws://127.0.0.1:${running.door}/ws`
+  // The Person, where they are already: this machine's own window.
+  client = new Engine(address)
+  await until(client, "open")
+  const asks: { code: string; name: string; kind: string }[][] = []
+  client.stream(
+    undefined,
+    "devices.asking",
+    {},
+    (asking) => asks.push(asking),
+    () => {}
+  )
+  await expect.poll(() => asks.at(-1)).toEqual([])
+
+  // A browser the machine does not know, with a key of its own.
+  const made = (await crypto.subtle.generateKey("Ed25519", false, [
+    "sign",
+    "verify",
+  ])) as CryptoKeyPair
+  const key = base64url(
+    new Uint8Array(await crypto.subtle.exportKey("raw", made.publicKey))
+  )
+  const sign = async (message: string) =>
+    base64url(
+      new Uint8Array(
+        await crypto.subtle.sign(
+          "Ed25519",
+          made.privateKey,
+          new TextEncoder().encode(message)
+        )
+      )
+    )
+  const heard: Asking[] = []
+  const asker = {
+    key,
+    sign,
+    name: "Safari on a test",
+    kind: "browser",
+  } as const
+  askAtDoor(url, asker, (asking) => heard.push(asking))
+  // It is told a code, and the Person's session hears the same one.
+  await expect.poll(() => heard.at(-1)?.state).toBe("asked")
+  const asked = heard.at(-1) as Extract<Asking, { state: "asked" }>
+  expect(asked.code).toMatch(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/)
+  expect(asked.hostKey).toBe(running.host_key)
+  await expect
+    .poll(() => asks.at(-1))
+    .toMatchObject([
+      { code: asked.code, name: "Safari on a test", kind: "browser" },
+    ])
+
+  // Allowed by its code: it hears the device it is there, and the list
+  // of who asks is empty again.
+  const device = await client.command("devices.allow", { code: asked.code })
+  await expect.poll(() => heard.at(-1)?.state).toBe("paired")
+  expect(heard.at(-1)).toEqual({
+    state: "paired",
+    device: device.id,
+    hostKey: running.host_key,
+  })
+  await expect.poll(() => asks.at(-1)).toEqual([])
+  // And comes in by its own key, as any paired device.
+  other = new Engine(async () => ({
+    url,
+    door: { device: device.id, hostKey: running.host_key, sign },
+  }))
+  await until(other, "open")
+  expect((await other.call("devices.list", {})).devices).toMatchObject([
+    { id: device.id, kind: "browser", name: "Safari on a test" },
+  ])
+
+  // Another asks and is refused, and one stops asking: neither is paired.
+  const refused: Asking[] = []
+  askAtDoor(url, { ...asker, name: "Another" }, (asking) =>
+    refused.push(asking)
+  )
+  await expect.poll(() => refused.at(-1)?.state).toBe("asked")
+  // The same key asks again from a second page: its older asking ends.
+  const again: Asking[] = []
+  const stop = askAtDoor(url, { ...asker, name: "Again" }, (asking) =>
+    again.push(asking)
+  )
+  await expect.poll(() => again.at(-1)?.state).toBe("asked")
+  await expect.poll(() => refused.at(-1)?.state).toBe("refused")
+  expect(refused.at(-1)).toMatchObject({ refusal: { code: "expired" } })
+  await expect
+    .poll(() => asks.at(-1)?.map((one) => one.name))
+    .toEqual(["Again"])
+  stop()
+  await expect.poll(() => asks.at(-1)).toEqual([])
+  expect((await client.call("devices.list", {})).devices).toHaveLength(1)
 })
 
 test("a window calls, follows and sees refusals by their code", async () => {

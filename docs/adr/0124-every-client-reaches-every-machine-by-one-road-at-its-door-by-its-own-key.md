@@ -240,6 +240,13 @@ repository), with an adversarial check.
     must show it. Such a page may also hold all eight places for as long
     as it stays; the console's `banda devices add` is the way round, and
     a limit on how often one may ask is not built.
+  - The contract's client asks with `askAtDoor`
+    (`sdk/contract/src/door.ts`): it checks the challenge is signed by
+    the host key it names, says `ask`, and tells its caller how the
+    asking stands: `asked` with the code, then `paired` with the device
+    and that host key, once the door's `paired` is proved by it, or
+    `refused`, or `lost`. The key signs through a function, so a
+    browser's stays where WebCrypto keeps it.
   - Not yet: the windows' card and a browser's pairing screen, which
     follow the mocks.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**

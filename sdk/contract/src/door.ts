@@ -11,8 +11,13 @@
  *    nonce, that host key, the page's origin and its own nonce.
  * 3. The door's `welcome` must prove that host key again, over the
  *    client's nonce: a pipe that only repeats an old challenge cannot.
+ *
+ * A device the machine has not paired asks to be, in place of `hello`
+ * (decision 6; `ask`): the door answers a code, which the Person reads on
+ * this device and allows on one that is theirs there already.
  */
 import type { DeviceFrame } from "./generated/DeviceFrame"
+import type { DeviceKind } from "./generated/devices/DeviceKind"
 import type { DoorFrame } from "./generated/DoorFrame"
 import type { EngineFrame } from "./generated/EngineFrame"
 import { PROTOCOL } from "./generated/PROTOCOL"
@@ -38,6 +43,27 @@ export type DoorKey = {
   /** The device key's signature of `message`, as base64url. */
   sign: (message: string) => Promise<string>
 }
+
+/** What a device key signs in an `ask`: the door's nonce, the host key
+ * it asks, the origin of the page that asks, none as the empty line,
+ * then its own key, its kind and its name. */
+export const askMessage = (
+  doorNonce: string,
+  hostKey: string,
+  origin: string,
+  key: string,
+  kind: string,
+  name: string
+): string =>
+  `banda-door/ask/1\n${doorNonce}\n${hostKey}\n${origin}\n${key}\n${kind}\n${name}`
+
+/** What a host key signs in a `paired`: the door's nonce, the key of the
+ * device that asked, and the device it is there. */
+export const pairedMessage = (
+  doorNonce: string,
+  key: string,
+  device: string
+): string => `banda-door/paired/1\n${doorNonce}\n${key}\n${device}`
 
 /** What a host key signs in a `challenge`. */
 export const challengeMessage = (
@@ -266,5 +292,134 @@ export class AtDoor {
     }
     this.#said = { doorNonce: nonce, origin, hello }
     return { hello }
+  }
+}
+
+/** A device a machine has not paired, as it asks to be (`ask`). */
+export type Asker = {
+  /** Its public key: Ed25519, as base64url. */
+  key: string
+  /** That key's signature of `message`, as base64url. The key itself
+   * stays where it is kept. */
+  sign: (message: string) => Promise<string>
+  /** What the Person reads it by on the machine: "Safari on Roma's Mac". */
+  name: string
+  kind: DeviceKind
+}
+
+/**
+ * How a device's asking at a door stands:
+ * - `asked`: the door keeps it, under `code`, until `until` by the
+ *   machine's clock: the Person compares the code on both screens;
+ * - `paired`: the Person allowed it: the `device` it is there, by the
+ *   host key that door proved, which it keeps to come in by (`DoorKey`);
+ * - `refused`: the door said why not: the Person refused it, its time ran
+ *   out, too many ask, or that machine's Banda pairs none at its door;
+ * - `lost`: the connection ended with no word: it may ask again.
+ */
+export type Asking =
+  | { state: "asked"; code: string; until: number; hostKey: string }
+  | { state: "paired"; device: string; hostKey: string }
+  | { state: "refused"; refusal: Refusal }
+  | { state: "lost" }
+
+/**
+ * Asks the door at `url` to pair this device (ADR 0124, decision 6), and
+ * tells `heard` how it stands, last `paired`, `refused` or `lost`. The
+ * host key is the one the door's challenge says and proves: a device
+ * trusts it on first use, as its route to the door is what it trusts.
+ * Returns how to stop asking, which the door hears.
+ */
+export function ask(
+  url: string,
+  asker: Asker,
+  heard: (asking: Asking) => void
+): () => void {
+  const socket = new WebSocket(url)
+  /** What the challenge said, once it proved its own key. */
+  let door: { nonce: string; hostKey: string } | undefined
+  let over = false
+  const end = (asking: Asking) => {
+    if (over) return
+    over = true
+    heard(asking)
+    socket.close()
+  }
+  const take = async (text: string): Promise<void> => {
+    let frame: DoorFrame | EngineFrame
+    try {
+      frame = JSON.parse(text)
+    } catch {
+      return end({ state: "refused", refusal: NOT_THE_MACHINE })
+    }
+    switch (frame.type) {
+      case "challenge": {
+        const { nonce, host_key, time, protocol, sig } = frame
+        const said = challengeMessage(nonce, host_key, time, protocol)
+        if (door || !(await signed(host_key, said, sig)))
+          return end({ state: "refused", refusal: NOT_THE_MACHINE })
+        door = { nonce, hostKey: host_key }
+        const origin = globalThis.location?.origin ?? ""
+        const { key, kind, name } = asker
+        let signature: string
+        try {
+          signature = await asker.sign(
+            askMessage(nonce, host_key, origin, key, kind, name)
+          )
+        } catch {
+          return end({ state: "lost" })
+        }
+        if (over) return
+        const asks: DeviceFrame = {
+          type: "ask",
+          key,
+          name,
+          kind,
+          sig: signature,
+        }
+        socket.send(JSON.stringify(asks))
+        return
+      }
+      case "asked":
+        if (door && !over)
+          heard({
+            state: "asked",
+            code: frame.code,
+            until: frame.until,
+            hostKey: door.hostKey,
+          })
+        return
+      case "paired": {
+        const proved =
+          door !== undefined &&
+          (await signed(
+            door.hostKey,
+            pairedMessage(door.nonce, asker.key, frame.device),
+            frame.sig
+          ))
+        return end(
+          proved && door
+            ? { state: "paired", device: frame.device, hostKey: door.hostKey }
+            : { state: "refused", refusal: NOT_THE_MACHINE }
+        )
+      }
+      case "goodbye":
+        return end({ state: "refused", refusal: frame.reason })
+      default:
+      // Nothing else counts before it is paired.
+    }
+  }
+  // One frame at a time, as weighing one takes a moment.
+  let turn = Promise.resolve()
+  socket.onmessage = (message) => {
+    const text = String(message.data)
+    turn = turn.then(() => take(text)).catch(() => end({ state: "lost" }))
+  }
+  socket.onclose = () => {
+    turn = turn.then(() => end({ state: "lost" }))
+  }
+  return () => {
+    over = true
+    socket.close()
   }
 }
