@@ -133,6 +133,30 @@ pub fn keep_crash(places: &Places) {
     }
 }
 
+/// The file `banda stop` leaves in the state as it stops the engine.
+const QUIT_FILE: &str = "quit";
+
+/// Says that Quit Banda asked for the stop that comes (ADR 0086, decision
+/// 3): `banda stop` does, before it stops the engine. A window open on
+/// that engine quits too, where any other stop leaves it up (ADR 0124,
+/// decision 9). The next run takes it away as it begins.
+pub fn quits(places: &Places) {
+    if let Err(error) = write_private(&places.state.join(QUIT_FILE), b"") {
+        tracing::error!(%error, "Quit Banda could not say it asked the engine to stop");
+    }
+}
+
+/// Takes back that Quit Banda asked ([`quits`]): what it tried to stop
+/// was not stopped.
+pub fn quits_not(places: &Places) {
+    let _ = std::fs::remove_file(places.state.join(QUIT_FILE));
+}
+
+/// Whether Quit Banda asked for the stop of the run before ([`quits`]).
+pub fn quit(places: &Places) -> bool {
+    places.state.join(QUIT_FILE).exists()
+}
+
 /// This run, as it says how it goes.
 #[derive(Clone)]
 pub struct Run {
@@ -142,8 +166,10 @@ pub struct Run {
 }
 
 impl Run {
-    /// Says that a run on `port` began, and has not left.
+    /// Says that a run on `port` began, and has not left, nor was asked
+    /// to quit.
     pub fn began(places: &Places, port: u16) -> Run {
+        quits_not(places);
         let run = Run {
             file: places.run(),
             port,
@@ -196,7 +222,12 @@ mod tests {
         assert_eq!(before(&places), (Before::Left(Left::Stopping), Some(4100)));
         run.left(Left::Stopped);
         assert_eq!(before(&places), (Before::Left(Left::Stopped), Some(4100)));
+        // Quit Banda says it asked; the next run takes that away.
+        assert!(!quit(&places));
+        quits(&places);
+        assert!(quit(&places));
         Run::began(&places, 4101);
+        assert!(!quit(&places));
         assert_eq!(before(&places), (Before::Crashed, Some(4101)));
     }
 

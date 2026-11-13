@@ -7,10 +7,13 @@
 //! The window runs `banda start --with-parent`: it prints where the engine
 //! listens, as `serve --with-parent` does, then follows the engine until
 //! the window goes, which leaves the engine running, or until the engine
-//! stops. It exits 0 when the engine said it was asked to stop, as Quit
-//! Banda asks it, so the window quits too; otherwise the window starts it
-//! again. Where the engine is the window's child (`service.rs`), or its
-//! unit does not start, it serves the engine itself.
+//! stops. It exits 0 when Quit Banda stopped the engine, as `banda stop`
+//! says before it does (`run::quits`), so the window quits too. It exits
+//! 3 when the engine stopped as asked by anything else, as its unit
+//! stopped by hand: the window stays, and starts it when the Person says
+//! (ADR 0124, decision 9). Otherwise the window starts it again. Where the
+//! engine is the window's child (`service.rs`), or its unit does not
+//! start, it serves the engine itself, and ends the same ways.
 //!
 //! Another machine's window runs it here too, over ssh, and says so
 //! (`BANDA_OVER_SSH`, ADR 0081, decision 4). It starts the engine as the
@@ -204,7 +207,7 @@ pub async fn start(
                      its log is the window's."
                 );
                 banda_problems::catch_panics(places.problems());
-                return serve::serve(places, Serving::child(why)).await;
+                return serve_as_child(places, why).await;
             }
             Err(failed) => return Err(failed),
         },
@@ -216,7 +219,7 @@ pub async fn start(
                 ),
                 _ => tracing::info!("the engine runs as the window's child: {}", why.words()),
             }
-            return serve::serve(places, Serving::child(why.words())).await;
+            return serve_as_child(places, why.words()).await;
         }
         (Err(_), Way::Child(why)) => {
             return Err(Failure::Broken(format!(
@@ -231,6 +234,29 @@ pub async fn start(
     }
     println!("{}", crate::status::said(&found.0));
     Ok(())
+}
+
+/// Why the engine a window here follows stopped, where it stopped as
+/// asked: Quit Banda, and the window quits too; or anything else, and the
+/// window stays ([`Failure::Stopped`]). Another machine's window reads
+/// both the same, as before: Banda is stopped here, and it starts it only
+/// when its Person says.
+fn stopped_here(places: &Places) -> Result<(), Failure> {
+    if run::quit(places) || over_ssh_here() {
+        return Ok(());
+    }
+    Err(Failure::Stopped(
+        "Banda's engine was stopped, not by Quit Banda: the window stays, and starts it when asked."
+            .into(),
+    ))
+}
+
+/// Serves the engine as the window's child, `why`, until it stops: as
+/// asked, it ends as a followed engine does ([`stopped_here`]).
+async fn serve_as_child(places: Places, why: impl Into<String>) -> Result<(), Failure> {
+    let state = places.clone();
+    serve::serve(places, Serving::child(why.into())).await?;
+    stopped_here(&state)
 }
 
 /// Prints where the engine listens, as `serve --with-parent` does, and
@@ -271,8 +297,15 @@ async fn follow(
     while running.pid.is_some_and(alive) && began.elapsed() < STOPS_WITHIN {
         tokio::time::sleep(Duration::from_millis(50)).await;
     }
+    // Still there, it did not stop: it is followed again.
+    if running.pid.is_some_and(alive) {
+        return Err(Failure::Broken(
+            "Banda's engine closed its connection and still runs: the window follows it again."
+                .into(),
+        ));
+    }
     match run::before(places).0 {
-        Before::Left(_) => left_as_asked(starts, way, session, LOGS_OUT_WITHIN).await,
+        Before::Left(_) => left_as_asked(places, starts, way, session, LOGS_OUT_WITHIN).await,
         _ => Err(Failure::Broken(
             "Banda's engine stopped without being asked to: the window starts it again.".into(),
         )),
@@ -280,19 +313,20 @@ async fn follow(
 }
 
 /// What the follower says of an engine that stopped as asked, by what it
-/// `starts`: Banda quits, and the window with it; where it starts none, it
-/// is a Banda no longer open here (`way`); on a Mac, for another machine's
-/// window, it is a Person who logged out at the screen when their gui
-/// domain (`session`) goes `within` a while, and Banda quit at the Mac
-/// otherwise.
+/// `starts`: for a window here, whether Quit Banda stopped it
+/// ([`stopped_here`]); where it starts none, it is a Banda no longer open
+/// here (`way`); on a Mac, for another machine's window, it is a Person
+/// who logged out at the screen when their gui domain (`session`) goes
+/// `within` a while, and Banda quit at the Mac otherwise.
 async fn left_as_asked(
+    places: &Places,
     starts: Starts,
     way: Way,
     session: impl Fn() -> bool,
     within: Duration,
 ) -> Result<(), Failure> {
     match starts {
-        Starts::AsHere => Ok(()),
+        Starts::AsHere => stopped_here(places),
         Starts::Nothing => Err(not_open(way)),
         Starts::OnlyService if logged_out(session, within).await => {
             Err(not_open(Way::Child(Why::NoScreen)))
@@ -340,8 +374,8 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
     }
     drop(client);
     match (&running.unit, running.pid) {
-        (Some(unit), _) => stop_unit(manager, unit)?,
-        (None, Some(pid)) => terminate(&running, pid)?,
+        (Some(unit), _) => quitting(places, || stop_unit(manager, unit))?,
+        (None, Some(pid)) => quitting(places, || terminate(&running, pid))?,
         (None, None) => {
             return Err(Failure::Broken(
                 "This engine does not say its process: stop it where it was started.".into(),
@@ -358,7 +392,7 @@ pub async fn stop(places: &Places, force: bool) -> Result<(), Failure> {
 async fn stop_unanswering(places: &Places, manager: &dyn Manager) -> Result<(), Failure> {
     let unit = service::unit_of(places);
     if manager.runs(&unit) {
-        return stop_unit(manager, &unit);
+        return quitting(places, || stop_unit(manager, &unit));
     }
     let running = places.running().ok();
     let pid = (running.as_ref())
@@ -366,7 +400,7 @@ async fn stop_unanswering(places: &Places, manager: &dyn Manager) -> Result<(), 
         .filter(|_| locked(places));
     match (running, pid) {
         (Some(running), Some(pid)) => {
-            terminate(&running, pid)?;
+            quitting(places, || terminate(&running, pid))?;
             gone(manager, None, Some(pid)).await
         }
         _ => {
@@ -374,6 +408,14 @@ async fn stop_unanswering(places: &Places, manager: &dyn Manager) -> Result<(), 
             Ok(())
         }
     }
+}
+
+/// Stops the engine as Quit Banda does: it says so first (`run::quits`),
+/// for a window open on that engine to quit too, and takes it back where
+/// `stop` stopped nothing, so no later stop is read as Quit's.
+fn quitting(places: &Places, stop: impl FnOnce() -> Result<(), Failure>) -> Result<(), Failure> {
+    run::quits(places);
+    stop().inspect_err(|_| run::quits_not(places))
 }
 
 /// Stops the engine's `unit`, or job, and returns once its manager has.
@@ -652,34 +694,44 @@ mod tests {
     }
 
     #[tokio::test]
-    async fn an_engine_stopped_as_asked_quits_the_window_unless_the_mac_s_person_logged_out() {
+    async fn an_engine_quit_banda_stopped_quits_the_window_unless_the_mac_s_person_logged_out() {
         let way = Way::Child(Why::NotYet);
         let within = Duration::from_millis(600);
         let never = || -> bool { panic!("launchd is asked nothing") };
-        assert!(
-            left_as_asked(Starts::AsHere, way, never, within)
-                .await
-                .is_ok()
-        );
-        let Err(Failure::Later(words)) = left_as_asked(Starts::Nothing, way, never, within).await
+        let base = tempfile::tempdir().unwrap();
+        let places = &Places::under(base.path());
+        std::fs::create_dir_all(&places.state).unwrap();
+        // A window here stays for a stop Quit Banda did not ask for, and
+        // quits with one it did. A stop that stopped nothing asked none.
+        let stayed = left_as_asked(places, Starts::AsHere, way, never, within).await;
+        assert!(matches!(stayed, Err(Failure::Stopped(_))));
+        let failed = quitting(places, || Err(Failure::Broken("no".into())));
+        assert!(failed.is_err());
+        let stayed = left_as_asked(places, Starts::AsHere, way, never, within).await;
+        assert!(matches!(stayed, Err(Failure::Stopped(_))));
+        assert!(quitting(places, || Ok(())).is_ok());
+        let quit = left_as_asked(places, Starts::AsHere, way, never, within).await;
+        assert!(quit.is_ok());
+        let Err(Failure::Later(words)) =
+            left_as_asked(places, Starts::Nothing, way, never, within).await
         else {
             panic!("a Banda no longer open here");
         };
         assert!(words.starts_with("Banda's engine is not running here"));
 
         // Quit at the Mac: the Person's gui domain stays.
-        let stays = left_as_asked(Starts::OnlyService, way, || true, within).await;
+        let stays = left_as_asked(places, Starts::OnlyService, way, || true, within).await;
         assert!(stays.is_ok());
         // Logged out there: it goes, at once or a moment later.
         let Err(Failure::Later(words)) =
-            left_as_asked(Starts::OnlyService, way, || false, within).await
+            left_as_asked(places, Starts::OnlyService, way, || false, within).await
         else {
             panic!("logged out: later");
         };
         assert!(words.starts_with("Nobody is logged in at this Mac's screen"));
         let looks = std::sync::atomic::AtomicU32::new(0);
         let goes = || looks.fetch_add(1, std::sync::atomic::Ordering::SeqCst) < 1;
-        let went = left_as_asked(Starts::OnlyService, way, goes, within).await;
+        let went = left_as_asked(places, Starts::OnlyService, way, goes, within).await;
         assert!(matches!(went, Err(Failure::Later(_))));
     }
 }

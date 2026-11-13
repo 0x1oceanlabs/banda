@@ -16,6 +16,7 @@ import {
   KeptHosts,
   keyNamed,
   machinesOf,
+  ownEngine as ownEngineOf,
   thisNamed,
   type Names,
   namedIn,
@@ -1645,4 +1646,62 @@ test("this machine goes by the name its engine says, and its words name no machi
   const none = new KeptHosts(device, FORGETTING)
   expect(none.shown(HERE)).toBeUndefined()
   expect(none.machines.get()[0]).toMatchObject({ state: "live" })
+})
+
+test("this machine's engine, stopped as the device says, shows stopped until the Person starts it, and then is on its way back", async () => {
+  const { device } = desktop()
+  const wake = vi.fn()
+  const own = ownEngine({ wake })
+  const hosts = new KeptHosts(device, FORGETTING, own.engine)
+  hosts.follow()
+  own.says(welcomed())
+  // The device refused its address: its engine is away until woken.
+  own.says({ state: "away" })
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "stopped" } })
+  expect(reachWords(HERE, hosts.shown(HERE), hosts.seen)).toBe(
+    "Banda is stopped on this machine"
+  )
+  expect(hosts.machines.get()[0]).toMatchObject({ state: "away" })
+
+  // Start tells the device, and connects again once it was told.
+  hosts.start(HERE)
+  expect(device.start).toHaveBeenCalledWith(HERE)
+  expect(wake).not.toHaveBeenCalled()
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(wake).toHaveBeenCalledTimes(1)
+  own.says({ state: "connecting" })
+  expect(reachWords(HERE, hosts.shown(HERE), hosts.seen)).toBe(
+    "Banda is starting on this machine"
+  )
+  own.says(welcomed("b2"))
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
+  // Another machine's start wakes nothing here.
+  hosts.start("arc")
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(wake).toHaveBeenCalledTimes(1)
+})
+
+test("a window's own engine is away, in this machine's words, where the device says it is stopped; any other failure it tries again", async () => {
+  vi.stubGlobal("WebSocket", Socket)
+  const stopped = ownEngineOf(() =>
+    Promise.reject(
+      new Error(
+        "Error invoking remote method 'engine': EngineStopped: Banda is stopped on this machine"
+      )
+    )
+  )
+  await vi.waitFor(() => expect(stopped.status.state).toBe("away"))
+  await expect(
+    stopped.command("projects.create", { name: "Not now" })
+  ).rejects.toMatchObject({
+    name: "Unreachable",
+    host: HERE,
+    message: "Banda is stopped on this machine",
+  })
+  const broken = ownEngineOf(() => Promise.reject(new Error("no bridge")))
+  await vi.waitFor(() => expect(broken.status.state).toBe("lost"))
+  stopped.close()
+  broken.close()
 })

@@ -72,7 +72,7 @@ import { type Acts, actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
 import { relayed, relayedAs, saveCopy } from "./bytes"
 import { openDoor } from "./door"
-import { engineLayer, Stop } from "./engine"
+import { engineLayer, OwnEngine, Stop } from "./engine"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { appUpdates, modules } from "./modules"
@@ -306,8 +306,9 @@ const runtime = ManagedRuntime.make(
             term: process.env.TERM,
           }),
           node,
-          // The engine stopped as asked, by Quit Banda here or `banda
-          // stop`: the window goes with it, unless an update restarts it.
+          // Quit Banda stopped the engine, here or by `banda stop`: the
+          // window goes with it, unless an update restarts it. Stopped by
+          // anything else, the window stays (engine.ts).
           () => {
             if (!updating) leave()
           }
@@ -491,7 +492,8 @@ async function ready(): Promise<void> {
       ? Effect.map(address, (at) => ({ ...at, latency: TEST_LATENCY }))
       : address
   serve(runtime, fromPage, BRIDGE, {
-    engine: [none, () => Engine.use((engine) => late(engine.address))],
+    // Stopped, not by Quit Banda, it says so: the page's Panes do too.
+    engine: [none, () => OwnEngine.use((engine) => late(engine.reached))],
     // The other machines' engines, through ssh (hosts.ts, ADR 0081), as
     // far as this one's in a test.
     hosts: { current: [none, () => Hosts.use((hosts) => hosts.current)] },
@@ -499,7 +501,14 @@ async function ready(): Promise<void> {
       text,
       ([name]) => Hosts.use((hosts) => late(hosts.address(name))),
     ],
-    hostStart: [text, ([name]) => Hosts.use((hosts) => hosts.start(name))],
+    // No name is this machine's own engine, stopped (ADR 0124).
+    hostStart: [
+      text,
+      ([name]) =>
+        name === ""
+          ? OwnEngine.use((engine) => engine.start)
+          : Hosts.use((hosts) => hosts.start(name)),
+    ],
     hostAdd: [
       Schema.Tuple([
         Schema.Struct({

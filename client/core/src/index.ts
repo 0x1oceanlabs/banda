@@ -58,6 +58,7 @@ export {
   shownOf,
   UNKNOWN,
   ownEngine,
+  STOPPED_HERE,
   waitedName,
   THIS_MACHINE,
   unreachedWords,

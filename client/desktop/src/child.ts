@@ -88,7 +88,8 @@ type Start = Effect.Effect<
 >
 
 /** Runs what `start` starts for good, `name` in what it says when it
- * dies, or until a run exits with a code `last` takes; `use` reads each
+ * dies, or until a run exits with a code `last` takes, which it gives;
+ * `use` reads each
  * run, and a run whose `use` fails is stopped. `start` is asked anew for
  * each run, so a run starts the program where it is then. */
 export const keepRunning = <E extends { message: string }, R>(
@@ -110,7 +111,7 @@ export const keepRunning = <E extends { message: string }, R>(
       const ended = yield* Effect.scoped(
         once(start, use, byStdin ? grace : undefined)
       )
-      if (typeof ended === "number" && last(ended)) return
+      if (typeof ended === "number" && last(ended)) return ended
       if ((yield* Clock.currentTimeMillis) - started > HEALTHY)
         wait = FIRST_WAIT
       const how = typeof ended === "number" ? `code ${ended}` : ended

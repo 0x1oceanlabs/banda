@@ -1733,8 +1733,11 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   the engine when it does not run, prints where it listens, and follows
   it while the window is open; where the engine is the window's child,
   it is the engine, `serve --with-parent`, and its stdin closing stops
-  it. When the engine stops as asked, by Quit Banda or `banda stop`, the
-  program ends with code 0 and the window quits; when it crashed, main
+  it. When Quit Banda stops the engine, here or by `banda stop`, the
+  program ends with code 0 and the window quits. Stopped as asked by
+  anything else, as its unit stopped by hand, it ends with code 3: the
+  window stays, its Panes say Banda is stopped on this machine, and
+  Start starts it again (ADR 0124, decision 9). When it crashed, main
   starts it again (waiting up to 10 s between tries). Closing the last
   window only closes it: the engine and its Agents go on. Quit Banda
   (`banda.quit`, Ctrl+Q, but for a terminal's program, whose key it is

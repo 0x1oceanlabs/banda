@@ -795,6 +795,68 @@ fn an_engine_with_a_parent_still_stops_on_sigterm() {
     assert!(!places.state.join("engine.json").exists());
 }
 
+/// A window's `banda start --with-parent`, asked to serve the engine as
+/// its child, whatever service this system has: the program, and the
+/// stdin that holds it.
+#[cfg(unix)]
+fn started_for_a_window(places: &Places) -> (Child, ChildStdin) {
+    let mut engine = places
+        .banda(&["start", "--with-parent"])
+        .env("BANDA_ENGINE_AS", "child")
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .spawn()
+        .unwrap();
+    let stdin = engine.stdin.take().unwrap();
+    let mut line = String::new();
+    BufReader::new(engine.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    assert!(line.contains("\"port\""), "{line}");
+    (engine, stdin)
+}
+
+#[cfg(unix)]
+#[test]
+fn a_window_quits_with_quit_banda_and_stays_for_any_other_stop_of_its_engine() {
+    let places = Places::new();
+    let ended = |engine: &mut Child| {
+        wait_for(Duration::from_secs(10), || engine.try_wait().unwrap())
+            .expect("the engine stops")
+            .code()
+    };
+    // Stopped as its unit would be by hand: 3, and the window stays.
+    let (mut engine, _stdin) = started_for_a_window(&places);
+    let sent = Command::new("kill")
+        .arg(engine.id().to_string())
+        .status()
+        .unwrap();
+    assert!(sent.success());
+    assert_eq!(ended(&mut engine), Some(3));
+    // Quit Banda, as `banda stop` is: 0, and the window quits too.
+    let (mut engine, _stdin) = started_for_a_window(&places);
+    // The engine is this test's child, so its end is heard here while
+    // `banda stop` waits for it to be gone.
+    let stop = places
+        .banda(&["stop", "--force"])
+        .env("BANDA_ENGINE_AS", "child")
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    assert_eq!(ended(&mut engine), Some(0));
+    let stopped = stop.wait_with_output().unwrap();
+    assert!(stopped.status.success(), "{stopped:?}");
+    // The next run takes Quit's word away: stopped by hand again, 3.
+    let (mut engine, _stdin) = started_for_a_window(&places);
+    let sent = Command::new("kill")
+        .arg(engine.id().to_string())
+        .status()
+        .unwrap();
+    assert!(sent.success());
+    assert_eq!(ended(&mut engine), Some(3));
+}
+
 /// `banda mcp` as a Harness runs it: the command, arguments and
 /// environment a session was given.
 struct Mcp {

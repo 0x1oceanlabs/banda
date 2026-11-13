@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
-import { expect, it } from "@effect/vitest"
+import { expect, it, vi } from "@effect/vitest"
 import {
   Clock,
   Deferred,
@@ -16,7 +16,7 @@ import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
 import { command, keepRunning, letGo, lines } from "./child"
 import { Engine, Look } from "@banda/desktop-kit"
-import { engineLayer, Stop } from "./engine"
+import { engineLayer, EngineStopped, OwnEngine, Stop } from "./engine"
 import { firstLook, lookLayer } from "./look"
 import { Program } from "./program"
 import { script } from "./testing"
@@ -170,7 +170,7 @@ it.live(
         `echo "$@" >> "$(dirname "$0")/runs"\n` +
           `echo '{"protocol":1,"port":1,"secret":"s","window":"/w"}'\n` +
           `[ "$(wc -l < "$(dirname "$0")/runs")" -ge 2 ] && exit 0\n` +
-          "exit 3"
+          "exit 1"
       )
       let quit = () => {}
       const quits = new Promise<void>((done) => {
@@ -192,6 +192,57 @@ it.live(
         "start --with-parent",
         "start --with-parent",
       ])
+    })
+)
+
+it.live(
+  "an engine stopped as asked, but not by Quit Banda, leaves the window up: the page hears it is stopped, and it starts again when asked",
+  () =>
+    Effect.gen(function* () {
+      // Its first two runs end as `banda start` does for such a stop.
+      const program = script(
+        `echo "$@" >> "$(dirname "$0")/runs"\n` +
+          `[ "$(wc -l < "$(dirname "$0")/runs")" -ge 3 ] || exit 3\n` +
+          `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/w"}'\n` +
+          "exec sleep 60"
+      )
+      const quit = vi.fn()
+      const runs = () =>
+        readFileSync(join(dirname(program), "runs"), "utf8")
+          .trim()
+          .split("\n")
+      yield* Effect.gen(function* () {
+        const own = yield* OwnEngine
+        const why = yield* Effect.flip(own.reached)
+        expect(why).toBeInstanceOf(EngineStopped)
+        expect(why.message).toBe("Banda is stopped on this machine")
+        // Stopped, it stays so: asked again, the same, and no new run.
+        expect((yield* Effect.flip(own.reached)).message).toBe(why.message)
+        expect(runs()).toHaveLength(1)
+        expect(quit).not.toHaveBeenCalled()
+        // Started, twice over, it runs once; stopped again, it stays so,
+        // with no Start left over to start it.
+        yield* own.start
+        yield* own.start
+        expect((yield* Effect.flip(own.reached)).message).toBe(why.message)
+        yield* Effect.sleep("300 millis")
+        expect(runs()).toHaveLength(2)
+        // Started again, the address asked next waits for it.
+        yield* own.start
+        expect(yield* own.reached).toEqual({
+          url: "ws://127.0.0.1:4321/ws",
+          secret: "s3",
+        })
+        expect(runs()).toHaveLength(3)
+        expect(quit).not.toHaveBeenCalled()
+      }).pipe(
+        Effect.provide(
+          engineLayer(Effect.succeed(Option.none()), {}, quit).pipe(
+            Layer.provide(Program.layer({ program })),
+            Layer.provide(NodeServices.layer)
+          )
+        )
+      )
     })
 )
 

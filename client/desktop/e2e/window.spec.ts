@@ -530,6 +530,33 @@ test("this machine's engine dies: its Pane says so as another machine's does, a 
   await expect(thread.getByRole("button", { name: "Send" })).toBeVisible()
 })
 
+test("this machine's engine stopped by anything but Quit Banda leaves the window up: its Pane says it is stopped, and Start starts it (ADR 0124, decision 9)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  // Stopped as its unit would be by hand, not by `banda stop`.
+  process.kill(window.engine()!, "SIGTERM")
+  const pill = thread.locator("[data-machine-pill]")
+  await expect(pill).toContainText("Banda is stopped on this machine")
+  // It is not started again by itself.
+  await page.waitForTimeout(1_500)
+  expect(window.engine()).toBeUndefined()
+  await expect(
+    thread.getByRole("button", { name: "Send when back" })
+  ).toBeVisible()
+
+  await pill.getByRole("button", { name: "Start" }).click()
+  await expect(pill).toHaveCount(0, { timeout: 30_000 })
+  expect(window.engine()).toBeDefined()
+  await composer.fill("after the stop")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: after the stop")).toBeVisible()
+})
+
 test("no process of the window stays in the unit of what started it (ADR 0086, decision 7)", async () => {
   const systemd = spawnSync(
     "systemctl",

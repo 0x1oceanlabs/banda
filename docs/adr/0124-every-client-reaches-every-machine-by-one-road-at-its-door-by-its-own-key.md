@@ -182,4 +182,13 @@ repository), with an adversarial check.
   this machine". The bar no longer says "Reconnecting…": the pill does.
   A Pane reads its machine through one hook (`useMachineOf`), whichever
   machine that is.
+- **The window stays for every stop but Quit Banda (SE3, PR 4a).**
+  `banda stop`, which Quit Banda runs, says it asked before it stops the
+  engine (a `quit` file in the state, which the next run takes away). The
+  window's `banda start --with-parent` ends with 0 only then, and the
+  window quits. Stopped as asked by anything else, as its unit stopped by
+  hand, it ends with 3: the window stays, refuses the page its engine's
+  address in the words "Banda is stopped on this machine", and the pill on
+  each Pane of this machine says them, with Start, which starts the
+  engine again. An engine that crashed is started again, as before.
 
