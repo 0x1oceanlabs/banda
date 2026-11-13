@@ -312,13 +312,6 @@ export function isFree(workspace: Workspace): boolean {
   return workspace.project === undefined && workspace.columns.length > 0
 }
 
-/** Whether `workspace` takes a Pane of `project` moved to it, in the row
- * and solo: a free one, an empty one, or its Project's (ADR 0102,
- * decision 6). */
-export function admits(workspace: Workspace, project: ProjectId): boolean {
-  return workspace.project === undefined || workspace.project === project
-}
-
 /** Whether a Pane in `column` of `workspace` moves to another workspace
  * by the keys with its whole Group, as one window (ADR 0065): not in the
  * Project's own Group, whose Panes the Person opened one by one (ADR
@@ -350,45 +343,6 @@ export function keepsPlace(
   return strict && workspace.project !== undefined && !gone(workspace.project)
 }
 
-/** The Project Pane `pane` moves as: its own alone; `whole`, with its
- * Group, the Group's lead's, as `lead` says (an Agent's Thread), else its
- * first Pane's. */
-export function movingAs(
-  state: Workspaces,
-  pane: string,
-  whole: boolean,
-  lead: (entry: Entry) => boolean
-): ProjectId | undefined {
-  const at = find(state, pane)
-  if (!at) return undefined
-  const { columns } = state.list[at.workspace]
-  const column = columns[at.column]
-  if (!whole || column.group === undefined)
-    return column.entries[at.entry].project
-  const { start, end } = runOf(columns, at.column)
-  const all = columns.slice(start, end).flatMap((one) => one.entries)
-  return (all.find(lead) ?? all[0]).project
-}
-
-/** The workspaces Pane `pane`, or `whole` its Group, may not move to:
- * every other Project's but the one it stands on (ADR 0102, decision 6). */
-export function refusedTo(
-  state: Workspaces,
-  pane: string,
-  whole: boolean,
-  lead: (entry: Entry) => boolean
-): Set<string> {
-  const project = movingAs(state, pane, whole, lead)
-  const from = find(state, pane)?.workspace
-  return new Set(
-    project === undefined
-      ? []
-      : state.list
-          .filter((w, at) => at !== from && !admits(w, project))
-          .map((w) => w.id)
-  )
-}
-
 /** A Project's, as the words name it: by its name, else another
  * Project's. */
 const whose = (name: string | undefined) =>
@@ -400,9 +354,11 @@ function whoseIs(to: number, name: string | undefined): string {
 }
 
 /**
- * What a move refused onto workspace `to`, from 0, is told (ADR 0102,
- * decision 6): whose it is, its Project `owner`'s, and where the Pane can
- * go. `as` is the Project it moves as, and `scratch` whether that is of
+ * What a move the engine refused onto workspace `to`, from 0, is told
+ * (ADR 0102, decision 6): whose it is, its Project `owner`'s, and where
+ * the Pane can go. The engine refuses, and these are the window's words
+ * for it, by the names it knows (ADR 0110, decision 8). `as` is the
+ * Project it moves as, and `scratch` whether that is of
  * no Project, as the Placing says: a draft in the machine's own ID is,
  * with no summary. `along`, a Group of that Project takes it along, and
  * dragged alone it would go there. A Project not known is another
@@ -433,7 +389,8 @@ export function refusalOf({
 
 /** What the note under Pane `pane`, carried, says over each workspace but
  * the one it stands on, by their IDs, in the row and solo (ADR 0102,
- * decision 6): whose it is, if `refused`, else where the Pane goes, a
+ * decision 6): whose it is, if `refused`, as the copy of the engine's rule
+ * foresees (`arrangement.ts`'s `refusedTo`), else where the Pane goes, a
  * Project's by `projectOf`. */
 export function notesOf(
   state: Workspaces,

@@ -1299,6 +1299,96 @@ async fn a_pane_moved_to_another_project_goes_home_and_the_one_it_was_leaves() {
     assert!(group_of(&list, &now).is_string());
 }
 
+/// Two Projects, each with a Pane on its own workspace where the Flow is
+/// the row, and a stray Pane of Work beside Home's, which a Pane opened at
+/// a named place may be. Answers the Projects and the three Panes.
+async fn two_projects(machine: &Machine) -> ([ProjectId; 2], [Value; 3]) {
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let open =
+        |project, n, more| machine.command("workspaces.open", numbered(project, "a.a", n, more));
+    let on_its_own =
+        |project: ProjectId| json!({ "place": { "to": "project", "project": project } });
+    let ours = open(work, 1, on_its_own(work)).await.unwrap()["pane"].clone();
+    let theirs = open(home, 2, on_its_own(home)).await.unwrap()["pane"].clone();
+    let beside = json!({ "place": { "to": "beside", "pane": theirs, "side": "right" } });
+    let stray = open(work, 3, beside).await.unwrap()["pane"].clone();
+    ([work, home], [ours, theirs, stray])
+}
+
+#[tokio::test]
+async fn in_the_row_a_move_onto_another_projects_workspace_is_refused_for_every_caller() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
+    let ([work, _], [ours, theirs, stray]) = two_projects(&machine).await;
+    let before = machine.list().await;
+    assert_eq!(
+        layout(&before),
+        [vec![vec![1]], vec![vec![2], vec![3]], vec![]]
+    );
+    let homes = before["workspaces"][1]["id"].clone();
+    let said = |refused: Result<Value, Refusal>| {
+        let refusal = refused.unwrap_err();
+        assert_eq!(refusal.code, Code::Conflict);
+        refusal.message
+    };
+    let words = "Workspace 2 is another Project's. A Pane goes to its Project's workspace, \
+                 a free one or a new one.";
+
+    // The Person's, as a drop, a key and `banda call` send them.
+    let beside = json!({ "to": "beside", "pane": theirs, "side": "left" });
+    let pane = json!({ "pane": ours, "place": beside });
+    assert_eq!(
+        said(machine.command("workspaces.move_pane", pane).await),
+        words
+    );
+    let column = column_of(&before, &ours)["id"].clone();
+    let whole = json!({ "column": column, "workspace": homes, "index": 0 });
+    for method in ["workspaces.move_column", "workspaces.move_group"] {
+        assert_eq!(said(machine.command(method, whole.clone()).await), words);
+    }
+    // A Pane brought there, as "Open beside" opens one no workspace shows.
+    let brought = json!({
+        "again": true, "brought": true,
+        "place": { "to": "column", "workspace": homes, "index": 0 },
+    });
+    let open = machine.command("workspaces.open", numbered(work, "a.a", 4, brought));
+    assert_eq!(said(open.await), words);
+
+    // An Agent's: a Pane it opened, beside its Project's Pane that stands
+    // on the other Project's workspace.
+    let agent = AgentId::new();
+    let as_agent = |method: &'static str, params| machine.agent(agent, work, method, params);
+    let file = showing("files.file", json!({ "path": "a.md" }));
+    let own = as_agent("workspaces.open_pane", file).await.unwrap()["pane"].clone();
+    let standing = machine.list().await;
+    let there = json!({ "pane": own, "beside": { "pane": stray, "side": "right" } });
+    assert_eq!(said(as_agent("workspaces.move_own", there).await), words);
+
+    // Refused, nothing moved and nothing was said.
+    assert_eq!(machine.list().await, standing);
+
+    // Where a Pane may go, it goes: on the workspace it stands on, and to
+    // its Project's own.
+    let home = json!({ "pane": stray, "place": { "to": "beside", "pane": ours, "side": "right" } });
+    machine.command("workspaces.move_pane", home).await.unwrap();
+    assert_eq!(
+        layout(&machine.list().await)[0],
+        [vec![1], vec![3], vec![0]]
+    );
+}
+
+#[tokio::test]
+async fn in_the_flow_free_every_workspace_takes_any_pane() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (_, [ours, theirs, _]) = two_projects(&machine).await;
+    let beside = json!({ "to": "beside", "pane": theirs, "side": "left" });
+    let pane = json!({ "pane": ours, "place": beside });
+    machine.command("workspaces.move_pane", pane).await.unwrap();
+    let list = machine.list().await;
+    assert_eq!(layout(&list)[1], [vec![1], vec![2], vec![3]]);
+}
+
 #[tokio::test]
 async fn a_panes_id_comes_from_the_command_that_opens_it() {
     let root = tempfile::tempdir().unwrap();

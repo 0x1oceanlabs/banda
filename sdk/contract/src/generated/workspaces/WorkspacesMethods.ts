@@ -48,11 +48,14 @@ close: CommandMethod<OnePane, Done>,
  */
 update: CommandMethod<Update, Done>, 
 /**
- * Moves a Pane to a place, counted as if it had left its own.
+ * Moves a Pane to a place, counted as if it had left its own. In
+ * the row, never onto another Project's workspace: the window,
+ * an Agent and `banda` are refused alike (ADR 0110, decision 8).
  */
 move_pane: CommandMethod<MovePane, Done>, 
 /**
- * Moves a column, its Panes and all, to a workspace.
+ * Moves a column, its Panes and all, to a workspace, where the
+ * row lets it go, as `move_pane`.
  */
 move_column: CommandMethod<MoveColumn, Done>, 
 /**
@@ -91,7 +94,9 @@ group: CommandMethod<OneColumn, Done>,
  */
 regroup: CommandMethod<Regroup, Done>, 
 /**
- * Moves the Group a column is in, its columns all, to a workspace.
+ * Moves the Group a column is in, its columns all, to a workspace,
+ * where the row lets it go, as `move_pane`: it moves as its
+ * Agent's Thread's Project, else as its first Pane's.
  */
 move_group: CommandMethod<MoveColumn, Done>, 
 /**
@@ -161,7 +166,9 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  */
 open_pane: CommandMethod<OpenPane, Opened>, 
 /**
- * Moves a Pane you opened beside another that `panes` lists.
+ * Moves a Pane you opened beside another that `panes` lists. When
+ * each Project has its own workspace, never onto another
+ * Project's.
  */
 move_own: CommandMethod<MoveOwn, Done>, 
 /**

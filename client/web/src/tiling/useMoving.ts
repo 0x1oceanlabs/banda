@@ -19,9 +19,9 @@ import { cn } from "@banda/ui/lib/utils"
 import { type RefObject, useEffect, useRef } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Place } from "@banda/contract/workspaces"
-import { leads } from "../registry"
-import type { Plan } from "./arrange"
-import { notesOf, refusedTo, type Workspaces } from "./model"
+import { keptOf, type Plan } from "./arrange"
+import { refusedTo } from "./arrangement"
+import { notesOf, type Workspaces } from "./model"
 import { room, scrollOf, stripOf } from "./layout"
 import {
   carriesGroup,
@@ -34,6 +34,7 @@ import {
   standing,
   swallowClick,
 } from "./moving"
+import { factsOf } from "./useTiling"
 import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
 import { useHoldsMod, useMod } from "@banda/ui/hooks/use-key-of"
@@ -77,7 +78,9 @@ export type Carrying = {
 
 /** `Carrying.refuses` and `notes` over `state`, in the row and solo,
  * `strict`: every other Project's workspace refuses the Pane, and the note
- * says whose it is, or where the Pane goes (ADR 0102, decision 6). */
+ * says whose it is, or where the Pane goes (ADR 0102, decision 6). The
+ * engine refuses the move (ADR 0110, decision 8): the window foresees it
+ * by its copy of the engine's rule, to dim what takes no drop. */
 export function refusing(
   state: Workspaces,
   strict: boolean,
@@ -85,7 +88,8 @@ export function refusing(
 ): Pick<Carrying, "refuses" | "notes"> {
   if (!strict) return {}
   return {
-    refuses: (pane, whole) => refusedTo(state, pane, whole, leads),
+    refuses: (pane, whole) =>
+      refusedTo(keptOf(state), factsOf("row"), pane, whole),
     notes: (pane, refused) => notesOf(state, pane, refused, projectOf),
   }
 }

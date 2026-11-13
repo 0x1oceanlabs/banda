@@ -6,12 +6,18 @@ import {
   useRef,
   useState,
 } from "react"
-import { type Engine, newId, notDone, type ProjectId } from "@banda/contract"
+import { type Engine, newId, type ProjectId } from "@banda/contract"
 import type { Flow } from "@banda/contract/agents"
 import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
-import { groupedOf, HOME_KINDS, startable, widthOf } from "../registry"
-import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
+import {
+  groupedOf,
+  HOME_KINDS,
+  LEAD_KINDS,
+  startable,
+  widthOf,
+} from "../registry"
+import { type Change, logged, type Plan, send, tidied, viewOf } from "./arrange"
 import { type Facts, NO_FACTS } from "./arrangement"
 import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
@@ -29,19 +35,15 @@ import {
 import { keepView, loadView, moveOver } from "./store"
 import { useArranged } from "./useArranged"
 
-/** A change the engine refused is logged: the window draws what it says.
- * One whose answer was lost may have run: its fact draws it, if it did. */
-function refused(error: unknown): void {
-  if (notDone(error)?.outcome === "may_have_run")
-    console.warn("A change of the workspaces may have run:", error)
-  else console.warn("The workspaces did not change:", error)
-}
-
-/** What the engine places a Pane by, as this client believes them (ADR
- * 0110, decision 9): solo is its own view of the row. Which Projects are
- * of no Project each command says itself (`asking`). */
+/** What the engine places a Pane by, and refuses a move by, as this client
+ * believes them (ADR 0110, decision 9): solo is its own view of the row.
+ * Which Projects are of no Project each command says itself (`asking`). */
 export function factsOf(flow: Flow): Facts {
-  return { flow: flow === "free" ? "free" : "row", home: HOME_KINDS }
+  return {
+    flow: flow === "free" ? "free" : "row",
+    home: HOME_KINDS,
+    leads: LEAD_KINDS,
+  }
 }
 
 const stateOf = (seen: Seen) => seen.state
@@ -157,7 +159,7 @@ export function useTiling({
         (error: unknown) => {
           unanswered.done(id)
           if (plan.refused) plan.refused(error)
-          else refused(error)
+          else logged(error)
           store.set(dropped(store.get(), id))
         }
       )
@@ -180,7 +182,7 @@ export function useTiling({
       }
     )
       .then((kept) => kept && store.set(look(store.get(), kept)))
-      .catch(refused)
+      .catch(logged)
   }, [engine, machine, modules, home, store])
   // An empty workspace the Person left goes, as niri's: through the
   // queue, so it is drawn gone at once and goes after what was sent
@@ -237,7 +239,7 @@ export function useTiling({
           until(store.get().answered)
         },
         (error: unknown) => {
-          refused(error)
+          logged(error)
           until(0)
         }
       )

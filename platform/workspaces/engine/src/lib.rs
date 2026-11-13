@@ -4,9 +4,9 @@
 //!
 //! It is the machine's, not a Project's: one workspace holds Panes of every
 //! Project. Its commands carry what was decided, a place the Person named
-//! or a width; where a Pane with no place opens, `placing` decides here,
-//! for every caller (ADR 0110). What depends on the look or the view stays
-//! the window's. A change says the
+//! or a width; where a Pane with no place opens, and which move the row
+//! refuses, `placing` decides here, for every caller (ADR 0110). What
+//! depends on the look or the view stays the window's. A change says the
 //! whole arrangement after it in one event, so a window that follows
 //! draws what the event holds; new args for a Pane, the change made most,
 //! say only those. A command that changes nothing says nothing.
@@ -86,17 +86,13 @@ impl Workspaces {
         call.scratch(project).await
     }
 
-    /// What this machine places the Pane `open` by. Whether its Project is
-    /// of no Project the engine says itself where it knows the Project, as
-    /// it says `grouped`: of its own it takes no one's word (ADR 0110,
-    /// decision 6).
-    async fn facts(&self, call: &Call, open: &mut Open) -> Facts {
-        if let Some(known) = self.scratch(call, open.shows.project).await {
-            open.scratch = Some(known);
-        }
+    /// What this machine places a Pane by, and refuses a move by, read
+    /// before the change, as it cannot wait (ADR 0110, decision 5).
+    fn facts(&self) -> Facts {
         Facts {
             flow: self.flow_now(),
             home: self.home.clone(),
+            leads: self.grouped.clone(),
         }
     }
 
@@ -130,9 +126,12 @@ banda_kernel::methods! {
         command close(OnePane) -> Done, Write;
         /// Keeps new args for a Pane, which stays where it is.
         command update(Update) -> Done, Write;
-        /// Moves a Pane to a place, counted as if it had left its own.
+        /// Moves a Pane to a place, counted as if it had left its own. In
+        /// the row, never onto another Project's workspace: the window,
+        /// an Agent and `banda` are refused alike (ADR 0110, decision 8).
         command move_pane(MovePane) -> Done, Write;
-        /// Moves a column, its Panes and all, to a workspace.
+        /// Moves a column, its Panes and all, to a workspace, where the
+        /// row lets it go, as `move_pane`.
         command move_column(MoveColumn) -> Done, Write;
         /// Moves a workspace, its columns and all, up or down; never under
         /// the empty one at the bottom.
@@ -153,7 +152,9 @@ banda_kernel::methods! {
         /// A column in a Group leaves it that way; one in none joins the
         /// Group beside it that way.
         command regroup(Regroup) -> Done, Write;
-        /// Moves the Group a column is in, its columns all, to a workspace.
+        /// Moves the Group a column is in, its columns all, to a workspace,
+        /// where the row lets it go, as `move_pane`: it moves as its
+        /// Agent's Thread's Project, else as its first Pane's.
         command move_group(MoveColumn) -> Done, Write;
         /// Whether a column's Group takes the whole screen.
         command fill(Fill) -> Done, Write;
@@ -203,7 +204,9 @@ banda_kernel::methods! {
         /// a Thread's by its ID, stays where it is, and is named. It takes
         /// no focus; the Person sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
-        /// Moves a Pane you opened beside another that `panes` lists.
+        /// Moves a Pane you opened beside another that `panes` lists. When
+        /// each Project has its own workspace, never onto another
+        /// Project's.
         command move_own(MoveOwn) -> Done, Write, tool "move_pane";
         /// Closes a Pane you opened.
         command close_own(OnePane) -> Done, Write, tool "close_pane";
@@ -551,14 +554,13 @@ impl Workspaces {
         if self.grouped.contains(&open.shows.kind) {
             open.grouped.get_or_insert(true);
         }
-        // Only a Pane with no place is placed by the facts, which are read
-        // before the change, as it cannot wait.
-        let unplaced = open.place.is_none() && (open.instead.is_none() || open.moved == Some(true));
-        let facts = if unplaced {
-            self.facts(&call, &mut open).await
-        } else {
-            Facts::default()
-        };
+        // Whether its Project is of no Project the engine says itself
+        // where it knows the Project, as it says `grouped`: of its own it
+        // takes no one's word (ADR 0110, decision 6).
+        if let Some(known) = self.scratch(&call, open.shows.project).await {
+            open.scratch = Some(known);
+        }
+        let facts = self.facts();
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
             Ok(commands::open(list, open, &facts, seed)?)
         })
@@ -587,25 +589,25 @@ impl Workspaces {
     }
 
     async fn move_pane(&self, call: Call, moving: MovePane) -> Result<Done, Refusal> {
-        let MovePane {
-            pane,
-            place,
-            grouped,
-        } = moving;
+        let facts = self.facts();
+        let pane = moving.pane;
         done(&call, "moved", pane, Say::Whole, move |list, _, seed| {
-            Ok(model::move_pane(list, pane, &place, grouped, seed)?)
+            Ok(commands::move_pane(list, moving, &facts, seed)?)
         })
         .await
     }
 
     async fn move_column(&self, call: Call, moving: MoveColumn) -> Result<Done, Refusal> {
-        let MoveColumn {
-            column,
-            workspace,
-            index,
-        } = moving;
+        self.moving(call, moving, false).await
+    }
+
+    /// Moves a column, or with `whole` the Group it is in, where the row
+    /// lets it go.
+    async fn moving(&self, call: Call, moving: MoveColumn, whole: bool) -> Result<Done, Refusal> {
+        let facts = self.facts();
+        let column = moving.column;
         done(&call, "moved", column, Say::Whole, move |list, _, seed| {
-            Ok(model::move_column(list, column, workspace, index, seed)?)
+            Ok(commands::move_column(list, moving, whole, &facts, seed)?)
         })
         .await
     }
@@ -679,15 +681,7 @@ impl Workspaces {
     }
 
     async fn move_group(&self, call: Call, moving: MoveColumn) -> Result<Done, Refusal> {
-        let MoveColumn {
-            column,
-            workspace,
-            index,
-        } = moving;
-        done(&call, "moved", column, Say::Whole, move |list, _, seed| {
-            Ok(model::move_group(list, column, workspace, index, seed)?)
-        })
-        .await
+        self.moving(call, moving, true).await
     }
 
     async fn fill(&self, call: Call, fill: Fill) -> Result<Done, Refusal> {
@@ -864,10 +858,15 @@ impl Workspaces {
     async fn move_own(&self, call: Call, moving: MoveOwn) -> Result<Done, Refusal> {
         let (wall, me) = walled(&call)?;
         let MoveOwn { pane, beside } = moving;
+        let facts = self.facts();
         done(&call, "moved", pane, Say::Whole, move |list, _, seed| {
             own(list, wall, me, pane)?;
-            let place = beside.place(list, wall)?;
-            Ok(model::move_pane(list, pane, &place, None, seed)?)
+            let moving = MovePane {
+                pane,
+                place: beside.place(list, wall)?,
+                grouped: None,
+            };
+            Ok(commands::move_pane(list, moving, &facts, seed)?)
         })
         .await
     }

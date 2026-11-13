@@ -1,12 +1,13 @@
-//! Where a Pane goes when no one named a place: the Tiling's placement
-//! policy (ADR 0110). It only decides, from the arrangement and the facts
-//! it is given; `model` does what it decides. The window's prediction,
+//! Where a Pane goes when no one named a place, and which move the row
+//! refuses: the Tiling's placement policy (ADR 0110). It only decides,
+//! from the arrangement and the facts it is given; `model` does what it
+//! decides. The window's prediction,
 //! `client/web/src/tiling/arrangement.ts`, mirrors it, and the golden
 //! traces hold the two together until T1 runs this code there (ADR 0088,
 //! decision 11).
 
-use crate::model::{self, Arrangement, PaneId, Place, Shown, Side, WorkspaceId};
-use banda_kernel::ProjectId;
+use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
+use banda_kernel::{ProjectId, Refusal};
 use serde::Serialize;
 use std::collections::BTreeSet;
 use uuid::Uuid;
@@ -33,6 +34,11 @@ pub struct Facts {
     /// The Pane kinds that stand on their Project's workspace
     /// (`PaneKind.home`).
     pub home: BTreeSet<String>,
+    /// The Pane kinds that lead a Group, as an Agent's Thread does: those
+    /// that open as a Group of their own (`PaneKind.grouped`). A Group
+    /// moves as its lead's Project (ADR 0102, decision 6).
+    #[serde(skip_serializing_if = "BTreeSet::is_empty")]
+    pub leads: BTreeSet<String>,
 }
 
 /// Who a Pane is opened by, or for.
@@ -162,6 +168,118 @@ pub fn moves_away(list: &Arrangement, flow: Flow, project: ProjectId, instead: P
     let workspace = &list[at.workspace];
     let was = workspace.columns[at.column].panes[at.pane].shows.project;
     flow == Flow::Row && was != project && workspace.project.is_some_and(|owner| owner != project)
+}
+
+/// What a command moves, as the row asks whose it is.
+#[derive(Clone, Copy, Debug)]
+pub enum Moved {
+    /// A Pane alone, as its own Project's.
+    Pane(PaneId),
+    /// A column alone, as its lead's Project's, else its first Pane's.
+    Column(ColumnId),
+    /// A column with its whole Group, as the Group's lead's Project's, else
+    /// its first Pane's.
+    Group(ColumnId),
+    /// A Pane of this Project no workspace shows yet, which the Person
+    /// brings to a place ("Open beside").
+    Brought(ProjectId),
+}
+
+/// A move the row refuses: the workspace it would land on is another
+/// Project's (ADR 0102, decision 6).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Refused {
+    /// The workspace, and its place from the top, from 0.
+    pub workspace: WorkspaceId,
+    pub at: usize,
+    /// The Project that owns it.
+    pub owner: ProjectId,
+    /// The Project what moves is of.
+    pub moving: ProjectId,
+}
+
+impl From<Refused> for Refusal {
+    /// In the words the window says of a Project it does not know: the
+    /// engine knows no Project's name, and the window, which does, words
+    /// it by them (ADR 0110, decision 8).
+    fn from(refused: Refused) -> Refusal {
+        Refusal::conflict(format!(
+            "Workspace {} is another Project's. A Pane goes to its Project's workspace, \
+             a free one or a new one.",
+            refused.at + 1
+        ))
+    }
+}
+
+/// Whether the row refuses to move `moving` to `place`: onto a workspace
+/// another Project owns, from another workspace (ADR 0102, decision 6). A
+/// free workspace, an empty one and a new one take any Pane, and so does
+/// every workspace in the Flow `free`. On the workspace it stands on,
+/// whoever owns it, a Pane moves as it likes. What `moving` or `place`
+/// names that the workspaces do not hold is not this rule's to refuse.
+pub fn refuses(list: &Arrangement, facts: &Facts, moving: Moved, place: &Place) -> Option<Refused> {
+    if facts.flow != Flow::Row {
+        return None;
+    }
+    let (at, owner) = lands(list, place)?;
+    let (from, project) = moves_as(list, facts, moving)?;
+    (from != Some(at) && owner != project).then_some(Refused {
+        workspace: list[at].id,
+        at,
+        owner,
+        moving: project,
+    })
+}
+
+/// The workspace `place` puts a Pane on, from the top, and the Project
+/// that owns it then; none on one no Project owns, or a new one.
+fn lands(list: &Arrangement, place: &Place) -> Option<(usize, ProjectId)> {
+    let at = match *place {
+        Place::Column { workspace, .. } => model::workspace_at(list, workspace).ok()?,
+        Place::Stack { column, .. } => model::column_at(list, column).ok()?.0,
+        Place::Beside { pane, .. } | Place::Group { pane } => {
+            model::spot(list, pane).ok()?.workspace
+        }
+        // Its Project's workspace, or the empty one at the bottom, which
+        // it owns then.
+        Place::Project { project } | Place::Own { project } => {
+            let at =
+                (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
+            return Some((at, project));
+        }
+        Place::Workspace { .. } | Place::Free => return None,
+    };
+    Some((at, list[at].project?))
+}
+
+/// The workspace `moving` stands on, from the top, none for a Pane no
+/// workspace shows yet; and the Project it moves as.
+fn moves_as(
+    list: &Arrangement,
+    facts: &Facts,
+    moving: Moved,
+) -> Option<(Option<usize>, ProjectId)> {
+    let (column, whole) = match moving {
+        Moved::Brought(project) => return Some((None, project)),
+        Moved::Pane(pane) => {
+            let at = model::spot(list, pane).ok()?;
+            let pane = &list[at.workspace].columns[at.column].panes[at.pane];
+            return Some((Some(at.workspace), pane.shows.project));
+        }
+        Moved::Column(column) => (column, false),
+        Moved::Group(column) => (column, true),
+    };
+    let (w, c) = model::column_at(list, column).ok()?;
+    let columns = &list[w].columns;
+    let run = if whole {
+        model::run(columns, c)
+    } else {
+        c..c + 1
+    };
+    let mut panes = columns[run].iter().flat_map(|c| &c.panes);
+    let first = panes.clone().next()?;
+    let lead = panes.find(|pane| facts.leads.contains(&pane.shows.kind));
+    Some((Some(w), lead.unwrap_or(first).shows.project))
 }
 
 /// Where a Pane an Agent opens with no place goes: into its Thread's
@@ -388,5 +506,166 @@ mod tests {
         // On a free workspace it changes Project where it stands.
         let free = opened(&mut list, shown(work, "a.a", 2), Some(Place::Free));
         assert!(!moves_away(&list, Flow::Row, other, free));
+    }
+
+    fn row() -> Facts {
+        Facts {
+            flow: Flow::Row,
+            leads: BTreeSet::from(["t.t".to_owned()]),
+            ..Facts::default()
+        }
+    }
+
+    /// A column's place, last on `workspace`.
+    fn last_on(workspace: WorkspaceId) -> Place {
+        Place::Column {
+            workspace,
+            index: usize::MAX,
+        }
+    }
+
+    /// Work's Thread on its workspace, Home's Pane on Home's, and a Pane
+    /// of Work on a free one.
+    fn two_projects() -> (Arrangement, [ProjectId; 2], [PaneId; 3]) {
+        let mut list = start();
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let thread = opened(&mut list, shown(work, "t.t", 1), on_its_workspace(work));
+        group_pane(&mut list, thread, &seed()).unwrap();
+        let theirs = opened(&mut list, shown(home, "a.a", 2), on_its_workspace(home));
+        let loose = opened(&mut list, shown(work, "a.a", 3), Some(Place::Free));
+        (list, [work, home], [thread, theirs, loose])
+    }
+
+    #[test]
+    fn in_the_row_a_pane_never_moves_onto_another_projects_workspace() {
+        let (list, [work, home], [thread, theirs, loose]) = two_projects();
+        let refused = Some(Refused {
+            workspace: list[1].id,
+            at: 1,
+            owner: home,
+            moving: work,
+        });
+        let theirs_column = list[1].columns[0].id;
+        // By every place that lands there.
+        for place in [
+            last_on(list[1].id),
+            Place::Stack {
+                column: theirs_column,
+                index: 0,
+            },
+            Place::Beside {
+                pane: theirs,
+                side: Side::Left,
+            },
+            Place::Group { pane: theirs },
+            Place::Project { project: home },
+            Place::Own { project: home },
+        ] {
+            assert_eq!(refuses(&list, &row(), Moved::Pane(loose), &place), refused);
+            assert_eq!(refuses(&list, &row(), Moved::Pane(thread), &place), refused);
+            assert_eq!(
+                refuses(&list, &row(), Moved::Brought(work), &place),
+                refused
+            );
+            // Its own Project's goes there, and in the Flow free any does.
+            assert_eq!(refuses(&list, &row(), Moved::Pane(theirs), &place), None);
+            assert_eq!(refuses(&list, &row(), Moved::Brought(home), &place), None);
+            let free = Facts::default();
+            assert_eq!(refuses(&list, &free, Moved::Pane(loose), &place), None);
+        }
+        // A Project that owns no workspace yet takes the empty one at the
+        // bottom for its own.
+        let third = ProjectId::new();
+        let (bottom, theirs_to_be) = (list.len() - 1, Place::Project { project: third });
+        let at = refuses(&list, &row(), Moved::Pane(loose), &theirs_to_be).unwrap();
+        assert_eq!((at.at, at.owner), (bottom, third));
+    }
+
+    #[test]
+    fn a_pane_goes_to_its_projects_workspace_a_free_one_and_a_new_one() {
+        let (list, [work, _], [thread, _, loose]) = two_projects();
+        for place in [
+            last_on(list[0].id),
+            last_on(list[2].id),
+            last_on(list[3].id),
+            Place::Workspace { index: 0 },
+            Place::Free,
+            Place::Project { project: work },
+        ] {
+            assert_eq!(refuses(&list, &row(), Moved::Pane(loose), &place), None);
+            assert_eq!(refuses(&list, &row(), Moved::Pane(thread), &place), None);
+        }
+        // What the workspaces do not hold is not this rule's to refuse.
+        let nowhere = Place::Beside {
+            pane: PaneId::new(),
+            side: Side::Left,
+        };
+        assert_eq!(refuses(&list, &row(), Moved::Pane(loose), &nowhere), None);
+        let gone = Moved::Pane(PaneId::new());
+        assert_eq!(refuses(&list, &row(), gone, &last_on(list[1].id)), None);
+    }
+
+    #[test]
+    fn a_pane_moves_as_it_likes_on_the_workspace_it_stands_on() {
+        // Home's Pane in the Group of Work's Thread, on Work's workspace,
+        // as what an Agent opens there (ADR 0102, decision 1).
+        let (mut list, [_, home], [thread, ..]) = two_projects();
+        let guest = opened(
+            &mut list,
+            shown(home, "a.a", 4),
+            Some(Place::Group { pane: thread }),
+        );
+        let first = Place::Column {
+            workspace: list[0].id,
+            index: 0,
+        };
+        assert_eq!(refuses(&list, &row(), Moved::Pane(guest), &first), None);
+    }
+
+    #[test]
+    fn a_group_moves_as_its_lead_and_a_column_as_its_first_pane() {
+        let (mut list, [work, home], [thread, ..]) = two_projects();
+        let guest = opened(
+            &mut list,
+            shown(home, "a.a", 4),
+            Some(Place::Group { pane: thread }),
+        );
+        let (leads, guests) = (list[0].columns[0].id, list[0].columns[1].id);
+        let (to_home, to_free) = (last_on(list[1].id), last_on(list[2].id));
+        // The Group whole is Work's, by whichever of its columns; the
+        // guest's column alone is Home's, as the guest is.
+        for column in [leads, guests] {
+            let refused = refuses(&list, &row(), Moved::Group(column), &to_home).unwrap();
+            assert_eq!((refused.owner, refused.moving), (home, work));
+            assert_eq!(refuses(&list, &row(), Moved::Group(column), &to_free), None);
+        }
+        assert_eq!(
+            refuses(&list, &row(), Moved::Column(guests), &to_home),
+            None
+        );
+        assert_eq!(refuses(&list, &row(), Moved::Pane(guest), &to_home), None);
+        assert!(refuses(&list, &row(), Moved::Column(leads), &to_home).is_some());
+        // With no lead known, a Group is its first Pane's: Work's still.
+        let no_leads = Facts {
+            flow: Flow::Row,
+            ..Facts::default()
+        };
+        assert!(refuses(&list, &no_leads, Moved::Group(guests), &to_home).is_some());
+        // A column gone is not this rule's to refuse.
+        let gone = Moved::Group(ColumnId::new());
+        assert_eq!(refuses(&list, &row(), gone, &to_home), None);
+    }
+
+    #[test]
+    fn the_refusal_says_which_workspace_in_plain_words() {
+        let (list, _, [_, _, loose]) = two_projects();
+        let refused = refuses(&list, &row(), Moved::Pane(loose), &last_on(list[1].id));
+        let refusal = Refusal::from(refused.unwrap());
+        assert_eq!(refusal.code, banda_kernel::Code::Conflict);
+        assert!(
+            refusal
+                .message
+                .starts_with("Workspace 2 is another Project's.")
+        );
     }
 }

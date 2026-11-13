@@ -266,6 +266,13 @@ export const HOME_KINDS: readonly string[] = kinds
   .filter((kind) => kind.home !== undefined)
   .map((kind) => kind.kind)
 
+/** The kinds that open as a Group of their own, which lead a Group as it
+ * moves: as the engine reads them from the Apps' `window.json`, and
+ * refuses a move by (ADR 0110, decision 8). */
+export const LEAD_KINDS: readonly string[] = kinds
+  .filter((kind) => kind.grouped === true)
+  .map((kind) => kind.kind)
+
 /** Whether a Pane opens as a Group of its own (`PaneKind.grouped`). */
 export function groupedOf(pane: PaneState): boolean {
   return kindOf(pane.kind)?.grouped === true

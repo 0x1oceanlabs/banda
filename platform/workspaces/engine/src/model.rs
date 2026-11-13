@@ -380,7 +380,7 @@ pub(crate) fn spot(list: &Arrangement, pane: PaneId) -> Result<Spot, Refusal> {
         .ok_or_else(|| Refusal::not_found("The workspaces show no such Pane."))
 }
 
-fn column_at(list: &Arrangement, column: ColumnId) -> Result<(usize, usize), Refusal> {
+pub(crate) fn column_at(list: &Arrangement, column: ColumnId) -> Result<(usize, usize), Refusal> {
     list.iter()
         .enumerate()
         .find_map(|(w, workspace)| {
@@ -395,7 +395,7 @@ fn column_mut(list: &mut Arrangement, column: ColumnId) -> Result<&mut Column, R
     Ok(&mut list[w].columns[c])
 }
 
-fn workspace_at(list: &Arrangement, workspace: WorkspaceId) -> Result<usize, Refusal> {
+pub(crate) fn workspace_at(list: &Arrangement, workspace: WorkspaceId) -> Result<usize, Refusal> {
     list.iter()
         .position(|w| w.id == workspace)
         .ok_or_else(|| Refusal::not_found("There is no such workspace."))
@@ -853,7 +853,7 @@ pub enum Toward {
 
 /// The columns of the Group the one at `c` is in, as a range of
 /// `columns`: it alone when it is in none.
-fn run(columns: &[Column], c: usize) -> std::ops::Range<usize> {
+pub(crate) fn run(columns: &[Column], c: usize) -> std::ops::Range<usize> {
     let Some(group) = columns[c].group else {
         return c..c + 1;
     };
