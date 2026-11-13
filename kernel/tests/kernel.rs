@@ -3,9 +3,10 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Caller, Code, CommandId, Effect, Error, Event, EventFilter, Kernel, Kind, Lease,
-    Listener, Module, ModuleProject, OnRestart, Outcome, Participant, Pass, PersonId, ProjectId,
-    ProjectSummary, Refusal, Retry, Right, Scope, Settled, SignKind, Stream, Tx, decode, now_ms,
+    AgentId, App, AppMethods, Call, Caller, Code, CommandId, Does, Effect, Error, Event,
+    EventFilter, Kernel, Kind, Lease, Listener, Method, Module, ModuleProject, OnRestart, Outcome,
+    Participant, Pass, PersonId, ProjectId, ProjectSummary, Refusal, Retry, Right, Scope, Settled,
+    SignKind, Stream, Tx, decode, now_ms,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -2109,6 +2110,94 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
 
 async fn say(socket: &mut Socket, frame: Value) {
     socket.send(Message::text(frame.to_string())).await.unwrap();
+}
+
+/// The welcome lists each App with its version and API, and
+/// `apps.describe` answers them with their methods, word for word as
+/// here: a client of another build reads this shape (ADR 0082, decisions
+/// 2 and 14; ADR 0124, decision 3).
+#[tokio::test]
+async fn the_welcome_lists_the_apps_and_apps_describe_says_their_methods() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let list = Method {
+        name: "list",
+        kind: Kind::Call,
+        right: Right::Read,
+        does: Does::Read,
+        tool: Some("notes"),
+        pass: false,
+        about: "Every note.".to_owned(),
+    };
+    let add = Method {
+        name: "add",
+        kind: Kind::Command,
+        right: Right::Write,
+        does: Does::Act,
+        tool: None,
+        pass: false,
+        about: "Adds a note.".to_owned(),
+    };
+    let app = |id: &str, version: &str, methods| AppMethods {
+        app: App {
+            id: id.to_owned(),
+            version: version.to_owned(),
+            api: 1,
+        },
+        methods,
+    };
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .apps(vec![
+            app("notes", "0.2.0", vec![list, add]),
+            app("clock", "0.1.0", vec![]),
+        ])
+        .open()
+        .await
+        .unwrap();
+    let address = serve(&kernel, owner).await;
+    let (mut socket, welcome) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "secret" }),
+    )
+    .await;
+    assert_eq!(
+        welcome["apps"],
+        json!([
+            { "id": "notes", "version": "0.2.0", "api": 1 },
+            { "id": "clock", "version": "0.1.0", "api": 1 },
+        ])
+    );
+
+    let describe = json!({ "type": "call", "id": 1, "method": "apps.describe" });
+    say(&mut socket, describe).await;
+    let answer = next(&mut socket).await;
+    assert_eq!(
+        answer,
+        json!({ "type": "result", "id": 1, "ok": [
+            { "id": "notes", "version": "0.2.0", "api": 1, "methods": [
+                { "name": "list", "kind": "call", "right": "read", "does": "read",
+                  "tool": "notes", "pass": false, "about": "Every note." },
+                { "name": "add", "kind": "command", "right": "write", "does": "act",
+                  "tool": null, "pass": false, "about": "Adds a note." },
+            ] },
+            { "id": "clock", "version": "0.1.0", "api": 1, "methods": [] },
+        ] })
+    );
+
+    // An Agent reads it too; an engine handed none lists none.
+    let agent = Participant::Agent(AgentId::new());
+    let described = kernel.call(agent, "apps.describe", None, None, json!({}));
+    assert_eq!(described.await.unwrap(), answer["ok"]);
+    let bare = open(root.path(), owner, &notes).await;
+    let address = serve(&bare, owner).await;
+    let (_, welcome) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "secret" }),
+    )
+    .await;
+    assert!(welcome.get("apps").is_none(), "{welcome}");
 }
 
 #[tokio::test]

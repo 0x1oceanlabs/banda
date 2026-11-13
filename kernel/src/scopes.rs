@@ -2,6 +2,7 @@
 //! every Project the data holds, and where a module's method runs.
 
 use crate::access;
+use crate::apps::{AppMethods, Apps};
 use crate::environment::{Environment, Nowhere};
 use crate::kernel::{Entry, Kernel, PowerStreams, Projects};
 use crate::module::{Module, Scope, Stream, Wall};
@@ -27,6 +28,7 @@ pub struct KernelBuilder {
     pass_term: std::time::Duration,
     named: Option<watch::Receiver<Named>>,
     power: Option<PowerStreams>,
+    apps: Vec<AppMethods>,
 }
 
 impl KernelBuilder {
@@ -76,6 +78,15 @@ impl KernelBuilder {
     /// 0097). The module that reads them reads only while one is heard.
     pub fn power(mut self, stream: impl Fn() -> Stream + Send + Sync + 'static) -> Self {
         self.power = Some(Arc::new(stream));
+        self
+    }
+
+    /// The Apps this engine runs, each with the methods its engine part
+    /// gives, as the engine's scan of their manifests found them: the
+    /// `welcome` lists them, and `apps.describe` answers them (ADR 0082,
+    /// decisions 2 and 14). With none, it lists none.
+    pub fn apps(mut self, apps: Vec<AppMethods>) -> Self {
+        self.apps = apps;
         self
     }
 
@@ -156,6 +167,7 @@ impl KernelBuilder {
             environment: self.environment,
             named: self.named,
             power: self.power,
+            apps: Apps::new(self.apps),
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -261,6 +273,7 @@ impl Kernel {
             pass_term: passes::TERM,
             named: None,
             power: None,
+            apps: Vec::new(),
         }
     }
 

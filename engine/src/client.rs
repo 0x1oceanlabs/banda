@@ -80,6 +80,8 @@ pub struct Client {
     /// The log its machine's modules are followed by; none while no module
     /// is.
     machine: Option<ProjectId>,
+    /// The Apps it said it runs, with their versions.
+    apps: Vec<banda_kernel::App>,
 }
 
 impl Client {
@@ -128,6 +130,7 @@ impl Client {
             fence: None,
             named: None,
             machine: None,
+            apps: Vec::new(),
         };
         client
             .send(&ClientFrame::Hello {
@@ -140,11 +143,13 @@ impl Client {
                 fence,
                 named,
                 machine,
+                apps,
                 ..
             } => {
                 client.fence = fence;
                 client.named = named;
                 client.machine = machine;
+                client.apps = apps;
                 Ok(client)
             }
             EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
@@ -168,6 +173,12 @@ impl Client {
     /// welcome.
     pub fn machine(&self) -> Option<ProjectId> {
         self.machine
+    }
+
+    /// The Apps the engine runs, with their versions, as it said welcome;
+    /// none from an engine older than the list.
+    pub fn apps(&self) -> &[banda_kernel::App] {
+        &self.apps
     }
 
     /// Returns once the engine closed the connection, or it broke.

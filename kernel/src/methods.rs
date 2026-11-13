@@ -158,8 +158,9 @@ pub(crate) fn needs_command_id(method: &str) -> Refusal {
 /// only reads, so it may wait for the link and go again; or it acts, so
 /// it goes now, at most once, or fails at once while its machine is
 /// away. The module's doc says which a line is.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
 #[serde(rename_all = "lowercase")]
+#[ts(export, rename = "MethodDoes")]
 pub enum Does {
     Read,
     Act,
@@ -167,7 +168,8 @@ pub enum Does {
 
 /// One line of a module's `methods!` table, as `banda modules` prints it
 /// (ADR 0022, decision 1).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export)]
 pub struct Method {
     /// Without the module's prefix: `send`.
     pub name: &'static str,
@@ -213,6 +215,7 @@ pub fn own() -> Vec<OwnTable> {
     vec![
         table::<crate::Kernel>("projects"),
         table::<crate::window::Window>("window"),
+        table::<crate::apps::Apps>("apps"),
     ]
 }
 

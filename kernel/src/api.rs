@@ -8,8 +8,10 @@
 //!    none. A wrong version or an unknown token gets
 //!    `goodbye`. `welcome` lists the engine's modules, so a window shows
 //!    only what the engine has (ADR 0002, decision 8), the ID this
-//!    machine's modules are followed by (ADR 0025), and what this host is
-//!    called and drawn by, `named` (ADR 0095).
+//!    machine's modules are followed by (ADR 0025), what this host is
+//!    called and drawn by, `named` (ADR 0095), and its Apps with their
+//!    versions, `apps` (ADR 0082, decision 14), whose methods
+//!    `apps.describe` says.
 //! 2. `call` runs a method and gets one `result` with the same `id`; a
 //!    command's carries its place in the log, `at` (ADR 0082, decision 4).
 //!    A connection's commands to one scope, this machine's or a Project's,
@@ -192,6 +194,13 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
         build: Option<String>,
+        /// Each App this engine runs, and each part of the platform, with
+        /// its version and the major of the App API it is written to (ADR
+        /// 0082, decision 14); `apps.describe` says their methods. An
+        /// engine that says none is older than the list.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        #[ts(optional, as = "Option<Vec<crate::App>>")]
+        apps: Vec<crate::App>,
     },
     Result {
         #[ts(type = "number")]
@@ -476,6 +485,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         named: api.kernel.named(),
         version: Some(crate::version().to_owned()),
         build: crate::build().map(str::to_owned),
+        apps: api.kernel.apps(),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;

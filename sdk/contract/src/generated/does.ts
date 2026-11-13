@@ -1,8 +1,9 @@
 // Written by banda's tests from the list of Apps (engine/src/apps.rs): do not edit.
+import type { MethodDoes } from "./MethodDoes"
 import type { Methods } from "./Methods"
 
 /** What a method does: it reads, or it acts (ADR 0106, law 4). */
-export type Does = "read" | "act"
+export type Does = MethodDoes
 
 /** What each method does, as its line in `methods!` says: a command
  * acts; a call or a stream reads by its right `Read`, or by `read`,
@@ -22,6 +23,7 @@ export const DOES = {
   "projects.find_sign": "act",
   "window.requests": "read",
   "window.answer": "act",
+  "apps.describe": "read",
   "agents.threads": "read",
   "agents.thread": "read",
   "agents.subagent": "read",

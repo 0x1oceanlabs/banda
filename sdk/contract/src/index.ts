@@ -3,6 +3,8 @@
  * generated from the Rust; `scripts/check.sh` fails when they are stale.
  */
 export type { AgentId } from "./generated/AgentId"
+export type { App } from "./generated/App"
+export type { AppMethods } from "./generated/AppMethods"
 export type { Code } from "./generated/Code"
 export type { EngineStatus } from "./generated/EngineStatus"
 export type { CommandId } from "./generated/CommandId"

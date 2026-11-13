@@ -1,3 +1,4 @@
+import type { App } from "./generated/App"
 import type { ClientFrame } from "./generated/ClientFrame"
 import type { CommandId } from "./generated/CommandId"
 import { DOES, type Does } from "./generated/does"
@@ -8,12 +9,12 @@ import type { Fence } from "./generated/Fence"
 import type { Named } from "./generated/Named"
 import type { Refusal } from "./generated/Refusal"
 import type { ProjectId } from "./generated/ProjectId"
+import { PROTOCOL } from "./generated/PROTOCOL"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 import { newId } from "./ids"
 import type { Answer, CommandCall, MethodOf, Params } from "./methods"
 
-/** The protocol version this client speaks; the engine's `hello` checks it. */
-export const PROTOCOL = 1
+export { PROTOCOL }
 
 /** Where the engine listens, and the secret that names its owner. */
 export type Address = {
@@ -54,6 +55,11 @@ export type Status =
        * 0119, decision 6). None from an engine older than both. */
       version?: string
       build?: string
+      /** Each App the engine runs, and each part of the platform, with its
+       * version and the major of the App API it is written to (ADR 0082,
+       * decision 14); `apps.describe` says their methods. None from an
+       * engine older than the list. */
+      apps?: App[]
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -883,6 +889,7 @@ export class Engine {
           ...(frame.named && { named: frame.named }),
           ...(frame.version && { version: frame.version }),
           ...(frame.build && { build: frame.build }),
+          ...(frame.apps && { apps: frame.apps }),
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)

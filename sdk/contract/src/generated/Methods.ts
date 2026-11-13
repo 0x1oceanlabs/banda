@@ -1,6 +1,7 @@
 // Written by banda's tests from the list of Apps (engine/src/apps.rs): do not edit.
 import type { ProjectsMethods } from "./ProjectsMethods"
 import type { WindowMethods } from "./WindowMethods"
+import type { AppsMethods } from "./AppsMethods"
 import type { AgentsMethods } from "./agents/AgentsMethods"
 import type { BrowserMethods } from "./browser/BrowserMethods"
 import type { FilesMethods } from "./files/FilesMethods"
@@ -25,6 +26,7 @@ type Prefixed<P extends string, M> = {
  * part's, in the list of Apps (ADR 0062, decision 11). */
 export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"window", WindowMethods> &
+  Prefixed<"apps", AppsMethods> &
   Prefixed<"agents", AgentsMethods> &
   Prefixed<"browser", BrowserMethods> &
   Prefixed<"files", FilesMethods> &
