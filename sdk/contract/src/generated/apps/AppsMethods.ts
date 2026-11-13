@@ -26,8 +26,9 @@ installed: CallMethod<Nothing, Array<InstalledApp>>,
 /**
  * Installs the App in a folder on this machine, or installs it
  * again after a change: reads its app.toml, methods.json,
- * migrations and entry, says what is wrong in them, copies the
- * folder into Banda's data, and adds it to the running engine.
+ * migrations and entry and tries its steps, says what is wrong
+ * in them, copies the folder into Banda's data, and adds it to
+ * the running engine.
  * Every Project of this machine gets it at once, each with its
  * own tables, and its methods are Agents' tools from then. A
  * Project where its tables did not come up to date is answered in

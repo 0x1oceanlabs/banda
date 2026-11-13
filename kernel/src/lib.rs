@@ -109,7 +109,7 @@ pub use schemars;
 pub use scopes::KernelBuilder;
 pub use sign::{PictureKind, Sign, SignColor, SignKind, SignPick};
 pub use started::Started;
-pub use store::{Answer, Tx};
+pub use store::{Answer, Tx, try_steps};
 pub use tables::module_name;
 pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};

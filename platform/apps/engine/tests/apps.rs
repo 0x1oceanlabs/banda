@@ -269,6 +269,7 @@ async fn an_app_that_takes_what_the_engine_runs_or_reads_amiss_is_refused_in_wor
         assert!(taken.message.contains(id), "{}", taken.message);
     }
     // So is a tool's name: `jot_down` is the notes App's.
+    std::fs::remove_dir_all(folder.join("migrations")).unwrap();
     std::fs::write(folder.join("app.toml"), manifest("jot")).unwrap();
     let down = json!({ "down": { "kind": "call", "about": "Clashes." } });
     std::fs::write(folder.join("methods.json"), down.to_string()).unwrap();

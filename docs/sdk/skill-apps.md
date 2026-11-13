@@ -4,7 +4,11 @@ description: Read before you write or change a Banda App, a Pane, a bar Widget o
 ---
 
 <!--
-A draft. It becomes the Banda skill's topic `apps` (`sdk/skill/apps.md`)
+A draft. The Banda skill's topic `apps` ships now from
+`platform/apps/skill/apps.md`, and says how an Agent writes an App as a
+folder and installs it (ADR 0126). This page's rules, for an App with a
+window part, join that topic as each comes true for an App from a folder.
+It was to become the topic itself (`sdk/skill/apps.md`)
 once an App from elsewhere can be installed (V4): every `skill/*.md` next
 to a part of Banda ships to every Person's Agents
 (`platform/skill/build.rs:1-3`), so it waits until the rules can serve

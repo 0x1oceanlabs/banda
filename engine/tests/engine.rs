@@ -434,6 +434,10 @@ fn an_agent_writes_an_app_and_installs_it_and_its_session_calls_it_at_once() {
     };
     let written = said(in_shell(&["app", "new", "habits"]));
     assert_eq!(written["folder"], format!("{folder}/habits"));
+    let checked = said(in_shell(&["app", "check", "habits"]));
+    let tools = json!(["habits_add", "habits_list"]);
+    let read = json!({ "id": "habits", "version": "0.1.0", "tools": tools, "steps": 1 });
+    assert_eq!(checked, read);
     let installed = said(in_shell(&["app", "install", "habits"]));
     assert_eq!(installed["id"], "habits");
     assert_eq!(

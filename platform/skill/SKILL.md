@@ -81,6 +81,17 @@ Overview. `keys_list`, or `banda keys`, names every action; the topic
 behind the fence. What acts as your Person, as `thread.new` with `ask`,
 is refused: it stays theirs (ADR 0083).
 
+## Writing an App
+
+When your Person asks for an App in Banda, or for something that keeps
+records for them and their Agents to use later ("an App for tracking
+clients", a habit or expense tracker), it is a Banda App: a folder in
+your Project that `banda app` installs, whose methods every Agent then
+calls as tools. Read the skill's topic `apps` before you write it, and
+start no server, database or MCP server for it. A program, website or
+CLI they ask you to build in their code is not a Banda App: build that
+as asked.
+
 ## Opening the Banda menu for the Person
 
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space
