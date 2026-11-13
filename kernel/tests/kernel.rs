@@ -4446,3 +4446,255 @@ async fn a_project_removed_as_a_call_reaches_it_goes_once_what_the_call_brought_
     let after = give(kernel.clone()).await.unwrap_err();
     assert_eq!(after.code, Code::NotFound);
 }
+
+/// Tally: a module whose steps a test picks, as an App's ledger grows and
+/// breaks. `mark` writes a mark and queues `ring` for the engine; `count`
+/// reads the marks. It keeps each Project it opened in, and each `ring`
+/// it ran.
+#[derive(Clone)]
+struct Tally {
+    steps: &'static [&'static str],
+    scope: Scope,
+    opened: Arc<Mutex<Vec<ProjectId>>>,
+    rang: Arc<AtomicUsize>,
+}
+
+impl Tally {
+    const MARKS: &'static str = "CREATE TABLE tally_marks (id INTEGER PRIMARY KEY)";
+
+    fn with(steps: &'static [&'static str]) -> Tally {
+        Tally {
+            steps,
+            scope: Scope::Project,
+            opened: Default::default(),
+            rang: Default::default(),
+        }
+    }
+}
+
+#[async_trait::async_trait]
+impl Module for Tally {
+    fn name(&self) -> &'static str {
+        "tally"
+    }
+
+    fn scope(&self) -> Scope {
+        self.scope
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        self.steps
+    }
+
+    fn right(&self, method: &str) -> Option<Right> {
+        match method {
+            "mark" => Some(Right::Write),
+            "count" | "watch" => Some(Right::Read),
+            _ => None,
+        }
+    }
+
+    fn kind(&self, method: &str) -> Option<Kind> {
+        match method {
+            "mark" => Some(Kind::Command),
+            "count" => Some(Kind::Call),
+            "watch" => Some(Kind::Stream),
+            _ => None,
+        }
+    }
+
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.opened.lock().unwrap().push(project.id());
+        Ok(())
+    }
+
+    async fn stream(&self, _call: Call, _: &str, _: Value) -> Result<Stream, Refusal> {
+        Ok(tokio::sync::mpsc::channel(1).1)
+    }
+
+    async fn call(&self, call: Call, method: &str, _: Value) -> Result<Value, Refusal> {
+        if method == "mark" {
+            return call
+                .command(|tx| {
+                    tx.sql()
+                        .execute("INSERT INTO tally_marks DEFAULT VALUES", [])?;
+                    tx.enqueue("ring", "bell", &Value::Null)?;
+                    Ok(Value::Null)
+                })
+                .await;
+        }
+        let (_, marks) = call
+            .project()
+            .view(|sql| {
+                let marks: i64 =
+                    sql.query_row("SELECT COUNT(*) FROM tally_marks", [], |row| row.get(0))?;
+                Ok(marks)
+            })
+            .await?;
+        Ok(Value::from(marks))
+    }
+
+    async fn run(&self, _project: ModuleProject, _effect: Effect) -> Outcome {
+        self.rang.fetch_add(1, Ordering::SeqCst);
+        Outcome::Done
+    }
+}
+
+#[tokio::test]
+async fn a_module_whose_tables_do_not_come_up_to_date_is_turned_off_in_that_project_alone() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, data) = (dir.path().join("root"), dir.path().join("root/.data"));
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let open = |tally: &Tally| {
+        Kernel::builder(&root, &data, owner)
+            .module(Notes::default())
+            .module(tally.clone())
+            .open()
+    };
+    let ask = |kernel: Arc<Kernel>, method: &'static str, project: ProjectId, id: CommandId| async move {
+        let command = method.ends_with("mark").then_some(id);
+        kernel
+            .call(person, method, Some(project), command, Value::Null)
+            .await
+    };
+    let any = CommandId::new;
+
+    let first = Tally::with(&[Tally::MARKS]);
+    let kernel = open(&first).await.unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    ask(kernel.clone(), "tally.mark", work.id, any())
+        .await
+        .unwrap();
+    eventually(|| async { first.rang.load(Ordering::SeqCst) == 1 }).await;
+    let_go(kernel, &data, &[]).await;
+
+    // A step that fails turns the module off where it failed: the Project
+    // opens, its other modules go on, and each of its methods says why.
+    let broken = Tally::with(&[
+        Tally::MARKS,
+        "ALTER TABLE tally_markz ADD COLUMN at INTEGER",
+    ]);
+    let kernel = open(&broken).await.unwrap();
+    assert_eq!(kernel.projects().await.len(), 1, "the Project opened");
+    add(&kernel, person, &work, "kept").await.unwrap();
+    assert!(broken.opened.lock().unwrap().is_empty(), "told of nothing");
+    let read = ask(kernel.clone(), "tally.count", work.id, any()).await;
+    let refusal = read.unwrap_err();
+    assert_eq!(refusal.code, Code::AppUnavailable);
+    assert!(
+        refusal
+            .message
+            .starts_with("tally is turned off in this Project. Step 2 of its tables failed:"),
+        "{}",
+        refusal.message
+    );
+    let again = any();
+    let marked = ask(kernel.clone(), "tally.mark", work.id, again).await;
+    assert_eq!(marked.unwrap_err().code, Code::AppUnavailable);
+    let watched = kernel.stream(person, "tally.watch", Some(work.id), Value::Null);
+    assert_eq!(watched.await.unwrap_err().code, Code::AppUnavailable);
+    // A Project made meanwhile has it off too: its steps fail there alike.
+    let other = create(&kernel, owner, "Other").await;
+    let there = ask(kernel.clone(), "tally.count", other.id, any()).await;
+    assert_eq!(there.unwrap_err().code, Code::AppUnavailable);
+    let_go(kernel, &data, &[]).await;
+
+    // The step that failed left nothing, so it may be put right: the
+    // module runs again with what it kept, and a command refused while it
+    // was off runs under the same ID.
+    let fixed: &[&str] = &[
+        Tally::MARKS,
+        "ALTER TABLE tally_marks ADD COLUMN at INTEGER",
+    ];
+    let mended = Tally::with(fixed);
+    let kernel = open(&mended).await.unwrap();
+    assert_eq!(mended.opened.lock().unwrap().len(), 2);
+    ask(kernel.clone(), "tally.mark", work.id, again)
+        .await
+        .unwrap();
+    let count = ask(kernel.clone(), "tally.count", work.id, any()).await;
+    assert_eq!(count.unwrap(), json!(2));
+    let_go(kernel, &data, &[]).await;
+
+    // Data a newer one wrote turns an older one off, and is not touched.
+    let kernel = open(&first).await.unwrap();
+    let older = ask(kernel.clone(), "tally.count", work.id, any()).await;
+    let refusal = older.unwrap_err();
+    assert_eq!(refusal.code, Code::AppUnavailable);
+    assert!(
+        refusal.message.contains("newer tally"),
+        "{}",
+        refusal.message
+    );
+    add(&kernel, person, &work, "still").await.unwrap();
+    let_go(kernel, &data, &[]).await;
+    let kernel = open(&mended).await.unwrap();
+    let count = ask(kernel.clone(), "tally.count", work.id, any()).await;
+    assert_eq!(count.unwrap(), json!(2));
+}
+
+#[tokio::test]
+async fn an_effect_of_a_module_turned_off_waits_until_it_runs_again() {
+    let dir = tempfile::tempdir().unwrap();
+    let (root, data) = (dir.path().join("root"), dir.path().join("root/.data"));
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let open = |tally: &Tally| {
+        Kernel::builder(&root, &data, owner)
+            .module(tally.clone())
+            .open()
+    };
+    // Its effect is queued as the engine stops: the writer keeps it, and
+    // no run began.
+    let first = Tally::with(&[Tally::MARKS]);
+    let kernel = open(&first).await.unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    let_go(kernel, &data, &[]).await;
+    let sql = sqlite(&data, &work);
+    sql.execute(
+        "INSERT INTO kernel_outbox (module, kind, key, payload, state, next_at, created_at, runner)
+         VALUES ('tally', 'ring', 'bell', 'null', 'pending', 0, 0, 'engine')",
+        [],
+    )
+    .unwrap();
+    drop(sql);
+
+    let broken = Tally::with(&[Tally::MARKS, "CREATE TABLE other_marks (id INTEGER)"]);
+    let kernel = open(&broken).await.unwrap();
+    let refused = kernel.call(person, "tally.count", Some(work.id), None, Value::Null);
+    assert_eq!(refused.await.unwrap_err().code, Code::AppUnavailable);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    assert_eq!(broken.rang.load(Ordering::SeqCst), 0);
+    let_go(kernel, &data, &[]).await;
+
+    let kernel = open(&first).await.unwrap();
+    eventually(|| async { first.rang.load(Ordering::SeqCst) == 1 }).await;
+    drop(kernel);
+}
+
+#[tokio::test]
+async fn the_engine_does_not_start_with_a_module_of_the_machine_turned_off() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let tally = Tally {
+        scope: Scope::Machine,
+        ..Tally::with(&["CREATE TABLE tally_marks (id INTEGER PRIMARY KEY"])
+    };
+    let opened = Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
+        .module(tally)
+        .machine(dir.path().join("state").join("machine"))
+        .open()
+        .await;
+    let Err(Error::Refused(refusal)) = opened else {
+        panic!("it opened");
+    };
+    assert_eq!(refusal.code, Code::Conflict);
+    assert!(
+        refusal
+            .message
+            .starts_with("tally did not start. Step 1 of its tables failed:"),
+        "{}",
+        refusal.message
+    );
+}

@@ -204,6 +204,7 @@ impl Kernel {
         let scope = project.module(module.name());
         if kind != Kind::Command {
             access::decide(&participant, right, project.owner())?;
+            project.available(module.name())?;
             let call = Call::new(
                 participant,
                 scope,
@@ -223,9 +224,11 @@ impl Kernel {
             Begun::Answered(answer) => return answer,
         };
         // A refusal made before the handler runs is the command's answer
-        // too (ADR 0002, decision 2): one past its time, or not allowed.
-        let allowed =
-            in_time(not_after).and_then(|()| access::decide(&participant, right, project.owner()));
+        // too (ADR 0002, decision 2): one past its time, not allowed, or
+        // for an App turned off here, which its receipt does not keep.
+        let allowed = in_time(not_after)
+            .and_then(|()| access::decide(&participant, right, project.owner()))
+            .and_then(|()| project.available(module.name()));
         let answer = match allowed {
             Ok(()) => {
                 let call = Call::new(
@@ -317,6 +320,7 @@ impl Kernel {
         let (module, rest, right) = self.method(method)?;
         let (project, wall) = self.place(&**module, method, rest, project, only).await?;
         access::decide(&participant, right, project.owner())?;
+        project.available(module.name())?;
         let call = Call::new(
             participant,
             project.module(module.name()),

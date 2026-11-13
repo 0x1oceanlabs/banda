@@ -132,6 +132,10 @@ aliases.
    - Migrations stay forward only (ADR 0002, decision 12).
    - A move to a host with older Apps is checked before it starts
      (decision 11), so this is for the case nobody planned.
+   - _Built 2026-11-13 (track 2, slice 2a), and widened: any step that
+     fails, a step that reaches past the App's prefix included, refuses
+     that App alone, for an App an Agent writes fails while it is
+     written. The machine's own modules still stop the engine's start._
 
 9. **Migrations are named by hash, later.**
    - Today a ledger counts steps. When a fork and its upstream both add

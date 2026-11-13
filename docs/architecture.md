@@ -699,7 +699,14 @@ command (with its ID)
 | `projects/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
 Events are facts with a version, and the log is never rewritten. Each module
-keeps its own ledger of migrations. Our IDs are UUIDv7, but those derived
+keeps its own ledger of migrations. A module whose tables do not come up to
+date in a Project (a step that fails, a step that reaches past its prefix,
+or data a newer version of it wrote) is turned off in that Project alone:
+the Project opens, its other modules go on, the module's methods there
+answer `app_unavailable` with why, and its effects wait as they are. A step
+that failed left nothing, so the next start runs it again, put right or
+not. The machine's own modules are not turned off: the engine starts with
+all of them or does not start (ADR 0085, decision 8). Our IDs are UUIDv7, but those derived
 from another, as UUIDv5: a command's ID from what sent it, and what a
 workspaces command makes from its command's ID (ADR 0088, decision 11). A
 Harness's IDs are stored as references.

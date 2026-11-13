@@ -311,7 +311,7 @@ impl Call {
             return Err(crate::kernel::no_project());
         }
         Ok(Other {
-            project: self.project.beside(other),
+            project: self.project.beside(other)?,
             _moving: moving,
             _reached: reached,
         })
