@@ -453,7 +453,11 @@ The kernel holds only what every module needs, and it names no module.
     `door`, the host key, the device and the host key's signature over
     the device's nonce, which no pipe that repeats an old challenge can
     make; or `goodbye`: `forbidden`, and to a device that proved itself,
-    `revoked` once this machine removed it, or `protocol`.
+    `revoked` once this machine removed it, or `protocol`. A `goodbye`
+    to a `hello`, and the one that ends a session, is signed by the host
+    key over that `hello` as the door heard it and the reason: a client
+    marks it `signed`, the machine's own word to what it sent, and acts
+    on no other.
 
   A device's session acts as the Person who paired it, and a module reads
   the device as `Call::device`. Removing a device ends its sessions at

@@ -24,7 +24,12 @@
 //!    make it, so none poses as this machine. Or it says `goodbye`:
 //!    `forbidden` to a `hello` that does not prove a device this machine
 //!    knows; to one that does, `revoked` when the machine removed the
-//!    device, and `protocol` where the ranges do not meet.
+//!    device, and `protocol` where the ranges do not meet. A `goodbye` to
+//!    a `hello`, and the one that ends a session, is signed by the host
+//!    key too, over that `hello` as the door heard it and the reason: a
+//!    pipe that changed the `hello` on its way gets a `goodbye` its
+//!    client does not take for the machine's word, and a device forgets
+//!    a key or pairs again only on that word.
 //!
 //! After `welcome` the frames are the API's. A device's session acts as
 //! the Person it was paired by, and every act of it names the device
@@ -176,6 +181,34 @@ pub fn welcome_message(nonce: &str, device: DeviceId) -> String {
     format!("banda-door/welcome/1\n{nonce}\n{device}")
 }
 
+/// What a host key signs in a `goodbye`: the `hello` it answers, as the
+/// door heard it (its own nonce, the origin, the device, the client's
+/// nonce, the protocols and the `hello`'s signature), then why, the code
+/// and the words.
+pub fn goodbye_message(
+    door_nonce: &str,
+    origin: &str,
+    hello: &DeviceFrame,
+    reason: &Refusal,
+) -> String {
+    let DeviceFrame::Hello {
+        protocol: Protocols { min, max },
+        device,
+        nonce,
+        sig,
+    } = hello;
+    let Refusal { code, message, .. } = reason;
+    format!(
+        "banda-door/goodbye/1\n{door_nonce}\n{origin}\n{device}\n{nonce}\n{min}\n{max}\n{sig}\n{code}\n{message}"
+    )
+}
+
+/// Whether what a client chose, its nonce or its signature, can be signed
+/// as one line of text.
+fn fits(said: &str) -> bool {
+    !said.is_empty() && said.len() <= 128 && said.bytes().all(|b| b.is_ascii_graphic())
+}
+
 struct Door {
     kernel: Arc<Kernel>,
     devices: Box<dyn Devices>,
@@ -235,7 +268,13 @@ async fn serve(door: Arc<Door>, origin: Option<String>, socket: WebSocket) {
     // Heard from before its record is read, so no removal is missed.
     let mut removals = door.devices.removals();
     // The API's `hello`, with the owner's secret or a pass, is none here.
-    let admitted = match api::first::<DeviceFrame>(&mut stream).await {
+    let hello = api::first::<DeviceFrame>(&mut stream).await;
+    // What its `goodbye` is signed over, should it get one: none for a
+    // `hello` that cannot be signed as text.
+    let heard = hello
+        .clone()
+        .filter(|DeviceFrame::Hello { nonce, sig, .. }| fits(nonce) && fits(sig));
+    let admitted = match hello {
         Some(hello) => admit(&door, &nonce, origin.as_deref(), hello),
         None => Err(Refusal::forbidden(
             "The first frame at the door must be hello, signed by a device this machine paired.",
@@ -243,7 +282,10 @@ async fn serve(door: Arc<Door>, origin: Option<String>, socket: WebSocket) {
     };
     let (caller, device, welcome) = match admitted {
         Ok(admitted) => admitted,
-        Err(reason) => return api::refuse(sink, reason).await,
+        Err(reason) => {
+            let farewell = door.farewell(reason, &nonce, origin.as_deref(), heard.as_ref());
+            return api::refuse(sink, farewell).await;
+        }
     };
     let kernel = door.kernel.clone();
     let removed = async {
@@ -253,11 +295,30 @@ async fn serve(door: Arc<Door>, origin: Option<String>, socket: WebSocket) {
                 return std::future::pending().await;
             }
             if !(door.devices.device(device)).is_some_and(|device| !device.removed) {
-                return revoked();
+                return door.farewell(revoked(), &nonce, origin.as_deref(), heard.as_ref());
             }
         }
     };
     api::session(kernel, &door.engine, caller, welcome, sink, stream, removed).await
+}
+
+impl Door {
+    /// `reason` as this door's `goodbye` says it: signed by the host key
+    /// over the `hello` it answers, as the door heard it on a connection
+    /// it gave `door_nonce` from a page of `origin`, where it heard one.
+    fn farewell(
+        &self,
+        reason: Refusal,
+        door_nonce: &str,
+        origin: Option<&str>,
+        hello: Option<&DeviceFrame>,
+    ) -> api::Farewell {
+        let sig = hello.map(|hello| {
+            let said = goodbye_message(door_nonce, origin.unwrap_or_default(), hello, &reason);
+            URL_SAFE_NO_PAD.encode(self.devices.sign(said.as_bytes()))
+        });
+        api::Farewell { reason, sig }
+    }
 }
 
 /// Who a `hello` is, the device its session is, and what its `welcome`
@@ -278,11 +339,7 @@ fn admit(
     let forbidden =
         || Refusal::forbidden("This machine has not paired this device, or its key does not fit.");
     let paired = door.devices.device(device).ok_or_else(forbidden)?;
-    // A nonce of the client's is its own to choose, but it is signed as
-    // one line of text.
-    let fits =
-        !nonce.is_empty() && nonce.len() <= 128 && nonce.bytes().all(|b| b.is_ascii_graphic());
-    if !fits || paired.origin.as_deref() != origin {
+    if !fits(&nonce) || paired.origin.as_deref() != origin {
         return Err(forbidden());
     }
     let message = hello_message(

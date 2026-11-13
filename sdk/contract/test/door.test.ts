@@ -7,10 +7,13 @@ import { afterEach, beforeEach, expect, test, vi } from "vitest"
 import {
   base64url,
   challengeMessage,
+  goodbyeMessage,
   helloMessage,
   signed,
   welcomeMessage,
 } from "../src/door"
+import type { DeviceFrame } from "../src/generated/DeviceFrame"
+import type { Refusal } from "../src/generated/Refusal"
 import { type DoorKey, Engine, PROTOCOL, type Status } from "../src/index"
 
 type Frame = { [key: string]: unknown }
@@ -232,6 +235,8 @@ test("a device the machine removed is told so by the door, in the door's words, 
   // nothing.
   const close = socket.close.bind(socket)
   socket.close = () => {}
+  // Nobody signed this goodbye: it ends the connection, and is not the
+  // machine's word.
   socket.say({ type: "goodbye", reason })
   socket.say({ type: "welcome", engine: "a pipe", modules: [] })
   socket.say({
@@ -241,11 +246,75 @@ test("a device the machine removed is told so by the door, in the door's words, 
   })
   await vi.waitFor(() => expect(engine.status.state).toBe("refused"))
   await new Promise((done) => setTimeout(done, 20))
-  expect(engine.status).toMatchObject({ refusal: reason })
+  expect(engine.status).toEqual({ state: "refused", refusal: reason })
   expect(events).toEqual([])
   close()
   expect(engine.status.state).toBe("refused")
   engine.close()
+})
+
+test("a goodbye the host key signed to this client's own hello is the machine's own word, to that hello and in its session", async () => {
+  const reason = {
+    code: "revoked",
+    message: "This device was removed from this machine. Pair it again.",
+  }
+  const goodbye = async (hello: Frame, signer = host): Promise<Frame> => ({
+    type: "goodbye",
+    reason,
+    sig: await signer.sign(
+      goodbyeMessage(NONCE, "", hello as DeviceFrame, reason as Refusal)
+    ),
+  })
+  const door = doorOf(host)
+
+  // To its hello. The door closes right after it says so: the close is
+  // taken after the goodbye is weighed, not as a lost connection.
+  const first = await knocking()
+  first.socket.say(await door.challenge())
+  await vi.waitFor(() => expect(first.socket.sent).toHaveLength(1))
+  first.socket.say(await goodbye(first.socket.sent[0]!))
+  first.socket.onclose?.()
+  await vi.waitFor(() => expect(first.engine.status.state).toBe("refused"))
+  expect(first.engine.status).toEqual({
+    state: "refused",
+    refusal: reason,
+    signed: true,
+  })
+  first.engine.close()
+
+  // In a session it had open; one another key signed is not.
+  for (const [signer, signedSo] of [
+    [host, true],
+    [device, false],
+  ] as const) {
+    Socket.made = []
+    const { engine, socket } = await knocking()
+    socket.say(await door.challenge())
+    await vi.waitFor(() => expect(socket.sent).toHaveLength(1))
+    const hello = socket.sent[0]!
+    socket.say(await door.welcome(hello))
+    await vi.waitFor(() => expect(engine.status.state).toBe("open"))
+    socket.say(await goodbye(hello, signer))
+    socket.onclose?.()
+    await vi.waitFor(() => expect(engine.status.state).toBe("refused"))
+    expect(engine.status).toEqual({
+      state: "refused",
+      refusal: reason,
+      ...(signedSo && { signed: true }),
+    })
+    engine.close()
+  }
+
+  // Signed to another hello, as one a pipe changed on its way: not this
+  // client's, so not the machine's word to it.
+  Socket.made = []
+  const last = await knocking()
+  last.socket.say(await door.challenge())
+  await vi.waitFor(() => expect(last.socket.sent).toHaveLength(1))
+  last.socket.say(await goodbye({ ...last.socket.sent[0]!, sig: "changed" }))
+  await vi.waitFor(() => expect(last.engine.status.state).toBe("refused"))
+  expect(last.engine.status).toEqual({ state: "refused", refusal: reason })
+  last.engine.close()
 })
 
 test("a device that cannot sign now is not refused: the connection is lost, and tried again", async () => {

@@ -3,7 +3,8 @@
 //! their own keys.
 
 use banda_kernel::devices::{
-    self, Device, Devices, PROTOCOLS, challenge_message, hello_message, welcome_message,
+    self, Device, Devices, PROTOCOLS, challenge_message, goodbye_message, hello_message,
+    welcome_message,
 };
 use banda_kernel::{
     Call, DeviceId, Kernel, Kind, Module, PROTOCOL, PersonId, Refusal, Right, Scope,
@@ -192,17 +193,25 @@ fn signed(key: [u8; 32], message: &str, sig: &Value) -> bool {
         .is_ok()
 }
 
-/// The device's session, welcomed.
-async fn come_in(world: &World) -> (Socket, Value) {
-    let (mut socket, challenge) = knock(world.address, Some(WINDOW)).await;
-    say(
-        &mut socket,
-        hello(world.device, &world.key, &challenge, WINDOW),
-    )
-    .await;
-    let welcome = next(&mut socket).await;
-    assert_eq!(welcome["type"], "welcome", "{welcome}");
-    (socket, welcome)
+/// Whether `goodbye` is the machine's own word to `hello`, as the door
+/// heard it after `challenge` from a page of `origin`: signed by `host`.
+fn the_machine_s(
+    host: [u8; 32],
+    challenge: &Value,
+    origin: &str,
+    hello: &Value,
+    goodbye: &Value,
+) -> bool {
+    let reason: Refusal = serde_json::from_value(goodbye["reason"].clone()).unwrap();
+    let said = goodbye_message(
+        challenge["nonce"].as_str().unwrap(),
+        origin,
+        &serde_json::from_value(hello.clone()).unwrap(),
+        &reason,
+    );
+    goodbye
+        .get("sig")
+        .is_some_and(|sig| signed(host, &said, sig))
 }
 
 #[tokio::test]
@@ -267,6 +276,8 @@ async fn the_door_takes_no_owner_s_secret_and_no_pass() {
         let goodbye = next(&mut socket).await;
         assert_eq!(goodbye["type"], "goodbye", "{goodbye}");
         assert_eq!(goodbye["reason"]["code"], "forbidden");
+        // It said no `hello` the door could read: nothing to sign over.
+        assert!(goodbye.get("sig").is_none(), "{goodbye}");
     }
 }
 
@@ -338,7 +349,10 @@ async fn a_device_whose_protocols_this_engine_does_not_speak_is_told_which_it_do
 #[tokio::test]
 async fn a_removed_device_loses_its_sessions_at_once_and_opens_no_other() {
     let world = world().await;
-    let (mut socket, _) = come_in(&world).await;
+    let (mut socket, mine) = knock(world.address, Some(WINDOW)).await;
+    let came = hello(world.device, &world.key, &mine, WINDOW);
+    say(&mut socket, came.clone()).await;
+    assert_eq!(next(&mut socket).await["type"], "welcome");
     // Another device's session goes on.
     let other_key = key();
     let other = world.paired.pair(&other_key, world.owner, None);
@@ -350,6 +364,10 @@ async fn a_removed_device_loses_its_sessions_at_once_and_opens_no_other() {
     let goodbye = next(&mut socket).await;
     assert_eq!(goodbye["type"], "goodbye", "{goodbye}");
     assert_eq!(goodbye["reason"]["code"], "revoked");
+    // The machine's own word, by its host key, to the `hello` this very
+    // connection said: a device forgets its key on nothing less.
+    let host = world.paired.host_key();
+    assert!(the_machine_s(host, &mine, WINDOW, &came, &goodbye));
     let ended = tokio::time::timeout(Duration::from_secs(5), socket.next()).await;
     assert!(
         !matches!(ended, Ok(Some(Ok(Message::Text(_))))),
@@ -366,15 +384,48 @@ async fn a_removed_device_loses_its_sessions_at_once_and_opens_no_other() {
     // It opens no other, and is told why, to pair again; whoever only
     // knows its ID is told no more than a stranger.
     let (mut again, challenge) = knock(world.address, Some(WINDOW)).await;
-    say(
-        &mut again,
-        hello(world.device, &world.key, &challenge, WINDOW),
-    )
-    .await;
-    assert_eq!(next(&mut again).await["reason"]["code"], "revoked");
+    let asked = hello(world.device, &world.key, &challenge, WINDOW);
+    say(&mut again, asked.clone()).await;
+    let refused = next(&mut again).await;
+    assert_eq!(refused["reason"]["code"], "revoked");
+    assert!(the_machine_s(host, &challenge, WINDOW, &asked, &refused));
+    // Said to this `hello` alone: not to the one of its session before,
+    // though both carry the same nonce here.
+    assert!(!the_machine_s(host, &mine, WINDOW, &came, &refused));
+
     let (mut posing, challenge) = knock(world.address, Some(WINDOW)).await;
-    say(&mut posing, hello(world.device, &key(), &challenge, WINDOW)).await;
-    assert_eq!(next(&mut posing).await["reason"]["code"], "forbidden");
+    let posed = hello(world.device, &key(), &challenge, WINDOW);
+    say(&mut posing, posed.clone()).await;
+    let stranger = next(&mut posing).await;
+    assert_eq!(stranger["reason"]["code"], "forbidden");
+    // Signed for what it was said to: a `hello` a pipe changed on its way
+    // gets a `goodbye` its device does not take for the machine's word.
+    assert!(the_machine_s(host, &challenge, WINDOW, &posed, &stranger));
+    let real = hello(world.device, &world.key, &challenge, WINDOW);
+    assert!(!the_machine_s(host, &challenge, WINDOW, &real, &stranger));
+}
+
+#[tokio::test]
+async fn a_goodbye_is_signed_only_to_a_hello_that_reads_as_text() {
+    let world = world().await;
+    let host = world.paired.host_key();
+    // A range this engine does not speak is refused in the machine's word.
+    let (mut socket, challenge) = knock(world.address, Some(WINDOW)).await;
+    let mut newer = hello(world.device, &world.key, &challenge, WINDOW);
+    newer["protocol"] = json!({ "min": PROTOCOL + 1, "max": PROTOCOL + 3 });
+    say(&mut socket, newer.clone()).await;
+    let goodbye = next(&mut socket).await;
+    assert_eq!(goodbye["reason"]["code"], "protocol");
+    assert!(the_machine_s(host, &challenge, WINDOW, &newer, &goodbye));
+
+    // A nonce that is no one line of text is signed over by nothing.
+    let (mut socket, challenge) = knock(world.address, Some(WINDOW)).await;
+    let mut odd = hello(world.device, &world.key, &challenge, WINDOW);
+    odd["nonce"] = json!("two\nlines");
+    say(&mut socket, odd).await;
+    let goodbye = next(&mut socket).await;
+    assert_eq!(goodbye["reason"]["code"], "forbidden");
+    assert!(goodbye.get("sig").is_none(), "{goodbye}");
 }
 
 #[tokio::test]

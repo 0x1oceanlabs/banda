@@ -69,4 +69,13 @@ at?: number,
  * said was so as of then (ADR 0082, decision 3). Every answer
  * with `ok` carries it; an engine from before it says none.
  */
-as_of?: AsOf, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, } | { "type": "pong", id: number, time: number, };
+as_of?: AsOf, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "piece", stream: number, data: JsonValue, } | { "type": "ended", stream: number, } | { "type": "goodbye", reason: Refusal, 
+/**
+ * At the door, once it read a `hello`: the host key's signature
+ * over that `hello` as the door heard it and the reason
+ * (`crate::devices::goodbye_message`), so a device knows the
+ * machine itself said it to what the device sent, and no pipe on
+ * the way. None from the API, and none to what said no `hello`
+ * the door could read.
+ */
+sig?: string, } | { "type": "pong", id: number, time: number, };

@@ -269,6 +269,15 @@ pub enum EngineFrame {
     },
     Goodbye {
         reason: Refusal,
+        /// At the door, once it read a `hello`: the host key's signature
+        /// over that `hello` as the door heard it and the reason
+        /// (`crate::devices::goodbye_message`), so a device knows the
+        /// machine itself said it to what the device sent, and no pipe on
+        /// the way. None from the API, and none to what said no `hello`
+        /// the door could read.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        sig: Option<String>,
     },
     /// The answer to a `ping`: this machine's time, in ms since the epoch.
     Pong {
@@ -514,9 +523,22 @@ pub(crate) async fn first<T: serde::de::DeserializeOwned>(
     }
 }
 
+/// Why a connection ends, as its `goodbye` says it: the reason, and at
+/// the door the host key's signature of it.
+pub(crate) struct Farewell {
+    pub(crate) reason: Refusal,
+    pub(crate) sig: Option<String>,
+}
+
+impl From<Farewell> for EngineFrame {
+    fn from(Farewell { reason, sig }: Farewell) -> Self {
+        EngineFrame::Goodbye { reason, sig }
+    }
+}
+
 /// Tells a connection that gets no session why, and ends it.
-pub(crate) async fn refuse(mut sink: SplitSink<WebSocket, Message>, reason: Refusal) {
-    let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
+pub(crate) async fn refuse(mut sink: SplitSink<WebSocket, Message>, farewell: Farewell) {
+    let _ = sink.send(text(&EngineFrame::from(farewell))).await;
     let _ = sink.close().await;
 }
 
@@ -562,7 +584,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             )
             .await
         }
-        Err(reason) => refuse(sink, reason).await,
+        Err(reason) => refuse(sink, Farewell { reason, sig: None }).await,
     }
 }
 
@@ -578,7 +600,7 @@ pub(crate) async fn session(
     welcomed: Welcomed,
     mut sink: SplitSink<WebSocket, Message>,
     mut stream: SplitStream<WebSocket>,
-    ended: impl Future<Output = Refusal>,
+    ended: impl Future<Output = Farewell>,
 ) {
     let welcome = EngineFrame::Welcome {
         protocol: welcomed.protocol,
@@ -615,8 +637,8 @@ pub(crate) async fn session(
     loop {
         let message = tokio::select! {
             message = stream.next() => message,
-            reason = &mut ended => {
-                let _ = out.send(EngineFrame::Goodbye { reason }.into()).await;
+            farewell = &mut ended => {
+                let _ = out.send(EngineFrame::from(farewell).into()).await;
                 break;
             }
         };

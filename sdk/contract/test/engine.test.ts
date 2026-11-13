@@ -197,7 +197,12 @@ test("a device paired at the machine's console comes in at its door by its own k
   // Removed at the console, its session ends, told why.
   banda("devices", "remove", device.id)
   await until(client, "refused")
-  expect(client.status).toMatchObject({ refusal: { code: "revoked" } })
+  // The machine's own word, by its host key: what a device forgets its
+  // key on.
+  expect(client.status).toMatchObject({
+    refusal: { code: "revoked" },
+    signed: true,
+  })
 })
 
 test("a window calls, follows and sees refusals by their code", async () => {

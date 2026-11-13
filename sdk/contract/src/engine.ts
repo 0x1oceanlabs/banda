@@ -79,7 +79,11 @@ export type Status =
    * (`Engine.wake`). */
   | { state: "away" }
   /** The engine said goodbye, for example to an older window. */
-  | { state: "refused"; refusal: Refusal }
+  /** `signed`: at the door, the machine's own word, by the host key the
+   * device paired with over this connection's nonce (ADR 0124). Only on
+   * that does a device forget its key or pair again: a pipe on the way
+   * can say an unsigned one. */
+  | { state: "refused"; refusal: Refusal; signed?: true }
 
 /** The engine refused the call. Decide by `refusal.code`; show `message`. */
 export class Refused extends Error {
@@ -927,13 +931,15 @@ export class Engine {
       if (latency > 0) setTimeout(now, latency)
       else now()
     }
-    const session = (message: { data: unknown }) =>
-      later(() => this.#receive(String(message.data)))
     if ("door" in address) {
       // The door speaks first. Until its `welcome` proved the host key,
       // what it says is taken one frame at a time (`AtDoor`), as proving
       // takes a moment and nothing said meanwhile counts before it.
       const at = new AtDoor(address.door)
+      // Its session's frames, once it has one: a `goodbye` among them is
+      // weighed by the same key.
+      const session = (message: { data: unknown }) =>
+        later(() => this.#receive(String(message.data), at))
       let turn = Promise.resolve()
       socket.onmessage = (message) =>
         later(() => {
@@ -942,15 +948,24 @@ export class Engine {
             .then(() => this.#atDoor(socket, at, text, session))
             .catch(() => socket.close())
         })
+      // A door closes right after its `goodbye`: the close is taken after
+      // what was said before it, however long that takes to weigh.
+      socket.onclose = () =>
+        later(() => {
+          turn = turn.then(() => {
+            if (this.#socket === socket) this.#drop()
+          })
+        })
     } else {
       const { secret } = address
       socket.onopen = () => {
         this.#send({ type: "hello", protocol: PROTOCOL, token: secret })
         this.#said()
       }
-      socket.onmessage = session
+      socket.onmessage = (message) =>
+        later(() => this.#receive(String(message.data)))
+      socket.onclose = () => later(() => this.#drop())
     }
-    socket.onclose = () => later(() => this.#drop())
   }
 
   /**
@@ -968,13 +983,13 @@ export class Engine {
   ): Promise<void> {
     if (this.#socket !== socket) return
     // One that came while the `welcome` was proved is the session's.
-    if (at.proved) return this.#receive(text)
+    if (at.proved) return this.#receive(text, at)
     const said = await at.take(text)
     if (this.#socket !== socket || said === undefined) return
     this.#heardNow()
     if (said === "proved") {
       socket.onmessage = session
-      return this.#receive(text)
+      return this.#receive(text, at)
     }
     if (said === "lost") return socket.close()
     if ("hello" in said) {
@@ -982,7 +997,11 @@ export class Engine {
       return this.#said()
     }
     socket.onmessage = null
-    this.#set({ state: "refused", refusal: said.refused })
+    this.#set({
+      state: "refused",
+      refusal: said.refused,
+      ...(said.signed && { signed: true }),
+    })
     socket.close()
   }
 
@@ -1025,7 +1044,8 @@ export class Engine {
     })
   }
 
-  #receive(text: string): void {
+  /** Takes a session's frame; `door` where it came in at one. */
+  #receive(text: string, door?: AtDoor): void {
     this.#heardNow()
     let frame: EngineFrame
     try {
@@ -1049,10 +1069,30 @@ export class Engine {
           ...(frame.apps && { apps: frame.apps }),
         })
         break
-      case "goodbye":
-        this.#set({ state: "refused", refusal: frame.reason })
-        this.#socket?.close()
+      case "goodbye": {
+        const socket = this.#socket
+        if (!door || !socket) {
+          this.#set({ state: "refused", refusal: frame.reason })
+          socket?.close()
+          break
+        }
+        // Whoever said it, nothing said after counts; and its close,
+        // which comes right after, waits until it is weighed, or the
+        // client would only see a lost connection and try again.
+        socket.onmessage = null
+        socket.onclose = null
+        void door.farewell(frame).then((signed) => {
+          if (this.#socket !== socket) return
+          this.#set({
+            state: "refused",
+            refusal: frame.reason,
+            ...(signed && { signed: true }),
+          })
+          socket.close()
+          this.#drop()
+        })
         break
+      }
       case "pong": {
         const went = this.#pings.get(frame.id)
         this.#pings.delete(frame.id)
