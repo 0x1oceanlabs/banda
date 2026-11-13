@@ -504,15 +504,11 @@ export function wallpaper(dir: string) {
   )
 }
 
-/** Opens the Banda menu at "Add Project" as the Person does: by the bar's
- * logo, whatever the mod, then its action, Add Project (ADR 0026). The
- * menu, at its ways to add one. */
-export async function addProject(page: Page): Promise<Locator> {
-  await page
-    .getByRole("banner")
-    .getByRole("button", { name: /^Banda(:|$)/ })
-    .click()
-  const menu = page.getByRole("dialog", { name: "Banda menu" })
+/** Opens the Banda menu at "Add Project" as the Person does: by its
+ * key, then its action, Add Project (ADR 0026). The menu, at its ways to
+ * add one. */
+export async function addProject(page: Page, mod?: string): Promise<Locator> {
+  const menu = await bandaMenu(page, mod)
   await menu.getByRole("combobox", { name: "Search" }).fill("add project")
   await menu.getByRole("option", { name: /^Add Project/ }).click()
   await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
@@ -537,8 +533,12 @@ export async function newThreadIn(page: Page, name: string): Promise<void> {
 
 /** Makes a Project called `name` from the Banda menu, as the Person does:
  * its New Thread shows. */
-export async function newProject(page: Page, name: string): Promise<void> {
-  const menu = await addProject(page)
+export async function newProject(
+  page: Page,
+  name: string,
+  mod?: string
+): Promise<void> {
+  const menu = await addProject(page, mod)
   await menu.getByRole("option", { name: /New Project/ }).click()
   await menu.getByRole("combobox").fill(name)
   await menu.getByRole("combobox").press("Enter")
@@ -546,14 +546,15 @@ export async function newProject(page: Page, name: string): Promise<void> {
 }
 
 export async function firstThread(
-  page: Page
+  page: Page,
+  mod?: string
 ): Promise<{ thread: Locator; composer: Locator }> {
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page
     .getByRole("region", { name: "New Thread" })
     .getByRole("button", { name: "Close New Thread", exact: true })
     .click()
-  await newProject(page, "Work")
+  await newProject(page, "Work", mod)
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }
@@ -998,10 +999,11 @@ export async function groupBy(
 
 /**
  * The Banda menu, opened by its key from where the focus is (ADR 0017,
- * decision 1): Alt+Space opens it, the sidebar shown or not.
+ * decision 1): Alt+Space opens it, the sidebar shown or not; `mod` where
+ * keys.toml names another.
  */
-export async function bandaMenu(page: Page): Promise<Locator> {
-  await page.keyboard.press("Alt+Space")
+export async function bandaMenu(page: Page, mod = "Alt"): Promise<Locator> {
+  await page.keyboard.press(`${mod}+Space`)
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await expect(menu).toBeVisible()
   return menu
