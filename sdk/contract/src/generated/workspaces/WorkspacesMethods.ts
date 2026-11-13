@@ -34,6 +34,9 @@ list: CallMethod<Nothing, Arranged>,
 /**
  * Shows a Pane of a Project at a place, or instead of another, and
  * names it. One shown already stays where it is, and is named.
+ * With no place it goes where the Flow says, by the Pane it is
+ * opened from, for the window, a program and `banda` alike (ADR
+ * 0110, decision 4).
  */
 open: CommandMethod<Open, Opened>, 
 /**

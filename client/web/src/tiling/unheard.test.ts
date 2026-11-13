@@ -11,7 +11,7 @@ import { type CommandId, newId } from "@banda/contract"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
 import { afterEach, describe, expect, test, vi } from "vitest"
 import { keptOf, NO_VIEW } from "./arrange"
-import { apply, type Command } from "./arrangement"
+import { apply, type Command, type Facts, NO_FACTS } from "./arrangement"
 import { entries, focused } from "./model"
 import {
   ANSWER_WITHIN,
@@ -89,7 +89,7 @@ describe("a key drawn before the engine answers", () => {
     let seen = before
     let want: string | undefined
     for (const [id, command] of sent) {
-      ;({ seen, want } = predict(seen, id, { command }))
+      ;({ seen, want } = predict(seen, id, { command }, NO_FACTS))
     }
     expect(text(seen.predicted)).toBe(text(ran(list, ...sent)))
     expect(text(keptOf(seen.state))).toBe(text(ran(list, ...sent)))
@@ -106,7 +106,7 @@ describe("a key drawn before the engine answers", () => {
     const column = columnsOf(list)[0].id
     const id = newId()
     const size = { method: "workspaces.size", params: { column } } as const
-    const { seen } = predict(before, id, { command: size })
+    const { seen } = predict(before, id, { command: size }, NO_FACTS)
     expect(seen.unheard).toHaveLength(1)
     const after = answered(seen, id, null)
     expect(after.unheard).toEqual([])
@@ -126,7 +126,7 @@ describe("a key drawn before the engine answers", () => {
       method: "workspaces.regroup",
       params: { column: columnsOf(grouped)[0].id, toward: "right" },
     }
-    const predicted = predict(seen, id, { command: regroup }).seen
+    const predicted = predict(seen, id, { command: regroup }, NO_FACTS).seen
     const once = ran(grouped, [id, regroup])
     // Applied again over its own fact, it would step once more.
     expect(text(ran(once, [newId(), regroup]))).not.toBe(text(once))
@@ -145,7 +145,7 @@ describe("a key drawn before the engine answers", () => {
       method: "workspaces.size",
       params: { column, width: "1/3" },
     }
-    const waiting = predict(before, id, { command: width }).seen
+    const waiting = predict(before, id, { command: width }, NO_FACTS).seen
     // An Agent opens a Pane meanwhile; the engine runs it first.
     const agent: [CommandId, Command] = [newId(), opening(9)]
     const theirs = ran(list, agent)
@@ -175,14 +175,14 @@ describe("a key drawn before the engine answers", () => {
     ]
     let seen = before
     for (const [id, command] of [maximize, width])
-      seen = predict(seen, id, { command }).seen
+      seen = predict(seen, id, { command }, NO_FACTS).seen
     expect(columnsOf(seen.predicted!)[0].full).toBe(true)
     const back = dropped(seen, maximize[0])
     expect(text(back.predicted)).toBe(text(ran(list, width)))
     expect(back.unheard.map((one) => one.id)).toEqual([width[0]])
     // A Pane opened, refused, leaves what stands: its App lets it go.
     const id = newId()
-    const open = predict(back, id, { command: opening(7) })
+    const open = predict(back, id, { command: opening(7) }, NO_FACTS)
     const pane = open.want!
     const ids = (seen: Seen) =>
       seen.standing.list.flatMap((w) =>
@@ -201,7 +201,12 @@ describe("a key drawn before the engine answers", () => {
     const { seen: before, list } = three()
     const id = newId()
     const open = opening(9)
-    const { seen: opened, want: pane } = predict(before, id, { command: open })
+    const { seen: opened, want: pane } = predict(
+      before,
+      id,
+      { command: open },
+      NO_FACTS
+    )
     // Its App gives it an ID of its own, as a terminal does, at once.
     const asked = ask(opened, pane!, { n: 9, terminal: "t" }, Infinity)
     const standing = (seen: Seen) =>
@@ -240,7 +245,8 @@ describe("a key drawn before the engine answers", () => {
       },
     ])
     let seen = before
-    for (const [id, command] of sent) seen = predict(seen, id, { command }).seen
+    for (const [id, command] of sent)
+      seen = predict(seen, id, { command }, NO_FACTS).seen
     // Only the last is answered when the facts come, with a fact from
     // elsewhere among them: rule 4 finds no run, the place does.
     seen = answered(seen, sent[2][0], 12)
@@ -257,7 +263,7 @@ describe("a key drawn before the engine answers", () => {
       method: "workspaces.size",
       params: { column: columnsOf(list)[1].id, width: "1/2" },
     }
-    const seen = predict(before, id, { command: width }).seen
+    const seen = predict(before, id, { command: width }, NO_FACTS).seen
     const heard = hear(answered(seen, id, 4), ran(list, [id, width]), 4)
     expect(heard.state).toBe(seen.state)
     expect(heard.view).toBe(seen.view)
@@ -268,7 +274,7 @@ describe("a key drawn before the engine answers", () => {
   test("the view alone changes what is looked at, and cancels the Pane a command wanted", () => {
     const { seen: before } = three()
     const id = newId()
-    const { seen } = predict(before, id, { command: opening(4) })
+    const { seen } = predict(before, id, { command: opening(4) }, NO_FACTS)
     expect(seen.view.want?.command).toBe(id)
     const looked = look(seen, { ...seen.view, want: undefined })
     expect(looked.view.want).toBeUndefined()
@@ -340,6 +346,7 @@ type Step = {
   method: Command["method"]
   seed: string
   params: unknown
+  facts?: Facts
   refused?: string
   after: Kept[]
 }
@@ -363,7 +370,8 @@ describe.each(traces)("%s, as a window lives it", (_, trace) => {
     let seen = hear(unseen(NO_VIEW), trace.start, 0)
     for (const step of trace.steps) {
       const command = { method: step.method, params: step.params } as Command
-      seen = predict(seen, step.seed, { command, focus: false }).seen
+      const plan = { command, focus: false } as const
+      seen = predict(seen, step.seed, plan, step.facts ?? NO_FACTS).seen
     }
     return seen
   }

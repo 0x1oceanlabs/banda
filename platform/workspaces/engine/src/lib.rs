@@ -3,8 +3,10 @@
 //! decision 3; ADR 0025, decision 1).
 //!
 //! It is the machine's, not a Project's: one workspace holds Panes of every
-//! Project. Its commands carry what was decided, a place or a width; what
-//! depends on the look or the view stays the window's. A change says the
+//! Project. Its commands carry what was decided, a place the Person named
+//! or a width; where a Pane with no place opens, `placing` decides here,
+//! for every caller (ADR 0110). What depends on the look or the view stays
+//! the window's. A change says the
 //! whole arrangement after it in one event, so a window that follows
 //! draws what the event holds; new args for a Pane, the change made most,
 //! say only those. A command that changes nothing says nothing.
@@ -35,7 +37,7 @@ pub use commands::{
     Regroup, ShowAs, Size, Take, Tidy, Update,
 };
 use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
-use placing::{Asked, By, Flow};
+use placing::{Asked, By, Facts, Flow};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -69,20 +71,32 @@ impl Workspaces {
         self
     }
 
-    /// The facts a Pane showing `shows` is placed by, read before the
-    /// change, which cannot wait.
-    async fn asked(&self, call: &Call, shows: &Shown, by: By) -> Asked {
-        let project = shows.project;
-        // A draft stands in the machine's own ID, as no Project.
-        let scratch =
-            project == call.project().id() || call.scratch(project).await.unwrap_or(false);
-        Asked {
-            flow: self.flow.as_ref().map_or(Flow::Free, |read| read()),
-            project,
-            grouped: self.grouped.contains(&shows.kind),
-            home: self.home.contains(&shows.kind),
-            scratch,
-            by,
+    /// This machine's copy of the Flow.
+    fn flow_now(&self) -> Flow {
+        self.flow.as_ref().map_or(Flow::Free, |read| read())
+    }
+
+    /// Whether `project` is of no Project, as this machine knows it: a
+    /// draft stands in the machine's own ID. None for a Project it does not
+    /// know, another machine's.
+    async fn scratch(&self, call: &Call, project: banda_kernel::ProjectId) -> Option<bool> {
+        if project == call.project().id() {
+            return Some(true);
+        }
+        call.scratch(project).await
+    }
+
+    /// What this machine places the Pane `open` by. Whether its Project is
+    /// of no Project the engine says itself where it knows the Project, as
+    /// it says `grouped`: of its own it takes no one's word (ADR 0110,
+    /// decision 6).
+    async fn facts(&self, call: &Call, open: &mut Open) -> Facts {
+        if let Some(known) = self.scratch(call, open.shows.project).await {
+            open.scratch = Some(known);
+        }
+        Facts {
+            flow: self.flow_now(),
+            home: self.home.clone(),
         }
     }
 
@@ -108,6 +122,9 @@ banda_kernel::methods! {
         call list(Nothing) -> Arranged, Read;
         /// Shows a Pane of a Project at a place, or instead of another, and
         /// names it. One shown already stays where it is, and is named.
+        /// With no place it goes where the Flow says, by the Pane it is
+        /// opened from, for the window, a program and `banda` alike (ADR
+        /// 0110, decision 4).
         command open(Open) -> Opened, Write;
         /// Closes a Pane; its column goes when it was the last there.
         command close(OnePane) -> Done, Write;
@@ -534,17 +551,16 @@ impl Workspaces {
         if self.grouped.contains(&open.shows.kind) {
             open.grouped.get_or_insert(true);
         }
-        let by = By::Person { from: open.from };
-        let asked = if open.place.is_none() && open.instead.is_none() {
-            Some(self.asked(&call, &open.shows, by).await)
+        // Only a Pane with no place is placed by the facts, which are read
+        // before the change, as it cannot wait.
+        let unplaced = open.place.is_none() && (open.instead.is_none() || open.moved == Some(true));
+        let facts = if unplaced {
+            self.facts(&call, &mut open).await
         } else {
-            None
+            Facts::default()
         };
         let (pane, new) = change(&call, "opened", None, Say::Whole, move |list, _, seed| {
-            if let Some(asked) = asked {
-                open.place = placing::place(list, asked);
-            }
-            Ok(commands::open(list, open, seed)?)
+            Ok(commands::open(list, open, &facts, seed)?)
         })
         .await?;
         Ok(Opened { pane, new })
@@ -808,11 +824,19 @@ impl Workspaces {
         // What its Agent opens with no place goes where the Flow says: into
         // the Group of the Thread its pass was made for (ADR 0065, decisions
         // 6 and 7), else on its Project's workspace (ADR 0102, decision 4).
-        let by = By::Agent {
-            thread: call.thread(),
-        };
         let asked = if beside.is_none() {
-            Some(self.asked(&call, &shows, by).await)
+            Some(Asked {
+                flow: self.flow_now(),
+                project: shows.project,
+                grouped,
+                home: self.home.contains(&shows.kind),
+                scratch: self.scratch(&call, shows.project).await == Some(true),
+                from: None,
+                on: None,
+                by: By::Agent {
+                    thread: call.thread(),
+                },
+            })
         } else {
             None
         };

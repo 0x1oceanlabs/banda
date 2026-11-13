@@ -1,4 +1,9 @@
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import {
+  type Engine,
+  newId,
+  type ProjectId,
+  type ProjectSummary,
+} from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
@@ -8,7 +13,15 @@ import { onProjectsChanged } from "@banda/ui/lib/projects"
 import type { Action, Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
-import type { Change, Plan } from "../tiling/arrange"
+import {
+  type Change,
+  NO_VIEW,
+  type Plan,
+  type Step,
+  viewOf,
+} from "../tiling/arrange"
+import { hear, look, predict, unseen } from "../tiling/unheard"
+import { factsOf } from "../tiling/useTiling"
 import { quiet } from "../calls/quiet"
 import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
@@ -27,12 +40,11 @@ import {
   ACTIONS,
   bringing,
   closingShown,
-  movesAway,
   noProjectOf,
   opening,
-  openFrom,
+  openingFrom,
   picking,
-  placeFor,
+  placed,
   placingOf,
   ROUTING,
   strayedIn,
@@ -42,7 +54,6 @@ import {
   type Shell,
   targetsOf,
   startingHere,
-  updating,
   windowApiOf,
   arranging,
 } from "./actions"
@@ -102,6 +113,54 @@ const inFlow = (flow: Flow) =>
     files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } },
   } as unknown as Look)
 
+/** Projects as the engine names them, which the copy of its rule reads. */
+const A = "a0000000-0000-4000-8000-00000000000a" as ProjectId
+const B = "a0000000-0000-4000-8000-00000000000b" as ProjectId
+const NONE = "a0000000-0000-4000-8000-00000000000c" as ProjectId
+
+const terminal = (n: number): PaneState => ({
+  kind: "terminal.terminal",
+  args: { n },
+})
+
+/** What a plan asks of the engine. */
+const paramsOf = (step: Step) =>
+  step && "command" in step ? step.command.params : undefined
+
+/**
+ * A window in `flow`, with `none` of no Project: each change is drawn as
+ * the Tiling draws it before the engine answers, its command run by the
+ * client's copy of the engine's rule (ADR 0110, decision 9).
+ */
+function windowIn(flow: Flow, none: ProjectId[] = []) {
+  let seen = hear(unseen(NO_VIEW), [{ id: newId(), columns: [] }], 0)
+  const placing = placingOf(flow, none)
+  return {
+    get state() {
+      return seen.state
+    },
+    /** Each workspace's columns, each column's Panes by their args' `n`. */
+    layout: () =>
+      seen.state.list.map((workspace) =>
+        workspace.columns.map((column) =>
+          column.entries.map((entry) => entry.pane.args.n)
+        )
+      ),
+    /** Runs a change, and gives the Pane it focuses. */
+    change(how: (w: Workspaces, placing: Placing) => Step) {
+      const step = how(seen.state, placing)
+      if (!step) return undefined
+      if (!("command" in step)) {
+        seen = look(seen, viewOf(step))
+        return focused(step)?.id
+      }
+      const made = predict(seen, newId(), step, factsOf(flow))
+      seen = made.seen
+      return made.want
+    },
+  }
+}
+
 test("an archived Thread's Pane closes, and only its own", () => {
   const right = { place: "right" } as const
   let state = start()
@@ -124,8 +183,7 @@ test("an archived Thread's Pane closes, and only its own", () => {
 
 test("a Thread opens as a Group, and a Pane of another kind in none", () => {
   const params = (pane: PaneState) => {
-    const plan = opening(start(), "project-a", pane, { place: "right" })
-    return plan && "command" in plan ? plan.command.params : undefined
+    return paramsOf(opening(start(), "project-a", pane, { place: "right" }))
   }
   expect(params(thread("t1"))).toMatchObject({ grouped: true })
   const diff = { kind: "git.diff", args: { scope: { kind: "changes" } } }
@@ -141,7 +199,10 @@ test("opened to update, a Pane shown as its kind names it takes the new args, an
   const [shown] = entries(state)
 
   // The Project's one Diff, as its kind names it, with another scope.
-  expect(updating(state, "project-a", diff("staged"))).toEqual({
+  const row = placingOf("row", [])
+  const updating = (project: string, pane: PaneState) =>
+    placed(state, project, pane, row, { update: true })
+  expect(updating("project-a", diff("staged"))).toEqual({
     command: {
       method: "workspaces.update",
       params: { pane: shown!.id, args: diff("staged").args },
@@ -149,10 +210,13 @@ test("opened to update, a Pane shown as its kind names it takes the new args, an
     want: shown!.id,
   })
   // The same args: only the focus.
-  const same = updating(state, "project-a", diff("changes"))
+  const same = updating("project-a", diff("changes"))
   expect(entries(same as typeof state)).toEqual(entries(state))
+  // Not asked to update, it keeps what it shows, and gets the focus.
+  const kept = placed(state, "project-a", diff("staged"), row)
+  expect(entries(kept as typeof state)).toEqual(entries(state))
   // None shown in that Project: it opens.
-  expect(updating(state, "project-b", diff("staged"))).toMatchObject({
+  expect(updating("project-b", diff("staged"))).toMatchObject({
     command: { method: "workspaces.open" },
   })
 })
@@ -191,7 +255,7 @@ test("Alt+Q turns Quiet on until turned off, and off, and a module reads it", ()
   expect(quiet.get()).toBe("off")
 })
 
-test("a pick goes to the Pane that shows its thing, on any workspace, else opens it where its kind's home is", () => {
+test("a pick goes to the Pane that shows its thing, on any workspace, else asks the engine to open it", () => {
   const right = { place: "right" } as const
   let state = start()
   state = open(state, "project-a", thread("t1"), right)
@@ -200,41 +264,25 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
   state = open(state, "project-a", hid, right)
   state = open(state, "project-b", thread("t3"), right)
   const [first, second] = entries(state)
-  const placing = (flow: Flow, scratch = false): Placing => ({
-    flow,
-    scratch: () => scratch,
-  })
-  const row = placing("row")
+  const row = placingOf("row", [])
   const focus = (project: string, pane: PaneState) =>
     focused(picking(state, project, pane, row) as Workspaces)?.id
 
   expect(focus("project-a", thread("t1"))).toBe(first!.id)
   // The thing it shows, whatever else its args say: no second Pane.
   expect(focus("project-a", thread("t2"))).toBe(second!.id)
-  // Shown in another Project only: it opens, where its kind's home is,
-  // with the args it was picked with.
+  // Shown in another Project only: it opens, with the args it was picked
+  // with, from the Pane in front, and the engine says where.
   const t3 = thread("t3")
-  expect(picking(state, "project-a", t3, row)).toMatchObject({
-    command: {
-      method: "workspaces.open",
-      params: { project: "project-a", kind: "agents.thread", args: t3.args },
-    },
+  const asked = paramsOf(picking(state, "project-a", t3, row))
+  expect(asked).toMatchObject({
+    project: "project-a",
+    kind: "agents.thread",
+    args: t3.args,
+    from: focused(state)!.id,
+    on: state.list[0].id,
   })
-  // Where the Flow says: a new column right of the Pane in front in Free,
-  // the first on an empty workspace; last on its Project's workspace in
-  // Row, the Flow there is before a look comes; of no Project, on the top
-  // free workspace (ADR 0102, decision 1).
-  for (const [flow, scratch, place] of [
-    ["free", false, { to: "column", index: 0 }],
-    ["row", false, { to: "project", project: "project-a" }],
-    ["row", true, { to: "free" }],
-  ] as const) {
-    const files = { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } }
-    takeLook({ files } as unknown as Look)
-    expect(
-      picking(start(), "project-a", t3, placing(flow, scratch))
-    ).toMatchObject({ command: { params: { place } } })
-  }
+  expect(asked).not.toHaveProperty("place")
   // A kind that names no thing: the Pane that is the same one, as its
   // kind names it.
   const usage = { kind: "harnesses.usage", args: {} }
@@ -250,72 +298,84 @@ test("a pick goes to the Pane that shows its thing, on any workspace, else opens
   ).toBe(shown!.id)
 })
 
-test("a Pane the Person opens goes where the Flow says (ADR 0102, decision 3)", () => {
-  const entry = (id: string, project: string, kind = "terminal.terminal") => ({
-    id,
-    project,
-    pane: { kind, args: {} },
-  })
-  const column = (id: string, project: string, group?: string): Column => ({
-    id,
-    entries: [entry(`${id}-e`, project)],
-    active: 0,
-    ...(group !== undefined && { group }),
-  })
-  const on = (workspace: Partial<Workspace>): Workspaces => ({
-    list: [
-      { id: "w", columns: [], focus: 0, ...workspace },
-      { id: "bottom", columns: [], focus: 0 },
-    ],
-    current: 0,
-  })
-  const terminal = { kind: "terminal.terminal", args: {} }
-  const where = (state: Workspaces, flow: Flow = "row", scratch = false) =>
-    placeFor(state, "a", terminal, { flow, scratch: () => scratch })
-  const mine = on({ project: "a", columns: [column("c", "a")] })
-  const grouped = on({ project: "a", columns: [column("c", "a", "g")] })
-  const theirs = on({ project: "b", columns: [column("c", "b")] })
-  const free = on({ columns: [column("c", "b")] })
-  // Free: right of the Pane in front, wherever it is.
-  expect(where(theirs, "free")).toBe("right")
-  // In a Group of its Project, into it; anywhere else on a Project's
-  // workspace, its own or another's, into its Project's own Group.
-  expect(where(grouped)).toBe("group")
-  expect(where(mine)).toBe("own")
-  expect(where(theirs)).toBe("own")
-  expect(where(on({ project: "b", columns: [column("c", "b", "g")] }))).toBe(
-    "own"
-  )
-  // An empty workspace: its own Group too.
-  expect(where(on({}))).toBe("own")
-  // From inside its own Group, last into it.
-  expect(
-    where(on({ project: "a", own: "g", columns: [column("c", "a", "g")] }))
-  ).toBe("own")
-  // A free workspace keeps it, right of the Pane in front, as one of no
-  // Project does anywhere.
-  expect(where(free)).toBe("right")
-  expect(where(theirs, "solo", true)).toBe("right")
-  // A Thread: its Project's workspace, or of no Project the top free one.
-  const thread = { kind: "agents.thread", args: { thread: "t" } }
-  const row = { flow: "row", scratch: () => false } as const
-  expect(placeFor(free, "a", thread, row)).toBe("project")
-  expect(placeFor(free, "a", thread, { ...row, scratch: () => true })).toBe(
-    "free"
-  )
-  // What an Agent opens with its Thread not shown: the same.
-  expect(placeFor(free, "a", terminal, row, true)).toBe("project")
-  expect(
-    placeFor(free, "a", terminal, { ...row, scratch: () => true }, true)
-  ).toBe("free")
-  // Of no Project, from its Thread's Group on a free workspace, into it,
-  // as a Project's does; from another's, right of the Pane in front.
-  const its = on({ columns: [column("c", "a", "g")] })
-  expect(where(its, "solo", true)).toBe("group")
-  expect(where(its, "row", true)).toBe("group")
-  expect(where(on({ columns: [column("c", "b", "g")] }), "row", true)).toBe(
-    "right"
-  )
+test("a Pane the Person opens names no place: the window says the Pane in front and the workspace on screen, and the engine places it (ADR 0110, decision 3)", () => {
+  for (const flow of ["free", "row", "solo"] as const) {
+    const placing = placingOf(flow, [NONE])
+    let state = start()
+    const here = state.list[0].id
+    // On an empty workspace: the workspace alone.
+    const first = paramsOf(placed(state, A, terminal(1), placing))
+    expect(first).toEqual({
+      project: A,
+      kind: "terminal.terminal",
+      args: { n: 1 },
+      again: true,
+      on: here,
+    })
+    // From the Pane in front, a Thread as a Group of its own.
+    state = open(state, A, terminal(1), { place: "right" })
+    const from = focused(state)!.id
+    const second = paramsOf(placed(state, A, thread("t"), placing))
+    expect(second).toMatchObject({ from, on: here, grouped: true })
+    expect(second).not.toHaveProperty("place")
+    // For an Agent, and of no Project, it says so, and still no place.
+    const agents = placed(state, NONE, terminal(2), placing, { agents: true })
+    expect(paramsOf(agents)).toMatchObject({
+      agents: true,
+      scratch: true,
+      from,
+    })
+    expect(paramsOf(agents)).not.toHaveProperty("place")
+    // A place its caller named goes as named.
+    const below = placed(state, A, terminal(3), placing, { place: "below" })
+    expect(paramsOf(below)).toMatchObject({ place: { to: "stack", index: 1 } })
+    expect(paramsOf(below)).not.toHaveProperty("from")
+  }
+})
+
+test("a Pane the window opens is drawn at once where the engine's rule puts it, in the Flows free, row and solo (ADR 0110, decision 9)", () => {
+  const opened = (flow: Flow) => {
+    const window = windowIn(flow, [NONE])
+    const open = (project: ProjectId, pane: PaneState, how = {}) =>
+      window.change((w, placing) =>
+        placed(w, project, pane, placing, { again: true, ...how })
+      )
+    open(A, terminal(1))
+    open(A, terminal(2))
+    const three = open(A, { kind: "agents.thread", args: { n: 3 } })
+    // It has the focus, by the ID the engine gives it.
+    expect(focused(window.state)?.id).toBe(three)
+    open(A, terminal(4))
+    open(B, terminal(5))
+    open(NONE, terminal(6))
+    open(A, terminal(7), { agents: true })
+    return window
+  }
+  // Free: each right of the Pane in front, on a workspace no one owns.
+  const free = opened("free")
+  expect(free.layout()).toEqual([[[1], [2], [3], [4], [5], [6], [7]], []])
+  expect(free.state.list[0].project).toBeUndefined()
+  expect(free.state.list[0].own).toBeUndefined()
+  // The row, and solo, its view: the Project's own Group, the Thread last
+  // on its workspace, what is opened from it in its Group, another
+  // Project's on its own workspace, one of no Project right of the Pane in
+  // front, and what is opened for an Agent last on its Project's.
+  for (const flow of ["row", "solo"] as const) {
+    const window = opened(flow)
+    expect(window.layout()).toEqual([[[1], [2], [3], [4], [7]], [[5], [6]], []])
+    const [mine, theirs] = window.state.list
+    expect([mine.project, theirs.project]).toEqual([A, B])
+    const groups = mine.columns.map((column) => column.group)
+    expect(groups[0]).toBe(mine.own)
+    expect(groups[1]).toBe(mine.own)
+    expect(groups[2]).not.toBe(mine.own)
+    expect(groups[3]).toBe(groups[2])
+    expect(groups[4]).toBeUndefined()
+    expect(theirs.columns.map((column) => column.group)).toEqual([
+      theirs.own,
+      undefined,
+    ])
+  }
 })
 
 test("a draft in the machine's own ID is of no Project: its Thread opens on the top free workspace, and its other Panes stay where they are opened (ADR 0102, decision 1)", () => {
@@ -336,109 +396,76 @@ test("a draft in the machine's own ID is of no Project: its Thread opens on the 
     true,
     false,
   ])
-  const draft = { kind: "agents.thread", args: { thread: "t" } }
-  expect(placeFor(start(), "machine", draft, placing)).toBe("free")
-  const terminal = { kind: "terminal.terminal", args: {} }
-  const free = open(start(), "b", terminal, { place: "right" })
-  expect(placeFor(free, "machine", terminal, placing)).toBe("right")
+  // As the engine places them: a terminal of a Project on its workspace,
+  // a draft's Thread on the top free one, and its terminal beside it.
+  const window = windowIn("row", [NONE])
+  const open = (project: ProjectId, pane: PaneState) =>
+    window.change((w, placing) =>
+      placed(w, project, pane, placing, { again: true })
+    )
+  open(A, terminal(1))
+  open(NONE, { kind: "agents.thread", args: { n: 2 } })
+  open(NONE, terminal(3))
+  expect(window.layout()).toEqual([[[1]], [[2], [3]], []])
+  expect(window.state.list[1].project).toBeUndefined()
 })
 
-/** Work's workspace, holding its draft `e`, and a free one holding a
- * terminal, `f`. */
-function draftOnWork(): Workspaces {
-  const draft = { kind: "agents.thread", args: { harness: "fake" } }
-  const terminal = { kind: "terminal.terminal", args: {} }
-  const column = (id: string, entry: Column["entries"][number]): Column => ({
-    id,
-    active: 0,
-    entries: [entry],
+test("a draft moved to another Project says so and names no place: the engine has it leave a workspace that is not its Project's, in the row and solo, and take its place on a free one or in the Flow free (ADR 0102, decision 3)", () => {
+  const draft = (n: number): PaneState => ({
+    kind: "agents.thread",
+    args: { harness: "fake", n },
   })
-  return {
-    list: [
-      {
-        id: "work",
-        project: "work",
-        focus: 0,
-        columns: [column("c", { id: "e", project: "work", pane: draft })],
-      },
-      {
-        id: "free",
-        focus: 0,
-        columns: [column("d", { id: "f", project: "work", pane: terminal })],
-      },
-      { id: "bottom", columns: [], focus: 0 },
-    ],
-    current: 0,
+  const moving = (flow: Flow) => {
+    const window = windowIn(flow, [NONE])
+    const open = (pane: PaneState, how = {}) =>
+      window.change((w, placing) =>
+        placed(w, A, pane, placing, { again: true, ...how })
+      )
+    const first = open(draft(1))!
+    // The picker in the draft moves it to another Project.
+    const move = (from: string, project: ProjectId, pane: PaneState) =>
+      window.change((w, placing) => {
+        const step = openingFrom(w, project, pane, placing, from, "instead")
+        expect(paramsOf(step)).toMatchObject({ instead: from, moved: true })
+        expect(paramsOf(step)).not.toHaveProperty("place")
+        return step
+      })
+    return { window, first, move }
   }
-}
-
-test("a Pane in place of one on a Project's workspace goes elsewhere when it shows the same in another Project, or in none, in the row and solo (ADR 0102, decision 1)", () => {
-  const state = draftOnWork()
-  const row = placingOf("row", ["machine"])
-  const draft: PaneState = { kind: "agents.thread", args: { harness: "fake" } }
-  const away = (from: string, project: string, pane = draft, placing = row) =>
-    movesAway(state, from, project, pane, placing)
-  // A draft moved to Brand, or to No Project, from Work's workspace.
-  expect(away("e", "brand")).toBe(true)
-  expect(away("e", "machine")).toBe(true)
-  expect(away("e", "brand", draft, placingOf("solo", []))).toBe(true)
-  // The same Project; a free workspace, which takes any; the Flow free.
-  expect(away("e", "work")).toBe(false)
-  expect(away("f", "brand")).toBe(false)
-  expect(away("e", "brand", draft, placingOf("free", []))).toBe(false)
-  // From one in no workspace, as the drawer's.
-  expect(away("", "brand")).toBe(false)
-  // A draft that became its Thread, in a scratch Project not listed yet,
-  // or another machine's: it stays where it stood.
-  expect(away("e", "scratch", thread("t1"))).toBe(false)
-})
-
-test("a draft moved to another Project opens anew where the Flow says, and its tile closes once that is drawn; on a free workspace, or once it became its Thread, it is replaced in place (ADR 0102, decision 1)", async () => {
-  const state = draftOnWork()
-  const row = placingOf("row", ["machine"])
-  const draft: PaneState = { kind: "agents.thread", args: { harness: "fake" } }
-  const asked = async (
-    from: string,
-    project: string,
-    pane = draft,
-    opens = true
-  ) => {
-    const plans: unknown[] = []
-    const changing = (how: Change) => {
-      plans.push(how(state))
-      return Promise.resolve(opens ? "new" : undefined)
-    }
-    await openFrom(changing, state, row, project, pane, from, "instead")
-    return plans as { command: { method: string; params: object } }[]
+  for (const flow of ["row", "solo"] as const) {
+    const { window, first, move } = moving(flow)
+    // To Brand: on Brand's workspace, and the window follows it there.
+    const brand = move(first, B, draft(1))!
+    expect(window.layout()).toEqual([[], [[1]], []])
+    expect(window.state.list[1].project).toBe(B)
+    expect(focused(window.state)?.id).toBe(brand)
+    expect(window.state.current).toBe(1)
+    // To No Project: the top free workspace.
+    move(brand, NONE, draft(1))
+    expect(window.layout()).toEqual([[], [], [[1]], []])
+    expect(window.state.list[2].project).toBeUndefined()
+    // On a free workspace it changes Project where it stands.
+    move(focused(window.state)!.id, A, draft(1))
+    expect(window.layout()).toEqual([[], [], [[1]], []])
   }
-  const [brand, closed] = await asked("e", "brand")
-  expect(brand!.command).toMatchObject({
-    method: "workspaces.open",
-    params: { project: "brand", place: { to: "project", project: "brand" } },
-  })
-  expect(closed).toEqual({
-    command: { method: "workspaces.close", params: { pane: "e" } },
-  })
-  // No Project: the top free workspace.
-  const [none] = await asked("e", "machine")
-  expect(none!.command.params).toMatchObject({ place: { to: "free" } })
-  // Opened nowhere, it closes nothing.
-  expect(await asked("e", "brand", draft, false)).toHaveLength(1)
-  // On a free workspace, in place.
-  const [kept, ...rest] = await asked("f", "brand")
-  expect(kept!.command).toMatchObject({
-    method: "workspaces.open",
-    params: { project: "brand", instead: "f" },
-  })
-  expect(rest).toEqual([])
-  // Its first message, its Thread in a new scratch Project: in place, on
-  // Work's workspace still.
-  const [sent, ...after] = await asked("e", "scratch", thread("t1"))
-  expect(sent!.command).toMatchObject({
-    method: "workspaces.open",
-    params: { project: "scratch", instead: "e" },
-  })
-  expect(after).toEqual([])
+  // In the Flow free, in place.
+  const { window, first, move } = moving("free")
+  move(first, B, draft(1))
+  expect(window.layout()).toEqual([[[1]], []])
+
+  // Its first message makes it its Thread, another thing, in a scratch
+  // Project not listed yet: in place, and so in its own Project.
+  const row = placingOf("row", [])
+  const state = open(start(), "work", draft(1), { place: "right" })
+  const from = focused(state)!.id
+  const sent = openingFrom(state, "scratch", thread("t1"), row, from, "instead")
+  expect(paramsOf(sent)).toMatchObject({ project: "scratch", instead: from })
+  expect(paramsOf(sent)).not.toHaveProperty("moved")
+  const same = openingFrom(state, "work", draft(1), row, from, "instead")
+  expect(paramsOf(same)).not.toHaveProperty("moved")
+  // From one in no workspace, as the drawer's: beside the Pane in focus.
+  const drawer = openingFrom(state, "brand", draft(1), row, "", "instead")
+  expect(paramsOf(drawer)).not.toHaveProperty("moved")
 })
 
 test("pane.pick takes a Project and a Pane, as an Item carries it, and only it reaches the Window's answer", () => {
@@ -587,7 +614,7 @@ test("a Thread on a free workspace stands away from its Project's, in the row an
     ],
     current: 1,
   }
-  const row = { flow: "row", scratch: () => false } as const
+  const row = placingOf("row", [])
   expect([...strayedIn(state, row)]).toEqual(["t1"])
   expect([...strayedIn(state, { ...row, flow: "solo" })]).toEqual(["t1"])
   expect(strayedIn(state, { ...row, flow: "free" }).size).toBe(0)
@@ -620,7 +647,7 @@ test("from the Flow free to the row, no Project has a workspace yet, and no Thre
     ],
     current: 0,
   }
-  const row = { flow: "row", scratch: () => false } as const
+  const row = placingOf("row", [])
   expect(strayedIn(state, row).size).toBe(0)
   // Once a's first new Thread makes it one, a's Threads elsewhere are
   // away; b's, with none, are not.
@@ -985,42 +1012,44 @@ test("Arrange by Project names every Project its Panes are of, as a Pane opens, 
 })
 
 test("a first Pane started on an emptied Project's workspace goes where the keys put it, into its own Group, and on one of no Project there (ADR 0102, decision 4)", () => {
-  const terminal = { kind: "terminal.terminal", args: {} }
-  const row: Placing = { flow: "row", scratch: () => false }
-  const emptied: Workspaces = {
-    list: [
-      { id: "mine", project: "a", focus: 0, columns: [] },
-      { id: "bottom", focus: 0, columns: [] },
-    ],
-    current: 0,
+  const started = (flow: Flow) => {
+    const window = windowIn(flow)
+    // A's workspace, emptied, and the empty one at the bottom.
+    const first = window.change((w, placing) =>
+      placed(w, A, { kind: "agents.thread", args: { n: 1 } }, placing)
+    )!
+    window.change(() => ({
+      command: { method: "workspaces.close", params: { pane: first } },
+    }))
+    return window
   }
-  expect(placeFor(emptied, "a", terminal, row)).toBe("own")
-  expect(startingHere(emptied, "home", terminal, row)).toMatchObject({
-    command: {
-      method: "workspaces.open",
-      params: { project: "a", place: { to: "own", project: "a" } },
-    },
+  const row = started("row")
+  expect(row.state.list.map((w) => w.project)).toEqual([A, undefined])
+  // On the Project's, in its Project: asked of the engine, as a key's.
+  const asked = startingHere(row.state, B, terminal(2), placingOf("row", []))
+  expect(paramsOf(asked)).toEqual({
+    project: A,
+    kind: "terminal.terminal",
+    args: { n: 2 },
+    again: true,
+    on: row.state.list[0].id,
   })
+  row.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  expect(row.layout()).toEqual([[[2]], []])
+  expect(row.state.list[0].columns[0].group).toBe(row.state.list[0].own)
   // On the empty one at the bottom, a column there, in the home Project.
-  const plus = { ...emptied, current: 1 }
-  expect(startingHere(plus, "home", terminal, row)).toMatchObject({
-    command: {
-      params: {
-        project: "home",
-        place: { to: "column", workspace: "bottom", index: 0 },
-      },
-    },
+  row.change((w) => ({ ...w, current: 1 }))
+  const bottom = row.state.list[1].id
+  const there = startingHere(row.state, B, terminal(3), placingOf("row", []))
+  expect(paramsOf(there)).toMatchObject({
+    project: B,
+    place: { to: "column", workspace: bottom, index: 0 },
   })
   // In the Flow free, there too, in its Project.
-  const free = { ...row, flow: "free" } as const
-  expect(startingHere(emptied, "home", terminal, free)).toMatchObject({
-    command: {
-      params: {
-        project: "a",
-        place: { to: "column", workspace: "mine", index: 0 },
-      },
-    },
-  })
+  const free = started("free")
+  free.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  expect(free.layout()).toEqual([[[2]], []])
+  expect(free.state.list[0].columns[0].group).toBeUndefined()
 })
 
 test("workspace.close leaves an emptied workspace for the one above, or below from the first, then lets it go; by its ID from elsewhere, the window stays (ADR 0102, decision 2)", () => {

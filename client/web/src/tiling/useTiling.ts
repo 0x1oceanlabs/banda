@@ -10,8 +10,9 @@ import { type Engine, newId, notDone, type ProjectId } from "@banda/contract"
 import type { Flow } from "@banda/contract/agents"
 import { type Readable, Store, useStore } from "@banda/core/react"
 import type { PaneState } from "@banda/ui/pane"
-import { groupedOf, startable, widthOf } from "../registry"
+import { groupedOf, HOME_KINDS, startable, widthOf } from "../registry"
 import { type Change, type Plan, send, tidied, viewOf } from "./arrange"
+import { type Facts, NO_FACTS } from "./arrangement"
 import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
   answered,
@@ -36,6 +37,13 @@ function refused(error: unknown): void {
   else console.warn("The workspaces did not change:", error)
 }
 
+/** What the engine places a Pane by, as this client believes them (ADR
+ * 0110, decision 9): solo is its own view of the row. Which Projects are
+ * of no Project each command says itself (`asking`). */
+export function factsOf(flow: Flow): Facts {
+  return { flow: flow === "free" ? "free" : "row", home: HOME_KINDS }
+}
+
 const stateOf = (seen: Seen) => seen.state
 const asIs = (state: Workspaces) => state
 const viewIn = (seen: Seen) => seen.view
@@ -55,7 +63,9 @@ const standingIn = (seen: Seen) => seen.standing
  * every column in none is drawn the whole screen wide, on any workspace
  * (ADR 0079; ADR 0102, decision 8), but on the workspace `row` names: the
  * engine's arrangement stays as it is. In the Flow free, every workspace
- * is free, and goes emptied once the window leaves it (decision 1).
+ * is free, and goes emptied once the window leaves it (decision 1). A Pane
+ * opened with no place is drawn where the engine would put it, by `flow`
+ * (ADR 0110, decision 9).
  */
 export function useTiling({
   engine,
@@ -79,6 +89,10 @@ export function useTiling({
   gone?: Gone
 }) {
   const solo = flow === "solo"
+  const facts = useRef(NO_FACTS)
+  useLayoutEffect(() => {
+    facts.current = factsOf(flow)
+  }, [flow])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
   const ready = live.state === "ready"
@@ -128,7 +142,7 @@ export function useTiling({
       // What it makes takes IDs derived from its command's ID, so the
       // window draws it by the IDs the engine gives it.
       const id = newId()
-      const drawn = predict(store.get(), id, plan)
+      const drawn = predict(store.get(), id, plan, facts.current)
       store.set(drawn.seen)
       unanswered.sent(id)
       send(engine, plan.command, id).then(

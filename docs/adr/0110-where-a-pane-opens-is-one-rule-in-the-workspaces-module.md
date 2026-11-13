@@ -76,6 +76,22 @@ Each step is its own PR, and the window keeps working after each.
 1. `placing.rs` for where a Pane opens. `placeFor` and `movesAway` leave
    the window, and Arrange gathers a loose Pane already on its Project's
    workspace.
+   _Built_ (step 1b): `workspaces.open` with no `place` is placed by
+   `placing.rs` for every caller. The window sends the Pane it is opened
+   from (`from`) and, for when none is in front, the workspace on screen
+   (`on`): both say where the Person is, and neither is a place. It adds
+   three facts the engine cannot know: `agents`, the window opens it for
+   an Agent whose Thread no workspace shows; `moved`, with `instead`, it
+   shows what that Pane showed in another Project, so the engine may have
+   it open elsewhere while that Pane leaves, in one command; and
+   `scratch`, its Project is of no Project, which the engine says itself
+   of a Project it knows and takes only of one it does not (decision 6).
+   `commands::apply` takes the engine's `Facts` (the Flow and the kinds
+   that say `home`), the traces record them, and `tiling/arrangement.ts`
+   replays them. A place stays in a command where
+   its caller named one: a drop, a move, "Open beside", a Pane's `open`
+   with a place, an Agent's Thread that a workspace shows (`beside`), and
+   the buttons of an empty workspace no Project owns.
 2. Refusals in the engine.
 3. The Top layer in the Window: one stack, the keys, one focus return, so
    a Pane's inner field gets them back whichever layer closes.
