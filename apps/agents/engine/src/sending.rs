@@ -12,7 +12,7 @@
 
 use crate::model::{Mode, Offer, OptionValue, Settings};
 use banda_look::OneFile;
-use banda_look::keyed::Renamed;
+use banda_look::keyed::Retired;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -32,29 +32,12 @@ pub enum Enter {
     Queue,
 }
 
-/// How an Agent's windows stand, its Flow (ADR 0079): where its Thread
-/// opens, and what a pick of it shows.
-#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "agents/")]
-pub enum Flow {
-    /// Where the window has it: beside the Pane in front, and a pick goes
-    /// to wherever its Pane is. `off` before ADR 0079 (grace).
-    #[serde(alias = "off")]
-    Free,
-    /// Each Project on its own workspace, its Agents in a row, a pick at
-    /// the left (ADR 0065, ADR 0102). `project` before ADR 0079, `space`
-    /// before ADR 0069 (grace).
-    #[default]
-    #[serde(alias = "project")]
-    #[serde(alias = "space")]
-    Row,
-    /// As the row, and what has the focus fills the screen (ADR 0102).
-    Solo,
-}
-
 /// The file as Banda writes it first, every default named.
 pub const TEMPLATE: &str = include_str!("../agents.toml");
+
+/// What the file is told where it still says the Flow.
+const FLOW_MOVED: &str =
+    "the Flow is `flow` in tiling.toml now: it is read here until that file says it";
 
 /// How messages to an Agent are sent. Every key is optional.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -72,9 +55,6 @@ pub struct AgentsSettings {
     /// 0114, decision 7). The stars in "All models" set it; with none
     /// named, the menu holds the first three the Harness offers.
     pub models: Option<BTreeMap<String, Vec<String>>>,
-    /// The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).
-    #[serde(alias = "workspaces")]
-    pub flow: Option<Flow>,
     /// How many seconds the focus stays on a Thread it only came to, by
     /// the Strip's scroll or a key that moves the focus, before its mark
     /// counts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,
@@ -90,7 +70,6 @@ pub const SEEN_AFTER: f64 = 2.5;
 #[ts(export, export_to = "agents/")]
 pub struct Agents {
     pub enter: Enter,
-    pub flow: Flow,
     /// Seconds the focus stays on a Thread before it is seen; 0 at once.
     pub seen_after: f64,
     /// The account a new Thread starts on, by its entry's ID: none, the
@@ -124,14 +103,21 @@ pub struct Starts {
 impl OneFile for AgentsSettings {
     const NAME: &'static str = "agents.toml";
     const TEMPLATE: &'static str = TEMPLATE;
-    const RENAMED: &'static [Renamed] = &[
-        Renamed::key("", "workspaces", "flow"),
-        Renamed::value("workspaces", "off", "free"),
-        Renamed::value("workspaces", "project", "row"),
-        Renamed::value("workspaces", "space", "row"),
-        Renamed::value("flow", "off", "free"),
-        Renamed::value("flow", "project", "row"),
-        Renamed::value("flow", "space", "row"),
+    /// The Flow is the Tiling's, in `tiling.toml` (ADR 0127, decision 4),
+    /// which still reads it here while it does not say its own (ADR 0069
+    /// grace).
+    const RETIRED: &'static [Retired] = &[
+        Retired {
+            at: "flow",
+            table: false,
+            says: FLOW_MOVED,
+        },
+        // Its name before ADR 0079.
+        Retired {
+            at: "workspaces",
+            table: false,
+            says: FLOW_MOVED,
+        },
     ];
     type Resolved = Agents;
 
@@ -140,7 +126,6 @@ impl OneFile for AgentsSettings {
             enter: Some(Enter::default()),
             start: None,
             models: None,
-            flow: Some(Flow::default()),
             seen_after: Some(SEEN_AFTER),
         }
     }
@@ -150,7 +135,6 @@ impl OneFile for AgentsSettings {
             enter: self.enter.or(under.enter),
             start: self.start.or(under.start),
             models: self.models.or(under.models),
-            flow: self.flow.or(under.flow),
             seen_after: self.seen_after.or(under.seen_after),
         }
     }
@@ -159,7 +143,6 @@ impl OneFile for AgentsSettings {
         let start = self.start.unwrap_or_default();
         Agents {
             enter: self.enter.unwrap_or_default(),
-            flow: self.flow.unwrap_or_default(),
             // Less than none, or no number, is none.
             seen_after: self
                 .seen_after
@@ -227,14 +210,6 @@ pub fn start(file: &Path, harness: &str) -> Start {
     start.unwrap_or_default()
 }
 
-/// The Flow the `agents.toml` at `file` says now, read when asked, as
-/// `start` is.
-pub fn flow(file: &Path) -> Flow {
-    (banda_look::file::read_at::<AgentsSettings>(file))
-        .and_then(|settings| settings.flow)
-        .unwrap_or_default()
-}
-
 /// The accounts `file`'s `[start]` names for a new Thread (ADR 0093,
 /// decision 7): the one it starts on, and the one it starts on while that
 /// one is out. A file that is not there names neither.
@@ -294,6 +269,23 @@ mod tests {
         assert_eq!(agents.seen_after, 1.5);
         let (agents, _, _) = resolved(Some("seen-after = -3.0\n"));
         assert_eq!(agents.seen_after, 0.0, "less than none is none");
+    }
+
+    #[test]
+    fn the_flow_it_still_says_is_told_where_it_went_and_the_rest_reads() {
+        for old in [
+            "flow = \"free\"",
+            "workspaces = \"off\"",
+            "flow = \"sideways\"",
+        ] {
+            let text = format!("{old}\nenter = \"queue\"\n");
+            let (agents, keyed, problems) = resolved(Some(&text));
+            assert_eq!(agents.enter, Enter::Queue, "{old}");
+            assert!(!keyed.contains_key("flow"), "{old}");
+            assert_eq!(problems.len(), 1, "{old}: {problems:?}");
+            assert_eq!(problems[0].line, Some(1));
+            assert!(problems[0].message.contains("tiling.toml"));
+        }
     }
 
     #[test]

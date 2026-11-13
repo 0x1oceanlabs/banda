@@ -14,7 +14,7 @@
 
 use crate::Places;
 use crate::Problem;
-use crate::keyed::{self, Keyed, Layer};
+use crate::keyed::{self, Keyed, Layer, Moved, Retired};
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
 use schemars::{JsonSchema, Schema};
@@ -38,6 +38,8 @@ pub struct SettingsFile {
     class: Class,
     /// Its top-level keys of another class than the file's.
     sections: &'static [(&'static str, Class)],
+    /// Its keys that moved here from other files (ADR 0069 grace).
+    moved: &'static [Moved],
 }
 
 /// How the look resolves a file, from its text at a path, there or not:
@@ -94,6 +96,7 @@ impl SettingsFile {
             resolve: None,
             class: Class::Device,
             sections: &[],
+            moved: &[],
         }
     }
 
@@ -101,6 +104,7 @@ impl SettingsFile {
     pub const fn of<T: OneFile>() -> SettingsFile {
         SettingsFile {
             resolve: Some(resolve_value::<T>),
+            moved: T::MOVED,
             ..SettingsFile::new::<T>(T::NAME, template_of::<T>, check_of::<T>)
         }
     }
@@ -136,6 +140,12 @@ impl SettingsFile {
     /// The top-level keys of another class than the file's.
     pub fn sections(&self) -> &'static [(&'static str, Class)] {
         self.sections
+    }
+
+    /// Its keys that moved here from other files, which the writer writes
+    /// here whichever name it is given (ADR 0069 grace).
+    pub fn moved(&self) -> &'static [Moved] {
+        self.moved
     }
 
     /// The file's JSON Schema, titled with its name, each top-level key
@@ -183,6 +193,12 @@ impl SettingsFile {
         let text = std::fs::read_to_string(&path).ok();
         let resolved = self.resolve_text(&path, text.as_deref(), problems);
         watched.push(path);
+        // The files its keys moved from are read with it.
+        for old in self.moved.iter().map(|key| places.config.join(key.file)) {
+            if !watched.contains(&old) {
+                watched.push(old);
+            }
+        }
         resolved
     }
 
@@ -257,6 +273,12 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
     const TEMPLATE: &'static str;
     /// Names it may still say from before a rename (ADR 0069 grace).
     const RENAMED: &'static [crate::keyed::Renamed] = &[];
+    /// Keys that moved here from another file, read there while this one
+    /// does not say them (ADR 0069 grace).
+    const MOVED: &'static [Moved] = &[];
+    /// Keys it may still say that it no longer reads, as one that moved to
+    /// another file: each is told where, and the rest still reads.
+    const RETIRED: &'static [Retired] = &[];
     /// What the window gets, every key resolved.
     type Resolved: Serialize;
     /// Banda's own, every key said.
@@ -275,9 +297,30 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
 /// out, and the rest still reads. The engine reads a module's file so too.
 pub fn read<T: OneFile>(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<T> {
     crate::say_renamed(path, text, T::RENAMED, problems);
-    let mut settings: T = crate::read(path, text, problems)?;
-    settings.check(path, text, problems);
+    let kept = crate::say_retired(path, text, T::RETIRED, problems);
+    let mut settings: T = crate::read(path, &kept, problems)?;
+    settings.check(path, &kept, problems);
     Some(settings)
+}
+
+/// What the files beside the one at `path` still say of the keys that
+/// moved into it ([`OneFile::MOVED`]), file by file as it names them: each
+/// as a `T`, with its path and text. What is wrong there is
+/// left out with no word here: the old file says where its key went.
+fn moved_here<T: OneFile>(path: &Path) -> Vec<(T, (PathBuf, String))> {
+    let mut names: Vec<&'static str> = T::MOVED.iter().map(|key| key.file).collect();
+    names.dedup();
+    let folder = path.parent().unwrap_or(Path::new(""));
+    names
+        .into_iter()
+        .filter_map(|name| {
+            let old = folder.join(name);
+            let text = std::fs::read_to_string(&old).ok()?;
+            let said = keyed::moved(&text, name, T::MOVED)?;
+            let read = read::<T>(&old, &said, &mut Vec::new())?;
+            Some((read, (old, text)))
+        })
+        .collect()
 }
 
 /// The file at `path` as a `T`, as the engine reads a module's own file
@@ -292,6 +335,20 @@ pub fn read_at<T: OneFile>(path: &Path) -> Option<T> {
         tracing::warn!(%problem, file = T::NAME);
     }
     read
+}
+
+/// The file at `path` as the engine reads a module's own file to act by
+/// it: every key resolved, the file's own over what its keys' old files
+/// still say, over Banda's defaults. A file that is missing says nothing;
+/// what is wrong goes to the log, as [`read_at`] sends it.
+pub fn resolved_at<T: OneFile>(path: &Path) -> T::Resolved {
+    let text = std::fs::read_to_string(path).ok();
+    let mut problems = Vec::new();
+    let (resolved, _) = resolve_from::<T>(path, text.as_deref(), &mut problems);
+    for problem in &problems {
+        tracing::warn!(%problem, file = T::NAME);
+    }
+    resolved
 }
 
 /// A `T` on this machine, its file over Banda's defaults, with each key's
@@ -319,11 +376,16 @@ fn resolve_from<T: OneFile>(
         .and_then(|(path, text)| read::<T>(path, text, problems))
         .unwrap_or_default();
     let defaults = T::defaults();
-    let layers = [
-        Layer::new("defaults", &defaults, None),
-        Layer::new("file", &mine, file.as_ref()),
-    ];
-    let merged = mine.over(defaults);
+    // What a key's old file still says lies under the file's own, and is
+    // the Person's word as much: `file`, at its path there (ADR 0069
+    // grace).
+    let (before, olds): (Vec<_>, Vec<_>) = moved_here::<T>(path).into_iter().unzip();
+    let mut layers = vec![Layer::new("defaults", &defaults, None)];
+    for (said, old) in before.iter().zip(&olds).rev() {
+        layers.push(Layer::new("file", said, Some(old)));
+    }
+    layers.push(Layer::new("file", &mine, file.as_ref()));
+    let merged = before.into_iter().fold(mine, T::over).over(defaults);
     let keyed = keyed::keyed(&merged, &layers);
     (merged.resolved(), keyed)
 }

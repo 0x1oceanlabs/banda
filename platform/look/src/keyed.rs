@@ -18,7 +18,8 @@ pub struct From {
     /// `defaults`, `theme`, `hyprland`, `preset`, or `file`: the
     /// Person's own.
     pub layer: String,
-    /// The file it is in, when it is in one.
+    /// The file it is in, when it is in one: the file it moved out of,
+    /// while that one still says it (ADR 0069 grace).
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub path: Option<String>,
@@ -408,6 +409,51 @@ pub fn retired(text: &str, retired: &[Retired]) -> (String, Vec<(usize, String, 
     (text, said)
 }
 
+/// A key that moved here from another file (ADR 0069 grace): what that
+/// file still says of it is read while this one does not say it, the
+/// writer writes it here, and takes the old line out as it does.
+pub struct Moved {
+    /// The file it was in, by its name in the config folder.
+    pub file: &'static str,
+    /// Its dotted key there.
+    pub was: &'static str,
+    /// Its dotted key here.
+    pub now: &'static str,
+}
+
+/// What `text`, the file called `file`, still says of the keys of `moved`
+/// that were its own, as TOML under the names they have now; none when it
+/// says none of them, or is not TOML.
+pub fn moved(text: &str, file: &str, moved: &[Moved]) -> Option<String> {
+    let document = toml_edit::Document::parse(text).ok()?;
+    let mut said = toml_edit::DocumentMut::new();
+    for key in moved.iter().filter(|key| key.file == file) {
+        let leaf = key.was.rsplit('.').next().unwrap_or(key.was);
+        let value = table_at(document.as_table(), key.was, false)
+            .and_then(|table| table.get(leaf))
+            .and_then(Item::as_value);
+        let Some(value) = value else {
+            continue;
+        };
+        let mut value = value.clone();
+        value.decor_mut().clear();
+        let mut table: &mut dyn TableLike = said.as_table_mut();
+        let mut parts: Vec<&str> = key.now.split('.').collect();
+        let last = parts.pop().unwrap_or(key.now);
+        for part in parts {
+            let inner = table
+                .entry(part)
+                .or_insert_with(|| Item::Table(toml_edit::Table::new()));
+            table = inner.as_table_like_mut()?;
+        }
+        // The first name of it the file says wins, as one key has one value.
+        if !table.contains_key(last) {
+            table.insert(last, Item::Value(value));
+        }
+    }
+    (!said.is_empty()).then(|| said.to_string())
+}
+
 /// The table `at` names: itself for a key, the one that holds it for a
 /// value.
 fn table_at<'a>(top: &'a toml_edit::Table, at: &str, key: bool) -> Option<&'a dyn TableLike> {
@@ -526,6 +572,41 @@ mod tests {
             })
         );
         assert_eq!(only("a = \n", |_| false), None, "not TOML");
+    }
+
+    #[test]
+    fn a_key_that_moved_is_read_under_its_name_now() {
+        const MOVED: &[Moved] = &[
+            Moved {
+                file: "old.toml",
+                was: "workspaces",
+                now: "flow",
+            },
+            Moved {
+                file: "old.toml",
+                was: "flow",
+                now: "flow",
+            },
+            Moved {
+                file: "old.toml",
+                was: "columns.default",
+                now: "widths.new",
+            },
+            Moved {
+                file: "other.toml",
+                was: "enter",
+                now: "enter",
+            },
+        ];
+        let text = "enter = \"queue\"\nflow = \"row\" # mine\n\n[columns]\ndefault = \"1/3\"\n";
+        let said = moved(text, "old.toml", MOVED).unwrap();
+        let read: Value = toml::from_str(&said).unwrap();
+        assert_eq!(read, json!({ "flow": "row", "widths": { "new": "1/3" } }));
+        // Its older name, when the file says that one.
+        let said = moved("workspaces = \"off\"\n", "old.toml", MOVED).unwrap();
+        assert_eq!(said.trim(), "flow = \"off\"");
+        assert_eq!(moved("enter = \"queue\"\n", "old.toml", MOVED), None);
+        assert_eq!(moved("flow = \n", "old.toml", MOVED), None, "not TOML");
     }
 
     #[test]

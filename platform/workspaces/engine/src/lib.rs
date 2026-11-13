@@ -5,7 +5,9 @@
 //! It is the machine's, not a Project's: one workspace holds Panes of every
 //! Project. Its commands carry what was decided, a place the Person named
 //! or a width; where a Pane with no place opens, and which move the row
-//! refuses, `placing` decides here, for every caller (ADR 0110). What
+//! refuses, `placing` decides here, for every caller (ADR 0110), by the
+//! Flow and the rules of the Tiling's file, `tiling.toml` ([`tiling`];
+//! ADR 0127, decision 4). What
 //! depends on the look or the view stays the window's. A change says the
 //! whole arrangement after it in one event, so a window that follows
 //! draws what the event holds; new args for a Pane, the change made most,
@@ -27,6 +29,7 @@
 pub mod commands;
 pub mod model;
 pub mod placing;
+pub mod tiling;
 
 use banda_kernel::{
     AgentId, Call, Error, Kind, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx,
@@ -37,15 +40,24 @@ pub use commands::{
     Regroup, ShowAs, Size, Take, Tidy, Update,
 };
 use model::{Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Side, Sight, WorkspaceId};
-use placing::{Asked, By, Facts, Flow};
+use placing::{Asked, By, Facts};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use std::collections::BTreeSet;
+use tiling::Tiling;
 use ts_rs::TS;
 
 /// The version of every event this module writes.
 pub const VERSION: u32 = 1;
+
+/// The module's settings file in `~/.config/banda` (ADR 0016): the
+/// Tiling's, `tiling.toml`. How the Tiling behaves the Person means
+/// everywhere, as their keys: it follows them to every machine (ADR 0101,
+/// decision 3; ADR 0127, decision 4).
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<tiling::TilingSettings>()
+        .class(banda_look::Class::Shared, &[])];
 
 #[derive(Default)]
 pub struct Workspaces {
@@ -55,8 +67,9 @@ pub struct Workspaces {
     /// The Pane kinds that stand on their Project's workspace, as their
     /// window parts say (ADR 0065, decision 9).
     home: BTreeSet<String>,
-    /// Reads this machine's Flow; none, the Flow `free`.
-    flow: Option<Box<dyn Fn() -> Flow + Send + Sync>>,
+    /// Reads this machine's copy of the Tiling's file; none, the Flow
+    /// `free` and no rule.
+    tiling: Option<Box<dyn Fn() -> Tiling + Send + Sync>>,
 }
 
 impl Workspaces {
@@ -69,11 +82,6 @@ impl Workspaces {
     pub fn home_kinds(mut self, kinds: impl IntoIterator<Item = impl Into<String>>) -> Self {
         self.home = kinds.into_iter().map(Into::into).collect();
         self
-    }
-
-    /// This machine's copy of the Flow.
-    fn flow_now(&self) -> Flow {
-        self.flow.as_ref().map_or(Flow::Free, |read| read())
     }
 
     /// Whether `project` is of no Project, as this machine knows it: a
@@ -89,16 +97,24 @@ impl Workspaces {
     /// What this machine places a Pane by, and refuses a move by, read
     /// before the change, as it cannot wait (ADR 0110, decision 5).
     fn facts(&self) -> Facts {
+        let unsaid = || Tiling {
+            flow: tiling::Flow::Free,
+            ..Tiling::default()
+        };
+        let Tiling { flow, rules } = self.tiling.as_ref().map_or_else(unsaid, |read| read());
         Facts {
-            flow: self.flow_now(),
+            flow: flow.into(),
             home: self.home.clone(),
             leads: self.grouped.clone(),
+            rules,
         }
     }
 
-    /// Where this machine's Flow is read from (ADR 0110, decision 5).
-    pub fn flow(mut self, read: impl Fn() -> Flow + Send + Sync + 'static) -> Self {
-        self.flow = Some(Box::new(read));
+    /// Where this machine's copy of the Tiling's file is read from: its
+    /// Flow and its rules by kind of Pane (ADR 0110, decision 5; ADR 0127,
+    /// decision 4).
+    pub fn tiling(mut self, read: impl Fn() -> Tiling + Send + Sync + 'static) -> Self {
+        self.tiling = Some(Box::new(read));
         self
     }
 
@@ -120,7 +136,8 @@ banda_kernel::methods! {
         /// names it. One shown already stays where it is, and is named.
         /// With no place it goes where the Flow says, by the Pane it is
         /// opened from, for the window, a program and `banda` alike (ADR
-        /// 0110, decision 4).
+        /// 0110, decision 4). A rule of its kind in `tiling.toml` says
+        /// how wide its new column is, and may say where it opens.
         command open(Open) -> Opened, Write;
         /// Closes a Pane; its column goes when it was the last there.
         command close(OnePane) -> Done, Write;
@@ -818,12 +835,16 @@ impl Workspaces {
         // What its Agent opens with no place goes where the Flow says: into
         // the Group of the Thread its pass was made for (ADR 0065, decisions
         // 6 and 7), else on its Project's workspace (ADR 0102, decision 4).
+        // Its new column is as wide as its kind's rule says.
+        let facts = self.facts();
+        let width = facts.width(&shows.kind);
         let asked = if beside.is_none() {
             Some(Asked {
-                flow: self.flow_now(),
+                flow: facts.flow,
                 project: shows.project,
                 grouped,
-                home: self.home.contains(&shows.kind),
+                home: facts.at_home(&shows.kind),
+                opens: facts.opens(&shows.kind),
                 scratch: self.scratch(&call, shows.project).await == Some(true),
                 from: None,
                 on: None,
@@ -842,6 +863,7 @@ impl Workspaces {
             let place = place.or_else(|| placing::place(list, asked?));
             let opening = Opening {
                 place,
+                width,
                 by: Some(me),
                 ..Opening::of(shows)
             };

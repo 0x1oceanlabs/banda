@@ -59,7 +59,7 @@ import {
   widthOf,
   windowModule,
 } from "../registry"
-import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
+import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { isFlow, nextFlow } from "../bar/flow/Flow"
@@ -398,8 +398,8 @@ export function strayedIn(
 }
 
 /** What the engine refuses a move by, as this window believes it, as
- * agents.toml says the Flow now (ADR 0110, decision 9). */
-const factsNow = () => factsOf(fileNow(AGENTS_FILE).flow)
+ * tiling.toml says the Flow now (ADR 0110, decision 9). */
+const factsNow = () => factsOf(fileNow(TILING_FILE).flow)
 
 /** The toast a refused move shows: one, however long the key is held. */
 const REFUSED = "workspace-refused"
@@ -810,12 +810,12 @@ function presentHere(args: Args | undefined, then: (file: string) => void) {
 }
 
 /**
- * Writes the Flow into agents.toml (ADR 0079), for its key and for the
- * sidebar's menu; the look brings it back. What went wrong goes to the
- * console, as it did from the menu.
+ * Writes the Flow into tiling.toml (ADR 0079; ADR 0127, decision 4), for
+ * its key and for the bar's menu; the look brings it back. What went wrong
+ * goes to the console, as it did from the menu.
  */
 function writeFlow(shell: Shell, flow: Flow) {
-  const file = AGENTS_FILE.name
+  const file = TILING_FILE.name
   logged(file, shell.writeSetting(file, "flow", tomlOf(flow)))
 }
 
@@ -1078,7 +1078,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Workspaces",
     title: "Solo, what has the focus the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
-    run: (shell) => writeFlow(shell, nextFlow(fileNow(AGENTS_FILE).flow)),
+    run: (shell) => writeFlow(shell, nextFlow(fileNow(TILING_FILE).flow)),
   },
   {
     id: "workspaces.arrange",

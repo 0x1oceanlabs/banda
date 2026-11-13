@@ -7,7 +7,11 @@ import {
 } from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { ownEngine } from "@banda/core/testing"
-import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
+import {
+  DEFAULT_TILING,
+  type Flow,
+  TILING_FILE,
+} from "@banda/contract/workspaces"
 import type { Look } from "@banda/contract/look"
 import { toast } from "@banda/ui/components/sonner"
 import { takeLook } from "@banda/ui/lib/look"
@@ -108,10 +112,10 @@ const projectsOf = (names: Record<string, string>, scratch: string[] = []) =>
 const lookupOf = (projects: readonly ProjectSummary[]) => (id: string) =>
   projects.find((one) => one.id === id)
 
-/** The Flow agents.toml says now. */
+/** The Flow tiling.toml says now. */
 const inFlow = (flow: Flow) =>
   takeLook({
-    files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow } },
+    files: { [TILING_FILE.name]: { ...DEFAULT_TILING, flow } },
   } as unknown as Look)
 
 /** Projects as the engine names them, which the copy of its rule reads. */
@@ -545,11 +549,11 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   expect(settings).toHaveBeenCalledTimes(1)
 })
 
-test("flow.pick writes the Flow it names into agents.toml, as flow.solo does from the one in force, and a word it does not know nothing", async () => {
+test("flow.pick writes the Flow it names into tiling.toml, as flow.solo does from the one in force, and a word it does not know nothing", async () => {
   const writeSetting = vi.fn(() => Promise.resolve([] as string[]))
   const shell = shellOf({ writeSetting })
   takeLook({
-    files: { [AGENTS_FILE.name]: { ...DEFAULT_AGENTS, flow: "row" } },
+    files: { [TILING_FILE.name]: { ...DEFAULT_TILING, flow: "row" } },
   } as unknown as Look)
 
   runAction(shell, "flow.pick", { flow: "free" })
@@ -558,9 +562,9 @@ test("flow.pick writes the Flow it names into agents.toml, as flow.solo does fro
     runAction(shell, "flow.pick", args)
   runAction(shell, "flow.solo")
   expect(writeSetting.mock.calls).toEqual([
-    [AGENTS_FILE.name, "flow", '"free"'],
-    [AGENTS_FILE.name, "flow", '"solo"'],
-    [AGENTS_FILE.name, "flow", '"solo"'],
+    [TILING_FILE.name, "flow", '"free"'],
+    [TILING_FILE.name, "flow", '"solo"'],
+    [TILING_FILE.name, "flow", '"solo"'],
   ])
 
   // A refused write says so in the console, as the menu's did.
@@ -568,7 +572,7 @@ test("flow.pick writes the Flow it names into agents.toml, as flow.solo does fro
   writeSetting.mockResolvedValueOnce(["flow: not a Flow"])
   runAction(shell, "flow.pick", { flow: "row" })
   await vi.waitFor(() =>
-    expect(error).toHaveBeenCalledWith(`banda: ${AGENTS_FILE.name} refused`, [
+    expect(error).toHaveBeenCalledWith(`banda: ${TILING_FILE.name} refused`, [
       "flow: not a Flow",
     ])
   )

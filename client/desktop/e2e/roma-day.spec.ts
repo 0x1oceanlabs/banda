@@ -140,12 +140,12 @@ async function toastedOutOfView(
   ).toContainText("Done")
 }
 
-test("the Flow is picked on the bar, after the workspaces, and kept in agents.toml, and Alt+Shift+M goes between the row and solo (ADR 0079, ADR 0098)", async () => {
+test("the Flow is picked on the bar, after the workspaces, and kept in tiling.toml, and Alt+Shift+M goes between the row and solo (ADR 0079, ADR 0098, ADR 0127)", async () => {
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
   const flow = flowOf(page)
-  const file = join(dir, "config/agents.toml")
+  const file = join(dir, "config/tiling.toml")
   const written = () => textOf(file).match(/^flow = "(\w+)"$/m)?.[1]
   // The row is the default, and nothing is written for it.
   await expect(flow).toHaveAccessibleName("Flow: Row")
@@ -289,7 +289,7 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   expect(await shares()).toEqual([100, 100, 100])
 
   // Alt+M shows the row for a while, the focus where it was, and again
-  // goes back to solo; agents.toml keeps solo.
+  // goes back to solo; tiling.toml keeps solo.
   await page.keyboard.press("Alt+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])
   await expect(a).toHaveAttribute("data-focused", "true")

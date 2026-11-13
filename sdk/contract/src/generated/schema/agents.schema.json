@@ -25,11 +25,6 @@
       },
       "x-class": "machine"
     },
-    "flow": {
-      "description": "The Flow (ADR 0079). `workspaces` before ADR 0079 (grace).",
-      "$ref": "#/$defs/Flow",
-      "x-class": "shared"
-    },
     "seen-after": {
       "description": "How many seconds the focus stays on a Thread it only came to, by\nthe Strip's scroll or a key that moves the focus, before its mark\ncounts as seen: 0 at once. A click or a key in it counts at once (ADR 0096,\ndecision 3).",
       "type": "number",
@@ -121,26 +116,6 @@
         },
         {
           "type": "boolean"
-        }
-      ]
-    },
-    "Flow": {
-      "description": "How an Agent's windows stand, its Flow (ADR 0079): where its Thread\nopens, and what a pick of it shows.",
-      "oneOf": [
-        {
-          "description": "Where the window has it: beside the Pane in front, and a pick goes\nto wherever its Pane is. `off` before ADR 0079 (grace).",
-          "type": "string",
-          "const": "free"
-        },
-        {
-          "description": "Each Project on its own workspace, its Agents in a row, a pick at\nthe left (ADR 0065, ADR 0102). `project` before ADR 0079, `space`\nbefore ADR 0069 (grace).",
-          "type": "string",
-          "const": "row"
-        },
-        {
-          "description": "As the row, and what has the focus fills the screen (ADR 0102).",
-          "type": "string",
-          "const": "solo"
         }
       ]
     }

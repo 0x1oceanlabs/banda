@@ -7,8 +7,9 @@ import {
   useState,
 } from "react"
 import { type Engine, newId, type ProjectId } from "@banda/contract"
-import type { Flow } from "@banda/contract/agents"
+import { type Flow, type Rule, TILING_FILE } from "@banda/contract/workspaces"
 import { type Readable, Store, useStore } from "@banda/core/react"
+import { fileNow, useFile } from "@banda/ui/lib/look"
 import type { PaneState } from "@banda/ui/pane"
 import {
   groupedOf,
@@ -36,13 +37,20 @@ import { keepView, loadView, moveOver } from "./store"
 import { useArranged } from "./useArranged"
 
 /** What the engine places a Pane by, and refuses a move by, as this client
- * believes them (ADR 0110, decision 9): solo is its own view of the row.
- * Which Projects are of no Project each command says itself (`asking`). */
-export function factsOf(flow: Flow): Facts {
+ * believes them (ADR 0110, decision 9): solo is its own view of the row,
+ * and the rules are `tiling.toml`'s, as the engine reads them (ADR 0127,
+ * decision 4). Which Projects are of no Project each command says itself
+ * (`asking`). */
+export function factsOf(
+  flow: Flow,
+  rules: { readonly [kind: string]: Rule | undefined } = fileNow(TILING_FILE)
+    .rules
+): Facts {
   return {
     flow: flow === "free" ? "free" : "row",
     home: HOME_KINDS,
     leads: LEAD_KINDS,
+    rules,
   }
 }
 
@@ -92,9 +100,10 @@ export function useTiling({
 }) {
   const solo = flow === "solo"
   const facts = useRef(NO_FACTS)
+  const rules = useFile(TILING_FILE).rules
   useLayoutEffect(() => {
-    facts.current = factsOf(flow)
-  }, [flow])
+    facts.current = factsOf(flow, rules)
+  }, [flow, rules])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const live = useArranged(engine)
   const ready = live.state === "ready"

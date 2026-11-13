@@ -2,11 +2,12 @@
  * The Flow, on the bar beside the workspaces' numbers (ADR 0098, decision
  * 20): it arranges the workspaces, not the sidebar's list. Its icon draws the
  * one in force, and its menu picks one by the Window's `flow.pick`, which
- * writes agents.toml beside `flow.solo`, its key (ADR 0079). In the row
+ * writes tiling.toml beside `flow.solo`, its key (ADR 0079; ADR 0127,
+ * decision 4). In the row
  * and solo it also offers Arrange by Project, as Panes already open stay
  * where they are (ADR 0102, decision 9).
  *
- *   in    flow   agents.toml's `flow`, as the look resolves it (`useFile`)
+ *   in    flow   tiling.toml's `flow`, as the look resolves it (`useFile`)
  *         keys   the key in force for `flow.solo` (`useKeyLabel`)
  *   draws the icon of the Flow in force, with `flow.solo`'s key in its
  *         title; a click opens its menu: Free, Row and Solo, each with
@@ -17,7 +18,7 @@
  *   gives `isFlow` and `nextFlow` to the Window's `flow.pick` and
  *         `flow.solo` (`window/actions.ts`)
  */
-import { AGENTS_FILE, type Flow } from "@banda/contract/agents"
+import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -79,7 +80,7 @@ export function nextFlow(flow: Flow): Flow {
 /** The Flow's widget, as the top of this file says. */
 function FlowWidget() {
   const run = useRun()
-  const flow = useFile(AGENTS_FILE).flow
+  const flow = useFile(TILING_FILE).flow
   const keyFor = useKeyLabel()
   const key = keyFor("flow.solo")
   const Icon = FLOWS[flow].icon

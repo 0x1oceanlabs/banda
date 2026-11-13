@@ -4554,7 +4554,7 @@ test("a New Thread moved to another Project goes to that Project's workspace, or
 
 test("in solo, a reply's Run in a Thread of no Project opens its terminal in the Thread's Group, and the Thread stays in view (ADR 0102, decision 3)", async () => {
   window = await startWindow({
-    files: { "config/agents.toml": 'flow = "solo"\n' },
+    files: { "config/tiling.toml": 'flow = "solo"\n' },
   })
   const { page } = window
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -4574,7 +4574,7 @@ test("in solo, a reply's Run in a Thread of no Project opens its terminal in the
 
 test("in solo, a Group fits a narrow screen after Alt+R, and when the window narrows (ADR 0102, decision 8)", async () => {
   window = await startWindow({
-    files: { "config/agents.toml": 'flow = "solo"\n' },
+    files: { "config/tiling.toml": 'flow = "solo"\n' },
   })
   const { page } = window
   const NARROW = 1320
@@ -4613,7 +4613,7 @@ test("in solo, a Group fits a narrow screen after Alt+R, and when the window nar
   await shows(47, 53)
 })
 
-test('agents.toml\'s workspaces = "off" keeps a new Thread where the Person is', async () => {
+test("agents.toml's workspaces = \"off\", the Flow's old name and file, still keeps a new Thread where the Person is (ADR 0069 grace)", async () => {
   window = await startWindow({
     files: { "config/agents.toml": 'workspaces = "off"\n' },
   })

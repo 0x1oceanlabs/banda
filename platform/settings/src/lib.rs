@@ -9,6 +9,8 @@
 use banda_look::Places;
 use banda_look::keys::Manifests;
 use banda_look::{Problem, SettingsFile};
+use banda_workspaces::tiling;
+use std::collections::BTreeSet;
 use std::path::{Path, PathBuf};
 
 pub mod accounts;
@@ -19,7 +21,8 @@ pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them
 /// (ADR 0016, decision 3): what its `app.toml` says it owns.
-pub const MODULES: [(&str, &[SettingsFile]); 7] = [
+pub const MODULES: [(&str, &[SettingsFile]); 8] = [
+    ("workspaces", &banda_workspaces::SETTINGS),
     ("agents", &banda_agents::SETTINGS),
     ("harnesses", &banda_harnesses::SETTINGS),
     ("browser", &banda_browser::SETTINGS),
@@ -107,6 +110,19 @@ pub fn manifests() -> Manifests {
     manifests
 }
 
+/// The kinds of Pane the manifests declare: what a rule of `tiling.toml`
+/// may name (ADR 0127, decision 4).
+pub fn kinds() -> BTreeSet<String> {
+    let mut kinds = BTreeSet::new();
+    for (id, json) in WINDOWS {
+        let window: serde_json::Value = serde_json::from_str(json)
+            .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"));
+        let panes = window["panes"].as_array().into_iter().flatten();
+        kinds.extend(panes.filter_map(|pane| Some(pane["kind"].as_str()?.to_owned())));
+    }
+    kinds
+}
+
 /// Checks `paths`, or with none every file Banda reads, [`files`]. Says
 /// nothing when all is well.
 pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
@@ -116,9 +132,14 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
             fontconfig: None,
             ..places.clone()
         };
-        return banda_look::resolve(&places, &|| None, &also(), &manifests())
-            .look
-            .problems;
+        let look = banda_look::resolve(&places, &|| None, &also(), &manifests()).look;
+        let mut problems = look.problems;
+        // What the look cannot say of the Tiling's file: it knows no kind.
+        let path = places.config.join(tiling::NAME);
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            problems.extend(tiling::unknown_kinds(&path, &text, &kinds()));
+        }
+        return problems;
     }
     paths.iter().flat_map(|path| check_file(path)).collect()
 }
@@ -136,13 +157,19 @@ fn check_file(path: &Path) -> Vec<Problem> {
 }
 
 /// Checks `text` as the file at `path` is read: the Harness list as the
-/// engine reads it, anything else as the look does.
+/// engine reads it, anything else as the look does; and a rule of the
+/// Tiling's file against the kinds of Pane there are, so the writer
+/// refuses one of a kind no App has.
 fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let name = path.file_name().and_then(|name| name.to_str());
-    match name.and_then(file) {
+    let mut problems = match name.and_then(file) {
         Some(file) => file.check(path, text),
         None => banda_look::check_text(path, text),
+    };
+    if name == Some(tiling::NAME) {
+        problems.extend(tiling::unknown_kinds(path, text, &kinds()));
     }
+    problems
 }
 
 /// What is wrong with keys.toml's lines against every manifest's actions
@@ -232,7 +259,7 @@ mod tests {
         let look = resolved.look;
         assert_eq!(
             look.files["agents.toml"],
-            serde_json::json!({"enter": "queue", "flow": "row", "seen_after": 2.5})
+            serde_json::json!({"enter": "queue", "seen_after": 2.5})
         );
         assert_eq!(look.settings["agents.toml"]["enter"].from.layer, "file");
         assert!(
@@ -244,6 +271,98 @@ mod tests {
             !look.files.contains_key("harnesses.toml"),
             "a file the look only checks"
         );
+    }
+
+    /// The Tiling's file comes to the window as any module's (ADR 0127,
+    /// decision 4), and the Flow `agents.toml` still says is read into it
+    /// (ADR 0069 grace).
+    #[test]
+    fn the_look_carries_the_tiling_s_file_and_the_flow_agents_toml_still_says() {
+        let folder = tempfile::tempdir().unwrap();
+        let places = Places::at(folder.path());
+        let resolve = || banda_look::resolve(&places, &|| None, &also(), &manifests());
+        let look = resolve().look;
+        assert_eq!(
+            look.files["tiling.toml"],
+            serde_json::json!({"flow": "row", "rules": {}})
+        );
+        assert!(look.problems.is_empty(), "{:?}", look.problems);
+
+        std::fs::write(folder.path().join("agents.toml"), "flow = \"solo\"\n").unwrap();
+        let resolved = resolve();
+        let look = resolved.look;
+        assert_eq!(look.files["tiling.toml"]["flow"], "solo");
+        let from = &look.settings["tiling.toml"]["flow"].from;
+        assert_eq!((from.layer.as_str(), from.line), ("file", Some(1)));
+        assert!(from.path.as_deref().unwrap().ends_with("agents.toml"));
+        assert!(!look.settings["agents.toml"].contains_key("flow"));
+        // The old file is told where its key went, and nothing else is.
+        let said: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains("tiling.toml"));
+        assert!(
+            resolved
+                .watched
+                .contains(&folder.path().join("tiling.toml"))
+        );
+
+        let rule = "flow = \"free\"\n\n[rule.terminal.terminal]\nwidth = \"1/3\"\n";
+        std::fs::write(folder.path().join("tiling.toml"), rule).unwrap();
+        let look = resolve().look;
+        assert_eq!(
+            look.files["tiling.toml"],
+            serde_json::json!({
+                "flow": "free",
+                "rules": { "terminal.terminal": { "width": "1/3" } },
+            })
+        );
+    }
+
+    /// A key that moved is retired where it was: its old file reads, and
+    /// says where the key went.
+    #[test]
+    fn each_key_that_moved_is_told_where_it_went_in_its_old_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let mut moved = 0;
+        for now in files() {
+            for key in now.moved() {
+                moved += 1;
+                let old = file(key.file).unwrap_or_else(|| panic!("no {}", key.file));
+                let path = folder.path().join(old.name);
+                let problems = old.check(&path, &format!("{} = \"x\"\n", key.was));
+                assert_eq!(problems.len(), 1, "{}: {problems:?}", key.was);
+                assert_eq!(problems[0].key.as_deref(), Some(key.was));
+                assert!(problems[0].message.contains(now.name), "{problems:?}");
+            }
+        }
+        assert!(moved > 0);
+    }
+
+    #[test]
+    fn a_rule_names_a_kind_of_pane_the_manifests_declare() {
+        let kinds = kinds();
+        // The template names kinds there are, each in backticks.
+        let template = file("tiling.toml").unwrap().template();
+        let named: Vec<&str> = (template.split('`').skip(1).step_by(2))
+            .filter(|word| word.contains('.') && !word.contains(' '))
+            .collect();
+        assert!(named.len() >= 6, "{named:?}");
+        for kind in named {
+            assert!(kinds.contains(kind), "{kind} in {kinds:?}");
+        }
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("tiling.toml");
+        let text =
+            "[rule.terminal.terminal]\nwidth = \"1/3\"\n\n[rule.terminal.shell]\nwidth = \"1/3\"\n";
+        std::fs::write(&path, text).unwrap();
+        for problems in [
+            check(&Places::at(folder.path()), std::slice::from_ref(&path)),
+            check(&Places::at(folder.path()), &[]),
+        ] {
+            assert_eq!(problems.len(), 1, "{problems:?}");
+            assert_eq!(problems[0].line, Some(4));
+            assert_eq!(problems[0].key.as_deref(), Some("rule.terminal.shell"));
+        }
     }
 
     #[test]
@@ -327,11 +446,14 @@ mod classes {
             )],
         ),
         ("keys.toml", &[(Shared, &["binds"]), (Device, &["mod"])]),
+        // How the Tiling behaves is the Person's, as their keys (ADR 0127,
+        // decision 4).
+        ("tiling.toml", &[(Shared, &["flow", "rule"])]),
         (
             "agents.toml",
             &[
                 (Machine, &["start", "models"]),
-                (Shared, &["enter", "flow"]),
+                (Shared, &["enter"]),
                 // Not in the ADR's table: the device's, as in doubt.
                 (Device, &["seen-after"]),
             ],

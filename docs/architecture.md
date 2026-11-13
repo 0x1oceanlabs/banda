@@ -210,7 +210,15 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   the desktop's ad blocker (`apps/browser/desktop/src/blocker.ts`) on and off.
   The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
-  way (ADR 0016). The settings Pane writes every file through `banda
+  way (ADR 0016), and so does the Tiling's `tiling.toml` (ADR 0127,
+  decision 4): the Flow, and rules by kind of Pane, each a new column's
+  width and where the kind opens when no one named a place. The
+  `workspaces` module reads that file as a Pane opens, so `placing`
+  decides by it for the window, an Agent and `banda` alike; the page
+  takes the same file from the look for what it draws ahead. The Flow
+  was `agents.toml`'s: what that file still says is read while
+  `tiling.toml` does not say it, and the writer writes it in the
+  Tiling's file under either name (ADR 0069 grace). The settings Pane writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
   through `@banda/ui/lib/look`. Each file says whose copy each of its
   top-level keys is (ADR 0101, decision 3), in its `SettingsFile` and as
@@ -789,7 +797,7 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Project's folder | the files of the work |
-| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how Threads start and messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
+| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`), how Threads start and messages to an Agent are sent (`agents.toml`) and how the Tiling behaves (`tiling.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; how its last run went (`run.json`); the passes, hashed (`passes.sqlite3`); while the engine runs, its port and per-run secret |
@@ -2405,7 +2413,8 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   the sidebar list, and a line ceiling on the Window's root (decisions 1
   and 5); what the sidebar list's components still take as code is
   listed, none of it a Project's or a Thread's verb, and the list pins
-  no Project and writes no `agents.toml`, as it runs the actions by id
+  no Project and writes no `agents.toml` or `tiling.toml`, as it runs
+  the actions by id
   with the `run` only the Window gives (decision 11); a mark's
   rank is read only to pick the loudest, on the lines listed (decision
   8); and the calls part reads no page and, of the Tiling, imports only

@@ -2,9 +2,7 @@
  * The Thread as a Pane (ADR 0091, decision 5): its kind, and what it gives
  * the Thread it holds. The Thread is `thread/Thread.tsx`.
  */
-import { AGENTS_FILE } from "@banda/contract/agents"
 import { unreachedWords, usePlaced } from "@banda/core/react"
-import { fileNow } from "@banda/ui/lib/look"
 import { seenNamed, useStatus } from "@banda/ui/hooks/use-status"
 import { ThreadMedia } from "./thread/ThreadMedia"
 import { MarkdownShell } from "@banda/ui/components/markdown-code"
@@ -27,8 +25,10 @@ export const threadPane = definePane<ThreadArgs>({
   start: NEW_THREAD,
   // A Thread starts with its Harness.
   letter: "H",
-  // On its Project's workspace, with the Project's other Agents (ADR 0065).
-  home: () => fileNow(AGENTS_FILE).flow !== "free",
+  // On its Project's workspace, with the Project's other Agents (ADR
+  // 0065): in which Flow is the Tiling's to say, by its own file (ADR
+  // 0127, decision 4), so it is said whatever the Flow.
+  home: () => true,
   // A Group from its opening, for what its Agent opens (ADR 0065).
   grouped: true,
   // Another host's Thread opens too, on that host's engine (ADR 0081).

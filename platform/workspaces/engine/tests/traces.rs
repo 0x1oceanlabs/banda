@@ -25,6 +25,7 @@ use banda_kernel::{Code, Refusal};
 use banda_workspaces::commands::{self, METHODS};
 use banda_workspaces::model::{self, Arrangement, Seed};
 use banda_workspaces::placing::{Facts, Flow};
+use banda_workspaces::tiling::{Opens, Rule};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -172,6 +173,23 @@ impl Tracing {
     fn in_the_flow(&mut self, flow: Flow) {
         self.facts.flow = flow;
         self.facts.home = BTreeSet::from([THREAD.to_owned()]);
+    }
+
+    /// The next steps run with this rule of `kind`, as `tiling.toml` says
+    /// it: a new column's width, and where a Pane of it opens.
+    fn ruled(&mut self, kind: &str, width: Option<&str>, opens: Option<Opens>) {
+        let rule = Rule {
+            width: width.map(str::to_owned),
+            opens,
+        };
+        self.facts.rules.insert(kind.to_owned(), rule);
+    }
+
+    /// Each workspace's columns by their width, where one was given.
+    fn widths(&self) -> Vec<Vec<Option<&str>>> {
+        (self.list.iter())
+            .map(|w| w.columns.iter().map(|c| c.width.as_deref()).collect())
+            .collect()
     }
 
     /// The next steps run with a Thread's kind leading its Group.
@@ -1456,6 +1474,77 @@ fn refused_moves() -> Tracing {
     t
 }
 
+fn rules() -> Tracing {
+    let mut t = Tracing::new(
+        19,
+        "rules",
+        "A rule of a kind of Pane, as tiling.toml says it, gives its new column a \
+         width where the command names none, and says where a Pane of it opens when \
+         no one named a place: right of the Pane in front, under it, into its Group, \
+         or last on its Project's workspace, over what the kind says of itself. It \
+         gives way with no Pane in front, and in the row from a workspace another \
+         Project owns; a place named and what is opened for an Agent go as without \
+         it.",
+    );
+    t.ruled("w.w", Some("1/3"), None);
+    t.ruled("r.r", Some("2/3"), Some(Opens::Beside));
+    t.ruled("b.b", None, Some(Opens::Below));
+    t.ruled("g.g", None, Some(Opens::Group));
+    t.ruled("p.p", None, Some(Opens::Project));
+    // A Thread's kind that a rule opens beside, as any other Pane.
+    t.ruled(THREAD, None, Some(Opens::Beside));
+    let from = |pane: &str| json!({ "from": pane });
+
+    // In the Flow free: a width where none is named, the one named else.
+    t.in_the_flow(Flow::Free);
+    let one = t.opened(shows(WORK, "w.w", 1));
+    t.ok(
+        "open",
+        and(shows(WORK, "w.w", 2), json!({ "width": "1/2" })),
+    );
+    assert_eq!(t.widths()[0], [Some("1/3"), Some("1/2")]);
+    // Right of the Pane in front, at its width; under it; into its Group.
+    t.ok("open", and(shows(WORK, "r.r", 3), from(&one)));
+    t.ok("open", and(shows(HOME, "b.b", 4), from(&one)));
+    let five = t.opened(and(shows(WORK, "g.g", 5), from(&one)));
+    assert_eq!(t.layout()[0], [vec![1, 4], vec![5], vec![3], vec![2]]);
+    assert_eq!(t.widths()[0][2], Some("2/3"));
+    assert_eq!(t.grouping()[0], [1, 1, 0, 0]);
+    // With no Pane in front the rule gives way: as the Flow says.
+    let top = t.workspace(0);
+    t.ok("open", and(shows(WORK, "b.b", 6), json!({ "on": top })));
+    assert_eq!(t.layout()[0].last().unwrap(), &[6]);
+    // A place named is the place.
+    let beside = json!({ "place": { "to": "beside", "pane": five, "side": "left" } });
+    t.ok("open", and(shows(WORK, "b.b", 7), beside));
+    assert_eq!(t.layout()[0][1], [7]);
+
+    // In the row: Work's Thread opens beside the Pane in front, by its
+    // rule, not on Work's workspace; "project" sends another kind there.
+    t.in_the_flow(Flow::Row);
+    let eight = t.opened(and(
+        shows(HOME, "a.a", 8),
+        json!({ "place": { "to": "project", "project": HOME } }),
+    ));
+    t.ok("open", and(thread(HOME, 9), from(&eight)));
+    t.ok("open", and(shows(HOME, "p.p", 10), from(&eight)));
+    assert_eq!(t.layout()[1], [vec![8], vec![9], vec![10]]);
+    // From a workspace another Project owns, the rule gives way: Work's
+    // Pane goes home, into Work's own Group. One of no Project stands
+    // where it is opened, as the row lets it.
+    t.ok("open", and(shows(WORK, "b.b", 11), from(&eight)));
+    assert_eq!(t.layout()[1], [vec![8], vec![9], vec![10]]);
+    t.ok("open", of_none(and(shows(THIRD, "b.b", 12), from(&eight))));
+    assert_eq!(t.layout()[1][0], [8, 12]);
+    // What is opened for an Agent goes as an Agent's: last on its
+    // Project's workspace, at its kind's width.
+    let agents = and(from(&eight), json!({ "agents": true }));
+    t.ok("open", and(shows(HOME, "r.r", 13), agents));
+    assert_eq!(t.layout()[1].last().unwrap(), &[13]);
+    assert_eq!(t.widths()[1].last().unwrap(), &Some("2/3"));
+    t
+}
+
 #[test]
 fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
     let traces = [
@@ -1477,6 +1566,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         placed_row(),
         moved_away(),
         refused_moves(),
+        rules(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

@@ -200,6 +200,9 @@ export const SECTIONS: Section[] = [
       { name: "harnesses.toml" },
       { name: "agents.toml", tables: ["start"], drawn: true },
       { name: "agents.toml", title: "Writing to an Agent" },
+      // The Flow's row stays here until the Tiling has a section of its
+      // own: its key is the Tiling's file's now (ADR 0127, decision 4).
+      { name: "tiling.toml", tables: ["flow"], title: "Writing to an Agent" },
     ],
     about:
       "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",

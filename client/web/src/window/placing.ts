@@ -1,6 +1,6 @@
 import { useCallback, useMemo } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Flow } from "@banda/contract/agents"
+import type { Flow } from "@banda/contract/workspaces"
 import { sameEach, useStore } from "@banda/core/react"
 import { type Stores, threadlessIn } from "../calls/stores"
 import type { Gone } from "../tiling/model"

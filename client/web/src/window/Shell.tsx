@@ -110,7 +110,7 @@ import {
   widthIn,
 } from "../tiling/model"
 import { unsoloing } from "../tiling/groups"
-import { AGENTS_FILE } from "@banda/contract/agents"
+import { TILING_FILE } from "@banda/contract/workspaces"
 import { useFile } from "@banda/ui/lib/look"
 import { Drawer } from "./Drawer"
 import { Peek, usePeek } from "./Peek"
@@ -185,7 +185,7 @@ export function Shell({
   // workspace is drawn the whole screen wide, and the Strip scrolls
   // from one to the next. `Alt+M` shows the workspace in view as the row
   // for a while (`row`), until it goes or the Flow changes.
-  const flow = useFile(AGENTS_FILE).flow
+  const flow = useFile(TILING_FILE).flow
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
   const [stores] = useState(newStores)

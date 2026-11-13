@@ -31,6 +31,8 @@ import { connectionWidget } from "./bar/connection/Connection"
 import { flowWidget } from "./bar/flow/Flow"
 import { problemsWidget } from "./bar/problems/Problems"
 import { updateWidget } from "./bar/update/Update"
+import { TILING_FILE } from "@banda/contract/workspaces"
+import { fileNow } from "@banda/ui/lib/look"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { keepProblem } from "./problems/keep"
@@ -252,9 +254,9 @@ export function showsOf(pane: PaneState): string | null {
   return told(() => kindOf(pane.kind)?.shows?.(pane.args) ?? null, null)
 }
 
-/** Where a Pane opens from the sidebar, a call or a module: last on its
- * Project's workspace when its kind says so (`PaneKind.home`), else right
- * of the Pane in front. */
+/** Where a Pane of its kind stands in the row: on its Project's workspace
+ * when its kind says so (`PaneKind.home`), else right of the Pane in
+ * front. Whether the row is on is its caller's to ask. */
 export function homeOf(pane: PaneState): "project" | "right" {
   return told(() => kindOf(pane.kind)?.home?.(), false) ? "project" : "right"
 }
@@ -450,10 +452,13 @@ export function sheetsOf(pane: PaneState): boolean {
   return kindOf(pane.kind)?.sheet === true
 }
 
-/** How wide a new column for a Pane opens: a list at the narrowest
- * preset; the rest as the look says, by what is beside it. */
+/** How wide a new column for a Pane opens, as the engine gives it one
+ * that names none: what the rule of its kind says in `tiling.toml` (ADR
+ * 0127, decision 4); with none, a list at the narrowest preset, and the
+ * rest as the look says, by what is beside it. */
 export function widthOf(pane: PaneState): Width | undefined {
-  return narrow(pane) ? columnsOf().presets[0] : undefined
+  const ruled = fileNow(TILING_FILE).rules[pane.kind]?.width
+  return ruled ?? (narrow(pane) ? columnsOf().presets[0] : undefined)
 }
 
 /**

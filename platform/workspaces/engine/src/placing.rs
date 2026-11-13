@@ -7,9 +7,10 @@
 //! decision 11).
 
 use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
+use crate::tiling::{Opens, Rule};
 use banda_kernel::{ProjectId, Refusal};
 use serde::Serialize;
-use std::collections::BTreeSet;
+use std::collections::{BTreeMap, BTreeSet};
 use uuid::Uuid;
 
 /// How the Person works the Panes, as far as placement goes. Solo is each
@@ -39,6 +40,31 @@ pub struct Facts {
     /// moves as its lead's Project (ADR 0102, decision 6).
     #[serde(skip_serializing_if = "BTreeSet::is_empty")]
     pub leads: BTreeSet<String>,
+    /// The Person's rules by kind of Pane, from `tiling.toml` (ADR 0127,
+    /// decision 4): each over what its kind and the Flow say.
+    #[serde(skip_serializing_if = "BTreeMap::is_empty")]
+    pub rules: BTreeMap<String, Rule>,
+}
+
+impl Facts {
+    /// Whether a Pane of `kind` stands on its Project's workspace: as its
+    /// rule says where it opens, else as its kind does.
+    pub fn at_home(&self, kind: &str) -> bool {
+        match self.opens(kind) {
+            Some(opens) => opens == Opens::Project,
+            None => self.home.contains(kind),
+        }
+    }
+
+    /// Where the rule of `kind` says a Pane of it opens, if it says.
+    pub fn opens(&self, kind: &str) -> Option<Opens> {
+        self.rules.get(kind)?.opens
+    }
+
+    /// A new column's width for a Pane of `kind`, when its rule gives one.
+    pub fn width(&self, kind: &str) -> Option<String> {
+        self.rules.get(kind)?.width.clone()
+    }
 }
 
 /// Who a Pane is opened by, or for.
@@ -58,8 +84,11 @@ pub struct Asked {
     pub project: ProjectId,
     /// Its kind opens as a Group of its own (`PaneKind.grouped`).
     pub grouped: bool,
-    /// Its kind stands on its Project's workspace (`PaneKind.home`).
+    /// Its kind stands on its Project's workspace (`PaneKind.home`, or its
+    /// rule's `opens = "project"`).
     pub home: bool,
+    /// Where its kind's rule says it opens, by the Pane in front.
+    pub opens: Option<Opens>,
     /// Its Project is no Project: a draft, or a scratch one (ADR 0046).
     pub scratch: bool,
     /// The Pane it is opened from, the one in front where its caller is.
@@ -74,9 +103,14 @@ pub struct Asked {
 ///
 /// What an Agent opens goes into its Thread's Group, while a workspace
 /// shows the Thread; in the row, else, last on its Project's workspace, or,
-/// of no Project, on the top free one. For the rest, in the Flow `free`:
-/// right of the Pane in front, else last on the workspace on screen. In
-/// the row:
+/// of no Project, on the top free one. For the rest, a Pane whose kind's
+/// rule says where it opens goes there, by the Pane in front: right of
+/// it, under it or into its Group (`tiling.toml`; ADR 0127, decision 4).
+/// The rule gives way where there is no Pane in front, and in the row
+/// where that Pane stands on a workspace another Project owns: a rule
+/// never puts a Pane where the row would refuse it. Then, in the Flow
+/// `free`: right of the Pane in front, else last on the workspace on
+/// screen. In the row:
 /// - a Pane whose kind stands on its Project's workspace, a Thread, goes
 ///   last there, or, of no Project, on the top free one;
 /// - with no Pane in front, into its Project's own Group, first on its
@@ -92,15 +126,14 @@ pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
         project,
         grouped,
         home,
+        opens,
         scratch,
         from,
         on,
         by,
     } = asked;
-    let right = |pane| Place::Beside {
-        pane,
-        side: Side::Right,
-    };
+    let beside = |pane, side| Place::Beside { pane, side };
+    let right = |pane| beside(pane, Side::Right);
     let its_workspace = if scratch {
         Place::Free
     } else {
@@ -125,6 +158,18 @@ pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
             index: usize::MAX,
         })
     };
+    if let (Some(opens), Some((pane, at))) = (opens, &at) {
+        let owner = list[at.workspace].project;
+        let theirs = flow == Flow::Row && !scratch && owner.is_some_and(|owner| owner != project);
+        match opens {
+            _ if theirs => {}
+            Opens::Beside => return Some(right(*pane)),
+            Opens::Below => return Some(beside(*pane, Side::Below)),
+            Opens::Group => return Some(Place::Group { pane: *pane }),
+            // Its Project's workspace is the row's to find (`home`).
+            Opens::Project => {}
+        }
+    }
     if flow == Flow::Free {
         return at.map(|(pane, _)| right(pane)).or_else(here);
     }
@@ -311,6 +356,7 @@ mod tests {
             project,
             grouped: false,
             home: false,
+            opens: None,
             scratch: false,
             from,
             on,
@@ -492,6 +538,111 @@ mod tests {
         assert_eq!(place(&list, agents(Flow::Row)), on_its_workspace(other));
         assert_eq!(place(&list, agents(Flow::Free)), right(pane));
         assert_eq!(place(&list, asked(work, Flow::Free, AGENT)), None);
+    }
+
+    #[test]
+    fn a_rule_places_a_pane_by_the_one_in_front_whatever_the_flow() {
+        let (list, work, pane) = one_pane(on_its_workspace);
+        let ruled = |flow, opens| Asked {
+            opens: Some(opens),
+            ..asked(work, flow, from(pane))
+        };
+        let below = Some(Place::Beside {
+            pane,
+            side: Side::Below,
+        });
+        for flow in [Flow::Free, Flow::Row] {
+            assert_eq!(place(&list, ruled(flow, Opens::Beside)), right(pane));
+            assert_eq!(place(&list, ruled(flow, Opens::Below)), below);
+            let group = Some(Place::Group { pane });
+            assert_eq!(place(&list, ruled(flow, Opens::Group)), group);
+        }
+        // Without it, in the row, the Pane goes into its Project's own Group.
+        assert_eq!(place(&list, asked_row(work, pane)), own(work));
+    }
+
+    #[test]
+    fn a_rule_gives_way_with_no_pane_in_front_and_on_another_projects_workspace() {
+        let (list, work, pane) = one_pane(on_its_workspace);
+        let ruled = |asked: Asked| Asked {
+            opens: Some(Opens::Below),
+            ..asked
+        };
+        // No Pane in front, or one that has gone: as the Flow says.
+        assert_eq!(
+            place(&list, ruled(asked(work, Flow::Row, NOTHING))),
+            own(work)
+        );
+        assert_eq!(place(&list, ruled(asked(work, Flow::Free, NOTHING))), None);
+        let gone = from(PaneId::new());
+        assert_eq!(place(&list, ruled(asked(work, Flow::Row, gone))), own(work));
+        // In the row, from a workspace another Project owns, it goes home,
+        // as the row has it; in the Flow free every workspace is free.
+        let other = ProjectId::new();
+        assert_eq!(place(&list, ruled(asked_row(other, pane))), own(other));
+        let free = ruled(asked(other, Flow::Free, from(pane)));
+        assert!(matches!(
+            place(&list, free),
+            Some(Place::Beside {
+                side: Side::Below,
+                ..
+            })
+        ));
+        // One of no Project stands where it is opened, as the row lets it.
+        assert!(
+            place(&list, ruled(scratch(asked_row(other, pane)))).is_some_and(|place| matches!(
+                place,
+                Place::Beside {
+                    side: Side::Below,
+                    ..
+                }
+            ))
+        );
+        // What an Agent opens goes as an Agent's, rule or no rule.
+        let agents = ruled(asked(work, Flow::Row, (Some(pane), None, FOR_AGENT)));
+        assert_eq!(place(&list, agents), on_its_workspace(work));
+    }
+
+    #[test]
+    fn a_rule_says_whether_its_kind_stands_on_its_projects_workspace() {
+        let rule = |opens| Rule {
+            opens: Some(opens),
+            ..Rule::default()
+        };
+        let facts = Facts {
+            home: BTreeSet::from(["t.t".to_owned()]),
+            rules: BTreeMap::from([
+                ("t.t".to_owned(), rule(Opens::Beside)),
+                ("a.a".to_owned(), rule(Opens::Project)),
+                (
+                    "b.b".to_owned(),
+                    Rule {
+                        width: Some("1/3".to_owned()),
+                        opens: None,
+                    },
+                ),
+            ]),
+            ..Facts::default()
+        };
+        // The rule over the kind's own word; a rule that says only a width
+        // leaves the kind's.
+        assert!(!facts.at_home("t.t") && facts.at_home("a.a") && !facts.at_home("b.b"));
+        assert_eq!(facts.opens("t.t"), Some(Opens::Beside));
+        assert_eq!(facts.width("b.b").as_deref(), Some("1/3"));
+        assert_eq!((facts.width("a.a"), facts.opens("c.c")), (None, None));
+        let plain = Facts {
+            home: BTreeSet::from(["t.t".to_owned()]),
+            ..Facts::default()
+        };
+        assert!(plain.at_home("t.t") && !plain.at_home("a.a"));
+        // "project" is the row's: last on its Project's workspace.
+        let (list, work, pane) = one_pane(on_its_workspace);
+        let at_home = Asked {
+            home: facts.at_home("a.a"),
+            opens: facts.opens("a.a"),
+            ..asked_row(work, pane)
+        };
+        assert_eq!(place(&list, at_home), on_its_workspace(work));
     }
 
     #[test]

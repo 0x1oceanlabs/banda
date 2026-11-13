@@ -12,6 +12,7 @@ import machine from "./generated/schema/machine.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
 import sidebar from "./generated/schema/sidebar.schema.json"
 import terminal from "./generated/schema/terminal.schema.json"
+import tiling from "./generated/schema/tiling.schema.json"
 import type { Class } from "./generated/look/Class"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 
@@ -44,6 +45,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "sidebar.toml": sidebar as Schema,
   "browser.toml": browser as Schema,
   "agents.toml": agents as Schema,
+  "tiling.toml": tiling as Schema,
   "harnesses.toml": harnesses as Schema,
   "sharing.toml": sharing as Schema,
   "terminal.toml": terminal as Schema,
