@@ -11,7 +11,7 @@
  * `updates.state`, with its acts; what changed; and when they looked.
  * Each machine decides for itself; the widget only shows and asks.
  *
- *   in    this window's app's update (`window.banda.update`), and what
+ *   in    this window's app's update (the device's `update`), and what
  *         each machine's engine says on `updates.state` (`heard.tsx`)
  *   draws its icon and pill, the worst state over them all, and the
  *         popover with a row for each
@@ -82,6 +82,7 @@ import {
   shortOf,
   UPDATED_FOR,
 } from "./updating"
+import { device } from "../../boot"
 
 /** The notes the popover lists before "Show all". */
 const NOTES = 3
@@ -89,26 +90,11 @@ const NOTES = 3
 /** How long the widget takes to grow into the bar or out of it. */
 const LEAVES_IN = 240
 
-const host = () => window.banda?.update
-
 /** Where this window's app's update is, as main tells it; none outside
  * the desktop. */
 function useUpdate(): Update | undefined {
   const [update, setUpdate] = useState<Update>()
-  useEffect(() => {
-    const update = host()
-    if (!update) return
-    let live = true
-    update.current().then(
-      (now) => live && setUpdate(now),
-      () => {}
-    )
-    const stop = update.listen(setUpdate)
-    return () => {
-      live = false
-      stop()
-    }
-  }, [])
+  useEffect(() => device.update.follow(setUpdate), [])
   return update
 }
 
@@ -158,7 +144,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
           if (!next) {
             setLit(undefined)
             // What changed was seen: the update is `none` again.
-            if (app?.state === "updated") host()?.seen()
+            if (app?.state === "updated") device.update.seen()
           }
         }}
       >
@@ -260,7 +246,7 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
     const follow = () => {
       clearTimeout(timer)
       timer = document.hasFocus()
-        ? setTimeout(() => host()?.seen(), UPDATED_FOR)
+        ? setTimeout(() => device.update.seen(), UPDATED_FOR)
         : undefined
     }
     follow()
@@ -298,7 +284,7 @@ function About({
   const notes = app && "notes" in app ? app.notes : []
   const restart = useRestartThere(engineFor)
   const checkAll = () => {
-    host()?.check()
+    device.update.check()
     for (const { machine } of rows)
       if (machine.host && !machine.away)
         void engineFor(machine.host)
@@ -394,7 +380,7 @@ function WindowRow({ app }: { app: Update | undefined }) {
             </PopoverClose>
             <PopoverClose
               render={<Button size="sm" />}
-              onClick={() => host()?.restart()}
+              onClick={() => device.update.restart()}
             >
               Restart window
             </PopoverClose>
@@ -427,7 +413,11 @@ function WindowRow({ app }: { app: Update | undefined }) {
         <RowGrid data-machine="window">
           {icon}
           {name}
-          <Button variant="outline" size="sm" onClick={() => host()?.now()}>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => device.update.now()}
+          >
             Try again
           </Button>
           <Say bad>{app.reason}</Say>

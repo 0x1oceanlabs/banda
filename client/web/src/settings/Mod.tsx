@@ -25,6 +25,7 @@ import {
 import { cn } from "@banda/ui/lib/utils"
 import { bindPath, KEYS_FILE, type Move, movesOf } from "../actions/actions"
 import { useLookKeys } from "../look"
+import { device } from "../boot"
 
 /** The mods Settings offers first, each with when it fits. */
 const PICKS: readonly { mod: Mod; when: string }[] = [
@@ -62,7 +63,7 @@ export function ModCard() {
   const keys = useLookKeys()
   const now = keys.mod
   const keyFor = useKeyLabel()
-  const settings = window.banda?.settings
+  const settings = device.settings.writes() ? device.settings : undefined
   const { refused, write } = useWrite({ against: now })
   // A mod picked whose moves wait to be seen.
   const [asked, setAsked] = useState<{

@@ -19,6 +19,7 @@ import { PLACES, useProblems } from "../problems/live"
 import { lookingInto } from "../problems/look"
 import type { SectionProps } from "./sections"
 import { Group, Rows } from "./SettingRow"
+import { device } from "../boot"
 
 /** Where the window keeps when the section was last open: for this
  * machine, and for each other by its key in `hosts.toml`. */
@@ -208,7 +209,7 @@ function ProblemRow({
               <Button
                 size="sm"
                 variant="ghost"
-                onClick={() => void window.banda?.problems.logs()}
+                onClick={() => device.problems.logs()}
               >
                 Open logs folder
               </Button>

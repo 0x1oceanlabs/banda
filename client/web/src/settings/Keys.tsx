@@ -19,6 +19,7 @@ import { bindPath, KEYS_FILE, RESET_KEY } from "../actions/actions"
 import { useLookKeys } from "../look"
 import { ModCard } from "./Mod"
 import { RowFrame } from "./SettingRow"
+import { device } from "../boot"
 
 export function Keys({ lit }: { lit?: string }) {
   const keys = useLookKeys()
@@ -36,7 +37,7 @@ export function Keys({ lit }: { lit?: string }) {
         <Button
           variant="outline"
           size="sm"
-          onClick={() => window.banda?.menu.open("actions")}
+          onClick={() => device.menu.open("actions")}
         >
           <KeyboardIcon />
           Open the key sheet
@@ -81,7 +82,7 @@ function Line({
   ask: (on: boolean) => void
 }) {
   const { refused, write } = useWrite({ against: bind })
-  const settings = window.banda?.settings
+  const settings = device.settings.writes() ? device.settings : undefined
 
   // While it asks, the next key pressed is the line's: the line takes it
   // where it is, its action and comment kept. Esc stops.

@@ -25,6 +25,7 @@ import {
 import type { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { actInScope } from "@banda/ui/hooks/use-scope"
 import type { Action, Args } from "@banda/ui/module"
+import { device } from "../boot"
 
 /** The scopes whose keys work with the mod still held too, and the mod. */
 export type Held = { mod: Mod; scopes: ReadonlySet<string> }
@@ -200,8 +201,7 @@ export function bindPath({ scope, ...key }: Bound): string {
 /** Writes `key` to keys.toml, running `action`, or `none` to free it; what
  * was wrong, if it was refused. */
 export function writeBind(key: Bound, action: string): Promise<string[]> {
-  return (
-    window.banda?.settings.set(KEYS_FILE, bindPath(key), tomlOf(action)) ??
-    Promise.resolve([`Only the desktop app writes ${KEYS_FILE}`])
-  )
+  return device.settings.writes()
+    ? device.settings.set(KEYS_FILE, bindPath(key), tomlOf(action))
+    : Promise.resolve([`Only the desktop app writes ${KEYS_FILE}`])
 }

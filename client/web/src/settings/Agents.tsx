@@ -21,6 +21,7 @@ import { terminal } from "@banda/terminal-pane"
 import { PaneMount, RoutingContext, routingOnly } from "../tiling/mount"
 import { throughEngine } from "./machine-settings"
 import type { SectionProps } from "./sections"
+import { device } from "../boot"
 
 /** The Panes a sign-in opens: a terminal, and no other kind. */
 const kinds = terminal.panes
@@ -38,7 +39,7 @@ const fileOf = (engine: Engine, name: string, here: boolean): SettingsFile => {
   return {
     set: (key, value) => writer.set(name, key, value),
     reset: (key) => writer.reset(name, key),
-    reveal: here ? () => void window.banda?.settings.reveal(name) : undefined,
+    reveal: here ? () => device.settings.reveal(name) : undefined,
   }
 }
 

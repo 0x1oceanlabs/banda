@@ -18,6 +18,7 @@ import type {
   HostState,
   HostTest,
   PoppedAsk,
+  Update,
 } from "@banda/core"
 import type { Host } from "@banda/desktop/bridge"
 
@@ -27,6 +28,9 @@ const desktop = (): Host | undefined => window.banda
 /** Why a host's part does nothing without the desktop, in the Person's
  * words, which Settings shows as they are. */
 export const ELSEWHERE = "Only Banda's app reaches other machines."
+
+/** Why a setting is not written without the desktop. */
+const NO_SETTINGS = "Only Banda's app writes the settings."
 
 /** What a host's part answers without the desktop. */
 const elsewhere = () => Promise.reject(new Error(ELSEWHERE))
@@ -181,6 +185,8 @@ export const device = {
   /** The Banda menu, as `banda menu ROUTE` opens it (ADR 0017, decision
    * 7). */
   menu: {
+    /** Opens the Banda menu at `route`, as its key does. */
+    open: (route: string): void => desktop()?.menu.open(route),
     /** Calls `listener` with each route the menu is asked to open at,
      * until it is stopped. */
     listen: (listener: (route: string) => void) =>
@@ -203,15 +209,36 @@ export const device = {
     /** Sets `key` in `file` to `value`, TOML; what was wrong, if refused. */
     set: (file: string, key: string, value: string) =>
       desktop()?.settings.set(file, key, value) ??
-      Promise.resolve(["Only Banda's app writes the settings."]),
+      Promise.resolve([NO_SETTINGS]),
     /** Takes `key` out of `file`; what was wrong, if refused. */
     reset: (file: string, key: string) =>
-      desktop()?.settings.reset(file, key) ??
-      Promise.resolve(["Only Banda's app writes the settings."]),
+      desktop()?.settings.reset(file, key) ?? Promise.resolve([NO_SETTINGS]),
+    /** Moves `key` in `file` to the key `to`, its value and comment
+     * kept; what was wrong, if refused. */
+    rename: (file: string, key: string, to: string) =>
+      desktop()?.settings.rename(file, key, to) ??
+      Promise.resolve([NO_SETTINGS]),
+    /** Shows `file` in the system's file manager, the settings' folder
+     * for none; nothing without the desktop. */
+    reveal: (file: string): void => void desktop()?.settings.reveal(file),
+    /** Whether this device writes the settings' files: the desktop. */
+    writes: (): boolean => desktop() !== undefined,
     /** The themes there are, as `banda look themes` lists them (ADR
      * 0007); none without the desktop. */
     themes: (): Promise<Listed[]> =>
       desktop()?.settings.themes() ?? Promise.resolve([]),
+  },
+  /** What broke in Banda (ADR 0039). */
+  problems: {
+    /** Opens the folder of Banda's logs. */
+    logs: (): void => void desktop()?.problems.logs(),
+  },
+  /** A folder of this device, as its own dialog picks one (ADR 0026). */
+  folder: {
+    /** Asks the Person for a folder, the dialog opening at `at`: its
+     * path, or none as they cancel. */
+    pick: (at: string | null): Promise<string | null> =>
+      desktop()?.folder.pick(at) ?? Promise.resolve(null),
   },
   /** Files on the machine, by their full path (ADR 0073, decision 14). */
   files: {
@@ -237,6 +264,26 @@ export const device = {
   },
   /** Banda's own update (ADR 0041). */
   update: {
+    /** Hands `take` where this window's app's update is now, then each
+     * time it changes; returns how to stop. Nothing without the desktop. */
+    follow: (take: (update: Update) => void): (() => void) => {
+      const update = desktop()?.update
+      if (!update) return () => undefined
+      let on = true
+      update.current().then(
+        (now) => on && take(now),
+        () => undefined
+      )
+      const stop = update.listen((now) => on && take(now))
+      return () => {
+        on = false
+        stop()
+      }
+    },
+    /** The window says it showed what the update brought. */
+    seen: (): void => desktop()?.update.seen(),
+    /** Downloads the version that is out now, and restarts into it. */
+    now: (): void => desktop()?.update.now(),
     check: (): void => desktop()?.update.check(),
     /** Installs the version that is ready and starts it. */
     restart: (): void => desktop()?.update.restart(),
