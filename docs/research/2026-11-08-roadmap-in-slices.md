@@ -88,7 +88,7 @@ The third track (Roma, 2026-11-13). Its rules are [the window](../window.md), it
 
 ### 5. The other stories
 
-A CRM as an App, an Agent asks an Agent, your Banda from a browser, no server of your own (Banda Cloud), a document for two. The look (M7, ADR 0080) is the window track's second pass.
+A CRM as an App, an Agent asks an Agent, your Banda from a browser, no server of your own (Banda Cloud), a document for two. The look (M7, ADR 0080) is the window track's second pass. What no stage holds yet is in [the backlog](2026-11-13-backlog.md).
 
 ## Rework we know of
 
