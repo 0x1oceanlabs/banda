@@ -402,8 +402,12 @@ _Avoid_: Person document; replica.
 **Machine file**:
 A settings file that says what one machine has: its Harnesses, its name,
 its sharing. It is read and written through that machine's engine and
-never copied (ADR 0101, decision 3). A device's own file, how this screen
-looks, is never copied either.
+never copied (ADR 0101, decision 3).
+
+**Device file**:
+A settings file that says how one device works: how this screen looks, the
+`mod` key. It stays on its device and is never copied (ADR 0101, decisions
+3 and 4).
 
 **Query**:
 A read, answered with how fresh it is ("as of"), and safe to repeat (ADR
