@@ -327,8 +327,9 @@ the scroll, the zoom and the workspace on screen (ADR 0025). Say "an App's
 view" or "the client's view".
 
 **Worker**:
-A process on the host that runs an App from elsewhere, with its App's
-pass. In v1 it runs only Apps the Person made or trusts (ADR 0062).
+A process on the host that runs an App an Agent or anyone else wrote. The
+engine starts it and talks to it in lines of JSON, and does its writing
+(ADR 0126). In v1 it runs only Apps the Person made or trusts (ADR 0062).
 
 **Tracer App**:
 The first App on the worker road: a small one an Agent builds for the
