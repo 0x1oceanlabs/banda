@@ -57,6 +57,7 @@ export {
   type Read,
   type Status,
 } from "./engine"
+export { ask as askAtDoor, type Asker, type Asking } from "./door"
 export { newId } from "./ids"
 export { quitAsks, type QuitAsks } from "./quit"
 export type {
