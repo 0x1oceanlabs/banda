@@ -427,6 +427,7 @@ mod tests {
                             ok: Some(tools),
                             error: None,
                             at: None,
+                            as_of: None,
                         };
                         socket.send(say(listed)).await.unwrap();
                         continue;
@@ -438,6 +439,7 @@ mod tests {
                             ok: Some(ok),
                             error: None,
                             at: Some(1),
+                            as_of: None,
                         };
                         socket.send(say(answered)).await.unwrap();
                     }

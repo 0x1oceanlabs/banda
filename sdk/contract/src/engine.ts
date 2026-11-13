@@ -12,7 +12,13 @@ import type { ProjectId } from "./generated/ProjectId"
 import { PROTOCOL } from "./generated/PROTOCOL"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 import { newId } from "./ids"
-import type { Answer, CommandCall, MethodOf, Params } from "./methods"
+import type {
+  Answer,
+  CommandCall,
+  MethodOf,
+  Params,
+  ReadMethod,
+} from "./methods"
 
 export { PROTOCOL }
 
@@ -154,8 +160,63 @@ export class Unreachable extends Error {
   }
 }
 
-/** The engine's answer to one call, whole: its `ok`, and a command's `at`. */
+/** The engine's answer to one call, whole: its `ok`, a command's `at`,
+ * and when it was so, `as_of`. */
 type Result = Extract<EngineFrame, { type: "result" }>
+
+/**
+ * A read's answer, and when it was so (ADR 0082, decision 3; #1226): in
+ * ms since the epoch by this machine's clock, from the engine's `as_of`
+ * less how far its clock is ahead, or as it came, from an engine that
+ * says none. A Pane shows a value from a machine away "as of" then.
+ */
+export type Read<T> = { value: T; as_of: number }
+
+/** Why an act was not done, or may have been: the engine refused it
+ * (`Refused`), its machine was out of reach (`Unreachable`), or the
+ * connection broke (`Lost`). Each says it in words (`problem()`). */
+export type NotDone = Refused | Unreachable | Lost
+
+/**
+ * What an act came to (ADR 0106, laws 4 and 5; #1226): done, with its
+ * answer; refused, not done; or it may have run, as it was on its way as
+ * its machine or the connection went, or the engine says so
+ * (`may_have_run`): the caller looks before it asks again. A switch on
+ * `outcome` that leaves out the third case does not compile where its
+ * result must be whole.
+ */
+export type Outcome<T> =
+  | { outcome: "done"; value: T }
+  | { outcome: "refused"; error: NotDone }
+  | { outcome: "may_have_run"; error: NotDone }
+
+/** The outcome an act's error says, or none for an error no engine and no
+ * link gave, as a bug's, which the caller throws on. */
+export function notDone(
+  error: unknown
+): Exclude<Outcome<never>, { outcome: "done" }> | undefined {
+  const went =
+    error instanceof Refused
+      ? error.refusal.code === "may_have_run"
+      : error instanceof Unreachable || error instanceof Lost
+        ? error.may_have_run
+        : undefined
+  if (went === undefined) return undefined
+  return { outcome: went ? "may_have_run" : "refused", error: error as NotDone }
+}
+
+/** What `act` came to, as an `Outcome`, which it never throws: as
+ * `outcome(engine.command(...))`, or `engine.commandAt` for its `at`. An
+ * error that is no outcome, as a bug's, it throws. */
+export async function outcome<T>(act: Promise<T>): Promise<Outcome<T>> {
+  try {
+    return { outcome: "done", value: await act }
+  } catch (error) {
+    const not = notDone(error)
+    if (not) return not
+    throw error
+  }
+}
 
 type Pending = {
   resolve: (result: Result) => void
@@ -438,6 +499,26 @@ export class Engine {
     options: { project?: ProjectId; once?: boolean } = {}
   ): Promise<Answer<M>> {
     return this.#call(method, params, options)
+  }
+
+  /**
+   * Reads, as {@link call} does a method that reads, and gives its answer
+   * with when it was so (`Read`).
+   */
+  async read<M extends ReadMethod>(
+    method: M,
+    params: Params<M>,
+    options: { project?: ProjectId; once?: boolean } = {}
+  ): Promise<Read<Answer<M>>> {
+    const result = await this.#ask(method, params, options)
+    const said = result.as_of?.at
+    return {
+      value: (result.ok ?? null) as Answer<M>,
+      as_of:
+        said === undefined
+          ? Date.now()
+          : Math.round(said - (this.#offset ?? 0)),
+    }
   }
 
   async #call<T>(

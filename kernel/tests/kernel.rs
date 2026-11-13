@@ -2172,7 +2172,11 @@ async fn the_welcome_lists_the_apps_and_apps_describe_says_their_methods() {
 
     let describe = json!({ "type": "call", "id": 1, "method": "apps.describe" });
     say(&mut socket, describe).await;
-    let answer = next(&mut socket).await;
+    let mut answer = next(&mut socket).await;
+    // Every answer says when it was so, by the engine's clock.
+    let as_of = answer["as_of"]["at"].as_i64().expect("an as_of");
+    assert!((now_ms() - as_of).abs() < 60_000, "{answer}");
+    answer.as_object_mut().unwrap().remove("as_of");
     assert_eq!(
         answer,
         json!({ "type": "result", "id": 1, "ok": [

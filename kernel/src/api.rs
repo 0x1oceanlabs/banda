@@ -13,7 +13,11 @@
 //!    versions, `apps` (ADR 0082, decision 14), whose methods
 //!    `apps.describe` says.
 //! 2. `call` runs a method and gets one `result` with the same `id`; a
-//!    command's carries its place in the log, `at` (ADR 0082, decision 4).
+//!    command's carries its place in the log, `at` (ADR 0082, decision 4),
+//!    and every one with `ok` when it was so, `as_of` (decision 3). A
+//!    client reads a read's as `Read`, and an act's, a command's or a call
+//!    that acts, as its `Outcome`: done, refused, or `may_have_run`
+//!    (`sdk/contract`, #1226).
 //!    A connection's commands to one scope, this machine's or a Project's,
 //!    wait in one queue: each starts once the one before it answered, so
 //!    they commit, and answer, in the order sent. A client sends the next
@@ -219,6 +223,12 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional, type = "number")]
         at: Option<i64>,
+        /// When the engine answered, by its machine's clock: what a read
+        /// said was so as of then (ADR 0082, decision 3). Every answer
+        /// with `ok` carries it; an engine from before it says none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        as_of: Option<AsOf>,
     },
     Event {
         #[ts(type = "number")]
@@ -251,6 +261,17 @@ pub enum EngineFrame {
         #[ts(type = "number")]
         time: i64,
     },
+}
+
+/// When an answer was so, by the engine's machine's clock (ADR 0082,
+/// decision 3). With a client's offset from that clock, as its `pong`s
+/// say it, the client says "as of 14:02" by its own.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[ts(export)]
+pub struct AsOf {
+    /// In ms since the epoch.
+    #[ts(type = "number")]
+    pub at: i64,
 }
 
 /// Who a connection is: the identity port (ADR 0001, decision 3). Here the
@@ -408,12 +429,14 @@ fn answered(id: u64, answer: Result<Answer, Refusal>) -> Outgoing {
             ok: Some(value),
             error: None,
             at,
+            as_of: Some(AsOf { at: now_ms() }),
         },
         Err(error) => EngineFrame::Result {
             id,
             ok: None,
             error: Some(error),
             at: None,
+            as_of: None,
         },
     };
     frame.into()

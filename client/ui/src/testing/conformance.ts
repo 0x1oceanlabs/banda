@@ -34,6 +34,7 @@
 import {
   Engine,
   type JsonValue,
+  notDone,
   type ProjectId,
   type Refusal,
   Unreachable,
@@ -249,12 +250,7 @@ function recording(side: Side, url: string) {
         },
         (error: Error) => {
           if (state.over) return
-          one.ended =
-            error instanceof Unreachable
-              ? error.may_have_run
-                ? "may_have_run"
-                : "refused"
-              : error.name
+          one.ended = notDone(error)?.outcome ?? error.name
           reject(error)
         }
       )
