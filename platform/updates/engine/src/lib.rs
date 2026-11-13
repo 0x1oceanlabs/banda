@@ -21,7 +21,9 @@
 //! the looks then take nothing above it until the Person takes the newest
 //! again: the choice is kept in `engine/chosen`.
 
+pub mod daemon;
 pub mod feed;
+pub mod guard;
 pub mod restart;
 pub mod take;
 
@@ -125,7 +127,7 @@ pub struct Updated {
 
 /// The file in `engine/` that keeps how the engine last moved, for the
 /// copy it moved onto: `{ "to": …, "from": …, "at": …, "idle": … }`.
-const MOVED: &str = "moved";
+pub(crate) const MOVED: &str = "moved";
 
 /// How the engine that runs `version` came to it, as `engine/moved`
 /// says, when it moved onto it.
@@ -193,6 +195,9 @@ struct Held {
     /// decision 2); none where this process is `banda-update` itself, or
     /// a test that looks in its own.
     program: Option<PathBuf>,
+    /// The service it runs as beside the engine's, which looks every hour
+    /// and guards a move; none where the engine looks itself.
+    service: Option<daemon::Service>,
 }
 
 /// What the restart reads, and how it asks for one.
@@ -210,7 +215,7 @@ const CHOSEN: &str = "chosen";
 impl Updates {
     pub fn new(banda: Banda, take: watch::Receiver<TakeUpdates>) -> Updates {
         let chosen = chosen(&banda.engine);
-        let copies = take::copies(&banda.engine);
+        let copies = takeable(&banda.engine);
         let ready = match &chosen {
             Some(chosen) => {
                 (*chosen != banda.version && copies.contains(chosen)).then(|| chosen.clone())
@@ -236,6 +241,17 @@ impl Updates {
             started: AtomicBool::new(false),
             restarting: None,
             program: None,
+            service: None,
+        }))
+    }
+
+    /// Runs `banda-update` as its own service, `service`, once the engine
+    /// opens: it then looks every hour in place of the engine.
+    pub fn serving(self, service: daemon::Service) -> Updates {
+        let held = Arc::into_inner(self.0).expect("set before it is shared");
+        Updates(Arc::new(Held {
+            service: Some(service),
+            ..held
         }))
     }
 
@@ -362,8 +378,8 @@ impl Updates {
             return;
         }
         let running = &self.0.banda.version;
-        let Some(newest) = (take::copies(&self.0.banda.engine).into_iter())
-            .find(|copy| feed::is_above(copy, running))
+        let Some(newest) =
+            (takeable(&self.0.banda.engine).into_iter()).find(|copy| feed::is_above(copy, running))
         else {
             return;
         };
@@ -393,9 +409,14 @@ impl Updates {
         let published = (releases.iter())
             .find(|release| release.tag_name.strip_prefix('v') == Some(newest.as_str()))
             .and_then(feed::Release::published);
+        let bad = guard::bad(&banda.engine);
         for (release, version) in above {
             if !feed::is_above(&version, &have) {
                 break;
+            }
+            // One that did not start is never taken again.
+            if bad.contains(&version) {
+                continue;
             }
             if let Ok(found) = self.bundle(which, release, &version).await? {
                 return Ok((newest, published, Some(found)));
@@ -574,16 +595,7 @@ impl Updates {
             let Ok(said) = serde_json::from_str::<UpdateState>(&line) else {
                 continue;
             };
-            self.0.state.send_modify(|state| {
-                state.newest.clone_from(&said.newest);
-                state.looked = said.looked;
-                state.taking.clone_from(&said.taking);
-                state.ready.clone_from(&said.ready);
-                state.chosen.clone_from(&said.chosen);
-                state.failed.clone_from(&said.failed);
-                state.off.clone_from(&said.off);
-                state.published = said.published;
-            });
+            self.heard(&said);
             last = Some(());
         }
         let status = child
@@ -595,6 +607,64 @@ impl Updates {
         }
         Ok(self.0.state.borrow().clone())
     }
+}
+
+impl Updates {
+    /// Takes what `banda-update` said into the state: what the look and
+    /// the take own, never what the engine does (what the copy waits for,
+    /// how the engine came to its version, machine.toml's word).
+    fn heard(&self, said: &UpdateState) {
+        if said.running != self.0.banda.version {
+            return;
+        }
+        self.0.state.send_modify(|state| {
+            state.newest.clone_from(&said.newest);
+            state.looked = said.looked;
+            state.taking.clone_from(&said.taking);
+            state.ready.clone_from(&said.ready);
+            state.chosen.clone_from(&said.chosen);
+            state.failed.clone_from(&said.failed);
+            state.off.clone_from(&said.off);
+            state.published = said.published;
+        });
+    }
+
+    /// Starts `banda-update run` as its own service, where the engine is
+    /// its machine's service too and takes updates: says whether it runs.
+    async fn service_started(&self) -> bool {
+        let (Some(program), Some(service), Some(restarting)) =
+            (&self.0.program, &self.0.service, &self.0.restarting)
+        else {
+            return false;
+        };
+        if *restarting.restart.moves() != restart::Moves::Itself || self.off().is_some() {
+            return false;
+        }
+        daemon::start(program, &self.0.banda, service).await
+    }
+
+    /// Follows what the service keeps of each look (`engine/state.json`).
+    async fn follow_service(self) {
+        let mut seen = None;
+        loop {
+            if let Some((said, when)) = guard::kept_state(&self.0.banda.engine)
+                && seen != Some(when)
+            {
+                seen = Some(when);
+                self.heard(&said);
+            }
+            tokio::time::sleep(Duration::from_secs(10)).await;
+        }
+    }
+}
+
+/// The copies in place that may be moved onto: all but those that did
+/// not start (`guard::bad`).
+fn takeable(engine: &std::path::Path) -> Vec<String> {
+    let bad = guard::bad(engine);
+    (take::copies(engine).into_iter())
+        .filter(|copy| !bad.contains(copy))
+        .collect()
 }
 
 /// The version the Person chose, as `engine/chosen` keeps it.
@@ -742,7 +812,7 @@ impl Updates {
         if version == NEWEST {
             let _ = std::fs::remove_file(engine.join(CHOSEN));
             // The newest copy in place waits again, not the one chosen.
-            let ready = (take::copies(engine).into_iter())
+            let ready = (takeable(engine).into_iter())
                 .find(|copy| feed::is_above(copy, &self.0.banda.version));
             self.0.state.send_modify(|state| {
                 state.chosen = None;
@@ -906,7 +976,7 @@ impl Updates {
 }
 
 /// The engine's program in its copy's folder.
-const PROGRAM: &str = if cfg!(windows) { "banda.exe" } else { "banda" };
+pub(crate) const PROGRAM: &str = if cfg!(windows) { "banda.exe" } else { "banda" };
 
 /// Each value of `changes`, the current one first, as a stream's pieces.
 fn follow(mut changes: watch::Receiver<UpdateState>) -> Stream {
@@ -969,6 +1039,12 @@ impl Module for Updates {
         });
         let updates = self.clone();
         tokio::spawn(async move {
+            // The service looks every hour where it runs, and the engine
+            // follows what it keeps; where it does not, the engine looks.
+            if updates.service_started().await {
+                updates.follow_service().await;
+                return;
+            }
             tokio::time::sleep(updates.0.first).await;
             loop {
                 updates.look().await;
