@@ -59,7 +59,10 @@ description in words. What is kept is in md, html and json files.
   separate part and may be missing. By default Banda gives an App a web
   screen built with shadcn/ui, shown on every client: the desktop, the web
   and the phone. Threads, the terminal, the browser, files and git are
-  ordinary Apps with no special rights.
+  ordinary Apps with no special rights: they ship with Banda, as `ls` and
+  `cp` ship with an operating system, and go through the same contract as
+  any other App. Today Threads still has places of its own in the kernel;
+  this principle is where it is going.
 - **The check:** an App with no screen is fully useful through an Agent. An
   Agent writes a working App in one Thread.
 
@@ -67,8 +70,9 @@ description in words. What is kept is in md, html and json files.
 
 - **The code:** all work and all state live in the engine. A client shows
   and asks. It joins the machines it reaches, in one router that every
-  client shares (ADR 0124), and does no work by itself: it keeps no queues
-  and decides no notifications.
+  client shares (ADR 0124), and does no work by itself. The only thing it
+  keeps is what waits for a machine that is away (ADR 0105), and it decides
+  no notifications.
 - **The check:** close the window and nothing is lost or stops. A new
   client, the web or a phone, needs only screens; it repeats no logic.
 
@@ -158,8 +162,10 @@ JSON with a description in words (principle 2).
 
 - **Banda's own Apps** (Threads, the terminal, Files, Git, the browser): the
   part on the machine is Rust inside the engine, and the screens are
-  TypeScript live components shipped with the client. That stays: it is
-  Banda's core, as a kernel is an operating system's.
+  TypeScript live components shipped with the client. They ship with
+  Banda, as `ls` and `cp` ship with an operating system, but they are not
+  its kernel: they go through the same contract as any other App, with no
+  special rights (principle 3).
 - **Apps an Agent or anyone else writes:** a separate program on the machine,
   a worker. The engine starts it and talks to it in lines of JSON: "call
   `add_client` with this". The App answers "here is the answer, and here is

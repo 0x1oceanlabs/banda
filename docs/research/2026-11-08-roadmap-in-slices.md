@@ -10,7 +10,7 @@ _Amended 2026-11-12 and 2026-11-13: stages 3 to 5 are replaced by the order of [
 - **Each slice is built in the end shape**: actions, not props; hooks over the hosts store; the seams H5 fills, such as `KeptHosts.sessionOf`. The refactor then moves code instead of rewriting it.
 - **Foundation only when a slice needs it.** The slice names the vision item it pulls in, as T-pred pulled A8 and seen on the host pulled E8 (ADR 0096).
 - **One short ADR per stage, with a mockup**, and Roma's decisions gathered in one list rather than asked one by one.
-- **Three tracks at once, no more** (Roma, 2026-11-13; two before). One builds story 1: hosts, the engine and the one road. One builds story 2: an App an Agent writes. One builds the window: ADR 0087, then `client/core` (ADR 0089), then the look (ADR 0080).
+- **Three tracks at once, no more** (Roma, 2026-11-13; two before). One builds story 1: hosts, the engine and the one road. One builds story 2: an App an Agent writes. One builds the window: ADR 0087, then `client/core` (ADR 0089), then the look (ADR 0080). Joining the machines in `client/core` (SE3, SE4) is story 1's, so the window track leaves `client/core/src/hosts.ts` and `client/desktop/src/hosts.ts` to it.
 - **Frozen until a stage needs them:** Windows, ADR 0092's later steps, CI work, iroh, Banda Cloud, isolating Agents (ADR 0123). Apps from elsewhere come back with story 2.
 
 ## Where we are
