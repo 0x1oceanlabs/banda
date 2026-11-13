@@ -878,6 +878,7 @@ dependencies = [
  "banda-kernel",
  "banda-machines",
  "base64 0.22.1",
+ "clap",
  "flate2",
  "reqwest",
  "serde",

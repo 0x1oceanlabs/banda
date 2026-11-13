@@ -189,6 +189,10 @@ struct Held {
     /// How it moves onto a copy, and what it waits for; none in a test
     /// that only looks.
     restarting: Option<Restarting>,
+    /// `banda-update`, which looks and takes for the engine (ADR 0131,
+    /// decision 2); none where this process is `banda-update` itself, or
+    /// a test that looks in its own.
+    program: Option<PathBuf>,
 }
 
 /// What the restart reads, and how it asks for one.
@@ -231,6 +235,17 @@ impl Updates {
             looking: tokio::sync::Mutex::new(()),
             started: AtomicBool::new(false),
             restarting: None,
+            program: None,
+        }))
+    }
+
+    /// Looks and takes through the `banda-update` at `program`, in a
+    /// process of its own, not in this one.
+    pub fn through(self, program: PathBuf) -> Updates {
+        let held = Arc::into_inner(self.0).expect("set before it is shared");
+        Updates(Arc::new(Held {
+            program: Some(program),
+            ..held
         }))
     }
 
@@ -295,6 +310,12 @@ impl Updates {
     /// when it is above the one running and the one ready: what
     /// `updates.check` and each hour's look do.
     pub async fn look(&self) -> UpdateState {
+        if self.0.program.is_some() {
+            return self.ask(&["check"]).await.unwrap_or_else(|why| {
+                self.0.state.send_modify(|state| state.failed = Some(why));
+                self.0.state.borrow().clone()
+            });
+        }
         let _one = self.0.looking.lock().await;
         if let Some(off) = self.off() {
             self.0.state.send_modify(|state| {
@@ -511,6 +532,71 @@ impl Updates {
     }
 }
 
+impl Updates {
+    /// Runs `banda-update` with `command` for this Banda, and takes what
+    /// it says at each change into the state: what the look and the take
+    /// own, never what the engine does (what the copy waits for, how the
+    /// engine came to its version, machine.toml's word). Answers its
+    /// last word; fails when it could not run, or said nothing.
+    async fn ask(&self, command: &[&str]) -> Result<UpdateState, String> {
+        use tokio::io::AsyncBufReadExt;
+        let program = self.0.program.as_ref().ok_or("no banda-update")?;
+        let _one = self.0.looking.lock().await;
+        let banda = &self.0.banda;
+        let takes = serde_json::to_value(*self.0.take.borrow())
+            .ok()
+            .and_then(|said| said.as_str().map(str::to_owned))
+            .unwrap_or_else(|| "when-idle".to_owned());
+        let mut run = tokio::process::Command::new(program);
+        run.args(command)
+            .args(["--running", &banda.version])
+            .args(["--channel", banda.channel])
+            .args(["--folder", banda.folder])
+            .arg("--engine")
+            .arg(&banda.engine)
+            .args(["--takes", &takes])
+            .stdin(std::process::Stdio::null())
+            .stdout(std::process::Stdio::piped())
+            .kill_on_drop(true);
+        if let Some(own) = &banda.program {
+            run.arg("--program").arg(own);
+        }
+        if self.0.releases != RELEASES {
+            run.args(["--releases", &self.0.releases]);
+        }
+        let mut child = run
+            .spawn()
+            .map_err(|e| format!("banda-update did not start ({}): {e}", program.display()))?;
+        let out = child.stdout.take().ok_or("banda-update has no stdout")?;
+        let mut lines = tokio::io::BufReader::new(out).lines();
+        let mut last = None;
+        while let Ok(Some(line)) = lines.next_line().await {
+            let Ok(said) = serde_json::from_str::<UpdateState>(&line) else {
+                continue;
+            };
+            self.0.state.send_modify(|state| {
+                state.newest.clone_from(&said.newest);
+                state.looked = said.looked;
+                state.taking.clone_from(&said.taking);
+                state.ready.clone_from(&said.ready);
+                state.chosen.clone_from(&said.chosen);
+                state.failed.clone_from(&said.failed);
+                state.off.clone_from(&said.off);
+                state.published = said.published;
+            });
+            last = Some(());
+        }
+        let status = child
+            .wait()
+            .await
+            .map_err(|e| format!("banda-update: {e}"))?;
+        if last.is_none() {
+            return Err(format!("banda-update said nothing and ended: {status}"));
+        }
+        Ok(self.0.state.borrow().clone())
+    }
+}
+
 /// The version the Person chose, as `engine/chosen` keeps it.
 fn chosen(engine: &std::path::Path) -> Option<String> {
     let said = std::fs::read_to_string(engine.join(CHOSEN)).ok()?;
@@ -639,6 +725,18 @@ impl Updates {
     /// Puts `version` in place and keeps it as chosen; `newest` drops the
     /// choice and looks again.
     pub async fn choose(&self, version: &str) -> Result<UpdateState, Refusal> {
+        if self.0.program.is_some() {
+            let state = self
+                .ask(&["take", version])
+                .await
+                .map_err(Refusal::conflict)?;
+            return match state.failed {
+                Some(failed) if state.chosen.as_deref() != Some(version) => {
+                    Err(Refusal::conflict(failed))
+                }
+                _ => Ok(state),
+            };
+        }
         let version = version.to_owned();
         let engine = &self.0.banda.engine;
         if version == NEWEST {

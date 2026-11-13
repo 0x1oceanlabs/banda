@@ -413,3 +413,35 @@ async fn a_newer_copy_the_window_put_in_place_is_ready_with_no_download() {
     std::fs::write(copy.join("version"), "banda 0.1.0-dev.9 (build o)\n").unwrap();
     assert_eq!(older.updates.look().await.ready, None);
 }
+
+/// The engine looks and takes through `banda-update`, a program of its
+/// own (ADR 0131, decision 2): what it says reaches the engine's state.
+#[tokio::test]
+async fn banda_update_takes_the_newest_in_a_process_of_its_own() {
+    let machine = machine_running(
+        "dev",
+        "0.1.0-dev.10",
+        |at, served| {
+            let newest = publish(
+                served,
+                at,
+                "0.1.0-dev.12",
+                bundle("banda 0.1.0-dev.12 (build b)"),
+                None,
+            );
+            format!("[{newest}]")
+        },
+        |_| None,
+    )
+    .await;
+    let updates = (machine.updates).through(PathBuf::from(env!("CARGO_BIN_EXE_banda-update")));
+    let state = updates.look().await;
+    assert_eq!(state.failed, None, "{state:?}");
+    assert_eq!(state.newest.as_deref(), Some("0.1.0-dev.12"));
+    assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.12"));
+    assert!(state.looked.is_some());
+    assert!(machine.engine.join("0.1.0-dev.12/banda").is_file());
+    // A version chosen goes through it too, and one it has not is refused.
+    let refused = updates.choose("0.1.0-dev.99").await;
+    assert!(refused.is_err(), "{refused:?}");
+}

@@ -26,6 +26,13 @@ use banda_pulls::Pulls;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_updates::Updates;
+
+/// The updater's program, beside the engine's (ADR 0131).
+const UPDATER: &str = if cfg!(windows) {
+    "banda-update.exe"
+} else {
+    "banda-update"
+};
 use banda_updates::restart::Restart;
 use banda_workspaces::Workspaces;
 
@@ -221,11 +228,25 @@ mod build {
             program: std::env::current_exe().ok(),
             engine: host.places.data.join("engine"),
         };
-        Updates::new(banda, host.machine.updates()).restarts(
+        // `banda-update` beside the engine looks and takes, in a process
+        // of its own (ADR 0131, decision 2); a copy that carries none
+        // looks in this one.
+        let helper = (banda.program.as_ref())
+            .and_then(|program| program.parent())
+            .map(|folder| folder.join(UPDATER))
+            .filter(|helper| helper.is_file());
+        let updates = Updates::new(banda, host.machine.updates()).restarts(
             host.restart.clone(),
             host.working.count(),
             host.hands.now(),
-        )
+        );
+        match helper {
+            Some(helper) => updates.through(helper),
+            None => {
+                tracing::info!("no banda-update beside the engine: it looks for updates itself");
+                updates
+            }
+        }
     }
 
     /// The Pane kinds that open as a Group of their own, as the window

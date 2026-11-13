@@ -96,7 +96,10 @@ export const CARRIED = "adapters"
  * `banda.exe` and its copy's (the harnesses' `carried::NODE_FOLDER`). */
 export const NODE_FOLDER = "node"
 /** What a copy carries beside its program, each folder of it whole. */
-const BESIDE = [CARRIED, NODE_FOLDER]
+/** The updater, a program of its own beside the engine (ADR 0131). */
+const UPDATER =
+  process.platform === "win32" ? "banda-update.exe" : "banda-update"
+const BESIDE = [CARRIED, NODE_FOLDER, UPDATER]
 /** The file beside a copy that names the app's Electron, which runs the
  * adapters as Node (the harnesses' `carried::ELECTRON`). */
 export const ELECTRON = "electron"

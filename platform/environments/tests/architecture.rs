@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 17] = [
+const ON_THE_HOST: [(&str, usize, &str); 18] = [
     (
         "engine/src/moving.rs",
         1,
@@ -39,6 +39,12 @@ const ON_THE_HOST: [(&str, usize, &str); 17] = [
         1,
         "runs a new copy of the engine it took, by its own path, with --version, to check it says \
          the version its feed named before it goes into place (ADR 0119, decision 5)",
+    ),
+    (
+        "platform/updates/engine/src/lib.rs",
+        1,
+        "runs banda-update, the updater's own program beside the engine's, to look and take for \
+         the engine (ADR 0131, decision 2)",
     ),
     (
         "kernel/src/host.rs",

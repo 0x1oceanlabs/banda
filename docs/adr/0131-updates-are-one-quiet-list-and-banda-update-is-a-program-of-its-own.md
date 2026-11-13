@@ -61,21 +61,25 @@ minimal and clear for the user".
    - **The words:** Update, Updating, Up to date, Away, Couldn't update.
      Never engine, restart, token or frame.
 2. **`banda-update` is a program of its own**, as the vision's parts are
-   programs (§4.1): one job, its own process, its own unit.
-   - It runs as its own systemd user unit and timer, or launchd job, beside
-     the engine's, never inside it. It reads the channel's feed,
-     downloads, checks and puts the copy in `<data>/engine/<version>/`,
-     then points `<data>/engine/current` at it.
-   - **It asks the engine, it does not replace it.** The engine answers
-     whether anything runs (Turns, terminals, recent keys); once nothing
-     does, `banda-update` restarts the engine's unit through systemd or
-     launchd, which starts `current`. The engine no longer `exec`s a copy.
-   - It updates the app too: the AppImage swap and brew move out of
-     Electron main. The window only shows its state.
-   - What it says is a file, `<state>/updates.json`, and its log. The
-     engine serves that file on `updates.state` as now, so the widget and
-     `banda update` read the same thing.
-   - `banda update` calls it: `--check`, `--now`, `--version <v>`.
+   programs (§4.1). The engine still updates itself, by itself, once
+   nothing runs; what changes is which program does the work.
+   - **It looks and takes.** It reads the channel's feed, downloads the
+     newest engine, checks it and puts it beside the running one in
+     `<data>/engine/<version>/`. It ships beside `banda` in every copy:
+     in the app, in the engine's bundle, and in the copies kept.
+   - **Its own service.** `banda-update run` runs as its own systemd user
+     unit, or launchd job, beside the engine's, never inside it: it looks
+     every hour, and asks the engine whether anything runs (Turns,
+     terminals, recent keys).
+   - **The switch stays the engine's.** Once nothing runs, it asks the
+     engine to move onto the new copy, which the engine does in its own
+     process, as now, keeping its port and its secret (#1702).
+   - **It puts back what does not start.** It waits for the engine to
+     answer on the new version. One that does not is marked bad in
+     `<data>/engine/`, never taken again, and the engine goes back to the
+     copy it ran.
+   - `banda update` and the widget's Check now and Update reach it
+     through the engine, whose `updates.*` methods keep their shape.
 3. **The contract stays.** `updates.state`, `updates.check` and
    `updates.restart` keep their shape; only who does the work moves.
 
@@ -84,15 +88,15 @@ minimal and clear for the user".
 | Step | What |
 |---|---|
 | 0 | #1702: the window keeps its engine across a move (done) |
-| 1 | This ADR and the widget as variant A (decision 1) |
-| 2 | `banda-update`: its crate and binary, the feed, take and check moved from `platform/updates/engine`; packed beside `banda` |
-| 3 | Its unit and timer (Linux), its job (macOS); the engine's restart through the unit; the engine's `exec` goes |
-| 4 | The app's update moves from Electron main into it |
-| 5 | `platform/updates` keeps only the engine's answer of what runs and `updates.state` served from the file |
+| 1 | This ADR and the widget as variant A (#1711) |
+| 2 | `banda-update check` and `take`: the looks and takes run in it, the engine asks it; it ships beside `banda` |
+| 3 | `banda-update run` as its own unit or job: the hourly look, the wait for nothing running, the move asked of the engine, and putting back a copy that does not start |
+| 4 | The app's own update (AppImage, brew) moves into it from Electron main |
 
 ## Consequences
 
-- An update no longer depends on the program it replaces staying sane.
+- An update no longer depends on the program it replaces staying sane:
+  a copy that does not start is put back.
 - The window shows and asks; it decides and downloads nothing.
 - A release carries one more small binary.
 - Windows keeps its updates through the app until ADR 0090's service.
