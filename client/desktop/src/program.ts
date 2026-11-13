@@ -95,13 +95,17 @@ export const CARRIED = "adapters"
 /** The folder of the Node the Windows app carries to run them, beside its
  * `banda.exe` and its copy's (the harnesses' `carried::NODE_FOLDER`). */
 export const NODE_FOLDER = "node"
+/** The folder of the window's page the app carries, `web/dist` in it,
+ * beside its `banda` and its copy's: where the engine looks for the page
+ * it serves at its door (`engine/src/page.rs`; ADR 0124, SE5). */
+export const PAGE_FOLDER = "web"
 /** The updater, a program of its own beside the engine (ADR 0131): a
  * file, not a folder. */
 export const UPDATER =
   process.platform === "win32" ? "banda-update.exe" : "banda-update"
 /** What a copy carries beside its program: each folder of it whole, and
  * each file. */
-const BESIDE = [CARRIED, NODE_FOLDER, UPDATER]
+const BESIDE = [CARRIED, NODE_FOLDER, PAGE_FOLDER, UPDATER]
 /** The file beside a copy that names the app's Electron, which runs the
  * adapters as Node (the harnesses' `carried::ELECTRON`). */
 export const ELECTRON = "electron"
@@ -492,7 +496,8 @@ const naming = (kept: string, electron: string | undefined) =>
 
 /** Whether `copy` is whole: there, as long as `program`, and beside each
  * file the app carries beside `program` (`BESIDE`, a file or each file of
- * a folder), as long as it. A copy made before the app carried them is
+ * a folder), as long as it; a folder inside one, as the page's build,
+ * only has to be there. A copy made before the app carried them is
  * not. */
 function whole(copy: string, program: string): boolean {
   const carried = BESIDE.flatMap((name) => {
@@ -520,10 +525,12 @@ function kindOf(path: string): "file" | "folder" | undefined {
   }
 }
 
-/** Whether `kept` is there, as long as `packed`. */
+/** Whether `kept` is there, as long as `packed`; a folder, whose size
+ * says nothing of what it holds, only there. */
 function sameSize(kept: string, packed: string): boolean {
   try {
-    return statSync(kept).size === statSync(packed).size
+    const [has, had] = [statSync(kept), statSync(packed)]
+    return had.isDirectory() ? has.isDirectory() : has.size === had.size
   } catch {
     return false
   }
