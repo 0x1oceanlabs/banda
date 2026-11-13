@@ -39,8 +39,9 @@ pub(crate) struct MachineFile {
     /// its battery.
     pub icon: Option<MachineIcon>,
     /// Start Banda at login: its engine starts as you log in, so its
-    /// Agents and other machines find it running. Off, it starts as you
-    /// open Banda. On by default; macOS has it so far, Linux next.
+    /// Agents and other machines find it running; on Linux with linger on,
+    /// as the machine starts. Off, it starts as you open Banda. On by
+    /// default; macOS and Linux have it so far.
     pub start_at_login: Option<bool>,
     /// Stay awake while Agents work: this machine does not idle-sleep
     /// while a Turn runs here, and for 10 minutes after, so a message

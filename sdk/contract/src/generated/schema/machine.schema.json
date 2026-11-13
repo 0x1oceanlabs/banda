@@ -16,7 +16,7 @@
       "x-class": "machine"
     },
     "start-at-login": {
-      "description": "Start Banda at login: its engine starts as you log in, so its\nAgents and other machines find it running. Off, it starts as you\nopen Banda. On by default; macOS has it so far, Linux next.",
+      "description": "Start Banda at login: its engine starts as you log in, so its\nAgents and other machines find it running; on Linux with linger on,\nas the machine starts. Off, it starts as you open Banda. On by\ndefault; macOS and Linux have it so far.",
       "type": "boolean",
       "x-class": "machine"
     },

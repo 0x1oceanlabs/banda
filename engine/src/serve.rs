@@ -18,7 +18,10 @@
 //! lock, and where it started again after a crash three times within a
 //! minute. It opens its app, hidden, when it has none, from once it is
 //! whole until it is asked to stop (`service/app.rs`). On macOS it keeps
-//! its job's plist where "Start Banda at login" says, the job or not.
+//! its job's plist where "Start Banda at login" says, the job or not; on
+//! Linux, as its systemd unit's own process, its unit's file, enabled
+//! while the setting is on and naming its own program
+//! (`service/unit_file.rs`).
 //!
 //! While its Agents work, and while plugged in if the Person says so, it
 //! keeps its machine from idle sleep, until it stops (ADR 0097).
@@ -31,7 +34,7 @@
 use crate::apps::{self, HostContext};
 use crate::places::{FOLDER, HOST, Places, Running, from_checkout};
 use crate::run::{self, Before, Left, Run};
-use crate::service::{self, app, launchd};
+use crate::service::{self, app, launchd, unit_file};
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
@@ -193,6 +196,14 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // goes off.
     if cfg!(target_os = "macos") {
         launchd::follow_login(&places, machine.starts_at_login());
+    } else if let Some(unit) = running.unit.as_deref() {
+        // As its unit's own process, so its unit's file names this copy.
+        unit_file::follow_login(
+            &places,
+            unit,
+            pipe.program.clone(),
+            machine.starts_at_login(),
+        );
     }
     // The Turns that run, which hold the machine awake as machine.toml
     // says; the system lets the hold go too, should the engine crash.

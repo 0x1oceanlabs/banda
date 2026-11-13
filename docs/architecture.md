@@ -47,9 +47,21 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   session, `<folder>-engine` (`banda-engine`, `banda-dev-engine`; a state
   folder other than the default adds a short hash of it). Any client
   starts it when no engine answers: the window, and every command that
-  reaches the engine; it is started with `systemd-run --user`, then
-  waited for while its unit runs, for up to two minutes, as it opens its
-  Projects first. It gets the user manager's environment, never its
+  reaches the engine, then waits for it while its unit runs, for up to
+  two minutes, as it opens its Projects first. While "Start Banda at
+  login" (`machine.toml`'s `start-at-login`, on by default) is on, the
+  default state folder's unit is a file,
+  `~/.config/systemd/user/<folder>-engine.service`, enabled with a link
+  in `default.target.wants`, so the user manager starts it at login, and
+  from boot where linger is on (ADR 0086, step 8); a client writes it and
+  starts it with `systemctl --user start`, and the engine rewrites it with
+  its own program each time it starts, and takes it away once the setting
+  goes off (`engine/src/service/unit_file.rs`). Otherwise, and for a
+  test's, a trial's or a checkout's engine, it is started with
+  `systemd-run --user`, a transient unit. What the starter's session
+  lends it, below, goes in a drop-in under the runtime folder, never in
+  the file, so a boot never hands it a display or ssh agent that has
+  gone. `banda stop` stops the unit and leaves it enabled. It gets the user manager's environment, never its
   starter's, but for Banda's own `BANDA_*` variables (never an Agent's
   pass or Project), the places its starter set or its XDG folders moved,
   the session's display and ssh agent where the manager lacks them, and
@@ -1642,7 +1654,9 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   copy's `banda` with its own arguments: the same process, so the same
   unit or launchd job and one holder of the state's lock throughout. A
   transient unit's program cannot change, so a crash starts the copy the
-  unit was started with, which moves again once idle. The window's child,
+  unit was started with, which moves again once idle; a unit from its
+  file names the new copy once it runs, as the engine rewrites the file
+  as it starts, so a crash or a boot starts that. The window's child,
   and Windows, do not move: they restart with Banda.
   `banda update --version <v>` (`updates.take`, Manage) puts that
   version in place, an older one too, keeps it in `<data>/engine/chosen`,

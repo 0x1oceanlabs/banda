@@ -164,7 +164,11 @@ none already in the file.
   it updates itself (ADR 0119). By hand, it is the same script:
   `curl -fsSL https://github.com/0x1oceanlabs/banda/releases/download/v<version>/install.sh | sh -s -- <version>`.
 - On Linux, its engine as a service that outlives your ssh session:
-  `loginctl enable-linger $USER`, once. On a Mac, you logged in at its
+  `loginctl enable-linger $USER`, once. With "Start Banda at login" on
+  there (`machine.toml`'s `start-at-login`, on by default), its unit is
+  enabled, so with linger the engine starts as the machine boots, before
+  anyone logs in: `systemctl --user is-enabled <folder>-engine` says
+  `enabled` once Banda has run there. On a Mac, you logged in at its
   screen; locked is fine (see below).
 - Claude Code, or your other Harnesses, signed in there: the Agents run
   there.
