@@ -444,10 +444,12 @@ test("with Quiet on for 30 minutes, a finished Thread makes no sound, no toast a
   await popover.getByRole("button", { name: "30 minutes" }).click()
   await expect(popover).toBeHidden()
   await expect(bell).toHaveAttribute("data-quiet", "")
-  await expect(bell).toHaveAccessibleName(/^Quiet until \d{1,2}:\d\d$/)
+  // Until a time today; with its day, where the half hour ends tomorrow,
+  // as it does for a run in the last half hour before midnight.
+  await expect(bell).toHaveAccessibleName(/^Quiet until (\w{3} )?\d{1,2}:\d\d$/)
   await expect(bell).toHaveAttribute(
     "title",
-    /^Quiet until \d{1,2}:\d\d · Alt\+Q$/
+    /^Quiet until (\w{3} )?\d{1,2}:\d\d · Alt\+Q$/
   )
   await expect(bell.locator("svg").first()).toHaveCSS("opacity", "0")
   await expect(bell.locator("svg").last()).toHaveCSS("opacity", "1")
