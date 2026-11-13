@@ -348,6 +348,8 @@ impl Apps {
     }
 
     async fn remove(&self, call: Call, params: Remove) -> Result<(), Refusal> {
+        // Its record first: from here it is not installed, whatever
+        // follows.
         let (installed, id) = (self.installed.clone(), params.id.clone());
         let removed = tokio::task::spawn_blocking(move || installed.remove(&id)).await;
         removed.map_err(|_| Refusal::internal())??;
@@ -356,14 +358,17 @@ impl Apps {
             .lock()
             .unwrap()
             .retain(|had| had.app.id != params.id);
-        // One the engine never took, installed and not served, is gone
-        // from disk, and that is all.
+        // One the engine never took, installed and not served, has only
+        // its record and its copies to lose.
         if let Some(registry) = &self.registry {
             match registry.remove(&params.id).await {
                 Err(refusal) if refusal.code != Code::NotFound => return Err(refusal),
                 _ => {}
             }
         }
+        // Its copies last, when its worker has let go of them.
+        let (installed, id) = (self.installed.clone(), params.id.clone());
+        let _ = tokio::task::spawn_blocking(move || installed.clear(&id)).await;
         let author = call.participant();
         call.command(move |tx| {
             let removed = serde_json::json!({ "id": params.id });
