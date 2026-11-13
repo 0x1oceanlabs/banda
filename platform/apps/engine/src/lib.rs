@@ -12,6 +12,8 @@
 //!   ([`installed::Installed`]), and adds it to the running engine, in the
 //!   place of the one installed before. `apps.installed` lists them and
 //!   `apps.remove` takes one away.
+//! - `apps.export` streams what an App keeps in a Project, its events and
+//!   its tables, as lines anyone can read (ADR 0085, decision 10).
 //!
 //! It is a module of the machine: an App is installed on a machine, and
 //! keeps its data in each Project (ADR 0085, decision 5). An Agent's pass
@@ -35,8 +37,8 @@ mod worker;
 
 use banda_kernel::host::Node;
 use banda_kernel::{
-    App, AppMethods, Call, Code, Kind, Module, Nothing, Reach, Refusal, Registry, Right, Scope,
-    TurnedOff, now_ms,
+    App, AppMethods, Call, Code, Kind, Module, Nothing, ProjectId, Reach, Refusal, Registry, Right,
+    Scope, Stream, TurnedOff, now_ms,
 };
 use folder::Folder;
 use installed::{Install as Kept, Installed, InstalledFrom};
@@ -93,6 +95,34 @@ pub struct Install {
 pub struct Remove {
     /// Its id, as `clients`.
     pub id: String,
+}
+
+/// The App to export, and the Project whose data of it.
+#[derive(Debug, Deserialize, JsonSchema, TS)]
+#[ts(export, export_to = "apps/")]
+pub struct Export {
+    pub project: ProjectId,
+    /// The App's id, as `clients`: one installed from a folder, one of
+    /// Banda's own, or one removed whose data stays.
+    pub app: String,
+}
+
+/// One piece of an App's export: lines of one file of it, `app.json`,
+/// `events.ndjson` or `<table>.ndjson`; or, last, `done`, with how many
+/// lines each file has. An export with no `done` was cut short.
+#[derive(Debug, Serialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "apps/")]
+pub enum ExportPiece {
+    Lines {
+        file: String,
+        #[ts(type = "Array<unknown>")]
+        lines: Vec<Value>,
+    },
+    Done {
+        #[ts(type = "Record<string, number>")]
+        done: Value,
+    },
 }
 
 /// An App installed on this machine from a folder.
@@ -152,6 +182,15 @@ banda_kernel::methods! {
         /// then. What it kept in each Project stays there, and installing
         /// it again brings it back.
         command remove(Remove) -> (), Write, pass;
+        /// What an App keeps in a Project, as lines anyone can read (ADR
+        /// 0085, decision 10), in pieces, each the lines of one file of
+        /// the export: first `app.json`, with its ledger and each table's
+        /// CREATE, then its events in the log's order, then each of its
+        /// tables, a row a line by column; and last `done`, with each
+        /// file's count of lines. It reads the data whether the engine
+        /// runs the App or not. The Person's alone: it is all the App
+        /// holds.
+        stream export(Export) -> ExportPiece, Manage, read;
     }
 }
 
@@ -381,6 +420,12 @@ impl Apps {
         })
         .await
     }
+
+    async fn export(&self, _: Call, params: Export) -> Result<Stream, Refusal> {
+        let registry = (self.registry.as_ref())
+            .ok_or_else(|| Refusal::conflict("This engine exports no App's data."))?;
+        registry.export(params.project, &params.app).await
+    }
 }
 
 #[async_trait::async_trait]
@@ -411,5 +456,9 @@ impl Module for Apps {
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+
+    async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
     }
 }

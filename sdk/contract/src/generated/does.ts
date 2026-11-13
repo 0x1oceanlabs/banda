@@ -146,6 +146,7 @@ export const DOES = {
   "apps.installed": "read",
   "apps.install": "act",
   "apps.remove": "act",
+  "apps.export": "read",
   "bytes.issue": "read",
   "devices.list": "read",
   "devices.add": "act",

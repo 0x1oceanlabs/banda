@@ -563,3 +563,105 @@ async fn an_app_installed_while_the_engine_runs_is_there_at_once_and_is_replaced
         .await;
     assert_eq!(notes.unwrap()[0]["text"], "Tea.");
 }
+
+/// What an App keeps in a Project reads without the App, as lines (ADR
+/// 0085, decision 10): its ledger and its tables' CREATE, its events, and
+/// each table a row a line.
+#[tokio::test]
+async fn an_apps_data_is_exported_as_lines_anyone_can_read() {
+    needs_node!();
+    let host = host(&["clients"]).await;
+    let work = host.project("Work").await;
+    let anna = json!({ "name": "Anna", "city": "Berlin" });
+    host.call(&work, "clients.add", anna).await.unwrap();
+    let note = json!({ "client": 1, "text": "Likes tea." });
+    host.call(&work, "clients.note", note).await.unwrap();
+
+    let export = |by: Caller, app: &'static str| {
+        let params = json!({ "project": work.id, "app": app });
+        let kernel = host.kernel.clone();
+        async move {
+            let mut pieces = kernel.stream(by, "apps.export", None, params).await?;
+            let (mut lines, mut done) = (Vec::new(), Value::Null);
+            while let Some(piece) = pieces.recv().await {
+                if let Some(counts) = piece.get("done") {
+                    done = counts.clone();
+                    continue;
+                }
+                let file = piece["file"].as_str().unwrap().to_owned();
+                for line in piece["lines"].as_array().unwrap() {
+                    lines.push((file.clone(), line.clone()));
+                }
+            }
+            // An export is whole when it says so, by how much it holds.
+            let mut counted = serde_json::Map::new();
+            for (file, _) in &lines {
+                let count = counted.get(file).and_then(Value::as_u64).unwrap_or(0);
+                counted.insert(file.clone(), json!(count + 1));
+            }
+            assert_eq!(done, Value::Object(counted));
+            Ok::<_, Refusal>(lines)
+        }
+    };
+    let lines = export(host.person().into(), "clients").await.unwrap();
+    let files: Vec<&str> = lines.iter().map(|(file, _)| &**file).collect();
+    assert_eq!(
+        files,
+        [
+            "app.json",
+            "events.ndjson",
+            "events.ndjson",
+            "clients_notes.ndjson",
+            "clients_people.ndjson",
+        ]
+    );
+    let head = &lines[0].1;
+    assert_eq!(
+        (&head["id"], &head["version"], &head["ledger"]),
+        (&json!("clients"), &json!("0.1.0"), &json!(2))
+    );
+    assert_eq!(head["tables"][1]["name"], "clients_people");
+    let create = head["tables"][1]["create"].as_str().unwrap();
+    assert!(
+        create.starts_with("CREATE TABLE clients_people"),
+        "{create}"
+    );
+    assert_eq!(
+        (&lines[1].1["kind"], &lines[2].1["kind"]),
+        (&json!("added"), &json!("noted"))
+    );
+    assert_eq!(lines[3].1["text"], "Likes tea.");
+    let person = &lines[4].1;
+    assert_eq!(
+        (&person["id"], &person["name"], &person["city"]),
+        (&json!(1), &json!("Anna"), &json!("Berlin"))
+    );
+    assert_eq!(person["email"], Value::Null);
+
+    // An App that keeps nothing here exports its head alone; a name that
+    // is no App's is refused, and so is an Agent: it is all the App holds.
+    let nothing = export(host.person().into(), "nothing").await.unwrap();
+    assert_eq!(nothing.len(), 1);
+    assert_eq!(
+        nothing[0].1,
+        json!({ "id": "nothing", "version": null, "ledger": 0, "tables": [] })
+    );
+    let reserved = export(host.person().into(), "sqlite").await.unwrap_err();
+    assert_eq!(reserved.code, Code::Invalid);
+    let agent = Caller::agent(AgentId::new(), work.id);
+    assert_eq!(
+        export(agent, "clients").await.unwrap_err().code,
+        Code::Forbidden
+    );
+
+    // Removed, its data is still there to export.
+    let command = Some(CommandId::new());
+    let remove = json!({ "id": "clients" });
+    (host.kernel)
+        .call(host.person(), "apps.remove", None, command, remove)
+        .await
+        .unwrap();
+    let after = export(host.person().into(), "clients").await.unwrap();
+    assert_eq!(after.len(), lines.len());
+    assert_eq!(after[4].1["name"], "Anna");
+}

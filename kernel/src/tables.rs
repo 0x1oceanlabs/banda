@@ -101,6 +101,16 @@ const TABLE_FUNCTIONS: [&str; 2] = ["json_each", "json_tree"];
 /// full-text index, whose rows are all in the module's own tables.
 const FTS5: &str = "fts5";
 
+/// Whether `name`, a table's or an index's, is the module's that is named
+/// `module` and kept the prefixes `legacy`: one of them, then `_`.
+pub(crate) fn owned_by(module: &str, legacy: &[&str], name: &str) -> bool {
+    let of = |prefix: &str| {
+        name.strip_prefix(prefix)
+            .is_some_and(|rest| rest.starts_with('_'))
+    };
+    of(module) || legacy.iter().any(|prefix| of(prefix))
+}
+
 /// One module's tables in a store: the prefixes they go by, and its ledger
 /// of migrations.
 #[derive(Clone, Copy)]
@@ -122,11 +132,7 @@ impl Tables {
     /// Whether `name`, a table's or an index's, is this module's: its name
     /// or a legacy prefix, then `_`.
     fn owns(&self, name: &str) -> bool {
-        let of = |prefix: &str| {
-            name.strip_prefix(prefix)
-                .is_some_and(|rest| rest.starts_with('_'))
-        };
-        of(self.module) || self.legacy.iter().any(|prefix| of(prefix))
+        owned_by(self.module, self.legacy, name)
     }
 
     /// Whether this module's SQL may do `action`, in one of its migration

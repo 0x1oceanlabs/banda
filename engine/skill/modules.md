@@ -198,7 +198,7 @@ Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`,
 
 The Apps on this machine: every App and platform part its engine runs, each with its methods, as apps.describe answers; and the Apps installed from a folder, which a Person's Agent writes (ADR 0126). apps.install checks an App's folder (its app.toml, its methods as data, its migrations and its entry) and copies it into Banda's data; apps.installed lists them, and apps.remove takes one away and keeps its data.
 
-Its methods, `banda call apps.<method>`: `describe`, `installed`, `install`, `remove`.
+Its methods, `banda call apps.<method>`: `describe`, `installed`, `install`, `remove`, `export`.
 
 ## Bytes (`bytes`)
 

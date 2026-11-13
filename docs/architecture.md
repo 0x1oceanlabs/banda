@@ -1030,6 +1030,22 @@ this machine (ADR 0126).
   starts nothing as it opens. The Apps installed before a start are
   handed to the kernel as it is built, named as added, so their steps
   run as each Project opens.
+- **What an App keeps reads without it.** `apps.export {project, app}`
+  streams it as lines (ADR 0085, decision 10), read by the kernel
+  (`kernel/src/export.rs`) in pieces, each the lines of one file of the
+  export: first `app.json`, with the App's ledger and each of its
+  tables' CREATE; then `events.ndjson`, its events in the log's order;
+  then a `<table>.ndjson` for each table, a row a line by column, bytes
+  as `{"$base64": …}`. The last piece is `done`, with each file's count
+  of lines: an export without it was cut short, and `banda export`
+  fails. Its tables are those of its prefix and of the ids it had
+  before; a full-text index is listed by its CREATE and has no rows
+  there, as it is made again from what it indexes. It reads a page at a
+  time, each from the last row's key on, so the Project's reads go on
+  beside it. It serves Banda's own Apps, and one removed whose data
+  stays; it is the Person's alone; and an App's files are not in it
+  yet. `banda export --app <id>` prints each line with its file, and
+  with `--to <folder>` writes the export's files there.
 - **A session hears its tools change.** `machine.apps` is the kernel's
   stream of the Apps it runs, as the `welcome` lists them: the list now,
   then again at each change. `banda mcp` hears it on a connection of its

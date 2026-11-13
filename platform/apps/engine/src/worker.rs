@@ -518,14 +518,7 @@ async fn read(
             }
             let mut object = Map::with_capacity(names.len());
             for (column, name) in names.iter().enumerate() {
-                use rusqlite::types::ValueRef as Kept;
-                let value = match row.get_ref(column)? {
-                    Kept::Null => Value::Null,
-                    Kept::Integer(whole) => json!(whole),
-                    Kept::Real(real) => json!(real),
-                    Kept::Text(text) => json!(String::from_utf8_lossy(text)),
-                    Kept::Blob(_) => return Err(bytes(name).into()),
-                };
+                let value = banda_kernel::cell(row.get_ref(column)?, |_| Err(bytes(name)))?;
                 object.insert(name.clone(), value);
             }
             read.push(Value::Object(object));
