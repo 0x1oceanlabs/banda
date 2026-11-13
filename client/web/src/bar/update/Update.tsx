@@ -1,22 +1,20 @@
 /**
- * The updates widget on the bar's right (ADR 0119, decision 7; ADR 0041,
- * decision 4; ADR 0072): one widget over this window's app and every
- * machine the window shows, this one too. Its icon and pill say the worst
- * state over them all: failed, in `--destructive`, with where; a machine
- * that waits to restart; a version ready, a green dot and the version; a
- * download, the circle filling; else a quiet icon, there only for Banda
- * Dev (ADR 0045). The popover is the chosen mock's variant A: this
- * window's own row first, as the app restarts at once and the engine
- * waits; then a row for each machine, from what its engine says on
- * `updates.state`, with its acts; what changed; and when they looked.
- * Each machine decides for itself; the widget only shows and asks.
+ * The updates widget on the bar's right (ADR 0131, decision 1; ADR 0119;
+ * ADR 0072): one widget over this window's app and every machine the
+ * window shows. The bar has its icon alone, the worst state over them
+ * all: red when something failed, a dot when something is ready, the
+ * ring while it downloads, else a quiet icon, there only for Banda Dev
+ * (ADR 0045). The popover is mock v2's variant A: a title in one line, a
+ * row a machine with one word at its right and at most one button, and
+ * when they last checked. This machine's row holds this window's app: one
+ * Update takes both. Each machine decides for itself; the widget only
+ * shows and asks.
  *
  *   in    this window's app's update (the device's `update`), and what
  *         each machine's engine says on `updates.state` (`heard.tsx`)
- *   draws its icon and pill, the worst state over them all, and the
- *         popover with a row for each
- *   runs  `update.check` and `update.restart`, and a machine's restart
- *         there, from the popover
+ *   draws its icon, the worst state over them all, and the popover
+ *   runs  `update.check`, `update.restart` and `update.now`, and
+ *         `updates.check` and `updates.restart` on a machine
  *
  * It always stands on the bar, last on the right where `[bar]` does not
  * place it (`../layout/placed.ts`).
@@ -27,10 +25,14 @@ import { Button } from "@banda/ui/components/button"
 import { MachineIcon } from "@banda/ui/components/machine-icon"
 import {
   Popover,
-  PopoverClose,
   PopoverContent,
   PopoverTrigger,
 } from "@banda/ui/components/popover"
+import {
+  Collapsible,
+  CollapsibleContent,
+  CollapsibleTrigger,
+} from "@banda/ui/components/collapsible"
 import { works } from "@banda/ui/components/banda-mark"
 import {
   Dialog,
@@ -51,9 +53,9 @@ import {
   useState,
 } from "react"
 import type { Engine } from "@banda/contract"
-import type { Note, Update } from "@banda/core"
+import type { Update } from "@banda/core"
 import { sameEach, useStore } from "@banda/core/react"
-import { CheckIcon, PanelsLeftBottomIcon } from "lucide-react"
+import { CheckIcon, ChevronRightIcon, ClockIcon } from "lucide-react"
 import { HERE, StoresContext } from "../../calls/stores"
 import {
   FollowUpdates,
@@ -62,30 +64,20 @@ import {
   useMachineUpdates,
 } from "./heard"
 import {
-  allOn,
   lookedOf,
   lookedWords,
   type MachineUpdates,
   newestOf,
-  outWords,
+  plainOf,
   type Row,
   rowOf,
   shownOn,
+  titleOf,
   type Worst,
   worstOf,
 } from "./machines"
-import {
-  firstOf,
-  groupsOf,
-  lineOf,
-  SHOW_AFTER,
-  shortOf,
-  UPDATED_FOR,
-} from "./updating"
+import { SHOW_AFTER, UPDATED_FOR } from "./updating"
 import { device } from "../../boot"
-
-/** The notes the popover lists before "Show all". */
-const NOTES = 3
 
 /** How long the widget takes to grow into the bar or out of it. */
 const LEAVES_IN = 240
@@ -98,15 +90,46 @@ function useUpdate(): Update | undefined {
   return update
 }
 
+/** The rows, this machine's with this window's app in it, and what went
+ * wrong as the Person last acted on a machine. */
+export function useRows(
+  app: Update | undefined,
+  machines: readonly MachineUpdates[],
+  now: number,
+  troubles: ReadonlyMap<string, string>
+) {
+  return machines.map((machine) => {
+    const row = rowOf(
+      machine,
+      now,
+      machine.host === undefined ? app : undefined
+    )
+    const trouble = troubles.get(machine.host ?? "")
+    return {
+      machine,
+      row: trouble
+        ? ({
+            ...row,
+            kind: "failed",
+            status: "Couldn't update",
+            why: plainOf(trouble),
+            details: trouble,
+            act: "retry",
+          } satisfies Row)
+        : row,
+    }
+  })
+}
+
 /** The widget, on this machine's `engine`. */
 export function UpdateWidget({ engine }: { engine: Engine }) {
   const app = useUpdate()
   const machines = useMachineUpdates()
   const now = useNow(MINUTE)
-  const rows = machines.map((machine) => ({
-    machine,
-    row: rowOf(machine, now),
-  }))
+  const [troubles, setTroubles] = useState<ReadonlyMap<string, string>>(
+    new Map()
+  )
+  const rows = useRows(app, machines, now, troubles)
   const worst = worstOf(app, rows)
   const [open, setOpen] = useState(false)
   const { opened } = useKeptUpdates()
@@ -133,8 +156,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
   const drawn = shown ? worst : last
   const follow = <FollowUpdates engine={engine} />
   if (!drawn) return follow
-  const line = drawn.app && app ? lineOf(app) : barWords(drawn)
-  const pill = "pill" in drawn ? drawn.pill : undefined
+  const line = barWords(drawn)
   const widget = (
     <span data-update-slot={shown ? "in" : "out"} className="flex">
       <Popover
@@ -152,7 +174,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
           render={
             <Button
               variant="ghost"
-              size={pill ? "sm" : "icon-sm"}
+              size="icon-sm"
               aria-label={line}
               title={line}
               data-update={drawn.kind}
@@ -161,7 +183,6 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
                 drawn.kind === "quiet" && "opacity-55 hover:opacity-100",
                 drawn.kind === "failed" &&
                   "text-destructive hover:text-destructive",
-                pill && "h-7 gap-1.5 ps-1.5 pe-1.5",
                 // The check is drawn in the colour of what was added.
                 drawn.kind === "updated" && "[&_svg]:text-added"
               )}
@@ -169,20 +190,8 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
           }
         >
           <UpdateIcon worst={drawn} />
-          {pill && (
-            <span
-              className={cn(
-                "h-4.5 rounded-full bg-foreground/8 px-1.5 font-mono text-small leading-4.5 tracking-tight",
-                drawn.kind === "waits"
-                  ? "text-muted-foreground"
-                  : "text-foreground"
-              )}
-            >
-              {pill}
-            </span>
-          )}
         </PopoverTrigger>
-        <PopoverContent className="w-100 gap-0 p-1.5 text-ui">
+        <PopoverContent className="w-80 gap-0 p-1.5 text-ui">
           <About
             app={app}
             machines={machines}
@@ -190,6 +199,7 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
             engine={engine}
             lit={lit}
             now={now}
+            setTroubles={setTroubles}
           />
         </PopoverContent>
       </Popover>
@@ -211,26 +221,350 @@ export function UpdateWidget({ engine }: { engine: Engine }) {
 const sameWorst = (a: Worst, b: Worst | undefined) =>
   b !== undefined && JSON.stringify(a) === JSON.stringify(b)
 
-/** The line on hover, which says what the bar's widget shows. */
+/** The line on hover, which says what the bar's icon shows. */
 export function barWords(worst: Worst): string {
   switch (worst.kind) {
     case "failed":
-      return worst.pill === "window"
-        ? "This window cannot update itself"
-        : `${worst.pill} could not update`
+      return `Couldn't update ${worst.name}`
     case "updated":
-      return `Updated to ${worst.pill}`
-    case "waits":
-      return `${worst.pill} for its Agents to finish`
+      return `Updated to ${worst.version}`
     case "ready":
-      return `${worst.pill} is ready`
+      return worst.version
+        ? `Banda ${worst.version} is ready`
+        : "An update is ready"
     case "downloading":
-      return `Downloading${worst.version ? ` ${worst.version}` : ""} · ${Math.round(worst.share * 100)}%`
+      return `Updating${worst.version ? ` to ${worst.version}` : ""} · ${Math.round(worst.share * 100)}%`
     case "looking":
-      return "Looking for a new version…"
+      return "Checking for updates…"
     case "quiet":
-      return "Every machine runs the newest"
+      return "Banda is up to date"
   }
+}
+
+/** The popover: its title, a row a machine, and when they checked. */
+function About({
+  app,
+  machines,
+  rows,
+  engine,
+  lit,
+  now,
+  setTroubles,
+}: {
+  app: Update | undefined
+  machines: readonly MachineUpdates[]
+  rows: readonly { machine: MachineUpdates; row: Row }[]
+  engine: Engine
+  lit?: string
+  now: number
+  setTroubles: (
+    change: (was: ReadonlyMap<string, string>) => ReadonlyMap<string, string>
+  ) => void
+}) {
+  const engineFor = useEngineFor(engine)
+  const { title, say } = titleOf(rows, newestOf(app, machines[0]))
+  const trouble = (machine: MachineUpdates, why?: string) =>
+    setTroubles((was) => {
+      const next = new Map(was)
+      if (why === undefined) next.delete(machine.host ?? "")
+      else next.set(machine.host ?? "", why)
+      return next
+    })
+  const updating = useUpdateThere(engineFor, trouble)
+  const check = (machine: MachineUpdates) =>
+    void engineFor(machine.host)
+      .call("updates.check", {})
+      .catch(() => {})
+  const checkAll = () => {
+    device.update.check()
+    for (const { machine } of rows) if (!machine.away) check(machine)
+  }
+  const retry = (machine: MachineUpdates) => {
+    trouble(machine)
+    if (machine.host === undefined)
+      if (app?.state === "failed") device.update.now()
+      else device.update.check()
+    check(machine)
+  }
+  return (
+    <>
+      <div className="px-2.5 pt-2 pb-0.5">
+        <div className="text-ui font-semibold" data-update-title>
+          {title}
+        </div>
+        {say && (
+          <div className="mt-0.5 text-meta text-muted-foreground">{say}</div>
+        )}
+      </div>
+      <div className="mt-1">
+        {rows.map(({ machine, row }) => (
+          <MachineRow
+            key={machine.host ?? ""}
+            machine={machine}
+            row={row}
+            lit={lit !== undefined && machine.host === lit}
+            onUpdate={() => updating.ask(machine, row)}
+            onRetry={() => retry(machine)}
+          />
+        ))}
+      </div>
+      <div className="mt-1 flex items-center border-t border-border pt-1 pr-0.5 pl-2.5">
+        <span className="text-meta text-muted-foreground">
+          {lookedWords(lookedOf(machines), now)}
+        </span>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="ml-auto"
+          onClick={checkAll}
+        >
+          Check now
+        </Button>
+      </div>
+      {updating.dialog}
+    </>
+  )
+}
+
+/** A machine's row: its name, one word or one button, and a why. */
+function MachineRow({
+  machine,
+  row,
+  lit,
+  onUpdate,
+  onRetry,
+}: {
+  machine: MachineUpdates
+  row: Row
+  lit: boolean
+  onUpdate: () => void
+  onRetry: () => void
+}) {
+  return (
+    <div
+      data-machine={machine.host ?? "here"}
+      data-row={row.kind}
+      className={cn(
+        "grid min-h-8 grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-control py-1 pr-1.5 pl-2.5",
+        row.kind === "away" && "opacity-55",
+        lit && "bg-accent/60"
+      )}
+    >
+      <span className="grid place-items-center text-muted-foreground">
+        <MachineIcon icon={machine.icon} size={14} />
+      </span>
+      <span
+        className="min-w-0 truncate font-medium"
+        title={row.from && (row.to ? `${row.from} → ${row.to}` : row.from)}
+      >
+        {machine.name}
+        {machine.host === undefined && (
+          <span className="ms-1 text-meta font-normal text-muted-foreground">
+            this machine
+          </span>
+        )}
+      </span>
+      <Corner row={row} onUpdate={onUpdate} onRetry={onRetry} />
+      {row.kind === "taking" && (
+        <span className="col-span-2 col-start-2 my-0.5 h-0.75 overflow-hidden rounded-full bg-foreground/10">
+          <i
+            role="progressbar"
+            aria-valuenow={Math.round((row.share ?? 0) * 100)}
+            className="block h-full bg-foreground opacity-70 transition-[width] duration-500"
+            style={{ width: `${(row.share ?? 0) * 100}%` }}
+          />
+        </span>
+      )}
+      {row.why && (
+        <span className="col-span-2 col-start-2 text-meta leading-snug text-muted-foreground">
+          {row.why}
+        </span>
+      )}
+      {row.command && (
+        <span className="col-span-2 col-start-2 mt-0.5 flex items-center gap-1.5 rounded-control bg-muted py-1 pr-1 pl-2.5">
+          <code className="min-w-0 flex-1 truncate text-meta text-foreground">
+            {row.command}
+          </code>
+          <Copy text={row.command} />
+        </span>
+      )}
+      {row.details && <Details text={row.details} />}
+    </div>
+  )
+}
+
+/** What stands at a row's right: its one button, or its one word. */
+function Corner({
+  row,
+  onUpdate,
+  onRetry,
+}: {
+  row: Row
+  onUpdate: () => void
+  onRetry: () => void
+}) {
+  if (row.act === "update")
+    return (
+      <Button size="sm" onClick={onUpdate}>
+        Update
+      </Button>
+    )
+  if (row.act === "retry")
+    return (
+      <Button variant="outline" size="sm" onClick={onRetry}>
+        Try again
+      </Button>
+    )
+  if (!row.status) return <span />
+  return (
+    <span
+      className={cn(
+        "inline-flex items-center gap-1.5 text-meta whitespace-nowrap text-muted-foreground tabular-nums"
+      )}
+    >
+      {row.kind === "ok" && <CheckIcon className="size-3.5 text-added" />}
+      {row.kind === "waits" && row.status.startsWith("After") && (
+        <ClockIcon className="size-3.25" />
+      )}
+      {row.status}
+    </span>
+  )
+}
+
+/** What went wrong, as the program said it: folded under Details. */
+function Details({ text }: { text: string }) {
+  return (
+    <Collapsible className="col-span-2 col-start-2 text-small text-muted-foreground">
+      <CollapsibleTrigger className="group inline-flex items-center gap-0.5 hover:text-foreground">
+        <ChevronRightIcon className="size-3 transition-transform group-data-[panel-open]:rotate-90" />
+        Details
+      </CollapsibleTrigger>
+      <CollapsibleContent>
+        <pre className="mt-1 mb-0.5 rounded-small bg-foreground/6 px-2 py-1.5 font-mono text-small whitespace-pre-wrap select-text">
+          {text}
+        </pre>
+      </CollapsibleContent>
+    </Collapsible>
+  )
+}
+
+/**
+ * Update on a machine (ADR 0131, decision 1): this window's app restarts
+ * at once, and the engine moves now where nothing runs. While Agents work
+ * there it asks once, and waiting is the default: a machine that updates
+ * by itself once idle does so, and this window's app restarts all the
+ * same, as it stops no Agent. What fails is said on the row (`trouble`).
+ * `ask` updates a machine's row; `dialog` is drawn where it asks.
+ */
+export function useUpdateThere(
+  engineFor: (host: string | undefined) => Engine,
+  trouble: (machine: MachineUpdates, why?: string) => void
+) {
+  const [asking, setAsking] = useState<{ machine: MachineUpdates; row: Row }>()
+  const close = useCallback(() => setAsking(undefined), [])
+  const restartApp = (row: Row) => {
+    if (row.app) device.update.restart()
+  }
+  const restartEngine = (machine: MachineUpdates, force: boolean) =>
+    engineFor(machine.host)
+      .call("updates.restart", force ? { force: true } : {})
+      .then(
+        () => true,
+        (error: Error) => {
+          trouble(machine, error.message)
+          return false
+        }
+      )
+  const ask = (machine: MachineUpdates, row: Row) => {
+    trouble(machine)
+    if (!row.engine) return restartApp(row)
+    if ((machine.said?.waits?.turns ?? 0) > 0) setAsking({ machine, row })
+    else
+      void restartEngine(machine, false).then((done) => done && restartApp(row))
+  }
+  const now = () => {
+    if (!asking) return
+    const { machine, row } = asking
+    close()
+    void restartEngine(machine, true).then((done) => done && restartApp(row))
+  }
+  const later = () => {
+    if (!asking) return
+    close()
+    restartApp(asking.row)
+  }
+  return {
+    ask,
+    dialog: (
+      <UpdateDialog
+        machine={asking?.machine}
+        onNow={now}
+        onLater={later}
+        onClose={close}
+      />
+    ),
+  }
+}
+
+/** While Agents work there: wait for them, or stop them and update. */
+function UpdateDialog({
+  machine,
+  onNow,
+  onLater,
+  onClose,
+}: {
+  machine: MachineUpdates | undefined
+  onNow: () => void
+  onLater: () => void
+  onClose: () => void
+}) {
+  const working = useWorkingOn(machine?.host)
+  const turns = machine?.said?.waits?.turns ?? 0
+  const name = machine?.name ?? ""
+  // One set to ask takes nothing by itself: waiting is only a Cancel.
+  const asks =
+    machine?.said?.takes === "ask" || machine?.said?.waits?.person === true
+  const agents = turns === 1 ? "An Agent is" : `${turns} Agents are`
+  return (
+    <Dialog
+      open={machine !== undefined}
+      onOpenChange={(open) => {
+        if (!open) onClose()
+      }}
+    >
+      <DialogContent showCloseButton={false}>
+        <DialogHeader>
+          <DialogTitle>
+            {agents} working on {name}
+          </DialogTitle>
+          <DialogDescription>
+            Updating now stops {turns === 1 ? "it" : "them"}.
+            {!asks && " Or Banda updates by itself as soon as they finish."}
+          </DialogDescription>
+        </DialogHeader>
+        {working.length > 0 && (
+          <ul className="list-disc ps-5 text-ui leading-relaxed text-muted-foreground">
+            {working.map((title, i) => (
+              <li key={`${i}-${title}`}>{title}</li>
+            ))}
+          </ul>
+        )}
+        <DialogFooter>
+          <Button
+            type="button"
+            variant="ghost"
+            className="text-destructive hover:text-destructive"
+            onClick={onNow}
+          >
+            Stop {turns === 1 ? "it" : "them"} and update
+          </Button>
+          <Button type="button" autoFocus onClick={asks ? onClose : onLater}>
+            {asks ? "Cancel" : "Update when they finish"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  )
 }
 
 /** Says that Banda updated `UPDATED_FOR`, unless the Person opened the
@@ -260,394 +594,6 @@ function useUpdatedFor(update: Update | undefined, open: boolean) {
   }, [updated, open])
 }
 
-/** The popover: its head, this window's row, each machine's, what
- * changed, and when they looked. */
-function About({
-  app,
-  machines,
-  rows,
-  engine,
-  lit,
-  now,
-}: {
-  app: Update | undefined
-  machines: readonly MachineUpdates[]
-  rows: readonly { machine: MachineUpdates; row: Row }[]
-  engine: Engine
-  lit?: string
-  now: number
-}) {
-  const engineFor = useEngineFor(engine)
-  const newest = newestOf(app, machines[0])
-  const everyOn = newest ? allOn(newest.version, app, machines) : false
-  const corner = outWords(newest, everyOn, now)
-  const notes = app && "notes" in app ? app.notes : []
-  const restart = useRestartThere(engineFor)
-  const checkAll = () => {
-    device.update.check()
-    for (const { machine } of rows)
-      if (machine.host && !machine.away)
-        void engineFor(machine.host)
-          .call("updates.check", {})
-          .catch(() => {})
-  }
-  return (
-    <>
-      <div className="flex items-baseline gap-2 px-2.5 pt-2 pb-1.5">
-        <span className="text-ui font-semibold">
-          {app?.name ?? "Banda"}
-          {newest && ` ${shortOf(newest.version)}`}
-        </span>
-        {corner && (
-          <span className="ml-auto text-meta text-muted-foreground tabular-nums">
-            {corner}
-          </span>
-        )}
-      </div>
-      <WindowRow app={app} />
-      {app && windowShown(app) && <Sep />}
-      {rows.map(({ machine, row }) => (
-        <MachineRow
-          key={machine.host ?? ""}
-          machine={machine}
-          row={row}
-          lit={lit !== undefined && machine.host === lit}
-          onRestart={() => restart.ask(machine)}
-          onCheck={() =>
-            void engineFor(machine.host)
-              .call("updates.check", {})
-              .catch(() => {})
-          }
-        />
-      ))}
-      {notes.length > 0 && (
-        <>
-          <Sep />
-          <Notes notes={notes} />
-        </>
-      )}
-      <Sep />
-      <div className="flex items-center gap-1.5 py-1 pr-1.5 pl-2.5">
-        <span className="text-meta text-muted-foreground">
-          {app?.state === "none" && app.missed ? (
-            <span className="text-destructive">
-              Could not update: {app.missed}
-            </span>
-          ) : (
-            lookedWords(lookedOf(machines), now)
-          )}
-        </span>
-        <span className="ml-auto flex gap-1">
-          <Button variant="ghost" size="sm" onClick={checkAll}>
-            Check now
-          </Button>
-        </span>
-      </div>
-      {restart.dialog}
-    </>
-  )
-}
-
-/** Whether this window has a row: once its new app is down, out on
- * macOS, failed, or just came. */
-const windowShown = (app: Update) =>
-  ["ready", "out", "failed", "updated"].includes(app.state)
-
-/** This window's own row (ADR 0119, decision 7): it restarts at once,
- * and the Agents go on. */
-function WindowRow({ app }: { app: Update | undefined }) {
-  if (!app || !windowShown(app)) return null
-  const from = shortOf(app.have)
-  const name = (
-    <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-      <b className="font-medium">This window</b>
-    </span>
-  )
-  const icon = (
-    <span className="grid place-items-center text-muted-foreground">
-      <PanelsLeftBottomIcon className="size-3.75" />
-    </span>
-  )
-  switch (app.state) {
-    case "ready":
-      return (
-        <RowGrid data-machine="window">
-          {icon}
-          {name}
-          <span className="flex gap-1">
-            <PopoverClose render={<Button variant="ghost" size="sm" />}>
-              Later
-            </PopoverClose>
-            <PopoverClose
-              render={<Button size="sm" />}
-              onClick={() => device.update.restart()}
-            >
-              Restart window
-            </PopoverClose>
-          </span>
-          <Say>
-            {from} → {shortOf(app.version)}. Agents keep working: only the
-            window restarts.
-          </Say>
-        </RowGrid>
-      )
-    case "out":
-      return (
-        <RowGrid data-machine="window">
-          {icon}
-          {name}
-          <span />
-          <Say>
-            {from} → {shortOf(app.version)}. Its app updates with Homebrew:
-            <span className="mt-1.5 flex items-center gap-1.5 rounded-control bg-muted py-1 pr-1 pl-2.5">
-              <code className="min-w-0 flex-1 truncate text-meta text-foreground">
-                {app.command}
-              </code>
-              <Copy text={app.command} />
-            </span>
-          </Say>
-        </RowGrid>
-      )
-    case "failed":
-      return (
-        <RowGrid data-machine="window">
-          {icon}
-          {name}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => device.update.now()}
-          >
-            Try again
-          </Button>
-          <Say bad>{app.reason}</Say>
-        </RowGrid>
-      )
-    case "updated":
-      return (
-        <RowGrid data-machine="window">
-          {icon}
-          <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-            <b className="font-medium">This window</b>
-            <Version>{shortOf(app.have)}</Version>
-          </span>
-          <span className="inline-flex text-added">
-            <CheckIcon className="size-3.5" />
-          </span>
-          <Say>Updated from {shortOf(app.from)}. Here is what changed.</Say>
-        </RowGrid>
-      )
-    default:
-      return null
-  }
-}
-
-/** A machine's row. */
-function MachineRow({
-  machine,
-  row,
-  lit,
-  onRestart,
-  onCheck,
-}: {
-  machine: MachineUpdates
-  row: Row
-  lit: boolean
-  onRestart: () => void
-  onCheck: () => void
-}) {
-  return (
-    <RowGrid
-      data-machine={machine.host ?? "here"}
-      data-row={row.kind}
-      className={cn(row.kind === "away" && "opacity-60", lit && "bg-accent/60")}
-    >
-      <span className="grid place-items-center text-muted-foreground">
-        <MachineIcon icon={machine.icon} size={14} />
-      </span>
-      <span className="flex min-w-0 items-baseline gap-1.5 whitespace-nowrap">
-        <b className="font-medium">{machine.name}</b>
-        {row.from && (
-          <Version>
-            {row.from}
-            {row.to && (
-              <>
-                {" → "}
-                <span className="text-foreground">{row.to}</span>
-              </>
-            )}
-          </Version>
-        )}
-      </span>
-      <Corner row={row} onRestart={onRestart} onCheck={onCheck} />
-      {row.kind === "taking" ? (
-        <span className="col-span-2 col-start-2 h-0.75 overflow-hidden rounded-full bg-foreground/10">
-          <i
-            role="progressbar"
-            aria-valuenow={Math.round((row.share ?? 0) * 100)}
-            className="block h-full bg-foreground opacity-70 transition-[width] duration-500"
-            style={{ width: `${(row.share ?? 0) * 100}%` }}
-          />
-        </span>
-      ) : (
-        row.say && <Say bad={row.kind === "failed"}>{row.say}</Say>
-      )}
-    </RowGrid>
-  )
-}
-
-/** What stands at a row's right: its act, its check, or a word. */
-function Corner({
-  row,
-  onRestart,
-  onCheck,
-}: {
-  row: Row
-  onRestart: () => void
-  onCheck: () => void
-}) {
-  switch (row.kind) {
-    case "ok":
-      return row.from ? (
-        <span className="inline-flex text-added">
-          <CheckIcon className="size-3.5" />
-        </span>
-      ) : (
-        <span />
-      )
-    case "away":
-      return <Version>away</Version>
-    case "taking":
-      return <Version>{row.size}</Version>
-    case "failed":
-      return (
-        <Button variant="outline" size="sm" onClick={onCheck}>
-          Try again
-        </Button>
-      )
-    case "ask":
-      return (
-        <Button variant="outline" size="sm" onClick={onRestart}>
-          Restart
-        </Button>
-      )
-    case "waits":
-      return row.restarts ? (
-        <Button variant="ghost" size="sm" onClick={onRestart}>
-          Restart now
-        </Button>
-      ) : (
-        <span />
-      )
-    default:
-      return <span />
-  }
-}
-
-/** Restart now on a machine (ADR 0119, decision 3): at once while no
- * Agent works there; else it asks first, Cancel the default, and lists
- * the Threads whose turns it stops. A restart refused as Agents began
- * meanwhile asks after all. `ask` restarts a machine; `dialog` is drawn
- * where it asks. */
-export function useRestartThere(
-  engineFor: (host: string | undefined) => Engine
-) {
-  const [asking, setAsking] = useState<MachineUpdates>()
-  const [failed, setFailed] = useState<string>()
-  const close = useCallback(() => {
-    setAsking(undefined)
-    setFailed(undefined)
-  }, [])
-  const ask = (machine: MachineUpdates) => {
-    if ((machine.said?.waits?.turns ?? 0) > 0) setAsking(machine)
-    else
-      void engineFor(machine.host)
-        .call("updates.restart", {})
-        .catch((error: Error) => {
-          setFailed(error.message)
-          setAsking(machine)
-        })
-  }
-  const force = () => {
-    if (!asking) return
-    engineFor(asking.host)
-      .call("updates.restart", { force: true })
-      .then(close, (error: Error) => setFailed(error.message))
-  }
-  return {
-    ask,
-    dialog: (
-      <RestartDialog
-        machine={asking}
-        failed={failed}
-        onRestart={force}
-        onClose={close}
-      />
-    ),
-  }
-}
-
-function RestartDialog({
-  machine,
-  failed,
-  onRestart,
-  onClose,
-}: {
-  machine: MachineUpdates | undefined
-  failed: string | undefined
-  onRestart: () => void
-  onClose: () => void
-}) {
-  const working = useWorkingOn(machine?.host)
-  const terminals = machine?.said?.waits?.terminals ?? 0
-  const name = machine?.name ?? ""
-  return (
-    <Dialog
-      open={machine !== undefined}
-      onOpenChange={(open) => {
-        if (!open) onClose()
-      }}
-    >
-      <DialogContent showCloseButton={false}>
-        <DialogHeader>
-          <DialogTitle>Restart Banda on {name} now?</DialogTitle>
-          <DialogDescription>
-            Agents work on {name}. A restart stops their turns
-            {working.length > 0 ? ":" : "."}
-          </DialogDescription>
-        </DialogHeader>
-        {working.length > 0 && (
-          <ul className="list-disc ps-5 text-ui leading-relaxed">
-            {working.map((title, i) => (
-              <li key={`${i}-${title}`}>{title}</li>
-            ))}
-          </ul>
-        )}
-        {terminals > 0 && (
-          <p className="text-ui text-muted-foreground">
-            {terminals === 1
-              ? "A terminal is open there and ends too."
-              : `${terminals} terminals are open there and end too.`}
-          </p>
-        )}
-        {failed && (
-          <p role="alert" className="text-meta text-destructive">
-            {failed}
-          </p>
-        )}
-        <DialogFooter>
-          <Button type="button" variant="outline" autoFocus onClick={onClose}>
-            Cancel
-          </Button>
-          <Button type="button" variant="destructive" onClick={onRestart}>
-            Restart anyway
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-  )
-}
-
 /** The titles of the Threads at work on host `host`, this machine's
  * where none, as its Watches list them. */
 function useWorkingOn(host: string | undefined): string[] {
@@ -661,54 +607,6 @@ function useWorkingOn(host: string | undefined): string[] {
     [stores, host]
   )
   return useStore(stores.items, select, sameEach)
-}
-
-function RowGrid({
-  className,
-  children,
-  ...rest
-}: {
-  className?: string
-  children: ReactNode
-  "data-machine"?: string
-  "data-row"?: string
-}) {
-  return (
-    <div
-      {...rest}
-      className={cn(
-        "grid grid-cols-[18px_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 rounded-control px-2.5 py-2 hover:bg-foreground/5",
-        className
-      )}
-    >
-      {children}
-    </div>
-  )
-}
-
-function Say({ bad, children }: { bad?: boolean; children: ReactNode }) {
-  return (
-    <span
-      className={cn(
-        "col-span-2 col-start-2 text-meta leading-snug",
-        bad ? "text-destructive" : "text-muted-foreground"
-      )}
-    >
-      {children}
-    </span>
-  )
-}
-
-function Version({ children }: { children: ReactNode }) {
-  return (
-    <span className="text-meta text-muted-foreground tabular-nums">
-      {children}
-    </span>
-  )
-}
-
-function Sep() {
-  return <div className="mx-1.5 my-1 h-px bg-border" />
 }
 
 /** Copies `text`, and says so a moment. */
@@ -732,46 +630,8 @@ function Copy({ text }: { text: string }) {
   )
 }
 
-/** What changed, by kind, the newest's version beside New; a few, and
- * the rest on "Show all" (ADR 0072, decision 5). */
-function Notes({ notes }: { notes: readonly Note[] }) {
-  const [all, setAll] = useState(false)
-  const groups = groupsOf(notes)
-  const listed = all ? groups : firstOf(groups, NOTES)
-  const newest = notes[0]?.version
-  return (
-    <div className="max-h-56 overflow-y-auto px-2.5 pt-0.5 pb-1.5 text-ui">
-      {listed.map((group) => (
-        <section key={group.title}>
-          <h4 className="mt-1.5 mb-0.5 text-small font-medium text-muted-foreground">
-            {group.title === "New" && newest
-              ? `New in ${shortOf(newest)}`
-              : group.title}
-          </h4>
-          <ul className="list-disc ps-4 leading-relaxed">
-            {group.lines.map((line) => (
-              <li key={`${line.version}-${line.text}`} title={line.version}>
-                {line.text}
-              </li>
-            ))}
-          </ul>
-        </section>
-      ))}
-      {!all && notes.length > NOTES && (
-        <button
-          type="button"
-          className="mt-1 text-meta text-muted-foreground hover:text-foreground"
-          onClick={() => setAll(true)}
-        >
-          Show all {notes.length}
-        </button>
-      )}
-    </div>
-  )
-}
-
 /** The arrow up in a circle (ADR 0072, decision 2): drawn to the share
- * that is down, a green dot once a version is ready or a machine waits,
+ * that is down, a green dot once a version is ready,
  * a short arc running round while Banda looks, a `!` when it failed, and
  * a check once Banda updated. globals.css moves it by
  * `data-update-icon`. */
@@ -783,8 +643,8 @@ function UpdateIcon({ worst }: { worst: Worst }) {
       : worst.kind === "looking"
         ? 0.22
         : 1
-  const state = worst.kind === "waits" ? "ready" : worst.kind
-  const dot = worst.kind === "ready" || worst.kind === "waits"
+  const state = worst.kind
+  const dot = worst.kind === "ready"
   return (
     <span className="relative inline-grid place-items-center">
       <svg
