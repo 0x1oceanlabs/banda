@@ -311,3 +311,44 @@ test("the status names the machine, as its welcome does", async () => {
   expect(older.status).not.toHaveProperty("named")
   older.close()
 })
+
+test("an engine that refuses the secret it welcomed started again: the client asks its address again, and a secret never welcomed stays refused", async () => {
+  let secret = "old"
+  const engine = new Engine(async () => ({ url: "ws://engine", secret }))
+  await flush()
+  Socket.made[0].welcome()
+  expect(engine.status.state).toBe("open")
+  // The engine started again under a new secret, on the same port: the
+  // address still names the old one for a while.
+  Socket.made[0].close()
+  await vi.advanceTimersByTimeAsync(250)
+  const stale = Socket.made[1]
+  stale.onopen?.()
+  expect(stale.sent[0]).toMatchObject({ type: "hello", token: "old" })
+  const no = {
+    code: "forbidden",
+    message: "The first frame must be hello with a token this engine knows.",
+  }
+  stale.say({ type: "goodbye", reason: no })
+  expect(engine.status.state).toBe("lost")
+  // Then it names the new one.
+  secret = "new"
+  await vi.advanceTimersByTimeAsync(500)
+  const fresh = Socket.made[2]
+  fresh.welcome()
+  expect(fresh.sent[0]).toMatchObject({ type: "hello", token: "new" })
+  expect(engine.status.state).toBe("open")
+  engine.close()
+
+  // A secret it was never welcomed with is refused for good.
+  const stranger = new Engine(async () => ({
+    url: "ws://engine",
+    secret: "wrong",
+  }))
+  await flush()
+  const door = Socket.made.at(-1)!
+  door.onopen?.()
+  door.say({ type: "goodbye", reason: no })
+  expect(stranger.status.state).toBe("refused")
+  stranger.close()
+})

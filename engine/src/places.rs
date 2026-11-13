@@ -153,6 +153,16 @@ pub fn channel() -> &'static str {
 }
 
 const RUNNING: &str = "engine.json";
+/// The secret an engine keeps for the copy it moves onto, in its own
+/// process (ADR 0119, decision 3).
+const MOVING: &str = "moving.json";
+
+/// What [`MOVING`] holds: the process the secret is for, and the secret.
+#[derive(Serialize, Deserialize)]
+struct Moving {
+    pid: u32,
+    secret: String,
+}
 const OWNER: &str = "owner.json";
 
 #[derive(Serialize, Deserialize)]
@@ -370,6 +380,28 @@ impl Places {
     pub fn withdraw(&self) {
         let _ = std::fs::remove_file(self.state.join(RUNNING));
     }
+
+    /// Keeps this run's `secret` for the copy the engine moves onto in its
+    /// own process: its windows' clients reconnect with the secret they
+    /// have, and nothing they follow sees a new engine.
+    pub fn keep_secret(&self, secret: &str) -> std::io::Result<()> {
+        let moving = Moving {
+            pid: std::process::id(),
+            secret: secret.to_owned(),
+        };
+        write_private(&self.state.join(MOVING), &serde_json::to_vec(&moving)?)
+    }
+
+    /// The secret the engine kept as it moved onto this copy, in this
+    /// process; taken once. One kept for another process, as a move that
+    /// could not run its copy left it, is gone and gives none.
+    pub fn kept_secret(&self) -> Option<String> {
+        let path = self.state.join(MOVING);
+        let bytes = std::fs::read(&path).ok()?;
+        let _ = std::fs::remove_file(&path);
+        let moving: Moving = serde_json::from_slice(&bytes).ok()?;
+        (moving.pid == std::process::id()).then_some(moving.secret)
+    }
 }
 
 /// Writes a file only this user can read, whole or not at all.
@@ -383,4 +415,31 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 #[cfg(any(target_os = "macos", all(test, unix)))]
 pub fn write_private_unsynced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
     banda_kernel::host::write_private_unsynced(path, bytes)
+}
+
+#[cfg(test)]
+mod moving_tests {
+    use super::*;
+
+    #[test]
+    fn a_secret_kept_for_a_move_is_taken_once_and_only_by_its_own_process() {
+        let base = tempfile::tempdir().unwrap();
+        let places = Places::under(base.path());
+        std::fs::create_dir_all(&places.state).unwrap();
+        places.keep_secret("kept").unwrap();
+        assert_eq!(places.kept_secret().as_deref(), Some("kept"));
+        assert_eq!(places.kept_secret(), None, "taken once");
+        // One a move of another process left behind gives none.
+        let other = Moving {
+            pid: std::process::id().wrapping_add(1),
+            secret: "theirs".into(),
+        };
+        write_private(
+            &places.state.join(MOVING),
+            &serde_json::to_vec(&other).unwrap(),
+        )
+        .unwrap();
+        assert_eq!(places.kept_secret(), None);
+        assert!(!places.state.join(MOVING).exists());
+    }
 }
