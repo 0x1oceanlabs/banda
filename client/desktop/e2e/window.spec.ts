@@ -498,16 +498,19 @@ test("this machine's engine dies: its Pane says so as another machine's does, a 
   await expect(thread.getByText("You said: hello")).toBeVisible()
 
   // Each death in a row has main wait longer before it starts the engine
-  // again: after the fourth, seconds, in which the window stays.
+  // again: after the fifth, 8 s, in which the window stays. A connection
+  // back within 3 s was never out of reach.
   let last: number | undefined
-  for (let died = 0; died < 4; died++) {
+  for (let died = 0; died < 5; died++) {
     await expect.poll(() => window.engine()).not.toBe(last)
     await expect.poll(() => window.engine()).toBeDefined()
     last = window.engine()!
     process.kill(last, "SIGKILL")
   }
   const pill = thread.locator("[data-machine-pill]")
-  await expect(pill).toContainText("Banda is restarting on this machine")
+  await expect(pill).toContainText("Banda is restarting on this machine", {
+    timeout: 10_000,
+  })
   // The bar says nothing of it: the pill does.
   await expect(page.getByText("Reconnecting…")).toHaveCount(0)
 

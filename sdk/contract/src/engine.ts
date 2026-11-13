@@ -379,8 +379,9 @@ const hostTime = (at: number | undefined, offset: number | undefined) =>
  * - An engine may be pinged (`ping`): one that answers nothing, its
  *   connection open or not, is stale until it is heard again, and an act
  *   to it fails as one to a machine away does. An engine no one else says
- *   is away is stale as its connection ends too (`staleOnLoss`), so an act
- *   asked as it restarts fails at once.
+ *   is away is stale too once its connection ended and it is not heard
+ *   again in a while (`staleOnLoss`), so an act asked as it stays down
+ *   fails at once.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -406,6 +407,8 @@ export class Engine {
   readonly #unreachable: (() => Unreachable) | undefined
   readonly #ping: Ping | undefined
   readonly #staleOnLoss: boolean
+  /** Counts down from a connection's end to stale (`staleOnLoss`). */
+  #losing: ReturnType<typeof setTimeout> | undefined
   /** Who hears it go stale, and answer again (`watchStale`). */
   readonly #staleWatchers = new Set<(stale: boolean) => void>()
   /** When it last heard the engine say anything, by this machine's clock. */
@@ -443,9 +446,12 @@ export class Engine {
    * `ping`, the engine is asked whether it still answers (ADR 0082,
    * decision 11). `staleOnLoss` is for an engine no one else says is
    * away, as a device's own machine's (ADR 0124): its connection says
-   * it. Once it was heard, a connection that ends leaves it stale while
-   * it tries again, until it is heard again: an act fails at once, in
-   * its machine's words, and never waits for the engine to be back.
+   * it. Once it was heard, a connection that ends, and is not heard again
+   * within `ping.within` (`PING`'s where it has no ping), leaves it stale
+   * while it tries again, until it is heard again: an act fails at once,
+   * in its machine's words, and never waits for the engine to be back.
+   * Back sooner, it was never out of reach, and a command cut off goes
+   * again, as on any connection that breaks.
    */
   constructor(
     address: () => Promise<Address>,
@@ -803,6 +809,7 @@ export class Engine {
     this.#why = why
     // Away, it is no more stale: the client that reaches it says why.
     this.#stale = false
+    this.#found()
     if (this.#status.state === "away") return
     this.#go++
     clearTimeout(this.#next)
@@ -817,6 +824,7 @@ export class Engine {
   /** Closes the connection for good. */
   close(): void {
     this.#closed = true
+    this.#found()
     this.#socket?.close()
     this.#quiet(new Lost())
     this.#fail(new Lost())
@@ -1234,6 +1242,7 @@ export class Engine {
 
   /** The engine said something: it answers, and is stale no more. */
   #heardNow(): void {
+    this.#found()
     this.#heard = Date.now()
     this.#answered = true
     this.#missed = 0
@@ -1334,11 +1343,33 @@ export class Engine {
     this.#socket = null
     this.#helloed = false
     const again = !this.#closed && this.#status.state !== "refused"
-    // Its own connection says whether it answers: ended, it does not,
-    // until it is heard again. One never heard is still starting.
-    if (again && this.#staleOnLoss && this.#heard !== undefined) this.#hush()
+    // Its own connection says whether it answers: ended, and not heard
+    // again in as long as an asked engine has to answer, it does not. One
+    // never heard is still starting; one back sooner, as after a blip or
+    // a quick restart, was never out of reach, and what was cut off goes
+    // again.
+    if (
+      again &&
+      this.#staleOnLoss &&
+      this.#heard !== undefined &&
+      !this.#stale &&
+      this.#losing === undefined
+    )
+      this.#losing = setTimeout(
+        () => {
+          this.#losing = undefined
+          this.#hush()
+        },
+        (this.#ping ?? PING).within
+      )
     this.#lose()
     if (again) this.#retry()
+  }
+
+  /** Heard, away or closed, its lost connection counts no more. */
+  #found(): void {
+    clearTimeout(this.#losing)
+    this.#losing = undefined
   }
 
   #retry(): void {

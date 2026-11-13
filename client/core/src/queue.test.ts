@@ -888,8 +888,11 @@ test("a message waits while this machine's engine restarts, and a Pane closed me
   expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
   expect(waitsFor(hosts.shown(HERE), here.status.state)).toBe(false)
 
-  // Its engine goes: this machine is away, and what is sent now waits.
+  // Its engine goes, and is not back in a while: this machine is away,
+  // and what is sent now waits.
   Socket.opened[0]!.close()
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
+  await vi.advanceTimersByTimeAsync(3_000)
   expect(hosts.shown(HERE)).toMatchObject({
     state: { state: "away", why: words },
     asOf: at1432,
@@ -922,8 +925,8 @@ test("a message waits while this machine's engine restarts, and a Pane closed me
   })
 
   // It tries again by itself, and is back under the same boot.
-  await vi.advanceTimersByTimeAsync(250)
-  const socket = Socket.opened[1]!
+  await vi.advanceTimersByTimeAsync(5_000)
+  const socket = Socket.opened.at(-1)!
   expect(callsOn(socket)).toEqual([])
   socket.say(opened)
   await vi.advanceTimersByTimeAsync(0)

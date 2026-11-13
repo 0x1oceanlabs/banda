@@ -1550,12 +1550,16 @@ test("an engine with no ping is never pinged, nor stale", async () => {
 const restarting = () =>
   new Unreachable("", "Banda is restarting on this machine")
 
+/** A ping that only says how long a lost connection has: `within` ms. */
+const lostFor = (within: number) => ({ every: 60_000, quiet: 60_000, within })
+
 test("an engine no one else says is away is stale as its connection ends: an act on its way fails as one that may have run, one asked as it restarts fails at once, unsent, a read waits, and heard again it goes on", async () => {
   holding()
   await serve()
-  client = new Engine(address, { unreachable: restarting, staleOnLoss: true })
+  const down = { staleOnLoss: true, ping: lostFor(200) }
+  client = new Engine(address, { unreachable: restarting, ...down })
   // One that names no machine says the same in the connection's words.
-  other = new Engine(address, { staleOnLoss: true })
+  other = new Engine(address, down)
   const said: boolean[] = []
   client.watchStale((stale) => said.push(stale))
   await until(client, "open")
@@ -1582,7 +1586,9 @@ test("an engine no one else says is away is stale as its connection ends: an act
   await stop()
   await until(client, "lost")
   Holding.let()
-  expect(client.stale).toBe(true)
+  // Not at once: it has a moment to be back.
+  expect(client.stale).toBe(false)
+  await expect.poll(() => client!.stale).toBe(true)
   expect(said).toEqual([true])
   expect(await settled).toMatchObject([
     {
@@ -1616,6 +1622,36 @@ test("an engine no one else says is away is stale as its connection ends: an act
   expect(sentWith(unsent)).toEqual([])
   await client.command("projects.create", { name: "Back" })
   expect(await names(client)).toContain("Back")
+})
+
+test("an engine no one else says is away, back before its moment is out, was never out of reach: a command cut off goes again", async () => {
+  holding()
+  await serve()
+  client = new Engine(address, {
+    unreachable: restarting,
+    staleOnLoss: true,
+    ping: lostFor(30_000),
+  })
+  const said: boolean[] = []
+  client.watchStale((stale) => said.push(stale))
+  await until(client, "open")
+  Holding.held = true
+  const cut = newId()
+  const made = client.command(
+    "projects.create",
+    { name: "Cut off" },
+    undefined,
+    cut
+  )
+  await expect.poll(() => sentWith(cut).length).toBe(1)
+  await stop()
+  await until(client, "lost")
+  Holding.let()
+  await serve()
+  await made
+  expect(client.stale).toBe(false)
+  expect(said).toEqual([])
+  expect(sentWith(cut)).toHaveLength(2)
 })
 
 test("an engine no one else says is away, not heard yet, is still starting: an act waits for its first connection", async () => {
