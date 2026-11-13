@@ -20,7 +20,8 @@ pub enum DevicesCommand {
     /// by that key prints as it is.
     Add {
         /// The device's public key: Ed25519, 32 bytes, as base64url.
-        #[arg(long)]
+        /// One in 64 starts with `-`, and is a key all the same.
+        #[arg(long, allow_hyphen_values = true)]
         key: String,
         /// What you read it by; this machine's name for its own window.
         #[arg(long, required_unless_present = "here")]
@@ -92,4 +93,30 @@ pub async fn devices(places: &Places, what: DevicesCommand) -> Result<(), Failur
 
 async fn ask(client: &mut Client, method: &str, params: Value) -> Result<Value, Failure> {
     client.call(method, None, CommandId::new(), params).await
+}
+
+#[cfg(test)]
+mod tests {
+    use super::DevicesCommand;
+    use clap::Parser;
+
+    #[derive(Parser)]
+    struct Cli {
+        #[command(subcommand)]
+        what: DevicesCommand,
+    }
+
+    #[test]
+    fn a_key_that_starts_with_a_dash_is_a_key() {
+        let key = "-sbUl8XNCEjaHjWi4lSjJIAlT1PQ-4YGLmy5QCkqrPk";
+        let cli = Cli::try_parse_from(["banda", "add", "--self", "--key", key]).unwrap();
+        assert!(
+            matches!(cli.what, DevicesCommand::Add { key: said, here: true, .. } if said == key)
+        );
+        // Its other flags are still flags after it.
+        let cli = Cli::try_parse_from(["banda", "add", "--key", key, "--name", "phone"]).unwrap();
+        assert!(
+            matches!(cli.what, DevicesCommand::Add { name: Some(name), .. } if name == "phone")
+        );
+    }
 }
