@@ -50,6 +50,42 @@ afterEach(() => {
 
 const flush = () => vi.advanceTimersByTimeAsync(0)
 
+test("what the client follows and hears goes with its hello, before the engine's welcome, and what joins after goes at once", async () => {
+  const engine = new Engine(address)
+  engine.follow(
+    "project",
+    3,
+    {},
+    () => {},
+    () => {}
+  )
+  await flush()
+  const socket = Socket.made[0]
+  socket.onopen?.()
+  // One round trip less: nothing waits for the welcome.
+  expect(socket.sent.map((frame) => frame.type)).toEqual(["hello", "subscribe"])
+  expect(socket.sent[1]).toMatchObject({ project: "project", after: 3 })
+  const stop = engine.follow(
+    "project",
+    0,
+    {},
+    () => {},
+    () => {}
+  )
+  expect(socket.sent.map((frame) => frame.type)).toEqual([
+    "hello",
+    "subscribe",
+    "subscribe",
+  ])
+  stop()
+  expect(socket.sent.at(-1)).toMatchObject({ type: "unsubscribe" })
+  socket.say({ type: "welcome", engine: "test", modules: ["agents"] })
+  expect(engine.status.state).toBe("open")
+  // Nothing is said twice once the welcome comes.
+  expect(socket.sent).toHaveLength(4)
+  engine.close()
+})
+
 test("a command that broke off goes again with the same command ID", async () => {
   const engine = new Engine(address)
   await flush()

@@ -75,8 +75,14 @@ export class Socket {
   close() {
     this.onclose?.()
   }
-  /** Says `frame` to the page. */
+  #open = false
+  /** Says `frame` to the page, on a connection that opened first, as a
+   * real one has by its first message. */
   say(frame: object) {
+    if (!this.#open) {
+      this.#open = true
+      this.onopen?.()
+    }
     this.onmessage?.({ data: JSON.stringify(frame) })
   }
 }

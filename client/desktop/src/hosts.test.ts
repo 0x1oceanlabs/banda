@@ -1101,7 +1101,7 @@ it.live(
       })
       yield* Effect.gen(function* () {
         const hosts = yield* Hosts
-        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "one" })
         const seen = yield* watched
         // The follower ends.
         fake.touch("cut")
@@ -1120,7 +1120,7 @@ it.live(
         ).toEqual(Option.none())
         // It comes back with the second run's port and secret.
         const second = yield* hosts.address("devbox")
-        expect(second.secret).toBe("two")
+        expect(second).toMatchObject({ secret: "two" })
         expect(fake.runs("-N")[1]!.args).toContain(
           `127.0.0.1:${portOf(fake, 1)}:127.0.0.1:2222`
         )
@@ -1136,7 +1136,9 @@ it.live(
         expect(
           yield* Effect.timeoutOption(hosts.address("devbox"), 300)
         ).toEqual(Option.none())
-        expect((yield* hosts.address("devbox")).secret).toBe("three")
+        expect(yield* hosts.address("devbox")).toMatchObject({
+          secret: "three",
+        })
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake, { first: 1_000 })))
     }),
   20_000
@@ -1169,7 +1171,7 @@ it.live(
         )
         // Starting it does, and the one waiting gets its address.
         yield* hosts.start("devbox")
-        expect((yield* Fiber.join(asked)).secret).toBe("two")
+        expect(yield* Fiber.join(asked)).toMatchObject({ secret: "two" })
         expect(fake.runs("follower")).toHaveLength(2)
         // Starting a live host does nothing; one not in hosts.toml fails.
         yield* hosts.start("devbox")
@@ -1203,7 +1205,7 @@ it.live(
       })
       yield* Effect.gen(function* () {
         const hosts = yield* Hosts
-        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "one" })
         const seen = yield* watched
         fake.touch("quit")
         expect(yield* reaches((host) => host.state === "away")).toEqual({
@@ -1213,7 +1215,7 @@ it.live(
           why: `${channel.name} is not running there, or nobody is logged in there`,
         })
         // No one asks: it comes back as the Person logs in there.
-        expect((yield* hosts.address("devbox")).secret).toBe("two")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "two" })
         expect(fake.runs("follower")).toHaveLength(3)
         expect(seen.map((host) => host.state)).not.toContain("stopped")
         expect(logged).toContain(
@@ -1412,7 +1414,7 @@ it.live(
         expect((yield* hosts.current)[0]!.state).toBe("signin")
         expect(fake.runs("follower")).toHaveLength(1)
         fake.touch("signed")
-        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "one" })
         // Once ssh is in, what it prints is the other machine's: a link
         // then is no sign-in.
         fake.touch("later")
@@ -1629,8 +1631,8 @@ it.live(
           "the forward to devbox ended before it answered (code 255)",
         ])
         expect(
-          (yield* Hosts.use((hosts) => hosts.address("devbox"))).secret
-        ).toBe("two")
+          yield* Hosts.use((hosts) => hosts.address("devbox"))
+        ).toMatchObject({ secret: "two" })
       }).pipe(Effect.scoped, Effect.provide(hostsOn(fake)))
     }),
   20_000
@@ -1895,7 +1897,7 @@ it.live(
       const written = `# mine\n\n${DEVBOX_TOML.replace('ssh = "devbox"', 'ssh = "devbox"  # home')}`
       yield* Effect.gen(function* () {
         const hosts = yield* Hosts
-        expect((yield* hosts.address("devbox")).secret).toBe("one")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "one" })
         const pids = fake.pidsOf("devbox")
         expect(
           yield* hosts.set("devbox", { ssh: "roma@devbox", banda: "" })
@@ -1908,7 +1910,7 @@ it.live(
         expect(changed).toMatchObject({ name: "devbox", ssh: "roma@devbox" })
         expect(changed).not.toHaveProperty("banda")
         // Reached again at once, at the new address, the old ssh ended.
-        expect((yield* hosts.address("devbox")).secret).toBe("two")
+        expect(yield* hosts.address("devbox")).toMatchObject({ secret: "two" })
         expect(fake.runs("follower", "roma@devbox")).toHaveLength(1)
         expect(fake.runs("follower").at(-1)!.args.at(-1)).toBe(
           remoteCommand(undefined)

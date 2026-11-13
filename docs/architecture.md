@@ -460,6 +460,15 @@ The kernel holds only what every module needs, and it names no module.
   once, each told `revoked`: the port says each removal
   (`Devices::removals`), and a session asks whether its own is still
   paired.
+  The contract's client speaks both ways in (`sdk/contract/src/engine.ts`,
+  `door.ts`): its `Address` says the owner's secret, for the API, or a
+  `DoorKey`, for the door: the device, the host key it paired with, and
+  what signs for the device, which never hands the client its key. At the
+  door it answers only a challenge that host key signed, takes what the
+  door says one frame at a time until the `welcome` proved the key over
+  its own nonce, and says a door that is another machine's as a refusal.
+  Either way it sends what it follows and hears right after its `hello`,
+  before the `welcome`, so a connection costs one round trip less.
 - **Environment** (ADR 0084, decision 1). A port beside Identity: where a
   Project's programs run. A module starts each through its Project's
   (`ModuleProject::environment`), never itself: a `Program` (its

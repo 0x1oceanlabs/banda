@@ -45,6 +45,7 @@ export {
   notDone,
   outcome,
   type Address,
+  type DoorKey,
   type Answered,
   type CommandOptions,
   type NotDone,

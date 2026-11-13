@@ -54,19 +54,32 @@ function states(now: number): Record<string, object> {
 
 /** Answers `updates.state` on every engine socket of the page from
  * `states`, by the machine its engine names in its welcome; and keeps
- * each `updates.restart` asked, answering it. */
+ * each `updates.restart` asked, answering it. The page asks for its
+ * streams with its `hello`, before that welcome: those wait for it. */
 async function answerUpdates(page: Page, asked: object[]) {
   const said = states(Date.now())
   await page.routeWebSocket(/.*/, (socket) => {
     const engine = socket.connectToServer()
     let name: string | undefined
+    let welcomed = false
+    // The streams asked before the welcome said which machine this is.
+    const early: { id: number; message: string | Buffer }[] = []
+    const state = (id: number, message: string | Buffer) => {
+      const state = name !== undefined ? said[name] : undefined
+      if (state)
+        socket.send(JSON.stringify({ type: "piece", stream: id, data: state }))
+      else engine.send(message)
+    }
     engine.onMessage((message) => {
       const frame = JSON.parse(String(message)) as {
         type: string
         named?: { name: string }
       }
-      if (frame.type === "welcome") name = frame.named?.name
       socket.send(message)
+      if (frame.type !== "welcome") return
+      name = frame.named?.name
+      welcomed = true
+      for (const { id, message } of early.splice(0)) state(id, message)
     })
     socket.onMessage((message) => {
       const frame = JSON.parse(String(message)) as {
@@ -75,12 +88,10 @@ async function answerUpdates(page: Page, asked: object[]) {
         method?: string
         params?: object
       }
-      const state = name !== undefined ? said[name] : undefined
-      if (frame.type === "stream" && frame.method === "updates.state" && state)
-        socket.send(
-          JSON.stringify({ type: "piece", stream: frame.id, data: state })
-        )
-      else if (frame.method === "updates.restart") {
+      if (frame.type === "stream" && frame.method === "updates.state") {
+        if (welcomed) state(frame.id, message)
+        else early.push({ id: frame.id, message })
+      } else if (frame.method === "updates.restart") {
         asked.push({ machine: name, ...frame.params })
         socket.send(JSON.stringify({ type: "result", id: frame.id, ok: {} }))
       } else engine.send(message)
