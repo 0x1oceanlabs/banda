@@ -18,15 +18,28 @@
  * by hand, ends it with code 3: the window stays, its Panes say Banda is
  * stopped on this machine, and it starts the engine again when the Person
  * says (`start`; ADR 0124, decision 9). One that crashed is started
- * again. Quit Banda here runs `banda stop --force` (`Stop`). It starts
+ * again. Quit Banda here runs `banda stop --force` (`Stop`).
+ *
+ * The page reaches the engine at its door, as the device this window is
+ * (ADR 0124, decision 5). Main is this machine's console, as whoever
+ * reads `engine.json` is, so it pairs the window with no question: each
+ * time the engine starts, by this device's key (key.ts), which makes no
+ * second record, and pairs anew after a lost key or a lost device store.
+ * The page gets the door's address, the device and the host key, not the
+ * owner secret, and main signs its `hello` to that door alone. An engine
+ * with no door yet, or one that would not pair, is reached as before, by
+ * the secret, and main says so in its log: the window is never locked out
+ * of its own machine. Main's own client, and what it relays, stay on
+ * the loopback API. It starts
  * with `path` as its PATH, when there is one: on macOS, the login
  * shell's (login.ts), and with `env` over the window's environment: the
  * Node the app provides for the adapters it carries (ADR 0059).
  */
 import { type Address, type Code, Engine as Client } from "@banda/contract"
-import { STOPPED_HERE } from "@banda/core"
+import { type EngineAt, STOPPED_HERE } from "@banda/core"
 import { Engine } from "@banda/desktop-kit"
 import {
+  Console,
   Context,
   Data,
   Deferred,
@@ -39,6 +52,7 @@ import {
 } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
+import type { DeviceKey } from "./key"
 import { Program } from "./program"
 
 /** The first line `start --with-parent` prints; `window` is where the
@@ -49,8 +63,63 @@ const Running = Schema.fromJsonString(
     port: Schema.Number,
     secret: Schema.String,
     window: Schema.String,
+    // Its door, and the host key it proves there, where it has one.
+    door: Schema.optional(Schema.Number),
+    host_key: Schema.optional(Schema.String),
   })
 )
+
+/** The origin of Banda's page, which a window pairs from. */
+const ORIGIN = "app://banda"
+
+/** How long pairing may take before the page is given today's road. */
+const PAIRS_WITHIN = "10 seconds"
+
+/**
+ * Pairs this window with the engine `client` reaches, by `key`: its
+ * device there, the same one each time. It goes by the machine's name,
+ * as `banda devices add --self` names it. An engine that refused main's
+ * client pairs nothing, and says so at once; given up on (`given`), it
+ * watches no more.
+ */
+async function paired(
+  client: Client,
+  key: string,
+  given: AbortSignal
+): Promise<string> {
+  await new Promise<void>((opened, refused) => {
+    const stop = client.watch((status) => {
+      if (status.state === "open") opened()
+      else if (status.state === "refused")
+        refused(new Error(status.refusal.message))
+      else return
+      queueMicrotask(() => stop())
+    })
+    given.addEventListener("abort", () => stop(), { once: true })
+  })
+  const { status } = client
+  const name = (status.state === "open" && status.named?.name) || "This machine"
+  const device = await client.command("devices.add", {
+    key,
+    name,
+    kind: "desktop",
+    here: true,
+  })
+  return device.id
+}
+
+/** Whether `message` is the `hello` a page of Banda's signs for the door
+ * that proves `hostKey` (`helloMessage` in the contract): nothing else is
+ * signed with this device's key. */
+export function helloTo(message: string, hostKey: string): boolean {
+  const lines = message.split("\n")
+  return (
+    lines.length === 5 &&
+    lines[0] === "banda-door/hello/1" &&
+    lines[2] === hostKey &&
+    lines[3] === ORIGIN
+  )
+}
 
 /** The code `start --with-parent` ends with once the engine stopped as
  * asked, but not by Quit Banda (`engine/src/control.rs`). */
@@ -70,9 +139,12 @@ export class OwnEngine extends Context.Service<
     /** Where the engine listens, as `Engine.address` says it; but it says
      * why not while the engine is stopped, so the page's Panes say so and
      * nothing waits. */
-    readonly reached: Effect.Effect<Address, EngineStopped>
+    readonly reached: Effect.Effect<EngineAt, EngineStopped>
     /** Starts an engine that was stopped; running, it changes nothing. */
     readonly start: Effect.Effect<void>
+    /** This device's signature of the page's `hello` to this engine's
+     * door; anything else is refused. */
+    readonly sign: (message: string) => Effect.Effect<string, Unexpected>
   }
 >()("banda/OwnEngine") {}
 
@@ -82,7 +154,8 @@ class Unexpected extends Data.TaggedError("Unexpected")<{
 }> {}
 
 /** The engine's layer: see `Engine` (@banda/desktop-kit) and `OwnEngine`.
- * `stopped` is called once Quit Banda stopped the engine. */
+ * `stopped` is called once Quit Banda stopped the engine. With `key`,
+ * this device's, the page reaches the engine at its door. */
 export const engineLayer = (
   path: Effect.Effect<
     Option.Option<string>,
@@ -90,7 +163,8 @@ export const engineLayer = (
     ChildProcessSpawner.ChildProcessSpawner
   > = Effect.succeed(Option.none()),
   env: Record<string, string> = {},
-  stopped: () => void = () => {}
+  stopped: () => void = () => {},
+  key?: DeviceKey
 ) =>
   Layer.effectContext(
     Effect.gen(function* () {
@@ -100,9 +174,56 @@ export const engineLayer = (
         onSome: (PATH) => ({ ...env, PATH }),
       })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
+      // Where the page reaches it, once the window is paired or not.
+      const forPage = yield* SubscriptionRef.make(Option.none<EngineAt>())
+      // The host key the running engine proves at its door.
+      let hostKey: string | undefined
+      let client: Client | undefined
       const door = yield* Deferred.make<string>()
       // Whether it was stopped, not by Quit Banda, until it is started.
       const down = yield* SubscriptionRef.make(false)
+      const at = known(address).pipe(
+        Stream.runHead,
+        Effect.map(Option.getOrThrow)
+      )
+      /** Main's one client, on the loopback API. */
+      const clientNow = () =>
+        (client ??= new Client(() => Effect.runPromise(at)))
+      /**
+       * What the page is given for a run that said `port`, `secret` and
+       * maybe a door: the door, once this window is paired there; else
+       * today's road, as for an engine with no door, a main with no key,
+       * or a pairing that fails.
+       */
+      const forThePage = (said: typeof Running.Type) => {
+        const before: EngineAt = {
+          url: `ws://127.0.0.1:${said.port}/ws`,
+          secret: said.secret,
+        }
+        const { door: port, host_key: proves } = said
+        if (!key || port === undefined || proves === undefined)
+          return SubscriptionRef.set(forPage, Option.some(before))
+        hostKey = proves
+        return Effect.tryPromise((given) =>
+          paired(clientNow(), key.public, given)
+        ).pipe(
+          Effect.timeout(PAIRS_WITHIN),
+          Effect.map((device): EngineAt => ({
+            url: `ws://127.0.0.1:${port}/ws`,
+            door: { device, hostKey: proves },
+          })),
+          Effect.catch((error) =>
+            Effect.as(
+              Console.error(
+                "banda: the window was not paired with its engine, and reaches it as before:",
+                error
+              ),
+              before
+            )
+          ),
+          Effect.flatMap((at) => SubscriptionRef.set(forPage, Option.some(at)))
+        )
+      }
       /** The first line of a run: where it listens, and the door. */
       const started = (line: string) =>
         Schema.decodeUnknownEffect(Running)(line).pipe(
@@ -122,6 +243,10 @@ export const engineLayer = (
                 })
               ),
               Deferred.succeed(door, running.window)
+            ).pipe(
+              // Beside the run, which reads on; it ends with the run's
+              // scope, before what the run said is forgotten.
+              Effect.andThen(Effect.forkScoped(forThePage(running)))
             )
           )
         )
@@ -141,7 +266,13 @@ export const engineLayer = (
               return started(line)
             }),
             Effect.andThen(Effect.never),
-            Effect.ensuring(SubscriptionRef.set(address, Option.none()))
+            Effect.scoped,
+            Effect.ensuring(
+              Effect.andThen(
+                SubscriptionRef.set(address, Option.none()),
+                SubscriptionRef.set(forPage, Option.none())
+              ).pipe(Effect.andThen(Effect.sync(() => (hostKey = undefined))))
+            )
           )
         },
         {
@@ -167,10 +298,6 @@ export const engineLayer = (
           }
         })
       )
-      const at = known(address).pipe(
-        Stream.runHead,
-        Effect.map(Option.getOrThrow)
-      )
       // Stopped now, or while it waits: the page's connection hears why.
       const whenDown = SubscriptionRef.changes(down).pipe(
         Stream.filter((is) => is),
@@ -179,18 +306,27 @@ export const engineLayer = (
           Effect.fail(new EngineStopped({ message: STOPPED_HERE }))
         )
       )
-      let client: Client | undefined
       yield* Effect.addFinalizer(() => Effect.sync(() => client?.close()))
       const own = {
-        reached: Effect.raceFirst(at, whenDown),
+        reached: Effect.raceFirst(
+          known(forPage).pipe(Stream.runHead, Effect.map(Option.getOrThrow)),
+          whenDown
+        ),
         // No longer stopped at once, so the address asked next waits.
         start: SubscriptionRef.set(down, false),
+        sign: (message: string) =>
+          key && hostKey !== undefined && helloTo(message, hostKey)
+            ? Effect.succeed(key.sign(message))
+            : Effect.fail(
+                new Unexpected({
+                  message:
+                    "This device signs only its hello to this machine's door.",
+                })
+              ),
       }
       return Context.make(Engine, {
         address: at,
-        client: Effect.sync(
-          () => (client ??= new Client(() => Effect.runPromise(at)))
-        ),
+        client: Effect.sync(clientNow),
         door: Deferred.await(door),
       }).pipe(Context.add(OwnEngine, own))
     })

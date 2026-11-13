@@ -182,6 +182,22 @@ repository), with an adversarial check.
   this machine". The bar no longer says "Reconnecting…": the pill does.
   A Pane reads its machine through one hook (`useMachineOf`), whichever
   machine that is.
+- **The window is at the door (SE3, PR 4b).** Main pairs the window
+  with its own machine each time the engine starts, through its own
+  client on the loopback API, as that machine's console: `devices.add`
+  with `here`, by this device's key, which makes no second record and
+  pairs anew after a lost key or a lost device store. The key is an
+  Ed25519 key in `device.key` in Banda's state, for its owner alone. The
+  page is handed the door's address, the device and the host key, and
+  main signs its `hello` to that door, from Banda's own origin, and
+  nothing else. An engine whose first line names no door, or a pairing
+  that does not answer in 10 s, leaves the page on the owner's secret, as
+  before. Main's own client and the bytes it relays stay on the loopback
+  API. A page served for development, of another origin, is reached as
+  before too. Not yet: a window whose device is removed while it runs
+  pairs again only at its next start, or its engine's; and a pairing the
+  engine refuses falls back to the secret, where it could remove what is
+  in its way and pair again.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

@@ -32,6 +32,22 @@ export const ELSEWHERE = "Only Banda's app reaches other machines."
 const elsewhere = () => Promise.reject(new Error(ELSEWHERE))
 
 export const device = {
+  /**
+   * Where this machine's engine listens now, as the page connects to it
+   * (ADR 0124, decision 5): at its door, as the device the desktop paired
+   * this window as, with the desktop signing its `hello`, as it holds
+   * this device's key; as before, by the owner's secret, for an engine
+   * with no door yet. Asked of the desktop each time, and kept nowhere
+   * in the page.
+   */
+  engine: async (): Promise<Address> => {
+    const host = desktop()
+    if (!host) return elsewhere()
+    const at = await host.engine()
+    if (!("door" in at)) return at
+    const sign = (message: string) => host.sign(message)
+    return { ...at, door: { ...at.door, sign } }
+  },
   /** The other machines of `hosts.toml`, as the desktop reaches them over
    * ssh (ADR 0081, decision 4). */
   hosts: {

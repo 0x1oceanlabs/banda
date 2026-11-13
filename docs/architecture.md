@@ -1735,7 +1735,15 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 
 - **The page reaches the engine only through the API.** Electron main gives
   it one thing: the engine's address, through `window.banda.engine()` in
-  a sandboxed preload. The page is served from `app://banda` with a
+  a sandboxed preload. That address is the engine's door (ADR 0124,
+  decision 5): main pairs the window with its own machine each time the
+  engine starts, by this device's key, kept in `device.key` in Banda's
+  state for its owner alone (`client/desktop/src/key.ts`), and hands the
+  page the door, the device and the host key. It signs the page's `hello`
+  to that door (`window.banda.sign`) and nothing else, so the page holds
+  no key, and no owner secret where its engine has a door and paired the
+  window. An engine with no door yet, or one that would not pair, is
+  reached by the secret, as before, and main's log says so. The page is served from `app://banda` with a
   strict Content Security Policy. It cannot navigate, open windows or get
   permissions, and links open in the browser. It may run WebAssembly
   shipped with it, which Ghostty draws terminals with.

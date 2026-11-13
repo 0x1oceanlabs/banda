@@ -64,6 +64,18 @@ export type Update = { name: string; have: string; always: boolean } & (
 export type Note = { version: string; text: string }
 
 /**
+ * Where the window's page finds this machine's engine, as the desktop
+ * tells it (ADR 0124, decision 5): at its door, as the device this
+ * machine paired this window as, with the host key the engine must
+ * prove, where the engine has a door; the desktop holds the device's key
+ * and signs for the page (`sign`). An engine with no door yet is reached
+ * as before, by its owner's secret.
+ */
+export type EngineAt = { url: string; latency?: number } & (
+  { secret: string } | { door: { device: string; hostKey: string } }
+)
+
+/**
  * Another machine's engine, as the window reaches it over ssh (ADR 0081,
  * decision 4; `hosts.toml`): starting; waiting for the Person to sign in
  * to Tailscale at `url`; live, with its build and this window's own

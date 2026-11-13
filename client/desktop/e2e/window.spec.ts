@@ -557,6 +557,62 @@ test("this machine's engine stopped by anything but Quit Banda leaves the window
   await expect(thread.getByText("You said: after the stop")).toBeVisible()
 })
 
+test("the window comes in at its engine's door as a device this machine paired by itself, and its page holds no owner secret (ADR 0124, decision 5)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  // What the desktop hands the page: the door, the device and the host
+  // key the engine must prove; never the secret.
+  const at = await page.evaluate(() =>
+    (
+      globalThis as unknown as { banda: { engine: () => Promise<object> } }
+    ).banda.engine()
+  )
+  expect(Object.keys(at).sort()).toEqual(["door", "url"])
+  const { door } = at as { door: { device: string; hostKey: string } }
+  // This machine paired the window itself, once, as its own.
+  const listed = JSON.parse(window.banda("devices", "list")).ok
+  expect(listed.host_key).toBe(door.hostKey)
+  expect(listed.devices).toMatchObject([
+    { id: door.device, kind: "desktop", here: true, origin: "app://banda" },
+  ])
+  // The desktop signs the page's hello to that door, and nothing else.
+  const signs = (message: string) =>
+    page.evaluate(
+      (message) =>
+        (
+          globalThis as unknown as {
+            banda: { sign: (message: string) => Promise<string> }
+          }
+        ).banda
+          .sign(message)
+          .then(
+            () => "signed",
+            () => "refused"
+          ),
+      message
+    )
+  expect(await signs("pay Bob")).toBe("refused")
+  expect(
+    await signs(`banda-door/hello/1\nn\n${door.hostKey}\nhttps://x.example\nm`)
+  ).toBe("refused")
+  // And the window works through it.
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  // Its engine restarts: paired again by the same key, the same device.
+  const first = window.engine()!
+  process.kill(first, "SIGKILL")
+  await expect.poll(() => window.engine() ?? first).not.toBe(first)
+  await composer.fill("after the break")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: after the break")).toBeVisible()
+  const again = JSON.parse(window.banda("devices", "list")).ok
+  expect(again.devices).toHaveLength(1)
+  expect(again.devices[0].id).toBe(door.device)
+})
+
 test("no process of the window stays in the unit of what started it (ADR 0086, decision 7)", async () => {
   const systemd = spawnSync(
     "systemctl",
