@@ -15,8 +15,10 @@
 # icon = "desktop"
 
 # Start Banda at login: its engine starts as you log in, so its Agents
-# and other machines find it running. false: it starts as you open
-# Banda. macOS has it so far, Linux next.
+# and other machines find it running. On Linux its systemd user unit is
+# enabled, and with linger on (loginctl enable-linger) it starts as the
+# machine starts, nobody logged in. false: it starts as you open Banda.
+# macOS and Linux have it so far.
 # start-at-login = true
 
 # Stay awake while Agents work: the machine does not idle-sleep while a

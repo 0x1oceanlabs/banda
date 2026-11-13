@@ -375,6 +375,18 @@ starts at login too, later.
   only an app that left a crash dump newer than its lock and than the
   engine's last look that saw it run, as a page's or the GPU's dump
   from earlier in the run is not the app's.
+- Plan step 8, as built (2026-11-13): while "Start Banda at login" is
+  on, the default state folder's unit is a file in
+  `~/.config/systemd/user`, linked into `default.target.wants` as
+  `systemctl enable` would (which refuses while a transient unit of that
+  name runs), and a client starts it with `systemctl --user start`; off,
+  the file goes and the unit is transient, as before. A test's, a
+  trial's and a checkout's unit is always transient. What the starter's
+  session lends the engine goes in a drop-in under the runtime folder,
+  not in the file. The engine rewrites the file with its own program as
+  it starts, so after it moved onto a new copy a boot starts that copy.
+  Banda does not turn linger on itself: which machine serves others is
+  the Person's to say, and `docs/hosts.md` gives the one command.
 - The draft in PR #460, decision 6: the engine's own `hello` with a
   "generation" gives way to ADR 0082's `challenge`, `hello` with a
   range, and `welcome`.

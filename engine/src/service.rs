@@ -3,16 +3,21 @@
 //! On Linux it runs as a systemd user unit, `<folder>-engine`
 //! (`banda-engine`, `banda-dev-engine`), which any client starts when no
 //! engine answers: the window, and every command that reaches the engine.
-//! It is started with `systemd-run --user`, so it has the user manager's
-//! environment, never its starter's: what a starter's shell sets for
-//! itself, as Claude Code's `CLAUDECODE`, reaches no Harness or Terminal
-//! of the engine. What comes with it from its starter:
+//! While "Start Banda at login" is on, the unit is a file the user manager
+//! starts at login, and from boot with linger on, which a client starts
+//! with `systemctl start` ([`unit_file`]); while it is off, and for a
+//! test's or a trial's engine, a client starts it with `systemd-run
+//! --user`. Either way it has the user manager's environment, never its
+//! starter's: what a starter's shell sets for itself, as Claude Code's
+//! `CLAUDECODE`, reaches no Harness or Terminal of the engine. What comes
+//! with it from its starter:
 //!
 //! - Banda's own variables, but for an Agent's pass and Project;
 //! - the places its starter set, or that the starter's XDG folders move
 //!   where the manager's do not, so the window and the engine find the
 //!   same things;
-//! - the session's display and ssh agent, where the manager lacks them;
+//! - the session's display and ssh agent, where the manager lacks them,
+//!   until the session ends;
 //! - PATH from the login shell before the manager's, with what the
 //!   shell's profile adds, where Harnesses are found.
 //!
@@ -44,6 +49,7 @@
 
 pub mod app;
 pub mod launchd;
+pub mod unit_file;
 
 use crate::Failure;
 use crate::places::{FOLDER, Places};
@@ -172,6 +178,10 @@ pub trait Systemd: Manager {
     fn environment(&self) -> Vec<(String, String)>;
     /// `systemd-run` with `arguments`, which start a transient unit.
     fn run(&self, arguments: &[String]) -> Result<(), String>;
+    /// Starts unit `name` from its file.
+    fn start(&self, name: &str) -> Result<(), String>;
+    /// Reads the unit files again, as one changed.
+    fn reload(&self) -> Result<(), String>;
 }
 
 /// What runs the engine as the session's service here: launchd on macOS,
@@ -235,6 +245,14 @@ impl Systemd for User {
     fn run(&self, arguments: &[String]) -> Result<(), String> {
         let arguments: Vec<&str> = arguments.iter().map(String::as_str).collect();
         User::ran("systemd-run", &arguments).map(drop)
+    }
+
+    fn start(&self, unit: &str) -> Result<(), String> {
+        User::systemctl(&["start", &format!("{unit}.service")]).map(drop)
+    }
+
+    fn reload(&self) -> Result<(), String> {
+        User::systemctl(&["daemon-reload"]).map(drop)
     }
 }
 
@@ -367,27 +385,28 @@ pub(crate) fn unit_in(cgroup: &str) -> Option<&str> {
 pub struct Unit {
     pub name: String,
     program: PathBuf,
-    /// Set over the user manager's environment.
+    /// Set over the user manager's environment, and kept in its file.
     env: Vec<(String, String)>,
+    /// What its starter's session lends it, set over the user manager's
+    /// environment until the session ends.
+    session: Vec<(String, String)>,
     /// The user manager's version, which says what the unit may ask.
     version: u32,
+    /// Its files, for the default state folder's engine.
+    files: Option<unit_file::Files>,
+    /// Whether it starts at login, from its files: "Start Banda at login"
+    /// is on, and it is the default state folder's engine.
+    at_login: bool,
 }
 
 impl Unit {
-    /// What `systemd-run` takes to start it.
-    fn arguments(&self) -> Vec<String> {
-        let mut arguments: Vec<String> = [
-            "--user",
-            "--quiet",
-            // A unit that stopped, even failed, goes, so the next start
-            // may take its name.
-            "--collect",
-        ]
-        .map(str::to_owned)
-        .into();
-        arguments.push(format!("--unit={}", self.name));
-        arguments.push(format!("--description=Banda's engine ({FOLDER})"));
-        let mut properties = vec![
+    fn description(&self) -> String {
+        format!("Banda's engine ({FOLDER})")
+    }
+
+    /// What it asks of systemd, for its `[Unit]` and its `[Service]`.
+    fn properties(&self) -> (Vec<&'static str>, Vec<&'static str>) {
+        let mut service = vec![
             // Started once the program runs: systemd says so when it
             // cannot (from systemd 240).
             if self.version >= 240 {
@@ -408,14 +427,35 @@ impl Unit {
         // (services take it from systemd 243), and one that crashes
         // three times in a minute as it starts stops trying.
         if self.version >= 243 {
-            properties.extend([
-                "OOMPolicy=continue",
-                "StartLimitIntervalSec=60",
-                "StartLimitBurst=3",
-            ]);
+            service.push("OOMPolicy=continue");
+            (
+                vec!["StartLimitIntervalSec=60", "StartLimitBurst=3"],
+                service,
+            )
+        } else {
+            (Vec::new(), service)
         }
-        arguments.extend(properties.iter().map(|p| format!("--property={p}")));
-        arguments.extend((self.env.iter()).map(|(name, value)| format!("--setenv={name}={value}")));
+    }
+
+    /// What `systemd-run` takes to start it.
+    fn arguments(&self) -> Vec<String> {
+        let mut arguments: Vec<String> = [
+            "--user",
+            "--quiet",
+            // A unit that stopped, even failed, goes, so the next start
+            // may take its name.
+            "--collect",
+        ]
+        .map(str::to_owned)
+        .into();
+        arguments.push(format!("--unit={}", self.name));
+        arguments.push(format!("--description={}", self.description()));
+        let (unit, service) = self.properties();
+        arguments.extend((unit.iter().chain(&service)).map(|p| format!("--property={p}")));
+        arguments.extend(
+            (self.env.iter().chain(&self.session))
+                .map(|(name, value)| format!("--setenv={name}={value}")),
+        );
         arguments.push("--".to_owned());
         arguments.push(self.program.display().to_string());
         arguments.push("serve".to_owned());
@@ -423,30 +463,42 @@ impl Unit {
     }
 }
 
-/// The variables a unit gets over the user manager's (`manager`), from
-/// its `starter`'s:
-///
-/// - Banda's own ([`own`]);
-/// - the [`SESSION`]'s, where the manager lacks them;
-/// - PATH, the login shell's (`login`) then the manager's.
-fn environment(
+/// The variables a unit keeps over the user manager's (`manager`), from
+/// its `starter`'s: Banda's own ([`own`]), and PATH, the login shell's
+/// (`login`) then the manager's.
+fn kept(
     starter: &[(String, String)],
     places: &Places,
     manager: &[(String, String)],
     login: Option<&str>,
 ) -> Vec<(String, String)> {
     let mut env = own(starter, places, manager);
-    for name in SESSION {
-        if let (Some(value), None) = (given(starter, name), given(manager, name)) {
-            env.push((name.to_owned(), value));
-        }
-    }
     let manager_path = given(manager, "PATH").unwrap_or_default();
     let path = merged(login.unwrap_or_default(), &manager_path);
     if !path.is_empty() {
         env.push(("PATH".to_owned(), path));
     }
     env
+}
+
+/// What a `starter`'s session lends a unit: the [`SESSION`]'s variables
+/// the `manager` lacks.
+fn session(starter: &[(String, String)], manager: &[(String, String)]) -> Vec<(String, String)> {
+    (SESSION.iter())
+        .filter(|name| given(manager, name).is_none())
+        .filter_map(|name| Some(((*name).to_owned(), given(starter, name)?)))
+        .collect()
+}
+
+/// The files of `places`' engine's unit `name`, as `manager` names the
+/// folders: for the default state folder's engine, on Linux, never a
+/// checkout's.
+fn files_of(places: &Places, name: &str, manager: &[(String, String)]) -> Option<unit_file::Files> {
+    let default = crate::places::default_state();
+    let ours = cfg!(target_os = "linux")
+        && !crate::places::from_checkout()
+        && apart(&places.state, default.as_deref()).is_none();
+    ours.then(|| unit_file::Files::of(name, manager)).flatten()
 }
 
 /// `name`'s value among `among`, when it is set and not empty.
@@ -600,30 +652,34 @@ pub async fn unit(places: &Places, program: PathBuf, version: u32, systemd: &dyn
     if login.is_none() {
         tracing::warn!("the login shell did not say its PATH: the engine has the session's");
     }
-    let env = environment(&starter, places, &manager, login.as_deref());
-    let taken: Vec<&str> = (env.iter())
-        .map(|(name, _)| name.as_str())
-        .filter(|name| SESSION.contains(name))
-        .collect();
-    if !taken.is_empty() {
+    let session = session(&starter, &manager);
+    if !session.is_empty() {
+        let taken: Vec<&str> = session.iter().map(|(name, _)| name.as_str()).collect();
         tracing::info!(
             ?taken,
             "the user manager lacks these of the session's variables: the engine takes its starter's"
         );
     }
+    let files = files_of(places, &name, &manager);
+    let at_login = files.is_some() && banda_machines::starts_at_login(&places.config);
     Unit {
+        env: kept(&starter, places, &manager, login.as_deref()),
         name,
         program,
-        env,
+        session,
         version,
+        files,
+        at_login,
     }
 }
 
-/// Starts `unit` and waits for its engine to answer (`answers`), while the
-/// unit runs and for [`OPENS_WITHIN`] at most. A unit of that name that
-/// runs already, which another client just started, is waited for too.
-/// An engine that answers with a refusal, as one of another protocol
-/// does, is not waited for.
+/// Starts `unit`, from its file while it starts at login, else with
+/// `systemd-run`, taking away its file, which the setting no longer
+/// wants; then waits for its engine to answer (`answers`), while the unit
+/// runs and for [`OPENS_WITHIN`] at most. A unit of that name that runs
+/// already, which another client just started, is waited for too. An
+/// engine that answers with a refusal, as one of another protocol does,
+/// is not waited for.
 pub async fn start<T, F>(
     systemd: &dyn Systemd,
     unit: &Unit,
@@ -632,7 +688,7 @@ pub async fn start<T, F>(
 where
     F: Future<Output = Result<T, Failure>>,
 {
-    if let Err(said) = systemd.run(&unit.arguments())
+    if let Err(said) = started(systemd, unit)
         && !systemd.runs(&unit.name)
     {
         return Err(Failure::Broken(format!(
@@ -641,6 +697,23 @@ where
     }
     let says = format!("journalctl --user -u {}", unit.name);
     answered(systemd, &unit.name, &says, answers).await
+}
+
+/// Starts `unit` as [`start`] says. A file it cannot keep, or a manager
+/// that does not read it, leaves it to `systemd-run`, whose unit comes
+/// before a file of the same name.
+fn started(systemd: &dyn Systemd, unit: &Unit) -> Result<(), String> {
+    if unit.files.is_some() {
+        let session = unit.session_file();
+        match unit_file::settle(systemd, unit, unit.at_login, session.as_deref()) {
+            Ok(()) if unit.at_login => return systemd.start(&unit.name),
+            Ok(()) => {}
+            Err(said) => {
+                tracing::warn!(%said, "the engine's unit file was not kept: it starts with systemd-run")
+            }
+        }
+    }
+    systemd.run(&unit.arguments())
 }
 
 /// Waits for the engine that `name` runs to answer (`answers`), while
@@ -703,6 +776,8 @@ mod tests {
         /// The process the unit runs.
         pid: Option<u32>,
         ran: Mutex<Vec<Vec<String>>>,
+        /// What it was asked of the units' files: `start <name>`, `reload`.
+        asked: Mutex<Vec<String>>,
     }
 
     impl Systemd for Fake {
@@ -718,6 +793,15 @@ mod tests {
                 return Err(said.clone());
             }
             self.up.store(!self.dies, Ordering::SeqCst);
+            Ok(())
+        }
+        fn start(&self, name: &str) -> Result<(), String> {
+            self.asked.lock().unwrap().push(format!("start {name}"));
+            self.up.store(!self.dies, Ordering::SeqCst);
+            Ok(())
+        }
+        fn reload(&self) -> Result<(), String> {
+            self.asked.lock().unwrap().push("reload".into());
             Ok(())
         }
     }
@@ -740,7 +824,30 @@ mod tests {
             name: "banda-engine".into(),
             program: "/home/person/.local/share/banda/engine/0.3.0/banda".into(),
             env: vec![("BANDA_LOG".into(), "debug".into())],
+            session: vec![("SSH_AUTH_SOCK".into(), "/tmp/ssh-x/agent.1".into())],
             version,
+            files: None,
+            at_login: false,
+        }
+    }
+
+    /// [`unit`], with its files under `base`, at login or not.
+    #[cfg(target_os = "linux")]
+    fn unit_with_files(base: &Path, at_login: bool) -> Unit {
+        let files = unit_file::Files::of(
+            "banda-engine",
+            &pairs(&[
+                (
+                    "XDG_CONFIG_HOME",
+                    &base.join("config").display().to_string(),
+                ),
+                ("XDG_RUNTIME_DIR", &base.join("run").display().to_string()),
+            ]),
+        );
+        Unit {
+            files,
+            at_login,
+            ..unit(257)
         }
     }
 
@@ -849,6 +956,7 @@ mod tests {
             "--property=Restart=on-failure",
             "--property=StartLimitBurst=3",
             "--setenv=BANDA_LOG=debug",
+            "--setenv=SSH_AUTH_SOCK=/tmp/ssh-x/agent.1",
         ] {
             assert!(has(argument), "{argument} in {arguments:?}");
         }
@@ -899,12 +1007,16 @@ mod tests {
             ("WAYLAND_DISPLAY", "wayland-0"),
         ]);
         let places = Places::under(Path::new("/home/person"));
-        let env = environment(
+        let mut env = kept(
             &starter,
             &places,
             &manager,
             Some("/home/person/.local/share/mise/shims:/usr/bin"),
         );
+        let lent = session(&starter, &manager);
+        // What the session lends is none of what the unit keeps.
+        assert!(!env.iter().any(|(name, _)| SESSION.contains(&name.as_str())));
+        env.extend(lent);
         let value = |name: &str| {
             (env.iter())
                 .find(|(named, _)| named == name)
@@ -955,7 +1067,7 @@ mod tests {
         // An AppImage's Electron goes as it stops: the engine is not told it.
         let mut from_appimage = starter.clone();
         from_appimage.push(("APPIMAGE".into(), "/home/person/Banda.AppImage".into()));
-        let env = environment(&from_appimage, &places, &[], None);
+        let env = kept(&from_appimage, &places, &[], None);
         assert!(!env.iter().any(|(name, _)| name == "BANDA_NODE"));
         assert!(!env.iter().any(|(name, _)| name == "PATH"));
     }
@@ -1074,5 +1186,127 @@ mod tests {
         };
         let said = start(&dies, &unit(257), none).await.err().unwrap().words();
         assert!(said.contains("stopped as it started"), "{said}");
+    }
+
+    #[test]
+    fn the_unit_file_says_what_systemd_run_is_told_and_starts_at_login() {
+        let file = Unit {
+            program: "/home/person/my banda/banda".into(),
+            ..unit(257)
+        }
+        .file();
+        for line in [
+            "[Unit]",
+            "Description=Banda's engine (",
+            "CollectMode=inactive-or-failed",
+            "StartLimitBurst=3",
+            "[Service]",
+            "Type=exec",
+            "KillMode=mixed",
+            "OOMPolicy=continue",
+            "Restart=on-failure",
+            "Environment=\"BANDA_LOG=debug\"",
+            "ExecStart=\"/home/person/my banda/banda\" serve",
+            "[Install]",
+            "WantedBy=default.target",
+        ] {
+            assert!(file.contains(line), "{line} in {file}");
+        }
+        // What the session lends goes as the session does: never in the file.
+        assert!(!file.contains("SSH_AUTH_SOCK"), "{file}");
+        let session = unit(257).session_file().unwrap();
+        assert_eq!(
+            session,
+            "[Service]\nEnvironment=\"SSH_AUTH_SOCK=/tmp/ssh-x/agent.1\"\n"
+        );
+        assert_eq!(
+            Unit {
+                session: Vec::new(),
+                ..unit(257)
+            }
+            .session_file(),
+            None
+        );
+    }
+
+    #[cfg(target_os = "linux")]
+    #[tokio::test]
+    async fn at_login_a_client_writes_the_unit_enables_it_and_starts_it_from_its_file() {
+        let base = tempfile::tempdir().unwrap();
+        let systemd = Fake {
+            version: Some(257),
+            ..Fake::default()
+        };
+        let unit = unit_with_files(base.path(), true);
+        assert!(start(&systemd, &unit, || async { Ok(()) }).await.is_ok());
+        let file = base.path().join("config/systemd/user/banda-engine.service");
+        let wanted = base
+            .path()
+            .join("config/systemd/user/default.target.wants/banda-engine.service");
+        let session = base
+            .path()
+            .join("run/systemd/user/banda-engine.service.d/session.conf");
+        assert_eq!(std::fs::read_to_string(&file).unwrap(), unit.file());
+        assert_eq!(std::fs::read_link(&wanted).unwrap(), file, "enabled");
+        assert!(
+            std::fs::read_to_string(&session)
+                .unwrap()
+                .contains("SSH_AUTH_SOCK")
+        );
+        assert_eq!(
+            *systemd.asked.lock().unwrap(),
+            ["reload", "start banda-engine"]
+        );
+        assert!(systemd.ran.lock().unwrap().is_empty(), "no systemd-run");
+
+        // Unchanged, the manager is not asked to read it again.
+        assert!(start(&systemd, &unit, || async { Ok(()) }).await.is_ok());
+        assert_eq!(systemd.asked.lock().unwrap().len(), 3);
+
+        // With "Start Banda at login" off, the file goes, and the unit is
+        // transient again.
+        let off = unit_with_files(base.path(), false);
+        assert!(start(&systemd, &off, || async { Ok(()) }).await.is_ok());
+        assert!(!file.exists() && wanted.symlink_metadata().is_err() && !session.exists());
+        assert_eq!(systemd.asked.lock().unwrap()[3..], ["reload".to_owned()]);
+        assert_eq!(systemd.ran.lock().unwrap().len(), 1);
+    }
+
+    #[test]
+    fn a_test_s_or_a_trial_s_engine_has_no_unit_file() {
+        let places = Places::under(Path::new("/tmp/test"));
+        assert!(files_of(&places, "banda-engine-1a2b3c4d", &[]).is_none());
+    }
+
+    #[cfg(target_os = "linux")]
+    #[test]
+    fn the_unit_file_is_kept_while_start_at_login_is_on_and_goes_once_it_is_off() {
+        let base = tempfile::tempdir().unwrap();
+        // What a client reads before it starts the unit, and the engine
+        // follows as it runs.
+        let places = Places::under(base.path());
+        assert!(
+            banda_machines::starts_at_login(&places.config),
+            "on by default"
+        );
+        std::fs::create_dir_all(&places.config).unwrap();
+        std::fs::write(
+            places.config.join("machine.toml"),
+            "start-at-login = false\n",
+        )
+        .unwrap();
+        assert!(!banda_machines::starts_at_login(&places.config));
+
+        let systemd = Fake::default();
+        let unit = unit_with_files(base.path(), true);
+        let file = base.path().join("config/systemd/user/banda-engine.service");
+        let session = base
+            .path()
+            .join("run/systemd/user/banda-engine.service.d/session.conf");
+        unit_file::settle(&systemd, &unit, true, Some("[Service]\n")).unwrap();
+        assert!(file.exists() && session.exists());
+        unit_file::settle(&systemd, &unit, false, None).unwrap();
+        assert!(!file.exists() && !session.exists());
+        assert_eq!(*systemd.asked.lock().unwrap(), ["reload", "reload"]);
     }
 }

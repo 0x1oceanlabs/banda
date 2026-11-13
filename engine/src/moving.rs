@@ -8,9 +8,11 @@
 //!
 //! Not a stop of the unit and a start of another: a transient unit's
 //! program cannot be changed, and between the stop and the start a window
-//! of the older version could start its own engine. The unit still names
-//! the copy it was started with, so a crash starts that again, which then
-//! moves again once nothing runs.
+//! of the older version could start its own engine. A transient unit
+//! still names the copy it was started with, so a crash starts that
+//! again, which then moves again once nothing runs; a unit from its file
+//! names the new copy, which rewrites the file as it starts
+//! (`service/unit_file.rs`).
 //!
 //! On Linux it first ends what is left in its unit's cgroup, as systemd's
 //! `KillMode=mixed` would on a stop: TERM, then KILL after the unit's
