@@ -60,4 +60,39 @@ export const methods = {
       "SELECT text, at FROM clients_notes WHERE client = ? ORDER BY id DESC"
     return { answer: await read(sql, [client]) }
   },
+
+  // The App's screen: a Tree, which Banda draws. The form's fields come
+  // from the params of `add`, the command it sends.
+  async home(_, { read }) {
+    const rows = await read(
+      `SELECT p.name, p.city, p.email,
+              (SELECT COUNT(*) FROM clients_notes n WHERE n.client = p.id) AS notes
+       FROM clients_people p ORDER BY p.name`
+    )
+    return {
+      answer: {
+        title: "Clients",
+        about:
+          "The people I work with: who they are, where, and notes on each.",
+        children: [
+          {
+            node: "Table",
+            rows: rows.map((row) => ({ ...row, notes: row.notes || null })),
+            empty: "No clients yet",
+            columns: [
+              { key: "name", title: "Name" },
+              { key: "city", title: "City" },
+              { key: "email", title: "Email" },
+              { key: "notes", title: "Notes", as: "badge" },
+            ],
+          },
+          {
+            node: "Card",
+            title: "Add a client",
+            children: [{ node: "Form", command: "add", submit: "Add client" }],
+          },
+        ],
+      },
+    }
+  },
 }

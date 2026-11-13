@@ -12,6 +12,7 @@
     "./devices": "./src/devices.ts",
     "./door": "./src/door.ts",
     "./terminal": "./src/terminal.ts",
+    "./apps": "./src/apps.ts",
     "./git": "./src/git.ts",
     "./files": "./src/files.ts",
     "./harnesses": "./src/harnesses.ts",

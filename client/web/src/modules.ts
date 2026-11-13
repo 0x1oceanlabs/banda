@@ -4,6 +4,7 @@
  * registry is built from this list, in its order.
  */
 import { agents } from "@banda/agents-pane"
+import { apps } from "@banda/apps-pane"
 import { browser } from "@banda/browser-pane"
 import { clock } from "@banda/clock-pane"
 import { harnesses } from "@banda/harnesses-pane"
@@ -24,4 +25,5 @@ export const modules: readonly Module[] = [
   pulls,
   notifications,
   clock,
+  apps,
 ]

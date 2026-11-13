@@ -10,7 +10,9 @@ as tools: "make me an App for tracking clients". You write it as a
 folder in your Project and install it, with no click and no restart.
 From then its methods are tools every Agent on this machine calls, in
 every Project, and `banda call` reaches them too. An App with no screen
-is whole: your Person talks to an Agent, and the Agent calls it.
+is whole: your Person talks to an Agent, and the Agent calls it. Give it
+a screen when they ask to see or fill something themselves ("Its
+screen", below).
 
 A program, website or CLI your Person asks you to build in their code is
 not a Banda App: build that as asked.
@@ -79,7 +81,8 @@ Each method has a `kind` and `about`, and `params` when it takes any:
 
 - A method's name is lowercase letters, digits and `_`.
 - **`kind`**: a `call` reads and answers; a `command` changes what the
-  App keeps. Only one of the App's commands runs in a Project at a time.
+  App keeps; a `view` answers the App's screen ("Its screen", below).
+  Only one of the App's commands runs in a Project at a time.
 - **`about`** is the most important line you write. Another Agent sees
   only it and `params`, and decides from them whether to call the
   method. Say what it does, what it takes and what it answers.
@@ -88,8 +91,9 @@ Each method has a `kind` and `about`, and `params` when it takes any:
   needs.
 - **`right`**: `read` for a call and `write` for a command when left
   out. `manage` is for what only your Person may do.
-- Every method is an Agent's tool, `<id>_<method>`. `"tool": false`
-  leaves one out. A tool's name another tool has is refused.
+- Every call and command is an Agent's tool, `<id>_<method>`. `"tool":
+  false` leaves one out. A tool's name another tool has is refused.
+- **`ui`**: `true` on a command a control of the App's screen may send.
 
 ### migrations
 
@@ -135,7 +139,7 @@ It answers `{ answer, write, emit }`:
   in one transaction, or none. A method never opens the database.
 - `emit` is the App's events, each `{ kind, subject, payload }`: what
   happened, for what follows the App later, as its screen.
-- A `call` that answers `write` or `emit` is refused.
+- A `call` or a `view` that answers `write` or `emit` is refused.
 
 Rules that keep an App right:
 
@@ -148,6 +152,44 @@ Rules that keep an App right:
 - `console.log` goes to Banda's log, not to the caller.
 - Plain Node, with what Node has built in.
 
+## Its screen
+
+A screen is a `view`: a method that answers a Tree, the screen as data.
+Banda draws it with its own components, in your Person's theme, in every
+window they have. You write no HTML and no CSS, and none of your code
+runs in the window.
+
+- Declare it in `methods.json` with `"kind": "view"`, as `home` above. It
+  reads, and writes nothing. Name the main one `home`: your Person finds
+  it in the Banda menu by the App's name.
+- Mark each command a control sends with `"ui": true`, as `add`.
+- Its function answers `{ answer: <Tree> }`, as `home` in `worker.mjs`.
+- `banda call clients.home` prints the Tree as Banda read it, or says
+  where it is wrong: `children[0] (Tabel): there is no such node`.
+- Show it to your Person: the `open_pane` tool with the kind `apps.view`
+  and args `{"app": "clients", "view": "home"}` opens it beside your
+  Thread.
+- It is read again whenever the App emits an event: emit one in each
+  command that changes what a screen shows, as `add` and `note` do.
+
+A Tree is `{ "title", "about", "children": [ … ] }`: `title` names its
+Pane, `about` is a line under it. Each child is a node, an object with
+`"node"` and its props:
+
+| `node` | Its props |
+|---|---|
+| `Table` | `columns`: each `{ "key", "title" }`, with `"as": "badge"` to set its cells apart. `rows`: objects by the columns' keys, a cell text, a number, true, false or null. `empty`: the words for no rows. At most 12 columns and 1,000 rows |
+| `List` | `items`: each `{ "title", "about", "badge" }`, for what reads badly in columns. `empty` |
+| `Card` | `title`, and `children`: nodes in a box |
+| `Form` | `command`: one of the App's `ui` commands. `title`. `submit`: the words on its button. Its fields are the command's params, in the order `methods.json` writes them: text, a number, a select for an `enum` of strings, a checkbox for a boolean; a param's `title` is its label. `fields` chooses and orders them: each `{ "name" }`, with `label`, `placeholder`, or `"kind": "textarea"` for long text |
+| `Button` | `label`, `command`, and `params`: it sends the command with them |
+| `Badge` | `text` |
+| `Empty` | `title`, `about`: what to say where there is nothing yet |
+| `Markdown` | `text` |
+
+A Tree holds at most 500 nodes. A prop not named here is refused: ask
+for less, not for a prop Banda does not have.
+
 ## When it goes wrong
 
 Each refusal says what to do next:
@@ -158,8 +200,9 @@ Each refusal says what to do next:
   why: a step of its tables failed in this Project, its code does not
   load, or it lacks a method `methods.json` declares. Nothing ran. Fix
   and install again.
-- `internal`, "`clients.add` failed: …": the method threw, or a write
-  failed. The message has the error. Nothing was written.
+- `internal`, "`clients.add` failed: …": the method threw, a write
+  failed, or a view answered what is no Tree. The message has the error,
+  and for a Tree where in it. Nothing was written.
 - `conflict`, when the method did not refuse so itself: a table's own
   rule refused the write, as a row there already.
 - `may_have_run`: the method did not answer in time, or its worker

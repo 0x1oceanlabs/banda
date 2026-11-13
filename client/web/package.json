@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@banda/agents-pane": "workspace:*",
+    "@banda/apps-pane": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/clock-pane": "workspace:*",
     "@banda/contract": "workspace:*",

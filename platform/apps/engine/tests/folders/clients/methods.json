@@ -1,6 +1,7 @@
 {
   "add": {
     "kind": "command",
+    "ui": true,
     "about": "Adds a client: their name, and their city and email when known. Answers the client as kept, with its id.",
     "params": {
       "type": "object",
@@ -52,5 +53,9 @@
       "properties": { "client": { "type": "integer" } },
       "required": ["client"]
     }
+  },
+  "home": {
+    "kind": "view",
+    "about": "The clients, with how many notes each has, and a form to add one."
   }
 }
