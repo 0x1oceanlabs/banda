@@ -17,6 +17,7 @@ import type { Address } from "@banda/contract"
 import type {
   ActAnswer,
   ActAsk,
+  EngineAt,
   HostEntry,
   HostState,
   HostTest,
@@ -35,8 +36,11 @@ export type { Notice } from "@banda/notifications-pane/desktop"
  * `window.banda` from it, and main answers it (client/desktop/src).
  */
 export const BRIDGE = bridge({
-  /** Where the engine listens now; it waits while the engine starts. */
-  engine: invoke<[], Address>(),
+  /** Where the engine listens now, at its door where it has one; it
+   * waits while the engine starts. */
+  engine: invoke<[], EngineAt>(),
+  /** This device's signature of the page's `hello` to that door. */
+  sign: invoke<[message: string], string>(),
   /** The other machines in `hosts.toml`, as the window reaches them over
    * ssh (ADR 0081, decision 4), with no secret. */
   hosts: {

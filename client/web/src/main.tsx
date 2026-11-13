@@ -33,7 +33,7 @@ stepLoops(document)
 quiet.follow({ root: document.documentElement, events: window })
 // This machine's engine is one of the machines' (ADR 0124): while it
 // does not answer, its Panes say so, and nothing waits silently.
-const engine = host && ownEngine(() => host.engine())
+const engine = host && ownEngine(device.engine)
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */
 const kept = (error: unknown) => {

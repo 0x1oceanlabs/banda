@@ -39,7 +39,7 @@ import {
   systemPreferences,
   type WebContents,
 } from "electron"
-import { type Address, quitAsks } from "@banda/contract"
+import { quitAsks } from "@banda/contract"
 import {
   BANDA,
   type Device,
@@ -73,6 +73,7 @@ import { BRIDGE } from "./bridge"
 import { relayed, relayedAs, saveCopy } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
+import { deviceKey } from "./key"
 import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { appUpdates, modules } from "./modules"
@@ -311,7 +312,11 @@ const runtime = ManagedRuntime.make(
           // anything else, the window stays (engine.ts).
           () => {
             if (!updating) leave()
-          }
+          },
+          // This device's key, which the window is paired by (ADR 0124). A
+          // page served for development is of another origin than the one
+          // a window pairs from: it reaches the engine as before.
+          DEV_PAGE ? undefined : deviceKey(join(state, "device.key"))
         ),
         Stop.layer,
         lookLayer,
@@ -487,7 +492,9 @@ async function ready(): Promise<void> {
     appUpdates.followEngine(client, app.getVersion(), update.heard)
   )
   /** An engine's address, with the tests' latency. */
-  const late = <E, R>(address: Effect.Effect<Address, E, R>) =>
+  const late = <A extends { url: string }, E, R>(
+    address: Effect.Effect<A, E, R>
+  ) =>
     TEST_LATENCY
       ? Effect.map(address, (at) => ({ ...at, latency: TEST_LATENCY }))
       : address
@@ -502,6 +509,10 @@ async function ready(): Promise<void> {
       ([name]) => Hosts.use((hosts) => late(hosts.address(name))),
     ],
     // No name is this machine's own engine, stopped (ADR 0124).
+    sign: [
+      text,
+      ([message]) => OwnEngine.use((engine) => engine.sign(message)),
+    ],
     hostStart: [
       text,
       ([name]) =>

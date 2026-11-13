@@ -16,7 +16,8 @@ import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
 import { command, keepRunning, letGo, lines } from "./child"
 import { Engine, Look } from "@banda/desktop-kit"
-import { engineLayer, EngineStopped, OwnEngine, Stop } from "./engine"
+import { engineLayer, EngineStopped, helloTo, OwnEngine, Stop } from "./engine"
+import { deviceKey } from "./key"
 import { firstLook, lookLayer } from "./look"
 import { Program } from "./program"
 import { script } from "./testing"
@@ -238,6 +239,51 @@ it.live(
       }).pipe(
         Effect.provide(
           engineLayer(Effect.succeed(Option.none()), {}, quit).pipe(
+            Layer.provide(Program.layer({ program })),
+            Layer.provide(NodeServices.layer)
+          )
+        )
+      )
+    })
+)
+
+it("this device's key signs only a hello of Banda's page to the door that proves its machine's host key", () => {
+  const hello = (hostKey: string, origin: string) =>
+    `banda-door/hello/1\ndoor-nonce\n${hostKey}\n${origin}\nmine`
+  expect(helloTo(hello("H0ST", "app://banda"), "H0ST")).toBe(true)
+  // Another machine's door, another page, another message, or one with
+  // more to it: none.
+  expect(helloTo(hello("0THER", "app://banda"), "H0ST")).toBe(false)
+  expect(helloTo(hello("H0ST", "https://elsewhere.example"), "H0ST")).toBe(
+    false
+  )
+  expect(helloTo("banda-door/welcome/1\nmine\ndevice", "H0ST")).toBe(false)
+  expect(helloTo(`${hello("H0ST", "app://banda")}\nmore`, "H0ST")).toBe(false)
+  expect(helloTo("pay Bob", "H0ST")).toBe(false)
+})
+
+it.live(
+  "an engine with no door is reached as before, and nothing is signed for it",
+  () =>
+    Effect.gen(function* () {
+      const program = script(
+        `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/w"}'\n` +
+          "exec sleep 60"
+      )
+      const key = deviceKey(join(dirname(program), "device.key"))
+      yield* Effect.gen(function* () {
+        const own = yield* OwnEngine
+        expect(yield* own.reached).toEqual({
+          url: "ws://127.0.0.1:4321/ws",
+          secret: "s3",
+        })
+        const refused = yield* Effect.flip(
+          own.sign("banda-door/hello/1\nn\nH0ST\napp://banda\nm")
+        )
+        expect(refused.message).toContain("signs only its hello")
+      }).pipe(
+        Effect.provide(
+          engineLayer(Effect.succeed(Option.none()), {}, () => {}, key).pipe(
             Layer.provide(Program.layer({ program })),
             Layer.provide(NodeServices.layer)
           )
