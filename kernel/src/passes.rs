@@ -75,11 +75,16 @@ ALTER TABLE passes ADD COLUMN runs TEXT;
 "#,
 ];
 
-/// A secret no one can guess: 32 random bytes, in hex.
-pub fn secret() -> Result<String, Error> {
+/// 32 bytes no one can guess, from the system's random source.
+pub(crate) fn random() -> Result<[u8; 32], Error> {
     let mut bytes = [0u8; 32];
     getrandom::fill(&mut bytes).map_err(|e| Error::Io(std::io::Error::other(e)))?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
+    Ok(bytes)
+}
+
+/// A secret no one can guess: 32 random bytes, in hex.
+pub fn secret() -> Result<String, Error> {
+    Ok(random()?.iter().map(|b| format!("{b:02x}")).collect())
 }
 
 /// Where a pass is taken (ADR 0083, decision 2). Anywhere else it is

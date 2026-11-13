@@ -569,6 +569,24 @@ a remote whose owner is not the Person, or `.claude/`, `.codex/`,
 Banda's own reads of a Project: git status, diffs, checkpoints, Files.
 They never run the Project's hooks or helpers (ADR 0083).
 
+**Door**:
+An engine's way in for the Person's devices, over any pipe: loopback, a
+tailnet, an ssh tunnel. A device proves its device key there, and the
+engine its host key, on every connection. It takes no owner's secret and
+no pass: the API keeps those, for the programs on the machine (ADR 0123,
+ADR 0124).
+_Avoid_: gateway (ADR 0083's word for MCP over HTTP).
+
+**Host key**:
+A machine's own key, made by its engine and kept in its state. It signs
+what the door says, so no pipe poses as that machine, as ssh's
+`known_hosts` holds (ADR 0124).
+
+**Device key**:
+A device's own key, made on it and never leaving it. A machine keeps its
+public half since the device was paired, and removing the device there
+ends its sessions at once (ADR 0124).
+
 **Person key**:
 The Person's root of trust, made on their first device. It signs which
 devices and hosts are theirs, and which host is home (ADR 0083).
@@ -603,12 +621,13 @@ _Avoid_: VM.
 The one switch per Project that runs its Agents, terminals and scripts in
 a box (ADR 0084).
 
-**Door**:
+**Box door**:
 A box's one way back into Banda: Banda's tools, opening a link,
-credentials, secrets (ADR 0084).
+credentials, secrets (ADR 0084, where it is "the door"). Not the Door, an
+engine's way in for devices.
 
 **Door pass**:
-A pass for the door only. It ends with the box (ADR 0084).
+A pass for a box's door only. It ends with the box (ADR 0084).
 
 **Environment sign-in**:
 An account of a Harness made for boxes: the same subscription with its own

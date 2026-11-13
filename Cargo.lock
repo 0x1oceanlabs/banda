@@ -642,6 +642,7 @@ dependencies = [
  "notify-debouncer-full",
  "process-wrap",
  "reqwest",
+ "ring",
  "rusqlite",
  "rustix",
  "schemars 1.2.3",

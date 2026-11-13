@@ -20,6 +20,9 @@ use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
 use uuid::Uuid;
 
+mod common;
+use common::{Socket, next, say};
+
 /// Notes: `add` writes a note and queues `publish`, keyed by one feed,
 /// after the wait it is given, as a slow change takes. `stamp` is a
 /// command that acts outside the store and writes nothing there, as a
@@ -1997,9 +2000,6 @@ impl Identity for Tokens {
     }
 }
 
-type Socket =
-    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
-
 /// Serves the kernel's API on a free port of this machine.
 async fn serve(kernel: &Arc<Kernel>, owner: PersonId) -> std::net::SocketAddr {
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -2016,19 +2016,6 @@ async fn connect(address: std::net::SocketAddr, hello: Value) -> (Socket, Value)
     socket.send(Message::text(hello.to_string())).await.unwrap();
     let answer = next(&mut socket).await;
     (socket, answer)
-}
-
-async fn next(socket: &mut Socket) -> Value {
-    loop {
-        let message = tokio::time::timeout(Duration::from_secs(5), socket.next())
-            .await
-            .expect("a frame in time")
-            .expect("an open socket")
-            .unwrap();
-        if let Message::Text(text) = message {
-            return serde_json::from_str(&text).unwrap();
-        }
-    }
 }
 
 #[tokio::test]
@@ -2119,10 +2106,6 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         .await
         .unwrap();
     assert_eq!(next(&mut socket).await["error"]["code"], "invalid");
-}
-
-async fn say(socket: &mut Socket, frame: Value) {
-    socket.send(Message::text(frame.to_string())).await.unwrap();
 }
 
 /// The welcome lists each App with its version and API, word for word as

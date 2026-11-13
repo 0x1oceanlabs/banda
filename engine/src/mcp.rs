@@ -404,6 +404,7 @@ mod tests {
                     version: None,
                     build: None,
                     apps: vec![],
+                    door: None,
                 };
                 socket.send(say(welcome)).await.unwrap();
                 while let Some(Ok(Message::Text(text))) = socket.next().await {

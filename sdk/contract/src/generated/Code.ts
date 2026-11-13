@@ -3,4 +3,4 @@
 /**
  * Why a call was not done. A caller decides what to do by this alone.
  */
-export type Code = "invalid" | "not_found" | "forbidden" | "conflict" | "may_have_run" | "expired" | "app_unavailable" | "protocol" | "internal";
+export type Code = "invalid" | "not_found" | "forbidden" | "conflict" | "may_have_run" | "expired" | "app_unavailable" | "protocol" | "revoked" | "internal";

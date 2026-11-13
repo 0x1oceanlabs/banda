@@ -5,6 +5,7 @@ import type { Event } from "./Event";
 import type { Fence } from "./Fence";
 import type { Named } from "./Named";
 import type { ProjectId } from "./ProjectId";
+import type { Proved } from "./Proved";
 import type { Refusal } from "./Refusal";
 import type { JsonValue } from "./serde_json/JsonValue";
 
@@ -49,7 +50,12 @@ version?: string, build?: string,
  * 0082, decision 14); `apps.describe` says their methods. An
  * engine that says none is older than the list.
  */
-apps?: Array<App>, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
+apps?: Array<App>, 
+/**
+ * At the door (`crate::devices`, ADR 0124, decision 3): who the
+ * two ends proved to be. The API says none.
+ */
+door?: Proved, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, 
 /**
  * A command's place in the log of its scope (ADR 0082, decision
  * 4): the last fact it wrote. A view current there shows what it

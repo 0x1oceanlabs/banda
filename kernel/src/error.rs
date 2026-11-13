@@ -39,6 +39,9 @@ pub enum Code {
     AppUnavailable,
     /// The window and the engine speak different protocol versions.
     Protocol,
+    /// The device was removed from this machine: its sessions end, and it
+    /// opens none until it is paired again (ADR 0124, decision 6).
+    Revoked,
     /// Something broke inside the engine, and the details are in its log;
     /// or in the code of an App from a folder, and the message says what.
     Internal,
@@ -57,6 +60,8 @@ impl Code {
             Code::MayHaveRun | Code::Expired => true,
             // The call ran nothing, and an App put right answers the resend.
             Code::AppUnavailable | Code::Protocol | Code::Internal => false,
+            // It ends a session, and answers no command.
+            Code::Revoked => false,
         }
     }
 }
@@ -72,6 +77,7 @@ impl std::fmt::Display for Code {
             Code::Expired => "expired",
             Code::AppUnavailable => "app_unavailable",
             Code::Protocol => "protocol",
+            Code::Revoked => "revoked",
             Code::Internal => "internal",
         })
     }

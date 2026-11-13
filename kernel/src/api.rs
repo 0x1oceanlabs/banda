@@ -12,6 +12,10 @@
 //!    called and drawn by, `named` (ADR 0095), and its Apps with their
 //!    versions, `apps` (ADR 0082, decision 14), whose methods
 //!    `apps.describe` says.
+//!    The door ([`crate::devices`], ADR 0124) is the other way in, for
+//!    the Person's devices: its first frames prove a device's key and the
+//!    host's instead, its `welcome` adds what they proved, and from there
+//!    on a session is the same ([`session`]).
 //! 2. `call` runs a method and gets one `result` with the same `id`; a
 //!    command's carries its place in the log, `at` (ADR 0082, decision 4),
 //!    and every one with `ok` when it was so, `as_of` (decision 3). A
@@ -61,6 +65,7 @@
 
 use crate::access::Caller;
 use crate::cursors::Heard;
+use crate::devices::Proved;
 use crate::events::{Event, EventFilter};
 use crate::module::Stream;
 use crate::router::Queue;
@@ -74,6 +79,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Response};
 use axum::routing::get;
 use futures::future::BoxFuture;
+use futures::stream::{SplitSink, SplitStream};
 use futures::{FutureExt, SinkExt, StreamExt};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -84,7 +90,7 @@ use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use ts_rs::TS;
 
-const HELLO_WITHIN: Duration = Duration::from_secs(10);
+pub(crate) const HELLO_WITHIN: Duration = Duration::from_secs(10);
 
 /// How long a run may hold up the next in its queue: a guard against one
 /// that hangs. A command is one write, so it answers well within this,
@@ -210,6 +216,11 @@ pub enum EngineFrame {
         #[serde(default, skip_serializing_if = "Vec::is_empty")]
         #[ts(optional, as = "Option<Vec<crate::App>>")]
         apps: Vec<crate::App>,
+        /// At the door (`crate::devices`, ADR 0124, decision 3): who the
+        /// two ends proved to be. The API says none.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        door: Option<Proved>,
     },
     Result {
         #[ts(type = "number")]
@@ -464,19 +475,39 @@ impl From<EngineFrame> for Outgoing {
     }
 }
 
-fn text(frame: &EngineFrame) -> Message {
+pub(crate) fn text(frame: &impl Serialize) -> Message {
     Message::Text(Utf8Bytes::from(
         serde_json::to_string(frame).expect("frames serialize"),
     ))
 }
 
-async fn serve(api: Arc<Api>, socket: WebSocket) {
-    let (mut sink, mut stream) = socket.split();
-    let first = match tokio::time::timeout(HELLO_WITHIN, stream.next()).await {
-        Ok(Some(Ok(Message::Text(first)))) => serde_json::from_str::<ClientFrame>(&first).ok(),
+/// A connection's first frame, read as `T`, if it comes in time and is
+/// one.
+pub(crate) async fn first<T: serde::de::DeserializeOwned>(
+    stream: &mut SplitStream<WebSocket>,
+) -> Option<T> {
+    match tokio::time::timeout(HELLO_WITHIN, stream.next()).await {
+        Ok(Some(Ok(Message::Text(first)))) => serde_json::from_str(&first).ok(),
         _ => None,
-    };
-    let who = match first {
+    }
+}
+
+/// Tells a connection that gets no session why, and ends it.
+pub(crate) async fn refuse(mut sink: SplitSink<WebSocket, Message>, reason: Refusal) {
+    let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
+    let _ = sink.close().await;
+}
+
+/// What a session's `welcome` says of how it began: the protocol picked,
+/// and at the door, who the two ends proved to be.
+pub(crate) struct Welcomed {
+    pub(crate) protocol: u32,
+    pub(crate) door: Option<Proved>,
+}
+
+async fn serve(api: Arc<Api>, socket: WebSocket) {
+    let (sink, mut stream) = socket.split();
+    let who = match first::<ClientFrame>(&mut stream).await {
         Some(ClientFrame::Hello { protocol, .. }) if protocol != PROTOCOL => Err(Refusal::new(
             Code::Protocol,
             format!(
@@ -490,30 +521,55 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             "The first frame must be hello with a token this engine knows.",
         )),
     };
-    let caller = match who {
-        Ok(caller) => caller,
-        Err(reason) => {
-            let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
-            let _ = sink.close().await;
-            return;
-        }
-    };
-    let welcome = EngineFrame::Welcome {
+    let welcome = Welcomed {
         protocol: PROTOCOL,
-        engine: api.engine.clone(),
-        modules: api
-            .kernel
-            .modules()
-            .into_iter()
-            .map(str::to_owned)
-            .collect(),
-        machine: api.kernel.machine(),
-        boot: api.kernel.boot().to_owned(),
-        fence: Some(api.kernel.fence()),
-        named: api.kernel.named(),
+        door: None,
+    };
+    // A session by the API ends only with its connection.
+    let never = std::future::pending();
+    match who {
+        Ok(caller) => {
+            session(
+                api.kernel.clone(),
+                &api.engine,
+                caller,
+                welcome,
+                sink,
+                stream,
+                never,
+            )
+            .await
+        }
+        Err(reason) => refuse(sink, reason).await,
+    }
+}
+
+/// A session, from its `welcome` on, which says how it began (`welcomed`):
+/// `caller`'s, who came by the API or by the door. It runs the frames that
+/// come until the connection ends, or until `ended` says why it must: then
+/// it says `goodbye` with that, as a device's does once its machine
+/// removed it.
+pub(crate) async fn session(
+    kernel: Arc<Kernel>,
+    engine: &str,
+    caller: Caller,
+    welcomed: Welcomed,
+    mut sink: SplitSink<WebSocket, Message>,
+    mut stream: SplitStream<WebSocket>,
+    ended: impl Future<Output = Refusal>,
+) {
+    let welcome = EngineFrame::Welcome {
+        protocol: welcomed.protocol,
+        engine: engine.to_owned(),
+        modules: kernel.modules().into_iter().map(str::to_owned).collect(),
+        machine: kernel.machine(),
+        boot: kernel.boot().to_owned(),
+        fence: Some(kernel.fence()),
+        named: kernel.named(),
         version: Some(crate::version().to_owned()),
         build: crate::build().map(str::to_owned),
-        apps: api.kernel.apps(),
+        apps: kernel.apps(),
+        door: welcomed.door,
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;
@@ -533,7 +589,16 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
     let mut subscriptions: HashMap<u64, JoinHandle<()>> = HashMap::new();
     let mut queues = Queues::default();
 
-    while let Some(Ok(message)) = stream.next().await {
+    let mut ended = std::pin::pin!(ended);
+    loop {
+        let message = tokio::select! {
+            message = stream.next() => message,
+            reason = &mut ended => {
+                let _ = out.send(EngineFrame::Goodbye { reason }.into()).await;
+                break;
+            }
+        };
+        let Some(Ok(message)) = message else { break };
         let Message::Text(body) = message else {
             if matches!(message, Message::Close(_)) {
                 break;
@@ -563,8 +628,8 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 not_after,
                 params,
             } => {
-                let queue = api.kernel.queue(&caller, &method, project, &params);
-                let kernel = api.kernel.clone();
+                let queue = kernel.queue(&caller, &method, project, &params);
+                let kernel = kernel.clone();
                 let out = out.clone();
                 let name = method.clone();
                 let caller = caller.clone();
@@ -586,7 +651,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 after,
                 filter,
             } => {
-                match api.kernel.follow(caller.clone(), project).await {
+                match kernel.follow(caller.clone(), project).await {
                     Ok(project) => {
                         // The answer goes out before the first event.
                         let ok = serde_json::json!({ "subscription": id });
@@ -608,8 +673,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 method,
                 params,
             } => {
-                match api
-                    .kernel
+                match kernel
                     .stream(caller.clone(), &method, project, params)
                     .await
                 {
