@@ -37,12 +37,15 @@ use crate::run::{self, Before, Left, Run};
 use crate::service::{self, app, launchd, unit_file};
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
+use banda_devices::Paired;
 use banda_harnesses::Harnesses;
 use banda_harnesses::carried::{Carried, Here, Node};
 use banda_kernel::api::{self, OwnerSecret};
+use banda_kernel::devices;
 use banda_kernel::{Hands, Kernel, PROTOCOL, Working};
 use banda_machines::Machine;
 use banda_updates::restart::{Moves, Restart};
+use futures::FutureExt as _;
 use std::fs::{File, TryLockError};
 use std::path::Path;
 
@@ -107,6 +110,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         Err(TryLockError::Error(error)) => return Err(Failure::broken(error)),
     }
     let (before, last_port) = run::before(&places);
+    let last_door = run::door_before(&places);
     // Whatever `engine.json` says now, the run before said: no client
     // waits on an engine that is still opening.
     places.withdraw();
@@ -151,7 +155,12 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     let listener = listen(port, last_port).await?;
     let port = listener.local_addr().map_err(Failure::broken)?.port();
-    let run = Run::began(&places, port);
+    // This machine's host key and the devices it paired, and the door
+    // they come in by (ADR 0124).
+    let paired = Paired::open(&places.state, owner).map_err(Failure::broken)?;
+    let door = listen_at_door(crate::places::door_port(), last_door).await?;
+    let door_port = door.local_addr().map_err(Failure::broken)?.port();
+    let run = Run::began(&places, port).with_door(door_port);
     // Whether the fence holds here, found once (ADR 0083), before the
     // engine runs any program of its own on the host.
     let environment = crate::fence::environment(&places).await;
@@ -183,6 +192,8 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         unit: own_unit().or_else(|| job.then(|| launchd::label_of(&places))),
         child,
         pid_ns: crate::places::pid_ns(),
+        door: Some(door_port),
+        host_key: Some(paired.host_key_text()),
     };
     // Every Thread's session reaches the engine through this program's
     // `banda mcp` (ADR 0019).
@@ -246,6 +257,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         hands: &hands,
         restart: &restart,
         apps: &installed,
+        devices: &paired,
     };
     let builder = apps::serve(builder, &host);
     let opening = (served.into_iter())
@@ -264,6 +276,11 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         owner,
     };
     let engine = format!("banda {}", env!("BANDA_VERSION"));
+    // The door serves a file's bytes and a page as the API's port does,
+    // so a pipe that carries only the door carries them too.
+    let at_door = devices::router(kernel.clone(), paired.clone(), engine.clone())
+        .merge(api::bytes(bytes.clone()))
+        .route("/", axum::routing::get(door_says(&machine, &paired)));
     let router = api::router(kernel.clone(), identity, engine).merge(api::bytes(bytes));
     // Whole now: clients may find it.
     places.announce(&running).map_err(Failure::broken)?;
@@ -294,9 +311,20 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
             keeps.abort();
         }
     };
-    let served = axum::serve(listener, router)
-        .with_graceful_shutdown(stop)
-        .await;
+    // Both listeners close as it is asked to stop, and it goes on only
+    // once the door's is gone too: the next engine finds its port free.
+    let stop = stop.shared();
+    let (served, at_door) = tokio::join!(
+        axum::serve(listener, router)
+            .with_graceful_shutdown(stop.clone())
+            .into_future(),
+        axum::serve(door, at_door)
+            .with_graceful_shutdown(stop)
+            .into_future(),
+    );
+    if let Err(error) = at_door {
+        tracing::warn!(%error, "the door stopped serving");
+    }
     if let Some(keeping) = keeping {
         keeping.abort();
     }
@@ -330,6 +358,38 @@ async fn listen(port: u16, last: Option<u16>) -> Result<tokio::net::TcpListener,
     tokio::net::TcpListener::bind((HOST, port))
         .await
         .map_err(Failure::broken)
+}
+
+/// Listens for the door on `asked`, the port this Banda asks for first,
+/// else on the one the run before's door had, else on any: a busy port
+/// never keeps a window from its own engine, as `engine.json` says where
+/// the door is, and a door that had to move stays where it moved to.
+async fn listen_at_door(asked: u16, last: Option<u16>) -> Result<tokio::net::TcpListener, Failure> {
+    for port in [Some(asked).filter(|port| *port != 0), last]
+        .into_iter()
+        .flatten()
+    {
+        match tokio::net::TcpListener::bind((HOST, port)).await {
+            Ok(listener) => return Ok(listener),
+            Err(error) => tracing::info!(port, %error, "the door listens on another port"),
+        }
+    }
+    tokio::net::TcpListener::bind((HOST, 0))
+        .await
+        .map_err(Failure::broken)
+}
+
+/// What the door answers a plain `GET /`: one line, this machine's name
+/// and its host key, for a person who checks a pipe to it with `curl`
+/// (ADR 0124's first try). Every challenge says the key; the name is what
+/// every window that reaches this machine shows, and whoever a pipe lets
+/// as far as the door reads it too.
+fn door_says(
+    machine: &Machine,
+    paired: &Paired,
+) -> impl Fn() -> std::future::Ready<String> + Clone + use<> {
+    let (named, host_key) = (machine.named(), paired.host_key_text());
+    move || std::future::ready(format!("Banda on {} · {host_key}\n", named.borrow().name))
 }
 
 /// The unit this engine runs as, when it is the session's service.

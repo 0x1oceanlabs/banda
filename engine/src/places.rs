@@ -23,7 +23,6 @@
 use crate::Failure;
 use banda_kernel::{PersonId, api};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
 use std::path::{Path, PathBuf};
 
 #[cfg(windows)]
@@ -80,6 +79,13 @@ pub struct Running {
     /// names it only there.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub pid_ns: Option<u64>,
+    /// The port of its door on 127.0.0.1, where a device comes in by its
+    /// own key, and the host key it proves there, as base64url (ADR 0124).
+    /// None from an engine older than the door.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub door: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub host_key: Option<String>,
 }
 
 /// The PID namespace this process runs in, by its inode.
@@ -98,6 +104,19 @@ pub fn pid_ns() -> Option<u64> {
 impl Running {
     pub fn url(&self) -> String {
         format!("ws://{HOST}:{}{}", self.port, api::PATH)
+    }
+}
+
+/// The port this Banda's door asks for first (ADR 0124): one for each
+/// channel, as Banda and Banda Dev run side by side (ADR 0033), so a pipe
+/// set up to it, as `tailscale serve`, finds it there after a restart.
+/// Taken, the door listens on any, and `engine.json` says which. A build
+/// from a checkout asks for none: its tests and trials run many at once.
+pub fn door_port() -> u16 {
+    match channel() {
+        "stable" => 22632,
+        "dev" => 22633,
+        _ => 0,
     }
 }
 
@@ -355,7 +374,7 @@ impl Places {
 
 /// Writes a file only this user can read, whole or not at all.
 pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    write_private_as(path, bytes, true)
+    banda_kernel::host::write_private(path, bytes)
 }
 
 /// [`write_private`], not waited for on the disk: for a file that matters
@@ -363,23 +382,5 @@ pub fn write_private(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
 /// was or empty.
 #[cfg(any(target_os = "macos", all(test, unix)))]
 pub fn write_private_unsynced(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
-    write_private_as(path, bytes, false)
-}
-
-fn write_private_as(path: &Path, bytes: &[u8], synced: bool) -> std::io::Result<()> {
-    if let Some(folder) = path.parent() {
-        std::fs::create_dir_all(folder)?;
-    }
-    let temporary = path.with_extension("new");
-    let mut options = std::fs::File::options();
-    options.write(true).create(true).truncate(true);
-    #[cfg(unix)]
-    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
-    let mut file = options.open(&temporary)?;
-    file.write_all(bytes)?;
-    if synced {
-        file.sync_all()?;
-    }
-    drop(file);
-    banda_kernel::host::rename(&temporary, path)
+    banda_kernel::host::write_private_unsynced(path, bytes)
 }

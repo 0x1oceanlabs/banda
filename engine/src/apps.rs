@@ -14,6 +14,7 @@ use banda_agents::{Agents, Pipe};
 use banda_apps::Apps;
 use banda_browser::Browser;
 use banda_bytes::Bytes;
+use banda_devices::{DevicesModule, Paired};
 use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
@@ -75,6 +76,9 @@ pub struct HostContext<'a> {
     /// The apps module, over what this engine runs: Banda's own and the
     /// installed Apps it serves, which the engine takes as modules too.
     pub apps: &'a Apps,
+    /// This machine's host key and the devices it paired, which the
+    /// engine's door asks and the devices module changes (ADR 0124).
+    pub devices: &'a Paired,
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
@@ -119,6 +123,10 @@ mod build {
 
     pub fn browser(_: &HostContext<'_>) -> Browser {
         Browser::new()
+    }
+
+    pub fn devices(host: &HostContext<'_>) -> DevicesModule {
+        DevicesModule::new(host.devices.clone())
     }
 
     /// Banda's settings are the settings Pane's to write (ADR 0073,
@@ -254,6 +262,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         icon: banda_kernel::MachineIcon::Desktop,
     };
     let machine = Machine::new(&places.config, named);
+    let devices = Paired::open(&places.state, banda_kernel::PersonId::new()).unwrap();
     with(&HostContext {
         places: &places,
         harnesses: &harnesses,
@@ -265,6 +274,7 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
         hands: &Hands::new(),
         restart: &Restart::new(banda_updates::restart::Moves::Itself),
         apps: &Apps::new(crate::modules::described(), places.installed()),
+        devices: &devices,
     })
 }
 
@@ -602,6 +612,10 @@ mod tests {
             ("projects.foreign", "it looks at a folder for Add Project"),
             ("window.requests", "it listens for what to ask the window"),
             ("terminal.watch", "it says what a terminal shows"),
+            (
+                "devices.list",
+                "it lists the devices, which only the Person may see",
+            ),
             ("harnesses.account", "it asks a Harness who is signed in"),
         ];
         let mut read_by_mark = Vec::new();

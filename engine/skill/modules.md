@@ -206,6 +206,12 @@ A file's bytes, and a page shown in a frame, served beside the engine's API by a
 
 Its methods, `banda call bytes.<method>`: `issue`.
 
+## Devices (`devices`)
+
+The devices this machine lets in at its door, and the host key it proves itself to them by (ADR 0124): a desktop's window, a browser, a phone or a CLI on another machine, each by a key of its own that never leaves it. Only the Person pairs or removes one, and a device removed loses its sessions at once.
+
+Its methods, `banda call devices.<method>`: `list`, `add`, `remove`.
+
 ## Harnesses (`harnesses`)
 
 The agent programs this computer can start, who is signed in to each, how much of its usage limits is spent, and the tokens and estimated API cost in its local journals.

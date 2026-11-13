@@ -56,6 +56,7 @@ mod build_id;
 mod children;
 mod client;
 mod control;
+mod devices;
 mod fence;
 mod files;
 mod mcp;
@@ -250,6 +251,12 @@ enum Command {
     Account {
         #[command(subcommand)]
         what: account::AccountCommand,
+    },
+    /// The devices this machine lets in at its door, each by its own key:
+    /// lists them, pairs one, or removes one.
+    Devices {
+        #[command(subcommand)]
+        what: devices::DevicesCommand,
     },
     /// A gateway account's key, kept in this machine's keyring (ADR 0078,
     /// decision 1).
@@ -816,6 +823,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         }
         Command::App { what } => app::app(&places, what).await,
         Command::Account { what } => account::account(&places, what).await,
+        Command::Devices { what } => devices::devices(&places, what).await,
         Command::Secret { what } => account::secret(&places, what).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
