@@ -73,6 +73,10 @@ export const FREE = { "config/agents.toml": 'flow = "free"\n' }
 
 export const SANDBOXED = !process.env.CI
 
+/** How long a window's first `banda` call waits for its engine to say
+ * where it listens, in ms: a busy runner starts it late. */
+const ENGINE_UP_WITHIN = 30_000
+
 export type Window = {
   app: ElectronApplication
   page: Page
@@ -238,15 +242,28 @@ export async function startWindow({
   // No test starts an editor of the machine's: none is found, unless the
   // test says which (`editorsOn`).
   await editorsOn(app, [])
+  // Whether a `banda` call found the engine up already.
+  let answered = false
   return {
     app,
     page,
     dir,
-    banda: (...args) =>
-      execFileSync(join(repository, "target/debug/banda"), args, {
+    banda: (...args) => {
+      // The engine starts beside the window, which is drawn before it
+      // answers: the first call waits until it says where it listens, as
+      // nobody types `banda` before Banda is up (#940).
+      if (!answered) {
+        const running = join(variables.BANDA_STATE, "engine.json")
+        const since = Date.now()
+        while (!existsSync(running) && Date.now() - since < ENGINE_UP_WITHIN)
+          Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 50)
+        answered = true
+      }
+      return execFileSync(join(repository, "target/debug/banda"), args, {
         env: variables,
         encoding: "utf8",
-      }),
+      })
+    },
     engine: () => {
       const main = String(app.process().pid)
       try {
