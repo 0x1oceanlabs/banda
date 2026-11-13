@@ -389,6 +389,11 @@ export class Engine {
   /** Its `hello` went on this connection: what it follows and hears from
    * then on goes at once, before the engine's `welcome`. */
   #helloed = false
+  /** The secret this connection said hello with, and the last one the
+   * engine welcomed: one it welcomed and now refuses is an engine that
+   * started again under another, whose address the client asks again. */
+  #secret: string | undefined
+  #welcomed: string | undefined
   #status: Status = { state: "connecting" }
   readonly #watchers = new Set<(status: Status) => void>()
   #nextId = 1
@@ -967,6 +972,7 @@ export class Engine {
       else now()
     }
     if ("door" in address) {
+      this.#secret = undefined
       // The door speaks first. Until its `welcome` proved the host key,
       // what it says is taken one frame at a time (`AtDoor`), as proving
       // takes a moment and nothing said meanwhile counts before it.
@@ -993,6 +999,7 @@ export class Engine {
         })
     } else {
       const { secret } = address
+      this.#secret = secret
       socket.onopen = () => {
         this.#send({ type: "hello", protocol: PROTOCOL, token: secret })
         this.#said()
@@ -1091,6 +1098,7 @@ export class Engine {
     switch (frame.type) {
       case "welcome":
         this.#wait = FIRST_WAIT
+        this.#welcomed = this.#secret
         this.#set({
           state: "open",
           engine: frame.engine,
@@ -1107,6 +1115,20 @@ export class Engine {
       case "goodbye": {
         const socket = this.#socket
         if (!door || !socket) {
+          // Refused the secret it welcomed before (`forbidden`, its
+          // answer to a hello it does not know): the engine started
+          // again under another, as after a crash, and the address may
+          // not name the new one yet. The connection is lost, not
+          // refused: the client asks for the address again, and waits
+          // longer each time it still names the old one.
+          if (
+            frame.reason.code === "forbidden" &&
+            this.#secret !== undefined &&
+            this.#secret === this.#welcomed
+          ) {
+            socket?.close()
+            break
+          }
           this.#set({ state: "refused", refusal: frame.reason })
           socket?.close()
           break

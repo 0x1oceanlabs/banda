@@ -180,10 +180,16 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     #[cfg(not(unix))]
     let mut term = None::<()>;
     // A secret for this run of the engine: whoever has it is the owner.
+    // An engine that moved onto this copy in its own process keeps its
+    // own, as it keeps its port: its windows reconnect as after a blip.
+    let secret = match places.kept_secret() {
+        Some(kept) => kept,
+        None => banda_kernel::secret().map_err(Failure::broken)?,
+    };
     let running = Running {
         protocol: PROTOCOL,
         port,
-        secret: banda_kernel::secret().map_err(Failure::broken)?,
+        secret,
         build: build_id::own(),
         version: Some(env!("BANDA_VERSION").to_owned()),
         channel: Some(crate::places::channel().to_owned()),
@@ -304,11 +310,16 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     let keeps = keeping.as_ref().map(tokio::task::JoinHandle::abort_handle);
 
     let asked = run.clone();
+    let secret_kept = (places.clone(), running.secret.clone());
     let stop = async move {
         tokio::select! {
             () = stopped(with_parent, term) => {}
             program = restart.asked() => {
                 tracing::info!("the engine stops to move onto its new copy");
+                let (places, secret) = secret_kept;
+                if let Err(error) = places.keep_secret(&secret) {
+                    tracing::warn!(%error, "the new copy takes a new secret: windows connect again");
+                }
                 crate::moving::asked(program);
             }
         }
