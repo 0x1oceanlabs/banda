@@ -75,6 +75,15 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub child: Option<String>,
+    /// The port of its door on 127.0.0.1, where a device comes in by its
+    /// own key, and the host key it proves there (ADR 0124); none from an
+    /// engine older than the door.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub door: Option<u16>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub host_key: Option<String>,
     /// Whether the fence around its Harnesses holds, as it said in its
     /// welcome (ADR 0083).
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -189,6 +198,8 @@ pub fn said(running: &Running) -> Status {
         pid: running.pid,
         unit: running.unit.clone(),
         child: running.child.clone(),
+        door: running.door,
+        host_key: running.host_key.clone(),
         ..Status::default()
     }
 }

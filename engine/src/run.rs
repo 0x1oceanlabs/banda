@@ -43,6 +43,10 @@ pub enum Before {
 struct Said {
     /// The port it listened on.
     port: u16,
+    /// The port its door listened on; none from an engine older than the
+    /// door.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    door: Option<u16>,
     /// How it left; none while it runs, and for good if it crashed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     left: Option<Left>,
@@ -59,11 +63,22 @@ pub fn before(places: &Places) -> (Before, Option<u16>) {
         Some(Said {
             port,
             left: Some(left),
+            ..
         }) => (Before::Left(left), Some(port)),
-        Some(Said { port, left: None }) => (Before::Crashed, Some(port)),
+        Some(Said {
+            port, left: None, ..
+        }) => (Before::Crashed, Some(port)),
         None if places.running().is_ok() => (Before::Crashed, None),
         None => (Before::None, None),
     }
+}
+
+/// The port the run before's door listened on, which this one takes again
+/// when it is free and its own is taken, so a door that had to move stays
+/// where it moved to.
+pub fn door_before(places: &Places) -> Option<u16> {
+    let bytes = std::fs::read(places.run()).ok()?;
+    serde_json::from_slice::<Said>(&bytes).ok()?.door
 }
 
 /// How many starts after a crash within [`CRASH_WITHIN_MS`] stop the
@@ -123,6 +138,7 @@ pub fn keep_crash(places: &Places) {
 pub struct Run {
     file: PathBuf,
     port: u16,
+    door: Option<u16>,
 }
 
 impl Run {
@@ -131,9 +147,17 @@ impl Run {
         let run = Run {
             file: places.run(),
             port,
+            door: None,
         };
         run.say(None);
         run
+    }
+
+    /// This run, whose door listens on `door`.
+    pub fn with_door(mut self, door: u16) -> Run {
+        self.door = Some(door);
+        self.say(None);
+        self
     }
 
     /// Says how this run left.
@@ -144,6 +168,7 @@ impl Run {
     fn say(&self, left: Option<Left>) {
         let said = Said {
             port: self.port,
+            door: self.door,
             left,
         };
         let written = serde_json::to_vec_pretty(&said)

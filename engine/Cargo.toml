@@ -26,6 +26,7 @@ banda-machines = { path = "../platform/machines/engine" }
 banda-updates = { path = "../platform/updates/engine" }
 banda-pulls = { path = "../apps/pulls/engine" }
 banda-sharing = { path = "../platform/sharing/engine" }
+banda-devices = { path = "../platform/devices/engine" }
 banda-workspaces = { path = "../platform/workspaces/engine" }
 banda-kernel = { path = "../kernel" }
 banda-look = { path = "../platform/look" }
@@ -50,6 +51,8 @@ uuid.workspace = true
 
 [dev-dependencies]
 async-trait.workspace = true
+base64.workspace = true
+ring.workspace = true
 tempfile.workspace = true
 
 # build.rs scans each App's manifest into the list of Apps (ADR 0062,

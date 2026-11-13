@@ -364,6 +364,7 @@ dependencies = [
  "banda-apps",
  "banda-browser",
  "banda-bytes",
+ "banda-devices",
  "banda-environments",
  "banda-fence",
  "banda-files",
@@ -382,10 +383,12 @@ dependencies = [
  "banda-terminal",
  "banda-updates",
  "banda-workspaces",
+ "base64 0.22.1",
  "clap",
  "dirs",
  "dunce",
  "futures",
+ "ring",
  "rustix",
  "serde",
  "serde_json",
@@ -481,6 +484,23 @@ dependencies = [
  "tokio",
  "ts-rs",
  "winapi-util",
+]
+
+[[package]]
+name = "banda-devices"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "base64 0.22.1",
+ "ring",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "ts-rs",
 ]
 
 [[package]]

@@ -493,6 +493,39 @@ pub fn on_this_machine_on(windows: bool, path: &[u8]) -> bool {
     }
 }
 
+/// Writes `bytes` to `path`, whole or not at all, readable only by its
+/// user: beside it first, then renamed over it, and waited for on the
+/// disk. For what Banda keeps in its own state, as a key.
+pub fn write_private(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    write_private_as(path, bytes, true)
+}
+
+/// [`write_private`], not waited for on the disk: for a file that matters
+/// only until the system starts again, which an OS crash may leave as it
+/// was or empty.
+pub fn write_private_unsynced(path: &Path, bytes: &[u8]) -> io::Result<()> {
+    write_private_as(path, bytes, false)
+}
+
+fn write_private_as(path: &Path, bytes: &[u8], synced: bool) -> io::Result<()> {
+    use std::io::Write as _;
+    if let Some(folder) = path.parent() {
+        std::fs::create_dir_all(folder)?;
+    }
+    let temporary = path.with_extension("new");
+    let mut options = std::fs::File::options();
+    options.write(true).create(true).truncate(true);
+    #[cfg(unix)]
+    std::os::unix::fs::OpenOptionsExt::mode(&mut options, 0o600);
+    let mut file = options.open(&temporary)?;
+    file.write_all(bytes)?;
+    if synced {
+        file.sync_all()?;
+    }
+    drop(file);
+    rename(&temporary, path)
+}
+
 /// Puts `from` in place of `to`, a file or a folder, which it replaces
 /// when it is a file: one written whole beside it, put in place in one
 /// step ([`tried`]).

@@ -383,7 +383,7 @@ async fn upgrade(
     ws: WebSocketUpgrade,
 ) -> Response {
     let origin = headers.get(header::ORIGIN).and_then(|o| o.to_str().ok());
-    if !origin_allowed(origin) {
+    if !origin_allowed(origin) || through_a_proxy(&headers) {
         return StatusCode::FORBIDDEN.into_response();
     }
     ws.on_upgrade(move |socket| serve(api, socket))
@@ -404,16 +404,38 @@ fn origin_allowed(origin: Option<&str>) -> bool {
         return true;
     }
     match origin.split_once("://") {
-        Some(("http" | "https", rest)) => {
-            let host = if rest.starts_with("[::1]") {
-                "[::1]"
-            } else {
-                rest.split([':', '/']).next().unwrap_or_default()
-            };
-            matches!(host, "localhost" | "127.0.0.1" | "[::1]")
-        }
+        Some(("http" | "https", rest)) => loopback(rest),
         _ => false,
     }
+}
+
+/// Whether `authority`, a host with or without a port and a path, names
+/// this machine's loopback.
+fn loopback(authority: &str) -> bool {
+    let host = if authority.starts_with("[::1]") {
+        "[::1]"
+    } else {
+        authority.split([':', '/']).next().unwrap_or_default()
+    };
+    matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+}
+
+/// Whether a request came through a proxy, as `tailscale serve` or a
+/// reverse proxy carries one: by what a proxy adds, or by a `Host` that
+/// names this machine other than by its loopback. The API is for the
+/// programs on this machine, and the owner's secret is taken from no
+/// network: what a network carries comes to the door (ADR 0124, decision
+/// 2). A pipe that hides itself, as an ssh forward does, is its user's
+/// own.
+fn through_a_proxy(headers: &HeaderMap) -> bool {
+    let added = headers.keys().any(|name| {
+        let name = name.as_str();
+        name == "forwarded" || name.starts_with("x-forwarded-") || name.starts_with("tailscale-")
+    });
+    let host = headers
+        .get(header::HOST)
+        .and_then(|host| host.to_str().ok());
+    added || !host.is_some_and(loopback)
 }
 
 /// Who a `hello`'s token names, the one Project a pass keeps it in, and

@@ -1,0 +1,14 @@
+# The devices module, as it declares itself (ADR 0022). What its code
+# says, its methods, its code declares; this holds the rest.
+id = "devices"
+kind = "platform"
+name = "Devices"
+about = "The devices this machine lets in at its door, and the host key it proves itself to them by (ADR 0124): a desktop's window, a browser, a phone or a CLI on another machine, each by a key of its own that never leaves it. Only the Person pairs or removes one, and a device removed loses its sessions at once."
+version = "0.1.0"
+# The major of the App API it is written to (ADR 0062, ADR 0082).
+api = 1
+from-banda = true
+
+# What it needs of Banda (ADR 0082, decision 2): nothing it could
+# declare here is built yet.
+[needs]

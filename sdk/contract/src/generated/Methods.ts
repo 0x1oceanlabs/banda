@@ -9,6 +9,7 @@ import type { PullsMethods } from "./pulls/PullsMethods"
 import type { TerminalMethods } from "./terminal/TerminalMethods"
 import type { AppsMethods } from "./apps/AppsMethods"
 import type { BytesMethods } from "./bytes/BytesMethods"
+import type { DevicesMethods } from "./devices/DevicesMethods"
 import type { HarnessesMethods } from "./harnesses/HarnessesMethods"
 import type { KeysMethods } from "./keys/KeysMethods"
 import type { MachinesMethods } from "./machines/MachinesMethods"
@@ -34,6 +35,7 @@ export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"apps", AppsMethods> &
   Prefixed<"bytes", BytesMethods> &
+  Prefixed<"devices", DevicesMethods> &
   Prefixed<"harnesses", HarnessesMethods> &
   Prefixed<"keys", KeysMethods> &
   Prefixed<"machines", MachinesMethods> &

@@ -42,6 +42,24 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   file only this user can read. A second engine with the same state
   folder refuses to start. `banda --version` names the build id too (ADR
   0086, decision 2).
+- **The engine's door** (ADR 0124). Beside the API it listens on a second
+  port of 127.0.0.1, where a device comes in by its own key
+  (`kernel/src/devices.rs`, below): 22632 for Banda and 22633 for Banda
+  Dev, so a pipe set up to it finds it after a restart, or any free one
+  when that is taken, and any for a build from a checkout.
+  `engine.json` and `banda status` say the port, `door`, and the host
+  key, `host_key`. The door serves a file's bytes and a page as the API's
+  port does, and answers a plain `GET /` with one line, this machine's
+  name and its host key, for a person who checks a pipe with `curl`.
+  The API takes no request a proxy carried: one with `Forwarded`,
+  `X-Forwarded-*` or `Tailscale-*`, or whose `Host` is not this
+  machine's loopback, is refused, so the owner's secret is taken from no
+  network. The devices module (`platform/devices`) keeps the host key in
+  `host.key` and the devices in `devices.json`, in the engine's state,
+  each readable only by its user, and is the kernel's devices port.
+  `banda devices list | add | remove` is this machine's console:
+  `add --self --key …` pairs this machine's own window, and `remove`
+  ends a device's sessions at once.
 - **The engine is the machine's, and outlives the window** (ADR 0086,
   decisions 1 and 3). On Linux it is a systemd user unit of the Person's
   session, `<folder>-engine` (`banda-engine`, `banda-dev-engine`; a state

@@ -47,6 +47,12 @@ unit?: string,
  */
 child?: string, 
 /**
+ * The port of its door on 127.0.0.1, where a device comes in by its
+ * own key, and the host key it proves there (ADR 0124); none from an
+ * engine older than the door.
+ */
+door?: number, host_key?: string, 
+/**
  * Whether the fence around its Harnesses holds, as it said in its
  * welcome (ADR 0083).
  */
