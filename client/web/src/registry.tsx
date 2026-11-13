@@ -259,6 +259,13 @@ export function homeOf(pane: PaneState): "project" | "right" {
   return told(() => kindOf(pane.kind)?.home?.(), false) ? "project" : "right"
 }
 
+/** The kinds that say `home`, whatever it answers now: as the engine reads
+ * them from the Apps' `window.json`, where it is a flag, and places a Pane
+ * of one by the Flow itself (ADR 0110, decision 5). */
+export const HOME_KINDS: readonly string[] = kinds
+  .filter((kind) => kind.home !== undefined)
+  .map((kind) => kind.kind)
+
 /** Whether a Pane opens as a Group of its own (`PaneKind.grouped`). */
 export function groupedOf(pane: PaneState): boolean {
   return kindOf(pane.kind)?.grouped === true

@@ -3,10 +3,12 @@ import type { ProjectId } from "../ProjectId";
 import type { JsonValue } from "../serde_json/JsonValue";
 import type { PaneId } from "./PaneId";
 import type { Place } from "./Place";
+import type { WorkspaceId } from "./WorkspaceId";
 
 export type Open = { 
 /**
- * Left out, where the Flow says (ADR 0110).
+ * Where the Person named one: a drop, "Open beside", a Pane that says
+ * where. Left out, where the Flow says (ADR 0110, decision 3).
  */
 place?: Place, 
 /**
@@ -15,9 +17,33 @@ place?: Place,
  */
 from?: PaneId, 
 /**
+ * The workspace on its caller's screen, which the Flow places it by
+ * when no Pane is in front there. Left out, as on none.
+ */
+on?: WorkspaceId, 
+/**
+ * It is an Agent's, opened for one as the tab a browser opens for it,
+ * so the Flow places it as what an Agent opens (ADR 0102, decision 4).
+ */
+agents?: boolean, 
+/**
+ * Its Project is of no Project: a scratch one, or a draft's, the
+ * machine's own ID (ADR 0046). Of its own machine's Projects the
+ * engine says it itself and takes no one's word; the window says it of
+ * another machine's (ADR 0110, decision 6). Left out, a Project's.
+ */
+scratch?: boolean, 
+/**
  * The Pane it shows in place of, which leaves.
  */
 instead?: PaneId, 
+/**
+ * With `instead`: it shows what that Pane showed, in another Project,
+ * as a draft the Person moved there. In the row, on a workspace of
+ * another Project, it opens where the Flow says, from that Pane,
+ * which leaves all the same (ADR 0102, decision 3).
+ */
+moved?: boolean, 
 /**
  * A new column's width; left out, the look's.
  */

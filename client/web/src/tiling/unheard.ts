@@ -41,7 +41,7 @@ import {
   type Want,
   withAsked,
 } from "./arrange"
-import { apply, type Command } from "./arrangement"
+import { apply, type Command, type Facts } from "./arrangement"
 import { sameData, sameEach } from "@banda/core"
 import {
   type Column,
@@ -55,6 +55,9 @@ import {
 export type Unheard = {
   id: CommandId
   command: Command
+  /** What the engine places a Pane by, as the client believed them when
+   * it sent the command (ADR 0110, decision 9). */
+  facts: Facts
   /** Where its event stands in the log, once the engine said. */
   at?: number
 }
@@ -117,16 +120,18 @@ type Planned = { command: Command; want?: string; focus?: false }
 
 /**
  * `plan` sent under `id`, drawn at once: its command applied over what is
- * drawn now. A command the copy refuses draws nothing, and waits for the
- * engine's answer all the same. Gives the Pane it focuses, if any, and the
- * one it opens, by the ID the engine gives it too.
+ * drawn now, a Pane with no place put where the engine would by `facts`.
+ * A command the copy refuses draws nothing, and waits for the engine's
+ * answer all the same. Gives the Pane it focuses, if any, and the one it
+ * opens, by the ID the engine gives it too.
  */
 export function predict(
   seen: Seen,
   id: CommandId,
-  plan: Planned
+  plan: Planned,
+  facts: Facts
 ): { seen: Seen; want?: string; opens?: string } {
-  const unheard = [...seen.unheard, { id, command: plan.command }]
+  const unheard = [...seen.unheard, { id, command: plan.command, facts }]
   const applied = seen.predicted && applyOne(seen.predicted, unheard.at(-1)!)
   const predicted = applied ? applied.list : seen.predicted
   const want =
@@ -242,7 +247,7 @@ function settled(seen: Seen): Seen {
 
 /** `one` applied to `list`; none when the copy refuses it. */
 function applyOne(list: Kept[], one: Unheard) {
-  const applied = apply(list, one.command, one.id)
+  const applied = apply(list, one.command, one.id, one.facts)
   return "refused" in applied ? undefined : applied
 }
 

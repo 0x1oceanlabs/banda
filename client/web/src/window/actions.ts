@@ -73,6 +73,7 @@ import { askRemoval } from "../settings/RemoveProject"
 import { notNow } from "../trust/not-now"
 import { askTrust } from "../trust/TrustCard"
 import {
+  asking,
   type Change,
   closableAt,
   closingWorkspace,
@@ -98,11 +99,9 @@ import {
   entries,
   even,
   fill,
-  find,
   focusEntry,
   focused,
   focusedColumn,
-  isFree,
   movingAs,
   refusalOf,
   refusedTo,
@@ -490,9 +489,11 @@ export function targetsOf(
   }))
 }
 
-/** Shows a Pane of a Project and focuses it, as `how` says; a new column
- * takes its width. A Pane is the one shown as its kind names it, so a
- * Project has one Diff. */
+/** Shows a Pane of a Project and focuses it at the place its caller
+ * named, as `how` says; a new column takes its width. A Pane is the one
+ * shown as its kind names it, so a Project has one Diff. With no place, as
+ * a Pane's own `open` leaves it out, it takes the place of the one of its
+ * kind on the opener's workspace, or goes right of the opener. */
 export function opening(
   workspaces: Workspaces,
   project: ProjectId,
@@ -504,47 +505,72 @@ export function opening(
     ...how,
     width: widthOf(pane),
   })
-  // As `placeFor` says (ADR 0102, decision 3): in the Group of the Pane it
-  // opens from, last on its Project's workspace, into its own Group there,
-  // or on the top free workspace.
+  // Into the Group of the Pane it opens from, as the engine names it.
   const from = how.from ?? focused(workspaces)?.id
   const plan = opened(workspaces, next, {
     place:
-      how.place === "group" && from
-        ? { to: "group", pane: from }
-        : how.place === "project" || how.place === "own"
-          ? { to: how.place, project }
-          : how.place === "free"
-            ? { to: "free" }
-            : undefined,
+      how.place === "group" && from ? { to: "group", pane: from } : undefined,
     grouped: groupedOf(pane),
   })
   if (!plan) return next
   return how.focus === false ? { ...plan, focus: false } : plan
 }
 
-/** Shows a Pane as `opening` does; one already shown, as its kind names
- * it, takes these args and the focus, as a file's Pane the line a link
- * names. */
-export function updating(
+/** How a Pane the engine places opens (`placed`): as `Opening`, and with
+ * `update`, one already shown takes these args; `agents`, it is opened
+ * for an Agent, as the tab a browser opens for one. */
+type Placed = Omit<Opening, "width" | "identity" | "keep"> & {
+  update?: true
+  agents?: boolean
+}
+
+/**
+ * Shows a Pane of a Project and focuses it, as `how` says. Where it goes
+ * is the engine's to say (ADR 0110, decision 3): the window sends the Pane
+ * and where the Person is (`asking`), and names a place only where its
+ * caller named one (`how.place`, `opening`). One already shown, as its
+ * kind names it, gets the focus instead, unless it opens `again`; with
+ * `update` it takes these args first, as a file's Pane the line a link
+ * names.
+ */
+export function placed(
   workspaces: Workspaces,
   project: ProjectId,
   pane: PaneState,
-  how: Omit<Opening, "width"> = {}
+  placing: Placing,
+  { update, agents, ...how }: Placed = {}
 ): Step {
   const wanted = { project, pane }
-  const shown = entries(workspaces).find((entry) =>
-    samePane(entry, wanted, identityOf)
-  )
-  // None shown, or one with these args: as `opening` does.
-  if (!shown || samePane(shown, wanted))
-    return opening(workspaces, project, pane, how)
+  const shown = how.again
+    ? undefined
+    : entries(workspaces).find((entry) => samePane(entry, wanted, identityOf))
+  if (shown && update && !samePane(shown, wanted))
+    return {
+      command: {
+        method: "workspaces.update",
+        params: { pane: shown.id, args: pane.args },
+      },
+      want: shown.id,
+    }
+  if (shown)
+    return how.focus === false ? undefined : focusEntry(workspaces, shown.id)
+  if (how.place !== undefined) return opening(workspaces, project, pane, how)
+  const plan = asking(workspaces, wanted, {
+    ...saidOf(project, pane, placing),
+    from: how.from,
+    agents,
+  })
+  return how.focus === false ? { ...plan, focus: false } : plan
+}
+
+/** What the window says of a Pane the engine places, beside where the
+ * Person is: its kind's Group and width, and whether its Project is of no
+ * Project, which the engine takes of another machine's alone. */
+function saidOf(project: ProjectId, pane: PaneState, placing: Placing) {
   return {
-    command: {
-      method: "workspaces.update",
-      params: { pane: shown.id, args: pane.args },
-    },
-    want: shown.id,
+    grouped: groupedOf(pane),
+    width: widthOf(pane),
+    scratch: placing.scratch(project),
   }
 }
 
@@ -610,44 +636,10 @@ export function placingOf(flow: Flow, none: readonly ProjectId[]): Placing {
 }
 
 /**
- * Where a Pane the Person opens goes, by the Flow and the Projects as they
- * are now (`placingOf`; ADR 0102, decision 3).
- * In the Flow `free`, right of the Pane in front. In the row and solo:
- * - one an Agent opens with its Thread not shown (`agent`), or a Thread, as
- *   its kind's `home` says, last on its Project's workspace, or, of no
- *   Project, on the top free workspace;
- * - a Pane opened from a Group of its Project, into that Group, of no
- *   Project too;
- * - another Pane of no Project, right of the Pane in front;
- * - one opened on a free workspace, right of the Pane in front;
- * - any other, last into its Project's own Group, first on its workspace.
- */
-export function placeFor(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  { flow, scratch }: Placing,
-  agent = false
-): Place {
-  if (flow === "free") return "right"
-  const none = scratch(project)
-  if (agent || homeOf(pane) === "project") return none ? "free" : "project"
-  const { workspace, column } = focusedColumn(workspaces)
-  const from = column?.entries[column.active]
-  const grouped = column?.group !== undefined && from?.project === project
-  if (none) return grouped ? "group" : "right"
-  // From the Project's own Group, last into it, not stacked in a Deck.
-  if (column?.group !== undefined && column.group === workspace.own)
-    return "own"
-  if (grouped) return "group"
-  return isFree(workspace) ? "right" : "own"
-}
-
-/**
  * Goes to the Pane picked (`pane.pick`, ADR 0087, decision 7): to the one
  * a workspace shows, on any workspace, by the thing it shows (`shows`),
- * else by what makes it that Pane; else opens it where the Flow says
- * (`placeFor`, ADR 0102, decision 3).
+ * else by what makes it that Pane; else opens it where the engine places
+ * it (`placed`).
  */
 export function picking(
   workspaces: Workspaces,
@@ -666,76 +658,39 @@ export function picking(
 }
 
 /**
- * Whether a Pane opened in place of `from` goes elsewhere, where the Flow
- * says (`placeFor`): in the row and solo, one that shows what `from`
- * showed, in another Project that the workspace holding `from` does not
- * take, as a draft the Person moves to another Project, or to none (ADR
- * 0102, decision 1). A draft that became its Thread with its first
- * message stays where it stood.
+ * Opens a Pane as a tile asks (`Frame.open`), from the tile `from`, at the
+ * place it names. One in place of `from` that shows what `from` showed, in
+ * another Project, as a draft the Person moves to another Project or to
+ * none, says so and names no place: the engine has it take that place, or,
+ * in the row on a workspace that is not its Project's, open where the Flow
+ * says while `from` leaves (ADR 0102, decision 3). A draft that became its
+ * Thread with its first message shows another thing, and stays.
  */
-export function movesAway(
+export function openingFrom(
   workspaces: Workspaces,
-  from: string,
   project: ProjectId,
   pane: PaneState,
-  { flow }: Placing
-): boolean {
-  if (flow === "free") return false
-  const at = find(workspaces, from)
-  if (!at) return false
-  const workspace = workspaces.list[at.workspace]
-  const was = workspace.columns[at.column].entries[at.entry]
-  return (
-    was.project !== project &&
-    showsOf(was.pane) === showsOf(pane) &&
-    !admits(workspace, project)
-  )
-}
-
-/**
- * Opens a Pane as a tile asks (`Frame.open`), by `changing`, from the
- * workspaces as drawn now. One in place of `from` that its workspace does
- * not take (`movesAway`) opens anew where the Flow says, and the window
- * follows it; `from` closes once it is drawn there, so no workspace
- * empties in between.
- */
-export function openFrom(
-  changing: (how: Change) => Promise<string | undefined>,
-  workspaces: Workspaces,
   placing: Placing,
-  project: ProjectId,
-  pane: PaneState,
   from: string,
   place?: Place
-): Promise<unknown> {
-  if (
-    place !== "instead" ||
-    !movesAway(workspaces, from, project, pane, placing)
-  )
-    return changing((w) => opening(w, project, pane, { from, place }))
-  return changing((w) =>
-    placed(w, project, pane, placing, { again: true })
-  ).then((entry) => entry && changing(() => closing(from)))
-}
-
-/** Opens the Pane where the Flow says (`placeFor`), as `how` says. */
-export function placed(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  placing: Placing,
-  how: Omit<Opening, "width" | "place"> = {}
 ): Step {
-  const place = placeFor(workspaces, project, pane, placing)
-  return opening(workspaces, project, pane, { ...how, place })
+  const was = entries(workspaces).find((entry) => entry.id === from)
+  const moved =
+    place === "instead" &&
+    was !== undefined &&
+    was.project !== project &&
+    showsOf(was.pane) === showsOf(pane)
+  if (!moved) return opening(workspaces, project, pane, { from, place })
+  const said = saidOf(project, pane, placing)
+  return asking(workspaces, { project, pane }, { ...said, instead: from })
 }
 
 /**
  * Opens a first Pane on the empty workspace on screen, as its buttons do,
  * in its Project, else in `home`. On a Project's, where the keys would:
  * a terminal makes the Project's own Group there, and the next goes right
- * of it (ADR 0102, decision 4). On one of no Project, there, which makes
- * it a free one (decision 1).
+ * of it (ADR 0102, decision 4). On one of no Project the buttons name the
+ * place: there, which makes it a free one (decision 1).
  */
 export function startingHere(
   workspaces: Workspaces,
@@ -744,11 +699,9 @@ export function startingHere(
   placing: Placing
 ): Step {
   const { project } = current(workspaces)
-  const place =
-    project === undefined
-      ? "right"
-      : placeFor(workspaces, project, pane, placing)
-  return opening(workspaces, project ?? home, pane, { place, again: true })
+  return project === undefined
+    ? opening(workspaces, home, pane, { place: "right", again: true })
+    : placed(workspaces, project, pane, placing, { again: true })
 }
 
 /** What `pane.pick` is asked: a Project, and the Pane to open in it, its

@@ -24,6 +24,7 @@
 use banda_kernel::{Code, Refusal};
 use banda_workspaces::commands::{self, METHODS};
 use banda_workspaces::model::{self, Arrangement, Seed};
+use banda_workspaces::placing::{Facts, Flow};
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::collections::BTreeSet;
@@ -35,6 +36,8 @@ const THIRD: &str = "a0000000-0000-4000-8000-000000000003";
 const FOURTH: &str = "a0000000-0000-4000-8000-000000000004";
 const FIFTH: &str = "a0000000-0000-4000-8000-000000000005";
 const AGENT: &str = "b0000000-0000-4000-8000-000000000001";
+/// A kind that stands on its Project's workspace, where the facts say so.
+const THREAD: &str = "t.t";
 /// An ID the workspaces hold nowhere.
 const NOWHERE: &str = "e0000000-0000-4000-8000-000000000001";
 
@@ -63,6 +66,10 @@ struct Step {
     /// The command's ID, whose `Seed` names what it makes.
     seed: String,
     params: Value,
+    /// What the engine places a Pane by, when it is not the Flow `free`
+    /// with no kind known (`placing::Facts`).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    facts: Option<Facts>,
     #[serde(skip_serializing_if = "Option::is_none")]
     answer: Option<Value>,
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -77,6 +84,8 @@ struct Tracing {
     slug: &'static str,
     trace: Trace,
     list: Arrangement,
+    /// The facts its next steps run by.
+    facts: Facts,
 }
 
 impl Tracing {
@@ -85,6 +94,7 @@ impl Tracing {
         Tracing {
             number,
             slug,
+            facts: Facts::default(),
             list: start.clone(),
             trace: Trace {
                 about,
@@ -133,7 +143,8 @@ impl Tracing {
     fn run(&mut self, method: &str, mut params: Value) -> Result<Value, Refusal> {
         let seed = command_id(self.number, self.trace.steps.len() + 1);
         let mut list = self.list.clone();
-        let applied = commands::apply(&mut list, method, params.clone(), &Seed::of(&seed));
+        let facts = &self.facts;
+        let applied = commands::apply(&mut list, method, params.clone(), facts, &Seed::of(&seed));
         if applied.is_ok() {
             self.list = list;
         }
@@ -144,6 +155,7 @@ impl Tracing {
             method: format!("workspaces.{method}"),
             seed,
             params,
+            facts: (self.facts != Facts::default()).then(|| self.facts.clone()),
             answer,
             refused: applied.as_ref().err().map(|refusal| refusal.code),
             after: in_order(self.list.clone()),
@@ -153,6 +165,15 @@ impl Tracing {
 
     fn list(&self) -> &Arrangement {
         &self.list
+    }
+
+    /// The next steps run in `flow`, with a Thread's kind standing on its
+    /// Project's workspace.
+    fn in_the_flow(&mut self, flow: Flow) {
+        self.facts = Facts {
+            flow,
+            home: BTreeSet::from([THREAD.to_owned()]),
+        };
     }
 
     fn workspace(&self, w: usize) -> String {
@@ -1154,6 +1175,181 @@ fn update() -> Tracing {
     t
 }
 
+/// A Thread, as the window opens one: a Group of its own.
+fn thread(project: &str, n: u32) -> Value {
+    and(shows(project, THREAD, n), json!({ "grouped": true }))
+}
+
+/// `open`'s params, of no Project, as the engine says of its own Projects
+/// and the window of another machine's.
+fn of_none(params: Value) -> Value {
+    and(params, json!({ "scratch": true }))
+}
+
+fn placed_free() -> Tracing {
+    let mut t = Tracing::new(
+        15,
+        "placed-free",
+        "In the Flow free, a Pane with no place opens right of the Pane it is opened \
+         from, a Thread and what is opened for an Agent too; with none in front, last \
+         on the workspace on screen; with neither, where a Pane with no place goes. \
+         One moved to another Project takes the place of the one it was.",
+    );
+    t.in_the_flow(Flow::Free);
+    let one = t.opened(shows(WORK, "a.a", 1));
+    let from = |pane: &str| json!({ "from": pane });
+    t.ok("open", and(shows(WORK, "a.a", 2), from(&one)));
+    t.ok("open", and(thread(HOME, 3), from(&one)));
+    assert_eq!(t.layout(), [vec![vec![1], vec![3], vec![2]], EMPTY]);
+    assert_eq!(t.grouping()[0], [0, 1, 0]);
+    // With no Pane in front, on the workspace on screen.
+    let bottom = t.bottom();
+    let four = t.opened(and(shows(THIRD, "a.a", 4), json!({ "on": bottom })));
+    // One gone, a Pane or a workspace, counts as none.
+    let gone = json!({ "from": NOWHERE, "on": NOWHERE });
+    t.ok("open", and(shows(THIRD, "a.a", 5), gone));
+    assert_eq!(t.layout()[1], [vec![4], vec![5]]);
+    // For an Agent whose Thread no workspace shows, as the Person's.
+    let agents = and(from(&four), json!({ "agents": true }));
+    t.ok("open", and(shows(WORK, "a.a", 6), agents));
+    t.ok(
+        "open",
+        and(shows(WORK, "a.a", 7), json!({ "agents": true })),
+    );
+    assert_eq!(
+        t.layout(),
+        [
+            vec![vec![1], vec![3], vec![2], vec![7]],
+            vec![vec![4], vec![6], vec![5]],
+            EMPTY
+        ]
+    );
+    let moved = json!({ "instead": one, "moved": true });
+    t.ok("open", and(shows(HOME, "a.a", 8), moved));
+    assert_eq!(t.layout()[0], [vec![8], vec![3], vec![2], vec![7]]);
+    t
+}
+
+fn placed_row() -> Tracing {
+    let mut t = Tracing::new(
+        16,
+        "placed-row",
+        "In the row, a Pane with no place opens by where it is opened from: from the \
+         Project's own Group, last into it; from a Group of its Project, into that \
+         Group; on a free workspace, right of the Pane in front; any other, and with \
+         none in front, into its Project's own Group. A Thread goes last on its \
+         Project's workspace, and so does what is opened for an Agent. A Pane of no \
+         Project goes right of the Pane in front, a Thread of none on the top free \
+         workspace.",
+    );
+    t.in_the_flow(Flow::Row);
+    let from = |pane: &str| json!({ "from": pane });
+    // With none in front, the Project's own Group, which makes its
+    // workspace; from it, last into it.
+    let one = t.opened(shows(WORK, "a.a", 1));
+    t.ok("open", and(shows(WORK, "a.a", 2), from(&one)));
+    // A Thread, last on its Project's workspace; from it, into its Group.
+    let three = t.opened(and(thread(WORK, 3), from(&one)));
+    t.ok("open", and(shows(WORK, "a.a", 4), from(&three)));
+    assert_eq!(
+        t.layout(),
+        [vec![vec![1], vec![2], vec![3], vec![4]], EMPTY]
+    );
+    assert_eq!(t.grouping()[0], [1, 1, 2, 2]);
+    assert_eq!(t.list()[0].own, t.list()[0].columns[0].group);
+    // Another Project's, from a Group, goes home.
+    let five = t.opened(and(shows(HOME, "a.a", 5), from(&three)));
+    assert_eq!(t.list()[1].project.unwrap().to_string(), HOME);
+    // Of no Project: right of the Pane in front; a Thread, on the top free
+    // workspace; from its Group, into it; with none in front, on the
+    // workspace on screen.
+    let none = |n| of_none(shows(FIFTH, "a.a", n));
+    t.ok("open", and(none(6), from(&five)));
+    let seven = t.opened(and(of_none(thread(FIFTH, 7)), from(&five)));
+    t.ok("open", and(none(8), from(&seven)));
+    let free = t.workspace(2);
+    let nine = t.opened(and(none(9), json!({ "on": free })));
+    // On a free workspace, a Project's stays, right of the Pane in front.
+    t.ok("open", and(shows(THIRD, "a.a", 10), from(&nine)));
+    assert_eq!(
+        t.layout(),
+        [
+            vec![vec![1], vec![2], vec![3], vec![4]],
+            vec![vec![5], vec![6]],
+            vec![vec![7], vec![8], vec![9], vec![10]],
+            EMPTY
+        ]
+    );
+    assert_eq!(t.grouping()[1..3], [vec![3, 0], vec![4, 4, 0, 0]]);
+    assert_eq!(t.list()[2].project, None);
+    // From a column in no Group on its Project's workspace, the own Group.
+    let on_work = json!({ "place": { "to": "project", "project": WORK } });
+    let loose = t.opened(and(shows(WORK, "a.a", 11), on_work));
+    t.ok("open", and(shows(WORK, "a.a", 12), from(&loose)));
+    // For an Agent whose Thread no workspace shows: last on its Project's
+    // workspace, or, of no Project, on the top free one.
+    let agents = and(from(&one), json!({ "agents": true }));
+    t.ok("open", and(shows(WORK, "a.a", 13), agents));
+    t.ok("open", and(none(14), json!({ "agents": true })));
+    // A Pane in front that has gone counts as none.
+    t.ok("open", and(shows(WORK, "a.a", 15), from(NOWHERE)));
+    assert_eq!(
+        t.layout()[0],
+        [
+            vec![1],
+            vec![2],
+            vec![12],
+            vec![15],
+            vec![3],
+            vec![4],
+            vec![11],
+            vec![13]
+        ]
+    );
+    assert_eq!(t.grouping()[0], [1, 1, 1, 1, 2, 2, 0, 0]);
+    assert_eq!(t.layout()[2].last().unwrap(), &[14]);
+    // Of no Project with nothing in front: where a Pane with no place goes.
+    t.ok("open", none(16));
+    assert_eq!(t.layout()[1], [vec![5], vec![6], vec![16]]);
+    t
+}
+
+fn moved_away() -> Tracing {
+    let mut t = Tracing::new(
+        17,
+        "moved-away",
+        "In the row, a Pane opened instead of one that showed the same in another \
+         Project, on a workspace that is not the new Project's, opens where the Flow \
+         says, and the one it was leaves. On its own Project's workspace or a free \
+         one it takes that Pane's place, and so does one not moved.",
+    );
+    t.in_the_flow(Flow::Row);
+    let moved = |instead: &str| json!({ "instead": instead, "moved": true });
+    let one = t.opened(thread(WORK, 1));
+    // To another Project: home, and its workspace stays the first's.
+    let made = t.next();
+    let two = t.opened(and(thread(HOME, 2), moved(&one)));
+    assert_eq!(two, made.pane().to_string());
+    assert_eq!(t.layout(), [EMPTY, vec![vec![2]], EMPTY]);
+    assert_eq!(t.grouping()[1], [1]);
+    assert_eq!(t.list()[0].project.unwrap().to_string(), WORK);
+    // Within its Project, and on a free workspace, where it stands.
+    let three = t.opened(and(thread(HOME, 3), moved(&two)));
+    let free = json!({ "place": { "to": "free" } });
+    let four = t.opened(and(thread(THIRD, 4), free));
+    t.ok("open", and(thread(FOURTH, 5), moved(&four)));
+    assert_eq!(t.layout(), [EMPTY, vec![vec![3]], vec![vec![5]], EMPTY]);
+    // Not moved, as a draft that became its Thread: where it stands.
+    let six = t.opened(and(thread(WORK, 6), json!({ "instead": three })));
+    assert_eq!(t.layout()[1], [vec![6]]);
+    // Of no Project, and no Thread: right of the one it was, which leaves.
+    t.ok("open", and(of_none(shows(FIFTH, "a.a", 7)), moved(&six)));
+    assert_eq!(t.layout(), [EMPTY, vec![vec![7]], vec![vec![5]], EMPTY]);
+    assert_eq!(t.grouping()[1], [0]);
+    t.refused("open", and(thread(WORK, 8), moved(NOWHERE)), Code::NotFound);
+    t
+}
+
 #[test]
 fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
     let traces = [
@@ -1171,6 +1367,9 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         update(),
         own_group(),
         arranged(),
+        placed_free(),
+        placed_row(),
+        moved_away(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

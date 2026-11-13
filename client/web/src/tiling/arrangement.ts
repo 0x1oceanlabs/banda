@@ -1,8 +1,11 @@
 /**
  * The arrangement's commands as the engine runs them, copied: what
- * `platform/workspaces/engine/src/model.rs` and `commands.rs` do, function
- * for function, so a client works out what a command does before the
- * engine answers (ADR 0088, decision 11). The engine's golden traces hold
+ * `platform/workspaces/engine/src/model.rs`, `commands.rs` and
+ * `placing.rs` do, function for function, so a client works out what a
+ * command does before the engine answers (ADR 0088, decision 11). Where a
+ * Pane with no place opens is the engine's to say (ADR 0110): this copy
+ * of its rule only draws ahead, by the facts the client believes the
+ * engine has, and the engine's answer wins. The engine's golden traces hold
  * the two together: `parity.test.ts` replays every one through `apply`.
  * The model itself, compiled to WebAssembly, takes this one's place (T1);
  * so it imports nothing but the contract, as that crate will be a leaf.
@@ -77,14 +80,26 @@ export type Applied =
   { list: Workspace[]; answer: Answer } | { refused: Code; message: string }
 
 /**
+ * What the engine places a Pane by, beside its arrangement, as
+ * `placing::Facts` (ADR 0110, decision 5): its machine's Flow, solo being
+ * each client's view of the row, and the Pane kinds that stand on their
+ * Project's workspace (`PaneKind.home`).
+ */
+export type Facts = { flow: "free" | "row"; home: readonly string[] }
+
+/** The engine's facts when it knows no Flow and no kind. */
+export const NO_FACTS: Facts = { flow: "free", home: [] }
+
+/**
  * Runs `command` on `list` as the engine runs it under the command ID
- * `seed`, from which what it makes takes its IDs (`seeded`). `list` stays
- * as it was, refused or not.
+ * `seed`, from which what it makes takes its IDs (`seeded`), by `facts`.
+ * `list` stays as it was, refused or not.
  */
 export function apply(
   list: readonly Workspace[],
   command: Command,
-  seed: string
+  seed: string,
+  facts: Facts = NO_FACTS
 ): Applied {
   // What it keeps of the params, as its args, is its own too.
   const [copy, params] = structuredClone([list, command.params]) as [
@@ -92,7 +107,7 @@ export function apply(
     unknown,
   ]
   try {
-    const answer = dispatch(copy, command.method, params, seedOf(seed))
+    const answer = dispatch(copy, command.method, params, facts, seedOf(seed))
     return { list: copy, answer }
   } catch (error) {
     if (!(error instanceof Refused)) throw error
@@ -177,6 +192,7 @@ function dispatch(
   list: Arrangement,
   method: string,
   params: unknown,
+  facts: Facts,
   seed: Seed
 ): Answer {
   // Its params are read first, then whether it ran before, as the kernel
@@ -189,7 +205,7 @@ function dispatch(
   switch (method) {
     case "workspaces.open": {
       const opening = read(readOpen)
-      const [pane, isNew] = openCommand(list, opening, seed)
+      const [pane, isNew] = openCommand(list, opening, facts, seed)
       return { pane, new: isNew }
     }
     case "workspaces.close": {
@@ -323,25 +339,112 @@ function dispatch(
 }
 
 /** Opens a Pane as `workspaces.open` says; answers it, and whether it is
- * new. One the workspaces show already is only named. */
+ * new. One the workspaces show already is only named. One with no place
+ * goes where `place` says, by `facts`. */
 function openCommand(
   list: Arrangement,
-  asked: Open,
+  open: Open,
+  facts: Facts,
   seed: Seed
 ): [string, boolean] {
-  const again = asked.again === true || asked.instead !== undefined
-  const shown = { project: asked.project, kind: asked.kind, args: asked.args }
+  const again = open.again === true || open.instead !== undefined
+  const shown = { project: open.project, kind: open.kind, args: open.args }
   const isNew = again || showing(list, shown) === undefined
-  const opening: Opening = {
-    shown,
-    place: asked.place,
-    instead: asked.instead,
-    width: asked.width,
-    again,
-  }
-  const pane = open(list, opening, seed)
-  if (isNew && asked.grouped === true) groupPane(list, pane, seed)
+  const grouped = open.grouped === true
+  let { place, instead } = open
+  // The Pane it was moved from to another Project, when it opens
+  // elsewhere: from there, and that Pane leaves once the new one stands.
+  const away =
+    instead !== undefined &&
+    place === undefined &&
+    open.moved === true &&
+    movesAway(list, facts.flow, open.project, instead)
+      ? instead
+      : undefined
+  if (away !== undefined) instead = undefined
+  if (place === undefined && instead === undefined)
+    place = placeAsked(list, {
+      flow: facts.flow,
+      project: open.project,
+      home: facts.home.includes(open.kind),
+      scratch: open.scratch === true,
+      from: away ?? open.from,
+      on: open.on,
+      agents: open.agents === true,
+    })
+  const opening: Opening = { shown, place, instead, width: open.width, again }
+  const pane = openPane(list, opening, seed)
+  if (isNew && grouped) groupPane(list, pane, seed)
+  if (away !== undefined) close(list, away, seed)
   return [pane, isNew]
+}
+
+// Where a Pane with no place goes, as `placing.rs` says it.
+
+/** A Pane to place, and the facts it is placed by, as `placing::Asked`:
+ * all but an Agent's own tool, which no client's command runs. */
+type Asked = {
+  flow: Facts["flow"]
+  project: string
+  home: boolean
+  scratch: boolean
+  from: string | undefined
+  on: string | undefined
+  /** Opened for an Agent whose Thread no workspace shows. */
+  agents: boolean
+}
+
+/** As `placing::place`: where the Pane goes by the Flow; none, where a
+ * Pane with no place goes. */
+function placeAsked(list: Arrangement, asked: Asked): Place | undefined {
+  const { flow, project, home, scratch, from, on, agents } = asked
+  const right = (pane: string): Place => ({ to: "beside", pane, side: "right" })
+  const itsWorkspace: Place = scratch
+    ? { to: "free" }
+    : { to: "project", project }
+  if (agents && flow === "row") return itsWorkspace
+  // A Pane in front that has gone since counts as none, and so does a
+  // workspace.
+  const at = spotOr(list, from)
+  const here = (): Place | undefined =>
+    on !== undefined && list.some((w) => w.id === on)
+      ? { to: "column", workspace: on, index: LAST }
+      : undefined
+  if (flow === "free") return at && from !== undefined ? right(from) : here()
+  if (home) return itsWorkspace
+  if (!at || from === undefined)
+    return scratch ? here() : { to: "own", project }
+  const workspace = list[at.workspace]
+  const column = workspace.columns[at.column]
+  const inItsGroup =
+    column.group !== undefined && column.panes[at.pane].project === project
+  const group: Place = { to: "group", pane: from }
+  if (scratch) return inItsGroup ? group : right(from)
+  if (column.group !== undefined && column.group === workspace.own)
+    return { to: "own", project }
+  if (inItsGroup) return group
+  // A free one: no Project owns it, and the Pane in front is on it.
+  return workspace.project === undefined ? right(from) : { to: "own", project }
+}
+
+/** As `placing::moves_away`: whether a Pane opened in place of `instead`,
+ * in another Project than it, opens elsewhere. */
+function movesAway(
+  list: Arrangement,
+  flow: Facts["flow"],
+  project: string,
+  instead: string
+): boolean {
+  const at = spotOr(list, instead)
+  if (!at) return false
+  const workspace = list[at.workspace]
+  const was = workspace.columns[at.column].panes[at.pane].project
+  return (
+    flow === "row" &&
+    was !== project &&
+    workspace.project !== undefined &&
+    workspace.project !== project
+  )
 }
 
 // The params, read as serde reads them: a field left out or null is none
@@ -448,7 +551,12 @@ function readOpen(f: Fields): Open {
     kind: text(f.kind),
     args: json(f.args),
     place: optional(f.place, placeOf),
+    from: optional(f.from, id),
+    on: optional(f.on, id),
+    agents: optional(f.agents, bool),
+    scratch: optional(f.scratch, bool),
     instead: optional(f.instead, id),
+    moved: optional(f.moved, bool),
     width: optional(f.width, text),
     again: optional(f.again, bool),
     grouped: optional(f.grouped, bool),
@@ -527,13 +635,20 @@ function blank(id: string): Workspace {
 type Spot = { workspace: number; column: number; pane: number }
 
 function spot(list: Arrangement, pane: string): Spot {
+  const at = spotOr(list, pane)
+  if (!at) throw notFound("The workspaces show no such Pane.")
+  return at
+}
+
+/** Where a Pane is; none when the workspaces show no such Pane. */
+function spotOr(list: Arrangement, pane: string | undefined): Spot | undefined {
   for (const [w, workspace] of list.entries()) {
     for (const [c, column] of workspace.columns.entries()) {
       const p = column.panes.findIndex((other) => other.id === pane)
       if (p >= 0) return { workspace: w, column: c, pane: p }
     }
   }
-  throw notFound("The workspaces show no such Pane.")
+  return undefined
 }
 
 function columnAt(list: Arrangement, column: string): [number, number] {
@@ -596,7 +711,7 @@ type Opening = {
   again: boolean
 }
 
-function open(list: Arrangement, opening: Opening, seed: Seed): string {
+function openPane(list: Arrangement, opening: Opening, seed: Seed): string {
   const { shown, place, instead, width, again } = opening
   checkShown(shown)
   checkWidth(width)

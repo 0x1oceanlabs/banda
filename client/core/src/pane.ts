@@ -10,18 +10,16 @@ import type { JsonValue } from "@banda/contract"
 export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 
 /**
- * Where a Pane opens, from the Pane that opens it: in a new column to its
- * right, below it in its column, instead of it in its place, or in its
- * Group, in the Deck right of it, as what a Thread opens goes; last on its
- * Project's workspace (ADR 0065, ADR 0102); last into the Project's own
- * Group, first on that workspace (ADR 0102, decision 4); or last on the top free
- * workspace, as a Thread of no Project does (ADR 0102, decision 1). Left
- * out, the window shows the Pane where its workspace shows one of its
- * kind, or to the right. `instead` is the word the engine's
- * `workspaces.open` has (ADR 0087, decision 14).
+ * Where a Pane opens, when its caller names a place, from the Pane that
+ * opens it: in a new column to its right, below it in its column, instead
+ * of it in its place, or in its Group, in the Deck right of it, as what a
+ * Thread opens goes (ADR 0065). Left out by a Pane, the window shows it
+ * where its workspace shows one of its kind, or to the right; left out by
+ * a key or a menu, the engine places it by the Flow (ADR 0110).
+ * `instead` is the word the engine's `workspaces.open` has (ADR 0087,
+ * decision 14).
  */
-export type Place =
-  "right" | "below" | "instead" | "group" | "project" | "own" | "free"
+export type Place = "right" | "below" | "instead" | "group"
 
 /**
  * The other host of `hosts.toml` a Pane's args name under `host`, by its

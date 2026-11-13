@@ -1,0 +1,799 @@
+{
+  "about": "In the Flow free, a Pane with no place opens right of the Pane it is opened from, a Thread and what is opened for an Agent too; with none in front, last on the workspace on screen; with neither, where a Pane with no place goes. One moved to another Project takes the place of the one it was.",
+  "start": [
+    {
+      "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "from": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "f71f6727-4c3b-5425-a232-e8367c716d63"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000003",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "from": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+        "grouped": true,
+        "kind": "t.t",
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "eeaf8b24-6c31-5515-be3f-6b06101bcd22"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000004",
+      "params": {
+        "args": {
+          "n": 4
+        },
+        "kind": "a.a",
+        "on": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+        "project": "a0000000-0000-4000-8000-000000000003"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "68904e90-a117-524c-9b78-a8e88164331b"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": [
+            {
+              "id": "17d61745-5799-5734-aa1b-bf263d754c76",
+              "panes": [
+                {
+                  "id": "68904e90-a117-524c-9b78-a8e88164331b",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "bffef349-116c-54aa-b84f-6440e6687859",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 5
+        },
+        "from": "e0000000-0000-4000-8000-000000000001",
+        "kind": "a.a",
+        "on": "e0000000-0000-4000-8000-000000000001",
+        "project": "a0000000-0000-4000-8000-000000000003"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "21616a28-3107-539a-8b55-8a5bea8a0b75"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": [
+            {
+              "id": "17d61745-5799-5734-aa1b-bf263d754c76",
+              "panes": [
+                {
+                  "id": "68904e90-a117-524c-9b78-a8e88164331b",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "f189bb9e-6733-50f7-a755-fc0e3cc32a1a",
+              "panes": [
+                {
+                  "id": "21616a28-3107-539a-8b55-8a5bea8a0b75",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "bffef349-116c-54aa-b84f-6440e6687859",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000006",
+      "params": {
+        "agents": true,
+        "args": {
+          "n": 6
+        },
+        "from": "68904e90-a117-524c-9b78-a8e88164331b",
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "27b2e680-7569-56db-b095-085c1a37d795"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": [
+            {
+              "id": "17d61745-5799-5734-aa1b-bf263d754c76",
+              "panes": [
+                {
+                  "id": "68904e90-a117-524c-9b78-a8e88164331b",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fca5c95a-d2ad-52a8-9004-d25e04f5f24c",
+              "panes": [
+                {
+                  "id": "27b2e680-7569-56db-b095-085c1a37d795",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "f189bb9e-6733-50f7-a755-fc0e3cc32a1a",
+              "panes": [
+                {
+                  "id": "21616a28-3107-539a-8b55-8a5bea8a0b75",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "bffef349-116c-54aa-b84f-6440e6687859",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000007",
+      "params": {
+        "agents": true,
+        "args": {
+          "n": 7
+        },
+        "kind": "a.a",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "fcd6bbb4-faf8-55e2-ad27-e565ba7b24b0"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "80f292a7-5c19-5c66-b83b-6777b810970f",
+              "panes": [
+                {
+                  "id": "fcd6bbb4-faf8-55e2-ad27-e565ba7b24b0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": [
+            {
+              "id": "17d61745-5799-5734-aa1b-bf263d754c76",
+              "panes": [
+                {
+                  "id": "68904e90-a117-524c-9b78-a8e88164331b",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fca5c95a-d2ad-52a8-9004-d25e04f5f24c",
+              "panes": [
+                {
+                  "id": "27b2e680-7569-56db-b095-085c1a37d795",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "f189bb9e-6733-50f7-a755-fc0e3cc32a1a",
+              "panes": [
+                {
+                  "id": "21616a28-3107-539a-8b55-8a5bea8a0b75",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "bffef349-116c-54aa-b84f-6440e6687859",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "0000000f-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 8
+        },
+        "instead": "8d8a29da-32d4-50ad-a44a-d0a5d4b9eab0",
+        "kind": "a.a",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "free",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "1e3f016e-a831-55f4-a0ab-e971fc068cad"
+      },
+      "after": [
+        {
+          "id": "a5a9e794-317a-5294-ad79-e39ef27df180",
+          "columns": [
+            {
+              "id": "75f09b8d-a4fb-5996-b047-054a51168ee9",
+              "panes": [
+                {
+                  "id": "1e3f016e-a831-55f4-a0ab-e971fc068cad",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 8
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "8021d5ec-5560-5edd-8972-eb64dac7c1a4",
+              "panes": [
+                {
+                  "id": "eeaf8b24-6c31-5515-be3f-6b06101bcd22",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "a7c55768-8fce-530c-9192-8a003c32de2a"
+            },
+            {
+              "id": "074846dc-3006-5077-87c0-e5509c4639bc",
+              "panes": [
+                {
+                  "id": "f71f6727-4c3b-5425-a232-e8367c716d63",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "80f292a7-5c19-5c66-b83b-6777b810970f",
+              "panes": [
+                {
+                  "id": "fcd6bbb4-faf8-55e2-ad27-e565ba7b24b0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "a7ec90ba-fb59-5435-99a1-c4861ff37cd5",
+          "columns": [
+            {
+              "id": "17d61745-5799-5734-aa1b-bf263d754c76",
+              "panes": [
+                {
+                  "id": "68904e90-a117-524c-9b78-a8e88164331b",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "fca5c95a-d2ad-52a8-9004-d25e04f5f24c",
+              "panes": [
+                {
+                  "id": "27b2e680-7569-56db-b095-085c1a37d795",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
+              "id": "f189bb9e-6733-50f7-a755-fc0e3cc32a1a",
+              "panes": [
+                {
+                  "id": "21616a28-3107-539a-8b55-8a5bea8a0b75",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false
+            }
+          ]
+        },
+        {
+          "id": "bffef349-116c-54aa-b84f-6440e6687859",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

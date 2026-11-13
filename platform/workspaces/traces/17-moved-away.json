@@ -1,0 +1,547 @@
+{
+  "about": "In the row, a Pane opened instead of one that showed the same in another Project, on a workspace that is not the new Project's, opens where the Flow says, and the one it was leaves. On its own Project's workspace or a free one it takes that Pane's place, and so does one not moved.",
+  "start": [
+    {
+      "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+      "columns": []
+    }
+  ],
+  "steps": [
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000001",
+      "params": {
+        "args": {
+          "n": 1
+        },
+        "grouped": true,
+        "kind": "t.t",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "b420f72e-5c56-54be-a1e7-7c6bea92946f"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [
+            {
+              "id": "d114c313-07b1-5f91-8996-67ce81896fdf",
+              "panes": [
+                {
+                  "id": "b420f72e-5c56-54be-a1e7-7c6bea92946f",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 1
+                  }
+                }
+              ],
+              "full": false,
+              "group": "04653f5a-0223-54f6-9ed9-bc492b470ea8"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000002",
+      "params": {
+        "args": {
+          "n": 2
+        },
+        "grouped": true,
+        "instead": "b420f72e-5c56-54be-a1e7-7c6bea92946f",
+        "kind": "t.t",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "52bd3901-cbff-5e9f-8718-5d6e6accbb4b"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "e420c6d5-51fd-552a-8c94-5d756c48d52c",
+              "panes": [
+                {
+                  "id": "52bd3901-cbff-5e9f-8718-5d6e6accbb4b",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 2
+                  }
+                }
+              ],
+              "full": false,
+              "group": "50a398f1-92d2-5825-8b92-6faca4841511"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000003",
+      "params": {
+        "args": {
+          "n": 3
+        },
+        "grouped": true,
+        "instead": "52bd3901-cbff-5e9f-8718-5d6e6accbb4b",
+        "kind": "t.t",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000002"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "357dab59-4730-5020-81a4-d572923ccd4a"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "e420c6d5-51fd-552a-8c94-5d756c48d52c",
+              "panes": [
+                {
+                  "id": "357dab59-4730-5020-81a4-d572923ccd4a",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "50a398f1-92d2-5825-8b92-6faca4841511"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000004",
+      "params": {
+        "args": {
+          "n": 4
+        },
+        "grouped": true,
+        "kind": "t.t",
+        "place": {
+          "to": "free"
+        },
+        "project": "a0000000-0000-4000-8000-000000000003"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "40a7c1cf-f4a8-55a1-935c-0bfca14327ba"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "e420c6d5-51fd-552a-8c94-5d756c48d52c",
+              "panes": [
+                {
+                  "id": "357dab59-4730-5020-81a4-d572923ccd4a",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "50a398f1-92d2-5825-8b92-6faca4841511"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": [
+            {
+              "id": "bfab749a-77ee-525d-84a7-2c41542c2713",
+              "panes": [
+                {
+                  "id": "40a7c1cf-f4a8-55a1-935c-0bfca14327ba",
+                  "project": "a0000000-0000-4000-8000-000000000003",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 4
+                  }
+                }
+              ],
+              "full": false,
+              "group": "960aaf71-a1e5-5120-8611-c401a57fd36e"
+            }
+          ]
+        },
+        {
+          "id": "f1b20bc8-4773-5adf-b7a6-d825f6cdf0d7",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000005",
+      "params": {
+        "args": {
+          "n": 5
+        },
+        "grouped": true,
+        "instead": "40a7c1cf-f4a8-55a1-935c-0bfca14327ba",
+        "kind": "t.t",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000004"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "8e6e4053-da68-5732-9c68-144cf4d5241b"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "e420c6d5-51fd-552a-8c94-5d756c48d52c",
+              "panes": [
+                {
+                  "id": "357dab59-4730-5020-81a4-d572923ccd4a",
+                  "project": "a0000000-0000-4000-8000-000000000002",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 3
+                  }
+                }
+              ],
+              "full": false,
+              "group": "50a398f1-92d2-5825-8b92-6faca4841511"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": [
+            {
+              "id": "bfab749a-77ee-525d-84a7-2c41542c2713",
+              "panes": [
+                {
+                  "id": "8e6e4053-da68-5732-9c68-144cf4d5241b",
+                  "project": "a0000000-0000-4000-8000-000000000004",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "group": "960aaf71-a1e5-5120-8611-c401a57fd36e"
+            }
+          ]
+        },
+        {
+          "id": "f1b20bc8-4773-5adf-b7a6-d825f6cdf0d7",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000006",
+      "params": {
+        "args": {
+          "n": 6
+        },
+        "grouped": true,
+        "instead": "357dab59-4730-5020-81a4-d572923ccd4a",
+        "kind": "t.t",
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "4e0cdbf2-1500-5a76-8469-655b99d5283b"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "e420c6d5-51fd-552a-8c94-5d756c48d52c",
+              "panes": [
+                {
+                  "id": "4e0cdbf2-1500-5a76-8469-655b99d5283b",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 6
+                  }
+                }
+              ],
+              "full": false,
+              "group": "50a398f1-92d2-5825-8b92-6faca4841511"
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": [
+            {
+              "id": "bfab749a-77ee-525d-84a7-2c41542c2713",
+              "panes": [
+                {
+                  "id": "8e6e4053-da68-5732-9c68-144cf4d5241b",
+                  "project": "a0000000-0000-4000-8000-000000000004",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "group": "960aaf71-a1e5-5120-8611-c401a57fd36e"
+            }
+          ]
+        },
+        {
+          "id": "f1b20bc8-4773-5adf-b7a6-d825f6cdf0d7",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000007",
+      "params": {
+        "args": {
+          "n": 7
+        },
+        "instead": "4e0cdbf2-1500-5a76-8469-655b99d5283b",
+        "kind": "a.a",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000005",
+        "scratch": true
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "answer": {
+        "new": true,
+        "pane": "c6582dfa-7cbc-5bcc-807c-c86af8f512bd"
+      },
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "27341b11-9ef2-52e1-b96d-a4cb6923ef7d",
+              "panes": [
+                {
+                  "id": "c6582dfa-7cbc-5bcc-807c-c86af8f512bd",
+                  "project": "a0000000-0000-4000-8000-000000000005",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": [
+            {
+              "id": "bfab749a-77ee-525d-84a7-2c41542c2713",
+              "panes": [
+                {
+                  "id": "8e6e4053-da68-5732-9c68-144cf4d5241b",
+                  "project": "a0000000-0000-4000-8000-000000000004",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "group": "960aaf71-a1e5-5120-8611-c401a57fd36e"
+            }
+          ]
+        },
+        {
+          "id": "f1b20bc8-4773-5adf-b7a6-d825f6cdf0d7",
+          "columns": []
+        }
+      ]
+    },
+    {
+      "method": "workspaces.open",
+      "seed": "00000011-0000-4000-8000-000000000008",
+      "params": {
+        "args": {
+          "n": 8
+        },
+        "grouped": true,
+        "instead": "e0000000-0000-4000-8000-000000000001",
+        "kind": "t.t",
+        "moved": true,
+        "project": "a0000000-0000-4000-8000-000000000001"
+      },
+      "facts": {
+        "flow": "row",
+        "home": [
+          "t.t"
+        ]
+      },
+      "refused": "not_found",
+      "after": [
+        {
+          "id": "12f6901d-dd76-5b71-95f2-996f8e8ad5ee",
+          "columns": [],
+          "project": "a0000000-0000-4000-8000-000000000001"
+        },
+        {
+          "id": "e5978e5e-ebb6-52e9-a4be-9c28aa79fcc0",
+          "columns": [
+            {
+              "id": "27341b11-9ef2-52e1-b96d-a4cb6923ef7d",
+              "panes": [
+                {
+                  "id": "c6582dfa-7cbc-5bcc-807c-c86af8f512bd",
+                  "project": "a0000000-0000-4000-8000-000000000005",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 7
+                  }
+                }
+              ],
+              "full": false
+            }
+          ],
+          "project": "a0000000-0000-4000-8000-000000000002"
+        },
+        {
+          "id": "ca9fe900-5d0a-58f8-ae46-2157cd05b547",
+          "columns": [
+            {
+              "id": "bfab749a-77ee-525d-84a7-2c41542c2713",
+              "panes": [
+                {
+                  "id": "8e6e4053-da68-5732-9c68-144cf4d5241b",
+                  "project": "a0000000-0000-4000-8000-000000000004",
+                  "kind": "t.t",
+                  "args": {
+                    "n": 5
+                  }
+                }
+              ],
+              "full": false,
+              "group": "960aaf71-a1e5-5120-8611-c401a57fd36e"
+            }
+          ]
+        },
+        {
+          "id": "f1b20bc8-4773-5adf-b7a6-d825f6cdf0d7",
+          "columns": []
+        }
+      ]
+    }
+  ]
+}

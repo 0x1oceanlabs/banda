@@ -133,17 +133,14 @@ import { Workspaces } from "../tiling/Workspaces"
 import {
   closing,
   closingShown,
-  opening,
-  openFrom,
+  openingFrom,
   picking,
   placed,
-  placeFor,
   focusedIn,
   strayedIn,
   runAction,
   targetsOf,
   startingHere,
-  updating,
   type Shell as Parts,
   useWindowApi,
 } from "./actions"
@@ -511,14 +508,14 @@ export function Shell({
         if (entry && samePane(entry, { project: into, pane }, identityOf))
           return closing(entry.id)
         // Not again: the one shown, as its kind names it, keeps what it
-        // shows, or takes these args when asked to update it.
-        return (again || !update ? opening : updating)(w, into, pane, {
+        // shows, or takes these args when asked to update it. Beside its
+        // Agent's Thread, where a workspace shows it, in its Group; else
+        // where the engine places what is opened for an Agent.
+        return placed(w, into, pane, placing, {
           ...how,
-          ...(at?.from ? { from: at.from } : {}),
-          // What an Agent opens goes into its Thread's Group, else where
-          // the Flow says (ADR 0102, decision 3).
-          place: at?.from ? "group" : placeFor(w, into, pane, placing, !!at),
-          ...(again ? { again } : { keep: true }),
+          ...(at &&
+            (at.from ? { from: at.from, place: "group" } : { agents: true })),
+          ...(again ? { again } : update && { update }),
         })
       })
     },
@@ -743,13 +740,8 @@ export function Shell({
       open: (project, pane, ...asked) =>
         sheetsOf(pane)
           ? parts.open(pane, project)
-          : void openFrom(
-              changing,
-              drawnNow(),
-              parts.placing(),
-              project,
-              pane,
-              ...asked
+          : change((w) =>
+              openingFrom(w, project, pane, parts.placing(), ...asked)
             ),
       update,
       close: (entry) => change(() => closing(entry)),
@@ -789,7 +781,7 @@ export function Shell({
         }
       },
     }),
-    [change, changing, update, parts, popOut, stores, drawnNow]
+    [change, update, parts, popOut, stores, drawnNow]
   )
   // What is asked from outside the window, it does, as for its own.
   useAsked(parts, frame.open)

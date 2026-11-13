@@ -10,15 +10,19 @@
 //! window's arrangement once, the workspaces set aside, the last Arrange
 //! by Project that Undo puts back, the Agents' tools behind their walls,
 //! the arrangement's upgrades as it is read, and the events. So does what
-//! it knows of the kinds of Pane: its handler of `open` fills `grouped`
-//! from the kind when it is left out, and that of `arrange` its `leads`
-//! from those kinds; `apply` takes both as sent. A window sends them by
-//! the kinds that open grouped (`PaneKind.grouped`), so its copy of the
-//! model knows no kind.
+//! it knows of the kinds of Pane that open grouped: its handler of `open`
+//! fills `grouped` from the kind when it is left out, and that of
+//! `arrange` its `leads` from those kinds; `apply` takes both as sent. A
+//! window sends them by the kinds that open grouped (`PaneKind.grouped`).
+//!
+//! Where a Pane with no place goes is `placing`'s to say, by the `Facts`
+//! its caller knows: the engine its own, a client's copy what it believes
+//! the engine's are (ADR 0110, decisions 5 and 9).
 
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
+use crate::placing::{self, Asked, By, Facts};
 use banda_kernel::{ProjectId, Refusal, decode};
 use banda_look::columns::Display;
 use schemars::JsonSchema;
@@ -57,7 +61,8 @@ pub struct Open {
     #[serde(flatten)]
     #[ts(flatten)]
     pub shows: Shown,
-    /// Left out, where the Flow says (ADR 0110).
+    /// Where the Person named one: a drop, "Open beside", a Pane that says
+    /// where. Left out, where the Flow says (ADR 0110, decision 3).
     #[serde(default)]
     #[ts(optional)]
     pub place: Option<Place>,
@@ -66,10 +71,34 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub from: Option<PaneId>,
+    /// The workspace on its caller's screen, which the Flow places it by
+    /// when no Pane is in front there. Left out, as on none.
+    #[serde(default)]
+    #[ts(optional)]
+    pub on: Option<WorkspaceId>,
+    /// It is an Agent's, opened for one as the tab a browser opens for it,
+    /// so the Flow places it as what an Agent opens (ADR 0102, decision 4).
+    #[serde(default)]
+    #[ts(optional)]
+    pub agents: Option<bool>,
+    /// Its Project is of no Project: a scratch one, or a draft's, the
+    /// machine's own ID (ADR 0046). Of its own machine's Projects the
+    /// engine says it itself and takes no one's word; the window says it of
+    /// another machine's (ADR 0110, decision 6). Left out, a Project's.
+    #[serde(default)]
+    #[ts(optional)]
+    pub scratch: Option<bool>,
     /// The Pane it shows in place of, which leaves.
     #[serde(default)]
     #[ts(optional)]
     pub instead: Option<PaneId>,
+    /// With `instead`: it shows what that Pane showed, in another Project,
+    /// as a draft the Person moved there. In the row, on a workspace of
+    /// another Project, it opens where the Flow says, from that Pane,
+    /// which leaves all the same (ADR 0102, decision 3).
+    #[serde(default)]
+    #[ts(optional)]
+    pub moved: Option<bool>,
     /// A new column's width; left out, the look's.
     #[serde(default)]
     #[ts(optional)]
@@ -235,18 +264,54 @@ pub struct Take {
 
 /// Opens a Pane as `workspaces.open` says; answers it, and whether it is
 /// new. One the workspaces show already is only named, and keeps the Group
-/// it is in or not.
-pub fn open(list: &mut Arrangement, open: Open, seed: &Seed) -> Result<(PaneId, bool), Refusal> {
+/// it is in or not. One with no place goes where `placing` says, by
+/// `facts`.
+pub fn open(
+    list: &mut Arrangement,
+    open: Open,
+    facts: &Facts,
+    seed: &Seed,
+) -> Result<(PaneId, bool), Refusal> {
     let again = open.again == Some(true) || open.instead.is_some();
     let new = again || model::showing(list, &open.shows).is_none();
     let Open {
         shows,
-        place,
-        instead,
+        mut place,
+        from,
+        on,
+        agents,
+        scratch,
+        mut instead,
+        moved,
         width,
         grouped,
         ..
     } = open;
+    let grouped = grouped == Some(true);
+    let project = shows.project;
+    // The Pane it was moved from to another Project, when it opens
+    // elsewhere: from there, and that Pane leaves once the new one stands.
+    let away = (instead.filter(|_| place.is_none() && moved == Some(true)))
+        .filter(|&other| placing::moves_away(list, facts.flow, project, other));
+    if away.is_some() {
+        instead = None;
+    }
+    if place.is_none() && instead.is_none() {
+        let asked = Asked {
+            flow: facts.flow,
+            project,
+            grouped,
+            home: facts.home.contains(&shows.kind),
+            scratch: scratch == Some(true),
+            from: away.or(from),
+            on,
+            by: match agents {
+                Some(true) => By::Agent { thread: None },
+                _ => By::Person,
+            },
+        };
+        place = placing::place(list, asked);
+    }
     let opening = Opening {
         shown: shows,
         place,
@@ -256,26 +321,30 @@ pub fn open(list: &mut Arrangement, open: Open, seed: &Seed) -> Result<(PaneId, 
         by: None,
     };
     let pane = model::open(list, opening, seed)?;
-    if new && grouped == Some(true) {
+    if new && grouped {
         model::group_pane(list, pane, seed)?;
+    }
+    if let Some(other) = away {
+        model::close(list, other, seed)?;
     }
     Ok((pane, new))
 }
 
 /// Runs the command `method`, one of `METHODS`, with its params, as the
-/// module runs it, and answers as it does: `{"pane", "new"}` for `open`,
-/// `{}` for the rest. A refused command may leave `list` half changed, as the
+/// module runs it by `facts`, and answers as it does: `{"pane", "new"}` for
+/// `open`, `{}` for the rest. A refused command may leave `list` half changed, as the
 /// model's functions do: keep it only when the command passes.
 pub fn apply(
     list: &mut Arrangement,
     method: &str,
     params: Value,
+    facts: &Facts,
     seed: &Seed,
 ) -> Result<Value, Refusal> {
     match method {
         "open" => {
             let opening: Open = read(list, seed, params)?;
-            let (pane, new) = open(list, opening, seed)?;
+            let (pane, new) = open(list, opening, facts, seed)?;
             return Ok(json!({ "pane": pane, "new": new }));
         }
         "close" => {

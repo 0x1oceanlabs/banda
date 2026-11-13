@@ -14,12 +14,15 @@ import type { Code } from "@banda/contract"
 import type { Workspace } from "@banda/contract/workspaces"
 import { describe, expect, test } from "vitest"
 import { keptOf, NO_VIEW, resolve } from "./arrange"
-import { apply, type Command, METHODS } from "./arrangement"
+import { apply, type Command, type Facts, METHODS } from "./arrangement"
 
 type Step = {
   method: Command["method"]
   seed: string
   params: unknown
+  /** What the engine placed a Pane by; left out, its facts with no Flow
+   * and no kind known. */
+  facts?: Facts
   answer?: { pane: string; new: boolean } | Record<string, never>
   refused?: Code
   after: Workspace[]
@@ -62,6 +65,13 @@ function ordered(value: unknown): unknown {
   )
 }
 
+test("the traces place a Pane in the Flow free and in the row", () => {
+  const flows = traces.flatMap(([, trace]) =>
+    trace.steps.flatMap((step) => step.facts?.flow ?? [])
+  )
+  expect(new Set(flows)).toEqual(new Set(["free", "row"]))
+})
+
 test("there are traces to replay, of every command the copy runs", () => {
   expect(traces.length).toBeGreaterThan(0)
   const traced = new Set(
@@ -83,7 +93,7 @@ describe.each(traces)("%s", (_, trace) => {
   test.each(steps)("%s", (_, step, before) => {
     const given = JSON.stringify(before)
     const command = { method: step.method, params: step.params } as Command
-    const applied = apply(before, command, step.seed)
+    const applied = apply(before, command, step.seed, step.facts)
     // Pure, refused or not.
     expect(JSON.stringify(before)).toBe(given)
     if (step.refused !== undefined) {

@@ -1143,12 +1143,7 @@ async fn in_the_row_a_pane_opened_with_no_place_goes_by_the_rule() {
     let work = machine.project("Work").await;
     // Into its Project's own Group, first on its workspace.
     let open = |project, kind: &str, n, more: Value| {
-        let mut params = json!({ "project": project, "kind": kind, "args": { "n": n } });
-        params
-            .as_object_mut()
-            .unwrap()
-            .extend(more.as_object().unwrap().clone());
-        machine.command("workspaces.open", params)
+        machine.command("workspaces.open", numbered(project, kind, n, more))
     };
     let pane = open(work, "a.a", 1, json!({})).await.unwrap()["pane"].clone();
     let list = machine.opened().await;
@@ -1177,6 +1172,131 @@ async fn in_the_row_a_pane_opened_with_no_place_goes_by_the_rule() {
         .filter(|workspace| workspace.get("project") == Some(&json!(scratch)))
         .collect();
     assert!(owners.is_empty());
+}
+
+/// Each workspace's columns, each column's Panes by their args' `n`.
+fn layout(list: &Value) -> Vec<Vec<Vec<u64>>> {
+    let columns = |w: &Value| w["columns"].as_array().unwrap().clone();
+    let numbers = |c: Value| {
+        let panes = c["panes"].as_array().unwrap().iter();
+        panes
+            .map(|p| p["args"]["n"].as_u64().unwrap_or(0))
+            .collect()
+    };
+    let workspaces = list["workspaces"].as_array().unwrap().iter();
+    workspaces
+        .map(|w| columns(w).into_iter().map(numbers).collect())
+        .collect()
+}
+
+/// `workspaces.open`'s params for a Pane numbered `n`, with `more`.
+fn numbered(project: ProjectId, kind: &str, n: u32, more: Value) -> Value {
+    let mut params = json!({ "project": project, "kind": kind, "args": { "n": n } });
+    let more = more.as_object().unwrap().clone();
+    params.as_object_mut().unwrap().extend(more);
+    params
+}
+
+#[tokio::test]
+async fn the_window_a_program_and_an_agent_open_a_pane_by_one_rule() {
+    // In the Flow free: right of the Pane in front, else on the workspace
+    // on screen, else where a Pane with no place goes.
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let open = |n, more| machine.command("workspaces.open", numbered(work, "a.a", n, more));
+    let one = open(1, json!({})).await.unwrap()["pane"].clone();
+    open(2, json!({})).await.unwrap();
+    // The window, from the Pane in front.
+    open(3, json!({ "from": one })).await.unwrap();
+    // The window, with none in front, on the workspace on screen.
+    let bottom = machine.list().await["workspaces"][1]["id"].clone();
+    open(4, json!({ "on": bottom })).await.unwrap();
+    // A program, `banda files`, and an Agent whose Thread is not shown.
+    open(5, json!({})).await.unwrap();
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    let asked = showing("files.file", json!({ "n": 6 }));
+    machine
+        .answer_from(CommandId::new(), agent, "workspaces.open_pane", asked)
+        .await
+        .unwrap();
+    let list = machine.list().await;
+    let top = vec![vec![1], vec![3], vec![2], vec![5], vec![6]];
+    assert_eq!(layout(&list), [top, vec![vec![4]], vec![]]);
+
+    // In the row: the Person's go into the Project's own Group, from the
+    // window and from a program alike, and an Agent's last on its
+    // Project's workspace.
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let open = |n, more| machine.command("workspaces.open", numbered(work, "a.a", n, more));
+    let one = open(1, json!({})).await.unwrap()["pane"].clone();
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    let asked = showing("files.file", json!({ "n": 2 }));
+    machine
+        .answer_from(CommandId::new(), agent, "workspaces.open_pane", asked)
+        .await
+        .unwrap();
+    let from = open(3, json!({ "from": one })).await.unwrap()["pane"].clone();
+    let program = open(4, json!({})).await.unwrap()["pane"].clone();
+    let list = machine.list().await;
+    assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![4], vec![2]]);
+    let own = &list["workspaces"][0]["own"];
+    assert!(own.is_string());
+    assert_eq!(&group_of(&list, &from), own);
+    assert_eq!(&group_of(&list, &program), own);
+}
+
+#[tokio::test]
+async fn of_its_own_projects_the_engine_takes_no_ones_word() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let thread = |project, said: bool| {
+        let args = json!({ "thread": Uuid::now_v7().to_string() });
+        let params = json!({
+            "project": project, "kind": "agents.thread", "args": args, "scratch": said,
+        });
+        machine.command("workspaces.open", params)
+    };
+    // Its own Project keeps its workspace, whatever the window says.
+    thread(work, true).await.unwrap();
+    let list = machine.list().await;
+    assert_eq!(list["workspaces"][0]["project"], json!(work));
+    // One it does not know, another machine's, is as the window says: of
+    // no Project, on a free workspace, or a Project's, on its own.
+    let (none, theirs) = (ProjectId::new(), ProjectId::new());
+    thread(none, true).await.unwrap();
+    thread(theirs, false).await.unwrap();
+    let list = machine.list().await;
+    assert!(list["workspaces"][1].get("project").is_none());
+    assert_eq!(list["workspaces"][2]["project"], json!(theirs));
+}
+
+#[tokio::test]
+async fn a_pane_moved_to_another_project_goes_home_and_the_one_it_was_leaves() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let other = machine.project("Other").await;
+    let thread = |project, more| {
+        machine.command(
+            "workspaces.open",
+            numbered(project, "agents.thread", 1, more),
+        )
+    };
+    let draft = thread(work, json!({})).await.unwrap()["pane"].clone();
+    let moved = json!({ "instead": draft, "moved": true });
+    let now = thread(other, moved).await.unwrap()["pane"].clone();
+    // One command, one event: no workspace is drawn empty in between.
+    let list = machine.opened().await;
+    assert_eq!(machine.events().await.len(), 2);
+    assert_eq!(list["workspaces"][0]["project"], json!(work));
+    assert_eq!(layout(&list), [vec![], vec![vec![1]], vec![]]);
+    assert_eq!(list["workspaces"][1]["project"], json!(other));
+    assert_eq!(list["workspaces"][1]["columns"][0]["panes"][0]["id"], now);
+    assert!(group_of(&list, &now).is_string());
 }
 
 #[tokio::test]

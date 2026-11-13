@@ -6,13 +6,14 @@
  * one's focused column and each column's shown Pane, by their IDs. The
  * two make the `Workspaces` the window draws (`model.ts`).
  *
- * A key still works out its change with `model.ts`, which says where a
- * Pane goes; what that puts where becomes one command, which the window
- * draws at once with the client's copy of the engine's commands
+ * A key still works out a move or a named place with `model.ts`; what
+ * that puts where becomes one command. A Pane opened with no place named
+ * goes where the engine says (`asking`; ADR 0110). The window draws each
+ * command at once with the client's copy of the engine's commands
  * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
-import type { CommandId, Engine, Event } from "@banda/contract"
+import type { CommandId, Engine, Event, ProjectId } from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -31,6 +32,7 @@ import {
   type Entry,
   entries,
   find,
+  focused,
   type Gone,
   keepsPlace,
   NONE_GONE,
@@ -363,9 +365,9 @@ function placeIn(spot: Spot): Place {
 
 /**
  * The Pane `next` shows that `before` did not, as a command to open it
- * where `next` has it, or at `place`, as the engine names one the window
- * only foresees: a Group's, a Project's workspace (ADR 0065); none when it
- * was shown already, and only the view changes. `grouped`, its column is
+ * where `next` has it, the place its caller named, or at `place`, as the
+ * engine names one the window only foresees: a Group's (ADR 0065); none
+ * when it was shown already, and only the view changes. `grouped`, its column is
  * a Group from its opening: the one it goes into, else its own.
  */
 export function opened(
@@ -403,6 +405,50 @@ export function opened(
         again: true,
         place: place ?? placeIn(spot),
         ...(width !== undefined && { width }),
+      },
+    },
+  }
+}
+
+/**
+ * A Pane to open where the engine places it (ADR 0110, decision 3): the
+ * command says what is wanted and where the Person is, the Pane in front,
+ * or `from` when another opens it, and the workspace on screen, never a
+ * place. `instead`, it shows what that Pane showed, in another Project:
+ * the engine has it take that Pane's place, or open where the Flow says
+ * while that Pane leaves. `agents`, it is opened for an Agent; `scratch`,
+ * its Project is of no Project, which the engine takes of another
+ * machine's alone.
+ */
+export function asking(
+  state: Workspaces,
+  { project, pane }: { project: ProjectId; pane: PaneState },
+  how: {
+    from?: string
+    instead?: string
+    grouped?: boolean
+    width?: string
+    agents?: boolean
+    scratch?: boolean
+  } = {}
+): Plan {
+  const from = how.from ?? focused(state)?.id
+  const on = current(state).id
+  return {
+    command: {
+      method: "workspaces.open",
+      params: {
+        project,
+        kind: pane.kind,
+        args: pane.args,
+        ...(how.grouped && { grouped: true }),
+        ...(how.width !== undefined && { width: how.width }),
+        ...(how.instead !== undefined
+          ? { instead: how.instead, moved: true }
+          : // The window shows it anew, though another tile shows the same.
+            { again: true, ...(from && { from }), ...(on && { on }) }),
+        ...(how.agents && { agents: true }),
+        ...(how.scratch && { scratch: true }),
       },
     },
   }
