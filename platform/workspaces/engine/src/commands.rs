@@ -15,14 +15,16 @@
 //! `arrange` its `leads` from those kinds; `apply` takes both as sent. A
 //! window sends them by the kinds that open grouped (`PaneKind.grouped`).
 //!
-//! Where a Pane with no place goes is `placing`'s to say, by the `Facts`
-//! its caller knows: the engine its own, a client's copy what it believes
-//! the engine's are (ADR 0110, decisions 5 and 9).
+//! Where a Pane with no place goes, and which move the row refuses, is
+//! `placing`'s to say, by the `Facts` its caller knows: the engine its
+//! own, a client's copy what it believes the engine's are (ADR 0110,
+//! decisions 5, 8 and 9). So a move runs here, behind that rule, for the
+//! window, an Agent and `banda` alike.
 
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
-use crate::placing::{self, Asked, By, Facts};
+use crate::placing::{self, Asked, By, Facts, Moved};
 use banda_kernel::{ProjectId, Refusal, decode};
 use banda_look::columns::Display;
 use schemars::JsonSchema;
@@ -99,6 +101,13 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub moved: Option<bool>,
+    /// With a `place`: the Person brings it there, as a Pane moved, by
+    /// "Open beside". In the row it never goes onto another Project's
+    /// workspace, as no move does (ADR 0102, decision 6). Left out, it
+    /// opens at the place named, whoever owns the workspace.
+    #[serde(default)]
+    #[ts(optional)]
+    pub brought: Option<bool>,
     /// A new column's width; left out, the look's.
     #[serde(default)]
     #[ts(optional)]
@@ -265,7 +274,7 @@ pub struct Take {
 /// Opens a Pane as `workspaces.open` says; answers it, and whether it is
 /// new. One the workspaces show already is only named, and keeps the Group
 /// it is in or not. One with no place goes where `placing` says, by
-/// `facts`.
+/// `facts`, and one brought to a place is refused as a move there is.
 pub fn open(
     list: &mut Arrangement,
     open: Open,
@@ -283,12 +292,16 @@ pub fn open(
         scratch,
         mut instead,
         moved,
+        brought,
         width,
         grouped,
         ..
     } = open;
     let grouped = grouped == Some(true);
     let project = shows.project;
+    if let Some(place) = place.as_ref().filter(|_| new && brought == Some(true)) {
+        admit(list, facts, Moved::Brought(project), place)?;
+    }
     // The Pane it was moved from to another Project, when it opens
     // elsewhere: from there, and that Pane leaves once the new one stands.
     let away = (instead.filter(|_| place.is_none() && moved == Some(true)))
@@ -330,6 +343,51 @@ pub fn open(
     Ok((pane, new))
 }
 
+/// Refuses a move the row refuses (`placing::refuses`).
+fn admit(list: &Arrangement, facts: &Facts, moving: Moved, place: &Place) -> Result<(), Refusal> {
+    placing::refuses(list, facts, moving, place).map_or(Ok(()), |refused| Err(refused.into()))
+}
+
+/// Moves a Pane as `workspaces.move_pane` says, unless the row refuses it.
+pub fn move_pane(
+    list: &mut Arrangement,
+    moving: MovePane,
+    facts: &Facts,
+    seed: &Seed,
+) -> Result<(), Refusal> {
+    let MovePane {
+        pane,
+        place,
+        grouped,
+    } = moving;
+    admit(list, facts, Moved::Pane(pane), &place)?;
+    model::move_pane(list, pane, &place, grouped, seed)
+}
+
+/// Moves a column as `workspaces.move_column` says, or with `whole` the
+/// Group it is in, as `workspaces.move_group`, unless the row refuses it.
+pub fn move_column(
+    list: &mut Arrangement,
+    moving: MoveColumn,
+    whole: bool,
+    facts: &Facts,
+    seed: &Seed,
+) -> Result<(), Refusal> {
+    let MoveColumn {
+        column,
+        workspace,
+        index,
+    } = moving;
+    let place = Place::Column { workspace, index };
+    if whole {
+        admit(list, facts, Moved::Group(column), &place)?;
+        model::move_group(list, column, workspace, index, seed)
+    } else {
+        admit(list, facts, Moved::Column(column), &place)?;
+        model::move_column(list, column, workspace, index, seed)
+    }
+}
+
 /// Runs the command `method`, one of `METHODS`, with its params, as the
 /// module runs it by `facts`, and answers as it does: `{"pane", "new"}` for
 /// `open`, `{}` for the rest. A refused command may leave `list` half changed, as the
@@ -356,20 +414,12 @@ pub fn apply(
             model::update(list, pane, args)?;
         }
         "move_pane" => {
-            let MovePane {
-                pane,
-                place,
-                grouped,
-            } = read(list, seed, params)?;
-            model::move_pane(list, pane, &place, grouped, seed)?;
+            let moving = read(list, seed, params)?;
+            move_pane(list, moving, facts, seed)?;
         }
         "move_column" => {
-            let MoveColumn {
-                column,
-                workspace,
-                index,
-            } = read(list, seed, params)?;
-            model::move_column(list, column, workspace, index, seed)?;
+            let moving = read(list, seed, params)?;
+            move_column(list, moving, false, facts, seed)?;
         }
         "move_workspace" => {
             let MoveWorkspace { workspace, index } = read(list, seed, params)?;
@@ -404,12 +454,8 @@ pub fn apply(
             model::regroup(list, column, toward)?;
         }
         "move_group" => {
-            let MoveColumn {
-                column,
-                workspace,
-                index,
-            } = read(list, seed, params)?;
-            model::move_group(list, column, workspace, index, seed)?;
+            let moving = read(list, seed, params)?;
+            move_column(list, moving, true, facts, seed)?;
         }
         "fill" => {
             let Fill { column, fill } = read(list, seed, params)?;

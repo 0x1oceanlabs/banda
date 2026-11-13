@@ -1,4 +1,10 @@
-import { newId, type ProjectId, type ProjectSummary } from "@banda/contract"
+import {
+  type Code,
+  newId,
+  type ProjectId,
+  type ProjectSummary,
+  Refused,
+} from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
 import { ownEngine } from "@banda/core/testing"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
@@ -122,6 +128,16 @@ const terminal = (n: number): PaneState => ({
 /** What a plan asks of the engine. */
 const paramsOf = (step: Step) =>
   step && "command" in step ? step.command.params : undefined
+
+/** The engine refuses `step`, a plan it was sent, with `code`: `conflict`,
+ * as the row refuses a move (ADR 0110, decision 8). What the window says
+ * of it is its own to word. */
+function refuse(step: unknown, code: Code = "conflict") {
+  const plan = step as Plan
+  expect(plan.command).toBeDefined()
+  expect(plan.refused).toBeDefined()
+  plan.refused?.(new Refused({ code, message: "As the engine says it." }))
+}
 
 /**
  * A window in `flow`, with `none` of no Project: each change is drawn as
@@ -663,7 +679,7 @@ test("from the Flow free to the row, no Project has a workspace yet, and no Thre
   expect([...strayedIn(made, row)].sort()).toEqual(["t1", "t3"])
 })
 
-test("Alt+Shift+N onto another Project's workspace does nothing in the row, and moves in the free Flow (ADR 0102, decision 6)", () => {
+test("Alt+Shift+N onto another Project's workspace is the engine's to refuse in the row, in the window's words, and moves in the free Flow (ADR 0102, decision 6; ADR 0110, decision 8)", () => {
   const terminal = { kind: "terminal.terminal", args: {} }
   const state: Workspaces = {
     list: [
@@ -707,13 +723,31 @@ test("Alt+Shift+N onto another Project's workspace does nothing in the row, and 
     return step
   }
   toasted.mockClear()
-  expect(sent("row")).toBeUndefined()
-  // It says whose the workspace is, and where Banda's Panes go.
+  // The window asks all the same, and says nothing of its own: what its
+  // copy of the rule foresees refused leaves the view where it is.
+  const asked = sent("row")
+  expect(asked).toMatchObject({
+    command: { method: "workspaces.move_pane", params: { pane: "e" } },
+    focus: false,
+  })
+  expect(toasted).not.toHaveBeenCalled()
+  // Another refusal, as of a Pane gone since, is not the row's.
+  const warned = vi.spyOn(console, "warn").mockImplementation(() => {})
+  refuse(asked, "not_found")
+  expect(warned).toHaveBeenCalled()
+  warned.mockRestore()
+  expect(toasted).not.toHaveBeenCalled()
+  // Once the engine refuses it, the window says whose the workspace is,
+  // and where Banda's Panes go.
+  refuse(asked)
   expect(toasted).toHaveBeenCalledWith("Workspace 2 is Brand's", {
     id: expect.any(String),
     description: "Banda's Panes go to its workspace, a free one or a new one.",
   })
-  expect(sent("free")).toBeDefined()
+  // In the Flow free the copy foresees no refusal, and the Pane is
+  // followed where it goes.
+  expect(sent("free")).toMatchObject({ want: "e" })
+  expect(sent("free")).not.toHaveProperty("refused")
   // The Pane menu greys out the same workspace, and shows whose each is.
   inFlow("row")
   const projects = projectsOf({ a: "Banda", b: "Brand" })
@@ -756,8 +790,7 @@ test("a refused move names the workspace by its number before the move, though t
   // the window knows no summary of.
   for (const project of ["s", "machine"]) {
     const shell = shellOf({
-      change: (how: (w: Workspaces) => unknown) =>
-        expect(how(on(project))).toBeUndefined(),
+      change: (how: (w: Workspaces) => unknown) => refuse(how(on(project))),
       projectOf: lookupOf(projects),
       placing: () => placingOf("row", noProjectOf(projects, "machine")),
     })
@@ -817,7 +850,7 @@ test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Age
   })
 })
 
-test("Open beside brings a Thread onto a free workspace or its Project's, never onto another Project's in the row (ADR 0102, decision 6)", () => {
+test("Open beside brings a Thread onto a free workspace or its Project's; onto another Project's in the row the engine refuses it, in the window's words (ADR 0102, decision 6; ADR 0110, decision 8)", () => {
   const pane = thread("t1")
   const terminal = { kind: "terminal.terminal", args: {} }
   const on = (project?: string): Workspaces => ({
@@ -842,18 +875,27 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   const projectOf = lookupOf(projects)
   const row = placingOf("row", noProjectOf(projects, "machine"))
   toasted.mockClear()
-  expect(bringing(on("b"), "a", pane, row, projectOf)).toBeUndefined()
+  // It says it brings the Pane, so the engine refuses it as a move, and
+  // the window says nothing until it does.
+  const brought = bringing(on("b"), "a", pane, row, projectOf)
+  expect(paramsOf(brought)).toMatchObject({ brought: true, again: true })
+  expect(toasted).not.toHaveBeenCalled()
+  refuse(brought)
   expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
     id: expect.any(String),
     description: "Banda's Panes go to its workspace, a free one or a new one.",
   })
-  expect(bringing(on(), "a", pane, row, projectOf)).toBeDefined()
-  expect(bringing(on("a"), "a", pane, row, projectOf)).toBeDefined()
+  // Where the engine lets it go, the copy foresees no refusal.
+  for (const owner of [undefined, "a"]) {
+    const let_go = bringing(on(owner), "a", pane, row, projectOf)
+    expect(paramsOf(let_go)).toMatchObject({ brought: true })
+    expect(let_go).not.toHaveProperty("refused")
+  }
   // A Thread of no Project hears where it goes: a free workspace. So does
   // a draft in the machine's own ID, which has no summary.
   for (const none of ["s", "machine"]) {
     toasted.mockClear()
-    expect(bringing(on("b"), none, pane, row, projectOf)).toBeUndefined()
+    refuse(bringing(on("b"), none, pane, row, projectOf))
     expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
       id: expect.any(String),
       description:
@@ -862,7 +904,37 @@ test("Open beside brings a Thread onto a free workspace or its Project's, never 
   }
   // In the Flow free, every workspace is free.
   const free = placingOf("free", noProjectOf(projects))
-  expect(bringing(on("b"), "a", pane, free, projectOf)).toBeDefined()
+  expect(bringing(on("b"), "a", pane, free, projectOf)).not.toHaveProperty(
+    "refused"
+  )
+  // One another workspace shows moves here, and is refused as any move.
+  const elsewhere: Workspaces = {
+    list: [
+      ...on("b").list.slice(0, 1),
+      {
+        id: "mine",
+        project: "a",
+        focus: 0,
+        columns: [
+          { id: "d", active: 0, entries: [{ id: "t", project: "a", pane }] },
+        ],
+      },
+      { id: "bottom", columns: [], focus: 0 },
+    ],
+    current: 0,
+  }
+  toasted.mockClear()
+  const moved = bringing(elsewhere, "a", pane, row, projectOf)
+  expect(moved).toMatchObject({
+    command: { method: "workspaces.move_pane", params: { pane: "t" } },
+    focus: false,
+  })
+  // The window stays where it is while the engine says no: `focus`.
+  refuse(moved)
+  expect(toasted).toHaveBeenCalledWith("Workspace 1 is Brand's", {
+    id: expect.any(String),
+    description: "Banda's Panes go to its workspace, a free one or a new one.",
+  })
 })
 
 test("Alt+Space goes to the sidebar's Search while it shows, and from there with nothing typed opens the Banda menu, as with the sidebar hidden; / and 0 are the sidebar's own (ADR 0098, decision 17)", () => {

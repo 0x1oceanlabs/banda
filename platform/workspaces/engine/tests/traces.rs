@@ -170,10 +170,13 @@ impl Tracing {
     /// The next steps run in `flow`, with a Thread's kind standing on its
     /// Project's workspace.
     fn in_the_flow(&mut self, flow: Flow) {
-        self.facts = Facts {
-            flow,
-            home: BTreeSet::from([THREAD.to_owned()]),
-        };
+        self.facts.flow = flow;
+        self.facts.home = BTreeSet::from([THREAD.to_owned()]);
+    }
+
+    /// The next steps run with a Thread's kind leading its Group.
+    fn led_by_threads(&mut self) {
+        self.facts.leads = BTreeSet::from([THREAD.to_owned()]);
     }
 
     fn workspace(&self, w: usize) -> String {
@@ -1350,6 +1353,109 @@ fn moved_away() -> Tracing {
     t
 }
 
+fn refused_moves() -> Tracing {
+    let mut t = Tracing::new(
+        18,
+        "refused-moves",
+        "In the row, nothing moves onto a workspace another Project owns: a Pane alone \
+         as its own Project's, a column as its first Pane's, a Group as its lead's, an \
+         Agent's Thread's, and a Pane brought to a place as one moved there. It goes \
+         to its Project's workspace, a free one and a new one, and moves as it likes \
+         on the workspace it stands on. A Pane opened at a place that is not brought \
+         opens there. In the Flow free nothing is refused.",
+    );
+    t.in_the_flow(Flow::Row);
+    t.led_by_threads();
+    let last = |workspace: &str| json!({ "to": "column", "workspace": workspace, "index": 9 });
+    let pane_to = |pane: &str, place: Value| json!({ "pane": pane, "place": place });
+    let column_to = |column: &str, workspace: &str| json!({ "column": column, "workspace": workspace, "index": 0 });
+    // Work's Thread with Home's Pane in its Group, Home's own Pane on
+    // Home's workspace, and a Pane of Work on a free one.
+    let thread = t.opened(thread(WORK, 1));
+    let in_group = json!({ "place": { "to": "group", "pane": thread } });
+    let guest = t.opened(and(shows(HOME, "a.a", 2), in_group));
+    let theirs = t.opened(shows(HOME, "a.a", 3));
+    let free = json!({ "place": { "to": "free" } });
+    let loose = t.opened(and(shows(WORK, "a.a", 4), free));
+    assert_eq!(
+        t.layout(),
+        [vec![vec![1], vec![2]], vec![vec![3]], vec![vec![4]], EMPTY]
+    );
+    let (works, homes, frees) = (t.workspace(0), t.workspace(1), t.workspace(2));
+    assert_eq!(t.list()[1].project.unwrap().to_string(), HOME);
+
+    // A Pane alone, by every place that lands on Home's workspace.
+    let theirs_column = t.column(1, 0);
+    for place in [
+        last(&homes),
+        json!({ "to": "stack", "column": theirs_column, "index": 0 }),
+        json!({ "to": "beside", "pane": theirs, "side": "right" }),
+        json!({ "to": "group", "pane": theirs }),
+        json!({ "to": "project", "project": HOME }),
+        json!({ "to": "own", "project": HOME }),
+        // A Project with no workspace yet would own the empty one.
+        json!({ "to": "project", "project": THIRD }),
+    ] {
+        t.refused("move_pane", pane_to(&loose, place), Code::Conflict);
+    }
+    // The Group whole is Work's, by whichever of its columns; its lead's
+    // column alone too. Home's guest alone goes home.
+    let (leads, guests) = (t.column(0, 0), t.column(0, 1));
+    t.refused("move_group", column_to(&leads, &homes), Code::Conflict);
+    t.refused("move_group", column_to(&guests, &homes), Code::Conflict);
+    t.refused("move_column", column_to(&leads, &homes), Code::Conflict);
+    // On the workspace it stands on, the guest moves as it likes.
+    t.ok("move_column", column_to(&guests, &works));
+    assert_eq!(t.layout()[0], [vec![2], vec![1]]);
+    t.ok("move_column", column_to(&guests, &homes));
+    assert_eq!(t.layout()[..2], [vec![vec![1]], vec![vec![2], vec![3]]]);
+    assert_eq!(guest, t.pane(1, 0, 0));
+
+    // Brought to a place, as "Open beside", a new Pane is refused as one
+    // moved there; one only opened there opens.
+    let there = json!({ "again": true, "place": last(&homes) });
+    let brought = and(there.clone(), json!({ "brought": true }));
+    t.refused(
+        "open",
+        and(shows(WORK, "a.a", 5), brought.clone()),
+        Code::Conflict,
+    );
+    t.ok("open", and(shows(HOME, "a.a", 5), brought));
+    let stray = t.opened(and(shows(WORK, "a.a", 6), there));
+    assert_eq!(t.layout()[1], [vec![2], vec![3], vec![5], vec![6]]);
+
+    // Where a Pane goes: on the workspace it stands on, to its Project's,
+    // to a free one, and to a new one.
+    let first = json!({ "to": "column", "workspace": homes, "index": 0 });
+    t.ok("move_pane", pane_to(&stray, first));
+    t.ok("move_pane", pane_to(&stray, last(&works)));
+    t.ok("move_pane", pane_to(&stray, last(&frees)));
+    t.ok("move_group", column_to(&leads, &frees));
+    t.ok(
+        "move_pane",
+        pane_to(&loose, json!({ "to": "workspace", "index": 0 })),
+    );
+    assert_eq!(
+        t.layout(),
+        [
+            vec![vec![4]],
+            EMPTY,
+            vec![vec![2], vec![3], vec![5]],
+            vec![vec![1], vec![6]],
+            EMPTY
+        ]
+    );
+    // Emptied, Work's workspace is Work's still.
+    t.refused("move_pane", pane_to(&guest, last(&works)), Code::Conflict);
+
+    // In the Flow free, every workspace takes any Pane.
+    t.in_the_flow(Flow::Free);
+    t.ok("move_pane", pane_to(&loose, last(&homes)));
+    t.ok("move_group", column_to(&leads, &homes));
+    assert_eq!(t.layout()[2], [vec![1], vec![2], vec![3], vec![5], vec![4]]);
+    t
+}
+
 #[test]
 fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
     let traces = [
@@ -1370,6 +1476,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         placed_free(),
         placed_row(),
         moved_away(),
+        refused_moves(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

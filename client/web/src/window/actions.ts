@@ -78,13 +78,17 @@ import {
   closableAt,
   closingWorkspace,
   columnMoved,
+  keptOf,
   moved,
   opened,
   type Plan,
+  refusable,
   resized,
   type Step,
   workspaceMoved,
 } from "../tiling/arrange"
+import { refusedTo, type RowRefusal } from "../tiling/arrangement"
+import { factsOf } from "../tiling/useTiling"
 import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
 import { floorsOf, roomLeft } from "../tiling/layout"
 import {
@@ -102,10 +106,7 @@ import {
   focusEntry,
   focused,
   focusedColumn,
-  movingAs,
   refusalOf,
-  refusedTo,
-  admits,
   fresh,
   go,
   heighten,
@@ -123,7 +124,6 @@ import {
   toEdge,
   widen,
   type Spot,
-  type Workspace,
   type Workspaces,
 } from "../tiling/model"
 
@@ -397,31 +397,29 @@ export function strayedIn(
   )
 }
 
-/** In the row and solo, as agents.toml says now: a Project's workspace
- * holds its Panes only (ADR 0102, decision 6). */
-const strictNow = () => fileNow(AGENTS_FILE).flow !== "free"
+/** What the engine refuses a move by, as this window believes it, as
+ * agents.toml says the Flow now (ADR 0110, decision 9). */
+const factsNow = () => factsOf(fileNow(AGENTS_FILE).flow)
 
 /** The toast a refused move shows: one, however long the key is held. */
 const REFUSED = "workspace-refused"
 
-/** Says why a move onto workspace `to` was refused: whose it is, and where
- * a Pane that moves as `as` can go, by `projectOf`, or as one of no
- * Project when `scratch` says so (`refusalOf`). `to` is numbered as in
- * `w`, before the move, as the bar shows it: a move lets an emptied free
- * workspace above it go. */
+/** Words a move the engine refused onto another Project's workspace:
+ * whose it is, and where a Pane that moves as its Project can go, by
+ * `projectOf`, or as one of no Project when `scratch` says so
+ * (`refusalOf`). The workspace is numbered as before the move, as the bar
+ * shows it. `along`, its Group took the Pane along. */
 function sayRefused(
-  w: Workspaces,
-  to: Workspace,
-  as: ProjectId,
+  { at, owner, moving }: RowRefusal,
   along: boolean,
   projectOf: (project: ProjectId) => ProjectSummary | undefined,
   scratch: Placing["scratch"]
 ) {
   const { title, description } = refusalOf({
-    to: w.list.findIndex((one) => one.id === to.id),
-    owner: to.project === undefined ? undefined : projectOf(to.project),
-    as: projectOf(as),
-    scratch: scratch(as),
+    to: at,
+    owner: projectOf(owner),
+    as: projectOf(moving),
+    scratch: scratch(moving),
     along,
   })
   toast(title, { id: REFUSED, description })
@@ -430,8 +428,10 @@ function sayRefused(
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
  * window (ADR 0065), but one of the Project's own Group goes alone
- * (`takesGroup`). A refusal names the Projects by `projectOf`, and those
- * of no Project as `scratch` says (`Placing`). */
+ * (`takesGroup`). Onto another Project's workspace, in the row and solo,
+ * the engine refuses it (ADR 0102, decision 6), and the window says whose
+ * it is and where the Pane can go: it names the Projects by `projectOf`,
+ * and those of no Project as `scratch` says (`Placing`). */
 function moving(
   w: Workspaces,
   how: (w: Workspaces) => Workspaces,
@@ -442,27 +442,17 @@ function moving(
   const entry = focused(w)
   const next = how(w)
   if (!entry || next === w) return undefined
-  const to = current(next)
-  const whole = takesGroup(workspace, column)
-  // Never onto another Project's workspace, in the row and solo (ADR
-  // 0102, decision 6): it says whose it is, and where the Pane can go.
-  const as = movingAs(w, entry.id, whole, leads)
-  if (
-    to.id !== workspace.id &&
-    as !== undefined &&
-    !admits(to, as) &&
-    strictNow()
-  ) {
-    // Taken along by its Group, it would go there alone, by a drag.
-    const along = as !== entry.project && admits(to, entry.project)
-    sayRefused(w, to, as, along, projectOf, scratch)
-    return undefined
-  }
-  if (whole && to.id !== workspace.id) {
-    const plan = columnMoved(next, column.id)
-    return plan && { ...plan, want: entry.id }
-  }
-  return moved(next, entry.id)
+  const away = current(next).id !== workspace.id
+  const whole = takesGroup(workspace, column) && away
+  const moves = whole ? columnMoved(next, column.id) : moved(next, entry.id)
+  const plan = moves && whole ? { ...moves, want: entry.id } : moves
+  return (
+    plan &&
+    refusable(w, plan, factsNow(), (refused) =>
+      // Taken along by its Group, it would go there alone, by a drag.
+      sayRefused(refused, refused.owner === entry.project, projectOf, scratch)
+    )
+  )
 }
 
 /** Moves the focused Pane as `moving` does, where `how` puts it. */
@@ -471,7 +461,8 @@ const moveFocused = (shell: Shell, how: (w: Workspaces) => Workspaces) =>
 
 /** Each workspace as the Pane menu's "To workspace" offers it to the
  * Pane at `spot`, as `moving` would move it: its Project, and whether the
- * keys refuse the move there (ADR 0102, decision 6). */
+ * engine refuses the move there, as the copy of its rule foresees (ADR
+ * 0102, decision 6). */
 export function targetsOf(
   state: Workspaces,
   spot: Spot,
@@ -480,9 +471,8 @@ export function targetsOf(
   const workspace = state.list[spot.workspace]
   const column = workspace.columns[spot.column]
   const entry = column.entries[spot.entry].id
-  const refused = strictNow()
-    ? refusedTo(state, entry, takesGroup(workspace, column), leads)
-    : new Set<string>()
+  const whole = takesGroup(workspace, column)
+  const refused = refusedTo(keptOf(state), factsNow(), entry, whole)
   return state.list.map((w) => ({
     owner: w.project === undefined ? undefined : projectOf(w.project),
     refused: refused.has(w.id),
@@ -575,9 +565,10 @@ function saidOf(project: ProjectId, pane: PaneState, placing: Placing) {
 }
 
 /** Shows a Pane here, right of the focused one, with its width; one
- * another workspace shows moves here. Never onto another Project's
- * workspace, in the row and solo, as `placing` says: as `Alt+Shift+N`, it
- * says why, by `projectOf` (ADR 0102, decision 6). */
+ * another workspace shows moves here. Onto another Project's workspace,
+ * in the row and solo, the engine refuses it as it does a move, and as
+ * `Alt+Shift+N` the window says why, by `projectOf` (ADR 0102, decision
+ * 6). */
 export function bringing(
   workspaces: Workspaces,
   project: ProjectId,
@@ -585,18 +576,6 @@ export function bringing(
   placing: Placing,
   projectOf: (project: ProjectId) => ProjectSummary | undefined
 ): Step {
-  const workspace = current(workspaces)
-  if (placing.flow !== "free" && !admits(workspace, project)) {
-    sayRefused(
-      workspaces,
-      workspace,
-      project,
-      false,
-      projectOf,
-      placing.scratch
-    )
-    return undefined
-  }
   const next = bring(workspaces, project, pane, {
     place: "right",
     width: widthOf(pane),
@@ -610,8 +589,14 @@ export function bringing(
   // The one that moved here shows anew in `next`, under another ID.
   const was = new Set(entries(workspaces).map((entry) => entry.id))
   const here = entries(next).find((entry) => !was.has(entry.id))
-  if (away && here) return moved(next, away.id, here.id)
-  return opened(workspaces, next, { grouped: groupedOf(pane) }) ?? next
+  const moves = away !== undefined && here !== undefined
+  const plan = moves
+    ? moved(next, away.id, here.id)
+    : opened(workspaces, next, { grouped: groupedOf(pane), brought: true })
+  if (!plan) return moves ? undefined : next
+  return refusable(workspaces, plan, factsOf(placing.flow), (refused) =>
+    sayRefused(refused, false, projectOf, placing.scratch)
+  )
 }
 
 /** How the Person works the Panes: the Flow, and whether a Project is a

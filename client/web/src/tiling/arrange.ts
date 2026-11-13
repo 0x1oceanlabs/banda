@@ -13,7 +13,14 @@
  * (`unheard.ts`), until the engine's event holds it. Pure, so plain tests
  * cover it.
  */
-import type { CommandId, Engine, Event, ProjectId } from "@banda/contract"
+import {
+  type CommandId,
+  type Engine,
+  type Event,
+  notDone,
+  type ProjectId,
+  Refused,
+} from "@banda/contract"
 import type {
   Arranged,
   Changed,
@@ -23,7 +30,12 @@ import type {
 } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
 import type { Source } from "@banda/ui/hooks/use-live"
-import type { Command } from "./arrangement"
+import {
+  type Command,
+  type Facts,
+  refusalFor,
+  type RowRefusal,
+} from "./arrangement"
 import {
   clamp,
   type Column,
@@ -287,7 +299,9 @@ export function applyChange(state: Arranged, event: Event): Arranged {
   return { at: event.seq, workspaces, aside }
 }
 
-/** The arrangement a window kept, for the engine to take (decision 2). */
+/** The arrangement a window kept, for the engine to take (decision 2),
+ * and the one it draws, as the engine keeps one, for the copy of the
+ * engine's rules to answer over. */
 export function keptOf(state: Workspaces): Kept[] {
   return state.list.map((workspace) => ({
     id: workspace.id,
@@ -321,6 +335,40 @@ export type Plan = {
   want?: string
   focus?: false
   refused?: (error: unknown) => void
+}
+
+/** A change the engine refused is logged: the window draws what it says.
+ * One whose answer was lost may have run: its fact draws it, if it did. */
+export function logged(error: unknown): void {
+  if (notDone(error)?.outcome === "may_have_run")
+    console.warn("A change of the workspaces may have run:", error)
+  else console.warn("The workspaces did not change:", error)
+}
+
+/**
+ * `plan`, a move or a Pane brought, as the row may refuse it (ADR 0102,
+ * decision 6). The engine decides (ADR 0110, decision 8): the plan goes to
+ * it all the same, and once it refuses, `say` words why, by what the copy
+ * of its rule foresaw over `before` by `facts`. One foreseen refused
+ * leaves the view where it is. Any other refusal is logged, as ever.
+ */
+export function refusable(
+  before: Workspaces,
+  plan: Plan,
+  facts: Facts,
+  say: (refused: RowRefusal) => void
+): Plan {
+  const foreseen = refusalFor(keptOf(before), plan.command, facts)
+  if (!foreseen) return plan
+  return {
+    ...plan,
+    focus: false,
+    refused: (error) => {
+      const row = error instanceof Refused && error.refusal.code === "conflict"
+      if (row) say(foreseen)
+      else logged(error)
+    },
+  }
 }
 
 /**
@@ -368,12 +416,18 @@ function placeIn(spot: Spot): Place {
  * where `next` has it, the place its caller named, or at `place`, as the
  * engine names one the window only foresees: a Group's (ADR 0065); none
  * when it was shown already, and only the view changes. `grouped`, its column is
- * a Group from its opening: the one it goes into, else its own.
+ * a Group from its opening: the one it goes into, else its own. `brought`,
+ * the Person brings it to that place, as a Pane moved there, which the
+ * engine refuses as it does a move (ADR 0102, decision 6).
  */
 export function opened(
   before: Workspaces,
   next: Workspaces,
-  { place, grouped }: { place?: Place; grouped?: boolean } = {}
+  {
+    place,
+    grouped,
+    brought,
+  }: { place?: Place; grouped?: boolean; brought?: boolean } = {}
 ): Plan | undefined {
   const known = new Set(entries(before).map((entry) => entry.id))
   const entry = entries(next).find((other) => !known.has(other.id))
@@ -404,6 +458,7 @@ export function opened(
         ...shows,
         again: true,
         place: place ?? placeIn(spot),
+        ...(brought && { brought }),
         ...(width !== undefined && { width }),
       },
     },

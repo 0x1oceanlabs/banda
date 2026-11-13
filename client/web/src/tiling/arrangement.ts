@@ -3,9 +3,10 @@
  * `platform/workspaces/engine/src/model.rs`, `commands.rs` and
  * `placing.rs` do, function for function, so a client works out what a
  * command does before the engine answers (ADR 0088, decision 11). Where a
- * Pane with no place opens is the engine's to say (ADR 0110): this copy
- * of its rule only draws ahead, by the facts the client believes the
- * engine has, and the engine's answer wins. The engine's golden traces hold
+ * Pane with no place opens, and which move the row refuses, is the
+ * engine's to say (ADR 0110): this copy of its rule only draws ahead, by
+ * the facts the client believes the engine has, and the engine's answer
+ * wins. The engine's golden traces hold
  * the two together: `parity.test.ts` replays every one through `apply`.
  * The model itself, compiled to WebAssembly, takes this one's place (T1);
  * so it imports nothing but the contract, as that crate will be a leaf.
@@ -27,7 +28,13 @@
  * the ways params can be wrong, so most of how they refuse is unchecked
  * until T1.
  */
-import type { Code, JsonValue, MethodOf, Params } from "@banda/contract"
+import type {
+  Code,
+  JsonValue,
+  MethodOf,
+  Params,
+  ProjectId,
+} from "@banda/contract"
 import {
   type Column,
   type Pane,
@@ -82,10 +89,15 @@ export type Applied =
 /**
  * What the engine places a Pane by, beside its arrangement, as
  * `placing::Facts` (ADR 0110, decision 5): its machine's Flow, solo being
- * each client's view of the row, and the Pane kinds that stand on their
- * Project's workspace (`PaneKind.home`).
+ * each client's view of the row, the Pane kinds that stand on their
+ * Project's workspace (`PaneKind.home`), and those that lead a Group, as
+ * an Agent's Thread does (`PaneKind.grouped`); left out, none.
  */
-export type Facts = { flow: "free" | "row"; home: readonly string[] }
+export type Facts = {
+  flow: "free" | "row"
+  home: readonly string[]
+  leads?: readonly string[]
+}
 
 /** The engine's facts when it knows no Flow and no kind. */
 export const NO_FACTS: Facts = { flow: "free", home: [] }
@@ -227,11 +239,13 @@ function dispatch(
         place: placeOf(f.place),
         grouped: optional(f.grouped, bool),
       }))
+      admit(list, facts, { pane }, place)
       movePane(list, pane, place, grouped, seed)
       break
     }
     case "workspaces.move_column": {
       const { column, workspace, index } = read(readMoveColumn)
+      admit(list, facts, { column }, { to: "column", workspace, index })
       moveColumn(list, column, workspace, index, seed)
       break
     }
@@ -295,6 +309,7 @@ function dispatch(
     }
     case "workspaces.move_group": {
       const { column, workspace, index } = read(readMoveColumn)
+      admit(list, facts, { group: column }, { to: "column", workspace, index })
       moveGroup(list, column, workspace, index, seed)
       break
     }
@@ -340,7 +355,8 @@ function dispatch(
 
 /** Opens a Pane as `workspaces.open` says; answers it, and whether it is
  * new. One the workspaces show already is only named. One with no place
- * goes where `place` says, by `facts`. */
+ * goes where `place` says, by `facts`, and one brought to a place is
+ * refused as a move there is. */
 function openCommand(
   list: Arrangement,
   open: Open,
@@ -352,6 +368,8 @@ function openCommand(
   const isNew = again || showing(list, shown) === undefined
   const grouped = open.grouped === true
   let { place, instead } = open
+  if (place !== undefined && isNew && open.brought === true)
+    admit(list, facts, { brought: open.project }, place)
   // The Pane it was moved from to another Project, when it opens
   // elsewhere: from there, and that Pane leaves once the new one stands.
   const away =
@@ -444,6 +462,191 @@ function movesAway(
     was !== project &&
     workspace.project !== undefined &&
     workspace.project !== project
+  )
+}
+
+// Which move the row refuses, as `placing.rs` says it.
+
+/**
+ * What a command moves, as `placing::Moved`: a Pane alone, as its own
+ * Project's; a column alone, or with its whole `group`, as its lead's
+ * Project's, else its first Pane's; or a Pane of the Project `brought`
+ * that no workspace shows yet.
+ */
+export type Moved =
+  | { pane: string }
+  | { column: string }
+  | { group: string }
+  | { brought: ProjectId }
+
+/** A move the row refuses, as `placing::Refused`: the workspace it would
+ * land on, its place from the top, from 0, the Project that owns it, and
+ * the Project what moves is of. */
+export type RowRefusal = {
+  workspace: string
+  at: number
+  owner: ProjectId
+  moving: ProjectId
+}
+
+/**
+ * As `placing::refuses`: whether the row refuses to move `moving` to
+ * `place`, onto a workspace another Project owns, from another workspace
+ * (ADR 0102, decision 6). The engine decides it for every caller (ADR
+ * 0110, decision 8): a client asks its copy only to draw ahead, as the
+ * workspaces a carried Pane may not go to, and to word the engine's
+ * refusal by the names it knows.
+ */
+export function refuses(
+  list: readonly Workspace[],
+  facts: Facts,
+  moving: Moved,
+  place: Place
+): RowRefusal | undefined {
+  if (facts.flow !== "row") return undefined
+  const to = lands(list, place)
+  const as = movesAs(list, facts, moving)
+  if (!to || !as || as.from === to.at || to.owner === as.project)
+    return undefined
+  const { at, owner } = to
+  return { workspace: list[at].id, at, owner, moving: as.project }
+}
+
+/** As `placing::lands`: the workspace `place` puts a Pane on, and the
+ * Project that owns it then; none on one no Project owns, or a new one. */
+function lands(
+  list: readonly Workspace[],
+  place: Place
+): { at: number; owner: ProjectId } | undefined {
+  let at: number
+  switch (place.to) {
+    case "column":
+      at = list.findIndex((w) => w.id === place.workspace)
+      break
+    case "stack":
+      at = list.findIndex((w) => w.columns.some((c) => c.id === place.column))
+      break
+    case "beside":
+    case "group":
+      at = spotOr(list, place.pane)?.workspace ?? -1
+      break
+    case "project":
+    case "own": {
+      // Its Project's workspace, or the empty one at the bottom, which it
+      // owns then.
+      const own = list.findIndex((w) => w.project === place.project)
+      return { at: own < 0 ? list.length - 1 : own, owner: place.project }
+    }
+    case "workspace":
+    case "free":
+      return undefined
+  }
+  const owner = list[at]?.project
+  return owner === undefined ? undefined : { at, owner }
+}
+
+/** As `placing::moves_as`: the workspace `moving` stands on, none for a
+ * Pane no workspace shows yet, and the Project it moves as. */
+function movesAs(
+  list: readonly Workspace[],
+  facts: Facts,
+  moving: Moved
+): { from?: number; project: ProjectId } | undefined {
+  if ("brought" in moving) return { project: moving.brought }
+  if ("pane" in moving) {
+    const at = spotOr(list, moving.pane)
+    if (!at) return undefined
+    const pane = list[at.workspace].columns[at.column].panes[at.pane]
+    return { from: at.workspace, project: pane.project }
+  }
+  const whole = "group" in moving
+  const id = whole ? moving.group : moving.column
+  const w = list.findIndex((one) => one.columns.some((c) => c.id === id))
+  if (w < 0) return undefined
+  const { columns } = list[w]
+  const c = columns.findIndex((column) => column.id === id)
+  const { start, end } = whole ? run(columns, c) : { start: c, end: c + 1 }
+  const panes = columns.slice(start, end).flatMap((column) => column.panes)
+  const lead = panes.find((pane) => facts.leads?.includes(pane.kind))
+  return { from: w, project: (lead ?? panes[0]).project }
+}
+
+/** Refuses a move the row refuses, in the engine's words. */
+function admit(
+  list: Arrangement,
+  facts: Facts,
+  moving: Moved,
+  place: Place
+): void {
+  const refused = refuses(list, facts, moving, place)
+  if (!refused) return
+  throw new Refused(
+    "conflict",
+    `Workspace ${refused.at + 1} is another Project's. A Pane goes to its Project's workspace, a free one or a new one.`
+  )
+}
+
+/**
+ * The refusal the row gives `command`, by `facts`, as the engine answers
+ * it over `list`: of a Pane, a column or a Group moved, and of a Pane
+ * brought to a place; none for a command the row lets go, and for one
+ * that moves nothing between workspaces.
+ */
+export function refusalFor(
+  list: readonly Workspace[],
+  command: Command,
+  facts: Facts
+): RowRefusal | undefined {
+  const { method, params } = command
+  const column = ({ workspace, index }: Params<"workspaces.move_column">) =>
+    ({ to: "column", workspace, index }) as const
+  switch (method) {
+    case "workspaces.move_pane":
+      return refuses(list, facts, { pane: params.pane }, params.place)
+    case "workspaces.move_column":
+      return refuses(list, facts, { column: params.column }, column(params))
+    case "workspaces.move_group":
+      return refuses(list, facts, { group: params.column }, column(params))
+    case "workspaces.open": {
+      const { place, project, kind, args } = params
+      if (place === undefined || params.brought !== true) return undefined
+      const isNew =
+        params.again === true ||
+        showing(list, { project, kind, args }) === undefined
+      return isNew
+        ? refuses(list, facts, { brought: project }, place)
+        : undefined
+    }
+    default:
+      return undefined
+  }
+}
+
+/**
+ * The workspaces the row lets Pane `pane` move to no more, by their IDs:
+ * alone, or `whole` with the Group it is in (ADR 0102, decision 6). What a
+ * client dims while the Pane is carried, and greys out in its menu.
+ */
+export function refusedTo(
+  list: readonly Workspace[],
+  facts: Facts,
+  pane: string,
+  whole: boolean
+): Set<string> {
+  const at = spotOr(list, pane)
+  const column = at && list[at.workspace].columns[at.column]
+  const moving: Moved =
+    whole && column?.group !== undefined ? { group: column.id } : { pane }
+  return new Set(
+    list
+      .filter((to) =>
+        refuses(list, facts, moving, {
+          to: "column",
+          workspace: to.id,
+          index: LAST,
+        })
+      )
+      .map((to) => to.id)
   )
 }
 
@@ -557,6 +760,7 @@ function readOpen(f: Fields): Open {
     scratch: optional(f.scratch, bool),
     instead: optional(f.instead, id),
     moved: optional(f.moved, bool),
+    brought: optional(f.brought, bool),
     width: optional(f.width, text),
     again: optional(f.again, bool),
     grouped: optional(f.grouped, bool),
@@ -641,7 +845,10 @@ function spot(list: Arrangement, pane: string): Spot {
 }
 
 /** Where a Pane is; none when the workspaces show no such Pane. */
-function spotOr(list: Arrangement, pane: string | undefined): Spot | undefined {
+function spotOr(
+  list: readonly Workspace[],
+  pane: string | undefined
+): Spot | undefined {
   for (const [w, workspace] of list.entries()) {
     for (const [c, column] of workspace.columns.entries()) {
       const p = column.panes.findIndex((other) => other.id === pane)
@@ -698,7 +905,7 @@ function alike(a: JsonValue, b: JsonValue): boolean {
   )
 }
 
-function showing(list: Arrangement, shown: Shown): Pane | undefined {
+function showing(list: readonly Workspace[], shown: Shown): Pane | undefined {
   return list.flatMap(panesOf).find((pane) => same(pane, shown))
 }
 
@@ -996,7 +1203,10 @@ function display(
 
 /** The columns of the Group the one at `c` is in, from `start` to before
  * `end`: it alone when it is in none. */
-function run(columns: Column[], c: number): { start: number; end: number } {
+function run(
+  columns: readonly Column[],
+  c: number
+): { start: number; end: number } {
   const group = columns[c].group
   if (group === undefined) return { start: c, end: c + 1 }
   let start = c

@@ -93,6 +93,26 @@ Each step is its own PR, and the window keeps working after each.
    with a place, an Agent's Thread that a workspace shows (`beside`), and
    the buttons of an empty workspace no Project owns.
 2. Refusals in the engine.
+   _Built_ (WS3): `placing.rs` refuses a move onto a workspace another
+   Project owns (`refuses`), in the row, for every caller:
+   `workspaces.move_pane`, `move_column`, `move_group` and an Agent's
+   `move_pane` tool all run behind it in `commands.rs`, so the window, an
+   Agent and `banda` are refused alike. A Pane alone moves as its own
+   Project's, and a Group as its lead's, by the kinds that open as a
+   Group of their own (`Facts.leads`), as when it is arranged. "Open
+   beside" says that it brings the Pane (`brought`), so a Pane no
+   workspace shows yet is refused as one moved there; any other Pane
+   opened at a named place opens there, as before. The refusal is the
+   contract's `conflict`, with words that name the workspace by its
+   number. A refusal carries a code and words and no more, and the engine
+   knows no Project's name: so the window words the same refusal by the
+   names it knows, from its copy of the rule. That copy is
+   `tiling/arrangement.ts`'s `refuses`, held to the engine's by the trace
+   `18-refused-moves`. The window asks it for three things and decides
+   none: the workspaces a carried Pane is not dropped on, the rows the
+   Pane menu greys out, and whose workspace to name once the engine has
+   refused. `refusedTo`, `movingAs` and `admits` left `tiling/model.ts`,
+   and the refusing left `moving` and `bringing` in `window/actions.ts`.
 3. The Top layer in the Window: one stack, the keys, one focus return, so
    a Pane's inner field gets them back whichever layer closes.
 4. Cleaning `arrange.ts`, `actions.ts` and `Shell.tsx`, and the Tiling

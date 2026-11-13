@@ -45,6 +45,13 @@ instead?: PaneId,
  */
 moved?: boolean, 
 /**
+ * With a `place`: the Person brings it there, as a Pane moved, by
+ * "Open beside". In the row it never goes onto another Project's
+ * workspace, as no move does (ADR 0102, decision 6). Left out, it
+ * opens at the place named, whoever owns the workspace.
+ */
+brought?: boolean, 
+/**
  * A new column's width; left out, the look's.
  */
 width?: string, 
