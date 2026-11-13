@@ -10,7 +10,7 @@
  *         hosts      the machines, for one away with Agents at work
  *   draws the Mark in the loudest state of the work, a crossed bell while
  *         Quiet is on; while the sidebar is hidden, the count beside it
- *         and the small inbox it opens (`SmallInbox.tsx`)
+ *         and the small inbox it opens (the sidebar's `SmallInbox`)
  *   runs  `sidebar.toggle` on the Mark: a click shows or hides the
  *         sidebar, as Alt+A does (decision 21, as amended); the small
  *         inbox runs what its rows do
@@ -45,8 +45,7 @@ import {
   useItems,
   useLaterClock,
 } from "../../calls/stores"
-import { logoName, logoWords } from "./count"
-import { SmallInbox, useInboxCount } from "./SmallInbox"
+import { logoName, logoWords, SmallInbox, useInboxCount } from "../../sidebar"
 
 export function Mark({ engine }: { engine: Engine }) {
   const status = useStatus(engine)

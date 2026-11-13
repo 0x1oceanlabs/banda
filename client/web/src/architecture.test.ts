@@ -200,7 +200,7 @@ test("a file that no longer reaches a module leaves the list", () => {
  */
 const TILING_STILL: Record<string, string[]> = {
   "web/src/tiling/PaneFrame.tsx": ["../window/attach", "../titles/Title"],
-  "web/src/tiling/store.ts": ["../sidebar/width"],
+  "web/src/tiling/store.ts": ["../sidebar"],
 }
 
 test("the Tiling imports no more of the Window than the list holds", () => {
@@ -499,6 +499,35 @@ test("only the Window gives run to what it draws", () => {
 })
 
 /**
+ * The sidebar is one module with one door (the window's rule 1): outside
+ * `sidebar/`, its code is taken only from `sidebar/index.ts`, as
+ * `../sidebar`, by every form of import, a mock's among them. The list
+ * holds who still reaches past the door; it is empty, and stays so.
+ */
+const PAST_THE_DOOR: string[] = []
+
+test("outside the sidebar, its code is taken only through its door", () => {
+  const inside = /["'](?:\.\.?\/)+sidebar\/[^"']+["']/
+  const root = join(app, "web/src")
+  const past = sources(root)
+    .filter((file) => !relative(root, file).startsWith("sidebar/"))
+    .filter((file) => file !== join(root, "architecture.test.ts"))
+    .filter((file) => inside.test(readFileSync(file, "utf8")))
+    .map((file) => relative(app, file))
+  expect(past).toEqual(PAST_THE_DOOR)
+  // And the door only hands on: it holds no code of its own.
+  const door = readFileSync(join(root, "sidebar/index.ts"), "utf8")
+  expect(
+    door
+      .replace(/\/\*[\s\S]*?\*\//g, "")
+      .trim()
+      .split("\n")
+  ).toSatisfy((lines: string[]) =>
+    lines.every((line) => /^export \{.*\} from "\.\/[\w-]+"$/.test(line))
+  )
+})
+
+/**
  * What the sidebar list's components take as code, not data, by file and
  * component (`componentProps`, ADR 0087, B4e): each `.tsx` under
  * `sidebar/` is read, its counts on the Bar's too (B4f), which go to a
@@ -532,6 +561,12 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
   },
   "web/src/sidebar/LaterPicker.tsx": {
     Picking: ["onPick"],
+  },
+  // The small inbox came in from the Bar's folder with the sidebar's one
+  // door: its list is the sidebar's own, and tells its popover of Esc and
+  // of "7 at work ›".
+  "web/src/sidebar/SmallInbox.tsx": {
+    SmallList: ["onEsc", "onWorking"],
   },
 }
 
@@ -1135,7 +1170,9 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
  * that reads a place in it, as Alt+U's start does, sort nothing by
  * themselves. What a file takes is read in each form of import and
  * re-export (`valuesTaken`), and neither the rows' module nor `order`'s
- * is taken whole, so none gathers the rows by another name.
+ * is taken whole, so none gathers the rows by another name. Outside the
+ * sidebar they come through its door (`sidebar/index.ts`), which hands
+ * `useOrderNow`, `byOrder` and `placeIn` on and never `order` itself.
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
   const sidebar = join(app, "web/src/sidebar")
@@ -1147,11 +1184,29 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
       valuesTaken(readFileSync(file, "utf8"), file),
     ])
   )
+  // The door, and what a file takes of the order's module: by itself
+  // inside the sidebar, through the door outside it.
+  const door = "web/src/sidebar/index.ts"
+  const ofOrder = (of: Record<string, string[]>) => [
+    ...(of[ordering] ?? []),
+    ...(of[sidebar] ?? []),
+  ]
   const taking = (module: string, name: string) =>
     [...taken]
-      .filter(([, of]) => of[module]?.includes(name))
+      .filter(
+        ([file, of]) =>
+          file !== door &&
+          (module === ordering ? ofOrder(of) : (of[module] ?? [])).includes(
+            name
+          )
+      )
       .map(([file]) => file)
   expect([...taking(rowing, "*"), ...taking(ordering, "*")]).toEqual([])
+  expect(taken.get(door)?.[ordering]?.toSorted()).toEqual([
+    "byOrder",
+    "placeIn",
+    "useOrderNow",
+  ])
   expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/order.ts"])
   const list = "web/src/sidebar/useOrdered.ts"
   // The parts that draw the list take its order as it comes.
@@ -1163,7 +1218,8 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
   ].map((file) => `web/src/sidebar/${file}`)
   const altU = "web/src/window/Shell.tsx"
   const going = [...taken]
-    .map(([file, of]) => ({ file, taken: of[ordering] ?? [] }))
+    .filter(([file]) => file !== door)
+    .map(([file, of]) => ({ file, taken: ofOrder(of) }))
     .filter(
       ({ taken: names }) =>
         names.includes("order") || names.includes("useOrderNow")
@@ -1398,13 +1454,13 @@ const BY_DOES = [
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/LaterPicker.tsx: itemActionOf",
   "web/src/sidebar/SectionView.tsx: itemActionOf",
-  "web/src/sidebar/items.ts: action.does",
-  "web/src/sidebar/items.ts: itemActionOf",
   "web/src/sidebar/undo.ts: itemActionOf",
   "web/src/sidebar/useActs.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
+  "web/src/window/items.ts: action.does",
+  "web/src/window/items.ts: itemActionOf",
 ]
 
 test("the Window finds an item action by what it does no more than the list holds", () => {
