@@ -1,0 +1,90 @@
+---
+// The desk's world: Banda's dark tokens (the `dark` class) over a night
+// lit by the painting's colours. What it holds sits on glass.
+---
+
+<div class="night dark">
+  <slot name="dive" />
+  <div class="rest">
+    <div class="sky" aria-hidden="true"></div>
+    <slot />
+  </div>
+</div>
+
+<style>
+  .night {
+    background: var(--night);
+    color: var(--foreground);
+  }
+  .rest {
+    position: relative;
+    isolation: isolate;
+    padding-bottom: clamp(48px, 6vw, 96px);
+  }
+  /* The glows down the desk, after the dive's. They are fixed to the
+     sections, not to the screen: nothing behind the glass has to be
+     drawn again as the page scrolls. */
+  .sky {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+    /* The last stretch is plain night: the paint that runs onto the wall
+       below is that colour. */
+    background:
+      linear-gradient(
+        180deg,
+        transparent calc(100% - 260px),
+        var(--night) calc(100% - 110px)
+      ),
+      radial-gradient(
+        900px 760px at 6% 22%,
+        color-mix(in oklab, var(--glow-violet) 70%, transparent),
+        transparent 68%
+      ),
+      radial-gradient(
+        900px 600px at 70% 34%,
+        color-mix(in oklab, var(--glow-teal) 50%, transparent),
+        transparent 66%
+      ),
+      radial-gradient(
+        800px 700px at 100% 50%,
+        color-mix(in oklab, var(--glow-violet) 52%, transparent),
+        transparent 66%
+      ),
+      radial-gradient(
+        700px 520px at 8% 66%,
+        color-mix(in oklab, var(--glow-ember) 36%, transparent),
+        transparent 68%
+      ),
+      radial-gradient(
+        900px 700px at 74% 82%,
+        color-mix(in oklab, var(--glow-teal) 42%, transparent),
+        transparent 66%
+      ),
+      radial-gradient(
+        760px 600px at 30% 86%,
+        color-mix(in oklab, var(--glow-ember) 40%, transparent),
+        transparent 70%
+      ),
+      linear-gradient(
+        180deg,
+        var(--night) 0,
+        var(--night-violet) 30%,
+        var(--night) 55%,
+        var(--night-violet) 80%,
+        var(--night) 96%
+      );
+  }
+  .sky::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+    mask-image: linear-gradient(
+      180deg,
+      #000 calc(100% - 320px),
+      transparent calc(100% - 160px)
+    );
+  }
+</style>

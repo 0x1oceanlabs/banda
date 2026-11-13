@@ -1,0 +1,166 @@
+---
+// The paint box: the filters every painted thing on the wall shares. They
+// are costly, so only still art takes them, never what moves each frame.
+---
+
+<svg
+  width="0"
+  height="0"
+  style="position:absolute"
+  aria-hidden="true"
+  focusable="false"
+>
+  <defs>
+    <!-- a hand's wobble on every contour -->
+    <filter id="wob" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".032"
+        numOctaves="2"
+        seed="3"
+        result="n"
+      ></feTurbulence>
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="n"
+        scale="7"
+        xChannelSelector="R"
+        yChannelSelector="G"
+      ></feDisplacementMap>
+    </filter>
+    <!-- flat colour, laid with a brush: wobble and pale streaks -->
+    <filter id="paint" x="-10%" y="-10%" width="120%" height="120%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".018"
+        numOctaves="3"
+        seed="4"
+        result="n"
+      ></feTurbulence>
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="n"
+        scale="16"
+        xChannelSelector="R"
+        yChannelSelector="G"
+        result="d"
+      ></feDisplacementMap>
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".003 .045"
+        numOctaves="2"
+        seed="9"
+        result="s"
+      ></feTurbulence>
+      <feColorMatrix
+        in="s"
+        type="matrix"
+        values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .9 0 0 0 -.6"
+        result="sh"
+      ></feColorMatrix>
+      <feComposite in="sh" in2="d" operator="in" result="shd"></feComposite>
+      <feMerge>
+        <feMergeNode in="d"></feMergeNode>
+        <feMergeNode in="shd"></feMergeNode>
+      </feMerge>
+    </filter>
+    <!-- the dark that floods the wall: a ragged edge and no streaks, so
+         it meets the solid sheet above it without a seam (in sRGB: a dark
+         colour in linear light comes back a shade off) -->
+    <filter
+      id="flood"
+      x="-5%"
+      y="-30%"
+      width="110%"
+      height="160%"
+      color-interpolation-filters="sRGB"
+    >
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".012 .03"
+        numOctaves="3"
+        seed="8"
+        result="n"
+      ></feTurbulence>
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="n"
+        scale="38"
+        xChannelSelector="R"
+        yChannelSelector="G"
+      ></feDisplacementMap>
+    </filter>
+    <!-- a character's body: a small wobble and a little sheen -->
+    <filter id="body" x="-15%" y="-15%" width="130%" height="130%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".03"
+        numOctaves="2"
+        seed="11"
+        result="n"
+      ></feTurbulence>
+      <feDisplacementMap
+        in="SourceGraphic"
+        in2="n"
+        scale="6"
+        xChannelSelector="R"
+        yChannelSelector="G"
+        result="d"
+      ></feDisplacementMap>
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".006 .06"
+        numOctaves="2"
+        seed="5"
+        result="s"
+      ></feTurbulence>
+      <feColorMatrix
+        in="s"
+        type="matrix"
+        values="0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  .9 0 0 0 -.52"
+        result="sh"
+      ></feColorMatrix>
+      <feComposite in="sh" in2="d" operator="in" result="shd"></feComposite>
+      <feMerge>
+        <feMergeNode in="d"></feMergeNode>
+        <feMergeNode in="shd"></feMergeNode>
+      </feMerge>
+    </filter>
+    <!-- gesso: dry white strokes with ragged edges -->
+    <filter id="gesso" x="-20%" y="-20%" width="140%" height="140%">
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".004 .05"
+        numOctaves="2"
+        seed="7"
+        result="s"
+      ></feTurbulence>
+      <feColorMatrix
+        in="s"
+        type="matrix"
+        values="0 0 0 0 0  0 0 0 0 0  0 0 0 0 0  5 0 0 0 -1.1"
+        result="a"
+      ></feColorMatrix>
+      <feComposite
+        in="SourceGraphic"
+        in2="a"
+        operator="in"
+        result="t"
+      ></feComposite>
+      <feTurbulence
+        type="fractalNoise"
+        baseFrequency=".03"
+        numOctaves="2"
+        seed="2"
+        result="w"
+      ></feTurbulence>
+      <feDisplacementMap
+        in="t"
+        in2="w"
+        scale="18"
+        xChannelSelector="R"
+        yChannelSelector="G"
+      ></feDisplacementMap>
+    </filter>
+  </defs>
+</svg>

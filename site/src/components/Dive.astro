@@ -1,0 +1,354 @@
+---
+// The dive: the page goes from the gallery wall onto Banda's desk. The
+// stage holds still while the reader scrolls: the painting's dark paint
+// floods down over the wall, the desk's glow comes up where the cadmium
+// disc was, and a Banda window that lay tilted on the desk straightens
+// to face the reader. Every move is a transform or an opacity; the
+// painted edge is drawn once.
+import DeskWindow from "./DeskWindow.astro"
+import { eyeWhites, pupils } from "../lib/paint"
+---
+
+<section class="dive" id="desk" aria-labelledby="desk-title" data-dive>
+  <div class="stage">
+    <div class="wall" aria-hidden="true"></div>
+    <div class="flood" aria-hidden="true" data-flood>
+      <div class="sheet"></div>
+      <svg
+        class="edge"
+        viewBox="0 0 1440 300"
+        preserveAspectRatio="none"
+        aria-hidden="true"
+      >
+        <g filter="url(#flood)">
+          <path
+            d="M-40 -60 H1480 V96 C1380 120 1300 84 1210 112 C1120 140 1040 96 940 120 C850 142 760 104 660 128 C560 150 470 102 370 126 C270 150 170 110 80 132 C30 144 -10 128 -40 136 Z"
+            style="fill:var(--night)"
+          ></path>
+        </g>
+        <g filter="url(#wob)" stroke-linecap="round">
+          <g style="stroke:var(--night);fill:var(--night)">
+            <path d="M150 120 V236" stroke-width="12"></path>
+            <circle cx="150" cy="242" r="9" stroke="none"></circle>
+            <path d="M420 120 V196" stroke-width="10"></path>
+            <circle cx="420" cy="201" r="8" stroke="none"></circle>
+            <path d="M610 126 V268" stroke-width="13"></path>
+            <circle cx="610" cy="274" r="10" stroke="none"></circle>
+            <path d="M1010 112 V218" stroke-width="11"></path>
+            <circle cx="1010" cy="224" r="9" stroke="none"></circle>
+            <path d="M1280 104 V176" stroke-width="9"></path>
+            <circle cx="1280" cy="181" r="7" stroke="none"></circle>
+          </g>
+          <!-- the painting's colours, dragged along by the dark -->
+          <g style="stroke:var(--paint-cadmium);fill:var(--paint-cadmium)">
+            <path d="M760 118 V230" stroke-width="7"></path>
+            <circle cx="760" cy="235" r="6" stroke="none"></circle>
+            <path d="M300 128 V176" stroke-width="5"></path>
+          </g>
+          <g style="stroke:var(--paint-cobalt);fill:var(--paint-cobalt)">
+            <path d="M1140 120 V206" stroke-width="7"></path>
+            <circle cx="1140" cy="211" r="6" stroke="none"></circle>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <!-- In the dark, only the gang's eyes are left, before the desk lights
+         up: the same eyes the Mark has. -->
+    <svg class="eyes" viewBox="-80 -40 160 104" aria-hidden="true" data-eyes>
+      <Fragment set:html={eyeWhites(7)} />
+      <g class="pupils" set:html={pupils()} />
+    </svg>
+    <div class="glow" aria-hidden="true" data-glow></div>
+
+    <div class="content">
+      <div class="wrap head" data-head>
+        <p class="wsno">
+          <span class="n">02</span>The desk
+        </p>
+        <h2 id="desk-title">
+          <span class="ln q">
+            Agents work.
+            <span
+              class="hm"
+              data-mark="working"
+              data-doing="think"
+              data-size="80"
+              aria-hidden="true"
+            ></span>
+          </span>
+          <span class="ln">
+            You steer.
+            <span
+              class="hm"
+              data-mark="asks"
+              data-size="80"
+              aria-hidden="true"
+            ></span>
+          </span>
+        </h2>
+        <p class="lede">
+          <b>Every Agent at work, in one window.</b> Claude Code and Codex side
+          by side in Panes, and an inbox that tells you who waits for you.
+        </p>
+      </div>
+      <div
+        class="bench"
+        data-bench
+        role="img"
+        aria-label="A Banda window: one Agent finishes, a sub-agent fails, another asks to run a command, and the Person allows it."
+      >
+        <div class="tilt" data-tilt>
+          <DeskWindow />
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<script>
+  import { dive } from "../lib/dive"
+  import { playWindow } from "../lib/desk-window"
+  import { stillOffscreen } from "../lib/mark"
+
+  const section = document.querySelector<HTMLElement>("[data-dive]")!
+  dive(section)
+  playWindow(section.querySelector<HTMLElement>("[data-win]")!)
+  stillOffscreen(section)
+</script>
+
+<style>
+  .dive {
+    position: relative;
+  }
+  /* With the script, the stage holds while three screens scroll by. */
+  .dive:global(.live) {
+    height: 320svh;
+  }
+  /* The stage clips only sideways: the paint may run above it, over the
+     wall the reader just left. */
+  .stage {
+    position: sticky;
+    top: 0;
+    height: 100svh;
+    min-height: 560px;
+    overflow-x: clip;
+    isolation: isolate;
+  }
+  .wall,
+  .flood,
+  .glow {
+    position: absolute;
+    inset: 0;
+    pointer-events: none;
+  }
+  .wall,
+  .glow {
+    overflow: hidden;
+  }
+  .wall {
+    background: var(--gallery-wall) var(--plaster);
+  }
+  /* Without the script there is no pour: the stage is the desk. */
+  .flood {
+    display: none;
+    bottom: auto;
+    height: calc(100% + 22vh);
+    will-change: transform;
+  }
+  .dive:global(.live) .flood {
+    display: block;
+  }
+  .sheet {
+    height: calc(100% - 22vh);
+    background: var(--night);
+  }
+  .edge {
+    display: block;
+    width: 100%;
+    height: 22vh;
+    margin-top: -1px;
+    overflow: visible;
+  }
+  /* The painting, turned into light: the cadmium disc is the ember, the
+     cobalt edges deepen to violet, the green strip leaves teal below. */
+  .glow {
+    z-index: 1;
+    background:
+      radial-gradient(
+        42% 48% at 58% 52%,
+        color-mix(in oklab, var(--glow-ember) 62%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        22% 26% at 86% 22%,
+        color-mix(in oklab, var(--glow-flare) 34%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        48% 60% at 4% 84%,
+        color-mix(in oklab, var(--glow-violet) 78%, transparent),
+        transparent 68%
+      ),
+      radial-gradient(
+        30% 50% at 100% 50%,
+        color-mix(in oklab, var(--glow-violet) 46%, transparent),
+        transparent 70%
+      ),
+      radial-gradient(
+        60% 30% at 50% 108%,
+        color-mix(in oklab, var(--glow-teal) 60%, transparent),
+        transparent 70%
+      ),
+      linear-gradient(
+        180deg,
+        var(--night),
+        var(--night-violet) 60%,
+        var(--night)
+      );
+    will-change: opacity, transform;
+  }
+  .eyes {
+    position: absolute;
+    left: 50%;
+    top: 46%;
+    width: clamp(120px, 14vw, 200px);
+    translate: -50% -50%;
+    z-index: 2;
+    opacity: 0;
+    overflow: visible;
+    will-change: opacity, transform;
+  }
+  .glow::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-image: var(--grain);
+  }
+
+  .content {
+    position: relative;
+    z-index: 3;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    color: var(--foreground);
+  }
+  .head {
+    width: 100%;
+    padding-top: clamp(28px, 7svh, 72px);
+    display: grid;
+    grid-template-columns: 1fr minmax(240px, 340px);
+    gap: 4px 48px;
+    align-items: end;
+    will-change: opacity, transform;
+  }
+  .wsno {
+    grid-column: 1 / -1;
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 14px;
+    font: 500 12px/16px var(--font-family-sans);
+    color: var(--muted-foreground);
+  }
+  .wsno .n {
+    width: 26px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--small-radius);
+    background: color-mix(in oklab, var(--foreground) 8%, transparent);
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  h2 {
+    margin: 0;
+    font-size: clamp(44px, min(7.4vw, 11svh), 112px);
+    line-height: 0.9;
+    letter-spacing: -0.055em;
+    font-weight: 780;
+  }
+  .ln {
+    display: flex;
+    align-items: center;
+    gap: 0.1em;
+    white-space: nowrap;
+  }
+  .q {
+    font-weight: 220;
+    color: color-mix(in oklab, var(--foreground) 58%, transparent);
+    letter-spacing: -0.05em;
+  }
+  .hm {
+    display: inline-grid;
+    place-items: center;
+    width: 0.6em;
+    height: 0.6em;
+    margin-left: 0.14em;
+    transform: translateY(0.04em);
+  }
+  .hm :global(svg) {
+    width: 100%;
+    height: 100%;
+  }
+  .lede {
+    margin: 0 0 6px;
+    font-size: 16px;
+    line-height: 25px;
+    color: color-mix(in oklab, var(--foreground) 78%, transparent);
+    text-wrap: pretty;
+  }
+  .lede b {
+    color: var(--foreground);
+    font-weight: 560;
+  }
+  @media (max-width: 900px) {
+    .head {
+      grid-template-columns: 1fr;
+    }
+    .lede {
+      max-width: 44ch;
+      margin-top: 14px;
+    }
+  }
+
+  /* The bench the window lies on. */
+  .bench {
+    position: relative;
+    flex: 1;
+    min-height: 0;
+    margin: clamp(20px, 4svh, 40px) var(--page-pad) 0;
+    perspective: 2400px;
+    perspective-origin: 50% 0%;
+  }
+  .tilt {
+    position: absolute;
+    left: 50%;
+    top: 0;
+    width: 1200px;
+    height: 740px;
+    transform-origin: 50% 0%;
+    transform: translateX(-50%) scale(var(--s, 0.6));
+    will-change: transform;
+  }
+  .tilt[data-narrow] {
+    left: 0;
+    transform-origin: 0 0;
+    transform: scale(var(--s, 0.6));
+  }
+  /* On a phone the window shows its left part, running off the screen's
+     right edge. */
+  .bench:has(.tilt[data-narrow]) {
+    overflow: hidden;
+    margin-right: 0;
+    border-radius: var(--window-radius) 0 0 0;
+    mask-image: linear-gradient(to right, #000 82%, transparent);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .wall,
+    .flood {
+      display: none;
+    }
+  }
+</style>

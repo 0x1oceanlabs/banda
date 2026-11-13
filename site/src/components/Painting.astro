@@ -1,0 +1,366 @@
+---
+// The painting "BANDA", as the gang: a cadmium disc, cobalt, soot and a
+// green strip, after the museum piece; six Agents with big eyes, each
+// shaped by its state; and a speech bubble that is a Thread. The canvas
+// is still art under the paint filters, drawn once on its own layer;
+// the characters and the bubble move over it.
+import Character from "./Character.astro"
+
+const box: [number, number] = [800, 1000]
+---
+
+<figure
+  class="canvas"
+  aria-label="A painting of the gang: six Agents with big eyes, each one shaped by its state, and a speech bubble that is a Thread."
+>
+  <svg
+    class="art"
+    viewBox="0 0 800 1000"
+    preserveAspectRatio="xMidYMid slice"
+    aria-hidden="true"
+  >
+    <rect width="800" height="1000" style="fill:var(--paint-ground)"></rect>
+    <!-- the ground: pale gesso sweeps -->
+    <g filter="url(#gesso)" opacity=".9" fill="none">
+      <path
+        d="M-40 120 C200 90 420 140 860 100"
+        style="stroke:var(--paint-ground-2)"
+        stroke-width="120"
+      ></path>
+      <path
+        d="M-40 760 C220 720 520 790 860 740"
+        style="stroke:var(--paint-ground-2)"
+        stroke-width="140"
+      ></path>
+    </g>
+    <g filter="url(#paint)">
+      <!-- top left: a dark cloud over cobalt -->
+      <path
+        d="M-20 -20 H420 C410 40 360 70 300 86 C250 100 210 90 170 130 C130 170 120 230 60 260 C30 275 0 280 -20 280 Z"
+        style="fill:var(--paint-soot)"
+      ></path>
+      <circle cx="110" cy="70" r="66" style="fill:var(--paint-cloud)"></circle>
+      <circle
+        cx="210"
+        cy="44"
+        r="58"
+        style="fill:var(--paint-cloud-2)"
+      ></circle>
+      <circle cx="300" cy="40" r="44" style="fill:var(--paint-cloud)"></circle>
+      <circle
+        cx="60"
+        cy="150"
+        r="48"
+        style="fill:var(--paint-graphite)"
+      ></circle>
+      <path
+        d="M-20 250 C40 236 90 196 140 206 C190 216 160 300 90 340 C50 362 10 372 -20 372 Z"
+        style="fill:var(--paint-cobalt)"
+      ></path>
+      <!-- top right: grey and black -->
+      <path
+        d="M610 -20 H820 V200 C780 220 740 196 708 164 C670 126 640 80 610 -20 Z"
+        style="fill:var(--paint-slate)"
+      ></path>
+      <circle
+        cx="740"
+        cy="40"
+        r="62"
+        style="fill:var(--paint-graphite)"
+      ></circle>
+      <!-- the right edge: cobalt -->
+      <path
+        d="M752 300 C780 300 820 300 820 300 V640 C790 620 770 560 760 480 C752 420 748 350 752 300 Z"
+        style="fill:var(--paint-cobalt)"
+      ></path>
+      <!-- the cadmium disc -->
+      <circle
+        cx="430"
+        cy="520"
+        r="296"
+        style="fill:var(--paint-cadmium)"
+      ></circle>
+      <!-- bottom left: a grey smear under the name -->
+      <path
+        d="M-20 836 C60 820 170 830 250 846 C270 880 262 920 240 948 L-20 950 Z"
+        style="fill:var(--paint-ash)"
+      ></path>
+      <!-- bottom right: a dark patch -->
+      <path
+        d="M560 860 C640 840 760 846 820 852 V960 H560 Z"
+        style="fill:var(--paint-graphite)"
+      ></path>
+      <!-- the green strip -->
+      <path
+        d="M-20 944 C180 936 470 952 820 940 V1020 H-20 Z"
+        style="fill:var(--paint-green)"
+      ></path>
+    </g>
+    <!-- white gesso over it all, behind the lead -->
+    <g filter="url(#gesso)" style="stroke:var(--paint-gesso)" fill="none">
+      <path
+        d="M300 500 C350 440 500 430 560 480 C610 530 600 640 540 690 C480 740 360 742 316 690 C276 640 268 550 300 500 Z"
+        style="fill:var(--paint-gesso)"
+        stroke="none"
+      ></path>
+      <path
+        d="M196 392 C260 372 300 366 340 362"
+        stroke-width="30"
+        stroke-linecap="round"
+      ></path>
+      <path
+        d="M300 300 C330 240 380 190 420 150"
+        stroke-width="30"
+        stroke-linecap="round"
+      ></path>
+      <path
+        d="M250 780 C330 806 430 816 520 800"
+        stroke-width="26"
+        stroke-linecap="round"
+      ></path>
+      <path
+        d="M650 380 C700 410 716 470 700 520"
+        stroke-width="22"
+        stroke-linecap="round"
+      ></path>
+    </g>
+    <!-- drips off the disc and the gesso -->
+    <g filter="url(#wob)" stroke-linecap="round">
+      <g style="stroke:var(--paint-cadmium);fill:var(--paint-cadmium)">
+        <path d="M300 772 V860" stroke-width="6"></path>
+        <circle cx="300" cy="862" r="5" stroke="none"></circle>
+        <path d="M352 806 V902" stroke-width="5"></path>
+        <circle cx="352" cy="904" r="4.5" stroke="none"></circle>
+        <path d="M520 800 V880" stroke-width="6"></path>
+        <circle cx="520" cy="882" r="5" stroke="none"></circle>
+      </g>
+      <g style="stroke:var(--paint-gesso)">
+        <path d="M430 808 V936" stroke-width="5"></path>
+        <path d="M470 806 V900" stroke-width="4"></path>
+        <path d="M150 940 V976" stroke-width="4"></path>
+      </g>
+      <g style="stroke:var(--paint-cobalt);fill:var(--paint-cobalt)">
+        <path d="M86 330 V420" stroke-width="5"></path>
+        <circle cx="86" cy="422" r="4.5" stroke="none"></circle>
+        <path d="M764 600 V690" stroke-width="5"></path>
+      </g>
+      <path
+        d="M640 950 V990"
+        stroke-width="4"
+        style="stroke:var(--paint-yellow)"
+      ></path>
+    </g>
+    <!-- the name, painted in the corner -->
+    <g filter="url(#wob)">
+      <text
+        x="30"
+        y="924"
+        font-family="Inter Variable, Inter, sans-serif"
+        font-weight="850"
+        font-size="62"
+        letter-spacing="-1"
+        style="fill:var(--paint-gesso)"
+      >
+        BANDA
+      </text>
+    </g>
+    <!-- the speech bubble: the Thread -->
+    <g filter="url(#wob)">
+      <path
+        d="M398 104 C470 80 640 76 734 98 C776 110 782 170 774 230 C766 290 742 320 682 328 C612 336 548 334 506 330 L446 424 L466 326 C414 318 384 300 378 250 C370 190 364 120 398 104 Z"
+        style="fill:var(--paint-gesso);stroke:var(--gallery-ink)"
+        stroke-width="7"
+        stroke-linejoin="round"
+      ></path>
+    </g>
+  </svg>
+
+  <Character states="woke" at={[110, 150]} scale={0.46} seed={2} box={box} />
+  <Character
+    states="working"
+    at={[160, 470]}
+    scale={0.78}
+    legs
+    sat
+    drips
+    seed={1}
+    box={box}
+  />
+  <Character
+    states="failed"
+    at={[676, 590]}
+    scale={0.62}
+    legs
+    seed={3}
+    box={box}
+    gaze="headline"
+  />
+  <Character
+    states="calm"
+    at={[650, 812]}
+    scale={0.52}
+    legs
+    seed={5}
+    box={box}
+    gaze="headline"
+  />
+  <Character
+    states="done"
+    at={[372, 872]}
+    scale={0.4}
+    legs
+    seed={4}
+    box={box}
+  />
+  <div class="lead">
+    <Character
+      states={["asks", "working", "done"]}
+      at={[430, 590]}
+      scale={1.12}
+      legs
+      arm
+      drips
+      sat
+      seed={7}
+      box={box}
+      gaze="headline"
+    />
+  </div>
+
+  <div class="say" aria-live="polite">
+    <div class="lines" data-say-lines>
+      <div class="who">
+        <span class="dot" data-say-dot></span>
+        <span data-say-who>Agent · Claude Code · asks</span>
+      </div>
+      <div class="msg" data-say-msg>
+        Tests pass. Allow <code>pnpm publish</code>?
+      </div>
+    </div>
+    <div class="you on" data-say-you>
+      <span>YOU</span>
+      <b data-say-answer>Allow.</b>
+    </div>
+  </div>
+</figure>
+
+<style>
+  .canvas {
+    position: relative;
+    margin: 0;
+    container-type: inline-size;
+    aspect-ratio: 4 / 5;
+    background: var(--paint-ground);
+    box-shadow:
+      1px 0 0 rgb(0 0 0 / 0.06),
+      14px 22px 38px -14px rgb(0 0 0 / 0.35),
+      2px 3px 6px rgb(0 0 0 / 0.12);
+  }
+  /* Its own layer: painted once, never again for what moves over it. */
+  .art {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    display: block;
+    will-change: transform;
+  }
+  .lead {
+    display: contents;
+  }
+
+  .say {
+    position: absolute;
+    left: 50.6%;
+    top: 12.3%;
+    width: 42.6%;
+    height: 19.4%;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 0.6cqw;
+    pointer-events: none;
+    will-change: opacity;
+  }
+  .who {
+    font-family: var(--font-family-mono);
+    font-size: max(8px, 1.65cqw);
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    color: var(--gallery-muted);
+    display: flex;
+    align-items: center;
+    gap: 1cqw;
+  }
+  .dot {
+    width: 1.3cqw;
+    height: 1.3cqw;
+    min-width: 6px;
+    min-height: 6px;
+    border-radius: 2px;
+    background: var(--gang-asks);
+    display: inline-block;
+    transition: border-radius 0.3s;
+  }
+  .msg {
+    font-size: max(11px, 3.3cqw);
+    line-height: 1.18;
+    font-weight: 650;
+    letter-spacing: -0.02em;
+    color: var(--gallery-ink);
+  }
+  .msg :global(code) {
+    white-space: nowrap;
+    font-family: var(--font-family-mono);
+    font-weight: 600;
+    font-size: 0.86em;
+    letter-spacing: -0.02em;
+    background: color-mix(in oklab, var(--gang-asks) 18%, transparent);
+    padding: 0 0.25em;
+    border-radius: 3px;
+  }
+  .msg :global(.work) {
+    font-family: var(--font-family-mono);
+    font-size: 0.7em;
+    font-weight: 500;
+    color: var(--gallery-ink-2);
+  }
+  .you {
+    align-self: flex-end;
+    margin-top: 0.8cqw;
+    display: flex;
+    align-items: baseline;
+    gap: 1.2cqw;
+    font-size: max(11px, 2.7cqw);
+    font-weight: 600;
+    letter-spacing: -0.015em;
+    opacity: 0;
+    transform: translateY(4px);
+    transition:
+      opacity 0.35s,
+      transform 0.35s;
+  }
+  .you span {
+    font-family: var(--font-family-mono);
+    font-size: max(8px, 1.65cqw);
+    letter-spacing: 0.07em;
+    color: var(--gallery-muted);
+    font-weight: 500;
+  }
+  .you.on {
+    opacity: 1;
+    transform: none;
+  }
+  .lines {
+    transition: opacity 0.3s;
+  }
+  .lines.fade {
+    opacity: 0;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .you,
+    .lines {
+      transition: none;
+    }
+  }
+</style>

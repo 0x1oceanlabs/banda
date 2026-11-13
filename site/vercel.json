@@ -4,5 +4,5 @@
   "installCommand": "npx --yes pnpm@11.28.9 install --frozen-lockfile --filter @banda/site...",
   "buildCommand": "npx --yes pnpm@11.28.9 run build",
   "outputDirectory": "dist",
-  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../client/ui ../sdk/contract/src/generated/look ../pnpm-lock.yaml ../pnpm-workspace.yaml"
+  "ignoreCommand": "git diff --quiet HEAD^ HEAD -- . ../client/ui ../docs/design/kit/mark.js ../sdk/contract/src/generated/look ../pnpm-lock.yaml ../pnpm-workspace.yaml"
 }

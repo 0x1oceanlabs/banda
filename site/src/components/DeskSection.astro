@@ -1,0 +1,90 @@
+---
+// A section on the desk: its number as a workspace's, a headline in two
+// weights (the quiet half, then the loud one) and a few lines beside it.
+// What it shows comes in the slot, on glass.
+interface Props {
+  id: string
+  num: string
+  label: string
+  quiet: string
+  loud: string
+}
+
+const { id, num, label, quiet, loud } = Astro.props
+---
+
+<section class="wrap ds" id={id} aria-labelledby={`${id}-title`}>
+  <div class="head">
+    <div>
+      <p class="wsno">
+        <span class="n">{num}</span>
+        {label}
+      </p>
+      <h2 id={`${id}-title`}>
+        <span class="q">{quiet}</span>
+        {loud}
+      </h2>
+    </div>
+    <div class="say">
+      <slot name="say" />
+    </div>
+  </div>
+  <slot />
+</section>
+
+<style>
+  .ds {
+    padding-top: clamp(96px, 10vw, 136px);
+  }
+  .head {
+    display: grid;
+    grid-template-columns: 1fr minmax(260px, 400px);
+    gap: 20px 48px;
+    align-items: end;
+    margin-bottom: 28px;
+  }
+  .wsno {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    margin: 0 0 18px;
+    font: 500 12px/16px var(--font-family-sans);
+    color: var(--muted-foreground);
+  }
+  .wsno .n {
+    width: 26px;
+    height: 24px;
+    display: grid;
+    place-items: center;
+    border-radius: var(--small-radius);
+    background: color-mix(in oklab, var(--foreground) 8%, transparent);
+    color: var(--foreground);
+    font-variant-numeric: tabular-nums;
+  }
+  h2 {
+    margin: 0;
+    font-size: clamp(40px, 6.2vw, 88px);
+    line-height: 0.94;
+    letter-spacing: -0.05em;
+    font-weight: 760;
+    text-wrap: balance;
+  }
+  .q {
+    display: block;
+    font-weight: 220;
+    color: color-mix(in oklab, var(--foreground) 58%, transparent);
+    letter-spacing: -0.045em;
+  }
+  .say :global(p) {
+    margin: 0;
+    font-size: 16px;
+    line-height: 25px;
+    color: color-mix(in oklab, var(--foreground) 76%, transparent);
+    text-wrap: pretty;
+  }
+  @media (max-width: 900px) {
+    .head {
+      grid-template-columns: 1fr;
+    }
+  }
+</style>

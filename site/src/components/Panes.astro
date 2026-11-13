@@ -1,0 +1,637 @@
+---
+// Everything is a Pane: the Strip's columns, side by side, scrolling
+// sideways inside the page as they do in the window. The last column is
+// the one an Agent writes next.
+import DeskSection from "./DeskSection.astro"
+import Icon from "./Icon.astro"
+---
+
+<DeskSection
+  id="panes"
+  num="04"
+  label="Panes"
+  quiet="Side by side."
+  loud="Everything is a Pane."
+>
+  <p slot="say">
+    Threads, the terminal, a browser, files and the Diff stand in columns you
+    scroll through, as in niri. Each is an App on one open SDK, with no special
+    rights. An Agent can write the next one.
+  </p>
+  <div class="glass">
+    <div
+      class="strip"
+      tabindex="0"
+      role="region"
+      aria-label="A strip of Panes: scroll sideways"
+      data-strip
+    >
+      <article class="pane">
+        <div class="ph">
+          <span data-mark="done" data-size="16" data-calls="false"></span>
+          <span class="chip">
+            <span class="sign">B</span>banda
+          </span>
+          <span class="pt">Fix blank window on reload</span>
+        </div>
+        <div class="body">
+          <div class="bubble">
+            The window is blank after a reload. Find out why.
+          </div>
+          <div class="fold">
+            <Icon name="layers" size={14} />
+            Read 6 files, ran 3 commands, edited 2 files{" "}
+            <span class="add">+38</span>
+            <span class="rem">−9</span>
+          </div>
+          <p class="prose">
+            The page rendered before the engine answered. It now waits for the
+            first state, then draws. Reload works; the test is in{" "}
+            <code>window.test.ts</code>.
+          </p>
+          <p class="cap">
+            <b>Thread.</b> You and an Agent, in markdown. Work folds into one
+            line.
+          </p>
+        </div>
+      </article>
+      <article class="pane">
+        <div class="ph">
+          <span data-mark="working" data-doing="reply" data-size="16"></span>
+          <span class="chip">
+            <span class="sign t">W</span>Work
+          </span>
+          <span class="pt">Reconcile February bank statements</span>
+        </div>
+        <div class="body">
+          <div class="bubble">
+            Match the February statement against invoices/ and list what's
+            missing.
+          </div>
+          <div class="fold">
+            <Icon name="layers" size={14} />
+            Read 14 files, searched for 2 patterns
+          </div>
+          <p class="prose dim">
+            Three payments have no invoice yet. I'm writing them to{" "}
+            <code>missing.md</code>…
+          </p>
+          <p class="cap">
+            <b>Codex, too.</b> Claude Code or Codex: the Harnesses you already
+            have.
+          </p>
+        </div>
+      </article>
+      <article class="pane">
+        <div class="ph">
+          <Icon name="term" size={15} class="dim" />
+          <span class="pt">zsh</span>
+          <span class="pm">devbox · ~/code/banda</span>
+        </div>
+        <div class="body mono">
+          <div>
+            <span class="c">$ git status --short</span>
+          </div>
+          <div>&nbsp;M client/web/src/sidebar/settings.ts</div>
+          <div>&nbsp;M client/web/src/sidebar/Sidebar.tsx</div>
+          <div>?? sidebar.toml</div>
+          <div>&nbsp;</div>
+          <div>
+            <span class="c">$ pnpm vitest sidebar</span>
+          </div>
+          <div>
+            <span class="g">&nbsp;✓</span> sidebar/settings.test.ts
+          </div>
+          <div>
+            <span class="g">&nbsp;✓</span> sidebar/toml.test.ts
+          </div>
+          <div>&nbsp;</div>
+          <div>
+            <span class="c">$ </span>
+            <span class="cur"></span>
+          </div>
+          <p class="cap">
+            <b>Terminal.</b> A real shell, on whichever machine the Project
+            lives.
+          </p>
+        </div>
+      </article>
+      <article class="pane">
+        <div class="ph">
+          <Icon name="globe" size={15} class="dim" />
+          <span class="url">
+            <b>localhost:5173</b>/settings/sidebar
+          </span>
+        </div>
+        <div class="page">
+          <h4>Sidebar</h4>
+          <div class="sub">Saved in sidebar.toml</div>
+          <div class="prow">
+            <span>Oldest first</span>
+            <span class="tog on"></span>
+          </div>
+          <div class="prow">
+            <span>Show Later</span>
+            <span class="tog"></span>
+          </div>
+          <div class="prow">
+            <span>Group by Project</span>
+            <span class="tog on"></span>
+          </div>
+        </div>
+        <div class="body foot">
+          <p class="cap">
+            <b>Browser.</b> Chromium in a Pane, beside the Thread that changes
+            the page.
+          </p>
+        </div>
+      </article>
+      <article class="pane">
+        <div class="ph">
+          <Icon name="folder" size={15} class="dim" />
+          <span class="pt">Files</span>
+          <span class="pm">banda</span>
+        </div>
+        <div class="body">
+          <div class="tree">
+            <div>
+              <Icon name="chev" size={14} style="transform:rotate(90deg)" />
+              <Icon name="folder" size={15} />
+              docs
+            </div>
+            <div class="in">
+              <Icon name="file" size={15} />
+              what-we-build.md
+            </div>
+            <div class="in">
+              <Icon name="file" size={15} />
+              plan.md
+            </div>
+            <div class="in f sel">
+              <Icon name="file" size={15} />
+              report.html
+            </div>
+            <div>
+              <Icon name="chev" size={14} />
+              <Icon name="folder" size={15} />
+              client
+            </div>
+            <div class="f">
+              <Icon name="file" size={15} />
+              sidebar.toml
+            </div>
+            <div class="f">
+              <Icon name="file" size={15} />
+              settings.json
+            </div>
+          </div>
+          <p class="cap">
+            <b>Files.</b> md, html and json that you and an Agent both read.
+          </p>
+        </div>
+      </article>
+      <article class="pane">
+        <div class="ph">
+          <Icon name="branch" size={15} class="dim" />
+          <span class="pt">Diff</span>
+          <span class="pm">feat/sidebar-toml</span>
+        </div>
+        <div class="body">
+          <div class="diff">
+            <div class="h">sidebar.toml</div>
+            <div class="a">+ [sidebar]</div>
+            <div class="a">+ oldest_first = true</div>
+            <div class="a">+ show_later = false</div>
+            <div class="h">settings.ts</div>
+            <div class="r">- const row = json.row ?? {"{}"}</div>
+            <div class="a">+ const row = toml.sidebar ?? json.row</div>
+          </div>
+          <p class="cap">
+            <b>Diff.</b> What the Agents changed, before it is yours.
+          </p>
+        </div>
+      </article>
+      <article class="pane yours">
+        <div class="ph">
+          <Icon name="app" size={15} class="dim" />
+          <span class="pt">Your App</span>
+        </div>
+        <div class="body center">
+          <div class="ask">
+            <div class="meta">You, in a Thread:</div>
+            <div class="bubble wide">
+              Make me a Pane that lists every open PR across my Projects.
+            </div>
+          </div>
+          <p class="cap">
+            <b>Next column: yours.</b> An Agent writes a new App in a Thread,
+            and it opens here like any other Pane.
+          </p>
+        </div>
+      </article>
+    </div>
+    <div class="nav">
+      <div class="map" aria-hidden="true" data-map>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <span></span>
+        <b data-view></b>
+      </div>
+      <span class="lbl">Scroll the columns</span>
+      <div class="arr">
+        <button class="ib" type="button" aria-label="Previous Pane" data-prev>
+          <Icon name="left" size={16} />
+        </button>
+        <button class="ib" type="button" aria-label="Next Pane" data-next>
+          <Icon name="right" size={16} />
+        </button>
+      </div>
+    </div>
+  </div>
+</DeskSection>
+
+<script>
+  import { reduced, stillOffscreen } from "../lib/mark"
+
+  const section = document.getElementById("panes")!
+  stillOffscreen(section)
+  const strip = section.querySelector<HTMLElement>("[data-strip]")!
+  const view = section.querySelector<HTMLElement>("[data-view]")!
+  // The overview under the strip: which columns are in sight.
+  function overview() {
+    const cells = 7 * 25 - 3
+    view.style.width = `${Math.max(22, (cells * strip.clientWidth) / strip.scrollWidth)}px`
+    view.style.transform = `translateX(${(cells * strip.scrollLeft) / strip.scrollWidth}px)`
+  }
+  strip.addEventListener("scroll", overview, { passive: true })
+  addEventListener("resize", overview)
+  overview()
+  const step = (direction: number) =>
+    strip.scrollBy({
+      left:
+        direction *
+        (strip.querySelector<HTMLElement>(".pane")!.offsetWidth + 8),
+      behavior: reduced ? "auto" : "smooth",
+    })
+  section
+    .querySelector("[data-prev]")!
+    .addEventListener("click", () => step(-1))
+  section.querySelector("[data-next]")!.addEventListener("click", () => step(1))
+</script>
+
+<style>
+  .strip {
+    display: flex;
+    gap: var(--gap-outer);
+    overflow-x: auto;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+    border-radius: var(--tile-radius);
+    overscroll-behavior-x: contain;
+  }
+  .strip::-webkit-scrollbar {
+    display: none;
+  }
+  .pane {
+    flex: 0 0 400px;
+    height: 390px;
+    scroll-snap-align: start;
+    border-radius: var(--tile-radius);
+    background: color-mix(in oklab, var(--background) 95%, transparent);
+    box-shadow: inset 0 0 0 1px var(--border);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    font-size: 14px;
+    line-height: 20px;
+  }
+  .pane.yours {
+    background: color-mix(in oklab, var(--background) 55%, transparent);
+    box-shadow: inset 0 0 0 1px var(--input);
+  }
+  @media (max-width: 720px) {
+    .pane {
+      flex-basis: calc(100vw - 64px);
+      height: 430px;
+    }
+  }
+  .ph {
+    height: 40px;
+    flex: none;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0 12px 0 14px;
+    white-space: nowrap;
+    min-width: 0;
+  }
+  .pt {
+    font-weight: 500;
+    overflow: hidden;
+    min-width: 0;
+    mask-image: linear-gradient(to right, #000 calc(100% - 24px), transparent);
+  }
+  .pm {
+    color: var(--muted-foreground);
+    font-size: 12px;
+  }
+  .dim {
+    color: var(--muted-foreground);
+    flex: none;
+  }
+  .chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .sign {
+    display: inline-grid;
+    place-items: center;
+    width: 14px;
+    height: 14px;
+    border-radius: 4px;
+    font: 600 9px/1 var(--font-family-sans);
+    color: var(--background);
+    background: var(--sign-violet);
+  }
+  .sign.t {
+    background: var(--sign-teal);
+  }
+  .body {
+    flex: 1;
+    min-height: 0;
+    padding: 4px 16px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    overflow: hidden;
+  }
+  .body.foot {
+    flex: none;
+    padding-top: 0;
+  }
+  .body.center {
+    justify-content: center;
+  }
+  .body.mono {
+    font: 12.5px/20px var(--font-family-mono);
+    color: var(--muted-foreground);
+    gap: 0;
+  }
+  .c {
+    color: var(--foreground);
+  }
+  .g {
+    color: var(--ansi-2);
+  }
+  .cur {
+    display: inline-block;
+    width: 7px;
+    height: 14px;
+    background: var(--foreground);
+    vertical-align: -2px;
+  }
+  .bubble {
+    align-self: flex-end;
+    max-width: 92%;
+    background: var(--raised);
+    border-radius: var(--card-radius);
+    padding: 8px 12px;
+    line-height: 22px;
+  }
+  .bubble.wide {
+    align-self: stretch;
+    max-width: none;
+  }
+  .fold {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-wrap: wrap;
+    color: var(--muted-foreground);
+    font-size: 13px;
+  }
+  .add {
+    color: var(--added);
+  }
+  .rem {
+    color: var(--destructive);
+  }
+  .prose {
+    margin: 0;
+    line-height: 22px;
+  }
+  .prose.dim {
+    color: var(--muted-foreground);
+  }
+  .prose code {
+    font-family: var(--font-family-mono);
+    font-size: 12.5px;
+    background: var(--raised);
+    border-radius: var(--small-radius);
+    padding: 1px 5px;
+  }
+  .cap {
+    margin: auto 0 0;
+    padding-top: 12px;
+    border-top: 1px solid var(--border);
+    font: 13px/19px var(--font-family-sans);
+    color: var(--muted-foreground);
+  }
+  .foot .cap {
+    border: 0;
+  }
+  .cap b {
+    color: var(--foreground);
+    font-weight: 560;
+  }
+  .url {
+    flex: 1;
+    min-width: 0;
+    height: 26px;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-radius: var(--control-radius);
+    background: var(--block);
+    color: var(--muted-foreground);
+    font-size: 12px;
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .url b {
+    color: var(--foreground);
+    font-weight: 400;
+  }
+  .page {
+    flex: 1;
+    margin: 0 8px;
+    border-radius: var(--card-radius) var(--card-radius) 0 0;
+    background: var(--paper);
+    color: var(--gallery-ink);
+    padding: 16px 18px;
+    font-size: 13px;
+    line-height: 18px;
+  }
+  .page h4 {
+    margin: 0 0 2px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+  .page .sub {
+    color: var(--gallery-muted);
+    font-size: 12px;
+    margin-bottom: 12px;
+  }
+  .prow {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 9px 0;
+    border-top: 1px solid var(--gallery-line);
+  }
+  .tog {
+    width: 28px;
+    height: 16px;
+    border-radius: 99px;
+    background: color-mix(in oklab, var(--gallery-ink) 18%, var(--paper));
+    position: relative;
+  }
+  .tog::after {
+    content: "";
+    position: absolute;
+    top: 2px;
+    left: 2px;
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    background: var(--paper);
+  }
+  .tog.on {
+    background: var(--gallery-ink);
+  }
+  .tog.on::after {
+    transform: translateX(12px);
+  }
+  .tree {
+    font-size: 14px;
+    line-height: 28px;
+  }
+  .tree div {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    color: var(--muted-foreground);
+    white-space: nowrap;
+  }
+  .tree .f {
+    color: var(--foreground);
+  }
+  .tree .in {
+    padding-left: 22px;
+  }
+  .tree .sel {
+    background: var(--raised);
+    border-radius: var(--control-radius);
+    margin: 0 -8px;
+    padding: 0 8px 0 30px;
+  }
+  .diff {
+    font: 12.5px/20px var(--font-family-mono);
+    border-radius: var(--card-radius);
+    background: var(--block);
+    box-shadow: inset 0 0 0 1px var(--border);
+    overflow: hidden;
+  }
+  .diff div {
+    padding: 0 10px;
+    white-space: pre;
+  }
+  .diff .a {
+    background: color-mix(in oklab, var(--added) 13%, transparent);
+    color: color-mix(in oklab, var(--added) 80%, var(--foreground));
+  }
+  .diff .r {
+    background: color-mix(in oklab, var(--destructive) 13%, transparent);
+    color: color-mix(in oklab, var(--destructive) 75%, var(--foreground));
+  }
+  .diff .h {
+    color: var(--muted-foreground);
+  }
+  .ask {
+    border-radius: var(--card-radius);
+    background: var(--block);
+    box-shadow: inset 0 0 0 1px var(--border);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+  }
+  .meta {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .nav {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 8px 2px;
+  }
+  .map {
+    display: flex;
+    gap: 3px;
+    align-items: center;
+    position: relative;
+    height: 22px;
+    padding: 0 4px;
+  }
+  .map span {
+    width: 22px;
+    height: 14px;
+    border-radius: 4px;
+    background: var(--raised);
+    box-shadow: inset 0 0 0 1px var(--border);
+  }
+  .map b {
+    position: absolute;
+    top: 1px;
+    left: 2px;
+    height: 20px;
+    width: 22px;
+    border-radius: 5px;
+    box-shadow: 0 0 0 1px var(--foreground);
+  }
+  .lbl {
+    font-size: 12px;
+    color: var(--muted-foreground);
+  }
+  .arr {
+    margin-left: auto;
+    display: flex;
+    gap: 4px;
+  }
+  .ib {
+    width: 32px;
+    height: 32px;
+    border-radius: var(--control-radius);
+    border: 0;
+    background: var(--raised);
+    color: var(--foreground);
+    display: grid;
+    place-items: center;
+    cursor: pointer;
+  }
+  .ib:hover {
+    background: color-mix(in oklab, var(--foreground) 14%, transparent);
+  }
+  @media (max-width: 520px) {
+    .lbl {
+      display: none;
+    }
+  }
+</style>
