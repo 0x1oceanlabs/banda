@@ -59,6 +59,30 @@ export const helloMessage = (
 export const welcomeMessage = (nonce: string, device: string): string =>
   `banda-door/welcome/1\n${nonce}\n${device}`
 
+/** What a host key signs in a `goodbye`: the `hello` it answers, as the
+ * door heard it (its own nonce, the origin, the device, the client's
+ * nonce, the protocols and the `hello`'s signature), then why, the code
+ * and the words. A `hello` a pipe changed on its way gets a `goodbye`
+ * its client does not take for the machine's word. */
+export const goodbyeMessage = (
+  doorNonce: string,
+  origin: string,
+  { device, nonce, protocol, sig }: DeviceFrame,
+  { code, message }: Refusal
+): string =>
+  [
+    "banda-door/goodbye/1",
+    doorNonce,
+    origin,
+    device,
+    nonce,
+    protocol.min,
+    protocol.max,
+    sig,
+    code,
+    message,
+  ].join("\n")
+
 const NOT_THE_MACHINE: Refusal = {
   code: "forbidden",
   message:
@@ -112,13 +136,19 @@ export async function signed(
  * - `proved`: the frame is the `welcome` that proved the host key, the
  *   session's first;
  * - `refused`: the door is not that machine's, or it said `goodbye`: the
- *   connection ends there, and nothing it says after counts;
+ *   connection ends there, and nothing it says after counts. `signed`
+ *   where the host key signed that `goodbye`: the machine's own word, on
+ *   which alone a device forgets a key or pairs again;
  * - `lost`: this device could not sign now: the connection ends, to be
  *   tried again;
  * - nothing, for a frame that counts for nothing before the proof.
  */
 export type AtDoorSaid =
-  { hello: DeviceFrame } | { refused: Refusal } | "proved" | "lost" | undefined
+  | { hello: DeviceFrame }
+  | { refused: Refusal; signed?: true }
+  | "proved"
+  | "lost"
+  | undefined
 
 /**
  * One connection at a door, until its `welcome` is proved. Nothing that
@@ -127,8 +157,9 @@ export type AtDoorSaid =
  */
 export class AtDoor {
   readonly #key: DoorKey
-  /** This client's nonce, once its `hello` went. */
-  #nonce: string | undefined
+  /** This connection's `hello`, once it went, with the door's nonce and
+   * the origin it was signed for. */
+  #said: { doorNonce: string; origin: string; hello: DeviceFrame } | undefined
   /** The door's `welcome` proved the host key: what it says from then on
    * is a session's. */
   proved = false
@@ -159,14 +190,16 @@ export class AtDoor {
     } catch {
       return { refused: NOT_A_DOOR }
     }
-    if (this.#nonce === undefined) {
+    if (this.#said === undefined) {
       if (frame?.type !== "challenge") return { refused: NOT_A_DOOR }
       return this.#answer(frame)
     }
-    // Why the door lets this device in no more is its own to say. The
-    // host key does not sign it, so it ends this connection and no more:
-    // what a device does about `revoked` waits for a signed word.
-    if (frame?.type === "goodbye") return { refused: frame.reason }
+    // Why the door lets this device in no more is its own to say, and
+    // only its host key's signature makes it the machine's word.
+    if (frame?.type === "goodbye") {
+      const theirs = await this.farewell(frame)
+      return { refused: frame.reason, ...(theirs && { signed: true }) }
+    }
     if (frame?.type !== "welcome") return undefined
     const door = frame.door
     const proved =
@@ -175,10 +208,27 @@ export class AtDoor {
       door.device === this.#key.device &&
       (await signed(
         this.#key.hostKey,
-        welcomeMessage(this.#nonce, this.#key.device),
+        welcomeMessage(this.#said.hello.nonce, this.#key.device),
         door.sig
       ))
     return proved ? "proved" : { refused: NOT_THE_MACHINE }
+  }
+
+  /** Whether the host key this device paired with signed `goodbye` to
+   * this connection's `hello`, as this client said it. */
+  async farewell(
+    goodbye: Extract<EngineFrame, { type: "goodbye" }>
+  ): Promise<boolean> {
+    const said = this.#said
+    return (
+      said !== undefined &&
+      goodbye.sig !== undefined &&
+      (await signed(
+        this.#key.hostKey,
+        goodbyeMessage(said.doorNonce, said.origin, said.hello, goodbye.reason),
+        goodbye.sig
+      ))
+    )
   }
 
   async #answer(
@@ -203,15 +253,14 @@ export class AtDoor {
     } catch {
       return "lost"
     }
-    this.#nonce = mine
-    return {
-      hello: {
-        type: "hello",
-        protocol: { min: PROTOCOL, max: PROTOCOL },
-        device: this.#key.device,
-        nonce: mine,
-        sig: signature,
-      },
+    const hello: DeviceFrame = {
+      type: "hello",
+      protocol: { min: PROTOCOL, max: PROTOCOL },
+      device: this.#key.device,
+      nonce: mine,
+      sig: signature,
     }
+    this.#said = { doorNonce: nonce, origin, hello }
+    return { hello }
   }
 }

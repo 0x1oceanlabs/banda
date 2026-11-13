@@ -152,7 +152,7 @@ impl Client {
                 client.apps = apps;
                 Ok(client)
             }
-            EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
+            EngineFrame::Goodbye { reason, .. } => Err(Failure::Refused(reason)),
             _ => Err(Failure::broken("The engine did not say welcome.")),
         }
     }

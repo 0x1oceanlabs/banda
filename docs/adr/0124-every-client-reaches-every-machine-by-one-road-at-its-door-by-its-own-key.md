@@ -141,10 +141,15 @@ repository), with an adversarial check.
   device, and the host key's signature over the client's nonce. Keys,
   nonces and signatures are base64url, and what is signed is text, one
   field a line (`kernel/src/devices.rs`, `sdk/contract/src/door.ts`).
-- **A `goodbye` is not signed yet** (#1660). A client ends the connection
-  on one and does nothing else about it. Before a window forgets a key or
-  pairs again on `revoked` or `forbidden` (PR 4b), the door signs its
-  `goodbye` over the client's nonce.
+- **A `goodbye` is signed too** (#1660): once the door read a `hello`, by
+  the host key over that `hello` as the door heard it (its own nonce, the
+  origin, the device, the client's nonce, the protocols and the `hello`'s
+  signature) and the reason, to the `hello` itself and as the session
+  ends. A client marks such a refusal as the machine's own word
+  (`signed`) only when it is signed to the `hello` the client itself
+  said; one a pipe on the way can say, or get by changing the `hello`,
+  only ends the connection. A device forgets a key or pairs again on the
+  signed one alone.
 - **A removed device keeps its record,** marked, so only that device is
   told `revoked`; whoever only knows its ID is told `forbidden`, as a
   stranger is.
