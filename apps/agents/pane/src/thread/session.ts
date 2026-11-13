@@ -13,12 +13,11 @@ import { newId, type Engine, type ProjectId } from "@banda/contract"
 import {
   KEEP,
   Unreachable,
-  useHereNamed,
   useQueue,
-  usePlaced,
   useWaiting,
+  useWaitsOn,
+  useWrittenFrom,
   type Wait,
-  waitsFor,
 } from "@banda/core/react"
 import { toast } from "@banda/ui/components/sonner"
 import { problem } from "@banda/ui/lib/words"
@@ -32,7 +31,7 @@ import type {
   TurnId,
   TurnView,
 } from "@banda/contract/agents"
-import { useMachine, useSeenNamed, useStatus } from "@banda/ui/hooks/use-status"
+import { useMachine, useStatus } from "@banda/ui/hooks/use-status"
 import { projectsChanged } from "@banda/ui/lib/projects"
 import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
@@ -307,15 +306,13 @@ export function useThreadSession({
   // The messages that wait for the Thread's machine (ADR 0105), which
   // keep what the Pane shows before that machine answers, as after a
   // restart while it is away: its Harness's name (Q6, #956) and skills.
-  // The machine is the one the directory says has its Project, by its
-  // hosts.toml name, as the queue keeps it (ADR 0106, decision 1).
-  const { host, shown } = usePlaced(project, args.host)
+  // Read by the Thread, as the queue works out its machine (ADR 0106,
+  // law 6).
+  const waitsHere = useWaiting(project, thread)
   // Which machine the Person writes from, for the Agent (ADR 0122): this
   // window's, once its engine said its name, and whether it is the
   // Thread's.
-  const here = useHereNamed()
-  const from = here ? { machine: here.name, here: host === undefined } : null
-  const waitsHere = useWaiting(host, thread)
+  const from = useWrittenFrom(project, { args })
   const shows = waitsHere.find((wait) => wait.shows)?.shows
   const name = harnessName(harnesses, harness, shows?.to) || "the Agent"
   const short = harnessShort(harnesses, harness) || name
@@ -527,68 +524,66 @@ export function useThreadSession({
   // build, a message waits for it, by Send itself (ADR 0105, Q2), for 10
   // minutes from now, unless the Person keeps it longer. A new Thread's
   // first words stay in its composer. It keeps what its Pane shows before
-  // that machine answers: its Project, its title and its Harness's name
-  // (Q6).
+  // that machine answers: its title and its Harness's name, and the
+  // queue its Project (Q6).
   const queued = useQueue()
-  const later = thread !== null && waitsFor(shown, reach)
-  const on = useSeenNamed(host)?.name
+  const on = useWaitsOn(project, { args }, reach)
   const whenBack =
-    later && on !== undefined
+    thread !== null && on !== undefined
       ? (now: number) => whenBackTitle(on, now + KEEP, now)
       : undefined
   const sendWhenBack = (text: string, images: Image[]) => {
-    if (thread === null || host === undefined) return false
-    const summary =
-      shown?.projects.find((one) => one.id === project) ??
-      queued.get().find((one) => one.project === project && one.shows?.project)
-        ?.shows?.project
-    queued.add({
-      call: {
-        method: "agents.send",
-        params: {
-          thread,
-          text,
-          images: images.map(({ id }) => id),
-          settings: null,
-          steer: false,
-          from,
+    if (thread === null) return false
+    return queued.add(
+      {
+        call: {
+          method: "agents.send",
+          params: {
+            thread,
+            text,
+            images: images.map(({ id }) => id),
+            settings: null,
+            steer: false,
+            from,
+          },
+          // Fixed now: each send of it is this one command.
+          command: newId(),
         },
-        // Fixed now: each send of it is this one command.
-        command: newId(),
+        project,
+        item: thread,
+        text,
+        // To show, and to put back with its words.
+        carried: images,
+        pane: {
+          kind: "agents.thread",
+          args: { thread, harness, title: state?.title ?? args.title },
+        },
+        shows: {
+          to: name,
+          ...(offer.skills.length > 0 && {
+            skills: offer.skills.map((skill) => skill.name),
+          }),
+        },
+        at: Date.now(),
       },
-      host,
-      project,
-      item: thread,
-      text,
-      // To show, and to put back with its words.
-      carried: images,
-      pane: {
-        kind: "agents.thread",
-        args: { thread, harness, title: state?.title ?? args.title },
-      },
-      shows: {
-        ...(summary && { project: summary }),
-        to: name,
-        ...(offer.skills.length > 0 && {
-          skills: offer.skills.map((skill) => skill.name),
-        }),
-      },
-      at: Date.now(),
-    })
-    return true
+      // By the Pane it is written in, as the queue finds its machine.
+      { args }
+    )
   }
   // What comes back to this Thread that no Window takes, as in a window
   // of its own, goes back into its draft here, and is said here where
   // only this window shows the Thread.
+  // Heard for a Thread of this machine too, whose messages never wait:
+  // the Thread does not ask where it is.
   useEffect(
     () =>
-      thread === null || host === undefined
+      thread === null
         ? undefined
         : queued.onBack(
-            (back) => back.wait.host === host && (tellBack(back), true),
+            (back) => back.wait.project === project && (tellBack(back), true),
             { item: thread }
           ),
-    [queued, host, thread]
+    [queued, project, thread]
   )
   const whenBackActions = {
     /** Takes it back, its words and images into the draft. */

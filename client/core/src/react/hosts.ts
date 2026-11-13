@@ -5,7 +5,13 @@
  */
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Named } from "@banda/contract/machines"
-import { createContext, useCallback, useContext, useLayoutEffect } from "react"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useLayoutEffect,
+  useMemo,
+} from "react"
 import {
   awayFor,
   FORGETTING,
@@ -16,7 +22,7 @@ import {
   type Shown,
   thisNamed,
 } from "../hosts"
-import type { PaneState } from "../pane"
+import { paneHost, type PaneState } from "../pane"
 import { sameData } from "../store"
 import { useSelected, useStore } from "./store"
 
@@ -152,6 +158,25 @@ export const useAnyHost = (): boolean => useHostsBy(anyHost)
  * engine first says them. */
 export const useHereNamed = (): Named | undefined =>
   useStore(useContext(HostsContext).hereNamed, itself)
+
+/**
+ * Where the Person writes to `pane` of `project` from, for its Agent (ADR
+ * 0122): this window's machine, by its name, and whether that is the
+ * machine that has the Pane; none until this machine's engine said its
+ * name. Worked out from the Pane, so an App never asks where it is (ADR
+ * 0106, law 6).
+ */
+export function useWrittenFrom(
+  project: ProjectId,
+  pane: Pick<PaneState, "args">
+): { machine: string; here: boolean } | null {
+  const machine = useHereNamed()?.name
+  const here = useHostOf(project, paneHost(pane)) === undefined
+  return useMemo(
+    () => (machine === undefined ? null : { machine, here }),
+    [machine, here]
+  )
+}
 
 /** This machine's name and icon where the Window names it (`thisNamed`),
  * as `thisToo` says, drawn again only as that changes. */

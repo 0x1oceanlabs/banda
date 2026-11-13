@@ -49,7 +49,7 @@ import {
   UNKNOWN,
   usePaneOn,
   useReach,
-  useWaiting,
+  useWaitingFor,
 } from "@banda/core/react"
 import { sayComposer } from "../window/attach"
 import { heightAt } from "./layout"
@@ -280,7 +280,7 @@ export const PaneFrame = memo(function PaneFrame({
   // window that lists no Items, as a popped-out Pane's, keeps its header.
   const unheard =
     reach.shown?.state.state !== "live" && reach.shown?.asOf === undefined
-  const kept = useWaiting(there, subject ?? null).find((wait) => wait.shows)
+  const kept = useWaitingFor(there, subject ?? null).find((wait) => wait.shows)
   const shows = unheard ? kept?.shows : undefined
   const item = listed || shows !== undefined
   const summary =

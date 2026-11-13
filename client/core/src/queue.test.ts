@@ -3,6 +3,7 @@ import {
   Lost,
   newId,
   type ProjectId,
+  type ProjectSummary,
   Refused,
   type Status,
   Unreachable,
@@ -40,7 +41,6 @@ const message = (text: string, command = newId(), at = at1432): NewWait => ({
     params: { thread: THREAD, text, images: [], settings: null, steer: false },
     command,
   } as CommandCall,
-  host: "arc",
   project: PROJECT,
   item: THREAD,
   text,
@@ -162,6 +162,34 @@ test("a message waits while arc is away and goes once it is back, by the ID it w
   expect(back).toEqual([])
   engine.close()
   hosts.waiting.close()
+})
+
+test("a message is queued for the machine that has its Pane, which the queue works out: none for this machine's, and its Project is kept as that machine lists it (ADR 0106, law 6)", () => {
+  const listed = { id: PROJECT, name: "banda" } as ProjectSummary
+  const waiting = new Waiting(inMemory(), {
+    // The Window's directory: one Project on arc, the rest here.
+    placed: (project) => (project === PROJECT ? "arc" : undefined),
+    summary: (host, project) =>
+      host === "arc" && project === PROJECT ? listed : undefined,
+  })
+  const here = "0196f000-0000-7000-8000-000000000022" as ProjectId
+  expect(waiting.add({ ...message("stays"), project: here })).toBe(false)
+  expect(waiting.get()).toEqual([])
+
+  expect(waiting.add({ ...message("goes"), shows: { to: "Claude" } })).toBe(
+    true
+  )
+  expect(waiting.get()).toMatchObject([
+    { host: "arc", text: "goes", shows: { to: "Claude", project: listed } },
+  ])
+  // While arc lists nothing, as away since the window began, what a
+  // message to it kept before is what the next keeps.
+  const unlisted = new Waiting(inMemory(), { placed: () => "arc" })
+  unlisted.add({ ...message("first"), shows: { project: listed } })
+  unlisted.add({ ...message("second", newId()), shows: { to: "Claude" } })
+  expect(unlisted.get()[1]).toMatchObject({ shows: { project: listed } })
+  waiting.close()
+  unlisted.close()
 })
 
 test("past its time, a message is not sent: it comes back expired, and one that went as its machine went comes back as one that may have gone through", async () => {

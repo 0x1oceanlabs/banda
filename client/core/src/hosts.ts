@@ -337,7 +337,15 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#directory = directory
     this.#shown.subscribe(() => this.#sayMachines())
     this.waiting = new Waiting(waiting, {
+      // What waits goes to the machine that has its Pane, as an act on
+      // it would (`sessionOf`).
+      placed: (project, pane) =>
+        this.hostOf(project, paneHost(pane)) ?? undefined,
       named: (host) => namedIn(this.get(), host, this.seen).name,
+      summary: (host, project) =>
+        this.get()
+          .find((one) => one.name === host)
+          ?.projects.find((one) => one.id === project),
       // A message queued now goes in its host's time as its engine heard
       // it last.
       ahead: (host) => this.#engines.get(host)?.offset,

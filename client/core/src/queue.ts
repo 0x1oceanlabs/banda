@@ -31,7 +31,7 @@ import {
   Unreachable,
 } from "@banda/contract"
 import type { Shown } from "./hosts"
-import type { PaneState } from "./pane"
+import { paneHost, type PaneState } from "./pane"
 import { type Readable, sameEach, Store } from "./store"
 
 const MINUTE = 60_000
@@ -131,11 +131,12 @@ export type Wait = {
   went?: true
 }
 
-/** A message that waits, as an App queues it: its time is 10 minutes
+/** A message that waits, as an App queues it for its Pane: the queue
+ * works out its machine (ADR 0106, law 6), and its time is 10 minutes
  * unless it says how long. */
 export type NewWait = Omit<
   Wait,
-  "until" | "notAfter" | "seq" | "going" | "went"
+  "host" | "until" | "notAfter" | "seq" | "going" | "went"
 > & { keep?: number }
 
 /** Why a message came back unsent. */
@@ -313,7 +314,15 @@ export class Waiting implements Readable<readonly Wait[]> {
   readonly #storage: WaitingStorage
   readonly #waits = new Store<readonly Wait[]>([])
   readonly #now: () => number
+  readonly #placed: (
+    project: ProjectId,
+    pane: Pick<PaneState, "args">
+  ) => string | undefined
   readonly #named: (host: string) => string
+  readonly #summary: (
+    host: string,
+    project: ProjectId
+  ) => ProjectSummary | undefined
   readonly #ahead: (host: string) => number | undefined
   /** Whether this window sends and gives back: the main window's. */
   readonly drains: boolean
@@ -344,28 +353,40 @@ export class Waiting implements Readable<readonly Wait[]> {
   #tidied = false
 
   /**
-   * `named` says a machine's name; `now` is this device's clock; `ahead`
-   * says how far a host's clock is ahead of it, as its engine last heard;
-   * only the main window `drains` what waits: sends it, and gives back
-   * what does not go. It reads what is kept now, and follows it once
-   * started (`start`).
+   * `placed` says the machine that has a Pane of a Project, by its key in
+   * `hosts.toml`, none for this machine or one the Window does not know:
+   * with no Window's hosts, the one its args name. `named` says a
+   * machine's name, and `summary` a Project as that machine lists it;
+   * `now` is this device's clock; `ahead` says how far a host's clock is
+   * ahead of it, as its engine last heard; only the main window `drains`
+   * what waits: sends it, and gives back what does not go. It reads what
+   * is kept now, and follows it once started (`start`).
    */
   constructor(
     storage: WaitingStorage = inMemory(),
     {
+      placed = (_, pane) => paneHost(pane),
       named = (host: string) => host,
+      summary = () => undefined,
       now = Date.now,
       ahead = () => undefined,
       drains = true,
     }: {
+      placed?: (
+        project: ProjectId,
+        pane: Pick<PaneState, "args">
+      ) => string | undefined
       named?: (host: string) => string
+      summary?: (host: string, project: ProjectId) => ProjectSummary | undefined
       now?: () => number
       ahead?: (host: string) => number | undefined
       drains?: boolean
     } = {}
   ) {
     this.#storage = storage
+    this.#placed = placed
     this.#named = named
+    this.#summary = summary
     this.#now = now
     this.#ahead = ahead
     this.drains = drains
@@ -392,14 +413,41 @@ export class Waiting implements Readable<readonly Wait[]> {
     return () => this.close()
   }
 
-  /** Queues `wait`, after what waits already; its time counts from its
-   * `at`, 7 days at most. */
-  add({ keep = KEEP, ...wait }: NewWait): void {
+  /**
+   * Queues `wait` for the machine that has the Pane it is written in,
+   * `by`, after what waits already, and says whether it did: not where
+   * that is this machine, whose engine is there, or no machine the Window
+   * knows. Its time counts from its `at`, 7 days at most. What its Pane
+   * shows before that machine answers, where it says any, keeps its
+   * Project as that machine lists it, or as a message to it kept it
+   * before (Q6).
+   */
+  add(
+    { keep = KEEP, ...wait }: NewWait,
+    by: Pick<PaneState, "args"> = wait.pane
+  ): boolean {
+    const host = this.#placed(wait.project, by)
+    if (host === undefined) return false
     const until = wait.at + Math.min(keep, longest())
     const seq = Math.max(0, ...this.#latestAll().map((one) => one.seq)) + 1
-    const ahead = this.#ahead(wait.host) ?? 0
-    this.#put({ ...wait, until, notAfter: until + ahead, seq })
+    const ahead = this.#ahead(host) ?? 0
+    const project =
+      this.#summary(host, wait.project) ??
+      this.get().find(
+        (one) => one.project === wait.project && one.shows?.project
+      )?.shows?.project
+    this.#put({
+      ...wait,
+      host,
+      ...(wait.shows && {
+        shows: { ...(project && { project }), ...wait.shows },
+      }),
+      until,
+      notAfter: until + ahead,
+      seq,
+    })
     this.#refresh()
+    return true
   }
 
   /** Takes back the message sent as `command`, unless it is on its way:
