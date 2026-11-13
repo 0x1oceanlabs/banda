@@ -211,6 +211,37 @@ repository), with an adversarial check.
   tarball do not carry the page, so only an engine run from the app or a
   checkout has one; and without the desktop the page says it needs
   Banda's app, until the browser's adapter and its pairing screen.
+- **A device asks at the door, and the Person allows it by its code
+  (SE5).** In place of `hello`, a device this machine has not paired
+  says `ask`: its public key, the name the Person reads it by and its
+  kind, signed by that key over the door's nonce, the host key and the
+  origin, so no one asks in another's name. It is the door's one frame
+  that needs no pairing. The door answers `asked` with a code, eight
+  letters as `4F7K-92QD`, made from the key and the door's nonce, and
+  keeps the connection. The engine keeps the askings in memory: eight at
+  most, one per key, each under a code of its own, for five minutes, and
+  forgets one whose device left the door. `devices.asking` says them to
+  every session that is the Person here, `devices.allow` pairs the one
+  with a code, from the origin it asked from, and `devices.refuse` sends
+  it away; at the machine's console, `banda devices allow <code>` and
+  `refuse <code>`, the code read as it is typed. The device hears
+  `paired`, signed by the host key, and comes in again with `hello`; or
+  `goodbye`, as it is refused or its time is out.
+  - **What the code is for.** It ties the Person's Allow to the device
+    they look at, against a mistaken Allow. It is no guard against
+    someone between the device and the door: the route's own secrecy is
+    (TLS on the tailnet, loopback), and a device trusts the host key its
+    first challenge says, on first use.
+  - **Any page that reaches the door may ask**, by any name: a site
+    open in a browser on this machine reaches the loopback door, and so
+    does one on any device of the tailnet. So what asks is said to the
+    Person with **the origin it asks from**, which `devices.asking`
+    carries, beside its name and code, and the card that offers Allow
+    must show it. Such a page may also hold all eight places for as long
+    as it stays; the console's `banda devices add` is the way round, and
+    a limit on how often one may ask is not built.
+  - Not yet: the windows' card and a browser's pairing screen, which
+    follow the mocks.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

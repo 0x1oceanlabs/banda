@@ -19,6 +19,10 @@ import { PROTOCOL } from "./generated/PROTOCOL"
 import type { Refusal } from "./generated/Refusal"
 import type { Protocols } from "./generated/Protocols"
 
+/** A paired device's first frame at the door. Its other, `ask`, is how
+ * one this machine has not paired asks to be (ADR 0124, decision 6). */
+export type Hello = Extract<DeviceFrame, { type: "hello" }>
+
 /**
  * How a client proves who it is at an engine's door (ADR 0124, decisions
  * 3 and 5): the device it is there, the host key it paired with, which
@@ -67,7 +71,7 @@ export const welcomeMessage = (nonce: string, device: string): string =>
 export const goodbyeMessage = (
   doorNonce: string,
   origin: string,
-  { device, nonce, protocol, sig }: DeviceFrame,
+  { device, nonce, protocol, sig }: Hello,
   { code, message }: Refusal
 ): string =>
   [
@@ -144,7 +148,7 @@ export async function signed(
  * - nothing, for a frame that counts for nothing before the proof.
  */
 export type AtDoorSaid =
-  | { hello: DeviceFrame }
+  | { hello: Hello }
   | { refused: Refusal; signed?: true }
   | "proved"
   | "lost"
@@ -159,7 +163,7 @@ export class AtDoor {
   readonly #key: DoorKey
   /** This connection's `hello`, once it went, with the door's nonce and
    * the origin it was signed for. */
-  #said: { doorNonce: string; origin: string; hello: DeviceFrame } | undefined
+  #said: { doorNonce: string; origin: string; hello: Hello } | undefined
   /** The door's `welcome` proved the host key: what it says from then on
    * is a session's. */
   proved = false
@@ -253,7 +257,7 @@ export class AtDoor {
     } catch {
       return "lost"
     }
-    const hello: DeviceFrame = {
+    const hello: Hello = {
       type: "hello",
       protocol: { min: PROTOCOL, max: PROTOCOL },
       device: this.#key.device,

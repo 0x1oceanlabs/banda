@@ -2,7 +2,9 @@
 //! in at its door, from its own console. Whoever runs it here is this
 //! machine's console, as its owner is: it pairs a device by its public
 //! key, lists them, and removes one, which ends that device's sessions at
-//! once. The engine keeps them (the devices module); this only asks it.
+//! once. A device that asks at the door shows a code: `allow` with that
+//! code pairs it, and `refuse` sends it away. The engine keeps them (the
+//! devices module); this only asks it.
 
 use crate::Failure;
 use crate::client::Client;
@@ -39,6 +41,11 @@ pub enum DevicesCommand {
     },
     /// Removes a device, by its ID or its name: its sessions end at once.
     Remove { device: String },
+    /// Pairs the device that asks at the door with this code, as its own
+    /// screen shows it: `banda devices allow 4F7K-92QD`. Prints it.
+    Allow { code: String },
+    /// Sends the device that asks with this code away.
+    Refuse { code: String },
 }
 
 /// `--kind`, as `DeviceKind` names itself.
@@ -85,6 +92,12 @@ pub async fn devices(places: &Places, what: DevicesCommand) -> Result<(), Failur
                 json!({ "device": one["id"] }),
             )
             .await?
+        }
+        DevicesCommand::Allow { code } => {
+            ask(&mut client, "devices.allow", json!({ "code": code })).await?
+        }
+        DevicesCommand::Refuse { code } => {
+            ask(&mut client, "devices.refuse", json!({ "code": code })).await?
         }
     };
     println!("{}", json!({ "ok": answer }));

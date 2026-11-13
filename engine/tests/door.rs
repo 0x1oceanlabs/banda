@@ -8,7 +8,7 @@ mod common;
 mod socket;
 
 use banda_kernel::PROTOCOL;
-use banda_kernel::devices::{hello_message, welcome_message};
+use banda_kernel::devices::{ask_message, hello_message, paired_message, welcome_message};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::rand::SystemRandom;
@@ -63,6 +63,15 @@ impl Engine {
             "banda {args:?}: {said}{}",
             String::from_utf8_lossy(&output.stderr)
         );
+        serde_json::from_str(said.trim()).unwrap()
+    }
+
+    /// `banda` with `args`, on this engine, which refuses it: what it
+    /// printed, as JSON.
+    fn refused(&self, args: &[&str]) -> Value {
+        let output = banda(&self.dir, args).output().unwrap();
+        let said = String::from_utf8_lossy(&output.stdout);
+        assert!(!output.status.success(), "banda {args:?}: {said}");
         serde_json::from_str(said.trim()).unwrap()
     }
 
@@ -354,4 +363,91 @@ fn get_upgrade(port: u64, host: &str, upgrade: &str, added: &str) -> String {
     let mut line = String::new();
     BufReader::new(stream).read_line(&mut line).unwrap();
     line
+}
+
+/// A browser's page at this machine's door, as one served from it.
+const BROWSER: &str = "https://arc.example";
+
+/// A device that holds `key` knocks at the door on `port` from a page of
+/// `BROWSER` and asks to be paired as `name`: the door's answer, and the
+/// socket it waits on.
+async fn ask(port: u64, key: &Ed25519KeyPair, name: &str) -> (Socket, Value, Value) {
+    let mut request = format!("ws://127.0.0.1:{port}/ws")
+        .into_client_request()
+        .unwrap();
+    (request.headers_mut()).insert("origin", BROWSER.parse().unwrap());
+    let (mut socket, _) = tokio_tungstenite::connect_async(request).await.unwrap();
+    let challenge = next(&mut socket).await;
+    let said = ask_message(
+        challenge["nonce"].as_str().unwrap(),
+        challenge["host_key"].as_str().unwrap(),
+        BROWSER,
+        &public(key),
+        "browser",
+        name,
+    );
+    let asks = json!({
+        "type": "ask",
+        "key": public(key),
+        "name": name,
+        "kind": "browser",
+        "sig": URL_SAFE_NO_PAD.encode(key.sign(said.as_bytes())),
+    });
+    say(&mut socket, asks).await;
+    let answer = next(&mut socket).await;
+    (socket, challenge, answer)
+}
+
+#[tokio::test(flavor = "multi_thread")]
+async fn a_browser_asks_at_the_door_and_the_person_allows_it_by_the_code_on_its_screen() {
+    let engine = Engine::start();
+    let browser = key();
+    let (mut socket, challenge, asked) = ask(engine.door(), &browser, "Safari on Roma's Mac").await;
+    assert_eq!(asked["type"], "asked", "{asked}");
+    let code = asked["code"].as_str().unwrap().to_owned();
+    // Nothing is paired by asking.
+    assert_eq!(
+        engine.banda(&["devices", "list"])["ok"]["devices"],
+        json!([])
+    );
+
+    // The Person types the code they read on the browser, at this
+    // machine's console: the browser is paired from where it asked.
+    let allowed = engine.banda(&["devices", "allow", &code]);
+    let device = &allowed["ok"];
+    assert_eq!(device["name"], "Safari on Roma's Mac");
+    assert_eq!(device["kind"], "browser");
+    assert_eq!(device["origin"], BROWSER);
+    assert_eq!(device["key"], public(&browser).as_str());
+    // The browser hears it, in the machine's own word.
+    let paired = next(&mut socket).await;
+    assert_eq!(paired["type"], "paired", "{paired}");
+    assert_eq!(paired["device"], device["id"]);
+    let said = paired_message(
+        challenge["nonce"].as_str().unwrap(),
+        &public(&browser),
+        serde_json::from_value(device["id"].clone()).unwrap(),
+    );
+    let host = URL_SAFE_NO_PAD.decode(engine.host_key()).unwrap();
+    let sig = URL_SAFE_NO_PAD
+        .decode(paired["sig"].as_str().unwrap())
+        .unwrap();
+    assert!(
+        UnparsedPublicKey::new(&ED25519, host)
+            .verify(said.as_bytes(), &sig)
+            .is_ok()
+    );
+    // The code is used: it allows nothing again.
+    let again = engine.refused(&["devices", "allow", &code]);
+    assert_eq!(again["error"]["code"], "not_found", "{again}");
+
+    // Another asks and is refused: it is told, and stays a stranger.
+    let other = key();
+    let (mut socket, _, asked) = ask(engine.door(), &other, "Someone's phone").await;
+    let code = asked["code"].as_str().unwrap().to_owned();
+    engine.banda(&["devices", "refuse", &code]);
+    let goodbye = next(&mut socket).await;
+    assert_eq!(goodbye["reason"]["code"], "forbidden", "{goodbye}");
+    let listed = engine.banda(&["devices", "list"]);
+    assert_eq!(listed["ok"]["devices"].as_array().unwrap().len(), 1);
 }

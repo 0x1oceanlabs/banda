@@ -10,11 +10,20 @@
 //! module's methods list, add and remove a device, as only the Person
 //! does. A device removed keeps its record, marked, so it alone is told
 //! `revoked`, and its sessions end at once.
+//!
+//! A device this machine has not paired asks at the door, and waits there
+//! (decision 6). The askings are kept in memory only, a few at a time,
+//! each for five minutes: `devices.asking` says them to every window that
+//! is the Person here, each with the code its own screen shows, and
+//! `devices.allow` pairs one, `devices.refuse` sends it away. An engine
+//! that restarts forgets them: the device asks again.
 
 use banda_kernel::api::APP_ORIGIN;
-use banda_kernel::devices::{Device, Devices};
+use banda_kernel::devices::{Asked, Asking, Device, Devices};
 use banda_kernel::methods::Nothing;
-use banda_kernel::{Call, DeviceId, Kind, Module, PersonId, Refusal, Right, Scope, now_ms};
+use banda_kernel::{
+    Call, DeviceId, Kind, Module, PersonId, Refusal, Right, Scope, Stream, now_ms, watching,
+};
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use ring::rand::SystemRandom;
@@ -24,7 +33,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
-use tokio::sync::watch;
+use tokio::sync::{oneshot, watch};
 use ts_rs::TS;
 
 /// The host key's file in the engine's state: an Ed25519 key, as PKCS#8.
@@ -35,6 +44,13 @@ const DEVICES: &str = "devices.json";
 
 /// The most a device's name holds.
 const NAME_MOST: usize = 64;
+
+/// How many devices may ask to be paired at once: more are told to try
+/// again, so whoever reaches the door fills no memory.
+const ASKING_MOST: usize = 8;
+
+/// How long an asking waits for the Person's answer, in ms.
+const ASKING_FOR: i64 = 5 * 60 * 1000;
 
 /// What kind of client a device is, for the Person who reads the list.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
@@ -83,7 +99,41 @@ pub struct PairedDevice {
     pub removed_at: Option<i64>,
 }
 
+/// A device that asks to be paired, as `devices.asking` says it.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct Ask {
+    /// The code its own screen shows: the Person allows it only where
+    /// the two are the same.
+    pub code: String,
+    /// What it says it is called.
+    pub name: String,
+    pub kind: DeviceKind,
+    /// The origin of the page that asks; none for a program with no page.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub origin: Option<String>,
+    /// When it asked, in ms since the epoch.
+    #[ts(type = "number")]
+    pub asked_at: i64,
+    /// When its time is out.
+    #[ts(type = "number")]
+    pub until: i64,
+}
+
+/// An asking as it waits: what the Person sees of it, the key it proved,
+/// and who hears the answer at the door.
+struct Waiting {
+    ask: Ask,
+    key: String,
+    answer: oneshot::Sender<Option<DeviceId>>,
+}
+
 struct Kept {
+    /// The devices that ask now, which the door keeps waiting.
+    waiting: Mutex<Vec<Waiting>>,
+    /// The same as the Person's windows hear them.
+    asking: watch::Sender<Vec<Ask>>,
     host: Ed25519KeyPair,
     file: PathBuf,
     /// Who a device's session acts as: this machine's owner.
@@ -120,6 +170,8 @@ impl Paired {
             Err(error) => return Err(error),
         };
         Ok(Paired(Arc::new(Kept {
+            waiting: Mutex::new(Vec::new()),
+            asking: watch::channel(Vec::new()).0,
             host,
             file,
             owner,
@@ -207,6 +259,59 @@ impl Paired {
         Ok(())
     }
 
+    /// Lets go of each asking whose time is out, or whose device went
+    /// from the door, and says what is left to who hears them.
+    fn tidy(&self) {
+        let now = now_ms();
+        let mut waiting = self.0.waiting.lock().unwrap();
+        waiting.retain(|one| one.ask.until > now && !one.answer.is_closed());
+        let left: Vec<Ask> = waiting.iter().map(|one| one.ask.clone()).collect();
+        self.0.asking.send_if_modified(|said| {
+            let changed = *said != left;
+            if changed {
+                *said = left;
+            }
+            changed
+        });
+    }
+
+    /// Takes the asking with `code` out, as the Person answers it; none
+    /// with that code waits, as when its time ran out.
+    fn answered(&self, code: &str) -> Result<Waiting, Refusal> {
+        self.tidy();
+        let code = typed(code);
+        let mut waiting = self.0.waiting.lock().unwrap();
+        let at = (waiting.iter().position(|one| one.ask.code == code)).ok_or_else(|| {
+            Refusal::not_found("No device asks with this code now: its time may be out.")
+        })?;
+        Ok(waiting.remove(at))
+    }
+
+    /// Pairs the device that asks with `code`, by `by`'s session, and
+    /// tells it at the door.
+    fn allow(&self, code: &str, by: Option<DeviceId>) -> Result<PairedDevice, Refusal> {
+        let Waiting { ask, key, answer } = self.answered(code)?;
+        let add = Add {
+            key,
+            name: ask.name,
+            kind: ask.kind,
+            origin: ask.origin,
+            here: false,
+        };
+        let paired = self.add(add, by);
+        // Told either way: a device that was not paired asks again.
+        let _ = answer.send(paired.as_ref().ok().map(|device| device.id));
+        self.tidy();
+        paired
+    }
+
+    /// Sends the device that asks with `code` away.
+    fn refuse(&self, code: &str) -> Result<(), Refusal> {
+        let _ = self.answered(code)?.answer.send(None);
+        self.tidy();
+        Ok(())
+    }
+
     /// Writes the devices' file, whole, and only then has the door read
     /// them so: a change that was not kept is not made.
     fn keep(&self, known: Vec<PairedDevice>) -> Result<(), Refusal> {
@@ -271,6 +376,74 @@ impl Devices for Paired {
     fn removals(&self) -> watch::Receiver<u64> {
         self.0.removals.subscribe()
     }
+
+    fn ask(&self, asking: Asking) -> Result<Asked, Refusal> {
+        self.tidy();
+        let invalid = || Refusal::invalid("A device is a desktop, a browser, a phone or a cli.");
+        let kind = serde_json::from_value(Value::String(asking.kind)).map_err(|_| invalid())?;
+        let key = URL_SAFE_NO_PAD.encode(asking.key);
+        let now = now_ms();
+        let until = now + ASKING_FOR;
+        let (answer, heard) = oneshot::channel();
+        {
+            let mut waiting = self.0.waiting.lock().unwrap();
+            // One device asks once: asked again, as from a page opened
+            // anew, its older asking goes.
+            waiting.retain(|one| one.key != key);
+            if waiting.len() >= ASKING_MOST {
+                return Err(Refusal::conflict(
+                    "Too many devices ask to join this machine now. Try again in a few minutes.",
+                ));
+            }
+            // A code names one asking: another key that came to the same
+            // one asks again, on a new connection, for another.
+            if waiting.iter().any(|one| one.ask.code == asking.code) {
+                return Err(Refusal::conflict(
+                    "Another device asks under this code now. Ask again.",
+                ));
+            }
+            waiting.push(Waiting {
+                ask: Ask {
+                    code: asking.code,
+                    name: asking.name,
+                    kind,
+                    origin: asking.origin,
+                    asked_at: now,
+                    until,
+                },
+                key,
+                answer,
+            });
+        }
+        self.tidy();
+        Ok(Asked {
+            until,
+            answer: heard,
+        })
+    }
+
+    fn left(&self, _code: &str) {
+        // Its answer is let go of: it goes with the rest that went.
+        self.tidy();
+    }
+}
+
+/// A code as the Person typed it, as the door says them: in capitals,
+/// with its dash, and each letter that reads as a digit taken for it.
+fn typed(code: &str) -> String {
+    let letters: String = code
+        .chars()
+        .filter(|letter| letter.is_ascii_alphanumeric())
+        .map(|letter| match letter.to_ascii_uppercase() {
+            'O' => '0',
+            'I' | 'L' => '1',
+            letter => letter,
+        })
+        .collect();
+    match letters.len() {
+        8 => format!("{}-{}", &letters[..4], &letters[4..]),
+        _ => letters,
+    }
 }
 
 /// The devices module.
@@ -296,7 +469,25 @@ banda_kernel::methods! {
         /// Removes a device: its sessions end at once, and it opens none
         /// until it is paired again.
         command remove(Remove) -> (), Manage;
+        /// The devices that ask at the door to be paired now, then again
+        /// as one asks, is answered or runs out of time: each with the
+        /// code its own screen shows.
+        stream asking(Nothing) -> Vec<Ask>, Manage, read;
+        /// Pairs the device that asks with this code, so it comes in at
+        /// this machine's door as the Person. Allow it only where its
+        /// screen shows the same code.
+        command allow(Answer) -> PairedDevice, Manage;
+        /// Sends the device that asks with this code away.
+        command refuse(Answer) -> (), Manage;
     }
+}
+
+/// The asking the Person answers, by its code.
+#[derive(Debug, Deserialize, JsonSchema, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct Answer {
+    /// As both screens show it: `4F7K-92QD`.
+    code: String,
 }
 
 /// What `devices.list` answers.
@@ -351,6 +542,20 @@ impl DevicesModule {
         let paired = self.paired.clone();
         written(move || paired.remove(device)).await
     }
+
+    async fn asking(&self, _: Call, _: Nothing) -> Result<Stream, Refusal> {
+        self.paired.tidy();
+        Ok(watching(self.paired.0.asking.subscribe()))
+    }
+
+    async fn allow(&self, call: Call, Answer { code }: Answer) -> Result<PairedDevice, Refusal> {
+        let (paired, by) = (self.paired.clone(), call.device());
+        written(move || paired.allow(&code, by)).await
+    }
+
+    async fn refuse(&self, _: Call, Answer { code }: Answer) -> Result<(), Refusal> {
+        self.paired.refuse(&code)
+    }
 }
 
 /// Runs a change that writes the devices' file where a wait for the disk
@@ -388,6 +593,10 @@ impl Module for DevicesModule {
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }
+
+    async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
+    }
 }
 
 #[cfg(test)]
@@ -402,6 +611,108 @@ mod tests {
             origin: Some("https://arc.example".to_owned()),
             here: false,
         }
+    }
+
+    /// A device's asking: its key `byte` over, named `name`, with `code`.
+    fn asking(byte: u8, name: &str, code: &str) -> Asking {
+        Asking {
+            key: [byte; 32],
+            name: name.to_owned(),
+            kind: "browser".to_owned(),
+            origin: Some("https://arc.example".to_owned()),
+            code: code.to_owned(),
+        }
+    }
+
+    #[tokio::test]
+    async fn a_device_that_asks_waits_for_the_person_who_allows_it_by_its_code_or_refuses_it() {
+        let state = tempfile::tempdir().unwrap();
+        let paired = Paired::open(state.path(), PersonId::new()).unwrap();
+        let heard = paired.0.asking.subscribe();
+        let Asked { until, mut answer } = paired.ask(asking(1, "Safari", "4F7K-92QD")).unwrap();
+        assert!(until > now_ms());
+        // Every window that is the Person here hears it, with its code.
+        let said = heard.borrow().clone();
+        assert_eq!(said.len(), 1);
+        assert_eq!(
+            (said[0].code.as_str(), said[0].name.as_str(), said[0].kind),
+            ("4F7K-92QD", "Safari", DeviceKind::Browser)
+        );
+        assert!(answer.try_recv().is_err());
+        // Another code allows nothing; its own, as the Person types it,
+        // pairs it from where it asked, and says who allowed it.
+        let by = DeviceId::new();
+        let none = paired.allow("0000-0000", Some(by)).unwrap_err();
+        assert_eq!(none.code, banda_kernel::Code::NotFound);
+        let device = paired.allow(" 4f7k-92qd ", Some(by)).unwrap();
+        assert_eq!(answer.try_recv().unwrap(), Some(device.id));
+        assert_eq!(device.name, "Safari");
+        assert_eq!(device.origin.as_deref(), Some("https://arc.example"));
+        assert_eq!(device.added_by, Some(by));
+        assert_eq!(paired.device(device.id).unwrap().key, [1u8; 32]);
+        assert!(heard.borrow().is_empty());
+        // Allowed once: the code is no more.
+        assert!(paired.allow("4F7K-92QD", None).is_err());
+
+        // Refused, it hears so, and is not paired.
+        let Asked { mut answer, .. } = paired.ask(asking(2, "iPhone", "AAAA-BBBB")).unwrap();
+        paired.refuse("AAAA-BBBB").unwrap();
+        assert_eq!(answer.try_recv().unwrap(), None);
+        assert_eq!(paired.listed().len(), 1);
+        assert!(heard.borrow().is_empty());
+    }
+
+    #[tokio::test]
+    async fn only_a_few_devices_ask_at_once_each_once_under_a_code_of_its_own_and_one_that_left_makes_room()
+     {
+        let state = tempfile::tempdir().unwrap();
+        let paired = Paired::open(state.path(), PersonId::new()).unwrap();
+        let heard = paired.0.asking.subscribe();
+        let mut waiting = Vec::new();
+        for byte in 0..ASKING_MOST as u8 {
+            let code = format!("AB12-{byte:04}");
+            waiting.push(paired.ask(asking(byte, "one", &code)).unwrap());
+        }
+        let Err(full) = paired.ask(asking(99, "one more", "FE11-0000")) else {
+            panic!("it keeps no more than a few");
+        };
+        assert_eq!(full.code, banda_kernel::Code::Conflict);
+        // One that asks again takes its own place, under its new code.
+        waiting.push(paired.ask(asking(0, "one", "AB12-AGA1")).unwrap());
+        assert_eq!(heard.borrow().len(), ASKING_MOST);
+        assert!(heard.borrow().iter().all(|one| one.code != "AB12-0000"));
+        assert!(paired.allow("AB12-0000", None).is_err());
+        // One that left the door is forgotten as the door says so, and
+        // makes room for another.
+        drop(waiting.remove(1));
+        paired.left("AB12-0001");
+        assert!(heard.borrow().iter().all(|one| one.code != "AB12-0001"));
+        assert_eq!(heard.borrow().len(), ASKING_MOST - 1);
+        // A code names one asking: another key under it asks again.
+        let Err(taken) = paired.ask(asking(98, "another", "AB12-0003")) else {
+            panic!("two devices never wait under one code");
+        };
+        assert_eq!(taken.code, banda_kernel::Code::Conflict);
+        paired.ask(asking(99, "one more", "R00M-0000")).unwrap();
+        assert!(heard.borrow().iter().any(|one| one.code == "R00M-0000"));
+        // What is not a kind of device is not kept.
+        let toaster = Asking {
+            kind: "toaster".to_owned(),
+            ..asking(50, "toaster", "T0AS-TER0")
+        };
+        assert!(paired.ask(toaster).is_err());
+    }
+
+    #[test]
+    fn a_code_is_read_as_the_person_typed_it() {
+        for said in ["4F7K-92QD", " 4f7k-92qd ", "4f7k92qd", "4F7K 92QD"] {
+            assert_eq!(typed(said), "4F7K-92QD", "{said}");
+        }
+        // A letter that reads as a digit is that digit: the door says
+        // neither O, I nor L.
+        assert_eq!(typed("o0il-1234"), "0011-1234");
+        // What is no code stays what it is, and finds nothing.
+        assert_eq!(typed("4F7K"), "4F7K");
     }
 
     #[test]

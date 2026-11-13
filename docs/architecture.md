@@ -498,6 +498,10 @@ The kernel holds only what every module needs, and it names no module.
   one, from the page's build beside the engine's program
   (`engine/src/page.rs`; SE5): itself only, by a policy that lets it load
   nothing from elsewhere, and never on the API's port.
+  A device this machine has not paired asks at the door with `ask`, by
+  its own key, and waits there under a code both screens show; the
+  devices module keeps the askings in memory, and `devices.allow` or
+  `banda devices allow <code>` pairs one (decision 6).
   The contract's client speaks both ways in (`sdk/contract/src/engine.ts`,
   `door.ts`): its `Address` says the owner's secret, for the API, or a
   `DoorKey`, for the door: the device, the host key it paired with, and
