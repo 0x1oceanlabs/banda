@@ -996,6 +996,17 @@ this machine (ADR 0126).
   a write is `internal`, with its words, for it is the App's to put
   right; but a write its table's own rules refuse is `conflict`.
   `banda app new <id>` writes a folder to start from.
+- **Tried before it is installed.** `banda app check <folder>` reads an
+  App's folder and tries its steps on a database of its own, in memory,
+  as a Project's store would run them (`banda_kernel::try_steps`), with
+  no engine and none of its code run. `apps.install` does the same before
+  it copies anything, so a step that fails is refused with why, and the
+  App installed before goes on as it ran. A step that fails only over
+  what a Project holds still turns it off there alone.
+- **Agents know the road.** The Banda skill's topic `apps`
+  (`platform/apps/skill/apps.md`) says how to write one, with the clients
+  App of the module's tests as its example, word for word; the skill's
+  core and the brief every session gets point to it.
 - **Added while the engine runs.** `apps.install` adds the App to the
   running engine through the kernel's `Registry`, a handle the engine
   makes and the kernel binds as it opens. Every open Project takes the

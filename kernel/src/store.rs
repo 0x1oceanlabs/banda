@@ -350,15 +350,7 @@ impl Store {
     /// kernel's own must, or it does not open.
     pub(crate) fn open(path: &Path, modules: &[Tables]) -> Result<Store, Error> {
         let mut writer = Connection::open(path)?;
-        writer.execute_batch(
-            "PRAGMA journal_mode = WAL;
-             PRAGMA synchronous = NORMAL;
-             PRAGMA foreign_keys = ON;
-             PRAGMA busy_timeout = 5000;
-             PRAGMA trusted_schema = OFF;",
-        )?;
-        let writer_authorizer = Authorizer::install(&mut writer, modules)?;
-        migrate(&mut writer, KERNEL, KERNEL_MIGRATIONS)?;
+        let writer_authorizer = ready(&mut writer, modules)?;
         let off: Vec<Off> = (modules.iter())
             .filter_map(|tables| bring_up(&mut writer, &writer_authorizer, tables))
             .collect();
@@ -1061,6 +1053,49 @@ fn seen(sql: &Connection, ledger: &str, known: usize, module: bool) -> Result<us
         )
     })
     .into())
+}
+
+/// Tries a module's steps on a database of its own, in memory, as a
+/// Project's store runs them ([`ready`]): why they do not come up to date,
+/// in the words a Project it is turned off in says. Nothing is kept, and
+/// its tables are empty: a step that fails only over rows a Project holds
+/// passes here. Whoever takes an App from outside the build tries its
+/// steps so before it is installed.
+pub fn try_steps(module: &'static str, steps: &[&str]) -> Result<(), String> {
+    // Its steps come beside, as they are tried: the authorizer reads only
+    // whose tables are whose.
+    let tables = Tables {
+        module,
+        legacy: &[],
+        migrations: &[],
+    };
+    let tried = || -> Result<(), Off> {
+        let unopened = |why| Off {
+            module,
+            step: None,
+            why,
+        };
+        let mut sql = Connection::open_in_memory().map_err(|e| unopened(e.into()))?;
+        let authorizer = ready(&mut sql, &[tables]).map_err(unopened)?;
+        migrate_in(&mut sql, module, steps, Some((&authorizer, &tables)))
+    };
+    tried().map_err(|off| off.words())
+}
+
+/// Makes `writer` ready for its modules' steps, as every store's is: its
+/// pragmas, the authorizer by `modules`' tables, and the kernel's own
+/// tables up to date.
+fn ready(writer: &mut Connection, modules: &[Tables]) -> Result<Arc<Authorizer>, Error> {
+    writer.execute_batch(
+        "PRAGMA journal_mode = WAL;
+         PRAGMA synchronous = NORMAL;
+         PRAGMA foreign_keys = ON;
+         PRAGMA busy_timeout = 5000;
+         PRAGMA trusted_schema = OFF;",
+    )?;
+    let authorizer = Authorizer::install(writer, modules)?;
+    migrate(writer, KERNEL, KERNEL_MIGRATIONS)?;
+    Ok(authorizer)
 }
 
 /// Brings a module's tables up to date on the writer: why it is turned

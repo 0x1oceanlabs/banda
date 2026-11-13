@@ -248,6 +248,24 @@ impl Folder {
         })
     }
 
+    /// Reads the App in `folder` as [`Folder::read`] does, and tries its
+    /// steps ([`Folder::tried`]). It runs none of its code.
+    pub fn check(folder: &Path) -> Result<Folder, Refusal> {
+        let app = Folder::read(folder)?;
+        app.tried()?;
+        Ok(app)
+    }
+
+    /// Tries its steps as a Project's store would run them, on a database
+    /// of its own that is not kept: a step that would turn the App off
+    /// there is refused here, with why. Its tables there are empty, so a
+    /// step that fails only over what a Project holds passes.
+    pub(crate) fn tried(&self) -> Result<(), Refusal> {
+        let steps: Vec<&str> = self.migrations.iter().map(String::as_str).collect();
+        banda_kernel::try_steps(kept(self.id.clone()), &steps)
+            .map_err(|why| invalid(MIGRATIONS, why))
+    }
+
     /// The name an Agent calls `method` by, as a tool.
     pub fn tool_name(&self, method: &str) -> String {
         format!("{}_{method}", self.id)
@@ -595,6 +613,29 @@ mod tests {
             "{}",
             refused.message
         );
+    }
+
+    #[test]
+    fn a_check_tries_the_steps_as_a_project_would_run_them() {
+        assert_eq!(Folder::check(app(&[]).path()).unwrap().migrations.len(), 1);
+        let cases = [
+            ("CREATE TABEL clients_notes (id INTEGER)", "syntax error"),
+            ("CREATE TABLE notes (id INTEGER)", "not authorized"),
+            (
+                "INSERT INTO clients_peple (name) VALUES ('x')",
+                "no such table",
+            ),
+        ];
+        for (step, why) in cases {
+            let dir = app(&[("migrations/002.sql", step)]);
+            let refused = Folder::check(dir.path()).unwrap_err();
+            assert_eq!(refused.code, Code::Invalid, "{step}");
+            let words = "migrations: Step 2 of its tables failed:";
+            assert!(refused.message.starts_with(words), "{}", refused.message);
+            assert!(refused.message.contains(why), "{}", refused.message);
+            // Read alone, it is the folder it says it is.
+            assert!(Folder::read(dir.path()).is_ok());
+        }
     }
 
     #[test]

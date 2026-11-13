@@ -492,25 +492,42 @@ async fn an_app_installed_while_the_engine_runs_is_there_at_once_and_is_replaced
         .await;
     assert_eq!(early.unwrap_err().code, Code::Internal);
 
-    // Installed again with a step that fails, it is off where it failed,
-    // and says so as it is installed; a Project made then has it off too.
-    std::fs::write(
-        written.join("migrations/002.sql"),
-        "CREATE TABEL clients_notes (id)",
-    )
-    .unwrap();
-    let broken = install().await.unwrap();
-    assert_eq!(broken["off"][0]["project"], json!(work.id));
-    let why = broken["off"][0]["why"].as_str().unwrap();
+    // Installed again with a step that fails, it is refused with why, and
+    // the App goes on as it ran.
+    let typo = "CREATE TABEL clients_notes (id)";
+    std::fs::write(written.join("migrations/002.sql"), typo).unwrap();
+    let refused = install().await.unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+    let words = "migrations: Step 2 of its tables failed";
+    assert!(refused.message.starts_with(words), "{}", refused.message);
+    let found = host.call(&work, "clients.find", json!({ "city": "Berlin" }));
+    assert_eq!(found.await.unwrap()[0]["name"], "Anna");
+
+    // A step that fails only over what one Project holds turns it off
+    // there alone, and the install says where and why: two clients of one
+    // name here, and a rule against it.
+    let again = json!({ "name": "Anna", "city": "Lisbon" });
+    host.call(&work, "clients.add", again).await.unwrap();
+    let home = host.project("Home").await;
+    let unique = "CREATE UNIQUE INDEX clients_people_by_name ON clients_people (name)";
+    std::fs::write(written.join("migrations/002.sql"), unique).unwrap();
+    let partly = install().await.unwrap();
+    assert_eq!(partly["off"].as_array().unwrap().len(), 1);
+    assert_eq!(partly["off"][0]["project"], json!(work.id));
+    let why = partly["off"][0]["why"].as_str().unwrap();
     assert!(why.starts_with("Step 2 of its tables failed"), "{why}");
     let off = host
         .call(&work, "clients.find", json!({}))
         .await
         .unwrap_err();
     assert_eq!(off.code, Code::AppUnavailable);
+    assert_eq!(
+        host.call(&home, "clients.find", json!({})).await.unwrap(),
+        json!([])
+    );
 
-    // Put right and installed again, it has what it kept, and its new
-    // table, with no restart.
+    // The step put right and installed again, it has what it kept, and its
+    // new table, with no restart.
     copy("migrations/002.sql");
     let mended = install().await.unwrap();
     assert_eq!(mended["off"], json!([]));
@@ -522,11 +539,6 @@ async fn an_app_installed_while_the_engine_runs_is_there_at_once_and_is_replaced
         json!({ "client": 1, "text": "Tea." }),
     );
     noted.await.unwrap();
-    let home = host.project("Home").await;
-    assert_eq!(
-        host.call(&home, "clients.find", json!({})).await.unwrap(),
-        json!([])
-    );
 
     // Removed, it has no method and no tool; installed again, its data is
     // there.
