@@ -419,6 +419,7 @@ function Screen({
           heardUnder.current = bootOf(engine)
           drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
+          input.inOrder(piece.in_order === true)
           if (
             measured &&
             (measured.cols !== piece.size.cols ||

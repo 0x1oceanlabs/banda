@@ -596,8 +596,15 @@ command (with its ID)
   commit in the order sent (ADR 0082, decision 4): the API keeps one
   queue for each scope a connection sends commands to, and runs it one
   command at a time, so a client sends the next before the last answers.
-  Queues run beside each other, and calls and streams wait in none, nor
-  does a command its module says runs on past one write
+  A module's calls that say so (`Module::in_order`) wait the same way in
+  a queue of their own for each thing they act on, behind no command: a
+  terminal's writes and sizes, so a key lands after the key before it,
+  its Pane sends each as it is typed, its echo is one round trip away,
+  and a program that reads nothing holds up no other terminal. The
+  terminal's snapshot says so (`in_order`); for an engine that does not,
+  the Pane sends one at a time (`apps/terminal/pane/src/input.ts`).
+  Queues run beside each other, and other calls and streams wait in none,
+  nor does a command its module says runs on past one write
   (`Module::runs_on`), as a sign-in that waits for the Person. A command
   still running after thirty seconds, which only one that hangs does,
   gives up its place, and the next starts beside it; the log says so. A

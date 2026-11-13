@@ -85,6 +85,14 @@ pub enum Piece {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         ended: Option<Ended>,
+        /// The engine runs a session's writes and sizes to this terminal
+        /// in the order it sent them, so its client sends each key as it
+        /// is typed, before the last one's answer. An engine older than
+        /// that order says nothing here, and runs them side by side: its
+        /// client sends one at a time.
+        #[ts(optional, as = "Option<bool>")]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        in_order: bool,
     },
     Output {
         text: String,

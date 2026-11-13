@@ -43,6 +43,8 @@ struct Notes {
     stamp_held: Arc<tokio::sync::RwLock<()>>,
     /// How many times `touch` acted.
     touched: Arc<AtomicUsize>,
+    /// What `type` took, as it ran: a call that runs in the order sent.
+    typed: Arc<Mutex<Vec<String>>>,
     /// How the next runs of `publish` end; `Done` once the script is empty.
     script: Arc<Mutex<VecDeque<Outcome>>>,
     /// Whether the next run of `publish` panics.
@@ -83,7 +85,7 @@ impl Module for Notes {
 
     fn right(&self, method: &str) -> Option<Right> {
         match method {
-            "add" | "stamp" | "linger" | "post" | "touch" | "give" => Some(Right::Write),
+            "add" | "stamp" | "linger" | "post" | "touch" | "type" | "give" => Some(Right::Write),
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
@@ -96,7 +98,7 @@ impl Module for Notes {
     fn kind(&self, method: &str) -> Option<Kind> {
         match method {
             "add" | "purge" | "stamp" | "linger" | "post" | "give" => Some(Kind::Command),
-            "list" | "pass" | "whose" | "show" | "touch" => Some(Kind::Call),
+            "list" | "pass" | "whose" | "show" | "touch" | "type" => Some(Kind::Call),
             "count" => Some(Kind::Stream),
             _ => None,
         }
@@ -104,6 +106,11 @@ impl Module for Notes {
 
     fn runs_on(&self, method: &str) -> bool {
         method == "linger"
+    }
+
+    /// Each `pad` it types on keeps its own order.
+    fn in_order(&self, method: &str, params: &Value) -> Option<Uuid> {
+        (method == "type").then(|| Uuid::from_u128(params["pad"].as_u64().unwrap_or(0).into()))
     }
 
     /// `count` says the numbers up to `to`, then ends.
@@ -170,6 +177,12 @@ impl Module for Notes {
                 }
             }
             "touch" => Ok(json!(self.touched.fetch_add(1, Ordering::SeqCst) + 1)),
+            "type" => {
+                let Add { text, wait } = decode(params)?;
+                tokio::time::sleep(Duration::from_millis(wait)).await;
+                self.typed.lock().unwrap().push(text);
+                Ok(Value::Null)
+            }
             "give" => {
                 let to: ProjectId = decode(params["to"].clone())?;
                 let text = params["text"].as_str().unwrap_or_default().to_owned();
@@ -2338,6 +2351,51 @@ async fn a_command_that_runs_holds_up_its_own_queue_alone() {
         listed(&kernel, owner, &a).await,
         json!(["from elsewhere", "after the stamp"])
     );
+}
+
+#[tokio::test]
+async fn a_session_s_calls_that_run_in_order_do_and_wait_for_no_command() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let project = create(&kernel, owner, "Work").await;
+    let address = serve(&kernel, owner).await;
+    let hello = json!({ "type": "hello", "protocol": 1, "token": "secret" });
+    let (mut socket, _) = connect(address, hello).await;
+
+    // A command of the same Project runs meanwhile: its queue is another.
+    let held = notes.stamp_held.write().await;
+    say(&mut socket, stamping(1, &project, "stamp")).await;
+    notes.stamp_began.notified().await;
+
+    // Sent together, the first the slowest: run as they came, each would
+    // land after those sent after it. What is typed on another pad waits
+    // for none of them.
+    let keys = [("l", 300, 1), ("s", 0, 1), ("x", 0, 2), ("\r", 100, 1)];
+    for (id, (text, wait, pad)) in (10..).zip(keys) {
+        let typing = json!({
+            "type": "call", "id": id, "method": "notes.type", "project": project.id,
+            "params": { "text": text, "wait": wait, "pad": pad }
+        });
+        say(&mut socket, typing).await;
+    }
+    let mut ids = Vec::new();
+    for _ in keys {
+        ids.push(next(&mut socket).await["id"].clone());
+    }
+    assert_eq!(
+        ids,
+        [12, 10, 11, 13],
+        "one pad's answered in the order sent, the other's beside them"
+    );
+    assert_eq!(
+        *notes.typed.lock().unwrap(),
+        ["x", "l", "s", "\r"],
+        "run in the order sent, while the command still runs"
+    );
+    drop(held);
+    assert_eq!(next(&mut socket).await["id"], 1);
 }
 
 #[tokio::test]

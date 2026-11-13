@@ -18,11 +18,14 @@ export type TerminalMethods = {
  */
 open: CallMethod<Open, null>, 
 /**
- * What the Person types.
+ * What the Person types. A session's writes and sizes to one
+ * terminal run in the order it sent them, so it sends the next
+ * before the last answers, once the terminal's `watch` said so
+ * (`in_order`).
  */
 write: CallMethod<Write, null>, 
 /**
- * The size a window gives it.
+ * The size a window gives it, in its order among the writes.
  */
 resize: CallMethod<Resize, null>, 
 /**

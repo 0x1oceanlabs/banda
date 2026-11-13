@@ -15,13 +15,17 @@ use crate::{CommandId, Named, ProjectId, Refusal};
 use serde_json::Value;
 use std::sync::Arc;
 use tokio::sync::{mpsc, watch};
+use uuid::Uuid;
 
-/// One of a session's queues of commands, by the scope they run in
-/// ([`Kernel::queue`]).
+/// One of a session's queues ([`Kernel::queue`]): of commands, by the scope
+/// they run in; or of a module's calls that run in the order sent, by
+/// that module, the Project they name and the thing they act on
+/// ([`Module::in_order`]).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub(crate) enum Queue {
     Machine,
     Project(ProjectId),
+    InOrder(&'static str, Option<ProjectId>, Uuid),
 }
 
 /// The prefixes of the kernel's own methods, which no module takes:
@@ -243,17 +247,22 @@ impl Kernel {
     /// The queue the router keeps a call from one session in, so the
     /// session's commands to one scope commit in the order sent (ADR 0082,
     /// decision 4): a command's scope, this machine's or a Project's. The
-    /// kernel's own `projects.*` are this machine's. `None` for a call or a
-    /// stream, which runs as it arrives, as does a command that runs on
-    /// ([`Module::runs_on`]). `None` too for what will be refused: a
-    /// method there is not, or a Project there is not or outside the
-    /// caller's pass, so a client makes no queue, which lasts as long as
-    /// its connection, for a Project of its choosing.
+    /// kernel's own `projects.*` are this machine's. A module's calls that
+    /// run in the order sent ([`Module::in_order`]) have a queue of their
+    /// own for each thing they act on, so keys typed into a terminal wait
+    /// for no command, nor for another terminal's keys.
+    /// `None` for any other call or a stream, which runs as it
+    /// arrives, as does a command that runs on ([`Module::runs_on`]).
+    /// `None` too for what will be refused: a method there is not, or a
+    /// Project there is not or outside the caller's pass, so a client
+    /// makes no queue, which lasts as long as its connection, for a
+    /// Project of its choosing.
     pub(crate) fn queue(
         &self,
         caller: &Caller,
         method: &str,
         project: Option<ProjectId>,
+        params: &Value,
     ) -> Option<Queue> {
         if let Some(own) = own_method(method)
             && let Some(kind) = Self::own_kind(own)
@@ -261,17 +270,28 @@ impl Kernel {
             return (kind == Kind::Command).then_some(Queue::Machine);
         }
         let (module, rest, _) = self.method(method).ok()?;
-        if module.kind(rest)? != Kind::Command || module.runs_on(rest) {
-            return None;
-        }
-        if module.scope() == Scope::Machine {
-            return Some(Queue::Machine);
-        }
-        let id = project.or(caller.only)?;
-        // While the list of Projects changes, a Project goes unchecked.
-        let known = (self.projects.try_read()).map_or(true, |all| all.contains_key(&id));
-        let within = caller.only.is_none_or(|only| only == id);
-        (known && within).then_some(Queue::Project(id))
+        // What a call keeps its order by; none for a command.
+        let by = match module.kind(rest)? {
+            Kind::Command if !module.runs_on(rest) => None,
+            Kind::Call => Some(module.in_order(rest, params)?),
+            _ => return None,
+        };
+        let scope = if module.scope() == Scope::Machine {
+            None
+        } else {
+            let id = project.or(caller.only)?;
+            // While the list of Projects changes, a Project goes unchecked.
+            let known = (self.projects.try_read()).map_or(true, |all| all.contains_key(&id));
+            let within = caller.only.is_none_or(|only| only == id);
+            if !(known && within) {
+                return None;
+            }
+            Some(id)
+        };
+        Some(match by {
+            Some(thing) => Queue::InOrder(module.name(), scope, thing),
+            None => scope.map_or(Queue::Machine, Queue::Project),
+        })
     }
 
     /// Opens a module's stream in a Project, or this machine's for a module

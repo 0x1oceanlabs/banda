@@ -83,6 +83,20 @@ pub trait Module: Send + Sync + 'static {
         false
     }
 
+    /// What one of its calls keeps its order by, when it runs after every
+    /// such call its session sent before it: the thing it acts on, as the
+    /// terminal a Person types into, where a key lands after the key
+    /// before it. The router keeps the calls of one such thing in a queue
+    /// of their own, beside the scope's commands and behind none of them,
+    /// nor behind another thing's calls, so a client sends the next before
+    /// the last answers (ADR 0124, SE8). `method` comes without the
+    /// module's prefix. `None` for a call that runs as it arrives, and for
+    /// a thing there is not: the queue lasts as long as the connection, so
+    /// a client makes none for an ID of its choosing.
+    fn in_order(&self, _method: &str, _params: &Value) -> Option<Uuid> {
+        None
+    }
+
     /// Its methods an Agent may call as tools: the lines of its `methods!`
     /// table marked `tool`, `Self::method_tools(self.name())` (ADR 0019,
     /// decision 3).

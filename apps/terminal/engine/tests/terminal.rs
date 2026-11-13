@@ -186,7 +186,12 @@ async fn a_shell_says_what_runs_in_front_and_where() {
     // A window that watches later hears it right after the screen.
     let mut later = world.watch(terminal).await;
     let first = piece(&mut later).await;
-    assert!(matches!(first, Some(Piece::Snapshot { .. })), "{first:?}");
+    // A client sends each key as it is typed only once the engine said it
+    // runs them in the order sent.
+    assert!(
+        matches!(first, Some(Piece::Snapshot { in_order: true, .. })),
+        "{first:?}"
+    );
     assert_eq!(piece(&mut later).await, Some(Piece::Titled { title }));
     world
         .call("terminal.close", json!({ "terminal": terminal }))
