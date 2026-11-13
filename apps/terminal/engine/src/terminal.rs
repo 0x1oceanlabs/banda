@@ -11,7 +11,7 @@
 
 use crate::front::Front;
 use crate::history::{Decoder, History, Since};
-use crate::model::{Ended, Open, Piece, Size, Title};
+use crate::model::{Drawn, Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
 use banda_kernel::{ModuleProject, Program, ProjectId, PtyControl, Started, Stream, project_env};
 use std::collections::BTreeMap;
@@ -223,14 +223,21 @@ impl Terminal {
 
     /// What the terminal shows, then what it prints and whether it ended,
     /// until it is closed. A watcher that falls behind gets the whole
-    /// screen again.
-    pub fn watch(self: &Arc<Self>) -> Stream {
+    /// screen again. One that says what it drew `after` goes on from
+    /// there, while the terminal still keeps it.
+    pub fn watch(self: &Arc<Self>, after: Option<Drawn>) -> Stream {
         // One piece waits at a time; what comes meanwhile goes in the next.
         let (say, heard) = mpsc::channel(1);
         let terminal = self.clone();
         let mut changed = self.changed.subscribe();
         tokio::spawn(async move {
-            let mut told = Told::default();
+            // From what its window drew, while that is a place in what
+            // the terminal keeps of this run.
+            let up_to = after.and_then(|drawn| terminal.now.lock().unwrap().history.after(drawn));
+            let mut told = Told {
+                up_to,
+                ..Told::default()
+            };
             loop {
                 changed.mark_unchanged();
                 let Some(pieces) = terminal.since(&mut told) else {
@@ -265,7 +272,8 @@ impl Terminal {
             return None;
         }
         let output = told.up_to.map(|from| now.history.since(from));
-        told.up_to = Some(now.history.next());
+        let place = now.history.place();
+        told.up_to = Some(place.at);
         let mut pieces = Vec::new();
         match output {
             None | Some(Since::Gone) => {
@@ -278,10 +286,26 @@ impl Terminal {
                     ended: now.ended,
                     // As `Terminals::in_order` tells the router.
                     in_order: true,
+                    drawn: Some(place),
+                });
+            }
+            // The first answer to a window that said what it drew: no
+            // screen, only what it missed, and its size and its end as a
+            // snapshot says them.
+            Some(Since::Pieces(texts)) if told.size.is_none() => {
+                told.size = Some(now.size);
+                told.end = now.ended.is_some();
+                pieces.push(Piece::Resumed {
+                    missed: texts.concat(),
+                    at: place.at,
+                    size: now.size,
+                    ended: now.ended,
+                    in_order: true,
                 });
             }
             Some(Since::Pieces(texts)) if !texts.is_empty() => pieces.push(Piece::Output {
                 text: texts.concat(),
+                at: Some(place.at),
             }),
             Some(Since::Pieces(_)) => {}
         }

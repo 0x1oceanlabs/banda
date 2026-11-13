@@ -37,6 +37,10 @@ const surfaces = vi.hoisted(() => {
       canActivateLink: (text: string) => boolean
     }
   }[] = []
+  /** What the screens were given to draw, in order. */
+  const drew: string[] = []
+  /** What a screen answers to what it is given to draw, if anything. */
+  const state: { answers: string | undefined } = { answers: undefined }
   class Surface {
     readonly cols = 80
     readonly rows = 24
@@ -48,8 +52,15 @@ const surfaces = vi.hoisted(() => {
     setVisible() {}
     focus() {}
     fit() {}
-    write() {}
-    resetAndWrite() {}
+    write(text: string) {
+      drew.push(`write ${text}`)
+      // A query in what it draws is answered at once, as Ghostty does.
+      if (state.answers !== undefined)
+        made.at(-1)?.options.onData(state.answers)
+    }
+    resetAndWrite(text: string) {
+      drew.push(`screen ${text}`)
+    }
     setSharedGrid() {}
     setFont() {}
     setTheme() {}
@@ -60,7 +71,7 @@ const surfaces = vi.hoisted(() => {
       return ""
     }
   }
-  return { made, Surface }
+  return Object.assign(state, { made, drew, Surface })
 })
 vi.mock("../../ghostty/src/index.ts", () => ({ Surface: surfaces.Surface }))
 
@@ -85,6 +96,9 @@ const settle = () => act(() => new Promise<void>((done) => setTimeout(done, 0)))
 function engine(open: () => Promise<null>) {
   const calls: { method: string; params: unknown }[] = []
   const streams: {
+    /** What it is asked with, now: as the session asks it again after a
+     * reconnect. */
+    params: () => unknown
     hear: (piece: unknown) => void
     end: (refusal?: { code: string; message: string }) => void
   }[] = []
@@ -96,11 +110,15 @@ function engine(open: () => Promise<null>) {
     stream: (
       _project: unknown,
       _method: string,
-      _params: unknown,
+      params: unknown,
       hear: (piece: unknown) => void,
       end: (refusal?: { code: string; message: string }) => void
     ) => {
-      streams.push({ hear, end })
+      streams.push({
+        params: () => (typeof params === "function" ? params() : params),
+        hear,
+        end,
+      })
       return () => {}
     },
     run: () => Promise.resolve(null),
@@ -123,6 +141,7 @@ afterEach(async () => {
   await act(async () => root?.unmount())
   document.body.innerHTML = ""
   surfaces.made.length = 0
+  surfaces.drew.length = 0
   placed.now = {}
 })
 
@@ -365,6 +384,61 @@ test("a Pane restored while its machine is away watches its shell and, on the an
   })
 })
 
+test("back after a reconnect, it asks for what came after what it drew, and draws no screen again", async () => {
+  const { session, calls, streams } = engine(() => Promise.resolve(null))
+  await mount(session, { ...NEW, terminal: "kept" })
+  const watch = streams[0]!
+  // Before it drew anything, it asks for the whole screen.
+  expect(watch.params()).toEqual({ terminal: "kept" })
+  const size = { cols: 80, rows: 24 }
+  await act(async () => {
+    watch.hear({
+      kind: "snapshot",
+      history: "$ ",
+      size,
+      in_order: true,
+      drawn: { run: "r", at: 3 },
+    })
+    watch.hear({ kind: "output", text: "ls", at: 4 })
+  })
+  expect(surfaces.drew).toEqual(["screen $ ", "write ls"])
+  // The connection breaks, and the session asks the stream again.
+  expect(watch.params()).toEqual({
+    terminal: "kept",
+    after: { run: "r", at: 4 },
+  })
+  // The engine goes on from there: what it missed, and no screen. What
+  // the screen answers to that old output is not typed.
+  const typed = () => calls.filter(({ method }) => method === "terminal.write")
+  surfaces.answers = "\u001b[?62;c"
+  await act(async () =>
+    watch.hear({
+      kind: "resumed",
+      missed: "\r\na.txt",
+      at: 5,
+      size,
+      in_order: true,
+    })
+  )
+  await settle()
+  expect(surfaces.drew).toEqual(["screen $ ", "write ls", "write \r\na.txt"])
+  expect(typed()).toEqual([])
+  expect(watch.params()).toEqual({
+    terminal: "kept",
+    after: { run: "r", at: 5 },
+  })
+  // What it answers to output as it comes is typed, as ever.
+  await act(async () => watch.hear({ kind: "output", text: "?", at: 6 }))
+  await settle()
+  expect(typed().map(({ params }) => params)).toEqual([
+    { terminal: "kept", data: "\u001b[?62;c" },
+  ])
+  surfaces.answers = undefined
+  // An engine older than that says no place: the whole screen each time.
+  await act(async () => watch.hear({ kind: "snapshot", history: "$ ls", size }))
+  expect(watch.params()).toEqual({ terminal: "kept" })
+})
+
 test("a Pane opened while its machine is away, back with no shell, offers one and types nothing", async () => {
   const { session, streams } = engine(() => Promise.reject(AWAY))
   const { element } = await mount(session, NEW)
@@ -480,6 +554,7 @@ test("a page link leaves the Pane only as the router's act, and with no window i
   surfaces.made[0]!.options.onLinkActivate(url, { ctrlKey: false })
   expect(run.mock.calls).toEqual([["link.open", { url }]])
   surfaces.made.length = 0
+  surfaces.drew.length = 0
   await act(async () => root?.unmount())
   await mount(session, { ...NEW, terminal: "kept" })
   surfaces.made[0]!.options.onLinkActivate(url, { ctrlKey: false })

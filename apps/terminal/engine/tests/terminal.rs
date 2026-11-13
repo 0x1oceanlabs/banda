@@ -7,7 +7,7 @@ mod common;
 
 use banda_environments::How;
 use banda_kernel::{AgentId, Code, Participant, Whose};
-use banda_terminal::model::{Piece, TerminalId};
+use banda_terminal::model::{Drawn, Piece, RunId, TerminalId};
 use common::{World, next, piece, until};
 use serde_json::json;
 
@@ -41,6 +41,87 @@ async fn a_terminal_starts_its_program_in_its_projects_environment() {
         unset.clone().all(|name| name.starts_with("ELECTRON_")),
         "{unset:?}"
     );
+}
+
+#[tokio::test]
+async fn a_window_back_after_a_reconnect_hears_only_what_it_missed() {
+    let world = World::new().await;
+    let terminal = world
+        .run("printf 'one? '; read a; printf 'two? '; read b")
+        .await;
+    // It drew the first question, and each piece said how much that is.
+    let mut watching = world.watch(terminal).await;
+    let (mut screen, mut drawn) = (String::new(), None);
+    while !screen.contains("one? ") {
+        match piece(&mut watching).await {
+            Some(Piece::Snapshot {
+                history, drawn: at, ..
+            }) => (screen, drawn) = (history, at),
+            Some(Piece::Output { text, at }) => {
+                screen.push_str(&text);
+                drawn = drawn.map(|drawn| Drawn {
+                    at: at.unwrap(),
+                    ..drawn
+                });
+            }
+            _ => {}
+        }
+    }
+    let drawn = drawn.expect("a snapshot says how much it is");
+
+    // Its connection breaks, and the program prints on meanwhile.
+    drop(watching);
+    let answer = json!({ "terminal": terminal, "data": "x\r" });
+    world.call("terminal.write", answer).await.unwrap();
+    let mut other = world.watch(terminal).await;
+    until(&mut other, |screen| screen.contains("two? ")).await;
+
+    // Back, it says what it drew: no screen again, only what came since.
+    let mut back = world.watch_after(terminal, drawn).await;
+    let first = piece(&mut back).await;
+    let Some(Piece::Resumed {
+        missed,
+        at,
+        ended: None,
+        in_order: true,
+        ..
+    }) = first
+    else {
+        panic!("it goes on: {first:?}")
+    };
+    assert!(
+        missed.contains("two? ") && !missed.contains("one? "),
+        "{missed:?}"
+    );
+    assert!(at > drawn.at);
+    // With nothing missed, it is told so, and hears what comes next.
+    let mut again = world.watch_after(terminal, Drawn { at, ..drawn }).await;
+    let first = piece(&mut again).await;
+    assert!(
+        matches!(&first, Some(Piece::Resumed { missed, at: same, .. }) if missed.is_empty() && *same == at),
+        "{first:?}"
+    );
+
+    // What another run printed, or a place this one never reached, is
+    // nowhere in what it keeps: the whole screen again.
+    let elsewhere = [
+        Drawn {
+            run: RunId::new(),
+            ..drawn
+        },
+        Drawn {
+            at: at + 1000,
+            ..drawn
+        },
+    ];
+    for after in elsewhere {
+        let mut again = world.watch_after(terminal, after).await;
+        let first = piece(&mut again).await;
+        let Some(Piece::Snapshot { history, .. }) = first else {
+            panic!("a snapshot for {after:?}: {first:?}")
+        };
+        assert!(history.contains("one? ") && history.contains("two? "));
+    }
 }
 
 #[tokio::test]

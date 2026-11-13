@@ -9,6 +9,7 @@ import type { Resize } from "./Resize";
 import type { Running } from "./Running";
 import type { Servers } from "./Servers";
 import type { StopServer } from "./StopServer";
+import type { Watch } from "./Watch";
 import type { Write } from "./Write";
 
 export type TerminalMethods = { 
@@ -34,9 +35,11 @@ resize: CallMethod<Resize, null>,
 close: CallMethod<One, null>, 
 /**
  * The screen so far, then what it prints, then how it ended.
- * Watching shows what a Person types, such as a sign-in's code.
+ * A window that says what it drew `after` a reconnect hears
+ * only what came since, while the terminal keeps it. Watching
+ * shows what a Person types, such as a sign-in's code.
  */
-watch: StreamMethod<One, Piece>, 
+watch: StreamMethod<Watch, Piece>, 
 /**
  * The Project's servers, then their list again each time it
  * changes: what a terminal or an Agent started that listens on

@@ -3,7 +3,7 @@
 //! in Windows' own tables of sockets and processes, with its step 8. Until
 //! then `open`, `ports` and `stop_server` refuse and say so.
 
-use crate::model::{Open, Size};
+use crate::model::{Drawn, Open, Size};
 use banda_kernel::{ModuleProject, ProjectId, Stream};
 use std::convert::Infallible;
 use std::sync::Arc;
@@ -52,7 +52,7 @@ impl Terminal {
         match self.none {}
     }
 
-    pub fn watch(self: &Arc<Self>) -> Stream {
+    pub fn watch(self: &Arc<Self>, _: Option<Drawn>) -> Stream {
         match self.none {}
     }
 }

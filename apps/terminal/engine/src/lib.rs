@@ -31,7 +31,7 @@ pub use windows::{NO_SERVERS, NO_TERMINALS};
 use banda_kernel::{
     Call, Hands, Kind, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream,
 };
-use model::{Open, Piece, Running, Servers, Size, TerminalId};
+use model::{Open, Piece, Running, Servers, Size, TerminalId, Watch};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 #[cfg(unix)]
@@ -126,9 +126,11 @@ banda_kernel::methods! {
         /// Stops the program and what it started.
         call close(One) -> (), Run;
         /// The screen so far, then what it prints, then how it ended.
-        /// Watching shows what a Person types, such as a sign-in's code.
+        /// A window that says what it drew `after` a reconnect hears
+        /// only what came since, while the terminal keeps it. Watching
+        /// shows what a Person types, such as a sign-in's code.
         // It needs Run, for what the screen shows, and only reads it.
-        stream watch(One) -> Piece, Run, read;
+        stream watch(Watch) -> Piece, Run, read;
         /// The Project's servers, then their list again each time it
         /// changes: what a terminal or an Agent started that listens on
         /// this computer (ADR 0044).
@@ -355,8 +357,9 @@ impl Terminals {
         Ok(())
     }
 
-    async fn watch(&self, call: Call, One { terminal }: One) -> Result<Stream, Refusal> {
-        Ok(self.find(call.project().id(), terminal)?.watch())
+    async fn watch(&self, call: Call, watch: Watch) -> Result<Stream, Refusal> {
+        let terminal = self.find(call.project().id(), watch.terminal)?;
+        Ok(terminal.watch(watch.after))
     }
 
     async fn running(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {

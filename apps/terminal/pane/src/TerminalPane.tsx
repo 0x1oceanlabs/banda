@@ -16,6 +16,7 @@ import {
   Unreachable,
 } from "@banda/contract"
 import {
+  type Drawn,
   type Ended,
   type Piece,
   TERMINAL_FILE,
@@ -381,6 +382,9 @@ function Screen({
     // once, not over and over. A Pane drawn again on a new engine, its
     // last one having said goodbye, has had its screen.
     let followed = heardUnder.current !== undefined
+    // Set while the screen draws output its terminal printed while this
+    // Pane was not heard: its answers to that are not typed.
+    let old = false
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { project })
     const input = new Input(call, terminal, (error) => {
@@ -410,14 +414,33 @@ function Screen({
         terminal,
         size: { cols: drawn?.cols ?? 80, rows: drawn?.rows ?? 24 },
       })
+    // How much of the terminal's output this screen has drawn, as its
+    // pieces said: after a reconnect the watch goes on from here, with no
+    // screen again (`terminal.watch {after}`). None from an engine older
+    // than that, which sends the whole screen each time.
+    let seen: Drawn | undefined
     const hear = (piece: Piece) => {
       if (!drawn) return
       switch (piece.kind) {
         case "snapshot":
+        case "resumed":
+          if (piece.kind === "snapshot") {
+            drawn.resetAndWrite(piece.history)
+            seen = piece.drawn
+          } else {
+            // The screen is as it was drawn, and what it missed is old:
+            // a query in it is answered no more than a snapshot's is.
+            old = true
+            try {
+              drawn.write(piece.missed)
+            } finally {
+              old = false
+            }
+            if (seen) seen = { ...seen, at: piece.at }
+          }
           followed = true
           parked = false
           heardUnder.current = bootOf(engine)
-          drawn.resetAndWrite(piece.history)
           drawn.setSharedGrid(piece.size)
           input.inOrder(piece.in_order === true)
           if (
@@ -434,6 +457,7 @@ function Screen({
           break
         case "output":
           drawn.write(piece.text)
+          if (seen && piece.at !== undefined) seen = { ...seen, at: piece.at }
           break
         case "resized":
           drawn.setSharedGrid(piece.size)
@@ -452,7 +476,8 @@ function Screen({
       stop = engine.stream(
         project,
         "terminal.watch",
-        { terminal },
+        // Asked again after a reconnect, it says what it drew by then.
+        () => ({ terminal, ...(seen && { after: seen }) }),
         hear,
         (refusal) => {
           if (left) return
@@ -533,7 +558,8 @@ function Screen({
         theme: themeOf(element),
         font: fontNow(),
         cursor: cursorOf(writingNow.current),
-        onData: (data) => typed.current(data),
+        // What the screen answers to output drawn late types nothing.
+        onData: (data) => old || typed.current(data),
         onResize: (cols, rows) => {
           measured = { cols, rows }
           // The screen redraws at every size as a column grows; the shell
