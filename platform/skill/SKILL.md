@@ -71,6 +71,16 @@ Agent or runs or opens something outside Banda, as `thread.new` with
 `ask`: write no such line in `keys.toml`, by a tool, a command or an edit,
 and give them the line instead (ADR 0083).
 
+## Doing in the window what a key does
+
+The `act` tool, or `banda act <id> [--args JSON]`, runs one of Banda's
+actions in your Person's window by its id, as its key does: `terminal.new`
+puts a terminal beside the Pane in focus, `overview.toggle` shows the
+Overview. `keys_list`, or `banda keys`, names every action; the topic
+`keys` says how to pick one. It goes through the engine, so it works
+behind the fence. What acts as your Person, as `thread.new` with `ask`,
+is refused: it stays theirs (ADR 0083).
+
 ## Opening the Banda menu for the Person
 
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space
@@ -137,7 +147,8 @@ your Person has outside it is out of your reach too:
 - what needs another user's rights: `sudo`, `newuidmap`, `fusermount`,
   and so AppImages (`APPIMAGE_EXTRACT_AND_RUN=1` runs one) and sshfs;
 - devices but the plain ones: no GPU, `kvm`, `fuse`, `tun` or sound;
-- Banda's window: `banda menu` and `banda files` reach none.
+- Banda's window: `banda menu` and `banda files` reach none. `banda act`
+  and the `act` tool go through the engine, and do.
 
 What you start ends with your Harness, in the background too: a dev
 server, a trial, `gh run watch`, a long build. Your Harness ends as the

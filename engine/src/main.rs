@@ -29,6 +29,8 @@
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //! - `banda menu [route]` opens the Banda menu in the window, at a route
 //!   such as `actions` or `project.<name>` (ADR 0017).
+//! - `banda act <id>` runs one of Banda's actions in the window, as its
+//!   key does, and prints `{"ok": …}` (ADR 0127, decision 2).
 //! - `banda modules` prints what each module offers, one JSON object per
 //!   line; `--unstable` lists the paths not in the contract yet (ADR 0022).
 //! - `banda problems` prints what broke in Banda, one JSON object per
@@ -47,6 +49,7 @@
 //! logs out at its screen (`control.rs`).
 
 mod account;
+mod act;
 mod app;
 mod apps;
 mod build_id;
@@ -280,6 +283,20 @@ enum Command {
         /// The list as JSON, one action per line.
         #[arg(long)]
         json: bool,
+    },
+    /// Runs one of Banda's actions in the window, by its id, as its key
+    /// does: `banda act overview.toggle` shows the Overview. `banda keys`
+    /// lists every action, what it takes and the scope it works in: an
+    /// action of a scope runs for the Pane in focus. It prints what the
+    /// engine said as one JSON line, and exits 1, saying why, for an
+    /// action Banda has not, args it does not take, and a window that is
+    /// not open or does not run it.
+    Act {
+        /// The action's id, as `overview.toggle` or `terminal.new`.
+        id: String,
+        /// What the action takes, as JSON: `{"address":"https://…"}`.
+        #[arg(long, value_parser = |json: &str| serde_json::from_str::<banda_look::keys::Args>(json))]
+        args: Option<banda_look::keys::Args>,
     },
     /// Opens Files in Banda's window on a folder: PATH, or where this
     /// runs; a file opens its folder with it picked. It shows in the
@@ -825,6 +842,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Account { what } => account::account(&places, what).await,
         Command::Devices { what } => devices::devices(&places, what).await,
         Command::Secret { what } => account::secret(&places, what).await,
+        Command::Act { id, args } => act::act(&places, id, args).await,
         Command::Files { path, project } => files::open(&places, path, project).await,
         Command::Machine { json } => machine(&places, json).await,
         Command::Update {

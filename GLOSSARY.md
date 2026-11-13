@@ -714,8 +714,9 @@ _Avoid_: main key, except as Settings' label for it.
 
 **Action**:
 One thing the Person can do, by id, with a JSON Schema of what it takes:
-keys, buttons, menus, widgets, the CLI and Agents all run the same one
-(ADR 0005, ADR 0071).
+keys, buttons, menus, widgets, the CLI (`banda act`) and Agents (the `act`
+tool) all run the same one (ADR 0005, ADR 0071, ADR 0127). An Agent runs
+any but what acts as the Person, their own gesture (ADR 0083).
 _Avoid_: command (that is a request to an App).
 
 **Pane menu**:

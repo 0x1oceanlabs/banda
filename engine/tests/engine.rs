@@ -922,6 +922,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "login_finish",
                 "limits",
                 "keys_list",
+                "act",
                 "keys_bind",
                 "keys_free",
                 "keys_reset",

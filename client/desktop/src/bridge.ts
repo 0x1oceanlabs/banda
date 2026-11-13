@@ -15,6 +15,8 @@ import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
 import type { Address } from "@banda/contract"
 import type {
+  ActAnswer,
+  ActAsk,
   HostEntry,
   HostState,
   HostTest,
@@ -169,6 +171,18 @@ export const BRIDGE = bridge({
     open: send<[route: string]>(),
     /** Calls `listener` with each route the menu is asked to open at. */
     listen: push<string>(),
+  },
+  /**
+   * Actions the window runs for who asks from outside its page (ADR 0127,
+   * decision 2): the engine, for `banda act` and an Agent's `act` tool,
+   * and main itself, as the menu bar's rows. The one road by which main
+   * asks the page to run an action (acts.ts).
+   */
+  act: {
+    /** Calls `listener` with each action the window is asked to run. */
+    asked: push<ActAsk>(),
+    /** The window's answer to one: it ran it, or why not. */
+    answer: send<[answer: ActAnswer]>(),
   },
   /** The desktop's notifications and its quiet: the notifications
    * module's (ADR 0056). */

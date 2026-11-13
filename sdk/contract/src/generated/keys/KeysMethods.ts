@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { Nothing } from "../Nothing";
 import type { StreamMethod } from "../StreamMethod";
+import type { Act } from "./Act";
 import type { Bind } from "./Bind";
 import type { Key } from "./Key";
 import type { Listed } from "./Listed";
@@ -22,6 +23,20 @@ export type KeysMethods = {
  * here before binding it.
  */
 list: CallMethod<Nothing, Array<Listed>>, 
+/**
+ * Runs one of Banda's actions in your Person's window by its id,
+ * as its key does: `overview.toggle` shows the Overview,
+ * `terminal.new` opens a terminal beside the Pane in focus.
+ * `keys_list` names every action, what it takes and the scope
+ * it works in: an action of a scope runs for the Pane in focus,
+ * when that Pane is of the scope. It refuses, with why, an
+ * action Banda has not, args it does not take, and what only
+ * your Person does: an action that sends words to an Agent, or
+ * runs or opens something outside Banda, as `thread.new` with
+ * `ask` does, and what is written and sent in a field, as the
+ * Composer's Send. With no window open, it says so.
+ */
+act: CallMethod<Act, string>, 
 /**
  * Binds a key to an action, in keys.toml: `Alt+M` to
  * `column.maximize`, with the args it takes when it takes any,

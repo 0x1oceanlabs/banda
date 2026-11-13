@@ -4,6 +4,8 @@
  * `@banda/core/react`.
  */
 export {
+  type ActAnswer,
+  type ActAsk,
   type Cap,
   type HostEntry,
   type HostState,

@@ -10,6 +10,12 @@
 //! would type, a `none` that frees nothing. Only the Person binds a key
 //! that acts as them (ADR 0083, decision 3).
 //!
+//! An action runs by its id too (`keys.act`, ADR 0127, decision 2), for
+//! `banda act` and an Agent's `act` tool: the id and the args are checked
+//! here against what the manifests declare, and the window where the
+//! Person is runs it, asked by the kernel's road. An Agent runs any
+//! action but what acts as the Person.
+//!
 //! A machine's own settings are read through it too ([`read`]), so another
 //! device's window shows them as this machine has them (ADR 0106,
 //! decision 7).
@@ -26,6 +32,7 @@ use serde_json::Value;
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::watch;
 use ts_rs::TS;
 
@@ -34,6 +41,9 @@ use read::{ReadSetting, SettingsRead};
 
 /// The file the Person's keys are in.
 const FILE: &str = "keys.toml";
+
+/// How long the window has to run an action and say so.
+const ACTING: Duration = Duration::from_secs(10);
 
 /// An action as `banda keys` lists it.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -101,6 +111,18 @@ pub struct Key {
     pub scope: Option<String>,
 }
 
+/// An action to run in the Person's window, as its key does.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
+#[ts(export, export_to = "keys/")]
+pub struct Act {
+    /// The action's id, as `keys_list` lists it: `overview.toggle`.
+    pub action: String,
+    /// What the action takes, when it takes any, as `keys_list` says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub args: Option<Args>,
+}
+
 /// The mod to hold for every Banda key.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS, JsonSchema)]
 #[ts(export, export_to = "keys/")]
@@ -166,24 +188,71 @@ fn may_bind(by: Participant, bind: &Bind) -> Result<(), Refusal> {
         return Ok(());
     }
     let manifests = banda_settings::manifests();
-    let Some((_, action)) = look::action_named(&manifests, id) else {
-        return Err(Refusal::invalid(format!(
-            "Banda has no action {id}; keys_list lists them"
-        )));
-    };
-    let Some(given) = action.as_person(bind.args.as_ref()) else {
-        return Ok(());
-    };
-    let with = if given.is_empty() {
-        String::new()
+    let action = declared(&manifests, id)?;
+    match as_person(action, bind.args.as_ref()) {
+        None => Ok(()),
+        Some(what) => Err(Refusal::forbidden(format!(
+            "Only your Person binds a key to {what}: it acts as them. Give them \
+             the line, to add to keys.toml themselves."
+        ))),
+    }
+}
+
+/// The action `id` names among the manifests', as the look finds a line's;
+/// or that Banda has none such.
+fn declared<'a>(manifests: &'a look::Manifests, id: &str) -> Result<&'a look::Action, Refusal> {
+    look::action_named(manifests, id)
+        .map(|(_, action)| action)
+        .ok_or_else(|| {
+            Refusal::invalid(format!(
+                "Banda has no action {id}; keys_list, or `banda keys`, lists them"
+            ))
+        })
+}
+
+/// `action` with the args that make it act as the Person, as `thread.new
+/// with ask`, when given `args` it does (ADR 0083, decision 3); none when
+/// it does not.
+fn as_person(action: &look::Action, args: Option<&Args>) -> Option<String> {
+    let given = action.as_person(args)?;
+    Some(if given.is_empty() {
+        action.id.clone()
     } else {
-        format!(" with {}", given.join(", "))
-    };
-    Err(Refusal::forbidden(format!(
-        "Only your Person binds a key to {}{with}: it acts as them. Give them \
-         the line, to add to keys.toml themselves.",
-        action.id
-    )))
+        format!("{} with {}", action.id, given.join(", "))
+    })
+}
+
+/// The action `act` names, for `by` to run it (ADR 0127, decision 2): its
+/// id as Banda has it now, and its title. Refused, in words that name what
+/// was wrong: an id Banda has not, args the action does not take, as a
+/// line of keys.toml's are checked, and for an Agent what stays the
+/// Person's own gesture (ADR 0083, decision 3): an action that acts as
+/// them, as its mark says, and one of a field's scope, as the Composer's
+/// Send, since what is written and sent in a field is theirs, though an
+/// Agent may bind its key. Every other action an Agent runs, the Tiling's
+/// and the focus's too. An action that declares no args is given none, so
+/// what only another part of the window hands it, as `terminal.run` its
+/// line, no caller here does.
+fn may_act(by: Participant, act: &Act) -> Result<(String, String), Refusal> {
+    let manifests = banda_settings::manifests();
+    let action = declared(&manifests, act.action.trim())?;
+    let none = Args::new();
+    if let Some(wrong) = look::wrong_args(action, act.args.as_ref().unwrap_or(&none)) {
+        return Err(Refusal::invalid(wrong));
+    }
+    if let Participant::Agent(_) = by {
+        let in_field = (manifests.scopes.iter())
+            .any(|scope| scope.field && Some(&scope.id) == action.scope.as_ref());
+        let theirs =
+            as_person(action, act.args.as_ref()).or_else(|| in_field.then(|| action.id.clone()));
+        if let Some(what) = theirs {
+            return Err(Refusal::forbidden(format!(
+                "Only your Person runs {what}: it acts as them. Tell them what to do \
+                 in the window instead."
+            )));
+        }
+    }
+    Ok((action.id.clone(), action.title.clone()))
 }
 
 /// A key of a settings file to set, as `banda settings set` takes it.
@@ -385,6 +454,14 @@ impl KeysModule {
         Ok(list(&self.config).0)
     }
 
+    async fn act(&self, call: Call, act: Act) -> Result<String, Refusal> {
+        let (action, title) = may_act(call.participant(), &act)?;
+        // The id as Banda has it now, which the window runs by.
+        let asked = Act { action, ..act };
+        let () = call.ask_window("act", &asked, ACTING).await?;
+        Ok(format!("Banda's window ran “{title}”"))
+    }
+
     async fn bind(&self, call: Call, key: Bind) -> Result<String, Refusal> {
         may_bind(call.participant(), &key)?;
         bind(&self.config, &key).map_err(refused)
@@ -461,6 +538,18 @@ banda_kernel::methods! {
         /// or Banda's own), and what it takes. Find an action by its title
         /// here before binding it.
         call list(Nothing) -> Vec<Listed>, Read, tool "keys_list";
+        /// Runs one of Banda's actions in your Person's window by its id,
+        /// as its key does: `overview.toggle` shows the Overview,
+        /// `terminal.new` opens a terminal beside the Pane in focus.
+        /// `keys_list` names every action, what it takes and the scope
+        /// it works in: an action of a scope runs for the Pane in focus,
+        /// when that Pane is of the scope. It refuses, with why, an
+        /// action Banda has not, args it does not take, and what only
+        /// your Person does: an action that sends words to an Agent, or
+        /// runs or opens something outside Banda, as `thread.new` with
+        /// `ask` does, and what is written and sent in a field, as the
+        /// Composer's Send. With no window open, it says so.
+        call act(Act) -> String, Write, tool "act";
         /// Binds a key to an action, in keys.toml: `Alt+M` to
         /// `column.maximize`, with the args it takes when it takes any,
         /// in its scope's table for an action of a scope. Banda's keys
@@ -841,6 +930,139 @@ mod tests {
         // The Person binds it, as with a line of their own in keys.toml.
         let person = Participant::Person(PersonId::new());
         assert_eq!(may_bind(person, &ask), Ok(()));
+    }
+
+    fn acted(action: &str, args: Value) -> Act {
+        Act {
+            action: action.to_owned(),
+            args: args.as_object().cloned(),
+        }
+    }
+
+    #[test]
+    fn an_action_is_run_by_an_id_banda_has_with_args_it_takes() {
+        let person = Participant::Person(PersonId::new());
+        let agent = Participant::Agent(AgentId::new());
+        for by in [person, agent] {
+            let (id, title) = may_act(by, &acted("overview.toggle", Value::Null)).unwrap();
+            assert_eq!(id, "overview.toggle");
+            assert_eq!(title, "Overview of every window");
+            // The Tiling's and the focus's are an Agent's to run too.
+            for id in ["terminal.new", "column.maximize", "pane.close"] {
+                assert!(may_act(by, &acted(id, Value::Null)).is_ok(), "{id}");
+            }
+            let open = acted("browser.open", json!({ "address": "https://github.com" }));
+            assert!(may_act(by, &open).is_ok());
+            // An id it had before runs the action as it is called now.
+            let (id, _) = may_act(by, &acted(" sidebar.settle\n", Value::Null)).unwrap();
+            assert_eq!(id, "sidebar.archive");
+
+            let nothing = may_act(by, &acted("no.such", Value::Null)).unwrap_err();
+            assert_eq!(nothing.code, Code::Invalid);
+            assert_eq!(
+                nothing.message,
+                "Banda has no action no.such; keys_list, or `banda keys`, lists them"
+            );
+        }
+    }
+
+    #[test]
+    fn args_an_action_does_not_take_are_refused_by_name() {
+        let person = Participant::Person(PersonId::new());
+        let said = |action: &str, args: Value| {
+            let refused = may_act(person, &acted(action, args)).unwrap_err();
+            assert_eq!(refused.code, Code::Invalid);
+            refused.message
+        };
+        assert_eq!(
+            said("browser.open", json!({ "url": "x" })),
+            "browser.open takes address, file, words, project, not url"
+        );
+        assert_eq!(
+            said("browser.open", json!({ "address": 7 })),
+            "address is a string"
+        );
+        assert_eq!(said("file.open", json!({})), "file.open needs file");
+        assert_eq!(
+            said("overview.toggle", json!({ "now": true })),
+            "overview.toggle takes no args"
+        );
+        // What an action declares no args for, only the window gives it:
+        // no shell is handed a line from here.
+        assert_eq!(
+            said("terminal.run", json!({ "line": "rm -rf ~" })),
+            "terminal.run takes no args"
+        );
+        // A yes or a no is taken as one.
+        let pin = json!({ "project": "p", "pinned": true });
+        assert!(may_act(person, &acted("projects.pin", pin)).is_ok());
+        assert_eq!(
+            said("projects.pin", json!({ "project": "p", "pinned": "yes" })),
+            "pinned is a boolean"
+        );
+    }
+
+    #[test]
+    fn only_the_person_runs_what_acts_as_them() {
+        let agent = Participant::Agent(AgentId::new());
+        let person = Participant::Person(PersonId::new());
+        let file = json!({ "file": "/tmp/a.pdf" });
+        let ask = acted("thread.new", json!({ "ask": "hello" }));
+        let refused = may_act(agent, &ask).unwrap_err();
+        assert_eq!(refused.code, Code::Forbidden);
+        assert!(
+            refused
+                .message
+                .starts_with("Only your Person runs thread.new with ask: it acts as them."),
+            "{}",
+            refused.message
+        );
+        let outside = may_act(agent, &acted("file.outside", file.clone())).unwrap_err();
+        assert_eq!(outside.code, Code::Forbidden);
+        assert!(
+            outside
+                .message
+                .starts_with("Only your Person runs file.outside:"),
+            "{}",
+            outside.message
+        );
+        // What the clipboard holds goes to no shell by an Agent's hand; a
+        // field's own actions, as the Composer's Send of what its Person
+        // wrote, are theirs; and no Agent deletes a Thread, as the engine
+        // lets none.
+        let thread = json!({ "project": "p", "item": "t" });
+        let theirs = [
+            acted("edit.paste", Value::Null),
+            acted("edit.paste-plain", Value::Null),
+            acted("agents.composer.send", Value::Null),
+            acted("agents.composer.send-other", Value::Null),
+            acted("agents.composer.plan", Value::Null),
+            acted("agents.delete-thread", thread),
+        ];
+        for act in &theirs {
+            let refused = may_act(agent, act).unwrap_err();
+            assert_eq!(refused.code, Code::Forbidden, "{act:?}");
+            assert!(
+                refused
+                    .message
+                    .starts_with(&format!("Only your Person runs {}:", act.action)),
+                "{}",
+                refused.message
+            );
+            assert!(may_act(person, act).is_ok(), "{act:?}");
+        }
+        // An Agent still binds the Composer's keys for its Person.
+        let send = Bind {
+            scope: Some("composer".to_owned()),
+            ..bound("Ctrl+Return", "agents.composer.send")
+        };
+        assert_eq!(may_bind(agent, &send), Ok(()));
+        // The Person's own `banda act` runs them.
+        assert!(may_act(person, &ask).is_ok());
+        assert!(may_act(person, &acted("file.outside", file)).is_ok());
+        // Given none of the args that make it so, it is an Agent's too.
+        let new = acted("thread.new", json!({ "harness": "fake" }));
+        assert!(may_act(agent, &new).is_ok());
     }
 
     #[test]

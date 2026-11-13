@@ -15,6 +15,7 @@ import {
   type KeptHosts,
   linkOf,
   linkRefused,
+  type Route,
   routeAct,
   type Store,
 } from "@banda/core"
@@ -1528,19 +1529,23 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     run: (_, args) => presentHere(args, device.files.show),
   },
   {
-    // The menu's Paste, as a terminal's: the focused field takes it.
+    // The menu's Paste, as a terminal's: the focused field takes it. Only
+    // the Person runs it (ADR 0083, decision 3): what the clipboard holds
+    // goes where the focus is, a shell among them, which would run it.
     id: "edit.paste",
     section: "Banda",
     title: "Paste",
     unlisted: true,
+    runsAsPerson: true,
     run: () => device.edit.paste(),
   },
   {
-    // The composer menu's "Paste as plain text".
+    // The composer menu's "Paste as plain text"; the Person's, as Paste.
     id: "edit.paste-plain",
     section: "Banda",
     title: "Paste as plain text",
     unlisted: true,
+    runsAsPerson: true,
     run: () => device.edit.pastePlain(),
   },
   {
@@ -1929,19 +1934,20 @@ export function fromHere(shell: Pick<Shell, "here">): {
  * where the one router says (ADR 0106, law 3): keys, menus and Widgets go
  * through here, and a Pane's acts after its own route (`handlesOf`), so
  * an action does the same from each. One that does not run says why, as
- * "Not on arc yet: Open in a browser", never nothing.
+ * "Not on arc yet: Open in a browser", never nothing; how it went is for
+ * what asked from outside the window (asked.ts).
  */
 export function runAction(
   shell: Shell,
   action: string | Action<Shell>,
   args?: Args
-): void {
+): Promise<Route> {
   const known =
     typeof action === "string"
       ? ACTIONS.find((one) => one.id === action)
       : action
   if (!known) throw new Error(`Banda has no action ${String(action)}`)
-  actAs(
+  return actAs(
     shell.hosts,
     () => routeAct(shell.hosts, actOf(known), fromHere(shell), args),
     (routed) => known.run(shell, routed)

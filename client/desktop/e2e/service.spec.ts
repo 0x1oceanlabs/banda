@@ -102,11 +102,14 @@ test("main runs the page's Quit Banda, as macOS's Quit does while Agents work, a
   await expect(thread.getByText("Waiting.", { exact: true })).toBeVisible()
 
   // As main does on macOS where `banda stop` refused (closing.ts): it runs
-  // the action in the window, as what a Pane in its own window asks.
+  // the action in the window, on the road it asks the page's actions by
+  // (acts.ts). The page's answer names an ask main did not make, and is
+  // dropped.
   const quit = () =>
     app.evaluate(({ BrowserWindow }) =>
-      BrowserWindow.getAllWindows()[0]?.webContents.send("popped.asked", {
-        run: { action: "banda.quit" },
+      BrowserWindow.getAllWindows()[0]?.webContents.send("act.asked", {
+        id: -1,
+        action: "banda.quit",
       })
     )
   await quit()

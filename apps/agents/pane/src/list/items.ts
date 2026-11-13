@@ -455,7 +455,9 @@ const archive: ItemAction = {
  * that host is back, so one said to have failed never lands later (ADR
  * 0096, decision 8). Once the host took it, every Pane that shows the
  * Thread closes, as nothing is left there to show; one the host refuses,
- * as a Thread at work, keeps its Panes, and a toast says why.
+ * as a Thread at work, keeps its Panes, and a toast says why. Only the
+ * Person runs it or binds a key to it (ADR 0083, decision 3): the engine
+ * lets no Agent delete a Thread, and the window deletes as its Person.
  */
 const remove: ItemAction = {
   id: "agents.delete-thread",
@@ -469,6 +471,7 @@ const remove: ItemAction = {
     },
     ["project", "item"]
   ),
+  runsAsPerson: true,
   group: "other",
   does: "delete",
   row: () => null,

@@ -579,7 +579,8 @@
           "item"
         ],
         "additionalProperties": false
-      }
+      },
+      "runsAsPerson": true
     },
     {
       "id": "agents.move-thread",

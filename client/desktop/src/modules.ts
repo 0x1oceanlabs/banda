@@ -4,7 +4,9 @@
  * is in the page. Main builds its runtime with their layer, answers the
  * bridge's channels with their answers and what their engine parts ask
  * with `asked` (road.ts), serves their hosts of `app://` with `served`,
- * and tells them when its window opens.
+ * and tells them when its window opens. The keys module has no part of
+ * its own here: what it asks, an action to run, the window's own road to
+ * its page answers (acts.ts).
  */
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
@@ -12,6 +14,7 @@ import { notificationsDesktop } from "@banda/notifications-desktop"
 import { followEngine, updates } from "@banda/updates-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
+import { Acts, actsAsked } from "./acts"
 
 /** What a module's part uses: its own services and what main gives it. */
 type Uses<M> =
@@ -24,20 +27,26 @@ const asked: Readonly<
   Record<
     string,
     Asked<
-      Uses<
-        | typeof browserDesktop
-        | typeof agentsDesktop
-        | typeof notificationsDesktop
-      >
+      | Uses<
+          | typeof browserDesktop
+          | typeof agentsDesktop
+          | typeof notificationsDesktop
+        >
+      | Acts
     >
   >
 > = {
   browser: browserDesktop.asked,
   agents: agentsDesktop.asked,
+  keys: actsAsked,
 }
 
 export const modules = {
-  layer: Layer.mergeAll(browserDesktop.layer, notificationsDesktop.layer),
+  layer: Layer.mergeAll(
+    browserDesktop.layer,
+    notificationsDesktop.layer,
+    Acts.layer
+  ),
   /** Under where the bridge's table takes each module in. */
   answers: {
     browser: browserDesktop.answers,

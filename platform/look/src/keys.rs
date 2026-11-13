@@ -952,8 +952,9 @@ fn types(bind: &Bind) -> bool {
 }
 
 /// What is wrong with `args` for `action`, by its JSON Schema: a name it
-/// does not take, one it must have, or a value of another kind.
-fn wrong_args(action: &Action, given: &Args) -> Option<String> {
+/// does not take, one it must have, or a value of another kind. A line of
+/// keys.toml and an action run by its id (`keys.act`) are checked alike.
+pub fn wrong_args(action: &Action, given: &Args) -> Option<String> {
     let schema = action.args.as_ref();
     let properties = schema.and_then(|schema| schema["properties"].as_object());
     let Some(properties) = properties else {
@@ -971,6 +972,7 @@ fn wrong_args(action: &Action, given: &Args) -> Option<String> {
         let kind = property["type"].as_str().unwrap_or("string");
         let fits = match kind {
             "number" => value.is_number(),
+            "boolean" => value.is_boolean(),
             _ => value.is_string(),
         };
         if !fits {

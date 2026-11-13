@@ -68,6 +68,7 @@ import {
   poppedOf,
   poppedRoute,
 } from "@banda/core"
+import { type Acts, actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
 import { relayed, relayedAs, saveCopy } from "./bytes"
 import { openDoor } from "./door"
@@ -697,6 +698,8 @@ async function ready(): Promise<void> {
       later: [none, () => Effect.sync(update.later)],
       seen: [none, () => Effect.sync(update.seen)],
     },
+    // The page's answers to the actions it was asked to run (acts.ts).
+    act: actsAnswers,
     // Panes in windows of their own (ADR 0025, decision 9): the window
     // pops them out; what they ask goes to it.
     popped: {
@@ -776,22 +779,13 @@ function showMenuBar(): void {
     // `pane.pick`, as a call's notice goes there); the Thread Pane's
     // kind is the agents module's (ThreadPane.tsx).
     openThread: (project, thread, title) => {
-      const contents = openBanda().webContents
-      const tell = () =>
-        tellPage(contents, BRIDGE.popped.asked, {
-          run: {
-            action: "pane.pick",
-            args: {
-              project,
-              pane: {
-                kind: "agents.thread",
-                args: { thread, harness: "", title },
-              },
-            },
-          },
+      openBanda()
+      runtime.runFork(
+        runOwn("pane.pick", {
+          project,
+          pane: { kind: "agents.thread", args: { thread, harness: "", title } },
         })
-      if (contents.isLoadingMainFrame()) contents.once("did-finish-load", tell)
-      else tell()
+      )
     },
     // As ⌘Q: Quit Banda, asking first while Agents work (closing.ts).
     quit: () => app.quit(),
@@ -831,11 +825,11 @@ const quitBanda = Effect.sync(() => {
  * Quit Banda as macOS's Quit runs it (closing.ts): `banda stop` with no
  * terminal to ask in stops the engine where no Agent works, and Banda
  * quits. Where some do, the window comes to the front and its page's Quit
- * Banda asks first, as on Ctrl+Q, told on the channel that runs what a
- * Pane in its own window asks; a page that crashed or loads, or a quit
- * that comes again soon after, asks in a system dialog instead.
+ * Banda asks first, as on Ctrl+Q, run by the road main asks the page's
+ * actions on (acts.ts); a page that crashed or loads, or a quit that
+ * comes again soon after, asks in a system dialog instead.
  */
-const askToQuit = quitAsking({
+const askToQuit = quitAsking<Stop | Acts>({
   working: Stop.use((stop) => stop.unlessWorking),
   // With no window shown, as Banda lives in the menu bar, macOS asks.
   pageCan: Effect.sync(() => {
@@ -847,10 +841,11 @@ const askToQuit = quitAsking({
       !contents.isLoadingMainFrame()
     )
   }),
-  askPage: Effect.sync(() =>
-    tellPage(inFront()?.webContents, BRIDGE.popped.asked, {
-      run: { action: "banda.quit" },
-    })
+  // Nothing waits on the page's answer: a quit that comes again soon
+  // after asks in a system dialog.
+  askPage: Effect.sync(() => inFront()).pipe(
+    Effect.andThen(Effect.forkDetach(runOwn("banda.quit"))),
+    Effect.asVoid
   ),
   // How many work, as the menu bar heard: one at least, as `banda stop`
   // found some. Over the window when it shows; else in front, by itself.
