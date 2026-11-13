@@ -1,6 +1,6 @@
 import { rowsOf } from "@banda/contract/settings"
 import { expect, test } from "vitest"
-import { groupsOf, parseLink, search, SECTIONS } from "./sections"
+import { groupsOf, parseLink, search, SECTIONS, switches } from "./sections"
 
 test("each section has an id of its own, so a link can open any of them", () => {
   const ids = SECTIONS.map((section) => section.id)
@@ -67,4 +67,17 @@ test("another drawn table stays out of the search", () => {
   expect(drawn.length).toBeGreaterThan(0)
   for (const { key } of drawn)
     expect(search(key).map((found) => found.row.key)).not.toContain(key)
+})
+
+test("a section switches with Settings for where it shows one machine's part: a file's, or what its engine keeps; Machines shows every machine itself", () => {
+  const switching = SECTIONS.filter(switches).map((section) => section.id)
+  // What an engine keeps, in no file.
+  expect(switching).toEqual(
+    expect.arrayContaining(["general", "projects", "problems"])
+  )
+  // A file with a part of the machine's.
+  expect(switching).toEqual(expect.arrayContaining(["agents", "sharing"]))
+  // This device's alone, and every machine's.
+  expect(switching).not.toContain("appearance")
+  expect(switching).not.toContain("machines")
 })

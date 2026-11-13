@@ -9,7 +9,7 @@ import { existsSync, readFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, shot, withArc } from "./arc"
-import type { Window } from "./window"
+import { recordProblem, type Window } from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -45,7 +45,7 @@ async function onArc() {
     .click()
   const thread = page.getByRole("region", { name: TITLE, exact: true })
   await thread.getByRole("textbox", { name: "Message to Fake AI" }).focus()
-  return { page }
+  return { page, project, folder }
 }
 
 /** Alt+, and the Settings it opens, at section `name`. */
@@ -118,4 +118,85 @@ test("arc's settings while arc is away: its pill says so, and a change is refuse
   )
   await expect(path).toBeVisible()
   await shot(page, "settings-for-arc-away")
+})
+
+test("General, Projects and Problems switch with Settings for: arc's engine, its Projects, changed on arc, and its Problems, looked into on arc (ADR 0124, SE1)", async () => {
+  const { page, project, folder } = await onArc()
+  recordProblem(arc!, "arc's watch broke")
+  recordProblem(window!, "this machine's watch broke")
+  const projectsOf = (on: Pick<Arc, "banda">) =>
+    (
+      JSON.parse(on.banda("call", "projects.list")) as {
+        ok: { id: string; pinned: boolean; scratch: boolean }[]
+      }
+    ).ok
+  const pinned = (on: Pick<Arc, "banda">) =>
+    projectsOf(on)
+      .filter((one) => one.pinned)
+      .map((one) => one.id)
+  const scratch = (on: Pick<Arc, "banda">) =>
+    projectsOf(on).filter((one) => one.scratch).length
+
+  // Projects: arc's, by arc's folder, and a pin lands on arc alone.
+  const settings = await settingsAt(page, "Projects")
+  const switchOf = settings.getByRole("radiogroup", { name: "Settings for" })
+  const theirs = switchOf.getByRole("radio", { name: "arc" })
+  const ours = switchOf.getByRole("radio", { name: /^This (Mac|machine)$/ })
+  await expect(theirs).toHaveAttribute("aria-checked", "true")
+  await expect(settings.getByTitle(folder, { exact: true })).toBeVisible()
+  await settings.getByRole("switch", { name: "Pin Project" }).click()
+  await expect.poll(() => pinned(arc!)).toEqual([project])
+  expect(pinned(window!)).toEqual([])
+  await shot(page, "settings-projects-for-arc")
+  // This machine's, a click away: its own Projects, none of them arc's.
+  await ours.click()
+  await expect(settings.getByTitle(folder, { exact: true })).toHaveCount(0)
+  await theirs.click()
+
+  // Problems: arc's alone, with no logs folder to open from here, and a
+  // Thread that looks into one starts on arc.
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Problems/ })
+    .click()
+  await expect(theirs).toHaveAttribute("aria-checked", "true")
+  const broke = settings.getByRole("button", { name: /arc's watch broke/ })
+  await expect(broke).toBeVisible()
+  await expect(settings.getByText("this machine's watch broke")).toHaveCount(0)
+  await broke.click()
+  await expect(
+    settings.getByRole("button", { name: "Copy report" })
+  ).toBeVisible()
+  await expect(
+    settings.getByRole("button", { name: "Open logs folder" })
+  ).toHaveCount(0)
+  await shot(page, "settings-problems-for-arc")
+  // No Project there is Banda's checkout, so it starts in arc's No
+  // Project, whose first message makes its folder on arc.
+  const before = scratch(window!)
+  await settings.getByRole("button", { name: "Look into it" }).click()
+  await expect(
+    page
+      .getByRole("region", { name: /^Look into Banda's Problem/ })
+      .getByText(/^You said: Look into Banda's Problem/)
+  ).toBeVisible()
+  expect(scratch(arc!)).toBe(1)
+  expect(scratch(window!)).toBe(before)
+  // Its Thread takes the keys, and the Sheet goes (ADR 0102, decision 5).
+  await expect(settings).toHaveCount(0)
+  const kept = window!.banda("problems")
+  expect(kept).toContain("this machine's watch broke")
+  expect(kept).not.toContain("arc's watch broke")
+
+  // General: arc's engine and fence, and this device's rows say whose
+  // they are.
+  const general = await settingsAt(page, "General")
+  await expect(
+    general
+      .getByRole("radiogroup", { name: "Settings for" })
+      .getByRole("radio", { name: "arc" })
+  ).toHaveAttribute("aria-checked", "true")
+  await expect(general.locator('[data-key="fence"]')).toBeVisible()
+  await expect(general.getByText(/^Settings folder on this/)).toBeVisible()
+  await shot(page, "settings-general-for-arc")
 })

@@ -1,9 +1,9 @@
 /**
  * The Fence row in General (ADR 0083): whether the fence around every
- * Harness holds on this computer, what a new Thread starts with then, and
- * what an Agent gets behind it and never gets; where it does not hold
- * whole, why, and the one fix there is. The mode menus' Learn more leads
- * here (`general/fence`).
+ * Harness holds on the machine Settings shows, what a new Thread starts
+ * with then, and what an Agent gets behind it and never gets; where it
+ * does not hold whole, why, and the one fix there is. The mode menus'
+ * Learn more leads here (`general/fence`).
  */
 import type { Fence } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
@@ -114,7 +114,13 @@ type Shown = {
   lists?: { kept: boolean; caveat?: string }
 }
 
-function shownOf(fence: Fence, quit: string): Shown {
+/** `there`: another machine's name, where the fence is not this
+ * computer's; its words then name that machine, and how Banda starts
+ * again there. */
+function shownOf(fence: Fence, quit: string, there?: string): Shown {
+  const again = there
+    ? `restart Banda on ${there}`
+    : `quit Banda${quit && ` (${quit})`} and open it again`
   if (fence.fence === "holds") {
     const layers = fence.layers
       .map((layer) => (layer === "landlock" ? "Landlock" : layer))
@@ -123,7 +129,7 @@ function shownOf(fence: Fence, quit: string): Shown {
       return {
         word: "partly",
         layers,
-        about: `Partly. This Linux lacks a part the fence needs, so it has gaps. ${SUPERVISED}`,
+        about: `Partly. ${there ? `${there}'s` : "This"} Linux lacks a part the fence needs, so it has gaps. ${SUPERVISED}`,
         more: (
           <>
             {fence.docker_group && (
@@ -196,8 +202,8 @@ function shownOf(fence: Fence, quit: string): Shown {
         "Ubuntu doesn't let apps use user namespaces, which the fence needs.",
         <>
           <p className="text-meta">
-            Run this once in a Terminal to let Banda use them. Then quit Banda
-            {quit && ` (${quit})`} and open it again.
+            Run this once in a Terminal{there && ` on ${there}`} to let Banda
+            use them. Then {again}.
           </p>
           <Copyable text={APPARMOR} label="Copy the command" />
         </>
@@ -205,9 +211,11 @@ function shownOf(fence: Fence, quit: string): Shown {
     case "no_user_namespaces":
     case "refused":
       return off(
-        "This computer doesn't allow user namespaces, which the fence needs."
+        `${there ?? "This computer"} doesn't allow user namespaces, which the fence needs.`
       )
     case "unsupported_os":
+      // What another machine runs, its fence does not say.
+      if (there) return off(`Banda has no fence for ${there}'s system yet.`)
       return isMac
         ? off(
             "Banda has no fence for macOS yet.",
@@ -219,7 +227,7 @@ function shownOf(fence: Fence, quit: string): Shown {
       return off(
         "Banda's engine is from before the fence and gets it when it starts again.",
         <Note icon={InfoIcon}>
-          Quit Banda{quit && ` (${quit})`} and open it again to start it now.
+          {again.charAt(0).toUpperCase() + again.slice(1)} to start it now.
         </Note>,
         "Until then, new Threads start as they did."
       )
@@ -229,7 +237,7 @@ function shownOf(fence: Fence, quit: string): Shown {
       )
     case "setup_failed":
       return off(
-        "Banda couldn't set it up here.",
+        `Banda couldn't set it up ${there ? `on ${there}` : "here"}.`,
         <Details words={fence.words} />
       )
   }
@@ -286,17 +294,20 @@ function Copyable({ text, label }: { text: string; label: string }) {
 
 export function FenceRow({
   fence,
+  there,
   lit,
   onAgents,
 }: {
   fence: Fence
+  /** Another machine's name, where the fence is its. */
+  there?: string
   /** A link named it: it shows lit. */
   lit: boolean
   /** Opens Settings → Agents, where each Harness's new Threads' mode is. */
   onAgents?: () => void
 }) {
   const quit = useKeyLabel()("banda.quit") ?? ""
-  const shown = shownOf(fence, quit)
+  const shown = shownOf(fence, quit, there)
   const whole = holdsWhole(fence)
   return (
     <Item

@@ -5,6 +5,7 @@ import {
   clickNotice,
   desktopOf,
   firstThread,
+  recordProblem,
   setInFront,
   startWindow,
   textOf,
@@ -67,33 +68,13 @@ test("what breaks in the page and in main is kept as a Problem, and main's conso
   expect(statSync(join(dir, "state/logs/engine.log")).mode & 0o777).toBe(0o600)
 })
 
-/** A Problem as a part of Banda records it, through the CLI. */
-const record = (window: Window, message: string, at = "banda_git::watch") =>
-  window.banda(
-    "call",
-    "problems.record",
-    "--params",
-    JSON.stringify({
-      source: "engine",
-      kind: "panic",
-      message,
-      frames: [
-        {
-          file: "apps/git/engine/src/watch.rs",
-          function: at,
-          line: 40,
-        },
-      ],
-    })
-  )
-
 test("a new Problem tells once, silently, and opens in Settings → Problems (ADR 0039)", async () => {
   window = await startWindow()
   const { app, page } = window
   await expect((await firstThread(page)).composer).toBeVisible()
 
   // In front: a toast, whose Details opens the Problem in Settings.
-  record(window, "the watch broke")
+  recordProblem(window, "the watch broke")
   const toast = page
     .getByRole("region", { name: "Notifications" })
     .getByRole("listitem")
@@ -114,12 +95,12 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
     "apps/git/engine/src/watch.rs:40 in banda_git::watch"
   )
   // The same fault again only counts.
-  record(window, "the watch broke")
+  recordProblem(window, "the watch broke")
   await expect(toast).toBeHidden()
 
   // Away: one system notification, no sound; a click opens it.
   await setInFront(page, false)
-  record(window, "the index broke", "banda_git::index")
+  recordProblem(window, "the index broke", "banda_git::index")
   await expect
     .poll(async () =>
       (await desktopOf(app)).shown.map((notice) => notice.title)
@@ -162,7 +143,7 @@ test("Look into it asks an Agent in a new Thread, in the Project of Banda's chec
       .includes(`Look into Banda's Problem ${fingerprint}`)
 
   // From the toast, and from Settings → Problems.
-  record(window, "the watch broke")
+  recordProblem(window, "the watch broke")
   const toast = page
     .getByRole("region", { name: "Notifications" })
     .getByRole("listitem")
@@ -172,7 +153,7 @@ test("Look into it asks an Agent in a new Thread, in the Project of Banda's chec
   const [watch] = problemsOf(window)
   await expect.poll(() => asked(watch!.fingerprint)).toBe(true)
 
-  record(window, "the index broke", "banda_git::index")
+  recordProblem(window, "the index broke", "banda_git::index")
   await toast.getByRole("button", { name: "Details" }).click()
   const settings = page.getByRole("region", { name: "Settings", exact: true })
   await settings.getByRole("button", { name: "Look into it" }).click()

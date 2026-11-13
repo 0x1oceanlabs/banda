@@ -10,6 +10,7 @@
 import type { ComponentType, ReactNode } from "react"
 import type { Engine } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
+import type { Handles } from "../tiling/mount"
 import {
   aboutOf,
   type Row,
@@ -40,6 +41,7 @@ import { General } from "./General"
 import { Keys } from "./Keys"
 import { MachinesSettings } from "./MachinesSettings"
 import { ProblemsSettings } from "./ProblemsSettings"
+import { hasMachinePart } from "./machine-settings"
 import { showRows } from "./machines"
 import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
@@ -86,6 +88,11 @@ export type Section = {
   files?: SectionFile[]
   /** What it holds, under its title. */
   about: string
+  /** Whether it shows one machine's part, the one picked under "Settings
+   * for" (`switches`): said where its files do not say it. General,
+   * Projects and Problems show what a machine's engine keeps, in no file
+   * (ADR 0124, principle 9); Machines shows every machine itself. */
+  machine?: boolean
   /** Its own rows, by key. */
   custom?: { [key: string]: CustomRow }
   /** What it shows instead of its first file's rows, as a module draws
@@ -102,11 +109,16 @@ export type SectionProps = {
   engine: Engine
   /** That other machine, by its key in `hosts.toml`; none for this one. */
   on?: string
+  /** That other machine's name, as the Window shows it, for the words
+   * that say whose a thing is; none for this one. */
+  there?: string
   /** The part of it a link names. */
   lit?: string
-  /** Runs a window's action, as the Pane's `run`; none in a dialog of
-   * the settings. */
+  /** Runs a window's action for the machine it shows, through the router
+   * (ADR 0106, law 3); none in a dialog of the settings. */
   run?: WindowApi["run"]
+  /** Whether an action runs for that machine, and why not. */
+  runs?: Handles["runs"]
 }
 
 export const SECTIONS: Section[] = [
@@ -115,6 +127,7 @@ export const SECTIONS: Section[] = [
     title: "General",
     icon: SettingsIcon,
     about: "Banda's engine, its fence, and where its settings files are.",
+    machine: true,
     Body: General,
   },
   {
@@ -123,6 +136,7 @@ export const SECTIONS: Section[] = [
     icon: FoldersIcon,
     about:
       "The folders you and your Agents work in. Banda's engine keeps them, not a file.",
+    machine: true,
     Body: ProjectsSettings,
   },
   {
@@ -145,6 +159,7 @@ export const SECTIONS: Section[] = [
     ],
     about:
       "Where your Projects and Agents run. Each machine names itself, and every window shows that name.",
+    machine: false,
     Body: MachinesSettings,
   },
   {
@@ -234,7 +249,8 @@ export const SECTIONS: Section[] = [
     title: "Problems",
     icon: BugIcon,
     about:
-      "What broke in Banda itself, kept on this computer. Sharing sends a report only if you turn it on.",
+      "What broke in Banda itself, kept on the machine it broke on. Sharing sends a report only if you turn it on.",
+    machine: true,
     Body: ProblemsSettings,
   },
   {
@@ -296,6 +312,16 @@ function grouped(rows: Row[]): { title: string; rows: Row[] }[] {
     title: group.split(".").map(titleOf).join(" › "),
     rows,
   }))
+}
+
+/** Whether a section shows the part of the machine picked under "Settings
+ * for" (ADR 0106, step 5b): as it says, else as one of its files has a
+ * part of the machine's. */
+export function switches(section: Section): boolean {
+  return (
+    section.machine ??
+    (section.files ?? []).some((file) => hasMachinePart(file.name))
+  )
 }
 
 /** The file a section opens: its first. */

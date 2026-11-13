@@ -3,11 +3,12 @@
  * Project's name, whether it comes first, whether the Person trusts it
  * (ADR 0083, decision 5), whether it is hidden, and its removal. They are
  * the engine's, not a file's, so the section calls the engine, and tells
- * the window a Project changed. Archived Projects show only here, where
- * they can come back.
+ * the window a Project changed: the engine of the machine picked under
+ * "Settings for", whose Projects these are. Archived Projects show only
+ * here, where they can come back.
  */
 import { useState } from "react"
-import type { Engine, ProjectSummary, UpdateProject } from "@banda/contract"
+import type { ProjectSummary, UpdateProject } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   Select,
@@ -29,6 +30,7 @@ import {
   updateProject,
 } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
+import type { Runs } from "@banda/ui/pane"
 import {
   BadgeCheckIcon,
   BoxIcon,
@@ -36,32 +38,32 @@ import {
   FolderSearchIcon,
   Trash2Icon,
 } from "lucide-react"
-import { LOCATE, locateRoute } from "../menu/menu"
+import { LOCATE } from "../menu/menu"
 import { AsideRow } from "../safe/AsideRow"
 import { RemoveProjectDialog, type Removing, removingOf } from "./RemoveProject"
+import type { SectionProps } from "./sections"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 import { SignField, signAbout } from "./SignField"
 import { notNow } from "../trust/not-now"
 import { Soon, TrustCard, type Trusting } from "../trust/TrustCard"
 import { ISOLATED, offersSaying, trustAbout } from "../trust/trust"
 
-type Props = {
-  engine: Engine
-  /** The Project a link names: `projects/<id>`. */
-  lit?: string
-}
+/** `engine`: of the machine whose Projects it shows; `lit`: the Project a
+ * link names, `projects/<id>`. */
+type Props = Pick<SectionProps, "engine" | "there" | "lit" | "run" | "runs">
 
-/** The Projects, and the workspaces set aside while some are (ADR 0039). */
+/** The Projects, and the workspaces set aside while some are (ADR 0039):
+ * those are this window's, so they show with this machine's Projects. */
 export function ProjectsSettings(props: Props) {
   return (
     <>
-      <AsideRow engine={props.engine} />
+      {props.there === undefined && <AsideRow engine={props.engine} />}
       <Project {...props} />
     </>
   )
 }
 
-function Project({ engine, lit }: Props) {
+function Project({ engine, lit, run, runs }: Props) {
   // Every Project, the archived too, as the window's other lists read them.
   const { listed } = useProjects(engine)
   // The Project picked here, until a link names another.
@@ -91,6 +93,10 @@ function Project({ engine, lit }: Props) {
     void act(() => updateProject(engine, { project: project.id, ...how }))
   // The Threads that go with it are the agents module's.
   const ask = async () => setRemoving(await removingOf(engine, project))
+  // Locate picks the folder with this device's picker, which sees no
+  // other machine's disk: the router says so, in its words.
+  const locating = { project: project.id }
+  const locate: Runs = runs?.("projects.locate", locating) ?? { runs: true }
 
   return (
     <>
@@ -136,14 +142,20 @@ function Project({ engine, lit }: Props) {
             title="Folder is missing"
             about="Its Threads open again once you locate the folder its work is in now."
           >
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => window.banda?.menu.open(locateRoute(project.id))}
-            >
-              <FolderSearchIcon />
-              {LOCATE}
-            </Button>
+            {locate.runs ? (
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => run?.("projects.locate", locating)}
+              >
+                <FolderSearchIcon />
+                {LOCATE}
+              </Button>
+            ) : (
+              <span className="text-meta text-muted-foreground">
+                {locate.why}
+              </span>
+            )}
           </RowFrame>
         )}
         <RowFrame
