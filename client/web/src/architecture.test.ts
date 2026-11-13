@@ -1845,6 +1845,7 @@ test("the core names no App", () => {
 const CORE_CONSTANTS = [
   "core/src/hosts.ts: FORGETTING",
   "core/src/hosts.ts: NONE",
+  "core/src/hosts.ts: THIS_MACHINE",
   "core/src/queue.ts: KEEPS",
   "core/src/react/here.ts: HereContext",
   "core/src/react/here.ts: NOWHERE",

@@ -1,10 +1,6 @@
-import {
-  type Engine,
-  newId,
-  type ProjectId,
-  type ProjectSummary,
-} from "@banda/contract"
+import { newId, type ProjectId, type ProjectSummary } from "@banda/contract"
 import { FORGETTING, type HostsDevice, KeptHosts } from "@banda/core"
+import { ownEngine } from "@banda/core/testing"
 import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { toast } from "@banda/ui/components/sonner"
@@ -1185,9 +1181,9 @@ test("an action from a key goes through the router as one from a Pane: on arc, w
 
 test("a key's act on a Project this machine added since its list was read runs, once that list is read again; one no machine has is refused (ADR 0106, law 3)", async () => {
   const added = "added" as ProjectId
-  const engine = {
+  const { engine } = ownEngine({
     call: () => Promise.resolve(projectsOf({ a: "a", added: "added" })),
-  } as unknown as Engine
+  })
   const hosts = new KeptHosts(NO_HOSTS, FORGETTING, engine)
   hosts.ours(projectsOf({ a: "a" }), "m0" as ProjectId)
   const ran = vi.fn()

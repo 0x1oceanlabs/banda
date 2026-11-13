@@ -1,9 +1,9 @@
-import type { Engine, ProjectId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, expect, test, vi } from "vitest"
 import { inWindow } from "../directory"
 import { FORGETTING, KeptHosts, reachWords } from "../hosts"
-import { away, desktop, live, project, Socket } from "../testing"
+import { away, desktop, live, ownEngine, project, Socket } from "../testing"
 import {
   HostsContext,
   type Reach,
@@ -22,7 +22,7 @@ test("a Pane reaches the engine of the host listing its Project, else of the one
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const { device, tell } = desktop()
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   const hosts = new KeptHosts(device, FORGETTING, here)
   hosts.follow()
   /** What a Pane of `project`, its args naming host `named`, reaches. */
@@ -111,7 +111,7 @@ test("a Pane restored while its machine is away reaches that machine by the dire
   vi.stubGlobal("WebSocket", Socket)
   Socket.opened = []
   const kept = inWindow()
-  const here = { here: true } as unknown as Engine
+  const here = ownEngine().engine
   // The window before: arc listed "r1".
   const before = desktop()
   const first = new KeptHosts(before.device, FORGETTING, here, {

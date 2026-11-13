@@ -5,13 +5,11 @@
  * what it says it is, how long it has been out of reach, and how its dot
  * stands. Pure, so plain tests cover it.
  */
-import type { Named } from "@banda/contract/machines"
 import { cleanText } from "@banda/ui/hooks/use-status"
 import { short } from "@banda/ui/lib/words"
 import { awaySince, type HostState, otherBuild, type Shown } from "@banda/core"
 
-/** This machine before its engine says its name. */
-export const THIS_MACHINE: Named = { name: "This machine", icon: "desktop" }
+export { THIS_MACHINE } from "@banda/core"
 
 /** A machine's state in a word or two, on its row in Settings. */
 export function stateWords(state: HostState): string {

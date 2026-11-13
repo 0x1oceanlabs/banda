@@ -162,4 +162,17 @@ repository), with an adversarial check.
   and `Tailscale-*`, and by a `Host` that is not this machine's loopback.
 - **What a client follows and hears goes with its `hello`,** at the API
   and at the door, before the `welcome`: nothing that acts does.
+- **This machine is one of the machines in the core (SE3, PR 3).** It
+  has an entry as each host has (`KeptHosts.shown`), judged by its own
+  engine's connection, as no one else says whether that machine is in
+  reach. A client makes such an engine with `staleOnLoss`: once heard, a
+  connection that ends leaves it answering nothing until it is heard
+  again, and it tries again all the while. Then the one rule holds for it
+  as for arc: an act is refused at once, in words that name no machine
+  ("Banda is restarting on this machine"), a message waits for it, and a
+  Pane closed meanwhile is let go of once it is back. A window that
+  starts is in reach of its own machine, so what it asks first waits for
+  the first connection. The window turns this on with the pill on its
+  own Panes (PR 4a); until then its own engine is made as before, and
+  never answers nothing.
 

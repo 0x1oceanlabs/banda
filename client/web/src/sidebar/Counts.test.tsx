@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Look } from "@banda/contract/look"
 import { DEFAULT_SIDEBAR, type Machines } from "@banda/contract/sidebar"
 import {
@@ -13,6 +13,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
 } from "@banda/ui/components/dropdown-menu"
+import { ownEngine } from "@banda/core/testing"
 import { takeLook } from "@banda/ui/lib/look"
 import { MINUTE } from "@banda/ui/lib/words"
 import type { Listed, Lists } from "@banda/ui/pane"
@@ -94,7 +95,7 @@ async function listOf(lists: Lists, run: Run = () => undefined) {
         return () => undefined
       },
     },
-    {} as Engine
+    ownEngine().engine
   )
   stop = kept.follow()
   const build = { build: "abc", version: null }

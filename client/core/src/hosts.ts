@@ -7,6 +7,14 @@
  * only the desktop knows: its engine asks it on every connect, and the
  * page keeps the address nowhere. What this device remembers of the
  * hosts' names the Window hands in (`Names`), as the device keeps it.
+ *
+ * This machine is one of the machines (ADR 0124): it has an entry as
+ * each host has (`KeptHosts.shown`), judged by its own engine's
+ * connection, and the same rule while that is out of reach. An act on it
+ * is refused at once, a message waits for it, and a Pane closed
+ * meanwhile is let go of once it is back. The list (`get`) stays the
+ * other machines, below this one.
+ *
  * Plain, so plain tests cover it; what reads it from React is
  * `react/hosts.ts`.
  */
@@ -28,7 +36,7 @@ import {
 } from "@banda/contract/machines"
 import type { HostState } from "./device"
 import { type DirectoryMemory, inWindow, type Placed } from "./directory"
-import { paneHost, type PaneState, withHost } from "./pane"
+import { HERE, paneHost, type PaneState, withHost } from "./pane"
 import { clock, tickingClock } from "./time"
 import { openProjects, shownProjects } from "./projects"
 import { Left, type Leaving } from "./left"
@@ -64,8 +72,8 @@ export type Names = {
     take: (named: Named) => void
   ) => () => void
   /** Hands `take` this machine's name and icon, as its own `engine` says
-   * them, cleaned, and keeps nothing: it is never away from its own
-   * window. Returns how to stop. */
+   * them, cleaned, and keeps nothing: a window starts with its own
+   * machine's engine. Returns how to stop. */
   followHere?: (engine: Engine, take: (named: Named) => void) => () => void
 }
 
@@ -80,10 +88,17 @@ export const FORGETTING: Names = {
   follow: () => () => undefined,
 }
 
-/** A host as the Window shows it. */
+/** This machine before its engine says its name. */
+export const THIS_MACHINE: Named = { name: "This machine", icon: "desktop" }
+
+/** Why this machine's engine is out of reach while its connection is
+ * down: what keeps it running starts it again. */
+const RESTARTING = "Banda is restarting on this machine"
+
+/** A machine as the Window shows it: a host, or this machine. */
 export type Shown = {
   /** Its key in `hosts.toml`, which the Person sees only until its first
-   * welcome. */
+   * welcome; `HERE` for this machine, reached over no ssh. */
   name: string
   /** What it says it is called and drawn by, cleaned (ADR 0095, decision
    * 2); as this device last saw it while it says nothing. */
@@ -119,6 +134,13 @@ export type Shown = {
 }
 
 const NONE: readonly ProjectSummary[] = []
+
+/** A machine's Projects as its rows show them: none archived, and its
+ * Threads' own after the rest. */
+const rows = (listed: readonly ProjectSummary[]): ProjectSummary[] => [
+  ...shownProjects(listed),
+  ...listed.filter((project) => project.scratch && !project.archived),
+]
 
 const live = (shown: Shown) => shown.state.state === "live"
 
@@ -274,6 +296,12 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   /** The hosts as the desktop told them last. */
   #told: readonly HostState[] = []
   readonly #hereNamed = new Store<Named | undefined>(undefined)
+  readonly #hereShown = new Store<Shown | undefined>(undefined)
+
+  /** This machine as the Window shows it, as each host is (`Shown`), by
+   * its own engine's connection (`#judgeHere`); none outside a Window,
+   * which has no engine of its own. */
+  readonly here: Readable<Shown | undefined> = this.#hereShown
 
   /** This machine and the hosts a new Thread starts on (`machinesOf`),
    * told again only as what they say changes. */
@@ -336,23 +364,67 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#here = here
     this.#directory = directory
     this.#shown.subscribe(() => this.#sayMachines())
+    this.#hereShown.subscribe(() => this.#sayMachines())
     this.waiting = new Waiting(waiting, {
       // What waits goes to the machine that has its Pane, as an act on
-      // it would (`sessionOf`).
-      placed: (project, pane) =>
-        this.hostOf(project, paneHost(pane)) ?? undefined,
-      named: (host) => namedIn(this.get(), host, this.seen).name,
+      // it would (`sessionOf`): this one too, where the Window has an
+      // engine of its own.
+      placed: (project, pane) => {
+        const host = this.hostOf(project, paneHost(pane))
+        if (host === undefined) return here ? HERE : undefined
+        return host ?? undefined
+      },
+      named: (host) => this.#nameOf(host),
       summary: (host, project) =>
-        this.get()
-          .find((one) => one.name === host)
-          ?.projects.find((one) => one.id === project),
+        this.shown(host)?.projects.find((one) => one.id === project),
       // A message queued now goes in its host's time as its engine heard
       // it last.
-      ahead: (host) => this.#engines.get(host)?.offset,
+      ahead: (host) => (host === HERE ? here : this.#engines.get(host))?.offset,
       drains,
     })
     this.waiting.subscribe(() => this.#sendWaiting())
     this.left = new Left(waiting, { drains })
+    this.#hereNamed.subscribe(() => this.#judgeHere())
+    this.#judgeHere()
+  }
+
+  /**
+   * Takes this machine as the Window shows it now, by its own engine's
+   * connection, which no one else watches: away while that answers
+   * nothing, as it restarts (`Engine.stale`), with its rows as of when it
+   * was last heard; refused once it said goodbye; else live, while it
+   * connects too, as a window that starts is in reach of its own machine.
+   * Its build is this window's own, so it says none.
+   */
+  #judgeHere(): void {
+    const engine = this.#here
+    if (!engine) return
+    const was = this.#hereShown.get()
+    const { status } = engine
+    const entry = { name: HERE, ssh: "" }
+    const none = { build: null, version: null }
+    const now: HostState = engine.stale
+      ? { ...entry, state: "away", why: RESTARTING }
+      : status.state === "refused"
+        ? { ...entry, state: "refused", why: status.refusal.message }
+        : { ...entry, state: "live", ...none, own: none }
+    const { machine, projects } = this.#ours
+    const shown: Shown = {
+      ...shownOf(was, now, Date.now(), undefined, engine.heard),
+      named: this.#hereNamed.get() ?? THIS_MACHINE,
+      projects: rows(projects),
+      ...(machine !== undefined && { machine }),
+    }
+    if (!sameData(shown, was)) this.#hereShown.set(shown)
+  }
+
+  /** Machine `key`'s `engine` is open, under `boot`: what waits for it
+   * goes, the Panes closed meanwhile first, before anything new. */
+  #back(key: string, engine: Engine, boot: string): void {
+    this.#boots.set(key, boot)
+    for (const one of this.left.take(key, boot))
+      for (const letGo of this.#letters) letGo(one, engine)
+    this.#sendWaiting()
   }
 
   /** The boot host `host`'s engine said last, none if it said none yet:
@@ -372,6 +444,21 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   readonly get = (): readonly Shown[] => this.#shown.get()
   readonly subscribe = (listener: () => void) => this.#shown.subscribe(listener)
 
+  /** Machine `key` as the Window shows it now: a host by its key in
+   * `hosts.toml`, this machine by its own (`HERE`). None for a host the
+   * Window does not know, nor for this machine outside a Window. */
+  shown(key: string): Shown | undefined {
+    return key === HERE
+      ? this.#hereShown.get()
+      : this.get().find((one) => one.name === key)
+  }
+
+  /** Machine `key`'s name, as the Window shows it, or as this device
+   * last saw it. */
+  #nameOf(key: string): string {
+    return (this.shown(key)?.named ?? this.seen(key)).name
+  }
+
   /** Host `key`'s name and icon as this device last saw it (`Names`). */
   readonly seen = (key: string): Named => this.#names.seen(key)
 
@@ -381,16 +468,26 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     const waiting = this.waiting.start()
     const left = this.left.follow()
     const hosts = this.#device.follow((hosts) => this.take(hosts))
-    const here =
-      this.#here &&
-      this.#names.followHere?.(this.#here, (named) => {
+    const engine = this.#here
+    const named =
+      engine &&
+      this.#names.followHere?.(engine, (named) => {
         if (!sameData(named, this.#hereNamed.get())) this.#hereNamed.set(named)
       })
+    // This machine is judged as its engine's connection changes, and as
+    // it answers nothing or again; open, what waits for it goes.
+    const status = engine?.watch((status) => {
+      this.#judgeHere()
+      if (status.state === "open") this.#back(HERE, engine, status.boot)
+    })
+    const stale = engine?.watchStale(() => this.#judgeHere())
     return () => {
       hosts?.()
       waiting()
       left()
-      here?.()
+      named?.()
+      status?.()
+      stale?.()
     }
   }
 
@@ -427,17 +524,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#sendWaiting()
   }
 
-  /** Sends what waits for each host the Window reaches now: live, its
+  /** Sends what waits for each machine the Window reaches now: live, its
    * engine open and answering. Its engine is made for it if need be. Only
    * the main window sends. */
   #sendWaiting(): void {
     if (!this.waiting.drains) return
-    const hosts = new Set(this.waiting.get().map((wait) => wait.host))
-    for (const shown of this.get()) {
-      if (!hosts.has(shown.name) || !live(shown)) continue
-      const engine = this.engine(shown.name)
+    for (const key of new Set(this.waiting.get().map((wait) => wait.host))) {
+      const shown = this.shown(key)
+      if (!shown || !live(shown)) continue
+      const engine = this.engine(key)
       if (engine.status.state === "open" && !engine.stale)
-        this.waiting.send(shown.name, engine)
+        this.waiting.send(key, engine)
     }
   }
 
@@ -479,6 +576,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     // its ID, so its Panes are its own from a window's first moment.
     if (machine !== undefined) this.#learn(this.#ourIds, { machine })
     this.#shown.set(this.#placed(this.get()))
+    this.#judgeHere()
     // Said here too, as the hosts' rows may not change with ours.
     this.#sayMachines()
   }
@@ -516,9 +614,14 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * the host is not live it is away, and tries again as the host is live
    * (`take`). A mark it loses with the connection names the host, as the
    * link may drop before the desktop says the host is away. What the host
-   * says it is called and drawn by, the Window shows from then on.
+   * says it is called and drawn by, the Window shows from then on. This
+   * machine's (`HERE`) is the one the Window was made with.
    */
   engine(name: string): Engine {
+    if (name === HERE) {
+      if (!this.#here) throw new Error("This window has no engine of its own.")
+      return this.#here
+    }
     let engine = this.#engines.get(name)
     if (!engine) {
       engine = new Engine(
@@ -532,22 +635,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
           // Another machine's engine is asked whether it still answers:
           // stale, its host shows away until it answers again.
           ping: PING,
-          onStale: () => this.take(this.#told),
         }
       )
       const made = engine
+      made.watchStale(() => this.take(this.#told))
       this.#engines.set(name, engine)
       this.#relay(engine, name)
       this.#names.follow(engine, name, (named) => this.#named(name, named))
       engine.watch((status) => {
         if (status.state !== "open") return
         if (status.machine) this.#scope(name, status.machine)
-        this.#boots.set(name, status.boot)
-        // What waits for the host goes as its engine is open again: the
-        // Panes closed meanwhile first, before anything new.
-        for (const one of this.left.take(name, status.boot))
-          for (const letGo of this.#letters) letGo(one, made)
-        this.#sendWaiting()
+        this.#back(name, made, status.boot)
       })
       this.#hearPowers()
     }
@@ -610,12 +708,13 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * did (`hostOf`): this machine's engine for its own Projects; else that
    * host's, one for the Window's life (`engine`). Every act an App makes
    * goes to it (ADR 0089, decision 5). It is never this machine's in
-   * another's place, so an act never runs on the wrong machine: a host the
-   * Window does not know, or does not reach now, refuses at once
-   * (`Unreachable`) rather than wait to run by itself once it is back, and
-   * so does a Project no machine the Window knows has (ADR 0106, law 3). A
-   * Pane `drawn` from it keeps its host's while that host is out of reach:
-   * it shows what it showed, and catches up once the host is back.
+   * another's place, so an act never runs on the wrong machine: a machine
+   * the Window does not know, or does not reach now, this one too (ADR
+   * 0124), refuses at once (`Unreachable`) rather than wait to run by
+   * itself once it is back, and so does a Project no machine the Window
+   * knows has (ADR 0106, law 3). A Pane `drawn` from it keeps its
+   * machine's while that is out of reach: it shows what it showed, and
+   * catches up once the machine is back.
    */
   sessionOf(
     project: ProjectId,
@@ -624,13 +723,12 @@ export class KeptHosts implements Readable<readonly Shown[]> {
   ): Engine {
     const host = this.hostOf(project, pane && paneHost(pane))
     if (host === null) throw new Unreachable("", UNKNOWN, { machine: "" })
-    if (host === undefined) {
-      if (!this.#here) throw new Error("This window has no engine of its own.")
-      return this.#here
-    }
-    const shown = this.get().find((one) => one.name === host)
-    if (shown && (drawn || live(shown))) return this.engine(host)
-    throw this.#unreachable(host)
+    const key = host ?? HERE
+    const shown = this.shown(key)
+    // By whether the Window reaches it; outside a Window, this machine's
+    // says there is none of its own.
+    if (shown ? drawn || live(shown) : key === HERE) return this.engine(key)
+    throw this.#unreachable(key)
   }
 
   /**
@@ -641,8 +739,8 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * one taken out of hosts.toml, "This window does not reach arc".
    */
   #unreachable(name: string): Unreachable {
-    const shown = this.get().find((one) => one.name === name)
-    const machine = (shown?.named ?? this.seen(name)).name
+    const shown = this.shown(name)
+    const machine = this.#nameOf(name)
     const words = shown
       ? (reachWords(name, shown, this.seen) ?? `Connecting to ${machine}`)
       : `This window does not reach ${machine}`
@@ -755,7 +853,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
 
   /** Tells the machines again, where they say something new. */
   #sayMachines(): void {
-    const now = machinesOf(this.#ours, this.get())
+    const now = machinesOf(this.#ours, this.get(), this.#hereShown.get()?.away)
     if (!sameData(now, this.#machines.get())) this.#machines.set(now)
   }
 
@@ -789,10 +887,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       const said = this.#scopes.get(name)
       const machine = said !== undefined && free(name, said) ? said : undefined
       const listed = this.#listed.get(name) ?? NONE
-      const projects = [
-        ...shownProjects(listed),
-        ...listed.filter((project) => project.scratch && !project.archived),
-      ].filter((project) => free(name, project.id))
+      const projects = rows(listed).filter((project) => free(name, project.id))
       const archived = listed.filter(
         (project) => project.archived && !taken.has(project.id)
       )
@@ -822,18 +917,28 @@ export class KeptHosts implements Readable<readonly Shown[]> {
 
 /**
  * The machines a new Thread starts on (ADR 0095, decision 7): this one
- * first, unnamed; then each host whose rows the Window shows, live or
- * away, by its name and icon. Each with its Host scope's ID, once its
+ * first, unnamed, away since `away` while the Window does not reach its
+ * engine; then each host whose rows the Window shows, live
+ * or away, by its name and icon. Each with its Host scope's ID, once its
  * engine said it, and its open Projects, pinned first: none archived,
  * none whose folder is missing, none a Thread's own. `hosts` are as the
  * Window places them (`KeptHosts`), so an ID this machine, or a host
  * before, has shows on that one only, as in the sidebar.
  */
-export function machinesOf(ours: Ours, hosts: readonly Shown[]): Machine[] {
+export function machinesOf(
+  ours: Ours,
+  hosts: readonly Shown[],
+  away?: number
+): Machine[] {
   const open = (projects: readonly ProjectSummary[]) =>
     openProjects(shownProjects(projects))
   const machines: Machine[] = [
-    { machine: ours.machine, state: "live", projects: open(ours.projects) },
+    {
+      machine: ours.machine,
+      state: away === undefined ? "live" : "away",
+      ...(away !== undefined && { away }),
+      projects: open(ours.projects),
+    },
   ]
   for (const host of hosts) {
     const { state } = host.state
@@ -1047,15 +1152,21 @@ export function awakeWords(
   }
 }
 
+/** This machine's Banda, as the words of a connection to it name it: the
+ * machine itself goes unnamed (ADR 0095, decision 4). */
+const BANDA_HERE = "Banda on this machine"
+
 /** What a Pane on host `host` says while it cannot reach it, as the
  * Window shows that host (`shown`), by the name it says it has, or the
  * one this device last saw (`seen`); none while it is live. Not known
- * yet, as before the desktop first tells the hosts, it waits. */
+ * yet, as before the desktop first tells the hosts, it waits. This
+ * machine (`HERE`) is away only as its engine restarts, and says so. */
 export function reachWords(
   host: string,
   shown: Shown | undefined,
   seen: (key: string) => Named
 ): string | undefined {
+  if (host === HERE) return hereWords(shown)
   const { name } = shown?.named ?? seen(host)
   if (!shown) return `Waiting for ${name}`
   const { state } = shown
@@ -1075,6 +1186,15 @@ export function reachWords(
   }
 }
 
+/** `reachWords` of this machine: away or refused, in the words of its
+ * state, which name no machine; else none. */
+function hereWords(shown: Shown | undefined): string | undefined {
+  const state = shown?.state
+  return state?.state === "away" || state?.state === "refused"
+    ? state.why
+    : undefined
+}
+
 /**
  * Why the Window does not reach host `host` now, by one rule: the host as
  * the Window shows it (`shown`), and its engine's connection (`status`).
@@ -1091,10 +1211,10 @@ export function unreachedWords(
 ): string | undefined {
   const words = reachWords(host, shown, seen)
   if (words !== undefined || status === "open") return words
-  const { name } = shown?.named ?? seen(host)
+  const on = host === HERE ? BANDA_HERE : (shown?.named ?? seen(host)).name
   return status === "refused"
-    ? `${name} refused this window`
-    : `Connecting to ${name}`
+    ? `${on} refused this window`
+    : `Connecting to ${on}`
 }
 
 /**

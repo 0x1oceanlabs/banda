@@ -1,5 +1,6 @@
 import {
   type CommandCall,
+  Engine,
   Lost,
   newId,
   type ProjectId,
@@ -23,7 +24,8 @@ import {
   Waiting,
   waitsFor,
 } from "./queue"
-import { away, desktop, live, Socket } from "./testing"
+import { HERE } from "./pane"
+import { away, desktop, live, project, Socket } from "./testing"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -865,4 +867,68 @@ test("what is kept that is no message, as one broken or of another build, is let
   expect(main.get()).toEqual([])
   expect([...device.kept.keys()]).toEqual(["banda.agents.draft.t1"])
   main.close()
+})
+
+test("a message waits while this machine's engine restarts, and a Pane closed meanwhile too: both go once it is back, the close first", async () => {
+  vi.useFakeTimers({ now: at1432 })
+  vi.stubGlobal("WebSocket", Socket)
+  Socket.opened = []
+  const { device } = desktop()
+  const words = "Banda is restarting on this machine"
+  // Its own connection says whether it answers.
+  const here = new Engine(
+    async () => ({ url: "ws://127.0.0.1:1/here", secret: "s3cr3t" }),
+    { staleOnLoss: true, unreachable: () => new Unreachable(HERE, words) }
+  )
+  const hosts = new KeptHosts(device, FORGETTING, here)
+  hosts.follow()
+  hosts.ours([project(PROJECT)], "m0" as ProjectId)
+  await vi.advanceTimersByTimeAsync(0)
+  Socket.opened[0]!.say(opened)
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
+  expect(waitsFor(hosts.shown(HERE), here.status.state)).toBe(false)
+
+  // Its engine goes: this machine is away, and what is sent now waits.
+  Socket.opened[0]!.close()
+  expect(hosts.shown(HERE)).toMatchObject({
+    state: { state: "away", why: words },
+    asOf: at1432,
+  })
+  expect(waitsFor(hosts.shown(HERE), here.status.state)).toBe(true)
+  await expect(
+    hosts
+      .sessionOf(PROJECT, undefined, { drawn: true })
+      .command("projects.create", { name: "Not now" })
+  ).rejects.toMatchObject({ name: "Unreachable", message: words })
+  const pane = { kind: "agents.thread", args: { thread: THREAD } }
+  const command = newId()
+  expect(
+    hosts.waiting.add({ ...message("once you are back", command), pane })
+  ).toBe(true)
+  expect(hosts.waiting.get()).toMatchObject([
+    { host: HERE, text: "once you are back" },
+  ])
+  const terminal = { kind: "terminal.terminal", args: { terminal: "t1" } }
+  hosts.left.add({
+    host: HERE,
+    boot: hosts.bootOf(HERE),
+    project: PROJECT,
+    pane: terminal,
+  })
+  const order: string[] = []
+  hosts.onLeft((one, engine) => {
+    expect(engine).toBe(here)
+    order.push(`closed ${String(one.pane.args.terminal)}`)
+  })
+
+  // It tries again by itself, and is back under the same boot.
+  await vi.advanceTimersByTimeAsync(250)
+  const socket = Socket.opened[1]!
+  expect(callsOn(socket)).toEqual([])
+  socket.say(opened)
+  await vi.advanceTimersByTimeAsync(0)
+  order.push(...callsOn(socket).map((call) => `sent ${call.command}`))
+  expect(order).toEqual(["closed t1", `sent ${command}`])
+  expect(hosts.left.get()).toEqual([])
+  expect(hosts.shown(HERE)).toMatchObject({ state: { state: "live" } })
 })
