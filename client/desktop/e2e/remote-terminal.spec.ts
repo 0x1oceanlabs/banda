@@ -108,6 +108,30 @@ test("arc's terminal opens on arc: hostname says arc, its header names arc, and 
   expect(existsSync(join(arc!.code.here, "banda", "seen.txt"))).toBe(false)
 })
 
+test("keys typed into arc's terminal go as they are typed, before the last one's answer, and land in the order typed (ADR 0124, SE8)", async () => {
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  // The first write's answer says arc runs them in the order sent.
+  await run(page, "true > first.txt")
+  await expect.poll(() => inFolder(folder, "first.txt")).toBe("")
+  // A round trip of 300 ms, and a key each 20 ms: one write at a time
+  // would carry the line in three or four.
+  arc!.latency(300)
+  const since = arc!.asked().length
+  const line = "echo the quick brown fox jumps > typed.txt"
+  await page.keyboard.type(line, { delay: 20 })
+  await page.keyboard.press("Enter")
+  await expect
+    .poll(() => inFolder(folder, "typed.txt"))
+    .toBe("the quick brown fox jumps\n")
+  const writes = arc!
+    .asked()
+    .slice(since)
+    .filter(({ method }) => method === "terminal.write")
+  expect(writes.length).toBeGreaterThanOrEqual(8)
+})
+
 test("the terminal's key, from arc's Thread, opens arc's terminal", async () => {
   const { page, composer, folder } = await onArc()
   await composer.focus()

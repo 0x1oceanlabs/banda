@@ -7,4 +7,12 @@ import type { Title } from "./Title";
  * What `terminal.watch` says: the screen first, then what the program
  * prints, the size a window gives it, and that it ended.
  */
-export type Piece = { "kind": "snapshot", history: string, size: Size, ended?: Ended, } | { "kind": "output", text: string, } | { "kind": "resized", size: Size, } | { "kind": "exited", ended: Ended, } | { "kind": "titled", title: Title, };
+export type Piece = { "kind": "snapshot", history: string, size: Size, ended?: Ended, 
+/**
+ * The engine runs a session's writes and sizes to this terminal
+ * in the order it sent them, so its client sends each key as it
+ * is typed, before the last one's answer. An engine older than
+ * that order says nothing here, and runs them side by side: its
+ * client sends one at a time.
+ */
+in_order?: boolean, } | { "kind": "output", text: string, } | { "kind": "resized", size: Size, } | { "kind": "exited", ended: Ended, } | { "kind": "titled", title: Title, };

@@ -10,14 +10,24 @@ type Send = <M extends "terminal.write" | "terminal.resize">(
   params: Params<M>
 ) => Promise<unknown>
 
+/** How many writes and sizes are on their way at once, at most, to an
+ * engine that runs them in the order sent: past it, what is typed
+ * meanwhile goes as one, as a paste's pieces do. */
+const ON_THEIR_WAY = 8
+
 /**
- * What a Pane sends one terminal, in the order the Person did it. The
- * engine runs calls side by side, so each waits for the one before it.
- * What is typed meanwhile goes in one call, and only the last size counts.
- * A size that does not reach the program is not worth a word, as the next
- * one replaces it; typing that does not is. A key goes now or never (ADR
- * 0106, decision 4): one refused, as its machine is away, is said and
- * gone, kept nowhere to go later by itself.
+ * What a Pane sends one terminal, in the order the Person did it. An
+ * engine that runs a session's writes and sizes in the order sent says so
+ * as the terminal's screen comes (`inOrder`, from its snapshot): from
+ * then on each key goes as it is typed, before the last one's answer, so
+ * its echo is one round trip away, never two. Until an engine says so, as
+ * one older than that order never does, it runs them side by side, so
+ * each waits for the one before it, and what is typed meanwhile goes in
+ * one call. Only the last size
+ * counts. A size that does not reach the program is not worth a word, as
+ * the next one replaces it; typing that does not is. A key goes now or
+ * never (ADR 0106, decision 4): one refused, as its machine is away, is
+ * said and gone, kept nowhere to go later by itself.
  */
 export class Input {
   readonly #send: Send
@@ -25,7 +35,10 @@ export class Input {
   readonly #onProblem: (error: unknown) => void
   #typed = ""
   #size: Size | null = null
-  #sending = false
+  /** How many calls are on their way. */
+  #sent = 0
+  /** The engine said it runs them in the order sent. */
+  #inOrder = false
 
   constructor(
     send: Send,
@@ -39,36 +52,47 @@ export class Input {
 
   type(data: string): void {
     this.#typed += data
-    void this.#flush()
+    this.#flush()
   }
 
   resize(size: Size): void {
     this.#size = size
-    void this.#flush()
+    this.#flush()
   }
 
-  async #flush(): Promise<void> {
-    if (this.#sending) return
-    this.#sending = true
+  /** Whether its engine runs what it sends in the order sent, as the
+   * terminal's snapshot says each time its screen comes. */
+  inOrder(yes: boolean): void {
+    this.#inOrder = yes
+    this.#flush()
+  }
+
+  #flush(): void {
     const terminal = this.#terminal
-    try {
-      while (this.#size || this.#typed) {
-        const size = this.#size
-        if (size) {
-          this.#size = null
-          await this.#send("terminal.resize", { terminal, size }).catch(
-            () => undefined
-          )
-          continue
-        }
+    while (
+      (this.#size || this.#typed) &&
+      this.#sent < (this.#inOrder ? ON_THEIR_WAY : 1)
+    ) {
+      const size = this.#size
+      let answered: Promise<unknown>
+      if (size) {
+        this.#size = null
+        answered = this.#send("terminal.resize", { terminal, size }).catch(
+          () => undefined
+        )
+      } else {
         const [data, rest] = cut(this.#typed)
         this.#typed = rest
-        await this.#send("terminal.write", { terminal, data }).catch(
+        answered = this.#send("terminal.write", { terminal, data }).catch(
           this.#onProblem
         )
       }
-    } finally {
-      this.#sending = false
+      // On its way until it answered; then what waited goes.
+      this.#sent++
+      void answered.finally(() => {
+        this.#sent--
+        this.#flush()
+      })
     }
   }
 }

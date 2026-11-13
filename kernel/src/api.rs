@@ -21,9 +21,12 @@
 //!    A connection's commands to one scope, this machine's or a Project's,
 //!    wait in one queue: each starts once the one before it answered, so
 //!    they commit, and answer, in the order sent. A client sends the next
-//!    before the last answers. Queues run beside each other, and a call
-//!    or a stream waits in none, nor does a command that runs on past one
-//!    write ([`Module::runs_on`](crate::Module::runs_on)). A command may
+//!    before the last answers. A module's calls that say so
+//!    ([`Module::in_order`](crate::Module::in_order)), as the keys typed
+//!    into one terminal, wait the same way in a queue of their own.
+//!    Queues run beside each other, and any other call or a stream waits
+//!    in none, nor does a command that runs on past one write
+//!    ([`Module::runs_on`](crate::Module::runs_on)). A command may
 //!    carry `not_after`: past it it is refused `expired`, but for one that
 //!    ran, which gets its answer (ADR 0105).
 //!
@@ -83,11 +86,13 @@ use ts_rs::TS;
 
 const HELLO_WITHIN: Duration = Duration::from_secs(10);
 
-/// How long a command may hold up the next in its queue: a guard against
-/// one that hangs. A command is one write, so it answers well within
-/// this, even as the disk stalls; one that runs on by design waits in no
-/// queue ([`Module::runs_on`](crate::Module::runs_on)). One still running
-/// past it gives up its place, and the log says so (ADR 0082, decision 4).
+/// How long a run may hold up the next in its queue: a guard against one
+/// that hangs. A command is one write, so it answers well within this,
+/// even as the disk stalls; one that runs on by design waits in no queue
+/// ([`Module::runs_on`](crate::Module::runs_on)). A call that keeps its
+/// order gives up on its own well before it, as a terminal's write to a
+/// program that reads nothing does. One still running past it gives up
+/// its place, and the log says so (ADR 0082, decision 4).
 const HOLDS_UP: Duration = Duration::from_secs(30);
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
@@ -558,7 +563,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 not_after,
                 params,
             } => {
-                let queue = api.kernel.queue(&caller, &method, project);
+                let queue = api.kernel.queue(&caller, &method, project, &params);
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 let name = method.clone();
@@ -641,21 +646,23 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
     let _ = writer.await;
 }
 
-/// One connection's queues of commands, one for each scope they run in
-/// (ADR 0082, decision 4). A queue runs its commands one at a time, in the
-/// order they came, each once the one before it answered or ran for
-/// [`HOLDS_UP`]. Its last commands run even once the connection is gone,
-/// as a call does: a resend after a reconnect finds their receipts.
+/// One connection's queues: of commands, one for each scope they run in
+/// (ADR 0082, decision 4), and of the calls that run in the order sent,
+/// one for each thing they act on ([`Queue`]). A queue runs what it holds
+/// one at a time, in the order it came, each once the one before it
+/// answered or ran for [`HOLDS_UP`]. Its last runs go on even once the
+/// connection is gone, as any call does: a command's resend after a
+/// reconnect finds its receipt.
 #[derive(Default)]
 struct Queues(HashMap<Queue, mpsc::UnboundedSender<Queued>>);
 
-/// A command in a queue: its method, for the log, and the run that
-/// answers it.
+/// A command or a call in a queue: its method, for the log, and the run
+/// that answers it.
 type Queued = (String, BoxFuture<'static, ()>);
 
 impl Queues {
-    /// Queues `run`, which answers one command. The connection's reader
-    /// never waits here, so a long queue holds up no other.
+    /// Queues `run`, which answers one command or call. The connection's
+    /// reader never waits here, so a long queue holds up no other.
     fn push(
         &mut self,
         queue: Queue,
@@ -679,7 +686,7 @@ async fn one_at_a_time(mut runs: mpsc::UnboundedReceiver<Queued>, holds_up: Dura
         if tokio::time::timeout(holds_up, &mut running).await.is_err() {
             tracing::warn!(
                 %method,
-                "a command ran past {}s, so the next in its queue starts beside it",
+                "it ran past {}s, so the next in its queue starts beside it",
                 holds_up.as_secs()
             );
         }

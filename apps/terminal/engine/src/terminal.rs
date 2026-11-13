@@ -276,6 +276,8 @@ impl Terminal {
                     history: now.history.all(),
                     size: now.size,
                     ended: now.ended,
+                    // As `Terminals::in_order` tells the router.
+                    in_order: true,
                 });
             }
             Some(Since::Pieces(texts)) if !texts.is_empty() => pieces.push(Piece::Output {

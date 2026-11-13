@@ -43,6 +43,7 @@ use std::sync::{Arc, Mutex};
 use terminal::Terminal;
 use tokio::sync::{mpsc, watch};
 use ts_rs::TS;
+use uuid::Uuid;
 #[cfg(not(unix))]
 use windows::Terminal;
 
@@ -115,9 +116,12 @@ banda_kernel::methods! {
         /// Starts a program on a PTY, or again once it ended; one that runs
         /// stays as it is.
         call open(Open) -> (), Run;
-        /// What the Person types.
+        /// What the Person types. A session's writes and sizes to one
+        /// terminal run in the order it sent them, so it sends the next
+        /// before the last answers, once the terminal's `watch` said so
+        /// (`in_order`).
         call write(Write) -> (), Run;
-        /// The size a window gives it.
+        /// The size a window gives it, in its order among the writes.
         call resize(Resize) -> (), Run;
         /// Stops the program and what it started.
         call close(One) -> (), Run;
@@ -246,6 +250,19 @@ impl Module for Terminals {
 
     fn kind(&self, method: &str) -> Option<Kind> {
         Self::method_kind(method)
+    }
+
+    /// What the Person types into one terminal lands in the order typed,
+    /// and a size among it where it was given; each open terminal's apart,
+    /// so a program that reads nothing holds up no other terminal's keys.
+    /// A terminal's `watch` says so (`Piece::Snapshot`'s `in_order`).
+    fn in_order(&self, method: &str, params: &Value) -> Option<Uuid> {
+        if !matches!(method, "write" | "resize") {
+            return None;
+        }
+        let terminal = TerminalId::deserialize(params.get("terminal")?).ok()?;
+        let open = self.open.lock().unwrap().contains_key(&terminal);
+        open.then(|| terminal.into())
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
