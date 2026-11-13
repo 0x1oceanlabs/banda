@@ -210,9 +210,12 @@ shares one core, and only its Window knows the device (ADR 0089).
 _Avoid_: frontend.
 
 **Device**:
-The machine a client runs on, and what only it has: notifications, sound,
-the clipboard, a file picker, opening outside Banda, its webviews. It tells
-its hosts whether the Person is in front of it (ADR 0082).
+Where a client runs and where the Person sits, with what only it has:
+notifications, sound, the clipboard, a file picker, opening outside Banda,
+its webviews. It may have no machine of its own, as a phone has none. It
+tells the machines it reaches whether the Person is in front of it, and
+reaches them by its own key (ADR 0082, ADR 0124). A machine is where the
+work runs: when the Person walks away, the work goes on.
 
 **Kernel**:
 The small part of the engine that every App needs: scopes and their

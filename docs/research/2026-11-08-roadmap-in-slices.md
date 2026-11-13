@@ -2,7 +2,7 @@
 
 Plan, 2026-11-08, agreed with Roma the same day. It orders the work of the vision (`2026-11-06-architecture-vision.md`, §9.3 and §10) as slices the Person can try. The IDs are the vision's.
 
-_Amended 2026-11-12: stages 3 to 5 are replaced by the order of [what we build](../what-we-build.md): story 1, the session follows the Person, as the foundation; story 2, an Agent writes an App, as the difference; then the other stories. The fence splits: the door comes with story 1 and isolating Agents waits ([ADR 0123](../adr/0123-the-door-comes-with-the-session-that-follows-the-person-and-isolating-agents-waits.md))._
+_Amended 2026-11-12 and 2026-11-13: stages 3 to 5 are replaced by the order of [what we build](../what-we-build.md): story 1, one Banda on every machine, as the foundation; story 2, an Agent writes an App, as the difference; then the other stories. The fence splits: the door comes with story 1 and isolating Agents waits ([ADR 0123](../adr/0123-the-door-comes-with-the-session-that-follows-the-person-and-isolating-agents-waits.md))._
 
 ## How we build
 
@@ -39,21 +39,36 @@ A short ADR first. Then, one slice each: arc's terminal on the Mac; arc's Files,
 
 This comes before the web because it is the same contract the web needs: the screen here, the data on the host. Built for the Mac, most of the web's work is done.
 
-### 3. Story 1: the session follows the Person
+### 3. Story 1: one Banda on every machine
 
-The foundation: what cloud sessions give, on the Person's own machines and with any Agent. The slices below are a first cut; the check of 2026-11-12 against the code orders them.
+The foundation (Roma, 2026-11-13): every machine looks and acts the same from the desktop, the web and the phone, as `ssh` lands you in the same terminal (principle 9). Every client reaches every machine by one road (ADR 0124). Moving a Thread comes at the end. Track A, about 47 days of work.
 
-| Slice | What the Person tries | Pulls in |
-|---|---|---|
-| The engine is the same everywhere | devbox's engine starts at boot and runs Agents as arc's does | S1, S3; engine map item 5 |
-| The engine knows the machines | `banda --host devbox`; the window stops routing between machines | H4, H7; engine map items 1, 3, 6 |
-| The session moves by the engine | move a Thread with its terminal and Panes from the Mac to devbox, then to arc | ADR 0116, E-steps |
-| The engine knows the devices | close the window and nothing is lost; notifications still come | E3, E7 to E9; engine map items 2, 4 |
-| The door, then the web and the phone | a phone joins with a code and answers the Agent | ADR 0123, H3, H4, W1 to W3 |
+| Slice | What Roma tries |
+|---|---|
+| SE0 the docs | this PR: principle 9, story 1, ADR 0124 |
+| SE2 devbox starts at boot | reboot devbox, unlock: its engine runs with no window anywhere |
+| SE1 the gates | another machine's cards and Projects have the same menus as this one's (Rename, Fork, Stop, pin, trust) |
+| SE3 the door, and this machine on it | kill the Mac's engine: the window stays, says "away", offers "Send when back", and arc goes on |
+| SE5 the window in any browser | Safari pairs with one "Allow" and shows the same window, all three machines |
+| SE6 the phone | from the iPhone, answer an Agent's question on devbox and stop a turn on arc; story 1 then runs end to end with today's move |
+| SE7 told anywhere | the phone in a pocket gets a push; the Mac and the phone side by side give one signal |
+| SE4 every desktop on the road | "via tailnet · 18 ms"; after sleep, arc's Panes are back within a second |
+| SE9 the Person's screen reaches every machine | a devbox Agent's Diff and browser tab show on the Mac, then on the phone |
+| SE11 the engines carry the move (ADR 0125) | move a working Thread and close the window: after its turn it is there |
+| SE12 move from the phone | the whole story with a working Thread |
+| SE13 the room goes along | the worktree and the Thread's Panes follow it |
+| beside: SE8 feels local, SE10 every machine's Project is whole | echo over the phone's hotspot; ADR 0120's tries |
 
 ### 4. Story 2: an Agent writes an App
 
-The difference. The kernel splits (A1), Threads becomes an ordinary App (T0), Apps publish facts and intents (B7, B8), an App is actions, data and events with an optional shadcn/ui screen, and an App installs without rebuilding Banda. It ends in a trial: an Agent writes a working App in one Thread.
+The difference, on a second track beside story 1 (Roma, 2026-11-13). An App the Person's own Agent writes installs with no click (Roma, 2026-11-12).
+
+| Slice | What Roma tries |
+|---|---|
+| 2-0 the base: A1a, H1 with #1231 and #1226 | `banda status` lists each machine's Apps and their versions |
+| 2a an App from the Agent | on devbox an Agent writes a clients App; another Thread, Claude then Codex, finds clients in Berlin; a broken migration turns off only that App |
+| 2b in one Thread, readable without it | it installs with no restart; `banda export --app clients` prints its rows |
+| 2c the default screen | a list and a form drawn from its Tree, on arc and in the Mac's window; on the phone after SE6 |
 
 ### 5. The other stories
 
