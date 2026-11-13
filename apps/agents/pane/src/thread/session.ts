@@ -32,7 +32,6 @@ import type {
   TurnView,
 } from "@banda/contract/agents"
 import { useMachine, useStatus } from "@banda/ui/hooks/use-status"
-import { projectsChanged } from "@banda/ui/lib/projects"
 import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
@@ -266,7 +265,6 @@ export function useThreadSession({
             scratchCommand: creation.current,
             scratch: made.id,
           })
-          projectsChanged()
           return made.id
         })
         .catch((error: unknown) => {

@@ -45,7 +45,6 @@ import {
   Previewers,
   usePreviewers,
 } from "@banda/ui/lib/previewers"
-import { projectsChanged } from "@banda/ui/lib/projects"
 import type { AnyPaneKind, Args } from "@banda/ui/module"
 import type { PaneProps, PaneState, Runs } from "@banda/ui/pane"
 import { KindsContext } from "../launcher"
@@ -106,10 +105,11 @@ export function refused({ said, offer }: Refused): void {
 /**
  * Runs an act as `route` says, or says why not (ADR 0106, law 3). A
  * Project no machine the Window knows has may be this machine's, added
- * since its list was read: that list is read once more, from this
- * machine's own engine, before the act is refused, so nothing fails closed
- * only because this window has not looked. How it went, for what asked
- * from outside the window and hears no toast (ADR 0127, decision 2).
+ * a moment ago, its fact not yet followed: that list is read once more,
+ * from this machine's own engine, before the act is refused, so nothing
+ * fails closed only because this window has not heard. How it went, for
+ * what asked from outside the window and hears no toast (ADR 0127,
+ * decision 2).
  */
 export function actAs(
   hosts: Pick<KeptHosts, "reread">,
@@ -123,12 +123,7 @@ export function actAs(
   }
   const first = route()
   if (first.runs || first.why !== UNKNOWN) return Promise.resolve(ran(first))
-  return hosts.reread().then(() => {
-    const again = route()
-    // The rest of the window hears of the Project too.
-    if (again.runs) projectsChanged()
-    return ran(again)
-  })
+  return hosts.reread().then(() => ran(route()))
 }
 
 /**

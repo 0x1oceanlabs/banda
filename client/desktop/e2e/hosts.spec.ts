@@ -64,7 +64,6 @@ import {
   headerShows,
   leaveSidebar,
   placeOf,
-  setInFront,
   startWindow,
   type Window,
 } from "./window"
@@ -446,9 +445,7 @@ async function work(window: Window): Promise<string> {
     "--params",
     JSON.stringify({ harness: "fake", text: "Sidebar for arc", settings: null })
   )
-  // A Project added from outside shows as the window comes to the front.
-  await setInFront(window.page, false)
-  await setInFront(window.page, true)
+  // A Project added from outside shows as its machine says so (ADR 0127).
   return project
 }
 
@@ -3199,9 +3196,9 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
       .getByRole("region", { name: "Scratch on arc", exact: true })
       .getByText("You said: Scratch on arc")
   ).toBeVisible()
-  // arc's new Project shows as the window comes to the front.
-  await setInFront(page, false)
-  await setInFront(page, true)
+  // arc's new Project shows as arc says so (ADR 0127), once the pointer
+  // the ✎ menu left over the list lets it move (ADR 0098).
+  await leaveSidebar(page)
   const scratch = macOf
     .getByRole("option")
     .filter({ hasText: "Scratch on arc" })

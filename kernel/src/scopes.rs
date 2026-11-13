@@ -192,6 +192,7 @@ impl KernelBuilder {
             ))),
             projects,
             adding: Default::default(),
+            told: Default::default(),
             machine,
             passes,
             window,

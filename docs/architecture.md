@@ -312,7 +312,24 @@ The kernel holds only what every module needs, and it names no module.
   Project), `projects.browse` lists folders as a path is typed,
   `projects.update` renames, pins or archives, and `projects.remove` forgets
   a Project: its modules stop what runs there (`Module::closing`), its data
-  becomes `<id>.gone` and is deleted, and its folder is not touched. A
+  becomes `<id>.gone` and is deleted, and its folder is not touched. Each
+  change is said in this machine's log (ADR 0127): after a command of
+  `projects.*`, the kernel writes one fact `changed` as `projects`, a name
+  no module takes, for each Project whose line in the list reads
+  otherwise than the log last said, its subject the Project's ID and its
+  payload which Project and what happened to it, `added`, `updated`,
+  `located` or `removed` (`ProjectChanged`); a sign found as the engine
+  starts is said so too. A command that changes nothing, or is sent
+  again, says nothing. `projects.listed` gives the list with its place in
+  that log, `at`, and who follows the Projects reads it again on each
+  fact after it: every list of them in a window does (`useProjects`,
+  `client/ui/src/hooks/use-projects.ts`), each machine's from its own
+  engine, so a Project added by `banda project add`, by an Agent or from
+  another window shows at once, and nothing is read again as a window
+  comes to the front. What an engine finds as it starts, as a folder gone
+  while it was stopped, no fact says: a window reads the list again when
+  its engine says a new boot. A kernel with no module of the machine's
+  has no log, and says none. A
   Thread in No Project has a Project of its own, `scratch` in `project.json`
   (ADR 0046): `projects.create { scratch: true }` makes it, with no name, in
   a new folder `~/Banda/scratch/<date>-<id8>/`, and `projects.update

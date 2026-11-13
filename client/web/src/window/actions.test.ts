@@ -11,7 +11,6 @@ import { AGENTS_FILE, DEFAULT_AGENTS, type Flow } from "@banda/contract/agents"
 import type { Look } from "@banda/contract/look"
 import { toast } from "@banda/ui/components/sonner"
 import { takeLook } from "@banda/ui/lib/look"
-import { onProjectsChanged } from "@banda/ui/lib/projects"
 import type { Action, Args } from "@banda/ui/module"
 import type { PaneState } from "@banda/ui/pane"
 import { expect, test, vi } from "vitest"
@@ -1259,8 +1258,6 @@ test("a key's act on a Project this machine added since its list was read runs, 
   const hosts = new KeptHosts(NO_HOSTS, FORGETTING, engine)
   hosts.ours(projectsOf({ a: "a" }), "m0" as ProjectId)
   const ran = vi.fn()
-  const heard = vi.fn()
-  const stop = onProjectsChanged(heard)
   const shell = shellOf({
     hosts,
     route: ran,
@@ -1276,8 +1273,6 @@ test("a key's act on a Project this machine added since its list was read runs, 
   expect(ran).not.toHaveBeenCalled()
   await vi.waitFor(() => expect(ran).toHaveBeenCalledWith({ project: added }))
   expect(toasted).not.toHaveBeenCalled()
-  expect(heard).toHaveBeenCalled()
-  stop()
 
   ran.mockClear()
   runAction(shell, act, { project: "x" as ProjectId })

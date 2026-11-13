@@ -49,7 +49,7 @@ function ListedOn({ hosts, name }: { hosts: KeptHosts; name: string }) {
 }
 
 /** Host `name`'s engine, whose Projects `hosts` takes as it lists them,
- * and again as the window comes to the front (`useProjects`). */
+ * and again as that machine says one changed (`useProjects`). */
 export function useListedOn(hosts: KeptHosts, name: string): Engine {
   const engine = hosts.engine(name)
   const { listed } = useProjects(engine)

@@ -19,7 +19,7 @@ import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, withArc } from "./arc"
 import { pdfOf } from "./pdf"
-import { setInFront, type Window } from "./window"
+import { type Window } from "./window"
 
 const shots = process.env.BANDA_E2E_SHOTS
 
@@ -94,9 +94,7 @@ async function openedHere() {
     "--params",
     JSON.stringify({ harness: "fake", text: TITLE, settings: null })
   )
-  // A Project added from outside shows as the window comes to the front.
-  await setInFront(page, false)
-  await setInFront(page, true)
+  // A Project added from outside shows as its machine says so (ADR 0127).
   await sidebar.getByText(TITLE).click()
   const thread = page.getByRole("region", { name: TITLE, exact: true })
   await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()

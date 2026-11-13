@@ -32,7 +32,6 @@ import {
   within,
 } from "@banda/ui/pane"
 import { withHost } from "@banda/core"
-import { projectsChanged } from "@banda/ui/lib/projects"
 import type { Args } from "@banda/ui/module"
 import { holdTile, TileBox, TileContext } from "@banda/ui/lib/tile"
 import {
@@ -230,13 +229,11 @@ export const PaneFrame = memo(function PaneFrame({
   // arrangement written before kept it; a Project no machine the Window
   // knows has shows why, and opens on none (ADR 0106, decision 1).
   const reach = useReach(entry.project, paneHost(entry.pane))
+  // A Pane of a Project its machine just added is unknown until the list
+  // that follows that machine says so (`useProjects`); one no machine has
+  // stays unknown.
   const unknown = reach.host === null
   const there = reach.host ?? undefined
-  // A Pane of a Project added on this machine since its list was read
-  // finds it by reading it again; one no machine has stays unknown.
-  useEffect(() => {
-    if (unknown) projectsChanged()
-  }, [unknown])
   // Why it cannot reach its machine, this one too (ADR 0124).
   const at = useMachineOf(entry.project, paneHost(entry.pane))
   const words = at && reachWords(at.key, at.shown, seenNamed)

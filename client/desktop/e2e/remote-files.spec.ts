@@ -18,7 +18,7 @@ import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { type Arc, newArc, put, shot, withArc } from "./arc"
 import { pdfOf } from "./pdf"
-import { projectId, setInFront, type Window } from "./window"
+import { projectId, type Window } from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -340,10 +340,8 @@ test("a file of this machine dropped on arc's tree is refused in words, and noth
   // What a drag of this machine's row carries, its Project and whole
   // path: a drag between two Panes is the Person's hand.
   const project = projectId(window!, "Same")
-  // A Project added from outside shows as the window comes to the front,
-  // and only then does the window know this machine holds it.
-  await setInFront(page, false)
-  await setInFront(page, true)
+  // A Project added from outside shows as its machine says so (ADR
+  // 0127), and only then does the window know this machine holds it.
   const toast = page
     .getByRole("region", { name: "Notifications" })
     .getByText(

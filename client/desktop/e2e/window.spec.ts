@@ -6639,7 +6639,7 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   ).toBeVisible()
 })
 
-test("Add Project adds a folder on disk from the Banda menu, and one banda project add made shows as the window comes back", async () => {
+test("Add Project adds a folder on disk from the Banda menu, and one banda project add made shows at once (ADR 0127)", async () => {
   window = await startWindow()
   const { page, dir, banda } = window
   await firstThread(page)
@@ -6668,11 +6668,9 @@ test("Add Project adds a folder on disk from the Banda menu, and one banda proje
   await expect(menu).toBeHidden()
   await expect(page.getByRole("button", { name: "Project: app" })).toBeVisible()
 
-  // A Project added from a terminal shows once the window comes back to
-  // the front.
+  // A Project added from a terminal shows as the engine says so (ADR
+  // 0127): the window is not brought to the front for it.
   banda("project", "add", join(work, "cli"))
-  await setInFront(page, false)
-  await setInFront(page, true)
   await bandaMenu(page)
   await search.fill("cli")
   await expect(menu.getByRole("group", { name: "Projects" })).toContainText(
@@ -6813,8 +6811,6 @@ test("Add Project asks in the menu whether to trust a folder that looks foreign,
   banda("project", "add", mine)
   expect(listed("mine")?.trusted).toBe(true)
   expect(listed("mine")?.trust_said).toBeFalsy()
-  await setInFront(page, false)
-  await setInFront(page, true)
   await projectSettings("mine")
   const trust = page.locator('[data-key="trust"]')
   await expect(trust).toContainText(
@@ -6886,8 +6882,6 @@ test("a Project's menu opens its settings, where it is pinned, named, archived a
   const lab = join(dir, "lab")
   mkdirSync(lab)
   banda("project", "add", lab)
-  await setInFront(page, false)
-  await setInFront(page, true)
   // Grouped by Project, a right click on its header opens its menu.
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await groupBy(page, "Project")

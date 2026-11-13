@@ -30,7 +30,6 @@ import {
   placeOf,
   projectId,
   send,
-  setInFront,
   sidebarOf,
   startWindow,
   threadNamed,
@@ -331,8 +330,6 @@ test("a Project to trust is a card first in Your turn: Enter asks on the trust c
   await send(window, "Bench the window tests")
   const folder = addForeign(window, "widget")
   addForeign(window, "gadget")
-  await setInFront(page, false)
-  await setInFront(page, true)
   const sidebar = sidebarOf(page)
   const panel = sidebar.getByRole("tabpanel")
   const widget = panel.getByRole("option", { name: "Trust “widget”?" })
@@ -386,8 +383,13 @@ test("a Project to trust is a card first in Your turn: Enter asks on the trust c
   await other.hover()
   await other.getByText("Not now", { exact: true }).click()
   await expect(other).toHaveCount(0)
-  await setInFront(page, false)
-  await setInFront(page, true)
+  // Pinned from a terminal, it is heard again (ADR 0127).
+  window.banda(
+    "call",
+    "projects.update",
+    "--params",
+    JSON.stringify({ project: projectId(window, otherName), pinned: true })
+  )
   await expect(panel.locator("[data-project-card]")).toHaveCount(0)
   expect(trusts(window, otherName)).toBe(false)
 })
