@@ -18,6 +18,12 @@
 //! the copy it had. The copies no install names go as the engine next
 //! starts ([`Installed::sweep`]): one may still be read by a worker that
 //! ends as its last call does.
+//!
+//! `installed.json` is what says an App is installed. Removing one goes
+//! the other way round: the file goes first ([`Installed::remove`]), the
+//! engine lets go of the App, and its copies go last
+//! ([`Installed::clear`]), or as the engine next starts when a worker
+//! still holds one.
 
 use crate::folder::Folder;
 use crate::folder::is_id;
@@ -111,20 +117,31 @@ impl Installed {
     /// does not read is logged and left out: it runs nothing until it is
     /// installed again.
     pub fn list(&self) -> Vec<Install> {
-        let Ok(entries) = std::fs::read_dir(&self.root) else {
-            return Vec::new();
-        };
-        let mut ids: Vec<String> = entries
-            .flatten()
-            .map(|entry| entry.file_name().to_string_lossy().into_owned())
-            .filter(|name| is_id(name))
-            .collect();
+        // A folder with no record is not an install: a copy staged and
+        // not taken yet, or what a removed App left.
+        let mut ids: Vec<String> = (self.ids().filter(|id| self.record(id).is_file())).collect();
         ids.sort();
         ids.iter().filter_map(|id| self.read(id)).collect()
     }
 
+    /// The ids that have a folder here, installed or not.
+    fn ids(&self) -> impl Iterator<Item = String> {
+        let entries = std::fs::read_dir(&self.root)
+            .into_iter()
+            .flatten()
+            .flatten();
+        entries
+            .map(|entry| entry.file_name().to_string_lossy().into_owned())
+            .filter(|name| is_id(name))
+    }
+
+    /// The file that says the App `id` is installed, and which copy runs.
+    fn record(&self, id: &str) -> PathBuf {
+        self.root.join(id).join(KEPT)
+    }
+
     fn kept(&self, id: &str) -> Option<Kept> {
-        let bytes = std::fs::read(self.root.join(id).join(KEPT)).ok()?;
+        let bytes = std::fs::read(self.record(id)).ok()?;
         serde_json::from_slice(&bytes).ok()
     }
 
@@ -176,7 +193,7 @@ impl Installed {
         let written = || -> std::io::Result<()> {
             let new = place.join(format!("{KEPT}.new"));
             std::fs::write(&new, serde_json::to_vec_pretty(&kept)?)?;
-            host::rename(&new, &place.join(KEPT))
+            host::rename(&new, &self.record(&app.id))
         };
         written().map_err(|e| broke("an install was not kept", e))
     }
@@ -192,8 +209,8 @@ impl Installed {
     }
 
     /// Takes away the copies no install names, left by an install put in
-    /// another's place or cut short: as the engine starts, when no worker
-    /// reads one.
+    /// another's place or cut short, and what a removed App left: as the
+    /// engine starts, when no worker reads one.
     pub fn sweep(&self) {
         for Install { app, copy, .. } in self.list() {
             let place = self.root.join(&app.id);
@@ -204,18 +221,33 @@ impl Installed {
                 }
             }
         }
+        for id in self.ids().filter(|id| !self.record(id).is_file()) {
+            self.clear(&id);
+        }
     }
 
-    /// Takes the installed App `id` away. Its data stays in each Project
-    /// (ADR 0085, decision 6).
+    /// Says the App `id` is installed no more: its record goes, and its
+    /// copies stay for `clear`. Its data stays in each Project (ADR 0085,
+    /// decision 6).
     pub fn remove(&self, id: &str) -> Result<(), Refusal> {
-        let place = self.root.join(id);
-        if !is_id(id) || !place.is_dir() {
+        let record = self.record(id);
+        if !is_id(id) || !record.is_file() {
             return Err(Refusal::not_found(format!(
                 "No App named {id} is installed on this machine."
             )));
         }
-        host::remove_all(&place).map_err(|e| broke("an installed App was not removed", e))
+        host::tried(|| std::fs::remove_file(&record))
+            .map_err(|e| broke("an installed App was not removed", e))
+    }
+
+    /// Takes away the copies of `id`, removed, once the engine let go of
+    /// it. Its worker may hold its copy a moment longer, which Windows
+    /// refuses to remove meanwhile: what stays is swept as the engine
+    /// starts.
+    pub fn clear(&self, id: &str) {
+        if let Err(error) = host::remove_all(&self.root.join(id)) {
+            tracing::warn!(id, %error, "a removed App's copies stay until the engine starts");
+        }
     }
 }
 
