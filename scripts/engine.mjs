@@ -8,7 +8,8 @@
 // <resources> is the packed app's, where the engine and what it carries
 // are. It writes, in client/desktop/dist/:
 //
-// - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda`, its line tables
+// - <folder>-<version>-engine-<os>-<arch>.tar.gz: `banda` and its updater
+//   `banda-update` (ADR 0131), its line tables
 //   on macOS (`banda.dSYM`), the ACP adapters (`adapters/`), the Node they
 //   run on (`node/node`, ADR 0119 step 1b: scripts/node.mjs put it in
 //   target/node/<platform>/) and the licenses, laid out as the engine's
@@ -54,6 +55,7 @@ if (!os || !arch)
 // machine into an engine that cannot run its Agents.
 const carried = [
   "banda",
+  "banda-update",
   ...(os === "mac" ? ["banda.dSYM"] : []),
   "adapters",
   "LICENSE",
@@ -87,6 +89,13 @@ const said = execFileSync(join(resources, "banda"), ["--version"], {
 if (!said.startsWith(`banda ${version} `)) {
   throw new Error(`engine.mjs: the engine says "${said}", not ${version}`)
 }
+// And so does its updater (ADR 0131).
+const updater = execFileSync(join(resources, "banda-update"), ["--version"], {
+  encoding: "utf8",
+}).trim()
+if (updater !== `banda-update ${version}`) {
+  throw new Error(`engine.mjs: banda-update says "${updater}", not ${version}`)
+}
 
 const dist = "client/desktop/dist"
 const name = `${channel.folder}-${version}-engine-${os}-${arch}.tar.gz`
@@ -103,6 +112,7 @@ const listed = execFileSync("tar", ["-tzf", file], { encoding: "utf8" })
   .map((entry) => entry.replace(/^\.\//, ""))
 for (const name of [
   "banda",
+  "banda-update",
   "adapters/claude-agent-acp.mjs",
   "adapters/codex-acp.mjs",
   "node/node",

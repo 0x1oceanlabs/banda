@@ -25,7 +25,7 @@ echo "== Banda $BANDA_VERSION ($BANDA_CHANNEL)"
 if [[ $(uname) == Darwin ]]; then
   export CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=packed
 fi
-cargo build --release --bin banda
+cargo build --release --bin banda --bin banda-update
 pnpm install --frozen-lockfile --silent
 # The app carries the licenses of what it is built from (ADR 0038). On
 # Windows it also carries a Node, which runs the adapters there (ADR 0090,
@@ -64,6 +64,8 @@ resources=$(find client/desktop/dist -maxdepth 4 -type d \
 carried=(adapters/claude-agent-acp.mjs adapters/codex-acp.mjs)
 if [[ ${OS:-} == Windows_NT ]]; then
   carried+=(banda.exe banda.pdb node/node.exe)
+else
+  carried+=(banda-update)
 fi
 for file in "${carried[@]}"; do
   if [[ ! -s ${resources:-/nowhere}/$file ]]; then

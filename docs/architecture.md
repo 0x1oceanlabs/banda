@@ -1912,7 +1912,12 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
 - **The engine updates itself** (ADR 0119), with or without a window:
   the machine-scope module `updates` (`platform/updates/engine`) looks
   at its channel's releases a minute after the engine starts, then
-  hourly, and on `updates.check` (`banda update --check`). Banda Dev
+  hourly, and on `updates.check` (`banda update --check`). Each look
+  and each take runs in `banda-update`, the updater's own program
+  beside the engine's (ADR 0131, decision 2): the engine runs
+  `banda-update check` or `take <v>` with the Banda it is for, and takes
+  each line of JSON it prints, an `UpdateState`, into its own; a copy
+  that carries none looks in the engine's process. Banda Dev
   reads every Dev, Banda only a Stable (`feed.rs`); the window's app
   reads the release it found newest. A release carries an engine feed,
   `<dev|latest>-engine-<linux|mac>.yml`, naming one bundle,

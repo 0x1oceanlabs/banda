@@ -49,6 +49,8 @@ export default {
     target: ["AppImage"],
     extraResources: [
       { from: "../../target/release/banda", to: "banda" },
+      // The updater beside it, a program of its own (ADR 0131).
+      { from: "../../target/release/banda-update", to: "banda-update" },
       // What Install in Settings → Machines runs on another machine over
       // ssh, of this build (ADR 0119, decision 8; src/hosts.ts).
       { from: "../../scripts/install.sh", to: "install.sh" },
@@ -66,6 +68,7 @@ export default {
     // (scripts/package.sh, ADR 0039, decision 9).
     extraResources: [
       { from: "../../target/release/banda", to: "banda" },
+      { from: "../../target/release/banda-update", to: "banda-update" },
       { from: "../../target/release/banda.dSYM", to: "banda.dSYM" },
       { from: "../../scripts/install.sh", to: "install.sh" },
     ],
