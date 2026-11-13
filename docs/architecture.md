@@ -537,7 +537,12 @@ The kernel holds only what every module needs, and it names no module.
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has,
   and names the engine's boot, which another start changes: a window
-  that hears a new one knows every session of the last ended.
+  that hears a new one knows every session of the last ended. It lists
+  the engine's Apps too, `apps`, each with its version and the major of
+  the App API it is written to, as their manifests say, and
+  `apps.describe` gives each App's methods (ADR 0082, decisions 2 and
+  14); `banda status` prints the list. The protocol's version is the
+  kernel's `PROTOCOL`, which the contract takes from its generated files.
 - **Streams.** A module can answer a window with live pieces that are not
   facts, such as what a terminal prints: the window asks for a stream
   (`stream`) and hears its pieces (`piece`) until it ends (`ended`) or the

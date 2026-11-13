@@ -16,7 +16,7 @@
 //! decision 2).
 
 use crate::apps::{APPS, MANIFEST, Part, WINDOW};
-use banda_kernel::Method;
+use banda_kernel::{App, AppMethods, Method};
 use banda_look::keys::{Action, Scope};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -153,6 +153,29 @@ fn offer(part: &Part) -> Offer {
                 .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"))
         }),
     }
+}
+
+/// Each App and platform part in the list of Apps, with its version, the
+/// major of the App API it is written to, and its engine part's methods:
+/// what the engine's `welcome` lists and `apps.describe` answers (ADR
+/// 0082, decisions 2 and 14). The window's own part is a client's, and no
+/// App. The manifests are Banda's own, and the build checks each.
+pub fn described() -> Vec<AppMethods> {
+    APPS.iter()
+        .map(|part| {
+            let id = part.id;
+            let manifest: Manifest = toml::from_str(part.manifest)
+                .unwrap_or_else(|error| panic!("{id}'s {MANIFEST}: {error}"));
+            AppMethods {
+                app: App {
+                    api: (manifest.api).unwrap_or_else(|| panic!("{id}'s {MANIFEST} has an api")),
+                    id: manifest.id,
+                    version: manifest.version,
+                },
+                methods: part.methods.map(|methods| methods()).unwrap_or_default(),
+            }
+        })
+        .collect()
 }
 
 /// The Pane kinds that open as a Group of their own, as the window parts
@@ -400,6 +423,26 @@ mod tests {
     /// What the workspaces open as a Group of its own is what the window's
     /// code says, through the files its tests write: a Thread's Pane alone
     /// (ADR 0065, decision 7).
+    /// The welcome lists every App and platform part in the list, the
+    /// window's own not, each with its manifest's version and API, and
+    /// `apps.describe` gives each its engine part's methods.
+    #[test]
+    fn the_apps_described_are_the_list_s_with_their_methods() {
+        let described = described();
+        let ids: Vec<&str> = described.iter().map(|d| d.app.id.as_str()).collect();
+        let listed: Vec<&str> = APPS.iter().map(|part| part.id).collect();
+        assert_eq!(ids, listed);
+        for (app, part) in described.iter().zip(APPS) {
+            let manifest: toml::Table = toml::from_str(part.manifest).unwrap();
+            assert_eq!(Some(app.app.version.as_str()), manifest["version"].as_str());
+            assert_eq!(Some(i64::from(app.app.api)), manifest["api"].as_integer());
+            let methods = part.methods.map(|methods| methods()).unwrap_or_default();
+            assert_eq!(app.methods, methods, "{}", part.id);
+        }
+        let terminal = described.iter().find(|d| d.app.id == "terminal").unwrap();
+        assert!(terminal.methods.iter().any(|m| m.name == "open"));
+    }
+
     #[test]
     fn a_threads_pane_alone_opens_as_a_group_of_its_own() {
         assert_eq!(

@@ -1,5 +1,6 @@
 //! `banda status`: whether this machine's engine runs, since when, its
-//! build, and who works and who waits on this machine, as one JSON line.
+//! build, its Apps and their versions, and who works and who waits on
+//! this machine, as one JSON line.
 //! It starts nothing. `--follow` prints a line again on each change, the
 //! current one first, for the bar outside the window: the menu bar on
 //! macOS and Omarchy's shell plugin read it, so both show the same (ADR
@@ -24,7 +25,7 @@ use banda_agents::counts::{self, AgentCounts, ProjectThreads};
 use banda_agents::model::{ListedThread, ThreadList};
 use banda_kernel::api::EngineFrame;
 use banda_kernel::{
-    Code, CommandId, EventFilter, Fence, Named, PROTOCOL, ProjectId, ProjectSummary, Refusal,
+    App, Code, CommandId, EventFilter, Fence, Named, PROTOCOL, ProjectId, ProjectSummary, Refusal,
 };
 use banda_machines::Machine;
 use serde::{Deserialize, Serialize};
@@ -93,6 +94,13 @@ pub struct Status {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub agents: Option<AgentCounts>,
+    /// Each App its engine runs, and each part of the platform, with its
+    /// version and the major of the App API it is written to, as the
+    /// engine said them in its welcome (ADR 0082, decision 14): none from
+    /// an engine older than the list, nor with no engine.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<Vec<App>>")]
+    pub apps: Vec<App>,
 }
 
 /// One line, its fields in their order: `running` first.
@@ -137,7 +145,7 @@ async fn status_line(places: &Places, pass: bool) -> Result<Status, Failure> {
                     protocol: Some(PROTOCOL),
                     ..Status::default()
                 };
-                (fenced(line, &client), client.named().cloned())
+                (welcomed(line, &client), client.named().cloned())
             }
             Ok(Err(refused @ Failure::Refused(_))) => return Err(refused),
             _ => (Status::default(), None),
@@ -146,7 +154,7 @@ async fn status_line(places: &Places, pass: bool) -> Result<Status, Failure> {
         match answering(places).await {
             Ok((running, mut client)) => {
                 let named = client.named().cloned();
-                let mut line = fenced(said(&running), &client);
+                let mut line = welcomed(said(&running), &client);
                 // An engine that broke off as it was read still runs, as
                 // far as it said.
                 let mut lists = Lists::default();
@@ -207,11 +215,12 @@ fn this_machine(line: Status, system: Option<String>, named: Option<Named>) -> S
     }
 }
 
-/// `line`, with the fence as the engine said it in its welcome, never as
-/// a file says.
-fn fenced(line: Status, client: &Client) -> Status {
+/// `line`, with the fence and the Apps as the engine said them in its
+/// welcome, never as a file says.
+fn welcomed(line: Status, client: &Client) -> Status {
     Status {
         fence: client.fence().cloned(),
+        apps: client.apps().to_vec(),
         ..line
     }
 }
@@ -508,7 +517,7 @@ async fn follow_engine(
     else {
         return Ok(());
     };
-    let line = fenced(said(running), &reader);
+    let line = welcomed(said(running), &reader);
     let mut named = reader.named().cloned();
     let mut heard = Heard {
         // The kernel's stream of this machine's name and icon (ADR 0095).

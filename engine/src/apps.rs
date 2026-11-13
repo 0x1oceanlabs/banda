@@ -551,9 +551,10 @@ mod tests {
     fn does() -> String {
         let mut text = String::from(
             "// Written by banda's tests from the list of Apps (engine/src/apps.rs): do not edit.\n\
+             import type { MethodDoes } from \"./MethodDoes\"\n\
              import type { Methods } from \"./Methods\"\n\n\
              /** What a method does: it reads, or it acts (ADR 0106, law 4). */\n\
-             export type Does = \"read\" | \"act\"\n\n\
+             export type Does = MethodDoes\n\n\
              /** What each method does, as its line in `methods!` says: a command\n \
              * acts; a call or a stream reads by its right `Read`, or by `read`,\n \
              * and acts otherwise. */\n\
