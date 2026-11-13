@@ -133,7 +133,10 @@ pub fn bare(name: &'static str) -> &'static str {
 }
 
 /// A method's kind, as its line in `methods!` says: `call`, `command` or
-/// `stream`, each as this module's doc says (ADR 0082, decision 3).
+/// `stream`, each as this module's doc says (ADR 0082, decision 3). A
+/// `view` is an App's read that answers a Tree, its screen as data (ADR
+/// 0062, decision 7): it goes as a call does. An App from a folder
+/// declares one in its `methods.json`; `methods!` has no such line yet.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, rename = "MethodKind")]
@@ -141,6 +144,7 @@ pub enum Kind {
     Call,
     Command,
     Stream,
+    View,
 }
 
 /// The kind of a tool its engine did not say: a `call`, which keeps no

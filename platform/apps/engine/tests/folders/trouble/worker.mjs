@@ -30,4 +30,7 @@ export const methods = {
     throw new TypeError("it broke")
   },
   who: (_, { by, project }) => ({ answer: { by, project } }),
+  mess: () => ({
+    answer: { title: "Words", children: [{ node: "Tabel", rows: [] }] },
+  }),
 }

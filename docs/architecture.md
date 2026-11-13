@@ -1003,6 +1003,22 @@ this machine (ADR 0126).
   it copies anything, so a step that fails is refused with why, and the
   App installed before goes on as it ran. A step that fails only over
   what a Project holds still turns it off there alone.
+- **Its screen is a view that answers a Tree** (ADR 0062, decision 7).
+  A method of kind `view` is a read, routed as a call, whose answer is
+  the App's screen as data: a title and nodes of a small catalogue, Card,
+  Table, List, Form, Button, Badge, Empty and Markdown
+  (`platform/apps/engine/src/tree.rs`). The engine reads the Tree before
+  any client sees it: a client is trusted and a Tree is not. What it
+  gets wrong is `internal`, by where in the Tree and why, and a Tree is
+  held to 500 nodes and a Table to 1,000 rows. A control names only one
+  of the App's own commands that `methods.json` marks `"ui": true`. A
+  Form's fields come from that command's params, so no App writes them
+  twice: they come in the order `methods.json` writes them, and `fields`
+  chooses among them, orders them or says more of one.
+  The Tree carries the place in the Project's log it shows (`at`), taken
+  before the view read, so a client follows the App's events from there
+  and reads the view again on one. A view is no Agent's tool unless it
+  says so. No Pane draws it yet.
 - **Agents know the road.** The Banda skill's topic `apps`
   (`platform/apps/skill/apps.md`) says how to write one, with the clients
   App of the module's tests as its example, word for word; the skill's

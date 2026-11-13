@@ -322,6 +322,119 @@ async fn what_goes_wrong_in_an_app_stays_in_that_app() {
             .iter()
             .all(|tool| tool.name != "trouble_who")
     );
+
+    // A view that answers no Tree is refused where it is wrong, before
+    // any client draws it.
+    let mess = call("trouble.mess", json!({})).await.unwrap_err();
+    assert_eq!(mess.code, Code::Internal);
+    assert_eq!(
+        mess.message,
+        "trouble.mess failed: its Tree does not read. children[0] (Tabel): there is no such node: the nodes are Card, Table, List, Form, Button, Badge, Empty and Markdown."
+    );
+}
+
+/// The clients App with a screen: its folder, copied, with `add` marked
+/// for a screen and a view `home` that lists the clients and adds one.
+fn clients_with_a_screen(dir: &Path) -> PathBuf {
+    let (from, to) = (folder("clients"), dir.join("clients"));
+    std::fs::create_dir_all(to.join("migrations")).unwrap();
+    for file in ["app.toml", "migrations/001.sql", "migrations/002.sql"] {
+        std::fs::copy(from.join(file), to.join(file)).unwrap();
+    }
+    std::fs::copy(from.join("worker.mjs"), to.join("clients.mjs")).unwrap();
+    let methods = std::fs::read_to_string(from.join("methods.json")).unwrap();
+    let mut methods: Value = serde_json::from_str(&methods).unwrap();
+    methods["add"]["ui"] = json!(true);
+    methods["home"] = json!({
+        "kind": "view",
+        "about": "The clients, and a form to add one.",
+        "params": { "type": "object", "properties": { "city": { "type": "string" } } }
+    });
+    std::fs::write(to.join("methods.json"), methods.to_string()).unwrap();
+    let worker = r#"
+        import { methods as clients } from "./clients.mjs"
+        export const methods = {
+          ...clients,
+          async home({ city }, call) {
+            const { answer: rows } = await clients.find({ city }, call)
+            return {
+              answer: {
+                title: "Clients",
+                about: "The people I work with.",
+                children: [
+                  { node: "Table", rows, empty: "No clients yet",
+                    columns: [{ key: "name", title: "Name" }, { key: "city", title: "City" }] },
+                  { node: "Card", title: "Add a client",
+                    children: [{ node: "Form", command: "add", submit: "Add client" }] },
+                ],
+              },
+            }
+          },
+        }
+    "#;
+    std::fs::write(to.join("worker.mjs"), worker).unwrap();
+    to
+}
+
+#[tokio::test]
+async fn an_apps_view_answers_its_screen_as_a_tree_the_engine_read() {
+    needs_node!();
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let app = clients_with_a_screen(&dir.path().join("written"));
+    install(dir.path(), owner, &[&app]);
+    let kernel = serve(dir.path(), owner, node()).await;
+    let host = Host { kernel, owner, dir };
+    let work = host.project("Work").await;
+    let anna = json!({ "name": "Anna", "city": "Berlin" });
+    host.call(&work, "clients.add", anna).await.unwrap();
+    host.call(&work, "clients.add", json!({ "name": "Boris" }))
+        .await
+        .unwrap();
+
+    // The view is listed as one, and is no Agent's tool.
+    let described = (host.kernel).call(host.person(), "apps.describe", None, None, json!({}));
+    let described = described.await.unwrap();
+    let clients = (described.as_array().unwrap().iter())
+        .find(|app| app["id"] == "clients")
+        .unwrap();
+    let home = (clients["methods"].as_array().unwrap().iter())
+        .find(|method| method["name"] == "home")
+        .unwrap();
+    assert_eq!(
+        (&home["kind"], &home["does"], &home["tool"]),
+        (&json!("view"), &json!("read"), &Value::Null)
+    );
+
+    // Its Tree, as the client gets it: the Form has its fields, from the
+    // params of the command it sends.
+    let log = (host.kernel.follow(host.person(), work.id).await).unwrap();
+    let said = log.events_after(0, Default::default(), 10).await.unwrap();
+    let at = said.last().unwrap().seq;
+    let tree = host.call(&work, "clients.home", json!({ "city": "Berlin" }));
+    let field = |name: &str, label: &str, required: bool| {
+        json!({ "name": name, "label": label, "kind": "text", "required": required,
+            "placeholder": null, "options": [] })
+    };
+    assert_eq!(
+        tree.await.unwrap(),
+        json!({
+            // The log's place after the two clients were added.
+            "at": at,
+            "title": "Clients",
+            "about": "The people I work with.",
+            "children": [
+                { "node": "Table", "empty": "No clients yet",
+                  "columns": [{ "key": "name", "title": "Name", "as": "text" },
+                              { "key": "city", "title": "City", "as": "text" }],
+                  "rows": [{ "id": 1, "name": "Anna", "city": "Berlin", "email": null }] },
+                { "node": "Card", "title": "Add a client", "children": [
+                    { "node": "Form", "title": null, "command": "add", "submit": "Add client",
+                      "fields": [field("name", "Name", true), field("city", "City", false),
+                                 field("email", "Email", false)] } ] },
+            ]
+        })
+    );
 }
 
 /// Starts the engine's kernel over `dir` again, once the one before let go

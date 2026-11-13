@@ -66,6 +66,8 @@ struct Written {
     about: String,
     params: Option<Value>,
     tool: Option<bool>,
+    #[serde(default)]
+    ui: bool,
 }
 
 /// One method an App gives, checked.
@@ -82,6 +84,9 @@ pub struct Declared {
     pub params: Value,
     /// Whether an Agent calls it as a tool, `<app>_<method>`.
     pub tool: bool,
+    /// Whether a control of the App's screen may send it: a command's
+    /// `ui` (ADR 0062, decision 7).
+    pub ui: bool,
 }
 
 /// An App read from its folder, and checked.
@@ -266,6 +271,11 @@ impl Folder {
             .map_err(|why| invalid(MIGRATIONS, why))
     }
 
+    /// The method it declares by this name.
+    pub fn declared(&self, name: &str) -> Option<&Declared> {
+        self.methods.iter().find(|declared| declared.name == name)
+    }
+
     /// The name an Agent calls `method` by, as a tool.
     pub fn tool_name(&self, method: &str) -> String {
         format!("{}_{method}", self.id)
@@ -280,7 +290,8 @@ impl Folder {
                 kind: method.kind,
                 right: method.right,
                 does: match (method.kind, method.right) {
-                    (Kind::Call, Right::Read) => Does::Read,
+                    // A view writes nothing, whatever right it asks.
+                    (Kind::View, _) | (Kind::Call, Right::Read) => Does::Read,
                     _ => Does::Act,
                 },
                 tool: method.tool.then(|| kept(self.tool_name(&method.name))),
@@ -297,7 +308,12 @@ impl Folder {
             .map(|method| Tool {
                 name: self.tool_name(&method.name),
                 method: format!("{}.{}", self.id, method.name),
-                kind: method.kind,
+                // A tool's kind says only whether to send it again: a
+                // view goes as a call does.
+                kind: match method.kind {
+                    Kind::View => Kind::Call,
+                    kind => kind,
+                },
                 description: method.about.clone(),
                 schema: method.params.clone(),
             })
@@ -329,9 +345,16 @@ fn methods(folder: &Path, id: &str) -> Result<Vec<Declared>, Refusal> {
             about,
             params,
             tool,
+            ui,
         } = serde_json::from_value(method).map_err(|error| wrong(format!("{error}.")))?;
         if kind == Kind::Stream {
-            return Err(wrong("kind is \"call\" or \"command\".".into()));
+            return Err(wrong("kind is \"call\", \"command\" or \"view\".".into()));
+        }
+        if ui && kind != Kind::Command {
+            return Err(wrong(
+                "\"ui\" marks a command a control of the App's screen may send: this is no command."
+                    .into(),
+            ));
         }
         if about.trim().is_empty() {
             return Err(wrong(
@@ -364,7 +387,10 @@ fn methods(folder: &Path, id: &str) -> Result<Vec<Declared>, Refusal> {
             right,
             about: about.trim().to_owned(),
             params,
-            tool: tool.unwrap_or(true),
+            // A view's answer is a screen for a client to draw: no
+            // Agent's tool unless the App says so.
+            tool: tool.unwrap_or(kind != Kind::View),
+            ui,
         });
     }
     Ok(methods)
@@ -436,10 +462,11 @@ mod tests {
     #[test]
     fn a_folder_reads_as_its_app_with_its_methods_and_steps() {
         let methods = r#"{
-            "add": { "kind": "command", "about": " Adds a client. ",
+            "add": { "kind": "command", "about": " Adds a client. ", "ui": true,
                      "params": { "type": "object", "required": ["name"] } },
             "purge": { "kind": "command", "right": "manage", "about": "Forgets all.", "tool": false },
-            "find": { "kind": "call", "about": "The clients in a city." }
+            "find": { "kind": "call", "about": "The clients in a city." },
+            "home": { "kind": "view", "about": "The clients, and a form to add one." }
         }"#;
         let dir = app(&[
             (METHODS, methods),
@@ -462,9 +489,15 @@ mod tests {
             [
                 ("add", Kind::Command, Right::Write, true),
                 ("find", Kind::Call, Right::Read, true),
+                // A view reads, and is a screen: no tool unless it says so.
+                ("home", Kind::View, Right::Read, false),
                 ("purge", Kind::Command, Right::Manage, false),
             ]
         );
+        // Only the command marked so may be sent from the App's screen.
+        let ui: Vec<_> = (read.methods.iter()).filter(|m| m.ui).collect();
+        assert_eq!(ui.len(), 1);
+        assert_eq!(ui[0].name, "add");
         // A method with no params takes an object with nothing in it.
         assert_eq!(
             read.methods[1].params,
@@ -501,7 +534,7 @@ mod tests {
             let (from, to) = change.split_once(" -> ").unwrap();
             MANIFEST_OK.replace(from, to)
         };
-        let cases: [(&str, String, &str); 16] = [
+        let cases: [(&str, String, &str); 17] = [
             (
                 MANIFEST,
                 manifest("\"clients\" -> \"Clients2\""),
@@ -582,6 +615,11 @@ mod tests {
                 r#"{ "find": { "kind": "call", "about": "x", "params": { "type": "string" } } }"#
                     .into(),
                 "methods.json: find: params is a JSON Schema of an object",
+            ),
+            (
+                METHODS,
+                r#"{ "find": { "kind": "call", "about": "x", "ui": true } }"#.into(),
+                "methods.json: find: \"ui\" marks a command",
             ),
         ];
         for (file, text, words) in cases {
