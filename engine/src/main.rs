@@ -46,7 +46,9 @@
 //! window exits 75 while no engine runs where it starts none: a Mac with
 //! nobody logged in at its screen, or where the engine would be that
 //! window's child off Linux; or once the Mac's job stops as the Person
-//! logs out at its screen (`control.rs`).
+//! logs out at its screen (`control.rs`). `banda start --with-parent` for
+//! a window here exits 3 once the engine stopped as asked, but not by
+//! Quit Banda: the window stays, and starts it only when the Person says.
 
 mod account;
 mod act;
@@ -542,6 +544,11 @@ pub enum Failure {
     /// starts none, as on a Mac with nobody logged in at its screen, or
     /// once the Mac's job stops as the Person logs out at its screen.
     Later(String),
+    /// The engine stopped as it was asked to, but not by Quit Banda: plain
+    /// words on stderr, exit 3. Only `banda start --with-parent` for a
+    /// window here says it: that window stays, says the engine is stopped,
+    /// and starts it again when the Person says (ADR 0124, decision 9).
+    Stopped(String),
 }
 
 impl Failure {
@@ -553,7 +560,7 @@ impl Failure {
     pub fn words(self) -> String {
         match self {
             Failure::Refused(refusal) => refusal.message,
-            Failure::Broken(words) | Failure::Later(words) => words,
+            Failure::Broken(words) | Failure::Later(words) | Failure::Stopped(words) => words,
         }
     }
 
@@ -595,6 +602,10 @@ impl Failure {
             Failure::Later(words) => {
                 eprintln!("banda: {words}");
                 ExitCode::from(75)
+            }
+            Failure::Stopped(words) => {
+                eprintln!("banda: {words}");
+                ExitCode::from(3)
             }
         }
     }

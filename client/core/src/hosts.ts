@@ -49,8 +49,10 @@ export type HostsDevice = {
   follow: (take: (hosts: HostState[]) => void) => (() => void) | undefined
   /** Where host `name`'s engine listens now. */
   engine: (name: string) => Promise<Address>
-  /** Starts host `name`'s engine again there. */
-  start: (name: string) => void
+  /** Starts host `name`'s engine again there; this machine's own, by
+   * its key (`HERE`). Settled, where it says so, once the device was
+   * told. */
+  start: (name: string) => void | Promise<void>
 }
 
 /**
@@ -95,6 +97,12 @@ export const THIS_MACHINE: Named = { name: "This machine", icon: "desktop" }
  * down: what keeps it running starts it again. */
 const RESTARTING = "Banda is restarting on this machine"
 
+/** Why it is while it was stopped as asked, but not by Quit Banda: the
+ * window stays, and starts it when the Person says (ADR 0124, decision
+ * 9). The device says it in these words where it refuses the engine's
+ * address, and the page knows it by them. */
+export const STOPPED_HERE = "Banda is stopped on this machine"
+
 /**
  * This machine's engine, as a window makes it (ADR 0124): where `address`
  * says it listens. No one else says whether it is in reach, so its own
@@ -104,7 +112,15 @@ const RESTARTING = "Banda is restarting on this machine"
  * this machine's words.
  */
 export const ownEngine = (address: () => Promise<Address>): Engine => {
-  const engine: Engine = new Engine(address, {
+  // Stopped, as the device says in refusing its address, it is away until
+  // the Person starts it (`KeptHosts.start`).
+  const reached = () =>
+    address().catch((error: unknown) => {
+      throw String(error).includes(STOPPED_HERE)
+        ? new Unreachable(HERE, STOPPED_HERE, { machine: THIS_MACHINE.name })
+        : error
+    })
+  const engine: Engine = new Engine(reached, {
     ping: PING,
     staleOnLoss: true,
     unreachable: () =>
@@ -413,9 +429,11 @@ export class KeptHosts implements Readable<readonly Shown[]> {
    * Takes this machine as the Window shows it now, by its own engine's
    * connection, which no one else watches: away while that answers
    * nothing, as it restarts (`Engine.stale`), with its rows as of when it
-   * was last heard; refused once it said goodbye; else live, while it
-   * connects too, as a window that starts is in reach of its own machine.
-   * Its build is this window's own, so it says none.
+   * was last heard; stopped, as the device says where it refuses its
+   * address (`ownEngine`); refused once it said goodbye; connecting on
+   * its way back from any of those; else live, while it first connects
+   * too, as a window that starts is in reach of its own machine. Its
+   * build is this window's own, so it says none.
    */
   #judgeHere(): void {
     const engine = this.#here
@@ -424,11 +442,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     const { status } = engine
     const entry = { name: HERE, ssh: "" }
     const none = { build: null, version: null }
+    // On its way back after it was out of reach, it is not live yet.
+    const back = status.state !== "open" && was !== undefined && !live(was)
     const now: HostState = engine.stale
       ? { ...entry, state: "away", why: RESTARTING }
       : status.state === "refused"
         ? { ...entry, state: "refused", why: status.refusal.message }
-        : { ...entry, state: "live", ...none, own: none }
+        : status.state === "away"
+          ? { ...entry, state: "stopped" }
+          : back
+            ? { ...entry, state: "connecting" }
+            : { ...entry, state: "live", ...none, own: none }
     const { machine, projects } = this.#ours
     const shown: Shown = {
       ...shownOf(was, now, Date.now(), undefined, engine.heard),
@@ -810,9 +834,12 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     return this.#welcomed.get(engine)
   }
 
-  /** Starts host `name`'s engine again there. */
+  /** Starts host `name`'s engine again there. This machine's own
+   * (`HERE`), stopped, connects again once the device was told to start
+   * it. */
   start(name: string): void {
-    this.#device.start(name)
+    const told = this.#device.start(name)
+    if (name === HERE) void Promise.resolve(told).then(() => this.#here?.wake())
   }
 
   /** Takes what host `name` says it is called and drawn by now. */
@@ -1213,13 +1240,21 @@ export function reachWords(
   }
 }
 
-/** `reachWords` of this machine: away or refused, in the words of its
- * state, which name no machine; else none. */
+/** `reachWords` of this machine, in words that name no machine: away or
+ * refused, why; stopped, or starting again after it; else none. */
 function hereWords(shown: Shown | undefined): string | undefined {
   const state = shown?.state
-  return state?.state === "away" || state?.state === "refused"
-    ? state.why
-    : undefined
+  switch (state?.state) {
+    case "away":
+    case "refused":
+      return state.why
+    case "stopped":
+      return STOPPED_HERE
+    case "connecting":
+      return "Banda is starting on this machine"
+    default:
+      return undefined
+  }
 }
 
 /**

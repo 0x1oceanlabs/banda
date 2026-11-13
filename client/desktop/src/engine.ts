@@ -12,15 +12,19 @@
  * its window closes (closing.ts).
  *
  * The window learns the engine's address from the first line, and forgets
- * it while the engine is down. An engine that stops as asked, as Quit
- * Banda or `banda stop` stops it, ends the program with code 0: the window
- * quits then (`stopped`). One that crashed is started again. Quit Banda
- * here runs `banda stop --force` (`Stop`). It starts
+ * it while the engine is down. An engine Quit Banda stopped, here or by
+ * `banda stop`, ends the program with code 0: the window quits then
+ * (`stopped`). One stopped as asked by anything else, as its unit stopped
+ * by hand, ends it with code 3: the window stays, its Panes say Banda is
+ * stopped on this machine, and it starts the engine again when the Person
+ * says (`start`; ADR 0124, decision 9). One that crashed is started
+ * again. Quit Banda here runs `banda stop --force` (`Stop`). It starts
  * with `path` as its PATH, when there is one: on macOS, the login
  * shell's (login.ts), and with `env` over the window's environment: the
  * Node the app provides for the adapters it carries (ADR 0059).
  */
 import { type Address, type Code, Engine as Client } from "@banda/contract"
+import { STOPPED_HERE } from "@banda/core"
 import { Engine } from "@banda/desktop-kit"
 import {
   Context,
@@ -48,13 +52,37 @@ const Running = Schema.fromJsonString(
   })
 )
 
+/** The code `start --with-parent` ends with once the engine stopped as
+ * asked, but not by Quit Banda (`engine/src/control.rs`). */
+const STOPPED = 3
+
+/** The engine was stopped as asked, but not by Quit Banda (ADR 0124,
+ * decision 9). Its message is what the page says of it. */
+export class EngineStopped extends Data.TaggedError("EngineStopped")<{
+  readonly message: string
+}> {}
+
+/** This machine's engine as the page's own connection reaches it, beside
+ * what main and its modules read of it (`Engine`). */
+export class OwnEngine extends Context.Service<
+  OwnEngine,
+  {
+    /** Where the engine listens, as `Engine.address` says it; but it says
+     * why not while the engine is stopped, so the page's Panes say so and
+     * nothing waits. */
+    readonly reached: Effect.Effect<Address, EngineStopped>
+    /** Starts an engine that was stopped; running, it changes nothing. */
+    readonly start: Effect.Effect<void>
+  }
+>()("banda/OwnEngine") {}
+
 /** The engine's first line was not what `start --with-parent` prints. */
 class Unexpected extends Data.TaggedError("Unexpected")<{
   readonly message: string
 }> {}
 
-/** The engine's layer: see `Engine` (@banda/desktop-kit). `stopped` is
- * called once the engine stopped as asked. */
+/** The engine's layer: see `Engine` (@banda/desktop-kit) and `OwnEngine`.
+ * `stopped` is called once Quit Banda stopped the engine. */
 export const engineLayer = (
   path: Effect.Effect<
     Option.Option<string>,
@@ -64,7 +92,7 @@ export const engineLayer = (
   env: Record<string, string> = {},
   stopped: () => void = () => {}
 ) =>
-  Layer.effect(Engine)(
+  Layer.effectContext(
     Effect.gen(function* () {
       const program = yield* Program
       const variables = Option.match(yield* path, {
@@ -73,6 +101,8 @@ export const engineLayer = (
       })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
       const door = yield* Deferred.make<string>()
+      // Whether it was stopped, not by Quit Banda, until it is started.
+      const down = yield* SubscriptionRef.make(false)
       /** The first line of a run: where it listens, and the door. */
       const started = (line: string) =>
         Schema.decodeUnknownEffect(Running)(line).pipe(
@@ -95,48 +125,74 @@ export const engineLayer = (
             )
           )
         )
+      const running = keepRunning(
+        "engine",
+        Effect.flatMap(program.path, (binary) =>
+          command(binary, ["start", "--with-parent"], variables)
+        ),
+        (child) => {
+          let first = true
+          // Every line is read, so the pipe never fills; the address
+          // is kept until the engine dies, then forgotten.
+          return lines(child).pipe(
+            Stream.runForEach((line) => {
+              if (!first) return Effect.void
+              first = false
+              return started(line)
+            }),
+            Effect.andThen(Effect.never),
+            Effect.ensuring(SubscriptionRef.set(address, Option.none()))
+          )
+        },
+        {
+          // It stopped as asked: by Quit Banda, or by something else.
+          last: (code) => code === 0 || code === STOPPED,
+          // As long as `banda stop --force` gives it elsewhere (`Stop`):
+          // on Windows Quit Banda stops it by its stdin.
+          grace: "30 seconds",
+        }
+      )
       yield* Effect.forkScoped(
-        keepRunning(
-          "engine",
-          Effect.flatMap(program.path, (binary) =>
-            command(binary, ["start", "--with-parent"], variables)
-          ),
-          (child) => {
-            let first = true
-            // Every line is read, so the pipe never fills; the address
-            // is kept until the engine dies, then forgotten.
-            return lines(child).pipe(
-              Stream.runForEach((line) => {
-                if (!first) return Effect.void
-                first = false
-                return started(line)
-              }),
-              Effect.andThen(Effect.never),
-              Effect.ensuring(SubscriptionRef.set(address, Option.none()))
+        Effect.gen(function* () {
+          while (true) {
+            // Quit Banda stopped it: Banda quits.
+            if ((yield* running) !== STOPPED) return yield* Effect.sync(stopped)
+            // Stopped otherwise, the window stays until the Person starts
+            // it again.
+            yield* SubscriptionRef.set(down, true)
+            yield* SubscriptionRef.changes(down).pipe(
+              Stream.filter((is) => !is),
+              Stream.runHead
             )
-          },
-          {
-            // It stopped as asked: Banda quits.
-            last: (code) => code === 0,
-            // As long as `banda stop --force` gives it elsewhere (`Stop`):
-            // on Windows Quit Banda stops it by its stdin.
-            grace: "30 seconds",
           }
-        ).pipe(Effect.andThen(Effect.sync(stopped)))
+        })
       )
       const at = known(address).pipe(
         Stream.runHead,
         Effect.map(Option.getOrThrow)
       )
+      // Stopped now, or while it waits: the page's connection hears why.
+      const whenDown = SubscriptionRef.changes(down).pipe(
+        Stream.filter((is) => is),
+        Stream.runHead,
+        Effect.andThen(
+          Effect.fail(new EngineStopped({ message: STOPPED_HERE }))
+        )
+      )
       let client: Client | undefined
       yield* Effect.addFinalizer(() => Effect.sync(() => client?.close()))
-      return {
+      const own = {
+        reached: Effect.raceFirst(at, whenDown),
+        // No longer stopped at once, so the address asked next waits.
+        start: SubscriptionRef.set(down, false),
+      }
+      return Context.make(Engine, {
         address: at,
         client: Effect.sync(
           () => (client ??= new Client(() => Effect.runPromise(at)))
         ),
         door: Deferred.await(door),
-      }
+      }).pipe(Context.add(OwnEngine, own))
     })
   )
 

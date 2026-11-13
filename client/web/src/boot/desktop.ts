@@ -61,14 +61,14 @@ export const device = {
      * and kept nowhere in the page. */
     engine: (name: string): Promise<Address> =>
       desktop()?.hostEngine(name) ?? elsewhere(),
-    /** Starts host `name`'s engine again there, as the Person asks. */
-    start: (name: string): void => {
+    /** Starts host `name`'s engine again there, as the Person asks; no
+     * name is this machine's own. Settled once the desktop was told. */
+    start: (name: string): Promise<void> =>
       desktop()
         ?.hostStart(name)
         .catch((error: unknown) => {
-          console.error(`banda: ${name} was not started`, error)
-        })
-    },
+          console.error(`banda: ${name || "the engine"} was not started`, error)
+        }) ?? Promise.resolve(),
     /** Stops Banda on host `name`, as the Person asks. */
     stop: (name: string, force: boolean): Promise<"stopped" | "working"> =>
       desktop()?.hostStop(name, force) ?? elsewhere(),
