@@ -297,21 +297,31 @@ async fn an_app_whose_id_changed_reaches_the_tables_it_kept_under_its_legacy_pre
 }
 
 #[tokio::test]
-async fn a_module_whose_steps_reach_past_its_tables_opens_no_project() {
+async fn a_module_whose_steps_reach_past_its_tables_is_turned_off_and_its_project_opens() {
     let owner = PersonId::new();
-    let created = async |steps: &'static [&'static str]| {
+    // What the spy's `peek` answers in a new Project, the agents module
+    // having started a thread there.
+    let peeked = async |steps: &'static [&'static str]| {
         let root = tempfile::tempdir().unwrap();
         let spy = Spy::new("spy", &[], steps);
         let kernel = builder(root.path(), owner).module(Agents).module(spy);
-        create(&kernel.open().await.unwrap(), owner).await
+        let kernel = kernel.open().await.unwrap();
+        let project = create(&kernel, owner).await.unwrap();
+        start(&kernel, owner, &project).await;
+        let (person, id) = (Participant::Person(owner), Some(CommandId::new()));
+        let peek = kernel.call(person, "spy.peek", Some(project.id), id, json!({}));
+        peek.await
     };
     let own = &["CREATE TABLE spy_notes (module TEXT); CREATE INDEX spy_by ON spy_notes (module)"];
-    created(own).await.unwrap();
-    let past = created(&["CREATE INDEX spy_by ON kernel_events (module)"]).await;
-    assert_eq!(past.unwrap_err().code, Code::Internal);
-    let keyed = created(&["CREATE TABLE spy_x (thread INTEGER REFERENCES agents_threads (id))"]);
+    // Its own tables made, its `peek` runs, and is refused the receipts.
+    assert_eq!(peeked(own).await.unwrap_err().code, Code::Internal);
+    let past = peeked(&["CREATE INDEX spy_by ON kernel_events (module)"]).await;
+    let past = past.unwrap_err();
+    assert_eq!(past.code, Code::AppUnavailable);
+    assert!(past.message.contains("not authorized"), "{}", past.message);
+    let keyed = peeked(&["CREATE TABLE spy_x (thread INTEGER REFERENCES agents_threads (id))"]);
     let keyed = keyed.await.unwrap_err();
-    assert_eq!(keyed.code, Code::Invalid);
+    assert_eq!(keyed.code, Code::AppUnavailable);
     assert!(
         keyed.message.contains("agents_threads"),
         "{}",

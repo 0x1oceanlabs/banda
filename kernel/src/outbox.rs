@@ -481,10 +481,14 @@ async fn start_ready(project: &Arc<Project>) -> Result<Duration, Error> {
             wait = READ_AGAIN;
         }
     }
-    let id = boot.id.clone();
+    // The effects of a module that does not run here, turned off or not
+    // this engine's, wait as they are.
+    let names: Vec<_> = project.modules().iter().map(|m| m.name()).collect();
+    let run_here = serde_json::to_string(&names)?;
+    let (id, here) = (boot.id.clone(), run_here.clone());
     let claimed = project
         .store()
-        .write(KERNEL, move |tx| claim(tx, &id))
+        .write(KERNEL, move |tx| claim(tx, &id, &here))
         .await?;
     for claimed in claimed {
         start(project, claimed);
@@ -492,7 +496,7 @@ async fn start_ready(project: &Arc<Project>) -> Result<Duration, Error> {
     let id = boot.id.clone();
     let (due, runs_out) = project
         .store()
-        .read(move |sql| next_due(sql, &id, now))
+        .read(move |sql| next_due(sql, &id, now, &run_here))
         .await?;
     let until = |at: i64, now: i64| Duration::from_millis((at - now).max(0).unsigned_abs());
     if let Some(at) = due {
@@ -733,18 +737,23 @@ fn leases_ran_out(sql: &Connection, boot: &str, now: i64) -> Result<Vec<Claimed>
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// An effect, as `o`, of a module that runs here: one of the names in
+/// the JSON list bound last.
+const RUNS_HERE: &str = "o.module IN (SELECT value FROM json_each(?))";
+
 /// Claims for this boot the first pending effect the engine runs of every
-/// key with nothing running, once it is due.
-fn claim(tx: &mut Tx<'_>, boot: &str) -> Result<Vec<Claimed>, Error> {
+/// key with nothing running, once it is due, of the modules `run_here`
+/// names, a JSON list.
+fn claim(tx: &mut Tx<'_>, boot: &str, run_here: &str) -> Result<Vec<Claimed>, Error> {
     let (now, sql) = (tx.now(), tx.kernel());
     let mut ready = {
         let mut statement = sql.prepare(&format!(
             "SELECT {CLAIMED} FROM kernel_outbox o
              WHERE o.state = 'pending' AND o.runner = 'engine' AND o.next_at <= ?1
-               AND {FIRST_OF_ITS_KEY}
+               AND {FIRST_OF_ITS_KEY} AND {RUNS_HERE}
              ORDER BY o.id"
         ))?;
-        let rows = statement.query_map(params![now], read_claimed)?;
+        let rows = statement.query_map(params![now, run_here], read_claimed)?;
         rows.collect::<rusqlite::Result<Vec<_>>>()?
     };
     for claimed in &mut ready {
@@ -842,13 +851,19 @@ fn settle(
 /// wall clock, and when the first lease `boot` gave that had not run out by
 /// `now` runs out, on its own. One that waits behind a run of its key is
 /// not due: the loop wakes as that run ends.
-fn next_due(sql: &Connection, boot: &str, now: i64) -> Result<(Option<i64>, Option<i64>), Error> {
+fn next_due(
+    sql: &Connection,
+    boot: &str,
+    now: i64,
+    run_here: &str,
+) -> Result<(Option<i64>, Option<i64>), Error> {
     let due = sql.query_row(
         &format!(
             "SELECT MIN(o.next_at) FROM kernel_outbox o
-             WHERE o.state = 'pending' AND o.runner = 'engine' AND {FIRST_OF_ITS_KEY}"
+             WHERE o.state = 'pending' AND o.runner = 'engine' AND {FIRST_OF_ITS_KEY}
+               AND {RUNS_HERE}"
         ),
-        [],
+        params![run_here],
         |row| row.get(0),
     )?;
     let runs_out = sql.query_row(
@@ -996,8 +1011,12 @@ mod tests {
         queue("a", "pending", 0);
         // Due at once, it would wake the loop with nothing to start, again
         // and again, for as long as the run lasts.
-        assert_eq!(next_due(&sql, "this boot", 0).unwrap(), (None, None));
+        let due = |run_here| next_due(&sql, "this boot", 0, run_here).unwrap();
+        assert_eq!(due(r#"["notes"]"#), (None, None));
         queue("b", "pending", 7);
-        assert_eq!(next_due(&sql, "this boot", 0).unwrap(), (Some(7), None));
+        assert_eq!(due(r#"["notes"]"#), (Some(7), None));
+        // Nor is one of a module that does not run here, which nothing
+        // would start.
+        assert_eq!(due(r#"["other"]"#), (None, None));
     }
 }

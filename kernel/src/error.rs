@@ -31,6 +31,10 @@ pub enum Code {
     /// did not run (ADR 0105): what waited for this machine was kept too
     /// long. Sending it again changes nothing.
     Expired,
+    /// The method's App is turned off in the Project it was called in: its
+    /// tables there did not come up to date, and the message says why. The
+    /// Project's other Apps go on (the architecture vision, D4).
+    AppUnavailable,
     /// The window and the engine speak different protocol versions.
     Protocol,
     /// Something broke inside the engine. The details are in its log.
@@ -48,7 +52,8 @@ impl Code {
         match self {
             Code::Invalid | Code::NotFound | Code::Forbidden | Code::Conflict => true,
             Code::MayHaveRun | Code::Expired => true,
-            Code::Protocol | Code::Internal => false,
+            // The call ran nothing, and an App put right answers the resend.
+            Code::AppUnavailable | Code::Protocol | Code::Internal => false,
         }
     }
 }
@@ -62,6 +67,7 @@ impl std::fmt::Display for Code {
             Code::Conflict => "conflict",
             Code::MayHaveRun => "may_have_run",
             Code::Expired => "expired",
+            Code::AppUnavailable => "app_unavailable",
             Code::Protocol => "protocol",
             Code::Internal => "internal",
         })
@@ -98,6 +104,10 @@ impl Refusal {
 
     pub fn expired(message: impl Into<String>) -> Self {
         Self::new(Code::Expired, message)
+    }
+
+    pub fn app_unavailable(message: impl Into<String>) -> Self {
+        Self::new(Code::AppUnavailable, message)
     }
 
     pub fn internal() -> Self {

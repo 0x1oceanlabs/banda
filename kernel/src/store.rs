@@ -171,6 +171,38 @@ pub(crate) struct Store {
     published: broadcast::Sender<Arc<Event>>,
     outbox: Arc<Notify>,
     running: Runs,
+    /// The modules turned off here, as it opened: see [`Off`].
+    off: Vec<Off>,
+}
+
+/// A module turned off in one store: its tables there did not come up to
+/// date, so nothing of it runs there, and the store's other modules go on
+/// (the architecture vision, D4). It stays off until the engine opens the
+/// store again with steps that pass: a step that failed left nothing, so
+/// it may be put right.
+#[derive(Debug)]
+pub(crate) struct Off {
+    /// The module, which its ledger is named after.
+    pub module: &'static str,
+    /// The step that failed, counted from 1; none when its ledger was not
+    /// read, or holds more steps than this engine knows.
+    pub step: Option<i64>,
+    pub why: Error,
+}
+
+impl Off {
+    /// Why it is off, in words for whoever calls it.
+    pub(crate) fn words(&self) -> String {
+        let why = match &self.why {
+            Error::Refused(refusal) => refusal.message.clone(),
+            Error::Database(error) => format!("{error}."),
+            other => format!("{other}."),
+        };
+        match self.step {
+            Some(step) => format!("Step {step} of its tables failed: {why}"),
+            None => why,
+        }
+    }
 }
 
 /// The reader connection, and who runs SQL on it.
@@ -312,7 +344,9 @@ impl Store {
     /// Opens `path`, puts an authorizer on both its connections by
     /// `modules`' tables, brings the kernel's and every module's tables up
     /// to date, each module's steps reaching only its own, and starts the
-    /// writer.
+    /// writer. A module whose tables do not come up to date is turned off
+    /// here ([`Store::off`]), and the store opens with the rest; the
+    /// kernel's own must, or it does not open.
     pub(crate) fn open(path: &Path, modules: &[Tables]) -> Result<Store, Error> {
         let owners: Arc<[Tables]> = modules.into();
         let mut writer = Connection::open(path)?;
@@ -325,13 +359,12 @@ impl Store {
         )?;
         let writer_authorizer = Authorizer::install(&mut writer, owners.clone())?;
         migrate(&mut writer, KERNEL, KERNEL_MIGRATIONS)?;
+        let mut off = Vec::new();
         for tables in modules {
-            migrate_in(
-                &mut writer,
-                tables.module,
-                tables.migrations,
-                Some((&writer_authorizer, tables)),
-            )?;
+            let of = Some((&*writer_authorizer, tables));
+            if let Err(stuck) = migrate_in(&mut writer, tables.module, tables.migrations, of) {
+                off.push(stuck);
+            }
         }
         let mut reader = Connection::open(path)?;
         reader.execute_batch(
@@ -358,7 +391,18 @@ impl Store {
             published,
             outbox: Arc::new(Notify::new()),
             running: Runs::default(),
+            off,
         })
+    }
+
+    /// The modules turned off here, as it opened.
+    pub(crate) fn off(&self) -> &[Off] {
+        &self.off
+    }
+
+    /// Why `module` is turned off here; none when it runs.
+    pub(crate) fn off_of(&self, module: &str) -> Option<&Off> {
+        self.off.iter().find(|off| off.module == module)
     }
 
     /// Runs `change` in one transaction on the writer, as `module`, or as
@@ -935,20 +979,43 @@ struct Stored {
 /// Applies the steps of `ledger` that this database has not seen, each in
 /// its own transaction. A database that has seen more steps than this engine
 /// knows was written by a newer engine and is not opened.
-pub(crate) fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Error> {
-    migrate_in(sql, ledger, steps, None)
+pub(crate) fn migrate(
+    sql: &mut Connection,
+    ledger: &'static str,
+    steps: &[&str],
+) -> Result<(), Error> {
+    migrate_in(sql, ledger, steps, None).map_err(|stuck| stuck.why)
 }
 
 /// [`migrate`], with a module's tables: each step runs as the module
 /// through the writer's authorizer, and the foreign keys it leaves are
 /// read after it. A step that reaches past its module's tables is
-/// refused, and the store is not opened.
+/// refused, and so is a ledger with more steps than `steps`, which a newer
+/// version of the module wrote. The steps before the one that failed are
+/// kept, and it left nothing.
 fn migrate_in(
     sql: &mut Connection,
-    ledger: &str,
+    ledger: &'static str,
     steps: &[&str],
     module: Option<(&Authorizer, &Tables)>,
-) -> Result<(), Error> {
+) -> Result<(), Off> {
+    let stuck = |step| {
+        move |why| Off {
+            module: ledger,
+            step,
+            why,
+        }
+    };
+    let done = seen(sql, ledger, steps.len(), module.is_some()).map_err(stuck(None))?;
+    for (step, script) in (1_i64..).zip(steps.iter()).skip(done) {
+        apply(sql, ledger, step, script, module).map_err(stuck(Some(step)))?;
+    }
+    Ok(())
+}
+
+/// How many steps of `ledger` this database has seen, of the `known` this
+/// engine has; refused when it has seen more.
+fn seen(sql: &Connection, ledger: &str, known: usize, module: bool) -> Result<usize, Error> {
     sql.execute_batch(
         "CREATE TABLE IF NOT EXISTS kernel_migrations (
             ledger TEXT NOT NULL,
@@ -962,34 +1029,47 @@ fn migrate_in(
         params![ledger],
         |row| row.get(0),
     )?;
-    let known = i64::try_from(steps.len()).unwrap_or(i64::MAX);
-    if done > known {
-        return Err(Refusal::conflict(format!(
+    let done = usize::try_from(done).unwrap_or(usize::MAX);
+    if done <= known {
+        return Ok(done);
+    }
+    Err(Refusal::conflict(if module {
+        format!(
+            "Its data here was written by a newer {ledger} ({done} steps of its tables, this one knows {known})."
+        )
+    } else {
+        format!(
             "This Project was opened by a newer Banda ({ledger} has {done} steps, this one knows {known})."
-        ))
-        .into());
-    }
-    for (step, script) in (1_i64..)
-        .zip(steps.iter())
-        .skip(usize::try_from(done).unwrap_or(usize::MAX))
-    {
-        let tx = sql.transaction()?;
-        match module {
-            None => tx.execute_batch(script)?,
-            Some((authorizer, tables)) => {
-                {
-                    let _as = authorizer.migrate(&tx, ledger);
-                    tx.execute_batch(script)?;
-                }
-                tables.parents_are_its_own(&tx)?;
+        )
+    })
+    .into())
+}
+
+/// Runs one step of `ledger` and writes it in the ledger, in one
+/// transaction.
+fn apply(
+    sql: &mut Connection,
+    ledger: &str,
+    step: i64,
+    script: &str,
+    module: Option<(&Authorizer, &Tables)>,
+) -> Result<(), Error> {
+    let tx = sql.transaction()?;
+    match module {
+        None => tx.execute_batch(script)?,
+        Some((authorizer, tables)) => {
+            {
+                let _as = authorizer.migrate(&tx, ledger);
+                tx.execute_batch(script)?;
             }
+            tables.parents_are_its_own(&tx)?;
         }
-        tx.execute(
-            "INSERT INTO kernel_migrations (ledger, step, at) VALUES (?1, ?2, ?3)",
-            params![ledger, step, now_ms()],
-        )?;
-        tx.commit()?;
     }
+    tx.execute(
+        "INSERT INTO kernel_migrations (ledger, step, at) VALUES (?1, ?2, ?3)",
+        params![ledger, step, now_ms()],
+    )?;
+    tx.commit()?;
     Ok(())
 }
 
@@ -1021,6 +1101,13 @@ mod tests {
         matches!(error, Error::Database(e)
             if e.sqlite_error_code() == Some(rusqlite::ErrorCode::AuthorizationForStatementDenied)
                 || e.to_string().starts_with("not authorized to use function"))
+    }
+
+    /// Whether `opened` opened with the notes module turned off, for a
+    /// reason `why` holds of.
+    fn off_as(opened: &Result<Store, Error>, why: impl Fn(&Error) -> bool) -> bool {
+        let Ok(store) = opened else { return false };
+        matches!(store.off(), [off] if off.module == "notes" && why(&off.why))
     }
 
     fn author() -> Participant {
@@ -1577,8 +1664,64 @@ mod tests {
         let notes_items = tables_of_notes(&["CREATE TABLE notes_items (text TEXT)"]);
         drop(Store::open(&path, &notes_items).unwrap());
         drop(Store::open(&path, &notes_items).unwrap());
+        // A module's newer data turns off the module alone.
         let older = Store::open(&path, &tables_of_notes(&[]));
+        let newer = |why: &Error| matches!(why, Error::Refused(r) if r.code == Code::Conflict);
+        assert!(off_as(&older, newer));
+        drop(older);
+        // The kernel's own keeps the store shut.
+        let sql = Connection::open(&path).unwrap();
+        sql.execute(
+            "INSERT INTO kernel_migrations (ledger, step, at) VALUES (?1, ?2, 0)",
+            params![KERNEL, KERNEL_MIGRATIONS.len() as i64 + 1],
+        )
+        .unwrap();
+        drop(sql);
+        let older = Store::open(&path, &notes_items);
         assert!(matches!(older, Err(Error::Refused(r)) if r.code == Code::Conflict));
+    }
+
+    #[tokio::test]
+    async fn a_step_that_fails_turns_off_its_module_alone_and_leaves_nothing() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = dir.path().join("project.sqlite3");
+        let other = Tables {
+            module: "other",
+            legacy: &[],
+            migrations: &["CREATE TABLE other_items (text TEXT)"],
+        };
+        let with = |steps| [tables_of_notes(steps)[0], other];
+        let broken = with(&[
+            "CREATE TABLE notes_items (text TEXT)",
+            "CREATE TABLE notes_tags (tag TEXT); INSERT INTO notes_tagz VALUES ('x')",
+        ]);
+        let store = Store::open(&path, &broken).unwrap();
+        let [off] = store.off() else {
+            panic!("notes alone is off");
+        };
+        assert_eq!((off.module, off.step), ("notes", Some(2)));
+        assert_eq!(
+            off.words(),
+            "Step 2 of its tables failed: no such table: notes_tagz."
+        );
+        // The module after it came up to date, and runs.
+        store
+            .write("other", |tx| {
+                tx.sql()
+                    .execute("INSERT INTO other_items VALUES ('kept')", [])?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        drop(store);
+        // The steps before it are kept and the failed one left nothing, so
+        // the step put right runs.
+        let mended = with(&[
+            "CREATE TABLE notes_items (text TEXT)",
+            "CREATE TABLE notes_tags (tag TEXT)",
+        ]);
+        let store = Store::open(&path, &mended).unwrap();
+        assert!(store.off().is_empty());
     }
 
     #[tokio::test]
@@ -1752,7 +1895,7 @@ mod tests {
         let path = dir.path().join("refused.sqlite3");
         for steps in refused_steps {
             let opened = Store::open(&path, &tables_of_notes(steps));
-            assert!(opened.is_err_and(|e| refused(&e)), "{steps:?}");
+            assert!(off_as(&opened, refused), "{steps:?}");
         }
         // SQLite asks nothing of a key's parent: the kernel reads it after.
         let keyed: [&'static [&'static str]; 2] = [
@@ -1762,10 +1905,8 @@ mod tests {
         ];
         for steps in keyed {
             let opened = Store::open(&path, &tables_of_notes(steps));
-            assert!(
-                matches!(&opened, Err(Error::Refused(r)) if r.code == Code::Invalid),
-                "{steps:?}"
-            );
+            let invalid = |why: &Error| matches!(why, Error::Refused(r) if r.code == Code::Invalid);
+            assert!(off_as(&opened, invalid), "{steps:?}");
         }
         let renamed = [Tables {
             module: "notes",
@@ -1803,7 +1944,7 @@ mod tests {
         let path = dir.path().join("refused.sqlite3");
         for steps in refused_steps {
             let opened = Store::open(&path, &tables_of_notes(steps));
-            assert!(opened.is_err_and(|e| refused(&e)), "{steps:?}");
+            assert!(off_as(&opened, refused), "{steps:?}");
         }
         let store = Store::open(
             &dir.path().join("project.sqlite3"),

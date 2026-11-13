@@ -281,6 +281,7 @@ pub struct Project {
     removed: std::sync::Mutex<Option<PathBuf>>,
     owner: PersonId,
     store: Store,
+    /// The modules that run here: [`Project::modules`].
     modules: Arc<[Arc<dyn Module>]>,
     passes: Arc<Passes>,
     window: Arc<Window>,
@@ -359,6 +360,26 @@ impl Project {
         let store = tokio::task::spawn_blocking(move || Store::open(&path, &tables))
             .await
             .map_err(|_| Error::Closed)??;
+        for off in store.off() {
+            tracing::error!(
+                module = off.module, data = %data.display(), why = %off.words(),
+                "a module is turned off in a Project: its tables did not come up to date"
+            );
+        }
+        // The window stands on the machine's modules, so its scope opens
+        // with all of them or not at all, before any of them is told.
+        if projects.is_some()
+            && let Some(off) = store.off().first()
+        {
+            let words = format!("{} did not start. {}", off.module, off.words());
+            return Err(Refusal::conflict(words).into());
+        }
+        // What is turned off here runs nothing here: no call, no effect,
+        // no listener, and it is told of nothing.
+        let modules = (modules.iter())
+            .filter(|module| store.off_of(module.name()).is_none())
+            .cloned()
+            .collect();
         let project = Arc::new(Project {
             id: manifest.id,
             moving: Default::default(),
@@ -607,8 +628,22 @@ impl Project {
         &self.store
     }
 
+    /// The modules that run here: every one of its scope but those turned
+    /// off here ([`Project::available`]).
     pub(crate) fn modules(&self) -> &[Arc<dyn Module>] {
         &self.modules
+    }
+
+    /// Refuses `app_unavailable`, with why, when `module` is turned off
+    /// here: its tables did not come up to date as this opened.
+    pub(crate) fn available(&self, module: &str) -> Result<(), Refusal> {
+        match self.store.off_of(module) {
+            None => Ok(()),
+            Some(off) => Err(Refusal::app_unavailable(format!(
+                "{module} is turned off in this Project. {}",
+                off.words()
+            ))),
+        }
     }
 
     pub(crate) fn boot(&self) -> &Boot {
@@ -776,11 +811,13 @@ impl ModuleProject {
 
     /// The same module in `other`, as a call that reaches it from this
     /// Project sees it ([`Call::other`](crate::Call::other)).
-    pub(crate) fn beside(&self, other: Arc<Project>) -> ModuleProject {
-        ModuleProject {
+    /// Refused when the module is turned off there.
+    pub(crate) fn beside(&self, other: Arc<Project>) -> Result<ModuleProject, Refusal> {
+        other.available(self.module)?;
+        Ok(ModuleProject {
             project: other,
             module: self.module,
-        }
+        })
     }
 
     /// Where the Project's programs run (ADR 0084): a module starts each
