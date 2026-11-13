@@ -198,10 +198,6 @@ one only when the Person asks (ADR 0095). In code, the Welcome's
 _Avoid_: host, in the window's words; mark or emblem, for its name and
 icon.
 
-**Home host**:
-The host that keeps the Person's documents: the always-on host when the
-Person has one, else the laptop (ADR 0082).
-
 **Client**:
 What shows the hosts' work and asks for changes: the desktop app, a
 browser tab, a phone, the CLI. One client works with several hosts, and
@@ -382,18 +378,32 @@ _Avoid_: telemetry, analytics.
 ## Scopes and messages
 
 **Scope**:
-The one writer of a record. A Project's moves between hosts; the Host's
-(its programs, accounts, installed code and settings) never moves; the
-Person's is a few documents on the home host (ADR 0082). A session's
-scopes, an Agent's tools, are another thing.
-_Avoid_: machine scope (it split into Host and Person).
+The one writer of a record. There are two: a Project's moves between
+hosts on command; the Host's (its programs, accounts, installed code,
+settings and arrangement) never moves. There is no Person scope: the
+Person's files are files on each machine (ADR 0101). A session's scopes,
+an Agent's tools, are another thing.
+_Avoid_: machine scope (it is the Host's); Person scope.
 
-**Person document**:
-One of the Person's few versioned files on the home host: the
-arrangement, keys, the sidebar, themes, `[notify]`, Web Apps' manifests.
-Each is read whole, and clients cache it; no other host keeps one (ADR
-0082). Seen marks are not among them: they are the Thread's (ADR 0096).
-_Avoid_: sync, replica.
+**Peer**:
+What each of the Person's machines is to the others: none is central, and
+none must be on. Each starts and works with no network and no other
+machine (ADR 0101).
+_Avoid_: home host (there is none).
+
+**Shared file**:
+A settings file that means the same everywhere: the sidebar, key binds,
+`[notify]`, themes. Every machine keeps a full copy, and a device uses
+only its own machine's. Copying them between machines is the sync, not
+built yet (ADR 0101, decision 3). Seen marks are not among them: they are
+the Thread's (ADR 0096).
+_Avoid_: Person document; replica.
+
+**Machine file**:
+A settings file that says what one machine has: its Harnesses, its name,
+its sharing. It is read and written through that machine's engine and
+never copied (ADR 0101, decision 3). A device's own file, how this screen
+looks, is never copied either.
 
 **Query**:
 A read, answered with how fresh it is ("as of"), and safe to repeat (ADR
@@ -720,9 +730,10 @@ and behind the Extensions button when it is not.
 
 **Tiling**:
 How Banda lays out Panes, and the program in the Window's middle that does
-it: one Rust model, with its authority on the home host and a copy in each
-client that draws a key at once, and on each client the view, the Tiles
-and the motion. It knows Panes, never what they show (ADR 0062, ADR 0087).
+it: one Rust model, with its authority on the engine of the machine whose
+window shows it and a copy in each client that draws a key at once, and on
+each client the view, the Tiles and the motion. It knows Panes, never what
+they show (ADR 0062, ADR 0087, ADR 0101).
 Its other name is the composer.
 _Avoid_: composer for anything else.
 
@@ -739,12 +750,16 @@ while hidden, and measures and resizes nothing while moving (ADR 0088).
 _Avoid_: resize.
 
 **Arrangement**:
-The workspaces, columns, Groups and widths, kept by the tiling on the home
-host. The client's view is not part of it (ADR 0062, ADR 0082).
+The workspaces, columns, Groups and widths, kept by the tiling on the
+machine whose window shows it, and never copied to another. The client's
+view is not part of it (ADR 0062, ADR 0101).
 
 **Overlay**:
-The changes to the arrangement a client keeps, marked "not yet saved",
-while the home host is away: an hour and 200 changes at most (ADR 0062).
+The changes to the arrangement a client would keep, marked "not yet
+saved", while the engine that holds it is away: an hour and 200 changes
+at most (ADR 0062). Not built: a desktop's engine is its own machine's, so
+it needs none, and whether a browser tab gets one is decided with the web
+(ADR 0101, decision 5).
 _Avoid_: overlay for what sits over the tiles (that is the Top layer).
 
 **Workspace**:

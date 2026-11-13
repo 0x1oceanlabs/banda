@@ -66,8 +66,9 @@ description in words. What is kept is in md, html and json files.
 ### 4. The engine is the operating system, the client is the browser
 
 - **The code:** all work and all state live in the engine. A client shows
-  and asks; it decides nothing by itself, not which machine, not queues,
-  not notifications.
+  and asks. It joins the machines it reaches, in one router that every
+  client shares (ADR 0124), and does no work by itself: it keeps no queues
+  and decides no notifications.
 - **The check:** close the window and nothing is lost or stops. A new
   client, the web or a phone, needs only screens; it repeats no logic.
 
