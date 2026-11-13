@@ -100,6 +100,83 @@ description in words. What is kept is in md, html and json files.
   a team is just more people in the same network.
 - **The check:** a team needs new rights, not a new model.
 
+### 9. Where the work runs makes no difference
+
+Every machine's Projects, Threads, terminals, files, git, browser pages and
+settings look and act the same in every client (the desktop, the web and
+the phone), whether the machine is the one in front of the Person or a
+server far away. It is like `ssh`: you land in the same terminal as if it
+stood on your desk. Only the device's own things are local: its screen,
+clipboard, notifications, files and the apps it opens. A machine that is
+away is said honestly, in one word, and nothing waits for it in silence.
+
+- **The code:** no client code asks "this machine or another?" about a work
+  thing; it asks the machine that owns the thing, through one router. A
+  client reaches the engine of the machine it runs on by the same road,
+  with the same key and the same away rule as any other machine
+  (ADR 0124). A device thing goes through the device, by a named
+  capability.
+- **The check:** the same gesture on a Project of the Mac and on one of arc
+  gives the same screen, except for the machine's name. The window works
+  with its own machine's engine stopped. The phone, which has no machine of
+  its own, and devbox, which has no window, pass every try of story 1.
+
+## Apps on every machine and every device
+
+Principles 3 and 9 together: **an App's logic lives on a machine, and the
+device draws it.** An App's code never travels to a device; a description
+of its screen does.
+
+| Kind of screen | What it is | Where it runs | On the phone |
+|---|---|---|---|
+| **Tree** | the App answers data: which components, with what in them (a list, a form, a table, a chart) | the logic on the machine, drawn by the client | drawn the same way, with nothing new to write |
+| **Live component** | what must draw every frame: a Thread, a terminal, a browser's page, a file's view | in every client, shipped with Banda | the same, in the web build |
+| **Frame** | an App's own HTML page in a sandboxed frame, as an MCP App's | in the frame, on the device | the same frame |
+| **Site** | a website as an App, with its own sign-in | in a webview of its own on the device | a browser tab |
+
+- **One catalogue of components ships with Banda:** shadcn/ui, Banda's own,
+  and the live components. Every client draws them itself, in its own
+  theme. Typing, scrolling, sorting and menus act on the device at once; a
+  save goes to the machine.
+- **An App with a screen and one without are the same App.** An Agent calls
+  its actions in text; the Person sees them drawn from its Tree. The
+  default screen on shadcn/ui is that Tree.
+- **The phone needs to know no App.** A new App an Agent writes on arc shows
+  on the phone with no phone update. The catalogue is the channel through
+  which every App reaches every client, so the phone can grow from its
+  first version.
+- **Machines on different versions do not get in the way.** The client knows
+  only the catalogue, and the catalogue has one version.
+- **An App asks the device through Banda,** never by itself: show this, tell
+  the Person, put this on the clipboard, let them pick a file. The device
+  where the Person is decides. So an App on devbox can reach the Person on
+  the phone.
+
+**What an App is written in.** Any language, because an App talks to Banda in
+JSON with a description in words (principle 2).
+
+- **Banda's own Apps** (Threads, the terminal, Files, Git, the browser): the
+  part on the machine is Rust inside the engine, and the screens are
+  TypeScript live components shipped with the client. That stays: it is
+  Banda's core, as a kernel is an operating system's.
+- **Apps an Agent or anyone else writes:** a separate program on the machine,
+  a worker. The engine starts it and talks to it in lines of JSON: "call
+  `add_client` with this". The App answers "here is the answer, and here is
+  what to write". The engine does the writing, so an App cannot spoil
+  another's data, every write has a receipt, and a broken migration turns
+  off only that App. TypeScript on Node comes first (Agents write it best,
+  and the engine already carries Node), then any language on the same
+  JSON. WebAssembly comes later, with isolation, for Apps from people the
+  Person does not trust.
+- **Its screen is not code but data:** a Tree in JSON, drawn from the
+  catalogue.
+
+**Apps follow the Person.** By default an App installed once is there on
+every one of the Person's machines; its data stays in each Project, on the
+Project's machine. There may be exceptions. Which Apps live on which machines
+is meant to be one declarative file, as with nix, that a Person and an Agent
+can both read and that rebuilds any machine. Not decided yet.
+
 ## What Banda is not
 
 - **Not an IDE.** Code is one kind of work. Many of the people who use
@@ -129,11 +206,17 @@ differs by four things together:
 
 ## The stories the foundation must carry
 
-1. **The session follows you.** Roma starts working with an Agent on the
-   Mac. He moves the session to devbox, where the Agent keeps doing its
-   tasks. He closes the laptop, goes for a walk and keeps working with the
-   Agent from the phone. Back home, from the Mac or the phone, he moves the
-   session to arc.
+1. **One Banda on every machine.** Roma has a Mac, arc (always on) and
+   devbox. From the Mac, from a browser or from the phone he sees all three
+   as one Banda: every machine's Projects, Threads, terminals, files, git,
+   pages and settings. They look and act the same, on the device in front of
+   him or on a server, as `ssh` lands you in the same terminal. Only the
+   device's own things are local: its screen, clipboard, notifications and
+   files. A machine that is away is said so, and the others work. He starts
+   with an Agent on the Mac and moves the session to devbox, where the Agent
+   keeps going. He closes the laptop, goes for a walk and works from the
+   phone. Back home, he moves the session to arc. Moving is part of the
+   story; its core is that where the work runs makes no difference.
 2. **An Agent writes an App.** "Make me an App for tracking clients." In
    one Thread the App is ready, appears in Banda, and other Agents use it.
 3. **A CRM as an App.** A company connects its CRM as an App, with a screen
@@ -151,16 +234,16 @@ differs by four things together:
 
 We build all of it, in an order where each step stands on a finished base:
 
-1. **Story 1, the foundation.** Reach what cloud sessions give, on the
-   Person's own machines and with any Agent. This is "the engine is the
-   operating system, the client is the browser", and it is the weakest part
-   today.
+1. **Story 1, the foundation: one Banda on every machine.** Reach what
+   cloud sessions give, on the Person's own machines and with any Agent,
+   the same from the desktop, the web and the phone. This is principles 4
+   and 9, and it is the weakest part today.
 2. **Story 2, the difference.** An Agent writes an App: no cloud session
-   does it.
+   does it. It runs beside story 1, on a second track (Roma, 2026-11-13).
 3. **The other stories**, on the same base.
 
-The door for the phone and the web (device keys, pairing, one access rule)
-comes with story 1; isolating Agents waits (ADR 0123). The slices are in
+Every client reaches every machine by one road, at its door, by its own key
+(ADR 0124); isolating Agents waits (ADR 0123). The slices are in
 [the roadmap](research/2026-11-08-roadmap-in-slices.md).
 
 ## Decided
@@ -174,3 +257,11 @@ comes with story 1; isolating Agents waits (ADR 0123). The slices are in
   many Agents. Companies come next, over the same network.
 - **The business.** The code is open. Banda sells the cloud, integrations
   and inference; inference is one more provider beside the others.
+- **The phone's first version** (Roma, 2026-11-13). The Threads list, a
+  Thread, an Agent's questions, Stop, and any Pane opened from a Thread, full
+  screen. The terminal comes when keys show before the machine answers, as
+  in mosh. Through the catalogue, the phone grows with every App.
+- **An App the Person's own Agent writes** installs and runs with no click
+  and no sandbox, under the Person's user, as the Agent's shell does. Every
+  install shows in the Thread and in the list of Apps. Apps from other
+  people wait for isolation (Roma, 2026-11-12).

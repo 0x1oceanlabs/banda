@@ -41,11 +41,13 @@ in story 1's way:
    for story 1's door slice, says exactly what of B14, F1 and F2 it needs
    and which route the phone and the web take (a tailnet with `direct` TLS,
    or a relay reached by an outbound connection).
+   _Amended by [ADR 0124](0124-every-client-reaches-every-machine-by-one-road-at-its-door-by-its-own-key.md): every client reaches every machine at its door by its own key; the routes add the tailnet through `tailscale serve`, and the ssh route carries the door, not the owner._
 3. **Isolating Agents waits, with no date.** The rest of F0, the OS
    sandbox, containers and isolated Projects come back when Roma puts them
    back in the order.
 4. **The `ssh` route does not change.** It still opens no listener and
    gives no more than the ssh login gives.
+   _Amended by [ADR 0124](0124-every-client-reaches-every-machine-by-one-road-at-its-door-by-its-own-key.md): every client reaches every machine at its door by its own key; the routes add the tailnet through `tailscale serve`, and the ssh route carries the door, not the owner._
 
 ## Consequences
 
