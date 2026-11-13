@@ -155,7 +155,7 @@ impl Children {
         before: u64,
     ) -> Started {
         match program.whose() {
-            Whose::Harness | Whose::Terminal => {}
+            Whose::Harness | Whose::Terminal | Whose::Worker => {}
             Whose::HarnessProbe | Whose::Act => return started,
         }
         let Some(pid) = started.id() else {

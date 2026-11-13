@@ -340,6 +340,16 @@ pub fn runnable(path: &Path) -> bool {
 #[cfg(windows)]
 pub use windows::runnable;
 
+/// A program that runs JavaScript as Node does: what the engine starts
+/// the programs it carries on, and what a module runs code of its own on.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Node {
+    pub program: PathBuf,
+    /// Whether it is an Electron, which runs as Node only with
+    /// `ELECTRON_RUN_AS_NODE`.
+    pub electron: bool,
+}
+
 /// Whether `path` is `folder` or is inside it, part by part, as the system
 /// compares names ([`same_name`]): without case on Windows, whose disks
 /// ignore it, and a drive or a share the same whether Windows' `\\?\`

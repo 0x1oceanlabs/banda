@@ -1,0 +1,21 @@
+{
+  "keep": { "kind": "command", "about": "Keeps a word." },
+  "kept": { "kind": "call", "about": "The words kept." },
+  "stray": {
+    "kind": "command",
+    "about": "Keeps a word, then writes a table that is not its own."
+  },
+  "peek": {
+    "kind": "call",
+    "about": "Reads a table that is not its own, and says what it was told."
+  },
+  "scribble": { "kind": "call", "about": "A call that answers a write." },
+  "slow": { "kind": "command", "about": "Never answers." },
+  "die": { "kind": "command", "about": "Ends its worker." },
+  "fail": { "kind": "call", "about": "Throws." },
+  "who": {
+    "kind": "call",
+    "about": "Who calls, and in which Project.",
+    "tool": false
+  }
+}

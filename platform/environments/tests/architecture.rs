@@ -139,7 +139,7 @@ const ENVIRONMENTS: &str = "platform/environments/src";
 /// The kernel's constructors of a program, one for each `Whose`: only
 /// these make one, and each gives it holes in the fence exactly when it is
 /// one to start behind it.
-const MADE_BY: [&str; 4] = ["harness", "harness_probe", "terminal", "act"];
+const MADE_BY: [&str; 5] = ["harness", "harness_probe", "terminal", "act", "worker"];
 
 /// What else code reaches through a program's type, which makes none.
 const READ_BY: [&str; 2] = ["whose", "holes"];
@@ -152,7 +152,13 @@ const PORT: &str = "kernel/src/environment.rs";
 /// start behind the fence with its Project's holes, and its CLI asked
 /// about itself with none; a terminal the Person opened and a git act they
 /// asked for, outside it (ADR 0083, decision 1).
-const WHOSE: [(&str, &str, usize, &str); 9] = [
+const WHOSE: [(&str, &str, usize, &str); 10] = [
+    (
+        "platform/apps/engine/src/worker.rs",
+        "worker",
+        1,
+        "the worker of an App a Person's Agent wrote: its code is an Agent's, so it starts behind the fence, with holes to read its own copy and Banda's loop (ADR 0126, decision 3)",
+    ),
     (
         "platform/harnesses/engine/src/accounts/mod.rs",
         "terminal",

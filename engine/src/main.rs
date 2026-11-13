@@ -241,7 +241,7 @@ enum Command {
         with_parent: bool,
     },
     /// The Apps installed on this machine from a folder, which a Person's
-    /// Agent writes: install one, list them, remove one.
+    /// Agent writes: start a new one, install one, list them, remove one.
     App {
         #[command(subcommand)]
         what: app::AppCommand,

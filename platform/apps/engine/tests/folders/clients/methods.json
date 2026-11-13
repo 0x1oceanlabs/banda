@@ -1,0 +1,56 @@
+{
+  "add": {
+    "kind": "command",
+    "about": "Adds a client: their name, and their city and email when known. Answers the client as kept, with its id.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string", "description": "The client's name." },
+        "city": { "type": "string", "description": "The city they are in." },
+        "email": { "type": "string" }
+      },
+      "required": ["name"]
+    }
+  },
+  "find": {
+    "kind": "call",
+    "about": "Finds clients: those in a city, those whose name or email holds a text, or all of them. Answers each with its id, name, city and email.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "city": {
+          "type": "string",
+          "description": "Only the clients in this city."
+        },
+        "text": {
+          "type": "string",
+          "description": "Only those whose name or email holds this."
+        }
+      }
+    }
+  },
+  "note": {
+    "kind": "command",
+    "about": "Writes a note on a client, by the client's id.",
+    "params": {
+      "type": "object",
+      "properties": {
+        "client": {
+          "type": "integer",
+          "description": "The client's id, as find answers it."
+        },
+        "text": { "type": "string" }
+      },
+      "required": ["client", "text"]
+    }
+  },
+  "notes": {
+    "kind": "call",
+    "about": "The notes on a client, the newest first.",
+    "params": {
+      "type": "object",
+      "properties": { "client": { "type": "integer" } },
+      "required": ["client"]
+    }
+  }
+}

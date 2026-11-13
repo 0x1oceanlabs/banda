@@ -38,7 +38,7 @@ use crate::service::{self, app, launchd, unit_file};
 use crate::{Failure, build_id, parent};
 use banda_agents::Pipe;
 use banda_harnesses::Harnesses;
-use banda_harnesses::carried::{Carried, Here};
+use banda_harnesses::carried::{Carried, Here, Node};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Hands, Kernel, PROTOCOL, Working};
 use banda_machines::Machine;
@@ -160,7 +160,8 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // next engine to stop should this one crash.
     #[cfg(target_os = "macos")]
     let (environment, noting) = crate::children::noted(environment, &places);
-    harnesses.carry(carried(&program));
+    let (carried, node) = carried(&program);
+    harnesses.carry(carried);
     harnesses.accounts_in(places.data.join("accounts"));
     // Heard from here on: a TERM as the engine opens, or as soon as it
     // says where it listens, stops it as any other does, not by the
@@ -212,10 +213,14 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     // Its battery and why it is awake, for other machines' windows: read
     // only while one hears `machine.power`.
     let power = banda_machines::power::Meter::new(awake.why());
+    // The Apps installed from a folder, each a module of its own, run by
+    // its worker on the Node this host has (ADR 0126).
+    let (installed, served) =
+        banda_apps::Apps::new(crate::modules::described(), places.installed()).serving(node);
     let builder = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .named(machine.named())
-        .apps(crate::modules::listed())
+        .apps(installed.runs().iter().map(|app| app.app.clone()).collect())
         .power(move || power.stream())
         // Every Project's programs run on this host, as the Person's own
         // do (ADR 0084), a Harness's behind the fence where it holds (ADR
@@ -240,8 +245,12 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
         bytes: &bytes,
         hands: &hands,
         restart: &restart,
+        apps: &installed,
     };
-    let opening = apps::serve(builder, &host).open();
+    let builder = apps::serve(builder, &host);
+    let opening = (served.into_iter())
+        .fold(builder, |builder, app| builder.module(app))
+        .open();
     let kernel = tokio::select! {
         opened = opening => opened.map_err(Failure::broken)?,
         () = terminated(&mut term) => {
@@ -420,7 +429,7 @@ async fn stopped(with_parent: bool, mut term: Term) {
 /// has them beside the engine's `program`, in its checkout or on its PATH
 /// (ADR 0059; ADR 0062, step S1): an engine started in a shell, with no
 /// window, runs Banda's own Harness entries through them too.
-fn carried(program: &Path) -> Option<Carried> {
+fn carried(program: &Path) -> (Option<Carried>, Option<Node>) {
     // Where it is, through any link it was started by, as macOS names
     // it: the app's resources or the engine's own copy.
     let program = dunce::canonicalize(program).unwrap_or_else(|_| program.to_owned());
@@ -430,6 +439,11 @@ fn carried(program: &Path) -> Option<Carried> {
         checkout: from_checkout(),
     };
     let carried = Carried::find(&here);
+    // What runs an App's worker, with the adapters here or not.
+    let node = match &carried {
+        Some(carried) => Some(carried.node.clone()),
+        None => banda_harnesses::carried::node(&here),
+    };
     match &carried {
         Some(Carried { adapters, node }) => tracing::info!(
             adapters = %adapters.display(),
@@ -440,7 +454,7 @@ fn carried(program: &Path) -> Option<Carried> {
             "this host has no Node or no adapters Banda carries: its own Harnesses start through npx"
         ),
     }
-    carried
+    (carried, node)
 }
 
 #[cfg(test)]

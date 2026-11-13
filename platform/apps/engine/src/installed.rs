@@ -68,6 +68,22 @@ impl Installed {
         Installed { root: root.into() }
     }
 
+    /// Banda's loop for a worker on Node, as a file beside the Apps,
+    /// written when it is not there as this engine has it. No App's id has
+    /// a dot, so it is taken for none.
+    pub fn runner(&self) -> PathBuf {
+        let file = self.root.join(".runner.mjs");
+        let same = std::fs::read_to_string(&file).is_ok_and(|kept| kept == crate::worker::RUNNER);
+        if !same {
+            let written = std::fs::create_dir_all(&self.root)
+                .and_then(|()| std::fs::write(&file, crate::worker::RUNNER));
+            if let Err(error) = written {
+                tracing::error!(%error, "Banda's loop for workers was not written: no App runs");
+            }
+        }
+        file
+    }
+
     /// Where the App `id` runs from: the copy of its folder.
     pub fn copy_of(&self, id: &str) -> PathBuf {
         self.root.join(id).join(COPY)

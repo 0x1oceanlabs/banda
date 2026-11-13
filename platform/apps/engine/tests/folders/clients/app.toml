@@ -1,0 +1,8 @@
+# The clients App: an App as a Person's Agent writes one (ADR 0126). It is
+# Banda's example of an App from a folder, and its tests' own.
+id = "clients"
+name = "Clients"
+about = "The people I work with: who they are, where, and notes on each."
+version = "0.1.0"
+api = 1
+entry = "worker.mjs"

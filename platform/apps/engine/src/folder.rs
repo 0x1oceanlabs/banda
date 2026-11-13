@@ -128,6 +128,13 @@ fn method_name(name: &str) -> bool {
         && name.len() <= NAME_MOST
 }
 
+/// `text` kept for as long as the engine runs: the kernel takes a module's
+/// name, its steps and its methods' names so, and an installed App's are
+/// read once as the engine starts.
+pub(crate) fn kept(text: String) -> &'static str {
+    Box::leak(text.into_boxed_str())
+}
+
 /// Whether `id` may be an App's from a folder: a module's name
 /// ([`banda_kernel::module_name`]), no longer than its tables' and its
 /// tools' names bear.
@@ -221,10 +228,8 @@ impl Folder {
         format!("{}_{method}", self.id)
     }
 
-    /// Its methods as `apps.describe` lists them. Their names live as long
-    /// as the engine does: an App is described a few times in its run.
+    /// Its methods as `apps.describe` lists them.
     pub fn described(&self) -> Vec<Method> {
-        let kept = |text: String| -> &'static str { Box::leak(text.into_boxed_str()) };
         self.methods
             .iter()
             .map(|method| Method {

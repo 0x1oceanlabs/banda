@@ -1,0 +1,7 @@
+# An App whose methods go wrong, each in its own way: the tests' own.
+id = "trouble"
+name = "Trouble"
+about = "Methods that go wrong, for the tests of what Banda does then."
+version = "0.1.0"
+api = 1
+entry = "worker.mjs"

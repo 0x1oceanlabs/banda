@@ -31,13 +31,16 @@ pub enum Code {
     /// did not run (ADR 0105): what waited for this machine was kept too
     /// long. Sending it again changes nothing.
     Expired,
-    /// The method's App is turned off in the Project it was called in: its
-    /// tables there did not come up to date, and the message says why. The
-    /// Project's other Apps go on (the architecture vision, D4).
+    /// The method's App does not run where it was called, and the message
+    /// says why: it is turned off in that Project, its tables there not
+    /// having come up to date, or the program that runs its code did not
+    /// start. Nothing of the call ran. The other Apps go on (the
+    /// architecture vision, D4; ADR 0126, decision 7).
     AppUnavailable,
     /// The window and the engine speak different protocol versions.
     Protocol,
-    /// Something broke inside the engine. The details are in its log.
+    /// Something broke inside the engine, and the details are in its log;
+    /// or in the code of an App from a folder, and the message says what.
     Internal,
 }
 

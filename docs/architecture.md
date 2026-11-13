@@ -884,8 +884,41 @@ this machine (ADR 0126).
   each Project stays (ADR 0085, decision 6). `banda app install | list |
   remove` are these calls, and `banda modules` prints the installed Apps
   after Banda's own.
-- An installed App runs from the engine's next start, by a worker: that is
-  the module's next step.
+- **A worker runs it.** As the engine starts, it takes each installed App
+  as a module of its own (`Served`): its name is the App's id, its
+  migrations the folder's steps, its methods and its tools what
+  `methods.json` declares, so the router, the access rule, receipts,
+  `banda call` and `banda mcp` treat it as any module. One process serves
+  an App on a machine: the engine starts it at the App's first call, with
+  the Node Banda carries or the machine has and Banda's own loop
+  (`runner.mjs`, which loads the App's entry), behind the fence where it
+  holds, and again when it has ended. They talk in lines of JSON on its
+  stdin and stdout: a call with its params, who calls and the Project; the
+  worker's reads of its own tables, which the engine answers from that
+  Project's reader under the App's authorizer; and its answer, or its
+  refusal.
+- **The engine does the writing.** A command answers its writes and its
+  events as data, and the module keeps them in one transaction with the
+  command's receipt: each statement under the App's authorizer, so SQL
+  that reaches another App's table is refused and nothing of the command
+  is kept, and each event by who called. One command of an App runs in a
+  Project at a time, from its call to its commit, so what it read is
+  still so as its writes land. A call that answers a write is refused.
+- **What goes wrong stays in the App**, and the refusal says how far the
+  call got. A worker that does not start, for its code does not load, it
+  lacks a method `methods.json` declares, or the machine has no Node,
+  refuses the App's methods with `app_unavailable` and what it said:
+  nothing ran. One that ends before it answers, or does not answer in a
+  minute, refuses with `may_have_run`: Banda wrote nothing, and what its
+  code did by itself may be done; one that did not answer is let go of,
+  and the next call starts another. A refusal its method makes
+  (`invalid`, `not_found`, `forbidden`, `conflict`) reaches the caller as
+  it is. What its code throws, a write that fails or a call that answers
+  a write is `internal`, with its words, for it is the App's to put
+  right; but a write its table's own rules refuse is `conflict`.
+  `banda app new <id>` writes a folder to start from.
+- An installed App runs from the engine's next start; adding it to the
+  running engine is the module's next step.
 
 ### agents
 
