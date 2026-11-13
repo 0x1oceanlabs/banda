@@ -57,6 +57,8 @@ export {
   thisNamed,
   shownOf,
   UNKNOWN,
+  ownEngine,
+  waitedName,
   THIS_MACHINE,
   unreachedWords,
   Unreachable,

@@ -6,7 +6,7 @@
  * engine runs its module.
  */
 import { type Engine, Unreachable } from "@banda/contract"
-import type { Act, KeptHosts } from "@banda/core"
+import { type Act, HERE, type KeptHosts } from "@banda/core"
 import {
   type AnyPaneKind,
   defineModule,
@@ -368,8 +368,9 @@ export function closedOf(
 ): void {
   const kind = kindOf(entry.pane.kind)
   if (!kind?.closed) return
+  // Not one no machine the Window knows has: that names no machine.
   const missed = (error: unknown) => {
-    if (error instanceof Unreachable && error.host) away(error)
+    if (error instanceof Unreachable && error.machine) away(error)
   }
   let engine: Engine
   try {
@@ -399,7 +400,11 @@ export function keptAway(
       project,
       pane,
     })
-    toast(`Closes on ${why.machine} once it is back`)
+    toast(
+      why.host === HERE
+        ? "Closes once Banda is back on this machine"
+        : `Closes on ${why.machine} once it is back`
+    )
   }
 }
 

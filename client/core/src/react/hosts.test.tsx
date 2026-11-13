@@ -8,9 +8,12 @@ import {
   HostsContext,
   type Reach,
   useEngineOf,
+  useMachineOf,
   usePlaced,
   useReach,
 } from "./hosts"
+import { HERE } from "../pane"
+import { useWaitingFor, useWaitsOn } from "./waiting"
 
 afterEach(() => {
   vi.useRealTimers()
@@ -156,4 +159,70 @@ test("a Pane restored while its machine is away reaches that machine by the dire
   expect(placed.mine).toEqual({})
   expect(placed.none).toEqual({})
   hosts.engine("arc").close()
+})
+
+test("a Pane reads its machine by one rule, this one too: while its own engine answers nothing, it says so in this machine's words, and what it sends waits", () => {
+  const { device, tell } = desktop()
+  const own = ownEngine()
+  const hosts = new KeptHosts(device, FORGETTING, own.engine)
+  hosts.follow()
+  tell([away])
+  hosts.ours([project("mine")])
+  /** What a Pane of `project` reads of its machine, and of what waits. */
+  const read = (project: string, named?: string) => {
+    let got:
+      | {
+          at: ReturnType<typeof useMachineOf>
+          waits: string | undefined
+          waiting: number
+        }
+      | undefined
+    const Pane = () => {
+      const at = useMachineOf(project as ProjectId, named)
+      const pane = { args: { host: named ?? "" } }
+      const waits = useWaitsOn(project as ProjectId, pane, "lost")
+      const waiting = useWaitingFor(named).length
+      got = { at, waits, waiting }
+      return null
+    }
+    renderToStaticMarkup(
+      <HostsContext value={hosts}>
+        <Pane />
+      </HostsContext>
+    )
+    return got!
+  }
+  // Another machine's, by its key; one no machine has, none.
+  expect(read("r1", "arc").at).toMatchObject({
+    key: "arc",
+    shown: { state: { state: "away" } },
+  })
+  expect(read("r1", "arc").waits).toBe("arc")
+  expect(read("nowhere").at).toBeUndefined()
+
+  // This machine's, live: nothing to say, and Send goes now.
+  const mine = read("mine")
+  expect(mine.at).toMatchObject({ key: HERE, shown: { name: HERE } })
+  expect(reachWords(HERE, mine.at!.shown, hosts.seen)).toBeUndefined()
+  expect(mine.waits).toBeUndefined()
+
+  // Its engine answers nothing: its words, and Send waits for it.
+  own.answers(false, 4)
+  const gone = read("mine")
+  expect(reachWords(HERE, gone.at!.shown, hosts.seen)).toBe(
+    "Banda is restarting on this machine"
+  )
+  expect(gone.waits).toBe("Banda on this machine")
+  expect(gone.waiting).toBe(0)
+  const thread = { kind: "agents.thread", args: { thread: "t1" } }
+  hosts.waiting.add({
+    call: { method: "agents.send", params: {}, command: "c1" } as never,
+    project: "mine" as ProjectId,
+    item: "t1",
+    text: "later",
+    pane: thread,
+    at: Date.now(),
+  })
+  expect(read("mine").waiting).toBe(1)
+  expect(read("r1", "arc").waiting).toBe(0)
 })

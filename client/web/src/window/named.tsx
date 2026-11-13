@@ -14,13 +14,13 @@ import { cn } from "@banda/ui/lib/utils"
 import { paneHost, type PaneState } from "@banda/ui/pane"
 import type { Filler, HeaderProps } from "@banda/ui/slots"
 import { PlayIcon } from "lucide-react"
-import { useCallback, useContext } from "react"
+import { useContext } from "react"
 import {
   HostsContext,
   reachWords,
   type Shown,
   useAwayFor,
-  useHostsBy,
+  useMachineOf,
   useNamedOf,
   useThisNamed,
   useLeftFor,
@@ -95,20 +95,11 @@ export function MachinePill({
 }
 
 /** The pill of a Pane of `project` whose args name host `named`, by the
- * host it is on as the Window shows it now; none on this machine, nor
- * before the Window knows that host. */
+ * machine it is on as the Window shows it now, this one too (ADR 0124);
+ * none before the Window knows that machine. */
 function Pill({ project, pane }: { project: ProjectId; pane: PaneState }) {
   const kept = useContext(HostsContext)
-  const named = paneHost(pane)
-  const shown = useHostsBy(
-    useCallback(
-      (hosts: readonly Shown[]) => {
-        const host = kept.hostOf(project, named)
-        return hosts.find((one) => one.name === host)
-      },
-      [kept, project, named]
-    )
-  )
+  const shown = useMachineOf(project, paneHost(pane))?.shown
   return shown ? (
     <MachinePill shown={shown} onStart={() => kept.start(shown.name)} />
   ) : null

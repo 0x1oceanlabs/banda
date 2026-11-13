@@ -8,10 +8,11 @@
 import { useCallback, useContext } from "react"
 import type { ProjectId, Status } from "@banda/contract"
 import type { Leaving } from "../left"
-import { paneHost, type PaneState } from "../pane"
+import { waitedName } from "../hosts"
+import { HERE, paneHost, type PaneState } from "../pane"
 import { type Queue, type Wait, waitsFor } from "../queue"
 import { sameEach } from "../store"
-import { HostsContext, usePlaced } from "./hosts"
+import { HostsContext, useMachineOf } from "./hosts"
 import { useStore } from "./store"
 
 const NONE: readonly Wait[] = []
@@ -57,7 +58,7 @@ export function useWaiting(
  * The messages this device has waiting for host `host`, in the order
  * queued, as the Window reads them, which shows the machines: its pill
  * counts them all (ADR 0105, Q3), and a Frame reads those to the Item it
- * shows, `item`. None for no host, as this machine's Panes name none.
+ * shows, `item`. No host is this machine, as its Panes name none.
  */
 export function useWaitingFor(
   host: string | undefined,
@@ -65,7 +66,8 @@ export function useWaitingFor(
 ): readonly Wait[] {
   const pick = useCallback(
     (wait: Wait) =>
-      wait.host === host && (item === undefined || wait.item === item),
+      wait.host === (host ?? HERE) &&
+      (item === undefined || wait.item === item),
     [host, item]
   )
   return useWaitingBy(pick)
@@ -75,26 +77,28 @@ export function useWaitingFor(
  * Whether what `pane` of `project` sends now waits for its machine, as
  * "Send when back" (ADR 0105, Q2), by its engine's connection `status`
  * (`waitsFor`): that machine's name, for the words, while it does; none
- * while it goes now, and on this machine. Worked out from the Pane, as
- * its session is (`KeptHosts.sessionOf`), so an App never asks where its
- * Pane is (ADR 0106, law 6).
+ * while it goes now. Worked out from the Pane, as its session is
+ * (`KeptHosts.sessionOf`), so an App never asks where its Pane is (ADR
+ * 0106, law 6).
  */
 export function useWaitsOn(
   project: ProjectId,
   pane: Pick<PaneState, "args">,
   status: Status["state"]
 ): string | undefined {
-  const { shown } = usePlaced(project, paneHost(pane))
-  return waitsFor(shown, status) ? shown?.named.name : undefined
+  const shown = useMachineOf(project, paneHost(pane))?.shown
+  return shown && waitsFor(shown, status)
+    ? waitedName(shown.name, shown.named.name)
+    : undefined
 }
 
 /** How many Panes closed while host `host` was away wait to be let go of
  * there (ADR 0106, decision 4), which the pill counts beside the
- * messages; none for no host. */
+ * messages; no host is this machine. */
 export function useLeftFor(host: string | undefined): number {
   const select = useCallback(
     (left: readonly Leaving[]) =>
-      host === undefined ? 0 : left.filter((one) => one.host === host).length,
+      left.filter((one) => one.host === (host ?? HERE)).length,
     [host]
   )
   return useStore(useContext(HostsContext).left, select)

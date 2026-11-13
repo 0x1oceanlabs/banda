@@ -22,6 +22,7 @@ export {
   usePlaced,
   useReach,
   useShownNow,
+  useMachineOf,
   useShownOf,
   useThisNamed,
   useWrittenFrom,

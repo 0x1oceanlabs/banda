@@ -852,7 +852,14 @@ export class Engine {
       // Failed as the engine goes stale, by its pings or its connection.
       if (going !== "read" && (ping || this.#staleOnLoss))
         this.#hushed.add(done)
-      if (ping && this.#status.state === "connecting" && this.#quietFor(ping))
+      // One whose connection says it, never heard, is still starting.
+      const starting = this.#staleOnLoss && this.#heard === undefined
+      if (
+        ping &&
+        !starting &&
+        this.#status.state === "connecting" &&
+        this.#quietFor(ping)
+      )
         timer = setTimeout(() => this.#hush(), ping.within)
       const stop = this.watch((status) => {
         if (status.state === "open") done()
