@@ -22,7 +22,7 @@ import {
   type Shown,
   thisNamed,
 } from "../hosts"
-import { paneHost, type PaneState } from "../pane"
+import { HERE, paneHost, type PaneState } from "../pane"
 import { sameData } from "../store"
 import { useSelected, useStore } from "./store"
 
@@ -90,6 +90,31 @@ export function usePlaced(
   return host === undefined ? {} : { host, shown }
 }
 
+/**
+ * The machine that has `project`, by its key, `HERE` for this one, and as
+ * the Window shows it now (`KeptHosts.shown`); none for a Project no
+ * machine the Window knows has. What a Pane says of its machine while it
+ * cannot reach it, it says by this, whichever machine that is (ADR 0124).
+ */
+export function useMachineOf(
+  project: ProjectId,
+  named: string | undefined
+): { key: string; shown: Shown | undefined } | undefined {
+  const kept = useContext(HostsContext)
+  const host = useHostOf(project, named)
+  const there = useShownOf(host ?? undefined)
+  const here = useStore(kept.here, itself)
+  return useMemo(
+    () =>
+      host === null
+        ? undefined
+        : host === undefined
+          ? { key: HERE, shown: here }
+          : { key: host, shown: there },
+    [host, here, there]
+  )
+}
+
 /** Where a Pane reaches its engine: this machine's; or another host's,
  * by its name, with what the Window knows of that host yet, and its
  * engine once it knows it; or none, `host` null, as no machine the
@@ -150,7 +175,7 @@ export function useNamedOf(
 }
 
 const anyHost = (hosts: readonly Shown[]) => hosts.length > 0
-const itself = (named: Named | undefined) => named
+const itself = <T>(one: T) => one
 
 /** Whether `hosts.toml` has another machine, drawn again only as that
  * changes. */

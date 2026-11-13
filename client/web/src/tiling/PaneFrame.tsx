@@ -47,6 +47,7 @@ import {
   type KeptHosts,
   reachWords,
   UNKNOWN,
+  useMachineOf,
   usePaneOn,
   useReach,
   useWaitingFor,
@@ -236,8 +237,9 @@ export const PaneFrame = memo(function PaneFrame({
   useEffect(() => {
     if (unknown) projectsChanged()
   }, [unknown])
-  const words =
-    there === undefined ? undefined : reachWords(there, reach.shown, seenNamed)
+  // Why it cannot reach its machine, this one too (ADR 0124).
+  const at = useMachineOf(entry.project, paneHost(entry.pane))
+  const words = at && reachWords(at.key, at.shown, seenNamed)
   // Its host out of reach while the Pane shows: a pill under its header
   // says so, in a band of its own, so it covers none of the Pane (#955).
   const pill = !away && reach.engine !== undefined && words !== undefined

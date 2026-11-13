@@ -2023,12 +2023,16 @@ const HOSTS_FOR_APPS = [
   "Unreachable",
   "heldWords",
   "unreachedWords",
+  // The machine a Pane is on, this one too, to say why it cannot reach
+  // it (ADR 0124).
+  "useMachineOf",
   "useMachines",
   "useNamedOf",
   "usePlaced",
-  "useShownOf",
   // Which machine a Thread says it is written from (ADR 0122).
   "useWrittenFrom",
+  // What a message waits for, in words.
+  "waitedName",
 ]
 
 /** The names the core's hosts files export: the store, its words and
@@ -2636,7 +2640,7 @@ test("a file is stamped with its Project or its device only in the places listed
  */
 const ASKING_WHERE: Record<string, number> = {
   "apps/agents/pane/src/ThreadPane.tsx": 1,
-  "apps/agents/pane/src/thread/Thread.tsx": 15,
+  "apps/agents/pane/src/thread/Thread.tsx": 11,
 }
 
 const askingWhere = Object.fromEntries(

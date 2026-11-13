@@ -95,6 +95,27 @@ export const THIS_MACHINE: Named = { name: "This machine", icon: "desktop" }
  * down: what keeps it running starts it again. */
 const RESTARTING = "Banda is restarting on this machine"
 
+/**
+ * This machine's engine, as a window makes it (ADR 0124): where `address`
+ * says it listens. No one else says whether it is in reach, so its own
+ * connection does (`staleOnLoss`), and it is asked whether it still
+ * answers as another machine's is, as one that hangs keeps its
+ * connection open. While it does not answer, an act fails at once in
+ * this machine's words.
+ */
+export const ownEngine = (address: () => Promise<Address>): Engine => {
+  const engine: Engine = new Engine(address, {
+    ping: PING,
+    staleOnLoss: true,
+    unreachable: () =>
+      new Unreachable(HERE, RESTARTING, {
+        machine: THIS_MACHINE.name,
+        as_of: engine.heard,
+      }),
+  })
+  return engine
+}
+
 /** A machine as the Window shows it: a host, or this machine. */
 export type Shown = {
   /** Its key in `hosts.toml`, which the Person sees only until its first
@@ -374,7 +395,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
         if (host === undefined) return here ? HERE : undefined
         return host ?? undefined
       },
-      named: (host) => this.#nameOf(host),
+      named: (host) => waitedName(host, this.#nameOf(host)),
       summary: (host, project) =>
         this.shown(host)?.projects.find((one) => one.id === project),
       // A message queued now goes in its host's time as its engine heard
@@ -1152,9 +1173,15 @@ export function awakeWords(
   }
 }
 
-/** This machine's Banda, as the words of a connection to it name it: the
+/** This machine's Banda, as words name what a Pane or a message of this
+ * machine waits for: "Sends once Banda on this machine is back". The
  * machine itself goes unnamed (ADR 0095, decision 4). */
 const BANDA_HERE = "Banda on this machine"
+
+/** Machine `key` as words name what waits for it: by `name`, or this
+ * machine's Banda. */
+export const waitedName = (key: string, name: string): string =>
+  key === HERE ? BANDA_HERE : name
 
 /** What a Pane on host `host` says while it cannot reach it, as the
  * Window shows that host (`shown`), by the name it says it has, or the
@@ -1211,7 +1238,7 @@ export function unreachedWords(
 ): string | undefined {
   const words = reachWords(host, shown, seen)
   if (words !== undefined || status === "open") return words
-  const on = host === HERE ? BANDA_HERE : (shown?.named ?? seen(host)).name
+  const on = waitedName(host, (shown?.named ?? seen(host)).name)
   return status === "refused"
     ? `${on} refused this window`
     : `Connecting to ${on}`

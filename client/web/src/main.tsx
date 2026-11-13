@@ -7,8 +7,8 @@ import {
 } from "@banda/ui/hooks/use-status"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
+import { ownEngine } from "@banda/core"
 import { HostsContext, KeptHosts, onDevice, poppedOf } from "@banda/core/react"
 import { stepLoops } from "@banda/ui/lib/loops"
 import { moveEnterKey } from "./enter-key"
@@ -31,7 +31,9 @@ stepLoops(document)
 // Quiet, as this machine keeps it, in every window on it (ADR 0098,
 // decision 21).
 quiet.follow({ root: document.documentElement, events: window })
-const engine = host && new Engine(() => host.engine())
+// This machine's engine is one of the machines' (ADR 0124): while it
+// does not answer, its Panes say so, and nothing waits silently.
+const engine = host && ownEngine(() => host.engine())
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */
 const kept = (error: unknown) => {

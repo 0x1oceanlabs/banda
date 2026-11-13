@@ -172,7 +172,12 @@ repository), with an adversarial check.
   ("Banda is restarting on this machine"), a message waits for it, and a
   Pane closed meanwhile is let go of once it is back. A window that
   starts is in reach of its own machine, so what it asks first waits for
-  the first connection. The window turns this on with the pill on its
-  own Panes (PR 4a); until then its own engine is made as before, and
-  never answers nothing.
+  the first connection.
+- **The window shows it (SE3, PR 4a).** It makes its own engine with
+  that rule and a ping (`ownEngine`). While the engine is out of reach,
+  each Pane of this machine has the pill another machine's has, Send is
+  "Send when back", and a message that waits says "Waits for Banda on
+  this machine". The bar no longer says "Reconnecting…": the pill does.
+  A Pane reads its machine through one hook (`useMachineOf`), whichever
+  machine that is.
 

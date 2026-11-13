@@ -489,6 +489,44 @@ test("the engine dies mid-work, comes back, and the Thread goes on", async () =>
   await expect(thread.getByText("You said: hello")).toBeVisible()
 })
 
+test("this machine's engine dies: its Pane says so as another machine's does, a message sent meanwhile waits, and goes once the engine is back (ADR 0124)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  // Each death in a row has main wait longer before it starts the engine
+  // again: after the fourth, seconds, in which the window stays.
+  let last: number | undefined
+  for (let died = 0; died < 4; died++) {
+    await expect.poll(() => window.engine()).not.toBe(last)
+    await expect.poll(() => window.engine()).toBeDefined()
+    last = window.engine()!
+    process.kill(last, "SIGKILL")
+  }
+  const pill = thread.locator("[data-machine-pill]")
+  await expect(pill).toContainText("Banda is restarting on this machine")
+  // The bar says nothing of it: the pill does.
+  await expect(page.getByText("Reconnecting…")).toHaveCount(0)
+
+  // Send waits for this machine, by the same words as for another.
+  await composer.fill("after the break")
+  await thread.getByRole("button", { name: "Send when back" }).click()
+  const waits = thread.getByRole("list", {
+    name: "Waiting for Banda on this machine",
+  })
+  await expect(waits).toContainText("after the break")
+  await expect(pill).toContainText("1 waiting")
+
+  // Back, the pill goes and the message does, once.
+  await expect(pill).toHaveCount(0, { timeout: 30_000 })
+  await expect(thread.getByText("You said: after the break")).toBeVisible()
+  await expect(waits).toHaveCount(0)
+  await expect(thread.getByRole("button", { name: "Send" })).toBeVisible()
+})
+
 test("no process of the window stays in the unit of what started it (ADR 0086, decision 7)", async () => {
   const systemd = spawnSync(
     "systemctl",

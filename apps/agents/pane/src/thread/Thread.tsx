@@ -72,7 +72,7 @@ import {
   useSeenNamed,
   useStatus,
 } from "@banda/ui/hooks/use-status"
-import { heldWords, useShownOf } from "@banda/core/react"
+import { heldWords, useMachineOf, waitedName } from "@banda/core/react"
 import { movedArgs, NewThreadBar } from "../composer/NewThread"
 import { linksOf } from "./links"
 import { type ThreadArgs, useThreadSession, zoomKey } from "./session"
@@ -112,10 +112,12 @@ export function Thread(props: PaneProps<ThreadArgs>) {
   // reach it, Send waits, and says why as its pill does (ADR 0095,
   // decision 7).
   const on = useSeenNamed(host)?.name
-  const shown = useShownOf(host)
+  const at = useMachineOf(project, host)
   const { state: status } = useStatus(engine)
-  const held =
-    host === undefined ? undefined : heldWords(host, shown, status, seenNamed)
+  // On this machine too, while its own engine is out of reach (ADR 0124).
+  const held = at && heldWords(at.key, at.shown, status, seenNamed)
+  // What its waiting messages say they wait for.
+  const waited = at && waitedName(at.key, on ?? at.key)
   const {
     live,
     state,
@@ -624,7 +626,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
               onWho={(account) => startOn(account)}
               onOpen={(pane) => open(pane, "instead")}
             />
-          ) : live.state !== "ready" && waitsHere.length > 0 && on ? (
+          ) : live.state !== "ready" && waitsHere.length > 0 && waited ? (
             // What waits for its machine shows before the Thread can (ADR
             // 0105).
             <WaitsAlone
@@ -632,7 +634,7 @@ export function Thread(props: PaneProps<ThreadArgs>) {
             >
               <WaitsFor
                 waits={waitsHere}
-                machine={on}
+                machine={waited}
                 reader={reader}
                 {...whenBackActions}
               />
@@ -674,10 +676,10 @@ export function Thread(props: PaneProps<ThreadArgs>) {
                   moves={moves}
                   whenBack={
                     waitsHere.length > 0 &&
-                    on && (
+                    waited && (
                       <WaitsFor
                         waits={waitsHere}
-                        machine={on}
+                        machine={waited}
                         reader={reader}
                         {...whenBackActions}
                       />
