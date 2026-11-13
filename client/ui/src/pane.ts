@@ -220,7 +220,9 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
   /** Whether it opens last on its Project's workspace, as an Agent's Thread
-   * does where `agents.toml` says so (ADR 0065, decision 9). */
+   * does in the row (ADR 0065, decision 9): the Tiling asks it only
+   * there, by the Flow of its own file, and a rule of the kind in
+   * `tiling.toml` may say otherwise (ADR 0127, decision 4). */
   home?: () => boolean
   /** Whether it opens as a Group of its own when no Group takes it in, as
    * an Agent's Thread does, so the Panes its Agent opens join a Group

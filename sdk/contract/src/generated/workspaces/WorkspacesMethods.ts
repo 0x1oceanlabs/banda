@@ -36,7 +36,8 @@ list: CallMethod<Nothing, Arranged>,
  * names it. One shown already stays where it is, and is named.
  * With no place it goes where the Flow says, by the Pane it is
  * opened from, for the window, a program and `banda` alike (ADR
- * 0110, decision 4).
+ * 0110, decision 4). A rule of its kind in `tiling.toml` says
+ * how wide its new column is, and may say where it opens.
  */
 open: CommandMethod<Open, Opened>, 
 /**

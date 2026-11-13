@@ -1,5 +1,5 @@
 import type { Engine } from "@banda/contract"
-import type { Flow } from "@banda/contract/agents"
+import type { Flow } from "@banda/contract/workspaces"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { type Key, keyLabel } from "@banda/ui/lib/keys"
@@ -7,14 +7,14 @@ import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test, vi } from "vitest"
 import { flowWidget, isFlow, nextFlow } from "./Flow"
 
-/** agents.toml's Flow as the look resolves it: a server's drawing has
+/** tiling.toml's Flow as the look resolves it: a server's drawing has
  * no store to read the look from. */
-const agents = vi.hoisted(() => ({ flow: "row" as Flow }))
-vi.mock("@banda/ui/lib/look", () => ({ useFile: () => agents }))
+const tiling = vi.hoisted(() => ({ flow: "row" as Flow }))
+vi.mock("@banda/ui/lib/look", () => ({ useFile: () => tiling }))
 
 /** The widget drawn in `flow`, with `flow.solo` on `key`. */
 function drawn(flow: Flow, key?: Key): string {
-  agents.flow = flow
+  tiling.flow = flow
   const { Widget } = flowWidget
   return renderToStaticMarkup(
     <KeysInForce

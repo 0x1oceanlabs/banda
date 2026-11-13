@@ -108,7 +108,8 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub brought: Option<bool>,
-    /// A new column's width; left out, the look's.
+    /// A new column's width; left out, as the rule of its kind says in
+    /// `tiling.toml`, else the look's.
     #[serde(default)]
     #[ts(optional)]
     pub width: Option<String>,
@@ -274,7 +275,8 @@ pub struct Take {
 /// Opens a Pane as `workspaces.open` says; answers it, and whether it is
 /// new. One the workspaces show already is only named, and keeps the Group
 /// it is in or not. One with no place goes where `placing` says, by
-/// `facts`, and one brought to a place is refused as a move there is.
+/// `facts`, and one brought to a place is refused as a move there is. A
+/// new column with no width takes the one its kind's rule gives.
 pub fn open(
     list: &mut Arrangement,
     open: Open,
@@ -314,7 +316,8 @@ pub fn open(
             flow: facts.flow,
             project,
             grouped,
-            home: facts.home.contains(&shows.kind),
+            home: facts.at_home(&shows.kind),
+            opens: facts.opens(&shows.kind),
             scratch: scratch == Some(true),
             from: away.or(from),
             on,
@@ -326,10 +329,10 @@ pub fn open(
         place = placing::place(list, asked);
     }
     let opening = Opening {
+        width: width.or_else(|| facts.width(&shows.kind)),
         shown: shows,
         place,
         instead,
-        width,
         again,
         by: None,
     };

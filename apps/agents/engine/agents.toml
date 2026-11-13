@@ -23,13 +23,6 @@
 # holds the first three models the Harness offers.
 # claude = ["default", "opus", "sonnet"]
 
-# How an Agent's windows stand, its Flow (ADR 0079): "free", where they
-# are, a Thread opening beside the Pane in front; "row", each Project on
-# its own workspace, its Agents in a row (ADR 0065, ADR 0102); or "solo",
-# as the row, what has the focus filling the screen. The Flow's icon on
-# the bar switches it, and Alt+Shift+M goes from row to solo.
-# flow = "row"
-
 # How many seconds the focus stays on a Thread it only came to, by
 # scrolling the Strip or Alt+arrow, before its Done counts as seen (ADR
 # 0096). A click or a key in the Thread counts at once; 0 counts the focus

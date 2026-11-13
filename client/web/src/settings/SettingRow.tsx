@@ -211,9 +211,12 @@ export function RowFrame({
 /** Where the value comes from, when it is not Banda's own. */
 function Origin({ from, file }: { from?: From; file: string }) {
   if (!from || from.layer === "defaults") return null
+  // A key that moved is still the Person's line in the file it left,
+  // while that one says it (ADR 0069 grace).
+  const said = from.path?.split(/[\\/]/).pop() ?? file
   const words =
     from.layer === "file"
-      ? `${file}${from.line ? `:${from.line}` : ""}`
+      ? `${said}${from.line ? `:${from.line}` : ""}`
       : from.layer === "hyprland"
         ? "from Hyprland"
         : `from the ${from.layer}`

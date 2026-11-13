@@ -4,11 +4,17 @@
  * column's display is the look's `Display`.
  */
 import { canonical, uuidV5 } from "./ids"
+import type { ModuleFile } from "./look"
+import type { Tiling } from "./generated/workspaces/Tiling"
 
 export type { Arranged } from "./generated/workspaces/Arranged"
 export type { Aside } from "./generated/workspaces/Aside"
 export type { Changed } from "./generated/workspaces/Changed"
 export type { Column } from "./generated/workspaces/Column"
+export type { Flow } from "./generated/workspaces/Flow"
+export type { Opens } from "./generated/workspaces/Opens"
+export type { Rule } from "./generated/workspaces/Rule"
+export type { Tiling } from "./generated/workspaces/Tiling"
 export type { ColumnId } from "./generated/workspaces/ColumnId"
 export type { Pane } from "./generated/workspaces/Pane"
 export type { PaneId } from "./generated/workspaces/PaneId"
@@ -16,6 +22,17 @@ export type { Place } from "./generated/workspaces/Place"
 export type { Side } from "./generated/workspaces/Side"
 export type { Workspace } from "./generated/workspaces/Workspace"
 export type { WorkspaceId } from "./generated/workspaces/WorkspaceId"
+
+/** How the Tiling behaves with no `tiling.toml`, as `banda look` gives
+ * it: for before the first look. */
+export const DEFAULT_TILING: Tiling = { flow: "row", rules: {} }
+
+/** The Tiling's file, `tiling.toml`: the Flow, and the rules by kind of
+ * Pane that the engine places by (ADR 0127, decision 4). */
+export const TILING_FILE: ModuleFile<Tiling> = {
+  name: "tiling.toml",
+  before: DEFAULT_TILING,
+}
 
 /** What a workspaces command makes, each at most once; `bottom N`, the
  * `N`th of the new empty workspaces one makes one after another, as

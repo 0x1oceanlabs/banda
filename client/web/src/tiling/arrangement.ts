@@ -39,6 +39,7 @@ import {
   type Column,
   type Pane,
   type Place,
+  type Rule,
   seeded,
   type Side,
   type Workspace,
@@ -90,13 +91,22 @@ export type Applied =
  * What the engine places a Pane by, beside its arrangement, as
  * `placing::Facts` (ADR 0110, decision 5): its machine's Flow, solo being
  * each client's view of the row, the Pane kinds that stand on their
- * Project's workspace (`PaneKind.home`), and those that lead a Group, as
- * an Agent's Thread does (`PaneKind.grouped`); left out, none.
+ * Project's workspace (`PaneKind.home`), those that lead a Group, as
+ * an Agent's Thread does (`PaneKind.grouped`), and the Person's rules by
+ * kind of Pane, from `tiling.toml` (ADR 0127, decision 4); left out, none.
  */
 export type Facts = {
   flow: "free" | "row"
   home: readonly string[]
   leads?: readonly string[]
+  rules?: { readonly [kind: string]: Rule | undefined }
+}
+
+/** As `Facts::at_home`: whether a Pane of `kind` stands on its Project's
+ * workspace, as its rule says where it opens, else as its kind does. */
+function homeIn(facts: Facts, kind: string): boolean {
+  const opens = facts.rules?.[kind]?.opens
+  return opens === undefined ? facts.home.includes(kind) : opens === "project"
 }
 
 /** The engine's facts when it knows no Flow and no kind. */
@@ -384,13 +394,16 @@ function openCommand(
     place = placeAsked(list, {
       flow: facts.flow,
       project: open.project,
-      home: facts.home.includes(open.kind),
+      home: homeIn(facts, open.kind),
+      opens: facts.rules?.[open.kind]?.opens,
       scratch: open.scratch === true,
       from: away ?? open.from,
       on: open.on,
       agents: open.agents === true,
     })
-  const opening: Opening = { shown, place, instead, width: open.width, again }
+  // A new column with no width takes the one its kind's rule gives.
+  const width = open.width ?? facts.rules?.[open.kind]?.width
+  const opening: Opening = { shown, place, instead, width, again }
   const pane = openPane(list, opening, seed)
   if (isNew && grouped) groupPane(list, pane, seed)
   if (away !== undefined) close(list, away, seed)
@@ -405,6 +418,8 @@ type Asked = {
   flow: Facts["flow"]
   project: string
   home: boolean
+  /** Where its kind's rule says it opens, by the Pane in front. */
+  opens: Rule["opens"]
   scratch: boolean
   from: string | undefined
   on: string | undefined
@@ -415,7 +430,7 @@ type Asked = {
 /** As `placing::place`: where the Pane goes by the Flow; none, where a
  * Pane with no place goes. */
 function placeAsked(list: Arrangement, asked: Asked): Place | undefined {
-  const { flow, project, home, scratch, from, on, agents } = asked
+  const { flow, project, home, opens, scratch, from, on, agents } = asked
   const right = (pane: string): Place => ({ to: "beside", pane, side: "right" })
   const itsWorkspace: Place = scratch
     ? { to: "free" }
@@ -428,6 +443,16 @@ function placeAsked(list: Arrangement, asked: Asked): Place | undefined {
     on !== undefined && list.some((w) => w.id === on)
       ? { to: "column", workspace: on, index: LAST }
       : undefined
+  // Its kind's rule, by the Pane in front; it gives way in the row where
+  // that Pane stands on a workspace another Project owns.
+  const owner = at && list[at.workspace].project
+  const theirs =
+    flow === "row" && !scratch && owner !== undefined && owner !== project
+  if (at && from !== undefined && !theirs) {
+    if (opens === "beside") return right(from)
+    if (opens === "below") return { to: "beside", pane: from, side: "below" }
+    if (opens === "group") return { to: "group", pane: from }
+  }
   if (flow === "free") return at && from !== undefined ? right(from) : here()
   if (home) return itsWorkspace
   if (!at || from === undefined)

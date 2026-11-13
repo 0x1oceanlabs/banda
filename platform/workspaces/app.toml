@@ -8,7 +8,9 @@ version = "0.1.0"
 # The major of the App API it is written to (ADR 0062, ADR 0082).
 api = 1
 from-banda = true
-settings = []
+# The settings files it owns, in ~/.config/banda: the Tiling's (ADR 0127,
+# decision 4).
+settings = ["tiling.toml"]
 
 # What it needs of Banda (ADR 0082, decision 2): nothing it could
 # declare here is built yet.

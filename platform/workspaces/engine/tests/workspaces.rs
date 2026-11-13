@@ -7,8 +7,9 @@ use banda_kernel::{
 };
 use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, Seed, WorkspaceId};
-use banda_workspaces::placing::Flow;
+use banda_workspaces::tiling::{Flow, Opens, Rule, Tiling};
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::path::Path;
 use std::sync::Arc;
 use uuid::Uuid;
@@ -25,7 +26,33 @@ impl Machine {
 
     /// A machine whose Flow is the row (ADR 0110, decision 5).
     async fn in_the_row(root: &Path, owner: PersonId) -> Machine {
-        Machine::with(root, owner, Workspaces::new().flow(|| Flow::Row)).await
+        Machine::ruled(root, owner, Flow::Row, &[]).await
+    }
+
+    /// A machine whose `tiling.toml` says this Flow and these rules, each a
+    /// kind's width and where it opens (ADR 0127, decision 4).
+    async fn ruled(
+        root: &Path,
+        owner: PersonId,
+        flow: Flow,
+        rules: &[(&str, Option<&str>, Option<Opens>)],
+    ) -> Machine {
+        let rules: BTreeMap<String, Rule> = (rules.iter())
+            .map(|(kind, width, opens)| {
+                let rule = Rule {
+                    width: width.map(str::to_owned),
+                    opens: *opens,
+                };
+                ((*kind).to_owned(), rule)
+            })
+            .collect();
+        let tiling = Tiling { flow, rules };
+        Machine::with(
+            root,
+            owner,
+            Workspaces::new().tiling(move || tiling.clone()),
+        )
+        .await
     }
 
     async fn with(root: &Path, owner: PersonId, workspaces: Workspaces) -> Machine {
@@ -1251,6 +1278,51 @@ async fn the_window_a_program_and_an_agent_open_a_pane_by_one_rule() {
     assert!(own.is_string());
     assert_eq!(&group_of(&list, &from), own);
     assert_eq!(&group_of(&list, &program), own);
+}
+
+/// The Tiling's file holds for every caller (ADR 0127, decision 4): the
+/// window, a program and an Agent get a kind's width, and the Person's
+/// Panes open where its rule says.
+#[tokio::test]
+async fn a_rule_of_tiling_toml_holds_for_the_window_a_program_and_an_agent() {
+    let root = tempfile::tempdir().unwrap();
+    let rules = [
+        ("files.file", Some("1/3"), None),
+        ("a.a", None, Some(Opens::Below)),
+    ];
+    let machine = Machine::ruled(root.path(), PersonId::new(), Flow::Row, &rules).await;
+    let work = machine.project("Work").await;
+    let open = |kind, n, more| machine.command("workspaces.open", numbered(work, kind, n, more));
+    // The window, from the Pane in front; a program, with none.
+    let one = open("files.file", 1, json!({})).await.unwrap()["pane"].clone();
+    open("files.file", 2, json!({ "from": one })).await.unwrap();
+    // An Agent, whose Thread no workspace shows.
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    let asked = showing("files.file", json!({ "n": 3 }));
+    machine
+        .answer_from(CommandId::new(), agent, "workspaces.open_pane", asked)
+        .await
+        .unwrap();
+    // A width the caller names is the width.
+    open("files.file", 4, json!({ "width": "1/2" }))
+        .await
+        .unwrap();
+    // Under the Pane in front, by its kind's rule; a kind with none goes
+    // as the row has it, at no width of its own.
+    open("a.a", 5, json!({ "from": one })).await.unwrap();
+    open("b.b", 6, json!({ "from": one })).await.unwrap();
+    let list = machine.list().await;
+    assert_eq!(
+        layout(&list)[0],
+        [vec![1, 5], vec![2], vec![4], vec![6], vec![3]]
+    );
+    let widths: Vec<_> = (list["workspaces"][0]["columns"].as_array().unwrap().iter())
+        .map(|column| column["width"].as_str())
+        .collect();
+    assert_eq!(
+        widths,
+        [Some("1/3"), Some("1/3"), Some("1/2"), None, Some("1/3")]
+    );
 }
 
 #[tokio::test]

@@ -305,6 +305,8 @@ Its methods, `banda call updates.<method>`: `check`, `state`, `restart`, `take`.
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
 
+Its settings: `tiling.toml`.
+
 Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `unarrange`, `panes`, `open_pane`, `move_own`, `close_own`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:

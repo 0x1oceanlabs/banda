@@ -52,7 +52,8 @@ moved?: boolean,
  */
 brought?: boolean, 
 /**
- * A new column's width; left out, the look's.
+ * A new column's width; left out, as the rule of its kind says in
+ * `tiling.toml`, else the look's.
  */
 width?: string, 
 /**

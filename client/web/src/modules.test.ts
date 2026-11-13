@@ -1,6 +1,9 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProjectId } from "@banda/contract"
+import type { Look } from "@banda/contract/look"
+import { DEFAULT_TILING, TILING_FILE } from "@banda/contract/workspaces"
+import { takeLook } from "@banda/ui/lib/look"
 import type { Action, Module, WindowApi } from "@banda/ui/module"
 import { parts } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
@@ -19,6 +22,7 @@ import {
   startable,
   tileable,
   watches,
+  widthOf,
 } from "./registry"
 
 test("each module has its own id, and its Panes' kinds start with it (ADR 0022, decision 5)", () => {
@@ -29,6 +33,23 @@ test("each module has its own id, and its Panes' kinds start with it (ADR 0022, 
       expect(pane.kind.startsWith(`${m.id}.`)).toBe(true)
   const named = kinds.map((kind) => kind.kind)
   expect(new Set(named).size).toBe(named.length)
+})
+
+test("a new column is as wide as its kind's rule in tiling.toml says, else a list at the narrowest preset and the rest as the look has it (ADR 0127, decision 4)", () => {
+  const pane = (kind: string) => ({ kind, args: {} })
+  expect(widthOf(pane("files.tree"))).toBe("1/3")
+  expect(widthOf(pane("terminal.terminal"))).toBeUndefined()
+  const rules = {
+    "terminal.terminal": { width: "2/5" },
+    "files.tree": { width: "1/2" },
+    "git.diff": { opens: "below" as const },
+  }
+  const files = { [TILING_FILE.name]: { ...DEFAULT_TILING, rules } }
+  takeLook({ files } as unknown as Look)
+  expect(widthOf(pane("terminal.terminal"))).toBe("2/5")
+  expect(widthOf(pane("files.tree"))).toBe("1/2")
+  expect(widthOf(pane("git.diff"))).toBeUndefined()
+  takeLook({ files: {} } as unknown as Look)
 })
 
 test("a Pane shows while the engine runs its module, or always for a module with no engine part", () => {

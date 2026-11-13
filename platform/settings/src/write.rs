@@ -3,9 +3,10 @@
 //! changes one key and leaves every other line, comment and blank as it was,
 //! and writes nothing the file's own check would refuse.
 
-use crate::{check_text, file};
+use crate::{check_text, file, files};
 use banda_look::Problem;
 use banda_look::SettingsFile;
+use banda_look::keyed::Moved;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Key, TableLike, Value};
 
@@ -18,7 +19,50 @@ use toml_edit::{DocumentMut, Item, Key, TableLike, Value};
 /// entry's `id`: `harness.codex.command`. An entry not there is added. An
 /// inline table sets each of its keys, so `harness.gemini = { name = …,
 /// command = … }` adds a whole entry at once.
+///
+/// A key that moved to another file is written there, under either name,
+/// and the line its old file still has goes (ADR 0069 grace).
 pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<Problem>> {
+    let (name, key) = now_at(name, key);
+    set_in(config, name, &key, value)?;
+    forget_old(config, name, &key);
+    Ok(())
+}
+
+/// Where `key` of the file called `name` is now: the file it moved to and
+/// its key there, or itself.
+fn now_at<'a>(name: &'a str, key: &str) -> (&'a str, String) {
+    let dotted = dotted(key);
+    files()
+        .find_map(|file| {
+            let was = |moved: &&Moved| moved.file == name && Some(moved.was) == dotted.as_deref();
+            Some((file.name, file.moved().iter().find(was)?.now.to_owned()))
+        })
+        .unwrap_or((name, key.to_owned()))
+}
+
+/// Takes out what the files `key` of the file called `name` moved from
+/// still say of it: this file says it now, or says nothing, so the old
+/// line would only mislead. One that cannot be taken out stays, unread.
+fn forget_old(config: &Path, name: &str, key: &str) {
+    let dotted = dotted(key);
+    let moved = file(name).map_or(&[][..], |file| file.moved());
+    for old in moved
+        .iter()
+        .filter(|moved| Some(moved.now) == dotted.as_deref())
+    {
+        let _ = reset_in(config, old.file, old.was);
+    }
+}
+
+/// `key` as its parts joined by dots, however it is quoted or spaced; none
+/// when it does not read as a key.
+fn dotted(key: &str) -> Option<String> {
+    let parts = Key::parse(key).ok()?;
+    Some(parts.iter().map(Key::get).collect::<Vec<_>>().join("."))
+}
+
+fn set_in(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<Problem>> {
     let mut open = Open::new(config, name, key)?;
     let value = value
         .parse::<Value>()
@@ -157,8 +201,16 @@ pub fn rename(config: &Path, name: &str, key: &str, to: &str) -> Result<(), Vec<
 
 /// Takes `key` out of the file called `name`, so the layer under it
 /// shows; an entry of a list of tables, `harness.gemini`, goes whole. A
-/// key or file not there is already reset.
+/// key or file not there is already reset. A key that moved to another
+/// file goes there and where it was, under either name.
 pub fn reset(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
+    let (name, key) = now_at(name, key);
+    reset_in(config, name, &key)?;
+    forget_old(config, name, &key);
+    Ok(())
+}
+
+fn reset_in(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
     let mut open = Open::new(config, name, key)?;
     let leaf = open.leaf.clone();
     if name == "harnesses.toml"
@@ -544,6 +596,104 @@ mod tests {
 
     fn look(config: &tempfile::TempDir) -> String {
         std::fs::read_to_string(config.path().join("look.toml")).unwrap()
+    }
+
+    fn text_of(config: &tempfile::TempDir, name: &str) -> String {
+        std::fs::read_to_string(config.path().join(name)).unwrap()
+    }
+
+    /// The Flow moved from agents.toml to tiling.toml (ADR 0127, decision
+    /// 4): written under either name it lands in the Tiling's file, and
+    /// the line agents.toml still had goes (ADR 0069 grace).
+    #[test]
+    fn a_key_that_moved_is_written_where_it_is_now_and_its_old_line_goes() {
+        let config = tempfile::tempdir().unwrap();
+        let agents = "# Mine.\nenter = \"queue\"\n# how I work\nflow = \"free\"\n";
+        std::fs::write(config.path().join("agents.toml"), agents).unwrap();
+        set(config.path(), "agents.toml", "flow", "solo").unwrap();
+        let tiling = text_of(&config, "tiling.toml");
+        assert!(tiling.ends_with("\nflow = \"solo\"\n"), "{tiling}");
+        assert!(tiling.starts_with("#:schema ./schemas/tiling.schema.json\n"));
+        let agents = text_of(&config, "agents.toml");
+        assert!(!agents.contains("flow ="), "{agents}");
+        assert!(agents.contains("enter = \"queue\""), "{agents}");
+        assert!(
+            agents.contains("# how I work"),
+            "its comment stays: {agents}"
+        );
+        assert!(check_text(&config.path().join("agents.toml"), &agents).is_empty());
+        // Under its name now, the same.
+        set(config.path(), "tiling.toml", "flow", "row").unwrap();
+        assert!(text_of(&config, "tiling.toml").contains("flow = \"row\""));
+        // A value it does not take is refused, and nothing is written.
+        let refused = set(config.path(), "agents.toml", "flow", "sideways");
+        assert!(refused.is_err());
+        assert!(text_of(&config, "tiling.toml").contains("flow = \"row\""));
+    }
+
+    #[test]
+    fn a_key_that_moved_resets_in_both_files() {
+        let config = tempfile::tempdir().unwrap();
+        // Only the old file says it, under either of its names there:
+        // reset takes that line out.
+        for old in ["workspaces = \"off\"\n", "flow = \"free\"\n"] {
+            std::fs::write(config.path().join("agents.toml"), old).unwrap();
+            reset(config.path(), "tiling.toml", "flow").unwrap();
+            assert_eq!(text_of(&config, "agents.toml"), "", "{old}");
+        }
+        assert!(
+            !config.path().join("tiling.toml").exists(),
+            "nothing to reset there"
+        );
+        // Both say it: both lines go, by the old name too.
+        std::fs::write(config.path().join("agents.toml"), "flow = \"free\"\n").unwrap();
+        std::fs::write(config.path().join("tiling.toml"), "flow = \"solo\"\n").unwrap();
+        reset(config.path(), "agents.toml", "flow").unwrap();
+        assert_eq!(text_of(&config, "agents.toml"), "");
+        assert_eq!(text_of(&config, "tiling.toml"), "");
+    }
+
+    #[test]
+    fn a_rule_is_written_by_its_kind_and_one_of_no_kind_is_refused() {
+        let config = tempfile::tempdir().unwrap();
+        set(
+            config.path(),
+            "tiling.toml",
+            "rule.terminal.terminal.width",
+            "1/3",
+        )
+        .unwrap();
+        set(
+            config.path(),
+            "tiling.toml",
+            "rule.terminal.terminal.opens",
+            "below",
+        )
+        .unwrap();
+        let text = text_of(&config, "tiling.toml");
+        assert!(
+            text.contains("\n[rule.terminal.terminal]\nwidth = \"1/3\"\nopens = \"below\"\n"),
+            "{text}"
+        );
+        assert!(
+            text.contains("# flow = \"row\""),
+            "the template's comments stay"
+        );
+        for (key, value) in [
+            ("rule.terminal.shell.width", "1/3"),
+            ("rule.terminal.terminal.width", "wide"),
+            ("rule.terminal.terminal.opens", "sideways"),
+        ] {
+            let refused = set(config.path(), "tiling.toml", key, value);
+            assert!(refused.is_err(), "{key} = {value}");
+            assert_eq!(text_of(&config, "tiling.toml"), text, "{key} = {value}");
+        }
+        reset(config.path(), "tiling.toml", "rule.terminal.terminal").unwrap();
+        let text = text_of(&config, "tiling.toml");
+        assert!(
+            !text.lines().any(|line| line.starts_with("[rule")),
+            "{text}"
+        );
     }
 
     #[test]

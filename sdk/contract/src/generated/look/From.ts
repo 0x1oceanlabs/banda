@@ -10,7 +10,8 @@ export type From = {
  */
 layer: string, 
 /**
- * The file it is in, when it is in one.
+ * The file it is in, when it is in one: the file it moved out of,
+ * while that one still says it (ADR 0069 grace).
  */
 path?: string, 
 /**

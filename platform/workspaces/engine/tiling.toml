@@ -1,0 +1,31 @@
+#:schema ./schemas/tiling.schema.json
+# How the Tiling behaves (ADR 0127): the Flow, and rules by kind of Pane.
+# Banda's engine reads it, so a key, an Agent and `banda` get the same
+# answer. Every key is optional: what you leave out is Banda's default,
+# written below. Check a change with: banda settings check
+
+# How you work the Panes, the Flow (ADR 0079): "free", a Pane opens beside
+# the one in front, and workspaces belong to no Project; "row", each
+# Project on its own workspace, its Agents in a row (ADR 0102); or "solo",
+# as the row, what has the focus filling the screen. The Flow's icon on
+# the bar switches it, and Alt+Shift+M goes from row to solo.
+# flow = "row"
+
+# A rule for one kind of Pane, in a table named by the kind: this one is
+# for a terminal, `terminal.terminal`. A Thread is `agents.thread`, the
+# browser `browser.browser`, the Diff `git.diff`, Files `files.tree` and a
+# file `files.file`; `banda call workspaces.list` names the kind of each
+# Pane now open. A kind with no rule opens as its App and the Flow say.
+# [rule.terminal.terminal]
+
+# How wide a new column for a Pane of this kind opens: a share of the
+# screen, such as "1/3", or "1" for all of it. By default the width
+# look.toml's [columns] gives a new column.
+# width = "1/3"
+
+# Where a Pane of this kind opens when no one named a place: "beside",
+# right of the Pane in front; "below", under it, in its column; "group",
+# in its Group; or "project", last on its Project's workspace, in the row.
+# With no Pane in front, and in the row from a workspace of another
+# Project, it opens as the Flow says. By default, as the Flow says.
+# opens = "beside"

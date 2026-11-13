@@ -393,7 +393,8 @@ _Avoid_: home host (there is none).
 
 **Shared file**:
 A settings file that means the same everywhere: the sidebar, key binds,
-`[notify]`, themes. Every machine keeps a full copy, and a device uses
+the Tiling's Flow and rules (`tiling.toml`), `[notify]`, themes. Every
+machine keeps a full copy, and a device uses
 only its own machine's. Copying them between machines is the sync, not
 built yet (ADR 0101, decision 3). Seen marks are not among them: they are
 the Thread's (ADR 0096).

@@ -8,7 +8,7 @@
  * Tiling and the Window's areas, stays here.
  */
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Flow } from "@banda/contract/agents"
+import type { Flow } from "@banda/contract/workspaces"
 import {
   type Here,
   HereContext,

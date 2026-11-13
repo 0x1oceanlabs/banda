@@ -62,6 +62,18 @@ test("with one machine, a search finds neither key, as the section draws neither
   )
 })
 
+test("the Flow's row stays in Agents, and is the Tiling's file's (ADR 0127, decision 4)", () => {
+  const rows = groupsOf(sectionOf("agents")).flatMap((group) =>
+    group.rows.map((row) => ({ ...row, group: group.title }))
+  )
+  expect(rows.filter((row) => row.key === "flow")).toMatchObject([
+    { file: "tiling.toml", title: "Flow", group: "Writing to an Agent" },
+  ])
+  // The Tiling's rules have no row yet: its section draws them (part b).
+  expect(rows.filter((row) => row.file === "tiling.toml")).toHaveLength(1)
+  expect(search("flow").map((found) => found.row.file)).toContain("tiling.toml")
+})
+
 test("another drawn table stays out of the search", () => {
   const drawn = rowsOf("agents.toml").filter(({ key }) => /^start\b/.test(key))
   expect(drawn.length).toBeGreaterThan(0)

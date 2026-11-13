@@ -15,7 +15,6 @@ export type { AgentCounts } from "./generated/agents/AgentCounts"
 export type { Agents } from "./generated/agents/Agents"
 export type { Archived } from "./generated/agents/Archived"
 export type { Enter } from "./generated/agents/Enter"
-export type { Flow } from "./generated/agents/Flow"
 export type { Body } from "./generated/agents/Body"
 export type { ChangedLines } from "./generated/agents/ChangedLines"
 export type { ChangesAsk } from "./generated/agents/ChangesAsk"
@@ -218,7 +217,6 @@ export function knownItem(item: Item): boolean {
  * for before the first look. */
 export const DEFAULT_AGENTS: Agents = {
   enter: "steer",
-  flow: "row",
   seen_after: 2.5,
 }
 

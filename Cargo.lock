@@ -794,6 +794,7 @@ dependencies = [
  "banda-machines",
  "banda-sharing",
  "banda-terminal",
+ "banda-workspaces",
  "dunce",
  "keyring-core",
  "schemars 1.2.3",
@@ -902,6 +903,7 @@ dependencies = [
  "serde_json",
  "tempfile",
  "tokio",
+ "toml",
  "ts-rs",
  "uuid",
 ]

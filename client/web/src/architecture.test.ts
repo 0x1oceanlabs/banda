@@ -585,11 +585,12 @@ test("the sidebar list takes no more code than the list holds, and no Project's 
  * A Project's pin is the Window's `projects.pin`, and the Flow the Person
  * picks is `flow.pick`, beside `flow.solo` (ADR 0087, B4e): the sidebar
  * list pins no Project itself, by `updateProject` or by the engine's
- * `projects.update`, and writes no `agents.toml`.
+ * `projects.update`, and writes neither `agents.toml` nor the Flow's
+ * file, `tiling.toml` (ADR 0127, decision 4).
  */
-test("the sidebar list pins no Project and writes no agents.toml", () => {
+test("the sidebar list pins no Project and writes no agents.toml or tiling.toml", () => {
   const writing =
-    /\bupdateProject\b|\bprojects\.update\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|["'`]agents\.toml)/
+    /\bupdateProject\b|\bprojects\.update\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|TILING_FILE|["'`](?:agents|tiling)\.toml)/
   const files = sources(join(app, "web/src/sidebar"), { tests: false })
   expect(files).toContain(join(app, "web/src/sidebar/ProjectMenu.tsx"))
   expect(
@@ -652,23 +653,17 @@ test("one place answers a pick, and only the action reaches it", () => {
  * an App, once for each place they do, by file (`appStrings`): a string
  * that names an action or a kind of the agents module's (`agents.…`) or a
  * Thread's (`thread.…`), and that module's settings file (`AGENTS_FILE`).
- * None of them names an App (ADR 0087, decision 1); these go with the
- * Flow (T-b) and intents (B8c), and the sidebar's New Thread with them,
- * as the key starts one. The Flow's widget took its string from the
- * sidebar to the Bar (ADR 0098, decision 20), so the Bar is read too.
- * None joins the list, and one that goes leaves it. Not what only tests
- * use.
+ * None of them names an App (ADR 0087, decision 1); these go with
+ * intents (B8c), and the sidebar's New Thread with them, as the key
+ * starts one. The Flow is the Tiling's own now, in `tiling.toml` (ADR
+ * 0127, decision 4), so its readers left the list. None joins the list,
+ * and one that goes leaves it. Not what only tests use.
  */
 const APP_STRINGS = [
-  "web/src/bar/flow/Flow.tsx: AGENTS_FILE",
   "web/src/sidebar/open.ts: thread.new",
-  "web/src/window/Shell.tsx: AGENTS_FILE",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
-  "web/src/window/actions.ts: AGENTS_FILE",
-  "web/src/window/actions.ts: AGENTS_FILE",
-  "web/src/window/actions.ts: AGENTS_FILE",
 ]
 
 const saying = [

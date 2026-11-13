@@ -72,6 +72,17 @@ and stories 1 and 2. The map behind it is kept outside the repository
    alone, so no client carries an interpreter; and behaviour beyond a rule
    is an App that follows events and runs actions, which decision 2 makes
    possible, so there is one way to extend Banda and not two.
+   _Built_ (WS4, part a): the file is the `workspaces` module's, a
+   Shared file. It holds `flow` and the rules, each a table named by its
+   kind of Pane, `[rule.terminal.terminal]`, with `width` and `opens`
+   (`beside`, `below`, `group` or `project`). A table by kind, and not a
+   list with a `kind` key, is what `banda settings set` already writes
+   key by key: `rule.terminal.terminal.width`. `placing.rs` places by
+   the rules for every caller, and a rule gives way where the row would
+   refuse the place. `flow` in `agents.toml` is read while `tiling.toml`
+   does not say it. The widths of `look.toml`'s `[columns]` stay there
+   until the Tiling has its Settings section (part b): the engine places
+   by none of them, and moving them moves their rows on the screen.
 5. **The Sidebar is a list.** The Banda menu is the one search, and a
    Thread starts in the New Thread Pane (#1630, which amends ADR 0098).
 6. **One name for "an App asks for a Pane":** the intent
@@ -97,5 +108,3 @@ and stories 1 and 2. The map behind it is kept outside the repository
   story 1 design holds it still "as of"; SE8's cache may draw it).
 - How Electron main is split by capability: its plan comes with the slice
   that does it, after story 1's edits to `main.ts` have landed.
-- The shape of a rule in `tiling.toml`: the slice that adds the file
-  shows it first.
