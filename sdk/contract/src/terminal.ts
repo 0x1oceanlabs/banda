@@ -7,6 +7,7 @@
 import type { ModuleFile } from "./look"
 import type { Writing } from "./generated/terminal/Writing"
 
+export type { Drawn } from "./generated/terminal/Drawn"
 export type { Ended } from "./generated/terminal/Ended"
 export type { Open } from "./generated/terminal/Open"
 export type { Piece } from "./generated/terminal/Piece"

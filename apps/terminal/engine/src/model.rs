@@ -11,6 +11,13 @@ banda_kernel::id!(
     export_to = "terminal/"
 );
 
+banda_kernel::id!(
+    /// One run of a terminal: a terminal opened again under its ID is
+    /// another run, whose output is numbered anew.
+    RunId,
+    export_to = "terminal/"
+);
+
 /// A terminal's size, in cells.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "terminal/")]
@@ -72,6 +79,30 @@ pub struct Ended {
     pub signal: Option<i32>,
 }
 
+/// The terminal to watch, and what its window drew of it already.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Watch {
+    pub terminal: TerminalId,
+    /// What the window drew before its connection broke, as the pieces it
+    /// heard said: the watch goes on from there, with no screen again. Left
+    /// out, or no longer kept, the watch starts with the whole screen.
+    #[ts(optional)]
+    #[serde(default)]
+    pub after: Option<Drawn>,
+}
+
+/// How much of a terminal's output a window has drawn.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Drawn {
+    /// Which run of the terminal.
+    pub run: RunId,
+    /// How many pieces of its output, from the first.
+    #[ts(type = "number")]
+    pub at: u64,
+}
+
 /// What `terminal.watch` says: the screen first, then what the program
 /// prints, the size a window gives it, and that it ended.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -93,9 +124,38 @@ pub enum Piece {
         #[ts(optional, as = "Option<bool>")]
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         in_order: bool,
+        /// How much this is, to watch on from after a reconnect
+        /// (`Watch.after`). An engine older than that says nothing here.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        drawn: Option<Drawn>,
+    },
+    /// The watch goes on from what the window said it drew
+    /// (`Watch.after`): no screen again, only what it `missed`, which may
+    /// be nothing. Its size and its end are as a snapshot says them. What
+    /// it missed is old: its window draws it and answers no query in it,
+    /// as it does a snapshot's.
+    Resumed {
+        missed: String,
+        /// How many pieces of output the window has drawn with this
+        /// (`Drawn.at`).
+        #[ts(type = "number")]
+        at: u64,
+        size: Size,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        ended: Option<Ended>,
+        #[ts(optional, as = "Option<bool>")]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        in_order: bool,
     },
     Output {
         text: String,
+        /// How many pieces of output the window has drawn with this one
+        /// (`Drawn.at`).
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        at: Option<u64>,
     },
     /// A window made it this size.
     Resized {

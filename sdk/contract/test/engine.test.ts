@@ -18,6 +18,7 @@ import { createInterface } from "node:readline"
 import { afterEach, beforeAll, beforeEach, expect, test, vi } from "vitest"
 import { decodeFact } from "../src/agents"
 import { base64url } from "../src/door"
+import type { Drawn } from "../src/terminal"
 import { seeded } from "../src/workspaces"
 import {
   type Address,
@@ -339,6 +340,62 @@ test("a window runs a terminal and hears what it prints, until it closes", async
   await expect.poll(() => screen).toContain("got hi")
   await client.call("terminal.close", { terminal }, { project: project.id })
   await expect.poll(() => closed).toBe(true)
+})
+
+test("a terminal's watch asked again after a reconnect goes on from what its window drew, with no screen again", async () => {
+  noting()
+  await serve()
+  client = new Engine(address)
+  const project = await client.command("projects.create", { name: "Work" })
+  const terminal = newId()
+  await client.call(
+    "terminal.open",
+    {
+      terminal,
+      program: "sh",
+      args: ["-c", 'printf "word? "; read word; echo "got $word"; sleep 100'],
+      size: { cols: 80, rows: 24 },
+    },
+    { project: project.id }
+  )
+  let screen = ""
+  let drawn: Drawn | undefined
+  const kinds: string[] = []
+  client.stream(
+    project.id,
+    "terminal.watch",
+    // Asked each time with what it drew by then.
+    () => ({ terminal, ...(drawn && { after: drawn }) }),
+    (piece) => {
+      kinds.push(piece.kind)
+      if (piece.kind === "snapshot") {
+        screen = piece.history
+        drawn = piece.drawn
+      }
+      if (piece.kind === "output") {
+        screen += piece.text
+        if (drawn && piece.at !== undefined) drawn = { ...drawn, at: piece.at }
+      }
+      if (piece.kind === "resumed") {
+        screen += piece.missed
+        if (drawn) drawn = { ...drawn, at: piece.at }
+      }
+    },
+    () => {}
+  )
+  await expect.poll(() => screen).toContain("word? ")
+  // The link breaks as the word goes: what the program prints next is
+  // printed while no one hears.
+  Noting.cut = "terminal.write"
+  await client
+    .call("terminal.write", { terminal, data: "hi\r" }, { project: project.id })
+    .catch(() => undefined)
+  await expect.poll(() => screen).toContain("got hi")
+  expect(Noting.opened).toHaveLength(2)
+  // The screen came once. Asked again, the watch went on.
+  expect(kinds.filter((kind) => kind === "snapshot")).toHaveLength(1)
+  expect(kinds).toContain("resumed")
+  expect(screen.match(/word\? /g)).toHaveLength(1)
 })
 
 test("a stream heard once ends when the connection breaks, and is not asked again", async () => {

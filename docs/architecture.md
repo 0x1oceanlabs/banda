@@ -1607,6 +1607,19 @@ this machine (ADR 0126).
   so far first, then what it prints and the size a window gives it, then
   how it ended. Every window that opens it sees the same screen, and a
   window that falls behind gets the whole screen again.
+- **A window back after a reconnect goes on from what it drew**
+  (`terminal.watch {after}`, #1236; ADR 0106, law 4). The screen and each
+  piece of output say how much of the terminal's output they reach
+  (`Drawn`: the history's run, and a count of its pieces). The contract's
+  session asks a stream again with what its caller says then
+  (`Engine.stream`, its params as a function), so the Pane asks with what
+  it drew by then. The terminal answers `resumed`: what the window
+  missed, which may be nothing, and its size and its end, with no screen
+  again. What it missed is old, so the Pane types none of the screen's
+  answers to it, as for a snapshot. A place the history no longer keeps,
+  one it never reached, or another run's (a terminal opened again under
+  its ID) gets the whole screen as before, and so does a window of an
+  engine older than this.
 - **Typing waits at most 5 seconds** for a program that does not read.
 - **A close stops what the program started too.** The program leads a
   session and a process group of its own. While it runs, a close sends the

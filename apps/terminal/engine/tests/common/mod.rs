@@ -6,7 +6,7 @@
 use banda_environments::{Asks, Local, Recorded};
 use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId, Stream};
 use banda_terminal::Terminals;
-use banda_terminal::model::{Piece, TerminalId};
+use banda_terminal::model::{Drawn, Piece, TerminalId};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
@@ -128,14 +128,19 @@ impl World {
     }
 
     pub async fn watch(&self, terminal: TerminalId) -> Stream {
+        self.watch_as(json!({ "terminal": terminal })).await
+    }
+
+    /// Watches on from what a window drew, as it does after a reconnect.
+    pub async fn watch_after(&self, terminal: TerminalId, after: Drawn) -> Stream {
+        self.watch_as(json!({ "terminal": terminal, "after": after }))
+            .await
+    }
+
+    async fn watch_as(&self, params: serde_json::Value) -> Stream {
         let person = Participant::Person(self.owner);
-        self.kernel
-            .stream(
-                person,
-                "terminal.watch",
-                Some(self.project),
-                json!({ "terminal": terminal }),
-            )
+        (self.kernel)
+            .stream(person, "terminal.watch", Some(self.project), params)
             .await
             .unwrap()
     }
@@ -148,7 +153,8 @@ pub async fn until(stream: &mut Stream, done: impl Fn(&str) -> bool) -> (String,
     loop {
         match piece(stream).await {
             Some(Piece::Snapshot { history, .. }) => screen = history,
-            Some(Piece::Output { text }) => screen.push_str(&text),
+            Some(Piece::Output { text, .. }) => screen.push_str(&text),
+            Some(Piece::Resumed { missed, .. }) => screen.push_str(&missed),
             Some(Piece::Resized { .. } | Piece::Titled { .. }) => {}
             ended @ (Some(Piece::Exited { .. }) | None) => return (screen, ended),
         }

@@ -306,7 +306,9 @@ type Following = {
 type Hearing = {
   project: ProjectId | undefined
   method: string
-  params: JsonValue
+  /** What it is asked with: as given, or as its caller says each time it
+   * is asked, so one heard again goes on from what it heard. */
+  params: JsonValue | (() => JsonValue)
   onPiece: (piece: unknown) => void
   onEnd: (refusal?: Refusal, error?: Error) => void
   /** Never said again after a reconnect: a stream that acts, or one heard
@@ -374,7 +376,8 @@ const hostTime = (at: number | undefined, offset: number | undefined) =>
  *   and as it breaks; on another machine, in that machine's words.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
- * - A stream that reads is heard again after a reconnect, from its start;
+ * - A stream that reads is heard again after a reconnect: from its start,
+ *   or from where its caller says it was (its `params` as a function);
  *   one that acts, or is heard `once`, ends instead.
  * - An engine may be pinged (`ping`): one that answers nothing, its
  *   connection open or not, is stale until it is heard again, and an act
@@ -723,8 +726,12 @@ export class Engine {
   /**
    * Hears a module's stream, such as a terminal's output: what it says now
    * and keeps nowhere. After a reconnect the engine says it again from its
-   * start. `onEnd` hears when the module ends it, or refuses it. Returns how
-   * to stop. A stream of this machine's, `window.requests`, has no Project.
+   * start; given `params` as a function, it is asked each time with what
+   * the function says then, so a stream whose module can go on from a
+   * place, as `terminal.watch {after}`, goes on from what its caller
+   * heard. `onEnd` hears when the module ends it, or refuses it. Returns
+   * how to stop. A stream of this machine's, `window.requests`, has no
+   * Project.
    *
    * A stream that does something, as a commit, is heard `once`, whether it
    * is asked so or the contract says it acts: asked again it would do it
@@ -739,7 +746,7 @@ export class Engine {
   stream<M extends MethodOf<"stream">>(
     project: ProjectId | undefined,
     method: M,
-    params: Params<M>,
+    params: Params<M> | (() => Params<M>),
     onPiece: (piece: Answer<M>) => void,
     onEnd: (refusal?: Refusal, error?: Error) => void,
     { once = false }: { once?: boolean } = {}
@@ -748,7 +755,7 @@ export class Engine {
     const hearing: Hearing = {
       project,
       method,
-      params: params as JsonValue,
+      params: params as JsonValue | (() => JsonValue),
       onPiece: onPiece as (piece: unknown) => void,
       onEnd,
       once: once || acts(method),
@@ -1082,7 +1089,10 @@ export class Engine {
       id,
       project: hearing.project,
       method: hearing.method,
-      params: hearing.params,
+      params:
+        typeof hearing.params === "function"
+          ? hearing.params()
+          : hearing.params,
     })
   }
 
