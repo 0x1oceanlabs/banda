@@ -11,7 +11,6 @@ import { nextCall } from "../calls/sight"
 import { type Elsewhere, rowKey } from "./rows"
 import { byOrder, order, useElsewhere, useOrderNow } from "./order"
 import type { Settings } from "./settings"
-import { inOrder, tally } from "./tally"
 
 const project = (id: string): ProjectSummary => ({
   id,
@@ -43,16 +42,9 @@ function walk(lists: Lists, keys: readonly string[]): string[] {
   return walked
 }
 
-/** What waits in the counts' list, top down. */
-function counted(lists: Lists, keys: readonly string[]): string[] {
-  return inOrder(tally(lists, ["waiting"], 0), keys).waiting.map(
-    ({ project, listed }) => `${project}:${listed.id}`
-  )
-}
-
 const byProject: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
 
-test("the counts list and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
+test("the sidebar list, the small inbox's among them, and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
   const lists = {
     ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
     ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "working", 7)],
@@ -74,7 +66,6 @@ test("the counts list and Alt+U go by one order, Your turn oldest first, whateve
   )
   expect(drawn).toEqual(keys)
   const waiting = keys.filter((key) => !key.endsWith(":run"))
-  expect(counted(lists, keys)).toEqual(waiting)
   expect(walk(lists, keys)).toEqual(waiting)
 })
 
@@ -85,8 +76,8 @@ const twoMachines = {
   ["far" as ProjectId]: [one("there", "asking", 5)],
 }
 
-test("another machine's Threads stand in one place in the sidebar list, the counts list and for Alt+U (ADR 0079, decision 4; #999)", () => {
-  // This pins the one order the three draw from; that each hands it the
+test("another machine's Threads stand in one place in the sidebar list and for Alt+U (ADR 0079, decision 4; #999)", () => {
+  // This pins the one order the two draw from; that each hands it the
   // same other machines, the test below and the architecture test pin.
   const elsewhere = [{ name: "devbox", projects: [project("far")] }]
   // What called first first, wherever it is, grouped by Project or not.
@@ -97,7 +88,6 @@ test("another machine's Threads stand in one place in the sidebar list, the coun
       elsewhere,
     })
     expect(keys).toEqual(placed)
-    expect(counted(twoMachines, keys)).toEqual(placed)
     expect(walk(twoMachines, keys)).toEqual(placed)
   }
   // Grouped by Project, the list draws the other machine's group with its
@@ -114,7 +104,7 @@ test("another machine's Threads stand in one place in the sidebar list, the coun
   ])
 })
 
-test("the counts and Alt+U take the other machines from the Window's hosts as the sidebar list does, Alt+U as they stand on the key", () => {
+test("Alt+U takes the other machines from the Window's hosts as the sidebar list does, Alt+U as they stand on the key", () => {
   const kept = new KeptHosts(
     {
       follow: () => undefined,

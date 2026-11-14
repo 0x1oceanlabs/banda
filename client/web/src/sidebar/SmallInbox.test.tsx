@@ -1,7 +1,10 @@
 // @vitest-environment happy-dom
 import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import type { Look } from "@banda/contract/look"
+import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { type Here, HereContext, type Run, RunContext } from "@banda/core/react"
 import { Store } from "@banda/core/react"
+import { takeLook } from "@banda/ui/lib/look"
 import { MINUTE } from "@banda/ui/lib/words"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { act } from "react"
@@ -9,15 +12,7 @@ import { createRoot } from "react-dom/client"
 import { afterEach, expect, test, vi } from "vitest"
 import { newStores, StoresContext } from "../calls/stores"
 import { ThreadMenus } from "../titles/ThreadMenu"
-import {
-  countOf,
-  countWords,
-  logoName,
-  logoWords,
-  NO_COUNT,
-  turnTone,
-} from "./count"
-import { SmallInbox } from "./SmallInbox"
+import { countsWidget } from "./Counts"
 
 // The title reads the window's naming store, which a test has none of.
 vi.mock("@banda/ui/lib/naming", () => ({
@@ -78,38 +73,8 @@ const lists: Lists = {
   ],
 }
 
-test("the count says whose turn it is and who works, and what is put away counts as neither", () => {
-  expect(countOf(lists, NOW)).toEqual({ turn: 2, mark: "asking", working: 1 })
-  expect(countOf({}, NOW)).toEqual(NO_COUNT)
-  expect(countWords({ turn: 3, mark: "done", working: 7 })).toBe(
-    "3 your turn, 7 at work"
-  )
-  expect(countWords({ turn: 3, mark: "done", working: 0 })).toBe("3 your turn")
-  expect(countWords({ turn: 0, mark: "rest", working: 7 })).toBe("7 at work")
-  // Your turn takes its loudest call's colour; woke's darker as text.
-  expect(turnTone("asking")).toBe("text-attention")
-  expect(turnTone("failed")).toBe("text-destructive")
-  expect(turnTone("woke")).toBe("text-woke-text")
-  expect(turnTone("rest")).toBe("text-foreground")
-})
-
-test('the logo is named "Banda: 3 your turn, 7 at work", with what it shows that the count does not say, and "Quiet on" while Quiet is on', () => {
-  const count = { turn: 3, mark: "done" as const, working: 7 }
-  const name = (...args: Parameters<typeof logoWords>) =>
-    logoName(logoWords(...args))
-  expect(name("done", count, false)).toBe("Banda: Done, 3 your turn, 7 at work")
-  expect(name("working", { ...count, turn: 0 }, false)).toBe("Banda: 7 at work")
-  expect(name("rest", NO_COUNT, true)).toBe("Banda: Quiet on")
-  expect(name("offline", NO_COUNT, false)).toBe("Banda: Offline")
-  // Another machine away while its Agents were at work says which.
-  expect(name("offline", count, false, "arc is away with Agents at work")).toBe(
-    "Banda: arc is away with Agents at work, 3 your turn, 7 at work"
-  )
-  expect(name("rest", NO_COUNT, false)).toBe("Banda")
-})
-
-/** The count of `lists` beside the logo at `NOW`, the sidebar shown or
- * not; what it runs goes to `run`. */
+/** The counts of `lists` in the Bar's middle at `NOW`, the sidebar shown
+ * or not; what they run goes to `run`. */
 async function draw(
   lists: Lists,
   { sidebar = false, run = () => undefined }: { sidebar?: boolean; run?: Run }
@@ -145,7 +110,10 @@ async function draw(
           <RunContext value={run}>
             <ThreadMenus engine={engine} projects={[project("work")]}>
               <button type="button">Pane</button>
-              <SmallInbox engine={engine} count={countOf(lists, NOW)} />
+              <countsWidget.Widget
+                engine={engine}
+                projects={[project("work")]}
+              />
             </ThreadMenus>
           </RunContext>
         </HereContext>
@@ -156,32 +124,33 @@ async function draw(
 }
 
 const count = () =>
-  document.querySelector<HTMLButtonElement>("[data-inbox-count]")
+  document.querySelector<HTMLButtonElement>('button[title$="at work"]')
 const inbox = () =>
   document.querySelector<HTMLElement>('[role="dialog"][aria-label="Inbox"]')
 
-test('the count reads "2 · 1", the turn in its loudest call\'s colour and the working in grey; nothing when nothing calls, nor while the sidebar shows', async () => {
+test("the counts name each count and stand while the sidebar is hidden; while it shows they are not there, or, shown always, give the sidebar's Inbox the focus", async () => {
   await draw(lists, {})
-  const button = count()!
-  expect(button.getAttribute("aria-label")).toBe(
-    "Inbox: 2 your turn, 1 at work"
+  expect(count()!.getAttribute("aria-label")).toBe(
+    "1 ask you · 1 done · 1 at work"
   )
-  expect(button.textContent).toBe("2·1")
-  const [turn, , working] = button.querySelectorAll("span")
-  expect(turn!.className).toBe("text-attention")
-  expect(working!.className).toBe("text-muted-foreground")
-  act(() => unmount?.())
-
-  // Only work: nothing calls, so nothing shows.
-  await draw({ ["work" as ProjectId]: [lists["work" as ProjectId]![2]!] }, {})
-  expect(count()).toBeNull()
   act(() => unmount?.())
 
   await draw(lists, { sidebar: true })
   expect(count()).toBeNull()
+  act(() => unmount?.())
+
+  // `show = "always"`: the sidebar's list is the one list.
+  const bar = { ...DEFAULT_SIDEBAR.bar, show: "always" as const }
+  takeLook({ sidebar: { ...DEFAULT_SIDEBAR, bar } } as unknown as Look)
+  const run = vi.fn<Run>()
+  await draw(lists, { sidebar: true, run })
+  await act(async () => count()!.click())
+  expect(run).toHaveBeenCalledWith("sidebar.show", { tab: "inbox" })
+  expect(inbox()).toBeNull()
+  takeLook({ sidebar: DEFAULT_SIDEBAR } as unknown as Look)
 })
 
-test('a click opens the small inbox: Your turn alone in one-line cards, in the sidebar\'s scope, the focus on the first card; "1 at work ›" shows the sidebar on Working; Esc gives the focus back', async () => {
+test("a click on the counts opens the small inbox: Your turn alone in the sidebar's cards, in the sidebar's scope, the focus on the first card; \"1 at work ›\" shows the sidebar on Working; Esc gives the focus back", async () => {
   const run = vi.fn<Run>()
   const { here } = await draw(lists, { run })
   const pane = document.querySelector<HTMLButtonElement>("button")!
@@ -189,6 +158,10 @@ test('a click opens the small inbox: Your turn alone in one-line cards, in the s
   await act(async () => {
     count()!.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true }))
     count()!.click()
+  })
+  // The list loads as the small inbox first opens.
+  await act(async () => {
+    await import("./SmallList")
   })
   const dialog = inbox()!
   expect(dialog).not.toBeNull()
@@ -198,7 +171,7 @@ test('a click opens the small inbox: Your turn alone in one-line cards, in the s
   expect(list.closest('[data-scope="sidebar"]')).not.toBeNull()
   expect(dialog.querySelector('[role="tab"]')).toBeNull()
   expect(dialog.querySelector('[role="combobox"]')).toBeNull()
-  // Your turn alone, oldest first, each card one line.
+  // Your turn alone, oldest first.
   const cards = [...list.querySelectorAll<HTMLElement>('[role="option"]')]
   expect(cards.map((card) => card.getAttribute("aria-label"))).toEqual([
     "Sidebar for arc, Done, 14 minutes",
@@ -223,7 +196,7 @@ test('a click opens the small inbox: Your turn alone in one-line cards, in the s
   )!
   await act(async () => working.click())
   expect(run).toHaveBeenCalledWith("sidebar.show", { tab: "working" })
-  // Shown, the sidebar takes the count and the small inbox away.
+  // Shown, the sidebar takes the counts and the small inbox away.
   await act(async () => here.set({ ...here.get(), sidebar: true }))
   expect(count()).toBeNull()
   expect(inbox()).toBeNull()

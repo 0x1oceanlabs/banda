@@ -2,7 +2,7 @@
  * A sidebar card as one model (ADR 0098, decisions 8 and 27): from a
  * Thread, the place it is drawn in and how the list is grouped, its three
  * lines, each a left and a right; the colour of its call; how quiet it
- * is; and its time. `CardView.tsx` and the counts' list only draw it, and `spokenOf`
+ * is; and its time. `CardView.tsx` only draws it, and `spokenOf`
  * says it to a screen reader. Pure, with no clock of its own: a time is a
  * moment and a kind, put into words as it is drawn, against the minute
  * the cards are drawn as of (`useMinute`).
@@ -137,16 +137,9 @@ export type CardModel = {
   child?: Child
 }
 
-/** The row a card is drawn from: the sidebar's, or, in the counts' list,
- * a Thread whose Project the sidebar does not know, by that Project's id
- * alone, whose card has no Project part. */
-export type CardRow = Omit<Row, "project"> & {
-  project: ProjectSummary | Pick<ProjectSummary, "id">
-}
-
 /** What a card is made from. */
 export type CardOf = {
-  row: CardRow
+  row: Row
   /** The place it is drawn in. */
   place: Stand
   /** When its time counts from there (`inbox.ts`, §2.5). */
@@ -214,7 +207,7 @@ export function cardOf(input: CardOf): CardModel {
     {
       left: child
         ? [{ kind: "parent", title: child.parent }]
-        : view.group === "project" || !("name" in row.project)
+        : view.group === "project"
           ? []
           : [{ kind: "project", project: row.project }],
       right: [

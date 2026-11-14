@@ -512,7 +512,7 @@ describe("tones: colour only on the mark and on a call's time", () => {
     }
   })
 
-  test("the counts' list draws the card, with its machine, its time and its colour (#1067)", () => {
+  test("the small inbox's card has its machine, its time and its colour, as the sidebar's (#1067)", () => {
     const asking = row("turn")
     const here = card(asking, { at: atOf(asking) })
     expect(kinds(here)).toEqual([

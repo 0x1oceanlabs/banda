@@ -562,10 +562,9 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
   "web/src/sidebar/LaterPicker.tsx": {
     Picking: ["onPick"],
   },
-  // The small inbox came in from the Bar's folder with the sidebar's one
-  // door: its list is the sidebar's own, and tells its popover of Esc and
-  // of "7 at work ›".
-  "web/src/sidebar/SmallInbox.tsx": {
+  // The small inbox's list is the sidebar's own, and tells the counts'
+  // popover of Esc and of "7 at work ›" (ADR 0098, decision 22).
+  "web/src/sidebar/SmallList.tsx": {
     SmallList: ["onEsc", "onWorking"],
   },
 }
@@ -654,7 +653,7 @@ test("only the files listed ask the Window where the Person looks", () => {
 
 /**
  * One action goes to an Agent, `pane.pick` (ADR 0087, decision 7): a
- * sidebar row, a row of the counts list, a toast's button and Alt+U run
+ * sidebar row, a card of the small inbox, a toast's button and Alt+U run
  * it. It is the Tiling's, and the Window answers its change in one place
  * (`Tiling.reach`), which alone brings a Pane to the left once drawn, and
  * only the action reaches that answer. No App is given another way to go
@@ -1182,13 +1181,14 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
 
 /**
  * What calls has one order, the Person's arrangement of the sidebar (ADR
- * 0087, decision 8; the plan's §6.3): the sidebar list, the bar's counts
- * list and Alt+U each take it from `order`, and only `order` works the
+ * 0087, decision 8; the plan's §6.3): the sidebar list, and the small
+ * inbox the bar's counts open with it, and Alt+U each take it from
+ * `order`, and only `order` works the
  * arrangement out. Each places another machine's Threads alike (ADR 0079,
  * decision 4; #999): a file that takes `order` takes the other machines
  * from `useElsewhere` too, and Alt+U takes them on the key, through
- * `useOrderNow`. The counts and Alt+U sort what they show by its keys in
- * `byOrder`: the sidebar list's file, the counts', Alt+U's, and a file
+ * `useOrderNow`. Alt+U sorts what it shows by its keys in `byOrder`: the
+ * sidebar list's file, the counts', Alt+U's, and a file
  * that reads a place in it, as Alt+U's start does, sort nothing by
  * themselves. What a file takes is read in each form of import and
  * re-export (`valuesTaken`), and neither the rows' module nor `order`'s
@@ -1247,17 +1247,14 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
         names.includes("order") || names.includes("useOrderNow")
     )
   expect(going).toEqual([
-    {
-      file: "web/src/sidebar/Counts.tsx",
-      taken: expect.arrayContaining(["order", "useElsewhere"]),
-    },
     { file: list, taken: expect.arrayContaining(["order", "useElsewhere"]) },
     { file: altU, taken: expect.arrayContaining(["useOrderNow"]) },
   ])
   for (const { file, taken: names } of going)
     if (names.includes("order")) expect(names, file).toContain("useElsewhere")
-  for (const file of ["web/src/sidebar/tally.ts", "web/src/calls/sight.ts"])
-    expect(readFileSync(join(app, file), "utf8"), file).toMatch(/\bbyOrder\(/)
+  expect(readFileSync(join(app, "web/src/calls/sight.ts"), "utf8")).toMatch(
+    /\bbyOrder\(/
+  )
   const placing = taking(ordering, "placeIn")
   expect(placing).toEqual(["web/src/calls/sight.ts"])
   const counting = ["web/src/sidebar/tally.ts", "web/src/sidebar/Counts.tsx"]

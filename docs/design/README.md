@@ -297,19 +297,18 @@ something ([0099] d4):
 
 One row, 36 px, text at the meta size in muted ([0024], [0098] d20–22):
 
-- **Left**: the Mark as the logo (it opens the Banda menu; `Alt+A`
-  shows and hides the sidebar), the Pager: the workspaces' numbers
+- **Left**: the Mark as the logo, alone (a click shows and hides the
+  sidebar, as `Alt+A` does), the Pager: the workspaces' numbers
   `1 2 3` and `+`, the current one on a faint fill, then the Flow's icon
   (`columns-3`, [0098] d20). In the row and solo, a Project's workspace
   shows by its Sign alone, faint while it is empty and keeps its place
   ([0102]). A number is the workspace's place, its `Alt+N`; a click goes
   there, and nothing else.
-- **Beside the logo**, while the sidebar is hidden ([0098] d22): the
-  count, Your turn in its loudest call's colour, the working in grey,
-  "3 · 7", nothing when nothing calls; a click opens the small inbox,
-  Your turn in one-line cards and "7 at work ›".
-- **Middle**: empty. The sidebar's counts ([0035]) stand there only
-  where the Person lists them.
+- **Middle**: the sidebar's counts ([0035]), while the sidebar is
+  hidden: each count's Mark and number, in its call's colour, the
+  working in grey, after the title of the Agent's Thread in focus; a
+  click opens the small inbox under them, Your turn in the sidebar's
+  cards and "7 at work ›" ([0098] d22).
 - **Right**: widgets that show only with something to say: ports
   `:5173 +1`, the limits' ring ([0043]), an update, the bell ([0048]).
 - No boxes, no pills, no call dots on the numbers ([0102]); only the

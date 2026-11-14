@@ -722,7 +722,7 @@ export const TILING_ACTIONS: readonly Action<Tiling>[] = [
   },
   {
     // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
-    // row, a row of the counts list, a toast's button and Alt+U run it,
+    // row, a card of the small inbox, a toast's button and Alt+U run it,
     // with the Pane as an Item carries it. It opens on the machine its
     // Project is on.
     id: "pane.pick",

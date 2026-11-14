@@ -38,7 +38,6 @@ import {
 import { type Act, actsWidth } from "./acts"
 import {
   type CardModel,
-  type CardRow,
   PULL_GLYPHS,
   type PullState,
   pullWords,
@@ -53,7 +52,7 @@ import { awayShort } from "../machines/words"
 import { CardTime } from "./CardStatus"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
-import { keyOf } from "./rows"
+import { keyOf, type Row } from "./rows"
 import { pickProps } from "./usePick"
 
 const NO_HARNESSES: readonly EmblemOf[] = []
@@ -71,7 +70,7 @@ export type CardAct = {
 
 /** The Project's menu its sign on a card's line 3 has (ADR 0098, decision
  * 14), this machine's alone; none outside the sidebar's list, which hands
- * it, so the counts' list draws a card with no menu's code. */
+ * it. */
 export const SignMenu = createContext<
   ((project: ProjectSummary, sign: ReactElement) => ReactElement) | undefined
 >(undefined)
@@ -120,7 +119,7 @@ export function Card({
   card: CardModel
   /** The row it is drawn from: what it opens, and whose title a model
    * may be writing. */
-  row: CardRow
+  row: Row
   /** Its Thread is the open one. */
   current: boolean
   /** The list's keys act on it. */
@@ -222,13 +221,13 @@ export function Card({
 }
 
 /**
- * A card's lines (ADR 0098, decision 8), as the sidebar's card and the
- * counts' list draw them: each a left and a right, lines 2 and 3 under the
- * title, past the mark. Text that does not fit fades out at its end, and
+ * A card's lines (ADR 0098, decision 8), as the sidebar's card draws
+ * them: each a left and a right, lines 2 and 3 under the title, past the
+ * mark. Text that does not fit fades out at its end, and
  * shows whole as the pointer rests on it (`FadeText`'s tooltip, where a
  * `CutTips` holds it).
  */
-export function CardLines({
+function CardLines({
   card,
   row,
   now,
@@ -238,7 +237,7 @@ export function CardLines({
   harnesses = NO_HARNESSES,
 }: {
   card: CardModel
-  row: CardRow
+  row: Row
   /** The moment it is drawn as of (`useMinute`). */
   now: number
   /** Its Thread is the open one: its Mark calls no one. */
@@ -382,7 +381,7 @@ function Piece({
 }: {
   slot: Slot
   card: CardModel
-  row: CardRow
+  row: Row
   current: boolean
   now: number
   harnesses: readonly EmblemOf[]
@@ -543,7 +542,7 @@ const GLYPH_COLOUR: Readonly<Partial<Record<PullState, string>>> = {
 
 /** The card's title, at 500 in Your turn, grey at work and dimmer put
  * away; while a model writes one, it shimmers (ADR 0077, decision 3). */
-function Title({ row, card }: { row: CardRow; card: CardModel }) {
+function Title({ row, card }: { row: Row; card: CardModel }) {
   const thinking = useThinking(row.project.id, row.listed.id)
   return (
     <FadeText

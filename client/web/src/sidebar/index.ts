@@ -6,10 +6,10 @@
  *
  *   draws   `Sidebar` and its `Edge`, at the Window's left; the Later's
  *           picker and the region it speaks in, which the Window mounts
- *           once; on the Bar, the counts (`countsWidget`), and beside the
- *           logo the small inbox with its count
+ *           once; on the Bar, the counts (`countsWidget`), which open the
+ *           small inbox
  *   says    the one order of what calls, for Alt+U and the counts
- *           (`useOrderNow`, `byOrder`, `placeIn`); the logo's words
+ *           (`useOrderNow`, `byOrder`, `placeIn`)
  *   takes   its keys' scope and list, which the Window registers; a tab
  *           to show; a width kept; a key of `sidebar.toml` to write
  *
@@ -23,9 +23,7 @@ export { kept, WIDTH } from "./width"
 export { askTab, isTab } from "./showing"
 export { byOrder, placeIn, useOrderNow } from "./order"
 export { countsWidget } from "./Counts"
-export { logoName, logoWords } from "./count"
 export { writeSidebar } from "./write-setting"
-export { SmallInbox, useInboxCount } from "./SmallInbox"
 export { LaterPicker, pickLater } from "./LaterPicker"
 export { Edge } from "./Edge"
 export { Sidebar } from "./Sidebar"

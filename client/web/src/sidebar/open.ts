@@ -1,6 +1,6 @@
 import { createContext, useContext } from "react"
 import { type Run, useRun } from "@banda/core/react"
-import type { CardRow } from "./card"
+import type { Row } from "./rows"
 
 /**
  * How the Sidebar shown over the Strip lets itself go, for its parts that
@@ -29,9 +29,7 @@ export function useOpen(): Run {
  * shows it, or in a new column of the current one. A Thread that woke is
  * seen as its Pane shows it to its Person (ADR 0074).
  */
-export function useOpenRow(
-  row: Pick<CardRow, "project" | "listed">
-): () => void {
+export function useOpenRow(row: Pick<Row, "project" | "listed">): () => void {
   const open = useOpen()
   return () =>
     open("pane.pick", { project: row.project.id, pane: row.listed.pane })

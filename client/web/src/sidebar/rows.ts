@@ -29,7 +29,7 @@ export type Placed = Pick<Row, "listed" | "stand" | "woke">
 
 /** Where `listed` stands at `now`, the Later clock, as `status.ts` says,
  * and when it woke. */
-export function placedOf(listed: Listed, now: number): Placed {
+function placedOf(listed: Listed, now: number): Placed {
   const woke = wokeAt(listed, now)
   return {
     listed,
