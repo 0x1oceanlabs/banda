@@ -30,6 +30,11 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use ts_rs::TS;
 
+/// What an Agent is told that would change an Account in a settings file:
+/// its commands are the one door to it (ADR 0108, decision 1).
+pub const BY_ITS_COMMANDS: &str = "An Account is changed with banda account, as anyone changes \
+                                   it: rename, enable, disable, default, fallback.";
+
 /// The version of every event this module writes.
 const VERSION: u32 = 1;
 

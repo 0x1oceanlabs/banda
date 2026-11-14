@@ -322,7 +322,8 @@ The kernel holds only what every module needs, and it names no module.
   `BANDA_FENCE=on` turns it on (ADR 0115). An Agent's `banda settings` and `banda keys bind` go
   through the engine (`keys.settings_set`, `settings_reset`,
   `settings_rename`), which refuses under a pass what only the Person
-  changes (`banda_settings::only_the_person`).
+  changes (`Settings::only_the_person`, and what each file says of its
+  own keys, `SettingsFile::only_the_person`).
 - **Passes** (ADR 0083, decision 2). A module asks its `ModuleProject` for
   a new pass of an Agent (`pass(agent, thread)`), 32 random bytes in hex;
   the agents module asks as a session opens, naming the session's Thread,

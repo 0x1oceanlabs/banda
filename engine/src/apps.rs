@@ -189,8 +189,10 @@ mod build {
     /// the settings an Agent changes through the engine, where the mode a
     /// Person sets for new Threads is kept as theirs (ADR 0083).
     pub fn keys(host: &HostContext<'_>) -> KeysModule {
-        KeysModule::new(SETTINGS, host.places.config.clone())
-            .modes_chosen_in(host.places.modes_chosen())
+        let modes = host.places.modes_chosen();
+        KeysModule::new(SETTINGS, host.places.config.clone()).tells(std::sync::Arc::new(
+            move |file, key, value| banda_agents::chosen_modes::chose(&modes, file, key, value),
+        ))
     }
 
     /// This machine's name and icon, which the settings' `set` writes in
@@ -450,28 +452,19 @@ mod tests {
         );
     }
 
-    /// The Apps' crates that a crate of another App's, or of the
-    /// platform's, still depends on. An App reaches another only by what
-    /// that one publishes, and the platform names no App (ADR 0062): this
-    /// list only falls, and a crate that needs one more says why in an ADR
-    /// first.
-    ///
-    /// Each App's settings are described in its own crate, and the engine
-    /// hands them to the settings' crate from the list ([`SETTINGS`]). The
-    /// agents' modes and agents.toml's shape that crate still names
-    /// (#1798, step 2).
-    const TAKES_AN_APP: [(&str, &str); 1] = [("platform/settings", "banda-agents")];
-
     /// The Apps' crates that only the tests of another part's crate take:
     /// Cargo keeps a dev-dependency from the code that ships, so this is
-    /// no border crossed, and it only falls too. The settings' tests and
+    /// no border crossed, and the list only falls. The settings' tests and
     /// the keys' read each part's settings files, the Apps' with them
     /// (platform/settings/tests/whole).
-    const TESTS_TAKE_AN_APP: [(&str, &str); 7] = [
+    const TESTS_TAKE_AN_APP: [(&str, &str); 8] = [
         ("platform/keys/engine", "banda-agents"),
         ("platform/keys/engine", "banda-browser"),
         ("platform/keys/engine", "banda-files"),
         ("platform/keys/engine", "banda-terminal"),
+        // From the list of what the code that ships takes, which it left
+        // (#1798, step 2): its tests read agents.toml as the others'.
+        ("platform/settings", "banda-agents"),
         ("platform/settings", "banda-browser"),
         ("platform/settings", "banda-files"),
         ("platform/settings", "banda-terminal"),
@@ -504,24 +497,63 @@ mod tests {
         takes
     }
 
+    /// No crate of an App's, nor of the platform's, takes another App's
+    /// crate: an App reaches another only by what that one publishes, and
+    /// the platform names no App (ADR 0062). Cargo holds it from there, as
+    /// the code that would name one does not build. What each part hands
+    /// the settings, the engine hands them from the list ([`HANDED`]).
     #[test]
-    fn no_more_crates_take_an_apps_crate_than_the_lists_hold() {
-        let listed = |list: &[(&str, &str)]| -> Vec<(String, String)> {
-            (list.iter())
-                .map(|(member, name)| (member.to_string(), name.to_string()))
-                .collect()
-        };
-        assert_eq!(takes_an_app("dependencies"), listed(&TAKES_AN_APP));
+    fn no_crate_takes_an_apps_crate_but_in_its_tests() {
+        assert_eq!(takes_an_app("dependencies"), []);
+        let listed: Vec<(String, String)> = TESTS_TAKE_AN_APP
+            .iter()
+            .map(|(member, name)| (member.to_string(), name.to_string()))
+            .collect();
         assert_eq!(
             takes_an_app("dev-dependencies"),
-            listed(&TESTS_TAKE_AN_APP),
+            listed,
             "in their tests alone"
         );
     }
 
+    /// The mode the Person sets for a Harness's new Threads through the
+    /// engine, as the settings Pane does, is kept as their choice where
+    /// the agents' part reads it (ADR 0083, F0-3): the keys module, as
+    /// this engine builds it, tells the agents' part.
+    #[test]
+    fn a_mode_the_person_sets_through_the_engine_is_kept_as_chosen() {
+        use banda_agents::chosen_modes::chosen;
+        use banda_agents::model::Mode;
+        on_a_test_host(|host| {
+            let root = host.places.state.join("kernel");
+            let owner = banda_kernel::PersonId::new();
+            let person = banda_kernel::Participant::Person(owner);
+            let set = serde_json::json!({
+                "file": "agents.toml",
+                "key": "start.claude.mode",
+                "value": "\"full_access\"",
+            });
+            let runtime = tokio::runtime::Runtime::new().unwrap();
+            runtime.block_on(async {
+                let kernel =
+                    banda_kernel::Kernel::builder(root.join("projects"), root.join("data"), owner)
+                        .machine(root.join("machine"))
+                        .module(build::keys(host))
+                        .open()
+                        .await
+                        .unwrap();
+                (kernel.call(person, "keys.settings_set", None, None, set))
+                    .await
+                    .unwrap();
+            });
+            let kept = chosen(&host.places.modes_chosen(), "claude");
+            assert_eq!(kept, Some(Mode::FullAccess));
+        });
+    }
+
     /// What the settings' and the keys' tests read as Banda's settings
-    /// whole is what this engine hands the settings: each part with files
-    /// or a window part, in the same order.
+    /// whole is what this engine hands the settings: each part's files and
+    /// its window part, in the same order.
     #[test]
     fn the_tests_whole_list_of_settings_is_the_one_the_engine_hands() {
         let said = |parts: &[banda_settings::Part]| -> Vec<(&str, Vec<&str>, bool)> {

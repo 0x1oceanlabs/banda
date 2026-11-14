@@ -29,7 +29,17 @@ const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<settings::
     .class(
         banda_look::Class::Device,
         &[("agents", banda_look::Class::Machine)],
-    );
+    )
+    .only_the_person(only_the_person);
+
+/// Why only the Person changes the key of `parts` in `browser.toml` (ADR
+/// 0083): what Agents may do in the browser.
+fn only_the_person(parts: &[&str], _: Option<&str>) -> Option<&'static str> {
+    matches!(parts, ["agents", ..]).then_some(
+        "Only your Person says what Agents may do in Banda's browser. Give them the line, to \
+         set it themselves.",
+    )
+}
 
 /// How long the window has to list its tabs.
 const LISTING: Duration = Duration::from_secs(10);
@@ -728,5 +738,19 @@ impl Module for Browser {
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    /// The file itself says it, so the engine refuses an Agent these keys
+    /// (ADR 0083).
+    #[test]
+    fn only_the_person_says_what_agents_may_do_in_the_browser() {
+        let file = &super::SETTINGS[0];
+        for key in [&["agents"][..], &["agents", "screenshots"]] {
+            assert!(file.person_alone(key, Some("true")).is_some(), "{key:?}");
+        }
+        assert_eq!(file.person_alone(&["tabs"], Some("\"rail\"")), None);
     }
 }

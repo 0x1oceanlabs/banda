@@ -8,9 +8,6 @@ license.workspace = true
 publish.workspace = true
 
 [dependencies]
-# The agents' modes and agents.toml's shape, until they go behind what the
-# settings ask of any App (#1798, step 2).
-banda-agents = { path = "../../apps/agents/engine" }
 banda-harnesses = { path = "../../platform/harnesses/engine" }
 # A file written whole is put in place as the host does it (ADR 0090).
 banda-kernel = { path = "../../kernel" }
@@ -23,8 +20,9 @@ toml_edit.workspace = true
 
 [dev-dependencies]
 # The parts' files, for the tests' whole list alone (tests/whole): the
-# code that ships takes no App's crate but the agents', and the engine
-# hands it each part's files.
+# code that ships takes no App's crate, and the engine hands it each
+# part's files.
+banda-agents = { path = "../../apps/agents/engine" }
 banda-browser = { path = "../../apps/browser/engine" }
 banda-files = { path = "../../apps/files/engine" }
 banda-machines = { path = "../../platform/machines/engine" }
