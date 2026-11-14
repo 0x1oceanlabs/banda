@@ -98,6 +98,11 @@ export const BRIDGE = bridge({
    * starts it until `hostStart`. `working` while Agents work there and
    * `force` is not set: nothing was stopped, and the page asks first. */
   hostStop: invoke<[name: string, force: boolean], "stopped" | "working">(),
+  /** Opens port `port` of host `name` on this device's loopback, the
+   * capability `forward_port` (ADR 0120, decision 2): the port it listens
+   * on here, the same when that was free; `away` while that machine is
+   * not live, at once. Fails with why not. */
+  hostForward: invoke<[name: string, port: number], number | "away">(),
   /** The Hosts of `~/.ssh/config` to suggest in Add a machine: no
    * pattern, none `hosts.toml` reaches already. */
   sshSuggestions: invoke<[], string[]>(),

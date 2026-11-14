@@ -13,10 +13,20 @@
  * a folder, it leaves pictures of what it checks.
  */
 import { existsSync } from "node:fs"
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { type Arc, newArc, put, SHOTS, shot, withArc } from "./arc"
-import { read, type Window } from "./window"
+import {
+  type Arc,
+  newArc,
+  openedFromArc,
+  put,
+  SHOTS,
+  shot,
+  withArc,
+} from "./arc"
+import { read, toastsOf, type Window } from "./window"
 
 let window: Window | undefined
 let arc: Arc | undefined
@@ -493,8 +503,15 @@ test("paths: a path arc's terminal prints opens arc's file at its line; Ctrl and
   ).toEqual([])
 })
 
-test("a public link opens in this device's browser; arc's localhost says it is arc's and offers its address to copy", async () => {
+test("a public link opens in this device's browser; arc's localhost opens here through a forward of arc's port, and says so; with arc away it says that at once", async () => {
+  test.setTimeout(180_000)
   const { page, composer, folder } = await onArc()
+  // A dev server on arc. A test's arc is this computer, so its port is
+  // taken here, and the forward takes the next free one.
+  const served = createServer((_, response) => response.end("arc's page"))
+  await new Promise<void>((done) => served.listen(0, "127.0.0.1", done))
+  const { port } = served.address() as AddressInfo
+  arc!.serves(port)
   await window!.app.evaluate(({ shell }) => {
     const opened: string[] = []
     ;(globalThis as { linkOpens?: string[] }).linkOpens = opened
@@ -506,7 +523,7 @@ test("a public link opens in this device's browser; arc's localhost says it is a
   await screen.click()
   await run(
     page,
-    "clear; printf 'http://example.test/page\\nhttp://localhost:3000/\\n'; : > printed"
+    `clear; printf 'http://example.test/page\\nhttp://localhost:${port}/hello\\n'; : > printed`
   )
   await expect.poll(() => inFolder(folder, "printed")).toBe("")
   const canvas = screen.locator("canvas").first()
@@ -534,34 +551,45 @@ test("a public link opens in this device's browser; arc's localhost says it is a
   ).toHaveCount(0)
   await page.keyboard.press("Escape")
 
+  // arc's own address opens here as any page does, once the Person
+  // clicks it (ADR 0120, decision 2).
   await canvas.hover({ position: { x: 24, y: row2Y } })
-  await expect(canvas).toHaveAttribute("title", "localhost:3000 is arc's")
-  // The menu promises nothing it will refuse: the address, to copy.
-  await canvas.click({ button: "right", position: { x: 24, y: row2Y } })
-  await expect(
-    menu.getByRole("menuitem", { name: "Copy address" })
-  ).toBeVisible()
-  await expect(
-    menu.getByRole("menuitem", { name: /^Open in this / })
-  ).toHaveCount(0)
-  await page.keyboard.press("Escape")
+  await expect(canvas).toHaveAttribute("title", /^Opens in this /)
   await canvas.click({ position: { x: 24, y: row2Y } })
-  const toast = page
-    .getByRole("region", { name: "Notifications" })
-    .getByRole("listitem")
-    .filter({ hasText: "localhost:3000 is arc's" })
-  await expect(toast).toBeVisible()
-  await expect(toast).toContainText("It opens here once port forwarding comes.")
-  await shot(page, "terminal-localhost", { toasts: true })
-  await toast.getByRole("button", { name: "Copy" }).click()
-  const clipboard = () =>
-    window!.app.evaluate(({ clipboard }) => clipboard.readText())
-  await expect.poll(clipboard).toBe("http://localhost:3000/")
-  expect(
-    await window!.app.evaluate(
+  const { toast, here } = await openedFromArc(page, port)
+  expect(here).toBeGreaterThan(port)
+  await shot(page, "terminal-localhost-opens", { toasts: true })
+  const opens = () =>
+    window!.app.evaluate(
       () => (globalThis as { linkOpens?: string[] }).linkOpens
     )
-  ).toHaveLength(1)
+  expect(await opens()).toEqual([
+    "http://example.test/page",
+    `http://localhost:${here}/hello`,
+  ])
+  // What answers there is arc's server.
+  const answer = await fetch(`http://127.0.0.1:${here}/hello`)
+  expect(await answer.text()).toBe("arc's page")
+
+  // A second click asks no second forward: the same port.
+  await expect(toast).toBeVisible()
+  // Not a double click, which picks the word.
+  await page.waitForTimeout(700)
+  await canvas.click({ position: { x: 24, y: row2Y } })
+  await expect.poll(async () => (await opens())?.length).toBe(3)
+  expect((await opens())![2]).toBe(`http://localhost:${here}/hello`)
+
+  // arc away: nothing waits, and nothing opens.
+  arc!.blackhole(true)
+  await expect(pillOf(page, screen)).toHaveText("arc is away", {
+    timeout: 60_000,
+  })
+  await canvas.click({ position: { x: 24, y: row2Y } })
+  await expect(
+    toastsOf(page).getByText(`arc is away: localhost:${port} did not open.`)
+  ).toBeVisible()
+  expect(await opens()).toHaveLength(3)
+  await new Promise((done) => served.close(done))
 })
 
 test("arc in a black hole: the pill shows within the keepalive's time, and a key says so without hanging", async () => {

@@ -207,8 +207,9 @@ export function follow<T>(
 /**
  * What a device can do for a Pane, the closed list of capabilities (ADR
  * 0082, decision 12, as ADR 0106 decision 6 amends it): tell, sound, the
- * clipboard, pick a file, open outside Banda, draw a page, drag out, and
- * save a copy. A web client has no `webview` and no `drag_out`.
+ * clipboard, pick a file, open outside Banda, draw a page, drag out,
+ * save a copy, and open another machine's port here (ADR 0120, decision
+ * 2). A web client has no `webview`, no `drag_out` and no `forward_port`.
  */
 export type Cap =
   | "notify"
@@ -219,3 +220,4 @@ export type Cap =
   | "webview"
   | "drag_out"
   | "save_file"
+  | "forward_port"

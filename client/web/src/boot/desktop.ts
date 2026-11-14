@@ -95,6 +95,10 @@ export const device = {
     /** Stops Banda on host `name`, as the Person asks. */
     stop: (name: string, force: boolean): Promise<"stopped" | "working"> =>
       desktop()?.hostStop(name, force) ?? elsewhere(),
+    /** Opens host `name`'s port `port` on this device (`forward_port`):
+     * the port it has here, or `away` while that machine is not live. */
+    forward: (name: string, port: number): Promise<number | "away"> =>
+      desktop()?.hostForward(name, port) ?? elsewhere(),
     /** Adds the machine at `ssh` to `hosts.toml`, as Settings' Add does:
      * its key made from the address; the entry written. */
     add: (machine: { ssh: string; banda?: string }): Promise<HostEntry> =>

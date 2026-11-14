@@ -10,8 +10,11 @@ import {
   type Act,
   type Hosts,
   type KeptHosts,
+  forwardWords,
+  linkForward,
   linkOf,
   linkRefused,
+  namedIn,
   type Route,
   routeAct,
   type Store,
@@ -222,6 +225,30 @@ function saveCopy(
     }, notDone)
 }
 
+/**
+ * Opens an address of another machine's own computer in this device's
+ * browser, through a forward of its port (ADR 0120, decision 2): the same
+ * port here, or the next free one, which a toast says. Asked on the
+ * Person's click alone; while that machine is away it says so at once.
+ */
+function openFrom(
+  hosts: Pick<Hosts, "get" | "seen">,
+  { of, port, named, at }: NonNullable<ReturnType<typeof linkForward>>
+) {
+  const words = forwardWords(named, namedIn(hosts.get(), of, hosts.seen).name)
+  void device.hosts.forward(of, port).then((here) => {
+    if (here === "away") return notDone(words.away)
+    const opened = at(here)
+    window.open(opened.href, "_blank", "noopener")
+    toast(
+      here === port
+        ? words.opens
+        : words.moved(port, opened.host, THIS_COMPUTER),
+      { id: `forward ${of} ${port}` }
+    )
+  }, notDone)
+}
+
 /** Does `then` with the device file `args` name, if it is there still,
  * for what reaches this device's disk alone; a toast
  * says when it has gone since its link was drawn (ADR 0063, decision 2).
@@ -277,20 +304,32 @@ function stopHost(host: string, force = false) {
  * Tiling's, which declares its own (`TILING_ACTIONS`). */
 export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   {
-    // A web address from a Pane opens in this device's browser, and one
-    // of another machine's own computer says it is that machine's (ADR
-    // 0106, decision 3). It takes its address from a Pane alone: it
+    // A web address from a Pane opens in this device's browser; one of
+    // another machine's own computer, through a forward of its port where
+    // this device opens one, and else it says whose it is (ADR 0106,
+    // decision 3; ADR 0120, decision 2). It takes its address from a Pane
+    // alone, with that Pane's Project, which says the machine: it
     // declares no `args`, so no line of keys.toml, the Person's or an
     // Agent's, can name one (ADR 0071, decision 3).
     id: "link.open",
     section: "Panes",
     title: "Open a link",
     unlisted: true,
-    run: (_shell, args = {}) => {
-      const link = typeof args.url === "string" ? linkOf(args.url) : undefined
+    run: (shell, args = {}) => {
+      const host =
+        typeof args.project === "string"
+          ? shell.hosts.hostOf(args.project as ProjectId)
+          : undefined
+      // A Project no machine the Window knows has: nowhere, never here.
+      if (host === null) return
+      const link =
+        typeof args.url === "string" ? linkOf(args.url, host) : undefined
+      if (!link) return
+      const forward = linkForward(link)
       // Main hands an http(s) address to the system, and nothing else
       // leaves the page.
-      if (link) window.open(link.url, "_blank", "noopener")
+      if (!forward) window.open(link.url, "_blank", "noopener")
+      else openFrom(shell.hosts, forward)
     },
   },
   {
@@ -797,8 +836,9 @@ const ON_ITS_MACHINE: ReadonlySet<string> = new Set([
 /**
  * The window's own acts on a web address: a value of the Pane's Project,
  * so the router weighs it there, and it runs in this window, on this
- * device's browser, on any machine's Project, but for an address of that
- * machine's own (`linkRefused`, ADR 0106, decision 3).
+ * device's browser, on any machine's Project; an address of that machine's
+ * own through a forward, or not at all where this device opens none
+ * (`linkRefused`, ADR 0106, decision 3; ADR 0120, decision 2).
  */
 const ON_LINKS = "link"
 
@@ -830,8 +870,10 @@ export function actOf(action: Action<Shell>): Act {
       title,
       at: "owner",
       here: true,
+      // A device that opens that machine's port here runs it (ADR 0120,
+      // decision 2); another says whose the address is.
       refuses: (args, machine) =>
-        typeof args?.url === "string"
+        typeof args?.url === "string" && !device.has("forward_port")
           ? linkRefused(args.url, machine)
           : undefined,
     }

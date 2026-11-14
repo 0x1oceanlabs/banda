@@ -16,7 +16,7 @@
 import { existsSync, readFileSync, rmSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { type Arc, newArc, put, shot, withArc } from "./arc"
+import { type Arc, newArc, openedFromArc, put, shot, withArc } from "./arc"
 import { pdfOf } from "./pdf"
 import { projectId, type Window } from "./window"
 
@@ -254,7 +254,7 @@ test("Alt+P: quick open finds arc's files and opens arc's file", async () => {
   await expect(file.locator('[data-line="1"]').first()).toHaveText("arc")
 })
 
-test("a markdown of arc's is drawn with arc's picture, its links open outside or say whose they are; arc's JSON and PDF draw from arc's bytes (ADR 0106, step 4c)", async () => {
+test("a markdown of arc's is drawn with arc's picture, its links open in this device's browser, arc's own through a forward; arc's JSON and PDF draw from arc's bytes (ADR 0106, step 4c)", async () => {
   const { page, composer } = await onArc({
     "pic.png": Buffer.from(PNG_3X2, "base64"),
     "manual.pdf": pdfOf([["Chapter 1", "From arc."]]),
@@ -283,16 +283,16 @@ test("a markdown of arc's is drawn with arc's picture, its links open outside or
     )
     .toBe(3)
   // A public page goes to this device's browser on a plain click, and
-  // arc's own address says whose it is and opens nothing here.
+  // arc's own address too, through a forward of arc's port (ADR 0120,
+  // decision 2).
   await notes.getByRole("link", { name: /the site/ }).click()
   await expect.poll(external).toEqual(["https://example.com/page"])
   await notes.getByRole("link", { name: /its server/ }).click()
-  await expect(
-    page
-      .getByRole("region", { name: "Notifications" })
-      .getByText("localhost:3000 is arc's")
-  ).toBeVisible()
-  expect(await external()).toEqual(["https://example.com/page"])
+  const { here } = await openedFromArc(page, 3000)
+  expect(await external()).toEqual([
+    "https://example.com/page",
+    `http://localhost:${here}/`,
+  ])
   // JSON's view and the PDF's read arc's bytes, in ranges for the PDF.
   await row("data.json").dblclick()
   const data = page.getByRole("region", { name: "data.json", exact: true })
@@ -543,7 +543,7 @@ test("paths: a path in arc's reply is found by arc, opens arc's file at its line
   expect(existsSync(join(here, "src/long.ts"))).toBe(false)
 })
 
-test("links: a reply's public link opens in this device's browser, and arc's localhost says it is arc's", async () => {
+test("links: a reply's public link opens in this device's browser, and arc's localhost too, through a forward of arc's port", async () => {
   const { page, thread, composer } = await onArc()
   await window!.app.evaluate(({ shell }) => {
     const opened: string[] = []
@@ -574,23 +574,23 @@ test("links: a reply's public link opens in this device's browser, and arc's loc
   await site.click()
   await expect.poll(opens).toEqual(["https://example.com/page"])
 
+  // arc's own address opens here too, through a forward of arc's port
+  // (ADR 0120, decision 2): the menu offers it as any page.
   const server = thread.getByRole("link", { name: "its server" })
-  await expect(server).toHaveAttribute("title", "localhost:3000 is arc's")
-  // The menu promises nothing it will refuse: the address, to copy.
+  await expect(server).toHaveAttribute("title", /\nOpens in /)
   await server.click({ button: "right" })
-  await expect(menu.getByRole("menuitem")).toHaveText(["Copy address"])
-  await expect(menu.getByRole("separator")).toHaveCount(0)
-  await shot(page, "localhost-menu-on-arc", { toasts: true })
+  await expect(menu.getByRole("menuitem")).toHaveText([
+    /^Open in this .+'s browser$/,
+    "Copy address",
+  ])
   await page.keyboard.press("Escape")
   await server.click()
-  const toast = page
-    .getByRole("region", { name: "Notifications" })
-    .getByRole("listitem")
-    .filter({ hasText: "localhost:3000 is arc's" })
-  await expect(toast).toBeVisible()
-  await expect(toast).toContainText("It opens here once port forwarding comes.")
-  await shot(page, "localhost-on-arc-refused", { toasts: true })
-  expect(await opens()).toEqual(["https://example.com/page"])
+  const { here } = await openedFromArc(page, 3000)
+  await shot(page, "localhost-on-arc-opens", { toasts: true })
+  expect(await opens()).toEqual([
+    "https://example.com/page",
+    `http://localhost:${here}/`,
+  ])
 })
 
 /** Two grey PNGs, told apart by their sizes. */
