@@ -141,7 +141,12 @@ Each step is its own PR, and the window keeps working after each.
    - **Not yet.** An App's part (`WindowApi.top`) and Banda UI's other
      popups keep the library's close and its return of the focus to what
      opened them. The keys' router still reads `role=dialog` to leave a
-     dialog its keys, and `pane.close` still asks the Sheet by itself.
+     dialog its keys.
+   - _Built_ (WS7, part b): `pane.close`, `pane.pick` and `pane.beside`
+     are the Tiling's, and ask for what lies over the Panes to go
+     (`Tiling.uncover`); the Window answers by the stack, which takes
+     away the part on the Sheet's layer whatever lies over it
+     (`Stack.close`).
 4. Cleaning `arrange.ts`, `actions.ts` and `Shell.tsx`, and the Tiling
    driver into `client/core`.
    _Built_ (WS7, part a): the Tiling's actions left `window/actions.ts`
@@ -150,6 +155,11 @@ Each step is its own PR, and the window keeps working after each.
    toast and Undo (`tiling/arranged.ts`). What opens a Pane (`placed`,
    `opening`, `bringing`, `picking`) is in `window/actions.ts` still, and
    the driver in `client/web/src/tiling/useTiling.ts`.
+   _Built_ (WS7, part b): what opens a Pane left `window/actions.ts` for
+   `client/web/src/tiling/opening.ts`, and the Window calls it as it calls
+   the Tiling's other parts. `window/actions.ts` holds no rule of the
+   workspaces now, and of the actions on a Pane only `pane.pop-out`. The
+   driver is in `client/web/src/tiling/useTiling.ts` still.
 
 ## Consequences
 

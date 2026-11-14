@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react"
 import type { ProjectSummary } from "@banda/contract"
 import type { Change } from "../tiling/arrange"
-import { arranging, type Placing } from "../tiling/actions"
+import { arranging } from "../tiling/actions"
+import type { Placing } from "../tiling/opening"
 
 /**
  * A Project of no Project made a Project's (ADR 0046) takes its Panes to

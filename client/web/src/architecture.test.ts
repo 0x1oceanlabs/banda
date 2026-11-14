@@ -620,9 +620,10 @@ test("only the files listed ask the Window where the Person looks", () => {
 /**
  * One action goes to an Agent, `pane.pick` (ADR 0087, decision 7): a
  * sidebar row, a row of the counts list, a toast's button and Alt+U run
- * it. The Window answers it in one place, which alone brings a Pane to the
- * left once drawn, and only the action reaches that answer. No App is
- * given another way to go to a Pane: the Window's API has no `goTo`.
+ * it. It is the Tiling's, and the Window answers its change in one place
+ * (`Tiling.reach`), which alone brings a Pane to the left once drawn, and
+ * only the action reaches that answer. No App is given another way to go
+ * to a Pane: the Window's API has no `goTo`.
  */
 test("one place answers a pick, and only the action reaches it", () => {
   // The core too, where the hosts store places a pick on its host.
@@ -635,9 +636,9 @@ test("one place answers a pick, and only the action reaches it", () => {
         )
       )
   expect(places(/\bhow: "left"/g)).toEqual(["web/src/window/Shell.tsx"])
-  // The Shell answers it as `parts` too: neither is called but by the action.
-  expect(places(/\b(?:shell|parts)\.pick\(/g)).toEqual([
-    "web/src/window/actions.ts",
+  // The Shell answers it as `parts` too: none is called but by the action.
+  expect(places(/\b(?:tiling|shell|parts)\.reach\(/g)).toEqual([
+    "web/src/tiling/actions.ts",
   ])
   const api = readFileSync(join(app, "ui/src/module.ts"), "utf8").match(
     /export type WindowApi = \{\n([\s\S]*?)\n\}/
@@ -695,7 +696,7 @@ test("a string that no longer names an App leaves the list", () => {
  * lowers it; the room lets PRs in flight that each cut a few lines leave
  * it alone.
  */
-const WINDOW_LINES = 899
+const WINDOW_LINES = 872
 const SLACK = 20
 
 test("the Window's root keeps under its ceiling, and the ceiling follows it down", () => {

@@ -374,8 +374,25 @@ A step that changes pixels shows Roma a before and after first.
       part of the Window (`pane.new`, `pane.close`, `pane.put-away`,
       `pane.pop-out`, `pane.pick`, `pane.beside`), listed in
       `client/web/src/modules.test.ts`, a list that only falls.
+    - _Built_ (WS7, part b): what opens a Pane is the Tiling's, in
+      `client/web/src/tiling/opening.ts` (`placed`, `opening`,
+      `openingFrom`, `bringing`, `picking`, `startingHere`, with `Placing`,
+      a close and what the sidebar list reads of where the Panes are), and
+      five of the six actions with it: `pane.new`, `pane.close`,
+      `pane.put-away`, `pane.pick` and `pane.beside`. For them `Tiling`
+      grew by four members, each named for what the Tiling asks: `reach`,
+      a change that goes to a Pane, which comes to the left once drawn;
+      `drawn`, the workspaces as drawn now; `paneOn`, a Pane as it opens
+      on its Project's machine; and `uncover`, which takes away what lies
+      over the Panes in their place. The Window answers `uncover` by the
+      Top layer's one stack (ADR 0110, step 3), which closes the part on
+      the Sheet's layer. `pane.pop-out` stays the Window's: the device
+      keeps which Panes are in windows of their own, in the Window's
+      root. The tests of the Tiling's actions run beside them, through a
+      fake of `Tiling` and no router (`tiling/actions.test.ts`,
+      `tiling/arranged.test.ts`).
     - _Not yet:_ the Window's actions that are an App's or a platform
-      part's (a file's, a Project's, the sidebar list's), the six above,
+      part's (a file's, a Project's, the sidebar list's), `pane.pop-out`,
       and the Window's root at 400 lines.
 11. `Listed` split into the Item, with `news`, and the owner's extras
     (B7a); the Person's marks behind one store (E8a); then, after the

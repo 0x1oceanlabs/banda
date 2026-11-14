@@ -2098,7 +2098,9 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   by its physical place. Each is declared by its owner: an App's in its
   `defineModule`, the Tiling's in `client/web/src/tiling/actions.ts`,
   which take only what the Tiling's interface names (`Tiling`), and the
-  Window's own beside the list. `window.json` copies each owner's for the
+  Window's own beside the list. What opens, closes, picks and puts away a
+  Pane is the Tiling's too (`client/web/src/tiling/opening.ts`): it says
+  what is wanted and the engine places it. `window.json` copies each owner's for the
   engine, the Tiling's to `platform/workspaces/window.json`, and
   `banda keys` names the owner of each (ADR 0087, decision 13).
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Left and Right

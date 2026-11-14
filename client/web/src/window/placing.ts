@@ -7,8 +7,7 @@ import { type Stores, threadlessIn } from "../calls/stores"
 import { logged, type Write } from "../sidebar/write-setting"
 import type { PickFlow } from "../tiling/flow"
 import type { Gone } from "../tiling/model"
-import { type Placing, placingOf } from "../tiling/actions"
-import { noProjectOf } from "./actions"
+import { noProjectOf, type Placing, placingOf } from "../tiling/opening"
 
 /**
  * How the Person works the Panes in `flow` (`placingOf`), and whether a

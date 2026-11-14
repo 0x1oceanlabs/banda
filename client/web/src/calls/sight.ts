@@ -12,24 +12,16 @@ import { byOrder, placeIn } from "../sidebar/order"
 import {
   type Column,
   current,
-  entries,
   find,
   focused,
+  isShowing,
+  showing,
   shownIn,
   type Workspaces,
 } from "../tiling/model"
 
 /** The thing a Pane shows, as the registry knows it. */
 export type Shows = (pane: PaneState) => string | null
-
-/** Whether an entry shows the thing. */
-export function isShowing(
-  entry: { project: ProjectId; pane: PaneState },
-  thing: { project: ProjectId; about: string },
-  shows: Shows
-): boolean {
-  return entry.project === thing.project && shows(entry.pane) === thing.about
-}
 
 /** How much of a Tile shows inside the Strip's clip for it to be on
  * screen (ADR 0087, decision 9). */
@@ -89,15 +81,6 @@ export function sightOf(
   const enough = ({ column }: { column: Column }) =>
     (shares?.get(column.id) ?? 1) >= ON_SCREEN_SHARE
   return tiles.some(enough) ? "on-screen" : "in-window"
-}
-
-/** The entry that shows the thing, on any workspace, if one does. */
-export function showing(
-  workspaces: Workspaces,
-  thing: { project: ProjectId; about: string },
-  shows: Shows
-) {
-  return entries(workspaces).find((entry) => isShowing(entry, thing, shows))
 }
 
 /**

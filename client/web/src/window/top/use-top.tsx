@@ -19,6 +19,12 @@ export function useTop(shown: boolean, { part, layer, keys, close }: Shown) {
   }, [shown, part, layer, keys, steady])
 }
 
+/** Takes away the part of the Top layer on `layer`, while one shows
+ * there (`Stack.close`); false when none does. */
+export function closeTop(layer: Layer): boolean {
+  return top.close(layer)
+}
+
 /** The Window's root has the stack follow the page while it lives. */
 export function useTopFollows() {
   useEffect(() => top.follow(), [])

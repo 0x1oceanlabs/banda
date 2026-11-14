@@ -107,19 +107,12 @@ test("a module's new action's id starts with its module's id", () => {
 const TILINGS = /^(?:pane|column|group|workspace|workspaces|flow|overview)\./
 
 /**
- * The Window's own actions that still act on a Pane (ADR 0087, decision
- * 13): each asks a part of the Window first, the launcher, the Sheet, the
- * calls or a window of the Pane's own, and goes to the Tiling with that
- * part of WS7. None joins the list, and one that goes leaves it.
+ * The Window's own action that still acts on a Pane (ADR 0087, decision
+ * 13): a Pane in a window of its own is kept by the device, in the
+ * Window's root, and goes with it (WS7, part e). None joins the list, and
+ * one that goes leaves it.
  */
-const WINDOW_PANES = [
-  "pane.new",
-  "pane.close",
-  "pane.put-away",
-  "pane.pop-out",
-  "pane.pick",
-  "pane.beside",
-]
+const WINDOW_PANES = ["pane.pop-out"]
 
 test("the Window declares no action of the Tiling's but the listed, and the Tiling none of another's (ADR 0087, decision 13)", () => {
   const ids = (actions: readonly { id: string }[]) => actions.map((a) => a.id)

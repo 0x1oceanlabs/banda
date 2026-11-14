@@ -4,12 +4,7 @@
  * Window's (ADR 0022, decision 3; ADR 0087, decision 13). The keys, the
  * Banda menu, its key sheet and `keys.toml` read the same list.
  */
-import type {
-  Engine,
-  JsonValue,
-  ProjectId,
-  ProjectSummary,
-} from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import {
   type Act,
   type Hosts,
@@ -38,25 +33,15 @@ import {
   takes,
   type WindowApi,
 } from "@banda/ui/module"
-import { IN_PROGRAM, type PaneState, paneOf, type Place } from "@banda/ui/pane"
+import { IN_PROGRAM, type PaneState } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { chipOf } from "./attach"
 import { device } from "../boot"
 import { quiet } from "../calls/quiet"
-import { showing } from "../calls/sight"
 import { actAs, refused, type Routing } from "../tiling/mount"
 import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
-import {
-  groupedOf,
-  homeOf,
-  identityOf,
-  launcher,
-  moduleAct,
-  showsOf,
-  widthOf,
-  windowModule,
-} from "../registry"
+import { moduleAct, windowModule } from "../registry"
 import { archiving } from "../sidebar/items"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { makeProject } from "../titles/MakeProject"
@@ -65,32 +50,7 @@ import { askTab, isTab } from "../sidebar/showing"
 import { askRemoval } from "../settings/RemoveProject"
 import { notNow } from "../trust/not-now"
 import { askTrust } from "../trust/TrustCard"
-import {
-  type Placing,
-  sayRefused,
-  TILING_ACTIONS,
-  type Tiling,
-} from "../tiling/actions"
-import {
-  asking,
-  moved,
-  opened,
-  type Plan,
-  refusable,
-  type Step,
-} from "../tiling/arrange"
-import { factsOf } from "../tiling/useTiling"
-import {
-  bring,
-  current,
-  entries,
-  focusEntry,
-  focused,
-  open,
-  type Opening,
-  samePane,
-  type Workspaces,
-} from "../tiling/model"
+import { TILING_ACTIONS, type Tiling } from "../tiling/actions"
 
 /** What the window's own actions can change: its parts, more than a
  * module's get (`WindowApi`), and what the Tiling's take (`Tiling`). */
@@ -106,24 +66,13 @@ export type Shell = WindowApi & {
   /** Opens the focused Pane in a window of its own, or brings it back to
    * its place (ADR 0025, decision 9). */
   popOut: () => void
-  /** Goes to the Pane `pane.pick` asks for, the one way to go to an
-   * Agent (ADR 0087, decision 7): where a workspace shows it, else where
-   * it opens (`picking`), and brings it to the left once drawn (ADR 0065,
-   * decision 8). Only that action calls it. */
-  pick: (project: ProjectId, pane: PaneState) => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
-  /** Closes every Pane that shows `item` of `project`, on any workspace:
-   * it is put away, archived or put off (ADR 0069; ADR 0074). */
-  putAway: (project: ProjectId, item: string) => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
   /** Has what peeks over the desk fill it, or float again (ADR 0073,
    * decision 7); false when nothing peeks. */
   fillPeek: () => boolean
-  /** Takes the Sheet away while it shows (ADR 0102, decision 5); false
-   * when none does. */
-  closeSheet: () => boolean
   /** Opens the Banda menu at a route, or the settings at theirs, as
    * `banda menu ROUTE` does (ADR 0017, decision 7). */
   route: (route: string) => void
@@ -176,275 +125,6 @@ export function windowApiOf(shell: Shell): WindowApi {
 export function useWindowApi(shell: Shell): WindowApi {
   const [api] = useState(() => windowApiOf(shell))
   return api
-}
-
-/** Whether a Pane is the focused one of `workspaces`, by all its args. */
-export function focusedIn(workspaces: Workspaces) {
-  const entry = focused(workspaces)
-  return (project: ProjectId, pane: PaneState) =>
-    entry !== undefined && samePane(entry, { project, pane }, identityOf)
-}
-
-/** What the Threads away from their Project's workspace show, on a free
- * one or another Project's, in the row and solo: their sidebar rows say so
- * (ADR 0102, decision 6). A Project with no workspace yet, as every one
- * after the Flow free, has none of its Threads away. */
-export function strayedIn(
-  workspaces: Workspaces,
-  { flow, scratch }: Placing
-): ReadonlySet<string> {
-  if (flow === "free") return new Set()
-  const owned = new Set(workspaces.list.map((workspace) => workspace.project))
-  return new Set(
-    workspaces.list
-      .flatMap((workspace) =>
-        workspace.columns
-          .flatMap((c) => c.entries)
-          .filter((entry) => entry.project !== workspace.project)
-      )
-      .filter(
-        (entry) =>
-          owned.has(entry.project) &&
-          !scratch(entry.project) &&
-          homeOf(entry.pane) === "project"
-      )
-      .flatMap((entry) => showsOf(entry.pane) ?? [])
-  )
-}
-
-/** Shows a Pane of a Project and focuses it at the place its caller
- * named, as `how` says; a new column takes its width. A Pane is the one
- * shown as its kind names it, so a Project has one Diff. With no place, as
- * a Pane's own `open` leaves it out, it takes the place of the one of its
- * kind on the opener's workspace, or goes right of the opener. */
-export function opening(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  how: Omit<Opening, "width"> = {}
-): Step {
-  const next = open(workspaces, project, pane, {
-    identity: identityOf,
-    ...how,
-    width: widthOf(pane),
-  })
-  // Into the Group of the Pane it opens from, as the engine names it.
-  const from = how.from ?? focused(workspaces)?.id
-  const plan = opened(workspaces, next, {
-    place:
-      how.place === "group" && from ? { to: "group", pane: from } : undefined,
-    grouped: groupedOf(pane),
-  })
-  if (!plan) return next
-  return how.focus === false ? { ...plan, focus: false } : plan
-}
-
-/** How a Pane the engine places opens (`placed`): as `Opening`, and with
- * `update`, one already shown takes these args; `agents`, it is opened
- * for an Agent, as the tab a browser opens for one. */
-type Placed = Omit<Opening, "width" | "identity" | "keep"> & {
-  update?: true
-  agents?: boolean
-}
-
-/**
- * Shows a Pane of a Project and focuses it, as `how` says. Where it goes
- * is the engine's to say (ADR 0110, decision 3): the window sends the Pane
- * and where the Person is (`asking`), and names a place only where its
- * caller named one (`how.place`, `opening`). One already shown, as its
- * kind names it, gets the focus instead, unless it opens `again`; with
- * `update` it takes these args first, as a file's Pane the line a link
- * names.
- */
-export function placed(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  placing: Placing,
-  { update, agents, ...how }: Placed = {}
-): Step {
-  const wanted = { project, pane }
-  const shown = how.again
-    ? undefined
-    : entries(workspaces).find((entry) => samePane(entry, wanted, identityOf))
-  if (shown && update && !samePane(shown, wanted))
-    return {
-      command: {
-        method: "workspaces.update",
-        params: { pane: shown.id, args: pane.args },
-      },
-      want: shown.id,
-    }
-  if (shown)
-    return how.focus === false ? undefined : focusEntry(workspaces, shown.id)
-  if (how.place !== undefined) return opening(workspaces, project, pane, how)
-  const plan = asking(workspaces, wanted, {
-    ...saidOf(project, pane, placing),
-    from: how.from,
-    agents,
-  })
-  return how.focus === false ? { ...plan, focus: false } : plan
-}
-
-/** What the window says of a Pane the engine places, beside where the
- * Person is: its kind's Group and width, and whether its Project is of no
- * Project, which the engine takes of another machine's alone. */
-function saidOf(project: ProjectId, pane: PaneState, placing: Placing) {
-  return {
-    grouped: groupedOf(pane),
-    width: widthOf(pane),
-    scratch: placing.scratch(project),
-  }
-}
-
-/** Shows a Pane here, right of the focused one, with its width; one
- * another workspace shows moves here. Onto another Project's workspace,
- * in the row and solo, the engine refuses it as it does a move, and as
- * `Alt+Shift+N` the window says why, by `projectOf` (ADR 0102, decision
- * 6). */
-export function bringing(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  placing: Placing,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined
-): Step {
-  const next = bring(workspaces, project, pane, {
-    place: "right",
-    width: widthOf(pane),
-    identity: identityOf,
-  })
-  const away = entries(workspaces).find(
-    (entry) =>
-      samePane(entry, { project, pane }, identityOf) &&
-      !current(workspaces).columns.some((c) => c.entries.includes(entry))
-  )
-  // The one that moved here shows anew in `next`, under another ID.
-  const was = new Set(entries(workspaces).map((entry) => entry.id))
-  const here = entries(next).find((entry) => !was.has(entry.id))
-  const moves = away !== undefined && here !== undefined
-  const plan = moves
-    ? moved(next, away.id, here.id)
-    : opened(workspaces, next, { grouped: groupedOf(pane), brought: true })
-  if (!plan) return moves ? undefined : next
-  return refusable(workspaces, plan, factsOf(placing.flow), (refused) =>
-    sayRefused(refused, false, projectOf, placing.scratch)
-  )
-}
-
-/** Those of no Project, the Projects as they are now: the scratch ones,
- * and a draft in the `machine`'s own ID, as a new one in No Project
- * starts. None of them owns a workspace (ADR 0102, decision 1). */
-export function noProjectOf(
-  projects: readonly ProjectSummary[],
-  machine?: ProjectId
-): ProjectId[] {
-  const scratch = projects.filter((one) => one.scratch).map((one) => one.id)
-  return machine ? [machine, ...scratch] : scratch
-}
-
-/**
- * Goes to the Pane picked (`pane.pick`, ADR 0087, decision 7): to the one
- * a workspace shows, on any workspace, by the thing it shows (`shows`),
- * else by what makes it that Pane; else opens it where the engine places
- * it (`placed`).
- */
-export function picking(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  placing: Placing
-): Step {
-  const about = showsOf(pane)
-  const entry =
-    about === null
-      ? undefined
-      : showing(workspaces, { project, about }, showsOf)
-  return entry
-    ? focusEntry(workspaces, entry.id)
-    : placed(workspaces, project, pane, placing)
-}
-
-/**
- * Opens a Pane as a tile asks (`Frame.open`), from the tile `from`, at the
- * place it names. One in place of `from` that shows what `from` showed, in
- * another Project, as a draft the Person moves to another Project or to
- * none, says so and names no place: the engine has it take that place, or,
- * in the row on a workspace that is not its Project's, open where the Flow
- * says while `from` leaves (ADR 0102, decision 3). A draft that became its
- * Thread with its first message shows another thing, and stays.
- */
-export function openingFrom(
-  workspaces: Workspaces,
-  project: ProjectId,
-  pane: PaneState,
-  placing: Placing,
-  from: string,
-  place?: Place
-): Step {
-  const was = entries(workspaces).find((entry) => entry.id === from)
-  const moved =
-    place === "instead" &&
-    was !== undefined &&
-    was.project !== project &&
-    showsOf(was.pane) === showsOf(pane)
-  if (!moved) return opening(workspaces, project, pane, { from, place })
-  const said = saidOf(project, pane, placing)
-  return asking(workspaces, { project, pane }, { ...said, instead: from })
-}
-
-/**
- * Opens a first Pane on the empty workspace on screen, as its buttons do,
- * in its Project, else in `home`. On a Project's, where the keys would:
- * a terminal makes the Project's own Group there, and the next goes right
- * of it (ADR 0102, decision 4). On one of no Project the buttons name the
- * place: there, which makes it a free one (decision 1).
- */
-export function startingHere(
-  workspaces: Workspaces,
-  home: ProjectId,
-  pane: PaneState,
-  placing: Placing
-): Step {
-  const { project } = current(workspaces)
-  return project === undefined
-    ? opening(workspaces, home, pane, { place: "right", again: true })
-    : placed(workspaces, project, pane, placing, { again: true })
-}
-
-/** What `pane.pick` is asked: a Project, and the Pane to open in it, its
- * kind and args, as an Item carries it; none when its args are not that. */
-export function pickOf(
-  args: Args | undefined
-): { project: ProjectId; pane: PaneState } | undefined {
-  const { project, pane } = args ?? {}
-  if (typeof project !== "string" || !isArgs(pane)) return undefined
-  const { kind, args: shown } = pane
-  if (typeof kind !== "string" || !isArgs(shown)) return undefined
-  return { project: project as ProjectId, pane: { kind, args: shown } }
-}
-
-/** Whether `value` is an object of JSON values, as a Pane's args are. */
-function isArgs(value: JsonValue | undefined): value is Args {
-  return typeof value === "object" && value !== null && !Array.isArray(value)
-}
-
-/** Closes a Pane; its neighbour takes the focus. */
-export function closing(pane: string): Plan {
-  return { command: { method: "workspaces.close", params: { pane } } }
-}
-
-/**
- * Closes a Pane that shows the thing, on any workspace, as a Thread the
- * Person archives leaves them (ADR 0008, decision 4); nothing when none
- * shows it.
- */
-export function closingShown(
-  workspaces: Workspaces,
-  thing: { project: ProjectId; about: string }
-): Plan | undefined {
-  const entry = showing(workspaces, thing, showsOf)
-  return entry && closing(entry.id)
 }
 
 /** What a file action takes. */
@@ -574,26 +254,6 @@ function stopHost(host: string, force = false) {
  * Tiling's, which declares its own (`TILING_ACTIONS`). */
 export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   {
-    id: "pane.new",
-    section: "Panes",
-    title: "New Pane",
-    keys: [{ code: "KeyN", mod: true }],
-    run: (shell) => shell.open(paneOf(launcher, {})),
-  },
-  {
-    id: "pane.close",
-    section: "Panes",
-    title: "Close the Pane",
-    keys: [{ code: "KeyW", mod: true }],
-    // The Sheet, while it shows; else the focused Pane.
-    run: (shell) =>
-      shell.closeSheet() ||
-      shell.change((w) => {
-        const entry = focused(w)
-        return entry && closing(entry.id)
-      }),
-  },
-  {
     // A web address from a Pane opens in this device's browser, and one
     // of another machine's own computer says it is that machine's (ADR
     // 0106, decision 3). It takes its address from a Pane alone: it
@@ -611,25 +271,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
-    // What an App asks once an Item is put away, as a Thread put off.
-    id: "pane.put-away",
-    args: takes(
-      {
-        project: "the Project of the Item",
-        item: "the Item's id in its Project",
-      },
-      ["project", "item"]
-    ),
-    section: "Panes",
-    title: "Close every Pane that shows an Item, on any workspace",
-    unlisted: true,
-    run: (shell, args) => {
-      const { project, item } = args ?? {}
-      if (typeof project === "string" && typeof item === "string")
-        shell.putAway(project as ProjectId, item)
-    },
-  },
-  {
     id: "pane.pop-out",
     section: "Panes",
     title: "The Pane in a window of its own, and back",
@@ -643,46 +284,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "Backquote", mod: true }],
     overDialogs: true,
     run: (shell) => shell.drawer(),
-  },
-  {
-    // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
-    // row, a row of the counts list, a toast's button and Alt+U run it,
-    // with the Pane as an Item carries it.
-    id: "pane.pick",
-    section: "Panes",
-    title: "Go to a Pane where a workspace shows it, or open it",
-    unlisted: true,
-    run: (shell, args) => {
-      const picked = pickOf(args)
-      if (!picked) return
-      // To a Pane, even the one in focus, which no focus goes to: the
-      // Sheet goes (ADR 0102, decision 5).
-      shell.closeSheet()
-      shell.pick(picked.project, picked.pane)
-    },
-  },
-  {
-    // Open beside (ADR 0098, decision 14): the sidebar's Shift+Enter and
-    // the Banda menu's Tab bring a Pane right of the one in focus, from
-    // wherever it is, and the Sheet goes (ADR 0102, decision 5).
-    id: "pane.beside",
-    section: "Panes",
-    title: "Bring a Pane beside the one in focus",
-    unlisted: true,
-    run: (shell, args) => {
-      const picked = pickOf(args)
-      if (!picked) return
-      shell.closeSheet()
-      shell.change((w) =>
-        bringing(
-          w,
-          picked.project,
-          picked.pane,
-          shell.placing(),
-          shell.projectOf
-        )
-      )
-    },
   },
   {
     id: "calls.answer",
@@ -1123,8 +724,9 @@ const ITEMS_AT =
 
 /** Where the Tiling's last actions start, a Pane's to a workspace by its
  * number: the key sheet lists a section's rows in this list's order, and
- * has had them after the Window's own of the Panes, as Close the Pane. It
- * goes once the key sheet keeps an order of its own. */
+ * has had them after the Window's own of the Panes, the Pane in a window
+ * of its own. It goes once the key sheet keeps an order of its own
+ * (#1731). */
 const SENDS_AT = TILING_ACTIONS.findIndex(
   (action) => action.id === "pane.send-1"
 )

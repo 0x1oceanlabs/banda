@@ -3,26 +3,29 @@
  * a key, the Banda menu, a widget, `banda act` and an Agent ask of the
  * middle, by id. The focus and a Pane's moves, a column's and a Pane's
  * sizes, the Groups, the workspaces, the Flow, Arrange by Project and the
- * overview are here; an action that asks a part of the Window first, as
- * `pane.close` its Sheet, is the Window's still (`window/actions.ts`).
+ * overview are here, and what opens, closes, picks, brings and puts away
+ * a Pane (`opening.ts`). The Pane in a window of its own is the Window's
+ * still, by the device (`window/actions.ts`).
  *
  *   in    Tiling   what the actions take of the Window, and no more: the
  *                  change of the workspaces, how the Person works the
- *                  Panes, where they are, and the view's own turns
+ *                  Panes, where they are, what lies over the Panes, and
+ *                  the view's own turns
  *   gives `TILING_ACTIONS`, which the Window lists among its own and
  *         every App's, and `platform/workspaces/window.json` copies for
  *         the engine, so `banda keys` names the workspaces as their owner
- *         `arranging`, `targetsOf` and `sayRefused`, for what the Window
- *         asks of the workspaces itself
- *         `Placing` and `placingOf`, how the Person works the Panes
+ *         `arranging` and `targetsOf`, for what the Window asks of the
+ *         workspaces itself
  */
 import type { ProjectId, ProjectSummary } from "@banda/contract"
 import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { toast } from "@banda/ui/components/sonner"
 import { fileNow } from "@banda/ui/lib/look"
 import { type Action, takes, type WindowApi } from "@banda/ui/module"
+import { type PaneState, paneOf } from "@banda/ui/pane"
+import { launcher } from "../launcher"
 import { columnsOf } from "../look"
-import { leads } from "../registry"
+import { leads, showsOf } from "../registry"
 import { sayArranged, unarrange, undoesNow } from "./arranged"
 import {
   type Change,
@@ -37,10 +40,20 @@ import {
   type Step,
   workspaceMoved,
 } from "./arrange"
-import { refusedTo, type RowRefusal } from "./arrangement"
+import { refusedTo } from "./arrangement"
 import { isFlow, nextFlow } from "./flow"
 import { filling, grouping, regrouping, shiftingInside } from "./groups"
 import { floorsOf, roomLeft } from "./layout"
+import {
+  bringing,
+  closing,
+  closingShown,
+  picking,
+  pickOf,
+  placed,
+  type Placing,
+  sayRefused,
+} from "./opening"
 import {
   across,
   carry,
@@ -58,9 +71,9 @@ import {
   go,
   heighten,
   heightTo,
+  isShowing,
   maximize,
   move,
-  refusalOf,
   send,
   share,
   shift,
@@ -73,27 +86,30 @@ import {
 } from "./model"
 import { factsOf } from "./useTiling"
 
-/** How the Person works the Panes: the Flow, and whether a Project is a
- * scratch one, of no Project (ADR 0046). */
-export type Placing = { flow: Flow; scratch: (project: ProjectId) => boolean }
-
-/** How the Person works the Panes in `flow`, with `none` of no Project,
- * as the Window lists them. */
-export function placingOf(flow: Flow, none: readonly ProjectId[]): Placing {
-  return { flow, scratch: (project) => none.includes(project) }
-}
-
 /** What the Tiling's actions take: the Window hands it in, as it hands
  * `Tiled` to what it draws, and they reach no more of the Window. */
 export type Tiling = {
   /** Changes the workspaces. */
   change: (how: Change) => void
+  /** Changes the workspaces to go to a Pane, which comes to the left of
+   * the screen once it is drawn (ADR 0065, decision 8). Only `pane.pick`
+   * asks it (ADR 0087, decision 7). */
+  reach: (how: Change) => void
+  /** The workspaces as they are drawn now. */
+  drawn: () => Workspaces
+  /** A Pane of a Project as it opens on the machine that Project is on,
+   * which only the Window knows (ADR 0081). */
+  paneOn: (project: ProjectId, pane: PaneState) => PaneState
+  /** Takes away what lies over the Panes in their place, as the Sheet,
+   * while it shows (ADR 0102, decision 5); false when nothing does. */
+  uncover: () => boolean
   /** How the Person works the Panes now: the Flow, and which Projects are
    * of no Project (`placingOf`). */
   placing: () => Placing
   /** A Project by its ID, its folder missing or not, as the bar names it. */
   projectOf: (project: ProjectId) => ProjectSummary | undefined
-  /** Where the Person is, for the workspace on screen. */
+  /** Where the Person is: the workspace on screen, and the Project a new
+   * Pane opens in. */
   here: Pick<WindowApi["here"], "get">
   toggleOverview: () => void
   /** Shows the focused Pane over the whole window, or brings it back. */
@@ -242,30 +258,6 @@ export function arranging(
 /** What the engine refuses a move by, as this window believes it, as
  * tiling.toml says the Flow now (ADR 0110, decision 9). */
 const factsNow = () => factsOf(fileNow(TILING_FILE).flow)
-
-/** The toast a refused move shows: one, however long the key is held. */
-const REFUSED = "workspace-refused"
-
-/** Words a move the engine refused onto another Project's workspace:
- * whose it is, and where a Pane that moves as its Project can go, by
- * `projectOf`, or as one of no Project when `scratch` says so
- * (`refusalOf`). The workspace is numbered as before the move, as the bar
- * shows it. `along`, its Group took the Pane along. */
-export function sayRefused(
-  { at, owner, moving }: RowRefusal,
-  along: boolean,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined,
-  scratch: Placing["scratch"]
-) {
-  const { title, description } = refusalOf({
-    to: at,
-    owner: projectOf(owner),
-    as: projectOf(moving),
-    scratch: scratch(moving),
-    along,
-  })
-  toast(title, { id: REFUSED, description })
-}
 
 /** Moves the focused Pane where `how` puts it, and follows it; one in a
  * Group that `how` sends to another workspace takes its Group, as one
@@ -673,6 +665,105 @@ export const TILING_ACTIONS: readonly Action<Tiling>[] = [
     keys: [{ code: `Digit${n}`, mod: true }],
     run: (tiling: Tiling) => tiling.change((w) => go(w, n - 1)),
   })),
+  {
+    // The launcher, where the Person is, as any Pane a key opens.
+    id: "pane.new",
+    section: "Panes",
+    title: "New Pane",
+    keys: [{ code: "KeyN", mod: true }],
+    run: (tiling) =>
+      tiling.change((w) =>
+        placed(
+          w,
+          tiling.here.get().project,
+          paneOf(launcher, {}),
+          tiling.placing(),
+          { again: true }
+        )
+      ),
+  },
+  {
+    id: "pane.close",
+    section: "Panes",
+    title: "Close the Pane",
+    keys: [{ code: "KeyW", mod: true }],
+    // What lies over the Panes, while it shows; else the focused Pane.
+    run: (tiling) => {
+      if (tiling.uncover()) return
+      tiling.change((w) => {
+        const entry = focused(w)
+        return entry && closing(entry.id)
+      })
+    },
+  },
+  {
+    // What an App asks once an Item is put away, as a Thread put off or
+    // archived (ADR 0008, decision 4; ADR 0069): one close for each Pane
+    // that shows it now.
+    id: "pane.put-away",
+    args: takes(
+      {
+        project: "the Project of the Item",
+        item: "the Item's id in its Project",
+      },
+      ["project", "item"]
+    ),
+    section: "Panes",
+    title: "Close every Pane that shows an Item, on any workspace",
+    unlisted: true,
+    run: (tiling, args) => {
+      const { project, item } = args ?? {}
+      if (typeof project !== "string" || typeof item !== "string") return
+      const shown = { project: project as ProjectId, about: item }
+      for (const entry of entries(tiling.drawn()))
+        if (isShowing(entry, shown, showsOf))
+          tiling.change((w) => closingShown(w, shown))
+    },
+  },
+  {
+    // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
+    // row, a row of the counts list, a toast's button and Alt+U run it,
+    // with the Pane as an Item carries it. It opens on the machine its
+    // Project is on.
+    id: "pane.pick",
+    section: "Panes",
+    title: "Go to a Pane where a workspace shows it, or open it",
+    unlisted: true,
+    run: (tiling, args) => {
+      const picked = pickOf(args)
+      if (!picked) return
+      // To a Pane, even the one in focus, which no focus goes to: what
+      // lies over the Panes goes (ADR 0102, decision 5).
+      tiling.uncover()
+      const { project } = picked
+      const pane = tiling.paneOn(project, picked.pane)
+      tiling.reach((w) => picking(w, project, pane, tiling.placing()))
+    },
+  },
+  {
+    // Open beside (ADR 0098, decision 14): the sidebar's Shift+Enter and
+    // the Banda menu's Tab bring a Pane right of the one in focus, from
+    // wherever it is, and what lies over the Panes goes (ADR 0102,
+    // decision 5).
+    id: "pane.beside",
+    section: "Panes",
+    title: "Bring a Pane beside the one in focus",
+    unlisted: true,
+    run: (tiling, args) => {
+      const picked = pickOf(args)
+      if (!picked) return
+      tiling.uncover()
+      tiling.change((w) =>
+        bringing(
+          w,
+          picked.project,
+          picked.pane,
+          tiling.placing(),
+          tiling.projectOf
+        )
+      )
+    },
+  },
   ...NUMBERS.map((n) => ({
     id: `pane.send-${n}`,
     section: "Panes",

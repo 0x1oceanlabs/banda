@@ -18,7 +18,7 @@ import type { Settings } from "../../sidebar/settings"
 import { useOrdered } from "../../sidebar/useOrdered"
 import { useTiled } from "../../tiling/kept"
 import { useMenuProjects } from "../../titles/ThreadMenu"
-import { focusedIn } from "../../window/actions"
+import { focusedIn } from "../../tiling/opening"
 import { atWork, countOf, countWords, type InboxCount, turnTone } from "./count"
 
 /** The count over every list, drawn again only as it changes. */
