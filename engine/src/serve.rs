@@ -160,6 +160,7 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     let paired = Paired::open(&places.state, owner).map_err(Failure::broken)?;
     let door = listen_at_door(crate::places::door_port(), last_door).await?;
     let door_port = door.local_addr().map_err(Failure::broken)?.port();
+    paired.at_door(door_port);
     let run = Run::began(&places, port).with_door(door_port);
     // Whether the fence holds here, found once (ADR 0083), before the
     // engine runs any program of its own on the host.

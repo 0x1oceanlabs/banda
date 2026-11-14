@@ -18,6 +18,8 @@
 //! `devices.allow` pairs one, `devices.refuse` sends it away. An engine
 //! that restarts forgets them: the device asks again.
 
+mod served;
+
 use banda_kernel::api::APP_ORIGIN;
 use banda_kernel::devices::{Asked, Asking, Device, Devices};
 use banda_kernel::methods::Nothing;
@@ -32,7 +34,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, OnceLock};
 use tokio::sync::{oneshot, watch};
 use ts_rs::TS;
 
@@ -135,6 +137,8 @@ struct Kept {
     /// The same as the Person's windows hear them.
     asking: watch::Sender<Vec<Ask>>,
     host: Ed25519KeyPair,
+    /// The loopback port the door listens on, once the engine opened it.
+    door: OnceLock<u16>,
     file: PathBuf,
     /// Who a device's session acts as: this machine's owner.
     owner: PersonId,
@@ -173,12 +177,19 @@ impl Paired {
             waiting: Mutex::new(Vec::new()),
             asking: watch::channel(Vec::new()).0,
             host,
+            door: OnceLock::new(),
             file,
             owner,
             known: Mutex::new(known),
             changing: Mutex::new(()),
             removals: watch::channel(0).0,
         })))
+    }
+
+    /// Says which loopback port the door listens on, so the machine can
+    /// tell where that door is served ([`served`]).
+    pub fn at_door(&self, port: u16) {
+        let _ = self.0.door.set(port);
     }
 
     /// The host key's public half, as every frame of the door says it.
@@ -497,6 +508,10 @@ pub struct Listed {
     /// This machine's host key, public: Ed25519, as base64url.
     pub host_key: String,
     pub devices: Vec<PairedDevice>,
+    /// Where this machine's door is served beyond loopback now, as
+    /// `https://arc.example.ts.net`: none where nothing serves it.
+    #[serde(default)]
+    pub doors: Vec<String>,
 }
 
 #[derive(Debug, Deserialize, JsonSchema, TS)]
@@ -527,9 +542,14 @@ pub struct Remove {
 
 impl DevicesModule {
     async fn list(&self, _: Call, _: Nothing) -> Result<Listed, Refusal> {
+        let doors = match self.paired.0.door.get() {
+            Some(port) => served::doors(*port).await,
+            None => Vec::new(),
+        };
         Ok(Listed {
             host_key: self.paired.host_key_text(),
             devices: self.paired.listed(),
+            doors,
         })
     }
 
