@@ -43,6 +43,7 @@ export const KindsContext = createContext<Kinds>({
 /** Lists the Panes a Person can open, and becomes the one picked. */
 export const launcher = definePane<Args>({
   kind: "window.launcher",
+  name: "New Pane",
   title: () => "New Pane",
   icon: LayoutGridIcon,
   elsewhere: true,

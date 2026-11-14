@@ -7,6 +7,7 @@ import { type VisualArgs, VisualFrame } from "./Frame"
 
 export const visualPane = definePane<VisualArgs>({
   kind: "agents.visual",
+  name: "Visual",
   title: (args) => args.title,
   icon: ChartLineIcon,
   // One Pane per Visual.

@@ -69,6 +69,7 @@ type DiffArgs = {
 
 export const diffPane = definePane<DiffArgs>({
   kind: "git.diff",
+  name: "Diff",
   title: () => "Diff",
   detail: (args) => labelOf(args.scope),
   icon: FileDiffIcon,

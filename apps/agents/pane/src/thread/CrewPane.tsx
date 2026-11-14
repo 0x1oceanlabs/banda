@@ -100,6 +100,7 @@ export const OPEN_CREW = "agents.crew.open"
 export const crewPane = definePane<CrewArgs>({
   // A literal, which the window's kind checker reads.
   kind: "agents.crew",
+  name: "Crew",
   title: () => "Crew",
   icon: UsersIcon,
   // Its header is its own: the tabs, the menu and no Stop.

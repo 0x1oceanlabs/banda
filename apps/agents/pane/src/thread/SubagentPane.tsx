@@ -70,6 +70,7 @@ import { Transcript } from "./Transcript"
 export const subagentPane = definePane<SubagentArgs>({
   // A literal, which the window's kind checker reads.
   kind: "agents.subagent",
+  name: "Sub-agent",
   title: () => "Sub-agent",
   icon: OrbitIcon,
   // Its header is its own: the satellite, and the breadcrumb.

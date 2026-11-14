@@ -851,7 +851,9 @@ test("Settings → Tiling shows the Flow, the widths and the rules and writes ti
   window = await startWindow({
     files: {
       "config/tiling.toml":
-        'flow = "free"\n\n[rule.git.diff]\nwidth = "1/3"\nopens = "below"\n',
+        'flow = "free"\n\n[columns]\nheights = ["1/2"]\n\n' +
+        '[rule.git.diff]\nwidth = "1/3"\nopens = "below"\n\n' +
+        '[rule.terminal.terminal]\nwidth = "2/5"\n',
     },
     // The widths were look.toml's: it still says two of them.
     look: '[columns]\nalone = "1/2"\ndefault = "1/3"\nmin = 10\n',
@@ -874,53 +876,119 @@ test("Settings → Tiling shows the Flow, the widths and the rules and writes ti
   // The Flow, as the file says it.
   const flow = settings.getByRole("radiogroup", { name: "Flow" })
   await expect(flow.getByRole("radio", { name: "free" })).toBeChecked()
-  // The widths, each from where it is said: look.toml's line still.
+  // The widths, each from where it is said: look.toml's line still. A
+  // width is a menu of the Steps.
   const width = settings.locator('[data-key="columns.default"]')
-  const field = width.getByRole("textbox", { name: "New column" })
-  await expect(field).toHaveValue("1/3")
+  const menu = width.getByRole("combobox", { name: "New column" })
+  await expect(menu).toContainText("1/3")
   await expect(width).toContainText("look.toml:3")
-  await expect(
-    settings
-      .locator('[data-key="columns.presets"]')
-      .getByRole("textbox", { name: "Steps" })
-  ).toHaveValue("1/3, 1/2, 2/3, 1")
+  // The Steps and the Heights are chips; the last one is not taken out.
+  const steps = settings.getByRole("list", { name: "Steps" })
+  await expect(steps.getByRole("listitem")).toHaveText([
+    "1/3",
+    "1/2",
+    "2/3",
+    "1",
+    "",
+  ])
+  const heights = settings.getByRole("list", { name: "Heights" })
+  await expect(heights.getByRole("listitem")).toHaveText(["1/2", ""])
+  await expect(heights.getByRole("button", { name: /^Remove/ })).toHaveCount(0)
   await expect(
     settings
       .locator('[data-key="columns.display"]')
       .getByRole("radio", { name: "stack" })
   ).toBeChecked()
-  // The rules the file has now, in a few words.
-  const rules = settings.locator('[data-key="rule"]')
-  await expect(rules).toContainText("1 rule")
-  await expect(rules).toContainText("git.diff: 1/3 wide, below.")
-  await expect(rules.getByRole("button", { name: "Open file" })).toBeVisible()
+  // The rules the file has now, a row each: the kind as it names itself,
+  // then what the rule says. The file opens from their row alone.
+  const diff = settings.locator('[data-key="rule.git.diff"]')
+  await expect(diff).toContainText("Diff")
+  await expect(diff).toContainText("a third wide, below")
+  await expect(
+    settings.locator('[data-key="rule.terminal.terminal"]')
+  ).toContainText("2/5 wide")
+  await expect(
+    settings
+      .locator('[data-key="rule"]')
+      .getByRole("button", { name: "Open file" })
+  ).toBeVisible()
+  await expect(settings.getByRole("button", { name: "Open file" })).toHaveCount(
+    1
+  )
   await page.screenshot({ path: "test-results/settings-tiling.png" })
 
-  // A change is written in the Tiling's file, and the old line goes; what
-  // is the screen's stays in look.toml.
-  await field.fill("2/3")
-  await field.press("Enter")
-  await expect
-    .poll(() => readFileSync(tiling, "utf8"))
-    .toContain('\n[columns]\ndefault = "2/3"\n')
+  // A step picked from the menu is written in the Tiling's file, and the
+  // old line goes; what is the screen's stays in look.toml.
+  const written = () => readFileSync(tiling, "utf8")
+  await menu.click()
+  await page.getByRole("option", { name: "2/3" }).click()
+  await expect.poll(written).toContain('default = "2/3"\n')
   expect(readFileSync(look, "utf8")).toBe(
     '[columns]\nalone = "1/2"\nmin = 10\n'
   )
   await expect(width).toContainText(/tiling\.toml:\d+/)
-  // The steps are one field: a list of shares.
-  const steps = settings
-    .locator('[data-key="columns.presets"]')
-    .getByRole("textbox", { name: "Steps" })
-  await steps.fill("1/4, 3/4")
-  await steps.press("Enter")
-  await expect
-    .poll(() => readFileSync(tiling, "utf8"))
-    .toContain('presets = ["1/4", "3/4"]')
-  // What is no share is refused, said at the row.
+  // Another share is written through Other…, which is a field in the
+  // menu's place; no step, it is shown, first in the menu.
+  const field = width.getByRole("textbox", { name: "New column" })
+  await menu.click()
+  await page.getByRole("option", { name: "Other…" }).click()
+  await expect(field).toBeFocused()
+  await field.fill("2/5")
+  await field.press("Enter")
+  await expect.poll(written).toContain('default = "2/5"\n')
+  await expect(menu).toContainText("2/5")
+  await expect(menu).toBeFocused()
+  await menu.click()
+  await expect(page.getByRole("option").first()).toHaveText("2/5")
+  await page.getByRole("option").first().click()
+  // What is no share is refused in the file's check's words, at the row,
+  // and nothing is written; Esc leaves it as it was, and the Sheet stays.
+  await menu.click()
+  await page.getByRole("option", { name: "Other…" }).click()
   await field.fill("wide")
   await field.press("Enter")
-  await expect(width.getByRole("alert")).toBeVisible()
-  expect(readFileSync(tiling, "utf8")).toContain('default = "2/3"')
+  await expect(width.getByRole("alert")).toContainText(
+    '"wide" is no width: a share of the screen'
+  )
+  await expect(field).toHaveAttribute("aria-invalid", "true")
+  await field.press("Escape")
+  await expect(width.getByRole("alert")).toHaveCount(0)
+  await expect(menu).toContainText("2/5")
+  expect(written()).toContain('default = "2/5"\n')
+
+  // A chip is added where its size puts it; a share already there, not
+  // twice; and Backspace on a chip takes it out.
+  const add = steps.getByRole("button", { name: "Add to Steps" })
+  const adding = steps.getByRole("textbox", { name: "Add to Steps" })
+  await add.click()
+  await adding.fill("1/4")
+  await adding.press("Enter")
+  await expect
+    .poll(written)
+    .toContain('presets = ["1/4", "1/3", "1/2", "2/3", "1"]')
+  await expect(add).toBeFocused()
+  await add.click()
+  await adding.fill("2/4")
+  await adding.press("Enter")
+  await expect(add).toBeFocused()
+  await steps.getByRole("button", { name: "Remove 2/3" }).focus()
+  await page.keyboard.press("Backspace")
+  await expect.poll(written).toContain('presets = ["1/4", "1/3", "1/2", "1"]')
+  await expect(steps.getByRole("listitem")).toHaveText([
+    "1/4",
+    "1/3",
+    "1/2",
+    "1",
+    "",
+  ])
+  await add.click()
+  await adding.fill("wide")
+  await adding.press("Enter")
+  await expect(
+    settings.locator('[data-key="columns.presets"]').getByRole("alert")
+  ).toContainText('"wide" is no width')
+  await adding.press("Escape")
+  expect(written()).toContain('presets = ["1/4", "1/3", "1/2", "1"]')
 
   // What is the screen's stays in Appearance; the Flow left Agents.
   await sections.getByRole("button", { name: /Appearance/ }).click()
@@ -942,9 +1010,9 @@ test("Settings → Tiling shows the Flow, the widths and the rules and writes ti
   await settings.getByRole("button", { name: "Close Settings" }).click()
 
   // The width chosen in Settings is the next column's: the Thread's is
-  // no longer alone, and both take the new width, two thirds.
+  // no longer alone, and both take the new width, two fifths.
   await page.keyboard.press("Alt+Enter")
-  await expect.poll(() => sharesOf(thread)).toEqual([67, 67])
+  await expect.poll(() => sharesOf(thread)).toEqual([40, 40])
   // The old names are still written to, and land in the Tiling's file.
   window.banda("settings", "set", "look.toml", "columns.alone", '"1/3"')
   expect(readFileSync(tiling, "utf8")).toContain('alone = "1/3"')

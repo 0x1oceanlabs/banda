@@ -17,6 +17,7 @@ import { Thread } from "./thread/Thread"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
+  name: "Thread",
   title: (args) => args.title || "New Thread",
   shows: (args) => args.thread,
   icon: MessageSquareIcon,

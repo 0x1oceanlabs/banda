@@ -179,6 +179,7 @@ export type TreeArgs = {
 
 export const treePane = definePane<TreeArgs>({
   kind: "files.tree",
+  name: "Files",
   title: (args) =>
     args.recent ? "Recent" : args.trash ? "Trash" : nameOf(args.dir) || "Files",
   detail: (args) => (args.recent || args.trash ? null : args.dir || null),

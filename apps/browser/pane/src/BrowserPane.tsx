@@ -104,6 +104,7 @@ import { zoomHandlers } from "@banda/ui/hooks/use-zoom"
 
 export const browserPane = definePane<KeptArgs>({
   kind: "browser.browser",
+  name: "Browser",
   title: (kept) => {
     const args = readArgs(kept, "")
     const tab = args.tabs[args.shown]

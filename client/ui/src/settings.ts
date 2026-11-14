@@ -14,12 +14,16 @@ import type { Args, WindowApi } from "./module"
 import type { PaneProps, PaneState } from "./pane"
 
 /** A row a section draws itself: the value now, how to set it, and the
- * control the schema would draw, to wrap. */
+ * control the schema would draw, to wrap. What the file's check said as
+ * it refused the last `set` shows under the row, and is `refused` here
+ * too, for a control that keeps what was typed until `forget`. */
 export type CustomRow = ComponentType<{
   row: Row
   setting?: Setting
   set: (value: string) => void
   control: ReactNode
+  refused: readonly string[]
+  forget: () => void
 }>
 
 /** A file a section shows. */
@@ -54,6 +58,9 @@ export type Section = {
   files?: SectionFile[]
   /** What it holds, under its title. */
   about: string
+  /** False where one of its rows opens its file, so its heading does
+   * not: a function has one door (the window's rule 1). */
+  openFile?: false
   /** Whether it shows one machine's part, the one picked under "Settings
    * for": said where its files do not say it. General, Projects and
    * Problems show what a machine's engine keeps, in no file (ADR 0124,

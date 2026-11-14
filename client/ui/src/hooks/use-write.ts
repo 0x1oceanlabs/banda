@@ -7,8 +7,8 @@ import { problem } from "@banda/ui/lib/words"
  * counts: one sent before it, as a field's blur on the way to ↶, answers
  * too late to say anything. The answer stands while `against`, the value
  * the write was against, stays: a file changed since, by hand or by a
- * later write, takes it away. `onWritten` runs after a write that went
- * through.
+ * later write, takes it away, and so does `forget`, as the Person leaves
+ * what was refused. `onWritten` runs after a write that went through.
  */
 export function useWrite({
   onWritten,
@@ -31,5 +31,9 @@ export function useWrite({
     )
   }
   const refused = said && said.against === now ? said.refused : []
-  return { refused, write }
+  const forget = () => {
+    last.current++
+    setSaid(undefined)
+  }
+  return { refused, write, forget }
 }

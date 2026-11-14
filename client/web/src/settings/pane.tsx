@@ -19,6 +19,7 @@ const Settings = lazy(() =>
 
 export const settingsPane = definePane<SettingsArgs>({
   kind: "window.settings",
+  name: "Settings",
   title: () => "Settings",
   icon: SettingsIcon,
   sheet: true,
