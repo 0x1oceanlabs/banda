@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "terminal.toml",
-  "description": "How Banda's terminal writes: its font, size and ligatures, and its\ncursor. Every key is optional.",
+  "description": "How Banda's terminal writes: its font, size and ligatures, its echo\nover a slow link, and its cursor. Every key is optional.",
   "type": "object",
   "properties": {
     "font": {
@@ -22,6 +22,11 @@
       "type": "boolean",
       "x-class": "device"
     },
+    "echo": {
+      "description": "Whether a letter typed over a slow link is drawn, underlined,\nbefore its machine sends it back: \"auto\" or \"off\".",
+      "$ref": "#/$defs/Echo",
+      "x-class": "device"
+    },
     "cursor": {
       "description": "The cursor, until a program asks for another.",
       "$ref": "#/$defs/CursorSettings",
@@ -30,6 +35,21 @@
   },
   "additionalProperties": false,
   "$defs": {
+    "Echo": {
+      "description": "Whether a letter typed over a slow link is drawn before its machine\nsends it back.",
+      "oneOf": [
+        {
+          "description": "Only while the machine's answer takes long enough to feel.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "Never: each letter shows as its machine sends it back.",
+          "type": "string",
+          "const": "off"
+        }
+      ]
+    },
     "CursorSettings": {
       "description": "The cursor, until a program asks for another.",
       "type": "object",

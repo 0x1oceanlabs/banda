@@ -38,6 +38,8 @@ function cssColor(color: number): string {
 }
 
 // Banda: the lines a cell's style draws over it.
+/** Banda: how much of its colour the line under a letter drawn ahead keeps. */
+const AHEAD_LINE = 0.45;
 const DECORATIONS = GHOSTTY_CELL.underline | GHOSTTY_CELL.strikethrough | GHOSTTY_CELL.overline;
 
 // Banda: the style bits a run of text shares, besides its foreground.
@@ -274,7 +276,11 @@ function drawRow(frame: Frame, rowIndex: number): void {
     context.fillStyle = cssColor(foregrounds[rowStart + column]!);
     const { left, width } = cellOf(frame, column, top);
     if ((style & GHOSTTY_CELL.underline) !== 0 || hoveredLink) {
+      // Banda: a letter drawn ahead of the machine has a fainter line (#1242).
+      const faint = inLink(snapshot.ahead ?? null, rowIndex, column);
+      if (faint) context.globalAlpha = AHEAD_LINE;
       context.fillRect(left, top + metrics.height - 2, width, 1);
+      if (faint) context.globalAlpha = 1;
     }
     if ((style & GHOSTTY_CELL.strikethrough) !== 0) {
       context.fillRect(left, top + Math.floor(metrics.height * 0.55), width, 1);

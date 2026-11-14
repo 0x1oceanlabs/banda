@@ -132,6 +132,41 @@ test("keys typed into arc's terminal go as they are typed, before the last one's
   expect(writes.length).toBeGreaterThanOrEqual(8)
 })
 
+test("over a slow link a letter typed shows at once, ahead of arc, once arc sent one back; where the program sends none back nothing shows (#1242)", async () => {
+  const { page, composer, folder } = await onArc()
+  const screen = await terminalOn(page, composer)
+  await screen.click()
+  await run(page, "true > first.txt")
+  await expect.poll(() => inFolder(folder, "first.txt")).toBe("")
+  // A round trip of a second. The first letter waits for arc, which is
+  // the link's measure; from then on what is typed shows before arc has it.
+  arc!.latency(1_000)
+  await page.keyboard.type("e")
+  await page.waitForTimeout(2_500)
+  await expect(screen).not.toHaveAttribute("data-ahead")
+  await page.keyboard.type("cho ahead")
+  await expect(screen).toHaveAttribute("data-ahead", "cho ahead", {
+    timeout: 500,
+  })
+  // At once: in a second arc has sent them back.
+  if (SHOTS)
+    await page.screenshot({ path: join(SHOTS, "terminal-echo-ahead.png") })
+  // arc sends them back: nothing is ahead, and the line is as typed.
+  await expect(screen).not.toHaveAttribute("data-ahead")
+  await run(page, " > typed.txt")
+  await expect.poll(() => inFolder(folder, "typed.txt")).toBe("ahead\n")
+
+  // A program that sends nothing back, as a password prompt: nothing is
+  // drawn for what it does not show.
+  await run(page, "stty -echo")
+  await page.waitForTimeout(2_500)
+  await page.keyboard.type("echo secret > quiet.txt")
+  await page.waitForTimeout(300)
+  await expect(screen).not.toHaveAttribute("data-ahead")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => inFolder(folder, "quiet.txt")).toBe("secret\n")
+})
+
 test("the terminal's key, from arc's Thread, opens arc's terminal", async () => {
   const { page, composer, folder } = await onArc()
   await composer.focus()

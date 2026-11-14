@@ -157,6 +157,12 @@ export interface GhosttySnapshot {
   readonly cursorStyle: number;
   readonly dirtyRows: ReadonlySet<number>;
   readonly grid: GhosttyGrid;
+  /** Banda: the cells that hold letters drawn ahead of the machine
+   * (`ahead.ts`, #1242): their underline is drawn fainter. */
+  readonly ahead?: {
+    readonly start: { readonly x: number; readonly y: number };
+    readonly end: { readonly x: number; readonly y: number };
+  };
 }
 
 /** Banda: a cell's width, GHOSTTY_CELL_WIDE's, as the grid holds it. */

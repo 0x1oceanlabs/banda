@@ -31,6 +31,19 @@ pub enum CursorStyle {
     Underline,
 }
 
+/// Whether a letter typed over a slow link is drawn before its machine
+/// sends it back.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "terminal/")]
+pub enum Echo {
+    /// Only while the machine's answer takes long enough to feel.
+    #[default]
+    Auto,
+    /// Never: each letter shows as its machine sends it back.
+    Off,
+}
+
 /// The cursor, until a program asks for another.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
@@ -41,8 +54,8 @@ pub struct CursorSettings {
     pub blink: Option<bool>,
 }
 
-/// How Banda's terminal writes: its font, size and ligatures, and its
-/// cursor. Every key is optional.
+/// How Banda's terminal writes: its font, size and ligatures, its echo
+/// over a slow link, and its cursor. Every key is optional.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct TerminalSettings {
@@ -56,6 +69,9 @@ pub struct TerminalSettings {
     /// Whether -> => != and the like are drawn as one sign, as the font
     /// draws them.
     pub ligatures: Option<bool>,
+    /// Whether a letter typed over a slow link is drawn, underlined,
+    /// before its machine sends it back: "auto" or "off".
+    pub echo: Option<Echo>,
     /// The cursor, until a program asks for another.
     #[serde(default)]
     pub cursor: CursorSettings,
@@ -78,6 +94,7 @@ pub struct Writing {
     pub font: Option<String>,
     pub size: Option<f64>,
     pub ligatures: bool,
+    pub echo: Echo,
     pub cursor: CursorStyle,
     pub blink: bool,
 }
@@ -92,6 +109,7 @@ impl OneFile for TerminalSettings {
             font: None,
             size: None,
             ligatures: Some(true),
+            echo: Some(Echo::Auto),
             cursor: CursorSettings {
                 style: Some(CursorStyle::Block),
                 blink: Some(true),
@@ -104,6 +122,7 @@ impl OneFile for TerminalSettings {
             font: self.font.or(under.font),
             size: self.size.or(under.size),
             ligatures: self.ligatures.or(under.ligatures),
+            echo: self.echo.or(under.echo),
             cursor: self.cursor.over(under.cursor),
         }
     }
@@ -114,6 +133,7 @@ impl OneFile for TerminalSettings {
             font: self.font,
             size: self.size,
             ligatures: self.ligatures.unwrap_or(true),
+            echo: self.echo.unwrap_or_default(),
             cursor: cursor.style.unwrap_or_default(),
             blink: cursor.blink.unwrap_or(true),
         }
@@ -163,6 +183,7 @@ mod tests {
         font: None,
         size: None,
         ligatures: true,
+        echo: Echo::Auto,
         cursor: CursorStyle::Block,
         blink: true,
     };
@@ -180,7 +201,7 @@ mod tests {
     #[test]
     fn the_file_chooses_each_key_and_keeps_the_rest() {
         let (writing, problems) = resolved(Some(
-            "font = \"Iosevka\"\nsize = 13.5\nligatures = false\n[cursor]\nstyle = \"bar\"\n",
+            "font = \"Iosevka\"\nsize = 13.5\nligatures = false\necho = \"off\"\n[cursor]\nstyle = \"bar\"\n",
         ));
         assert!(problems.is_empty());
         assert_eq!(
@@ -189,6 +210,7 @@ mod tests {
                 font: Some("Iosevka".to_owned()),
                 size: Some(13.5),
                 ligatures: false,
+                echo: Echo::Off,
                 cursor: CursorStyle::Bar,
                 blink: true,
             }

@@ -41,6 +41,7 @@ import {
   RotateCcwIcon,
   TerminalIcon,
 } from "lucide-react"
+import { Ahead, LOST } from "./ahead"
 import { Input } from "./input"
 import { outsideOf, type Target, targetOf } from "./links"
 import { type MenuAt, TerminalMenu, THIS_DEVICE } from "./TerminalMenu"
@@ -332,6 +333,9 @@ function Screen({
   const writing = useFile(TERMINAL_FILE)
   const writingNow = useRef(writing)
   const refont = useRef<() => void>(() => {})
+  // `terminal.toml`'s echo changed: what it draws ahead of its machine
+  // over a slow link (#1242) starts over.
+  const reecho = useRef<() => void>(() => {})
 
   useEffect(() => {
     focusedNow.current = focused
@@ -398,7 +402,35 @@ function Screen({
     })
     // A key goes to a shell that runs, and to one its machine has parked,
     // so a key there says it was not sent rather than vanish.
+    // Over a slow link a letter shows at once, until its machine sends
+    // it back (#1242): only to a shell that runs, and taken back where
+    // no answer comes.
+    const ahead = new Ahead()
+    let losing: ReturnType<typeof setTimeout> | undefined
+    // Its mount says them too, as the screen is a canvas.
+    let shownAhead = ""
+    const showAhead = () => {
+      const text = ahead.text()
+      if (text === shownAhead) return
+      shownAhead = text
+      drawn?.setAhead(text)
+      if (text) element.dataset.ahead = text
+      else delete element.dataset.ahead
+    }
+    const startOver = () => {
+      ahead.over()
+      showAhead()
+    }
+    reecho.current = startOver
     typed.current = (data) => {
+      if (running && writingNow.current.echo === "auto") {
+        ahead.typed(data, performance.now())
+        showAhead()
+        clearTimeout(losing)
+        // What its machine has not sent back by then is taken back.
+        if (ahead.waits)
+          losing = setTimeout(() => ahead.waits && startOver(), LOST)
+      }
       if (running || parked) input.type(data)
     }
     // Whatever the Pane now says of its shell, its machine, or the Person
@@ -424,6 +456,8 @@ function Screen({
       switch (piece.kind) {
         case "snapshot":
         case "resumed":
+          // The link dropped, or the screen is new: nothing waits.
+          startOver()
           if (piece.kind === "snapshot") {
             drawn.resetAndWrite(piece.history)
             seen = piece.drawn
@@ -456,7 +490,9 @@ function Screen({
           )
           break
         case "output":
+          ahead.heard(piece.text, performance.now())
           drawn.write(piece.text)
+          showAhead()
           if (seen && piece.at !== undefined) seen = { ...seen, at: piece.at }
           break
         case "resized":
@@ -642,6 +678,7 @@ function Screen({
     return () => {
       left = true
       clearTimeout(settling)
+      clearTimeout(losing)
       stop()
       stopWatchingTheme()
       stopObeying()
@@ -659,6 +696,7 @@ function Screen({
     if (JSON.stringify(was) === JSON.stringify(writing)) return
     refont.current()
     surface.current?.setCursor(cursorOf(writing))
+    reecho.current()
   }, [writing])
 
   // The footer under the screen takes its room from the screen, inside

@@ -17,6 +17,11 @@
 # them; each still takes its cells.
 # ligatures = true
 
+# Over a slow link to another machine, a letter you type is drawn at
+# once, underlined, until that machine sends it back: "auto", only while
+# its answer takes long enough to feel, or "off".
+# echo = "auto"
+
 [cursor]
 # "block", "bar" or "underline", until a program asks for another.
 # style = "block"
