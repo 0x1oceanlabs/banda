@@ -5,8 +5,8 @@ import { type Listed, NO_REASON } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { describe, expect, test } from "vitest"
-import type { Row } from "./rows"
-import { awayShort } from "../machines/words"
+import type { Row } from "../rows"
+import { awayShort } from "../../machines/words"
 import {
   agoSaid,
   type CardModel,
@@ -21,8 +21,8 @@ import {
   timeShown,
   workSaid,
   worksWords,
-} from "./card"
-import { atOf } from "./inbox"
+} from "./model"
+import { atOf } from "../inbox"
 
 /** Tuesday, 10 November 2026, 15:00 by the local clock. */
 const NOW = new Date(2026, 10, 10, 15, 0).getTime()

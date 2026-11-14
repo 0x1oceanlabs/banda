@@ -1,5 +1,5 @@
 /**
- * How a card's time is drawn (`card.ts`, spec §2.5): short and still,
+ * How a card's time is drawn (`model.ts`, spec §2.5): short and still,
  * "now", "14m", "2h", "3d", "Mar 3"; put off, when it wakes, "18:30",
  * "Tue 9:00", "Mar 3", "someday" or "when done"; at a usage limit, when
  * its Agent goes on, "15:00". Nothing ticks by the second: one timer
@@ -9,7 +9,7 @@
 import { COLOR_CLASS } from "@banda/ui/components/banda-mark"
 import { cn } from "@banda/ui/lib/utils"
 import { short, wakes } from "@banda/ui/lib/words"
-import type { Quiet, Time, Tone } from "./card"
+import type { Quiet, Time, Tone } from "./model"
 
 /** Each call's colour, as the Mark's; woke's yellow darker on a light
  * theme, where it is small text. */
