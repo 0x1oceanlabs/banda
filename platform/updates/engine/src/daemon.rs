@@ -66,7 +66,12 @@ pub async fn run(serves: Serves) {
         let version = running.and_then(|r| r.version);
         // The last move, once.
         if let Some(moved) = guard::moved(&serves.engine).filter(|m| guarded != Some(m.at)) {
-            match guard::guard(&moved, version.as_deref(), banda_kernel::now_ms()) {
+            match guard::guard(
+                &moved,
+                version.as_deref(),
+                &guard::bad(&serves.engine),
+                banda_kernel::now_ms(),
+            ) {
                 Guard::Fine => guarded = Some(moved.at),
                 Guard::Wait => {}
                 Guard::PutBack => {

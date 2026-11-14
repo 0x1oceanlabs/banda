@@ -140,11 +140,13 @@ pub enum Guard {
 }
 
 /// What the guard does about `moved`, as the engine that answers says
-/// `running`, at `now`.
-pub fn guard(moved: &Moved, running: Option<&str>, now: i64) -> Guard {
+/// `running`, at `now`. A move onto a copy already marked `bad` was put
+/// back, by the guard or by the engine as it came back from it: put back
+/// again, it would stop the copy before as it starts, again and again.
+pub fn guard(moved: &Moved, running: Option<&str>, bad: &[String], now: i64) -> Guard {
     let past = running
         .is_some_and(|running| running == moved.to || crate::feed::is_above(running, &moved.to));
-    if past || now - moved.at >= HISTORY_MS {
+    if past || bad.contains(&moved.to) || now - moved.at >= HISTORY_MS {
         Guard::Fine
     } else if now - moved.at < GRACE_MS {
         Guard::Wait
@@ -166,24 +168,35 @@ mod tests {
             arrived: false,
         };
         assert_eq!(
-            guard(&moved, Some("0.1.0-dev.12"), 1_000 + GRACE_MS * 2),
+            guard(&moved, Some("0.1.0-dev.12"), &[], 1_000 + GRACE_MS * 2),
             Guard::Fine
         );
-        assert_eq!(guard(&moved, None, 1_000 + 5_000), Guard::Wait);
+        assert_eq!(guard(&moved, None, &[], 1_000 + 5_000), Guard::Wait);
         assert_eq!(
-            guard(&moved, Some("0.1.0-dev.11"), 1_000 + 5_000),
+            guard(&moved, Some("0.1.0-dev.11"), &[], 1_000 + 5_000),
             Guard::Wait
         );
-        assert_eq!(guard(&moved, None, 1_000 + GRACE_MS), Guard::PutBack);
+        assert_eq!(guard(&moved, None, &[], 1_000 + GRACE_MS), Guard::PutBack);
         // Newer than the copy, or long ago: it came some other way.
         assert_eq!(
-            guard(&moved, Some("0.1.0-dev.13"), 1_000 + GRACE_MS),
+            guard(&moved, Some("0.1.0-dev.13"), &[], 1_000 + GRACE_MS),
             Guard::Fine
         );
-        assert_eq!(guard(&moved, None, 1_000 + 60 * 60 * 1000), Guard::Fine);
         assert_eq!(
-            guard(&moved, Some("0.1.0-dev.11"), 1_000 + GRACE_MS),
+            guard(&moved, None, &[], 1_000 + 60 * 60 * 1000),
+            Guard::Fine
+        );
+        assert_eq!(
+            guard(&moved, Some("0.1.0-dev.11"), &[], 1_000 + GRACE_MS),
             Guard::PutBack
+        );
+        // Put back already: the copy before runs, or is starting, and
+        // stays.
+        let bad = ["0.1.0-dev.12".to_owned()];
+        assert_eq!(guard(&moved, None, &bad, 1_000 + GRACE_MS), Guard::Fine);
+        assert_eq!(
+            guard(&moved, Some("0.1.0-dev.11"), &bad, 1_000 + GRACE_MS),
+            Guard::Fine
         );
     }
 
