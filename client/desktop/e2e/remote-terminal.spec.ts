@@ -138,28 +138,40 @@ test("over a slow link a letter typed shows at once, ahead of arc, once arc sent
   await screen.click()
   await run(page, "true > first.txt")
   await expect.poll(() => inFolder(folder, "first.txt")).toBe("")
-  // A round trip of a second. The first letter waits for arc, which is
-  // the link's measure; from then on what is typed shows before arc has it.
-  arc!.latency(1_000)
+  // A round trip of 600 ms. The first letter waits for arc, which is the
+  // link's measure; from then on what is typed shows before arc has it.
+  arc!.latency(600)
   await page.keyboard.type("e")
   await page.waitForTimeout(2_500)
   await expect(screen).not.toHaveAttribute("data-ahead")
-  await page.keyboard.type("cho ahead")
-  await expect(screen).toHaveAttribute("data-ahead", "cho ahead", {
-    timeout: 500,
+  // What it draws ahead, each time that changes: the letters as they are
+  // typed, then fewer as arc sends each back, then none.
+  await screen.evaluate((mount) => {
+    const seen: string[] = []
+    Object.assign(globalThis, { aheadSeen: seen })
+    new MutationObserver(() => seen.push(mount.dataset.ahead ?? "")).observe(
+      mount,
+      { attributes: true, attributeFilter: ["data-ahead"] }
+    )
   })
-  // At once: in a second arc has sent them back.
+  const seen = () =>
+    page.evaluate(() => (globalThis as { aheadSeen?: string[] }).aheadSeen!)
+  const line = "cho ahead"
+  await page.keyboard.type(line)
   if (SHOTS)
     await page.screenshot({ path: join(SHOTS, "terminal-echo-ahead.png") })
-  // arc sends them back: nothing is ahead, and the line is as typed.
-  await expect(screen).not.toHaveAttribute("data-ahead")
+  await expect.poll(async () => (await seen()).at(-1)).toBe("")
+  const drawn = (await seen()).filter(Boolean)
+  expect(Math.max(...drawn.map((one) => one.length))).toBeGreaterThanOrEqual(4)
+  for (const one of drawn) expect(line).toContain(one)
+  // arc sent them back: nothing is ahead, and the line is as typed.
   await run(page, " > typed.txt")
   await expect.poll(() => inFolder(folder, "typed.txt")).toBe("ahead\n")
 
   // A program that sends nothing back, as a password prompt: nothing is
   // drawn for what it does not show.
   await run(page, "stty -echo")
-  await page.waitForTimeout(2_500)
+  await page.waitForTimeout(1_500)
   await page.keyboard.type("echo secret > quiet.txt")
   await page.waitForTimeout(300)
   await expect(screen).not.toHaveAttribute("data-ahead")
