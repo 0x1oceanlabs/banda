@@ -9,9 +9,8 @@
  */
 import { groupState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
-import { isShowing } from "../calls/sight"
 import { listedIn, type Stores } from "../calls/stores"
-import type { Entry } from "../tiling/model"
+import { type Entry, isShowing } from "../tiling/model"
 import type { Owner, Shows } from "../tiling/shows"
 
 /** The Tiling's port to `stores`, the same for the Window's life, with

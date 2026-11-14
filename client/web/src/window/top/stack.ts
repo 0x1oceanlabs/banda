@@ -143,6 +143,15 @@ export class Stack {
     close()
   }
 
+  /** Takes away the part on `layer`, wherever the focus is and whatever
+   * lies over it, as `pane.close` takes the Sheet (ADR 0102, decision 5);
+   * false when none shows there, or the one there closes only by itself. */
+  close(layer: Layer): boolean {
+    const close = this.#shown.findLast((one) => one.layer === layer)?.close
+    close?.()
+    return close !== undefined
+  }
+
   /** Where the keys are, by the stack: the place they last were in the
    * highest part that takes them, else under them all, if it is still
    * there; and what they fall to with that place gone: the part's root,

@@ -1,58 +1,11 @@
 {
   "actions": [
     {
-      "id": "pane.new",
-      "title": "New Pane",
-      "section": "Panes",
-      "keys": [
-        {
-          "code": "KeyN",
-          "mod": true
-        }
-      ]
-    },
-    {
-      "id": "pane.close",
-      "title": "Close the Pane",
-      "section": "Panes",
-      "keys": [
-        {
-          "code": "KeyW",
-          "mod": true
-        }
-      ]
-    },
-    {
       "id": "link.open",
       "title": "Open a link",
       "section": "Panes",
       "keys": [],
       "unlisted": true
-    },
-    {
-      "id": "pane.put-away",
-      "title": "Close every Pane that shows an Item, on any workspace",
-      "section": "Panes",
-      "keys": [],
-      "unlisted": true,
-      "args": {
-        "type": "object",
-        "properties": {
-          "project": {
-            "type": "string",
-            "description": "the Project of the Item"
-          },
-          "item": {
-            "type": "string",
-            "description": "the Item's id in its Project"
-          }
-        },
-        "required": [
-          "project",
-          "item"
-        ],
-        "additionalProperties": false
-      }
     },
     {
       "id": "pane.pop-out",
@@ -70,20 +23,6 @@
           "mod": true
         }
       ]
-    },
-    {
-      "id": "pane.pick",
-      "title": "Go to a Pane where a workspace shows it, or open it",
-      "section": "Panes",
-      "keys": [],
-      "unlisted": true
-    },
-    {
-      "id": "pane.beside",
-      "title": "Bring a Pane beside the one in focus",
-      "section": "Panes",
-      "keys": [],
-      "unlisted": true
     },
     {
       "id": "calls.answer",

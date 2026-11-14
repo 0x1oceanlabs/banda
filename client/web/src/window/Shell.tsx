@@ -26,7 +26,7 @@ import type { Layout } from "../bar/layout/arrange"
 import { PARTS } from "../bar/layout/placed"
 import { Watches } from "../calls/Watches"
 import { quiet } from "../calls/quiet"
-import { besideOf, callAfter, isShowing, sightOf } from "../calls/sight"
+import { besideOf, callAfter, sightOf } from "../calls/sight"
 import {
   followCalls,
   itemsOf,
@@ -123,24 +123,20 @@ import {
 import { Workspaces } from "../tiling/Workspaces"
 import {
   closing,
-  closingShown,
-  openingFrom,
-  picking,
-  placed,
   focusedIn,
-  strayedIn,
-  runAction,
+  openingFrom,
+  placed,
   startingHere,
-  type Shell as Parts,
-  useWindowApi,
-} from "./actions"
+  strayedIn,
+} from "../tiling/opening"
+import { runAction, type Shell as Parts, useWindowApi } from "./actions"
 import { useAsked } from "./asked"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
-import { Layered, TopPart, useTopFollows, useTops } from "./top"
+import { closeTop, Layered, TopPart, useTopFollows, useTops } from "./top"
 
 /** The modules' sources, as a route names one for the menu to show alone. */
 const menuSources = sources.map(({ source }) => source)
@@ -293,18 +289,6 @@ export function Shell({
     projectsNow.current = projects
   }, [projects])
   useMadeGoesHome(projects, placing, change)
-  // The Person archives a Thread, from its row's menu, the Banda menu or
-  // Alt+S, or brings it back. Archived, it is put away: every Pane that
-  // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
-  const closeShown = useCallback(
-    (project: ProjectId, thing: string) => {
-      const shown = { project, about: thing }
-      for (const entry of entries(drawnNow()))
-        if (isShowing(entry, shown, showsOf))
-          change((w) => closingShown(w, shown))
-    },
-    [change, drawnNow]
-  )
   // How many Agents worked as the Person asked to quit, while Banda asks
   // whether to stop them (ADR 0086, decision 3).
   const [quitting, setQuitting] = useState<number | null>(null)
@@ -502,12 +486,14 @@ export function Shell({
     },
     // The one answer to `pane.pick` (ADR 0087, decision 7): the Tiling
     // goes to the Pane, or opens it, and it comes to the left once drawn.
-    pick: (project, pane) =>
-      void changing((w) =>
-        picking(w, project, paneOn(project, pane), placing)
-      ).then((entry) => {
+    reach: (how) =>
+      void changing(how).then((entry) => {
         if (entry) setReveal({ entry, how: "left" })
       }),
+    drawn: drawnNow,
+    paneOn,
+    // The Sheet, by the Top layer's one stack (ADR 0110, step 3).
+    uncover: () => closeTop("sheet"),
     look: () => told,
     quiet: quiet.on,
     projects: () => open,
@@ -529,10 +515,8 @@ export function Shell({
       if (call)
         parts.run("pane.pick", { project: call.project, pane: call.pane })
     },
-    putAway: closeShown,
     menu: toggleMenu,
     fillPeek,
-    closeSheet: sheet.close,
     glance,
     pickFlow: (to) => writeFlow(device.settings.set, pickFlow(to)),
     peek: (pane, project) =>

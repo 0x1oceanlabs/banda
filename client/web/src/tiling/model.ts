@@ -150,6 +150,24 @@ export function entries(state: Workspaces): Entry[] {
   )
 }
 
+/** Whether an entry shows the thing, as `shows` says what a Pane shows. */
+export function isShowing(
+  entry: { project: ProjectId; pane: PaneState },
+  thing: { project: ProjectId; about: string },
+  shows: (pane: PaneState) => string | null
+): boolean {
+  return entry.project === thing.project && shows(entry.pane) === thing.about
+}
+
+/** The entry that shows the thing, on any workspace, if one does. */
+export function showing(
+  workspaces: Workspaces,
+  thing: { project: ProjectId; about: string },
+  shows: (pane: PaneState) => string | null
+): Entry | undefined {
+  return entries(workspaces).find((entry) => isShowing(entry, thing, shows))
+}
+
 /** The width a column of `workspace` is drawn at. */
 export function widthIn(
   workspace: Workspace,

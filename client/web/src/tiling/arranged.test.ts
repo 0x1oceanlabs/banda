@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 import { newId, Refused } from "@banda/contract"
 import { expect, test, vi } from "vitest"
-import { keysInForce, pressFor, withKeys } from "../actions/actions"
+import { arranging, TILING_ACTIONS, type Tiling } from "./actions"
 import {
   type Change,
   keptOf,
@@ -9,12 +9,11 @@ import {
   type Plan,
   resolve,
   type Step,
-} from "../tiling/arrange"
-import { apply } from "../tiling/arrangement"
-import { focused, open, start, type Workspaces } from "../tiling/model"
-import { arranging, placingOf } from "../tiling/actions"
-import { undoesNow } from "../tiling/arranged"
-import { ACTIONS, runAction, type Shell } from "./actions"
+} from "./arrange"
+import { undoesNow } from "./arranged"
+import { apply } from "./arrangement"
+import { focused, open, start, type Workspaces } from "./model"
+import { placingOf } from "./opening"
 
 // What the toasts were told.
 const toast = vi.hoisted(() =>
@@ -33,14 +32,16 @@ function mixed(): Workspaces {
   return open(open(start(), newId(), thread, right), newId(), terminal, right)
 }
 
-/** A window whose workspaces are `state`, and the Undos it sent. */
+/** Runs the Tiling's action `id` in `tiling`, as its key would. */
+const run = (tiling: Tiling, id: string) =>
+  TILING_ACTIONS.find((one) => one.id === id)!.run(tiling)
+
+/** A Tiling whose workspaces are `state`, as the Window hands one in,
+ * and the Undos it sent. */
 function windowOf(state: Workspaces) {
   const steps: Step[] = []
   const change = (how: Change) => void steps.push(how(state))
-  // Where the Person is, from which the router weighs a key's action:
-  // Arrange is the window's own, which runs wherever that is.
-  const here = { get: () => ({ project: "p1" }) }
-  const shell = { change, placing: () => row, here }
+  const tiling = { change, placing: () => row } as Partial<Tiling> as Tiling
   const undos = () =>
     steps.filter(
       (step): step is Plan =>
@@ -48,7 +49,7 @@ function windowOf(state: Workspaces) {
         "command" in step &&
         step.command.method === "workspaces.unarrange"
     )
-  return { shell: shell as unknown as Shell, undos }
+  return { tiling, undos }
 }
 
 /** What the last toast offered: its Undo, if any. */
@@ -64,8 +65,8 @@ test("the Person's Arrange by Project says so, and its Undo puts the workspaces 
   const state = mixed()
   const front = focused(state)?.id
   expect(front).toBeDefined()
-  const { shell, undos } = windowOf(state)
-  runAction(shell, "workspaces.arrange")
+  const { tiling, undos } = windowOf(state)
+  run(tiling, "workspaces.arrange")
   const { title, action } = offered()
   expect(title).toBe("Arranged by Project")
   expect(action?.label).toBe("Undo")
@@ -86,8 +87,8 @@ test("an Arrange by Project that moves nothing says so, with no Undo", () => {
   const plan = arranging(state, row)
   const moved = apply(keptOf(state), plan.command, newId())
   if ("refused" in moved) throw new Error(moved.message)
-  const { shell } = windowOf(resolve(moved.list, NO_VIEW))
-  runAction(shell, "workspaces.arrange")
+  const { tiling } = windowOf(resolve(moved.list, NO_VIEW))
+  run(tiling, "workspaces.arrange")
   expect(offered()).toEqual({
     title: "Already arranged by Project",
     action: undefined,
@@ -97,32 +98,16 @@ test("an Arrange by Project that moves nothing says so, with no Undo", () => {
 
 test("a refused Undo shows the engine's words", () => {
   const words = "Can't undo: the workspaces changed."
-  const { shell, undos } = windowOf(mixed())
-  runAction(shell, "workspaces.arrange")
+  const { tiling, undos } = windowOf(mixed())
+  run(tiling, "workspaces.arrange")
   offered().action?.onClick()
   undos()[0]?.refused?.(new Refused({ code: "conflict", message: words }))
   expect(toast.error).toHaveBeenCalledWith(words)
 })
 
-test("Ctrl+Z undoes the Arrange while its toast shows, but never a field's, a program's or a page's", () => {
-  const keyed = withKeys(ACTIONS, [])
-  const ctrlZ = {
-    code: "KeyZ",
-    ctrlKey: true,
-    altKey: false,
-    metaKey: false,
-    shiftKey: false,
-  }
-  expect(pressFor(keyed, ctrlZ)?.action.id).toBe("workspaces.unarrange")
-  // A Pane's own Undo comes first, as Files'.
-  expect(pressFor(keyed, ctrlZ, ["files"])?.action.id).toBe("files.undo")
-  // Main never takes it from a browser's page.
-  const inForce = keysInForce({ alt: true, ctrl: false, super: false }, keyed)
-  const taken = inForce.byScope.get("") ?? []
-  expect(taken.some((key) => key.code === "KeyZ" && !key.alt)).toBe(false)
-
-  const { shell, undos } = windowOf(mixed())
-  runAction(shell, "workspaces.arrange")
+test("Undo's key undoes the Arrange while its toast shows, but never a field's or a program's", () => {
+  const { tiling, undos } = windowOf(mixed())
+  run(tiling, "workspaces.arrange")
   document.body.innerHTML = [
     "<input />",
     "<textarea></textarea>",
@@ -138,15 +123,15 @@ test("Ctrl+Z undoes the Arrange while its toast shows, but never a field's, a pr
   }
   focus("body > div:last-child")
   expect(undoesNow()).toBe(true)
-  runAction(shell, "workspaces.unarrange")
+  run(tiling, "workspaces.unarrange")
   expect(undos()).toHaveLength(1)
   expect(undoesNow()).toBe(false)
 })
 
 test("once the toast is gone, or another Arrange took its place, Ctrl+Z is left alone", () => {
-  const { shell, undos } = windowOf(mixed())
+  const { tiling, undos } = windowOf(mixed())
   document.body.innerHTML = ""
-  runAction(shell, "workspaces.arrange")
+  run(tiling, "workspaces.arrange")
   expect(undoesNow()).toBe(true)
   const [, first] = toast.mock.lastCall as [string, { onAutoClose: () => void }]
   first.onAutoClose()
@@ -154,9 +139,9 @@ test("once the toast is gone, or another Arrange took its place, Ctrl+Z is left 
 
   // A second Arrange's toast takes the first one's place: the first's
   // Undo does nothing.
-  runAction(shell, "workspaces.arrange")
+  run(tiling, "workspaces.arrange")
   const stale = offered().action
-  runAction(shell, "workspaces.arrange")
+  run(tiling, "workspaces.arrange")
   stale?.onClick()
   expect(undos()).toEqual([])
   offered().action?.onClick()

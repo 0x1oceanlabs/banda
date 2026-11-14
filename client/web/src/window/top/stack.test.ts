@@ -120,6 +120,17 @@ test("Esc takes away the part on top, one for each Esc: a menu over the Sheet ov
   expect(esc()).toBe(true)
 })
 
+test("a part is taken away by its layer, as the Sheet under a menu, whatever lies over it; a layer with none, or one that closes only by itself, says so", () => {
+  const sheet = show("sheet", { layer: "sheet" })
+  const menu = show("menu")
+  expect(stack.close("sheet")).toBe(true)
+  expect(sheet.close).toHaveBeenCalledOnce()
+  expect(menu.close).not.toHaveBeenCalled()
+  expect(stack.close("drawer")).toBe(false)
+  show("quit", { layer: "drawer", closes: false })
+  expect(stack.close("drawer")).toBe(false)
+})
+
 test("an Esc is taken wherever the focus is, and so that nothing after the stack acts on it", () => {
   const { message } = pane()
   const peek = show("peek", { layer: "peek", keys: false })

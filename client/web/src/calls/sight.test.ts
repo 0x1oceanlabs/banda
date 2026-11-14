@@ -7,6 +7,7 @@ import {
   current,
   open,
   share,
+  showing,
   start,
   widthIn,
   type Workspaces,
@@ -16,7 +17,6 @@ import {
   callAfter,
   nextCall,
   type Shows,
-  showing,
   type Shown,
   sightOf,
 } from "./sight"

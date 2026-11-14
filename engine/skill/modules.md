@@ -365,6 +365,8 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Go to workspace 7 (`workspace.go-7`), Alt+7
 - Go to workspace 8 (`workspace.go-8`), Alt+8
 - Go to workspace 9 (`workspace.go-9`), Alt+9
+- New Pane (`pane.new`), Alt+N
+- Close the Pane (`pane.close`), Alt+W
 - Move the Pane to workspace 1 (`pane.send-1`), Alt+Shift+1
 - Move the Pane to workspace 2 (`pane.send-2`), Alt+Shift+2
 - Move the Pane to workspace 3 (`pane.send-3`), Alt+Shift+3
@@ -390,8 +392,6 @@ The window's own actions: the tiling of columns, Panes and workspaces, the sideb
 
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
-- New Pane (`pane.new`), Alt+N
-- Close the Pane (`pane.close`), Alt+W
 - The Pane in a window of its own, and back (`pane.pop-out`)
 - The drawer: a quick Thread over the workspace (`drawer.toggle`), Alt+`
 - Go to what calls you (`calls.answer`), Alt+U

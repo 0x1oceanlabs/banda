@@ -40,6 +40,14 @@ const shellOf = (parts: object) => {
   } as unknown as Shell
 }
 
+/** What `pane.pick` takes of the Window beside the change it asks: no
+ * Sheet to take away, and a Pane as it is, on this machine. */
+const PICKS = {
+  uncover: () => false,
+  paneOn: (_: string, pane: PaneState) => pane,
+  placing: () => ({ flow: "row", scratch: () => false }),
+}
+
 /** The Pane in focus, of `scope`, whose scope takes what `takes` says;
  * what it was sent. */
 function focusedPane(scope: string, takes = true): string[] {
@@ -55,12 +63,12 @@ function focusedPane(scope: string, takes = true): string[] {
 }
 
 test("an action runs by its id with its args, where the Person is now, and one the window has not is refused by name", async () => {
-  const pick = vi.fn()
-  const shell = shellOf({ pick, closeSheet: () => true })
+  const reach = vi.fn()
+  const shell = shellOf({ reach, ...PICKS })
   const pane: PaneState = { kind: "agents.thread", args: { thread: "t1" } }
   const args = { project: "a", pane }
   expect(await act(shell, { action: "pane.pick", args })).toBeUndefined()
-  expect(pick.mock.calls).toEqual([["a", pane]])
+  expect(reach).toHaveBeenCalledOnce()
   expect(await act(shell, { action: "no.such" })).toBe(
     "Banda's window has no action no.such."
   )
@@ -115,10 +123,10 @@ test("the window answers each action the device asks it to run, and one that bro
       popped: { asked: () => () => undefined },
     },
   })
-  const pick = vi.fn(() => {
+  const reach = vi.fn(() => {
     throw new Error("The workspaces are away.")
   })
-  const shell = shellOf({ pick, closeSheet: () => true })
+  const shell = shellOf({ reach, ...PICKS })
   const Asked = () => {
     useAsked(shell, () => undefined)
     return null

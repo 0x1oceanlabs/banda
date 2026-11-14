@@ -26,7 +26,8 @@ import { labelOf } from "../registry"
 import { gateOf, type Handle, PaneMount, usePaneHandles } from "../tiling/mount"
 import { Elsewhere } from "../tiling/PaneFrame"
 import { PaneSlot } from "../tiling/PaneSlot"
-import { opening, type Shell } from "./actions"
+import { opening } from "../tiling/opening"
+import type { Shell } from "./actions"
 import { useTop } from "./top"
 
 /** What peeks over the desk: a Pane of a Project, and whether it fills
