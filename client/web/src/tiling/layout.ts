@@ -606,3 +606,81 @@ function go(
     () => shown
   ).to(0, move, 1)
 }
+
+/**
+ * Where a swipe let go lands, as niri's view gesture does: going from
+ * `from`, it would come to rest by itself at `rest`; it lands on the snap
+ * nearest there. A snap is where a column's left or right edge meets the
+ * room's, never past the first column's left or the last's right, and the
+ * focus goes to the furthest column whole there, the way it went; with
+ * `center = "always"`, where a column's middle meets the room's, and the
+ * focus goes to that column. A Group that fills the screen shows whole
+ * or not at all.
+ */
+export function landing(
+  all: readonly Place[],
+  columns: readonly {
+    filled?: boolean
+    ends?: { first: boolean; last: boolean }
+  }[],
+  { pad, inner }: { pad: number; inner: number },
+  center: Center,
+  { from, rest }: { from: number; rest: number }
+): { at: number; id: string } | undefined {
+  const head = all[0]
+  const tail = all.at(-1)
+  if (!head || !tail) return undefined
+  const leftOf = (place: Place) => place.left - pad
+  const rightOf = (place: Place) => place.right - pad - inner
+  const first = leftOf(head)
+  const last = Math.max(first, rightOf(tail))
+  const clamp = (at: number) => Math.min(last, Math.max(first, at))
+  // Each Group that fills the screen, from its first column's left to its
+  // last's right.
+  const groups: { left: number; right: number }[] = []
+  all.forEach((place, c) => {
+    const column = columns[c]
+    if (!column?.filled) return
+    if (column.ends?.first || !groups.length) groups.push({ ...place })
+    else groups[groups.length - 1]!.right = place.right
+  })
+  const cuts = (at: number) =>
+    groups.some(({ left, right }) => {
+      const from = at + pad
+      const to = from + inner
+      const whole = left >= from - 0.5 && right <= to + 0.5
+      return !whole && left < to && right > from
+    })
+  const centred = center === "always"
+  const snaps: { at: number; c: number; off: number }[] = centred
+    ? []
+    : [
+        { at: first, c: 0, off: 0 },
+        { at: last, c: all.length - 1, off: 0 },
+      ]
+  all.forEach((place, c) => {
+    const sides =
+      centred && place.right - place.left < inner
+        ? [(leftOf(place) + rightOf(place)) / 2]
+        : [leftOf(place), rightOf(place)]
+    for (const side of sides) {
+      const at = clamp(side)
+      if (centred || (at > first && at < last))
+        snaps.push({ at, c, off: Math.abs(at - side) })
+    }
+  })
+  const kept = snaps.filter((snap) => !cuts(snap.at))
+  const snap = (kept.length ? kept : snaps).reduce((near, one) => {
+    const by = Math.abs(one.at - rest) - Math.abs(near.at - rest)
+    return by < 0 || (by === 0 && one.off < near.off) ? one : near
+  })
+  if (centred) return { at: snap.at, id: all[snap.c]!.id }
+  const whole = (place: Place | undefined) =>
+    place !== undefined &&
+    place.left >= snap.at + pad - 0.5 &&
+    place.right <= snap.at + pad + inner + 0.5
+  const way = rest >= from ? 1 : -1
+  let c = snap.c
+  while (whole(all[c + way])) c += way
+  return { at: snap.at, id: all[c]!.id }
+}
