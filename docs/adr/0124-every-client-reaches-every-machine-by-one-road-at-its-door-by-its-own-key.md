@@ -294,6 +294,17 @@ repository), with an adversarial check.
   is not there, does not answer in three seconds, or serves no door. A
   window that lets a device in on every machine will hand these on. This
   is the one program the devices module starts on the host.
+- **The window hands a device the machines it joined (SE5, PR 4b).**
+  A machine never vouches for another, so the window that lets a device
+  in does: after Allow on every machine it asks each machine it joined
+  for its host key and its door (`devices.list`), and hands each the
+  others, with the device it is there (`devices.hand`, kept in the
+  device's record as `machines`). A machine that serves its door nowhere
+  is handed to none. The page a machine serves may then connect to those
+  doors besides its own: its policy's `connect-src` names each, `wss://`
+  and `https://`, a host a window handed and never a pattern, and only
+  an `https` address with no path is taken. Not yet: the browser reading
+  them.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

@@ -301,6 +301,10 @@ pub async fn serve(places: Places, serving: Serving) -> Result<(), Failure> {
     let at_door = match crate::page::Page::find(&pipe.program, from_checkout()) {
         Some(page) => {
             tracing::info!(files = %page.root().display(), "the door serves the window's page");
+            // It may connect to the other machines its devices were
+            // handed, besides this door.
+            let handed = paired.clone();
+            let page = page.connecting(move || handed.handed_doors());
             at_door.merge(page.router(says))
         }
         None => at_door.route("/", axum::routing::get(says)),

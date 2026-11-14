@@ -155,6 +155,7 @@ export const DOES = {
   "devices.asking": "read",
   "devices.allow": "act",
   "devices.refuse": "act",
+  "devices.hand": "act",
   "harnesses.list": "read",
   "harnesses.accounts": "read",
   "harnesses.account_profiles": "read",

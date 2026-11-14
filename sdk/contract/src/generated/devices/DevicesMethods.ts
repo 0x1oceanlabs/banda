@@ -6,6 +6,7 @@ import type { StreamMethod } from "../StreamMethod";
 import type { Add } from "./Add";
 import type { Answer } from "./Answer";
 import type { Ask } from "./Ask";
+import type { Hand } from "./Hand";
 import type { Listed } from "./Listed";
 import type { PairedDevice } from "./PairedDevice";
 import type { Remove } from "./Remove";
@@ -42,4 +43,11 @@ allow: CommandMethod<Answer, PairedDevice>,
 /**
  * Sends the device that asks with this code away.
  */
-refuse: CommandMethod<Answer, null>, };
+refuse: CommandMethod<Answer, null>, 
+/**
+ * Hands a device the other machines it was let in on, in place
+ * of those it had: it reads them in its own record
+ * (`devices.list`) and reaches each at its door, and the page
+ * this machine serves may connect there.
+ */
+hand: CommandMethod<Hand, PairedDevice>, };

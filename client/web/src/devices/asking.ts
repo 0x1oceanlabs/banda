@@ -7,7 +7,12 @@
  * at every door the window reaches.
  */
 import type { Engine } from "@banda/contract"
-import type { Ask, DeviceKind, PairedDevice } from "@banda/contract/devices"
+import type {
+  Ask,
+  DeviceKind,
+  Machine,
+  PairedDevice,
+} from "@banda/contract/devices"
 import { short } from "@banda/ui/lib/words"
 
 /** A machine a window reaches: its engine, and what the window calls
@@ -27,29 +32,74 @@ export const hearAsking = (
   engine.stream(undefined, "devices.asking", {}, heard, () => heard([]))
 
 /**
- * Allows the device that asks `at` a machine with `code`, then pairs it
- * on each of `others` by the key it proved there. Says the device, and
- * the machines of `others` that did not pair it: it asks at each of
- * those again.
+ * Allows the device that asks at the machine `at` with `code`, then pairs
+ * it on each of `others` by the key it proved there, and hands it, on
+ * each machine it joined, the others it joined: their names, host keys
+ * and doors, so the browser it is reaches them all from the one whose
+ * door it opened. A machine that serves its door nowhere is handed to
+ * none. Says the device, and the machines of `others` that did not pair
+ * it: it asks at each of those again.
  */
 export async function allow(
-  at: Engine,
+  at: Reached,
   code: string,
   others: readonly Reached[] = []
 ): Promise<{ device: PairedDevice; missed: string[] }> {
-  const device = await at.command("devices.allow", { code })
+  const device = await at.engine.command("devices.allow", { code })
   const { key, name, kind, origin } = device
   const paired = await Promise.allSettled(
     others.map(({ engine }) =>
       engine.command("devices.add", { key, name, kind, origin })
     )
   )
+  const joined = [
+    { machine: at, device },
+    ...others.flatMap((machine, i) => {
+      const one = paired[i]!
+      return one.status === "fulfilled" ? [{ machine, device: one.value }] : []
+    }),
+  ]
+  if (joined.length > 1) await hand(joined)
   return {
     device,
     missed: others
       .filter((_, i) => paired[i]!.status === "rejected")
       .map(({ name }) => name),
   }
+}
+
+/** Hands a device, on each machine it `joined`, the others of them, as
+ * each says its own host key and door. One that says no door, or does
+ * not answer, is left out; one that does not take the list, as an engine
+ * from before it, keeps none, and the device reaches it alone there. */
+async function hand(
+  joined: readonly { machine: Reached; device: PairedDevice }[]
+): Promise<void> {
+  const known = await Promise.all(
+    joined.map(async ({ machine, device }): Promise<Machine | undefined> => {
+      try {
+        const { host_key, doors } = await machine.engine.call(
+          "devices.list",
+          {}
+        )
+        const door = doors?.[0]
+        if (door === undefined) return undefined
+        return { name: machine.name, host_key, door, device: device.id }
+      } catch {
+        return undefined
+      }
+    })
+  )
+  await Promise.allSettled(
+    joined.map(({ machine, device }, here) =>
+      machine.engine.command("devices.hand", {
+        device: device.id,
+        machines: known.filter(
+          (one, i): one is Machine => one !== undefined && i !== here
+        ),
+      })
+    )
+  )
 }
 
 const LIST = new Intl.ListFormat("en-GB", { type: "conjunction" })

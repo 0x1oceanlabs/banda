@@ -88,7 +88,7 @@ function Question({
         if (how === "refuse")
           return at.engine.command("devices.refuse", { code: ask.code })
         const also = where === "every" ? others : []
-        const { device, missed } = await allow(at.engine, ask.code, also)
+        const { device, missed } = await allow(at, ask.code, also)
         const joined = also.filter(({ name }) => !missed.includes(name))
         toast(
           `${device.name} joined ${named([at, ...joined].map((m) => m.name))}`,

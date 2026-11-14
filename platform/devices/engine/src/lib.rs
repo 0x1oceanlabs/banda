@@ -47,6 +47,9 @@ const DEVICES: &str = "devices.json";
 /// The most a device's name holds.
 const NAME_MOST: usize = 64;
 
+/// The most other machines a device is handed.
+const MACHINES_MOST: usize = 16;
+
 /// How many devices may ask to be paired at once: more are told to try
 /// again, so whoever reaches the door fills no memory.
 const ASKING_MOST: usize = 8;
@@ -66,6 +69,24 @@ pub enum DeviceKind {
     Phone,
     /// The `banda` CLI on another machine.
     Cli,
+}
+
+/// Another machine a device was let in on, as the window that let it in
+/// hands it over (ADR 0124, decision 6): where its door is served, the
+/// host key it proves there, and the device it is there. This machine
+/// vouches for none of it: the Person's window said so, and the device
+/// checks the host key at that door itself.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize, JsonSchema, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct Machine {
+    /// What it says it is called: "devbox".
+    pub name: String,
+    /// Its host key, public: Ed25519, as base64url.
+    pub host_key: String,
+    /// Where its door is served: `https://devbox.example.ts.net`.
+    pub door: String,
+    /// The device this one is on that machine.
+    pub device: DeviceId,
 }
 
 /// A device as this machine keeps it, and as `devices.list` says it.
@@ -99,6 +120,11 @@ pub struct PairedDevice {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional, type = "number")]
     pub removed_at: Option<i64>,
+    /// The other machines it was let in on with this one, for it to reach
+    /// them from here; none until a window hands them (`devices.hand`).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<Vec<Machine>>")]
+    pub machines: Vec<Machine>,
 }
 
 /// A device that asks to be paired, as `devices.asking` says it.
@@ -250,10 +276,66 @@ impl Paired {
             added_at: now_ms(),
             added_by: by,
             removed_at: None,
+            machines: Vec::new(),
         };
         known.push(device.clone());
         self.keep(known)?;
         Ok(device)
+    }
+
+    /// Keeps the other machines `device` was let in on, in place of those
+    /// it had.
+    fn hand(&self, device: DeviceId, machines: Vec<Machine>) -> Result<PairedDevice, Refusal> {
+        if machines.len() > MACHINES_MOST {
+            return Err(Refusal::invalid(format!(
+                "A device is handed {MACHINES_MOST} machines at most."
+            )));
+        }
+        for machine in &machines {
+            let name = machine.name.trim();
+            if name.is_empty() || name.chars().count() > NAME_MOST {
+                return Err(Refusal::invalid(format!(
+                    "A machine's name has 1 to {NAME_MOST} characters."
+                )));
+            }
+            if !matches!(URL_SAFE_NO_PAD.decode(&machine.host_key), Ok(key) if key.len() == 32) {
+                return Err(Refusal::invalid(
+                    "A machine's host key is an Ed25519 public key: 32 bytes, as base64url.",
+                ));
+            }
+            if door_host(&machine.door).is_none() {
+                return Err(Refusal::invalid(
+                    "A machine's door is an https address with no path: https://name or \
+                     https://name:port.",
+                ));
+            }
+        }
+        let _changing = self.0.changing.lock().unwrap();
+        let mut known = self.0.known.lock().unwrap().clone();
+        let Some(one) = (known.iter_mut()).find(|one| one.id == device && one.removed_at.is_none())
+        else {
+            return Err(Refusal::not_found("This machine has no such device."));
+        };
+        one.machines = machines;
+        let handed = one.clone();
+        self.keep(known)?;
+        Ok(handed)
+    }
+
+    /// The doors of the other machines this machine's devices were handed,
+    /// each once, as `name` or `name:port`: where a page this machine
+    /// serves may connect besides its own door.
+    pub fn handed_doors(&self) -> Vec<String> {
+        let known = self.0.known.lock().unwrap();
+        let mut doors: Vec<String> = (known.iter())
+            .filter(|one| one.removed_at.is_none())
+            .flat_map(|one| &one.machines)
+            .filter_map(|machine| door_host(&machine.door))
+            .map(str::to_owned)
+            .collect();
+        doors.sort();
+        doors.dedup();
+        doors
     }
 
     /// Removes `device`: its record stays, marked, and its sessions end.
@@ -457,6 +539,23 @@ fn typed(code: &str) -> String {
     }
 }
 
+/// The host of a door's address, with its port where it has one, if the
+/// address is `https://` and that alone: plain letters, digits, dots and
+/// dashes, so it is put in a page's policy as it is.
+fn door_host(door: &str) -> Option<&str> {
+    let host = door.strip_prefix("https://")?;
+    let (name, port) = match host.split_once(':') {
+        Some((name, port)) => (name, Some(port)),
+        None => (host, None),
+    };
+    let plain = |part: &str| {
+        !part.is_empty() && part.chars().all(|c| c.is_ascii_alphanumeric() || c == '-')
+    };
+    let named = name.len() <= 253 && name.split('.').all(plain);
+    let ported = port.is_none_or(|port| port.parse::<u16>().is_ok_and(|port| port > 0));
+    (named && ported).then_some(host)
+}
+
 /// The devices module.
 pub struct DevicesModule {
     paired: Paired,
@@ -490,6 +589,11 @@ banda_kernel::methods! {
         command allow(Answer) -> PairedDevice, Manage;
         /// Sends the device that asks with this code away.
         command refuse(Answer) -> (), Manage;
+        /// Hands a device the other machines it was let in on, in place
+        /// of those it had: it reads them in its own record
+        /// (`devices.list`) and reaches each at its door, and the page
+        /// this machine serves may connect there.
+        command hand(Hand) -> PairedDevice, Manage;
     }
 }
 
@@ -540,6 +644,14 @@ pub struct Remove {
     device: DeviceId,
 }
 
+#[derive(Debug, Deserialize, JsonSchema, TS)]
+#[ts(export, export_to = "devices/")]
+pub struct Hand {
+    device: DeviceId,
+    /// The other machines it was let in on.
+    machines: Vec<Machine>,
+}
+
 impl DevicesModule {
     async fn list(&self, _: Call, _: Nothing) -> Result<Listed, Refusal> {
         let doors = match self.paired.0.door.get() {
@@ -575,6 +687,11 @@ impl DevicesModule {
 
     async fn refuse(&self, _: Call, Answer { code }: Answer) -> Result<(), Refusal> {
         self.paired.refuse(&code)
+    }
+
+    async fn hand(&self, _: Call, hand: Hand) -> Result<PairedDevice, Refusal> {
+        let paired = self.paired.clone();
+        written(move || paired.hand(hand.device, hand.machines)).await
     }
 }
 
@@ -799,5 +916,51 @@ mod tests {
         let again = Paired::open(state.path(), PersonId::new()).unwrap();
         assert_ne!(again.host_key(), first.host_key());
         assert!(state.path().join("host.unread").exists());
+    }
+
+    #[test]
+    fn a_device_is_handed_the_other_machines_and_the_page_may_connect_to_their_doors() {
+        let state = tempfile::tempdir().unwrap();
+        let paired = Paired::open(state.path(), PersonId::new()).unwrap();
+        let key = URL_SAFE_NO_PAD.encode([7; 32]);
+        let phone = paired.add(add(&key, "iPhone"), None).unwrap();
+        let machine = |name: &str, door: &str| Machine {
+            name: name.to_owned(),
+            host_key: URL_SAFE_NO_PAD.encode([9; 32]),
+            door: door.to_owned(),
+            device: DeviceId::new(),
+        };
+        let devbox = machine("devbox", "https://devbox.example.ts.net");
+        let mac = machine("M1PRO", "https://m1pro.example.ts.net:8443");
+        let handed = paired
+            .hand(phone.id, vec![devbox.clone(), mac.clone()])
+            .unwrap();
+        assert_eq!(handed.machines, [devbox.clone(), mac]);
+        assert_eq!(
+            paired.handed_doors(),
+            ["devbox.example.ts.net", "m1pro.example.ts.net:8443"]
+        );
+        // Kept: an engine that starts again reads them.
+        let again = Paired::open(state.path(), PersonId::new()).unwrap();
+        assert_eq!(again.listed()[0].machines.len(), 2);
+        // Handed anew, those it had go.
+        paired.hand(phone.id, vec![devbox]).unwrap();
+        assert_eq!(paired.handed_doors(), ["devbox.example.ts.net"]);
+        // A door that is no plain https address goes into no policy.
+        for door in [
+            "http://devbox.example.ts.net",
+            "https://devbox.example.ts.net/ws",
+            "https://*.ts.net",
+            "https://a b; script-src *",
+            "https://devbox:0",
+            "https://",
+        ] {
+            let refused = paired.hand(phone.id, vec![machine("devbox", door)]);
+            assert!(refused.is_err(), "{door}");
+        }
+        // A device removed hands nothing on, and is handed nothing.
+        paired.remove(phone.id).unwrap();
+        assert!(paired.handed_doors().is_empty());
+        assert!(paired.hand(phone.id, Vec::new()).is_err());
     }
 }
