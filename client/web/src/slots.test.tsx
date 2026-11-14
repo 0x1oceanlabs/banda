@@ -200,9 +200,12 @@ test("what fills the Slots is what the modules that run put there, in their orde
       details: (slots["thread.details"] ?? []).map(({ id }) => id),
     }
   }
-  expect(ids([])).toEqual({ header: ["window.machine"], details: [] })
+  expect(ids([])).toEqual({
+    header: ["window.back", "window.machine"],
+    details: [],
+  })
   expect(ids(["agents", "git"])).toEqual({
-    header: ["window.machine", "agents.mark"],
+    header: ["window.back", "window.machine", "agents.mark"],
     details: ["git.branch"],
   })
 })

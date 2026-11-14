@@ -23,6 +23,7 @@ import { AS_OF } from "./calls/as-of"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { DevicesAsking } from "./devices/AskingDialog"
+import { PhoneForm } from "./phone"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
 import { Updates } from "./bar/update/heard"
 
@@ -109,6 +110,7 @@ export function App({ engine }: { engine: Engine }) {
                 />
               </Updates>
               <DevicesAsking engine={engine} />
+              <PhoneForm />
             </Machines>
           </RoutingContext>
         </HostsContext>

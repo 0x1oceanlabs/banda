@@ -1237,3 +1237,16 @@ a[data-file][data-kind="text"] {
     animation: none;
   }
 }
+/* The phone's form of the window (ADR 0124, SE6): a browser as narrow as
+   a phone, which the page marks on its root. No bar; the list is the
+   whole screen wide, over the one Pane; a Pane's header keeps its own
+   buttons and the way back, and the window's go, as a phone has no Tiling
+   to work; and no key is named, as it has none. Over the width the window keeps for a wide screen. */
+[data-phone] {
+  --sidebar-width: 100vw !important;
+}
+[data-phone] [data-bar],
+[data-phone] [data-slot="kbd"],
+[data-phone] [data-slot="pane-buttons"] > :not([data-own]) {
+  display: none;
+}

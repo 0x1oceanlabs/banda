@@ -35,13 +35,7 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import {
-  Edge,
-  LaterPicker,
-  Sidebar,
-  useOrderNow,
-  writeSidebar,
-} from "../sidebar"
+import { Edge, LaterPicker, useOrderNow, writeSidebar } from "../sidebar"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -134,6 +128,7 @@ import { useAsked } from "./asked"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { ThreadMenus } from "../titles/ThreadMenu"
 import { device } from "../boot"
+import { bare, List, phoneNow } from "../phone"
 import { useKeyRouter, useKeys } from "./keys"
 import { useSteady } from "./steady"
 import { closeTop, Layered, TopPart, useTopFollows, useTops } from "./top"
@@ -214,7 +209,7 @@ export function Shell({
   // asked; wide, it keeps the Person's choice (ADR 0025, decision 10).
   const columnMin = useLookColumns().min
   const narrow = useNarrow(columnMin, sidebarWidth)
-  const [over, setOver] = useState(false)
+  const [over, setOver] = useState(phoneNow)
   if (over && !narrow) setOver(false)
   const setShown = narrow ? setOver : setSidebar
   const showSidebar = useCallback(() => setShown(true), [setShown])
@@ -321,7 +316,7 @@ export function Shell({
       ? zoom
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
-  const sidebarShown = (narrow ? over : sidebar) && !zoomed
+  const sidebarShown = (narrow ? over || bare(workspaces) : sidebar) && !zoomed
   // Where the Person is (ADR 0087, decision 4), and what the Apps list,
   // as the Apps' code reads them.
   const around = { sidebar: sidebarShown, home, machine, flow, projects }
@@ -747,7 +742,7 @@ export function Shell({
               data-sidebar-shown={(sidebarShown && !narrow) || undefined}
             >
               {sidebarShown && (
-                <Sidebar
+                <List
                   engine={engine}
                   over={narrow}
                   onDismiss={narrow ? hideOver : undefined}

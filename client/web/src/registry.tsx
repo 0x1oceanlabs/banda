@@ -27,6 +27,7 @@ import { toast } from "@banda/ui/components/sonner"
 import { memo, useCallback, useSyncExternalStore } from "react"
 import { type Kinds, launcher } from "./launcher"
 import { machineHeader } from "./window/named"
+import { backHeader } from "./phone"
 import { connectionWidget } from "./bar/connection/Connection"
 import { flowWidget } from "./bar/flow/Flow"
 import { problemsWidget } from "./bar/problems/Problems"
@@ -90,7 +91,7 @@ export const windowModule = defineModule({
     }),
   ],
   scopes: [LAUNCHER, SETTINGS, SIDEBAR_SCOPE],
-  slots: [machineHeader],
+  slots: [backHeader, machineHeader],
   bar: [
     countsWidget,
     flowWidget,
@@ -107,6 +108,13 @@ const all: readonly Module[] = [windowModule, ...modules]
 export const tops: ReadonlyMap<string, TopPart> = new Map(
   all.flatMap((m) => m.top).map((part) => [part.id, part])
 )
+
+/** The Action the Apps say is usual before any other (`Action.usual`),
+ * as an empty menu offers it first: a new Thread, while Threads run. A
+ * phone's list has it as its one door to something new. */
+export const usual: { id: string; title: string } | undefined = all
+  .flatMap((m) => m.actions)
+  .find((action) => action.usual)
 
 /** The Panes the modules offer, after the window's launcher. */
 export const kinds: readonly AnyPaneKind[] = all.flatMap((m) => m.panes)
