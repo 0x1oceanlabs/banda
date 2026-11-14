@@ -413,14 +413,20 @@ fn title_of(settings: Settings, id: &str) -> String {
         .map_or_else(|| id.to_owned(), |(_, action)| action.title.clone())
 }
 
+/// What a part does as the Person changes a key of a settings file
+/// through the engine, as the settings Pane does: the file's name, the key
+/// and the value it is set to, or none as it is taken out. A key renamed
+/// is taken out under either name. An Agent's change never comes here.
+pub type Chose = Arc<dyn Fn(&str, &str, Option<&str>) -> std::io::Result<()> + Send + Sync>;
+
 /// The keys module, over the Person's config folder.
 pub struct KeysModule {
     /// Banda's settings, over the parts the engine hands them.
     settings: Settings,
     config: PathBuf,
-    /// The file that keeps the modes the Person chose for each Harness's
-    /// new Threads in Settings; none in a test that gives none.
-    modes: Option<PathBuf>,
+    /// What hears each change the Person makes of a setting through the
+    /// engine; none in a test that gives none.
+    chose: Option<Chose>,
     /// Says something in the config folder changed: by a set at once, and
     /// by hand once the module watches it.
     heard: Arc<watch::Sender<()>>,
@@ -431,33 +437,34 @@ impl KeysModule {
         KeysModule {
             settings,
             config,
-            modes: None,
+            chose: None,
             heard: Arc::new(watch::Sender::new(())),
         }
     }
 
-    /// Keeps in `file`, in the engine's state folder, the mode the Person
-    /// chooses for a Harness's new Threads as they set it through
-    /// `settings_set`, as the settings Pane does (ADR 0083, F0-3).
-    pub fn modes_chosen_in(self, file: PathBuf) -> Self {
+    /// Tells `chose` each change the Person makes of a setting through
+    /// `settings_set`, `settings_reset` and `settings_rename`: the agents'
+    /// part keeps so the mode they choose for a Harness's new Threads (ADR
+    /// 0083, F0-3).
+    pub fn tells(self, chose: Chose) -> Self {
         KeysModule {
-            modes: Some(file),
+            chose: Some(chose),
             ..self
         }
     }
 
-    /// Keeps what a change `by` the Person makes of a new Thread's mode
-    /// they chose, as `keep` does it in the file of those; an Agent's
-    /// change is no choice, and reaches no mode (`only_the_person`).
-    fn keep_choice(
+    /// Tells a change `by` the Person, as `tell` says it to what hears
+    /// them; an Agent's change is no choice of the Person's, and is told to
+    /// none (`only_the_person`).
+    fn tell(
         &self,
         by: Participant,
-        keep: impl FnOnce(&Path) -> std::io::Result<()>,
+        tell: impl FnOnce(&Chose) -> std::io::Result<()>,
     ) -> Result<(), Refusal> {
-        match (by, &self.modes) {
-            (Participant::Person(_), Some(modes)) => keep(modes).map_err(|error| {
+        match (by, &self.chose) {
+            (Participant::Person(_), Some(chose)) => tell(chose).map_err(|error| {
                 Refusal::invalid(format!(
-                    "The file changed, but Banda did not keep that you chose it: {error}"
+                    "The file changed, but what follows your choice of it did not: {error}"
                 ))
             }),
             _ => Ok(()),
@@ -495,42 +502,38 @@ impl KeysModule {
 
     async fn settings_set(&self, call: Call, set: SetSetting) -> Result<String, Refusal> {
         let SetSetting { file, key, value } = set;
-        let why = banda_settings::only_the_person(&file, &key, Some(&value));
+        let why = self.settings.only_the_person(&file, &key, Some(&value));
         may_change(call.participant(), &file, &key, why)?;
         self.settings
             .set(&self.config, &file, &key, &value)
             .map_err(refused)?;
         self.heard.send_replace(());
-        self.keep_choice(call.participant(), |modes| {
-            banda_settings::chose(modes, &file, &key, Some(&value))
-        })?;
+        self.tell(call.participant(), |chose| chose(&file, &key, Some(&value)))?;
         Ok(format!("{key} is {value} in {file} now"))
     }
 
     async fn settings_reset(&self, call: Call, reset: ResetSetting) -> Result<String, Refusal> {
         let ResetSetting { file, key } = reset;
-        let why = banda_settings::only_the_person(&file, &key, None);
+        let why = self.settings.only_the_person(&file, &key, None);
         may_change(call.participant(), &file, &key, why)?;
         self.settings
             .reset(&self.config, &file, &key)
             .map_err(refused)?;
         self.heard.send_replace(());
-        self.keep_choice(call.participant(), |modes| {
-            banda_settings::chose(modes, &file, &key, None)
-        })?;
+        self.tell(call.participant(), |chose| chose(&file, &key, None))?;
         Ok(format!("{key} is as Banda has it in {file} now"))
     }
 
     async fn settings_rename(&self, call: Call, rename: RenameSetting) -> Result<String, Refusal> {
         let RenameSetting { file, key, to } = rename;
-        let why = banda_settings::only_the_person_renames(&file, &key, &to);
+        let why = self.settings.only_the_person_renames(&file, &key, &to);
         may_change(call.participant(), &file, &key, why)?;
         self.settings
             .rename(&self.config, &file, &key, &to)
             .map_err(refused)?;
         self.heard.send_replace(());
-        self.keep_choice(call.participant(), |modes| {
-            banda_settings::chose_renamed(modes, &file, &key, &to)
+        self.tell(call.participant(), |chose| {
+            banda_settings::chose_renamed(chose.as_ref(), &file, &key, &to)
         })?;
         Ok(format!("{key} is {to} in {file} now"))
     }
