@@ -95,6 +95,15 @@ and its principle 1 (one thing, one place).
    in `arrangement.ts` changes only after the engine's and its traces,
    and goes with T1.
 
+6. **A new Thread asked for on an empty free workspace opens there.**
+   _Added 2026-11-14._ Roma, asked whether the buttons' way or
+   `Alt+Enter`'s should stay (#1655, case 3), answered: "here". On an
+   empty workspace no Project owns, the buttons and `Alt+Enter` both open
+   the new Thread on it, and the screen stays. The engine places it, by
+   the workspace on screen (`on`), and the window's `startingHere` goes.
+   It answers ADR 0110's open question for an empty free workspace; one
+   that holds Panes keeps today's way until a case asks for another.
+
 ## Consequences
 
 - One sentence says where a Pane opens: what its Thread opens goes into
@@ -118,13 +127,6 @@ and its principle 1 (one thing, one place).
   opens with a click in it (decision 1).
 - **GLOSSARY:** "Project's own Group" goes; "Group" says what joins it.
 
-## Not decided here
-
-- **New Thread on an empty free workspace** (#1655, case 3): its buttons
-  open it there, `Alt+Enter` opens it on the top free workspace. One of
-  the two goes, with ADR 0110's open question of whether `Alt+Enter` on a
-  free workspace stays there.
-
 ## Steps
 
 Each step is a PR that names this ADR and track 3, slice WS2.
@@ -143,3 +145,6 @@ Each step is a PR that names this ADR and track 3, slice WS2.
 3. **`banda` from a terminal.** `BANDA_PANE` and `from`.
    _Roma tries:_ `banda files .` in a terminal beside a Thread opens Files
    where `Alt+E` would.
+4. **A new Thread here.** Decision 6.
+   _Roma tries:_ on an empty free workspace, `Alt+Enter` opens the new
+   Thread on it, as its button does.
