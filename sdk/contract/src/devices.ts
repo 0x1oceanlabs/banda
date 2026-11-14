@@ -5,4 +5,5 @@
 export type { Ask } from "./generated/devices/Ask"
 export type { DeviceKind } from "./generated/devices/DeviceKind"
 export type { Listed } from "./generated/devices/Listed"
+export type { Machine } from "./generated/devices/Machine"
 export type { PairedDevice } from "./generated/devices/PairedDevice"

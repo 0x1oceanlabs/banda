@@ -36,7 +36,8 @@ const INDEX: &str = "index.html";
 /// own files, its own door, and WebAssembly shipped with it, which
 /// Ghostty draws terminals with. Styles may be inline, as the page's
 /// components set lengths; scripts may not. A file's bytes and a page of
-/// a Pane come from this door too. Nothing frames it.
+/// a Pane come from this door too. Nothing frames it. [`policy`] adds the
+/// doors of the other machines to what it may connect to.
 const POLICY: &str = "default-src 'self'; \
     script-src 'self' 'wasm-unsafe-eval'; \
     style-src 'self' 'unsafe-inline'; \
@@ -51,10 +52,28 @@ const POLICY: &str = "default-src 'self'; \
     form-action 'none'; \
     frame-ancestors 'none'";
 
+/// The words of [`POLICY`] that say where the page may connect.
+const CONNECTS: &str = "connect-src 'self'";
+
+/// [`POLICY`] for a page that may also connect to `doors`, each the host
+/// of another machine's door, with its port where it has one (ADR 0124,
+/// decision 6): its WebSocket and its files, by TLS alone. Each is a door
+/// a window of the Person's handed to a device here, never a pattern.
+fn policy(doors: &[String]) -> String {
+    let more: String = (doors.iter())
+        .map(|door| format!(" wss://{door} https://{door}"))
+        .collect();
+    POLICY.replacen(CONNECTS, &format!("{CONNECTS}{more}"), 1)
+}
+
+/// The doors of other machines the page may connect to now.
+type Doors = std::sync::Arc<dyn Fn() -> Vec<String> + Send + Sync>;
+
 /// The page's files on this machine.
 #[derive(Clone)]
 pub struct Page {
     root: PathBuf,
+    doors: Doors,
 }
 
 impl Page {
@@ -81,12 +100,24 @@ impl Page {
         }?;
         // Whole, so a file is known to be under it.
         let root = dunce::canonicalize(&root).ok()?;
-        root.join(INDEX).is_file().then_some(Page { root })
+        root.join(INDEX).is_file().then(|| Page {
+            root,
+            doors: std::sync::Arc::new(Vec::new),
+        })
     }
 
     /// Where the files are.
     pub fn root(&self) -> &Path {
         &self.root
+    }
+
+    /// The page, allowed to connect to what `doors` says when it is
+    /// asked for: the other machines' doors ([`policy`]).
+    pub fn connecting(self, doors: impl Fn() -> Vec<String> + Send + Sync + 'static) -> Page {
+        Page {
+            doors: std::sync::Arc::new(doors),
+            ..self
+        }
     }
 
     /// The door's answers for the page: `GET /` gives the page to who asks
@@ -141,7 +172,7 @@ impl Page {
             }
         };
         set(header::CONTENT_TYPE, kind.as_ref());
-        set(header::CONTENT_SECURITY_POLICY, POLICY);
+        set(header::CONTENT_SECURITY_POLICY, &policy(&(self.doors)()));
         set(header::X_CONTENT_TYPE_OPTIONS, "nosniff");
         set(header::REFERRER_POLICY, "no-referrer");
         set(
@@ -259,6 +290,17 @@ mod tests {
         assert!(policy.contains("default-src 'self'"));
         assert!(policy.contains("script-src 'self' 'wasm-unsafe-eval';"));
         assert!(policy.contains("frame-ancestors 'none'"));
+        // It connects to its own door alone, until it is handed another.
+        assert!(policy.contains("connect-src 'self';"));
+        let handed = page
+            .clone()
+            .connecting(|| vec!["devbox.example.ts.net".to_owned()]);
+        let (_, headers, _) = get(&handed, "/", Some("text/html")).await;
+        let policy = &headers["content-security-policy"];
+        assert!(policy.contains(
+            "connect-src 'self' wss://devbox.example.ts.net https://devbox.example.ts.net;"
+        ));
+        assert!(policy.contains("script-src 'self' 'wasm-unsafe-eval';"));
         assert_eq!(headers["x-content-type-options"], "nosniff");
         assert_eq!(headers["vary"], "accept");
 
