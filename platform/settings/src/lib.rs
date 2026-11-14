@@ -506,7 +506,7 @@ mod classes {
             &[(
                 Shared,
                 &[
-                    "group", "inbox", "sort", "projects", "bar", "later", "machines",
+                    "group", "card", "inbox", "sort", "projects", "bar", "later", "machines",
                 ],
             )],
         ),

@@ -8,6 +8,7 @@ import type { Sidebar } from "./generated/sidebar/Sidebar"
 
 export type { Sidebar } from "./generated/sidebar/Sidebar"
 export type { GroupBy } from "./generated/sidebar/GroupBy"
+export type { Card } from "./generated/sidebar/Card"
 export type { Inbox } from "./generated/sidebar/Inbox"
 export type { InboxOrder } from "./generated/sidebar/InboxOrder"
 export type { Sort } from "./generated/sidebar/Sort"
@@ -26,6 +27,7 @@ export type { MachineRows } from "./generated/sidebar/MachineRows"
 export const DEFAULT_SIDEBAR: Sidebar = {
   file: "",
   group: "none",
+  card: 3,
   inbox: { order: "oldest", open: true, working: true },
   sort: { by: "attention" },
   projects: { order: "changed", rollup: true },

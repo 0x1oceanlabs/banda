@@ -69,7 +69,7 @@ const machinesOn = (rows: MachineRows, place: Stand = "turn") =>
     place,
     at: 5,
     now: 5,
-    view: { group: "none" },
+    view: { group: "none", lines: 3 },
     ...on(machineOnRow(arc, { rows, labelled: false })),
   }).lines.map((line) => line.right.filter((slot) => slot.kind === "machine"))
 const slot = (named: boolean) => ({

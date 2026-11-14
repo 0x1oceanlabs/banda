@@ -1,5 +1,6 @@
 /**
- * The sidebar's card (ADR 0098, S6a): three lines wherever it stands,
+ * The sidebar's card (ADR 0098, S6a): three lines wherever it stands, by
+ * default (two or one where `card` says, which sidebar-group.spec.ts tries),
  * each a left and a right; grouped by Project, line 3 leaves the Project
  * to its header (decisions 8 and 9, as amended). Colour only on a call's mark
  * and time: an asking card is orange, says Asks and its question; Failed
@@ -193,7 +194,7 @@ async function focusShots(window: Window, name: string, card: Locator) {
   }
 }
 
-test("a card's three lines: Asks orange on its mark and time with its question, Failed red with why and nothing on its right, Done green with its note, Woke yellow; one line for the rest, two grouped by Project (ADR 0098, S6a)", async () => {
+test("a card's three lines: Asks orange on its mark and time with its question, Failed red with why and nothing on its right, Done green with its note, Woke yellow; three lines for the rest too, grouped by Project as well (ADR 0098, S6a)", async () => {
   test.setTimeout(300_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
   const { page } = window

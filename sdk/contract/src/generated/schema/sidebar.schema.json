@@ -9,6 +9,11 @@
       "$ref": "#/$defs/GroupBy",
       "x-class": "shared"
     },
+    "card": {
+      "description": "How many lines a card has, the same everywhere: 3, 2 or 1.",
+      "$ref": "#/$defs/Card",
+      "x-class": "shared"
+    },
     "inbox": {
       "description": "What the Inbox shows, and in what order.",
       "$ref": "#/$defs/InboxSettings",
@@ -56,6 +61,14 @@
           "type": "string",
           "const": "project"
         }
+      ]
+    },
+    "Card": {
+      "description": "How many lines a card has, the same everywhere: 3, 2 or 1.",
+      "enum": [
+        3,
+        2,
+        1
       ]
     },
     "InboxSettings": {

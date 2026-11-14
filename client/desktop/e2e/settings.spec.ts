@@ -281,7 +281,7 @@ test("Agents show each account as a card, its page who is signed in, and write h
   )
 })
 
-test("General, how the sidebar groups, and hearing a sound", async () => {
+test("General, how the sidebar groups and a card's lines, and hearing a sound", async () => {
   window = await startWindow()
   const { page, dir } = window
   const { composer } = await firstThread(page)
@@ -326,6 +326,18 @@ test("General, how the sidebar groups, and hearing a sound", async () => {
     .toContain('group = "project"')
   // Each key says what it does.
   await expect(group).toContainText("How the list is grouped")
+  // A card's lines: 3, 2 or 1, 3 by default (decision 9, as amended
+  // again).
+  const card = settings.locator('[data-key="card"]')
+  await expect(card.getByRole("radio")).toHaveText(["3", "2", "1"])
+  await expect(card.getByRole("radio", { name: "3" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  )
+  await card.getByRole("radio", { name: "1" }).click()
+  await expect
+    .poll(() => textOf(join(dir, "config/sidebar.toml")))
+    .toMatch(/^card = 1$/m)
 
   await sections.getByRole("button", { name: /Sounds/ }).click()
   await settings.getByRole("button", { name: "Play done" }).click()

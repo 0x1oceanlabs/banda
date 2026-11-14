@@ -10,7 +10,7 @@ use crate::Places;
 use crate::Problem;
 use crate::keyed::{self, Keyed, Layer, Renamed, Retired};
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use std::path::{Path, PathBuf};
 use toml::Spanned;
 use ts_rs::TS;
@@ -25,6 +25,64 @@ pub enum GroupBy {
     None,
     /// Each Project under its header.
     Project,
+}
+
+/// How many lines a card has, the same wherever it stands (ADR 0098,
+/// decision 9, as amended again): 3, 2 or 1.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, TS)]
+#[ts(export, export_to = "sidebar/", type = "3 | 2 | 1")]
+pub struct Card(u8);
+
+impl Card {
+    /// Three lines: the default.
+    pub const THREE: Card = Card(3);
+
+    /// How many lines it is.
+    pub fn lines(self) -> u8 {
+        self.0
+    }
+}
+
+impl TryFrom<toml::Value> for Card {
+    type Error = String;
+
+    /// `"auto"`, the lines by where a card stood, is no more: it reads as
+    /// three, and says so at its line.
+    fn try_from(value: toml::Value) -> Result<Card, String> {
+        match value {
+            toml::Value::Integer(lines @ 1..=3) => Ok(Card(lines as u8)),
+            toml::Value::String(word) if word == "auto" => Err(
+                "card = \"auto\" is no longer used: a card has 3, 2 or 1 lines everywhere, 3 by default"
+                    .to_owned(),
+            ),
+            value => Err(format!("card is 3, 2 or 1, not {value}")),
+        }
+    }
+}
+
+impl<'de> Deserialize<'de> for Card {
+    fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Card, D::Error> {
+        crate::sound::from_toml(deserializer)
+    }
+}
+
+impl Serialize for Card {
+    fn serialize<S: Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        serializer.serialize_u8(self.0)
+    }
+}
+
+impl JsonSchema for Card {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Card".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        schemars::json_schema!({
+            "description": "How many lines a card has, the same everywhere: 3, 2 or 1.",
+            "enum": [3, 2, 1],
+        })
+    }
 }
 
 /// Your turn's order in the Inbox (ADR 0098, decision 3).
@@ -119,6 +177,8 @@ pub struct SidebarSettings {
     /// How the list is grouped: one list, or each Project under its
     /// header.
     pub group: Option<GroupBy>,
+    /// How many lines a card has, the same everywhere: 3, 2 or 1.
+    pub card: Option<Card>,
     /// What the Inbox shows, and in what order.
     #[serde(default)]
     pub inbox: InboxSettings,
@@ -212,6 +272,7 @@ pub struct Sidebar {
     /// writes its keys into it, and opens it.
     pub file: String,
     pub group: GroupBy,
+    pub card: Card,
     pub inbox: Inbox,
     pub sort: Sort,
     pub projects: Projects,
@@ -289,8 +350,8 @@ const RENAMED: &[Renamed] = &[
     Renamed::key("", "spaces", "projects"),
 ];
 
-/// What ADR 0098 put out of use: the presets and their sections and rows,
-/// a card's lines (decisions 7 and 9, as amended), the list of Projects
+/// What ADR 0098 put out of use: the presets and their sections and rows
+/// (decisions 7 and 9, as amended), the list of Projects
 /// (decision 16), a Project's New Thread, as the sidebar starts no Thread
 /// (decision 19, as Roma amended it on 2026-11-12), and `[hold]`, as the
 /// order always keeps still under the pointer (decision 6, as Roma
@@ -308,14 +369,9 @@ const RETIRED: &[Retired] = &[
         says: "[group] is no longer used: group = \"none\" or \"project\" groups the list",
     },
     Retired {
-        at: "card",
-        table: false,
-        says: "card is no longer used: every card has three lines",
-    },
-    Retired {
         at: "row",
         table: true,
-        says: "[row] is no longer used: every card has three lines",
+        says: "[row] is no longer used: card = 3, 2 or 1 says a card's lines",
     },
     Retired {
         at: "hold",
@@ -343,6 +399,7 @@ impl SidebarSettings {
     pub fn over(self, under: SidebarSettings) -> SidebarSettings {
         SidebarSettings {
             group: self.group.or(under.group),
+            card: self.card.or(under.card),
             inbox: InboxSettings {
                 order: self.inbox.order.or(under.inbox.order),
                 open: self.inbox.open.or(under.inbox.open),
@@ -376,6 +433,7 @@ impl SidebarSettings {
     pub fn defaults() -> SidebarSettings {
         SidebarSettings {
             group: Some(GroupBy::None),
+            card: Some(Card::THREE),
             inbox: InboxSettings {
                 order: Some(InboxOrder::Oldest),
                 open: Some(true),
@@ -415,6 +473,7 @@ impl SidebarSettings {
         Sidebar {
             file: file.display().to_string(),
             group: all.group.unwrap_or(GroupBy::None),
+            card: all.card.unwrap_or(Card::THREE),
             inbox: Inbox {
                 order: all.inbox.order.unwrap_or(InboxOrder::Oldest),
                 open: all.inbox.open.unwrap_or(true),
@@ -449,8 +508,8 @@ impl SidebarSettings {
 
 /// Reads a `sidebar.toml`, and checks what TOML alone does not, as
 /// [`crate::read`] reads a file. A key ADR 0098 put out of use is named
-/// and left out, and so is a way to group it no longer has: `group =
-/// "machine"` is one list.
+/// and left out, and so is a value it no longer has: `group = "machine"`
+/// is one list, and `card = "auto"` three lines.
 pub fn read_sidebar(
     path: &Path,
     text: &str,
@@ -546,6 +605,7 @@ mod tests {
         let (sidebar, problems) = resolved(dir.path());
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.group, GroupBy::None);
+        assert_eq!(sidebar.card, Card::THREE);
         assert_eq!(
             sidebar.inbox,
             Inbox {
@@ -566,11 +626,12 @@ mod tests {
     #[test]
     fn the_view_s_keys_are_the_person_s_to_change() {
         let (sidebar, problems) = with(
-            "group = \"project\"\n\
+            "group = \"project\"\ncard = 1\n\
              [inbox]\norder = \"newest\"\nopen = false\nworking = false\n",
         );
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.group, GroupBy::Project);
+        assert_eq!(sidebar.card.lines(), 1);
         assert_eq!(
             sidebar.inbox,
             Inbox {
@@ -582,20 +643,38 @@ mod tests {
     }
 
     /// ADR 0098, decisions 7 and 9 as amended: a file that still names a
-    /// preset, a card's lines or the machine grouping still reads, as one
-    /// list of three-line cards, and is told of each.
+    /// preset, a card's lines by where it stands or the machine grouping
+    /// still reads, as one list of three-line cards, and is told of each.
     #[test]
-    fn presets_card_and_machine_grouping_are_named_and_the_rest_holds() {
-        let (sidebar, problems) =
-            with("preset = \"projects\"\ncard = 1\ngroup = \"machine\"\n[sort]\nby = \"title\"\n");
+    fn presets_auto_cards_and_machine_grouping_are_named_and_the_rest_holds() {
+        let (sidebar, problems) = with(
+            "preset = \"projects\"\ncard = \"auto\"\ngroup = \"machine\"\n[sort]\nby = \"title\"\n",
+        );
         let lines: Vec<_> = said(&problems).into_iter().map(|(line, _)| line).collect();
         assert_eq!(lines, [1, 2, 3], "{problems:?}");
         assert!(problems[0].message.starts_with("preset is no longer used"));
-        assert!(problems[1].message.starts_with("card is no longer used"));
+        assert_eq!(
+            problems[1].message,
+            "card = \"auto\" is no longer used: a card has 3, 2 or 1 lines everywhere, \
+             3 by default"
+        );
+        assert_eq!(problems[1].column, Some(8), "at its value");
         assert!(problems[2].message.contains("machine"), "{problems:?}");
         assert!(problems.iter().all(|p| !p.left_out), "{problems:?}");
         assert_eq!(sidebar.group, GroupBy::None);
+        assert_eq!(sidebar.card, Card::THREE);
         assert_eq!(sidebar.sort.by, SortBy::Title, "the rest holds");
+    }
+
+    /// ADR 0098, decision 9 as amended again: 3, 2 or 1 lines, as the
+    /// Person picks.
+    #[test]
+    fn a_card_has_as_many_lines_as_the_person_picks() {
+        for lines in [3, 2, 1] {
+            let (sidebar, problems) = with(&format!("card = {lines}\n"));
+            assert!(problems.is_empty(), "{problems:?}");
+            assert_eq!(sidebar.card.lines(), lines);
+        }
     }
 
     #[test]
@@ -618,7 +697,10 @@ mod tests {
                     8,
                     "projects.new-thread is no longer used: a Thread starts in the New Thread Pane"
                 ),
-                (9, "[row] is no longer used: every card has three lines"),
+                (
+                    9,
+                    "[row] is no longer used: card = 3, 2 or 1 says a card's lines"
+                ),
             ]
         );
         assert_eq!(problems[0].column, Some(2), "at the table's name");
@@ -708,6 +790,10 @@ mod tests {
         assert_eq!(sidebar.group, GroupBy::Project, "the rest holds");
         assert_eq!((problems[0].line, problems[0].column), (Some(3), Some(6)));
 
+        let (sidebar, problems) = with("card = 5\n");
+        assert_eq!(sidebar.card, Card::THREE, "left out");
+        assert_eq!(problems[0].message, "card is 3, 2 or 1, not 5");
+
         let (_, problems) = with("group = \"colour\"\n");
         assert!(problems[0].message.contains("colour"), "{problems:?}");
 
@@ -740,11 +826,12 @@ mod tests {
         assert_eq!(
             keys(&schema),
             [
-                "bar", "group", "inbox", "later", "machines", "projects", "sort"
+                "bar", "card", "group", "inbox", "later", "machines", "projects", "sort"
             ]
         );
         assert_eq!(schema["properties"]["group"]["$ref"], "#/$defs/GroupBy");
         assert_eq!(consts("GroupBy"), ["none", "project"]);
+        assert_eq!(def("Card")["enum"], serde_json::json!([3, 2, 1]));
         assert_eq!(keys(def("InboxSettings")), ["open", "order", "working"]);
         assert_eq!(consts("InboxOrder"), ["oldest", "newest"]);
         assert_eq!(keys(def("ProjectsSettings")), ["order", "rollup"]);

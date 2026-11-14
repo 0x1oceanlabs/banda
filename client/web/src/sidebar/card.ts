@@ -1,7 +1,7 @@
 /**
- * A sidebar card as one model (ADR 0098, decisions 8 and 27): from a
- * Thread, the place it is drawn in and how the list is grouped, its three
- * lines, each a left and a right; the colour of its call; how quiet it
+ * A sidebar card as one model (ADR 0098, decisions 8, 9 and 27): from a
+ * Thread, the place it is drawn in and how the list is viewed, its three,
+ * two or one lines, each a left and a right; the colour of its call; how quiet it
  * is; and its time. `CardView.tsx` only draws it, and `spokenOf`
  * says it to a screen reader. Pure, with no clock of its own: a time is a
  * moment and a kind, put into words as it is drawn, against the minute
@@ -10,7 +10,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { DoingKind } from "@banda/contract/agents"
 import type { Named } from "@banda/contract/machines"
-import type { GroupBy } from "@banda/contract/sidebar"
+import type { Card, GroupBy } from "@banda/contract/sidebar"
 import type { Checks, Pull } from "@banda/contract/pulls"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
 import { type MarkDoing, type MarkState, works } from "@banda/ui/lib/mark-state"
@@ -31,8 +31,9 @@ import type { OnRow } from "./machine-on-row"
 
 /** How the list is viewed, as its cards take it: grouped by Project
  * (decision 7), a group's header names the Project its cards then leave
- * out. */
-export type CardView = { group: GroupBy }
+ * out; and how many lines each card has, the same everywhere (`card` in
+ * `sidebar.toml`, decision 9 as amended again). */
+export type CardView = { group: GroupBy; lines: Card }
 
 /** A call's colour (decision 8): on its mark and its time, and nowhere
  * else. */
@@ -81,7 +82,8 @@ export type Slot =
    * title (decision 24). */
   | { kind: "parent"; title: string }
   /** The machine it runs on: its icon, and on line 3 its name unless the
-   * Person asked for its icon alone; another machine's by its `host`. */
+   * Person asked for its icon alone; on line 1 of a card of fewer lines,
+   * its icon alone. Another machine's by its `host`. */
   | { kind: "machine"; host?: string; machine: Named; named: boolean }
   /** Its Harness's emblem. */
   | { kind: "harness"; id: string; name: string }
@@ -109,7 +111,7 @@ export type CardModel = {
    * stands elsewhere. */
   place: Stand
   title: string
-  /** Three (decision 8). */
+  /** Three, two or one, as the list is viewed (decision 9). */
   lines: Line[]
   /** The colour of its call, on its mark and its time. */
   tone?: Tone
@@ -191,7 +193,7 @@ export function cardOf(input: CardOf): CardModel {
   const failed = tone === "destructive"
   const pulls = failed ? undefined : listed.pulls
   const changed = does || failed ? undefined : listed.changedLines
-  const lines: Line[] = [
+  const lines: [Line, Line, Line] = [
     {
       left: [{ kind: "mark", look }, { kind: "title" }],
       right: [{ kind: "time" }],
@@ -232,7 +234,7 @@ export function cardOf(input: CardOf): CardModel {
     stand,
     place,
     title: listed.title,
-    lines,
+    lines: linesAt(lines, view.lines),
     ...(tone ? { tone } : {}),
     ...(quiet ? { quiet } : {}),
     time: timeOf(row, at, tone),
@@ -253,6 +255,23 @@ export function cardOf(input: CardOf): CardModel {
       : {}),
     ...(child ? { child } : {}),
   }
+}
+
+/** A card's three `lines` at `size` (decision 9, as amended again): all
+ * three; line 1 and line 2; or line 1 alone. With fewer than three, line
+ * 3's machine goes to line 1's right, before the time, by its icon. */
+export function linesAt(
+  lines: readonly [Line, Line, Line],
+  size: Card
+): Line[] {
+  const [first, second, third] = lines
+  if (size === 3) return [first, second, third]
+  const machine = third.right.find((slot) => slot.kind === "machine")
+  const top: Line = {
+    left: first.left,
+    right: [...(machine ? [{ ...machine, named: false }] : []), ...first.right],
+  }
+  return size === 2 ? [top, second] : [top]
 }
 
 /** `machine`'s slot on `row`'s card: by its name too, unless it shows by

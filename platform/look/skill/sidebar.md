@@ -1,14 +1,14 @@
 ---
 name: sidebar
-description: Arrange Banda's sidebar - group by Project or not, the Inbox's order and parts - in ~/.config/banda/sidebar.toml.
+description: Arrange Banda's sidebar - group by Project or not, a card's 3, 2 or 1 lines, the Inbox's order and parts - in ~/.config/banda/sidebar.toml.
 ---
 
 # The sidebar
 
 `~/.config/banda/sidebar.toml` arranges the sidebar, the Person's inbox
-of their Agents' work (ADR 0098): how the list is grouped, and what the
-Inbox shows. Its keys lie over Banda's defaults. Every card has three
-lines.
+of their Agents' work (ADR 0098): how the list is grouped, how many
+lines a card has, and what the Inbox shows. Its keys lie over Banda's
+defaults.
 
 The view menu in the sidebar's foot writes the keys of the view below
 into this file, one at a time, and keeps everything else. If the file is
@@ -20,6 +20,10 @@ not there yet, it starts as this template:
 
 - `group`: `"none"`, one list, the Inbox (the default); or
   `"project"`, each Project under its header.
+- `card`: how many lines a card has, the same everywhere, the small
+  inbox too: `3` (the default), its mark and title, what it says, its
+  Project, machine and Harness; `2`, the first two, the machine's icon on
+  line 1; or `1`, line 1 alone.
 - `[inbox]`: `order` is Your turn's, `"oldest"` first (the default, so
   no one waits forever) or `"newest"`. Alt+U walks the oldest first
   whatever it says. `open = false` leaves Open out of the Inbox, and
@@ -27,13 +31,14 @@ not there yet, it starts as this template:
 
 ## Keys no longer used
 
-ADR 0098 put these out of use: `preset`, `card`, `[group]` and its keys
+ADR 0098 put these out of use: `preset`, `[group]` and its keys
 (`by`, `states`, `bottom`, `folded`, `limit`, `empty`), `[row]` and its
 keys (`lines`, `hide`, `line1`–`line3`), `[projects]` `list` and
-`new-thread`; and `group = "machine"`, which reads as `"none"`. A file
+`new-thread`; `group = "machine"`, which reads as `"none"`; and
+`card = "auto"`, which reads as `3`. A file
 that still says one is told so at its line; the key is left out and the
-rest of the file holds. Take the line out, and write `group` instead
-where one says the same.
+rest of the file holds. Take the line out, and write `group` or
+`card` instead where one says the same.
 
 Names from before ADR 0069 still read, for one stable release: the
 table `[spaces]`; and from before ADR 0098 the table `[snooze]`. `banda look check` says each one's name now; write
@@ -53,6 +58,7 @@ nothing is named, and these keys change nothing.
 ## Asked for, and what to set
 
 - "Group my Threads by Project": `group = "project"`.
+- "Smaller cards" or "one line each": `card = 2` or `card = 1`.
 - "The newest call first": `[inbox]` `order = "newest"`.
 - "Only what is my turn in the Inbox": `[inbox]` `open = false` and
   `working = false`.

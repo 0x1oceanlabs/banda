@@ -7,8 +7,8 @@
  * list, which keys pick (S7b),
  * none of it is a Tab stop, and the header is a stop of the pick, whose
  * Shift+F10 opens the Project's menu (S11). The view menu in
- * the sidebar's foot writes `group` into sidebar.toml, None or Project;
- * with None, one list, arc's cards among this machine's. A Project to trust, or one whose folder is
+ * the sidebar's foot writes `group` into sidebar.toml, None or Project,
+ * and `card`, a card's 3, 2 or 1 lines; with None, one list, arc's cards among this machine's. A Project to trust, or one whose folder is
  * missing, is a card in Your turn, and with nothing at all the Inbox is
  * the first run (S11). Each is screenshot dark and light at 1440×900, as
  * `sidebar-s8b-*.png` and `sidebar-s11-*.png`.
@@ -223,7 +223,7 @@ test("grouped by Project, each header has its sign, name and chevron, by name; i
   await expect(work.getByRole("img")).toHaveCount(0)
 })
 
-test("the view menu in the sidebar's foot writes group = none into sidebar.toml: one list, arc's cards among this machine's, each of three lines (ADR 0098, S8b; decision 7, as amended)", async () => {
+test("the view menu in the sidebar's foot writes group = none into sidebar.toml: one list, arc's cards among this machine's, each of three lines; card = 2 and card = 1 draw two lines and one, arc's icon on line 1 (ADR 0098, S8b; decisions 7 and 9, as amended)", async () => {
   test.setTimeout(240_000)
   arc = newArc()
   stopArc = await arc.start()
@@ -264,9 +264,14 @@ test("the view menu in the sidebar's foot writes group = none into sidebar.toml:
   await shots(window, "view-menu")
   await expect(menu).toBeVisible()
 
-  // Two ways to group, and no Card row: every card has three lines.
+  // Two ways to group, and a card's lines: 3, 2 or 1, 3 by default.
   await expect(group.getByRole("radio")).toHaveCount(2)
-  await expect(menu.getByRole("radiogroup", { name: "Card" })).toHaveCount(0)
+  const card = menu.getByRole("radiogroup", { name: "Card lines" })
+  await expect(card.getByRole("radio")).toHaveText(["3", "2", "1"])
+  await expect(card.getByRole("radio", { name: "3" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  )
   await group.getByRole("radio", { name: "None" }).click()
   await expect
     .poll(() => readFileSync(join(window.dir, "config/sidebar.toml"), "utf8"))
@@ -287,6 +292,27 @@ test("the view menu in the sidebar's foot writes group = none into sidebar.toml:
   await expect(there).toHaveCount(3)
   await expect(there.nth(2)).toContainText("arc")
   await shots(window, "none")
+
+  // Of two lines or one, the same everywhere, each as sidebar.toml says
+  // it (decision 9, as amended again); arc's icon on line 1's right.
+  for (const lines of [2, 1] as const) {
+    await view.click()
+    const size = card.getByRole("radio", { name: String(lines) })
+    await size.click()
+    await expect
+      .poll(() => readFileSync(join(window.dir, "config/sidebar.toml"), "utf8"))
+      .toMatch(new RegExp(`^card = ${lines}$`, "m"))
+    await expect(size).toHaveAttribute("aria-checked", "true")
+    await page.keyboard.press("Escape")
+    await expect(menu).toBeHidden()
+    await view.blur()
+    await expect(linesOf(cardOf(panel, "please ask first"))).toHaveCount(lines)
+    await expect(there).toHaveCount(lines)
+    await expect(
+      there.first().locator('[data-machine-card="arc"]')
+    ).toBeVisible()
+    await shots(window, `card-${lines}`)
+  }
 
   // Project brings the headers back.
   await groupBy(page, "Project")
