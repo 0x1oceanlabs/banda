@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { type Place, revealTo } from "./layout"
+import { landing, type Place, revealTo } from "./layout"
 
 /** The room of a Strip: what shows starts 16 in, past the sidebar, and is
  * 1000 wide. */
@@ -65,5 +65,55 @@ describe("a column comes into view", () => {
     expect(
       revealTo(wide, ROOM, 0, "hello", { center: "left", first: "hello" })
     ).toBe(1008)
+  })
+})
+
+describe("a swipe let go lands", () => {
+  // Five halves, 496 wide with a gap of 8: snaps every 504.
+  const all = placed(["a", 496], ["b", 496], ["c", 496], ["d", 496], ["e", 496])
+  const free = all.map(() => ({}))
+  const land = (from: number, rest: number, columns: object[] = free) =>
+    landing(all, columns, ROOM, "never", { from, rest })
+
+  test("on the edge nearest to where it would rest, its column the furthest whole the way it went", () => {
+    expect(land(0, 300)).toEqual({ at: 504, id: "c" })
+    // A small throw: back where it was, the focus on the right one whole.
+    expect(land(0, 200)).toEqual({ at: 0, id: "b" })
+    // Back to the left: the furthest whole that way is the left one.
+    expect(land(1008, 700)).toEqual({ at: 504, id: "b" })
+  })
+
+  test("never past the first column or the last", () => {
+    expect(land(0, -900)).toEqual({ at: 0, id: "a" })
+    expect(land(0, 9000)).toEqual({ at: 1512, id: "e" })
+  })
+
+  test("a Group that fills the screen only whole, at its ends", () => {
+    // b and c one Group, filling the screen.
+    const columns = [
+      {},
+      { filled: true, ends: { first: true, last: false } },
+      { filled: true, ends: { first: false, last: true } },
+      {},
+      {},
+    ]
+    // Nearer d's right edge, which would cut the Group: it lands whole.
+    expect(land(0, 900, columns)).toEqual({ at: 504, id: "c" })
+    expect(land(0, 1300, columns)).toEqual({ at: 1512, id: "e" })
+  })
+
+  test("in the middle with center = always", () => {
+    const thirds = placed(["a", 328], ["b", 328], ["c", 328], ["d", 328])
+    const at = (rest: number) =>
+      landing(
+        thirds,
+        thirds.map(() => ({})),
+        ROOM,
+        "always",
+        { from: 0, rest }
+      )
+    // b's middle meets the room's at 0, c's at 336.
+    expect(at(120)).toEqual({ at: 0, id: "b" })
+    expect(at(200)).toEqual({ at: 336, id: "c" })
   })
 })

@@ -42,7 +42,7 @@ import {
   sized,
   type Space,
   scrollOf,
-  shownShare,
+  landing,
   widthAt,
 } from "./layout"
 import { type Shows, useGroups, useShows } from "./shows"
@@ -50,7 +50,15 @@ import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
 
 import { Tabs } from "./Tabs"
-import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
+import {
+  pixels,
+  scrollsSideways,
+  SWIPE_END,
+  Swipe,
+  THROW,
+  Tracker,
+  type Way,
+} from "./swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
 import { usePlates } from "./usePlates"
@@ -67,9 +75,9 @@ const VIEW_STEP = 48
  * fills the screen, as every one does in solo, the Group comes whole into
  * view, from its first column.
  *
- * A sideways swipe moves the Strip with the fingers, the mod held or not; where
- * it ends, the column most in view takes the focus and comes fully into
- * view. Over what scrolls sideways by itself, a swipe without the mod is that
+ * A sideways swipe moves the Strip with the fingers, the mod held or not;
+ * let go, it carries on as niri's does, to the column edge nearest where
+ * its throw would rest, on one spring at the hand's speed (`land`). Over what scrolls sideways by itself, a swipe without the mod is that
  * Pane's. A swipe up or down is the Pane's under the pointer: the Strip
  * never moves by itself.
  *
@@ -312,10 +320,17 @@ export const Strip = memo(function Strip({
       }
       if (held) event.preventDefault()
       if (!mine || swipe.way !== "sideways") return
+      // The system's glide after the fingers threw the Strip is not theirs:
+      // Banda carries it on its own spring.
+      if (swipe.gliding) return
       // The fingers take the Strip from wherever the spring has it.
       scrollOf(strip).stop()
       strip.scrollLeft += x
       clearTimeout(ending)
+      if (swipe.lifted()) {
+        land(strip, now.current, swipe.tracker.speed(event.timeStamp))
+        return
+      }
       ending = setTimeout(() => land(strip, now.current), SWIPE_END)
     }
     strip.addEventListener("wheel", onWheel, { passive: false })
@@ -330,7 +345,15 @@ export const Strip = memo(function Strip({
     if (!strip) return
     const root = document.documentElement
     let drag:
-      | { pointer: number; x: number; y: number; scroll: number; way?: Way }
+      | {
+          pointer: number
+          x: number
+          y: number
+          scroll: number
+          way?: Way
+          /** Its speed, for the throw it is let go with. */
+          tracker: Tracker
+        }
       | undefined
     const onDown = (event: PointerEvent) => {
       if (event.button !== 1 || !holdsMod(event)) return
@@ -344,6 +367,7 @@ export const Strip = memo(function Strip({
         x: event.clientX,
         y: event.clientY,
         scroll: strip.scrollLeft,
+        tracker: new Tracker(),
       }
       root.dataset.drag = "view"
     }
@@ -354,7 +378,11 @@ export const Strip = memo(function Strip({
       if (!drag.way && Math.max(Math.abs(dx), Math.abs(dy)) >= THRESHOLD) {
         drag.way = Math.abs(dx) >= Math.abs(dy) ? "sideways" : "upright"
       }
-      if (drag.way === "sideways") strip.scrollLeft = drag.scroll - dx
+      if (drag.way === "sideways") {
+        const was = strip.scrollLeft
+        strip.scrollLeft = drag.scroll - dx
+        drag.tracker.push(strip.scrollLeft - was, event.timeStamp)
+      }
       if (drag.way === "upright" && Math.abs(dy) >= VIEW_STEP) {
         // Pulled up, the next one comes up from below.
         now.current.onStep(dy < 0 ? 1 : -1)
@@ -363,10 +391,11 @@ export const Strip = memo(function Strip({
     }
     const finish = () => {
       if (!drag) return
-      const { way } = drag
+      const { way, tracker } = drag
       drag = undefined
       delete root.dataset.drag
-      if (way === "sideways") land(strip, now.current)
+      const speed = tracker.speed(performance.now())
+      if (way === "sideways") land(strip, now.current, speed)
     }
     const onUp = (event: PointerEvent) => {
       if (drag?.pointer === event.pointerId) finish()
@@ -665,36 +694,33 @@ function reveal(
 }
 
 /**
- * Where a sideways swipe ends: the focused column keeps the focus while no
- * other is more in view; else the one most in view nearest to it takes it.
- * Either comes whole into view, with its Group where that fills the
- * screen.
+ * Where a sideways swipe ends, let go at `speed` pixels a second, as
+ * niri's does (`landing`): on the snap nearest to where it would come to
+ * rest by itself, by one spring at the hand's speed; the focus on the
+ * furthest column whole there, the way it went.
  */
 function land(
   strip: HTMLElement,
   {
     columns,
-    focus,
     frame,
-  }: { columns: Drawn; focus: string | undefined; frame: Frame }
+  }: { columns: Drawn; focus: string | undefined; frame: Frame },
+  speed = 0
 ) {
   const all = places(strip, columns)
-  const { pad, inner } = room(strip)
-  const view = {
-    from: strip.scrollLeft + pad,
-    to: strip.scrollLeft + pad + inner,
+  const scroll = scrollOf(strip)
+  const from = scroll.value
+  const rest = from + speed * THROW
+  const landed = landing(all, columns, room(strip), columnsOf().center, {
+    from,
+    rest,
+  })
+  if (!landed) return
+  if (landed.at !== from) {
+    scroll.to(landed.at, moveOf("strip"), from, speed)
   }
-  const shares = all.map((place) => shownShare(place, view))
-  const most = Math.max(...shares) - 0.01
-  const at = all.findIndex((place) => place.id === focus)
-  const picked = all
-    .map((place, i) => ({ place, i }))
-    .filter(({ i }) => shares[i] >= most)
-    .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at))[0]?.place
-  if (!picked) return
-  revealFocus(strip, columns, picked.id, focus, all)
   // Where it goes shows from now, before it slides in.
   aimed(strip)
-  const entry = columnIn(strip, picked.id)?.dataset.entry
-  if (picked.id !== focus && entry) frame.focus(entry)
+  const entry = columnIn(strip, landed.id)?.dataset.entry
+  if (entry) frame.focus(entry)
 }
