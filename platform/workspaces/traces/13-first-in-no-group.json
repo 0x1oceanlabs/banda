@@ -1,5 +1,5 @@
 {
-  "about": "A Project's own Panes open last into its own Group, first on its workspace: the Group is made at the start when there is none, and goes with its last Pane.",
+  "about": "A Project's own Panes open first on its workspace, each a column in no Group, right of the columns in no Group at its start (ADR 0134, decision 3).",
   "start": [
     {
       "id": "26e029d5-0dd0-5def-8735-a8a581d1bb35",
@@ -14,7 +14,8 @@
         "args": {
           "n": 1
         },
-        "kind": "agents.thread",
+        "grouped": true,
+        "kind": "t.t",
         "place": {
           "project": "a0000000-0000-4000-8000-000000000001",
           "to": "project"
@@ -35,13 +36,14 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
           "project": "a0000000-0000-4000-8000-000000000001"
@@ -62,7 +64,7 @@
         "kind": "terminal.terminal",
         "place": {
           "project": "a0000000-0000-4000-8000-000000000001",
-          "to": "own"
+          "to": "start"
         },
         "project": "a0000000-0000-4000-8000-000000000001"
       },
@@ -86,8 +88,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "2e9b1523-167b-530a-b4b1-4d3825afbd93",
@@ -95,17 +96,17 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "b84e261a-df7d-5ed5-be07-551ee8544674"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "5425b54b-8269-5c83-83d8-8a8cd016ef85",
@@ -123,7 +124,7 @@
         "kind": "terminal.terminal",
         "place": {
           "project": "a0000000-0000-4000-8000-000000000001",
-          "to": "own"
+          "to": "start"
         },
         "project": "a0000000-0000-4000-8000-000000000001"
       },
@@ -147,8 +148,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "21b91886-d616-511d-915d-ceb2d184dd04",
@@ -162,8 +162,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "2e9b1523-167b-530a-b4b1-4d3825afbd93",
@@ -171,17 +170,17 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "b84e261a-df7d-5ed5-be07-551ee8544674"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "5425b54b-8269-5c83-83d8-8a8cd016ef85",
@@ -199,7 +198,7 @@
         "kind": "files.files",
         "place": {
           "project": "a0000000-0000-4000-8000-000000000002",
-          "to": "own"
+          "to": "start"
         },
         "project": "a0000000-0000-4000-8000-000000000002"
       },
@@ -223,8 +222,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "21b91886-d616-511d-915d-ceb2d184dd04",
@@ -238,8 +236,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "2e9b1523-167b-530a-b4b1-4d3825afbd93",
@@ -247,17 +244,17 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "b84e261a-df7d-5ed5-be07-551ee8544674"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "5425b54b-8269-5c83-83d8-8a8cd016ef85",
@@ -274,12 +271,10 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "79e9e090-533e-5c43-b861-345f51069b9a"
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "79e9e090-533e-5c43-b861-345f51069b9a"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "c6b268db-2344-5f54-8599-27b8f0cbc46c",
@@ -310,8 +305,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "21b91886-d616-511d-915d-ceb2d184dd04",
@@ -325,8 +319,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "2e9b1523-167b-530a-b4b1-4d3825afbd93",
@@ -334,17 +327,17 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "b84e261a-df7d-5ed5-be07-551ee8544674"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "5425b54b-8269-5c83-83d8-8a8cd016ef85",
@@ -367,7 +360,7 @@
         "kind": "files.files",
         "place": {
           "project": "a0000000-0000-4000-8000-000000000002",
-          "to": "own"
+          "to": "start"
         },
         "project": "a0000000-0000-4000-8000-000000000002"
       },
@@ -391,8 +384,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "21b91886-d616-511d-915d-ceb2d184dd04",
@@ -406,8 +398,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "b84e261a-df7d-5ed5-be07-551ee8544674"
+              "full": false
             },
             {
               "id": "2e9b1523-167b-530a-b4b1-4d3825afbd93",
@@ -415,17 +406,17 @@
                 {
                   "id": "04de2f6c-b8e0-5b75-a1a5-9154e3de6704",
                   "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "agents.thread",
+                  "kind": "t.t",
                   "args": {
                     "n": 1
                   }
                 }
               ],
-              "full": false
+              "full": false,
+              "group": "b8b2412d-1d76-5860-b826-2eb1bd7f8eb2"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "b84e261a-df7d-5ed5-be07-551ee8544674"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "5425b54b-8269-5c83-83d8-8a8cd016ef85",
@@ -442,12 +433,10 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "f9b41c74-9f2f-588f-8aa5-c1e960ec4319"
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "f9b41c74-9f2f-588f-8aa5-c1e960ec4319"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "c6b268db-2344-5f54-8599-27b8f0cbc46c",

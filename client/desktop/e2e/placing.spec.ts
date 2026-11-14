@@ -23,7 +23,6 @@ test.afterEach(async () => {
 type Kept = {
   id: string
   project?: string
-  own?: string
   columns: {
     group?: string
     width?: string
@@ -42,17 +41,16 @@ function kept(window: Window): Kept[] {
 /**
  * Where the one Files Pane stands, as the engine keeps it: its workspace
  * and its column, from 0, whether that workspace is a Project's, and
- * whether its column is in the Project's own Group. None while no
- * workspace shows one.
+ * whether its column is in a Group. None while no workspace shows one.
  */
 function filesAt(window: Window) {
   for (const [w, workspace] of kept(window).entries())
     for (const [c, column] of workspace.columns.entries()) {
       const pane = column.panes.find((one) => one.kind === "files.tree")
       if (!pane) continue
-      const own = column.group !== undefined && column.group === workspace.own
+      const grouped = column.group !== undefined
       const owned = workspace.project !== undefined
-      return { pane: pane.id, at: { workspace: w, column: c, owned, own } }
+      return { pane: pane.id, at: { workspace: w, column: c, owned, grouped } }
     }
   return undefined
 }
@@ -90,14 +88,13 @@ for (const flow of ["free", "row", "solo"] as const)
 
     // The Person's key, from the terminal.
     const byKey = await placed(() => page.keyboard.press("Alt+KeyE"))
-    // Right of the terminal on its workspace: in the row and solo, the
-    // Project's, in its own Group; in the Flow free, no one's.
-    const strict = flow !== "free"
+    // Right of the terminal on its workspace, in no Group: in the row and
+    // solo, the Project's; in the Flow free, no one's.
     expect(byKey).toEqual({
       workspace: 0,
       column: 1,
-      owned: strict,
-      own: strict,
+      owned: flow !== "free",
+      grouped: false,
     })
     // A program that names no place, as an Agent's tool and any App do.
     const params = { project: work, kind: "files.tree", args: { dir: folder } }

@@ -41,16 +41,9 @@ export const TILING_FILE: ModuleFile<Tiling> = {
 
 /** What a workspaces command makes, each at most once; `bottom N`, the
  * `N`th of the new empty workspaces one makes one after another, as
- * `workspaces.arrange` does (`Seed::nth`), and `own P`, the own Group it
- * starts on Project `P`'s workspace (`Seed::own`). */
+ * `workspaces.arrange` does (`Seed::nth`). */
 export type Made =
-  | "pane"
-  | "column"
-  | "group"
-  | "workspace"
-  | "bottom"
-  | `bottom ${number}`
-  | `own ${string}`
+  "pane" | "column" | "group" | "workspace" | "bottom" | `bottom ${number}`
 
 /** Fixed for good, as `MADE` in `model.rs`. */
 const MADE = "63bdd961-aad0-4575-bfc1-5f1d352969ad"

@@ -4305,7 +4305,6 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
 
 type Kept = {
   project?: string
-  own?: string
   columns: { group?: string; panes: { id: string; kind: string }[] }[]
 }
 
@@ -4365,12 +4364,12 @@ async function freeThenRow(window: Window) {
   }
 }
 
-test("Arrange by Project puts a Project's terminal into its own Group, first on its workspace, and its Agents after it (ADR 0102, decisions 4 and 9)", async () => {
+test("Arrange by Project puts a Project's terminal first on its workspace, in no Group, and its Agents after it (ADR 0102, decision 9; ADR 0134, decision 3)", async () => {
   window = await startWindow({ files: FREE })
   const { arrange, workspaces } = await freeThenRow(window)
 
   // Arranged from the Banda menu, on Work's workspace as the engine keeps
-  // it: the terminal is the own Group, first, and each Thread its Group.
+  // it: the terminal first, in no Group, and each Thread its Group.
   const work = projectId(window, "Work")
   const works = () =>
     workspaces().find((workspace) => workspace.project === work)
@@ -4378,14 +4377,14 @@ test("Arrange by Project puts a Project's terminal into its own Group, first on 
     const home = works()
     return {
       kinds: home?.columns.map((c) => c.panes.map((pane) => pane.kind)),
-      own: home !== undefined && home.own === home.columns[0]?.group,
+      loose: home !== undefined && home.columns[0]?.group === undefined,
       groups: new Set(home?.columns.map((c) => c.group ?? "none")).size,
     }
   }
   await arrange()
   await expect.poll(arranged).toEqual({
     kinds: [["terminal.terminal"], ["agents.thread"], ["agents.thread"]],
-    own: true,
+    loose: true,
     groups: 3,
   })
 
@@ -4727,15 +4726,15 @@ test("in the row, the Pane menu greys out another Project's workspace, and Open 
   await expect(on(1).getByRole("region", { name: "hello" })).toBeVisible()
 })
 
-test("in the row, Alt+Shift+N takes a Pane of the Project's own Group alone, and onto another Project's workspace the toast and the drag's note say whose it is (ADR 0102, decisions 4 and 6)", async () => {
+test("in the row, Alt+Shift+N takes a Pane in no Group alone, and onto another Project's workspace the toast and the drag's note say whose it is (ADR 0102, decision 6; ADR 0134, decision 3)", async () => {
   window = await startWindow({ look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { on, refused } = await twoProjects(page)
   const terminals = (n: number) =>
     on(n).getByRole("region", { name: "Terminal screen" })
 
-  // Work's workspace, emptied, stays: two terminals opened there go into
-  // its own Group.
+  // Work's workspace, emptied, stays: two terminals opened there go first
+  // on it, in no Group.
   await page.keyboard.press("Alt+Digit1")
   const hello = on(1).getByRole("region", { name: "hello" })
   await expect(hello).toHaveAttribute("data-focused", "true")
@@ -4756,8 +4755,8 @@ test("in the row, Alt+Shift+N takes a Pane of the Project's own Group alone, and
     "Work's Panes go to its workspace, a free one or a new one."
   )
   await expect(terminals(1)).toHaveCount(2)
-  // Onto a new workspace, the terminal goes alone: the other stays in
-  // Work's own Group.
+  // Onto a new workspace, the terminal goes alone: the other stays on
+  // Work's.
   await page.keyboard.press("Alt+Shift+Digit3")
   await expect(terminals(3)).toHaveCount(1)
   await page.keyboard.press("Alt+Digit1")
@@ -6498,7 +6497,7 @@ test("a Project's workspace goes once its last Thread is archived and the window
   await expect(plays).toHaveCount(0)
 })
 
-test("an emptied Project's workspace says whose it is, its first terminal starts the own Group, and the Person closes it (ADR 0102)", async () => {
+test("an emptied Project's workspace says whose it is, its terminals open first on it in no Group, and the Person closes it (ADR 0102; ADR 0134, decision 3)", async () => {
   window = await startWindow({ sidebar: 'group = "project"\n' })
   const { page } = window
   // Work, the first Project, is workspace 1; Play's, 2, is the one emptied.
@@ -6526,8 +6525,8 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
     .filter({ hasText: "Play's workspace is empty." })
   await expect(words).toContainText("It keeps its place until you close it.")
 
-  // Its Terminal starts the Project's own Group, which bears Play's name;
-  // the next terminal goes right of it, into the Group (decision 4).
+  // Its Terminal opens there, in no Group and with no handle or tag; the
+  // next terminal goes right of it (ADR 0134, decision 3).
   await tiling.getByRole("button", { name: "Terminal", exact: true }).click()
   const screens = tiling.getByRole("region", { name: "Terminal screen" })
   await expect(screens).toHaveCount(1)
@@ -6539,19 +6538,15 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
     .locator("[data-column]")
     .filter({ has: page.getByRole("region", { name: "Terminal screen" }) })
   const [first, second] = [columns.nth(0), columns.nth(1)]
-  const group = await first.getAttribute("data-group")
-  expect(group).toBeTruthy()
-  await expect(second).toHaveAttribute("data-group", group!)
+  await expect(first).not.toHaveAttribute("data-group")
+  await expect(second).not.toHaveAttribute("data-group")
   await expect(second.locator("section[data-tile]")).toHaveAttribute(
     "data-focused",
     "true"
   )
   const left = async (column: Locator) => (await column.boundingBox())!.x
   expect(await left(second)).toBeGreaterThan(await left(first))
-  const tag = page.locator("[data-group-tag]")
-  await expect(tag).toHaveCount(1)
-  await expect(tag).toHaveText("Play")
-  await page.screenshot({ path: "test-results/42-own-group-tag.png" })
+  await expect(tiling.locator("[data-group-handle]")).toHaveCount(0)
 
   // Emptied again, the Person closes it: the window goes to Work's, and
   // the bar has Play no more.

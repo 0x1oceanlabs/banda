@@ -274,9 +274,9 @@ export function openingFrom(
 /**
  * Opens a first Pane on the empty workspace on screen, as its buttons do,
  * in its Project, else in `home`. On a Project's, where the keys would:
- * a terminal makes the Project's own Group there, and the next goes right
- * of it (ADR 0102, decision 4). On one of no Project the buttons name the
- * place: there, which makes it a free one (decision 1).
+ * first there, in no Group, and the next right of it (ADR 0134, decision
+ * 3). On one of no Project the buttons name the place: there, which
+ * makes it a free one (decision 1).
  */
 export function startingHere(
   workspaces: Workspaces,

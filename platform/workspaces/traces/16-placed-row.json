@@ -1,5 +1,5 @@
 {
-  "about": "In the row, a Pane with no place opens by where it is opened from: from the Project's own Group, last into it; by a click in a Group, into that Group; on a free workspace, right of the Pane in front; any other, and with none in front, into its Project's own Group. A Thread goes last on its Project's workspace, and so does what is opened for an Agent. A Pane of no Project goes right of the Pane in front, a Thread of none on the top free workspace.",
+  "about": "In the row, a Pane with no place opens by where it is opened from: by a click in a Group, into that Group; on a free workspace or from a column in no Group on its Project's workspace, right of the Pane in front; from another Project's workspace, and with none in front, first on its Project's workspace, right of the columns in no Group at its start. A Thread goes last on its Project's workspace, and so does what is opened for an Agent. A Pane of no Project goes right of the Pane in front, a Thread of none on the top free workspace.",
   "start": [
     {
       "id": "47821720-d172-5e7c-8c43-99d1205e269d",
@@ -43,12 +43,10 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -93,8 +91,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -108,12 +105,10 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -159,8 +154,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -174,8 +168,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -193,8 +186,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -240,8 +232,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -255,8 +246,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -290,8 +280,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -336,8 +325,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -351,8 +339,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -386,8 +373,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -404,12 +390,10 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -455,8 +439,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -470,8 +453,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -505,8 +487,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -523,8 +504,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -541,8 +521,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -589,8 +568,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -604,8 +582,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -639,8 +616,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -657,8 +633,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -675,8 +650,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -743,8 +717,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -758,8 +731,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -793,8 +765,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -811,8 +782,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -829,8 +799,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -912,8 +881,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -927,8 +895,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -962,8 +929,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -980,8 +946,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -998,8 +963,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -1094,8 +1058,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -1109,8 +1072,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -1144,8 +1106,7 @@
               "group": "c8c4d1a3-c0aa-54f5-bde0-7c7dd173d3b6"
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -1162,8 +1123,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -1180,8 +1140,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -1293,8 +1252,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -1308,8 +1266,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -1357,8 +1314,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -1375,8 +1331,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -1393,8 +1348,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -1503,8 +1457,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -1518,23 +1471,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
-            },
-            {
-              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
-              "panes": [
-                {
-                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
-                  "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "a.a",
-                  "args": {
-                    "n": 12
-                  }
-                }
-              ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -1580,10 +1517,23 @@
                 }
               ],
               "full": false
+            },
+            {
+              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
+              "panes": [
+                {
+                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -1600,8 +1550,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -1618,8 +1567,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -1729,8 +1677,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -1744,23 +1691,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
-            },
-            {
-              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
-              "panes": [
-                {
-                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
-                  "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "a.a",
-                  "args": {
-                    "n": 12
-                  }
-                }
-              ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -1808,6 +1739,20 @@
               "full": false
             },
             {
+              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
+              "panes": [
+                {
+                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
               "id": "cd8612e4-ad12-5748-9c0f-ec187cf4747e",
               "panes": [
                 {
@@ -1822,8 +1767,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -1840,8 +1784,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -1858,8 +1801,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -1969,8 +1911,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -1984,23 +1925,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
-            },
-            {
-              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
-              "panes": [
-                {
-                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
-                  "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "a.a",
-                  "args": {
-                    "n": 12
-                  }
-                }
-              ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -2048,6 +1973,20 @@
               "full": false
             },
             {
+              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
+              "panes": [
+                {
+                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
               "id": "cd8612e4-ad12-5748-9c0f-ec187cf4747e",
               "panes": [
                 {
@@ -2062,8 +2001,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -2080,8 +2018,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -2098,8 +2035,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -2222,8 +2158,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -2237,23 +2172,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
-            },
-            {
-              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
-              "panes": [
-                {
-                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
-                  "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "a.a",
-                  "args": {
-                    "n": 12
-                  }
-                }
-              ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "65d11dc7-e22f-5d42-aa72-a251fd7632d0",
@@ -2267,8 +2186,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -2316,6 +2234,20 @@
               "full": false
             },
             {
+              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
+              "panes": [
+                {
+                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
               "id": "cd8612e4-ad12-5748-9c0f-ec187cf4747e",
               "panes": [
                 {
@@ -2330,8 +2262,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -2348,8 +2279,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -2366,8 +2296,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",
@@ -2490,8 +2419,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "cc13bacb-d42e-5bbb-a8fc-9d7bc26bffe9",
@@ -2505,23 +2433,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
-            },
-            {
-              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
-              "panes": [
-                {
-                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
-                  "project": "a0000000-0000-4000-8000-000000000001",
-                  "kind": "a.a",
-                  "args": {
-                    "n": 12
-                  }
-                }
-              ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "65d11dc7-e22f-5d42-aa72-a251fd7632d0",
@@ -2535,8 +2447,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+              "full": false
             },
             {
               "id": "628f453f-c246-5de8-afd9-85d047854ed0",
@@ -2584,6 +2495,20 @@
               "full": false
             },
             {
+              "id": "5145f02c-0725-55a8-b3d9-8e887c688362",
+              "panes": [
+                {
+                  "id": "f1b3a6df-0326-5499-b924-58e2614f2bc0",
+                  "project": "a0000000-0000-4000-8000-000000000001",
+                  "kind": "a.a",
+                  "args": {
+                    "n": 12
+                  }
+                }
+              ],
+              "full": false
+            },
+            {
               "id": "cd8612e4-ad12-5748-9c0f-ec187cf4747e",
               "panes": [
                 {
@@ -2598,8 +2523,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000001",
-          "own": "c5a09e46-c8aa-54e3-b16c-feb0bbbfbb9d"
+          "project": "a0000000-0000-4000-8000-000000000001"
         },
         {
           "id": "fb59f947-0d9d-56fc-bf4e-29227fdff364",
@@ -2616,8 +2540,7 @@
                   }
                 }
               ],
-              "full": false,
-              "group": "495a247e-e75e-5dbe-b85a-268e72db2786"
+              "full": false
             },
             {
               "id": "c53ad601-62c8-5ca1-a182-3a2cf808508f",
@@ -2648,8 +2571,7 @@
               "full": false
             }
           ],
-          "project": "a0000000-0000-4000-8000-000000000002",
-          "own": "495a247e-e75e-5dbe-b85a-268e72db2786"
+          "project": "a0000000-0000-4000-8000-000000000002"
         },
         {
           "id": "bb000671-1d63-5f45-a61e-8471ac6588ed",

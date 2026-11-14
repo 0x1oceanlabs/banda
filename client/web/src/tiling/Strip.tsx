@@ -180,7 +180,7 @@ export const Strip = memo(function Strip({
     .join()
   const empty = workspace.columns.length === 0
   // A Project's workspace says whose it is: emptied, where it keeps its
-  // place (ADR 0102, decision 2), and by its own Group's tag (decision 4).
+  // place (ADR 0102, decision 2).
   const whose =
     workspace.project === undefined
       ? undefined
@@ -474,7 +474,6 @@ export const Strip = memo(function Strip({
         const bar = column.decked && !zooms
         const { group, ends } = column
         const lit = group !== undefined && selected && focusedGroup === group
-        const own = group !== undefined && group === workspace.own
         return (
           <div
             key={column.id}
@@ -503,27 +502,16 @@ export const Strip = memo(function Strip({
                 data-focused={lit ? "" : undefined}
               />
             )}
-            {group !== undefined &&
-              ends.first &&
-              !zooms &&
-              (groups.handle ? (
-                <GroupHandle
-                  group={group}
-                  name={
-                    owned.get(group)?.name ??
-                    // The own Group has no owner: its tag is the Project's
-                    // name (ADR 0102, decision 4).
-                    (own ? whose : undefined)
-                  }
-                  pane={column.entries[0]?.id}
-                  panes={columns
-                    .slice(c, runOf(columns, c).end)
-                    .reduce((sum, one) => sum + one.entries.length, 0)}
-                />
-              ) : (
-                // With the handle off, the own Group still bears its tag.
-                own && whose !== undefined && <OwnTag name={whose} />
-              ))}
+            {group !== undefined && ends.first && !zooms && groups.handle && (
+              <GroupHandle
+                group={group}
+                name={owned.get(group)?.name}
+                pane={column.entries[0]?.id}
+                panes={columns
+                  .slice(c, runOf(columns, c).end)
+                  .reduce((sum, one) => sum + one.entries.length, 0)}
+              />
+            )}
             {bar && (
               <Tabs
                 entries={column.entries}
@@ -564,10 +552,6 @@ export const Strip = memo(function Strip({
   )
 })
 
-/** A Group's handle and the own Group's tag: a pill on its top edge. */
-const PILL =
-  "absolute -top-1.5 left-3 z-10 flex h-3 items-center rounded-full bg-popover px-1.5 text-small leading-3 text-muted-foreground ring-1 ring-border select-none"
-
 /**
  * A Group's handle (ADR 0065, decision 6): on its top edge, it shows
  * under the pointer, says the Group's name and its number of Panes, and
@@ -594,29 +578,10 @@ function GroupHandle({
       role="button"
       aria-label={label}
       title="Drag to move the Group"
-      className={cn(
-        PILL,
-        "cursor-grab gap-1 opacity-0 transition-opacity duration-150 data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
-      )}
+      className="absolute -top-1.5 left-3 z-10 flex h-3 cursor-grab items-center gap-1 rounded-full bg-popover px-1.5 text-small leading-3 text-muted-foreground opacity-0 ring-1 ring-border transition-opacity duration-150 select-none data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
     >
       <GripHorizontalIcon aria-hidden className="size-2.5" />
       {label}
-    </div>
-  )
-}
-
-/**
- * The Project's own Group's tag (ADR 0102, decision 4): the Project's
- * name, where the Group's handle would stand, there while the handle is
- * off. It only says; the handle carries.
- */
-function OwnTag({ name }: { name: string }) {
-  return (
-    <div
-      data-group-tag=""
-      className={cn(PILL, "pointer-events-none whitespace-nowrap")}
-    >
-      {name}
     </div>
   )
 }
