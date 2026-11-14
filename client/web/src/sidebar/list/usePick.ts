@@ -9,27 +9,20 @@ import {
   useState,
 } from "react"
 import { flushSync } from "react-dom"
+import { useStore } from "@banda/core/react"
 import type { Tab } from "../model/inbox"
-import {
-  pickAfter,
-  pickIn,
-  type Picks,
-  type Step,
-  stepped,
-} from "../model/pick"
+import { pickAfter, pickIn, type Step, stepped } from "../model/pick"
+import { pickedOf, type SidebarView, tabInView } from "./view"
 
 /** The attribute of a stop of the pick in the list: its key. A card has
  * `data-card` too, a Project's card among them; a group's header
  * `data-group`, its key, and `aria-expanded`; "+ N more" `data-more`. */
 export const PICK = "data-pick"
 
-/** What the list's items read of the pick: the key picked in the tab in
- * view, to say so, and how "+ N more" shows the rest and picks its first
- * card, as `→` does. */
-export const PickContext = createContext<{
-  picked?: string
-  expand: (stop: Element) => void
-}>({ expand: () => {} })
+/** How "+ N more" shows the rest and picks its first card, as `→` does:
+ * the pick's, which works on the list as it is drawn; none outside one.
+ * The key picked, the items read in the list's view (`pickedOf`). */
+export const Expand = createContext<(stop: Element) => void>(() => {})
 
 /** The key of a stop that is no Thread's card, a group's header, "+ N
  * more" or a Project's card: its machine's, as its region's, and its
@@ -75,7 +68,7 @@ function pageOf(view: Element | null, stops: readonly Element[]): number {
 
 /**
  * The pick in the list (ADR 0098, decision 13; spec §2.7): a key per tab,
- * which the keys act on; the DOM focus stays on the list, which names it
+ * kept in the list's view, which the keys act on; the DOM focus stays on the list, which names it
  * by `aria-activedescendant`. The arrows, Home, End and the pages move it
  * from stop to stop, never round the ends; `←` folds the picked card's
  * group and picks its header, or the header picked; `→` unfolds a folded
@@ -90,31 +83,28 @@ function pageOf(view: Element | null, stops: readonly Element[]): number {
  * lands on, with none.
  */
 export function usePick({
-  tab,
+  view,
   open,
-  toggle,
-  more,
 }: {
-  tab: Tab
+  /** The list's view, which keeps the pick, folds a group and shows a
+   * cut list whole. */
+  view: SidebarView
   /** The open Thread's card, by its key. */
   open: string | undefined
-  /** Folds or unfolds the group of that key. */
-  toggle: (group: string) => void
-  /** Shows a cut list whole. */
-  more: () => void
 }) {
+  const { toggle, toggleMore: more } = view
   const list = useRef<HTMLDivElement>(null)
-  const [picks, setPicks] = useState<Picks>({})
+  const tab = useStore(view, tabInView)
+  const picked = useStore(view, pickedOf)
   const [keyed, setKeyed] = useState(false)
-  const picked = picks[tab]
   const now = useRef({ tab, picked, open })
   useLayoutEffect(() => {
     now.current = { tab, picked, open }
   })
-  const pick = useCallback((key: string | undefined) => {
-    const { tab } = now.current
-    setPicks((was) => (was[tab] === key ? was : { ...was, [tab]: key }))
-  }, [])
+  const pick = useCallback(
+    (key: string | undefined) => view.pick(now.current.tab, key),
+    [view]
+  )
   const stops = () => (list.current ? stopsIn(list.current) : [])
   const stopOf = (key: string | undefined) =>
     key === undefined ? undefined : stops().find((stop) => keyOf(stop) === key)
@@ -297,7 +287,6 @@ export function usePick({
   })
 
   return {
-    picked,
     /** The stop picked, as drawn. */
     at: () => stopOf(now.current.picked),
     goneFrom,

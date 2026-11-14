@@ -10,7 +10,6 @@
  * 12), found by what each does.
  */
 import {
-  createContext,
   Fragment,
   type ReactElement,
   type RefObject,
@@ -73,6 +72,7 @@ import { ACT_LOOK } from "../cards/ThreadCard"
 import { refused } from "../model/refusals"
 import { type Does, keyId } from "../model/keys"
 import { useOpen } from "./open"
+import { useView, ViewContext, type ViewState } from "./view"
 import { useActs, useDoing } from "./useActs"
 
 /** A row of the card's menu, by what it does. */
@@ -201,18 +201,6 @@ export function machinesTo(machines: readonly Machine[] | undefined): There[] {
 }
 
 /**
- * Asks whether to delete a card's Thread, the one picked by `Delete` or
- * the one whose menu's Delete… was chosen; none takes the question away.
- * The sidebar's keys keep it, as the list's own popup.
- */
-export const AskDelete = createContext<(row: Row | undefined) => void>(
-  () => undefined
-)
-
-/** The card Delete asks about, and what asks or stops asking. */
-export type Deleting = { row?: Row; ask: (row: Row | undefined) => void }
-
-/**
  * The card `children` with its menu around it: a right click opens it
  * where the pointer is, and `openCardMenu` at the card.
  */
@@ -249,7 +237,8 @@ function Entries({
   const run = useRun()
   const doing = useDoing()
   const actOn = useActs()
-  const ask = useContext(AskDelete)
+  // Delete… asks in the list's view, as the key Delete does.
+  const view = useContext(ViewContext)
   const projects = movesTo(useMenuProjects(), row.project.id)
   const there = machinesTo(useMachines())
   const { listed } = row
@@ -281,7 +270,7 @@ function Entries({
     copy: () => doing(row, "copy"),
     folder: () => run("file.outside", { file: row.project.folder }),
     // The dialog takes the focus once the menu has gone.
-    delete: () => later(() => ask(row)),
+    delete: () => later(() => view?.ask(row)),
   }
   const groups = entriesOf(row.stand, listed, {
     moves: projects.length > 0 || there.length > 0,
@@ -377,16 +366,21 @@ export function openCardMenu(card: Element): void {
   )
 }
 
+/** The card whose Thread Delete asks about. */
+const deletingOf = (view: ViewState) => view.deleting
+
 /**
- * Asks whether to delete `row`'s Thread for good (ADR 0098, decision 14):
- * "Delete “Title”?", Cancel the default. Delete asks its App to, on its
- * host. Closed, the focus goes back where it was, the list.
+ * Asks whether to delete the Thread of the card the list's view asks
+ * about (ADR 0098, decision 14), the one picked by `Delete` or the one
+ * whose menu's Delete… was chosen: "Delete “Title”?", Cancel the default.
+ * Delete asks its App to, on its host. Closed, the focus goes back where
+ * it was, the list.
  */
-export function DeleteDialog({
-  deleting: { row, ask },
-}: {
-  deleting: Deleting
-}) {
+export function DeleteDialog() {
+  const view = useContext(ViewContext)
+  const row = useView(deletingOf)
+  // Cancel, Delete or Esc take the question away.
+  const done = () => view?.ask(undefined)
   const doing = useDoing()
   // Its words stay as it fades out.
   const [said, setSaid] = useState(row)
@@ -395,7 +389,7 @@ export function DeleteDialog({
     <AlertDialog
       open={row !== undefined}
       onOpenChange={(open) => {
-        if (!open) ask(undefined)
+        if (!open) done()
       }}
     >
       <DialogContent showCloseButton={false}>
@@ -406,19 +400,14 @@ export function DeleteDialog({
           </DialogDescription>
         </DialogHeader>
         <DialogFooter>
-          <Button
-            type="button"
-            variant="outline"
-            autoFocus
-            onClick={() => ask(undefined)}
-          >
+          <Button type="button" variant="outline" autoFocus onClick={done}>
             Cancel
           </Button>
           <Button
             type="button"
             variant="destructive"
             onClick={() => {
-              ask(undefined)
+              done()
               if (row) doing(row, "delete")
             }}
           >
