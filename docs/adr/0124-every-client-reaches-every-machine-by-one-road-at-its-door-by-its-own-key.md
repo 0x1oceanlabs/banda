@@ -265,6 +265,18 @@ repository), with an adversarial check.
   window that allows it allows it on them too; the look, which a browser
   takes from the system's light or dark alone; and the settings, which
   only the desktop writes.
+- **A window asks the Person about a device that asks (SE5, PR 3a).**
+  Every window that is the Person hears `devices.asking` on this machine
+  and on each other it reaches, and asks over itself
+  (`client/web/src/devices/`): the device's name, the code, its kind,
+  when it asked and the address of the page that asks, as any page that
+  reaches the door may ask. Allow lets it in on every machine the window
+  reaches, or only where it asked: allowed there by its code, it is
+  paired on the others by the key that machine says it proved
+  (`devices.add`), and one that did not pair it is named. Don't allow
+  sends it away. Closed with no answer, it waits out its time, and that
+  window says no more of it. Focus starts on neither button. Not yet:
+  Settings → Devices, where a device is removed.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
