@@ -15,7 +15,6 @@ import {
   standOf,
   takes,
 } from "@banda/ui/status"
-import { byOrder } from "./order"
 
 /** A Thread counted, with the Project it is in and where it stands. */
 export type Counted = { project: ProjectId; listed: Listed; stand: Stand }
@@ -65,37 +64,4 @@ export function tally(
 export function calm(lists: Lists, now: number): boolean {
   const { mark, waiting } = attentionOf(lists, now)
   return waiting === 0 && !works(mark)
-}
-
-/** A counted thing's `project:thing` key, as `rowKey` says its row's. */
-export const countedKey = ({ project, listed }: Counted): string =>
-  `${project}:${listed.id}`
-
-/**
- * What waits for the Person, then what works, as their list shows it:
- * each in the sidebar's `order` of `project:thing` keys, the one order of
- * what calls, which Alt+U walks (ADR 0087, decision 8). A thing the
- * sidebar lists nowhere comes last, the one that changed first first, as
- * Alt+U takes it (`byOrder`).
- */
-export function inOrder(
-  tallies: readonly Tally[],
-  order: readonly string[]
-): {
-  waiting: Counted[]
-  working: Counted[]
-} {
-  const seen = new Map<string, Counted>()
-  for (const { things } of tallies)
-    for (const thing of things) seen.set(countedKey(thing), thing)
-  const sorted = byOrder(
-    [...seen.values()],
-    order,
-    countedKey,
-    (a, b) => a.listed.changed - b.listed.changed
-  )
-  return {
-    waiting: sorted.filter((t) => t.stand !== "working"),
-    working: sorted.filter((t) => t.stand === "working"),
-  }
 }

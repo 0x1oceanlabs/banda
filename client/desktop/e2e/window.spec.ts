@@ -5431,17 +5431,12 @@ test("Alt+U goes to the Thread that calls", async () => {
   await expect(calls).toBeHidden()
 })
 
-/** The sidebar's counts in the bar's middle, where the Person lists them:
- * with the sidebar hidden, the count beside the logo says it by default
- * (ADR 0098, decision 22). */
-const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
-
-test("the bar's middle counts who works and who waits while the sidebar is closed, where the Person lists them, and a row opens its Thread", async () => {
-  window = await startWindow({ look: COUNTS })
+test("the bar's middle counts who works and who waits while the sidebar is closed, and a card of the small inbox they open opens its Thread", async () => {
+  window = await startWindow()
   const { page } = window
   const { composer } = await firstThread(page)
   const bar = page.getByRole("banner")
-  // Its numbers first: the logo's own name says "at work" too (S15).
+  // Its numbers first.
   const counts = bar.getByRole("button", { name: /^\d+ (at work|done)/ })
   await sendAndGoBelow(page, composer, "slow hello")
   // The sidebar shows the same, so the bar leaves it out.
@@ -5460,10 +5455,10 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   await page.screenshot({ path: "test-results/25-bar-counts.png" })
 
   await done.click()
-  const row = page.getByRole("menuitem", { name: /slow hello/ })
-  await expect(page.getByRole("group", { name: "Your turn" })).toContainText(
-    "slow hello"
-  )
+  const row = page
+    .getByRole("dialog", { name: "Inbox" })
+    .getByRole("option", { name: /slow hello/ })
+  await expect(row).toBeVisible()
   await page.screenshot({ path: "test-results/25-bar-counts-list.png" })
   await row.click()
   const thread = page.getByRole("region", { name: "slow hello" })
@@ -5500,7 +5495,7 @@ test("the bar's widgets stand where look.toml's [bar] lists them, and an id it h
 })
 
 test("with Alt held, the mouse moves a widget along the bar, the workspaces too, and writes [bar] (ADR 0064)", async () => {
-  window = await startWindow({ look: COUNTS })
+  window = await startWindow()
   const { page, dir } = window
   const file = join(dir, "config/look.toml")
   const written = () => (existsSync(file) ? readFileSync(file, "utf8") : "")

@@ -438,7 +438,7 @@ test("ten Agents of a Project work side by side on its workspace, and a pick bri
   await expect(one).toBeInViewport({ ratio: 0.99 })
 })
 
-test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, the count beside the logo says whose turn it is and who works, and the small inbox lists the calls in that order (ADR 0079, ADR 0087, ADR 0098 decision 22)", async () => {
+test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's order, the counts in the bar's middle say whose turn it is and who works, and the small inbox they open lists the calls in that order (ADR 0079, ADR 0087, ADR 0098 decision 22)", async () => {
   window = await startWindow()
   const { page } = window
   const [a, b, c] = await agents(
@@ -449,24 +449,22 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
     "hello d"
   )
   const bar = page.getByRole("banner")
-  const count = bar.locator("[data-inbox-count]")
+  const count = bar.locator("[data-widget='sidebar.counts'] button")
   const logo = bar.getByRole("button", { name: /^Banda(:|$)/ })
   await page.keyboard.press("Alt+KeyA")
   await expect(sidebarOf(page)).toBeHidden()
-  // Nothing calls, so no count shows; the logo says who works.
-  await expect(logo).toHaveAccessibleName("Banda: 3 at work")
-  await expect(count).toHaveCount(0)
+  // Nothing calls: the counts say who works, the logo that they work.
+  await expect(logo).toHaveAccessibleName("Banda: Working")
+  await expect(count).toHaveAccessibleName("3 at work")
 
   // They finish one after another.
   finish(window, "wait a")
-  await expect(count).toHaveAccessibleName("Inbox: 1 your turn, 2 at work")
-  await expect(count).toHaveText("1·2")
+  await expect(count).toHaveAccessibleName("1 done · 2 at work")
   finish(window, "wait b")
-  await expect(count).toHaveAccessibleName("Inbox: 2 your turn, 1 at work")
+  await expect(count).toHaveAccessibleName("2 done · 1 at work")
   finish(window, "wait c")
-  await expect(count).toHaveAccessibleName("Inbox: 3 your turn")
-  await expect(count).toHaveText("3")
-  await expect(logo).toHaveAccessibleName("Banda: Done, 3 your turn")
+  await expect(count).toHaveAccessibleName("3 done")
+  await expect(logo).toHaveAccessibleName("Banda: Done")
 
   // The small inbox goes in the sidebar list's order, the one order of
   // what calls (ADR 0087, decision 8): Your turn oldest first, so no one
@@ -485,10 +483,10 @@ test("with the Sidebar hidden, Alt+U goes down what calls in the sidebar list's 
   // is hidden: down the small inbox's list.
   await page.keyboard.press("Alt+KeyU")
   await expect(a).toHaveAttribute("data-focused", "true")
-  await expect(count).toHaveAccessibleName("Inbox: 2 your turn")
+  await expect(count).toHaveAccessibleName("2 done")
   await page.keyboard.press("Alt+KeyU")
   await expect(b).toHaveAttribute("data-focused", "true")
-  await expect(count).toHaveAccessibleName("Inbox: 1 your turn")
+  await expect(count).toHaveAccessibleName("1 done")
 
   // A card of the small inbox goes there too, by Enter.
   await count.click()

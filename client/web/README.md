@@ -157,7 +157,8 @@ PR.
   Person looks (`client/web/src/calls`). What calls has one order, the
   sidebar's as the Person arranged it (`order` in
   `client/web/src/sidebar/order.ts`): the sidebar list draws it, `Alt+U`
-  walks it, and the bar's counts list follows it (ADR 0079, ADR 0087).
+  walks it, and the small inbox the bar's counts open draws it too (ADR
+  0079, ADR 0087, ADR 0098).
   The window knows nothing of Threads: a Pane kind's `shows` names the
   thing it shows, so the window knows when the Person looks at it (its
   Pane has the focus and the window is in front), sees it on screen, or
@@ -168,7 +169,7 @@ PR.
     list with the one before: what starts calling is news, what stops is
     taken back, and a Project's first list is what already was. A toast's
     button goes to its Thread by the Window's `pane.pick`, the one way to
-    go to an Agent, which a sidebar row, the counts list and `Alt+U` run
+    go to an Agent, which a sidebar row, the small inbox and `Alt+U` run
     too (ADR 0087, decision 7).
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound

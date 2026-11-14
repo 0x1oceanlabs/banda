@@ -1,13 +1,13 @@
 /**
  * The one order of what calls (ADR 0079, decision 4; ADR 0087, decision
  * 8): the Person's sidebar, as the Inbox lays it out (ADR 0098). The
- * sidebar list draws it, the bar's counts list and `Alt+U` go by its
- * rows' `project:thing` keys, and only `order` works it out. Its keys are
+ * sidebar list draws it, the small inbox too, `Alt+U` goes by its rows'
+ * `project:thing` keys, and only `order` works it out. Its keys are
  * Your turn oldest first, then Open, then Working, whatever the list
- * shows and however it is grouped, so the counts and Alt+U take them
- * whole, while the Sidebar is hidden too, and only when asked, on the key
- * or as the counts' list opens. All three place the other machines'
- * Threads alike, by the one `elsewhereOf`.
+ * shows and however it is grouped, so Alt+U takes them whole, while the
+ * Sidebar is hidden too, and only when asked, on the key. The sidebar
+ * list, the small inbox's among them, and Alt+U place the other
+ * machines' Threads alike, by the one `elsewhereOf`.
  */
 import { useCallback, useContext } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
@@ -91,7 +91,7 @@ const elsewhereOf = (hosts: readonly Shown[]): Elsewhere[] =>
   hosts.filter(holds)
 
 /** The other machines the order places (`elsewhereOf`), drawn again only
- * as they change, for the sidebar list and the counts' list. */
+ * as they change, for the sidebar list. */
 export const useElsewhere = (): readonly Elsewhere[] =>
   useHostsBy(elsewhereOf, sameEach)
 
@@ -121,8 +121,8 @@ export function placeIn(keys: readonly string[]): (key: string) => number {
 }
 
 /**
- * `things` in the order of `keys`, each by its `project:thing` key: the
- * counts' list and `Alt+U` sort what they show by it alike. Those of one
+ * `things` in the order of `keys`, each by its `project:thing` key, as
+ * `Alt+U` sorts what it shows. Those of one
  * place, as those the sidebar lists nowhere, go by `tie`.
  */
 export function byOrder<T>(

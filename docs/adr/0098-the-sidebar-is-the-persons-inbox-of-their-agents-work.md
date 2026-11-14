@@ -331,6 +331,19 @@ From the audit (`2-code.md`):
     opens a small inbox: the same one-line cards, the same keys, and "7
     at work ›" to open the sidebar on Working. `Alt+U` works as ever.
 
+    _Amended 2026-11-14 by Roma ("the small inbox goes back to the widget
+    in the centre, as it was"): the logo is the Mark alone, with no count
+    beside it and nothing it opens, and its name says what it shows,
+    "Banda: Asks you, Quiet on". The bar's middle holds the sidebar's
+    counts by default again (`center = ["sidebar.counts"]`, ADR 0035), as
+    they were, shown as `[bar] show` says: each count's Mark, number and
+    words, after the title of the Agent's Thread in focus (ADR 0065,
+    decision 9). A click on them opens the small inbox under them: the
+    sidebar's own list of Your turn in its cards, its keys, the focus on
+    the first card, Esc back where it was, and "7 at work ›". The counts'
+    own list of one-line cards goes: one list, not two. Where the counts
+    show with the sidebar, a click gives the sidebar's Inbox the focus._
+
 ### Children and empty places
 
 23. **A Harness's sub-agents have no cards**: their Agent's mark shows

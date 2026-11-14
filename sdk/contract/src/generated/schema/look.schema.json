@@ -386,7 +386,7 @@
           }
         },
         "center": {
-          "description": "The widgets in the bar's middle, by id, in order: none by default;\nthe sidebar's counts, `\"sidebar.counts\"`, where the Person lists\nthem.",
+          "description": "The widgets in the bar's middle, by id, in order: the sidebar's\ncounts, `\"sidebar.counts\"`, which open the small inbox (ADR 0098,\ndecision 22).",
           "type": "array",
           "items": {
             "type": "string"

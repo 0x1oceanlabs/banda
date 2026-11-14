@@ -18,7 +18,7 @@
  *
  * S6b: another machine's card, arc's, is an ordinary card, its icon on
  * line 3, alone where sidebar.toml asks; a long title fades out at its end and shows whole beside the
- * sidebar after a 500 ms rest; the counts' list draws the same cards.
+ * sidebar after a 500 ms rest; the small inbox draws the same cards.
  * Shot as `sidebar-s6b-*.png`.
  *
  * A working card says what its Agent does, held as its Mark shows it (ADR
@@ -132,12 +132,12 @@ async function wide(window: Window) {
  * none plays but a cut text's fade, whose timeline is the text's own
  * scroll, and Playwright's `animations: "disabled"` would cancel it.
  */
-async function look(window: Window, mode: "dark" | "light", more = "") {
+async function look(window: Window, mode: "dark" | "light") {
   const { page, dir } = window
   const html = page.locator("html")
   writeFileSync(
     join(dir, "config/look.toml"),
-    `mode = "${mode}"\n${GLASS}[motion]\noff = true\n${more}`
+    `mode = "${mode}"\n${GLASS}[motion]\noff = true\n`
   )
   if (mode === "dark") await expect(html).toHaveClass(/\bdark\b/)
   else await expect(html).not.toHaveClass(/\bdark\b/)
@@ -462,14 +462,10 @@ test("a Thread away from its Project's workspace bears a small diamond at the st
 /** The Inbox, with the counts always on the bar. */
 const INBOX = 'group = "none"\n[bar]\nshow = "always"\n'
 
-/** The counts in the bar's middle, where the Person lists them: none
- * stand there by default (ADR 0098, decision 22). */
-const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
-
 /** A title too long for a card of the sidebar. */
 const LONG = "Bench the window tests on arc against the new sidebar cards"
 
-test("another machine's card is an ordinary card, its icon on line 3; a long title fades out at its end and shows whole beside the sidebar after a 500 ms rest, one that fits gets no fade and no tooltip; the counts' list draws the same cards (ADR 0098, S6b; #1067)", async () => {
+test("another machine's card is an ordinary card, its icon on line 3; a long title fades out at its end and shows whole beside the sidebar after a 500 ms rest, one that fits gets no fade and no tooltip; the small inbox draws the same cards (ADR 0098, S6b; #1067)", async () => {
   test.setTimeout(300_000)
   // arc holds two Threads done in its Project banda; this machine, named
   // mac, one in Work. The sidebar is the Inbox, so arc's cards stand among
@@ -590,16 +586,18 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   writeFileSync(sidebarToml, INBOX)
   await expect(arcMark.locator(".sr-only")).toHaveCount(0)
 
-  // The counts' list draws each as the sidebar's card of three lines: its
-  // mark, its title, its time, its Project, and arc's icon where it is
-  // arc's.
+  // The small inbox the counts open, with the sidebar hidden, draws each
+  // as the sidebar's card of three lines: its mark, its title, its time,
+  // its Project, and arc's icon where it is arc's.
   const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
-  const waiting = page.getByRole("group", { name: "Your turn" })
-  const items = waiting.getByRole("menuitem")
+  const waiting = page.getByRole("dialog", { name: "Inbox" })
+  const items = waiting.getByRole("option")
   const item = (title: string) =>
-    waiting.getByRole("menuitem", { name: new RegExp(`^${title},`) })
+    waiting.getByRole("option", { name: new RegExp(`^${title},`) })
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeHidden()
   for (const mode of ["dark", "light"] as const) {
-    await look(window, mode, COUNTS)
+    await look(window, mode)
     await counts.click()
     await expect(items).toHaveCount(3)
     await page.mouse.move(1400, 850)
@@ -626,6 +624,8 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   await expect(
     page.getByRole("region", { name: "Done on arc", exact: true })
   ).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeVisible()
 
   // arc's card has the acts mac's has, and they go to arc's engine (spec
   // S7a): its Archive archives it on arc, and the toast's Undo brings it

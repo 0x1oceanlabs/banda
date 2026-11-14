@@ -2489,7 +2489,7 @@ test("a message queued in a Thread in a window of its own is in this device's on
   await stopEngine()
 })
 
-test("the counts list and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {
+test("the small inbox and Alt+U place arc's Threads where the sidebar list does, among this machine's (ADR 0079, decision 4; #999)", async () => {
   test.setTimeout(shots ? 300_000 : 120_000)
   arc = newArc()
   const banda = await seed(arc)
@@ -2519,22 +2519,20 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
     })
   ).toHaveText(titles)
 
-  // The counts list them in the sidebar list's order, arc's newest last:
-  // the Person lists them in the bar's middle (ADR 0098, decision 22).
-  writeFileSync(
-    join(window.dir, "config/look.toml"),
-    'mode = "dark"\n[bar]\ncenter = ["sidebar.counts"]\n'
-  )
+  // The small inbox the counts open lists them in the sidebar list's
+  // order, arc's newest last (ADR 0098, decision 22).
   await expect(
     page.getByRole("region", { name: "Notifications" }).getByRole("listitem")
   ).toHaveCount(0, { timeout: 30_000 })
   const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
   await expect(counts).toHaveAccessibleName("3 done")
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeHidden()
   await counts.click()
-  const waiting = page.getByRole("group", { name: "Your turn" })
-  await expect(waiting.getByRole("menuitem")).toHaveCount(3)
+  const waiting = page.getByRole("dialog", { name: "Inbox" })
+  await expect(waiting.getByRole("option")).toHaveCount(3)
   await shot(page, "order-elsewhere-counts")
-  await expect(waiting.getByRole("menuitem")).toHaveText(titles)
+  await expect(waiting.getByRole("option")).toHaveText(titles)
   await page.keyboard.press("Escape")
   await expect(waiting).toBeHidden()
 

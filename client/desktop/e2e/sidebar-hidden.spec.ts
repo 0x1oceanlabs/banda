@@ -1,15 +1,15 @@
 /**
- * The sidebar hidden (ADR 0098, decision 22; spec S15): beside the bar's
- * logo, the count, "2 · 1", Your turn in its loudest call's colour, then
- * the working in grey, nothing when nothing calls, and nothing while the
- * sidebar shows; the logo's name says it, "Banda: Done, 2 your turn, 1 at
- * work", and "Quiet on". A click on the count opens the small inbox, a
- * dialog named Inbox: the sidebar's own list of Your turn, its cards
- * in its scope, so the same keys work, but no tabs, Search or 1–4; the
- * focus on its first card, Esc giving it back where it was, Enter opening
- * a card's Thread in its Pane. "1 at work ›" shows the sidebar on Working,
- * with the focus in its list. The count, whole and close up, and the
- * small inbox, dark and light, as `sidebar-s15-<name>-<mode>.png`.
+ * The sidebar hidden (ADR 0098, decision 22, as amended 2026-11-14): in
+ * the bar's middle, the sidebar's counts, each count's Mark and number,
+ * "2 done · 1 at work", nothing while the sidebar shows; the logo is the
+ * Mark alone, named by what it shows, "Banda: Done", and "Quiet on". A
+ * click on the counts opens the small inbox under them, a dialog named
+ * Inbox: the sidebar's own list of Your turn, its cards in its scope, so
+ * the same keys work, but no tabs, Search or 1–4; the focus on its first
+ * card, Esc giving it back where it was, Enter opening a card's Thread in
+ * its Pane. "1 at work ›" shows the sidebar on Working, with the focus in
+ * its list. The bar, whole and its middle close up, and the small inbox,
+ * dark and light, as `sidebar-s15-<name>-<mode>.png`.
  *
  * Threads start from outside the Window, as `banda call` starts them: one
  * whose first message says "wait" works until the test ends, any other is
@@ -35,9 +35,11 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-/** The count beside the logo. */
+/** The sidebar's counts, in the bar's middle. */
 const countOf = (page: Page) =>
-  page.getByRole("banner").locator("[data-inbox-count]")
+  page
+    .getByRole("banner")
+    .locator("[data-part='center'] [data-widget='sidebar.counts'] button")
 
 /** The bar's logo, named by what it shows. */
 const logoOf = (page: Page) =>
@@ -85,7 +87,7 @@ async function hide(page: Page) {
   await expect(sidebarOf(page)).toBeHidden()
 }
 
-test("with the sidebar hidden, the count beside the logo says whose turn it is and who works, Your turn in its loudest call's colour; nothing when nothing calls, nor with the sidebar shown; the logo's name says it, Quiet too (ADR 0098, S15)", async () => {
+test("with the sidebar hidden, the counts in the bar's middle say whose turn it is and who works; the logo is the Mark alone, named by what it shows, Quiet too; with the sidebar shown no counts (ADR 0098, decision 22, as amended)", async () => {
   window = await startWindow()
   const { page } = window
   await firstThread(page)
@@ -94,48 +96,42 @@ test("with the sidebar hidden, the count beside the logo says whose turn it is a
   await send(window, "wait one")
   await hide(page)
 
-  // Only work: nothing calls, so no count shows; the logo says who works.
-  await expect(logo).toHaveAccessibleName("Banda: 1 at work")
-  await expect(count).toHaveCount(0)
+  // Only work: the counts say who works, the logo that it works.
+  await expect(count).toHaveAccessibleName("1 at work")
+  await expect(logo).toHaveAccessibleName("Banda: Working")
 
-  // A call comes: the count shows, the turn in its call's colour, done's
-  // green, the working in grey.
+  // Calls come: the counts say them, the logo the loudest.
   await send(window, "call one")
   await send(window, "call two")
-  await expect(count).toHaveText("2·1")
-  await expect(count).toHaveAccessibleName("Inbox: 2 your turn, 1 at work")
-  const [turn, dot, working] = await count.locator("span").all()
-  await expect(turn!).toHaveClass("text-added")
-  await expect(dot!).toHaveAttribute("aria-hidden", "true")
-  await expect(working!).toHaveClass("text-muted-foreground")
-  // It stands right of the logo.
-  const [mark, counted] = [await logo.boundingBox(), await count.boundingBox()]
-  expect(counted!.x).toBeGreaterThanOrEqual(mark!.x + mark!.width)
-  await expect(logo).toHaveAccessibleName("Banda: Done, 2 your turn, 1 at work")
-  // The badge on the logo's corner went: the count says it.
+  await expect(count).toHaveAccessibleName("2 done · 1 at work")
+  await expect(logo).toHaveAccessibleName("Banda: Done")
+  // They stand in the bar's middle, and nothing stands beside the logo.
+  const [bar, counted] = [
+    await page.getByRole("banner").boundingBox(),
+    await count.boundingBox(),
+  ]
+  expect(
+    Math.abs(counted!.x + counted!.width / 2 - (bar!.x + bar!.width / 2))
+  ).toBeLessThan(2)
   await expect(logo.locator("span")).toHaveCount(0)
+  await expect(
+    page.getByRole("banner").locator(":scope > *").nth(1)
+  ).toHaveAttribute("data-part", "left")
 
   // Quiet on, the logo says so too.
   await page.keyboard.press("Alt+KeyQ")
-  await expect(logo).toHaveAccessibleName(
-    "Banda: Done, 2 your turn, 1 at work, Quiet on"
-  )
+  await expect(logo).toHaveAccessibleName("Banda: Done, Quiet on")
   await page.keyboard.press("Alt+KeyQ")
-  await expect(logo).toHaveAccessibleName("Banda: Done, 2 your turn, 1 at work")
+  await expect(logo).toHaveAccessibleName("Banda: Done")
 
-  // The sidebar shown says it all: no count beside the logo, whose name
-  // still says it.
+  // The sidebar shown says it all: no counts, and the logo as it was.
   await page.keyboard.press("Alt+KeyA")
   await expect(sidebarOf(page)).toBeVisible()
   await expect(count).toHaveCount(0)
-  await expect(logo).toHaveAccessibleName("Banda: Done, 2 your turn, 1 at work")
-  // The bar's middle is empty: the counts stand there only where listed.
-  await expect(
-    page.getByRole("banner").locator("[data-widget='sidebar.counts']")
-  ).toHaveCount(0)
+  await expect(logo).toHaveAccessibleName("Banda: Done")
 })
 
-test("a click on the count opens the small inbox: Your turn alone in the sidebar's cards and scope, the focus on the first; ↓ and S work as in the sidebar, 1–4 do nothing; Esc gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
+test("a click on the counts opens the small inbox under them: Your turn alone in the sidebar's cards and scope, the focus on the first; ↓ and S work as in the sidebar, 1–4 do nothing; Esc gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -146,7 +142,7 @@ test("a click on the count opens the small inbox: Your turn alone in the sidebar
   const count = countOf(page)
   const inbox = inboxOf(page)
   const list = inbox.getByRole("listbox")
-  await expect(count).toHaveText("3·1")
+  await expect(count).toHaveAccessibleName("3 done · 1 at work")
   // Where the focus is as it opens, which Esc gives it back to.
   await composer.click()
   await composer.evaluate((field) => field.setAttribute("data-was", ""))
@@ -155,6 +151,15 @@ test("a click on the count opens the small inbox: Your turn alone in the sidebar
   await count.click()
   await expect(inbox).toBeVisible()
   await expect(list).toBeFocused()
+  // Under the counts, centred on them.
+  const [counted, popup] = [
+    await count.boundingBox(),
+    await inbox.boundingBox(),
+  ]
+  expect(popup!.y).toBeGreaterThanOrEqual(counted!.y + counted!.height)
+  expect(
+    Math.abs(popup!.x + popup!.width / 2 - (counted!.x + counted!.width / 2))
+  ).toBeLessThan(2)
   // The sidebar's list, in its scope, with its keys; no tabs, no Search.
   await expect(inbox.locator('[data-scope="sidebar"]')).toHaveCount(1)
   await expect(inbox.getByRole("tab")).toHaveCount(0)
@@ -173,7 +178,7 @@ test("a click on the count opens the small inbox: Your turn alone in the sidebar
   await page.keyboard.press("s")
   await expect(cardOf(list, "call two")).toHaveCount(0)
   await picked(list, "call three")
-  await expect(count).toHaveText("2·1")
+  await expect(count).toHaveAccessibleName("2 done · 1 at work")
   await focusIs(page, "inbox")
   // 1–4 switch no tab here: there are none.
   await page.keyboard.press("2")
@@ -195,7 +200,7 @@ test("a click on the count opens the small inbox: Your turn alone in the sidebar
   await expect(inbox).toBeHidden()
   await focusIs(page, "pane")
   // Seen, it is no longer the Person's turn.
-  await expect(count).toHaveText("1·1")
+  await expect(count).toHaveAccessibleName("1 done · 1 at work")
 })
 
 test('"N at work ›" opens the sidebar on Working with the focus in its list, by a click or by Tab and Enter; the small inbox never shows with the sidebar (ADR 0098, S15)', async () => {
@@ -210,7 +215,7 @@ test('"N at work ›" opens the sidebar on Working with the focus in its list, b
   const inbox = inboxOf(page)
   const sidebar = sidebarOf(page)
   const working = sidebar.getByRole("tab", { name: /^Working/ })
-  await expect(count).toHaveText("1·2")
+  await expect(count).toHaveAccessibleName("1 done · 2 at work")
 
   // A click on "2 at work ›".
   await count.click()
@@ -267,7 +272,7 @@ async function look({ page, dir }: Window, mode: "dark" | "light") {
   await page.waitForTimeout(250)
 }
 
-test("the count beside the logo, and the small inbox, dark and light (ADR 0098, S15)", async () => {
+test("the counts in the bar's middle, and the small inbox under them, dark and light (ADR 0098, decision 22, as amended)", async () => {
   test.setTimeout(300_000)
   window = await startWindow()
   const { page } = window
@@ -289,8 +294,7 @@ test("the count beside the logo, and the small inbox, dark and light (ADR 0098, 
   await hide(page)
   const count = countOf(page)
   const inbox = inboxOf(page)
-  await expect(count).toHaveText("4·3")
-  await expect(count.locator("span").first()).toHaveClass("text-attention")
+  await expect(count).toHaveAccessibleName("1 ask you · 3 done · 3 at work")
   // The shots are of the bar and the small inbox: the toasts of the
   // Threads done stand aside.
   await page.addStyleTag({
@@ -306,7 +310,7 @@ test("the count beside the logo, and the small inbox, dark and light (ADR 0098, 
     })
     await page.screenshot({
       path: `test-results/sidebar-s15-count-close-${mode}.png`,
-      clip: { x: 0, y: 0, width: 240, height: 36 },
+      clip: { x: 520, y: 0, width: 400, height: 36 },
       animations: "disabled",
     })
     await count.click()

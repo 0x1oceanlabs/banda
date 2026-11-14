@@ -218,9 +218,6 @@ async function strip(page: Page, address: string) {
 /** The phase pressed with the Sidebar hidden, the last. */
 const HIDDEN = "focus, the Sidebar hidden"
 
-/** The sidebar's counts in the bar's middle: none stand there by default. */
-const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
-
 /** A phase's keys, pressed one at a time as a Person does: each lands on
  * a window at rest. */
 const PHASES: Record<string, string[]> = {
@@ -336,9 +333,7 @@ for (const latency of [0, 150]) {
     test("each tiling key is drawn, and what is drawn is the engine's", async () => {
       test.setTimeout(180_000)
       const address = await pageSite()
-      // The counts in the bar's middle, where the Person lists them (ADR
-      // 0098, decision 22), so the phase with the Sidebar hidden draws them.
-      window = await startWindow({ files: FREE, latency, look: COUNTS })
+      window = await startWindow({ files: FREE, latency })
       const { page } = window
       await strip(page, address)
       await page.evaluate(install)

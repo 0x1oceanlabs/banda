@@ -6,15 +6,13 @@
  *         calls      what the modules' work calls the Person for
  *                    (`barAttention`, the Window's stores)
  *         Quiet      whether the Person put calls off (`useQuiet`)
- *         lists      every Thread's list, for the count (`useInboxCount`)
  *         hosts      the machines, for one away with Agents at work
- *   draws the Mark in the loudest state of the work, a crossed bell while
- *         Quiet is on; while the sidebar is hidden, the count beside it
- *         and the small inbox it opens (the sidebar's `SmallInbox`)
+ *   draws the Mark alone, in the loudest state of the work, and a crossed
+ *         bell while Quiet is on; who waits and who works the sidebar's
+ *         counts say, in the Bar's middle (decision 22, as amended)
  *   runs  `sidebar.toggle` on the Mark: a click shows or hides the
- *         sidebar, as Alt+A does (decision 21, as amended); the small
- *         inbox runs what its rows do
- *   says  in its name what it shows, "Banda: 3 your turn, 7 at work", and
+ *         sidebar, as Alt+A does (decision 21, as amended)
+ *   says  in its name what it shows, "Banda: Asks you, Quiet on", and
  *         which machine is away with Agents at work: then it sleeps,
  *         offline (decision 18)
  */
@@ -22,6 +20,7 @@ import type { Engine, Status } from "@banda/contract"
 import {
   BandaMark,
   loudest,
+  MARK_WORDS,
   type MarkState,
 } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -45,7 +44,6 @@ import {
   useItems,
   useLaterClock,
 } from "../../calls/stores"
-import { logoName, logoWords, SmallInbox, useInboxCount } from "../../sidebar"
 
 export function Mark({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
@@ -54,38 +52,54 @@ export function Mark({ engine }: { engine: Engine }) {
   const attention = useCalls(barAttention)
   const mark = loudest([attention.mark, markOf(status)])
   const quiet = useQuiet() !== "off"
-  const count = useInboxCount()
   const away = useAwayAtWork()
   const words = logoWords(
     mark,
-    count,
     quiet,
     status.state === "open" ? away : undefined
   )
   return (
-    <>
-      <Button
-        variant="ghost"
-        size="icon-sm"
-        aria-label={logoName(words)}
-        title={`${keyFor("sidebar.toggle", "Sidebar")}${words && ` · ${words}`}`}
-        className="relative"
-        onClick={() => run("sidebar.toggle")}
-      >
-        <BandaMark state={mark} className="size-5" />
-        {/* Quiet (ADR 0098, decision 21): at the prototype's corner. */}
-        {quiet && (
-          <BellOffIcon
-            aria-hidden
-            data-quiet
-            className="absolute -right-1 -bottom-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0"
-          />
-        )}
-      </Button>
-      <SmallInbox engine={engine} count={count} />
-    </>
+    <Button
+      variant="ghost"
+      size="icon-sm"
+      aria-label={logoName(words)}
+      title={`${keyFor("sidebar.toggle", "Sidebar")}${words && ` · ${words}`}`}
+      className="relative"
+      onClick={() => run("sidebar.toggle")}
+    >
+      <BandaMark state={mark} className="size-5" />
+      {/* Quiet (ADR 0098, decision 21): at the prototype's corner. */}
+      {quiet && (
+        <BellOffIcon
+          aria-hidden
+          data-quiet
+          className="absolute -right-1 -bottom-1 size-2.5 text-muted-foreground transition-opacity duration-(--dur-fast) ease-(--ease) starting:opacity-0"
+        />
+      )}
+    </Button>
   )
 }
+
+/**
+ * What the Mark says after its name (ADR 0098, decision 22, as amended):
+ * the state it shows, "Asks you" or "Offline", or which machine is away
+ * while its Agents were at work (`away`, decision 18); and "Quiet on"
+ * while Quiet is on. Nothing, with nothing to say.
+ */
+export function logoWords(
+  mark: MarkState,
+  quiet: boolean,
+  away?: string
+): string {
+  return [
+    ...(mark === "rest" ? [] : [away ?? MARK_WORDS[mark]]),
+    ...(quiet ? ["Quiet on"] : []),
+  ].join(", ")
+}
+
+/** The Mark's name: "Banda: Asks you, Quiet on", or "Banda". */
+export const logoName = (words: string): string =>
+  words ? `Banda: ${words}` : "Banda"
 
 /** Which other machines out of reach had Agents at work, as the Mark's
  * name says them: "arc is away with Agents at work"; none while none. */

@@ -100,7 +100,11 @@ describe("the bar's widgets", () => {
     // none of them.
     const theirs = placed(
       { ...DEFAULT_BAR, right: ["harnesses.limits"] },
-      known({ "window.flow": "shown", "harnesses.limits": "shown" })
+      known({
+        "window.flow": "shown",
+        "sidebar.counts": "shown",
+        "harnesses.limits": "shown",
+      })
     )
     expect(theirs.parts.right).toEqual(["harnesses.limits", ...OWN])
     expect(theirs.problems).toEqual([])
