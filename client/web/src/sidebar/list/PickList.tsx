@@ -29,7 +29,7 @@ import {
   SIDEBAR_KEYS,
   tabOf,
 } from "../model/keys"
-import type { Ordered } from "../model/order"
+import type { Drawn } from "../model/drawn"
 import { firstAct } from "../cards/ProjectCard"
 import { useAskedTab } from "./showing"
 import { PANEL } from "./Tabs"
@@ -57,7 +57,7 @@ function toPane() {
  * in it.
  */
 export function useSidebarKeys(
-  { ordered }: { ordered: Ordered },
+  { ordered }: { ordered: Drawn },
   /** The list's view; the small inbox's (decision 22) has its tab alone,
    * and no Search. */
   view: SidebarView,

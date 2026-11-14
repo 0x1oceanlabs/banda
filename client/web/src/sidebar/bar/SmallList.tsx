@@ -6,7 +6,6 @@ import { useLayoutEffect, useMemo, useRef } from "react"
 import type { Engine } from "@banda/contract"
 import { useLookSidebar } from "../../look"
 import { PickList, useSidebarKeys } from "../list/PickList"
-import { regionsOf } from "../model/regions"
 import { SectionView } from "../list/SectionView"
 import type { Settings } from "../model/settings"
 import { useOrdered } from "../list/useOrdered"
@@ -76,7 +75,7 @@ export function SmallList({
         <div {...ordering.list} className="max-h-[60vh] overflow-y-auto">
           <PickList tab="inbox" picking={keys.picking}>
             <SectionView
-              regions={regionsOf(ordering.ordered.blocks)}
+              items={ordering.ordered.items}
               settings={settings}
               named={false}
               isCurrent={isCurrent}

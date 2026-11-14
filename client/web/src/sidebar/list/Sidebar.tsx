@@ -9,7 +9,6 @@ import { Dismiss } from "./open"
 import { AskedTrust } from "../../trust/TrustCard"
 import { Foot } from "./Foot"
 import { HostPart } from "./HostPart"
-import { regionsOf } from "../model/regions"
 import { DeleteDialog } from "./CardMenu"
 import { ProjectRows } from "./ProjectMenu"
 import { SectionView } from "./SectionView"
@@ -71,15 +70,14 @@ export function Sidebar({
     isCurrent,
     onDismiss
   )
-  const regions = regionsOf(ordered.blocks)
-  // The regions of `host`, another machine, or this one's: grouped,
+  // The items of `host`, another machine, or this one's: grouped,
   // another machine's groups follow under its label.
   const drawn = (host?: string) => {
-    const held = regions.filter((region) => region.host === host)
+    const held = ordered.items.filter((item) => item.host === host)
     return (
       held.length > 0 && (
         <SectionView
-          regions={held}
+          items={held}
           settings={settings}
           named={host !== undefined}
           isCurrent={isCurrent}

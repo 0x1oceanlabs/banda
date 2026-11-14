@@ -122,8 +122,13 @@ PR.
   or not at all; Your turn oldest or newest first; Open and the Working
   shelf in the Inbox or not; cards of three, two or one lines, the same
   everywhere.
-  `order.ts` is the one order, from the rows of `rows.ts`, laid out by
-  `inbox.ts`. `banda look` resolves the keys from `sidebar.toml`
+  One pure function, `sidebarOf` in `client/web/src/sidebar/model/drawn.ts`,
+  says what the sidebar draws, from what it is given: the rows of
+  `rows.ts`, laid out by `inbox.ts`, as the flat list of `flat.ts`, with
+  each tab's count, the bar's counts and the one order Alt+U walks; its
+  input and output are the contract the engine fills in SE7. The window
+  keeps of its own only the order under the pointer (`still.ts`).
+  `banda look` resolves the keys from `sidebar.toml`
   (`platform/look/src/sidebar.rs`; a file that still names a preset,
   `card = "auto"` or `group = "machine"` reads as one list of three-line
   cards, and is told so), and the view menu writes them into the file, keeping the Person's other keys and
@@ -156,10 +161,10 @@ PR.
   failed calls the Person (`callsOf` in `client/ui/src/pane.ts`). The window
   knows what calls, for the Marks, the rings and `Alt+U`; and where the
   Person looks (`client/web/src/calls`). What calls has one order, the
-  sidebar's as the Person arranged it (`order` in
-  `client/web/src/sidebar/model/order.ts`): the sidebar list draws it, `Alt+U`
-  walks it, and the small inbox the bar's counts open draws it too (ADR
-  0079, ADR 0087, ADR 0098).
+  sidebar's as the Person arranged it (`sidebarOf` in
+  `client/web/src/sidebar/model/drawn.ts`): the sidebar list draws it,
+  `Alt+U` walks it, and the bar's counts and the small inbox they open
+  read it too (ADR 0079, ADR 0087, ADR 0098).
   The window knows nothing of Threads: a Pane kind's `shows` names the
   thing it shows, so the window knows when the Person looks at it (its
   Pane has the focus and the window is in front), sees it on screen, or
