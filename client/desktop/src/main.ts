@@ -19,7 +19,8 @@
  * (settings.ts, ADR 0016). It swaps its own app for the release its
  * engine says is newest (`@banda/updates-desktop`, ADR 0119), writes
  * what the system says of itself for the theme (os-window/system.ts), and
- * makes its windows of what the look says (os-window/material.ts).
+ * opens its windows (os-window/windows.ts), made of what the look says
+ * (os-window/material.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -30,11 +31,9 @@ import { join, resolve } from "node:path"
 import {
   app,
   BrowserWindow,
-  type BrowserWindowConstructorOptions,
   Menu,
   nativeTheme,
   powerMonitor,
-  shell,
   type WebContents,
 } from "electron"
 import { quitAsks } from "@banda/contract"
@@ -47,7 +46,6 @@ import {
   serve,
   tellPage,
   text,
-  Window,
 } from "@banda/desktop-kit"
 import {
   type PoppedAsk as PoppedAskValue,
@@ -77,7 +75,6 @@ import {
   DOCK_SETTLES,
   dockShows,
   dockStep,
-  hidesOnClose,
   onDock,
   quitAsking,
   unseen,
@@ -90,7 +87,6 @@ import { menuBar } from "./tray"
 import { forwardAnswer, reaching } from "./forward"
 import { Hosts, terminalArgs } from "./hosts"
 import { problemsAnswers, startLog, watchProblems } from "./problems"
-import { revive } from "./revive"
 import { Editors } from "./editors"
 import { roadLayer } from "./road"
 import { settingsAnswers, settingsLayer } from "./settings"
@@ -99,6 +95,7 @@ import { clipboardAnswers } from "./device/clipboard"
 import { filesAnswers } from "./device/files"
 import { pickAnswers } from "./device/pick"
 import { frameAnswers, lookAnswers, Material } from "./os-window/material"
+import { Windows } from "./os-window/windows"
 import {
   appScheme,
   DEV_PAGE,
@@ -256,10 +253,18 @@ const runtime = ManagedRuntime.make(
           DEV_PAGE ? undefined : deviceKey(join(state, "device.key"))
         ),
         Stop.layer,
-        // What the system says of itself is written before the look
-        // starts, so the first look has it too (os-window/system.ts).
-        // Over the look, what the windows are made of (os-window/material.ts).
-        Material.layer().pipe(
+        // The windows (os-window/windows.ts), over what they are made of
+        // (os-window/material.ts), over the look. What the system says of
+        // itself is written before the look starts, so the first look has
+        // it too (os-window/system.ts).
+        Windows.layer({
+          closing: closingNow,
+          followDock,
+          showDock: () => dockTo(true),
+          opened: (contents) => runtime.runSync(modules.opened(contents)),
+          closePopped,
+        }).pipe(
+          Layer.provideMerge(Material.layer()),
           Layer.provideMerge(
             lookLayer.pipe(
               Layer.provide(
@@ -271,8 +276,7 @@ const runtime = ManagedRuntime.make(
         // Who works and who waits here, for the menu bar (macOS).
         statusLayer(hasMenuBar(process.platform)),
         // The settings open their files with `Editors.edit`.
-        settingsLayer.pipe(Layer.provideMerge(Editors.layer)),
-        Window.layer(() => window)
+        settingsLayer.pipe(Layer.provideMerge(Editors.layer))
       )
     ),
     Layer.merge(reaching(configFolder(app.getPath("appData")), installScript)),
@@ -302,12 +306,11 @@ const keepProblem = watchProblems(
       .then((client) => client.command("problems.record", record)),
   banda
 )
-let window: BrowserWindow | null = null
+/** Banda's windows (os-window/windows.ts), once main's runtime has built
+ * them (`ready`): none is open before, so what asks before finds none. */
+let windows: Windows["Service"] | null = null
 /** The Panes in windows of their own, by their IDs (ADR 0025, decision 9). */
 const popped = new Map<string, BrowserWindow>()
-/** Set while the window, closed in full screen on macOS, leaves it to
- * hide; showing it again meanwhile keeps it shown. */
-let hiding = false
 
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
@@ -320,7 +323,7 @@ if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
 } else if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on("second-instance", () => inFront())
+  app.on("second-instance", () => windows?.inFront())
   listApp()
   void app.whenReady().then(ready)
 }
@@ -341,7 +344,7 @@ async function ready(): Promise<void> {
       hosts.changes.pipe(
         Stream.runForEach((now) =>
           Effect.sync(() => {
-            for (const shown of [window, ...popped.values()])
+            for (const shown of [windows?.main(), ...popped.values()])
               tellPage(shown?.webContents, BRIDGE.hosts.listen, now)
           })
         )
@@ -374,7 +377,7 @@ async function ready(): Promise<void> {
       check: () =>
         engineClient().then((client) => client.call("updates.check", {})),
     },
-    (now) => tellPage(window?.webContents, BRIDGE.update.listen, now),
+    (now) => tellPage(windows?.main()?.webContents, BRIDGE.update.listen, now),
     () => {
       updating = true
     }
@@ -506,7 +509,7 @@ async function ready(): Promise<void> {
         Schema.Tuple([Schema.String, Schema.Number, Schema.Number]),
         ([pane, width, height], event) =>
           Effect.sync(() => {
-            if (event.sender === window?.webContents)
+            if (event.sender === windows?.main()?.webContents)
               popOut(pane, width, height)
           }),
       ],
@@ -518,22 +521,29 @@ async function ready(): Promise<void> {
           Effect.sync(() => {
             const from = BrowserWindow.fromWebContents(event.sender)
             if (!from || ![...popped.values()].includes(from)) return
-            tellPage(inFront()?.webContents, BRIDGE.popped.asked, asked)
+            tellPage(
+              windows?.inFront()?.webContents,
+              BRIDGE.popped.asked,
+              asked
+            )
           }),
       ],
     },
   })
   const first = await runtime.runPromise(firstLook(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
+  // The runtime is built, and its windows with it.
+  const built = runtime.runSync(Windows.use(Effect.succeed))
+  windows = built
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   if (hasMenuBar(process.platform)) showMenuBar()
-  window = openWindow(!hidden)
+  runtime.runSync(built.open(!hidden))
   // The Dock's icon shows the window again, hidden as it closed on macOS
   // (closing.ts).
   app.on("activate", () => {
-    const does = onDock(closingNow(), window !== null)
-    if (does === "show") inFront()
-    else if (does === "open") window = openWindow()
+    const does = onDock(closingNow(), built.main() !== null)
+    if (does === "show") built.inFront()
+    else if (does === "open") runtime.runSync(built.open())
   })
   // macOS says it logs out, restarts or shuts down before it asks Banda
   // to quit (Electron's `shutdown`, on NSWorkspaceWillPowerOffNotification):
@@ -591,8 +601,8 @@ function showMenuBar(): void {
 }
 
 /** The window brought to the front, or opened where there is none. */
-function openBanda(): BrowserWindow {
-  return inFront() ?? (window = openWindow())
+function openBanda(): void {
+  if (windows) runtime.runSync(windows.openBanda)
 }
 
 /** What the menu bar last heard of who works here; none off macOS. */
@@ -624,6 +634,7 @@ const askToQuit = quitAsking<Stop | Acts>({
   working: Stop.use((stop) => stop.unlessWorking),
   // With no window shown, as Banda lives in the menu bar, macOS asks.
   pageCan: Effect.sync(() => {
+    const window = windows?.main()
     const contents = window?.webContents
     return (
       !!window?.isVisible() &&
@@ -634,7 +645,7 @@ const askToQuit = quitAsking<Stop | Acts>({
   }),
   // Nothing waits on the page's answer: a quit that comes again soon
   // after asks in a system dialog.
-  askPage: Effect.sync(() => inFront()).pipe(
+  askPage: Effect.sync(() => windows?.inFront()).pipe(
     Effect.andThen(Effect.forkDetach(runOwn("banda.quit"))),
     Effect.asVoid
   ),
@@ -644,7 +655,7 @@ const askToQuit = quitAsking<Stop | Acts>({
     const working = statusNow()?.agents?.working ?? 0
     const asks = quitAsks(Math.max(1, working), process.platform === "darwin")
     if (!asks) return Effect.succeed(true)
-    const over = window?.isVisible() ? inFront() : null
+    const over = windows?.main()?.isVisible() ? windows.inFront() : null
     if (!over) app.focus({ steal: true })
     return confirm(over, {
       message: asks.title,
@@ -661,23 +672,10 @@ const askToQuit = quitAsking<Stop | Acts>({
  * page tells the routes apart, the settings' too. */
 function openMenu(route: unknown): string {
   if (typeof route !== "string") return "the route is not a string"
-  const shown = inFront()
+  const shown = windows?.inFront()
   if (!shown) return "no window"
   tellPage(shown.webContents, BRIDGE.menu.listen, route)
   return "ok"
-}
-
-/** The window, or `shown`, brought to the front; none when it is closed.
- * On macOS, from the menu bar alone, the Dock's icon comes back first,
- * and Banda comes to the front. */
-function inFront(shown = window): BrowserWindow | null {
-  if (!shown) return null
-  if (shown === window) hiding = false
-  void dockTo(true)?.then(() => app.focus({ steal: true }))
-  if (shown.isMinimized()) shown.restore()
-  shown.show()
-  shown.focus()
-  return shown
 }
 
 /** On macOS the Dock shows Banda's icon only while a window is open (ADR
@@ -727,49 +725,6 @@ function dockTo(wanted: boolean): Promise<void> | null {
   }
 }
 
-/** The main window; one the engine opened Banda for loads its page, and
- * shows only when asked (`shows`). */
-function openWindow(shows = true): BrowserWindow {
-  const opened = pageWindow(
-    {
-      width: 1280,
-      height: 820,
-      minWidth: 640,
-      minHeight: 420,
-      title: "Banda",
-    },
-    true,
-    shows
-  )
-  void opened.loadURL(PAGE)
-  // On macOS it hides as it closes, unless Banda quits (closing.ts). Its
-  // Panes in windows of their own close, back to their places, as they do
-  // when it closes.
-  opened.on("close", (event) => {
-    if (!hidesOnClose(closingNow())) return
-    event.preventDefault()
-    for (const one of popped.values()) one.close()
-    if (!opened.isFullScreen()) {
-      opened.hide()
-      return
-    }
-    // A window hidden in full screen would leave its Space black: it
-    // leaves full screen first, and comes back windowed.
-    hiding = true
-    opened.once("leave-full-screen", () => {
-      if (hiding) opened.hide()
-      hiding = false
-    })
-    opened.setFullScreen(false)
-  })
-  opened.on("closed", () => {
-    window = null
-    // Their Panes are the window's: they go with it.
-    for (const one of popped.values()) one.close()
-  })
-  return opened
-}
-
 /**
  * Opens Pane `pane` in a window of its own, `width` by `height`, the page
  * at `#pane/<id>` drawing it alone; or brings its window to the front.
@@ -777,21 +732,23 @@ function openWindow(shows = true): BrowserWindow {
  */
 function popOut(pane: string, width: number, height: number): void {
   const route = poppedRoute(pane)
-  if (poppedOf(route) !== pane) return
+  if (!windows || poppedOf(route) !== pane) return
   const shown = popped.get(pane)
   if (shown) {
-    inFront(shown)
+    windows.inFront(shown)
     return
   }
   const size = (at: number, least: number) =>
     Math.max(least, Math.min(Math.round(at) || least, 4096))
-  const opened = pageWindow({
-    width: size(width, 480),
-    height: size(height, 360),
-    minWidth: 320,
-    minHeight: 240,
-    title: "Banda",
-  })
+  const opened = runtime.runSync(
+    windows.page({
+      width: size(width, 480),
+      height: size(height, 360),
+      minWidth: 320,
+      minHeight: 240,
+      title: "Banda",
+    })
+  )
   void opened.loadURL(`${PAGE}${route}`)
   opened.on("closed", () => {
     popped.delete(pane)
@@ -803,74 +760,15 @@ function popOut(pane: string, width: number, height: number): void {
 
 /** Tells the window which Panes are in windows of their own. */
 function tellPopped(): void {
-  tellPage(window?.webContents, BRIDGE.popped.listen, [...popped.keys()])
+  tellPage(windows?.main()?.webContents, BRIDGE.popped.listen, [
+    ...popped.keys(),
+  ])
 }
 
-/** A window that shows Banda's page, made of what the look says (`main`
- * for the main window; os-window/material.ts), as it is ready, unless it
- * `shows` only when asked. */
-function pageWindow(
-  options: Omit<
-    BrowserWindowConstructorOptions,
-    "show" | "backgroundColor" | "webPreferences"
-  >,
-  main = false,
-  shows = true
-): BrowserWindow {
-  const opened = runtime.runSync(
-    Material.use((material) =>
-      material.open(
-        main,
-        (made) =>
-          new BrowserWindow({
-            ...options,
-            show: false,
-            ...made,
-            webPreferences: {
-              preload: join(import.meta.dirname, "preload.cjs"),
-              sandbox: true,
-              contextIsolation: true,
-              nodeIntegration: false,
-              // Banda's sounds play before the Person first clicks (ADR
-              // 0009).
-              autoplayPolicy: "no-user-gesture-required",
-              // The browser's pages (@banda/browser-desktop).
-              webviewTag: true,
-            },
-          })
-      )
-    )
-  )
-  // The modules' parts hear of each window that shows the page.
-  runtime.runSync(modules.opened(opened.webContents))
-  if (shows) opened.once("ready-to-show", () => opened.show())
-  // The Dock's icon is there while a window is open, however it shows.
-  opened.on("show", followDock)
-  opened.on("hide", followDock)
-  opened.on("minimize", followDock)
-  opened.on("closed", followDock)
-  opened.on("focus", () => opened.flashFrame(false))
-  const contents = opened.webContents
-  // A page whose process died loads again, as it was (#343).
-  revive(contents)
-  // The page never leaves: links open in the browser, nothing navigates.
-  contents.setWindowOpenHandler(({ url }) => {
-    if (/^https?:\/\//.test(url)) void shell.openExternal(url)
-    return { action: "deny" }
-  })
-  contents.on("will-navigate", (event) => {
-    event.preventDefault()
-    if (/^https?:\/\//.test(event.url)) void shell.openExternal(event.url)
-  })
-  if (!app.isPackaged) {
-    contents.on("before-input-event", (event, input) => {
-      if (input.type === "keyDown" && input.key === "F12") {
-        contents.toggleDevTools()
-        event.preventDefault()
-      }
-    })
-  }
-  return opened
+/** Closes the Panes' own windows, back to their places: they are the main
+ * window's, and go as it hides or closes (os-window/windows.ts). */
+function closePopped(): void {
+  for (const one of popped.values()) one.close()
 }
 
 /** The app menu, with its Quit (⌘Q); File's Close Window (⌘W); Edit; and
@@ -887,7 +785,7 @@ function macMenu(): Menu {
         { role: "minimize" },
         { role: "zoom" },
         { type: "separator" },
-        { label: "Banda", click: () => inFront() },
+        { label: "Banda", click: () => windows?.inFront() },
         { type: "separator" },
         { role: "front" },
       ],
@@ -911,7 +809,7 @@ app.on("window-all-closed", () => app.quit())
 // through, as does a logout, restart or shutdown, and every quit on Linux
 // and Windows.
 app.on("before-quit", (event) => {
-  if (!asksOnQuit(closingNow(), window !== null)) {
+  if (!asksOnQuit(closingNow(), !!windows?.main())) {
     quitting = true
     return
   }
