@@ -60,10 +60,10 @@ test("what a machine says it is shows on one line, each part cleaned, a part it 
 const MINUTE = 60_000
 const arc = { name: "arc", ssh: "arc" }
 
-test("how long a machine is out of reach, by a card's short steps: away in its first seconds; stopped says so", () => {
+test("how long a machine is out of reach, by a card's short steps: away in its first minute; stopped says so", () => {
   const now = 10 * 60 * MINUTE
   expect(awayShort({ since: now - 5_000 }, now)).toBe("away")
-  expect(awayShort({ since: now - 40_000 }, now)).toBe("away 40s")
+  expect(awayShort({ since: now - 40_000 }, now)).toBe("away")
   expect(awayShort({ since: now - MINUTE }, now)).toBe("away 1m")
   expect(awayShort({ since: now - 12 * MINUTE }, now)).toBe("away 12m")
   expect(awayShort({ since: now - 3 * 60 * MINUTE, stopped: true }, now)).toBe(

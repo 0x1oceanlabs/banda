@@ -16,7 +16,7 @@ import { FIELDS } from "@banda/ui/lib/keys"
 import { focusedTile, type PaneState } from "@banda/ui/pane"
 import { PROJECT_CARD } from "../trust/TrustCard"
 import { actsOf } from "./acts"
-import { itemKey, keyOf, type Row } from "./rows"
+import { itemKey, type Row } from "./rows"
 import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
 import type { ProjectAsks, Tab } from "./inbox"
 import { refused } from "./refusals"
@@ -31,10 +31,8 @@ import {
 } from "./keys"
 import type { Ordered } from "./order"
 import { firstAct } from "./ProjectCard"
-import { said, tabSaid, zeroSaid } from "./said"
 import { useAskedTab } from "./showing"
 import { PANEL, tabId } from "./Tabs"
-import { undoLast } from "./undo"
 import { useActs, useDoing } from "./useActs"
 import { PICK, PickContext, usePick } from "./usePick"
 
@@ -46,18 +44,16 @@ function toPane() {
 
 /**
  * The sidebar's keys (ADR 0098, decision 13; spec §2.7), its scope's on
- * the aside (ADR 0071, decision 1): Undo, `/` and the tabs' digits
- * anywhere in it but in a field, which keeps its own; the rest on the
- * pick (`usePick`), while the list itself has the focus, and an act on a
- * card not again as its key is held. Undo takes back the newest act kept,
- * and the pick goes back to its card. Delete's question is the list's own
- * popup, kept here as `deleting`. A tab shown by its key is said
- * aloud, and so is inbox zero, as it comes with the focus in the list (`said`).
- * The keys act on one card at a time, the one picked (decision 15, as
- * amended). `aside` goes on the aside, with `onKeyDown`, its Esc: a popup
- * and the title's field take theirs first; then the sidebar over the
- * Strip goes, and a docked one gives the focus back to the Pane in focus,
- * as it does when it is hidden with the focus in it.
+ * the aside (ADR 0071, decision 1): `/` and the tabs' digits anywhere in
+ * it but in a field, which keeps its own; the rest on the pick
+ * (`usePick`), while the list itself has the focus, and an act on a card
+ * not again as its key is held. Delete's question is the list's own
+ * popup, kept here as `deleting`. The keys act on one card at a time, the
+ * one picked (decision 15, as amended). `aside` goes on the aside, with
+ * `onKeyDown`, its Esc: a popup and the title's field take theirs first;
+ * then the sidebar over the Strip goes, and a docked one gives the focus
+ * back to the Pane in focus, as it does when it is hidden with the focus
+ * in it.
  */
 export function useSidebarKeys(
   { ordered }: { ordered: Ordered },
@@ -101,15 +97,6 @@ export function useSidebarKeys(
   const keyLabel = useKeyLabel()
   // The card whose Thread Delete asks about.
   const [deleting, setDeleting] = useState<Row>()
-
-  // Inbox zero, as it comes while the focus is in the list, is said once.
-  const zero = ordered.zero
-  const zeroed = useRef(zero !== undefined)
-  useEffect(() => {
-    if (zero && !zeroed.current && document.activeElement === listbox.current)
-      said.say(zeroSaid(zero, Date.now()))
-    zeroed.current = zero !== undefined
-  }, [zero, listbox])
 
   /**
    * What a key does on the pick. On a group's header, Enter folds or
@@ -194,20 +181,11 @@ export function useSidebarKeys(
       (_, event) => {
         const target = event?.target
         const tab = tabOf(does)
-        if (tab || does === "search" || does === "undo") {
+        if (tab || does === "search") {
           if (target instanceof Element && target.closest(FIELDS)) return false
-          if (small && does !== "undo") return false
-          if (tab) {
-            view.show(tab)
-            said.say(tabSaid(tab, ordered.tabs[tab].count))
-          } else if (does === "search") openIt("menu.at", {})
-          else {
-            const done = undoLast(run) ?? []
-            if (done.length > 0 && target === listbox.current)
-              picking.back(
-                new Set(done.map(({ listed }) => keyOf(listed.host, listed.id)))
-              )
-          }
+          if (small) return false
+          if (tab) view.show(tab)
+          else openIt("menu.at", {})
           return true
         }
         if (event && target !== listbox.current) return false

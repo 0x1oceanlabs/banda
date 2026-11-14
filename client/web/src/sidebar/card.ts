@@ -4,8 +4,8 @@
  * lines, each a left and a right; the colour of its call; how quiet it
  * is; and its time. `CardView.tsx` and the counts' list only draw it, and `spokenOf`
  * says it to a screen reader. Pure, with no clock of its own: a time is a
- * moment and a kind, put into words as it is drawn, against the list's
- * clock (`clock.ts`).
+ * moment and a kind, put into words as it is drawn, against the minute
+ * the cards are drawn as of (`useMinute`).
  */
 import type { ProjectSummary } from "@banda/contract"
 import type { DoingKind } from "@banda/contract/agents"
@@ -455,21 +455,6 @@ export function timeOf(
     return later?.someday ? { kind: "someday" } : { kind: "when done" }
   }
   return { kind: "ago", at, ...(tone ? { tone } : {}) }
-}
-
-/** Every time `card` says that changes as time goes by: its own and when
- * it was put off, unless they stand as of when its machine was last
- * heard; and how long that has been. */
-export function timesOf(card: CardModel): Time[] {
-  if (card.away) return [{ kind: "ago", at: card.away.since }]
-  const times: Time[] = [timeShown(card)]
-  if (card.does?.doing === "stuck" && card.does.at !== undefined)
-    times.push({ kind: "ago", at: card.does.at })
-  for (const line of card.lines)
-    for (const slot of [...line.left, ...line.right])
-      if (slot.kind === "says" && slot.putOff)
-        times.push({ kind: "ago", at: slot.putOff.at })
-  return times
 }
 
 /** A card as a screen reader says it (§2.8): its name and what describes

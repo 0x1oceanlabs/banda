@@ -1363,11 +1363,11 @@ mod tests {
             field: false,
             mod_held: false,
         });
-        // Undo holds Ctrl, ⌘ on a Mac, as a field's own does.
+        // Delete's second key holds Ctrl, ⌘ on a Mac, as a field's own does.
         for (id, code, primary) in [
             ("sidebar.archive-picked", "KeyS", false),
             ("sidebar.later-picked", "KeyZ", false),
-            ("sidebar.undo", "KeyZ", true),
+            ("sidebar.delete-picked", "Backspace", true),
         ] {
             manifests.actions.push(Action {
                 id: id.to_owned(),
@@ -1386,12 +1386,15 @@ mod tests {
             });
         }
         let mut problems = Vec::new();
-        let text = "[binds.sidebar]\n\"E\" = \"sidebar.archive-picked\"\n\"Z\" = \"none\"\n\"Shift+L\" = \"sidebar.later-picked\"\n\"Ctrl+Y\" = \"sidebar.undo\"\n[binds]\n\"Alt+E\" = \"sidebar.archive-picked\"\n";
+        let text = "[binds.sidebar]\n\"E\" = \"sidebar.archive-picked\"\n\"Z\" = \"none\"\n\"Shift+L\" = \"sidebar.later-picked\"\n\"Ctrl+Y\" = \"sidebar.delete-picked\"\n[binds]\n\"Alt+E\" = \"sidebar.archive-picked\"\n";
         let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
         let actions = in_force(&manifests, &keys, &mut problems);
         assert_eq!(texts(&actions, "sidebar.archive-picked"), ["S", "E"]);
         assert_eq!(texts(&actions, "sidebar.later-picked"), ["Shift+L"]);
-        assert_eq!(texts(&actions, "sidebar.undo"), ["Ctrl+Z", "Ctrl+Y"]);
+        assert_eq!(
+            texts(&actions, "sidebar.delete-picked"),
+            ["Ctrl+Backspace", "Ctrl+Y"]
+        );
         // The window's Alt+S still archives the Thread in focus anywhere.
         assert_eq!(texts(&actions, "sidebar.archive"), ["Alt+S"]);
         let said: Vec<(Option<u32>, &str)> = problems

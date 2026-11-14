@@ -31,6 +31,13 @@ export function tabName(tab: Tab, { count }: TabCount): string {
   return count > 0 ? `${TAB_WORDS[tab]}, ${count}` : TAB_WORDS[tab]
 }
 
+/** What the tab in view says aloud, as it is shown or its count changes:
+ * "Later, 5 Threads", "Inbox, no Threads". */
+export function tabSaid(tab: Tab, { count }: TabCount): string {
+  const many = count === 1 ? "1 Thread" : `${count || "no"} Threads`
+  return `${TAB_WORDS[tab]}, ${many}`
+}
+
 /** Where the arrows go along the tabs: the next or the one before, round
  * the ends, or the first or the last. */
 const STEPS: Readonly<Record<string, (at: number) => number>> = {
@@ -50,7 +57,9 @@ const STEPS: Readonly<Record<string, (at: number) => number>> = {
  * them from anywhere in the sidebar (`keys.ts`). At the sidebar's own
  * width three counts fit with every word whole, so the tabs are tight and
  * a count takes only its digits; a narrower sidebar cuts the words short,
- * and the Archive's icon always shows whole.
+ * and the Archive's icon always shows whole. A screen reader hears the
+ * tab in view and its count as either changes, in a polite line beside
+ * them (`tabSaid`); what an act did, its toast says.
  */
 export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
   const show = useContext(ShowTab)
@@ -62,59 +71,64 @@ export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
     show?.(TABS[step(TABS.indexOf(tab))]!)
   }
   return (
-    <div
-      role="tablist"
-      aria-label="Threads by where they stand"
-      className="flex items-center gap-0.5 px-1.5 pt-2 pb-1.5"
-      onKeyDown={onKeyDown}
-    >
-      {TABS.map((one) => {
-        const { count, calls } = tabs[one]
-        const archive = one === "archive"
-        const words =
-          archive && count > 0
-            ? `${TAB_WORDS.archive} · ${count}`
-            : TAB_WORDS[one]
-        return (
-          <button
-            key={one}
-            id={tabId(one)}
-            type="button"
-            role="tab"
-            aria-selected={one === tab}
-            aria-controls={PANEL}
-            aria-label={tabName(one, tabs[one])}
-            tabIndex={one === tab ? 0 : -1}
-            title={keyFor(`sidebar.tab-${one}`, words)}
-            onClick={() => show?.(one)}
-            className={cn(
-              "flex h-7 items-center gap-1 rounded-control px-1.5 text-ui whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
-              archive ? "ml-auto shrink-0" : "min-w-0",
-              one === tab
-                ? "bg-foreground/8 text-foreground"
-                : "text-muted-foreground/70 hover:text-foreground"
-            )}
-          >
-            {archive ? (
-              <ArchiveIcon className="size-3.5" />
-            ) : (
-              <span className="truncate">{TAB_WORDS[one]}</span>
-            )}
-            {!archive && count > 0 && (
-              <span
-                className={cn(
-                  "shrink-0 text-meta tabular-nums",
-                  calls
-                    ? "font-semibold text-attention"
-                    : "text-muted-foreground"
-                )}
-              >
-                {count}
-              </span>
-            )}
-          </button>
-        )
-      })}
-    </div>
+    <>
+      <div
+        role="tablist"
+        aria-label="Threads by where they stand"
+        className="flex items-center gap-0.5 px-1.5 pt-2 pb-1.5"
+        onKeyDown={onKeyDown}
+      >
+        {TABS.map((one) => {
+          const { count, calls } = tabs[one]
+          const archive = one === "archive"
+          const words =
+            archive && count > 0
+              ? `${TAB_WORDS.archive} · ${count}`
+              : TAB_WORDS[one]
+          return (
+            <button
+              key={one}
+              id={tabId(one)}
+              type="button"
+              role="tab"
+              aria-selected={one === tab}
+              aria-controls={PANEL}
+              aria-label={tabName(one, tabs[one])}
+              tabIndex={one === tab ? 0 : -1}
+              title={keyFor(`sidebar.tab-${one}`, words)}
+              onClick={() => show?.(one)}
+              className={cn(
+                "flex h-7 items-center gap-1 rounded-control px-1.5 text-ui whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
+                archive ? "ml-auto shrink-0" : "min-w-0",
+                one === tab
+                  ? "bg-foreground/8 text-foreground"
+                  : "text-muted-foreground/70 hover:text-foreground"
+              )}
+            >
+              {archive ? (
+                <ArchiveIcon className="size-3.5" />
+              ) : (
+                <span className="truncate">{TAB_WORDS[one]}</span>
+              )}
+              {!archive && count > 0 && (
+                <span
+                  className={cn(
+                    "shrink-0 text-meta tabular-nums",
+                    calls
+                      ? "font-semibold text-attention"
+                      : "text-muted-foreground"
+                  )}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          )
+        })}
+      </div>
+      <p aria-live="polite" className="sr-only">
+        {tabSaid(tab, tabs[tab])}
+      </p>
+    </>
   )
 }

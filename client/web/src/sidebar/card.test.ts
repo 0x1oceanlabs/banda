@@ -19,7 +19,6 @@ import {
   spokenOf,
   timeOf,
   timeShown,
-  timesOf,
   workSaid,
   worksWords,
 } from "./card"
@@ -147,7 +146,6 @@ describe("a machine out of reach (ADR 0098, decision 18)", () => {
     expect(working.lines[0]!.left[0]).toEqual({ kind: "mark", look: "offline" })
     expect(working.does).toBeUndefined()
     expect(working.stand).toBe("working")
-    expect(timesOf(working)).toEqual([{ kind: "ago", at: away }])
   })
 })
 
@@ -443,7 +441,6 @@ describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)"
     const limited = card(row("working", { mark: "working", limitUntil: at16 }))
     expect(limited.time).toEqual({ kind: "ago", at: NOW - 14 * MINUTE })
     expect(timeShown(limited)).toEqual({ kind: "goes on", at: at16 })
-    expect(timesOf(limited)).toEqual([{ kind: "goes on", at: at16 }])
     expect(spokenOf(limited, NOW)).toEqual({
       name: "Fix the form, Working, goes on at 16:00",
       description: "Usage limit. goes on at 16:00. banda. Claude Code",
@@ -461,10 +458,6 @@ describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)"
     const stuck = card(
       row("working", { mark: "working", stepped: NOW - 6 * MINUTE })
     )
-    expect(timesOf(stuck)).toEqual([
-      stuck.time,
-      { kind: "ago", at: NOW - 6 * MINUTE },
-    ])
     expect(spokenOf(stuck, NOW).description).toBe(
       "No events for 6 minutes. banda. Claude Code"
     )
@@ -566,20 +559,6 @@ describe("times (spec §2.5)", () => {
     })
     expect(later({ at: 0, someday: true })).toEqual({ kind: "someday" })
     expect(later({ at: 0 })).toEqual({ kind: "when done" })
-  })
-
-  test("the times that change: its own, or how long its machine is away, and when it was put off", () => {
-    const woke = card(
-      row("turn", {
-        later: { at: NOW - HOUR, woke: { at: NOW - MINUTE, by: "time" } },
-      })
-    )
-    expect(timesOf(woke)).toEqual([woke.time, { kind: "ago", at: NOW - HOUR }])
-    const away = card(row("working", { mark: "working" }, "arc"), {
-      machine: arc,
-      away: NOW - 12 * MINUTE,
-    })
-    expect(timesOf(away)).toEqual([{ kind: "ago", at: NOW - 12 * MINUTE }])
   })
 })
 
@@ -696,7 +675,7 @@ describe("spokenOf (spec §2.8)", () => {
     ]).toEqual([
       "now",
       "now",
-      "40 seconds",
+      "now",
       "1 minute",
       "14 minutes",
       "1 hour",

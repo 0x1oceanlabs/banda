@@ -1,13 +1,10 @@
 /**
- * Undo of the Person's acts on a card (ADR 0098, decision 10; spec S7a):
- * each act keeps what puts back what was, which its ghost line's Undo
- * runs; an archive is told in the one toast, `sidebar-undo`, as
- * "Archived · Undo", and more while it shows add to it, "Archived 3", its
- * time starting again, and its Undo takes all of them back. The window
- * keeps the last 20 acts for 10 minutes, and `Ctrl+Z` in the sidebar
- * takes back the newest, then the one before (spec §2.7, S7c); there is
- * no redo. "Archive N done" is one act (ADR 0098, decision 15): one Undo
- * takes it all back, and its toast says what it left.
+ * Undo of an archive from the sidebar (ADR 0098, decision 10, as
+ * amended): told in the one toast, `sidebar-undo`, as "Archived · Undo",
+ * and more while it shows add to it, "Archived 3", its time starting
+ * again; its Undo takes all of them back. That button is the one Undo: no
+ * key takes an act back. "Archive N done" is one act (decision 15), and
+ * its toast says what it left.
  * What is put back is the Thread's mark and its Later, never its Panes:
  * one brought back from the Archive opens none (#1069).
  */
@@ -17,12 +14,18 @@ import type { Run } from "@banda/core/react"
 import type { Args } from "@banda/ui/module"
 import type { Listed } from "@banda/ui/pane"
 import { asleep } from "@banda/ui/status"
-import type { Act } from "./acts"
 import { itemActionOf } from "../window/items"
 
-/** One step that puts back what an act changed: what it does, by the
- * Thread's item actions, and with what. */
-export type Step = { does: "archive" | "later" | "wake" | "unread"; args: Args }
+/** One step that puts back what an archive changed: what it does, by
+ * the Thread's item actions, and with what. */
+type Step = { does: "archive" | "later"; args: Args }
+
+/** What takes back one archive: the Thread it was on, and its steps. */
+export type Archived = {
+  project: ProjectId
+  listed: Listed
+  steps: readonly Step[]
+}
 
 /** How `listed` sleeps at `now`, as the Later that puts it back to sleep
  * takes it: till a time, its turn's end or Someday; none awake. */
@@ -33,41 +36,23 @@ function sleepOf(listed: Listed, now: number): Args | undefined {
   return later.until === undefined ? { done: true } : { until: later.until }
 }
 
-/**
- * What puts back what `act` changed of `listed`, as it stood just before,
- * at `now`:
- * - an archive brings it back, and puts it back to sleep as it slept,
- *   till the same time, its turn's end or Someday, as archiving ended its
- *   Later;
- * - an Unarchive archives it again;
- * - a Later or a Wake puts its Later back as it was, asleep or awake;
- * - a mark as unread, or as read, marks it the other way again.
- */
-export function undoOf(
-  act: Act | "unread",
+/** What takes back the archive of `listed`, as it stood just before, at
+ * `now`: it comes back, and goes back to sleep as it slept, till the same
+ * time, its turn's end or Someday, as archiving ended its Later. */
+export function archivedOf(
+  project: ProjectId,
   listed: Listed,
   now: number
-): Step[] {
+): Archived {
   const slept = sleepOf(listed, now)
-  const sleep: Step[] = slept ? [{ does: "later", args: slept }] : []
-  switch (act) {
-    case "archive":
-      return [{ does: "archive", args: { archived: false } }, ...sleep]
-    case "unarchive":
-      return [{ does: "archive", args: { archived: true } }]
-    case "later":
-    case "wake":
-      return slept ? sleep : [{ does: "wake", args: {} }]
-    case "unread":
-      return [{ does: "unread", args: {} }]
+  return {
+    project,
+    listed,
+    steps: [
+      { does: "archive", args: { archived: false } },
+      ...(slept ? [{ does: "later" as const, args: slept }] : []),
+    ],
   }
-}
-
-/** What takes back one act: the Thread it was on, and its steps. */
-export type Undoable = {
-  project: ProjectId
-  listed: Listed
-  steps: readonly Step[]
 }
 
 /** The toast's one id, so each archive adds to the one that shows. */
@@ -77,52 +62,24 @@ export const UNDO_TOAST = "sidebar-undo"
  * on it. */
 const LASTS = 6000
 
-/** How many acts `Ctrl+Z` can take back, and for how long, in ms. */
-export const KEPT = 20
-export const KEPT_FOR = 10 * 60_000
-
-/** The acts `Ctrl+Z` takes back, the newest last, each with when it was
- * done: one on several cards at once takes each back. */
-let kept: readonly { done: readonly Undoable[]; at: number }[] = []
-
-/** The archives the toast shows tells of, the first first. */
-let told: readonly Undoable[] = []
+/** The archives the toast that shows tells of, the first first. */
+let told: readonly Archived[] = []
 
 const forget = () => {
   told = []
 }
 
-/** Keeps `done`, one act on one card or several, for `Ctrl+Z`, done at
- * `now`: the oldest of more than 20 goes. */
-export function keep(done: readonly Undoable[], now = Date.now()): void {
-  if (done.length === 0) return
-  kept = [...kept, { done, at: now }].slice(-KEPT)
-}
-
-/** Runs `done`'s steps, by its Thread's App's item actions: taken back,
- * `Ctrl+Z` no longer takes it back, and an act on several cards takes
- * back the rest. */
-function runSteps(run: Run, done: Undoable): void {
-  const { project, listed, steps } = done
-  kept = kept.flatMap((one) => {
-    const rest = one.done.filter((other) => other !== done)
-    return rest.length === 0 ? [] : [{ ...one, done: rest }]
-  })
-  for (const { does, args } of steps) {
-    const action = itemActionOf(listed, does)
-    if (action) run(action.id, { project, item: listed.id, ...args })
-  }
-}
-
-/** The toast, telling of `archives`, and of what the last act left, as
- * "1 not reached (mac is away)"; none takes it away. */
-function tell(run: Run, archives: readonly Undoable[], left?: string): void {
-  told = archives
-  if (archives.length === 0) {
-    toast.dismiss(UNDO_TOAST)
-    return
-  }
-  const count = archives.length > 1 ? ` ${archives.length}` : ""
+/** Tells of archives in the toast, whose Undo then takes them back with
+ * the others it tells of, by their Threads' Apps' item actions, and of
+ * what the act left, `left`, as "1 not reached (mac is away)". */
+export function toldArchived(
+  run: Run,
+  done: readonly Archived[],
+  left?: string
+): void {
+  told = [...told, ...done]
+  if (told.length === 0) return
+  const count = told.length > 1 ? ` ${told.length}` : ""
   toast([`Archived${count}`, left].filter(Boolean).join(" · "), {
     id: UNDO_TOAST,
     duration: LASTS,
@@ -131,44 +88,14 @@ function tell(run: Run, archives: readonly Undoable[], left?: string): void {
       onClick: () => {
         const all = told
         forget()
-        for (const done of all) runSteps(run, done)
+        for (const { project, listed, steps } of all)
+          for (const { does, args } of steps) {
+            const action = itemActionOf(listed, does)
+            if (action) run(action.id, { project, item: listed.id, ...args })
+          }
       },
     },
     onDismiss: forget,
     onAutoClose: forget,
   })
-}
-
-/** Tells of archives in the toast, whose Undo then takes them back with
- * the others it tells of, and of what the act left, `left`. */
-export function toldArchived(
-  run: Run,
-  done: readonly Undoable[],
-  left?: string
-): void {
-  tell(run, [...told, ...done], left)
-}
-
-/** Puts back what `done` changed, as a ghost line's Undo does: the toast
- * no longer tells of it. */
-export function putBack(run: Run, done: Undoable): void {
-  runSteps(run, done)
-  if (told.includes(done))
-    tell(
-      run,
-      told.filter((one) => one !== done)
-    )
-}
-
-/** Takes back the newest act kept that is not 10 minutes old at `now`, as
- * `Ctrl+Z` does, on every card it was on, and says which; none where none
- * is kept. */
-export function undoLast(
-  run: Run,
-  now = Date.now()
-): readonly Undoable[] | undefined {
-  kept = kept.filter(({ at }) => now - at < KEPT_FOR)
-  const done = kept.at(-1)?.done
-  for (const one of done ?? []) putBack(run, one)
-  return done
 }

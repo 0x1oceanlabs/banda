@@ -3,12 +3,12 @@
  * its scope, `sidebar`, the whole sidebar (ADR 0071, decision 1): the
  * window matches them, `keys.toml` moves them in `[binds.sidebar]`, and
  * the key sheet lists them. They hold no mod, so they work only while the
- * focus is in the sidebar, and a field there types them; Undo holds Ctrl,
- * or ⌘ on a Mac, as a field's own does, and so does Delete's second key,
- * Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick
- * work while the focus is in the list; Undo, `/`, which opens the Banda
- * menu, the one search (Roma, 2026-11-12), and the tabs' digits anywhere
- * in the sidebar. The arrows, Home, End, the pages and Esc are the list's
+ * focus is in the sidebar, and a field there types them; Delete's second
+ * key holds Ctrl, Ctrl+Backspace, ⌘⌫ on a Mac. The acts on the pick work
+ * while the focus is in the list; `/`, which opens the Banda menu, the one
+ * search (Roma, 2026-11-12), and the tabs' digits anywhere in the
+ * sidebar. No key undoes: an archive's toast does (decision 10, as
+ * amended). The arrows, Home, End, the pages and Esc are the list's
  * own, as a list's are. Pure, so plain tests cover it.
  */
 import type { Key } from "@banda/ui/lib/keys"
@@ -24,7 +24,6 @@ export type Does =
   | "archive"
   | "later"
   | "unread"
-  | "undo"
   | "rename"
   | "suggest"
   | "menu"
@@ -77,12 +76,6 @@ export const SIDEBAR_KEYS: readonly {
     id: "sidebar.unread-picked",
     title: "Mark the card picked as unread, or as read",
     keys: [{ code: "KeyU" }],
-  },
-  {
-    does: "undo",
-    id: "sidebar.undo",
-    title: "Undo the last act on a card",
-    keys: [{ code: "KeyZ", primary: true }],
   },
   {
     does: "rename",

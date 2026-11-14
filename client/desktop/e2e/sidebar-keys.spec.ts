@@ -6,11 +6,11 @@
  * alone, so a terminal and a field type them, and Alt+S, Alt+Z, Alt+U and
  * Alt+A work as they did. The focus never goes to the page. The pick's
  * ring after a key, and none after a click, dark and light, as
- * `sidebar-s7b-*.png`. Ctrl+Z takes back the last act and the pick goes
- * back to its card; S on a card that asks or works says why in a toast,
- * and the pick stays; the region `#sb-said` tells of a call and of inbox
- * zero (S7c), and the refusal and the Undo, dark and light, as
- * `sidebar-s7c-*.png`. "Archive N done" on Your turn's head (S10b) leaves
+ * `sidebar-s7b-*.png`. No key undoes: the Archived toast's Undo takes
+ * back what it tells of; S on a card that asks or works says why in a
+ * toast, and the pick stays; the tabs' polite line says the tab in view
+ * and its count (S7c, as amended), and the refusal and the Undo, dark and
+ * light, as `sidebar-s7c-*.png`. "Archive N done" on Your turn's head (S10b) leaves
  * what asks, failed or woke, one act that one Undo takes back; the head,
  * dark and light, as `sidebar-s10b-*.png`.
  *
@@ -437,7 +437,7 @@ const ASKS = /^“please ask first” asks you\.\s*Answer it, or Z puts it off\.
 const WORKS =
   /^“wait for the build” is at work\.\s*Z puts it off until it's done\.$/
 
-test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with it; S on a card that asks or works toasts why and the pick stays; the region says a call and inbox zero (ADR 0098, S7c)", async () => {
+test("S S, and the toast's Undo, not Ctrl+Z, brings both cards back; S on a card that asks or works toasts why and the pick stays; the tabs' polite line says the tab in view and its count (ADR 0098, S7c, decision 10 as amended)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -450,14 +450,9 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
   const sidebar = sidebarOf(page)
   const list = sidebar.getByRole("listbox")
   const tab = (name: string) => tabOf(sidebar, name)
-  // The region is there from the start, empty: the calls came while the
-  // focus was in the New Thread's box, and 2 s on nothing was said.
-  const said = page.locator("#sb-said")
-  await expect(said).toHaveAttribute("role", "status")
-  await expect(said).toHaveAttribute("aria-live", "polite")
-  expect(await focusOf(page)).toBe("pane")
-  await page.waitForTimeout(2500)
-  await expect(said).toHaveText("")
+  // The tabs' polite line names the tab in view and its count.
+  const said = sidebar.locator("[aria-live=polite]")
+  await expect(said).toHaveText("Inbox, 4 Threads")
 
   // Into the list, described by the hint of its keys.
   await tab("Inbox").focus()
@@ -491,27 +486,26 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
   await page.keyboard.press("s")
   await picked(page, list, "call three")
   await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
-  await expect(toastOf(page, "Archived 2")).toBeVisible()
+  await expect(said).toHaveText("Inbox, 2 Threads")
+  const archived = toastOf(page, "Archived 2")
+  await expect(archived).toBeVisible()
 
-  // Ctrl+Z brings back the second, the pick goes back to it, and the
-  // toast tells of the first alone; again, the first.
+  // No key takes them back; the toast's Undo takes both.
   await page.keyboard.press("Control+z")
-  await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
-  await expect(cardOf(list, "call two")).toBeVisible()
-  await picked(page, list, "call two")
-  await expect(toastOf(page, /^Archived(?! 2)/)).toBeVisible()
-  await page.keyboard.press("Control+z")
+  await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
+  await archived.getByRole("button", { name: "Undo" }).click()
   await expect(tab("Archive")).toHaveAccessibleName("Archive")
   await expect(cardOf(list, "call one")).toBeVisible()
-  await picked(page, list, "call one")
-  expect(await focusOf(page)).toBe("list")
+  await expect(cardOf(list, "call two")).toBeVisible()
+  await expect(said).toHaveText("Inbox, 4 Threads")
 
-  // A call that comes while the focus is in the list is said.
+  // A call that comes counts in the line.
   await send(window, "call four")
-  await expect(said).toHaveText("call four is done.")
+  await expect(said).toHaveText("Inbox, 5 Threads")
 
   // The last card goes: the one that asks is put off, the rest archived,
-  // and the region says inbox zero in its own words.
+  // and the line says the Inbox holds none.
+  await list.focus()
   await page.keyboard.press("Home")
   await picked(page, list, "please ask first")
   await page.keyboard.press("z")
@@ -526,11 +520,14 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
     await page.keyboard.press("s")
   }
   await expect(sidebar.getByText("Nothing waits for you")).toBeVisible()
-  // In 2h past 22:00 is tomorrow, which names its day: "Thu 1:25".
-  await expect(said).toHaveText(
-    /^Inbox zero\. Nothing waits for you\. 1 at work\. Next wakes at (\w+ )?\d+:\d\d\.$/
-  )
+  await expect(said).toHaveText("Inbox, no Threads")
   expect(await focusOf(page)).toBe("list")
+  // A tab shown by its key says itself, and its count.
+  await page.keyboard.press("3")
+  await expect(said).toHaveText("Later, 1 Thread")
+  await page.keyboard.press("1")
+  await expect(said).toHaveText("Inbox, no Threads")
+  await list.focus()
 
   // The hint was read once: the list is described by it no more.
   await page.keyboard.press("Escape")
@@ -539,7 +536,7 @@ test("Undo by its key, S S Ctrl+Z, brings back the second card and the pick with
   await expect(list).toHaveAccessibleDescription("")
 })
 
-test("a refusal's toast, and the Undo after Ctrl+Z, dark and light (ADR 0098, S7c)", async () => {
+test("a refusal's toast, and the Archived toast with its Undo, dark and light (ADR 0098, S7c)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -572,17 +569,17 @@ test("a refusal's toast, and the Undo after Ctrl+Z, dark and light (ADR 0098, S7
     await page.keyboard.press("s")
     await page.keyboard.press("s")
     await expect(tab("Archive")).toHaveAccessibleName("Archive, 2")
-    await page.keyboard.press("Control+z")
-    await picked(page, list, "call two")
-    await expect(tab("Archive")).toHaveAccessibleName("Archive, 1")
-    await expect(toastOf(page, /^Archived(?! 2)/)).toBeVisible()
+    const archived = toastOf(page, "Archived 2")
+    await expect(archived).toBeVisible()
     await page.screenshot({ path: `test-results/sidebar-s7c-undo-${mode}.png` })
 
     // Back as it was, for the other look.
     // The toast that asks for the Thread that asks stays: Notifications'.
-    await page.keyboard.press("Control+z")
+    await archived.getByRole("button", { name: "Undo" }).click()
     await expect(tab("Archive")).toHaveAccessibleName("Archive")
     await expect(toastOf(page, /^Archived/)).toHaveCount(0)
+    // Off the toasts, which hold while the pointer is on them.
+    await leaveSidebar(page)
   }
 })
 

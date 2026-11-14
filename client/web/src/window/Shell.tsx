@@ -35,8 +35,13 @@ import {
   nowOf,
   workingHere,
 } from "../calls/stores"
-import { Edge, LaterPicker, SaidRegion, Sidebar } from "../sidebar"
-import { useOrderNow, writeSidebar } from "../sidebar"
+import {
+  Edge,
+  LaterPicker,
+  Sidebar,
+  useOrderNow,
+  writeSidebar,
+} from "../sidebar"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
@@ -789,7 +794,6 @@ export function Shell({
                   />
                 )}
                 <Toaster />
-                <SaidRegion />
                 <LaterPicker />
                 <RemovingProject engine={engine} />
                 <QuitDialog
