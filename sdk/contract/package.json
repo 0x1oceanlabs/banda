@@ -9,6 +9,7 @@
     ".": "./src/index.ts",
     "./agents": "./src/agents.ts",
     "./browser": "./src/browser.ts",
+    "./door": "./src/door.ts",
     "./terminal": "./src/terminal.ts",
     "./git": "./src/git.ts",
     "./files": "./src/files.ts",

@@ -5,6 +5,7 @@ import {
   followThisNamed,
   seenNamed,
 } from "@banda/ui/hooks/use-status"
+import type { Engine } from "@banda/contract"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import "@banda/ui/globals.css"
@@ -33,7 +34,10 @@ stepLoops(document)
 quiet.follow({ root: document.documentElement, events: window })
 // This machine's engine is one of the machines' (ADR 0124): while it
 // does not answer, its Panes say so, and nothing waits silently.
-const engine = host && ownEngine(device.engine)
+// A browser's is the door that served it the page, once that machine has
+// paired it (`atDoor`): until then there is no engine to reach.
+/** The engine the window opened on, for what says it broke. */
+let reached: Engine | undefined
 /** What broke in the page is a Problem (ADR 0039); React says it on the
  * console as it would. */
 const kept = (error: unknown) => {
@@ -51,11 +55,13 @@ const root = createRoot(document.getElementById("root")!, {
   },
 })
 
-if (host && engine) {
+/** The window, on this machine's engine. */
+function open(engine: Engine) {
+  reached = engine
   watchProblems(engine)
-  // Its files' bytes come through the desktop, which relays them to it.
+  // Its files' bytes come through the device, which relays them to it.
   relayBytesFrom(engine)
-  void moveEnterKey(host).catch(() => undefined)
+  if (host) void moveEnterKey(host).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)
   const show = () => {
@@ -94,24 +100,29 @@ if (host && engine) {
       <BrokeCard engine={engine} broke={{ what: "starts" }} onOpen={show} />
     )
   else show()
-} else {
-  root.render(
-    <p className="p-6 text-ui text-muted-foreground">
-      Open Banda from its desktop app: this page needs it to reach the engine.
-    </p>
-  )
 }
+
+if (host) open(ownEngine(device.engine))
+else
+  void import("./door")
+    .then(({ atDoor }) =>
+      atDoor(open, (card) => root.render(<StrictMode>{card}</StrictMode>))
+    )
+    .catch(kept)
 
 /** Says what broke, in place of the window (ADR 0039, decision 2), once
  * React has let go of the one that broke. */
 function broke(what: Broke) {
-  if (!host || !engine) return
+  const engine = reached
+  // Before a browser has paired there is no engine to set the
+  // workspaces aside on, and nothing of the window to open again.
+  if (!engine) return
   setTimeout(() =>
     root.render(
       <BrokeCard
         engine={engine}
         broke={what}
-        onOpen={() => void host.problems.reopen()}
+        onOpen={() => (host ? void host.problems.reopen() : location.reload())}
       />
     )
   )

@@ -5,8 +5,9 @@
  * Window uses, and its only way there. Nothing else in the Window or the
  * Tiling names `window.banda`, and at last nothing else in the page does
  * (architecture.test.ts; ADR 0089, decisions 2 and 11). Its callers reach
- * it through `boot/index.ts`. Without the desktop, as in a page of its
- * own, each part does nothing, and what answers says so.
+ * it through `boot/index.ts`. Without the desktop, as in a browser at a
+ * machine's door, each part does nothing, and what answers says so, but
+ * the engine: a browser's is the door that served it (`browser.ts`).
  */
 import type { Address } from "@banda/contract"
 import type { Listed } from "@banda/contract/look"
@@ -21,6 +22,7 @@ import type {
   Update,
 } from "@banda/core"
 import type { Host } from "@banda/desktop/bridge"
+import { browser } from "./browser"
 
 /** The desktop's bridge as each part is used; none without the desktop. */
 const desktop = (): Host | undefined => window.banda
@@ -42,11 +44,12 @@ export const device = {
    * this window as, with the desktop signing its `hello`, as it holds
    * this device's key; as before, by the owner's secret, for an engine
    * with no door yet. Asked of the desktop each time, and kept nowhere
-   * in the page.
+   * in the page. A browser has no desktop: its machine is the one whose
+   * door served it the page, which it reaches by a key of its own.
    */
   engine: async (): Promise<Address> => {
     const host = desktop()
-    if (!host) return elsewhere()
+    if (!host) return browser.engine()
     const at = await host.engine()
     if (!("door" in at)) return at
     const sign = (message: string) => host.sign(message)

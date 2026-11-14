@@ -2158,9 +2158,9 @@ test("an App or a platform part takes of the hosts only what reads them (#1041)"
 
 /**
  * The device's desktop adapter is taken in by one file, `boot/index.ts`,
- * the one import of its callers, which W1 makes pick a browser's adapter
- * where the desktop is not (ADR 0089, decision 4). Its tests read it as
- * it is.
+ * the one import of its callers (ADR 0089, decision 4). Where the desktop
+ * is not, the same adapter's parts do nothing but its engine, which is
+ * the browser's (`boot/browser.ts`). Its tests read it as it is.
  */
 test("only boot/index.ts takes in the device's desktop adapter", () => {
   const adapter = join(app, "web/src/boot/desktop")
