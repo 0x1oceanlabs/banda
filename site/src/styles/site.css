@@ -2,9 +2,9 @@
 /* Banda UI's theme without the window's (ADR 0128): the tokens, shadcn
    on them, the type and the base. */
 @import "@banda/ui/theme.css";
-/* The components a page takes from @banda/ui, which Tailwind does not
-   find from here: it reads the site's own files by itself. */
-@source "../../../client/ui/src/components";
+/* No page takes a component of @banda/ui yet. One that does adds
+   `@source` for its folder here, and that folder to vercel.json's
+   ignoreCommand (ADR 0133). */
 
 /*
  * The site's own palette. The home page is two worlds: a gallery wall

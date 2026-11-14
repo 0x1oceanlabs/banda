@@ -24,7 +24,8 @@ runs behind it, and no machine needs it.
    weighed: its server parts (server components, actions, middleware,
    sessions) are what the site does not need, since the account and the
    web client live on other hosts. Astro builds on Vite, as the window
-   does.
+   does. _ADR 0133, decision 1: Vercel Web Analytics' script is the one
+   a page ships without a `client:*` component._
 2. **It lives in `site/`, a package of the workspace** (`@banda/site`),
    not in `client/`: it is not a client of the engine, and it reads
    nothing of the contract but the look's tokens.

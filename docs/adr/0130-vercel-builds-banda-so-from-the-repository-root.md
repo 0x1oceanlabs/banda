@@ -22,7 +22,8 @@ lives; what it builds and when stays.
    `@banda/site`, and serves `site/dist`.
 2. **It builds only when the site, `client/ui`, the tokens, the Mark's
    kit, the lockfile or `vercel.json` changed**; otherwise the build is
-   skipped, and the PR's check passes.
+   skipped, and the PR's check passes. _ADR 0133, decision 2, narrows the
+   list to the files the site reads._
 3. **A branch without `vercel.json` is skipped.** The project's own
    setting, its "Ignored Build Step", is `exit 0`; a `vercel.json` in the
    branch overrides it. A branch cut before this ADR has nothing to build.
