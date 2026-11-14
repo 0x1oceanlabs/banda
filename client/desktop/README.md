@@ -124,3 +124,9 @@ page is one part of. A change to main changes this page in the same PR.
   runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
   brings its part of the table and of main; `client/desktop/src/modules.ts`
   is the one file in main that names one.
+
+## Checks
+
+- **Architecture tests.** Main runs an effect only in `main.ts`, on its
+  runtime, and in the two places `client/desktop/src/architecture.test.ts`
+  lists with their count and reason (ADR 0020).

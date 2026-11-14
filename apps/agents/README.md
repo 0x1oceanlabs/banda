@@ -456,3 +456,66 @@ module reaches a Harness through an adapter:
   it; the Harness then decides when to ask. Plan is Claude Code's
   plan mode and Codex's collaboration mode. Any other Harness's modes are
   options like the rest. The table is in `acp/options.rs`.
+
+## Links in a Thread
+
+An HTTP(S) Markdown link opens in Banda through `browser.open`, in the
+source Thread's Project (ADR 0051). Ctrl+click uses the existing desktop
+route to the system browser. The Thread supplies the opener to the UI's
+Markdown renderer; it names no browser module. A Thread in its own window
+relays the action through the existing window bridge. Named links show
+their destination's host; bare URLs are ellipsized visually, keeping the
+full text and `href` for copying. Local-file links are a separate contract.
+
+## Media in a Thread
+
+Markdown in a Thread shows local images, video and audio (ADR 0037,
+step 6). The agents Pane supplies the markdown renderer a resolver for
+its Project. It asks its session, the engine of the machine that has the
+Project, for a token for that path (`bytes.issue`, `media`), which the
+engine gives only for a picture, a video or a sound: a reply's paths are
+an Agent's to write. The URL is made as every byte URL is (`fileMint`),
+so an arc Thread's pictures are arc's (ADR 0106, step 4c). Nothing plays
+automatically. Images open larger on a
+click; a missing or unsupported file stays a link.
+
+Mermaid code fences render as SVG through `@streamdown/mermaid`, with
+copy, zoom and fullscreen controls and the look's light or dark scheme.
+The plugin keeps Mermaid's strict security mode. KaTeX renders inline
+`$…$` and block `$$…$$` math through `@streamdown/math`; its CSS and fonts
+ship with the app. Both plugins use Streamdown's streaming parser and
+error handling, alongside the existing code and media renderers.
+
+Tool results keep their images as `ToolContent::Image` metadata. The ACP
+adapter passes image payloads only to the transcript, which validates
+and writes their bytes through the existing image store before committing
+the item and its fact. For Codex ACP, which sends MCP images in
+`rawOutput.result.content`, the adapter reads that known image envelope
+when standard display content is absent. Invalid images become text beside the other
+result parts. The tool line fetches images through the Thread's shared
+image reader only when expanded and opens the same preview as message
+images. Sweeps retain images still referenced by a fork after a rewind.
+
+The bytes behind those URLs are in
+[`platform/bytes/README.md`](../../platform/bytes/README.md).
+
+## Checks
+
+- **Adapter tests** run the real engine. Only the Harness's transport is
+  replayed: the fake agent plays a recorded conversation
+  (`FAKE_AGENT_REPLAY`).
+  - A test has a Harness entry `record` what it and Banda say to each
+    other, one ACP frame per line. A Harness list cannot ask for it: a
+    recording holds everything said, a secret typed into a form too.
+  - Each frame the engine sends takes the next recorded one of its
+    method, or the answer with its ID, and must say the same, `initialize`
+    aside. The Harness's frames after it follow. A frame that differs
+    fails the replay, so a wrong answer to a Question fails its test.
+  - Real Claude Code and Codex conversations live in
+    `apps/agents/engine/tests/recordings/`. An ignored test records
+    them again, a paid run on the Person's own sign-in, when an adapter
+    changes.
+  - A recording leaves out who is signed in, the Person's home folder,
+    and the skills, plugins and agents a Harness lists as its own.
+  - T3 Code's Claude and Codex fixtures record other protocols (Claude's
+    SDK messages, Codex's app server), so they do not replay here.

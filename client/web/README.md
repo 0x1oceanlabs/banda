@@ -218,3 +218,36 @@ PR.
     from another family. The page takes it with the look
     (`useLookSound`); until the first look comes, the defaults play.
     Electron lets the page play sound before the first click.
+
+## Checks
+
+- **Architecture tests.** In the window
+  (`client/web/src/architecture.test.ts`), only `modules.ts` and the
+  bridge's table name a module's package, and nothing more animates a size
+  or a place (ADR 0088). Its tests find the Apps' and platform parts'
+  folders by their `app.toml` through `parts`
+  (`@banda/ui/testing/architecture`), which fails when it finds none. The
+  look check (`client/web/src/look.test.ts`) reads the same files that draw,
+  stylesheets too, with `look` (`@banda/ui/testing/look`): a colour, corner,
+  type size, shadow, layer or length off Banda UI is refused, but for the
+  cases its list holds by group, each with its rule and its reason, a list
+  that only falls (ADR 0113). Of ADR 0087's checks, three ratchets that only
+  fall hold what the Tiling imports of the Window, the App strings in the
+  Window, the Tiling and the sidebar list, and a line ceiling on the
+  Window's root (decisions 1 and 5); what the sidebar list's components
+  still take as code is listed, none of it a Project's or a Thread's verb,
+  and the list pins no Project and writes no `agents.toml` or `tiling.toml`,
+  as it runs the actions by id with the `run` only the Window gives
+  (decision 11); a mark's rank is read only to pick the loudest, on the
+  lines listed (decision 8); and the calls part reads no page and, of the
+  Tiling, imports only its model (decision 9). The parts the Window draws on
+  every move, each Tile and its Pane, each Strip and the widgets, stay
+  memoized (ADR 0088, decision 7). The Window and the Tiling read
+  `window.banda` only in `boot/desktop.ts`, and what else in the page reads
+  it, its own code, the core's, `@banda/ui`'s and the modules' Pane parts,
+  the test lists by file, a list that only falls (ADR 0089, decisions 2 and
+  11). The core imports only itself, the contract and, in its bindings,
+  React, reads no device, names no App and keeps no state at a module's top
+  level but the constants listed; only the Window makes and gives the hosts
+  and gives the machines; the desktop imports nothing of the page, which
+  takes the bridge's table only as a type (decisions 1, 4 and 11).

@@ -503,3 +503,27 @@ command (with its ID)
   It names the module, subject and kinds it shows, so it hears only those.
   The engine replays the log a page at a time, and a subscriber that falls
   behind catches up from the log.
+
+## Checks
+
+- **Architecture tests.** The kernel names no module, no module reads
+  another's tables, and a Pane imports only the API, `@banda/ui`, React and
+  its icons, and the core only as `@banda/core/react`; the terminal's Pane
+  also Ghostty. Beside the kernel's test (`kernel/tests/architecture.rs`),
+  two lists that only fall hold where the platform's Rust still names an App
+  and where an App's names another, by file and count, and a third, in
+  `engine/src/apps.rs`, the App crates another crate still depends on, all
+  of them the settings' (ADR 0062). The count reads names as written; a word
+  that only looks like an App's, as the program `git`, is listed apart with
+  its reason. No code of the engine makes a process but
+  `banda-environments`, and the places named in its test, each with how many
+  and why, that ask the host about itself or keep Banda's books and run
+  nothing of a Project's (ADR 0084, decision 4); no code uses ACP's agent
+  that starts its own. Each place that makes a `Program` is named there too,
+  with whose it makes and why (ADR 0083, decision 1).
+- **The fence's tests** make real namespaces. Where the system refuses
+  them, as devbox's CI containers do, each says why and skips;
+  `scripts/check.sh` outside CI sets `BANDA_FENCE_TESTS=require`, so there
+  that skip fails. CI's `fence` part, on GitHub's Ubuntu runner, sets
+  `BANDA_FENCE_TESTS=all`: every test runs, and one that would skip for
+  anything it lacks (namespaces, Landlock's scopes, bwrap) fails.
