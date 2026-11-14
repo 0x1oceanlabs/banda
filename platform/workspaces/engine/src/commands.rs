@@ -24,7 +24,7 @@
 use crate::model::{
     self, Arrangement, ColumnId, Opening, PaneId, Place, Seed, Shown, Toward, WorkspaceId,
 };
-use crate::placing::{self, Asked, By, Facts, Moved};
+use crate::placing::{self, Asked, By, Facts, Moved, Via};
 use banda_kernel::{ProjectId, Refusal, decode};
 use banda_look::columns::Display;
 use schemars::JsonSchema;
@@ -125,6 +125,12 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub grouped: Option<bool>,
+    /// How the Person asked for it, with no place: a click in `from`
+    /// opens into its Thread's Group, a key beside it (ADR 0134). Left
+    /// out, a key's.
+    #[serde(default)]
+    #[ts(optional)]
+    pub via: Option<Via>,
 }
 
 #[derive(Deserialize, TS, JsonSchema)]
@@ -297,6 +303,7 @@ pub fn open(
         brought,
         width,
         grouped,
+        via,
         ..
     } = open;
     let grouped = grouped == Some(true);
@@ -323,10 +330,12 @@ pub fn open(
             on,
             by: match agents {
                 Some(true) => By::Agent { thread: None },
-                _ => By::Person,
+                _ => By::Person {
+                    via: via.unwrap_or_default(),
+                },
             },
         };
-        place = placing::place(list, asked);
+        place = placing::place(list, &facts.leads, asked);
     }
     let opening = Opening {
         width: width.or_else(|| facts.width(&shows.kind)),

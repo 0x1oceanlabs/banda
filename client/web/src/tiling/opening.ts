@@ -17,7 +17,7 @@
  *         `sayRefused`, the words of a move the engine refused
  */
 import type { JsonValue, ProjectId, ProjectSummary } from "@banda/contract"
-import type { Flow } from "@banda/contract/workspaces"
+import type { Flow, Via } from "@banda/contract/workspaces"
 import { toast } from "@banda/ui/components/sonner"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
@@ -124,6 +124,7 @@ export function opening(
 type Placed = Omit<Opening, "width" | "identity" | "keep"> & {
   update?: true
   agents?: boolean
+  via?: Via
 }
 
 /**
@@ -140,7 +141,7 @@ export function placed(
   project: ProjectId,
   pane: PaneState,
   placing: Placing,
-  { update, agents, ...how }: Placed = {}
+  { update, agents, via = "key", ...how }: Placed = {}
 ): Step {
   const wanted = { project, pane }
   const shown = how.again
@@ -161,6 +162,7 @@ export function placed(
     ...saidOf(project, pane, placing),
     from: how.from,
     agents,
+    via,
   })
   return how.focus === false ? { ...plan, focus: false } : plan
 }
@@ -232,8 +234,12 @@ export function picking(
 }
 
 /**
- * Opens a Pane as a tile asks (`Frame.open`), from the tile `from`, at the
- * place it names. One in place of `from` that shows what `from` showed, in
+ * Opens a Pane as a tile asks (`Frame.open`), by a click in the tile
+ * `from`: at the place it names, right of `from`, under it or instead of
+ * it; else where the engine places it, into the Group of the Thread
+ * `from` is or stands with (ADR 0134, decision 1). One already shown
+ * gets the focus, and these args as its kind names it. One in place of
+ * `from` that shows what `from` showed, in
  * another Project, as a draft the Person moves to another Project or to
  * none, says so and names no place: the engine has it take that place, or,
  * in the row on a workspace that is not its Project's, open where the Flow
@@ -248,6 +254,12 @@ export function openingFrom(
   from: string,
   place?: Place
 ): Step {
+  if (place === undefined || place === "group")
+    return placed(workspaces, project, pane, placing, {
+      from,
+      via: "click",
+      update: true,
+    })
   const was = entries(workspaces).find((entry) => entry.id === from)
   const moved =
     place === "instead" &&

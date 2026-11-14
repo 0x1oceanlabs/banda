@@ -880,7 +880,7 @@ impl Workspaces {
             if let Some(shown) = model::showing_asked(list, &shows) {
                 return Ok((shown.id, false));
             }
-            let place = place.or_else(|| placing::place(list, asked?));
+            let place = place.or_else(|| placing::place(list, &facts.leads, asked?));
             let opening = Opening {
                 place,
                 width,

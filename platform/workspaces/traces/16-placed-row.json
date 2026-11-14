@@ -1,5 +1,5 @@
 {
-  "about": "In the row, a Pane with no place opens by where it is opened from: from the Project's own Group, last into it; from a Group of its Project, into that Group; on a free workspace, right of the Pane in front; any other, and with none in front, into its Project's own Group. A Thread goes last on its Project's workspace, and so does what is opened for an Agent. A Pane of no Project goes right of the Pane in front, a Thread of none on the top free workspace.",
+  "about": "In the row, a Pane with no place opens by where it is opened from: from the Project's own Group, last into it; by a click in a Group, into that Group; on a free workspace, right of the Pane in front; any other, and with none in front, into its Project's own Group. A Thread goes last on its Project's workspace, and so does what is opened for an Agent. A Pane of no Project goes right of the Pane in front, a Thread of none on the top free workspace.",
   "start": [
     {
       "id": "47821720-d172-5e7c-8c43-99d1205e269d",
@@ -211,7 +211,8 @@
         },
         "from": "223af36e-216d-522d-89a4-f5c5f83e1c34",
         "kind": "a.a",
-        "project": "a0000000-0000-4000-8000-000000000001"
+        "project": "a0000000-0000-4000-8000-000000000001",
+        "via": "click"
       },
       "facts": {
         "flow": "row",
@@ -713,7 +714,8 @@
         "from": "ee637b54-3178-5aa9-ae06-80108fe8faa2",
         "kind": "a.a",
         "project": "a0000000-0000-4000-8000-000000000005",
-        "scratch": true
+        "scratch": true,
+        "via": "click"
       },
       "facts": {
         "flow": "row",

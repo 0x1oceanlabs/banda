@@ -20,6 +20,7 @@ export type { Pane } from "./generated/workspaces/Pane"
 export type { PaneId } from "./generated/workspaces/PaneId"
 export type { Place } from "./generated/workspaces/Place"
 export type { Side } from "./generated/workspaces/Side"
+export type { Via } from "./generated/workspaces/Via"
 export type { Workspace } from "./generated/workspaces/Workspace"
 export type { WorkspaceId } from "./generated/workspaces/WorkspaceId"
 
