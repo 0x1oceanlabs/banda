@@ -821,7 +821,9 @@ _Avoid_: tabs, tabbed column (a Tab is a browser page's).
 Columns side by side on one workspace, held together, so they move and
 look as one: a plate behind them, in the colour of their Agent's state
 (ADR 0065). `Alt+G` starts one; an Agent's Thread is a Group from its
-opening, and the Panes its Agent opens join it. The mod and a drag of
+opening, and what its Thread opens joins it: what its Agent opens, and
+what the Person opens with a click in it. What the Person opens by a key
+opens beside it (ADR 0133). The mod and a drag of
 any of its Panes move it whole. It lays out only, and gives no access.
 
 **Zoom**:
@@ -859,11 +861,6 @@ A workspace that holds Panes of any Project and of none, as the Flow
 `free` does. In the row and solo there can be any number of them; the
 empty one at the bottom becomes one when a Pane is put on it, and a
 Thread of no Project opens on the first (ADR 0102).
-
-**Project's own Group**:
-The Group first on a Project's workspace that holds the Panes the Person
-opened for the Project and not for an Agent: a terminal, a dev server,
-Files, Git. It is there while it holds a Pane (ADR 0102).
 
 **Sheet**:
 Settings, Usage or the notifications, come in from the right edge over
