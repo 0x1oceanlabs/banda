@@ -211,7 +211,9 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
   way (ADR 0016), and so does the Tiling's `tiling.toml` (ADR 0127,
-  decision 4): the Flow, and rules by kind of Pane, each a new column's
+  decision 4): the Flow, a column's widths (`[columns]`: a new column's,
+  one alone, the steps, a Pane's heights, stack or Deck), and rules by
+  kind of Pane, each a new column's
   width and where the kind opens when no one named a place. The
   `workspaces` module reads that file as a Pane opens, so `placing`
   decides by it for the window, an Agent and `banda` alike; the page
@@ -222,7 +224,10 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   that has not chosen (ADR 0127, decision 3; `tiling/flow.ts`). The Flow
   was `agents.toml`'s: what that file still says is read while
   `tiling.toml` does not say it, and the writer writes it in the
-  Tiling's file under either name (ADR 0069 grace). The settings Pane writes every file through `banda
+  Tiling's file under either name (ADR 0069 grace). The widths were
+  `look.toml`'s `[columns]` and moved the same way; `look.toml` keeps
+  what is a screen's and a mouse's, `center`, `min` and `snap`, and the
+  page draws by the two joined (`columnsOf`, `client/web/src/look.ts`). The settings Pane writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
   through `@banda/ui/lib/look`. Each file says whose copy each of its
   top-level keys is (ADR 0101, decision 3), in its `SettingsFile` and as

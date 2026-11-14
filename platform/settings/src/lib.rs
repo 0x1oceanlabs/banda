@@ -306,7 +306,17 @@ mod tests {
         let look = resolve().look;
         assert_eq!(
             look.files["tiling.toml"],
-            serde_json::json!({"flow": "row", "rules": {}})
+            serde_json::json!({
+                "flow": "row",
+                "columns": {
+                    "presets": ["1/3", "1/2", "2/3", "1"],
+                    "heights": ["1/3", "1/2", "2/3"],
+                    "default": "1/2",
+                    "alone": "1",
+                    "display": "stack",
+                },
+                "rules": {},
+            })
         );
         assert!(look.problems.is_empty(), "{:?}", look.problems);
 
@@ -331,13 +341,40 @@ mod tests {
         let rule = "flow = \"free\"\n\n[rule.terminal.terminal]\nwidth = \"1/3\"\n";
         std::fs::write(folder.path().join("tiling.toml"), rule).unwrap();
         let look = resolve().look;
+        let tiling = &look.files["tiling.toml"];
+        assert_eq!(tiling["flow"], "free");
         assert_eq!(
-            look.files["tiling.toml"],
-            serde_json::json!({
-                "flow": "free",
-                "rules": { "terminal.terminal": { "width": "1/3" } },
-            })
+            tiling["rules"],
+            serde_json::json!({ "terminal.terminal": { "width": "1/3" } })
         );
+    }
+
+    /// The widths `look.toml`'s `[columns]` still says are read into the
+    /// Tiling's file, each told where it went, and what is the screen's
+    /// stays the look's (ADR 0127, decision 4; ADR 0069 grace).
+    #[test]
+    fn the_widths_look_toml_still_says_are_the_tiling_s_and_the_screen_s_stay() {
+        let folder = tempfile::tempdir().unwrap();
+        let places = Places::at(folder.path());
+        let said = "[columns]\ndefault = \"1/3\"\nmin = 20\n";
+        std::fs::write(folder.path().join("look.toml"), said).unwrap();
+        let resolved = banda_look::resolve(&places, &|| None, &also(), &manifests());
+        let look = resolved.look;
+        assert_eq!(look.files["tiling.toml"]["columns"]["default"], "1/3");
+        assert_eq!(look.columns.min, 20.0);
+        let from = &look.settings["tiling.toml"]["columns.default"].from;
+        assert_eq!((from.layer.as_str(), from.line), ("file", Some(2)));
+        assert!(from.path.as_deref().unwrap().ends_with("look.toml"));
+        assert!(!look.settings["look.toml"].contains_key("columns.default"));
+        assert_eq!(look.settings["look.toml"]["columns.min"].from.line, Some(3));
+        let said: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+        assert_eq!(said.len(), 1, "{said:?}");
+        assert!(said[0].contains("tiling.toml"));
+        // Once the Tiling's file says it, its word holds.
+        let mine = "[columns]\ndefault = \"2/3\"\n";
+        std::fs::write(folder.path().join("tiling.toml"), mine).unwrap();
+        let look = banda_look::resolve(&places, &|| None, &also(), &manifests()).look;
+        assert_eq!(look.files["tiling.toml"]["columns"]["default"], "2/3");
     }
 
     /// A key that moved is retired where it was: its old file reads, and
@@ -470,7 +507,7 @@ mod classes {
         ("keys.toml", &[(Shared, &["binds"]), (Device, &["mod"])]),
         // How the Tiling behaves is the Person's, as their keys (ADR 0127,
         // decision 4).
-        ("tiling.toml", &[(Shared, &["flow", "rule"])]),
+        ("tiling.toml", &[(Shared, &["flow", "columns", "rule"])]),
         (
             "agents.toml",
             &[

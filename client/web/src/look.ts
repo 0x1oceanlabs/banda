@@ -18,6 +18,7 @@ import {
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
+  fileOf,
   type Keys,
   type Listed,
   type Look,
@@ -30,6 +31,7 @@ import {
   WALLPAPER_URL,
 } from "@banda/contract/look"
 import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
+import { TILING_FILE } from "@banda/contract/workspaces"
 import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
 import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
 import { device } from "./boot"
@@ -125,14 +127,28 @@ export function moveOf(event: keyof Motion): Move {
   return (currentLook()?.motion ?? DEFAULT_MOTION)[event]
 }
 
-/** The widths columns take, and where the focused one scrolls to. */
-export function columnsOf(): Columns {
-  return currentLook()?.columns ?? DEFAULT_COLUMNS
+let joined: { of: Look; columns: Columns } | undefined
+
+/** A look's columns: the widths `tiling.toml` gives, the Person's, with
+ * what `look.toml` says of this screen (ADR 0127, decision 4). The same
+ * object until the look changes. */
+function joinedOf(look: Look): Columns {
+  if (joined?.of !== look) {
+    const widths = fileOf(look.files, TILING_FILE).columns
+    joined = { of: look, columns: { ...widths, ...look.columns } }
+  }
+  return joined.columns
 }
 
-/** `[columns]`, for what draws again when the look changes them. */
+/** The widths columns take, and where the focused one scrolls to. */
+export function columnsOf(): Columns {
+  const look = currentLook()
+  return look ? joinedOf(look) : DEFAULT_COLUMNS
+}
+
+/** The same, for what draws again when the look changes them. */
 export function useLookColumns(): Columns {
-  return useLook((look) => look.columns, DEFAULT_COLUMNS)
+  return useLook(joinedOf, DEFAULT_COLUMNS)
 }
 
 /** `[bar]`: how it shows the workspaces. */

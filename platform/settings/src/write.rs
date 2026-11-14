@@ -631,6 +631,38 @@ mod tests {
         assert!(text_of(&config, "tiling.toml").contains("flow = \"row\""));
     }
 
+    /// The widths moved from look.toml's `[columns]` to tiling.toml's (ADR
+    /// 0127, decision 4): written under the old name a width lands in the
+    /// Tiling's file, the old line goes, and what is the screen's stays.
+    #[test]
+    fn a_width_is_written_in_the_tiling_s_file_under_look_toml_s_name_too() {
+        let config = tempfile::tempdir().unwrap();
+        let look = "[columns]\ndefault = \"1/3\" # narrow\nmin = 20\n";
+        std::fs::write(config.path().join("look.toml"), look).unwrap();
+        set(config.path(), "look.toml", "columns.default", "2/3").unwrap();
+        let tiling = text_of(&config, "tiling.toml");
+        assert!(
+            tiling.ends_with("\n[columns]\ndefault = \"2/3\"\n"),
+            "{tiling}"
+        );
+        assert_eq!(text_of(&config, "look.toml"), "[columns]\nmin = 20\n");
+        set(
+            config.path(),
+            "tiling.toml",
+            "columns.presets",
+            "[\"1/4\", \"3/4\"]",
+        )
+        .unwrap();
+        assert!(text_of(&config, "tiling.toml").contains("presets = [\"1/4\", \"3/4\"]"));
+        // What is the screen's is still written in look.toml.
+        set(config.path(), "look.toml", "columns.min", "24").unwrap();
+        assert_eq!(text_of(&config, "look.toml"), "[columns]\nmin = 24\n");
+        // A width that is no share is refused, and nothing is written.
+        let refused = set(config.path(), "tiling.toml", "columns.alone", "wide");
+        assert!(refused.is_err());
+        assert!(!text_of(&config, "tiling.toml").contains("\nalone ="));
+    }
+
     #[test]
     fn a_key_that_moved_resets_in_both_files() {
         let config = tempfile::tempdir().unwrap();

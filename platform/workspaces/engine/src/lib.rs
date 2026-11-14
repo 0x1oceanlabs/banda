@@ -101,7 +101,9 @@ impl Workspaces {
             flow: tiling::Flow::Free,
             ..Tiling::default()
         };
-        let Tiling { flow, rules } = self.tiling.as_ref().map_or_else(unsaid, |read| read());
+        // A column that names no width is drawn by each client at the
+        // widths the file gives: the engine places by none of them yet.
+        let Tiling { flow, rules, .. } = self.tiling.as_ref().map_or_else(unsaid, |read| read());
         Facts {
             flow: flow.into(),
             home: self.home.clone(),

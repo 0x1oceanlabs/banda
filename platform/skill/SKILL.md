@@ -237,7 +237,7 @@ in `~/.config/banda-local/`, as their data and state too:
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
-| `tiling.toml` | how the Tiling behaves: the Flow, `flow`, and rules by kind of Pane, `[rule.terminal.terminal]` with `width = "1/3"` and `opens`, which is `"beside"`, `"below"`, `"group"` or `"project"`. The engine places by it for the window, an Agent and `banda` alike |
+| `tiling.toml` | how the Tiling behaves: the Flow, `flow`; a column's widths, `[columns]` with `default`, `alone`, `presets`, `heights` and `display`; and rules by kind of Pane, `[rule.terminal.terminal]` with `width = "1/3"` and `opens`, which is `"beside"`, `"below"`, `"group"` or `"project"`. The engine places by it for the window, an Agent and `banda` alike |
 | `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; `mod`, the keys held for every Banda key, `"Ctrl+Alt"` where the desktop holds Alt; Ctrl+Alt+Shift+K brings Banda's own back. Bind with `banda keys` or the `keys_*` tools: the topic `keys` |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `machine.toml` | this machine's name and icon, as every window shows it; `banda machine` prints them |

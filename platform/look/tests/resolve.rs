@@ -484,7 +484,7 @@ fn a_groups_plate_takes_its_keys() {
 fn columns_and_fonts_come_through_the_layers() {
     let machine = Machine::new(false);
     let look = machine.look();
-    assert_eq!(look.columns.presets, ["1/3", "1/2", "2/3", "1"]);
+    assert_eq!(look.columns.min, 30.0);
     assert_eq!(
         look.vars["--font-family-mono"],
         "\"JetBrains Mono Variable\", monospace"
@@ -496,20 +496,31 @@ fn columns_and_fonts_come_through_the_layers() {
     assert_eq!(look.vars["--text-root"], "16px");
 
     machine.look_toml(
-        "[columns]\npresets = [\"1/4\", \"3/4\"]\ndefault = \"3/4\"\ncenter = \"always\"\nmin = 24.5\n[font]\nmono = \"Iosevka\"\nsize = 12.25\n",
+        "[columns]\ncenter = \"always\"\nmin = 24.5\n[font]\nmono = \"Iosevka\"\nsize = 12.25\n",
     );
     let look = machine.look();
     assert!(look.problems.is_empty(), "{:?}", look.problems);
-    assert_eq!(look.columns.presets, ["1/4", "3/4"]);
-    assert_eq!(look.columns.default, "3/4");
     assert_eq!(look.columns.center, banda_look::columns::Center::Always);
     assert_eq!(look.columns.min, 24.5);
     assert_eq!(look.vars["--font-family-mono"], "\"Iosevka\", monospace");
     assert_eq!(look.vars["--text-root"], "14px");
 
-    machine.look_toml("[columns]\ndefault = \"wide\"\n");
-    let problem = &machine.look().problems[0];
-    assert_eq!((problem.line, problem.column), (Some(2), Some(11)));
+    // A width, the Tiling's now, is told where it went, and the rest of
+    // the table still reads (ADR 0127, decision 4).
+    machine.look_toml("[columns]\ndefault = \"3/4\"\nmin = \"wide\"\nsnap = 4\n");
+    let look = machine.look();
+    let said: Vec<_> = (look.problems.iter())
+        .map(|problem| (problem.key.as_deref(), problem.line, problem.column))
+        .collect();
+    assert_eq!(
+        said,
+        [
+            (Some("columns.default"), Some(2), Some(1)),
+            (Some("columns.min"), Some(3), Some(7)),
+        ]
+    );
+    assert!(look.problems[0].message.contains("tiling.toml"));
+    assert_eq!((look.columns.min, look.columns.snap), (30.0, 4.0));
 }
 
 #[test]

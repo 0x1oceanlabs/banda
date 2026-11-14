@@ -22,6 +22,7 @@ import {
   BellIcon,
   BotIcon,
   BugIcon,
+  Columns3Icon,
   FileCogIcon,
   FolderIcon,
   FoldersIcon,
@@ -47,6 +48,7 @@ import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
 import { ProjectsSettings } from "./ProjectsSettings"
 import { ThemePicker } from "./ThemePicker"
+import { RULES_ROW, Shares, TilingRules } from "./Tiling"
 
 /** A row a section draws itself: the value now, how to set it, and the
  * control the schema would draw, to wrap. */
@@ -172,6 +174,22 @@ export const SECTIONS: Section[] = [
     custom: { theme: ThemePicker },
   },
   {
+    // How the Tiling behaves (ADR 0127, decision 4): the Person's, one
+    // for every device. What of the columns is this screen's stays in
+    // Appearance, in look.toml.
+    id: "tiling",
+    title: "Tiling",
+    icon: Columns3Icon,
+    files: [
+      // The Flow, and any key the file gains; the rules are the Foot's.
+      { name: "tiling.toml", drawnKeys: ["rule"], found: [RULES_ROW] },
+      { name: "tiling.toml", tables: ["columns"], title: "Widths" },
+    ],
+    about: aboutOf("tiling.toml"),
+    custom: { "columns.presets": Shares, "columns.heights": Shares },
+    Foot: TilingRules,
+  },
+  {
     id: "sidebar",
     title: "Sidebar",
     icon: PanelLeftIcon,
@@ -200,9 +218,6 @@ export const SECTIONS: Section[] = [
       { name: "harnesses.toml" },
       { name: "agents.toml", tables: ["start"], drawn: true },
       { name: "agents.toml", title: "Writing to an Agent" },
-      // The Flow's row stays here until the Tiling has a section of its
-      // own: its key is the Tiling's file's now (ADR 0127, decision 4).
-      { name: "tiling.toml", tables: ["flow"], title: "Writing to an Agent" },
     ],
     about:
       "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",

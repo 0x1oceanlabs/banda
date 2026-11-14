@@ -52,7 +52,7 @@ export type Stand = {
   targets: readonly { owner?: ProjectSummary; refused: boolean }[]
   /** It is in a window of its own (ADR 0025, decision 9). */
   away: boolean
-  /** The look's steps: `[columns] presets` and `heights`. */
+  /** The Tiling's steps: `tiling.toml`'s `[columns] presets` and `heights`. */
   presets: readonly Width[]
   heights: readonly Width[]
   /** The share its column is never drawn narrower than, by its `min`. */

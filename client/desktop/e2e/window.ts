@@ -71,6 +71,12 @@ export const inUnit = (
  * have tests of their own (ADR 0102). */
 export const FREE = { "config/tiling.toml": 'flow = "free"\n' }
 
+/** tiling.toml with `widths`, the lines of its `[columns]`, for
+ * `startWindow`'s files; in the Flow `free` with `flow`. */
+export const widths = (widths: string, flow?: "free") => ({
+  "config/tiling.toml": `${flow ? 'flow = "free"\n' : ""}[columns]\n${widths}\n`,
+})
+
 export const SANDBOXED = !process.env.CI
 
 /** How long a window's first `banda` call waits for its engine to say

@@ -46,7 +46,11 @@ impl Machine {
                 ((*kind).to_owned(), rule)
             })
             .collect();
-        let tiling = Tiling { flow, rules };
+        let tiling = Tiling {
+            flow,
+            rules,
+            ..Tiling::default()
+        };
         Machine::with(
             root,
             owner,

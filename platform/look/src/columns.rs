@@ -1,7 +1,15 @@
-//! `[columns]`, as niri's: the widths a column steps through, the width a
-//! new one opens at, whether the focused one stays centred (ADR 0007,
-//! decision 2), and the heights a Pane steps through in its column (ADR
-//! 0025, decision 4).
+//! A column's sizes, as niri's, in two files (ADR 0127, decision 4).
+//!
+//! The widths are the Tiling's, the Person's, one for every device:
+//! `tiling.toml`'s `[columns]`, [`WidthsSettings`]: the widths a column
+//! steps through, the width a new one opens at, the heights a Pane steps
+//! through in its column (ADR 0025, decision 4), and how a column shows
+//! its Panes. They were `look.toml`'s before, where they are still read
+//! while `tiling.toml` does not say them (ADR 0069 grace, [`RETIRED`]).
+//!
+//! What is a screen's and a mouse's stays this device's, `look.toml`'s
+//! `[columns]`, [`ColumnsSettings`]: whether the focused column stays
+//! centred (ADR 0007, decision 2), `min` and `snap`.
 //!
 //! A width is a share of the screen as a fraction, `"1/3"`, or `"1"` for
 //! all of it. `min` keeps a share of a narrow window readable: no column
@@ -10,39 +18,70 @@
 //! `snap` is how near, in pixels, a size dragged with the mouse holds at
 //! one of `presets` or `heights` (ADR 0025, decision 5); 0 never holds.
 
+use crate::keyed::Retired;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::ops::RangeInclusive;
 use toml::Spanned;
 use ts_rs::TS;
 
+/// A column's widths and a Pane's heights, the Tiling's: `[columns]` in
+/// `tiling.toml`. One for every device: a width is a share of the screen.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct WidthsSettings {
+    /// Where its Pane does not ask for its own.
+    #[schemars(with = "Option<String>", title = "New column")]
+    pub default: Option<Spanned<String>>,
+    /// Until a second opens beside it: then both take a new column's.
+    #[schemars(with = "Option<String>", title = "A column alone")]
+    pub alone: Option<Spanned<String>>,
+    /// The widths the keys that widen and narrow a column go through.
+    #[schemars(with = "Option<Vec<String>>", title = "Steps")]
+    pub presets: Option<Vec<Spanned<String>>>,
+    /// A Pane's steps in its column, as shares of it.
+    #[schemars(with = "Option<Vec<String>>")]
+    pub heights: Option<Vec<Spanned<String>>>,
+    /// Its Panes one above another, or as a Deck: one at a time, the
+    /// others' names over it.
+    #[schemars(title = "A column shows")]
+    pub display: Option<Display>,
+}
+
+/// What of the columns is this screen's and this mouse's: `[columns]` in
+/// `look.toml`.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ColumnsSettings {
-    /// What the keys that widen and narrow a column step through.
-    #[schemars(with = "Option<Vec<String>>")]
-    pub presets: Option<Vec<Spanned<String>>>,
-    /// What the keys of a Pane's height step it through, as shares of its
-    /// column.
-    #[schemars(with = "Option<Vec<String>>")]
-    pub heights: Option<Vec<Spanned<String>>>,
-    /// A new column's width, where its Pane does not ask for its own.
-    #[schemars(with = "Option<String>")]
-    pub default: Option<Spanned<String>>,
-    /// The width of a column alone on its workspace, until the Person
-    /// gives it one: once a second opens beside it, both take `default`.
-    #[schemars(with = "Option<String>")]
-    pub alone: Option<Spanned<String>>,
+    /// Where the Strip scrolls the column in front to.
+    #[schemars(title = "Centre the column in front")]
     pub center: Option<Center>,
-    /// How a new column shows its Panes, as niri's `default-column-display`.
-    pub display: Option<Display>,
-    /// The narrowest a column is drawn, in rem; a list's is half of it.
-    #[schemars(with = "Option<f64>", range(min = 0, max = 200))]
+    /// No column is drawn narrower, in rem; a list's is half of it.
+    #[schemars(with = "Option<f64>", range(min = 0, max = 200), title = "Narrowest")]
     pub min: Option<Spanned<f64>>,
     /// How near, in pixels, a size dragged with the mouse holds at a
-    /// preset or a height; 0 never.
+    /// step of the widths or the heights; 0 never.
     #[schemars(with = "Option<f64>", range(min = 0, max = 64))]
     pub snap: Option<Spanned<f64>>,
+}
+
+/// The widths `look.toml`'s `[columns]` held before ADR 0127, as it is
+/// told where each went: `tiling.toml` reads them here while it does not
+/// say its own (ADR 0069 grace).
+pub const RETIRED: [Retired; 5] = [
+    retired("columns.default"),
+    retired("columns.alone"),
+    retired("columns.presets"),
+    retired("columns.heights"),
+    retired("columns.display"),
+];
+
+const fn retired(at: &'static str) -> Retired {
+    Retired {
+        at,
+        table: false,
+        says: "a column's widths are tiling.toml's [columns] now: this one is read here until that file says it",
+    }
 }
 
 /// Where the Strip scrolls a focused column to.
@@ -82,16 +121,30 @@ impl<'de> Deserialize<'de> for Display {
     }
 }
 
-/// `[columns]` resolved: valid widths only, narrowest first.
-#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+/// `tiling.toml`'s `[columns]` resolved: valid widths only, narrowest
+/// first.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
-pub struct Columns {
+pub struct Widths {
     pub presets: Vec<String>,
     pub heights: Vec<String>,
     pub default: String,
     pub alone: String,
-    pub center: Center,
     pub display: Display,
+}
+
+impl Default for Widths {
+    /// Banda's own.
+    fn default() -> Self {
+        WidthsSettings::defaults().resolve()
+    }
+}
+
+/// `look.toml`'s `[columns]` resolved.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Columns {
+    pub center: Center,
     pub min: f64,
     pub snap: f64,
 }
@@ -157,31 +210,25 @@ fn valid(width: &Spanned<String>) -> Option<String> {
 
 const WIDTH: &str = "is a share of the screen, such as \"1/3\", \"2/5\" or \"1\"";
 
-impl ColumnsSettings {
-    pub fn over(self, under: ColumnsSettings) -> ColumnsSettings {
-        ColumnsSettings {
-            presets: self.presets.or(under.presets),
-            heights: self.heights.or(under.heights),
+impl WidthsSettings {
+    pub fn over(self, under: WidthsSettings) -> WidthsSettings {
+        WidthsSettings {
             default: self.default.or(under.default),
             alone: self.alone.or(under.alone),
-            center: self.center.or(under.center),
+            presets: self.presets.or(under.presets),
+            heights: self.heights.or(under.heights),
             display: self.display.or(under.display),
-            min: self.min.or(under.min),
-            snap: self.snap.or(under.snap),
         }
     }
 
-    pub fn defaults() -> ColumnsSettings {
+    pub fn defaults() -> WidthsSettings {
         let spanned = |s: &str| Spanned::new(0..0, s.to_owned());
-        ColumnsSettings {
-            presets: Some(PRESETS.iter().map(|p| spanned(p)).collect()),
-            heights: Some(HEIGHTS.iter().map(|p| spanned(p)).collect()),
+        WidthsSettings {
             default: Some(spanned(DEFAULT)),
             alone: Some(spanned(ALONE)),
-            center: Some(Center::Never),
+            presets: Some(PRESETS.iter().map(|p| spanned(p)).collect()),
+            heights: Some(HEIGHTS.iter().map(|p| spanned(p)).collect()),
             display: Some(Display::Stack),
-            min: Some(Spanned::new(0..0, MIN)),
-            snap: Some(Spanned::new(0..0, SNAP)),
         }
     }
 
@@ -204,6 +251,45 @@ impl ColumnsSettings {
                 problems.push((Some(width.span()), format!("columns.{key} {WIDTH}")));
             }
         }
+        problems
+    }
+
+    pub fn resolve(&self) -> Widths {
+        let width = |width: &Option<Spanned<String>>, or: &str| {
+            width
+                .as_ref()
+                .and_then(valid)
+                .unwrap_or_else(|| or.to_owned())
+        };
+        Widths {
+            presets: steps(&self.presets, &PRESETS),
+            heights: steps(&self.heights, &HEIGHTS),
+            default: width(&self.default, DEFAULT),
+            alone: width(&self.alone, ALONE),
+            display: self.display.unwrap_or(Display::Stack),
+        }
+    }
+}
+
+impl ColumnsSettings {
+    pub fn over(self, under: ColumnsSettings) -> ColumnsSettings {
+        ColumnsSettings {
+            center: self.center.or(under.center),
+            min: self.min.or(under.min),
+            snap: self.snap.or(under.snap),
+        }
+    }
+
+    pub fn defaults() -> ColumnsSettings {
+        ColumnsSettings {
+            center: Some(Center::Never),
+            min: Some(Spanned::new(0..0, MIN)),
+            snap: Some(Spanned::new(0..0, SNAP)),
+        }
+    }
+
+    pub fn problems(&self) -> Vec<(Option<std::ops::Range<usize>>, String)> {
+        let mut problems = Vec::new();
         for (key, value, range, unit) in [
             ("min", &self.min, &MINS, "rem"),
             ("snap", &self.snap, &SNAPS, "pixels"),
@@ -225,19 +311,8 @@ impl ColumnsSettings {
     }
 
     pub fn resolve(&self) -> Columns {
-        let width = |width: &Option<Spanned<String>>, or: &str| {
-            width
-                .as_ref()
-                .and_then(valid)
-                .unwrap_or_else(|| or.to_owned())
-        };
         Columns {
-            presets: steps(&self.presets, &PRESETS),
-            heights: steps(&self.heights, &HEIGHTS),
-            default: width(&self.default, DEFAULT),
-            alone: width(&self.alone, ALONE),
             center: self.center.unwrap_or(Center::Never),
-            display: self.display.unwrap_or(Display::Stack),
             min: within(&self.min, &MINS, MIN),
             snap: within(&self.snap, &SNAPS, SNAP),
         }
@@ -263,12 +338,12 @@ mod tests {
     fn presets_come_narrowest_first_and_wrong_ones_are_named() {
         #[derive(Deserialize)]
         struct File {
-            columns: ColumnsSettings,
+            columns: WidthsSettings,
         }
         let read = |text: &str| toml::from_str::<File>(text).unwrap().columns;
         let mine = read("[columns]\npresets = [\"1\", \"2/5\", \"wide\", \"2/5\"]\n");
         assert_eq!(mine.problems().len(), 1);
-        let columns = mine.over(ColumnsSettings::defaults()).resolve();
+        let columns = mine.over(WidthsSettings::defaults()).resolve();
         assert_eq!(columns.presets, ["2/5", "1"]);
         assert_eq!(columns.heights, ["1/3", "1/2", "2/3"]);
         let tall = read("[columns]\nheights = [\"3/4\", \"1/4\", \"tall\"]\n");
@@ -284,6 +359,16 @@ mod tests {
         let half = read("[columns]\nalone = \"1/2\"\n");
         assert_eq!(half.resolve().alone, "1/2");
         assert_eq!(read("[columns]\nalone = \"all\"\n").problems().len(), 1);
+    }
+
+    #[test]
+    fn what_is_the_screen_s_stays_in_range() {
+        #[derive(Deserialize)]
+        struct File {
+            columns: ColumnsSettings,
+        }
+        let read = |text: &str| toml::from_str::<File>(text).unwrap().columns;
+        let columns = ColumnsSettings::defaults().resolve();
         assert_eq!(columns.center, Center::Never);
         let centred = read("[columns]\ncenter = \"on-overflow\"\n");
         assert_eq!(centred.resolve().center, Center::OnOverflow);

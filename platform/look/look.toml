@@ -73,16 +73,13 @@
 # float = 0.1                        # menus, dialogs, toasts, a floating bar, a thumb
 # lift = 0.45                        # what you carry: a Pane being moved, a Peek
 
-# A column's width is a share of the screen; Alt+R goes round the presets.
+# What of the columns is this screen's and this mouse's. A column's widths,
+# a Pane's heights and how a column shows its Panes are the Tiling's, in
+# tiling.toml's [columns], one for every device.
 # [columns]
-# presets = ["1/3", "1/2", "2/3", "1"]
-# heights = ["1/3", "1/2", "2/3"]    # a Pane's in its column: Alt+Shift+R, Alt+Ctrl+Up and Down
-# default = "1/2"                    # a new column's width
-# alone = "1"                        # a column alone on its workspace; "1/2" never fills
 # center = "never"                   # "never", "always" or "on-overflow"
-# display = "stack"                  # "stack" or "deck": how a new column shows its Panes
 # min = 30                           # no column narrower, in rem (a list: half)
-# snap = 8                           # a size dragged with the mouse holds this near a preset or height, in pixels; 0 never
+# snap = 8                           # a size dragged with the mouse holds this near a step of the widths or heights, in pixels; 0 never
 
 # [bar]
 # height = 36

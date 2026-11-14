@@ -13,10 +13,12 @@ import {
   DEFAULT_GROUPS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
+  fileOf,
   type Look,
   shown,
 } from "../src/look"
 import { DEFAULT_SIDEBAR } from "../src/sidebar"
+import { TILING_FILE } from "../src/workspaces"
 import { program } from "./built"
 
 const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
@@ -109,7 +111,10 @@ test("the window's own motion, columns and bar are what banda look gives with no
   })
   const look = JSON.parse(printed) as Look
   expect(look.motion).toEqual(DEFAULT_MOTION)
-  expect(look.columns).toEqual(DEFAULT_COLUMNS)
+  // The columns are the look's with the widths of the Tiling's file (ADR
+  // 0127, decision 4).
+  const widths = fileOf(look.files, TILING_FILE).columns
+  expect({ ...widths, ...look.columns }).toEqual(DEFAULT_COLUMNS)
   expect(look.bar).toEqual(DEFAULT_BAR)
   expect(look.drawer).toEqual(DEFAULT_DRAWER)
   expect(look.overview).toEqual(DEFAULT_OVERVIEW)
@@ -130,4 +135,5 @@ test("the window's own module files are what banda look gives with none", () => 
   const { files } = JSON.parse(printed) as Look
   expect(files[BROWSER_FILE.name]).toEqual(BROWSER_FILE.before)
   expect(files[AGENTS_FILE.name]).toEqual(AGENTS_FILE.before)
+  expect(files[TILING_FILE.name]).toEqual(TILING_FILE.before)
 })
