@@ -226,18 +226,24 @@ function saveCopy(
 }
 
 /**
- * Opens an address of another machine's own computer in this device's
- * browser, through a forward of its port (ADR 0120, decision 2): the same
- * port here, or the next free one, which a toast says. Asked on the
- * Person's click alone; while that machine is away it says so at once.
+ * Opens a page in this device's browser through a forward of machine
+ * `of`'s `port` (ADR 0120): `at` says the address to open once that port
+ * listens here. A `Link` of that machine's own takes the same port or the
+ * next free one, which a toast says (decision 2). A public page that
+ * answers to that port, as Codex's sign-in does to `localhost:1455`, takes
+ * the `same` alone, and where it is taken opens nothing, since the page
+ * would end at nothing (decision 3). Asked on the Person's click alone;
+ * while that machine is away it says so at once.
  */
 function openFrom(
   hosts: Pick<Hosts, "get" | "seen">,
-  { of, port, named, at }: NonNullable<ReturnType<typeof linkForward>>
+  { of, port, named, at }: NonNullable<ReturnType<typeof linkForward>>,
+  same = false
 ) {
   const words = forwardWords(named, namedIn(hosts.get(), of, hosts.seen).name)
-  void device.hosts.forward(of, port).then((here) => {
+  void device.hosts.forward(of, port, same).then((here) => {
     if (here === "away") return notDone(words.away)
+    if (here === "taken") return notDone(words.taken(port, THIS_COMPUTER))
     const opened = at(here)
     window.open(opened.href, "_blank", "noopener")
     toast(
@@ -326,10 +332,19 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
         typeof args.url === "string" ? linkOf(args.url, host) : undefined
       if (!link) return
       const forward = linkForward(link)
+      if (forward) return openFrom(shell.hosts, forward)
+      if (link.back && device.has("forward_port")) {
+        const { of, port } = link.back
+        const page = { of, port, named: `localhost:${port}` }
+        return openFrom(
+          shell.hosts,
+          { ...page, at: () => new URL(link.url) },
+          true
+        )
+      }
       // Main hands an http(s) address to the system, and nothing else
       // leaves the page.
-      if (!forward) window.open(link.url, "_blank", "noopener")
-      else openFrom(shell.hosts, forward)
+      window.open(link.url, "_blank", "noopener")
     },
   },
   {

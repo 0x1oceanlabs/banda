@@ -503,7 +503,7 @@ test("paths: a path arc's terminal prints opens arc's file at its line; Ctrl and
   ).toEqual([])
 })
 
-test("a public link opens in this device's browser; arc's localhost opens here through a forward of arc's port, and says so; with arc away it says that at once", async () => {
+test("a public link opens in this device's browser; arc's localhost opens here through a forward of arc's port, and says so; a page that answers to arc's port opens with that port here, the same or not at all; with arc away it says that at once", async () => {
   test.setTimeout(180_000)
   const { page, composer, folder } = await onArc()
   // A dev server on arc. A test's arc is this computer, so its port is
@@ -512,6 +512,15 @@ test("a public link opens in this device's browser; arc's localhost opens here t
   await new Promise<void>((done) => served.listen(0, "127.0.0.1", done))
   const { port } = served.address() as AddressInfo
   arc!.serves(port)
+  // A port of arc's nothing has here: a sign-in's page answers to it.
+  const spare = createServer()
+  await new Promise<void>((done) => spare.listen(0, "127.0.0.1", done))
+  const back = (spare.address() as AddressInfo).port
+  await new Promise((done) => spare.close(done))
+  arc!.serves(back)
+  // Short, so each stays on a row of its own.
+  const signIn = (to: number) =>
+    `http://e.test/?redirect_uri=http://127.0.0.1:${to}`
   await window!.app.evaluate(({ shell }) => {
     const opened: string[] = []
     ;(globalThis as { linkOpens?: string[] }).linkOpens = opened
@@ -523,12 +532,14 @@ test("a public link opens in this device's browser; arc's localhost opens here t
   await screen.click()
   await run(
     page,
-    `clear; printf 'http://example.test/page\\nhttp://localhost:${port}/hello\\n'; : > printed`
+    `clear; printf 'http://example.test/page\\nhttp://localhost:${port}/hello\\n${signIn(back)}\\n${signIn(port)}\\n'; : > printed`
   )
   await expect.poll(() => inFolder(folder, "printed")).toBe("")
   const canvas = screen.locator("canvas").first()
   const rowY = 8
   const row2Y = 26
+  const row3Y = 44
+  const row4Y = 62
   await canvas.hover({ position: { x: 24, y: rowY } })
   await expect(canvas).toHaveAttribute("title", /^Opens in this /)
   await canvas.click({ position: { x: 24, y: rowY }, modifiers: ["Control"] })
@@ -579,6 +590,27 @@ test("a public link opens in this device's browser; arc's localhost opens here t
   await expect.poll(async () => (await opens())?.length).toBe(3)
   expect((await opens())![2]).toBe(`http://localhost:${here}/hello`)
 
+  // A public page that answers to arc's own port, as Codex's sign-in
+  // does: that port opens here first, the same, and then the page (ADR
+  // 0120, decision 3).
+  await page.waitForTimeout(700)
+  await canvas.click({ position: { x: 24, y: row3Y } })
+  await expect.poll(async () => (await opens())?.length).toBe(4)
+  // It opens only once that port listens here, the same.
+  expect((await opens())![3]).toBe(signIn(back))
+  // Taken here, the next port is no use to a page that names it.
+  await page.waitForTimeout(700)
+  await canvas.click({ position: { x: 24, y: row4Y } })
+  await expect(
+    toastsOf(page).getByText(
+      new RegExp(
+        `^Port ${port} is taken on this .+: sign in with a code instead\\.$`
+      )
+    )
+  ).toBeVisible()
+  await shot(page, "sign-in-port-taken", { toasts: true })
+  expect(await opens()).toHaveLength(4)
+
   // arc away: nothing waits, and nothing opens.
   arc!.blackhole(true)
   await expect(pillOf(page, screen)).toHaveText("arc is away", {
@@ -588,7 +620,7 @@ test("a public link opens in this device's browser; arc's localhost opens here t
   await expect(
     toastsOf(page).getByText(`arc is away: localhost:${port} did not open.`)
   ).toBeVisible()
-  expect(await opens()).toHaveLength(3)
+  expect(await opens()).toHaveLength(4)
   await new Promise((done) => served.close(done))
 })
 

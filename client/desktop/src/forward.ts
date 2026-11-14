@@ -36,6 +36,10 @@ const TRIES = 10
 /** How long ssh has to listen, in ms: its own `ConnectTimeout` ends it
  * sooner on a link gone dead. */
 const ANSWER = 30_000
+/** How long a forward asked for at the same port alone lasts, in ms: a
+ * sign-in's time. Its port is one programs of this device's want too, as
+ * a sign-in of their own, so it is not held while that machine is live. */
+const SIGN_IN = 10 * 60_000
 
 /** Whether something listens on `host`'s `port` here. */
 const listensOn = (host: string, port: number) =>
@@ -89,6 +93,11 @@ const liveIn = (hosts: readonly HostState[], machine: HostState) =>
       one.state === "live"
   )
 
+/** A forward of `port` that listens at `have`, as one asked for with
+ * `same` takes it: `taken` where it listens at another port. */
+const asked = (have: number, port: number, same: boolean) =>
+  same && have !== port ? ("taken" as const) : have
+
 /** Other machines' ports, opened here (the module's words). */
 export class Forwards extends Context.Service<
   Forwards,
@@ -97,13 +106,18 @@ export class Forwards extends Context.Service<
      * Opens port `port` of host `machine`, by its key in `hosts.toml`, on
      * this device's loopback: the port it listens on here, the same when
      * that was free, or the one a forward of it already has. `away` while
-     * that machine is not live, at once. Fails, saying why, for a machine
-     * this window does not reach, what is no port, or no free port here.
+     * that machine is not live, at once. With `same`, only at the same
+     * port, which a page that answers to it names, as a sign-in's does,
+     * and for a sign-in's time: `taken` where this device has it for
+     * another. Fails, saying why,
+     * for a machine this window does not reach, what is no port, or no
+     * free port here.
      */
     readonly open: (
       machine: string,
-      port: number
-    ) => Effect.Effect<number | "away", Refused>
+      port: number,
+      same?: boolean
+    ) => Effect.Effect<number | "away" | "taken", Refused>
   }
 >()("banda/Forwards") {
   /** The forwards, each ssh run from `env`'s PATH, or the window's. */
@@ -125,7 +139,8 @@ export class Forwards extends Context.Service<
           machine: HostState,
           port: number,
           here: number,
-          ready: Deferred.Deferred<boolean>
+          ready: Deferred.Deferred<boolean>,
+          lasts?: number
         ) =>
           Effect.scoped(
             Effect.gen(function* () {
@@ -159,7 +174,9 @@ export class Forwards extends Context.Service<
                 Stream.take(1),
                 Stream.runDrain
               )
-              yield* Effect.raceFirst(ended, gone).pipe(
+              const over =
+                lasts === undefined ? Effect.never : Effect.sleep(lasts)
+              yield* Effect.raceAll([ended, gone, over]).pipe(
                 Effect.ensuring(Effect.sync(() => kept.delete(key)))
               )
               yield* Console.error(
@@ -191,15 +208,18 @@ export class Forwards extends Context.Service<
         /** A new forward to `host`'s `port`, at the first port free here.
          * Only a port taken meanwhile is a reason for the next one: an
          * ssh that did not listen on a free port did not get through. */
-        const start = (host: HostState, port: number) =>
+        const start = (host: HostState, port: number, same: boolean) =>
           Effect.gen(function* () {
             // One that listens since this open began to wait.
             const have = kept.get(`${host.name}:${port}`)
-            if (have !== undefined) return have
-            for (const here of candidates(port)) {
+            if (have !== undefined) return asked(have, port, same)
+            for (const here of same ? [port] : candidates(port)) {
               if (yield* taken(here)) continue
               const ready = yield* Deferred.make<boolean>()
-              yield* Effect.forkIn(run(host, port, here, ready), scope)
+              yield* Effect.forkIn(
+                run(host, port, here, ready, same ? SIGN_IN : undefined),
+                scope
+              )
               if (yield* Deferred.await(ready)) return here
               if (yield* taken(here)) continue
               if ((yield* liveNow(host.name)) === "away") return "away" as const
@@ -207,6 +227,7 @@ export class Forwards extends Context.Service<
                 message: `ssh to ${host.name} did not open its port ${port}.`,
               })
             }
+            if (same) return "taken" as const
             return yield* new Refused({
               message: `No port from ${port} on is free here.`,
             })
@@ -214,16 +235,16 @@ export class Forwards extends Context.Service<
 
         // What needs no ssh is answered at once, and never behind another
         // open: a forward that listens, a machine away, what is refused.
-        const open = (machine: string, port: number) =>
+        const open = (machine: string, port: number, same = false) =>
           Effect.gen(function* () {
             if (!isPort(port))
               return yield* new Refused({ message: `${port} is no port.` })
             const have = kept.get(`${machine}:${port}`)
-            if (have !== undefined) return have
+            if (have !== undefined) return asked(have, port, same)
             const host = yield* liveNow(machine)
             if (host === "away") return host
             // One at a time, so two never take one port here.
-            return yield* lock.withPermit(start(host, port))
+            return yield* lock.withPermit(start(host, port, same))
           })
 
         return { open }
@@ -244,7 +265,7 @@ export const reaching = (config: string, install?: string) =>
 /** The bridge's `hostForward`, answered beside its code (ADR 0089,
  * decision 9): the page's click asks `Forwards.open`. */
 export const forwardAnswer = [
-  Schema.Tuple([Schema.String, Schema.Number]),
-  ([name, port]: readonly [string, number]) =>
-    Forwards.use((forwards) => forwards.open(name, port)),
+  Schema.Tuple([Schema.String, Schema.Number, Schema.Boolean]),
+  ([name, port, same]: readonly [string, number, boolean]) =>
+    Forwards.use((forwards) => forwards.open(name, port, same)),
 ] as const

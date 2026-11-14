@@ -14,6 +14,11 @@ export type Link = {
   /** The machine whose own address it is, by its name. None for a public
    * page, which is no machine's. */
   readonly of?: string
+  /** The port of a machine's own a public page answers to once the
+   * Person is through with it, as a sign-in's `redirect_uri` names
+   * `localhost:1455` (ADR 0120, decision 3): that page works on this
+   * device only with that port of that machine's opened here, the same. */
+  readonly back?: { readonly of: string; readonly port: number }
 }
 
 /** The `Link` that `text` is, from machine `of` where that is another
@@ -22,7 +27,12 @@ export function linkOf(text: string, of?: string): Link | undefined {
   // The whole `//`, as `http:8080` parses too, as an address of no one's.
   const url = /^https?:\/\//i.test(text) ? parsed(text) : undefined
   if (!url) return undefined
-  return { url: text, ...(of !== undefined && own(url) && { of }) }
+  if (of === undefined) return { url: text }
+  if (own(url)) return { url: text, of }
+  // What it answers to, read as any address of that machine's is.
+  const to = linkOf(url.searchParams.get("redirect_uri") ?? "", of)
+  if (to?.of === undefined) return { url: text }
+  return { url: text, back: { of, port: portOf(new URL(to.url)) } }
 }
 
 /** A host's name with no last dot, which names the same place; `URL`
@@ -101,6 +111,9 @@ export function forwardWords(named: string, machine: string) {
     moved: (port: number, as: string, device: string) =>
       `${port} is taken on ${device}: opens as ${as}`,
     away: `${machine} is away: ${named} did not open.`,
+    /** A page that answers to `port` cannot take another. */
+    taken: (port: number, device: string) =>
+      `Port ${port} is taken on ${device}: sign in with a code instead.`,
   }
 }
 

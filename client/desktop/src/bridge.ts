@@ -101,8 +101,12 @@ export const BRIDGE = bridge({
   /** Opens port `port` of host `name` on this device's loopback, the
    * capability `forward_port` (ADR 0120, decision 2): the port it listens
    * on here, the same when that was free; `away` while that machine is
-   * not live, at once. Fails with why not. */
-  hostForward: invoke<[name: string, port: number], number | "away">(),
+   * not live, at once. With `same`, at the same port alone: `taken`
+   * where this device has it for another. Fails with why not. */
+  hostForward: invoke<
+    [name: string, port: number, same: boolean],
+    number | "away" | "taken"
+  >(),
   /** The Hosts of `~/.ssh/config` to suggest in Add a machine: no
    * pattern, none `hosts.toml` reaches already. */
   sshSuggestions: invoke<[], string[]>(),

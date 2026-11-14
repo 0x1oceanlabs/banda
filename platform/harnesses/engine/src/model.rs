@@ -253,6 +253,11 @@ pub struct SignInWay {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal: Option<Program>,
+    /// Whether it is for a Person at another machine's window alone (ADR
+    /// 0120, decision 3): on its own machine a way the Harness does by
+    /// itself signs in the same account, in the browser there.
+    #[serde(default)]
+    pub elsewhere: bool,
 }
 
 /// How much of a Harness account's usage limits is spent, as Banda last

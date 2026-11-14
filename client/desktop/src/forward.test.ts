@@ -204,6 +204,29 @@ it.live(
 )
 
 it.live(
+  "a port asked for as the same alone opens there or is taken, and no other port is tried",
+  () =>
+    Effect.gen(function* () {
+      const fake = fakeSsh()
+      const states = yield* SubscriptionRef.make([live("arc")])
+      const held = yield* Effect.promise(listening)
+      const port = yield* Effect.promise(free)
+      yield* Effect.gen(function* () {
+        const { open } = yield* Forwards
+        // A sign-in's page names the port: the next one is no use.
+        expect(yield* open("arc", held, true)).toBe("taken")
+        expect(yield* said(held)).toBe("this device's")
+        expect(yield* open("arc", port, true)).toBe(port)
+        expect(fake.calls()).toHaveLength(1)
+        // A forward of it at another port is no answer either.
+        const moved = yield* open("arc", held)
+        expect(moved).toBeGreaterThan(held)
+        expect(yield* open("arc", held, true)).toBe("taken")
+      }).pipe(Effect.provide(forwards(states, fake)))
+    })
+)
+
+it.live(
   "a machine this window does not reach, and what is no port, are refused",
   () =>
     Effect.gen(function* () {

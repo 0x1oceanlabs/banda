@@ -47,7 +47,8 @@ pub(crate) struct Row {
     /// home's settings name, as Claude Code's `apiKeyHelper`; else its
     /// gateway's configuration says how ([`Kind::gateway`]).
     pub key_helper: bool,
-    /// Whether its CLI signs in with a code shown on another computer.
+    /// Whether its CLI's `login` signs in by itself in a terminal: on a
+    /// page it names, or with a code shown on another computer.
     pub device_code: bool,
     /// The variable that names to its adapter the folder in a Project's
     /// `data` its sessions go in, one for every account of it, so any of

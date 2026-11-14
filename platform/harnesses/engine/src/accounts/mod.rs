@@ -393,7 +393,10 @@ impl Accounts {
             return Ok(Accounted { at, account });
         }
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
-        let account = asker.process.account(&harness).await?;
+        let mut account = asker.process.account(&harness).await?;
+        if let Some(cli) = &account.cli {
+            account.ways.extend(elsewhere(&harness, &cli.path));
+        }
         Ok(Accounted { at, account })
     }
 
@@ -407,6 +410,8 @@ impl Accounts {
             .account
             .ways
             .into_iter()
+            // The window of another machine's, in a terminal of its own.
+            .filter(|way| !way.elsewhere)
             .map(|way| AccountWay {
                 id: way.id,
                 name: way.name,
@@ -421,7 +426,7 @@ impl Accounts {
             ways.insert(
                 0,
                 AccountWay {
-                    id: "device-code".into(),
+                    id: DEVICE_CODE.into(),
                     name: "ChatGPT (device code on another computer)".into(),
                 },
             );
@@ -457,23 +462,14 @@ impl Accounts {
         }
         let (harness, asker, held) = self.asker(&call, &args.harness).await?;
         let ways = asker.process.ways();
-        let device_code = harness.row().is_some_and(|row| row.device_code);
-        let way = if args.way.as_deref() == Some("device-code") && device_code {
+        let codes = elsewhere_ways(&harness).iter().any(|w| w.id == DEVICE_CODE);
+        let way = if args.way.as_deref() == Some(DEVICE_CODE) && codes {
             let (_, cli) = crate::cli::find(&*call.project().environment(), &harness).await?;
             let cli = cli.ok_or_else(|| Refusal::conflict("This Account names no Codex CLI."))?;
-            // Codex's own device flow prints a URL and code, so the Person
-            // can finish on their Mac while this engine runs on arc.
-            let mut program = banda_kernel::Program::terminal(
-                &cli.path,
-                vec!["login".into(), "--device-auth".into()],
-            );
-            program.env = harness.env.clone();
-            crate::model::SignInWay {
-                id: "device-code".into(),
-                name: "ChatGPT (device code)".into(),
-                description: None,
-                terminal: Some(program),
-            }
+            elsewhere(&harness, &cli.path)
+                .into_iter()
+                .find(|way| way.id == DEVICE_CODE)
+                .ok_or_else(|| Refusal::conflict("This Account signs in with no device code."))?
         } else {
             match args.way {
                 Some(id) => ways.iter().find(|way| way.id == id),
@@ -593,11 +589,18 @@ impl Accounts {
     ) -> Result<(), Refusal> {
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
         let process = &asker.process;
-        let found = (process.ways().iter().find(|w| w.id == way)).ok_or_else(|| {
-            Refusal::not_found(format!("{} offers no such way to sign in.", harness.name))
-        })?;
-        if found.terminal.is_none() {
-            process.sign_in(&way).await?;
+        // One in a terminal ran there, the Harness's own or one for
+        // another machine's window: only the account changed.
+        match process.ways().iter().find(|w| w.id == way) {
+            Some(found) if found.terminal.is_some() => {}
+            Some(_) => process.sign_in(&way).await?,
+            None if elsewhere_ways(&harness).iter().any(|w| w.id == way) => {}
+            None => {
+                return Err(Refusal::not_found(format!(
+                    "{} offers no such way to sign in.",
+                    harness.name
+                )));
+            }
         }
         self.changed(&call, &harness.id).await
     }
@@ -663,6 +666,62 @@ fn fits(harness: &Harness, way: &str) -> bool {
         AccountKind::Api => harness.row().and_then(|row| row.api_way) == Some(way),
         AccountKind::Subscription | AccountKind::Gateway => true,
     }
+}
+
+/// The way that signs in with a code shown on another computer.
+const DEVICE_CODE: &str = "device-code";
+
+/// A way for another machine's window: its CLI's arguments, and its words.
+struct Elsewhere {
+    id: &'static str,
+    name: &'static str,
+    description: &'static str,
+    args: &'static [&'static str],
+}
+
+/// The ways a Person at another machine's window signs in to `harness`,
+/// each its CLI's own `login` in a terminal of this machine (ADR 0120,
+/// decision 3): on the page it prints, which answers to this machine's
+/// own port, and with a code, which needs no port. None for a Harness
+/// whose CLI has neither, or an account that is no subscription.
+fn elsewhere_ways(harness: &Harness) -> &'static [Elsewhere] {
+    let signs_in = harness.row().is_some_and(|row| row.device_code);
+    if !signs_in || harness.kind != AccountKind::Subscription {
+        return &[];
+    }
+    &[
+        Elsewhere {
+            id: "page",
+            name: "ChatGPT",
+            description: "Its page opens in this device's browser.",
+            args: &["login"],
+        },
+        Elsewhere {
+            id: DEVICE_CODE,
+            name: "ChatGPT (device code)",
+            description: "For an account with device codes turned on.",
+            args: &["login", "--device-auth"],
+        },
+    ]
+}
+
+/// [`elsewhere_ways`] as `harness` runs them, with its CLI at `cli`.
+fn elsewhere(harness: &Harness, cli: &str) -> Vec<crate::model::SignInWay> {
+    elsewhere_ways(harness)
+        .iter()
+        .map(|way| {
+            let args = way.args.iter().map(|arg| (*arg).to_owned()).collect();
+            let mut program = banda_kernel::Program::terminal(cli, args);
+            program.env = harness.env.clone();
+            crate::model::SignInWay {
+                id: way.id.into(),
+                name: way.name.into(),
+                description: Some(way.description.into()),
+                terminal: Some(program),
+                elsewhere: true,
+            }
+        })
+        .collect()
 }
 
 /// `url` as a gateway's address: an absolute http(s) URL with no
@@ -792,6 +851,39 @@ mod tests {
             4,
             "a subscription's are all its Harness's"
         );
+    }
+
+    #[test]
+    fn another_machines_window_signs_codex_in_by_its_cli_in_a_terminal() {
+        let root = tempfile::tempdir().unwrap();
+        let file = root.path().join("harnesses.toml");
+        let text = concat!(
+            "[omarchy]\nenabled = false\n",
+            "[[harness]]\nid = \"claude\"\n[[harness]]\nid = \"codex\"\n",
+            "[[harness]]\nid = \"xa\"\nof = \"codex\"\nkind = \"api\"\n",
+        );
+        std::fs::write(&file, text).unwrap();
+        let list = Harnesses::load(&file).unwrap();
+        let ways = elsewhere(&list.find("codex").unwrap(), "/bin/codex");
+        let said: Vec<_> = (ways.iter())
+            .map(|way| {
+                let program = way.terminal.as_ref().unwrap();
+                assert!(way.elsewhere);
+                (way.id.as_str(), program.args.join(" "))
+            })
+            .collect();
+        assert_eq!(
+            said,
+            [
+                ("page", "login".to_owned()),
+                ("device-code", "login --device-auth".to_owned())
+            ]
+        );
+        assert_eq!(ways[0].terminal.as_ref().unwrap().program, "/bin/codex");
+        // Claude Code's own ways are in a terminal already; a key is no
+        // subscription.
+        assert!(elsewhere(&list.find("claude").unwrap(), "/bin/claude").is_empty());
+        assert!(elsewhere(&list.find("xa").unwrap(), "/bin/codex").is_empty());
     }
 
     /// Codex reads a key only from its input, on pipes: the Person's

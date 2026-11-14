@@ -83,6 +83,7 @@ pub(super) fn ways(harness: &Harness, methods: Vec<acp::AuthMethod>) -> Vec<Sign
                 name: method.name().to_owned(),
                 description: method.description().map(str::to_owned),
                 terminal,
+                elsewhere: false,
             })
         })
         .collect()
