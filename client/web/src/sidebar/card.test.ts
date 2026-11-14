@@ -48,7 +48,7 @@ const row = (stand: Stand, more: Partial<Listed> = {}, host?: string): Row => ({
   stand,
   ...(host === undefined ? {} : { host }),
 })
-const ONE_LIST: CardView = { group: "none" }
+const ONE_LIST: CardView = { group: "none", lines: 3 }
 
 /** Pull request `number` of `o/r`, open and read as `snapshot` says. */
 const pull = (number: number, snapshot: Partial<Snapshot> = {}): Pull => ({
@@ -96,12 +96,40 @@ const kinds = ({ lines }: CardModel) =>
       `${left.map((slot) => slot.kind).join(" ")} | ${right.map((slot) => slot.kind).join(" ")}`
   )
 
-describe("three lines (ADR 0098, decisions 8 and 9, as amended)", () => {
-  test("every card has three lines, wherever it stands and however the list is grouped", () => {
+describe("3, 2 or 1 lines (ADR 0098, decisions 8 and 9, as amended again)", () => {
+  test("every card has the lines the Person picked, wherever it stands and however the list is grouped", () => {
     const places: Stand[] = ["turn", "open", "working", "later", "archived"]
-    for (const group of ["none", "project"] as const)
-      for (const place of places)
-        expect(card(row(place), { view: { group } }).lines).toHaveLength(3)
+    for (const lines of [3, 2, 1] as const)
+      for (const group of ["none", "project"] as const)
+        for (const place of places)
+          expect(
+            card(row(place), { view: { group, lines } }).lines
+          ).toHaveLength(lines)
+  })
+
+  test("of two lines, line 3 goes; of one, line 2 too; line 3's machine goes to line 1's right by its icon, before the time", () => {
+    const at = (lines: 3 | 2 | 1) =>
+      card(row("turn", {}, "arc"), {
+        machine: arc,
+        view: { group: "none", lines },
+      })
+    expect(kinds(at(3))).toEqual([
+      "mark title | time",
+      "says | ",
+      "project | machine harness",
+    ])
+    expect(kinds(at(2))).toEqual(["mark title | machine time", "says | "])
+    expect(kinds(at(1))).toEqual(["mark title | machine time"])
+    expect(at(1).lines[0]!.right[0]).toEqual({
+      kind: "machine",
+      host: "arc",
+      machine: arc,
+      named: false,
+    })
+    // With no machine, line 1 is as on three.
+    expect(
+      kinds(card(row("turn"), { view: { group: "none", lines: 1 } }))
+    ).toEqual(["mark title | time"])
   })
 
   test("a card keeps the place it is drawn in, wherever its Thread stands now", () => {
@@ -167,7 +195,7 @@ describe("slots, by place and group", () => {
   test("grouped by Project, line 3 has no Project: its header names it", () => {
     const grouped = card(row("turn", {}, "arc"), {
       machine: arc,
-      view: { group: "project" },
+      view: { group: "project", lines: 3 },
     })
     expect(kinds(grouped)).toEqual([
       "mark title | time",
@@ -189,7 +217,7 @@ describe("slots, by place and group", () => {
     ])
     const grouped = card(row("turn", { parent: "t0" }), {
       child,
-      view: { group: "project" },
+      view: { group: "project", lines: 3 },
     })
     expect(kinds(grouped)).toEqual(kinds(asks))
     // At work, it is a card under its parent.

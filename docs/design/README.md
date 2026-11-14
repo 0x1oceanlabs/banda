@@ -372,7 +372,10 @@ radius:
   | 2 | a word, **Asks**, **Done**, **Failed** or **Woke**, then what it says | a PR's ✓ or ✗, or the diff in grey |
   | 3 | the Project's Sign and name | the machine, the account's Emblem |
 
-  Lines 2 and 3 are at the meta size, 22 px in from the mark. Padding 6 ×
+  The Person may pick two lines or one instead, the same everywhere
+  (`card` in sidebar.toml, [0098] d9): lines 1 and 2, or line 1, the
+  machine's icon then before the time. Lines 2 and 3 are at the meta
+  size, 22 px in from the mark. Padding 6 ×
   8, the control's radius, 2 px between lines.
 - **A working row** is one line: a muted blue mark that moves by what its Agent
   does, the title at 45% of the text, the time. Its words, on a card or on

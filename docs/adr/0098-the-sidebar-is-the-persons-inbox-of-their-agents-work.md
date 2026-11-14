@@ -174,6 +174,17 @@ From the audit (`2-code.md`):
    Harness. The `card` key and the view menu's Card row go; a file that
    still says `card` reads, and is told so at the line._
 
+   _Amended again 2026-11-14 by Roma ("keep 3 sizes, it is handy"): a
+   card has **3, 2 or 1 lines**, as the Person picks, the same wherever
+   it stands, in the sidebar and the small inbox alike: `card = 3 | 2 |
+   1`, 3 by default, and the view menu's **Card lines** row. Two lines
+   are lines 1 and 2; one is line 1. With fewer than three, line 3's
+   machine moves to line 1's right by its icon, before the time, and a
+   Thread away from its Project's workspace bears its diamond right
+   after the title. There is still no "auto", no size by where a card
+   stands: a file that says `card = "auto"` reads as 3, and is told so at
+   the line._
+
 ### Acting on it
 
 10. **The pointer over a card shows its actions inline** at line 1's

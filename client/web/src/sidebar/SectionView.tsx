@@ -81,8 +81,9 @@ export function SectionView({
   const { picked, expand } = useContext(PickContext)
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
-  // Grouped, a header names what each card then leaves out.
-  const view: CardView = { group: settings.group }
+  // Grouped, a header names what each card then leaves out; each card
+  // has as many lines as the Person picked.
+  const view: CardView = { group: settings.group, lines: settings.card }
   // Grouped by Project, this machine's groups stand under its own label,
   // as another's do, where the Person asked it named too (ADR 0095,
   // decision 4). The label names only this machine's cards: another's,

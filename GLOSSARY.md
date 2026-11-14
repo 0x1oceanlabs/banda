@@ -878,7 +878,7 @@ The Window's area at its left edge, and Banda's list that fills it, the
 sidebar list: every Thread of every Project, and whatever else an App
 lists as an Item. Each row shows its own Mark. It is the Person's inbox:
 tabs Inbox, Working, Later and Archive, grouped by Project or not, every
-card of three lines, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
+card of three, two or one lines as the Person picks, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
 not of the Threads App: it reads only what Apps list (ADR 0087). On a
 phone it is the home screen. Where the two must be told apart, say "the
 Sidebar" for the area and "the sidebar list" for the list.
