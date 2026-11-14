@@ -191,6 +191,12 @@ desktop, web and the PWA now.
    `settings`, `sidebar` and `problems` in their own files; a second
    list in that test names the parts the root still answers itself, and
    only falls.
+   Part 3: the page's server is `os-window/page.ts`, a layer of main's
+   runtime: what answers `app://` (the page under its policy, the
+   wallpaper, the byte and sandbox hosts and the modules' own) and the
+   one permission the page has, registered once the app is ready and
+   before the first window loads, and taken away as the runtime is
+   disposed.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer

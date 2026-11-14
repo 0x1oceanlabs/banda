@@ -2,7 +2,8 @@
  * The desktop window. It reaches the engine, the session's service (a
  * systemd unit on Linux, a launchd job on macOS), which it starts when it
  * does not run, or else its child (engine.ts, ADR 0086), serves the page
- * from `app://banda` and hands the page the engine's address. Closing it
+ * from `app://banda` (os-window/page.ts) and hands the page the engine's
+ * address. Closing it
  * is not quitting Banda: the engine and its Agents go on, and Quit Banda
  * stops them; on macOS closing it hides it, and Banda lives in the menu
  * bar, its icon there saying who works and who waits (closing.ts,
@@ -24,27 +25,19 @@
  */
 import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
-import { join, resolve, sep } from "node:path"
-import { pathToFileURL } from "node:url"
+import { join, resolve } from "node:path"
 import {
   app,
   BrowserWindow,
   type BrowserWindowConstructorOptions,
   Menu,
   nativeTheme,
-  net,
   powerMonitor,
-  protocol,
-  session,
   shell,
   type WebContents,
 } from "electron"
 import { quitAsks } from "@banda/contract"
-import {
-  BANDA,
-  type Look as LookValue,
-  WALLPAPER_URL,
-} from "@banda/contract/look"
+import { BANDA, type Look as LookValue } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
@@ -52,7 +45,6 @@ import {
   Engine,
   Look,
   none,
-  type Relayed,
   serve,
   tellPage,
   text,
@@ -65,7 +57,6 @@ import {
 } from "@banda/core"
 import { type Acts, actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
-import { relayed, relayedAs } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
 import { deviceKey } from "./key"
@@ -108,6 +99,13 @@ import { sidebarAnswers } from "./sidebar"
 import { clipboardAnswers } from "./device/clipboard"
 import { filesAnswers } from "./device/files"
 import { pickAnswers } from "./device/pick"
+import {
+  appScheme,
+  DEV_PAGE,
+  fromPage,
+  PAGE,
+  pageLayer,
+} from "./os-window/page"
 import { systemLayer, thisSystem } from "./os-window/system"
 import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
 
@@ -132,15 +130,6 @@ const PoppedAsk = Schema.Union([
   }),
 ]) satisfies Schema.Decoder<PoppedAskValue>
 
-/** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
-const ORIGIN = "app://banda"
-/**
- * In development, the Vite server's address; the page is served from it.
- * A packaged app ignores it: no other page ever gets the engine.
- */
-const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
-/** Where the windows load the page from. */
-const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 /**
  * For tests only: how many ms late the page hears what the engine says,
  * as from a host far away (`Address.latency`). A packaged app ignores it.
@@ -148,48 +137,6 @@ const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 const TEST_LATENCY = app.isPackaged
   ? 0
   : Number(process.env.BANDA_TEST_LATENCY) || 0
-
-/** The byte host and the sandbox host, which ask main for no page. */
-const own: (request: Request, asks: Relayed) => ReturnType<typeof relayed> = (
-  request
-) => relayed(request)
-
-/** The hosts of `app://` beside Banda's own page: the files a Pane shows,
- * and the pages among them that run scripts, sandboxed (ADR 0073,
- * decision 5), both relayed to the engine that gave their tokens, which
- * serves them, this machine's or another's (bytes.ts, ADR 0106, decision
- * 6); and the modules' own, which may ask those two for a page of theirs
- * (`Relayed`), as a Visual another machine's engine keeps. */
-const hosts = new Map(
-  Object.entries({ ...modules.served, files: own, preview: own })
-)
-/** The hosts a frame shows: the modules' and the sandbox host. The byte
- * host serves any file, so no frame shows one. */
-const framed = [...Object.keys(modules.served), "preview"].map(
-  (host) => `app://${host}`
-)
-
-const CSP = [
-  "default-src 'self'",
-  // Ghostty draws terminals from WebAssembly that ships with the page.
-  "script-src 'self' 'wasm-unsafe-eval'",
-  "style-src 'self' 'unsafe-inline'",
-  // An extension's button shows its icon from crx:// (the browser's
-  // extensions, @banda/browser-desktop).
-  "img-src 'self' data: crx: app://files",
-  "media-src 'self' app://files",
-  "font-src 'self' data:",
-  // The engine; the page's own files, as Ghostty fetches its WebAssembly;
-  // and the byte host's ranges, as a PDF is read (ADR 0073, decision 5).
-  "connect-src 'self' ws://127.0.0.1:* app://files",
-  // The modules' pages a Pane shows in a frame, each on an origin of its
-  // own, as a Thread's Visuals (ADR 0037), and a file's page, sandboxed.
-  `frame-src ${framed.join(" ")}`,
-  "object-src 'none'",
-  "base-uri 'none'",
-  "form-action 'none'",
-  "frame-ancestors 'none'",
-].join("; ")
 
 // An Agent's pass for `banda`, which a window started in an Agent's shell
 // carries (ADR 0019), goes no further: the window's engine is its own, and
@@ -244,19 +191,8 @@ app.setDesktopName(`${channel.folder}.desktop`)
 // carries, and none before it is set (ADR 0090, decision 7; entry.ts).
 if (process.platform === "win32") app.setAppUserModelId(channel.appId)
 
-// The page reads the byte host's ranges across origins, as its CORS
-// allows (`corsEnabled`).
-protocol.registerSchemesAsPrivileged([
-  {
-    scheme: "app",
-    privileges: {
-      standard: true,
-      secure: true,
-      supportFetchAPI: true,
-      corsEnabled: true,
-    },
-  },
-])
+// `app:` is named to Chromium before the app is ready (os-window/page.ts).
+appScheme()
 
 /** Set as an update restarts Banda's app: the quit is the update's. */
 let updating = false
@@ -291,8 +227,10 @@ function leave(): void {
  * modules' own, the browser's and the notifications' (modules.ts), and
  * the road that answers what the modules' engine parts ask (road.ts).
  * Beside them, not under them, the other machines' engines (hosts.ts):
- * only the page reaches those. They start with the first effect run, and
- * stop when it is disposed. */
+ * only the page reaches those. Over them all, the page's server
+ * (os-window/page.ts), which is built last, so `app://` is answered once
+ * the runtime is built: before the first window loads its page (`ready`).
+ * They start with the first effect run, and stop when it is disposed. */
 const runtime = ManagedRuntime.make(
   roadLayer(modules.asked).pipe(
     Layer.provideMerge(modules.layer),
@@ -331,6 +269,10 @@ const runtime = ManagedRuntime.make(
       )
     ),
     Layer.merge(reaching(configFolder(app.getPath("appData")), installScript)),
+    // Over them all, what answers `app://`: the page, and the hosts beside
+    // it, the modules' too (os-window/page.ts).
+    (services) =>
+      pageLayer(pageFolder, modules.served).pipe(Layer.provideMerge(services)),
     // A packed Banda that cannot run a copy of its own says why.
     Layer.provide(
       Program.layer(where, (why) =>
@@ -431,26 +373,6 @@ async function ready(): Promise<void> {
         )
       )
     )
-  )
-  protocol.handle("app", (request) => {
-    const served = hosts.get(new URL(request.url).host)
-    if (served)
-      return runtime.runPromise(
-        served(request, (url) =>
-          Effect.promise(() => runtime.runPromise(relayedAs(request, url)))
-        )
-      )
-    return request.url.split("?")[0] === WALLPAPER_URL
-      ? wallpaper(request.url)
-      : page(request)
-  })
-  // The page asks for nothing but to write to the clipboard, as "Copy
-  // path" and a terminal's copy do: no camera, no notifications, no
-  // location, no reading the clipboard. Its system notifications go through the desktop
-  // (the notifications module, `@banda/notifications-desktop`).
-  session.defaultSession.setPermissionRequestHandler(
-    (_contents, permission, answer) =>
-      answer(permission === "clipboard-sanitized-write")
   )
   // The app's own update, the updates module's part here (ADR 0119,
   // decision 2): the engine's updates module says what is newest, and
@@ -849,45 +771,6 @@ function dockTo(wanted: boolean): Promise<void> | null {
   }
 }
 
-/** Serves the built page; nothing outside its folder. */
-async function page(request: Request): Promise<Response> {
-  const url = new URL(request.url)
-  const path = resolve(pageFolder, `.${decodeURIComponent(url.pathname)}`)
-  const file = path === pageFolder ? join(pageFolder, "index.html") : path
-  if (url.host !== "banda" || !file.startsWith(pageFolder + sep)) {
-    return new Response("Not found", { status: 404 })
-  }
-  return served(file, { "Content-Security-Policy": CSP })
-}
-
-/**
- * The picture Banda's glass is made of: the look's wallpaper, or its dark
- * one when the address asks for it, and no other file, whatever the
- * address asks (ADR 0023, ADR 0030).
- */
-async function wallpaper(address: string): Promise<Response> {
-  const desk = lookNow()?.desk
-  const asked = new URL(address).searchParams.get("of")
-  const pictures = [desk?.wallpaper, desk?.wallpaper_dark].flatMap((one) =>
-    one ? [one.path] : []
-  )
-  const file = pictures.find((path) => path === asked) ?? pictures[0]
-  if (!file) return new Response("Not found", { status: 404 })
-  return served(file)
-}
-
-/** A file of the machine's, as a page may take it: never sniffed. */
-async function served(
-  file: string,
-  more: Record<string, string> = {}
-): Promise<Response> {
-  const found = await net.fetch(pathToFileURL(file).toString())
-  const headers = new Headers(found.headers)
-  headers.set("X-Content-Type-Options", "nosniff")
-  for (const [name, value] of Object.entries(more)) headers.set(name, value)
-  return new Response(found.body, { status: found.status, headers })
-}
-
 /**
  * How a window lets the system's material through (ADR 0030): vibrancy
  * under the whole window on macOS, acrylic on Windows 11 from 22H2 (build
@@ -957,11 +840,6 @@ function lookIn(shown: BrowserWindow | null, now: LookValue): LookValue {
   return systemGlass(now) && (SYSTEM_MATERIAL === null || shown !== clear)
     ? { ...now, desk: { ...now.desk, glass: false } }
     : now
-}
-
-function fromPage(url: string): boolean {
-  if (DEV_PAGE) return url.startsWith(DEV_PAGE)
-  return url === ORIGIN || url.startsWith(`${ORIGIN}/`)
 }
 
 /** The main window; one the engine opened Banda for loads its page, and
