@@ -1,6 +1,6 @@
 import type { Flow } from "@banda/contract/workspaces"
 import { afterEach, expect, test, vi } from "vitest"
-import { flowHere, picked, Solo } from "./flow"
+import { flowHere, isFlow, nextFlow, picked, Solo } from "./flow"
 
 /** A device's own storage, which outlives a restart of its window. */
 function storage(): Storage {
@@ -124,4 +124,16 @@ test("a device whose storage is out of reach still turns Solo on and off, for as
   expect(solo.pick("solo", "row")).toBeUndefined()
   expect(flowHere("row", solo.get())).toBe("solo")
   expect(flowHere("row", new Solo().get())).toBe("row")
+})
+
+test("Alt+Shift+M goes from the row to solo and back, and from free to solo (ADR 0079)", () => {
+  expect(nextFlow("row")).toBe("solo")
+  expect(nextFlow("solo")).toBe("row")
+  expect(nextFlow("free")).toBe("solo")
+})
+
+test("flow.pick takes the three Flows by name, and no other word", () => {
+  for (const flow of ["free", "row", "solo"]) expect(isFlow(flow)).toBe(true)
+  for (const word of ["toString", "Row", "", 1, undefined])
+    expect(isFlow(word)).toBe(false)
 })

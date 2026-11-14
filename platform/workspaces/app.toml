@@ -1,5 +1,7 @@
 # The workspaces module, as it declares itself (ADR 0022). Its methods its
-# code declares; the window draws its workspaces itself (ADR 0025).
+# code declares; the window draws its workspaces itself (ADR 0025), and
+# the Tiling there declares its actions, which client/web's tests copy into
+# window.json beside this file (ADR 0087, decision 13).
 id = "workspaces"
 kind = "platform"
 name = "Workspaces"

@@ -307,19 +307,6 @@ How this machine's Panes are arranged: workspaces one under another, each a Stri
 
 Its settings: `tiling.toml`.
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `unarrange`, `panes`, `open_pane`, `move_own`, `close_own`.
-
-What an Agent in a Thread may call as a tool of `banda mcp`:
-
-- `panes`: The Panes on the workspaces, from the top down and from the left: your Project's with their args, a browser's with the tabs your Project's Agents opened alone, and, when your Person lets you see the other Projects, theirs without. `yours` marks the ones you opened, which alone you move and close.
-- `open_pane`: Opens a Pane of your Project for your Person to see: one of its Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID `threads` lists; `send` starts a Thread), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with `"file": "<path>"` to show one), a file (`files.file`, args `{"path": "<path>", "line": <n>}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}` alone). Only the args that choose what a Pane shows are yours to give; the rest are your Person's. Beside a Pane `panes` lists; left out, right of your Thread, in its Group, when your Thread is shown, else last on your Project's workspace, or beside your Project's Panes when it has none. A Thread opens as a Group of its own; left out, last on your Project's workspace or beside your Project's Panes, never in your Thread's. One shown already, a Thread's by its ID, stays where it is, and is named. It takes no focus; the Person sees a mark on it until they look.
-- `move_pane`: Moves a Pane you opened beside another that `panes` lists. When each Project has its own workspace, never onto another Project's.
-- `close_pane`: Closes a Pane you opened.
-
-## Window (`window`)
-
-The window's own actions: the tiling of columns, Panes and workspaces, the sidebar, the Banda menu and the settings.
-
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - Focus the Pane left (`pane.focus-left`), Alt+Left
@@ -362,10 +349,6 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Take the Pane into the column on the left, or out of its own (`pane.consume-left`), Alt+[
 - Take the Pane into the column on the right, or out of its own (`pane.consume-right`), Alt+]
 - The column the whole screen wide, or back (`column.maximize`), Alt+F
-- New Pane (`pane.new`), Alt+N
-- Close the Pane (`pane.close`), Alt+W
-- The Pane in a window of its own, and back (`pane.pop-out`)
-- The drawer: a quick Thread over the workspace (`drawer.toggle`), Alt+`
 - Overview of every window (`overview.toggle`), Alt+O
 - The workspace above (`workspace.up`), Alt+PageUp
 - Move the workspace up (`workspace.move-up`), Alt+Shift+PageUp
@@ -373,6 +356,44 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Move the workspace down (`workspace.move-down`), Alt+Shift+PageDown
 - A new workspace: the empty one at the bottom (`workspace.new`)
 - Close the workspace (`workspace.close`); takes `workspace` (the workspace's id; none for the one on screen)
+- Go to workspace 1 (`workspace.go-1`), Alt+1
+- Go to workspace 2 (`workspace.go-2`), Alt+2
+- Go to workspace 3 (`workspace.go-3`), Alt+3
+- Go to workspace 4 (`workspace.go-4`), Alt+4
+- Go to workspace 5 (`workspace.go-5`), Alt+5
+- Go to workspace 6 (`workspace.go-6`), Alt+6
+- Go to workspace 7 (`workspace.go-7`), Alt+7
+- Go to workspace 8 (`workspace.go-8`), Alt+8
+- Go to workspace 9 (`workspace.go-9`), Alt+9
+- Move the Pane to workspace 1 (`pane.send-1`), Alt+Shift+1
+- Move the Pane to workspace 2 (`pane.send-2`), Alt+Shift+2
+- Move the Pane to workspace 3 (`pane.send-3`), Alt+Shift+3
+- Move the Pane to workspace 4 (`pane.send-4`), Alt+Shift+4
+- Move the Pane to workspace 5 (`pane.send-5`), Alt+Shift+5
+- Move the Pane to workspace 6 (`pane.send-6`), Alt+Shift+6
+- Move the Pane to workspace 7 (`pane.send-7`), Alt+Shift+7
+- Move the Pane to workspace 8 (`pane.send-8`), Alt+Shift+8
+- Move the Pane to workspace 9 (`pane.send-9`), Alt+Shift+9
+
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `arrange`, `take`, `set_aside`, `bring_back`, `unarrange`, `panes`, `open_pane`, `move_own`, `close_own`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `panes`: The Panes on the workspaces, from the top down and from the left: your Project's with their args, a browser's with the tabs your Project's Agents opened alone, and, when your Person lets you see the other Projects, theirs without. `yours` marks the ones you opened, which alone you move and close.
+- `open_pane`: Opens a Pane of your Project for your Person to see: one of its Threads (`agents.thread`, args `{"thread": "<id>"}` alone, an ID `threads` lists; `send` starts a Thread), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`, with `"file": "<path>"` to show one), a file (`files.file`, args `{"path": "<path>", "line": <n>}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}` alone). Only the args that choose what a Pane shows are yours to give; the rest are your Person's. Beside a Pane `panes` lists; left out, right of your Thread, in its Group, when your Thread is shown, else last on your Project's workspace, or beside your Project's Panes when it has none. A Thread opens as a Group of its own; left out, last on your Project's workspace or beside your Project's Panes, never in your Thread's. One shown already, a Thread's by its ID, stays where it is, and is named. It takes no focus; the Person sees a mark on it until they look.
+- `move_pane`: Moves a Pane you opened beside another that `panes` lists. When each Project has its own workspace, never onto another Project's.
+- `close_pane`: Closes a Pane you opened.
+
+## Window (`window`)
+
+The window's own actions: the tiling of columns, Panes and workspaces, the sidebar, the Banda menu and the settings.
+
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
+
+- New Pane (`pane.new`), Alt+N
+- Close the Pane (`pane.close`), Alt+W
+- The Pane in a window of its own, and back (`pane.pop-out`)
+- The drawer: a quick Thread over the workspace (`drawer.toggle`), Alt+`
 - Go to what calls you (`calls.answer`), Alt+U
 - Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 - Banda menu (`menu.open`), Alt+Space; takes `source` (a source's id, to show its rows alone, as files.find)
@@ -400,24 +421,6 @@ Its actions, which `keys.toml` binds by id, with their keys under Banda's own mo
 - Show Working (`sidebar.tab-working`), 2, `[binds.sidebar]`
 - Show Later (`sidebar.tab-later`), 3, `[binds.sidebar]`
 - Show the Archive (`sidebar.tab-archive`), 4, `[binds.sidebar]`
-- Go to workspace 1 (`workspace.go-1`), Alt+1
-- Go to workspace 2 (`workspace.go-2`), Alt+2
-- Go to workspace 3 (`workspace.go-3`), Alt+3
-- Go to workspace 4 (`workspace.go-4`), Alt+4
-- Go to workspace 5 (`workspace.go-5`), Alt+5
-- Go to workspace 6 (`workspace.go-6`), Alt+6
-- Go to workspace 7 (`workspace.go-7`), Alt+7
-- Go to workspace 8 (`workspace.go-8`), Alt+8
-- Go to workspace 9 (`workspace.go-9`), Alt+9
-- Move the Pane to workspace 1 (`pane.send-1`), Alt+Shift+1
-- Move the Pane to workspace 2 (`pane.send-2`), Alt+Shift+2
-- Move the Pane to workspace 3 (`pane.send-3`), Alt+Shift+3
-- Move the Pane to workspace 4 (`pane.send-4`), Alt+Shift+4
-- Move the Pane to workspace 5 (`pane.send-5`), Alt+Shift+5
-- Move the Pane to workspace 6 (`pane.send-6`), Alt+Shift+6
-- Move the Pane to workspace 7 (`pane.send-7`), Alt+Shift+7
-- Move the Pane to workspace 8 (`pane.send-8`), Alt+Shift+8
-- Move the Pane to workspace 9 (`pane.send-9`), Alt+Shift+9
 - Open a Pane in the launcher's place (`launcher.open`), H for agents.thread or T for terminal.terminal or B for browser.browser or D for git.diff or F for files.tree, `[binds.launcher]`; takes `kind` (the kind of Pane, as terminal.terminal)
 - Open a Pane beside the launcher (`launcher.open-beside`), Shift+H for agents.thread or Shift+T for terminal.terminal or Shift+B for browser.browser or Shift+D for git.diff or Shift+F for files.tree, `[binds.launcher]`; takes `kind` (the kind of Pane, as terminal.terminal)
 - Search the settings (`settings.search`), /, `[binds.settings]`

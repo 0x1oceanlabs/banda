@@ -103,12 +103,13 @@ import {
   step,
   widthIn,
 } from "../tiling/model"
+import { targetsOf } from "../tiling/actions"
 import { useFlowHere } from "../tiling/flow"
 import { Drawer, useDrawer } from "./Drawer"
 import { Peek, usePeek } from "./Peek"
 import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
 import { useMadeGoesHome } from "./made"
-import { usePlacing } from "./placing"
+import { usePlacing, writeFlow } from "./placing"
 import { Overview } from "../tiling/Overview"
 import type { Frame } from "../tiling/PaneFrame"
 import {
@@ -129,7 +130,6 @@ import {
   focusedIn,
   strayedIn,
   runAction,
-  targetsOf,
   startingHere,
   type Shell as Parts,
   useWindowApi,
@@ -534,7 +534,7 @@ export function Shell({
     fillPeek,
     closeSheet: sheet.close,
     glance,
-    pickFlow,
+    pickFlow: (to) => writeFlow(device.settings.set, pickFlow(to)),
     peek: (pane, project) =>
       setPeek((was) =>
         pane

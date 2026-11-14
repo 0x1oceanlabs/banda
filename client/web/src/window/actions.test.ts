@@ -26,6 +26,12 @@ import {
   viewOf,
 } from "../tiling/arrange"
 import { hear, look, predict, unseen } from "../tiling/unheard"
+import {
+  arranging,
+  type Placing,
+  placingOf,
+  targetsOf,
+} from "../tiling/actions"
 import { factsOf } from "../tiling/useTiling"
 import { flowHere, Solo } from "../tiling/flow"
 import { quiet } from "../calls/quiet"
@@ -51,18 +57,15 @@ import {
   openingFrom,
   picking,
   placed,
-  placingOf,
   ROUTING,
   strayedIn,
-  type Placing,
   pickOf,
   runAction,
   type Shell,
-  targetsOf,
   startingHere,
   windowApiOf,
-  arranging,
 } from "./actions"
+import { writeFlow } from "./placing"
 
 const thread = (id: string): PaneState => ({
   kind: "agents.thread",
@@ -558,8 +561,7 @@ test("flow.solo and a pick of Solo or the row write nothing, as Solo is this dev
   let file: Flow = "row"
   const flowNow = () => flowHere(file, solo.get())
   const shell = shellOf({
-    writeSetting,
-    pickFlow: (flow: Flow) => solo.pick(flow, file),
+    pickFlow: (flow: Flow) => writeFlow(writeSetting, solo.pick(flow, file)),
     placing: () => placingOf(flowNow(), []),
   })
 

@@ -1,10 +1,14 @@
 import { useCallback, useMemo } from "react"
 import type { ProjectId, ProjectSummary } from "@banda/contract"
-import type { Flow } from "@banda/contract/workspaces"
+import { tomlOf } from "@banda/contract/settings"
+import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { sameEach, useStore } from "@banda/core/react"
 import { type Stores, threadlessIn } from "../calls/stores"
+import { logged, type Write } from "../sidebar/write-setting"
+import type { PickFlow } from "../tiling/flow"
 import type { Gone } from "../tiling/model"
-import { noProjectOf, type Placing, placingOf } from "./actions"
+import { type Placing, placingOf } from "../tiling/actions"
+import { noProjectOf } from "./actions"
 
 /**
  * How the Person works the Panes in `flow` (`placingOf`), and whether a
@@ -57,4 +61,12 @@ export function goneOf(
 ): Gone {
   const known = new Set(projects.map((project) => project.id))
   return (id) => threadless.includes(id) || none.includes(id) || !known.has(id)
+}
+
+/** Writes what a pick of the Flow says tiling.toml is to say now
+ * (`PickFlow`), when it changes how the engine places (ADR 0127, decision
+ * 4): the look brings it back, and what went wrong goes to the console. */
+export function writeFlow(write: Write, flow: ReturnType<PickFlow>): void {
+  const file = TILING_FILE.name
+  if (flow) logged(file, write(file, "flow", tomlOf(flow)))
 }

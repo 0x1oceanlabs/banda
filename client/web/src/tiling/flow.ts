@@ -14,8 +14,10 @@
  *         solo   this device's own choice, as `store.ts` keeps it
  *   gives `useFlowHere`, the Flow here and a pick of one, for the Window,
  *         which hands the Flow to what it draws (`kept.ts`) and the pick
- *         to its actions; the pick says what the file is to say when it
- *         changes how the engine places
+ *         to the Tiling's actions (`actions.ts`); the pick says what the
+ *         file is to say when it changes how the engine places, which the
+ *         Window writes
+ *         `isFlow` and `nextFlow`, for `flow.pick` and `flow.solo`
  */
 import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import { Store, useSelected } from "@banda/core/react"
@@ -52,6 +54,20 @@ export function picked(
     solo: wants === byDefault ? undefined : wants,
     ...(file === "free" && { write: "row" }),
   }
+}
+
+/** The Flows, by name. */
+const FLOWS: readonly string[] = ["free", "row", "solo"] satisfies Flow[]
+
+/** Whether `value` names a Flow (ADR 0079), as `flow.pick` takes it. */
+export function isFlow(value: unknown): value is Flow {
+  return typeof value === "string" && FLOWS.includes(value)
+}
+
+/** `Alt+Shift+M` (ADR 0079): from the row to solo and back; from free to
+ * solo. */
+export function nextFlow(flow: Flow): Flow {
+  return flow === "solo" ? "row" : "solo"
 }
 
 /** What a pick of a Flow gives: what tiling.toml's `flow` is to say now,

@@ -70,8 +70,9 @@ pub fn also() -> Vec<SettingsFile> {
 }
 
 /// Each module's window part, as client/web's tests write it, by the
-/// module's id, in the window's order; the window's own last (ADR 0071,
-/// decision 2). The look's keys in force read them. The engine's tests
+/// module's id, in the window's order; then the Tiling's, the workspaces'
+/// own, and the Window's own last (ADR 0071, decision 2; ADR 0087,
+/// decision 13). The look's keys in force read them. The engine's tests
 /// hold it to the list of Apps both ways, which it takes its files from in
 /// B2.
 pub const WINDOWS: &[(&str, &str)] = &[
@@ -93,21 +94,42 @@ pub const WINDOWS: &[(&str, &str)] = &[
         include_str!("../../../platform/notifications/window.json"),
     ),
     ("clock", include_str!("../../../apps/clock/window.json")),
+    (
+        "workspaces",
+        include_str!("../../../platform/workspaces/window.json"),
+    ),
     ("window", include_str!("../../../client/web/window.json")),
 ];
 
+/// What each window part declares, by its part's id, in [`WINDOWS`]' order.
+/// The files are Banda's own, so a wrong one is a bug the tests catch.
+fn declared() -> impl Iterator<Item = (&'static str, Manifests)> {
+    WINDOWS.iter().map(|(id, json)| {
+        let window = serde_json::from_str(json)
+            .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"));
+        (*id, window)
+    })
+}
+
 /// What the manifests declare (ADR 0071, decision 2): every action there
-/// is, the modules' in the window's order, then the window's own; and the
-/// scopes their keys work in.
+/// is, the modules' in the window's order, then the Tiling's and the
+/// Window's own; and the scopes their keys work in.
 pub fn manifests() -> Manifests {
     let mut manifests = Manifests::default();
-    for (id, json) in WINDOWS {
-        let window: Manifests = serde_json::from_str(json)
-            .unwrap_or_else(|error| panic!("{id}'s window.json: {error}"));
+    for (_, window) in declared() {
         manifests.actions.extend(window.actions);
         manifests.scopes.extend(window.scopes);
     }
     manifests
+}
+
+/// Whose each action of [`manifests`] is, in their order (ADR 0087,
+/// decision 13): the id of the App or the platform part that declares it,
+/// as `workspaces` the Tiling's, and `window` for the Window's own.
+pub fn owners() -> Vec<&'static str> {
+    declared()
+        .flat_map(|(id, window)| std::iter::repeat_n(id, window.actions.len()))
+        .collect()
 }
 
 /// The kinds of Pane the manifests declare: what a rule of `tiling.toml`

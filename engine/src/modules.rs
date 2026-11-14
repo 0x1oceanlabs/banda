@@ -89,8 +89,9 @@ pub struct Offer {
     manifest: Manifest,
     /// Its engine part's methods; none when it has no engine part.
     engine: Option<Vec<Method>>,
-    /// Its window part: its Panes, actions, sources, Watches and widgets;
-    /// none when the window draws it itself, as the workspaces.
+    /// Its window part: its Panes, actions, sources, Watches and widgets,
+    /// or, for the workspaces, the Tiling's actions alone (ADR 0087,
+    /// decision 13); none when it has no part in the window.
     window: Option<Window>,
 }
 
