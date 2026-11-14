@@ -2459,7 +2459,14 @@ images. Sweeps retain images still referenced by a fork after a rewind.
 - **Architecture tests.** The kernel names no module, no module reads
   another's tables, and a Pane imports only the API, `@banda/ui`, React
   and its icons, and the core only as `@banda/core/react`; the
-  terminal's Pane also Ghostty. No code of the engine makes a process
+  terminal's Pane also Ghostty. Beside the kernel's test
+  (`kernel/tests/architecture.rs`), two lists that only fall hold where
+  the platform's Rust still names an App and where an App's names
+  another, by file and count, and a third, in `engine/src/apps.rs`, the
+  App crates another crate still depends on, all of them the settings'
+  (ADR 0062). The count reads names as written; a word that only looks
+  like an App's, as the program `git`, is listed apart with its reason.
+  No code of the engine makes a process
   but `banda-environments`, and the places named in its test, each with
   how many and why, that ask the host about itself or keep Banda's books
   and run nothing of a Project's (ADR 0084, decision 4); no code uses
@@ -2496,7 +2503,9 @@ images. Sweeps retain images still referenced by a fork after a rewind.
   level but the constants listed; only the Window makes and gives the
   hosts and gives the machines; the desktop imports nothing of the page,
   which takes the bridge's table only as a type (decisions 1, 4 and
-  11).
+  11). Main runs an effect only in `main.ts`, on its runtime, and in the
+  two places `client/desktop/src/architecture.test.ts` lists with their
+  count and reason (ADR 0020).
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,
