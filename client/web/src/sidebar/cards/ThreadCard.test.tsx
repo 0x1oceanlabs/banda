@@ -9,7 +9,7 @@ import { act } from "react"
 import { createRoot } from "react-dom/client"
 import { renderToStaticMarkup } from "react-dom/server"
 import { afterEach, beforeEach, expect, test, vi } from "vitest"
-import type { Row } from "../rows"
+import type { Row } from "../model/rows"
 import { type CardAct, ThreadCard } from "./ThreadCard"
 import { cardOf, type CardOf } from "./model"
 

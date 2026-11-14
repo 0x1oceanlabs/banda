@@ -5,9 +5,13 @@ import { Button } from "@banda/ui/components/button"
 import { type Run, useRun } from "@banda/core/react"
 import { notNow } from "../../trust/not-now"
 import { PROJECT_CARD } from "../../trust/TrustCard"
-import { PROJECT_LOOK, type ProjectAsks, type ProjectCall } from "../inbox"
-import { useOpen } from "../open"
-import { ProjectMenu } from "../ProjectMenu"
+import {
+  PROJECT_LOOK,
+  type ProjectAsks,
+  type ProjectCall,
+} from "../model/inbox"
+import { useOpen } from "../list/open"
+import { ProjectMenu } from "../list/ProjectMenu"
 import { Card } from "./Card"
 import { CardTitle, MarkCell, Says } from "./parts"
 

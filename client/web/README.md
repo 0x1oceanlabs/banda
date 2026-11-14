@@ -157,7 +157,7 @@ PR.
   knows what calls, for the Marks, the rings and `Alt+U`; and where the
   Person looks (`client/web/src/calls`). What calls has one order, the
   sidebar's as the Person arranged it (`order` in
-  `client/web/src/sidebar/order.ts`): the sidebar list draws it, `Alt+U`
+  `client/web/src/sidebar/model/order.ts`): the sidebar list draws it, `Alt+U`
   walks it, and the small inbox the bar's counts open draws it too (ADR
   0079, ADR 0087, ADR 0098).
   The window knows nothing of Threads: a Pane kind's `shows` names the
