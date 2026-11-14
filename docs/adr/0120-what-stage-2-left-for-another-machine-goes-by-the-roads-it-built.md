@@ -1,6 +1,6 @@
 ---
-status: proposed
-date: 2026-11-12
+status: accepted
+date: 2026-11-14
 ---
 
 # What stage 2 left for another machine goes by the roads it built
@@ -99,8 +99,9 @@ The updates module takes its channel's newest engine and puts it beside
 the running one; restarting on it is a later step
 (`platform/updates/engine/src/lib.rs:1-13`; its methods, `check` and
 `state`, `:369-378`). Its ADR, "Each machine updates its own Banda, in
-one updates module", is PR #1522 (numbered 0115 there, a number main
-gave the fence), with "Update arc" as a row of one widget for every
+one updates module", is
+[ADR 0119](0119-each-machine-updates-its-own-banda-in-one-updates-module.md)
+(PR #1522), with "Update arc" as a row of one widget for every
 machine (its decision 7). The pill has no "arc runs another build": it
 waits for a button to press (`reachWords`, `client/core/src/hosts.ts:1004-1025`;
 ADR 0095, decision 9).
@@ -469,60 +470,35 @@ Each with a dated note in place, once accepted:
   its machine", not "on this computer". **Sign-in** says that Codex on
   another machine signs in through a terminal there.
 
-## Questions for Roma
+## Roma's answers
 
-1. **Which port does a forward take here?**
-   - _Recommended:_ the same as arc's when it is free here, else the next
-     free one, said in the toast. A sign-in's callback takes the same
-     port or is refused, since the page names it.
-   - _Other:_ always any free port: never refused, but a page that names
-     its own address, a dev server's socket on a fixed port and every
-     OAuth callback break.
+Roma answered on 2026-11-14, each as recommended.
 
-2. **Does Banda find arc's servers by itself?**
-   - _Recommended:_ no, not now. A port opens when the Person clicks a
-     link to it. Listing arc's servers on the Bar stays #1240, for when
-     the Person opens arc's ports often without a link to click.
-   - _Other:_ arc's engine watches the ports its terminals' programs
-     listen on, and the Bar lists them, as VS Code does: a reader of each
-     system's socket table, on Linux and macOS, for what a link already
-     gives.
+1. **Which port does a forward take here?** The same as arc's when it is
+   free here, else the next free one, said in the toast. A sign-in's
+   callback takes the same port or is refused, since the page names it.
 
-3. **Does arc's Agent get a browser while arc has no window?**
-   - _Recommended:_ not in this ADR. An Agent's pages run in the host's
-     Chromium (ADR 0062, decision 12; the vision's I7), which works with
-     the laptop closed. It is its own ADR. Codex's sign-in, which the
-     issue tied to it, no longer needs a browser on arc (decision 3).
-   - _Other:_ the Mac's window answers arc's browser requests, and arc
-     Agents' tabs load in the Mac's Chromium. It ends when the Mac
-     sleeps, and an Agent of another machine drives a browser of this
-     one.
+2. **Does Banda find arc's servers by itself?** No, not now. A port opens
+   when the Person clicks a link to it. Listing arc's servers on the Bar
+   stays #1240.
 
-4. **Folders, and a cut, across machines?**
-   - _Recommended:_ files only, one or many, in steps 5 and 6; a folder is
-     refused in words, until the Person asks. A cut and paste across
-     machines copies, and the file stays: a move across machines that
-     deletes after the copy is one more act that may half happen.
-   - _Other:_ folders now, the window walking them with `files.list`,
-     one round trip per folder; or a cut that moves, deleting on the
-     sending machine once the copy is placed.
+3. **Does arc's Agent get a browser while arc has no window?** Not in
+   this ADR. Roma asked for a research of its own first: an Agent's pages
+   in the host's Chromium (ADR 0062, decision 12; the vision's I7), which
+   works with the laptop closed. Its ADR follows that research.
 
-5. **What does the Bar's ring count?**
-   - _Recommended:_ every machine's accounts, one account once by Harness
-     and address, the best room of each Harness over all of them; Usage
-     stays one machine's, with the switch.
-   - _Other:_ the ring stays this machine's and the popover adds the
-     others; or Usage sums every machine's journals.
+4. **Folders, and a cut, across machines?** Files only, one or many; a
+   folder is refused in words, until the Person asks. A cut and paste
+   across machines copies, and the file stays.
 
-6. **Where does an arc Agent's Pane show?**
-   - _Recommended:_ as ADR 0101 call 2 says, in each window that shows
-     its Thread, and nowhere else; the Agent moves and closes only arc's.
-   - _Other:_ in every window that reaches arc; or the Agent's close
-     reaches the Mac too, by one more fact the windows carry.
+5. **What does the Bar's ring count?** Every machine's accounts, one
+   account once by Harness and address, the best room of each Harness
+   over all of them; Usage stays one machine's, with the switch.
 
-7. **The order.**
-   - _Recommended:_ the Plan's: Add Project (devbox needs it first),
-     ports and Codex's sign-in, copying, Usage and Limits, an Agent's
-     Panes, Update arc last, as it waits for PR #1522.
-   - _Other:_ the issues' order, #1240, #1245, #1246, #1011, #775,
-     #1244.
+6. **Where does an arc Agent's Pane show?** As ADR 0101 call 2 says, in
+   each window that shows its Thread, and nowhere else; the Agent moves
+   and closes only arc's.
+
+7. **The order.** The Plan's: Add Project (devbox needs it first), ports
+   and Codex's sign-in, copying, Usage and Limits, an Agent's Panes,
+   Update arc last.
