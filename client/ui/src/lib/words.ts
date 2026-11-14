@@ -35,38 +35,30 @@ export const MINUTE = 60_000
 export const HOUR = 60 * MINUTE
 export const DAY = 24 * HOUR
 
-/** A card's seconds go by tens of them; under the first ten, a moment
- * just passed reads "now". */
-export const TEN_SECONDS = 10_000
-
-/** The steps a card's time takes past "now" (ADR 0098, decision 8): under
- * each bound it counts by `by`, in `unit`s, short by its letter, in full
- * by its word. */
+/** The steps a card's time takes past "now", its whole first minute
+ * (ADR 0098, decision 8, as amended): under each bound it counts whole
+ * `unit`s, short by its letter, in full by its word. */
 const STEPS = [
-  { below: MINUTE, by: TEN_SECONDS, unit: 1_000, letter: "s", word: "second" },
-  { below: HOUR, by: MINUTE, unit: MINUTE, letter: "m", word: "minute" },
-  { below: DAY, by: HOUR, unit: HOUR, letter: "h", word: "hour" },
-  { below: 7 * DAY, by: DAY, unit: DAY, letter: "d", word: "day" },
+  { below: HOUR, unit: MINUTE, letter: "m", word: "minute" },
+  { below: DAY, unit: HOUR, letter: "h", word: "hour" },
+  { below: 7 * DAY, unit: DAY, letter: "d", word: "day" },
 ] as const
 
 /** How long ago a moment was, by a card's steps: "now" or a count of
- * one step, each with when it next changes; past a week, a date. */
+ * one step; past a week, a date. */
 export type Ago =
-  | { kind: "now"; next: number }
-  | { kind: "count"; count: number; letter: string; word: string; next: number }
+  | { kind: "now" }
+  | { kind: "count"; count: number; letter: string; word: string }
   | { kind: "date"; thisYear: boolean }
 
 /** How long ago `at` was at `now`, by a card's steps. A moment yet to
  * come, by another machine's clock, is "now". */
 export function agoOf(at: number, now: number): Ago {
   const passed = Math.max(0, now - at)
-  if (passed < TEN_SECONDS) return { kind: "now", next: at + TEN_SECONDS }
-  for (const { below, by, unit, letter, word } of STEPS)
-    if (passed < below) {
-      const steps = Math.floor(passed / by)
-      const next = at + (steps + 1) * by
-      return { kind: "count", count: (steps * by) / unit, letter, word, next }
-    }
+  if (passed < MINUTE) return { kind: "now" }
+  for (const { below, unit, letter, word } of STEPS)
+    if (passed < below)
+      return { kind: "count", count: Math.floor(passed / unit), letter, word }
   const thisYear = new Date(at).getFullYear() === new Date(now).getFullYear()
   return { kind: "date", thisYear }
 }
@@ -84,10 +76,11 @@ const OTHER_YEAR = new Intl.DateTimeFormat("en-US", {
 
 /**
  * How long ago `at` (ms since the epoch) was, short and still, as a card
- * says it (ADR 0098, decision 8): "now", then by tens of seconds, minutes,
- * hours and days, so a label changes seldom; past a week, the day, and its
- * year when that was another: "40s", "14m", "2h", "3d", "Mar 3",
- * "Mar 2025". In English, as all of Banda's words are.
+ * says it (ADR 0098, decision 8, as amended): "now" for the whole first
+ * minute, then by minutes, hours and days, so a label changes seldom and
+ * once a minute is often enough to draw it; past a week, the day, and its
+ * year when that was another: "14m", "2h", "3d", "Mar 3", "Mar 2025".
+ * In English, as all of Banda's words are.
  */
 export function short(at: number, now = Date.now()): string {
   const ago = agoOf(at, now)
@@ -101,30 +94,9 @@ export function short(at: number, now = Date.now()): string {
   }
 }
 
-/**
- * When the words `short(at, now)` says next change, after `now`: "now"
- * for ten seconds, then each ten seconds, each minute, each hour and
- * each day; past a week a date, which changes only as the year turns.
- */
-export function nextShort(at: number, now: number): number | undefined {
-  const ago = agoOf(at, now)
-  switch (ago.kind) {
-    case "now":
-    case "count":
-      return ago.next
-    case "date":
-      return ago.thisYear
-        ? new Date(new Date(now).getFullYear() + 1, 0, 1).getTime()
-        : undefined
-  }
-}
-
-/** How long ago `at` (ms since the epoch) was, in a few letters: as
- * `short` says it, but "now" for the whole first minute, where no one
- * counts the seconds. */
-export function ago(at: number, now = Date.now()): string {
-  return now - at < MINUTE ? "now" : short(at, now)
-}
+/** How long ago `at` (ms since the epoch) was, in a few letters, as
+ * `short` says it, "now" for the whole first minute. */
+export const ago = short
 
 /** How long until `at` (ms since the epoch), rounded up, in a few
  * letters: "45m", "3h", "2d". */

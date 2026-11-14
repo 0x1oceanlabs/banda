@@ -66,7 +66,7 @@ export type Away = { since: number; stopped?: boolean }
 
 /** How long a machine has been out of reach at `now`, by a card's short
  * steps (ADR 0098, decision 18): "away 12m", "stopped 3m", and in its
- * first seconds "away". */
+ * first minute "away". */
 export function awayShort({ since, stopped }: Away, now: number): string {
   const ago = short(since, now)
   const word = stopped ? "stopped" : "away"

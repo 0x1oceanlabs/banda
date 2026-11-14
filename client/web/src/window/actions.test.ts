@@ -188,14 +188,11 @@ test("the sidebar's keys are its scope's, none held with a mod (ADR 0098, decisi
       expect([key.alt, key.ctrl, key.super, key.mod]).toEqual(
         Array(4).fill(undefined)
       )
-  // Undo holds Ctrl, ⌘ on a Mac, as a field's own does, and so does
-  // Delete's Ctrl+Backspace, ⌘⌫ (§2.7); no other.
+  // Delete's Ctrl+Backspace, ⌘⌫ (§2.7), holds Ctrl, as a field's own
+  // does; no other. No key undoes (decision 10, as amended).
   expect(
     keys.filter(({ keys: bound = [] }) => bound.some((key) => key.primary))
-  ).toEqual([
-    expect.objectContaining({ id: "sidebar.undo" }),
-    expect.objectContaining({ id: "sidebar.delete-picked" }),
-  ])
+  ).toEqual([expect.objectContaining({ id: "sidebar.delete-picked" })])
   // The card's menu, by Shift+F10 or the Menu key, and Delete, in the
   // Archive (ADR 0098, decision 14).
   const keysOf = (id: string) => keys.find((key) => key.id === id)?.keys

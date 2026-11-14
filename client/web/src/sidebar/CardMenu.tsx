@@ -3,9 +3,9 @@
  * stands, which a right click on the card opens where the pointer is, and
  * Shift+F10 or the Menu key at the card picked (`openCardMenu`). Its rows
  * are the card's acts, by the same ways as its buttons and its keys, each
- * with the sidebar's key in force: Later and Archive keep what Ctrl+Z
- * takes back, and Archive on a card that asks says why in a toast, as S
- * does. Delete…, in the Archive alone, asks first (`DeleteDialog`). What
+ * with the sidebar's key in force: Archive is told in its toast, whose
+ * Undo takes it back, and Archive on a card that asks says why in a
+ * toast, as S does. Delete…, in the Archive alone, asks first (`DeleteDialog`). What
  * a Thread's App does, it does by its item actions (ADR 0087, decision
  * 12), found by what each does.
  */

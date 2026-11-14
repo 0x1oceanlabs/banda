@@ -263,8 +263,8 @@ test("a machine the window does not reach: a card says how long ago as of when i
       at: NOW - 15 * MINUTE,
       ...(away === undefined ? {} : { away }),
     })
-  // Heard 30 s after it changed: "30s", however long ago that was.
-  expect(said(NOW - 15 * MINUTE + 30_000)).toMatch(/data-time=""[^>]*>30s</)
+  // Heard 30 s after it changed: "now", however long ago that was.
+  expect(said(NOW - 15 * MINUTE + 30_000)).toMatch(/data-time=""[^>]*>now</)
   expect(said(NOW - 11 * MINUTE)).toMatch(/data-time=""[^>]*>4m</)
   // Reached, it counts on to now.
   expect(said()).toMatch(/data-time=""[^>]*>15m</)

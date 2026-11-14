@@ -154,6 +154,13 @@ From the audit (`2-code.md`):
    - **Times are short**: now, 40s, 14m, 2h, 3d. Nothing ticks.
    - **Long text fades out** at its end, and only when it does not fit.
      No "…".
+
+   _Amended 2026-11-14 by Roma ("simplify the small things"): times are
+   now, 14m, 2h, 3d: a card says "now" for its whole first minute, and
+   counts no seconds. One timer for the whole list draws the cards again
+   as each minute begins; no card keeps a timer of its own, nor waits for
+   the moment its words change. A working card holds what its Agent does
+   only as its Mark does, so its line does not flicker._
 9. **Density.** `card = "auto" | 3 | 2 | 1`. Auto: three lines for Your
    turn, one for the rest; two for Your turn when grouped by Project. A
    one-line working row shows the machine and the time. No card grows on
@@ -184,6 +191,16 @@ From the audit (`2-code.md`):
     archive-restore icon; each says its key in its tooltip. Archive acts
     at once, with an "Archived · Undo" toast; Later opens the Later
     picker at the card (ADR 0074, decision 5).
+
+    _Amended 2026-11-14 by Roma ("simplify the small things"): Undo is
+    the toast's button alone. No key takes an act back: `Ctrl+Z` in the
+    sidebar, its action `sidebar.undo` and the list of acts it kept go.
+    Archives while the toast shows add to it, "Archived 3", and its Undo
+    takes them all back. The sidebar has no announcer of its own: the
+    toast, which Sonner's region reads, says what an act did, and the
+    tabs carry a plain polite line that says the tab in view and its
+    count, "Inbox, 3 Threads", as either changes. No call, no inbox zero
+    and no tab is said apart from that._
 11. **A Thread that asks may be put off until Later.** The Agent waits; it comes back
     as Woke with the same question. A new call (a new question, a
     failure) still wakes it early (ADR 0074, decision 1). It still

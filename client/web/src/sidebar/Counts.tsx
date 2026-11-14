@@ -44,6 +44,7 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { CutTips } from "@banda/ui/components/fade-text"
+import { useMinute } from "@banda/ui/hooks/use-now"
 import { type Here, useHere } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
@@ -54,7 +55,7 @@ import { useLookSidebar } from "../look"
 import { order, useElsewhere } from "./order"
 import { placedOf, rowKey } from "./rows"
 import { type CardRow, type CardView, spokenOf } from "./card"
-import { CardLines, useCardClock } from "./CardView"
+import { CardLines } from "./CardView"
 import { atOf } from "./inbox"
 import { EDGE } from "./MachineCard"
 import { useOpenRow } from "./open"
@@ -270,7 +271,7 @@ function Item({
     { row, place: row.stand, at: atOf(row), now, view: UNGROUPED },
     { named: false, machines }
   )
-  const at = useCardClock(card)
+  const at = useMinute()
   const spoken = spokenOf(card, at)
   const onOpen = useOpenRow(row)
   return (

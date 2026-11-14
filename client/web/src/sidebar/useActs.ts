@@ -6,7 +6,7 @@ import type { Row } from "./rows"
 import { itemActionOf } from "../window/items"
 import { leftSaid, REFUSED } from "./refusals"
 import { pickLater } from "./LaterPicker"
-import { keep, toldArchived, type Undoable, undoOf } from "./undo"
+import { archivedOf, toldArchived } from "./undo"
 
 /** What an act on a card is told besides: the card's element, where the
  * Later picker opens; by a key, what to do as it takes the card out of
@@ -35,10 +35,9 @@ export function useDoing(): (
  * Thread's App's, by its item actions (ADR 0087, decision 12). Later
  * opens the picker at the card, and tells `gone` once a time is picked,
  * or puts it off until its turn ends at once, as the card's menu asks;
- * Archive acts at once, and is told in the toast. Each is kept for
- * `Ctrl+Z`. The Window that does not reach a card's host has its App
- * refuse at once, in its toast: the pick stays, and nothing is kept to
- * undo.
+ * Archive acts at once, and is told in the toast, whose Undo takes it
+ * back. The Window that does not reach a card's host has its App refuse
+ * at once, in its toast: the pick stays.
  */
 export function useActs(): (row: Row, act: Act | "unread", on: ActOn) => void {
   const run = useRun()
@@ -47,13 +46,11 @@ export function useActs(): (row: Row, act: Act | "unread", on: ActOn) => void {
   return (row, act, { card, gone, done: untilDone }) => {
     const { listed } = row
     const project = row.project.id
-    // What takes it back, kept, as the card goes; none where it is refused.
-    const done = (): Undoable | undefined => {
-      if (away(row) !== undefined) return undefined
-      gone?.()
-      const undo = { project, listed, steps: undoOf(act, listed, Date.now()) }
-      keep([undo])
-      return undo
+    // The card goes, unless its App refuses.
+    const done = () => {
+      const reached = away(row) === undefined
+      if (reached) gone?.()
+      return reached
     }
     if (act === "later" && untilDone) {
       done()
@@ -68,10 +65,12 @@ export function useActs(): (row: Row, act: Act | "unread", on: ActOn) => void {
       })
       return
     }
-    const undo = done()
+    const reached = done()
     if (act === "wake" || act === "unread") doing(row, act)
     else doing(row, "archive", { archived: act === "archive" })
-    if (act === "archive" && undo) toldArchived(run, [undo])
+    // Its Undo puts back the Thread as it stood before.
+    if (act === "archive" && reached)
+      toldArchived(run, [archivedOf(project, listed, Date.now())])
   }
 }
 
@@ -114,12 +113,9 @@ export function useArchiveAll(): (rows: readonly Row[]) => void {
       return
     }
     const now = Date.now()
-    const undos = acted.map((row) => ({
-      project: row.project.id,
-      listed: row.listed,
-      steps: undoOf("archive", row.listed, now),
-    }))
-    keep(undos)
+    const undos = acted.map((row) =>
+      archivedOf(row.project.id, row.listed, now)
+    )
     for (const row of acted) doing(row, "archive", { archived: true })
     toldArchived(run, undos, said)
   }

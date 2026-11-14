@@ -80,9 +80,9 @@ test.afterEach(async () => {
   window = arc = undefined
 })
 
-/** A card's time, short and still (ADR 0098, decision 8): "now", "40s",
- * "14m". */
-const SHORT_TIME = /^(now|\d+[smhd])$/
+/** A card's time, short and still (ADR 0098, decision 8, as amended):
+ * "now", "14m", "2h". */
+const SHORT_TIME = /^(now|\d+[mhd])$/
 
 /** A word as sh takes it, whatever it holds. */
 const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`

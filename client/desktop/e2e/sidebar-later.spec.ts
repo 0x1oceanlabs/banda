@@ -104,8 +104,9 @@ test("a Thread that asks is put off for a minute, waits with its question, and c
   // that (ADR 0099, decision 9); seen, it is the question that calls.
   await expect(row).toBeVisible({ timeout: 90_000 })
   await expect(row.getByRole("img", { name: "Woke" })).toBeVisible()
+  // A minute ago, as the minute's clock says it.
   await expect(row).toContainText(
-    /Woke You put it off \d+[sm] ago · Run a check/
+    /Woke You put it off (just now|\d+m ago) · Run a check/
   )
   await expect(markOf(page)).toHaveAccessibleName(/Woke/)
   await row.click()

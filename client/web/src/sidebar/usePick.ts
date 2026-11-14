@@ -119,9 +119,6 @@ export function usePick({
     pick(key)
   }
 
-  // The cards Undo brings back, the first drawn of which takes the pick.
-  const coming = useRef<ReadonlySet<string>>(undefined)
-
   /** As an act by key takes the card `gone` out of the tab: the pick
    * goes on, from the order drawn now (§2.7), where it was on it. */
   const goneFrom = (gone: string) => {
@@ -186,7 +183,6 @@ export function usePick({
 
   /** Moves the pick by `step` among the stops drawn. */
   const to = (step: Step) => {
-    coming.current = undefined
     moveTo(stepped(stops().map(keyOf), picked, step))
   }
 
@@ -260,7 +256,6 @@ export function usePick({
   // A click picks what it lands on, and the ring goes.
   const onPointerDown = (event: { target: EventTarget }) => {
     setKeyed(false)
-    coming.current = undefined
     const stop =
       event.target instanceof Element && event.target.closest(`[${PICK}]`)
     if (stop) pick(keyOf(stop))
@@ -275,8 +270,7 @@ export function usePick({
   }, [open, pick])
 
   // After each drawing: the list names its pick, which comes into view
-  // after a key; a card picked that left the tab hands it on, and one Undo
-  // brings back into it takes it, the first drawn of several.
+  // after a key; a card picked that left the tab hands it on.
   const drawn = useRef<{ tab: Tab; cards: readonly string[] }>(undefined)
   useLayoutEffect(() => {
     const own = list.current
@@ -286,14 +280,6 @@ export function usePick({
     const at = all.find((stop) => keyOf(stop) === picked)
     const before = drawn.current
     drawn.current = { tab, cards }
-    const back = coming.current
-    if (before?.tab !== tab) coming.current = undefined
-    else if (back !== undefined) {
-      const here = cards.filter((key) => back.has(key))
-      if (here.length === back.size) coming.current = undefined
-      const [first] = here
-      if (first !== undefined && first !== picked) return moveTo(first)
-    }
     if (at) own.setAttribute("aria-activedescendant", at.id)
     else own.removeAttribute("aria-activedescendant")
     if (at && scroll.current) at.scrollIntoView({ block: "nearest" })
@@ -309,11 +295,6 @@ export function usePick({
     /** The stop picked, as drawn. */
     at: () => stopOf(now.current.picked),
     goneFrom,
-    /** As Undo brings the cards `keys` back: the first drawn takes the
-     * pick in this tab, unless a key or a click moves the pick first. */
-    back: (keys: ReadonlySet<string>) => {
-      coming.current = keys
-    },
     expand,
     /** Moves the pick by `step`, as the small inbox puts it on its first
      * card. */

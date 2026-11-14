@@ -7,7 +7,6 @@ import {
   HOUR,
   left,
   MINUTE,
-  nextShort,
   problem,
   short,
   wakes,
@@ -64,16 +63,15 @@ test("what is left reads rounded up, a minute short of an hour as the hour", () 
   expect(left(now + 2 * DAY + 1, now)).toBe("3d")
 })
 
-test("a card's time is short and still: by tens of seconds, then minutes, hours, days, then the day", () => {
+test("a card's time is short and still: now for the first minute, then minutes, hours, days, then the day", () => {
   // Local times, as the Person's clock reads them.
   const now = new Date(2026, 10, 10, 15, 0).getTime()
   const before = (ms: number) => short(now - ms, now)
   expect(before(0)).toBe("now")
-  expect(before(9_999)).toBe("now")
-  expect(before(10_000)).toBe("10s")
-  expect(before(19_999)).toBe("10s")
-  expect(before(59_000)).toBe("50s")
+  expect(before(40_000)).toBe("now")
+  expect(before(MINUTE - 1)).toBe("now")
   expect(before(MINUTE)).toBe("1m")
+  expect(before(14 * MINUTE + 30_000)).toBe("14m")
   expect(before(HOUR - 1)).toBe("59m")
   expect(before(HOUR)).toBe("1h")
   expect(before(DAY - 1)).toBe("23h")
@@ -90,38 +88,6 @@ test("how long ago reads as a card's time, with the whole first minute now", () 
   expect(ago(now - 40_000, now)).toBe("now")
   expect(ago(now - 14 * MINUTE, now)).toBe("14m")
   expect(ago(new Date(2025, 2, 3).getTime(), now)).toBe("Mar 2025")
-})
-
-test("a card's time next changes each 10 s in the first minute, each 60 s in the first hour, then each hour and each day", () => {
-  const at = new Date(2026, 10, 10, 15, 0).getTime()
-  const next = (passed: number) => nextShort(at, at + passed)! - at
-  expect(next(0)).toBe(10_000)
-  expect(next(9_999)).toBe(10_000)
-  expect(next(10_000)).toBe(20_000)
-  expect(next(45_000)).toBe(50_000)
-  expect(next(59_000)).toBe(MINUTE)
-  expect(next(MINUTE)).toBe(2 * MINUTE)
-  expect(next(14 * MINUTE + 30_000)).toBe(15 * MINUTE)
-  expect(next(HOUR - 1)).toBe(HOUR)
-  expect(next(HOUR)).toBe(2 * HOUR)
-  expect(next(5 * HOUR + 1)).toBe(6 * HOUR)
-  expect(next(DAY)).toBe(2 * DAY)
-  expect(next(6 * DAY + 1)).toBe(7 * DAY)
-  // Its words change at that moment and not before.
-  for (const passed of [0, 9_000, 30_000, 14 * MINUTE, 3 * HOUR, 2 * DAY]) {
-    const now = at + passed
-    const changes = nextShort(at, now)!
-    expect(short(at, changes - 1)).toBe(short(at, now))
-    expect(short(at, changes)).not.toBe(short(at, now))
-  }
-  // Past a week a date, which changes as the year turns; an earlier
-  // year's never. A moment yet to come is now for 10 s past it.
-  const now = at
-  expect(nextShort(new Date(2026, 2, 3).getTime(), now)).toBe(
-    new Date(2027, 0, 1).getTime()
-  )
-  expect(nextShort(new Date(2025, 2, 3).getTime(), now)).toBeUndefined()
-  expect(nextShort(now + 5_000, now)).toBe(now + 15_000)
 })
 
 test("a wake time is on 24 hours and in English, whatever the system's: 18:30, Fri 9:00, Dec 3", () => {

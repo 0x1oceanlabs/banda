@@ -5,6 +5,7 @@ import { FadeText } from "@banda/ui/components/fade-text"
 import { MachineMark } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
 import type { ProjectSummary } from "@banda/contract"
+import { useMinute } from "@banda/ui/hooks/use-now"
 import { THINKING, useThinking } from "@banda/ui/lib/naming"
 import { projectLabel } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
@@ -31,6 +32,7 @@ import {
   type ReactElement,
   type ReactNode,
   useContext,
+  useEffect,
   useState,
 } from "react"
 import { type Act, actsWidth } from "./acts"
@@ -45,12 +47,10 @@ import {
   spokenOf,
   STRAYED,
   timeShown,
-  timesOf,
   workSaid,
 } from "./card"
 import { awayShort } from "../machines/words"
 import { CardTime } from "./CardStatus"
-import { dueOf, useClock, useWakeAt } from "./clock"
 import { MachineCard } from "./MachineCard"
 import { useOpenRow } from "./open"
 import { keyOf } from "./rows"
@@ -98,9 +98,9 @@ export const ACT_LOOK: Readonly<
  * (`card.ts`): three lines, each a left and a right, lines 2 and 3
  * under the title, past the mark. A child under its parent starts with ↳,
  * and its lines go in by as much (decision 24). Colour is only on a
- * call's mark and time. It is drawn again only as one of its times
- * changes (`clock.ts`), or, at work, as what its Agent does shows
- * (`useHeld`). It is an option of the list, which keys pick (decision
+ * call's mark and time. Its times are drawn again as each minute begins,
+ * on one timer for every card (`useMinute`), and, at work, as what its
+ * Agent does shows (`useHeld`). It is an option of the list, which keys pick (decision
  * 13): it has no focus of its own, and its ring shows while the list has
  * the focus and the last input was a key (`globals.css`). A click opens
  * the Pane it stands for, by `pane.pick`; a screen reader hears it by
@@ -135,7 +135,7 @@ export function Card({
 }) {
   const card = useHeld(model)
   const onOpen = useOpenRow(row)
-  const now = useCardClock(card)
+  const now = useMinute()
   const spoken = spokenOf(card, now)
   // One being named has none.
   const shown = field ? NO_ACTS : acts
@@ -221,12 +221,6 @@ export function Card({
   )
 }
 
-/** The moment `card` is drawn as of: the list's clock (`clock.ts`), which
- * draws it again only as one of its times changes. */
-export function useCardClock(card: CardModel): number {
-  return useClock((at) => dueOf(timesOf(card), at))
-}
-
 /**
  * A card's lines (ADR 0098, decision 8), as the sidebar's card and the
  * counts' list draw them: each a left and a right, lines 2 and 3 under the
@@ -245,7 +239,7 @@ export function CardLines({
 }: {
   card: CardModel
   row: CardRow
-  /** The moment it is drawn as of (`useCardClock`). */
+  /** The moment it is drawn as of (`useMinute`). */
   now: number
   /** Its Thread is the open one: its Mark calls no one. */
   current?: boolean
@@ -327,9 +321,9 @@ export function CardLines({
 /**
  * `card` as it shows what its Agent does at work (ADR 0099, decision 2):
  * held as a Mark holds what it shows, each doing at least `HOLD`
- * (`heldDoing`), so its words, its time and its Mark never disagree. A
- * first shows at once; the list's clock takes each next one by the time
- * it comes, once the one shown has held. Nothing holds while it does not
+ * (`heldDoing`), so its words do not flicker and its words, its time and
+ * its Mark never disagree. A first shows at once; a next one, once the one
+ * shown has held. Nothing holds, and nothing waits, while it does not
  * work.
  */
 function useHeld(card: CardModel): CardModel {
@@ -339,10 +333,14 @@ function useHeld(card: CardModel): CardModel {
   )
   if (!does && held) setHeld(undefined)
   const waits = does && !(held && sameDoes(held.doing, does))
-  useWakeAt(
-    waits ? (held ? held.since + HOLD : 0) : undefined,
-    (now) => does && setHeld((was) => heldDoing(was, does, now, sameDoes))
-  )
+  useEffect(() => {
+    if (!waits || !does) return
+    const timer = setTimeout(
+      () => setHeld((was) => heldDoing(was, does, Date.now(), sameDoes)),
+      held ? held.since + HOLD - Date.now() : 0
+    )
+    return () => clearTimeout(timer)
+  }, [waits, does, held])
   return waits && held ? { ...card, does: held.doing } : card
 }
 
