@@ -16,12 +16,13 @@
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It swaps its own app for the release its
- * engine says is newest (`@banda/updates-desktop`, ADR 0119).
+ * engine says is newest (`@banda/updates-desktop`, ADR 0119), and writes
+ * what the system says of itself for the theme (os-window/system.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
  */
-import { existsSync, mkdirSync, renameSync, writeFileSync } from "node:fs"
+import { existsSync } from "node:fs"
 import { userInfo } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -36,13 +37,11 @@ import {
   protocol,
   session,
   shell,
-  systemPreferences,
   type WebContents,
 } from "electron"
 import { quitAsks } from "@banda/contract"
 import {
   BANDA,
-  type Device,
   type Look as LookValue,
   WALLPAPER_URL,
 } from "@banda/contract/look"
@@ -109,6 +108,7 @@ import { dragOut, exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
+import { systemLayer, thisSystem } from "./os-window/system"
 import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
 
 /** What a Pane in its own window asks of the window (`PoppedAsk`). */
@@ -318,7 +318,11 @@ const runtime = ManagedRuntime.make(
           DEV_PAGE ? undefined : deviceKey(join(state, "device.key"))
         ),
         Stop.layer,
-        lookLayer,
+        // What the system says of itself is written before the look
+        // starts, so the first look has it too (os-window/system.ts).
+        lookLayer.pipe(
+          Layer.provide(systemLayer(join(state, "device.json"), thisSystem()))
+        ),
         // Who works and who waits here, for the menu bar (macOS).
         statusLayer(hasMenuBar(process.platform)),
         // The settings open their files with `Editors.edit`.
@@ -391,7 +395,6 @@ async function ready(): Promise<void> {
   )
   if (hidden) void dockTo(false)
   listShortcut()
-  followDevice()
   const listen = (now: LookValue) => {
     // Native parts (scrollbars, menus) and the page's own
     // prefers-color-scheme follow the look's mode.
@@ -1034,64 +1037,6 @@ function buttonsAt(now: LookValue | null): { x: number; y: number } {
 function insetOf(shown: BrowserWindow | null): number | null {
   if (!OWN_FRAME || !shown || shown !== window) return null
   return shown.isFullScreen() ? 0 : INSET
-}
-
-/** The accent set in the system's settings, as `#rrggbb` (ADR 0075,
- * decision 6): macOS's and Windows' only. */
-function accentOf(): string | null {
-  if (process.platform !== "darwin" && process.platform !== "win32") return null
-  const rgba = systemPreferences.getAccentColor()
-  return /^[0-9a-f]{6}/i.test(rgba)
-    ? `#${rgba.slice(0, 6).toLowerCase()}`
-    : null
-}
-
-/** Writes what the system says of itself where the look reads it, now
- * and each time the Person changes it: its accent (ADR 0100, decision 1),
- * so the macos theme's focus, rings and buttons take the Person's colour
- * (ADR 0075, decision 6); and whether it reduces transparency or raises
- * contrast, which turns glass off while it does (ADR 0100, decision 4).
- * The look resolves the theme again on each change, so only a change is
- * written: the window's own mode changes `nativeTheme` too. It is written
- * before the look starts, so the first look has it too. */
-function followDevice(): void {
-  const file = join(state, "device.json")
-  let written = ""
-  const write = () => {
-    const accent = accentOf()
-    const device: Device = {
-      ...(accent && { accent }),
-      reduce_transparency: nativeTheme.prefersReducedTransparency,
-      // Windows' high contrast forces its own colours.
-      high_contrast:
-        nativeTheme.shouldUseHighContrastColors ||
-        nativeTheme.inForcedColorsMode,
-    }
-    const text = JSON.stringify(device)
-    if (text === written) return
-    try {
-      mkdirSync(state, { recursive: true })
-      writeFileSync(`${file}.new`, text)
-      renameSync(`${file}.new`, file)
-      written = text
-    } catch (error) {
-      console.error(`banda: ${file}: ${String(error)}`)
-    }
-  }
-  write()
-  nativeTheme.on("updated", write)
-  if (process.platform === "darwin") {
-    systemPreferences.subscribeNotification(
-      "AppleColorPreferencesChangedNotification",
-      write
-    )
-    // Reduce transparency and increase contrast, in Accessibility.
-    systemPreferences.subscribeWorkspaceNotification(
-      "NSWorkspaceAccessibilityDisplayOptionsDidChangeNotification",
-      write
-    )
-  } else if (process.platform === "win32")
-    systemPreferences.on("accent-color-changed", write)
 }
 
 /** The look asks for the system's glass. */

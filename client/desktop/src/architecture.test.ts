@@ -70,10 +70,33 @@ function projectReads(source: string, file: string): string[] {
   return found
 }
 
+/**
+ * The ceiling on main's root, `main.ts`, in lines: Electron main becomes
+ * the window's parts and the device's capabilities, each a file of its
+ * own (`os-window/`, `device/`), and the root only builds the runtime
+ * from them and hands Electron's events on (ADR 0089, decision 9; the
+ * window's plan, WS10). The file stays under it, and a PR that cuts the
+ * file more than `SLACK` lines below it lowers it; what main gains goes
+ * into a part, not the root.
+ */
+const MAIN_LINES = 1289
+const SLACK = 20
+
+test("main's root keeps under its ceiling, and the ceiling follows it down", () => {
+  const text = readFileSync(join(root, "client/desktop/src/main.ts"), "utf8")
+  const lines = text.split("\n").length - 1
+  expect(lines).toBeLessThanOrEqual(MAIN_LINES)
+  expect(
+    MAIN_LINES - lines,
+    `main.ts has ${lines} lines: lower MAIN_LINES to it`
+  ).toBeLessThanOrEqual(SLACK)
+})
+
 test("main's code is found: the window's, the kit's and the Apps' parts in main", () => {
   const found = new Set(mains.map((file) => relative(root, file)))
   for (const file of [
     "client/desktop/src/main.ts",
+    "client/desktop/src/os-window/system.ts",
     "client/desktop-kit/src/files.ts",
     "apps/agents/desktop/src/index.ts",
     "apps/browser/desktop/src/index.ts",
