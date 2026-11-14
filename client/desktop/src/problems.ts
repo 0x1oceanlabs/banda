@@ -27,7 +27,10 @@ import {
   type Record,
   recordOf,
 } from "@banda/contract/problems"
-import { app, crashReporter, type WebContents } from "electron"
+import { type Answers, none } from "@banda/desktop-kit"
+import { Effect } from "effect"
+import { app, crashReporter, shell, type WebContents } from "electron"
+import type { BRIDGE } from "./bridge"
 
 /** The most a log grows to before it starts again, as the engine's. */
 const LOG_MOST = 4 << 20
@@ -223,3 +226,17 @@ const mapOf: MapOf = async (script) =>
       "utf8"
     )
   )
+
+/** Main's answers to the page's channels of `problems`: the logs' folder
+ * in `state`, opened in the system's file manager, and the page that
+ * broke opened again. */
+export const problemsAnswers = (
+  state: string
+): Answers<typeof BRIDGE.problems, never> => ({
+  logs: [
+    none,
+    () =>
+      Effect.asVoid(Effect.promise(() => shell.openPath(join(state, "logs")))),
+  ],
+  reopen: [none, (_, event) => Effect.sync(() => event.sender.reload())],
+})

@@ -8,8 +8,8 @@
  * bar, its icon there saying who works and who waits (closing.ts,
  * menubar.ts, tray.ts). It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
- * opens `sidebar.toml` in the Person's editor (ADR 0008), and opens the
- * system's folder picker for "Add Project" (ADR 0026), and a
+ * opens `sidebar.toml` in the Person's editor (sidebar.ts), and
+ * answers for the device's files, clipboard and pickers (device/), and a
  * Pane in a window of its own, the same page at `#pane/<id>` (ADR 0025,
  * decision 9); nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The modules' parts in main run here too, as the
@@ -52,11 +52,8 @@ import {
   Engine,
   Look,
   none,
-  pickFolder,
-  pickSave,
   type Relayed,
   serve,
-  Settings,
   tellPage,
   text,
   Window,
@@ -68,7 +65,7 @@ import {
 } from "@banda/core"
 import { type Acts, actsAnswers, runOwn } from "./acts"
 import { BRIDGE } from "./bridge"
-import { relayed, relayedAs, saveCopy } from "./bytes"
+import { relayed, relayedAs } from "./bytes"
 import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
 import { deviceKey } from "./key"
@@ -101,13 +98,15 @@ import { hasMenuBar } from "./menubar"
 import { Status, statusLayer } from "./status"
 import { menuBar } from "./tray"
 import { Hosts, terminalArgs } from "./hosts"
-import { startLog, watchProblems } from "./problems"
+import { problemsAnswers, startLog, watchProblems } from "./problems"
 import { revive } from "./revive"
 import { Editors } from "./editors"
-import { dragOut, exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
-import { settingsLayer } from "./settings"
-import { ensure } from "./sidebar"
+import { settingsAnswers, settingsLayer } from "./settings"
+import { sidebarAnswers } from "./sidebar"
+import { clipboardAnswers } from "./device/clipboard"
+import { filesAnswers } from "./device/files"
+import { pickAnswers } from "./device/pick"
 import { systemLayer, thisSystem } from "./os-window/system"
 import { NODE_FOLDER, PROGRAM, Program, whereOf } from "./program"
 
@@ -595,101 +594,18 @@ async function ready(): Promise<void> {
           ),
       ],
     },
-    sidebar: {
-      edit: [
-        none,
-        () =>
-          Effect.gen(function* () {
-            const sidebar = yield* Look.part("sidebar", "The sidebar's file")
-            ensure(sidebar.file)
-            yield* Editors.use((editors) => editors.edit(sidebar.file))
-          }),
-      ],
-    },
+    sidebar: sidebarAnswers,
     // The modules' own: the browser's (ADR 0013).
     ...modules.answers,
     // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
-    settings: {
-      set: [
-        Schema.Tuple([Schema.String, Schema.String, Schema.String]),
-        ([file, key, value]) =>
-          Settings.use((settings) => settings.set(file, key, value)),
-      ],
-      reset: [
-        Schema.Tuple([Schema.String, Schema.String]),
-        ([file, key]) => Settings.use((settings) => settings.reset(file, key)),
-      ],
-      rename: [
-        Schema.Tuple([Schema.String, Schema.String, Schema.String]),
-        ([file, key, to]) =>
-          Settings.use((settings) => settings.rename(file, key, to)),
-      ],
-      reveal: [
-        text,
-        ([file]) =>
-          Effect.flatMap(Look.part("config", "The config folder"), (config) =>
-            Settings.use((settings) => settings.reveal(config, file))
-          ),
-      ],
-      themes: [none, () => Settings.use((settings) => settings.themes)],
-    },
-    files: {
-      outside: [text, ([path]) => openFile(path)],
-      show: [text, ([path]) => Effect.sync(() => showFile(path))],
-      exists: [text, ([path]) => Effect.sync(() => exists(path))],
-      editors: [
-        none,
-        () =>
-          Editors.use((editors) => editors.list).pipe(
-            Effect.map((found) => found.map(({ id, name }) => ({ id, name })))
-          ),
-      ],
-      openIn: [
-        Schema.Tuple([
-          Schema.String,
-          Schema.String,
-          Schema.NullOr(Schema.Number),
-          Schema.NullOr(Schema.Number),
-        ]),
-        ([editor, path, line, column]) =>
-          Editors.use((editors) => editors.open(editor, path, line, column)),
-      ],
-      drag: [
-        Schema.Tuple([Schema.Array(Schema.String)]),
-        ([paths], event) => Effect.promise(() => dragOut(event.sender, paths)),
-      ],
-      save: [
-        Schema.Tuple([Schema.String, Schema.String]),
-        ([url, name], event) =>
-          saveCopy(url, name, (offered) =>
-            pickSave(BrowserWindow.fromWebContents(event.sender), offered)
-          ),
-      ],
-    },
-    edit: {
-      paste: [none, (_, event) => Effect.sync(() => event.sender.paste())],
-      pastePlain: [
-        none,
-        (_, event) => Effect.sync(() => event.sender.pasteAndMatchStyle()),
-      ],
-      copyImageAt: [
-        Schema.Tuple([Schema.Number, Schema.Number]),
-        ([x, y], event) =>
-          Effect.sync(() =>
-            event.sender.copyImageAt(Math.round(x), Math.round(y))
-          ),
-      ],
-    },
-    problems: {
-      logs: [
-        none,
-        () =>
-          Effect.asVoid(
-            Effect.promise(() => shell.openPath(join(state, "logs")))
-          ),
-      ],
-      reopen: [none, (_, event) => Effect.sync(() => event.sender.reload())],
-    },
+    settings: settingsAnswers,
+    // What broke in Banda: its logs, and the page opened again (ADR 0039).
+    problems: problemsAnswers(state),
+    // The device's capabilities (device/; ADR 0089, decision 9): its
+    // files, its clipboard, and "Add Project"'s folder picker (ADR 0026).
+    files: filesAnswers,
+    edit: clipboardAnswers,
+    folder: pickAnswers,
     menu: {
       open: [text, ([route]) => Effect.sync(() => openMenu(route))],
     },
@@ -728,14 +644,6 @@ async function ready(): Promise<void> {
             if (!from || ![...popped.values()].includes(from)) return
             tellPage(inFront()?.webContents, BRIDGE.popped.asked, asked)
           }),
-      ],
-    },
-    // "Add Project"'s folder picker (ADR 0026).
-    folder: {
-      pick: [
-        Schema.Tuple([Schema.NullOr(Schema.String)]),
-        ([at], event) =>
-          pickFolder(BrowserWindow.fromWebContents(event.sender), at),
       ],
     },
   })

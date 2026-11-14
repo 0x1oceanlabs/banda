@@ -185,6 +185,12 @@ desktop, web and the PWA now.
    `os-window/system.ts`, a layer of its own that writes `device.json`
    before the look starts and stops listening as main's runtime is
    disposed.
+   Part 2: the bridge's answers that need none of main's state are
+   tables beside their code, as `act`'s is: `files`, `edit` and `folder`
+   in `device/files.ts`, `device/clipboard.ts` and `device/pick.ts`, and
+   `settings`, `sidebar` and `problems` in their own files; a second
+   list in that test names the parts the root still answers itself, and
+   only falls.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer
