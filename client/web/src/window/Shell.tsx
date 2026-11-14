@@ -370,8 +370,8 @@ export function Shell({
     [change]
   )
   // A swipe up or down with the mod held steps once; a first Pane
-  // started on an empty workspace opens in its Project, there or into
-  // the Project's own Group (`startingHere`).
+  // started on an empty workspace opens in its Project, there or first
+  // on its workspace (`startingHere`).
   const stepBy = useCallback(
     (by: 1 | -1) => change((w) => step(w, by)),
     [change]

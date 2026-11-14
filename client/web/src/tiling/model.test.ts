@@ -714,25 +714,24 @@ describe("bringing a Pane here", () => {
   })
 })
 
-describe("sent by the keys, a Pane of the Project's own Group goes alone (ADR 0102, decision 4)", () => {
+describe("sent by the keys, a Pane in no Group goes alone, one in a Group takes it (ADR 0065)", () => {
   const column = (id: string, group?: string) => ({
     id,
     active: 0,
     entries: [{ id, project: A, pane: terminal(id) }],
     ...(group !== undefined && { group }),
   })
-  /** On A's workspace: its own Group of two terminals, then an Agent's
-   * Group of a Thread and its Diff; the focus on column `focus`. */
+  /** On A's workspace: two terminals in no Group, then an Agent's Group
+   * of a Thread and its Diff; the focus on column `focus`. */
   const workspaces = (focus: number): Workspaces => ({
     list: [
       {
         id: "a",
         project: A,
-        own: "own",
         focus,
         columns: [
-          column("x1", "own"),
-          column("x2", "own"),
+          column("x1"),
+          column("x2"),
           column("t1", "agent"),
           column("d1", "agent"),
         ],
@@ -742,13 +741,11 @@ describe("sent by the keys, a Pane of the Project's own Group goes alone (ADR 01
     current: 0,
   })
 
-  test("the focused terminal leaves, and its own Group stays with the rest", () => {
+  test("the focused terminal leaves alone", () => {
     const state = workspaces(1)
-    expect(takesGroup(current(state), current(state).columns[1])).toBe(false)
+    expect(takesGroup(current(state).columns[1])).toBe(false)
     const sent = send(state, 1)
     expect(columns(sent, 0)).toEqual([["x1"], ["t1"], ["d1"]])
-    expect(sent.list[0].own).toBe("own")
-    expect(sent.list[0].columns[0].group).toBe("own")
     expect(columns(sent, 1)).toEqual([["x2"]])
     expect(sent.list[1].columns[0].group).toBeUndefined()
     expect(focusName(sent)).toBe("x2")
@@ -756,7 +753,7 @@ describe("sent by the keys, a Pane of the Project's own Group goes alone (ADR 01
 
   test("a Pane of an Agent's Group still takes the whole Group, as one window (ADR 0065)", () => {
     const state = workspaces(2)
-    expect(takesGroup(current(state), current(state).columns[2])).toBe(true)
+    expect(takesGroup(current(state).columns[2])).toBe(true)
     const sent = send(state, 1)
     expect(columns(sent, 0)).toEqual([["x1"], ["x2"]])
     expect(columns(sent, 1)).toEqual([["t1"], ["d1"]])
