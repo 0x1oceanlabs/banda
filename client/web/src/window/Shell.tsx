@@ -121,7 +121,6 @@ import {
   focusedIn,
   openingFrom,
   placed,
-  startingHere,
   strayedIn,
 } from "../tiling/opening"
 import { runAction, type Shell as Parts, useWindowApi } from "./actions"
@@ -369,16 +368,10 @@ export function Shell({
       }),
     [change]
   )
-  // A swipe up or down with the mod held steps once; a first Pane
-  // started on an empty workspace opens in its Project, there or first
-  // on its workspace (`startingHere`).
+  // A swipe up or down with the mod held steps once.
   const stepBy = useCallback(
     (by: 1 | -1) => change((w) => step(w, by)),
     [change]
-  )
-  const startHere = useCallback(
-    (pane: PaneState) => change((w) => startingHere(w, home, pane, placing)),
-    [change, home, placing]
   )
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
@@ -544,6 +537,13 @@ export function Shell({
         change((w) => focusEntry(w, entry))
       ),
   })
+  // A first Pane started on an empty workspace opens as its key opens it,
+  // a Thread as `Alt+Enter`, where Here says it starts; the engine places
+  // it, there on a workspace no Project owns (ADR 0134, decision 6).
+  const startHere = useCallback(
+    (pane: PaneState) => parts.open(pane, here.get().starts),
+    [parts, here]
+  )
   // A Thread that woke by itself is told of once (ADR 0074, decision 7).
   useWokeNote(stores, parts.run)
   // A new Problem of Banda's own tells too, silently (ADR 0039).

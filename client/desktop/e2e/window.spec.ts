@@ -6652,6 +6652,50 @@ test("Alt+Enter starts in the Project in front, on its workspace; beside a Threa
   await startsIn("No Project")
 })
 
+test("on an empty workspace no Project owns, Alt+Enter opens the new Thread there, as its button does: the screen stays (ADR 0134, decision 6)", async () => {
+  window = await startWindow()
+  const { page } = window
+  // Work's draft on its workspace, and the empty one at the bottom.
+  await firstThread(page)
+  const names = () => workspaceNames(page)
+  await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
+  const fresh = page.getByRole("button", { name: "New workspace" })
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const current = numbers.locator("[aria-current]:not([inert])")
+  const drafts = page
+    .locator(`${ON_SCREEN} [data-strip]`)
+    .getByRole("region", { name: "New Thread" })
+  const inWork = drafts
+    .and(page.locator('[data-focused="true"]'))
+    .getByRole("button", { name: "Project: Work", exact: true })
+
+  // Alt+Enter on it: Work's new Thread opens there, not on Work's.
+  await fresh.click()
+  await expect(fresh).toHaveAttribute("aria-current", "true")
+  await page.keyboard.press("Alt+Enter")
+  await expect(inWork).toBeVisible()
+  await expect(drafts).toHaveCount(1)
+  await expect(current).toHaveAccessibleName("Workspace 2")
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "New workspace"])
+  await page.screenshot({ path: "test-results/thread-here-key.png" })
+
+  // Its button on the next empty one does the same.
+  await fresh.click()
+  await expect(fresh).toHaveAttribute("aria-current", "true")
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "New Thread", exact: true })
+    .click()
+  await expect(inWork).toBeVisible()
+  await expect(drafts).toHaveCount(1)
+  await expect(current).toHaveAccessibleName("Workspace 3")
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "Workspace 3", "New workspace"])
+})
+
 test("banda menu opens the Banda menu at a route, from outside the window", async () => {
   window = await startWindow()
   const { page, banda } = window

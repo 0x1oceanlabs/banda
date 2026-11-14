@@ -471,6 +471,18 @@ function placeAsked(
     if (opens === "below") return { to: "beside", pane: from, side: "below" }
     if (opens === "group") return { to: "group", pane: from }
   }
+  // On an empty workspace no Project owns, on screen, what the Person asks
+  // for with no Pane in front opens there; in the row a Project that owns
+  // no workspace takes the bottom one (ADR 0134, decision 6).
+  const empty = list.findIndex(
+    (w) => w.id === on && w.project === undefined && w.columns.length === 0
+  )
+  if (!at && !agents && empty >= 0) {
+    const owns = list.some((w) => w.project === project)
+    const takes =
+      flow === "row" && !scratch && !owns && empty === list.length - 1
+    if (!takes) return here()
+  }
   const homeward = flow === "row" && home
   if (at && from !== undefined && !agents) {
     const { columns } = list[at.workspace]
