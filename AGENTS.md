@@ -45,8 +45,10 @@ UNIX composition + deep modules + explicit contracts.
   accepted on 2026-11-06, and the order of the work in
   [the roadmap](docs/research/2026-11-08-roadmap-in-slices.md). Where they
   differ from what we build, what we build wins.
-- The decisions: [`docs/adr/`](docs/adr/). A change that contradicts an ADR
-  needs a new ADR first.
+- The decisions: [`docs/adr/`](docs/adr/README.md). Its index says which
+  still bind, by subject: read the standing ones of what you change. A
+  change that contradicts a standing ADR needs a new ADR first, and that
+  page says what an ADR is for.
 
 ## What is in play
 
