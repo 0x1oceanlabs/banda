@@ -9,7 +9,7 @@
  *   (decision 6); one that no longer does leaves the list.
  * - The Window holds the areas and the Tiling the Panes (ADR 0087,
  *   decisions 1 and 5): the Tiling imports no more of the Window than it
- *   does today, neither they nor the sidebar list names an App more than
+ *   does today, no code of the page's own names an App more than
  *   it does today, and the Window's root keeps under a line ceiling, 400
  *   at last. Each count only falls. The sidebar list does what the Person
  *   asks by the actions' ids: what it still takes as code is listed, no
@@ -107,6 +107,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs"
 import { dirname, join, relative, sep } from "node:path"
 import {
   appStrings,
+  appWords,
   beyond,
   componentProps,
   desktopReads,
@@ -685,38 +686,73 @@ test("one place answers a pick, and only the action reaches it", () => {
 })
 
 /**
- * What the Window, its Bar, the Tiling and the sidebar list still say of
- * an App, once for each place they do, by file (`appStrings`): a string
- * that names an action or a kind of the agents module's (`agents.…`) or a
- * Thread's (`thread.…`), and that module's settings file (`AGENTS_FILE`).
- * None of them names an App (ADR 0087, decision 1); these go with
- * intents (B8c). The sidebar's New Thread went (Roma, 2026-11-12): the
- * key and the New Thread Pane start one. The Flow is the Tiling's own
- * now, in `tiling.toml` (ADR 0127, decision 4), so its readers left the
- * list. None joins the list, and one that goes leaves it. Not what only
- * tests use.
+ * What the page's own code still says of an App, once for each place it
+ * does, by file (`appStrings`): a string that starts with a word an App
+ * declares, its id or the first word of its actions and kinds
+ * (`appWords`), as an action of a Thread's (`thread.…`), a method of the
+ * agents App's engine part (`agents.…`) or an App's settings file
+ * (`browser.toml`). Every folder of the page is read, the menu and the
+ * settings too (the window's rule 4; ADR 0127, decision 1), with every
+ * App's words: till WS8 only the Window, its Bar, the Tiling, the sidebar
+ * list and the boot were, for the agents App's alone. None of them names
+ * an App (ADR 0087, decision 1). What is left, and what takes it:
+ *
+ * - `settings/sections.ts` and `settings/Agents.tsx`: the sections of the
+ *   Apps' settings files, which each App declares next (WS8, part 2).
+ * - `thread.new` in the Window's root, the menu and Settings' Problems,
+ *   `terminal.run` in Settings' Machines and `files.…` in the Window's
+ *   actions: asked of an App by name, which go with intents (B8c, #1748).
+ * - `settings/Mod.tsx`: the two keys of an App's that Settings shows as
+ *   they read with the mod (#1749).
+ * - `settings/RemoveProject.tsx`: the Threads a Project's removal counts,
+ *   listed with `APP_METHODS` too (#1748).
+ * - `enter-key.ts`: a choice moved once out of the window's old storage
+ *   (#1750).
+ *
+ * The menu's usual Actions left it with WS8: an App says its own
+ * (`Action.usual`). None joins the list, and one that goes leaves it. Not
+ * what only tests use.
  */
 const APP_STRINGS = [
+  "web/src/enter-key.ts: agents.toml",
+  "web/src/enter-key.ts: agents.toml",
+  "web/src/menu/BandaMenu.tsx: thread.new",
+  "web/src/settings/Agents.tsx: agents.toml",
+  "web/src/settings/MachinesSettings.tsx: terminal.run",
+  "web/src/settings/Mod.tsx: thread.new",
+  "web/src/settings/Mod.tsx: terminal.new",
+  "web/src/settings/ProblemsSettings.tsx: thread.new",
+  "web/src/settings/RemoveProject.tsx: agents.threads",
+  "web/src/settings/sections.ts: agents.toml",
+  "web/src/settings/sections.ts: agents.toml",
+  "web/src/settings/sections.ts: browser.toml",
+  "web/src/settings/sections.ts: browser.toml",
+  "web/src/settings/sections.ts: agents.sites",
+  "web/src/settings/sections.ts: browser.toml",
+  "web/src/settings/sections.ts: terminal.toml",
+  "web/src/settings/sections.ts: terminal.toml",
+  "web/src/settings/sections.ts: files.toml",
+  "web/src/settings/sections.ts: files.toml",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
+  "web/src/window/actions.ts: files.stat",
+  "web/src/window/actions.ts: files.open",
+  "web/src/window/actions.ts: files.peek",
 ]
 
-const saying = [
-  "web/src/window",
-  "web/src/bar",
-  "web/src/tiling",
-  "web/src/sidebar",
-  "web/src/boot",
-]
-  .flatMap((folder) => sources(join(app, folder), { tests: false }))
-  .flatMap((file) =>
-    appStrings(readFileSync(file, "utf8"), file).map(
-      (what) => `${relative(app, file)}: ${what}`
-    )
+/** The words the Apps declare: `agents`, `thread`, `browser`, `files`… */
+const words = appWords(root)
+
+const saying = sources(join(app, "web/src"), { tests: false }).flatMap((file) =>
+  appStrings(readFileSync(file, "utf8"), file, words).map(
+    (what) => `${relative(app, file)}: ${what}`
   )
+)
 
-test("the Window, the Tiling and the sidebar list name an App no more than the list holds", () => {
+test("the page's own code names an App no more than the list holds", () => {
+  expect(words).toContain("thread")
+  expect(words).toContain("browser")
   expect(beyond(saying, APP_STRINGS)).toEqual([])
 })
 
@@ -1869,7 +1905,7 @@ test("the core names no App", () => {
   const naming = coreCode.flatMap((file) => {
     const source = readFileSync(file, "utf8")
     return [
-      ...appStrings(source, file),
+      ...appStrings(source, file, words),
       ...imports(source).filter(reachesModule),
     ].map((what) => `${relative(app, file)}: ${what}`)
   })

@@ -46,6 +46,14 @@ and stories 1 and 2. The map behind it is kept outside the repository
    is an action; the window knows no App; a view is the device's, the work
    the machine's, the settings the Person's; behaviour and the look are
    data.
+   _Built_ (WS8, part 1, rule 4): the Actions an empty Banda menu
+   offers are the Apps' to say (`Action.usual`), as New Thread and New
+   browser, and the menu names none. The test that counts where the
+   page's own code names an App reads every folder of the page, the menu
+   and Settings too, for every App's words, taken from the Apps'
+   `window.json`; its list only falls. Next the Apps declare their
+   Settings sections (part 2); what is asked of an App by name waits for
+   intents (decision 6).
 2. **An action runs from anywhere.** `banda act ID` and an Agent's tool
    run any action of the window or of an App, by its id and with its
    arguments, as a key does. The engine checks the id and the arguments

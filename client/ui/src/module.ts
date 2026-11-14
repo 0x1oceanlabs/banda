@@ -222,6 +222,10 @@ export type Action<Context = WindowApi> = {
   /** Run by its id alone, with the args another module gives: the Banda
    * menu and its key sheet leave it out. */
   unlisted?: true
+  /** The Banda menu offers it while empty, before any action is chosen
+   * often, as T3 Code's palette offers its own: an App's, in the modules'
+   * order, before the window's own. */
+  usual?: true
   /** Where its key works (ADR 0071, decision 1): a scope's id, as the
    * composer's; none for the window's, everywhere. `scoped` makes one. */
   scope?: string
