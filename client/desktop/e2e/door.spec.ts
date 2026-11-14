@@ -7,7 +7,7 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-test("a browser at this machine's door shows a code; allowed by it, the page is the window, and removed, it asks again (ADR 0124, decision 6; SE5)", async () => {
+test("a browser at this machine's door shows a code; the window asks the Person, and allowed there, the page is the window; removed, it asks again (ADR 0124, decisions 3 and 6; SE5)", async () => {
   test.setTimeout(120_000)
   window = await startWindow()
   const { app, page } = window
@@ -46,19 +46,44 @@ test("a browser at this machine's door shows a code; allowed by it, the page is 
   await expect(card.getByRole("status")).toContainText(
     "Waiting for Allow · the code is good until"
   )
+  // The window that is the Person here asks about it: who, the code its
+  // screen shows, and the address of the page that asks.
+  const question = page.locator("[data-devices-asking]")
+  await expect(question).toHaveAttribute("data-devices-asking", code!)
+  await expect(question.getByRole("heading")).toHaveText(/ wants to join /)
+  await expect(question.getByLabel("Code")).toHaveText(code!)
+  await expect(question).toContainText(
+    `Browser · asked now · from ${new URL(door).host}`
+  )
+  // One machine is all this window reaches: nothing to choose between.
+  await expect(question.getByRole("radio")).toHaveCount(0)
+  // Not allowed, it is told so, and may ask again.
+  await question.getByRole("button", { name: "Don't allow" }).click()
+  await expect(question).toHaveCount(0)
+  await expect(card).toHaveAttribute("data-pairing", "refused")
+  // Its window is never shown, so the click is said to the button.
+  await card.getByRole("button", { name: "Ask again" }).dispatchEvent("click")
+  await expect(card).toHaveAttribute("data-pairing", "asked")
   // It asks under the name its field says; another name is another
   // asking, with a code of its own.
   const name = card.getByLabel("This browser")
   await expect(name).toHaveValue(/ on /)
+  const before = await card.getByLabel("Code").textContent()
   await name.fill("The test's browser")
   await name.press("Enter")
-  await expect(card.getByLabel("Code")).not.toHaveText(code!)
+  await expect(card.getByLabel("Code")).not.toHaveText(before!)
   await expect(card.getByLabel("Code")).toHaveText(/^[0-9A-Z]{4}-[0-9A-Z]{4}$/)
   const asked = (await card.getByLabel("Code").textContent())!
 
-  // The Person allows it on this machine: the page is the window, on
-  // the same workspaces.
-  window.banda("devices", "allow", asked)
+  // The Person allows it in the window: the page is the window, on the
+  // same workspaces.
+  await expect(question).toHaveAttribute("data-devices-asking", asked)
+  await expect(question.getByRole("heading")).toHaveText(
+    /^The test's browser wants to join /
+  )
+  await question.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(question).toHaveCount(0)
+  await expect(page.getByText(/^The test's browser joined /)).toBeVisible()
   await expect(shown).toBeAttached({ timeout: 30_000 })
   await expect(card).toHaveCount(0)
   const listed = () =>
