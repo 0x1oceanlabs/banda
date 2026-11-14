@@ -349,10 +349,11 @@ mod tests {
     fn path_deps(file: &str) -> Vec<(String, String)> {
         let table = cargo(file);
         let from = file.trim_end_matches("Cargo.toml");
-        let mut deps: Vec<(String, String)> = table["dependencies"]
-            .as_table()
-            .unwrap()
-            .iter()
+        let mut deps: Vec<(String, String)> = table
+            .get("dependencies")
+            .and_then(|deps| deps.as_table())
+            .into_iter()
+            .flatten()
             .filter_map(|(name, dep)| {
                 let path = dep.get("path")?.as_str()?;
                 Some((name.clone(), tidy(from, path)))
@@ -427,6 +428,53 @@ mod tests {
             members, folders,
             "the workspace's members in the Apps' folders"
         );
+    }
+
+    /// The Apps' crates that a crate of another App's, or of the
+    /// platform's, still depends on. An App reaches another only by what
+    /// that one publishes, and the platform names no App (ADR 0062): this
+    /// list only falls, and a crate that needs one more says why in an ADR
+    /// first.
+    ///
+    /// Each App's settings are described in its own crate, and the
+    /// settings' crate gathers them by name until the list hands them over
+    /// (B2).
+    const TAKES_AN_APP: [(&str, &str); 4] = [
+        // Its modes and agents.toml's shape too.
+        ("platform/settings", "banda-agents"),
+        ("platform/settings", "banda-browser"),
+        ("platform/settings", "banda-files"),
+        ("platform/settings", "banda-terminal"),
+    ];
+
+    #[test]
+    fn no_more_crates_take_an_apps_crate_than_the_list_holds() {
+        let app = |folder: &str| {
+            folder
+                .strip_prefix("apps/")?
+                .split('/')
+                .next()
+                .map(str::to_owned)
+        };
+        let workspace = cargo("Cargo.toml");
+        let mut takes = Vec::new();
+        for member in workspace["workspace"]["members"].as_array().unwrap() {
+            let member = member.as_str().unwrap();
+            if !member.starts_with("apps/") && !member.starts_with("platform/") {
+                continue;
+            }
+            for (name, folder) in path_deps(&format!("{member}/Cargo.toml")) {
+                if app(&folder).is_some_and(|other| app(member) != Some(other)) {
+                    takes.push((member.to_owned(), name));
+                }
+            }
+        }
+        takes.sort();
+        let list: Vec<(String, String)> = TAKES_AN_APP
+            .iter()
+            .map(|(member, name)| (member.to_string(), name.to_string()))
+            .collect();
+        assert_eq!(takes, list);
     }
 
     /// Until the settings take the window parts from the list (B2), their
