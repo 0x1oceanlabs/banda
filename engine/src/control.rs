@@ -11,7 +11,9 @@
 //! says before it does (`run::quits`), so the window quits too. It exits
 //! 3 when the engine stopped as asked by anything else, as its unit
 //! stopped by hand: the window stays, and starts it when the Person says
-//! (ADR 0124, decision 9). Otherwise the window starts it again. Where the
+//! (ADR 0124, decision 9). An engine that moves onto another copy in its
+//! own place is the same engine to it: it follows it on, and the window
+//! hears nothing. Otherwise the window starts it again. Where the
 //! engine is the window's child (`service.rs`), or its unit does not
 //! start, it serves the engine itself, and ends the same ways.
 //!
@@ -265,7 +267,7 @@ async fn serve_as_child(places: Places, why: impl Into<String>) -> Result<(), Fa
 /// again.
 async fn follow(
     places: &Places,
-    (running, client): (Running, Client),
+    (running, mut client): (Running, Client),
     starts: Starts,
     way: Way,
     session: impl Fn() -> bool,
@@ -282,20 +284,22 @@ async fn follow(
     line["window"] = places.window().display().to_string().into();
     println!("{line}");
     let _ = std::io::stdout().flush();
-    let (gone, window_gone) = tokio::sync::oneshot::channel::<()>();
+    let (gone, mut window_gone) = tokio::sync::oneshot::channel::<()>();
     parent::on_gone(move || {
         let _ = gone.send(());
     });
-    tokio::select! {
-        // The window went: the engine goes on.
-        _ = window_gone => return Ok(()),
-        () = client.closed() => {}
-    }
-    // It says it is stopping as soon as it is asked to, and may take as
-    // long as systemd gives it to stop its Harnesses.
-    let began = Instant::now();
-    while running.pid.is_some_and(alive) && began.elapsed() < STOPS_WITHIN {
-        tokio::time::sleep(Duration::from_millis(50)).await;
+    loop {
+        tokio::select! {
+            // The window went: the engine goes on.
+            _ = &mut window_gone => return Ok(()),
+            () = client.closed() => {}
+        }
+        // It moved onto another copy in its own place: followed on, and
+        // the window hears nothing, as nothing it knows changed.
+        match moved_on(places, &running).await {
+            Some(next) => client = next,
+            None => break,
+        }
     }
     // Still there, it did not stop: it is followed again.
     if running.pid.is_some_and(alive) {
@@ -310,6 +314,39 @@ async fn follow(
             "Banda's engine stopped without being asked to: the window starts it again.".into(),
         )),
     }
+}
+
+/// The engine `running` names, once it closed its follower's connection:
+/// a client of it again when it moved onto another copy in its own place
+/// (`moving.rs`), the same process at the same address and door with the
+/// same secret; none once it went, or did neither within [`STOPS_WITHIN`].
+/// It says it is stopping as soon as it is asked to, and may take as long
+/// as systemd gives it to stop its Harnesses.
+async fn moved_on(places: &Places, running: &Running) -> Option<Client> {
+    let began = Instant::now();
+    while running.pid.is_some_and(alive) && began.elapsed() < STOPS_WITHIN {
+        if let Ok((now, client)) = answering(places).await
+            && same_road(running, &now)
+        {
+            return Some(client);
+        }
+        tokio::time::sleep(Duration::from_millis(100)).await;
+    }
+    None
+}
+
+/// Whether `now` is the engine `before` was, reached as the window knows
+/// it: what `start --with-parent` printed of it but its version, build
+/// and start, which a move changes.
+fn same_road(before: &Running, now: &Running) -> bool {
+    before.pid.is_some()
+        && before.pid == now.pid
+        && before.pid_ns == now.pid_ns
+        && before.protocol == now.protocol
+        && before.port == now.port
+        && before.secret == now.secret
+        && before.door == now.door
+        && before.host_key == now.host_key
 }
 
 /// What the follower says of an engine that stopped as asked, by what it
