@@ -1,7 +1,7 @@
 # The window's own part, as a module declares itself (ADR 0022, ADR 0071):
-# its actions, the tiling's first, its code declares; client/web's tests copy
-# them into window.json beside this file. When the window is split into
-# parts with names of their own, each takes its actions from here.
+# its actions its code declares; client/web's tests copy them into
+# window.json beside this file. The Tiling's are the workspaces' own, in
+# platform/workspaces/window.json (ADR 0087, decision 13).
 # It has no kind, api or [needs], which an App or a platform part declares:
 # the Window is neither, but a client's program (ADR 0087, decision 1).
 id = "window"

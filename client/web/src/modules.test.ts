@@ -10,6 +10,7 @@ import { expect, test } from "vitest"
 import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./window/actions"
 import { windowModule } from "./registry"
+import { TILING_ACTIONS } from "./tiling/actions"
 import { samePane } from "./tiling/model"
 import {
   identityOf,
@@ -100,6 +101,36 @@ test("a module's new action's id starts with its module's id", () => {
   )
 })
 
+/** What the Tiling's actions act on, by the word their ids start with:
+ * a Pane's place and size, a column, a Group, the workspaces, the Flow
+ * and the overview. */
+const TILINGS = /^(?:pane|column|group|workspace|workspaces|flow|overview)\./
+
+/**
+ * The Window's own actions that still act on a Pane (ADR 0087, decision
+ * 13): each asks a part of the Window first, the launcher, the Sheet, the
+ * calls or a window of the Pane's own, and goes to the Tiling with that
+ * part of WS7. None joins the list, and one that goes leaves it.
+ */
+const WINDOW_PANES = [
+  "pane.new",
+  "pane.close",
+  "pane.put-away",
+  "pane.pop-out",
+  "pane.pick",
+  "pane.beside",
+]
+
+test("the Window declares no action of the Tiling's but the listed, and the Tiling none of another's (ADR 0087, decision 13)", () => {
+  const ids = (actions: readonly { id: string }[]) => actions.map((a) => a.id)
+  expect(ids(WINDOW_ACTIONS).filter((id) => TILINGS.test(id))).toEqual(
+    WINDOW_PANES
+  )
+  expect(ids(TILING_ACTIONS).filter((id) => !TILINGS.test(id))).toEqual([])
+  const all = [...modules.flatMap(allOf), ...TILING_ACTIONS, ...WINDOW_ACTIONS]
+  expect(new Set(ids(all)).size).toBe(all.length)
+})
+
 /** An action as the engine reads it (ADR 0071, decision 2): its keys by
  * level, as its code writes them, for the engine to make real with the
  * mod; where they work, and what it takes. */
@@ -158,15 +189,20 @@ function written(file: string, value: unknown): boolean {
   return true
 }
 
-test("the window's own actions, the tiling's, are written for the engine as a module's are (ADR 0071, decision 2)", () => {
-  const file = join(import.meta.dirname, "../window.json")
+test("the Window's own actions are written for the engine as a module's are, and the Tiling's beside the workspaces' manifest (ADR 0071, decision 2; ADR 0087, decision 13)", () => {
+  const own = join(import.meta.dirname, "../window.json")
+  const tiling = join(
+    import.meta.dirname,
+    "../../../platform/workspaces/window.json"
+  )
   // Written now: review it and run again, as cargo test does the types.
-  expect(
-    written(file, {
+  expect([
+    written(own, {
       actions: WINDOW_ACTIONS.map(actionOf),
       scopes: windowModule.scopes,
-    })
-  ).toBe(false)
+    }),
+    written(tiling, { actions: TILING_ACTIONS.map(actionOf) }),
+  ]).toEqual([false, false])
 })
 
 test("each module's window part is written beside its manifest, for banda modules (ADR 0022, decision 1)", () => {

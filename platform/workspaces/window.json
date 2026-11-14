@@ -1,0 +1,831 @@
+{
+  "actions": [
+    {
+      "id": "pane.focus-left",
+      "title": "Focus the Pane left",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowLeft",
+          "mod": true
+        }
+      ],
+      "family": "Focus a Pane"
+    },
+    {
+      "id": "pane.focus-right",
+      "title": "Focus the Pane right",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowRight",
+          "mod": true
+        }
+      ],
+      "family": "Focus a Pane"
+    },
+    {
+      "id": "pane.focus-up",
+      "title": "Focus the Pane up",
+      "section": "Panes",
+      "keys": [],
+      "family": "Focus a Pane"
+    },
+    {
+      "id": "pane.focus-down",
+      "title": "Focus the Pane down",
+      "section": "Panes",
+      "keys": [],
+      "family": "Focus a Pane"
+    },
+    {
+      "id": "pane.move-left",
+      "title": "Move the Pane left",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowLeft",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane"
+    },
+    {
+      "id": "pane.move-right",
+      "title": "Move the Pane right",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowRight",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane"
+    },
+    {
+      "id": "pane.move-up",
+      "title": "Move the Pane up",
+      "section": "Panes",
+      "keys": [],
+      "family": "Move the Pane"
+    },
+    {
+      "id": "pane.move-down",
+      "title": "Move the Pane down",
+      "section": "Panes",
+      "keys": [],
+      "family": "Move the Pane"
+    },
+    {
+      "id": "pane.focus-up-or-workspace",
+      "title": "Focus the Pane up, or the workspace above",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowUp",
+          "mod": true
+        }
+      ],
+      "family": "Focus a Pane, or the workspace past it"
+    },
+    {
+      "id": "pane.focus-down-or-workspace",
+      "title": "Focus the Pane down, or the workspace below",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowDown",
+          "mod": true
+        }
+      ],
+      "family": "Focus a Pane, or the workspace past it"
+    },
+    {
+      "id": "pane.move-up-or-to-workspace",
+      "title": "Move the Pane up, or to the workspace above",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowUp",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane, or to the workspace past it"
+    },
+    {
+      "id": "pane.move-down-or-to-workspace",
+      "title": "Move the Pane down, or to the workspace below",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowDown",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane, or to the workspace past it"
+    },
+    {
+      "id": "column.wider",
+      "title": "Make the column wider",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "ArrowRight",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "column.narrower",
+      "title": "Make the column narrower",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "ArrowLeft",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "column.next-width",
+      "title": "The column's next width, round",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyR",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "column.previous-width",
+      "title": "The column's previous width, round",
+      "section": "Columns",
+      "keys": []
+    },
+    {
+      "id": "column.fill",
+      "title": "The column as wide as the room the others leave",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyF",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "column.width",
+      "title": "The column as wide as a step of the look's",
+      "section": "Columns",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "width": {
+            "type": "string",
+            "description": "a step of the look's, as 1/2"
+          }
+        },
+        "required": [
+          "width"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "column.center",
+      "title": "The column in the middle of the screen",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyC",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "column.first",
+      "title": "Focus the first column",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "Home",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "column.move-first",
+      "title": "Move the column to the first place",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "Home",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "column.last",
+      "title": "Focus the last column",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "End",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "column.move-last",
+      "title": "Move the column to the last place",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "End",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "pane.next-height",
+      "title": "The Pane's next height in its column, round",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "KeyR",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "pane.taller",
+      "title": "Make the Pane taller",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowDown",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "pane.shorter",
+      "title": "Make the Pane shorter",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "ArrowUp",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "pane.height",
+      "title": "The Pane as high in its column as a step of the look's",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "height": {
+            "type": "string",
+            "description": "a step of the look's, as 1/3"
+          }
+        },
+        "required": [
+          "height"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "column.even",
+      "title": "Every Pane of the column as high as the others",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyR",
+          "mod": true,
+          "more": true
+        }
+      ]
+    },
+    {
+      "id": "pane.zoom",
+      "title": "The Pane over the whole window, or back",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "KeyF",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "column.tabs",
+      "title": "The column as a Deck, one Pane at a time, or one above another",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyT",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "group.new",
+      "title": "A Group of the column, for others to join",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "KeyG",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "group.join-left",
+      "title": "The column into the Group on the left, or out of its own that way",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "BracketLeft",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "group.column-left",
+      "title": "Move the column left inside its Group",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "ArrowLeft",
+          "mod": true,
+          "more": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "group.join-right",
+      "title": "The column into the Group on the right, or out of its own that way",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "BracketRight",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "group.column-right",
+      "title": "Move the column right inside its Group",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "ArrowRight",
+          "mod": true,
+          "more": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "group.maximize",
+      "title": "The Group the whole screen wide, or back; in solo, the row for a while",
+      "section": "Groups",
+      "keys": [
+        {
+          "code": "KeyM",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "flow.solo",
+      "title": "Solo, what has the focus the whole screen wide, or back to the row",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "KeyM",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "workspaces.arrange",
+      "title": "Arrange by Project",
+      "section": "Workspaces",
+      "keys": []
+    },
+    {
+      "id": "workspaces.unarrange",
+      "title": "Undo Arrange by Project",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "KeyZ",
+          "primary": true
+        }
+      ]
+    },
+    {
+      "id": "flow.pick",
+      "title": "Pick how the Agents' windows stand: free, row or solo",
+      "section": "Workspaces",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "flow": {
+            "type": "string",
+            "description": "free, row or solo"
+          }
+        },
+        "required": [
+          "flow"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "pane.consume-left",
+      "title": "Take the Pane into the column on the left, or out of its own",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "BracketLeft",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "pane.consume-right",
+      "title": "Take the Pane into the column on the right, or out of its own",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "BracketRight",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "column.maximize",
+      "title": "The column the whole screen wide, or back",
+      "section": "Columns",
+      "keys": [
+        {
+          "code": "KeyF",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "overview.toggle",
+      "title": "Overview of every window",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "KeyO",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "workspace.up",
+      "title": "The workspace above",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "PageUp",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "workspace.move-up",
+      "title": "Move the workspace up",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "PageUp",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "workspace.down",
+      "title": "The workspace below",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "PageDown",
+          "mod": true
+        }
+      ]
+    },
+    {
+      "id": "workspace.move-down",
+      "title": "Move the workspace down",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "PageDown",
+          "mod": true,
+          "shift": true
+        }
+      ]
+    },
+    {
+      "id": "workspace.new",
+      "title": "A new workspace: the empty one at the bottom",
+      "section": "Workspaces",
+      "keys": []
+    },
+    {
+      "id": "workspace.close",
+      "title": "Close the workspace",
+      "section": "Workspaces",
+      "keys": [],
+      "args": {
+        "type": "object",
+        "properties": {
+          "workspace": {
+            "type": "string",
+            "description": "the workspace's id; none for the one on screen"
+          }
+        },
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "workspace.go",
+      "title": "Go to a workspace",
+      "section": "Workspaces",
+      "keys": [],
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "index": {
+            "type": "number",
+            "description": "its place from the top, from 0"
+          }
+        },
+        "required": [
+          "index"
+        ],
+        "additionalProperties": false
+      }
+    },
+    {
+      "id": "workspace.go-1",
+      "title": "Go to workspace 1",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit1",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-2",
+      "title": "Go to workspace 2",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit2",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-3",
+      "title": "Go to workspace 3",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit3",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-4",
+      "title": "Go to workspace 4",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit4",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-5",
+      "title": "Go to workspace 5",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit5",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-6",
+      "title": "Go to workspace 6",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit6",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-7",
+      "title": "Go to workspace 7",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit7",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-8",
+      "title": "Go to workspace 8",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit8",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "workspace.go-9",
+      "title": "Go to workspace 9",
+      "section": "Workspaces",
+      "keys": [
+        {
+          "code": "Digit9",
+          "mod": true
+        }
+      ],
+      "family": "Go to a workspace"
+    },
+    {
+      "id": "pane.send-1",
+      "title": "Move the Pane to workspace 1",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit1",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-2",
+      "title": "Move the Pane to workspace 2",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit2",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-3",
+      "title": "Move the Pane to workspace 3",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit3",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-4",
+      "title": "Move the Pane to workspace 4",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit4",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-5",
+      "title": "Move the Pane to workspace 5",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit5",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-6",
+      "title": "Move the Pane to workspace 6",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit6",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-7",
+      "title": "Move the Pane to workspace 7",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit7",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-8",
+      "title": "Move the Pane to workspace 8",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit8",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    },
+    {
+      "id": "pane.send-9",
+      "title": "Move the Pane to workspace 9",
+      "section": "Panes",
+      "keys": [
+        {
+          "code": "Digit9",
+          "mod": true,
+          "shift": true
+        }
+      ],
+      "family": "Move the Pane to a workspace"
+    }
+  ]
+}

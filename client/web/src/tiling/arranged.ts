@@ -4,18 +4,17 @@
  * it, and its Undo, or `workspaces.unarrange`'s key (Ctrl+Z, ⌘Z on a
  * Mac) while it shows, puts the workspaces back as they stood; once they
  * changed since, the engine refuses, and its words show. The Arrange a
- * Thread made a Project's asks for (`made.ts`) says nothing.
+ * Thread made a Project's asks for (`window/made.ts`) says nothing.
  */
-import { newId } from "@banda/contract"
 import { sameData } from "@banda/core"
 import { toast } from "@banda/ui/components/sonner"
 import { FIELDS } from "@banda/ui/lib/keys"
 import { problem } from "@banda/ui/lib/words"
 import { IN_PROGRAM } from "@banda/ui/pane"
-import { keptOf, type Plan } from "../tiling/arrange"
-import { apply } from "../tiling/arrangement"
-import { focused, type Workspaces } from "../tiling/model"
-import type { Shell } from "./actions"
+import type { Tiling } from "./actions"
+import { keptOf, type Plan } from "./arrange"
+import { apply } from "./arrangement"
+import { focused, type Workspaces } from "./model"
 
 /** The one toast an Arrange says itself in: the next one takes its place. */
 const ARRANGED = "workspaces.arranged"
@@ -27,11 +26,15 @@ const OWN_UNDO = `${FIELDS},${IN_PROGRAM}`
 /** What undoes the Arrange the toast shows, while it shows. */
 let shown: (() => void) | undefined
 
+/** The seed of a run that is only tried: what it makes is never kept, so
+ * it takes no ID of its own (ADR 0088, decision 11). */
+const TRIED = "00000000-0000-4000-8000-000000000000"
+
 /** Whether `plan` moves anything of `workspaces`, as the window's copy of
  * the engine's commands works it out. */
 function moves(workspaces: Workspaces, plan: Plan): boolean {
   const list = keptOf(workspaces)
-  const applied = apply(list, plan.command, newId())
+  const applied = apply(list, plan.command, TRIED)
   return "list" in applied && !sameData(applied.list, list)
 }
 
@@ -39,7 +42,7 @@ function moves(workspaces: Workspaces, plan: Plan): boolean {
  * `workspaces`: one that moves something offers Undo; one that moves
  * nothing says so. Gives the plan, to send. */
 export function sayArranged(
-  shell: Pick<Shell, "change">,
+  tiling: Pick<Tiling, "change">,
   workspaces: Workspaces,
   plan: Plan
 ): Plan {
@@ -49,7 +52,7 @@ export function sayArranged(
     return plan
   }
   const undo = () => {
-    if (shown === undo) unarrange(shell)
+    if (shown === undo) unarrange(tiling)
   }
   const gone = () => {
     if (shown === undo) shown = undefined
@@ -67,10 +70,10 @@ export function sayArranged(
 /** Puts the workspaces back as they stood before the last Arrange by
  * Project, the Pane in front still in front, as Arrange brings it along;
  * a refusal, as they changed since, shows the engine's words. */
-export function unarrange(shell: Pick<Shell, "change">): void {
+export function unarrange(tiling: Pick<Tiling, "change">): void {
   shown = undefined
   toast.dismiss(ARRANGED)
-  shell.change((workspaces) => ({
+  tiling.change((workspaces) => ({
     command: { method: "workspaces.unarrange", params: {} },
     want: focused(workspaces)?.id,
     refused: (error) => toast.error(problem(error, "Undo")),

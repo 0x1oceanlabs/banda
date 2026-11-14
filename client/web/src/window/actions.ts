@@ -1,7 +1,8 @@
 /**
  * What the window does, as one list of actions (ADR 0005, decisions 2 and
- * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
- * the Banda menu, its key sheet and `keys.toml` read the same list.
+ * 10): the modules' own, the Tiling's (`tiling/actions.ts`) and the
+ * Window's (ADR 0022, decision 3; ADR 0087, decision 13). The keys, the
+ * Banda menu, its key sheet and `keys.toml` read the same list.
  */
 import type {
   Engine,
@@ -39,19 +40,16 @@ import {
 } from "@banda/ui/module"
 import { IN_PROGRAM, type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
-import { sayArranged, unarrange, undoesNow } from "./arranged"
 import { chipOf } from "./attach"
 import { device } from "../boot"
 import { quiet } from "../calls/quiet"
 import { showing } from "../calls/sight"
-import { columnsOf } from "../look"
 import { actAs, refused, type Routing } from "../tiling/mount"
 import { type At, locateRoute } from "../menu/menu"
 import { modules } from "../modules"
 import {
   groupedOf,
   homeOf,
-  leads,
   identityOf,
   launcher,
   moduleAct,
@@ -59,96 +57,55 @@ import {
   widthOf,
   windowModule,
 } from "../registry"
-import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
-import { tomlOf } from "@banda/contract/settings"
-import { fileNow } from "@banda/ui/lib/look"
-import { isFlow, nextFlow } from "../bar/flow/Flow"
 import { archiving } from "../sidebar/items"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
 import { makeProject } from "../titles/MakeProject"
 import { pickLater } from "../sidebar/LaterPicker"
-import { logged } from "../sidebar/write-setting"
 import { askTab, isTab } from "../sidebar/showing"
 import { askRemoval } from "../settings/RemoveProject"
 import { notNow } from "../trust/not-now"
 import { askTrust } from "../trust/TrustCard"
 import {
+  type Placing,
+  sayRefused,
+  TILING_ACTIONS,
+  type Tiling,
+} from "../tiling/actions"
+import {
   asking,
-  type Change,
-  closableAt,
-  closingWorkspace,
-  columnMoved,
-  keptOf,
   moved,
   opened,
   type Plan,
   refusable,
-  resized,
   type Step,
-  workspaceMoved,
 } from "../tiling/arrange"
-import { refusedTo, type RowRefusal } from "../tiling/arrangement"
 import { factsOf } from "../tiling/useTiling"
-import type { PickFlow } from "../tiling/flow"
-import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
-import { floorsOf, roomLeft } from "../tiling/layout"
 import {
-  across,
   bring,
-  carry,
-  consume,
   current,
-  deck,
-  type Direction,
-  edge,
   entries,
-  even,
-  fill,
   focusEntry,
   focused,
-  focusedColumn,
-  refusalOf,
-  fresh,
-  go,
-  heighten,
-  heightTo,
-  maximize,
-  move,
   open,
   type Opening,
   samePane,
-  send,
-  share,
-  shift,
-  step,
-  takesGroup,
-  toEdge,
-  widen,
-  type Spot,
   type Workspaces,
 } from "../tiling/model"
 
 /** What the window's own actions can change: its parts, more than a
- * module's get (`WindowApi`). */
+ * module's get (`WindowApi`), and what the Tiling's take (`Tiling`). */
 export type Shell = WindowApi & {
   /** What the Top layer was asked to show of an App's (`WindowApi.top`),
    * which `TopPart` draws. */
   tops: Store<TopAsked>
-  /** Changes the workspaces. */
-  change: (how: Change) => void
   toggleSidebar: () => void
   /** Shows the sidebar, as a notice of many calls asks (ADR 0011). */
   showSidebar: () => void
-  toggleOverview: () => void
   /** Drops the drawer, or lifts it (ADR 0025, decision 8). */
   drawer: () => void
-  /** Shows the focused Pane over the whole window, or brings it back. */
-  zoom: () => void
   /** Opens the focused Pane in a window of its own, or brings it back to
    * its place (ADR 0025, decision 9). */
   popOut: () => void
-  /** Brings the focused column to the middle of the screen, once. */
-  center: () => void
   /** Goes to the Pane `pane.pick` asks for, the one way to go to an
    * Agent (ADR 0087, decision 7): where a workspace shows it, else where
    * it opens (`picking`), and brings it to the left once drawn (ADR 0065,
@@ -156,9 +113,6 @@ export type Shell = WindowApi & {
   pick: (project: ProjectId, pane: PaneState) => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
-  /** A Project by its ID, its folder missing or not, as the bar names it:
-   * `projects` has only the open ones. */
-  projectOf: (project: ProjectId) => ProjectSummary | undefined
   /** Closes every Pane that shows `item` of `project`, on any workspace:
    * it is put away, archived or put off (ADR 0069; ADR 0074). */
   putAway: (project: ProjectId, item: string) => void
@@ -170,16 +124,6 @@ export type Shell = WindowApi & {
   /** Takes the Sheet away while it shows (ADR 0102, decision 5); false
    * when none does. */
   closeSheet: () => boolean
-  /** How the Person works the Panes now: the Flow, and which Projects are
-   * of no Project (`placingOf`). */
-  placing: () => Placing
-  /** In solo, the workspace in view as the row for a while, or back to
-   * solo (ADR 0079); false when the Flow is not solo. */
-  glance: () => boolean
-  /** Picks a Flow on this device (`tiling/flow.ts`): Solo is its own
-   * view, and what tiling.toml is to say comes back when the pick changes
-   * how the engine places. */
-  pickFlow: PickFlow
   /** Opens the Banda menu at a route, or the settings at theirs, as
    * `banda menu ROUTE` does (ADR 0017, decision 7). */
   route: (route: string) => void
@@ -199,7 +143,7 @@ export type Shell = WindowApi & {
   /** The Window's hosts, by which the router places what an act acts on
    * (ADR 0106, law 3). */
   hosts: Hosts & Pick<KeptHosts, "reread">
-}
+} & Tiling
 
 /** What a module is given of `shell`, a steady face of it (`useSteady`):
  * its `WindowApi` alone, so an App's `start` and its widgets reach no more
@@ -234,136 +178,6 @@ export function useWindowApi(shell: Shell): WindowApi {
   return api
 }
 
-const ARROWS: Record<Direction, string> = {
-  left: "ArrowLeft",
-  right: "ArrowRight",
-  up: "ArrowUp",
-  down: "ArrowDown",
-}
-const DIRECTIONS = Object.keys(ARROWS) as Direction[]
-/**
- * Up and down, past a column's end the arrows go on to the workspace
- * there, as niri's `focus-window-or-workspace-down`; held, they stop at
- * the end. The ones that stay in the column are kept with no key, for
- * that and for `keys.toml`.
- */
-const PAST: Partial<Record<Direction, string>> = { up: "above", down: "below" }
-const UPRIGHT = ["up", "down"] as const
-const PAGES = { up: "PageUp", down: "PageDown" } as const
-const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
-const EDGES = [
-  { side: "first", code: "Home" },
-  { side: "last", code: "End" },
-] as const
-
-/**
- * Steps the focused column's width through the look's presets, by what
- * the window shows: a preset its `min` hides is passed over.
- */
-function resize(shell: Shell, by: 1 | -1, wrap = false) {
-  shell.change((w) => {
-    const workspace = current(w)
-    const column = workspace.columns[workspace.focus]
-    if (!column) return undefined
-    const look = columnsOf()
-    const floor = floorsOf(workspace.id, look)
-    return resized(w, widen(w, by, look, { floor, wrap }))
-  })
-}
-
-/** Steps the focused Pane's height through the look's `heights`. */
-function heightening(shell: Shell, by: 1 | -1, wrap = false) {
-  shell.change((w) => resized(w, heighten(w, by, columnsOf(), { wrap })))
-}
-
-/** Moves the focused Pane as `how` would: sideways its whole column, or
- * its whole Group (ADR 0065). */
-function shifting(w: Workspaces, direction: Direction): Step {
-  const workspace = current(w)
-  const column = workspace.columns[workspace.focus]
-  const entry = focused(w)
-  const next = shift(w, direction)
-  if (!column || !entry || next === w) return undefined
-  return direction === "left" || direction === "right"
-    ? columnMoved(next, column.id)
-    : moved(next, entry.id)
-}
-
-/** Moves the focused column, or its whole Group, to the first or the last
- * place. */
-function movedTo(w: Workspaces, side: "first" | "last"): Step {
-  const workspace = current(w)
-  const column = workspace.columns[workspace.focus]
-  const next = toEdge(w, side)
-  return column && next !== w ? columnMoved(next, column.id) : undefined
-}
-
-/** The toast a workspace that cannot close shows: one, however often it
- * is asked. */
-const UNCLOSABLE = "workspace-unclosable"
-
-/** Says why workspace `id` stays (`closableAt`): it holds Panes, or it is
- * the empty one at the bottom. One no longer there says nothing. */
-function sayUnclosable(w: Workspaces, id: string) {
-  const at = w.list.findIndex((one) => one.id === id)
-  if (at < 0) return
-  if (w.list[at].columns.length > 0)
-    toast(`Workspace ${at + 1} holds Panes`, {
-      id: UNCLOSABLE,
-      description:
-        "Only an empty workspace closes. Close or move its Panes first.",
-    })
-  else
-    toast("The empty workspace at the bottom stays", {
-      id: UNCLOSABLE,
-      description: "It is where a new workspace starts.",
-    })
-}
-
-/** Closes the empty workspace `id`, a Project's too (`closingWorkspace`):
- * from the one on screen, the window goes to the one above it first, or
- * below when it is the first. One that cannot close says why. */
-function closeWorkspace(shell: Shell, id: string): void {
-  shell.change((w) => {
-    const at = closableAt(w, id)
-    if (at === undefined) sayUnclosable(w, id)
-    if (at !== w.current) return undefined
-    return step(w, w.current > 0 ? -1 : 1)
-  })
-  shell.change((w) => {
-    const command = closingWorkspace(w, id)
-    return command && { command, focus: false }
-  })
-}
-
-/** Puts every Pane where the row would have opened it, or with `only`
- * that Project's alone: on its Project's workspace, one of no Project on a
- * free one (ADR 0102, decisions 7 and 9). A Project is one as `placing`
- * says, as for a Pane that opens: another machine's too, and one whose
- * folder is missing. A Group goes as its lead says, as it moves. */
-export function arranging(
-  workspaces: Workspaces,
-  { scratch }: Placing,
-  only?: ProjectId
-): Plan {
-  const all = entries(workspaces)
-  const named = new Set(all.map((entry) => entry.project))
-  const homed = [...named].filter((project) => !scratch(project))
-  const kinds = new Set(all.filter(leads).map((entry) => entry.pane.kind))
-  return {
-    command: {
-      method: "workspaces.arrange",
-      params: {
-        projects: homed,
-        leads: [...kinds],
-        ...(only !== undefined && { only }),
-      },
-    },
-    // The Pane in front goes along to where it is put.
-    want: focused(workspaces)?.id,
-  }
-}
-
 /** Whether a Pane is the focused one of `workspaces`, by all its args. */
 export function focusedIn(workspaces: Workspaces) {
   const entry = focused(workspaces)
@@ -396,88 +210,6 @@ export function strayedIn(
       )
       .flatMap((entry) => showsOf(entry.pane) ?? [])
   )
-}
-
-/** What the engine refuses a move by, as this window believes it, as
- * tiling.toml says the Flow now (ADR 0110, decision 9). */
-const factsNow = () => factsOf(fileNow(TILING_FILE).flow)
-
-/** The toast a refused move shows: one, however long the key is held. */
-const REFUSED = "workspace-refused"
-
-/** Words a move the engine refused onto another Project's workspace:
- * whose it is, and where a Pane that moves as its Project can go, by
- * `projectOf`, or as one of no Project when `scratch` says so
- * (`refusalOf`). The workspace is numbered as before the move, as the bar
- * shows it. `along`, its Group took the Pane along. */
-function sayRefused(
-  { at, owner, moving }: RowRefusal,
-  along: boolean,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined,
-  scratch: Placing["scratch"]
-) {
-  const { title, description } = refusalOf({
-    to: at,
-    owner: projectOf(owner),
-    as: projectOf(moving),
-    scratch: scratch(moving),
-    along,
-  })
-  toast(title, { id: REFUSED, description })
-}
-
-/** Moves the focused Pane where `how` puts it, and follows it; one in a
- * Group that `how` sends to another workspace takes its Group, as one
- * window (ADR 0065), but one of the Project's own Group goes alone
- * (`takesGroup`). Onto another Project's workspace, in the row and solo,
- * the engine refuses it (ADR 0102, decision 6), and the window says whose
- * it is and where the Pane can go: it names the Projects by `projectOf`,
- * and those of no Project as `scratch` says (`Placing`). */
-function moving(
-  w: Workspaces,
-  how: (w: Workspaces) => Workspaces,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined,
-  scratch: Placing["scratch"]
-): Step {
-  const { workspace, column } = focusedColumn(w)
-  const entry = focused(w)
-  const next = how(w)
-  if (!entry || next === w) return undefined
-  const away = current(next).id !== workspace.id
-  const whole = takesGroup(workspace, column) && away
-  const moves = whole ? columnMoved(next, column.id) : moved(next, entry.id)
-  const plan = moves && whole ? { ...moves, want: entry.id } : moves
-  return (
-    plan &&
-    refusable(w, plan, factsNow(), (refused) =>
-      // Taken along by its Group, it would go there alone, by a drag.
-      sayRefused(refused, refused.owner === entry.project, projectOf, scratch)
-    )
-  )
-}
-
-/** Moves the focused Pane as `moving` does, where `how` puts it. */
-const moveFocused = (shell: Shell, how: (w: Workspaces) => Workspaces) =>
-  shell.change((w) => moving(w, how, shell.projectOf, shell.placing().scratch))
-
-/** Each workspace as the Pane menu's "To workspace" offers it to the
- * Pane at `spot`, as `moving` would move it: its Project, and whether the
- * engine refuses the move there, as the copy of its rule foresees (ADR
- * 0102, decision 6). */
-export function targetsOf(
-  state: Workspaces,
-  spot: Spot,
-  projectOf: (project: ProjectId) => ProjectSummary | undefined
-): { owner?: ProjectSummary; refused: boolean }[] {
-  const workspace = state.list[spot.workspace]
-  const column = workspace.columns[spot.column]
-  const entry = column.entries[spot.entry].id
-  const whole = takesGroup(workspace, column)
-  const refused = refusedTo(keptOf(state), factsNow(), entry, whole)
-  return state.list.map((w) => ({
-    owner: w.project === undefined ? undefined : projectOf(w.project),
-    refused: refused.has(w.id),
-  }))
 }
 
 /** Shows a Pane of a Project and focuses it at the place its caller
@@ -600,10 +332,6 @@ export function bringing(
   )
 }
 
-/** How the Person works the Panes: the Flow, and whether a Project is a
- * scratch one, of no Project (ADR 0046). */
-export type Placing = { flow: Flow; scratch: (project: ProjectId) => boolean }
-
 /** Those of no Project, the Projects as they are now: the scratch ones,
  * and a draft in the `machine`'s own ID, as a new one in No Project
  * starts. None of them owns a workspace (ADR 0102, decision 1). */
@@ -613,12 +341,6 @@ export function noProjectOf(
 ): ProjectId[] {
   const scratch = projects.filter((one) => one.scratch).map((one) => one.id)
   return machine ? [machine, ...scratch] : scratch
-}
-
-/** How the Person works the Panes in `flow`, with `none` of no Project
- * (`noProjectOf`). */
-export function placingOf(flow: Flow, none: readonly ProjectId[]): Placing {
-  return { flow, scratch: (project) => none.includes(project) }
 }
 
 /**
@@ -810,19 +532,6 @@ function presentHere(args: Args | undefined, then: (file: string) => void) {
   })
 }
 
-/**
- * Picks the Flow on this device, for its key and for the bar's menu (ADR
- * 0079). Solo is the device's view and writes nothing (ADR 0127, decision
- * 3). Free and the row are how the engine places, so a change between
- * them is written into tiling.toml (decision 4), and the look brings it
- * back; what went wrong goes to the console, as it did from the menu.
- */
-function pickedFlow(shell: Shell, flow: Flow) {
-  const write = shell.pickFlow(flow)
-  const file = TILING_FILE.name
-  if (write) logged(file, shell.writeSetting(file, "flow", tomlOf(write)))
-}
-
 /** The other machines a stop is on its way to, by their keys: a second
  * click meanwhile sends no second `banda stop`. */
 const stopping = new Set<string>()
@@ -860,284 +569,10 @@ function stopHost(host: string, force = false) {
     .finally(() => stopping.delete(host))
 }
 
-/** The window's own actions, the tiling's first (ADR 0071, decision 2):
- * `client/web/window.json` copies them for the engine. */
+/** The Window's own actions (ADR 0071, decision 2; ADR 0087, decision
+ * 13): `client/web/window.json` copies them for the engine. None is the
+ * Tiling's, which declares its own (`TILING_ACTIONS`). */
 export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
-  ...DIRECTIONS.map((direction) => ({
-    id: `pane.focus-${direction}`,
-    section: "Panes",
-    family: "Focus a Pane",
-    title: `Focus the Pane ${direction}`,
-    keys: PAST[direction] ? [] : [{ code: ARROWS[direction], mod: true }],
-    run: (shell: Shell) => shell.change((w) => move(w, direction)),
-  })),
-  ...DIRECTIONS.map((direction) => ({
-    id: `pane.move-${direction}`,
-    section: "Panes",
-    family: "Move the Pane",
-    title: `Move the Pane ${direction}`,
-    keys: PAST[direction]
-      ? []
-      : [{ code: ARROWS[direction], mod: true, shift: true }],
-    run: (shell: Shell) => shell.change((w) => shifting(w, direction)),
-  })),
-  ...UPRIGHT.map((direction) => ({
-    id: `pane.focus-${direction}-or-workspace`,
-    section: "Panes",
-    family: "Focus a Pane, or the workspace past it",
-    title: `Focus the Pane ${direction}, or the workspace ${PAST[direction]}`,
-    keys: [{ code: ARROWS[direction], mod: true }],
-    whenHeld: `pane.focus-${direction}`,
-    run: (shell: Shell) => shell.change((w) => across(w, direction)),
-  })),
-  ...UPRIGHT.map((direction) => ({
-    id: `pane.move-${direction}-or-to-workspace`,
-    section: "Panes",
-    family: "Move the Pane, or to the workspace past it",
-    title: `Move the Pane ${direction}, or to the workspace ${PAST[direction]}`,
-    keys: [{ code: ARROWS[direction], mod: true, shift: true }],
-    whenHeld: `pane.move-${direction}`,
-    run: (shell: Shell) => moveFocused(shell, (w) => carry(w, direction)),
-  })),
-  {
-    id: "column.wider",
-    section: "Columns",
-    title: "Make the column wider",
-    keys: [{ code: "ArrowRight", mod: true, more: true }],
-    run: (shell) => resize(shell, 1),
-  },
-  {
-    id: "column.narrower",
-    section: "Columns",
-    title: "Make the column narrower",
-    keys: [{ code: "ArrowLeft", mod: true, more: true }],
-    run: (shell) => resize(shell, -1),
-  },
-  {
-    id: "column.next-width",
-    section: "Columns",
-    title: "The column's next width, round",
-    // As niri's Mod+R and Mod+Shift+R.
-    keys: [{ code: "KeyR", mod: true }],
-    run: (shell) => resize(shell, 1, true),
-  },
-  {
-    id: "column.previous-width",
-    section: "Columns",
-    title: "The column's previous width, round",
-    // Alt+Shift+R is the height now, as niri's; Alt+Ctrl+Left steps back.
-    run: (shell) => resize(shell, -1, true),
-  },
-  {
-    id: "column.fill",
-    section: "Columns",
-    title: "The column as wide as the room the others leave",
-    // As niri's Mod+Ctrl+F.
-    keys: [{ code: "KeyF", mod: true, more: true }],
-    run: (shell) =>
-      shell.change((w) => {
-        const width = roomLeft(current(w))
-        return width === undefined ? undefined : resized(w, fill(w, width))
-      }),
-  },
-  {
-    id: "column.width",
-    args: takes({ width: "a step of the look's, as 1/2" }, ["width"]),
-    section: "Columns",
-    title: "The column as wide as a step of the look's",
-    // A picture in the Pane menu (ADR 0066, decision 3): `{ width: "1/2" }`.
-    unlisted: true,
-    run: (shell, args) => {
-      const width = args?.width
-      if (typeof width !== "string" || share(width) === undefined) return
-      shell.change((w) => resized(w, fill(w, width)))
-    },
-  },
-  {
-    id: "column.center",
-    section: "Columns",
-    title: "The column in the middle of the screen",
-    // As niri's Mod+C.
-    keys: [{ code: "KeyC", mod: true }],
-    run: (shell) => shell.center(),
-  },
-  // As niri's Mod+Home and End, and Mod+Ctrl+Home and End.
-  ...EDGES.flatMap(({ side, code }) => [
-    {
-      id: `column.${side}`,
-      section: "Columns",
-      title: `Focus the ${side} column`,
-      keys: [{ code, mod: true }],
-      run: (shell: Shell) => shell.change((w) => edge(w, side)),
-    },
-    {
-      id: `column.move-${side}`,
-      section: "Columns",
-      title: `Move the column to the ${side} place`,
-      keys: [{ code, mod: true, shift: true }],
-      run: (shell: Shell) => shell.change((w) => movedTo(w, side)),
-    },
-  ]),
-  {
-    id: "pane.next-height",
-    section: "Panes",
-    title: "The Pane's next height in its column, round",
-    // As niri's Mod+Shift+R.
-    keys: [{ code: "KeyR", mod: true, shift: true }],
-    run: (shell) => heightening(shell, 1, true),
-  },
-  {
-    id: "pane.taller",
-    section: "Panes",
-    title: "Make the Pane taller",
-    keys: [{ code: "ArrowDown", mod: true, more: true }],
-    run: (shell) => heightening(shell, 1),
-  },
-  {
-    id: "pane.shorter",
-    section: "Panes",
-    title: "Make the Pane shorter",
-    keys: [{ code: "ArrowUp", mod: true, more: true }],
-    run: (shell) => heightening(shell, -1),
-  },
-  {
-    id: "pane.height",
-    args: takes({ height: "a step of the look's, as 1/3" }, ["height"]),
-    section: "Panes",
-    title: "The Pane as high in its column as a step of the look's",
-    // A picture in the Pane menu (ADR 0066, decision 3): `{ height: "1/3" }`.
-    unlisted: true,
-    run: (shell, args) => {
-      const height = args?.height
-      if (typeof height !== "string") return
-      shell.change((w) => resized(w, heightTo(w, height, columnsOf())))
-    },
-  },
-  {
-    id: "column.even",
-    section: "Columns",
-    title: "Every Pane of the column as high as the others",
-    // As niri's Mod+Ctrl+R.
-    keys: [{ code: "KeyR", mod: true, more: true }],
-    run: (shell) => shell.change((w) => resized(w, even(w))),
-  },
-  {
-    id: "pane.zoom",
-    section: "Panes",
-    title: "The Pane over the whole window, or back",
-    // As niri's Mod+Shift+F, fullscreen in the window.
-    keys: [{ code: "KeyF", mod: true, shift: true }],
-    run: (shell) => shell.zoom(),
-  },
-  {
-    id: "column.tabs",
-    section: "Columns",
-    title: "The column as a Deck, one Pane at a time, or one above another",
-    // niri's Mod+W; Alt+G starts a Group (ADR 0065).
-    keys: [{ code: "KeyT", mod: true }],
-    run: (shell) => shell.change((w) => resized(w, deck(w, columnsOf()))),
-  },
-  // Groups: columns held together, which move and look as one (ADR 0065).
-  {
-    id: "group.new",
-    section: "Groups",
-    title: "A Group of the column, for others to join",
-    keys: [{ code: "KeyG", mod: true }],
-    run: (shell) => shell.change(grouping),
-  },
-  ...(["left", "right"] as const).flatMap((side) => [
-    {
-      id: `group.join-${side}`,
-      section: "Groups",
-      title: `The column into the Group on the ${side}, or out of its own that way`,
-      keys: [
-        {
-          code: side === "left" ? "BracketLeft" : "BracketRight",
-          mod: true,
-          shift: true,
-        },
-      ],
-      run: (shell: Shell) => shell.change((w) => regrouping(w, side)),
-    },
-    {
-      id: `group.column-${side}`,
-      section: "Groups",
-      title: `Move the column ${side} inside its Group`,
-      keys: [{ code: ARROWS[side], mod: true, more: true, shift: true }],
-      run: (shell: Shell) => shell.change((w) => shiftingInside(w, side)),
-    },
-  ]),
-  {
-    id: "group.maximize",
-    section: "Groups",
-    title:
-      "The Group the whole screen wide, or back; in solo, the row for a while",
-    keys: [{ code: "KeyM", mod: true }],
-    run: (shell) => {
-      if (!shell.glance()) shell.change(filling)
-    },
-  },
-  {
-    id: "flow.solo",
-    section: "Workspaces",
-    title: "Solo, what has the focus the whole screen wide, or back to the row",
-    keys: [{ code: "KeyM", mod: true, shift: true }],
-    run: (shell) => pickedFlow(shell, nextFlow(shell.placing().flow)),
-  },
-  {
-    id: "workspaces.arrange",
-    section: "Workspaces",
-    title: "Arrange by Project",
-    // A toast says it, and offers Undo (`arranged.ts`).
-    run: (shell) =>
-      shell.change((w) => sayArranged(shell, w, arranging(w, shell.placing()))),
-  },
-  {
-    id: "workspaces.unarrange",
-    section: "Workspaces",
-    title: "Undo Arrange by Project",
-    // Its key is Undo's only while the toast offers it, and never a
-    // field's, a program's or a page's, which have their own.
-    keys: [{ code: "KeyZ", primary: true }],
-    when: undoesNow,
-    pageKeeps: true,
-    run: (shell) => unarrange(shell),
-  },
-  {
-    // The Flow's menu on the bar: a pick of the three, where the key only
-    // goes to solo and back.
-    id: "flow.pick",
-    args: takes({ flow: "free, row or solo" }, ["flow"]),
-    section: "Workspaces",
-    title: "Pick how the Agents' windows stand: free, row or solo",
-    unlisted: true,
-    run: (shell, args) => {
-      if (isFlow(args?.flow)) pickedFlow(shell, args.flow)
-    },
-  },
-  {
-    id: "pane.consume-left",
-    section: "Panes",
-    title: "Take the Pane into the column on the left, or out of its own",
-    // As niri's Mod+[.
-    keys: [{ code: "BracketLeft", mod: true }],
-    run: (shell) => moveFocused(shell, (w) => consume(w, "left")),
-  },
-  {
-    id: "pane.consume-right",
-    section: "Panes",
-    title: "Take the Pane into the column on the right, or out of its own",
-    keys: [{ code: "BracketRight", mod: true }],
-    run: (shell) => moveFocused(shell, (w) => consume(w, "right")),
-  },
-  {
-    id: "column.maximize",
-    section: "Columns",
-    title: "The column the whole screen wide, or back",
-    // As niri's Mod+F.
-    keys: [{ code: "KeyF", mod: true }],
-    run: (shell) => shell.change((w) => resized(w, maximize(w))),
-  },
   {
     id: "pane.new",
     section: "Panes",
@@ -1208,54 +643,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "Backquote", mod: true }],
     overDialogs: true,
     run: (shell) => shell.drawer(),
-  },
-  {
-    id: "overview.toggle",
-    section: "Workspaces",
-    title: "Overview of every window",
-    keys: [{ code: "KeyO", mod: true }],
-    run: (shell) => shell.toggleOverview(),
-  },
-  ...UPRIGHT.flatMap((direction): Action<Shell>[] => {
-    const code = PAGES[direction]
-    const by = direction === "up" ? -1 : 1
-    return [
-      {
-        id: `workspace.${direction}`,
-        section: "Workspaces",
-        title: `The workspace ${PAST[direction]}`,
-        keys: [{ code, mod: true }],
-        run: (shell) => shell.change((w) => step(w, by)),
-      },
-      {
-        id: `workspace.move-${direction}`,
-        section: "Workspaces",
-        title: `Move the workspace ${direction}`,
-        keys: [{ code, mod: true, shift: true }],
-        run: (shell) => shell.change((w) => workspaceMoved(w, by)),
-      },
-    ]
-  }),
-  {
-    id: "workspace.new",
-    section: "Workspaces",
-    title: "A new workspace: the empty one at the bottom",
-    run: (shell) => shell.change(fresh),
-  },
-  {
-    // An emptied Project's workspace keeps its place until the Person
-    // closes it (ADR 0102, decision 2). No key: a held Alt+W would go on
-    // to close the Panes of the workspace it goes to.
-    id: "workspace.close",
-    args: takes({
-      workspace: "the workspace's id; none for the one on screen",
-    }),
-    section: "Workspaces",
-    title: "Close the workspace",
-    run: (shell, args) => {
-      const id = args?.workspace ?? shell.here.get().workspace?.id
-      if (typeof id === "string") closeWorkspace(shell, id)
-    },
   },
   {
     // The one way to go to an Agent (ADR 0087, decision 7): a sidebar
@@ -1724,37 +1111,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
   ...SIDEBAR_KEYS.map(({ id, title, keys }) =>
     scoped(SIDEBAR, { id, title, section: "Sidebar", keys })
   ),
-  {
-    // A number on the Bar, past the ninth too, where the keys stop.
-    id: "workspace.go",
-    args: takes({ index: { number: "its place from the top, from 0" } }, [
-      "index",
-    ]),
-    section: "Workspaces",
-    title: "Go to a workspace",
-    unlisted: true,
-    run: (shell, args) => {
-      const index = args?.index
-      if (typeof index === "number" && Number.isInteger(index))
-        shell.change((w) => go(w, index))
-    },
-  },
-  ...NUMBERS.map((n) => ({
-    id: `workspace.go-${n}`,
-    section: "Workspaces",
-    family: "Go to a workspace",
-    title: `Go to workspace ${n}`,
-    keys: [{ code: `Digit${n}`, mod: true }],
-    run: (shell: Shell) => shell.change((w) => go(w, n - 1)),
-  })),
-  ...NUMBERS.map((n) => ({
-    id: `pane.send-${n}`,
-    section: "Panes",
-    family: "Move the Pane to a workspace",
-    title: `Move the Pane to workspace ${n}`,
-    keys: [{ code: `Digit${n}`, mod: true, shift: true }],
-    run: (shell: Shell) => moveFocused(shell, (w) => send(w, n - 1)),
-  })),
   // The launcher's letters (ADR 0025, decision 4).
   ...windowModule.actions,
 ]
@@ -1765,13 +1121,24 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
 const ITEMS_AT =
   WINDOW_ACTIONS.findIndex((action) => action.id === "sidebar.archive") + 1
 
-/** Every action: the modules' (`modules.ts`), then the window's own, with
- * the modules' item actions among them (ADR 0087, decision 12). */
+/** Where the Tiling's last actions start, a Pane's to a workspace by its
+ * number: the key sheet lists a section's rows in this list's order, and
+ * has had them after the Window's own of the Panes, as Close the Pane. It
+ * goes once the key sheet keeps an order of its own. */
+const SENDS_AT = TILING_ACTIONS.findIndex(
+  (action) => action.id === "pane.send-1"
+)
+
+/** Every action: the modules' (`modules.ts`), then the Tiling's and the
+ * Window's own, with the modules' item actions among them (ADR 0087,
+ * decisions 12 and 13). */
 export const ACTIONS: readonly Action<Shell>[] = [
   ...modules.flatMap((module) => module.actions),
+  ...TILING_ACTIONS.slice(0, SENDS_AT),
   ...WINDOW_ACTIONS.slice(0, ITEMS_AT),
   ...modules.flatMap((module) => module.items),
   ...WINDOW_ACTIONS.slice(ITEMS_AT),
+  ...TILING_ACTIONS.slice(SENDS_AT),
 ]
 
 /**

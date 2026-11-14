@@ -6,6 +6,12 @@ import type { ListedKey } from "./ListedKey";
  */
 export type Listed = { id: string, title: string, section: string, 
 /**
+ * Whose it is (ADR 0087, decision 13): the id of the App or the
+ * platform part that declares it, as `workspaces` for the Tiling's,
+ * and `window` for the Window's own.
+ */
+owner: string, 
+/**
  * Where its keys work: a scope's table, as `composer`; none for the
  * window's, everywhere.
  */

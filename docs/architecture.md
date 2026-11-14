@@ -2077,8 +2077,13 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     Agent opened is marked until the Person has it in focus; the window
     keeps which of them they have looked at (`banda.looked`).
 - **One list of actions** (`client/web/src/window/actions.ts`) holds what the
-  window does, the modules' actions and its own, each with a name, its
-  key sheet section and a default key, by its physical place.
+  window does, each with a name, its key sheet section and a default key,
+  by its physical place. Each is declared by its owner: an App's in its
+  `defineModule`, the Tiling's in `client/web/src/tiling/actions.ts`,
+  which take only what the Tiling's interface names (`Tiling`), and the
+  Window's own beside the list. `window.json` copies each owner's for the
+  engine, the Tiling's to `platform/workspaces/window.json`, and
+  `banda keys` names the owner of each (ADR 0087, decision 13).
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Left and Right
   step the width and Ctrl+Up and Down the Pane's height, Shift+R its next
   height, Ctrl+R even ones, Ctrl+F the room left, C the middle, Home and

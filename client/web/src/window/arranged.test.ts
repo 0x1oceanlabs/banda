@@ -12,8 +12,9 @@ import {
 } from "../tiling/arrange"
 import { apply } from "../tiling/arrangement"
 import { focused, open, start, type Workspaces } from "../tiling/model"
-import { ACTIONS, arranging, placingOf, runAction, type Shell } from "./actions"
-import { undoesNow } from "./arranged"
+import { arranging, placingOf } from "../tiling/actions"
+import { undoesNow } from "../tiling/arranged"
+import { ACTIONS, runAction, type Shell } from "./actions"
 
 // What the toasts were told.
 const toast = vi.hoisted(() =>

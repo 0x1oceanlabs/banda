@@ -144,6 +144,12 @@ Each step is its own PR, and the window keeps working after each.
      dialog its keys, and `pane.close` still asks the Sheet by itself.
 4. Cleaning `arrange.ts`, `actions.ts` and `Shell.tsx`, and the Tiling
    driver into `client/core`.
+   _Built_ (WS7, part a): the Tiling's actions left `window/actions.ts`
+   for `tiling/actions.ts` (ADR 0087, plan step 10), with `arranging`, a
+   move's refusal and the Pane menu's targets, and Arrange by Project's
+   toast and Undo (`tiling/arranged.ts`). What opens a Pane (`placed`,
+   `opening`, `bringing`, `picking`) is in `window/actions.ts` still, and
+   the driver in `client/web/src/tiling/useTiling.ts`.
 
 ## Consequences
 

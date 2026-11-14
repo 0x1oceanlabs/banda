@@ -6,7 +6,7 @@ import { type Key, keyLabel } from "@banda/ui/lib/keys"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import { FlowContext } from "../../tiling/kept"
-import { flowWidget, isFlow, nextFlow } from "./Flow"
+import { flowWidget } from "./Flow"
 
 /** The widget drawn in `flow`, with `flow.solo` on `key`. */
 function drawn(flow: Flow, key?: Key): string {
@@ -27,18 +27,6 @@ function drawn(flow: Flow, key?: Key): string {
     </FlowContext>
   )
 }
-
-test("Alt+Shift+M goes from the row to solo and back, and from free to solo (ADR 0079)", () => {
-  expect(nextFlow("row")).toBe("solo")
-  expect(nextFlow("solo")).toBe("row")
-  expect(nextFlow("free")).toBe("solo")
-})
-
-test("flow.pick takes the three Flows by name, and no other word", () => {
-  for (const flow of ["free", "row", "solo"]) expect(isFlow(flow)).toBe(true)
-  for (const word of ["toString", "Row", "", 1, undefined])
-    expect(isFlow(word)).toBe(false)
-})
 
 test("its icon is the Flow in force, named with Alt+Shift+M, and its menu is shut until asked for", () => {
   const key: Key = { code: "KeyM", alt: true, shift: true }

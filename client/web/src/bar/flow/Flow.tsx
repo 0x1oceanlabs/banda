@@ -1,7 +1,7 @@
 /**
  * The Flow, on the bar beside the workspaces' numbers (ADR 0098, decision
  * 20): it arranges the workspaces, not the sidebar's list. Its icon draws the
- * one in force on this device, and its menu picks one by the Window's
+ * one in force on this device, and its menu picks one by the Tiling's
  * `flow.pick`, beside `flow.solo`, its key (ADR 0079): Solo is this
  * device's view and writes nothing, and a pick between free and the row
  * writes tiling.toml (ADR 0127, decisions 3 and 4). In the row
@@ -17,8 +17,6 @@
  *         Solo; in the row and solo, Arrange by Project too
  *   runs  `flow.pick` with the Flow picked, and `workspaces.arrange` for
  *         Arrange by Project
- *   gives `isFlow` and `nextFlow` to the Window's `flow.pick` and
- *         `flow.solo` (`window/actions.ts`)
  */
 import type { Flow } from "@banda/contract/workspaces"
 import { Button } from "@banda/ui/components/button"
@@ -67,17 +65,6 @@ const FLOWS: Record<Flow, { title: string; about: string; icon: LucideIcon }> =
       icon: RectangleHorizontalIcon,
     },
   }
-
-/** Whether `value` names a Flow (ADR 0079), as `flow.pick` takes it. */
-export function isFlow(value: unknown): value is Flow {
-  return typeof value === "string" && Object.hasOwn(FLOWS, value)
-}
-
-/** `Alt+Shift+M` (ADR 0079): from the row to solo and back; from free to
- * solo. */
-export function nextFlow(flow: Flow): Flow {
-  return flow === "solo" ? "row" : "solo"
-}
 
 /** The Flow's widget, as the top of this file says. */
 function FlowWidget() {

@@ -52,6 +52,10 @@ pub struct Listed {
     pub id: String,
     pub title: String,
     pub section: String,
+    /// Whose it is (ADR 0087, decision 13): the id of the App or the
+    /// platform part that declares it, as `workspaces` for the Tiling's,
+    /// and `window` for the Window's own.
+    pub owner: String,
     /// Where its keys work: a scope's table, as `composer`; none for the
     /// window's, everywhere.
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -139,8 +143,10 @@ pub fn list(config: &Path) -> (Vec<Listed>, Vec<Problem>) {
     let listed = banda_settings::manifests()
         .actions
         .iter()
+        .zip(banda_settings::owners())
         .zip(&keys.actions)
-        .map(|(action, inforce)| Listed {
+        .map(|((action, owner), inforce)| Listed {
+            owner: owner.to_owned(),
             id: action.id.clone(),
             title: action.title.clone(),
             section: action.section.clone(),

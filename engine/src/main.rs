@@ -296,8 +296,9 @@ enum Command {
         #[command(subcommand)]
         what: SettingsCommand,
     },
-    /// Banda's keys (ADR 0071): every action with its keys in force, and
-    /// keys.toml's lines bound, freed and reset after the look's checks.
+    /// Banda's keys (ADR 0071): every action with its keys in force and
+    /// whose it is, and keys.toml's lines bound, freed and reset after the
+    /// look's checks.
     /// With no command, the list.
     Keys {
         #[command(subcommand)]
@@ -1295,7 +1296,7 @@ fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
 }
 
 /// An action as `banda keys` prints it: its id, its keys, mine marked
-/// `*`, its scope and its title.
+/// `*`, its scope, its title and its owner.
 fn line_of(action: &banda_keys::Listed) -> String {
     let keys: Vec<String> = action
         .keys
@@ -1307,10 +1308,11 @@ fn line_of(action: &banda_keys::Listed) -> String {
         .as_deref()
         .map_or_else(String::new, |scope| format!(" [{scope}]"));
     format!(
-        "{}\t{}{scope}\t{}",
+        "{}\t{}{scope}\t{}\t{}",
         action.id,
         keys.join(", "),
-        action.title
+        action.title,
+        action.owner
     )
 }
 

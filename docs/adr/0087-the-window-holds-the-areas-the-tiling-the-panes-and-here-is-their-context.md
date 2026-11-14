@@ -360,6 +360,23 @@ A step that changes pixels shows Roma a before and after first.
 9. The `pane.header` and `thread.details` Slots (B4i); the Tiling reads
    no `Listed` (T-a); Solo as a view (T-b, with E6 on the host).
 10. Actions by owner, and the Window at 400 lines or fewer (B4h).
+    - _Built_ (WS7, part a): the Tiling's actions are the Tiling's.
+      `client/web/src/tiling/actions.ts` declares them, for the focus,
+      a Pane's moves and sizes, the columns, the Groups, the workspaces,
+      the Flow, Arrange by Project and the overview, with their ids,
+      titles, sections and keys as they were. They take `Tiling`, a small
+      interface the Window hands in (the change of the workspaces, how the
+      Person works the Panes, Here, the view's turns and the Flow's pick),
+      and import nothing of the Window. The window's tests copy them to
+      `platform/workspaces/window.json`, and `banda keys` names each
+      action's owner, `workspaces` for these. `window/actions.ts` keeps
+      the Window's own; six of them still act on a Pane after asking a
+      part of the Window (`pane.new`, `pane.close`, `pane.put-away`,
+      `pane.pop-out`, `pane.pick`, `pane.beside`), listed in
+      `client/web/src/modules.test.ts`, a list that only falls.
+    - _Not yet:_ the Window's actions that are an App's or a platform
+      part's (a file's, a Project's, the sidebar list's), the six above,
+      and the Window's root at 400 lines.
 11. `Listed` split into the Item, with `news`, and the owner's extras
     (B7a); the Person's marks behind one store (E8a); then, after the
     host's projection, the Watches go (E8b).
