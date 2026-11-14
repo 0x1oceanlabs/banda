@@ -32,6 +32,7 @@ import {
   pruneAside,
   renaming,
   runningPrograms,
+  UPDATER,
   type Where,
   whereOf,
 } from "./program"
@@ -299,6 +300,58 @@ describe("the copy and the Node the app carries", () => {
       carried(program, "a newer node")
       yield* copyOf(program, copies)
       expect(readFileSync(node, "utf8")).toBe("a newer node")
+    })
+  )
+})
+
+describe("the copy and the updater the app carries", () => {
+  /** `banda-update` beside `program`: a file, not a folder, that is `text`. */
+  function carried(program: string, text: string) {
+    writeFileSync(join(dirname(program), UPDATER), text, { mode: 0o755 })
+  }
+
+  it.live("takes it, a file beside the program", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      carried(program, "an updater")
+      const copy = yield* copyOf(program, copies)
+      expect(readFileSync(join(dirname(copy), UPDATER), "utf8")).toBe(
+        "an updater"
+      )
+    })
+  )
+
+  // Banda Dev 0.1.0-dev.792 on macOS: the copy's check read the updater
+  // as a folder, and the window did not start (ENOTDIR).
+  it.live("kept, is checked as a file, and the copy is used again", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      carried(program, "an updater")
+      const copy = yield* copyOf(program, copies)
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      const path = yield* Program.use((own) => own.path).pipe(
+        Effect.provide(Program.layer({ program, copies })),
+        Effect.provide(NodeServices.layer)
+      )
+      expect(path).toBe(copy)
+    })
+  )
+
+  it.live("made without it, or with another, is made again", () =>
+    Effect.gen(function* () {
+      const copies = join(folder("data"), "engine")
+      const program = banda("banda 1.2.3 (build aa)")
+      const copy = yield* copyOf(program, copies)
+      const updater = join(dirname(copy), UPDATER)
+      expect(existsSync(updater)).toBe(false)
+      carried(program, "an updater")
+      expect(yield* copyOf(program, copies)).toBe(copy)
+      expect(readFileSync(updater, "utf8")).toBe("an updater")
+      carried(program, "a newer updater")
+      yield* copyOf(program, copies)
+      expect(readFileSync(updater, "utf8")).toBe("a newer updater")
     })
   )
 })
