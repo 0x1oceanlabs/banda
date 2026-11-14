@@ -9,9 +9,14 @@
 //! is ready at the next look, as one it took: the newest copy wins,
 //! whoever put it there.
 //!
+//! The looks and the takes run in `banda-update`, a program of its own
+//! beside the engine's (ADR 0131, decision 2), never in the engine's
+//! process: the engine asks it, or follows what its service keeps.
+//!
 //! It takes nothing from a checkout's build (Banda Local), where a package
 //! manager owns Banda (`package-type` beside the running program), with
-//! `BANDA_UPDATES=off`, or where `machine.toml` says `updates = "off"`.
+//! `BANDA_UPDATES=off`, where `machine.toml` says `updates = "off"`, or
+//! where the engine's copy carries no `banda-update`.
 //!
 //! Once a copy is in place, the engine moves onto it as soon as nothing
 //! runs ([`restart`]): no Turn, no terminal open, no key in the last ten
@@ -196,6 +201,9 @@ struct Held {
     /// decision 2); none where this process is `banda-update` itself, or
     /// a test that looks in its own.
     program: Option<PathBuf>,
+    /// The engine found no `banda-update` beside it: it takes nothing,
+    /// and says so. It never looks or takes in its own process.
+    lacks: bool,
     /// The service it runs as beside the engine's, which looks every hour
     /// and guards a move; none where the engine looks itself.
     service: Option<daemon::Service>,
@@ -234,7 +242,18 @@ impl Updates {
             started: AtomicBool::new(false),
             restarting: None,
             program: None,
+            lacks: false,
             service: None,
+        }))
+    }
+
+    /// The engine's, with no `banda-update` beside it: it takes no
+    /// update, and says why.
+    pub fn lacking(self) -> Updates {
+        let held = Arc::into_inner(self.0).expect("set before it is shared");
+        Updates(Arc::new(Held {
+            lacks: true,
+            ..held
         }))
     }
 
@@ -308,6 +327,11 @@ impl Updates {
         }
         if feed::system().is_none() {
             return Some("Banda packs no engine alone for this system yet".to_owned());
+        }
+        if self.0.lacks {
+            return Some(
+                "This copy of Banda carries no banda-update: update Banda's app".to_owned(),
+            );
         }
         if *self.0.take.borrow() == TakeUpdates::Off {
             return Some("machine.toml says updates = \"off\"".to_owned());
@@ -1266,6 +1290,22 @@ mod tests {
         assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.11"));
         assert_eq!(state.failed, None);
         assert!(guard::bad(&machine.engine).is_empty());
+    }
+
+    #[tokio::test]
+    async fn an_engine_with_no_banda_update_takes_nothing_and_says_why() {
+        let machine = machine(Moves::Itself);
+        let banda = machine.updates.0.banda.clone();
+        let updates = Updates::new(banda, machine.take.subscribe())
+            // Nowhere: a look in its own process would fail on it.
+            .reading("http://127.0.0.1:9", Duration::MAX, Duration::MAX)
+            .lacking();
+        let state = updates.look().await;
+        let off = state.off.expect("it says why");
+        assert!(off.contains("no banda-update"), "{off}");
+        assert_eq!((state.looked, state.failed), (None, None));
+        let refused = updates.choose("0.1.0-dev.9").await.unwrap_err();
+        assert!(refused.message.contains("no banda-update"), "{refused:?}");
     }
 
     #[tokio::test]

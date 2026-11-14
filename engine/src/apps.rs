@@ -229,8 +229,8 @@ mod build {
             engine: host.places.data.join("engine"),
         };
         // `banda-update` beside the engine looks and takes, in a process
-        // of its own (ADR 0131, decision 2); a copy that carries none
-        // looks in this one.
+        // of its own (ADR 0131, decision 2), never in this one: a copy
+        // that carries none takes no update, and says so.
         let helper = (banda.program.as_ref())
             .and_then(|program| program.parent())
             .map(|folder| folder.join(UPDATER))
@@ -255,8 +255,8 @@ mod build {
         match helper {
             Some(helper) => updates.through(helper).serving(service),
             None => {
-                tracing::info!("no banda-update beside the engine: it looks for updates itself");
-                updates
+                tracing::warn!("no banda-update beside the engine: it takes no update");
+                updates.lacking()
             }
         }
     }
