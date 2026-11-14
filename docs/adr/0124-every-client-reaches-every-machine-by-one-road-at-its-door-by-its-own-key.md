@@ -286,6 +286,14 @@ repository), with an adversarial check.
   not answer is named. Nothing there adds a device: one joins by asking
   at a door. Not yet: which row is the device the Person sits at, and a
   browser reaching the other machines by their host keys.
+- **A machine says where its door is served (SE5, PR 4a).** Only the
+  machine itself knows the name `tailscale serve` hands to its door, so
+  its engine asks the host's `tailscale` (`serve status --json`) and
+  `devices.list` says each address whose root goes to the door's port, as
+  `doors` (`platform/devices/engine/src/served.rs`). None where Tailscale
+  is not there, does not answer in three seconds, or serves no door. A
+  window that lets a device in on every machine will hand these on. This
+  is the one program the devices module starts on the host.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

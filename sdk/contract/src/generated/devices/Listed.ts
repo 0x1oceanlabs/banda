@@ -8,4 +8,9 @@ export type Listed = {
 /**
  * This machine's host key, public: Ed25519, as base64url.
  */
-host_key: string, devices: Array<PairedDevice>, };
+host_key: string, devices: Array<PairedDevice>, 
+/**
+ * Where this machine's door is served beyond loopback now, as
+ * `https://arc.example.ts.net`: none where nothing serves it.
+ */
+doors: Array<string>, };

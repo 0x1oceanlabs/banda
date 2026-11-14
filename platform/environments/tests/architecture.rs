@@ -27,7 +27,7 @@ const MAKES: [&str; 5] = [
 
 /// Where the engine makes a process on the host for no Project's
 /// program: the file, how many places in it make one, and why.
-const ON_THE_HOST: [(&str, usize, &str); 19] = [
+const ON_THE_HOST: [(&str, usize, &str); 20] = [
     (
         "engine/src/moving.rs",
         1,
@@ -52,6 +52,12 @@ const ON_THE_HOST: [(&str, usize, &str); 19] = [
         "starts banda-update as its own systemd unit or launchd job beside the engine's, resets \
          the engine's unit that gave up, and starts the engine's copy before again where the new one did not start (ADR 0131, \
          decision 2)",
+    ),
+    (
+        "platform/devices/engine/src/served.rs",
+        1,
+        "asks the host's tailscale where it serves this machine's door, which only this machine \
+         knows, for a window to hand that address to a device it lets in (ADR 0124, decision 4)",
     ),
     (
         "kernel/src/host.rs",
