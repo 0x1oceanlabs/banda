@@ -18,9 +18,8 @@ starts, ends or freezes a track changes this page.
   its track and its slice.
 - Repository work that serves every track, each an issue: borders held by
   the compiler ([#1798](https://github.com/0x1oceanlabs/banda/issues/1798)),
-  one model, not two
-  ([#1799](https://github.com/0x1oceanlabs/banda/issues/1799)), less to
-  read ([#1800](https://github.com/0x1oceanlabs/banda/issues/1800)).
+  and one model, not two
+  ([#1799](https://github.com/0x1oceanlabs/banda/issues/1799)).
 
 ## Not now
 

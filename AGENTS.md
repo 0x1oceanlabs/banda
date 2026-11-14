@@ -40,7 +40,10 @@ UNIX composition + deep modules + explicit contracts.
   to what the Person sees or touches follows them: each thing in one
   place, the engine decides, and no second door to a function.
 - The words: [`GLOSSARY.md`](GLOSSARY.md). Use its terms exactly.
-- The shape: [`docs/architecture.md`](docs/architecture.md).
+- The shape: [`docs/architecture.md`](docs/architecture.md), a map of
+  some 250 lines: read it whole. Then the `README.md` of each part you
+  change: the kernel's, the engine's, an App's, a platform part's,
+  `client/web`'s or `client/desktop`'s.
 - Where it is going: [the architecture vision](docs/research/2026-11-06-architecture-vision.md),
   accepted on 2026-11-06, and the order of the work in
   [the roadmap](docs/research/2026-11-08-roadmap-in-slices.md). Where they
@@ -300,15 +303,17 @@ page
 
 ## Where things are written
 
-Write the least that the next session must read
-([#1800](https://github.com/0x1oceanlabs/banda/issues/1800)).
+Write the least that the next session must read.
 
 - **An ADR** is for a decision that is hard to undo or that binds more
   than one part: a protocol, a format kept on disk, a border, a right. A
   step of work, a look or an order of work is no ADR.
 - **A PR** says what changed and why, what was tried and what was not.
 - **An issue** holds a plan, and what was found and not done.
-- **`docs/architecture.md`** follows the code: a change to the shape
-  changes it in the same PR.
+- **A part's `README.md`** holds its detail and follows its code: a
+  change to a part changes its page in the same PR.
+- **`docs/architecture.md`** is the map, a line or two for each part: a
+  change to the shape changes it in the same PR, and it stays under 250
+  lines.
 - **`docs/research/`** keeps dated evidence with its source and limits.
   It is not a decision; ADRs are.

@@ -4,7 +4,7 @@ The agents App: Threads, turns, Questions, Visuals, sub-agents, and the
 adapter that speaks to every Harness. Its engine part is `engine/`, its
 Panes are `pane/` ([their files](pane/README.md)), and what it runs in
 the window's main process is `desktop/`.
-[The architecture](../../docs/architecture.md#agents) is the map this
+[The architecture](../../docs/architecture.md#modules) is the map this
 page is one part of. A change to this App changes this page in the same
 PR.
 

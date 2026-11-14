@@ -1,7 +1,7 @@
 # Terminal
 
 The terminal App: a program on a PTY in the engine, drawn by Ghostty in
-its Pane. [The architecture](../../docs/architecture.md#terminal) is the
+its Pane. [The architecture](../../docs/architecture.md#modules) is the
 map this page is one part of. A change to this App changes this page in
 the same PR.
 
