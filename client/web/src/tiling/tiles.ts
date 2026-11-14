@@ -261,7 +261,7 @@ function keep(strip: HTMLElement, drawn: Strip): Kept {
 function layoutOf({ columns }: Strip): string {
   return columns
     .map(({ id, width, min, ends }) =>
-      [id, width, min, ends?.first, ends?.last, ends?.pad].join(" ")
+      [id, width, min, ends?.first, ends?.last].join(" ")
     )
     .join()
 }

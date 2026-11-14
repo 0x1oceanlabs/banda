@@ -81,21 +81,25 @@ html[data-glass] [data-held-by] {
 
 /*
  * A Group of columns (ADR 0065): a plate behind them, in its colour.
- * Each column draws its piece, across the gap on its right to the next
- * column, so the pieces meet with no seam and move with their columns;
- * the Group's ends stand `--group-pad` out, which the Strip leaves free
- * (`padded` counts it as half a gap too).
+ * The plate fills the columns' own place, as wide and as tall as a column
+ * out of any Group, and its Panes stand `--group-pad` in from its edge:
+ * the Strip measures a Group as it measures any column. Each column draws
+ * its piece, across the gap on its right to the next column, so the
+ * pieces meet with no seam and move with their columns.
  */
 /* Declared on the column, so a row of the overview, which scales its own
    --gap-inner, scales it too. */
 [data-column] {
   --group-pad: calc(var(--gap-inner) / 2);
 }
-[data-column][data-pad-left] {
-  margin-left: var(--group-pad);
+[data-column][data-group] {
+  padding-block: var(--group-pad);
 }
-[data-column][data-pad-right] {
-  margin-right: var(--group-pad);
+[data-column][data-group][data-first] {
+  padding-left: var(--group-pad);
+}
+[data-column][data-group][data-last] {
+  padding-right: var(--group-pad);
 }
 /* The plate's colour, fill and line are its own, typed, so a change of
    state crossfades and the motion eases them, rather than snapping. They
@@ -156,7 +160,7 @@ html[data-group-saturation="vivid"] {
   );
   --group-radius: calc(var(--tile-radius) + var(--group-pad));
   position: absolute;
-  inset-block: calc(-1 * var(--group-pad));
+  inset-block: 0;
   left: 0;
   right: calc(-1 * var(--gap-inner));
   pointer-events: none;
@@ -181,13 +185,12 @@ html[data-group-saturation="vivid"] {
   --group-focus-line: 18%;
 }
 [data-group-plate][data-first] {
-  left: calc(-1 * var(--group-pad));
   border-left-width: 1px;
   border-start-start-radius: var(--group-radius);
   border-end-start-radius: var(--group-radius);
 }
 [data-group-plate][data-last] {
-  right: calc(-1 * var(--group-pad));
+  right: 0;
   border-right-width: 1px;
   border-start-end-radius: var(--group-radius);
   border-end-end-radius: var(--group-radius);
