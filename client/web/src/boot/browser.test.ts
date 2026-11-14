@@ -8,6 +8,7 @@ import {
 import { afterEach, expect, test, vi } from "vitest"
 import {
   browserDevice,
+  keyed as keyedMachines,
   doorOf,
   type Kept,
   machineAtDoor,
@@ -197,4 +198,70 @@ test("an asking that is stopped before its key is made opens no door", async () 
   await new Promise((done) => setTimeout(done, 50))
   expect(at.heard.url).toBeUndefined()
   expect(heard).not.toHaveBeenCalled()
+})
+
+test("a browser keeps the machines it was handed, and reaches each at its own door as the device it is there", async () => {
+  const mine = kept()
+  const device = browserDevice(mine, () => "wss://arc.example.ts.net/ws")
+  const told: string[][] = []
+  const stop = device.hosts.follow((hosts) =>
+    told.push(hosts.map((host) => `${host.name}:${host.state}`))
+  )
+  await vi.waitFor(() => expect(told).toEqual([[]]))
+  const devbox = {
+    name: "devbox",
+    host_key: "host-devbox",
+    door: "https://devbox.example.ts.net",
+    device: "device-on-devbox",
+  }
+  const mac = {
+    name: "M1PRO",
+    host_key: "host-mac",
+    door: "https://m1pro.example.ts.net:8443",
+    device: "device-on-mac",
+  }
+  // Handed a door the page was not served for, it is served again.
+  expect(await device.hosts.hand([devbox])).toBe(true)
+  expect(told.at(-1)).toEqual(["devbox:live"])
+  expect(await device.hosts.hand([devbox])).toBe(false)
+  expect(await device.hosts.hand([devbox, mac])).toBe(true)
+  expect(told.at(-1)).toEqual(["devbox:live", "M1PRO:live"])
+  expect(told).toHaveLength(3)
+
+  const address = await device.hosts.engine("M1PRO")
+  if (!("door" in address)) throw new Error("no door")
+  expect(address).toMatchObject({
+    url: "wss://m1pro.example.ts.net:8443/ws",
+    door: { device: "device-on-mac", hostKey: "host-mac" },
+  })
+  await expect(device.hosts.engine("elsewhere")).rejects.toThrow("not let in")
+
+  // Kept: the next start has them before its machine says them, and one
+  // taken away then needs no page served again.
+  const again = browserDevice(mine, () => "wss://arc.example.ts.net/ws")
+  expect((await again.hosts.engine("devbox")).url).toBe(
+    "wss://devbox.example.ts.net/ws"
+  )
+  expect(await again.hosts.hand([mac])).toBe(false)
+  await expect(again.hosts.engine("devbox")).rejects.toThrow("not let in")
+
+  // Forgotten with the pairing.
+  stop()
+  await device.forget()
+  expect(mine.held.has("machines")).toBe(false)
+  await expect(device.hosts.engine("M1PRO")).rejects.toThrow("not let in")
+})
+
+test("two machines of one name are two hosts, and one handed twice is one", () => {
+  const machine = (host_key: string) => ({
+    name: "arc",
+    host_key,
+    door: `https://${host_key}.example.ts.net`,
+    device: "device",
+  })
+  const by = keyedMachines([machine("a"), machine("b"), machine("a")])
+  expect([...by].map(([key, one]) => [key, one.host_key])).toEqual([
+    ["arc", "a"],
+    ["arc 2", "b"],
+  ])
 })

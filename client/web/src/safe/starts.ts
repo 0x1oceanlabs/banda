@@ -27,6 +27,19 @@ export function starting(): number {
   }
 }
 
+/** This start ends as the page itself asks, to be served again: it did
+ * not break, and is not counted. */
+export function servedAgain(): void {
+  try {
+    const broken = Number(localStorage.getItem(STARTS)) || 0
+    if (broken > 1) localStorage.setItem(STARTS, String(broken - 1))
+    else localStorage.removeItem(STARTS)
+  } catch {
+    // As above.
+  }
+  location.reload()
+}
+
 /** This start went well. */
 export function wentWell(): void {
   try {

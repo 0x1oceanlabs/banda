@@ -1,5 +1,17 @@
 import { afterEach, expect, test, vi } from "vitest"
-import { device } from "./desktop"
+import { browser } from "./browser"
+import { device, ELSEWHERE } from "./desktop"
+
+// A browser's own keeping is IndexedDB, which a test has none of.
+vi.mock("./browser", () => ({
+  browser: {
+    hosts: {
+      follow: vi.fn(() => () => undefined),
+      engine: () =>
+        Promise.reject(new Error("This browser was not let in there.")),
+    },
+  },
+}))
 
 afterEach(() => vi.unstubAllGlobals())
 
@@ -99,8 +111,14 @@ test("the hosts come now and as they change, a change before the first answer wi
   expect(taken.at(-1)).toEqual(["later"])
   warned.mockRestore()
 
+  // With no desktop, as in a browser, the hosts are those its machine
+  // handed it (`browser.ts`); the rest of a host's part does nothing.
   vi.stubGlobal("window", {})
-  expect(device.hosts.follow(() => undefined)).toBeUndefined()
-  await expect(device.hosts.engine("arc")).rejects.toThrow()
+  expect(device.hosts.alone).toBe(true)
+  const handed = vi.fn()
+  device.hosts.follow(handed)()
+  expect(browser.hosts.follow).toHaveBeenCalledWith(handed)
+  await expect(device.hosts.engine("arc")).rejects.toThrow("not let in")
+  await expect(device.hosts.remove("arc")).rejects.toThrow(ELSEWHERE)
   expect(() => device.hosts.start("arc")).not.toThrow()
 })

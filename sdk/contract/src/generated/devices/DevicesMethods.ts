@@ -8,6 +8,7 @@ import type { Answer } from "./Answer";
 import type { Ask } from "./Ask";
 import type { Hand } from "./Hand";
 import type { Listed } from "./Listed";
+import type { Machine } from "./Machine";
 import type { PairedDevice } from "./PairedDevice";
 import type { Remove } from "./Remove";
 
@@ -50,4 +51,10 @@ refuse: CommandMethod<Answer, null>,
  * (`devices.list`) and reaches each at its door, and the page
  * this machine serves may connect there.
  */
-hand: CommandMethod<Hand, PairedDevice>, };
+hand: CommandMethod<Hand, PairedDevice>, 
+/**
+ * The other machines the device that asks was handed, then again
+ * as this machine's devices change: where it reaches each, and
+ * as which device. None for a program on the machine.
+ */
+machines: StreamMethod<Nothing, Array<Machine>>, };

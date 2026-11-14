@@ -6,9 +6,10 @@
  * them it comes in at the door as any device does (`engine`); without the
  * pairing it asks to be paired (`pair`).
  *
- * A browser reaches one machine by this file: the one whose door it
- * opened. The others come by their host keys, once that machine's
- * window allows this device on them too.
+ * The other machines come by that one (decision 7): the window that
+ * allowed this device hands it those it joined, each with its door, its
+ * host key and the device it is there, and this file keeps them
+ * (`hosts`), so the browser reaches each at its own door by the same key.
  */
 import {
   type Address,
@@ -17,6 +18,8 @@ import {
   type Asking,
   base64url,
 } from "@banda/contract"
+import type { Machine } from "@banda/contract/devices"
+import { type HostState, sameData } from "@banda/core"
 
 /** What this device keeps of itself: a few values by name. A browser's
  * is IndexedDB, which alone keeps a key WebCrypto does not hand out. */
@@ -42,6 +45,38 @@ const DATABASE = "banda"
 const STORE = "device"
 const KEY = "key"
 const DOOR = "door"
+const MACHINES = "machines"
+
+/** A machine this device was handed, as the Window's hosts have one:
+ * live, as only its own connection says whether it answers; over no
+ * ssh, and of no build this device knows. */
+const hostOf = (name: string): HostState => ({
+  name,
+  ssh: "",
+  state: "live",
+  build: null,
+  version: null,
+  own: { build: null, version: null },
+})
+
+/** Where a handed machine's door listens, as `wss://name[:port]/ws`. */
+const wsOf = (door: string): string => `${door.replace(/^http/, "ws")}/ws`
+
+/** The machines by the key the Window has each under: its name, and a
+ * number after it for a second of that name. One handed twice, by its
+ * host key, is one. */
+export function keyed(machines: readonly Machine[]): Map<string, Machine> {
+  const by = new Map<string, Machine>()
+  const seen = new Set<string>()
+  for (const machine of machines) {
+    if (seen.has(machine.host_key)) continue
+    seen.add(machine.host_key)
+    let key = machine.name
+    for (let n = 2; by.has(key); n++) key = `${machine.name} ${n}`
+    by.set(key, machine)
+  }
+  return by
+}
 
 /** One request of IndexedDB's, as a promise. */
 const settled = <T>(request: IDBRequest<T>): Promise<T> =>
@@ -177,7 +212,70 @@ export function browserDevice(kept: Kept, door: () => string) {
       stop?.()
     }
   }
+  /** The other machines, as kept: read once, then as they are handed. */
+  let others: Promise<Map<string, Machine>> | undefined
+  const machines = () =>
+    (others ??= kept.get<Machine[]>(MACHINES).then(
+      (had) => keyed(had ?? []),
+      // What does not read is none kept: its machine says them again.
+      () => new Map<string, Machine>()
+    ))
+  /** The last taking of handed machines: one at a time, in order. */
+  let taking: Promise<unknown> = Promise.resolve()
+  /** The pairing was forgotten: nothing handed is kept after it. */
+  let forgotten = false
+  const following = new Set<(hosts: HostState[]) => void>()
+  const states = (by: Map<string, Machine>) => [...by.keys()].map(hostOf)
   return {
+    /**
+     * The other machines this device was handed, as the Window's hosts
+     * (`HostsDevice`). None but its own connection says whether one
+     * answers (`alone`).
+     */
+    hosts: {
+      alone: true,
+      follow: (take: (hosts: HostState[]) => void) => {
+        let on = true
+        following.add(take)
+        void machines().then((by) => on && take(states(by)))
+        return () => {
+          on = false
+          following.delete(take)
+        }
+      },
+      engine: async (name: string): Promise<Address> => {
+        const machine = (await machines()).get(name)
+        if (!machine) throw new Error("This browser was not let in there.")
+        const { device, host_key: hostKey, door } = machine
+        return { url: wsOf(door), door: { device, hostKey, sign } }
+      },
+      /**
+       * Takes the machines this device's own says it was handed, in
+       * place of those it had, and tells who follows. Says whether one
+       * has a door the page did not have when it was served: its policy
+       * lets it connect only where the machine knew of then, so it is
+       * served again to reach that one.
+       */
+      hand: (handed: readonly Machine[]): Promise<boolean> => {
+        const take = async () => {
+          const had = await machines()
+          const now = keyed(handed)
+          if (forgotten || sameData([...had], [...now])) return false
+          await kept.set(MACHINES, [...handed])
+          if (forgotten) {
+            await kept.remove(MACHINES)
+            return false
+          }
+          others = Promise.resolve(now)
+          for (const tell of following) tell(states(now))
+          const doors = new Set([...had.values()].map((one) => one.door))
+          return [...now.values()].some((one) => !doors.has(one.door))
+        }
+        const taken = taking.then(take, take)
+        taking = taken
+        return taken
+      },
+    },
     /** The machine this device paired with, if it has. */
     paired,
     /**
@@ -198,9 +296,11 @@ export function browserDevice(kept: Kept, door: () => string) {
     pair,
     /** Forgets the pairing, as the machine said this device is its no
      * more: it asks again. The key stays this device's. */
-    forget: () => {
+    forget: async () => {
+      forgotten = true
       at = Promise.resolve(undefined)
-      return kept.remove(DOOR)
+      others = Promise.resolve(new Map())
+      await Promise.all([kept.remove(DOOR), kept.remove(MACHINES)])
     },
   }
 }

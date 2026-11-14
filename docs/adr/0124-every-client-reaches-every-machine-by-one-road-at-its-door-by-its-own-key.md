@@ -303,8 +303,20 @@ repository), with an adversarial check.
   is handed to none. The page a machine serves may then connect to those
   doors besides its own: its policy's `connect-src` names each, `wss://`
   and `https://`, a host a window handed and never a pattern, and only
-  an `https` address with no path is taken. Not yet: the browser reading
-  them.
+  an `https` address with no path is taken.
+- **A browser shows every machine it was let in on (SE5, PR 4c).** A
+  device hears the machines it was handed from its own machine
+  (`devices.machines`, a stream: now, and as that machine's devices
+  change) and keeps them beside its key, so the next start has them
+  before any machine answers. The Window takes them as its hosts, each
+  reached at its own door by the device's one key, as the device it is
+  there, proving that machine's host key; a host is keyed by the name it
+  was handed under. No desktop says whether one answers, so its own
+  connection does: lost for a while, it is away. A machine handed after
+  the page was served has a door the page's policy does not name, so the
+  page is served again once, which is no broken start. Not yet: bytes,
+  as images and files, from another machine's door; the browser adding,
+  changing or removing a machine; hosts by host key (SE4).
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

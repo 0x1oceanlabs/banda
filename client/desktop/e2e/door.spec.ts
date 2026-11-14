@@ -104,6 +104,53 @@ test("a browser at this machine's door shows a code; the window asks the Person,
   await expect(shown).toBeAttached({ timeout: 30_000 })
   expect(listed().filter((device) => device.kind === "browser")).toHaveLength(1)
 
+  // Handed another machine it was let in on, the browser has it among
+  // its machines by the name it was handed under, the page served again
+  // so it may connect to that door; none answers there, so it is away.
+  const far = {
+    name: "far-machine",
+    host_key: Buffer.alloc(32, 9).toString("base64url"),
+    door: "https://far-machine.invalid",
+    device: paired!.id,
+  }
+  const handing = JSON.stringify({ device: paired!.id, machines: [far] })
+  // A mark on the page as it is now: gone once it is served again.
+  await tab.evaluate(() => Object.assign(globalThis, { before: true }))
+  window.banda("call", "devices.hand", "--params", handing)
+  // What it keeps for its next start, beside its key.
+  const keeps = () =>
+    tab.evaluate(
+      () =>
+        new Promise<{ name: string; door: string }[] | null>((done, failed) => {
+          const opening = indexedDB.open("banda")
+          opening.onerror = () => failed(opening.error)
+          opening.onsuccess = () => {
+            const read = opening.result
+              .transaction("device")
+              .objectStore("device")
+              .get("machines")
+            read.onerror = () => failed(read.error)
+            read.onsuccess = () => done(read.result ?? null)
+          }
+        })
+    )
+  await expect
+    .poll(() => keeps().catch(() => null), { timeout: 30_000 })
+    .toMatchObject([{ name: far.name, door: far.door }])
+  // Served again, under a policy that lets it connect to that door.
+  await expect
+    .poll(() => tab.evaluate(() => "before" in globalThis).catch(() => true), {
+      timeout: 30_000,
+    })
+    .toBe(false)
+  await expect(shown).toBeAttached({ timeout: 30_000 })
+  const policy = await tab.evaluate(async () =>
+    (await fetch("/", { headers: { accept: "text/html" } })).headers.get(
+      "content-security-policy"
+    )
+  )
+  expect(policy).toContain("wss://far-machine.invalid")
+
   // Settings → Devices lists who this machine lets in: its own window,
   // which pairs itself and is not removed, and the browser.
   await page.keyboard.press("Alt+Comma")

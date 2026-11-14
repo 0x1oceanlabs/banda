@@ -1826,3 +1826,26 @@ test("an engine no one else says is away, not heard yet, is still starting: an a
   await made
   expect(await names(client)).toContain("At the start")
 })
+
+test("an engine no one starts, never heard, is lost as any: stale after its moment, an act fails at once, and heard, it goes on", async () => {
+  // Nothing listens where it first asks.
+  let started = false
+  client = new Engine(
+    async () =>
+      started ? address() : { url: "ws://127.0.0.1:1/ws", secret: "" },
+    { unreachable: restarting, staleOnLoss: "unheard", ping: lostFor(200) }
+  )
+  await until(client, "lost")
+  expect(client.stale).toBe(false)
+  await expect.poll(() => client!.stale).toBe(true)
+  await expect(
+    client.command("projects.create", { name: "Nowhere" })
+  ).rejects.toMatchObject({ name: "Unreachable" })
+  await serve()
+  started = true
+  client.wake()
+  await until(client, "open")
+  await expect.poll(() => client!.stale).toBe(false)
+  await client.command("projects.create", { name: "Heard" })
+  expect(await names(client)).toEqual(["Heard"])
+})

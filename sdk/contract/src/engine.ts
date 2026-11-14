@@ -415,6 +415,8 @@ export class Engine {
   readonly #unreachable: (() => Unreachable) | undefined
   readonly #ping: Ping | undefined
   readonly #staleOnLoss: boolean
+  /** One never heard is still starting, not lost (`staleOnLoss`). */
+  readonly #starts: boolean
   /** Counts down from a connection's end to stale (`staleOnLoss`). */
   #losing: ReturnType<typeof setTimeout> | undefined
   /** Who hears it go stale, and answer again (`watchStale`). */
@@ -459,7 +461,10 @@ export class Engine {
    * while it tries again, until it is heard again: an act fails at once,
    * in its machine's words, and never waits for the engine to be back.
    * Back sooner, it was never out of reach, and a command cut off goes
-   * again, as on any connection that breaks.
+   * again, as on any connection that breaks. One never heard is still
+   * starting, as the device itself starts its own machine's; `"unheard"`
+   * is for a machine no one starts, as a browser's others: never heard,
+   * it is lost as any.
    */
   constructor(
     address: () => Promise<Address>,
@@ -470,13 +475,14 @@ export class Engine {
     }: {
       unreachable?: () => Unreachable
       ping?: Ping
-      staleOnLoss?: boolean
+      staleOnLoss?: boolean | "unheard"
     } = {}
   ) {
     this.#address = address
     this.#unreachable = unreachable
     this.#ping = ping
-    this.#staleOnLoss = staleOnLoss
+    this.#staleOnLoss = staleOnLoss !== false
+    this.#starts = staleOnLoss === true
     void this.#connect()
   }
 
@@ -873,7 +879,7 @@ export class Engine {
       if (going !== "read" && (ping || this.#staleOnLoss))
         this.#hushed.add(done)
       // One whose connection says it, never heard, is still starting.
-      const starting = this.#staleOnLoss && this.#heard === undefined
+      const starting = this.#starts && this.#heard === undefined
       if (
         ping &&
         !starting &&
@@ -1377,13 +1383,13 @@ export class Engine {
     const again = !this.#closed && this.#status.state !== "refused"
     // Its own connection says whether it answers: ended, and not heard
     // again in as long as an asked engine has to answer, it does not. One
-    // never heard is still starting; one back sooner, as after a blip or
+    // never heard is still starting, where it starts; one back sooner, as after a blip or
     // a quick restart, was never out of reach, and what was cut off goes
     // again.
     if (
       again &&
       this.#staleOnLoss &&
-      this.#heard !== undefined &&
+      (this.#heard !== undefined || !this.#starts) &&
       !this.#stale &&
       this.#losing === undefined
     )
