@@ -6,16 +6,7 @@ arranged: workspaces one under another, each a Strip of columns.
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `workspaces.list`, `workspaces.open`, `workspaces.close`,
-  `workspaces.update`, `workspaces.move_pane`, `workspaces.move_column`,
-  `workspaces.move_workspace`, `workspaces.size`, `workspaces.height`,
-  `workspaces.even`, `workspaces.maximize`, `workspaces.display`,
-  `workspaces.group`, `workspaces.regroup`, `workspaces.move_group`,
-  `workspaces.fill`, `workspaces.tidy`, `workspaces.arrange`,
-  `workspaces.take`, `workspaces.set_aside`, `workspaces.bring_back`,
-  `workspaces.unarrange`, `workspaces.panes`, `workspaces.open_pane`,
-  `workspaces.move_own`, `workspaces.close_own`.
+  says what it does and why, and its `methods!` table there is its contract.
 - Its settings: `~/.config/banda/tiling.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

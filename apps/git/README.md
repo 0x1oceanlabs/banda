@@ -8,11 +8,7 @@ and makes branches.
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `git.status`, `git.diff`, `git.refs`, `git.commits`, `git.contents`,
-  `git.stage`, `git.unstage`, `git.revert`, `git.watch`, `git.act`,
-  `git.switch`, `git.branch`, `git.init`, `git.prompt`, `git.written`,
-  `git.folder_for`, `git.pack_folder`, `git.unpack_folder`.
+  says what it does and why, and its `methods!` table there is its contract.
 - **`pane/`**, its part in the page: one `defineModule` in
   `pane/src/index.ts`, with its Panes, actions and widgets.
 - **`app.toml`**, what no code says ([how a module declares
