@@ -189,9 +189,9 @@ export const countsWidget: Widget = {
   compact: true,
 }
 
-/** The counts' list's view: one line, the card of a place it is drawn
+/** The counts' list's view: one list, the card of a place it is drawn
  * outside of (ADR 0098, decision 27). */
-const ONE_LINE: CardView = { density: 1, group: "none" }
+const UNGROUPED: CardView = { group: "none" }
 
 /** What the counts count, drawn only while the list is open, in the
  * sidebar's order, which is worked out only then; one tooltip shows any
@@ -267,7 +267,7 @@ function Item({
   machines: Machines
 }) {
   const card = useCard(
-    { row, place: row.stand, at: atOf(row), now, view: ONE_LINE },
+    { row, place: row.stand, at: atOf(row), now, view: UNGROUPED },
     { named: false, machines }
   )
   const at = useCardClock(card)

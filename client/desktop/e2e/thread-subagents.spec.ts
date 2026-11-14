@@ -819,11 +819,8 @@ async function workingCard(window: Window, title: string) {
   return { card, lines: card.locator(":scope > span") }
 }
 
-/** Two lines a card, so a working one shows its line 2. */
-const TWO_LINES = "card = 2\n"
-
 test("a failed sub-agent shows red on its Thread's Mark while the Thread works, and line 2 counts those at work (ADR 0103, step 3)", async () => {
-  window = await startWindow({ look: LOOK, sidebar: TWO_LINES })
+  window = await startWindow({ look: LOOK })
   const { thread, composer } = await firstThread(window.page)
   const title = "sub-agents three fails lingers"
   await composer.fill(title)
@@ -840,7 +837,6 @@ test("a failed sub-agent shows red on its Thread's Mark while the Thread works, 
 test("a sub-agent that outlives its turn keeps its card in Working, not Done, until it ends (ADR 0103, decision 19)", async () => {
   window = await startWindow({
     look: LOOK,
-    sidebar: TWO_LINES,
     env: { FAKE_AGENT_OUTLIVES_BY: "6000" },
   })
   const { thread, composer } = await firstThread(window.page)

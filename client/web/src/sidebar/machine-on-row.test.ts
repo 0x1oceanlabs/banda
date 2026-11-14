@@ -69,7 +69,7 @@ const machinesOn = (rows: MachineRows, place: Stand = "turn") =>
     place,
     at: 5,
     now: 5,
-    view: { density: "auto", group: "none" },
+    view: { group: "none" },
     ...on(machineOnRow(arc, { rows, labelled: false })),
   }).lines.map((line) => line.right.filter((slot) => slot.kind === "machine"))
 const slot = (named: boolean) => ({
@@ -79,14 +79,10 @@ const slot = (named: boolean) => ({
   named,
 })
 
-test("a card of three lines names the machine on line 3, by its icon alone with icon, and with off nowhere (ADR 0095, decision 5)", () => {
-  expect(machinesOn("named")).toEqual([[], [], [slot(true)]])
-  expect(machinesOn("icon")).toEqual([[], [], [slot(false)]])
-  expect(machinesOn("off")).toEqual([[], [], []])
-})
-
-test("a card of one line has the machine's icon on its right, and with off nothing", () => {
-  expect(machinesOn("named", "open")).toEqual([[slot(false)]])
-  expect(machinesOn("icon", "open")).toEqual([[slot(false)]])
-  expect(machinesOn("off", "open")).toEqual([[]])
+test("a card names the machine on line 3, wherever it stands, by its icon alone with icon, and with off nowhere (ADR 0095, decision 5)", () => {
+  for (const place of ["turn", "open"] as const) {
+    expect(machinesOn("named", place)).toEqual([[], [], [slot(true)]])
+    expect(machinesOn("icon", place)).toEqual([[], [], [slot(false)]])
+    expect(machinesOn("off", place)).toEqual([[], [], []])
+  }
 })

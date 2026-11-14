@@ -26,7 +26,7 @@ export type Region = {
   /** Its header, when it is a group. */
   group?: GroupBlock
   /** The other machine whose Project's group it is, which goes under
-   * that machine's label; a machine's own group names it itself. */
+   * that machine's label. */
   host?: string
   blocks: Block[]
 }
@@ -39,12 +39,6 @@ const PLACES: Readonly<Record<Stand, string>> = {
   working: STAND_WORDS.working,
   later: STAND_WORDS.later,
   archived: STAND_WORDS.archived,
-}
-
-/** What a group's header names: its Project, or its machine. */
-function groupName(group: GroupBlock): string {
-  if (group.by === "machine") return group.host ?? "This machine"
-  return group.project?.name ?? NO_PROJECT
 }
 
 /** `blocks` in their regions, in their order. */
@@ -62,11 +56,9 @@ export function regionsOf(blocks: readonly Block[]): Region[] {
       case "group":
         regions.push({
           key: block.key,
-          label: groupName(block),
+          label: block.project?.name ?? NO_PROJECT,
           group: block,
-          ...(block.by === "project" && block.host !== undefined
-            ? { host: block.host }
-            : {}),
+          ...(block.host === undefined ? {} : { host: block.host }),
           blocks: [],
         })
         break

@@ -612,11 +612,42 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   ).toBe(0)
   /** The phase `name`'s Marks in view, held and stepped (ADR 0117): their
    * loops are `looks`', and each steps 6 to 13 times a second. */
-  const stepsOf = async (name: "marks" | "agents", looks: Shown[]) => {
+  const stepsOf = async (
+    name: "marks" | "agents",
+    looks: Shown[],
+    { foot = false } = {}
+  ) => {
     await leaveSidebar(page)
     await page.evaluate(() => (document.activeElement as HTMLElement).blur())
     await expect(page.locator("[data-news]")).toHaveCount(0)
-    const stepped = await steppedOf(sidebar)
+    let stepped = await steppedOf(sidebar)
+    if (foot) {
+      // More three-line cards than the list shows: the Marks at its foot,
+      // scrolled to, count too. Out of view, a Mark waits.
+      await sidebar
+        .locator('[data-slot="scroll-area-viewport"]')
+        .evaluate((list) => (list.scrollTop = list.scrollHeight))
+      await page.waitForTimeout(500)
+      const more = await steppedOf(sidebar)
+      const byName = new Map(stepped.map((loop) => [loop.name, loop]))
+      for (const loop of more) {
+        const was = byName.get(loop.name)
+        byName.set(
+          loop.name,
+          was
+            ? {
+                name: loop.name,
+                count: Math.max(was.count, loop.count),
+                held: was.held && loop.held,
+                steps: Math.max(was.steps, loop.steps),
+              }
+            : loop
+        )
+      }
+      stepped = [...byName.values()].sort((a, b) =>
+        a.name.localeCompare(b.name)
+      )
+    }
     phases[name]!.stepped = stepped
     expect(
       stepped.map((loop) => loop.name),
@@ -724,7 +755,8 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   framesOf("agents")
   await stepsOf(
     "agents",
-    doings.map(([doing]) => doing)
+    doings.map(([doing]) => doing),
+    { foot: true }
   )
 
   report(scale, versions, phases)

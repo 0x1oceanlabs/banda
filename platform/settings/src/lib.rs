@@ -499,8 +499,7 @@ mod classes {
             &[(
                 Shared,
                 &[
-                    "preset", "group", "card", "inbox", "sort", "projects", "bar", "later",
-                    "machines",
+                    "group", "inbox", "sort", "projects", "bar", "later", "machines",
                 ],
             )],
         ),
@@ -714,8 +713,6 @@ mod every_key {
         // None: what Banda finds the machine is called and drawn by.
         "machine.toml:name",
         "machine.toml:icon",
-        // None: the file's own keys, with no preset under them.
-        "sidebar.toml:preset",
         // None: the look's `[font]` mono, and three quarters of its size.
         "terminal.toml:font",
         "terminal.toml:size",

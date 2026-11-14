@@ -2806,7 +2806,7 @@ test("an answer that comes while its Thread works waits in the queue, named by t
 })
 
 test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {
-  window = await startWindow({ sidebar: '# mine\npreset = "projects"\n' })
+  window = await startWindow({ sidebar: '# mine\ngroup = "project"\n' })
   const { page, dir } = window
   const file = join(dir, "config/sidebar.toml")
   const { composer } = await firstThread(page)
@@ -2814,7 +2814,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await composer.press("Enter")
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   // The Inbox in view, under its tab (ADR 0098, decision 2), each Project
-  // a group in it, as the preset reads: the row sits under its Project's
+  // a group in it, as the file says: the row sits under its Project's
   // name.
   await expect(
     sidebar.getByRole("tablist", { name: "Threads by where they stand" })
@@ -2843,35 +2843,31 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(sidebar.getByRole("option", { name: /hello/ })).toBeVisible()
   await page.keyboard.press("Escape")
 
-  // The places preset groups by Project, as "projects" does (decision
-  // 16).
-  writeFileSync(file, 'preset = "places"\n')
-  await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
-  await page.screenshot({ path: "test-results/23-sidebar-places.png" })
-
   // A key no longer used is named by its line, and the rest of the file
   // holds (ADR 0098).
-  writeFileSync(file, 'preset = "places"\n[row]\nlines = 5\n')
+  writeFileSync(file, 'group = "project"\n[row]\nlines = 5\n')
   const problem = page.getByRole("status", { name: /^The look: / })
   await expect(problem).toHaveAttribute(
     "aria-label",
     /sidebar\.toml:2:2: \[row\] is no longer used/
   )
   await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
+  await page.screenshot({ path: "test-results/23-sidebar-row-retired.png" })
 
-  // A preset of the Person's own is a file, and reads as its keys say.
-  mkdirSync(join(dir, "config/sidebars"))
-  writeFileSync(
-    join(dir, "config/sidebars/flat.toml"),
-    'group = "project"\ncard = 1\n'
+  // A preset is no longer used either: the file reads as one list
+  // (decision 7, as amended).
+  writeFileSync(file, 'preset = "places"\n')
+  await expect(problem).toHaveAttribute(
+    "aria-label",
+    /sidebar\.toml:1:1: preset is no longer used/
   )
-  writeFileSync(file, 'preset = "flat"\n')
+  await expect(work).toHaveCount(0)
+  await expect(sidebar.getByRole("option", { name: /hello/ })).toBeVisible()
+
+  // Grouped by Project again, nothing is wrong.
+  writeFileSync(file, 'group = "project"\n')
   await expect(problem).toBeHidden()
-  await expect(
-    placeOf(sidebar.getByRole("tabpanel"), "Work").getByRole("option", {
-      name: /hello/,
-    })
-  ).toBeVisible()
+  await expect(work.getByRole("option", { name: /hello/ })).toBeVisible()
 })
 
 test("keys.toml binds a key, frees one, and the bar names what is wrong", async () => {
@@ -6374,14 +6370,14 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
   await search.fill("view")
   await search.press("Enter")
   await expect(menu.getByRole("option", { name: /^None/ })).toBeVisible()
-  await search.fill("machine")
+  await search.fill("project")
   await search.press("Enter")
   await expect(menu).toBeHidden()
   await expect
     .poll(() => textOf(join(window.dir, "config/sidebar.toml")))
-    .toContain('group = "machine"')
+    .toContain('group = "project"')
   // The one Thread is archived: a new one, from outside the Window, goes
-  // under this machine's header.
+  // under its Project's header.
   window.banda(
     "call",
     "agents.send",
@@ -6390,11 +6386,13 @@ test("the Banda menu goes into a Project and the sidebar's view, and Tab shows w
     "--params",
     JSON.stringify({ harness: "fake", text: "hello again", settings: null })
   )
-  await expect(placeOf(sidebar, "This machine")).toHaveCount(2)
+  await expect(
+    placeOf(sidebar, "Work").getByRole("option", { name: /hello again/ })
+  ).toBeVisible()
 })
 
 test("on a Project's empty workspace, a new Thread starts in that Project", async () => {
-  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  window = await startWindow({ sidebar: 'group = "project"\n' })
   const { page } = window
   // Work, the first Project, is home; Play's workspace is the one emptied.
   await firstThread(page)
@@ -6442,7 +6440,7 @@ test("on a Project's empty workspace, a new Thread starts in that Project", asyn
 })
 
 test("a Project's workspace goes once its last Thread is archived and the window has left it", async () => {
-  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  window = await startWindow({ sidebar: 'group = "project"\n' })
   const { page } = window
   const { play: thread } = await twoProjects(page)
   await expect(thread.getByRole("img", { name: "Nothing runs" })).toBeVisible()
@@ -6458,7 +6456,7 @@ test("a Project's workspace goes once its last Thread is archived and the window
 })
 
 test("an emptied Project's workspace says whose it is, its first terminal starts the own Group, and the Person closes it (ADR 0102)", async () => {
-  window = await startWindow({ sidebar: 'preset = "projects"\n' })
+  window = await startWindow({ sidebar: 'group = "project"\n' })
   const { page } = window
   // Work, the first Project, is workspace 1; Play's, 2, is the one emptied.
   await firstThread(page)

@@ -576,7 +576,7 @@ export const withArc = (
   arc: Arc,
   {
     dir,
-    sidebar = 'preset = "projects"\n',
+    sidebar = 'group = "project"\n',
     files = {},
   }: { dir?: string; sidebar?: string; files?: Record<string, string> } = {}
 ) =>

@@ -43,20 +43,26 @@ test("a list of counts is some of them, and every file has rows", () => {
   for (const file of Object.keys(SCHEMAS)) expect(rowsOf(file)).not.toEqual([])
 })
 
-test("the sidebar's view is a choice of groups and of a card's lines, and switches for the Inbox's parts (ADR 0098)", () => {
+test("the sidebar's view is a choice of groups, and switches for the Inbox's parts (ADR 0098)", () => {
   const rows = rowsOf("sidebar.toml")
   const control = (key: string) => rows.find((r) => r.key === key)?.control
   const values = (key: string) => {
     const at = control(key)
     return at?.kind === "choice" ? at.options.map((o) => o.value) : at
   }
-  expect(values("group")).toEqual(["none", "project", "machine"])
-  expect(values("card")).toEqual(["auto", 3, 2, 1])
+  expect(values("group")).toEqual(["none", "project"])
   expect(values("inbox.order")).toEqual(["oldest", "newest"])
   for (const key of ["inbox.open", "inbox.working"])
     expect(control(key)).toEqual({ kind: "switch" })
   // What ADR 0098 put out of use is no row.
-  for (const gone of ["group.by", "row.lines", "projects.list", "hold.still"])
+  for (const gone of [
+    "group.by",
+    "row.lines",
+    "projects.list",
+    "hold.still",
+    "card",
+    "preset",
+  ])
     expect(control(gone)).toBeUndefined()
 })
 

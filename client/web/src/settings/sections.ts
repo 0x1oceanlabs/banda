@@ -28,7 +28,7 @@ import { MachinesSettings } from "./MachinesSettings"
 import { ProblemsSettings } from "./ProblemsSettings"
 import { hasMachinePart } from "./machine-settings"
 import { showRows } from "./machines"
-import { PlaySound, PresetPicker } from "./rows"
+import { PlaySound } from "./rows"
 import { SharingSettings } from "./SharingSettings"
 import { ProjectsSettings } from "./ProjectsSettings"
 import { ThemePicker } from "./ThemePicker"
@@ -123,7 +123,6 @@ export const SECTIONS: Section[] = [
     icon: PanelLeftIcon,
     files: [{ name: "sidebar.toml" }],
     about: aboutOf("sidebar.toml"),
-    custom: { preset: PresetPicker },
   },
   {
     id: "sounds",

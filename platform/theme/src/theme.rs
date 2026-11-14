@@ -19,7 +19,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug)]
 pub struct Places {
     /// `~/.config/banda`: `look.toml`, `sidebar.toml`, and the Person's
-    /// `themes/<name>/` and `sidebars/<name>.toml`.
+    /// `themes/<name>/`.
     pub config: PathBuf,
     /// Omarchy's current theme, when Omarchy is installed.
     pub omarchy_current: Option<PathBuf>,

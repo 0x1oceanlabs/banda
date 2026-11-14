@@ -459,8 +459,8 @@ enum ThreadCommand {
 
 #[derive(Subcommand)]
 enum LookCommand {
-    /// Checks look.toml, sidebar.toml, a sidebar preset, browser.toml, a
-    /// theme's theme.toml, banda.toml or colors.toml, or with no files every
+    /// Checks look.toml, sidebar.toml, browser.toml, a theme's
+    /// theme.toml, banda.toml or colors.toml, or with no files every
     /// settings file, as `banda settings check` does. Prints
     /// path:line:column: problem and exits 1 when anything is wrong; prints
     /// nothing when all is well.

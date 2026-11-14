@@ -5,7 +5,7 @@
  */
 export type From = { 
 /**
- * `defaults`, `theme`, `hyprland`, `preset`, or `file`: the
+ * `defaults`, `theme`, `hyprland`, or `file`: the
  * Person's own.
  */
 layer: string, 

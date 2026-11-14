@@ -527,7 +527,7 @@ pub const FILES: [SettingsFile; 3] = [
     SettingsFile::new::<sidebar::SidebarSettings>(
         "sidebar.toml",
         || sidebar::TEMPLATE.to_owned(),
-        |path, text| checked(|problems| sidebar::read_sidebar(path, text, false, problems)),
+        |path, text| checked(|problems| sidebar::read_sidebar(path, text, problems)),
     )
     .class(Class::Shared, &[]),
     SettingsFile::new::<keys::KeysSettings>(
@@ -1278,14 +1278,11 @@ pub(crate) fn line_at(text: &str, offset: usize) -> u32 {
     text[..offset.min(text.len())].matches('\n').count() as u32 + 1
 }
 
-/// Checks `text` as the file at `path` would be read: a file in
-/// `sidebars/` as a sidebar preset, a `colors.toml` as a palette, one of
-/// the look's [`FILES`] as that file, anything else as `look.toml`.
+/// Checks `text` as the file at `path` would be read: a `colors.toml` as
+/// a palette, one of the look's [`FILES`] as that file, anything else as
+/// `look.toml`.
 pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let name = path.file_name();
-    if sidebar::is_sidebar_file(path) == Some(true) {
-        return checked(|problems| sidebar::read_sidebar(path, text, true, problems));
-    }
     if name.is_some_and(|name| name == "colors.toml") {
         return check_palette(path, text);
     }

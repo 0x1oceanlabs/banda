@@ -42,8 +42,8 @@ test.afterEach(async () => {
   window = arc = stopArc = undefined
 })
 
-/** The Inbox, one list, its cards of three lines in Your turn. */
-const INBOX = 'preset = "inbox"\n'
+/** The Inbox, one list, its cards of three lines. */
+const INBOX = 'group = "none"\n'
 
 /** The card of the Thread named `title`: its name starts with it. */
 const cardOf = (scope: Locator, title: string) =>

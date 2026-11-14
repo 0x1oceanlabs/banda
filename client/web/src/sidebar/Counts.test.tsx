@@ -126,34 +126,34 @@ async function listOf(lists: Lists, run: Run = () => undefined) {
   return [...document.querySelectorAll<HTMLElement>("[role=menuitem]")]
 }
 
-/** One line, the card's own: no line 2 or 3, no Project's sign; its title
- * and its time. */
-function oneLine(item: Element) {
-  expect(item.querySelectorAll(":scope > span")).toHaveLength(1)
-  expect(item.querySelector("[data-sign]")).toBeNull()
+/** The sidebar's card of three lines: its title and its time. */
+function threeLines(item: Element) {
+  expect(item.querySelectorAll(":scope > span")).toHaveLength(3)
   expect(item.querySelector("[data-slot=fade-text]")).not.toBeNull()
   expect(item.querySelector("[data-time]")).not.toBeNull()
 }
 
-test("the counts' list draws each Thread as the sidebar's one-line card: its mark, its title, another machine's icon and its time, with no Project's sign; a screen reader hears its spoken name (ADR 0098, decision 27; #1067)", async () => {
+test("the counts' list draws each Thread as the sidebar's card: its mark, its title, its Project, another machine and its time; a screen reader hears its spoken name (ADR 0098, decision 27; #1067)", async () => {
   const items = await listOf(lists)
   expect(items.map((item) => item.getAttribute("aria-label"))).toEqual([
     "Sidebar for arc, Done, 14 minutes",
     "Done on arc, Done, 3 minutes",
     "Bench window tests, Working, 2 minutes",
   ])
-  for (const item of items) oneLine(item)
+  for (const item of items) threeLines(item)
   // Only arc's names its machine, by its icon.
   expect(
     items.map((item) => item.querySelector("[data-machine-icon]") !== null)
   ).toEqual([false, true, false])
-  expect(items[1]!.getAttribute("aria-description")).toBe("arc")
+  expect(items[1]!.getAttribute("aria-description")).toBe(
+    "Done. far. arc. Claude Code"
+  )
   expect(
     items.map((item) => item.querySelector("[data-time]")!.textContent)
   ).toEqual(["14m", "3m", "2m"])
 })
 
-test("a Thread whose Project the sidebar does not know is in the list too, as many rows as the bar counts, last, the same one-line card with no Project part, and it opens its Thread", async () => {
+test("a Thread whose Project the sidebar does not know is in the list too, as many rows as the bar counts, last, the same card with no Project part, and it opens its Thread", async () => {
   const run = vi.fn<Run>()
   const pane = { kind: "agents.thread", args: { thread: "Left behind" } }
   const more = { ...lists, ["gone" as ProjectId]: [one("Left behind", {})] }
@@ -169,7 +169,8 @@ test("a Thread whose Project the sidebar does not know is in the list too, as ma
     "Bench window tests, Working, 2 minutes",
   ])
   const left = items[2]!
-  oneLine(left)
+  threeLines(left)
+  expect(left.querySelector("[data-sign]")).toBeNull()
   expect(left.querySelector("[data-machine-icon]")).toBeNull()
   expect(left.querySelector("[data-slot=fade-text]")!.textContent).toBe(
     "Left behind"

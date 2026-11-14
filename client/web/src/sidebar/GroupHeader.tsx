@@ -4,9 +4,7 @@ import {
   MARK_WORDS,
 } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
-import { MachineIcon } from "@banda/ui/components/machine-icon"
 import { ProjectSign } from "@banda/ui/components/project-sign"
-import { useHereNamed, useShownOf } from "@banda/core/react"
 import { NO_PROJECT } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { ChevronRightIcon, EllipsisIcon } from "lucide-react"
@@ -25,9 +23,8 @@ import { pickProps } from "./usePick"
  * too. The pointer over it, or the keyboard's focus in it, shows **⋯**,
  * the Project's menu its right click opens, in the rollup's place
  * (decision 16); no **+**: the sidebar starts no Thread (Roma,
- * 2026-11-12). A machine's group has the machine's icon and name. Another
- * machine's Project has no menu yet: each act would go to this machine's
- * engine. Inside the list, which keys pick (decision 13), none of it is a
+ * 2026-11-12). Another machine's Project has no menu yet: each act would
+ * go to this machine's engine. Inside the list, which keys pick (decision 13), none of it is a
  * Tab stop: the header is a stop of the pick (`stop`), folded or not,
  * which ← folds and → or Enter unfolds, Enter folding it again; Shift+F10
  * or the Menu key on it opens the Project's menu, as ⋯ does, and picked
@@ -49,9 +46,8 @@ export function GroupHeader({
   onFold: () => void
 }) {
   const { project, folded } = group
-  const byProject = group.by === "project"
   // ⋯ is this machine's Projects' alone.
-  const menu = byProject && group.host === undefined && project !== undefined
+  const menu = group.host === undefined && project !== undefined
   const tone = callColor(group.mark)
   // A click that folds or unfolds keeps the rollup in sight until the
   // pointer leaves the header (`globals.css`).
@@ -83,21 +79,15 @@ export function GroupHeader({
           onFold()
         }}
       >
-        {byProject ? (
-          <ProjectSign project={project} size={14} />
-        ) : (
-          <MachineName host={group.host} />
-        )}
-        {byProject && (
-          <span
-            className={cn(
-              "min-w-0 truncate",
-              project ? "font-medium" : "text-muted-foreground"
-            )}
-          >
-            {project?.name ?? NO_PROJECT}
-          </span>
-        )}
+        <ProjectSign project={project} size={14} />
+        <span
+          className={cn(
+            "min-w-0 truncate",
+            project ? "font-medium" : "text-muted-foreground"
+          )}
+        >
+          {project?.name ?? NO_PROJECT}
+        </span>
         <ChevronRightIcon
           aria-hidden
           className={cn(
@@ -174,21 +164,5 @@ export function GroupHeader({
         </span>
       )}
     </div>
-  )
-}
-
-/** A machine's icon and name, as its group's header names it: this
- * machine's, or another's, as the Window last heard them. */
-function MachineName({ host }: { host?: string }) {
-  const here = useHereNamed()
-  const shown = useShownOf(host)
-  const named = host === undefined ? here : shown?.named
-  return (
-    <>
-      {named && <MachineIcon icon={named.icon} size={14} />}
-      <span className="min-w-0 truncate font-medium">
-        {named?.name ?? host ?? "This machine"}
-      </span>
-    </>
   )
 }

@@ -4,7 +4,7 @@
  * the working in grey, nothing when nothing calls, and nothing while the
  * sidebar shows; the logo's name says it, "Banda: Done, 2 your turn, 1 at
  * work", and "Quiet on". A click on the count opens the small inbox, a
- * dialog named Inbox: the sidebar's own list of Your turn, one-line cards
+ * dialog named Inbox: the sidebar's own list of Your turn, its cards
  * in its scope, so the same keys work, but no tabs, Search or 1–4; the
  * focus on its first card, Esc giving it back where it was, Enter opening
  * a card's Thread in its Pane. "1 at work ›" shows the sidebar on Working,
@@ -135,7 +135,7 @@ test("with the sidebar hidden, the count beside the logo says whose turn it is a
   ).toHaveCount(0)
 })
 
-test("a click on the count opens the small inbox: Your turn alone in one-line cards in the sidebar's scope, the focus on the first; ↓ and S work as in the sidebar, 1–4 do nothing; Esc gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
+test("a click on the count opens the small inbox: Your turn alone in the sidebar's cards and scope, the focus on the first; ↓ and S work as in the sidebar, 1–4 do nothing; Esc gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -159,11 +159,11 @@ test("a click on the count opens the small inbox: Your turn alone in one-line ca
   await expect(inbox.locator('[data-scope="sidebar"]')).toHaveCount(1)
   await expect(inbox.getByRole("tab")).toHaveCount(0)
   await expect(inbox.getByRole("combobox")).toHaveCount(0)
-  // Your turn alone, oldest first, one line each.
+  // Your turn alone, oldest first, three lines each.
   const cards = list.getByRole("option")
   await expect(cards).toHaveText([/call one/, /call two/, /call three/])
   for (const card of await cards.all())
-    expect((await card.boundingBox())!.height).toBeLessThan(36)
+    await expect(card.locator(":scope > span")).toHaveCount(3)
   await picked(list, "call one")
 
   // ↓ moves the pick; S archives the card and the pick goes on below; the

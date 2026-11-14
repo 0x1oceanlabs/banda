@@ -1,34 +1,16 @@
 /**
  * Rows a section draws itself (ADR 0016, decision 4), where the schema
- * alone draws them less well: a preset from the presets there are, a
- * sound to hear before it is chosen, and another machine on rows in the
- * Show card's words.
+ * alone draws them less well: a sound to hear before it is chosen, and
+ * another machine on rows in the Show card's words.
  */
 import type { MachineRows } from "@banda/contract/sidebar"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import { type Chime, player } from "@banda/ui/sound"
 import { PlayIcon } from "lucide-react"
-import { useLookSidebar, useLookSound } from "../look"
-import { PRESET_WORDS } from "../sidebar"
+import { useLookSound } from "../look"
 import type { CustomRow } from "@banda/ui/settings"
 import { Choice } from "@banda/ui/components/setting-row"
-
-/** The sidebar's preset, from Banda's and the Person's own. */
-export const PresetPicker: CustomRow = ({ set }) => {
-  const { preset, presets } = useLookSidebar()
-  return (
-    <Choice
-      label="Preset"
-      options={presets.map((p) => ({
-        value: p.name,
-        about: PRESET_WORDS[p.name] ?? "Your own preset",
-      }))}
-      value={preset}
-      onPick={(picked) => set(tomlOf(picked))}
-    />
-  )
-}
 
 const MACHINE_ROWS: { value: MachineRows; words: string }[] = [
   { value: "named", words: "Icon and name" },

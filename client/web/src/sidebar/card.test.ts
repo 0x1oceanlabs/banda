@@ -13,7 +13,6 @@ import {
   type CardOf,
   cardOf,
   type CardView,
-  linesOf,
   pullStateOf,
   type PullChip,
   pullWords,
@@ -50,7 +49,7 @@ const row = (stand: Stand, more: Partial<Listed> = {}, host?: string): Row => ({
   stand,
   ...(host === undefined ? {} : { host }),
 })
-const AUTO: CardView = { density: "auto", group: "none" }
+const ONE_LIST: CardView = { group: "none" }
 
 /** Pull request `number` of `o/r`, open and read as `snapshot` says. */
 const pull = (number: number, snapshot: Partial<Snapshot> = {}): Pull => ({
@@ -87,7 +86,7 @@ const card = (of: Row, more: Partial<Omit<CardOf, "row">> = {}): CardModel =>
     place: of.stand,
     at: of.listed.changed,
     now: NOW,
-    view: AUTO,
+    view: ONE_LIST,
     ...more,
   })
 
@@ -98,28 +97,19 @@ const kinds = ({ lines }: CardModel) =>
       `${left.map((slot) => slot.kind).join(" ")} | ${right.map((slot) => slot.kind).join(" ")}`
   )
 
-describe("density (ADR 0098, decision 9)", () => {
-  test("auto: three lines in Your turn, two there grouped by Project, one for the rest", () => {
+describe("three lines (ADR 0098, decisions 8 and 9, as amended)", () => {
+  test("every card has three lines, wherever it stands and however the list is grouped", () => {
     const places: Stand[] = ["turn", "open", "working", "later", "archived"]
-    const auto = (group: CardView["group"]) =>
-      places.map((place) => linesOf(place, { density: "auto", group }))
-    expect(auto("none")).toEqual([3, 1, 1, 1, 1])
-    expect(auto("project")).toEqual([2, 1, 1, 1, 1])
-    expect(auto("machine")).toEqual([3, 1, 1, 1, 1])
+    for (const group of ["none", "project"] as const)
+      for (const place of places)
+        expect(card(row(place), { view: { group } }).lines).toHaveLength(3)
   })
 
-  test("a density the Person sets holds in every place", () => {
-    for (const density of [1, 2, 3] as const)
-      for (const place of ["turn", "working"] as const)
-        expect(linesOf(place, { density, group: "none" })).toBe(density)
-  })
-
-  test("a card keeps the lines of the place it is drawn in, wherever its Thread stands now", () => {
+  test("a card keeps the place it is drawn in, wherever its Thread stands now", () => {
     // Seen under the pointer: open now, still in Your turn's slot.
     const held = card(row("open", { mark: "idle", calls: undefined }), {
       place: "turn",
     })
-    expect(held.lines).toHaveLength(3)
     expect(held.place).toBe("turn")
     expect(held.stand).toBe("open")
     expect(held.tone).toBeUndefined()
@@ -141,19 +131,19 @@ describe("a machine out of reach (ADR 0098, decision 18)", () => {
     expect(asks.lines[2]!.right[1]).toEqual({ kind: "away", dot: true })
     expect([asks.stand, asks.tone]).toEqual(["turn", "attention"])
     expect(awayShort(asks.away!, NOW)).toBe("away 12m")
-    // Grouped by machine, its header names it: the words stand alone.
-    const grouped = card(row("turn", { away: true }, "arc"), {
-      machine: arc,
-      away,
-      view: { density: "auto", group: "machine" },
-    })
-    expect(grouped.lines[2]!.right[0]).toEqual({ kind: "away", dot: false })
-    // A card of one line has no line 3: its time stands as it went.
+    // With no machine named, the words stand alone.
+    const unnamed = card(row("turn", { away: true }, "arc"), { away })
+    expect(unnamed.lines[2]!.right[0]).toEqual({ kind: "away", dot: false })
+    // At work, its time stands as it went.
     const working = card(
       row("working", { mark: "working", away: true }, "arc"),
       { machine: arc, away }
     )
-    expect(kinds(working)).toEqual(["mark title | machine time"])
+    expect(kinds(working)).toEqual([
+      "mark title | time",
+      "says | ",
+      "project | machine away harness",
+    ])
     expect(working.lines[0]!.left[0]).toEqual({ kind: "mark", look: "offline" })
     expect(working.does).toBeUndefined()
     expect(working.stand).toBe("working")
@@ -161,7 +151,7 @@ describe("a machine out of reach (ADR 0098, decision 18)", () => {
   })
 })
 
-describe("slots, by place, density and group", () => {
+describe("slots, by place and group", () => {
   test("three lines: the mark and title | the time; a word and what it says; the Project | the machine and the Harness", () => {
     const asks = card(row("turn", {}, "arc"), { machine: arc })
     expect(kinds(asks)).toEqual([
@@ -176,34 +166,12 @@ describe("slots, by place, density and group", () => {
     ])
   })
 
-  test("grouped by Project, Your turn has two lines, and the machine moves to line 1's right", () => {
+  test("grouped by Project, line 3 has no Project: its header names it", () => {
     const grouped = card(row("turn", {}, "arc"), {
       machine: arc,
-      view: { density: "auto", group: "project" },
+      view: { group: "project" },
     })
-    expect(kinds(grouped)).toEqual(["mark title | machine time", "says | "])
-    expect(grouped.lines[0]!.right[0]).toEqual({
-      kind: "machine",
-      host: "arc",
-      machine: arc,
-      named: false,
-    })
-  })
-
-  test("grouped by machine, its header names the machine; grouped by Project, line 3 has no Project", () => {
-    const by = (group: CardView["group"]) =>
-      kinds(
-        card(row("turn", {}, "arc"), {
-          machine: arc,
-          view: { density: 3, group },
-        })
-      )
-    expect(by("machine")).toEqual([
-      "mark title | time",
-      "says | ",
-      "project | harness",
-    ])
-    expect(by("project")).toEqual([
+    expect(kinds(grouped)).toEqual([
       "mark title | time",
       "says | ",
       " | machine harness",
@@ -223,32 +191,19 @@ describe("slots, by place, density and group", () => {
     ])
     const grouped = card(row("turn", { parent: "t0" }), {
       child,
-      view: { density: "auto", group: "project" },
+      view: { group: "project" },
     })
     expect(kinds(grouped)).toEqual(kinds(asks))
-    expect(linesOf("turn", { density: "auto", group: "project" }, child)).toBe(
-      3
-    )
-    // At work, it is a line under its parent.
+    // At work, it is a card under its parent.
     const under = card(row("working", { mark: "working", parent: "t0" }), {
       child: { ...child, under: true },
     })
-    expect(kinds(under)).toEqual(["mark title | time"])
+    expect(kinds(under)).toEqual([
+      "mark title | time",
+      "works | ",
+      "parent | harness",
+    ])
     expect(under.child).toEqual({ parent: "Ship the inbox", under: true })
-  })
-
-  test("one line: the mark and the title | the time; a working row on another machine shows the machine and the time", () => {
-    expect(kinds(card(row("open", { mark: "idle" })))).toEqual([
-      "mark title | time",
-    ])
-    const working = card(row("working", { mark: "working" }, "arc"), {
-      machine: arc,
-    })
-    expect(kinds(working)).toEqual(["mark title | machine time"])
-    // This machine's names none.
-    expect(kinds(card(row("working", { mark: "working" })))).toEqual([
-      "mark title | time",
-    ])
   })
 
   test("this machine, named as the others are, takes the same slots with no host, as it has no card; its icon alone, line 3 says no name (ADR 0095, decisions 4 and 5)", () => {
@@ -261,7 +216,7 @@ describe("slots, by place, density and group", () => {
     })
     expect(
       kinds(card(row("working", { mark: "working" }), { machine: mac }))
-    ).toEqual(["mark title | machine time"])
+    ).toEqual(["mark title | time", "works | ", "project | machine harness"])
     const alone = card(row("turn", {}, "arc"), {
       machine: { ...arc, alone: true },
     })
@@ -327,9 +282,7 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
       []
     )
     // At work, line 2 says what it does; the work since has no diff yet.
-    const working = card(row("working", { mark: "working", changedLines }), {
-      view: { density: 2, group: "none" },
-    })
+    const working = card(row("working", { mark: "working", changedLines }))
     expect(working.lines[1]).toEqual({ left: [{ kind: "works" }], right: [] })
   })
 
@@ -345,9 +298,7 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
     )
     expect(says(row("turn", { mark: "failed", pulls })).right).toEqual([])
     // At work too: how its checks stand is not stale, as a diff is.
-    const working = card(row("working", { mark: "working", pulls }), {
-      view: { density: 2, group: "none" },
-    })
+    const working = card(row("working", { mark: "working", pulls }))
     expect(working.lines[1]!.right).toEqual([
       { kind: "pull", number: 1061, of: 1, state: "passed" },
     ])
@@ -414,9 +365,7 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
   })
 
   test("a card that calls for nothing says what it was asked, with no word", () => {
-    const open = card(row("open", { mark: "idle", calls: undefined }), {
-      view: { density: 2, group: "none" },
-    })
+    const open = card(row("open", { mark: "idle", calls: undefined }))
     expect(open.lines[1]!.left).toEqual([
       { kind: "says", text: "fix the form" },
     ])
@@ -424,12 +373,9 @@ describe("line 2's words (decision 8, spec §2.6)", () => {
 })
 
 describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)", () => {
-  const TWO: CardView = { density: 2, group: "none" }
-  /** A working card of `more`, two lines, and its line 2's words. */
+  /** A working card of `more`, and its line 2's words. */
   const works = (more: Partial<Listed>) => {
-    const one = card(row("working", { mark: "working", ...more }), {
-      view: TWO,
-    })
+    const one = card(row("working", { mark: "working", ...more }))
     expect(kinds(one)[1]).toBe("works | ")
     return worksWords(one.does!, NOW)
   }
@@ -500,7 +446,7 @@ describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)"
     expect(timesOf(limited)).toEqual([{ kind: "goes on", at: at16 }])
     expect(spokenOf(limited, NOW)).toEqual({
       name: "Fix the form, Working, goes on at 16:00",
-      description: "Usage limit. goes on at 16:00",
+      description: "Usage limit. goes on at 16:00. banda. Claude Code",
     })
     const friday = new Date(2026, 10, 13, 9, 0).getTime()
     expect(
@@ -519,16 +465,19 @@ describe("a working card's words (decision 8, spec §2.6; ADR 0099, decision 2)"
       stuck.time,
       { kind: "ago", at: NOW - 6 * MINUTE },
     ])
-    expect(spokenOf(stuck, NOW).description).toBe("No events for 6 minutes")
+    expect(spokenOf(stuck, NOW).description).toBe(
+      "No events for 6 minutes. banda. Claude Code"
+    )
   })
 
-  test("a card of one line says what its Agent does to a screen reader, as its Mark shows it", () => {
+  test("a card says what its Agent does to a screen reader once, as its Mark shows it", () => {
     const one = card(
       row("working", { mark: "working", ...doing("read", "card.ts") }, "arc"),
       { machine: arc }
     )
-    expect(one.lines).toHaveLength(1)
-    expect(spokenOf(one, NOW).description).toBe("Reads card.ts. arc")
+    expect(spokenOf(one, NOW).description).toBe(
+      "Reads card.ts. banda. arc. Claude Code"
+    )
   })
 })
 
@@ -562,23 +511,22 @@ describe("tones: colour only on the mark and on a call's time", () => {
   })
 
   test("no slot but the mark carries a colour, on every card", () => {
-    for (const mark of ["asking", "failed", "done"] as const)
-      for (const density of [1, 2, 3] as const) {
-        const one = card(row("turn", { mark }, "arc"), {
-          machine: arc,
-          view: { density, group: "none" },
-        })
-        expect(JSON.stringify(one.lines)).not.toMatch(
-          /tone|attention|destructive|added/
-        )
-      }
+    for (const mark of ["asking", "failed", "done"] as const) {
+      const one = card(row("turn", { mark }, "arc"), { machine: arc })
+      expect(JSON.stringify(one.lines)).not.toMatch(
+        /tone|attention|destructive|added/
+      )
+    }
   })
 
-  test("the counts' list draws the one-line card, with its machine's icon, its time and its colour (#1067)", () => {
-    const ONE: CardView = { density: 1, group: "none" }
+  test("the counts' list draws the card, with its machine, its time and its colour (#1067)", () => {
     const asking = row("turn")
-    const here = card(asking, { at: atOf(asking), view: ONE })
-    expect(kinds(here)).toEqual(["mark title | time"])
+    const here = card(asking, { at: atOf(asking) })
+    expect(kinds(here)).toEqual([
+      "mark title | time",
+      "says | ",
+      "project | harness",
+    ])
     expect(here.time).toEqual({
       kind: "ago",
       at: NOW - 14 * MINUTE,
@@ -589,8 +537,12 @@ describe("tones: colour only on the mark and on a call's time", () => {
       { mark: "working", began: NOW - HOUR },
       "arc"
     )
-    const there = card(working, { at: atOf(working), machine: arc, view: ONE })
-    expect(kinds(there)).toEqual(["mark title | machine time"])
+    const there = card(working, { at: atOf(working), machine: arc })
+    expect(kinds(there)).toEqual([
+      "mark title | time",
+      "works | ",
+      "project | machine harness",
+    ])
     expect(there.time).toEqual({ kind: "ago", at: NOW - HOUR })
   })
 })
@@ -644,7 +596,7 @@ describe("spokenOf (spec §2.8)", () => {
     })
     expect(spokenOf(working, NOW)).toEqual({
       name: "Fix the form, Working, 2 hours",
-      description: "Working. arc",
+      description: "Working. banda. arc. Claude Code",
     })
     const failed = card(
       row("turn", { mark: "failed", calls: "3 tests fail · #1061 ✗" })
@@ -654,7 +606,7 @@ describe("spokenOf (spec §2.8)", () => {
     )
   })
 
-  test("a child adds who started it, once, with line 3 or with none (ADR 0098, decision 24)", () => {
+  test("a child adds who started it, once, its line 3 naming its parent (ADR 0098, decision 24)", () => {
     const child = { parent: "Ship the inbox" }
     const asks = card(row("turn", { parent: "t0" }), { child })
     expect(spokenOf(asks, NOW).description).toBe(
@@ -664,7 +616,7 @@ describe("spokenOf (spec §2.8)", () => {
       child: { ...child, under: true },
     })
     expect(spokenOf(under, NOW).description).toBe(
-      "Working. Started by Ship the inbox"
+      "Working. Claude Code. Started by Ship the inbox"
     )
   })
 
@@ -764,7 +716,7 @@ describe("spokenOf (spec §2.8)", () => {
     })
     expect(spokenOf(away, NOW)).toEqual({
       name: "Fix the form, Working, 18 minutes",
-      description: "Working. arc. arc is away, 12 minutes",
+      description: "Working. banda. arc. Claude Code. arc is away, 12 minutes",
     })
     const stopped = card(row("working", { mark: "working" }, "arc"), {
       machine: arc,
@@ -772,22 +724,21 @@ describe("spokenOf (spec §2.8)", () => {
       stopped: true,
     })
     expect(spokenOf(stopped, NOW).description).toBe(
-      "Working. arc. arc is stopped, 12 minutes"
+      "Working. banda. arc. Claude Code. arc is stopped, 12 minutes"
     )
     const strayed = card(row("open", { mark: "idle", calls: undefined }), {
       strayed: true,
     })
     expect(spokenOf(strayed, NOW).description).toBe(
-      "Away from its Project's workspace"
+      "fix the form. banda. Claude Code. Away from its Project's workspace"
     )
   })
 })
 
 describe("a working card's line 2 says its sub-agents at work (ADR 0103, decision 32)", () => {
-  const TWO: CardView = { density: 2, group: "none" }
   const said = "3 sub-agents at work"
   const at = (more: Partial<Listed>) =>
-    card(row("working", { mark: "working", ...more }), { view: TWO })
+    card(row("working", { mark: "working", ...more }))
 
   test("before what its turn does, as it says more", () => {
     const one = at({
@@ -796,7 +747,9 @@ describe("a working card's line 2 says its sub-agents at work (ADR 0103, decisio
     })
     expect(kinds(one)[1]).toBe("works | ")
     expect(workSaid(one, NOW)).toBe(said)
-    expect(spokenOf(one, NOW).description).toBe("3 sub-agents at work")
+    expect(spokenOf(one, NOW).description).toBe(
+      "3 sub-agents at work. banda. Claude Code"
+    )
   })
 
   test("after its turn ended too, while they work on", () => {
@@ -822,8 +775,7 @@ describe("a working card's line 2 says its sub-agents at work (ADR 0103, decisio
     expect(workSaid(one, NOW)).toBe("Working")
     // A card that calls says its call, never its sub-agents.
     const done = card(
-      row("turn", { mark: "done", subagents: { working: 1, failed: 0, said } }),
-      { view: TWO }
+      row("turn", { mark: "done", subagents: { working: 1, failed: 0, said } })
     )
     expect(done.subagents).toBeUndefined()
   })

@@ -24,9 +24,6 @@ test.afterEach(async () => {
  * a window resized for them is drawn at once. */
 const LOOK = 'mode = "light"\n[desk]\nglass = false\n[motion]\noff = true\n'
 
-/** Two lines a card, so a working one shows its line 2. */
-const TWO_LINES = "card = 2\n"
-
 /** A cue file the fake's Crew waits for in its Fix phase, and how to give
  * it. */
 function cued() {
@@ -64,7 +61,7 @@ async function shots(window: Window, name: string) {
 
 test("Claude asks to start a Crew; once started its card works on after the turn, and its end comes back before Claude goes on", async () => {
   const cue = cued()
-  window = await startWindow({ look: LOOK, sidebar: TWO_LINES, env: cue.env })
+  window = await startWindow({ look: LOOK, env: cue.env })
   const { thread, composer } = await firstThread(window.page)
   const title = "crew start log"
   await composer.fill(title)

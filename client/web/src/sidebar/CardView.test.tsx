@@ -80,7 +80,7 @@ const cardElement = (
       place: row.stand,
       at: row.listed.changed,
       now: Date.now(),
-      view: { density: "auto", group: "none" },
+      view: { group: "none" },
       ...more,
     })}
     row={row}
@@ -191,23 +191,20 @@ test("a screen reader hears the card by spokenOf", () => {
 })
 
 test("a working card's line 2 says what its Agent does, muted as its time; at the limit, line 1's right says when it goes on", () => {
-  const two = { view: { density: 2, group: "none" } } as const
   const runs = drawn(
     rowOf("working", {
       mark: "working",
       doing: { what: "execute", title: "pnpm test", since: NOW },
       stepped: NOW,
-    }),
-    two
+    })
   )
   expect(runs).toMatch(/text-muted-foreground\/60">pnpm test<\/span>/)
-  expect(runs).toContain('aria-description="pnpm test"')
+  expect(runs).toContain('aria-description="pnpm test. banda. Claude Code"')
   const limited = drawn(
     rowOf("working", {
       mark: "working",
       limitUntil: new Date(2026, 10, 10, 16, 0).getTime(),
-    }),
-    two
+    })
   )
   expect(limited).toMatch(/data-time=""[^>]*>16:00</)
   expect(limited).toContain(">Usage limit · goes on at 16:00</span>")
@@ -226,8 +223,7 @@ test("a working card's words and its Mark change together, each doing held 1.5 s
             mark: "working",
             doing: { what, title, since: Date.now() },
             stepped: Date.now(),
-          }),
-          { view: { density: 2, group: "none" } }
+          })
         )
       )
     )
@@ -277,7 +273,7 @@ test("a machine the window does not reach: a card says how long ago as of when i
 /** Another machine's mark, which opens its card (`MachineCard`). */
 const CARD = 'data-machine-card="arc"'
 
-test("with its icon alone, a card of three lines draws the machine as a card of one line does, its name said to a screen reader", () => {
+test("with its icon alone, a card draws the machine by its icon, its name said to a screen reader", () => {
   const html = drawn(rowOf("turn", {}, "arc"), {
     machine: { ...arc, alone: true },
   })
@@ -295,26 +291,17 @@ test("this machine named too has no card, as it is here; alone, its name is the 
   expect(html).not.toContain("data-machine-card")
   expect(html).toContain('data-machine-icon="laptop"')
   expect(html).toMatch(/max-w-16[^"]*">mac<\/span>/)
-  expect(drawn(rowOf("open", { mark: "rest" }), { machine: mac })).toContain(
-    'title="mac"'
-  )
+  expect(
+    drawn(rowOf("open", { mark: "rest" }), {
+      machine: { ...mac, alone: true },
+    })
+  ).toContain('title="mac"')
 })
 
-test("a Thread away from its Project's workspace bears a small diamond: right after its title on one or two lines, at the start of line 3's right on three, never at line 1's right, where the acts show (ADR 0102, decision 6; spec S6b)", () => {
+test("a Thread away from its Project's workspace bears a small diamond at the start of line 3's right, never at line 1's right, where the acts show (ADR 0102, decision 6; spec S6b)", () => {
   for (const group of ["none", "project"] as const) {
-    for (const density of [1, 2] as const) {
-      const html = drawn(rowOf("turn"), {
-        view: { density, group },
-        strayed: true,
-      })
-      const mark = html.indexOf("lucide-diamond")
-      expect(mark, `${density} lines`).toBeGreaterThan(-1)
-      expect(mark).toBeGreaterThan(html.indexOf(">Bench window tests<"))
-      expect(mark).toBeLessThan(html.indexOf('class="ml-auto'))
-      expect(html).toContain('title="Away from its Project&#x27;s workspace"')
-    }
     const three = drawn(rowOf("turn"), {
-      view: { density: 3, group },
+      view: { group },
       strayed: true,
     })
     // Line 3's right starts with it, before the Harness's emblem.
@@ -322,6 +309,9 @@ test("a Thread away from its Project's workspace bears a small diamond: right af
     expect(three.indexOf("lucide-diamond")).toBeGreaterThan(third)
     expect(three.slice(third)).toMatch(
       /^class="ml-auto[^"]*"><span title="Away from its Project&#x27;s workspace"/
+    )
+    expect(three.indexOf("lucide-diamond")).toBeGreaterThan(
+      three.indexOf(">Bench window tests<")
     )
   }
   const plain = drawn(rowOf("turn"))
@@ -346,7 +336,7 @@ test('a card\'s text fades where it does not fit, never with "…"; the title is
           place: "turn",
           at: NOW - 14 * MINUTE,
           now: NOW,
-          view: { density: "auto", group: "none" },
+          view: { group: "none" },
         })}
         row={rowOf("turn")}
         current={false}
@@ -438,18 +428,7 @@ test("the acts and line 1's right share one cell, which keeps the acts' room whi
   expect(drawn(rowOf("turn"))).not.toMatch(/data-acts/)
 })
 
-test("the acts' room keeps the diamond in sight: on one or two lines it stands after the title, before the cell; on three, on line 3 (ADR 0102, decision 6)", () => {
-  for (const density of [1, 2] as const) {
-    const html = drawn(
-      rowOf("open", { mark: "idle", calls: undefined }),
-      { strayed: true, view: { density, group: "none" } },
-      false,
-      acts({ act: "later" }, { act: "archive" })
-    )
-    const diamond = html.indexOf("lucide-diamond")
-    expect(diamond).toBeGreaterThan(html.indexOf(">Bench window tests<"))
-    expect(diamond).toBeLessThan(html.indexOf("data-acts-time"))
-  }
+test("the acts' room keeps the diamond in sight, on line 3 (ADR 0102, decision 6)", () => {
   const three = drawn(
     rowOf("turn"),
     { strayed: true },

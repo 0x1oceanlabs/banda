@@ -82,7 +82,7 @@ test.afterEach(async () => {
 
 /** A card's time, short and still (ADR 0098, decision 8): "now", "40s",
  * "14m". */
-const SHORT_TIME = /(now|\d+[smhd])$/
+const SHORT_TIME = /^(now|\d+[smhd])$/
 
 /** A word as sh takes it, whatever it holds. */
 const quoted = (word: string) => `'${word.replaceAll("'", `'\\''`)}'`
@@ -331,7 +331,7 @@ const withArc = (
   arc: Arc,
   banda: string | null = program,
   dir?: string,
-  sidebar = 'preset = "projects"\n',
+  sidebar = 'group = "project"\n',
   latency = 0
 ) =>
   startWindow({
@@ -533,8 +533,11 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // A Thread started there shows as it starts, with how long it works.
   send(arc, banda, "Hosts over ssh, wait")
   await expect(
-    there.getByRole("option").filter({ hasText: "Hosts over ssh, wait" })
-  ).toContainText(SHORT_TIME)
+    there
+      .getByRole("option")
+      .filter({ hasText: "Hosts over ssh, wait" })
+      .locator("[data-time]")
+  ).toHaveText(SHORT_TIME)
   await shot(page, "pr2-1-projects-live")
   // Its label's card has its longer facts: what it is, why it is awake,
   // with its Agent at work there, its build and its address; its battery
@@ -608,7 +611,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
 
   // The Inbox: no label for a live host, and its rows among this
   // machine's, each with its host's name.
-  writeFileSync(join(window.dir, "config/sidebar.toml"), 'preset = "inbox"\n')
+  writeFileSync(join(window.dir, "config/sidebar.toml"), 'group = "none"\n')
   await expect(arcOf(page)).toHaveCount(0)
   const tags = sidebar.getByRole("option").locator('[data-machine-card="arc"]')
   await expect(tags).toHaveCount(2)
@@ -632,10 +635,7 @@ test("another machine's Threads show under its name, below this one's; stopped t
   await shot(page, "pr2-2-inbox-live")
 
   // The link drops and arc cannot be reached: away, its rows still there.
-  writeFileSync(
-    join(window.dir, "config/sidebar.toml"),
-    'preset = "projects"\n'
-  )
+  writeFileSync(join(window.dir, "config/sidebar.toml"), 'group = "project"\n')
   await expect(there.getByText("Bench window tests")).toBeVisible()
   arc.down(true)
   arc.cut()
@@ -665,8 +665,11 @@ test("another machine's Threads show under its name, below this one's; stopped t
   // link came back, so its Agent is given a turn that waits.
   send(arc, banda, "Hold arc, wait")
   await expect(
-    there.getByRole("option").filter({ hasText: "Hold arc, wait" })
-  ).toContainText(SHORT_TIME)
+    there
+      .getByRole("option")
+      .filter({ hasText: "Hold arc, wait" })
+      .locator("[data-time]")
+  ).toHaveText(SHORT_TIME)
   await more.focus()
   await page.keyboard.press("Enter")
   await page.getByRole("menuitem", { name: "Stop Banda on arc" }).click()
@@ -2496,7 +2499,7 @@ test("the counts list and Alt+U place arc's Threads where the sidebar list does,
     arc,
     program,
     undefined,
-    'preset = "inbox"\n[bar]\nshow = "always"\n'
+    'group = "none"\n[bar]\nshow = "always"\n'
   )
   const { page } = window
   await work(window)
@@ -2557,7 +2560,7 @@ test("hosts.toml applies as it changes: a machine added by hand or through the b
   await seed(arc)
   window = await startWindow({
     look: 'mode = "dark"\n',
-    sidebar: 'preset = "projects"\n',
+    sidebar: 'group = "project"\n',
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
   })
   const { page } = window
@@ -2679,7 +2682,7 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   )
   window = await startWindow({
     look: 'mode = "dark"\n',
-    sidebar: 'preset = "projects"\n',
+    sidebar: 'group = "project"\n',
     files: {
       "config/hosts.toml": `[[hosts]]\nname = "arc"\nssh = "arc"\nbanda = ${JSON.stringify(program)}\n`,
       "config/machine.toml": 'name = "m1pro"\nicon = "laptop"\n',
@@ -2990,13 +2993,13 @@ test("Settings → Machines: this machine names itself, arc is renamed on arc, t
   )
 })
 
-test("Settings → Machines, Show: only with another machine; how it shows on its cards changes them at once, Off on a card of one line too; a search lands on it, and Name this machine too names this one", async () => {
+test("Settings → Machines, Show: only with another machine; how it shows on its cards changes them at once, at work too; a search lands on it, and Name this machine too names this one", async () => {
   test.setTimeout(shots ? 300_000 : 180_000)
   arc = newArc()
   const banda = await seed(arc)
   window = await startWindow({
     look: 'mode = "dark"\n',
-    sidebar: 'preset = "inbox"\n',
+    sidebar: 'group = "none"\n',
     files: { "config/machine.toml": 'name = "mac"\nicon = "laptop"\n' },
     env: { PATH: `${arc.bin}:${process.env.PATH}` },
   })
@@ -3060,9 +3063,8 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
     /bg-accent\/60/
   )
 
-  // How another machine shows on its cards, changed live, in the file: on
-  // a card of three lines by its icon and name, on one of one line, as a
-  // Thread at work there, by its icon alone.
+  // How another machine shows on its cards, changed live, in the file: by
+  // its icon and name, on a Thread at work there too.
   await expect(sidebar.getByText("Bench window tests")).toBeVisible()
   send(arc, banda, "Hosts over ssh, wait")
   const arcRow = sidebar
@@ -3080,7 +3082,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await expect(pick("Icon and name")).toHaveAttribute("aria-checked", "true")
   await expect(name).toHaveText("arc")
   await expect(workMark.locator('[data-machine-icon="server"]')).toBeVisible()
-  await expect(workMark.locator(".max-w-16")).toHaveCount(0)
+  await expect(workMark.locator(".max-w-16")).toHaveText("arc")
   await shot(page, "show-rows-named")
   await pick("Icon").click()
   await expect
@@ -3092,7 +3094,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await expect(name).toHaveCount(0)
   await expect(workMark).toBeVisible()
   await shot(page, "show-rows-icon")
-  // Off is on no card, of one line too.
+  // Off is on no card, at work too.
   await pick("Off").click()
   await expect(mark).toHaveCount(0)
   await expect(atWork).toBeVisible()
@@ -3101,17 +3103,17 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
 
   // Written by hand, the card follows; with Off, arc's label still names
   // it.
-  writeFileSync(shownIn, 'preset = "inbox"\n[machines]\nrows = "named"\n')
+  writeFileSync(shownIn, 'group = "none"\n[machines]\nrows = "named"\n')
   await expect(pick("Icon and name")).toHaveAttribute("aria-checked", "true")
   await expect(name).toHaveText("arc")
-  writeFileSync(shownIn, 'preset = "projects"\n[machines]\nrows = "off"\n')
+  writeFileSync(shownIn, 'group = "project"\n[machines]\nrows = "off"\n')
   await expect(
     arcOf(page).locator('[data-machine-icon="server"]').first()
   ).toBeVisible()
 
   // Name this machine too: its rows, as the same choice has them, a label
   // over its Projects, and its Panes' headers.
-  writeFileSync(shownIn, 'preset = "inbox"\n')
+  writeFileSync(shownIn, 'group = "none"\n')
   await show.getByRole("switch", { name: "Name this machine too" }).click()
   await expect
     .poll(() => readFileSync(shownIn, "utf8"))
@@ -3125,7 +3127,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await pick("Off").click()
   await expect(ours.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
 
-  writeFileSync(shownIn, 'preset = "projects"\n[machines]\nthis-too = true\n')
+  writeFileSync(shownIn, 'group = "project"\n[machines]\nthis-too = true\n')
   const macOf = sidebar.getByRole("group", { name: "mac", exact: true })
   await expect(macOf.getByText("Sidebar for arc")).toBeVisible()
   await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
@@ -3177,7 +3179,7 @@ test("Settings → Machines, Show: only with another machine; how it shows on it
   await shot(page, "show-this-too-scratch")
 
   // Turned off, this machine's name goes everywhere; its Pane's too.
-  writeFileSync(shownIn, 'preset = "projects"\n')
+  writeFileSync(shownIn, 'group = "project"\n')
   await expect(macOf).toHaveCount(0)
   await expect(thread.locator('[data-machine-icon="laptop"]')).toHaveCount(0)
 })
