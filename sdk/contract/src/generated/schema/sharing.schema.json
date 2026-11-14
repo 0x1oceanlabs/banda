@@ -15,5 +15,6 @@
       "x-class": "machine"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "x-class": "machine"
 }

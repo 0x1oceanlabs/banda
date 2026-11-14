@@ -78,7 +78,14 @@ test("Settings opened from arc's Thread show arc's Sharing, written on arc, and 
   await expect(settings.getByRole("button", { name: "Open file" })).toHaveCount(
     0
   )
-  await expect(settings.getByText(/config\/sharing\.toml$/)).toBeVisible()
+  await expect(
+    settings.getByRole("button", { name: /config\/sharing\.toml$/ })
+  ).toBeVisible()
+  // And under its rows, whose copy it is: arc's, where it is on arc
+  // (#1736, point 4).
+  const whose = settings.locator('[data-whose="sharing.toml"]')
+  await expect(whose).toContainText("on arc")
+  await expect(whose.locator(`[title="${theirs}"]`)).toHaveCount(1)
 
   const problems = settings.locator('[data-key="problems"]').getByRole("switch")
   await expect(problems).toHaveAttribute("aria-checked", "false")
@@ -103,7 +110,9 @@ test("arc's settings while arc is away: its pill says so, and a change is refuse
   const problems = settings.locator('[data-key="problems"]').getByRole("switch")
   await expect(problems).toHaveAttribute("aria-checked", "false")
   // arc's read came: its file's path, which stays as of then.
-  const path = settings.getByText(/config\/sharing\.toml$/)
+  const path = settings.getByRole("button", {
+    name: /config\/sharing\.toml$/,
+  })
   await expect(path).toBeVisible()
   arc!.blackhole(true)
   await expect(

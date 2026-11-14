@@ -19,6 +19,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "shared",
   "$defs": {
     "Bound": {
       "description": "What a key of `[binds]` holds (ADR 0071, decision 3): what a line\nruns, or a scope's own table, as `[binds.composer]` or\n`[binds.sidebar]`, whose keys work while the focus is in that scope.",

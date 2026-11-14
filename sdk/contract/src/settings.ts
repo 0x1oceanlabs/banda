@@ -7,6 +7,7 @@ import agents from "./generated/schema/agents.schema.json"
 import browser from "./generated/schema/browser.schema.json"
 import files from "./generated/schema/files.schema.json"
 import harnesses from "./generated/schema/harnesses.schema.json"
+import keys from "./generated/schema/keys.schema.json"
 import look from "./generated/schema/look.schema.json"
 import machine from "./generated/schema/machine.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
@@ -16,6 +17,7 @@ import tiling from "./generated/schema/tiling.schema.json"
 import type { Class } from "./generated/look/Class"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 
+export type { Class } from "./generated/look/Class"
 export type { From } from "./generated/look/From"
 export type { Setting } from "./generated/look/Setting"
 
@@ -35,7 +37,8 @@ export type Schema = {
   minimum?: number
   maximum?: number
   $defs?: { [name: string]: Schema }
-  /** Of a top-level key: whose copy it is (ADR 0101, decision 3). */
+  /** Of a file, and of a top-level key that is not as its file: whose
+   * copy it is (ADR 0101, decision 3). */
   "x-class"?: Class
 }
 
@@ -52,6 +55,13 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "files.toml": files as Schema,
   "machine.toml": machine as Schema,
 }
+
+/** Whose copy `file` is, but for the top-level keys that say their own
+ * (ADR 0101, decision 3): the device's, as in doubt. `keys.toml` too,
+ * whose lines the Keys section draws, not rows. */
+export const fileClass = (file: string): Class =>
+  (file === "keys.toml" ? (keys as Schema) : SCHEMAS[file])?.["x-class"] ??
+  "device"
 
 /** One value a key may take, and what it means. */
 export type Option = { value: JsonValue; about?: string }

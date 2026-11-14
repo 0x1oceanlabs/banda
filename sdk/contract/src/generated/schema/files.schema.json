@@ -41,5 +41,6 @@
       "x-class": "device"
     }
   },
-  "additionalProperties": false
+  "additionalProperties": false,
+  "x-class": "device"
 }

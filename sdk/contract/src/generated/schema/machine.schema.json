@@ -37,6 +37,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "machine",
   "$defs": {
     "MachineIcon": {
       "description": "The icons a host may take, each one of Lucide's, drawn in the text's\ncolour (ADR 0095, decision 1). None of them is drawn like an account's\nemblem (ADR 0093), and no colour sets one machine apart: colour is the\naccount's.",

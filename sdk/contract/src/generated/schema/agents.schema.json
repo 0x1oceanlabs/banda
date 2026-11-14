@@ -33,6 +33,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "device",
   "$defs": {
     "Enter": {
       "description": "Where a message written while the Agent works goes when sent with\nEnter.",

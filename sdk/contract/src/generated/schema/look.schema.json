@@ -113,6 +113,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "device",
   "$defs": {
     "ThemeChoice": {
       "anyOf": [

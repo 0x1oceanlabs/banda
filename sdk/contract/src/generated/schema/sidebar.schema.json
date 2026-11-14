@@ -51,6 +51,7 @@
     }
   },
   "additionalProperties": false,
+  "x-class": "shared",
   "$defs": {
     "GroupBy": {
       "description": "How the list is grouped (ADR 0098, decision 7).",
