@@ -177,6 +177,14 @@ desktop, web and the PWA now.
    the Project's host, with the agents module's `paths` its one exception
    until step 3c; and a machine's own files come through its engine
    (`keys.settings_read`) with step 5b._
+   _Built_ (track 3, WS10, part 1; W1): main's root, `main.ts`, has a
+   ceiling in lines that only falls
+   (`client/desktop/src/architecture.test.ts`), and the first part is out
+   of it: what the system says of itself for the theme, its accent and
+   whether it reduces transparency or raises contrast, is
+   `os-window/system.ts`, a layer of its own that writes `device.json`
+   before the look starts and stops listening as main's runtime is
+   disposed.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer
