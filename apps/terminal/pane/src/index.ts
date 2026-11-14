@@ -1,8 +1,11 @@
-/** The terminal module's window part: its Pane, its actions, and its widget of the
- * servers started in Banda (ADR 0022, ADR 0044). */
+/** The terminal module's window part: its Pane, its actions, its widget of the
+ * servers started in Banda and its section of Settings (ADR 0022, ADR
+ * 0044). */
 import type { ProjectId } from "@banda/contract"
+import { aboutOf } from "@banda/contract/settings"
 import { defineModule, zoomActions } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
+import { TerminalIcon } from "lucide-react"
 import { ServersWidget } from "./Servers"
 import { TERMINAL } from "./scopes"
 import { NEW_TERMINAL, terminalPane } from "./TerminalPane"
@@ -45,6 +48,13 @@ export const terminal = defineModule({
     ...zoomActions(TERMINAL, "terminal", "the terminal", "Terminal"),
   ],
   scopes: [{ id: TERMINAL, title: "Terminal" }],
+  settings: {
+    id: "terminal",
+    title: "Terminal",
+    icon: TerminalIcon,
+    files: [{ name: "terminal.toml" }],
+    about: aboutOf("terminal.toml"),
+  },
   bar: [
     {
       id: "terminal.ports",

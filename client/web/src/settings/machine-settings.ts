@@ -11,6 +11,7 @@ import type { Engine } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import { type Setting, SCHEMAS } from "@banda/contract/settings"
 import { problem } from "@banda/ui/lib/words"
+import type { SettingsWriter } from "@banda/ui/settings"
 import { device } from "../boot"
 
 /** Whose copy `key` of `file` is (ADR 0101, decision 3): its top-level
@@ -28,13 +29,6 @@ export const hasMachinePart = (file: string) =>
   Object.keys(SCHEMAS[file]?.properties ?? {}).some(
     (key) => classOf(file, key) === "machine"
   )
-
-/** How a row writes its file: the words of what was wrong, none when it
- * was written. */
-export type SettingsWriter = {
-  set: (file: string, key: string, value: string) => Promise<string[]>
-  reset: (file: string, key: string) => Promise<string[]>
-}
 
 /** This device's files, written through the desktop (`banda settings`). */
 export const onThisDevice: SettingsWriter = device.settings

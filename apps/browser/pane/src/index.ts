@@ -1,13 +1,17 @@
-/** The browser's window part: its Pane, its actions and what the Banda
- * menu finds of it (ADR 0013, ADR 0022). It has no engine part, so it is
- * always on. */
+/** The browser's window part: its Pane, its actions, what the Banda
+ * menu finds of it and its section of Settings (ADR 0013, ADR 0022). It
+ * has no engine part, so it is always on. */
 import type { ProjectId } from "@banda/contract"
+import { BROWSER_FILE } from "@banda/contract/browser"
+import { aboutOf } from "@banda/contract/settings"
 import { defineModule, scoped, takes, zoomActions } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
+import { GlobeIcon } from "lucide-react"
 import { searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
 import { actionOf, BROWSER, BROWSER_KEYS, LEND } from "./keys"
 import { frontHolder, holderOf, openWith } from "./pages"
+import { BrowserSites } from "./Sites"
 import { webSource } from "./sources"
 import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
 import { followThreads, waitsWatch } from "./threads"
@@ -73,6 +77,24 @@ export const browser = defineModule({
   scopes: [{ id: BROWSER, title: "Browser" }],
   sources: [webSource],
   watches: [waitsWatch],
+  // browser.toml's rows, and under them the sites its Agents may use,
+  // which it draws itself.
+  settings: {
+    id: "browser",
+    title: "Browser",
+    icon: GlobeIcon,
+    files: [
+      { name: BROWSER_FILE.name },
+      {
+        name: BROWSER_FILE.name,
+        tables: ["agents"],
+        title: "Agent tools",
+        drawnKeys: ["agents.sites"],
+      },
+    ],
+    about: aboutOf(BROWSER_FILE.name),
+    Foot: BrowserSites,
+  },
   // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):
   // to the browser of the column right of the Thread's Pane, or a new
   // one there; with the Thread not shown, to its Project's browser the

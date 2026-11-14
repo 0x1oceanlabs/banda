@@ -5,10 +5,12 @@
  * every value is the look's, as `banda look --follow` read the files.
  */
 import { useContext, useEffect, useMemo, useRef, useState } from "react"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Owner } from "@banda/core"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
+import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import {
   InputGroup,
   InputGroupAddon,
@@ -25,7 +27,8 @@ import {
 } from "@banda/core/react"
 import { copyText } from "@banda/ui/lib/clipboard"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
-import type { PaneProps } from "@banda/ui/pane"
+import type { PaneProps, PaneState } from "@banda/ui/pane"
+import type { Section, SectionProps } from "@banda/ui/settings"
 import { useScope } from "@banda/ui/hooks/use-scope"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { CopyIcon, ExternalLinkIcon, SearchIcon } from "lucide-react"
@@ -36,19 +39,30 @@ import {
   ownFile,
   parseLink,
   search,
-  type Section,
   SECTIONS,
   switches,
 } from "./sections"
 import type { SettingsArgs } from "./pane"
-import { Group, Rows, SettingRow } from "./SettingRow"
+import { Group, Rows } from "@banda/ui/components/setting-row"
+import { SettingRow } from "./SettingRow"
 import { SettingsFor } from "./SettingsFor"
-import { usePaneHandles } from "../tiling/mount"
+import {
+  PaneMount,
+  RoutingContext,
+  routingOnly,
+  usePaneHandles,
+} from "../tiling/mount"
+import { kindOf } from "../registry"
 import { MachinePill } from "../window/named"
 import { classOf, throughEngine, useMachineSettings } from "./machine-settings"
 import { device } from "../boot"
 
 const NONE: Problem[] = []
+
+/** The one act of the window's that a Pane over the settings runs: a link
+ * it prints opens in this device's browser, through the router as any
+ * Pane's. */
+const LINK_OPEN = "link.open"
 
 export function Settings({
   engine,
@@ -127,14 +141,6 @@ export function Settings({
     [shownMachine]
   )
   const acts = usePaneHandles(owner, run)
-  const body = {
-    engine: machineEngine,
-    on,
-    there: on === undefined ? undefined : (shownOn?.named.name ?? on),
-    lit: at.key,
-    run: acts.run,
-    runs: acts.runs,
-  }
   const machine = useMachineSettings(
     on === undefined ? undefined : machineEngine,
     fileNames
@@ -143,6 +149,22 @@ export function Settings({
     () => throughEngine(machineEngine),
     [machineEngine]
   )
+  // The Pane a section opened over the settings, which goes with the
+  // section and the machine it was opened for.
+  const showing = `${section.id} ${on ?? ""}`
+  const [over, setOver] = useState<Over & { showing: string }>()
+  const body: SectionProps = {
+    engine: machineEngine,
+    on,
+    there: on === undefined ? undefined : (shownOn?.named.name ?? on),
+    lit: at.key,
+    run: acts.run,
+    runs: acts.runs,
+    writer: machineWriter,
+    device: device.settings.writes() ? device.settings : undefined,
+    reveal: on === undefined ? device.settings.reveal : undefined,
+    open: (pane, project) => setOver({ pane, project, showing }),
+  }
   const theirs = (r: Row) =>
     on !== undefined && classOf(r.file, r.key) === "machine"
   const found = useMemo(
@@ -362,7 +384,82 @@ export function Settings({
           </footer>
         </main>
       </div>
+      <PaneOver
+        over={over?.showing === showing ? over : undefined}
+        engine={machineEngine}
+        run={acts.run}
+        onShow={(next) => setOver(next && { ...next, showing })}
+      />
     </div>
+  )
+}
+
+/** A Pane a section shows over the settings, and its Project. */
+type Over = { pane: PaneState; project: ProjectId }
+
+/** The Pane a section opened over the settings (`SectionProps.open`), in
+ * a dialog: the terminal a sign-in runs in, in its Project on the machine
+ * the section shows, mounted as every Pane is (ADR 0106, decision 1). Of
+ * the window's actions it runs only the link's. */
+function PaneOver({
+  over,
+  engine,
+  run,
+  onShow,
+}: {
+  over: Over | undefined
+  engine: Engine
+  run: SectionProps["run"]
+  onShow: (over: Over | undefined) => void
+}) {
+  const routing = useContext(RoutingContext)
+  const only = useMemo(
+    () => ({
+      routing: routingOnly(routing, LINK_OPEN),
+      run: (action: string, args?: Parameters<NonNullable<typeof run>>[1]) => {
+        if (action === LINK_OPEN) run?.(action, args)
+      },
+    }),
+    [routing, run]
+  )
+  // The same owner while the Project stays, so the Pane keeps the handles
+  // it was given.
+  const project = over?.project
+  const owner = useMemo(
+    () => (project === undefined ? undefined : { project }),
+    [project]
+  )
+  const kind = over && kindOf(over.pane.kind)
+  const close = () => onShow(undefined)
+  return (
+    <Dialog open={kind !== undefined} onOpenChange={(open) => !open && close()}>
+      <DialogContent className="flex h-[70vh] flex-col sm:max-w-3xl">
+        {over && kind && owner && (
+          <>
+            <DialogTitle>{kind.title(over.pane.args)}</DialogTitle>
+            <div className="min-h-0 flex-1">
+              <RoutingContext value={only.routing}>
+                <PaneMount
+                  kind={kind}
+                  engine={engine}
+                  project={over.project}
+                  pane={over.pane}
+                  owner={owner}
+                  focused
+                  handle={{
+                    open: (pane) => onShow({ ...over, pane }),
+                    update: (args) =>
+                      onShow({ ...over, pane: { ...over.pane, args } }),
+                    close,
+                  }}
+                  run={only.run}
+                />
+              </RoutingContext>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
   )
 }
 

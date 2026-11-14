@@ -18,7 +18,7 @@ import { KeyboardIcon } from "lucide-react"
 import { bindPath, KEYS_FILE, RESET_KEY } from "../actions/actions"
 import { useLookKeys } from "../look"
 import { ModCard } from "./Mod"
-import { RowFrame } from "./SettingRow"
+import { RowFrame } from "@banda/ui/components/setting-row"
 import { device } from "../boot"
 
 export function Keys({ lit }: { lit?: string }) {

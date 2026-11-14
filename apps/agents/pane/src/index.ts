@@ -1,8 +1,9 @@
 /** The agents module's window part: its Panes, its Watch on what calls
  * for the Person, its action, what the Banda menu finds of it (ADR 0022),
  * what the Person does to a Thread it lists, its item actions (ADR 0087,
- * decision 12), and what it puts in a Slot: a Thread's Mark in its Pane's
- * header (ADR 0062, decision 17). */
+ * decision 12), what it puts in a Slot: a Thread's Mark in its Pane's
+ * header (ADR 0062, decision 17), and its section of Settings (ADR 0016,
+ * decision 7). */
 import type { ProjectId } from "@banda/contract"
 import {
   type Action,
@@ -29,6 +30,7 @@ import { threadHeader } from "./list/header"
 import { waitingThreads } from "./list/waiting"
 import { move } from "./list/marks-moved"
 import { answering } from "./list/answering"
+import { agentsSection } from "./settings/Section"
 
 /**
  * A new Thread, in a new column, on this computer's first Harness (ADR
@@ -174,6 +176,7 @@ export const agents = defineModule({
   sources: [askSource],
   items: threadItems,
   top: [moveThread],
+  settings: agentsSection,
   slots: [threadHeader, waitingThreads],
   // This machine's window moves the marks it kept to their host, once
   // (ADR 0096, decision 9): its own engine's, never another host's, the

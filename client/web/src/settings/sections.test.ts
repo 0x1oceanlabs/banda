@@ -1,5 +1,6 @@
 import { rowsOf } from "@banda/contract/settings"
 import { expect, test } from "vitest"
+import { modules } from "../modules"
 import { groupsOf, parseLink, search, SECTIONS, switches } from "./sections"
 
 test("each section has an id of its own, so a link can open any of them", () => {
@@ -17,6 +18,21 @@ test("each section has an id of its own, so a link can open any of them", () => 
 test("the Files App's section keeps the link files, and the settings files have their own", () => {
   expect(parseLink("files").section.title).toBe("Files")
   expect(parseLink("settings-files").section.title).toBe("Settings files")
+})
+
+test("an App's section is the one its module declares, and the Apps' stand in the modules' order between the Window's own (the window's rule 4)", () => {
+  const declared = modules.flatMap((module) => module.settings ?? [])
+  expect(declared.map((section) => section.id)).toEqual([
+    "agents",
+    "terminal",
+    "browser",
+    "files",
+  ])
+  // An App's section goes by the App's id.
+  for (const module of modules)
+    if (module.settings) expect(module.settings.id).toBe(module.id)
+  const at = (id: string) => SECTIONS.findIndex((s) => s.id === id)
+  expect(SECTIONS.slice(at("sounds") + 1, at("keys"))).toEqual(declared)
 })
 
 const sectionOf = (id: string) => SECTIONS.find((s) => s.id === id)!

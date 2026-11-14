@@ -3,13 +3,14 @@
  * previewer that claims it, Quick Look over the desk, the Banda menu's
  * files and quick open, and the actions that open them; and the keys of
  * a Files Pane, the actions of its scope (ADR 0071), which do what Files
- * does with files. */
+ * does with files; and its section of Settings, `files.toml`'s rows. */
 import type { ProjectId } from "@banda/contract"
 import { FILES_FILE } from "@banda/contract/files"
-import { tomlOf } from "@banda/contract/settings"
+import { aboutOf, tomlOf } from "@banda/contract/settings"
 import { fileNow } from "@banda/ui/lib/look"
 import { actInScope } from "@banda/ui/hooks/use-scope"
 import { defineModule, scoped, takes } from "@banda/ui/module"
+import { FolderIcon } from "lucide-react"
 import { filePane, openFile, peekFile } from "./FilePane"
 import { FILES, KEYS } from "./keys"
 import { peeked } from "./peek"
@@ -152,6 +153,13 @@ export const files = defineModule({
   ],
   scopes: [{ id: FILES, title: "Files" }],
   sources: [filesSource],
+  settings: {
+    id: "files",
+    title: "Files",
+    icon: FolderIcon,
+    files: [{ name: FILES_FILE.name }],
+    about: aboutOf(FILES_FILE.name),
+  },
 })
 
 /** An extension as a key of TOML: bare when it can be. */

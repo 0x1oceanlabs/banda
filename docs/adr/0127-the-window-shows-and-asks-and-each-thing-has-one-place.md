@@ -54,6 +54,17 @@ and stories 1 and 2. The map behind it is kept outside the repository
    `window.json`; its list only falls. Next the Apps declare their
    Settings sections (part 2); what is asked of an App by name waits for
    intents (decision 6).
+
+   _Built_ (WS8, part 2, rule 4): an App declares its section of
+   Settings on its module (`Module.settings`): its files, the tables of
+   each it shows, and what of them it draws itself, as Agents its
+   Harnesses' accounts and the browser its Agents' sites. Settings lists
+   the Apps' sections in the modules' order, between the Window's own, so
+   Terminal comes before Browser; it names no App's file. What a section
+   draws with is Banda UI's (`@banda/ui/settings`, and the row's parts in
+   `components/setting-row`), and what it needs of the window is given to
+   it: the files' writers, and a Pane over the settings for a sign-in's
+   terminal. The agents App's `settings-section` mark went with it.
 2. **An action runs from anywhere.** `banda act ID` and an Agent's tool
    run any action of the window or of an App, by its id and with its
    arguments, as a key does. The engine checks the id and the arguments

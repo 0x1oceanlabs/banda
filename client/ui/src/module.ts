@@ -12,6 +12,7 @@ import { ZOOM_KEYS, zoomId } from "./lib/zoom"
 import type { Notify } from "@banda/contract/look"
 import type { Listed, Lists, PaneKind, PaneState, Watch } from "./pane"
 import type { SoundSettings } from "./sound/settings"
+import type { Section } from "./settings"
 import type { Filler } from "./slots"
 import { actInScope } from "./hooks/use-scope"
 
@@ -576,6 +577,10 @@ export type Module = {
    * of its actions asks (`WindowApi.top`): a dialog, as moving a Thread
    * (ADR 0116, decision 7). */
   top: readonly TopPart[]
+  /** Its section of Settings (ADR 0016, decision 8; the window's rule 4):
+   * its settings files' rows, and what of them it draws itself. Settings
+   * shows the Apps' sections in the modules' order. */
+  settings?: Section
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -600,6 +605,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   previewers?: readonly Previewer[]
   items?: readonly ItemAction[]
   top?: readonly TopPart[]
+  settings?: Section
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -618,6 +624,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     previewers: module.previewers ?? [],
     items: module.items ?? [],
     top: module.top ?? [],
+    ...(module.settings && { settings: module.settings }),
     start: module.start,
   }
 }

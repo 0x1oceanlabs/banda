@@ -111,9 +111,10 @@ import {
   type Wrote,
 } from "./machines"
 import { buildWords, factsWords, stateWords } from "../machines/words"
-import type { SectionProps } from "./sections"
+import type { SectionProps } from "@banda/ui/settings"
 import { MachineRowsPicker } from "./rows"
-import { RowFrame, SettingRow } from "./SettingRow"
+import { RowFrame } from "@banda/ui/components/setting-row"
+import { SettingRow } from "./SettingRow"
 import { UpdatesRow } from "./UpdatesRow"
 
 /** A machine's own settings file. */

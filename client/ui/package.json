@@ -12,6 +12,7 @@
     "./status": "./src/status.ts",
     "./module": "./src/module.ts",
     "./slots": "./src/slots.ts",
+    "./settings": "./src/settings.ts",
     "./desktop": "./src/desktop.ts",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
