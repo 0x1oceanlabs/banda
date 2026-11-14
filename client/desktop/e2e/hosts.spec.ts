@@ -1209,8 +1209,8 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   arc.down(false)
   await stands(page, "live", 60_000)
 
-  // On arc, its picker lists this machine's Projects first, and adds none
-  // there.
+  // On arc, its picker lists this machine's Projects first; its Add
+  // Project adds on arc (ADR 0120, decision 1).
   await onArc.click()
   await expect(choices()).toHaveText([
     /No Project/,
@@ -1221,9 +1221,9 @@ test("a new Thread's Project picker groups the Projects by machine; one started 
   await expect(
     arcPart.getByRole("menuitemradio", { name: /^banda/ })
   ).toHaveAttribute("aria-checked", "true")
-  await expect(menu.getByRole("menuitem", { name: "Add Project" })).toHaveCount(
-    0
-  )
+  await expect(
+    menu.getByRole("menuitem", { name: "Add Project" })
+  ).toBeVisible()
   await shot(page, "step4c-4-arc-pane", ASIDE)
   // This machine's No Project, picked there, is this machine's again: what
   // an arc Pane opens in a Project of this machine's is placed once, by the
@@ -1394,9 +1394,9 @@ test("a popped-out Pane on arc picks from the window's machines: this machine's 
   await expect(
     arcPart.getByRole("menuitemradio", { name: /^banda/ })
   ).toHaveAttribute("aria-checked", "true")
-  await expect(menu.getByRole("menuitem", { name: "Add Project" })).toHaveCount(
-    0
-  )
+  await expect(
+    menu.getByRole("menuitem", { name: "Add Project" })
+  ).toBeVisible()
 })
 
 test("a Mac there, with no banda in hosts.toml: the window finds its Banda in the Mac's Application Support", async () => {
@@ -2251,6 +2251,79 @@ test("a window that starts while arc is away shows arc's rows as this device kep
   await expect(there.getByText("Bench window tests")).toBeVisible()
   await expect(dimmed(there)).toHaveCount(0, { timeout: 30_000 })
   await shot(page, "as-of-2-live")
+  await stopEngine()
+})
+
+test("Add Project asks where first: on arc, the path field lists arc's folders, its engine adds the Project and the new Thread starts there; this machine has none of it (ADR 0120, decision 1)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  const { page } = window
+  await expect(arcOf(page).getByText("Bench window tests")).toBeVisible()
+  const work = join(arc.dir, "work")
+  for (const folder of ["notes", "notebook"])
+    mkdirSync(join(work, folder), { recursive: true })
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  const options = menu.getByRole("option")
+  const named = (on: Pick<Arc, "banda">) =>
+    (
+      JSON.parse(on.banda("call", "projects.list")) as {
+        ok: { name: string }[]
+      }
+    ).ok.map((one) => one.name)
+
+  // The one door: it asks where, this machine first, then arc.
+  await bandaMenu(page)
+  await search.fill("Add Project")
+  await options.filter({ hasText: "Add Project" }).first().click()
+  await expect(search).toHaveAttribute("placeholder", "Where?")
+  await expect(options).toHaveCount(2)
+  await expect(options.nth(1)).toContainText("arc")
+  await expect(options.nth(1)).toContainText("1 Project")
+  await shot(page, "add-there-1-where")
+  await options.nth(1).click()
+
+  // On arc: its folders are its own, and no picker of this device's.
+  await expect(options).toHaveText([/^New Project/, /^Folder on arc/])
+  await shot(page, "add-there-2-how")
+  await options.nth(1).click()
+  await expect(search).toHaveValue("~/")
+  await expect(menu.getByRole("button", { name: "Open in Files" })).toHaveCount(
+    0
+  )
+  await search.fill(`${work}/note`)
+  await expect(menu.getByRole("option", { name: "notebook" })).toBeVisible()
+  await shot(page, "add-there-3-folder")
+  await menu.getByRole("option", { name: "notes" }).click()
+  await expect(search).toHaveValue(`${work}/notes/`)
+  await expect(options.first()).toHaveText(/^Add/)
+
+  // Enter adds it on arc, and its new Thread opens there.
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect.poll(() => named(arc!)).toContain("notes")
+  expect(named(window)).not.toContain("notes")
+  const draft = page
+    .getByRole("region", { name: "New Thread" })
+    .and(page.locator('[data-focused="true"]'))
+  await expect(
+    draft.getByRole("button", { name: "Project: notes on arc" })
+  ).toBeVisible()
+  await shot(page, "add-there-4-added")
+
+  // A door that knows its machine asks nothing more: Add Project in an arc
+  // Thread's Project list opens at arc's ways.
+  await draft.getByRole("button", { name: "Project: notes on arc" }).click()
+  await page
+    .getByRole("menu")
+    .getByRole("menuitem", { name: "Add Project" })
+    .click()
+  await expect(options).toHaveText([/^New Project/, /^Folder on arc/])
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
   await stopEngine()
 })
 

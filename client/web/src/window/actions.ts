@@ -495,9 +495,18 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     id: "project.add",
     section: "Banda",
     title: "Add Project",
-    // The menu lists "Add Project" as its own branch; this opens it there.
+    // The menu lists "Add Project" as its own branch; this opens it
+    // there: on the machine that has `project`, where a door knows its
+    // own, as a new Thread's Project list (ADR 0120, decision 1).
     unlisted: true,
-    run: (shell) => shell.route("project.add"),
+    args: takes({ project: "a Project of the machine it adds on" }),
+    run: (shell, args) => {
+      const host =
+        typeof args?.project === "string"
+          ? shell.hosts.hostOf(args.project as ProjectId)
+          : null
+      shell.route(host === null ? "project.add" : `project.add@${host ?? ""}`)
+    },
   },
   // A Project's verbs, as its line in the sidebar list and its menu run
   // them (ADR 0026, decisions 5 and 6).
@@ -770,7 +779,9 @@ const ON_LINKS = "link"
 
 /**
  * The window's own acts on this machine's engine, by the word their ids
- * start with: its Projects', as Add Project and Pin, and its Problems'.
+ * start with: its Projects', as Pin, and its Problems'. Add Project is
+ * the window's: it opens the menu, which adds on the machine it names
+ * (ADR 0120, decision 1).
  * One that names another machine's Project does not go there; one that
  * names none is this machine's, wherever the Person is. The rest of the
  * window's own are the window's, as the arrangement, the menu and the
@@ -803,7 +814,8 @@ export function actOf(action: Action<Shell>): Act {
     return ON_ITS_MACHINE.has(id)
       ? { title, at: "owner", app: "files", here: true }
       : { title, at: "device", here: true }
-  return { title, at: ON_THIS_MACHINE.has(owner) ? "device" : "window" }
+  const here = ON_THIS_MACHINE.has(owner) && id !== "project.add"
+  return { title, at: here ? "device" : "window" }
 }
 
 /** What the window tells its Panes' hosts (`Routing`): each of its

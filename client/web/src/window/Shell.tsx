@@ -40,7 +40,7 @@ import { useOrderNow, writeSidebar } from "../sidebar"
 import { WELL, wentWell } from "../safe/starts"
 import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
-import { BandaMenu } from "../menu/BandaMenu"
+import { BandaMenu, openingIn } from "../menu/BandaMenu"
 import {
   type At,
   type Branch,
@@ -49,7 +49,6 @@ import {
   locateRoute,
   type Opening,
   openingAt,
-  openingOf,
   settingsLinkOf,
 } from "../menu/menu"
 import { writeLook } from "../menu/theme"
@@ -399,10 +398,10 @@ export function Shell({
     (route: string) => {
       const link = settingsLinkOf(route)
       if (link === undefined)
-        setMenu(openingOf(route, projectsNow.current, menuSources))
+        setMenu(openingIn(kept, route, projectsNow.current, menuSources))
       else settings(link)
     },
-    [settings]
+    [settings, kept]
   )
   useEffect(() => device.menu.listen(route), [route])
   const ownKeys = useCallback(() => {
@@ -619,8 +618,8 @@ export function Shell({
   // A Project the menu added, as the engine answered it: the list may not
   // know it yet. The menu offers no scratch Space's.
   const added = useCallback(
-    (project: ProjectSummary) => {
-      onCreated(project)
+    (project: ProjectSummary, host?: string) => {
+      if (host === undefined) onCreated(project)
       startThread(project.id)
     },
     [onCreated, startThread]

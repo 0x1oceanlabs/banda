@@ -355,7 +355,17 @@
       "title": "Add Project",
       "section": "Banda",
       "keys": [],
-      "unlisted": true
+      "unlisted": true,
+      "args": {
+        "type": "object",
+        "properties": {
+          "project": {
+            "type": "string",
+            "description": "a Project of the machine it adds on"
+          }
+        },
+        "additionalProperties": false
+      }
     },
     {
       "id": "projects.pin",
