@@ -1300,12 +1300,18 @@ mod tests {
             // Nowhere: a look in its own process would fail on it.
             .reading("http://127.0.0.1:9", Duration::MAX, Duration::MAX)
             .lacking();
+        // Where Banda packs no engine alone, as on Windows yet, that is
+        // said first.
+        let why = match feed::system() {
+            Some(_) => "no banda-update",
+            None => "packs no engine alone",
+        };
         let state = updates.look().await;
         let off = state.off.expect("it says why");
-        assert!(off.contains("no banda-update"), "{off}");
+        assert!(off.contains(why), "{off}");
         assert_eq!((state.looked, state.failed), (None, None));
         let refused = updates.choose("0.1.0-dev.9").await.unwrap_err();
-        assert!(refused.message.contains("no banda-update"), "{refused:?}");
+        assert!(refused.message.contains(why), "{refused:?}");
     }
 
     #[tokio::test]
