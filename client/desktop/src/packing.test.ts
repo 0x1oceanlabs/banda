@@ -116,5 +116,6 @@ test("each app's update file has a name of its own, which the release workflow p
   const release = text(".github/workflows/release.yml")
   expect(release).toContain("client/desktop/dist/*-linux.yml")
   expect(release).toContain('"$MAC"/*-mac.yml')
+  expect(release).toContain("client/desktop/dist/$feed.yml windows/")
   expect(release).not.toMatch(/dist\/latest-(linux|mac)\.yml/)
 })

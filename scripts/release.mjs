@@ -5,8 +5,9 @@
 //   node scripts/release.mjs add <version> <files…>
 //
 // A Dev is a prerelease v<version> made at <commit>; only the last 20 Dev
-// releases are kept. `add` puts the Mac's files on a release already out
-// (ADR 0033, decision 6), and says `added=true` to the workflow.
+// releases are kept. `add` puts the Mac's or Windows' files on a release
+// already out (ADR 0033, decision 6; ADR 0090, step 6), and says
+// `added=true` to the workflow.
 // GITHUB_TOKEN and GITHUB_REPOSITORY come from the workflow.
 //
 // It publishes no Stable: a Stable is no longer the release of a tag
@@ -83,7 +84,7 @@ if (adding) {
   // A Dev the fallback below skipped has no release to add to.
   const release = releases.find((r) => r.tag_name === tag && !r.draft)
   if (!release) {
-    console.log(`::warning::${tag} is not out: its Mac files are not added.`)
+    console.log(`::warning::${tag} is not out: these files are not added.`)
     process.exit(0)
   }
   // A run again replaces what it added before.
