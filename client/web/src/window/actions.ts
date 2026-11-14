@@ -274,6 +274,9 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "The Pane in a window of its own, and back",
     run: (shell) => shell.popOut(),
   },
+  // First of the Window's own Thread rows on the key sheet: it stands
+  // under the Thread's own, which act on the same Thread (#1731).
+  archiving,
   {
     id: "drawer.toggle",
     section: "Threads",
@@ -290,7 +293,6 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "KeyU", mod: true }],
     run: (shell) => shell.answer(),
   },
-  archiving,
   {
     // Threads' "Make a Project from it…" (ADR 0046): its dialog is the
     // Window's, for a Project of No Project alone, missing or not, as the

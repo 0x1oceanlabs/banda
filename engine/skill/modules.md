@@ -393,9 +393,9 @@ The window's own actions: the tiling of columns, Panes and workspaces, the sideb
 Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - The Pane in a window of its own, and back (`pane.pop-out`)
+- Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 - The drawer: a quick Thread over the workspace (`drawer.toggle`), Alt+`
 - Go to what calls you (`calls.answer`), Alt+U
-- Archive the Thread you look at, or bring it back (`sidebar.archive`), Alt+S; takes `project` (the Project of the Item it acts on), `item` (the Item's id in its Project, as a Thread's; none for the one in focus)
 - Banda menu (`menu.open`), Alt+Space; takes `source` (a source's id, to show its rows alone, as files.find)
 - Every action and its key (`menu.keys`), Alt+K
 - Open the settings (`settings.open`), Alt+,; takes `link` (a section, or a row in it, as keys)
