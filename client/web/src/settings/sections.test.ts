@@ -62,16 +62,45 @@ test("with one machine, a search finds neither key, as the section draws neither
   )
 })
 
-test("the Flow's row stays in Agents, and is the Tiling's file's (ADR 0127, decision 4)", () => {
-  const rows = groupsOf(sectionOf("agents")).flatMap((group) =>
-    group.rows.map((row) => ({ ...row, group: group.title }))
-  )
-  expect(rows.filter((row) => row.key === "flow")).toMatchObject([
-    { file: "tiling.toml", title: "Flow", group: "Writing to an Agent" },
+test("the Tiling has a section of its own: the Flow, the widths and the rules (ADR 0127, decision 4)", () => {
+  const groups = groupsOf(sectionOf("tiling"))
+  expect(
+    groups.map((group) => [group.title, group.rows.map((row) => row.title)])
+  ).toEqual([
+    ["", ["Flow"]],
+    [
+      "Widths",
+      ["New column", "A column alone", "Steps", "Heights", "A column shows"],
+    ],
   ])
-  // The Tiling's rules have no row yet: its section draws them (part b).
-  expect(rows.filter((row) => row.file === "tiling.toml")).toHaveLength(1)
-  expect(search("flow").map((found) => found.row.file)).toContain("tiling.toml")
+  expect(groups.flatMap((group) => group.rows.map((row) => row.file))).toEqual(
+    Array(6).fill("tiling.toml")
+  )
+  // The Flow left Agents, and the widths left Appearance, where what is
+  // the screen's stays.
+  expect(keysOf("agents")).not.toContain("flow")
+  expect(keysOf("appearance").filter((key) => /^columns\b/.test(key))).toEqual([
+    "columns.center",
+    "columns.min",
+    "columns.snap",
+  ])
+})
+
+test("a search finds the Flow, the widths, the steps and the rules in the Tiling's section, and a link opens each", () => {
+  for (const [words, key] of [
+    ["flow", "flow"],
+    ["width", "columns.presets"],
+    ["steps", "columns.presets"],
+    ["new column", "columns.default"],
+    ["rules", "rule"],
+  ]) {
+    const found = search(words!).filter((one) => one.section.id === "tiling")
+    expect(found.map((one) => one.row.key)).toContain(key)
+    expect(parseLink(`tiling/${key}`)).toEqual({
+      section: sectionOf("tiling"),
+      key,
+    })
+  }
 })
 
 test("another drawn table stays out of the search", () => {

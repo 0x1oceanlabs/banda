@@ -601,46 +601,24 @@
       "additionalProperties": false
     },
     "ColumnsSettings": {
+      "description": "What of the columns is this screen's and this mouse's: `[columns]` in\n`look.toml`.",
       "type": "object",
       "properties": {
-        "presets": {
-          "description": "What the keys that widen and narrow a column step through.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "heights": {
-          "description": "What the keys of a Pane's height step it through, as shares of its\ncolumn.",
-          "type": "array",
-          "items": {
-            "type": "string"
-          }
-        },
-        "default": {
-          "description": "A new column's width, where its Pane does not ask for its own.",
-          "type": "string"
-        },
-        "alone": {
-          "description": "The width of a column alone on its workspace, until the Person\ngives it one: once a second opens beside it, both take `default`.",
-          "type": "string"
-        },
         "center": {
+          "title": "Centre the column in front",
+          "description": "Where the Strip scrolls the column in front to.",
           "$ref": "#/$defs/Center"
         },
-        "display": {
-          "description": "How a new column shows its Panes, as niri's `default-column-display`.",
-          "$ref": "#/$defs/Display"
-        },
         "min": {
-          "description": "The narrowest a column is drawn, in rem; a list's is half of it.",
+          "title": "Narrowest",
+          "description": "No column is drawn narrower, in rem; a list's is half of it.",
           "type": "number",
           "format": "double",
           "minimum": 0,
           "maximum": 200
         },
         "snap": {
-          "description": "How near, in pixels, a size dragged with the mouse holds at a\npreset or a height; 0 never.",
+          "description": "How near, in pixels, a size dragged with the mouse holds at a\nstep of the widths or the heights; 0 never.",
           "type": "number",
           "format": "double",
           "minimum": 0,
@@ -666,21 +644,6 @@
           "description": "The middle, when it does not fit beside the column focused before.",
           "type": "string",
           "const": "on-overflow"
-        }
-      ]
-    },
-    "Display": {
-      "description": "How a column shows its Panes.",
-      "oneOf": [
-        {
-          "description": "One above another, sharing the column's height.",
-          "type": "string",
-          "const": "stack"
-        },
-        {
-          "description": "A Deck: one at a time, the others' names in a row over it, as niri's\ntabbed column (ADR 0065).",
-          "type": "string",
-          "const": "deck"
         }
       ]
     },

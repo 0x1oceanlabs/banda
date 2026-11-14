@@ -176,12 +176,7 @@ export function Settings({
       />
     )
   }
-  // Groups of one title are one: a section may show a key of another
-  // file among a table's rows, as the Flow's among the Agents'.
-  const titled = new Map<string, Row[]>()
-  for (const { title, rows } of groupsOf(section))
-    titled.set(title, [...(titled.get(title) ?? []), ...rows])
-  const sectionGroups = [...titled].map(([title, rows]) => ({ title, rows }))
+  const sectionGroups = groupsOf(section)
   const shown = new Set(
     sectionGroups.flatMap((g) => g.rows.map((r) => `${r.file}:${r.key}`))
   )

@@ -86,10 +86,13 @@ Every key, with its default:
   Banda's own round look on any system: `theme = "banda"`.
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
-- "One Pane at a time, the others' names over it": `[columns]` `display = "deck"` (a Deck, `Alt+T`).
-- "Other heights for Alt+Shift+R": `[columns]` `heights = ["1/4", "1/2", "3/4"]`.
 - "Dragged sizes stick too much", "not at all": `[columns]` `snap = 4`, or
   `snap = 0`; the presets and heights are where they stick.
+- A column's widths are not the look's: they are `tiling.toml`'s
+  `[columns]`, the same on every device (`banda settings set tiling.toml
+  columns.default 1/3`). "One Pane at a time, the others' names over
+  it": `display = "deck"` there (a Deck, `Alt+T`); "other heights for
+  Alt+Shift+R": `heights = ["1/4", "1/2", "3/4"]` there.
 - "More project between the windows": `[gaps]` `inner = 16`, `outer = 16`.
 - "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`, as
   far as the desk's text reads over the wallpaper on Linux;

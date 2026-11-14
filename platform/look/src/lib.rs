@@ -395,7 +395,12 @@ pub fn read<T: serde::de::DeserializeOwned>(
 /// Reads a `look.toml` or a `banda.toml`, and checks what TOML alone does
 /// not: sizes are not negative, colours are colours, as [`read`] reads a
 /// file.
+///
+/// A column's widths, which it held before ADR 0127, are told where they
+/// went and left out: `tiling.toml` reads them here while it does not say
+/// its own (ADR 0069 grace).
 pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
+    let text = &say_retired(path, text, &columns::RETIRED, problems);
     let settings: Settings = read(path, text, problems)?;
     check_settings(path, text, &settings, problems);
     Some(settings)

@@ -48,6 +48,7 @@ import {
   workspaceNames,
   groupBy,
   viewMenuOf,
+  widths,
 } from "./window"
 
 let window: Window
@@ -2714,8 +2715,8 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
 test("what an Agent opens with no place goes into its Thread's Group as a Deck, marked, and moves neither the Thread nor the focus (ADR 0065, decision 7)", async () => {
   // A third each, so the three fit in view.
   window = await startWindow({
-    files: FREE,
-    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+    files: widths('default = "1/3"', "free"),
+    look: "[columns]\nmin = 10\n",
   })
   const { page, dir } = window
   const { thread, composer } = await firstThread(page)
@@ -2956,9 +2957,10 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
   await expect(keys).toHaveCount(1)
 })
 
-test("columns and the text size come from look.toml", async () => {
+test("columns come from tiling.toml and look.toml, and the text size from look.toml", async () => {
   window = await startWindow({
-    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nalone = "1/4"\nmin = 0\n[font]\nsize = 16\n',
+    files: widths('presets = ["1/4", "3/4"]\ndefault = "1/4"\nalone = "1/4"'),
+    look: "[columns]\nmin = 0\n[font]\nsize = 16\n",
   })
   const { page } = window
   const root = page.locator("html")
@@ -2994,7 +2996,8 @@ test("columns and the text size come from look.toml", async () => {
 test("no column is narrower than columns.min; Alt+R goes round, Alt+F fills", async () => {
   // 50 rem is more than 2/3 of this window's Strip and less than all of it.
   window = await startWindow({
-    look: '[columns]\nmin = 50\nalone = "1/2"\n',
+    files: widths('alone = "1/2"'),
+    look: "[columns]\nmin = 50\n",
   })
   const { page } = window
   const rem = await page
@@ -3928,7 +3931,8 @@ test("an Agent's Group, its plate, takes its state, and its handle says its Thre
   // Half the Strip each, so the Thread and its Diff both show; the
   // handle, off by default.
   window = await startWindow({
-    look: '[columns]\ndefault = "1/2"\n[groups]\nhandle = true\n',
+    files: widths('default = "1/2"'),
+    look: "[groups]\nhandle = true\n",
   })
   const { page } = window
   // Still, so what it draws is the same picture from one build to the
@@ -4038,8 +4042,8 @@ async function stillShot(
 test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {
   // A third each, so the three fit in view; the handle, off by default.
   window = await startWindow({
-    files: FREE,
-    look: '[columns]\nmin = 10\ndefault = "1/3"\n[groups]\nhandle = true\n',
+    files: widths('default = "1/3"', "free"),
+    look: "[columns]\nmin = 10\n[groups]\nhandle = true\n",
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4102,8 +4106,8 @@ test("a Group's handle carries it, and a Pane dropped inside its end joins it", 
 test("Alt and a grouped Pane's header carry its whole Group, and a note says so", async () => {
   // A third each, so the three fit in view; no handle, as by default.
   window = await startWindow({
-    files: FREE,
-    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+    files: widths('default = "1/3"', "free"),
+    look: "[columns]\nmin = 10\n",
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4200,8 +4204,8 @@ test("Alt and a grouped Pane's header carry its whole Group, and a note says so"
 test("a Thread picked in the sidebar comes to the Strip's left, beside it", async () => {
   // A third each, so four columns are wider than the screen.
   window = await startWindow({
-    files: FREE,
-    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+    files: widths('default = "1/3"', "free"),
+    look: "[columns]\nmin = 10\n",
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4782,8 +4786,8 @@ test("a tab in a Deck's bar carries its Pane", async () => {
 test("columns grow and go to their new places on the look's motion", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
-    files: FREE,
-    look: `[columns]\nalone = "1/2"\n[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
+    files: widths('alone = "1/2"', "free"),
+    look: `[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -8270,7 +8274,7 @@ test("the launcher's letter picks its Pane with Alt still held from Alt+N", asyn
 })
 
 test("an Agent binds Banda's keys for its Person: Alt+M fills the column, Ctrl+Alt+H opens an address (ADR 0071)", async () => {
-  window = await startWindow({ look: '[columns]\nalone = "1/2"\n' })
+  window = await startWindow({ files: widths('alone = "1/2"') })
   const { page, dir } = window
   const file = join(dir, "config/keys.toml")
   const { thread, composer } = await firstThread(page)

@@ -436,11 +436,14 @@ export function Field({
   label,
   value,
   onCommit,
+  className,
   ...input
 }: {
   label: string
   value?: JsonValue
   onCommit: (text: string) => void
+  /** Its width, where it holds more than a word: a list. */
+  className?: string
   type?: string
   min?: number
   max?: number
@@ -458,7 +461,8 @@ export function Field({
       defaultValue={shown}
       className={cn(
         "h-8 text-right font-mono text-meta",
-        input.type === "number" ? "w-24" : "w-36"
+        input.type === "number" ? "w-24" : "w-36",
+        className
       )}
       onBlur={(event) => commit(event.currentTarget.value)}
       onKeyDown={(event) => {

@@ -106,6 +106,23 @@ and stories 1 and 2. The map behind it is kept outside the repository
    does not say it. The widths of `look.toml`'s `[columns]` stay there
    until the Tiling has its Settings section (part b): the engine places
    by none of them, and moving them moves their rows on the screen.
+   _Built_ (WS4, part b; Roma chose the mock's variant A and its answer
+   1 on 2026-11-14): Settings has a section, Tiling, after Appearance:
+   the Flow, which leaves Agents; the widths; and one row that names
+   the rules the file has and opens the file, where a rule is written.
+   Five keys of `look.toml`'s `[columns]` are `tiling.toml`'s `[columns]`
+   now, under the names they had: `default`, `alone`, `presets`,
+   `heights` and `display`. They are the Person's, one for every
+   device, as a width is a share of the screen. `look.toml` keeps
+   `center`, `min` and `snap`, which are a screen's and a mouse's, and
+   their rows stay in Appearance. The five are read in `look.toml`
+   while `tiling.toml` does not say them, key by key, the writer writes
+   them in the Tiling's file under either name, and `banda settings
+   check` tells `look.toml` where each went (ADR 0069 grace). The page
+   draws by the two files joined (`columnsOf` in `client/web/src/look.ts`),
+   so the engine now has the widths in its own file and still places by
+   none of them: a column that names no width is each client's to draw
+   (#1708's first point is left for an issue).
 5. **The Sidebar is a list.** The Banda menu is the one search, and a
    Thread starts in the New Thread Pane (#1630, which amends ADR 0098).
 6. **One name for "an App asks for a Pane":** the intent

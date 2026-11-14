@@ -26,6 +26,7 @@ import {
   textOf,
   type Window,
   workspaceNames,
+  widths,
 } from "./window"
 
 let window: Window
@@ -36,7 +37,7 @@ test.afterEach(async () => {
 
 /** The look whose new column takes half the screen, so the row and Solo
  * draw two Threads apart. */
-const HALVES = '[columns]\ndefault = "1/2"\n'
+const HALVES = widths('default = "1/2"')
 
 /** The Flow's button on the bar. */
 const flowOf = (page: Page) =>
@@ -98,7 +99,7 @@ function kept(window: Window): string[][] {
 }
 
 test("Solo turned on in one window leaves a second window on the same engine as it was, writes no file and no arrangement, and is there after a restart (ADR 0127, decision 3)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const { app, page, dir } = window
   const { composer } = await firstThread(page)
   await composer.fill("hello a")
@@ -156,7 +157,7 @@ test("Solo turned on in one window leaves a second window on the same engine as 
   // Banda does (ADR 0039).
   await page.evaluate(() => localStorage.removeItem("banda.starts"))
   await app.close()
-  window = await startWindow({ look: HALVES, dir })
+  window = await startWindow({ files: HALVES, dir })
   await expect(flowOf(window.page)).toHaveAccessibleName("Flow: Solo")
   await expect.poll(() => shares(window.page)).toEqual([100, 100])
   expect(textOf(file)).not.toMatch(/^flow\s*=/m)

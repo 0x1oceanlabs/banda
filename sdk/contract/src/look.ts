@@ -8,7 +8,8 @@ import type { Bar } from "./generated/look/Bar"
 import type { Drawer } from "./generated/look/Drawer"
 import type { Groups } from "./generated/look/Groups"
 import type { Overview } from "./generated/look/Overview"
-import type { Columns } from "./generated/look/Columns"
+import type { Columns as OfLook } from "./generated/look/Columns"
+import type { Widths } from "./generated/look/Widths"
 import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
@@ -37,7 +38,7 @@ export type { Toasts } from "./generated/look/Toasts"
 export type { Source } from "./generated/look/Source"
 export type { Listed } from "./generated/look/Listed"
 export type { Motion } from "./generated/look/Motion"
-export type { Columns } from "./generated/look/Columns"
+export type { Widths } from "./generated/look/Widths"
 export type { Bar } from "./generated/look/Bar"
 export type { Setting } from "./generated/look/Setting"
 export type { Drawer } from "./generated/look/Drawer"
@@ -93,14 +94,26 @@ export const DEFAULT_GROUPS: Groups = {
   saturation: "normal",
 }
 
-/** Banda's own columns, niri's: what `banda look` gives with no files. */
-export const DEFAULT_COLUMNS: Columns = {
+/** How columns stand on this device, as the Tiling draws them: a
+ * column's widths, the Person's, from `tiling.toml`'s `[columns]`, with
+ * what is this screen's and this mouse's, from `look.toml`'s (ADR 0127,
+ * decision 4). */
+export type Columns = Widths & OfLook
+
+/** Banda's own widths, niri's: what `tiling.toml` gives when it says
+ * none. */
+export const DEFAULT_WIDTHS: Widths = {
   presets: ["1/3", "1/2", "2/3", "1"],
   heights: ["1/3", "1/2", "2/3"],
   default: "1/2",
   alone: "1",
-  center: "never",
   display: "stack",
+}
+
+/** Banda's own columns: what `banda look` gives with no files. */
+export const DEFAULT_COLUMNS: Columns = {
+  ...DEFAULT_WIDTHS,
+  center: "never",
   min: 30,
   snap: 8,
 }

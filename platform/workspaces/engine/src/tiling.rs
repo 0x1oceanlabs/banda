@@ -1,15 +1,16 @@
 //! The Tiling's file, `~/.config/banda/tiling.toml`: how the Tiling
 //! behaves, as the Person chooses (ADR 0127, decision 4). It holds the
-//! Flow, and rules by kind of Pane: how wide a new column for one opens,
-//! and where it opens when no one named a place.
+//! Flow, a column's widths, and rules by kind of Pane: how wide a new
+//! column for one opens, and where it opens when no one named a place.
 //!
 //! The engine reads it as a Pane opens ([`read`]), so a key, an Agent and
 //! `banda` get the same answer, and `placing` decides by it. A client that
 //! draws ahead takes the same file from the look, as `files["tiling.toml"]`,
 //! and gives its copy of the rule the same.
 //!
-//! The Flow was `agents.toml`'s before: what that file still says is read
-//! while this one does not say it (ADR 0069 grace).
+//! The Flow was `agents.toml`'s before, and the widths `look.toml`'s: what
+//! those files still say is read while this one does not say it (ADR 0069
+//! grace).
 //!
 //! The file says how the engine places: free, or the row. Solo is a view
 //! of the row, each device's own, kept with that device's view and
@@ -17,7 +18,7 @@
 //! value of the file: the row, and the Person's default for a device that
 //! has not chosen.
 
-use banda_look::columns::share;
+use banda_look::columns::{Widths, WidthsSettings, share};
 use banda_look::keyed::{Moved, Renamed, spans_in};
 use banda_look::{OneFile, Problem};
 use schemars::JsonSchema;
@@ -50,7 +51,9 @@ pub enum Flow {
     #[serde(alias = "project")]
     #[serde(alias = "space")]
     Row,
-    /// As the row, and what has the focus fills the screen (ADR 0102).
+    /// The row, and a device that has not chosen starts in Solo: what
+    /// has the focus fills the screen (ADR 0102). Each device turns Solo
+    /// on and off for itself.
     Solo,
 }
 
@@ -103,12 +106,17 @@ pub struct RuleSettings {
     pub opens: Option<Opens>,
 }
 
-/// How the Tiling behaves. Every key is optional.
+/// How Panes stand: the Flow, the widths, and rules by kind of Pane. A
+/// key, an Agent and banda get the same answer.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct TilingSettings {
-    /// The Flow (ADR 0079). `flow` in agents.toml before ADR 0127 (grace).
+    /// Where a Pane opens. Solo here is the start for a device that has
+    /// not chosen: its key and the Flow on the bar turn it on one device.
     pub flow: Option<Flow>,
+    /// A column's widths and a Pane's heights. `[columns]` in look.toml
+    /// before ADR 0127 (grace).
+    pub columns: Option<WidthsSettings>,
     /// Rules by kind of Pane, each a table named by the kind:
     /// `[rule.terminal.terminal]` is the rule of `terminal.terminal`.
     pub rule: Option<BTreeMap<String, BTreeMap<String, RuleSettings>>>,
@@ -133,8 +141,19 @@ pub struct Rule {
 #[ts(export, export_to = "workspaces/")]
 pub struct Tiling {
     pub flow: Flow,
+    /// A column's widths and a Pane's heights.
+    pub columns: Widths,
     /// The rules, by kind of Pane: `terminal.terminal`.
     pub rules: BTreeMap<String, Rule>,
+}
+
+/// A key that was `look.toml`'s under the name it has here.
+const fn of_look(key: &'static str) -> Moved {
+    Moved {
+        file: "look.toml",
+        was: key,
+        now: key,
+    }
 }
 
 impl OneFile for TilingSettings {
@@ -157,12 +176,19 @@ impl OneFile for TilingSettings {
             was: "workspaces",
             now: "flow",
         },
+        // The widths were the look's, under the names they keep.
+        of_look("columns.default"),
+        of_look("columns.alone"),
+        of_look("columns.presets"),
+        of_look("columns.heights"),
+        of_look("columns.display"),
     ];
     type Resolved = Tiling;
 
     fn defaults() -> Self {
         TilingSettings {
             flow: Some(Flow::default()),
+            columns: Some(WidthsSettings::defaults()),
             rule: None,
         }
     }
@@ -170,6 +196,11 @@ impl OneFile for TilingSettings {
     fn over(self, under: Self) -> Self {
         TilingSettings {
             flow: self.flow.or(under.flow),
+            // Key by key: a file may say one width and leave the rest.
+            columns: match (self.columns, under.columns) {
+                (Some(mine), Some(under)) => Some(mine.over(under)),
+                (mine, under) => mine.or(under),
+            },
             rule: self.rule.or(under.rule),
         }
     }
@@ -189,13 +220,17 @@ impl OneFile for TilingSettings {
             .collect();
         Tiling {
             flow: self.flow.unwrap_or_default(),
+            columns: self.columns.unwrap_or_default().resolve(),
             rules,
         }
     }
 
     /// A width that is no share of the screen is named and left out; the
-    /// rest of its rule still holds.
+    /// rest of its rule, and of the widths, still holds.
     fn check(&mut self, path: &Path, text: &str, problems: &mut Vec<Problem>) {
+        for (span, message) in self.columns.iter().flat_map(WidthsSettings::problems) {
+            problems.push(Problem::at(path, text, span, message));
+        }
         let rules = self.rule.iter_mut().flatten();
         for rule in rules.flat_map(|(_, panes)| panes.values_mut()) {
             if let Some(width) = rule.width.take_if(|width| share(width.get_ref()).is_none()) {
@@ -316,6 +351,60 @@ mod tests {
         let (tiling, _, problems) = resolved(None, Some("flow = \"sideways\"\n"));
         assert_eq!(tiling.flow, Flow::Row);
         assert!(problems.is_empty(), "{problems:?}");
+    }
+
+    /// The widths were `look.toml`'s `[columns]` (ADR 0127, decision 4):
+    /// what it still says is read key by key while this file does not say
+    /// that key (ADR 0069 grace).
+    #[test]
+    fn what_look_toml_still_says_of_the_widths_is_read_while_this_file_does_not_say_it() {
+        let resolved = |tiling: Option<&str>, look: &str| {
+            let folder = tempfile::tempdir().unwrap();
+            std::fs::write(folder.path().join("look.toml"), look).unwrap();
+            if let Some(text) = tiling {
+                std::fs::write(folder.path().join(NAME), text).unwrap();
+            }
+            let (mut problems, mut watched) = (Vec::new(), Vec::new());
+            let (tiling, keyed) = banda_look::file::resolve::<TilingSettings>(
+                &Places::at(folder.path()),
+                &mut problems,
+                &mut watched,
+            );
+            assert_eq!(tiling, read(folder.path()), "the engine reads the same");
+            assert!(problems.is_empty(), "{problems:?}");
+            (tiling.columns, keyed)
+        };
+        let look = "radius = 4\n\n[columns]\ndefault = \"1/3\"\npresets = [\"1/4\", \"3/4\"]\n\
+                    display = \"tabs\"\nmin = 20\n";
+        let (columns, keyed) = resolved(None, look);
+        assert_eq!(columns.default, "1/3");
+        assert_eq!(columns.presets, ["1/4", "3/4"]);
+        assert_eq!(columns.display, banda_look::columns::Display::Deck);
+        assert_eq!(columns.alone, "1", "what neither says is Banda's");
+        let from = &keyed["columns.default"].from;
+        assert_eq!((from.layer.as_str(), from.line), ("file", Some(4)));
+        assert!(from.path.as_deref().unwrap().ends_with("look.toml"));
+        assert_eq!(keyed["columns.alone"].from.layer, "defaults");
+        // This file's own word wins, key by key.
+        let mine = "[columns]\ndefault = \"2/3\"\nalone = \"1/2\"\n";
+        let (columns, keyed) = resolved(Some(mine), look);
+        assert_eq!(columns.default, "2/3");
+        assert_eq!(columns.alone, "1/2");
+        assert_eq!(columns.presets, ["1/4", "3/4"], "look.toml's still");
+        let from = &keyed["columns.default"].from;
+        assert!(from.path.as_deref().unwrap().ends_with(NAME));
+        assert_eq!(columns.heights, Widths::default().heights);
+    }
+
+    #[test]
+    fn a_width_that_is_no_share_is_named() {
+        let text = "[columns]\ndefault = \"wide\"\npresets = []\nalone = \"1/2\"\n";
+        let (tiling, _, problems) = resolved(Some(text), None);
+        let lines: Vec<_> = problems.iter().map(|problem| problem.line).collect();
+        assert_eq!(lines, [None, Some(2)], "{problems:?}");
+        assert_eq!(tiling.columns.default, "1/2", "Banda's");
+        assert_eq!(tiling.columns.presets, Widths::default().presets);
+        assert_eq!(tiling.columns.alone, "1/2", "the rest holds");
     }
 
     #[test]

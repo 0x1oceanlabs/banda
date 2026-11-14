@@ -1,12 +1,17 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "tiling.toml",
-  "description": "How the Tiling behaves. Every key is optional.",
+  "description": "How Panes stand: the Flow, the widths, and rules by kind of Pane. A\nkey, an Agent and banda get the same answer.",
   "type": "object",
   "properties": {
     "flow": {
-      "description": "The Flow (ADR 0079). `flow` in agents.toml before ADR 0127 (grace).",
+      "description": "Where a Pane opens. Solo here is the start for a device that has\nnot chosen: its key and the Flow on the bar turn it on one device.",
       "$ref": "#/$defs/Flow",
+      "x-class": "shared"
+    },
+    "columns": {
+      "description": "A column's widths and a Pane's heights. `[columns]` in look.toml\nbefore ADR 0127 (grace).",
+      "$ref": "#/$defs/WidthsSettings",
       "x-class": "shared"
     },
     "rule": {
@@ -37,9 +42,61 @@
           "const": "row"
         },
         {
-          "description": "As the row, and what has the focus fills the screen (ADR 0102).",
+          "description": "The row, and a device that has not chosen starts in Solo: what\nhas the focus fills the screen (ADR 0102). Each device turns Solo\non and off for itself.",
           "type": "string",
           "const": "solo"
+        }
+      ]
+    },
+    "WidthsSettings": {
+      "description": "A column's widths and a Pane's heights, the Tiling's: `[columns]` in\n`tiling.toml`. One for every device: a width is a share of the screen.",
+      "type": "object",
+      "properties": {
+        "default": {
+          "title": "New column",
+          "description": "Where its Pane does not ask for its own.",
+          "type": "string"
+        },
+        "alone": {
+          "title": "A column alone",
+          "description": "Until a second opens beside it: then both take a new column's.",
+          "type": "string"
+        },
+        "presets": {
+          "title": "Steps",
+          "description": "The widths the keys that widen and narrow a column go through.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "heights": {
+          "description": "A Pane's steps in its column, as shares of it.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "display": {
+          "title": "A column shows",
+          "description": "Its Panes one above another, or as a Deck: one at a time, the\nothers' names over it.",
+          "$ref": "#/$defs/Display"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Display": {
+      "description": "How a column shows its Panes.",
+      "oneOf": [
+        {
+          "description": "One above another, sharing the column's height.",
+          "type": "string",
+          "const": "stack"
+        },
+        {
+          "description": "A Deck: one at a time, the others' names in a row over it, as niri's\ntabbed column (ADR 0065).",
+          "type": "string",
+          "const": "deck"
         }
       ]
     },

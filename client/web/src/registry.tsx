@@ -453,8 +453,8 @@ export function sheetsOf(pane: PaneState): boolean {
 
 /** How wide a new column for a Pane opens, as the engine gives it one
  * that names none: what the rule of its kind says in `tiling.toml` (ADR
- * 0127, decision 4); with none, a list at the narrowest preset, and the
- * rest as the look says, by what is beside it. */
+ * 0127, decision 4); with none, a list at the narrowest step of the
+ * file's `[columns]`, and the rest as those say, by what is beside it. */
 export function widthOf(pane: PaneState): Width | undefined {
   const ruled = fileNow(TILING_FILE).rules[pane.kind]?.width
   return ruled ?? (narrow(pane) ? columnsOf().presets[0] : undefined)

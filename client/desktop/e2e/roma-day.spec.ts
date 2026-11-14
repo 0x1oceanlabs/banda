@@ -34,6 +34,7 @@ import {
   threadNamed,
   toastsOf,
   type Window,
+  widths,
 } from "./window"
 
 let window: Window
@@ -43,7 +44,7 @@ test.afterEach(async () => {
 })
 
 /** Columns half the Strip wide, whatever Banda's default. */
-const HALVES = '[columns]\ndefault = "1/2"\n'
+const HALVES = widths('default = "1/2"')
 
 /** The Flow's button, on the bar beside the workspaces (ADR 0098,
  * decision 20). */
@@ -267,7 +268,7 @@ test("in free a new Thread opens on the workspace the Person is on; in solo, as 
 })
 
 test("in solo every Agent is the whole screen wide at once, and the Strip scrolls from one to the next (ADR 0079)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const { page } = window
   const [a, b, c] = await agents(window, "hello a", "hello b", "hello c")
   const shares = () => sharesOf(a, b, c)
@@ -305,7 +306,7 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
 })
 
 test("in solo the focus past a Group's edge shows the next Group whole, from its first column, and Alt+R leaves an Agent alone the screen wide as it is (ADR 0102, decision 8)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const { page } = window
   const [a, b] = await agents(window, "hello a", "hello b")
   // A terminal opened at b joins its Group, right of it; a new Agent comes
@@ -359,7 +360,7 @@ test("in solo the focus past a Group's edge shows the next Group whole, from its
 })
 
 test("ten Agents of a Project work side by side on its workspace, and a pick brings one to the Strip's left, filled in solo (ADR 0065, ADR 0079)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const { page } = window
   const names = "one two three four five six seven eight nine ten"
     .split(" ")
@@ -676,7 +677,7 @@ test("ten tiling keys pressed faster than the Window draws land in order, each o
 })
 
 test("an Agent that finishes scrolled out of view on its workspace gets its toast (ADR 0087, decision 9)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const [a] = await agents(window, "wait a", "hello b", "hello c", "hello d")
   // In the row the Strip follows the last Agent: the first is out of view,
   // on the workspace on screen.
@@ -685,7 +686,7 @@ test("an Agent that finishes scrolled out of view on its workspace gets its toas
 })
 
 test("an Agent that finishes behind the Group that fills the screen in solo gets its toast (ADR 0087, decision 9)", async () => {
-  window = await startWindow({ look: HALVES })
+  window = await startWindow({ files: HALVES })
   const { page } = window
   const [a, b] = await agents(window, "wait a", "hello b")
   // In the row both show. In solo each Agent fills the Strip: the one in

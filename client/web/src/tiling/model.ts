@@ -42,14 +42,14 @@ export type Entry = {
 
 /**
  * A column's share of the screen's width, as a fraction such as `"1/3"`,
- * or `"1"`. Alt+Ctrl+Arrows step it through the look's presets.
+ * or `"1"`. Alt+Ctrl+Arrows step it through the Tiling's presets.
  */
 export type Width = string
 
-/** What the look says of widths (`[columns]`): the steps, a new column's,
+/** What `tiling.toml` says of widths (`[columns]`): the steps, a new column's,
  * and a column's alone on its workspace. Banda's own till the look comes. */
 export type Sizes = Pick<Columns, "presets" | "default" | "alone">
-/** What the look says of heights: the steps, and how a column shows. */
+/** What it says of heights: the steps, and how a column shows. */
 export type Heights = Pick<Columns, "heights" | "display">
 export const SIZES: Sizes = DEFAULT_COLUMNS
 

@@ -1,5 +1,6 @@
 #:schema ./schemas/tiling.schema.json
-# How the Tiling behaves (ADR 0127): the Flow, and rules by kind of Pane.
+# How the Tiling behaves (ADR 0127): the Flow, a column's widths, and rules
+# by kind of Pane.
 # Banda's engine reads it, so a key, an Agent and `banda` get the same
 # answer. Every key is optional: what you leave out is Banda's default,
 # written below. Check a change with: banda settings check
@@ -14,6 +15,15 @@
 # until you choose the row on it.
 # flow = "row"
 
+# A column's width is a share of the screen, the same on every device:
+# "1/3", or "1" for all of it.
+# [columns]
+# default = "1/2"                    # a new column's width
+# alone = "1"                        # a column alone on its workspace; "1/2" never fills
+# presets = ["1/3", "1/2", "2/3", "1"]  # the steps Alt+R goes round
+# heights = ["1/3", "1/2", "2/3"]    # a Pane's in its column: Alt+Shift+R, Alt+Ctrl+Up and Down
+# display = "stack"                  # "stack" or "deck": how a new column shows its Panes
+
 # A rule for one kind of Pane, in a table named by the kind: this one is
 # for a terminal, `terminal.terminal`. A Thread is `agents.thread`, the
 # browser `browser.browser`, the Diff `git.diff`, Files `files.tree` and a
@@ -22,8 +32,8 @@
 # [rule.terminal.terminal]
 
 # How wide a new column for a Pane of this kind opens: a share of the
-# screen, such as "1/3", or "1" for all of it. By default the width
-# look.toml's [columns] gives a new column.
+# screen, such as "1/3", or "1" for all of it. By default the width that
+# `default` of [columns] gives a new column.
 # width = "1/3"
 
 # Where a Pane of this kind opens when no one named a place: "beside",

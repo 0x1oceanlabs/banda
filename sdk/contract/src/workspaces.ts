@@ -4,7 +4,7 @@
  * column's display is the look's `Display`.
  */
 import { canonical, uuidV5 } from "./ids"
-import type { ModuleFile } from "./look"
+import { DEFAULT_WIDTHS, type ModuleFile } from "./look"
 import type { Tiling } from "./generated/workspaces/Tiling"
 
 export type { Arranged } from "./generated/workspaces/Arranged"
@@ -25,10 +25,14 @@ export type { WorkspaceId } from "./generated/workspaces/WorkspaceId"
 
 /** How the Tiling behaves with no `tiling.toml`, as `banda look` gives
  * it: for before the first look. */
-export const DEFAULT_TILING: Tiling = { flow: "row", rules: {} }
+export const DEFAULT_TILING: Tiling = {
+  flow: "row",
+  columns: DEFAULT_WIDTHS,
+  rules: {},
+}
 
-/** The Tiling's file, `tiling.toml`: the Flow, and the rules by kind of
- * Pane that the engine places by (ADR 0127, decision 4). */
+/** The Tiling's file, `tiling.toml`: the Flow, a column's widths, and the
+ * rules by kind of Pane that the engine places by (ADR 0127, decision 4). */
 export const TILING_FILE: ModuleFile<Tiling> = {
   name: "tiling.toml",
   before: DEFAULT_TILING,
