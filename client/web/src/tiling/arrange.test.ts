@@ -13,6 +13,7 @@ import {
   resolve,
   send as sendToEngine,
   tidied,
+  tidiedInFront,
   viewOf,
   withAsked,
   workspaceMoved,
@@ -349,6 +350,42 @@ describe("plans", () => {
       method: "workspaces.tidy",
       params: { keep: current(both).id },
     })
+  })
+
+  test("only the device in front tidies: a window behind never takes away the empty workspace the Person looks at on another device, and back in front it tidies then (ADR 0087, decision 10)", () => {
+    // Two windows on one engine draw the same workspaces, each with its
+    // own view: the Person, at the first, looks at an empty workspace,
+    // and the second, behind, shows another.
+    const state = arranged()
+    const list = [{ id: "empty", columns: [], focus: 0 }, ...state.list]
+    const first: Workspaces = { list, current: 0 }
+    const second: Workspaces = { list, current: 1 }
+    // The first keeps the one it shows, and the second sends nothing: its
+    // tidy would name its own workspace to keep, and let `empty` go.
+    expect(tidiedInFront(first, true)).toBeUndefined()
+    expect(tidiedInFront(second, false)).toBeUndefined()
+    // The Person comes to the second: it tidies then, as one window does.
+    expect(tidiedInFront(second, true)).toEqual(tidied(second))
+    expect(tidied(second)).toEqual({
+      method: "workspaces.tidy",
+      params: { keep: current(second).id },
+    })
+    // What stays and what goes is `tidied`'s still.
+    const mine = "p1" as ProjectId
+    const gone = (project: ProjectId) => project === mine
+    const kept: Workspaces = {
+      list: [
+        { id: "mine", columns: [], focus: 0, project: mine },
+        ...state.list,
+      ],
+      current: 1,
+    }
+    expect(tidiedInFront(kept, true)).toBeUndefined()
+    expect(tidiedInFront(kept, true, gone)).toEqual(tidied(kept, gone))
+    expect(tidiedInFront(kept, true, undefined, false)).toEqual(
+      tidied(kept, undefined, false)
+    )
+    expect(tidiedInFront(kept, false, gone, false)).toBeUndefined()
   })
 
   test("closes an emptied workspace the window has left, a Project's too, and keeps the rest (ADR 0102, decision 2)", () => {

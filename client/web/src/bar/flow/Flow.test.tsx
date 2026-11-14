@@ -4,28 +4,27 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import { type Key, keyLabel } from "@banda/ui/lib/keys"
 import { renderToStaticMarkup } from "react-dom/server"
-import { expect, test, vi } from "vitest"
+import { expect, test } from "vitest"
+import { FlowContext } from "../../tiling/kept"
 import { flowWidget, isFlow, nextFlow } from "./Flow"
-
-/** tiling.toml's Flow as the look resolves it: a server's drawing has
- * no store to read the look from. */
-const tiling = vi.hoisted(() => ({ flow: "row" as Flow }))
-vi.mock("@banda/ui/lib/look", () => ({ useFile: () => tiling }))
 
 /** The widget drawn in `flow`, with `flow.solo` on `key`. */
 function drawn(flow: Flow, key?: Key): string {
-  tiling.flow = flow
   const { Widget } = flowWidget
+  // The Flow this device shows, as the Window's `Kept` gives it:
+  // tiling.toml's, and the device's own Solo.
   return renderToStaticMarkup(
-    <KeysInForce
-      value={{
-        mod: DEFAULT_KEYS.mod,
-        byAction: new Map(key ? [["flow.solo", key]] : []),
-        byScope: new Map(),
-      }}
-    >
-      <Widget engine={{} as Engine} projects={[]} />
-    </KeysInForce>
+    <FlowContext value={flow}>
+      <KeysInForce
+        value={{
+          mod: DEFAULT_KEYS.mod,
+          byAction: new Map(key ? [["flow.solo", key]] : []),
+          byScope: new Map(),
+        }}
+      >
+        <Widget engine={{} as Engine} projects={[]} />
+      </KeysInForce>
+    </FlowContext>
   )
 }
 

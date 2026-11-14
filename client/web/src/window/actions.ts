@@ -89,6 +89,7 @@ import {
 } from "../tiling/arrange"
 import { refusedTo, type RowRefusal } from "../tiling/arrangement"
 import { factsOf } from "../tiling/useTiling"
+import type { PickFlow } from "../tiling/flow"
 import { filling, grouping, regrouping, shiftingInside } from "../tiling/groups"
 import { floorsOf, roomLeft } from "../tiling/layout"
 import {
@@ -179,6 +180,10 @@ export type Shell = WindowApi & {
   /** In solo, the workspace in view as the row for a while, or back to
    * solo (ADR 0079); false when the Flow is not solo. */
   glance: () => boolean
+  /** Picks a Flow on this device (`tiling/flow.ts`): Solo is its own
+   * view, and what tiling.toml is to say comes back when the pick changes
+   * how the engine places. */
+  pickFlow: PickFlow
   /** Opens the Banda menu at a route, or the settings at theirs, as
    * `banda menu ROUTE` does (ADR 0017, decision 7). */
   route: (route: string) => void
@@ -810,13 +815,16 @@ function presentHere(args: Args | undefined, then: (file: string) => void) {
 }
 
 /**
- * Writes the Flow into tiling.toml (ADR 0079; ADR 0127, decision 4), for
- * its key and for the bar's menu; the look brings it back. What went wrong
- * goes to the console, as it did from the menu.
+ * Picks the Flow on this device, for its key and for the bar's menu (ADR
+ * 0079). Solo is the device's view and writes nothing (ADR 0127, decision
+ * 3). Free and the row are how the engine places, so a change between
+ * them is written into tiling.toml (decision 4), and the look brings it
+ * back; what went wrong goes to the console, as it did from the menu.
  */
-function writeFlow(shell: Shell, flow: Flow) {
+function pickedFlow(shell: Shell, flow: Flow) {
+  const write = shell.pickFlow(flow)
   const file = TILING_FILE.name
-  logged(file, shell.writeSetting(file, "flow", tomlOf(flow)))
+  if (write) logged(file, shell.writeSetting(file, "flow", tomlOf(write)))
 }
 
 /** The other machines a stop is on its way to, by their keys: a second
@@ -1078,7 +1086,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     section: "Workspaces",
     title: "Solo, what has the focus the whole screen wide, or back to the row",
     keys: [{ code: "KeyM", mod: true, shift: true }],
-    run: (shell) => writeFlow(shell, nextFlow(fileNow(TILING_FILE).flow)),
+    run: (shell) => pickedFlow(shell, nextFlow(shell.placing().flow)),
   },
   {
     id: "workspaces.arrange",
@@ -1108,7 +1116,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     title: "Pick how the Agents' windows stand: free, row or solo",
     unlisted: true,
     run: (shell, args) => {
-      if (isFlow(args?.flow)) writeFlow(shell, args.flow)
+      if (isFlow(args?.flow)) pickedFlow(shell, args.flow)
     },
   },
   {

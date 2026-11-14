@@ -27,6 +27,7 @@ import {
 } from "../tiling/arrange"
 import { hear, look, predict, unseen } from "../tiling/unheard"
 import { factsOf } from "../tiling/useTiling"
+import { flowHere, Solo } from "../tiling/flow"
 import { quiet } from "../calls/quiet"
 import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar/keys"
@@ -549,23 +550,45 @@ test("a Project's verbs and the menu at a route do what the sidebar's buttons di
   expect(settings).toHaveBeenCalledTimes(1)
 })
 
-test("flow.pick writes the Flow it names into tiling.toml, as flow.solo does from the one in force, and a word it does not know nothing", async () => {
+test("flow.solo and a pick of Solo or the row write nothing, as Solo is this device's view; a pick between free and the row writes tiling.toml, and a word it does not know nothing (ADR 0127, decision 3)", async () => {
   const writeSetting = vi.fn(() => Promise.resolve([] as string[]))
-  const shell = shellOf({ writeSetting })
-  takeLook({
-    files: { [TILING_FILE.name]: { ...DEFAULT_TILING, flow: "row" } },
-  } as unknown as Look)
+  // The Window's own Solo, and the Flow it shows where the file says
+  // `file`, as `useFlowHere` gives them.
+  const solo = new Solo()
+  let file: Flow = "row"
+  const flowNow = () => flowHere(file, solo.get())
+  const shell = shellOf({
+    writeSetting,
+    pickFlow: (flow: Flow) => solo.pick(flow, file),
+    placing: () => placingOf(flowNow(), []),
+  })
 
-  runAction(shell, "flow.pick", { flow: "free" })
+  // Its key, to Solo and back, and the bar's menu: here alone.
+  runAction(shell, "flow.solo")
+  expect(flowNow()).toBe("solo")
+  runAction(shell, "flow.solo")
+  expect(flowNow()).toBe("row")
   runAction(shell, "flow.pick", { flow: "solo" })
+  expect(flowNow()).toBe("solo")
+  runAction(shell, "flow.pick", { flow: "row" })
+  expect(flowNow()).toBe("row")
   for (const args of [undefined, { flow: "toString" }, { flow: 1 }])
     runAction(shell, "flow.pick", args)
+  expect(writeSetting).not.toHaveBeenCalled()
+
+  // Free and the row are how the engine places, the file's: from free,
+  // Solo takes the row with it.
+  runAction(shell, "flow.pick", { flow: "free" })
+  file = "free"
   runAction(shell, "flow.solo")
   expect(writeSetting.mock.calls).toEqual([
     [TILING_FILE.name, "flow", '"free"'],
-    [TILING_FILE.name, "flow", '"solo"'],
-    [TILING_FILE.name, "flow", '"solo"'],
+    [TILING_FILE.name, "flow", '"row"'],
   ])
+  file = "row"
+  expect(flowNow()).toBe("solo")
+  runAction(shell, "flow.pick", { flow: "free" })
+  file = "free"
 
   // A refused write says so in the console, as the menu's did.
   const error = vi.spyOn(console, "error").mockImplementation(() => undefined)

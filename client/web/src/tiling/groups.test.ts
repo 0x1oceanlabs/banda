@@ -8,7 +8,6 @@ import {
   ownersOf,
   regrouping,
   shiftingInside,
-  unsoloing,
 } from "./groups"
 import {
   type Column,
@@ -178,14 +177,6 @@ describe("a Group", () => {
       true,
       undefined,
     ])
-    // Back to the row, a Group `Alt+M` filled gives the room back.
-    const filled = strip("ab", "gg", 0)
-    filled.list[0].filled = "g"
-    expect(unsoloing(filled)?.command.params).toEqual({
-      column: "a",
-      fill: false,
-    })
-    expect(unsoloing(strip("ab", "gg", 0))).toBeUndefined()
   })
 
   test("in solo the width keys leave a column that fills the screen alone as it is, and step a Group's shares as they show (ADR 0102, decision 8)", () => {

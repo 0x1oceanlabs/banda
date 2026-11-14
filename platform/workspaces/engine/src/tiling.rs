@@ -10,6 +10,12 @@
 //!
 //! The Flow was `agents.toml`'s before: what that file still says is read
 //! while this one does not say it (ADR 0069 grace).
+//!
+//! The file says how the engine places: free, or the row. Solo is a view
+//! of the row, each device's own, kept with that device's view and
+//! written nowhere here (ADR 0127, decision 3). `flow = "solo"` stays a
+//! value of the file: the row, and the Person's default for a device that
+//! has not chosen.
 
 use banda_look::columns::share;
 use banda_look::keyed::{Moved, Renamed, spans_in};
@@ -49,7 +55,10 @@ pub enum Flow {
 }
 
 impl From<Flow> for crate::placing::Flow {
-    /// Solo is each client's view of the row (ADR 0087, decision 10).
+    /// Solo is each client's view of the row (ADR 0087, decision 10): the
+    /// engine places by the row. A device turns Solo on and off for
+    /// itself and writes nothing, so `solo` in the file is the Person's
+    /// default, for a device that has not chosen (ADR 0127, decision 3).
     fn from(flow: Flow) -> Self {
         match flow {
             Flow::Free => Self::Free,

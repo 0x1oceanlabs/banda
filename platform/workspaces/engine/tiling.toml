@@ -5,10 +5,13 @@
 # written below. Check a change with: banda settings check
 
 # How you work the Panes, the Flow (ADR 0079): "free", a Pane opens beside
-# the one in front, and workspaces belong to no Project; "row", each
-# Project on its own workspace, its Agents in a row (ADR 0102); or "solo",
-# as the row, what has the focus filling the screen. The Flow's icon on
-# the bar switches it, and Alt+Shift+M goes from row to solo.
+# the one in front, and workspaces belong to no Project; or "row", each
+# Project on its own workspace, its Agents in a row (ADR 0102). Solo, what
+# has the focus filling the screen, is a view of the row that each device
+# keeps for itself: Alt+Shift+M and the Flow's icon on the bar turn it on
+# and off on the device they are used on, and write nothing here. "solo"
+# here is the row, with Solo as your default: a device starts in Solo
+# until you choose the row on it.
 # flow = "row"
 
 # A rule for one kind of Pane, in a table named by the kind: this one is

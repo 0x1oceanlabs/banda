@@ -9,6 +9,7 @@ import {
 import { type Engine, newId, type ProjectId } from "@banda/contract"
 import { type Flow, type Rule, TILING_FILE } from "@banda/contract/workspaces"
 import { type Readable, Store, useStore } from "@banda/core/react"
+import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { fileNow, useFile } from "@banda/ui/lib/look"
 import type { PaneState } from "@banda/ui/pane"
 import {
@@ -18,7 +19,14 @@ import {
   startable,
   widthOf,
 } from "../registry"
-import { type Change, logged, type Plan, send, tidied, viewOf } from "./arrange"
+import {
+  type Change,
+  logged,
+  type Plan,
+  send,
+  tidiedInFront,
+  viewOf,
+} from "./arrange"
 import { type Facts, NO_FACTS } from "./arrangement"
 import { focused, type Gone, NONE_GONE, soloed, type Workspaces } from "./model"
 import {
@@ -72,7 +80,9 @@ const standingIn = (seen: Seen) => seen.standing
  * which moves to the engine once. In the Flow solo, every Group and
  * every column in none is drawn the whole screen wide, on any workspace
  * (ADR 0079; ADR 0102, decision 8), but on the workspace `row` names: the
- * engine's arrangement stays as it is. In the Flow free, every workspace
+ * engine's arrangement stays as it is. `flow` is the Flow as this device
+ * shows it (`flow.ts`): solo is its own view, and writes nothing (ADR
+ * 0127, decision 3). In the Flow free, every workspace
  * is free, and goes emptied once the window leaves it (decision 1). A Pane
  * opened with no place is drawn where the engine would put it, by `flow`
  * (ADR 0110, decision 9).
@@ -195,17 +205,18 @@ export function useTiling({
   }, [engine, machine, modules, home, store])
   // An empty workspace the Person left goes, as niri's: through the
   // queue, so it is drawn gone at once and goes after what was sent
-  // before it.
+  // before it. Only the device in front tidies (`tidiedInFront`).
+  const front = useInFront()
   const tidying = useRef("")
   useEffect(() => {
     const command = ready
-      ? tidied(workspaces, gone, flow !== "free")
+      ? tidiedInFront(workspaces, front, gone, flow !== "free")
       : undefined
     const key = command ? JSON.stringify([command, workspaces.list.length]) : ""
     if (key === tidying.current) return
     tidying.current = key
     if (command) sent({ command, focus: false })
-  }, [workspaces, ready, sent, gone, flow])
+  }, [workspaces, ready, front, sent, gone, flow])
 
   // A change, worked out from what is drawn now and drawn at once; it
   // gives the Pane it focuses. One the engine refuses is drawn no more

@@ -63,6 +63,29 @@ and stories 1 and 2. The map behind it is kept outside the repository
    and write nothing. `workspaces.tidy` comes only from the device in
    front. This carries out ADR 0087 decision 10 and ADR 0110 decision 10,
    and words ADR 0101 decision 5 for more than one client on an engine.
+   _Built_ (WS5, part a): Solo is the device's. `flow.solo`
+   (`Alt+Shift+M`) and the Flow's menu on the bar turn it on and off in
+   the window they are used in, which keeps it with its view, in its own
+   storage, and writes no file and no arrangement
+   (`client/web/src/tiling/flow.ts`). `flow` in `tiling.toml` says how the
+   engine places, `free` or `row`. `solo` stays a value of it: the row,
+   and the Person's default, so a device that has not chosen starts in
+   Solo. A device has chosen while it shows other than that default; back
+   at it, it follows the default again, so the Settings row and `banda
+   settings set` still reach it. A pick between free and the row on the
+   bar writes the file, as that is how the engine places; from free, Solo
+   takes the row with it, as it is a view of the row. Going from solo to
+   the row no longer sends a `fill` (_changes ADR 0079_, decision 2): a
+   Group `Alt+M` filled stays as the Person left it. The row for a while
+   (`Alt+M` in solo) was the window's own state already, and nothing of a
+   width as drawn or of the scroll was written. A window sends
+   `workspaces.tidy` by itself only while it is in front, and one that
+   comes to the front tidies then (`tidiedInFront`,
+   `client/web/src/tiling/arrange.ts`). The gate is the page's: the
+   engine knows which device a call comes from (`Call::device`), and not
+   which one the Person is in front of, so two devices that each have
+   their system's focus both tidy still. The arrangement under the
+   device's name is part b.
 4. **The Tiling's behaviour is one file, `tiling.toml`,** read by the
    engine: the Flow, the widths, and rules that say where a kind of Pane
    opens and how wide. `flow` leaves `agents.toml`, and what is behaviour

@@ -676,6 +676,22 @@ export function tidied(
   }
 }
 
+/**
+ * The tidy a window sends by itself, as the Person leaves an empty
+ * workspace: `tidied`, and none from a window that is not in front (ADR
+ * 0087, decision 10; ADR 0127, decision 3). Each window keeps the
+ * workspace it shows, so one behind would take away the empty workspace
+ * the Person looks at on another device. Back in front, it tidies then.
+ */
+export function tidiedInFront(
+  state: Workspaces,
+  front: boolean,
+  gone?: Gone,
+  strict?: boolean
+): Command | undefined {
+  return front ? tidied(state, gone, strict) : undefined
+}
+
 /** Where workspace `id` stands, when the Person may close it: it is
  * empty, and not the empty one at the bottom. */
 export function closableAt(state: Workspaces, id: string): number | undefined {

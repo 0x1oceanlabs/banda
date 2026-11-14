@@ -1670,15 +1670,15 @@ test("only the Window gives the Apps what they list, and only what fills a Pane'
 
 /**
  * What the Tiling's parts read of it, its workspaces as it draws them,
- * and the workspaces set aside
+ * the workspaces set aside and the Flow this device shows
  * (`tiling/kept.ts`), only the Window's `Kept` gives, as it gives the
  * items and Here, and only the Window's root draws a `Kept` (above). The
  * workspaces are read by selector alone (`useTiled`): no file but
  * `Kept`'s takes their context.
  */
-test("only the Window's Kept gives the Tiling's workspaces and the aside, and the workspaces are read by selector", () => {
+test("only the Window's Kept gives the Tiling's workspaces, the aside and the Flow here, and the workspaces are read by selector", () => {
   const here = join(app, "web/src/window/here.tsx")
-  for (const tag of ["TilingContext", "AsideContext"]) {
+  for (const tag of ["TilingContext", "AsideContext", "FlowContext"]) {
     expect(drawingTag(pageFiles, tag), tag).toEqual([
       "client/web/src/window/here.tsx",
     ])
