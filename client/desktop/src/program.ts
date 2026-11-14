@@ -95,10 +95,12 @@ export const CARRIED = "adapters"
 /** The folder of the Node the Windows app carries to run them, beside its
  * `banda.exe` and its copy's (the harnesses' `carried::NODE_FOLDER`). */
 export const NODE_FOLDER = "node"
-/** What a copy carries beside its program, each folder of it whole. */
-/** The updater, a program of its own beside the engine (ADR 0131). */
-const UPDATER =
+/** The updater, a program of its own beside the engine (ADR 0131): a
+ * file, not a folder. */
+export const UPDATER =
   process.platform === "win32" ? "banda-update.exe" : "banda-update"
+/** What a copy carries beside its program: each folder of it whole, and
+ * each file. */
 const BESIDE = [CARRIED, NODE_FOLDER, UPDATER]
 /** The file beside a copy that names the app's Electron, which runs the
  * adapters as Node (the harnesses' `carried::ELECTRON`). */
@@ -489,20 +491,33 @@ const naming = (kept: string, electron: string | undefined) =>
   })
 
 /** Whether `copy` is whole: there, as long as `program`, and beside each
- * file the app carries beside `program` (`BESIDE`), as long as it. A copy
- * made before the app carried them is not. */
+ * file the app carries beside `program` (`BESIDE`, a file or each file of
+ * a folder), as long as it. A copy made before the app carried them is
+ * not. */
 function whole(copy: string, program: string): boolean {
-  const carried = BESIDE.flatMap((folder) => {
-    const packed = join(dirname(program), folder)
-    const names = existsSync(packed) ? readdirSync(packed) : []
-    return names.map((name) => [
-      join(dirname(copy), folder, name),
-      join(packed, name),
+  const carried = BESIDE.flatMap((name) => {
+    const packed = join(dirname(program), name)
+    const kept = join(dirname(copy), name)
+    const kind = kindOf(packed)
+    if (kind === "file") return [[kept, packed]]
+    if (kind !== "folder") return []
+    return readdirSync(packed).map((inner) => [
+      join(kept, inner),
+      join(packed, inner),
     ])
   })
   return [[copy, program], ...carried].every(([kept, packed]) =>
     sameSize(kept, packed)
   )
+}
+
+/** What `path` is: a file, a folder, or nothing there. */
+function kindOf(path: string): "file" | "folder" | undefined {
+  try {
+    return statSync(path).isDirectory() ? "folder" : "file"
+  } catch {
+    return undefined
+  }
 }
 
 /** Whether `kept` is there, as long as `packed`. */
