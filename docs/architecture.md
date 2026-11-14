@@ -850,7 +850,8 @@ contract. It is one folder: an App's in `apps/`, the platform's in
                legacy table prefixes, needs (empty yet), unstable marks
   window.json  its window part as the engine reads it, written by the window's tests:
                what `banda modules` prints, and the Pane kinds that open as
-               a Group of their own
+               a Group of their own, stand on their Project's workspace,
+               or are lists
 ```
 
 A module declares itself in its code and a short `app.toml` (ADR 0022,
@@ -903,7 +904,10 @@ from it. The serving engine reads the window parts too: the keys in
 force take their actions and scopes (ADR 0071, decision 2), and the
 workspaces, as they start, the Pane kinds that open as a Group of their
 own (`PaneKind.grouped`), so a Thread is a Group from its opening whoever
-opens it (ADR 0065, decision 7). For those kinds, a window part it
+opens it (ADR 0065, decision 7), those that stand on their Project's
+workspace (`PaneKind.home`), and those that are lists (`PaneKind.narrow`),
+whose new column takes the narrowest of `tiling.toml`'s widths whoever
+opens it (ADR 0127, decision 4). For those kinds, a window part it
 cannot read it logs and leaves out. A path a module takes that the
 contract lacks is an unstable mark in its `app.toml`, with why; the tests
 hold the count at a ceiling that only falls, and `scripts/check.sh`

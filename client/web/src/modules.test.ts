@@ -2,7 +2,11 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { ProjectId } from "@banda/contract"
 import type { Look } from "@banda/contract/look"
-import { DEFAULT_TILING, TILING_FILE } from "@banda/contract/workspaces"
+import {
+  DEFAULT_TILING,
+  type Tiling,
+  TILING_FILE,
+} from "@banda/contract/workspaces"
 import { takeLook } from "@banda/ui/lib/look"
 import type { Action, Module, WindowApi } from "@banda/ui/module"
 import { parts } from "@banda/ui/testing/architecture"
@@ -11,11 +15,14 @@ import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./window/actions"
 import { windowModule } from "./registry"
 import { TILING_ACTIONS } from "./tiling/actions"
+import { widthIn } from "./tiling/arrangement"
 import { samePane } from "./tiling/model"
+import { factsOf } from "./tiling/useTiling"
 import {
   identityOf,
   kindRuns,
   kinds,
+  NARROW_KINDS,
   labelOf,
   saidNow,
   sayLabel,
@@ -23,7 +30,6 @@ import {
   startable,
   tileable,
   watches,
-  widthOf,
 } from "./registry"
 
 test("each module has its own id, and its Panes' kinds start with it (ADR 0022, decision 5)", () => {
@@ -36,20 +42,27 @@ test("each module has its own id, and its Panes' kinds start with it (ADR 0022, 
   expect(new Set(named).size).toBe(named.length)
 })
 
-test("a new column is as wide as its kind's rule in tiling.toml says, else a list at the narrowest preset and the rest as the look has it (ADR 0127, decision 4)", () => {
-  const pane = (kind: string) => ({ kind, args: {} })
-  expect(widthOf(pane("files.tree"))).toBe("1/3")
-  expect(widthOf(pane("terminal.terminal"))).toBeUndefined()
+test("the window foresees a new column as wide as the engine gives it: its kind's rule in tiling.toml, else a list at the narrowest preset, and the rest as the look has it (ADR 0127, decision 4)", () => {
+  const widthOf = (kind: string) => widthIn(factsOf("row"), kind)
+  expect(NARROW_KINDS).toEqual(["files.tree"])
+  expect(widthOf("files.tree")).toBe("1/3")
+  expect(widthOf("terminal.terminal")).toBeUndefined()
+  const tiling = (said: Partial<Tiling>) =>
+    takeLook({
+      files: { [TILING_FILE.name]: { ...DEFAULT_TILING, ...said } },
+    } as unknown as Look)
+  const columns = { ...DEFAULT_TILING.columns, presets: ["1/4", "1/2"] }
+  tiling({ columns })
+  expect(widthOf("files.tree")).toBe("1/4")
   const rules = {
     "terminal.terminal": { width: "2/5" },
     "files.tree": { width: "1/2" },
     "git.diff": { opens: "below" as const },
   }
-  const files = { [TILING_FILE.name]: { ...DEFAULT_TILING, rules } }
-  takeLook({ files } as unknown as Look)
-  expect(widthOf(pane("terminal.terminal"))).toBe("2/5")
-  expect(widthOf(pane("files.tree"))).toBe("1/2")
-  expect(widthOf(pane("git.diff"))).toBeUndefined()
+  tiling({ columns, rules })
+  expect(widthOf("terminal.terminal")).toBe("2/5")
+  expect(widthOf("files.tree")).toBe("1/2")
+  expect(widthOf("git.diff")).toBeUndefined()
   takeLook({ files: {} } as unknown as Look)
 })
 
@@ -156,15 +169,17 @@ function actionOf(action: Action<never>) {
 /** What a module's window part offers, as `banda modules` prints it: its
  * code says it; this is a copy for the engine, which has no window. The
  * engine reads from it which kinds of Pane open as a Group of their own
- * (ADR 0065, decision 7) and which stand on their Project's workspace,
- * for the workspaces (ADR 0110). */
+ * (ADR 0065, decision 7), which stand on their Project's workspace and
+ * which are lists, whose new column is the narrowest, for the workspaces
+ * (ADR 0110; ADR 0127, decision 4). */
 function windowOf(module: Module) {
   return {
-    panes: module.panes.map(({ kind, grouped, home }) => ({
+    panes: module.panes.map(({ kind, grouped, home, narrow }) => ({
       kind,
       grouped,
       // Said, whatever its Flow: the engine asks it only in the row.
       ...(home && { home: true }),
+      ...(narrow && { narrow: true }),
     })),
     actions: allOf(module).map(actionOf),
     ...(module.scopes.length > 0 && { scopes: module.scopes }),

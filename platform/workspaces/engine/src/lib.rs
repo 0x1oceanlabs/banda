@@ -67,6 +67,9 @@ pub struct Workspaces {
     /// The Pane kinds that stand on their Project's workspace, as their
     /// window parts say (ADR 0065, decision 9).
     home: BTreeSet<String>,
+    /// The Pane kinds that are lists beside other Panes, as their window
+    /// parts say (`PaneKind.narrow`).
+    narrow: BTreeSet<String>,
     /// Reads this machine's copy of the Tiling's file; none, the Flow
     /// `free` and no rule.
     tiling: Option<Box<dyn Fn() -> Tiling + Send + Sync>>,
@@ -101,19 +104,34 @@ impl Workspaces {
             flow: tiling::Flow::Free,
             ..Tiling::default()
         };
-        // A column that names no width is drawn by each client at the
-        // widths the file gives: the engine places by none of them yet.
-        let Tiling { flow, rules, .. } = self.tiling.as_ref().map_or_else(unsaid, |read| read());
+        let Tiling {
+            flow,
+            rules,
+            columns,
+        } = self.tiling.as_ref().map_or_else(unsaid, |read| read());
         Facts {
             flow: flow.into(),
             home: self.home.clone(),
             leads: self.grouped.clone(),
             rules,
+            narrow: self.narrow.clone(),
+            // Narrowest first, as the file resolves them. Any other
+            // column that names no width is each client's to draw, from
+            // `default` and `alone`, by what stands beside it.
+            narrowest: columns.presets.into_iter().next(),
         }
     }
 
+    /// The kinds of Pane that are lists beside other Panes: a new column
+    /// for one opens at the narrowest of the Tiling's widths, whoever
+    /// opens it.
+    pub fn narrow_kinds(mut self, kinds: impl IntoIterator<Item = impl Into<String>>) -> Self {
+        self.narrow = kinds.into_iter().map(Into::into).collect();
+        self
+    }
+
     /// Where this machine's copy of the Tiling's file is read from: its
-    /// Flow and its rules by kind of Pane (ADR 0110, decision 5; ADR 0127,
+    /// Flow, its widths and its rules by kind of Pane (ADR 0110, decision 5; ADR 0127,
     /// decision 4).
     pub fn tiling(mut self, read: impl Fn() -> Tiling + Send + Sync + 'static) -> Self {
         self.tiling = Some(Box::new(read));

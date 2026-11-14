@@ -1329,6 +1329,70 @@ async fn a_rule_of_tiling_toml_holds_for_the_window_a_program_and_an_agent() {
     );
 }
 
+/// A list's narrow width is the engine's to give (ADR 0127, decision 4):
+/// the window, a program and an Agent get the narrowest of the widths
+/// `tiling.toml` says, where no rule of the kind says one.
+#[tokio::test]
+async fn a_list_opens_at_the_narrowest_width_for_the_window_a_program_and_an_agent() {
+    let root = tempfile::tempdir().unwrap();
+    let mut tiling = Tiling {
+        flow: Flow::Row,
+        ..Tiling::default()
+    };
+    tiling.columns.presets = vec!["1/4".to_owned(), "1/2".to_owned()];
+    let ruled = Rule {
+        width: Some("2/5".to_owned()),
+        opens: None,
+    };
+    (tiling.rules).insert("git.diff".to_owned(), ruled);
+    let lists = ["files.tree", "files.file", "git.diff"];
+    let workspaces = Workspaces::new()
+        .tiling(move || tiling.clone())
+        .narrow_kinds(lists);
+    let machine = Machine::with(root.path(), PersonId::new(), workspaces).await;
+    let work = machine.project("Work").await;
+    let open = |kind, n, more| machine.command("workspaces.open", numbered(work, kind, n, more));
+    // The window, from the Pane in front; a program, with none.
+    let one = open("files.tree", 1, json!({})).await.unwrap()["pane"].clone();
+    open("files.tree", 2, json!({ "from": one })).await.unwrap();
+    // An Agent, whose Thread no workspace shows.
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    let asked = showing("files.file", json!({ "n": 3 }));
+    machine
+        .answer_from(CommandId::new(), agent, "workspaces.open_pane", asked)
+        .await
+        .unwrap();
+    // A width the caller names is the width, and a rule's is over the
+    // narrowest; a kind that is no list takes none.
+    open("files.tree", 4, json!({ "width": "1/2" }))
+        .await
+        .unwrap();
+    open("git.diff", 5, json!({})).await.unwrap();
+    open("a.a", 6, json!({})).await.unwrap();
+    let list = machine.list().await;
+    let widths: Vec<_> = (list["workspaces"][0]["columns"].as_array().unwrap().iter())
+        .map(|column| {
+            (
+                column["panes"][0]["args"]["n"].as_u64(),
+                column["width"].as_str(),
+            )
+        })
+        .collect::<BTreeMap<_, _>>()
+        .into_values()
+        .collect();
+    assert_eq!(
+        widths,
+        [
+            Some("1/4"),
+            Some("1/4"),
+            Some("1/4"),
+            Some("1/2"),
+            Some("2/5"),
+            None
+        ]
+    );
+}
+
 #[tokio::test]
 async fn of_its_own_projects_the_engine_takes_no_ones_word() {
     let root = tempfile::tempdir().unwrap();

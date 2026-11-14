@@ -261,15 +261,18 @@ mod build {
         }
     }
 
-    /// The Pane kinds that open as a Group of their own, as the window
-    /// parts say (ADR 0065, decision 7), and this machine's copy of the
-    /// Tiling's file, its Flow and its rules by kind of Pane (ADR 0110,
+    /// The Pane kinds that open as a Group of their own, those that stand
+    /// on their Project's workspace and those that are lists, as the
+    /// window parts say (ADR 0065, decision 7), and this machine's copy
+    /// of the Tiling's file, its Flow, its widths and its rules by kind
+    /// of Pane (ADR 0110,
     /// decision 5; ADR 0127, decision 4).
     pub fn workspaces(host: &HostContext<'_>) -> Workspaces {
         let config = host.places.config.clone();
         Workspaces::new()
             .grouped_kinds(crate::modules::grouped_kinds())
             .home_kinds(crate::modules::home_kinds())
+            .narrow_kinds(crate::modules::narrow_kinds())
             .tiling(move || banda_workspaces::tiling::read(&config))
     }
 }

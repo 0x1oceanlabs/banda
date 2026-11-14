@@ -131,6 +131,15 @@ and stories 1 and 2. The map behind it is kept outside the repository
    so the engine now has the widths in its own file and still places by
    none of them: a column that names no width is each client's to draw
    (#1708's first point is left for an issue).
+   _Built_ (WS4, the leftover, #1735): a list's narrow width is the
+   engine's to give. `narrow` is a flag of the kind in its App's
+   `window.json`, as `home` and `grouped` are, and a new column for one
+   takes the narrowest of `presets` where no rule of the kind says a
+   width (`placing::Facts::width`): for the window, an Agent and
+   `banda` alike. The page sends no width of its own, and the trace of
+   the rules holds its copy to it. Any other column that names no width
+   is still each client's to draw, from `default` and `alone`, by what
+   stands beside it.
 5. **The Sidebar is a list.** The Banda menu is the one search, and a
    Thread starts in the New Thread Pane (#1630, which amends ADR 0098).
 6. **One name for "an App asks for a Pane":** the intent

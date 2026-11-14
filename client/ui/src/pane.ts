@@ -218,7 +218,11 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** The letter that opens it from the launcher, after Alt+N (ADR 0025,
    * decision 4): `T`. */
   letter?: string
-  /** A list that sits beside other Panes: it opens a third of the screen wide. */
+  /** A list that sits beside other Panes: its new column opens at the
+   * narrowest of the Tiling's widths, a third of the screen unless
+   * `tiling.toml` says other steps, where no rule of its kind says a
+   * width (ADR 0127, decision 4). The engine gives it, to every caller,
+   * and reads the flag from its App's `window.json`. */
   narrow?: boolean
   /** Whether it opens last on its Project's workspace, as an Agent's Thread
    * does in the row (ADR 0065, decision 9): the Tiling asks it only
