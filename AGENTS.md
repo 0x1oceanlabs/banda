@@ -50,11 +50,9 @@ UNIX composition + deep modules + explicit contracts.
 
 ## What is in play
 
-Banda is built by one Person and many Agents, on tracks:
-[the three tracks](docs/research/2026-11-13-three-tracks.md) say which,
-in what order and where they meet, and
-[the roadmap](docs/research/2026-11-08-roadmap-in-slices.md) what each
-slice is.
+Banda is built by one Person and many Agents, on tracks.
+[`docs/now.md`](docs/now.md) is the one page that says which tracks run,
+what is not built now and what waits for Roma, and where each plan is.
 
 - A session builds a slice of its track, or the task Roma gave it. A new
   feature outside the tracks is Roma's call first.
@@ -87,7 +85,8 @@ sessions meet:
   may hold a rule your change broke. If `main` is red from a merge that
   is not yours, fix it in a PR of its own that names that commit.
 - **A PR that waits for Roma** says so in its first line, with what it
-  waits for, and is not armed to merge itself.
+  waits for, has the label `waits-roma` and is not armed to merge itself.
+  Roma's queue is that label.
 
 ## Borders are held by checks
 
