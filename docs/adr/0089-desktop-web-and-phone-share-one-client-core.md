@@ -197,6 +197,12 @@ desktop, web and the PWA now.
    one permission the page has, registered once the app is ready and
    before the first window loads, and taken away as the runtime is
    disposed.
+   Part 7a: what the windows are made of is `os-window/material.ts`, a
+   service the windows are made through: the system's material under
+   the main window where the look asks for its glass, its own title bar
+   and the window buttons' place on macOS, each window's first colour,
+   and the look told to each window as it can show it, followed in the
+   layer's scope; it answers the bridge's `look` and `frame`.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer

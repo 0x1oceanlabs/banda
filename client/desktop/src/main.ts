@@ -17,8 +17,9 @@
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It swaps its own app for the release its
- * engine says is newest (`@banda/updates-desktop`, ADR 0119), and writes
- * what the system says of itself for the theme (os-window/system.ts).
+ * engine says is newest (`@banda/updates-desktop`, ADR 0119), writes
+ * what the system says of itself for the theme (os-window/system.ts), and
+ * makes its windows of what the look says (os-window/material.ts).
  * It reaches the engines of the machines in `hosts.toml` over ssh, and
  * hands the page their addresses too; it adds, takes out, tests and stops
  * those machines as the page asks (hosts.ts, ADR 0081, ADR 0095).
@@ -37,13 +38,11 @@ import {
   type WebContents,
 } from "electron"
 import { quitAsks } from "@banda/contract"
-import { BANDA, type Look as LookValue } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import {
   confirm,
   Engine,
-  Look,
   none,
   serve,
   tellPage,
@@ -61,7 +60,7 @@ import { openDoor } from "./door"
 import { engineLayer, OwnEngine, Stop } from "./engine"
 import { deviceKey } from "./key"
 import { loginPath } from "./login"
-import { firstFrame, firstLook, lookLayer } from "./look"
+import { firstLook, lookLayer } from "./look"
 import { appUpdates, modules } from "./modules"
 import {
   CHANNELS,
@@ -99,6 +98,7 @@ import { sidebarAnswers } from "./sidebar"
 import { clipboardAnswers } from "./device/clipboard"
 import { filesAnswers } from "./device/files"
 import { pickAnswers } from "./device/pick"
+import { frameAnswers, lookAnswers, Material } from "./os-window/material"
 import {
   appScheme,
   DEV_PAGE,
@@ -258,8 +258,15 @@ const runtime = ManagedRuntime.make(
         Stop.layer,
         // What the system says of itself is written before the look
         // starts, so the first look has it too (os-window/system.ts).
-        lookLayer.pipe(
-          Layer.provide(systemLayer(join(state, "device.json"), thisSystem()))
+        // Over the look, what the windows are made of (os-window/material.ts).
+        Material.layer().pipe(
+          Layer.provideMerge(
+            lookLayer.pipe(
+              Layer.provide(
+                systemLayer(join(state, "device.json"), thisSystem())
+              )
+            )
+          )
         ),
         // Who works and who waits here, for the menu bar (macOS).
         statusLayer(hasMenuBar(process.platform)),
@@ -295,12 +302,7 @@ const keepProblem = watchProblems(
       .then((client) => client.command("problems.record", record)),
   banda
 )
-/** The last look, for what reads it at once; none before the first.
- * The window opens once the runtime is built (`ready`). */
-const lookNow = () => runtime.runSync(Look.use((look) => look.current))
 let window: BrowserWindow | null = null
-/** The window that lets the desktop through, if one does (ADR 0023). */
-let clear: BrowserWindow | null = null
 /** The Panes in windows of their own, by their IDs (ADR 0025, decision 9). */
 const popped = new Map<string, BrowserWindow>()
 /** Set while the window, closed in full screen on macOS, leaves it to
@@ -333,34 +335,6 @@ async function ready(): Promise<void> {
   )
   if (hidden) void dockTo(false)
   listShortcut()
-  const listen = (now: LookValue) => {
-    // Native parts (scrollbars, menus) and the page's own
-    // prefers-color-scheme follow the look's mode.
-    nativeTheme.themeSource = now.mode
-    const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
-    // The main window's material follows the look where it can; a Pane's
-    // own window is solid.
-    const glass = systemGlass(now)
-    const set = SYSTEM_MATERIAL?.set
-    if (window && OWN_FRAME) window.setWindowButtonPosition(buttonsAt(now))
-    if (window && set && glass !== (window === clear)) {
-      clear = glass ? window : null
-      set(window, glass)
-      if (glass) window.setBackgroundColor(CLEAR)
-    }
-    for (const shown of [window, ...popped.values()]) {
-      if (!shown) continue
-      if (background && shown !== clear) shown.setBackgroundColor(background)
-      tellPage(shown.webContents, BRIDGE.look.listen, lookIn(shown, now))
-    }
-  }
-  runtime.runFork(
-    Look.use((look) =>
-      look.changes.pipe(
-        Stream.runForEach((now) => Effect.sync(() => listen(now)))
-      )
-    )
-  )
   // Each window hears how the other machines are (hosts.ts).
   runtime.runFork(
     Hosts.use((hosts) =>
@@ -492,28 +466,10 @@ async function ready(): Promise<void> {
     ],
     hostForward: forwardAnswer,
     sshSuggestions: [none, () => Hosts.use((hosts) => hosts.suggestions)],
-    look: {
-      current: [
-        none,
-        (_, event) =>
-          Effect.map(
-            Look.use((look) => look.current),
-            (now) =>
-              now
-                ? lookIn(BrowserWindow.fromWebContents(event.sender), now)
-                : now
-          ),
-      ],
-    },
-    frame: {
-      current: [
-        none,
-        (_, event) =>
-          Effect.sync(() =>
-            insetOf(BrowserWindow.fromWebContents(event.sender))
-          ),
-      ],
-    },
+    // What the windows are made of (os-window/material.ts): the look as
+    // a window can show it, and the room its frame takes.
+    look: lookAnswers,
+    frame: frameAnswers,
     sidebar: sidebarAnswers,
     // The modules' own: the browser's (ADR 0013).
     ...modules.answers,
@@ -771,77 +727,6 @@ function dockTo(wanted: boolean): Promise<void> | null {
   }
 }
 
-/**
- * How a window lets the system's material through (ADR 0030): vibrancy
- * under the whole window on macOS, acrylic on Windows 11 from 22H2 (build
- * 22621), and on Linux a transparent window for the compositor to blur.
- * Windows 10 has no material: `null`, and the desk is solid there.
- * `made` is what the window is made with; `set` changes it while the
- * window shows, so the glass follows the look, even one that comes after
- * the window opened, as on a Mac's first start. Linux's transparent window
- * is made once: turning it on shows from the next start.
- */
-const SYSTEM_MATERIAL: {
-  made: BrowserWindowConstructorOptions
-  set?: (shown: BrowserWindow, on: boolean) => void
-} | null =
-  process.platform === "darwin"
-    ? {
-        made: { vibrancy: "under-window" },
-        set: (shown, on) => shown.setVibrancy(on ? "under-window" : null),
-      }
-    : process.platform !== "win32"
-      ? { made: { transparent: true } }
-      : Number(process.getSystemVersion().split(".")[2]) >= 22621
-        ? {
-            made: { backgroundMaterial: "acrylic" },
-            set: (shown, on) =>
-              shown.setBackgroundMaterial(on ? "acrylic" : "none"),
-          }
-        : null
-
-/** The background of a window that lets the system's material through. */
-const CLEAR = "#00000000"
-
-/**
- * On macOS the window draws its own title bar (ADR 0030): the system's is
- * hidden, and its window buttons sit at the start of Banda's bar, in the
- * middle of its height, `INSET` px with the room around them.
- */
-const OWN_FRAME = process.platform === "darwin"
-const BUTTONS = { x: 12, width: 54, height: 14 }
-const INSET = 2 * BUTTONS.x + BUTTONS.width
-/** Banda's bar's height before the first look comes. */
-const BAR_HEIGHT = Number.parseFloat(BANDA.light["bar-height"])
-
-/** Where the window buttons sit, for a bar as high as the look says. */
-function buttonsAt(now: LookValue | null): { x: number; y: number } {
-  const bar = Number.parseFloat(now?.vars["--bar-height"] ?? "") || BAR_HEIGHT
-  return { x: BUTTONS.x, y: Math.round((bar - BUTTONS.height) / 2) }
-}
-
-/** The room the window buttons take at the bar's start (`frame`):
- * none in full screen, and `null` where the system draws the frame, as it
- * does for a Pane's own window. */
-function insetOf(shown: BrowserWindow | null): number | null {
-  if (!OWN_FRAME || !shown || shown !== window) return null
-  return shown.isFullScreen() ? 0 : INSET
-}
-
-/** The look asks for the system's glass. */
-function systemGlass(now: LookValue | null): boolean {
-  return now?.desk.glass === true && now.desk.material === "system"
-}
-
-/** The look as `shown` can show it. The system's glass shows only where
- * the window lets the desktop through, so a solid window's page paints
- * itself; Banda's own glass shows in every window (ADR 0023). */
-function lookIn(shown: BrowserWindow | null, now: LookValue): LookValue {
-  return systemGlass(now) && (SYSTEM_MATERIAL === null || shown !== clear)
-    ? { ...now, desk: { ...now.desk, glass: false } }
-    : now
-}
-
 /** The main window; one the engine opened Banda for loads its page, and
  * shows only when asked (`shows`). */
 function openWindow(shows = true): BrowserWindow {
@@ -852,23 +737,10 @@ function openWindow(shows = true): BrowserWindow {
       minWidth: 640,
       minHeight: 420,
       title: "Banda",
-      ...(OWN_FRAME && {
-        titleBarStyle: "hidden",
-        trafficLightPosition: buttonsAt(lookNow()),
-      }),
     },
-    // The system's glass lets its material through (ADR 0023, ADR 0030).
-    SYSTEM_MATERIAL !== null && systemGlass(lookNow()),
+    true,
     shows
   )
-  if (OWN_FRAME) {
-    // In full screen the system hides the window buttons: the bar takes
-    // back their room.
-    const tellFrame = () =>
-      tellPage(opened.webContents, BRIDGE.frame.listen, insetOf(opened))
-    opened.on("enter-full-screen", tellFrame)
-    opened.on("leave-full-screen", tellFrame)
-  }
   void opened.loadURL(PAGE)
   // On macOS it hides as it closes, unless Banda quits (closing.ts). Its
   // Panes in windows of their own close, back to their places, as they do
@@ -892,7 +764,6 @@ function openWindow(shows = true): BrowserWindow {
   })
   opened.on("closed", () => {
     window = null
-    if (clear === opened) clear = null
     // Their Panes are the window's: they go with it.
     for (const one of popped.values()) one.close()
   })
@@ -935,37 +806,41 @@ function tellPopped(): void {
   tellPage(window?.webContents, BRIDGE.popped.listen, [...popped.keys()])
 }
 
-/** A window that shows Banda's page, in the look's first colour, as it
- * is ready, unless it `shows` only when asked. */
+/** A window that shows Banda's page, made of what the look says (`main`
+ * for the main window; os-window/material.ts), as it is ready, unless it
+ * `shows` only when asked. */
 function pageWindow(
   options: Omit<
     BrowserWindowConstructorOptions,
     "show" | "backgroundColor" | "webPreferences"
   >,
-  glass = false,
+  main = false,
   shows = true
 ): BrowserWindow {
-  const current = lookNow()
-  const opened = new BrowserWindow({
-    ...options,
-    show: false,
-    ...(glass ? SYSTEM_MATERIAL?.made : {}),
-    backgroundColor: glass
-      ? CLEAR
-      : ((current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
-        (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff")),
-    webPreferences: {
-      preload: join(import.meta.dirname, "preload.cjs"),
-      sandbox: true,
-      contextIsolation: true,
-      nodeIntegration: false,
-      // Banda's sounds play before the Person first clicks (ADR 0009).
-      autoplayPolicy: "no-user-gesture-required",
-      // The browser's pages (@banda/browser-desktop).
-      webviewTag: true,
-    },
-  })
-  if (glass) clear = opened
+  const opened = runtime.runSync(
+    Material.use((material) =>
+      material.open(
+        main,
+        (made) =>
+          new BrowserWindow({
+            ...options,
+            show: false,
+            ...made,
+            webPreferences: {
+              preload: join(import.meta.dirname, "preload.cjs"),
+              sandbox: true,
+              contextIsolation: true,
+              nodeIntegration: false,
+              // Banda's sounds play before the Person first clicks (ADR
+              // 0009).
+              autoplayPolicy: "no-user-gesture-required",
+              // The browser's pages (@banda/browser-desktop).
+              webviewTag: true,
+            },
+          })
+      )
+    )
+  )
   // The modules' parts hear of each window that shows the page.
   runtime.runSync(modules.opened(opened.webContents))
   if (shows) opened.once("ready-to-show", () => opened.show())
