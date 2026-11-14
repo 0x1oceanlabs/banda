@@ -209,8 +209,8 @@ repository), with an adversarial check.
   no page. The page alone is nobody: what it does, it does as a paired
   device on the door's WebSocket. Not yet: the engine's own copy and its
   tarball do not carry the page, so only an engine run from the app or a
-  checkout has one; and without the desktop the page says it needs
-  Banda's app, until the browser's adapter and its pairing screen.
+  checkout has one; and without the desktop the page said it needed
+  Banda's app, until PR 2.
 - **A device asks at the door, and the Person allows it by its code
   (SE5).** In place of `hello`, a device this machine has not paired
   says `ask`: its public key, the name the Person reads it by and its
@@ -247,8 +247,24 @@ repository), with an adversarial check.
     and that host key, once the door's `paired` is proved by it, or
     `refused`, or `lost`. The key signs through a function, so a
     browser's stays where WebCrypto keeps it.
-  - Not yet: the windows' card and a browser's pairing screen, which
-    follow the mocks.
+  - Not yet: the windows' card that offers Allow, which follows the
+    mocks.
+- **A browser pairs at the door that served it, and is the window
+  (SE5, PR 2).** With no desktop behind it, the page is a device of its
+  own (`client/web/src/boot/browser.ts`): an Ed25519 key WebCrypto makes
+  and does not hand out, kept in the browser's IndexedDB with the device
+  it is and the host key it paired with. Not paired, it shows one card
+  (`client/web/src/door/`): the machine's name, as the door's one line says
+  it, the code, what to do, and the name it asks under, "Safari on
+  macOS", which the Person may change, a new name being a new asking
+  with a new code. Allowed, the page is the window on that machine's
+  engine, as that device; opened again, it comes in with no code. A
+  `goodbye` the host key signed, `revoked` or `forbidden`, makes it
+  forget the pairing and ask again, under the same key. Not yet: the
+  other machines, which a browser will reach by their host keys once the
+  window that allows it allows it on them too; the look, which a browser
+  takes from the system's light or dark alone; and the settings, which
+  only the desktop writes.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The

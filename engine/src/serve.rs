@@ -411,7 +411,9 @@ async fn listen_at_door(asked: u16, last: Option<u16>) -> Result<tokio::net::Tcp
 /// and its host key, for a person who checks a pipe to it with `curl`
 /// (ADR 0124's first try). Every challenge says the key; the name is what
 /// every window that reaches this machine shows, and whoever a pipe lets
-/// as far as the door reads it too.
+/// as far as the door reads it too. The window's page reads the name from
+/// this line before it has paired (`machineAtDoor`, in
+/// `client/web/src/boot/browser.ts`): its shape is that page's too.
 fn door_says(
     machine: &Machine,
     paired: &Paired,
