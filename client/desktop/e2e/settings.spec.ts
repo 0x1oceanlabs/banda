@@ -4,6 +4,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
   bandaMenu,
   firstThread,
+  FREE,
   sharesOf,
   startWindow,
   textOf,
@@ -636,7 +637,7 @@ test("Keys: the main key moves Banda's keys, and the Person's lines with it (ADR
 })
 
 test("New terminal: Ctrl+Alt+Enter opens a shell, and its keys can be assigned, changed and freed", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page, dir } = window
   const file = join(dir, "config/keys.toml")
   const { composer } = await firstThread(page)

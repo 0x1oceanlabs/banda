@@ -876,7 +876,8 @@ export async function newTerminal(page: Page): Promise<Locator> {
 }
 
 /** A shell opened from the Pane in focus, by Alt+N, and its screen once it
- * runs: in that Pane's Group, if it is in one. */
+ * runs: as a key opens, right of that Pane's Group if it is in one (ADR
+ * 0134, decision 2). */
 export async function openTerminal(page: Page): Promise<Locator> {
   await page.keyboard.press("Alt+KeyN")
   await page

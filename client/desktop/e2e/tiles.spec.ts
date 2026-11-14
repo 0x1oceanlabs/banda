@@ -63,7 +63,7 @@ const drewBefore = async (page: Page, n: number) => {
 
 test("a terminal draws nothing while it is hidden, and has drawn what it printed as it shows again", async () => {
   test.setTimeout(150_000)
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page, dir } = window
   // Every Tile is hidden while the window is away: this one is not.
   expect(await page.evaluate(() => document.visibilityState)).toBe("visible")

@@ -208,7 +208,7 @@ test("a page whose process is killed loads again, as it was (#343)", async () =>
 })
 
 test("New Pane and New Thread open a new tile at each press, as a browser's new window", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   await firstThread(page)
   const drafts = page.getByRole("region", { name: "New Thread" })
@@ -3494,7 +3494,7 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
 })
 
 test("the overview shows every column of a workspace, and a middle click or a cross closes a Pane", async () => {
-  window = await startWindow()
+  window = await startWindow({ files: FREE })
   const { page } = window
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
@@ -4856,6 +4856,7 @@ test("columns slide over as the sidebar comes or goes, and a key after it slides
 test("a tile fades in as it opens and fades out where it was as it closes", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
+    files: FREE,
     look: `[motion.open]\n${slow}\n[motion.close]\n${slow}\n`,
   })
   const { page } = window

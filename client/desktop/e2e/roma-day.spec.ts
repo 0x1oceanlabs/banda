@@ -309,16 +309,28 @@ test("in solo the focus past a Group's edge shows the next Group whole, from its
   window = await startWindow({ files: HALVES })
   const { page } = window
   const [a, b] = await agents(window, "hello a", "hello b")
-  // A terminal opened at b joins its Group, right of it; a new Agent comes
-  // last, a Group of its own.
+  // A terminal opened at b by a key opens beside its Group (ADR 0134,
+  // decision 2), and the Person puts it into the Group, right of b, as a
+  // drag does; a new Agent comes last, a Group of its own.
   const screen = await openTerminal(page)
   const terminal = page.locator("section[data-tile]").filter({ has: screen })
-  const c = await startAgent(window, "hello c")
   const groupOf = (tile: Locator) =>
     tile.evaluate(
       (element) => element.closest<HTMLElement>("[data-column]")!.dataset.group
     )
-  expect(await groupOf(terminal)).toBe(await groupOf(b))
+  expect(await groupOf(terminal)).not.toBe(await groupOf(b))
+  const [pane, lead] = await Promise.all(
+    [terminal, b].map((tile) => tile.getAttribute("data-tile"))
+  )
+  const place = { to: "group", pane: lead }
+  window.banda(
+    "call",
+    "workspaces.move_pane",
+    "--params",
+    JSON.stringify({ pane, place })
+  )
+  await expect.poll(() => groupOf(terminal)).toBe(await groupOf(b))
+  const c = await startAgent(window, "hello c")
   expect(await groupOf(c)).not.toBe(await groupOf(b))
   const shown = () =>
     Promise.all([a, b, terminal, c].map((one) => shownOf(page, one)))
