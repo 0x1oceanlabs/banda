@@ -304,6 +304,15 @@ export type Ours = {
   projects: readonly ProjectSummary[]
 }
 
+/** A host's rows as this device kept them (`cache.ts`): its Projects as
+ * the Window showed them, its Host scope's ID, and when it was last
+ * heard. */
+export type RowsAsOf = {
+  projects: readonly ProjectSummary[]
+  machine?: ProjectId
+  at: number
+}
+
 /**
  * The hosts as one Window shows them: their states as the desktop tells
  * them, one engine for each, made as it first goes live and kept for the
@@ -370,13 +379,17 @@ export class KeptHosts implements Readable<readonly Shown[]> {
 
   /** Which machine has each Project, as this device found it last. */
   readonly #directory: DirectoryMemory
+  /** A host's rows as this device kept them, none where it kept none. */
+  readonly #asOf: (host: HostState) => RowsAsOf | undefined
 
   /** `here` is this machine's engine; none outside a Window, where no
    * Project is this machine's to act on. What waits is kept in `waiting`,
    * the device's storage in a Window, which every window on the device
    * shares; only the main window `drains` it: sends it, and gives back
    * what does not go (#1299). The `directory` is kept where the Window
-   * keeps it, the same storage; else in this window alone. */
+   * keeps it, the same storage; else in this window alone. `asOf` reads
+   * what the device kept of a host's rows (#1243): a window that starts
+   * shows them as of then, until that host's engine lists them. */
   constructor(
     device: HostsDevice,
     names: Names,
@@ -386,6 +399,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       drains = true,
       directory = inWindow(),
       relay = () => undefined,
+      asOf = () => undefined,
     }: {
       waiting?: WaitingStorage
       drains?: boolean
@@ -393,8 +407,10 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       /** Tells the desktop's byte relay of each host's engine as it is
        * made, by its name in `hosts.toml` (ADR 0106, step 4c). */
       relay?: (engine: Engine, name: string) => void
+      asOf?: (host: HostState) => RowsAsOf | undefined
     } = {}
   ) {
+    this.#asOf = asOf
     this.#relay = relay
     this.#device = device
     this.#names = names
@@ -550,7 +566,7 @@ export class KeptHosts implements Readable<readonly Shown[]> {
     this.#told = hosts
     const was = new Map(this.get().map((one) => [one.name, one]))
     const now = hosts.map((host) =>
-      this.#shownNow(was.get(host.name), host, at)
+      this.#shownNow(was.get(host.name) ?? this.#keptOf(host), host, at)
     )
     for (const one of now) {
       if (!holds(one)) this.#listed.delete(one.name)
@@ -567,6 +583,28 @@ export class KeptHosts implements Readable<readonly Shown[]> {
       else if (was.get(name)?.state.state !== "live") engine.wake()
     }
     this.#sendWaiting()
+  }
+
+  /** Host `told`, which the Window shows for the first time, as this
+   * device kept it: its rows as of when it was last heard, which stand
+   * until its engine lists them, or while it is away. None where the
+   * device kept none of it, nor where the Window shows no rows of it. */
+  #keptOf(told: HostState): Shown | undefined {
+    // One that asks for a sign-in, or refused, shows no rows.
+    if (told.state === "signin" || told.state === "refused") return undefined
+    const kept = this.#asOf(told)
+    if (!kept) return undefined
+    const { name } = told
+    this.#listed.set(name, kept.projects)
+    if (kept.machine !== undefined) this.#scopes.set(name, kept.machine)
+    return {
+      name,
+      named: this.seen(name),
+      state: told,
+      away: kept.at,
+      asOf: kept.at,
+      projects: kept.projects,
+    }
   }
 
   /** Sends what waits for each machine the Window reaches now: live, its

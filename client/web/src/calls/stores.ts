@@ -142,6 +142,18 @@ export function markAway(stores: Stores, names: readonly string[]): void {
   if (marked) merge(stores)
 }
 
+/**
+ * Takes what this device kept of host `host`'s lists (`as-of.ts`), where
+ * the Window has none of it yet, as it starts: they stand marked as last
+ * heard, as an away host's do (`markAway`), until that host's Watches
+ * list again. Where the host listed already, what it said stays.
+ */
+export function seedLists(stores: Stores, lists: Lists, host: string): void {
+  if (host === HERE || stores.hosts.has(host)) return
+  stores.hosts.set(host, onHost(lists, host))
+  markAway(stores, [host])
+}
+
 /** What host `host` lists, each marked as that host's (`Listed.host`, ADR
  * 0081), so a notice and the Banda menu name the machine. Its Panes and
  * its toasts' answers name no host: a row, a call or the Banda menu opens

@@ -19,6 +19,7 @@ import { Machines } from "./window/machines"
 import { ROUTING } from "./window/actions"
 import { Shell } from "./window/Shell"
 import { DIRECTORY } from "./directory"
+import { AS_OF } from "./calls/as-of"
 import { RoutingContext } from "./tiling/mount"
 import { AskToShare } from "./sharing/AskToShare"
 import { relayBytesFrom } from "@banda/ui/hooks/use-file-url"
@@ -50,6 +51,7 @@ export function App({ engine }: { engine: Engine }) {
           waiting: onDevice(() => localStorage, window),
           directory: DIRECTORY,
           relay: relayBytesFrom,
+          asOf: AS_OF.rows,
         }
       )
   )

@@ -21,6 +21,7 @@ import {
 } from "@banda/core/react"
 import type { Listed, Report, Watch } from "@banda/ui/pane"
 import { dropHost, markAway, StoresContext, takeLists } from "./stores"
+import { AS_OF, followRows } from "./as-of"
 import { useLowBattery } from "./battery"
 import { runs, watches } from "../registry"
 import { useListedOn } from "../window/machines"
@@ -127,6 +128,16 @@ function Elsewhere() {
     for (const name of empty) dropHost(stores, name)
   }, [stores, empty])
   useEffect(() => markAway(stores, away), [stores, away])
+  // Each machine's rows are kept on the device as of when it was last
+  // heard, and a window that starts shows them at once (#1243).
+  useEffect(() => {
+    const rows = followRows(hosts, stores, AS_OF)
+    window.addEventListener("pagehide", rows.now)
+    return () => {
+      window.removeEventListener("pagehide", rows.now)
+      rows.stop()
+    }
+  }, [hosts, stores])
   // A machine low on battery while its Agents work there warns once
   // (ADR 0097, decision 8).
   useLowBattery(hosts, stores)

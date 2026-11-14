@@ -1804,7 +1804,7 @@ module reaches a Harness through an adapter:
 client/desktop                      Electron main: starts the engine, serves the page, hands it the address
 client/desktop-kit                  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the relay of the byte host to the engine
 client/web                          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
-client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words, the hosts
+client/core                         the core every client shares, with no DOM: Here, the stores read by selector, what an action runs with, the device's words, the hosts, what the device keeps of a machine "as of" (`cache.ts`)
 client/ui                           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 client/ghostty                      T3 Code's Ghostty adapter: a terminal on a canvas
 apps/*/pane, platform/*/pane        each module's Panes

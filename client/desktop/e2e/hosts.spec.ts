@@ -2359,6 +2359,48 @@ test("what waits for arc is this device's: the window started again with arc awa
   await stopEngine()
 })
 
+test("a window that starts while arc is away shows arc's rows as this device kept them, dim, as of when it last heard arc; arc back, they are live (#1243)", async () => {
+  test.setTimeout(shots ? 300_000 : 180_000)
+  arc = newArc()
+  await seed(arc)
+  const stopEngine = await held(arc)
+  window = await withArc(arc)
+  await expect(arcOf(window.page).getByText("Bench window tests")).toBeVisible()
+  // The device keeps arc's rows a while after they change.
+  await expect
+    .poll(
+      () =>
+        window!.page.evaluate(() =>
+          Object.keys(localStorage).filter((key) =>
+            key.startsWith("banda.asof.")
+          )
+        ),
+      { timeout: 15_000 }
+    )
+    .toEqual(["banda.asof.arc/rows@1"])
+  arc.down(true)
+  arc.cut()
+  await stands(window.page, "away", 30_000)
+
+  // The window starts again, arc still away: its Thread is there at
+  // once, dim, under arc, and arc says since when it was last heard.
+  window = await again(window, arc)
+  const { page } = window
+  const there = arcOf(page)
+  await expect(dimmed(there).getByText("Bench window tests")).toBeVisible()
+  await expect(dotOf(page)).toHaveAttribute("title", AWAY)
+  await stands(page, "away")
+  await shot(page, "as-of-1-away")
+
+  // arc back: its rows are live again, as it lists them.
+  arc.down(false)
+  await stands(page, "live", 60_000)
+  await expect(there.getByText("Bench window tests")).toBeVisible()
+  await expect(dimmed(there)).toHaveCount(0, { timeout: 30_000 })
+  await shot(page, "as-of-2-live")
+  await stopEngine()
+})
+
 test("a message whose time ran out while the window was closed is never sent: as the window starts, its words are back in the draft and a toast says so (H5e-2)", async () => {
   test.setTimeout(180_000)
   arc = newArc()
