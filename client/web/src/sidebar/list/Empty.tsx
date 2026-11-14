@@ -17,8 +17,7 @@ import { FolderPlusIcon } from "lucide-react"
 import type { Block, EmptyAt, Zero } from "../model/inbox"
 import { actionDoing, archiving } from "../../window/items"
 import { useOpen } from "./open"
-import { ShowTab } from "./Tabs"
-import { ToldSomeday } from "./useSidebarView"
+import { ViewContext } from "./view"
 
 /** Someday's head in Later, by the key `inbox.ts` gives it: where inbox
  * zero's Someday line shows Later. */
@@ -118,8 +117,7 @@ const MARKS: Readonly<Record<EmptyAt, MarkState>> = {
  * told.
  */
 export function InboxZero({ zero }: { zero: Zero }) {
-  const show = useContext(ShowTab)
-  const told = useContext(ToldSomeday)
+  const view = useContext(ViewContext)
   // How many sleep until Someday, as this inbox zero said it: its line
   // stays while it shows, though the view hears at once that it told, so
   // the next inbox zero this week says no more.
@@ -127,8 +125,8 @@ export function InboxZero({ zero }: { zero: Zero }) {
   if (zero.someday !== undefined && zero.someday !== someday)
     setSomeday(zero.someday)
   useEffect(() => {
-    if (someday !== undefined) told?.(Date.now())
-  }, [someday, told])
+    if (someday !== undefined) view?.told(Date.now())
+  }, [someday, view])
   return (
     <Place
       mark={
@@ -146,7 +144,7 @@ export function InboxZero({ zero }: { zero: Zero }) {
         <button
           type="button"
           className="rounded-control px-1 text-meta text-muted-foreground outline-none hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50"
-          onClick={() => show?.("later", SOMEDAY_HEAD)}
+          onClick={() => view?.show("later", SOMEDAY_HEAD)}
         >
           {someday} someday ›
         </button>

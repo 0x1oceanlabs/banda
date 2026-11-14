@@ -24,7 +24,8 @@ import type { Region } from "../model/regions"
 import type { Settings } from "../model/settings"
 import { ThreadRow } from "./ThreadRow"
 import { useActs, useArchiveAll } from "./useActs"
-import { PickContext, pickProps, pieceKey } from "./usePick"
+import { Expand, pickProps, pieceKey } from "./usePick"
+import { pickedOf, useView, ViewContext } from "./view"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** Your turn's head's key (`inbox.ts`). */
@@ -44,8 +45,8 @@ const signMenu = (project: ProjectSummary, sign: ReactElement) => (
  * more", which opens in place, each child at work under its parent with
  * ↳, past three "↳ + N more at work"; Later and the Archive by day; inbox
  * zero and an empty tab in words; and, grouped, each group under its
- * header, which folds it. A card keeps its node from one part to another,
- * so its Mark plays its change as news. The list is drawn as it is: React
+ * header, which folds it in the list's view. A card keeps its node from
+ * one part to another, so its Mark plays its change as news. The list is drawn as it is: React
  * moves its rows by their keys, one that comes fades in, by CSS, and one
  * that goes is gone (decision 6).
  * Under the pointer, Your turn's head offers to archive every card there
@@ -59,7 +60,6 @@ export function SectionView({
   named,
   isCurrent,
   strayed,
-  onToggle,
   engine,
   now,
 }: {
@@ -71,15 +71,14 @@ export function SectionView({
   /** The Threads that stand away from their Project's workspace (ADR
    * 0102, decision 6). */
   strayed: ReadonlySet<string>
-  /** Folds or opens the group of that key; or shows every child at work
-   * of the parent of that key. */
-  onToggle: (key: string) => void
   engine: Engine
   /** The Later clock the cards' words read. */
   now: number
 }) {
   const keyFor = useKeyLabel()
-  const { picked, expand } = useContext(PickContext)
+  const sidebar = useContext(ViewContext)
+  const picked = useView(pickedOf)
+  const expand = useContext(Expand)
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
   // Grouped, a header names what each card then leaves out; each card
@@ -226,7 +225,7 @@ export function SectionView({
             settings={settings}
             stop={stop}
             picked={stop === picked}
-            onFold={() => onToggle(block.key)}
+            onFold={() => sidebar?.toggle(block.key)}
           />
         )
         // Another machine's Project has no menu yet: each act would go to

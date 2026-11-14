@@ -1,16 +1,10 @@
-import { createContext, type KeyboardEvent, useContext } from "react"
+import { type KeyboardEvent, useContext } from "react"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import { STAND_WORDS } from "@banda/ui/status"
 import { ArchiveIcon } from "lucide-react"
 import { type Inbox, TABS, type Tab, type TabCount } from "../model/inbox"
-
-/** How a part of the sidebar shows a tab, at one of its blocks by its key
- * when it names one: the Sidebar's, whose view keeps it; none outside
- * one. */
-export const ShowTab = createContext<
-  ((tab: Tab, block?: string) => void) | undefined
->(undefined)
+import { tabId, ViewContext } from "./view"
 
 /** Each tab's name: the Inbox's, then each place's as its heading names
  * it, so a tab and the part it shows say the same. */
@@ -21,8 +15,7 @@ export const TAB_WORDS: Readonly<Record<Tab, string>> = {
   archive: STAND_WORDS.archived,
 }
 
-/** The tab's element's id, and the panel's, which the tab controls. */
-export const tabId = (tab: Tab) => `sb-tab-${tab}`
+/** The panel's id, which the tab controls. */
 export const PANEL = "sb-panel"
 
 /** What a tab is called aloud: its name, and how many it holds when it
@@ -62,13 +55,13 @@ const STEPS: Readonly<Record<string, (at: number) => number>> = {
  * them (`tabSaid`); what an act did, its toast says.
  */
 export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
-  const show = useContext(ShowTab)
+  const view = useContext(ViewContext)
   const keyFor = useKeyLabel()
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
     const step = STEPS[event.key]
     if (!step) return
     event.preventDefault()
-    show?.(TABS[step(TABS.indexOf(tab))]!)
+    view?.show(TABS[step(TABS.indexOf(tab))]!)
   }
   return (
     <>
@@ -96,7 +89,7 @@ export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
               aria-label={tabName(one, tabs[one])}
               tabIndex={one === tab ? 0 : -1}
               title={keyFor(`sidebar.tab-${one}`, words)}
-              onClick={() => show?.(one)}
+              onClick={() => view?.show(one)}
               className={cn(
                 "flex h-7 items-center gap-1 rounded-control px-1.5 text-ui whitespace-nowrap outline-none focus-visible:ring-2 focus-visible:ring-ring/50",
                 archive ? "ml-auto shrink-0" : "min-w-0",

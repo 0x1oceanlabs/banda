@@ -553,7 +553,7 @@ const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
     Sidebar: ["onDismiss", "isCurrent"],
   },
   "web/src/sidebar/list/SectionView.tsx": {
-    SectionView: ["isCurrent", "onToggle"],
+    SectionView: ["isCurrent"],
   },
   "web/src/sidebar/list/GroupHeader.tsx": {
     GroupHeader: ["onFold"],
