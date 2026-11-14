@@ -4,9 +4,10 @@
 //! names. The scan writes the list; this file says what an entry holds,
 //! and how this engine builds each engine part. `banda modules` and the
 //! serving engine read the list, and its tests hold the lists still kept
-//! by hand to it: the crates the `Cargo.toml` files name, the settings'
-//! window parts (until the settings take them from here, B2), and the
-//! window's modules. They write the contract's list of methods.
+//! by hand to it: the crates the `Cargo.toml` files name, and the
+//! window's modules. They write the contract's list of methods. The
+//! settings take each part's files and window part from it
+//! ([`SETTINGS`]), and name no App.
 
 use crate::places::{Places, channel, from_checkout};
 use banda_agents::{Agents, Pipe};
@@ -23,6 +24,7 @@ use banda_keys::KeysModule;
 use banda_machines::{Machine, Machines};
 use banda_problems::Problems;
 use banda_pulls::Pulls;
+use banda_settings::Settings;
 use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_updates::Updates;
@@ -86,6 +88,11 @@ pub struct HostContext<'a> {
 }
 
 include!(concat!(env!("OUT_DIR"), "/apps.rs"));
+
+/// Banda's settings, over what each part of the list hands them (ADR
+/// 0062, B2): its settings files and its window part, in the order the
+/// scan writes them ([`HANDED`]).
+pub const SETTINGS: Settings = Settings::over(HANDED);
 
 /// The lines of the `methods!` table of the part `build` makes.
 const fn table_of<M: MethodTable>(_build: fn(&HostContext<'_>) -> M) -> fn() -> Vec<Method> {
@@ -171,6 +178,7 @@ mod build {
         HarnessesModule::new(host.harnesses.clone()).with_accounts(
             host.places.data.join("accounts"),
             std::sync::Arc::new(banda_settings::accounts::Store::new(
+                SETTINGS,
                 host.places.config.clone(),
             )),
             secrets,
@@ -181,7 +189,8 @@ mod build {
     /// the settings an Agent changes through the engine, where the mode a
     /// Person sets for new Threads is kept as theirs (ADR 0083).
     pub fn keys(host: &HostContext<'_>) -> KeysModule {
-        KeysModule::new(host.places.config.clone()).modes_chosen_in(host.places.modes_chosen())
+        KeysModule::new(SETTINGS, host.places.config.clone())
+            .modes_chosen_in(host.places.modes_chosen())
     }
 
     /// This machine's name and icon, which the settings' `set` writes in
@@ -309,6 +318,13 @@ pub(crate) fn on_a_test_host<R>(with: impl FnOnce(&HostContext<'_>) -> R) -> R {
     })
 }
 
+// Banda's settings whole, as the settings' and the keys' tests read it:
+// its parts are held to the list here, and nothing reads them as settings.
+#[cfg(test)]
+#[expect(dead_code)]
+#[path = "../../platform/settings/tests/whole/mod.rs"]
+mod whole;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -347,10 +363,14 @@ mod tests {
     /// The crates a `Cargo.toml`'s `[dependencies]` reach by path, by name,
     /// each with its folder from the repository's top.
     fn path_deps(file: &str) -> Vec<(String, String)> {
-        let table = cargo(file);
+        path_deps_of(file, "dependencies")
+    }
+
+    /// The same of `table`, as `dev-dependencies`.
+    fn path_deps_of(file: &str, table: &str) -> Vec<(String, String)> {
         let from = file.trim_end_matches("Cargo.toml");
-        let mut deps: Vec<(String, String)> = table
-            .get("dependencies")
+        let mut deps: Vec<(String, String)> = cargo(file)
+            .get(table)
             .and_then(|deps| deps.as_table())
             .into_iter()
             .flatten()
@@ -436,19 +456,30 @@ mod tests {
     /// list only falls, and a crate that needs one more says why in an ADR
     /// first.
     ///
-    /// Each App's settings are described in its own crate, and the
-    /// settings' crate gathers them by name until the list hands them over
-    /// (B2).
-    const TAKES_AN_APP: [(&str, &str); 4] = [
-        // Its modes and agents.toml's shape too.
-        ("platform/settings", "banda-agents"),
+    /// Each App's settings are described in its own crate, and the engine
+    /// hands them to the settings' crate from the list ([`SETTINGS`]). The
+    /// agents' modes and agents.toml's shape that crate still names
+    /// (#1798, step 2).
+    const TAKES_AN_APP: [(&str, &str); 1] = [("platform/settings", "banda-agents")];
+
+    /// The Apps' crates that only the tests of another part's crate take:
+    /// Cargo keeps a dev-dependency from the code that ships, so this is
+    /// no border crossed, and it only falls too. The settings' tests and
+    /// the keys' read each part's settings files, the Apps' with them
+    /// (platform/settings/tests/whole).
+    const TESTS_TAKE_AN_APP: [(&str, &str); 7] = [
+        ("platform/keys/engine", "banda-agents"),
+        ("platform/keys/engine", "banda-browser"),
+        ("platform/keys/engine", "banda-files"),
+        ("platform/keys/engine", "banda-terminal"),
         ("platform/settings", "banda-browser"),
         ("platform/settings", "banda-files"),
         ("platform/settings", "banda-terminal"),
     ];
 
-    #[test]
-    fn no_more_crates_take_an_apps_crate_than_the_list_holds() {
+    /// Each crate of an App's or the platform's with the crates of another
+    /// App's that `table` of its Cargo.toml names.
+    fn takes_an_app(table: &str) -> Vec<(String, String)> {
         let app = |folder: &str| {
             folder
                 .strip_prefix("apps/")?
@@ -463,39 +494,49 @@ mod tests {
             if !member.starts_with("apps/") && !member.starts_with("platform/") {
                 continue;
             }
-            for (name, folder) in path_deps(&format!("{member}/Cargo.toml")) {
+            for (name, folder) in path_deps_of(&format!("{member}/Cargo.toml"), table) {
                 if app(&folder).is_some_and(|other| app(member) != Some(other)) {
                     takes.push((member.to_owned(), name));
                 }
             }
         }
         takes.sort();
-        let list: Vec<(String, String)> = TAKES_AN_APP
-            .iter()
-            .map(|(member, name)| (member.to_string(), name.to_string()))
-            .collect();
-        assert_eq!(takes, list);
+        takes
     }
 
-    /// Until the settings take the window parts from the list (B2), their
-    /// crate names each part's, the window's own too, and no other. Its
-    /// order is the look's, where the first action holding a key keeps it.
     #[test]
-    fn the_settings_read_each_window_part_the_list_has() {
-        let mut listed: Vec<(&str, &str)> = APPS
-            .iter()
-            .chain([&WINDOW])
-            .filter_map(|part| Some((part.id, part.window?)))
-            .collect();
-        let mut kept = banda_settings::WINDOWS.to_vec();
-        kept.sort();
-        listed.sort();
-        assert!(
-            kept == listed,
-            "banda_settings::WINDOWS names {:?}, and the list {:?}",
-            kept.iter().map(|(id, _)| id).collect::<Vec<_>>(),
-            listed.iter().map(|(id, _)| id).collect::<Vec<_>>(),
+    fn no_more_crates_take_an_apps_crate_than_the_lists_hold() {
+        let listed = |list: &[(&str, &str)]| -> Vec<(String, String)> {
+            (list.iter())
+                .map(|(member, name)| (member.to_string(), name.to_string()))
+                .collect()
+        };
+        assert_eq!(takes_an_app("dependencies"), listed(&TAKES_AN_APP));
+        assert_eq!(
+            takes_an_app("dev-dependencies"),
+            listed(&TESTS_TAKE_AN_APP),
+            "in their tests alone"
         );
+    }
+
+    /// What the settings' and the keys' tests read as Banda's settings
+    /// whole is what this engine hands the settings: each part with files
+    /// or a window part, in the same order.
+    #[test]
+    fn the_tests_whole_list_of_settings_is_the_one_the_engine_hands() {
+        let said = |parts: &[banda_settings::Part]| -> Vec<(&str, Vec<&str>, bool)> {
+            (parts.iter())
+                .map(|part| {
+                    let files = part.files.iter().map(|file| file.name).collect();
+                    (part.id, files, part.window.is_some())
+                })
+                .collect()
+        };
+        assert_eq!(said(whole::PARTS), said(HANDED));
+        let windows = |parts: &[banda_settings::Part]| -> Vec<Option<&str>> {
+            parts.iter().map(|part| part.window).collect()
+        };
+        assert!(windows(whole::PARTS) == windows(HANDED), "a window part");
     }
 
     /// The packages of Banda's a client's file imports whose names end in

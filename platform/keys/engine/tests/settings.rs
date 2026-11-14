@@ -13,10 +13,13 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
+#[path = "../../../settings/tests/whole/mod.rs"]
+mod whole;
+
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
     Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("state/machine"))
-        .module(KeysModule::new(root.join("config")))
+        .module(KeysModule::new(whole::WHOLE, root.join("config")))
         .open()
         .await
         .unwrap()

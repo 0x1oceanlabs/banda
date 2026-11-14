@@ -3,37 +3,45 @@
 //! changes one key and leaves every other line, comment and blank as it was,
 //! and writes nothing the file's own check would refuse.
 
-use crate::{check_text, file, files};
+use crate::Settings;
 use banda_look::Problem;
 use banda_look::SettingsFile;
 use banda_look::keyed::Moved;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Key, TableLike, Value};
 
-/// Sets `key`, dotted as `tile.border`, in the file called `name` in
-/// `config`, to `value`: a TOML value, or else the text as a string. A
-/// file not there yet starts from its template. Refuses, with what is
-/// wrong, a value the file would not take.
-///
-/// In a list of tables, as `[[harness]]`, the name after the list's is an
-/// entry's `id`: `harness.codex.command`. An entry not there is added. An
-/// inline table sets each of its keys, so `harness.gemini = { name = …,
-/// command = … }` adds a whole entry at once.
-///
-/// A key that moved to another file is written there, under either name,
-/// and the line its old file still has goes (ADR 0069 grace).
-pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<Problem>> {
-    let (name, key) = now_at(name, key);
-    set_in(config, name, &key, value)?;
-    forget_old(config, name, &key);
-    Ok(())
+impl Settings {
+    /// Sets `key`, dotted as `tile.border`, in the file called `name` in
+    /// `config`, to `value`: a TOML value, or else the text as a string. A
+    /// file not there yet starts from its template. Refuses, with what is
+    /// wrong, a value the file would not take.
+    ///
+    /// In a list of tables, as `[[harness]]`, the name after the list's is an
+    /// entry's `id`: `harness.codex.command`. An entry not there is added. An
+    /// inline table sets each of its keys, so `harness.gemini = { name = …,
+    /// command = … }` adds a whole entry at once.
+    ///
+    /// A key that moved to another file is written there, under either name,
+    /// and the line its old file still has goes (ADR 0069 grace).
+    pub fn set(
+        self,
+        config: &Path,
+        name: &str,
+        key: &str,
+        value: &str,
+    ) -> Result<(), Vec<Problem>> {
+        let (name, key) = now_at(self, name, key);
+        set_in(self, config, name, &key, value)?;
+        forget_old(self, config, name, &key);
+        Ok(())
+    }
 }
 
 /// Where `key` of the file called `name` is now: the file it moved to and
 /// its key there, or itself.
-fn now_at<'a>(name: &'a str, key: &str) -> (&'a str, String) {
+fn now_at<'a>(settings: Settings, name: &'a str, key: &str) -> (&'a str, String) {
     let dotted = dotted(key);
-    files()
+    (settings.files())
         .find_map(|file| {
             let was = |moved: &&Moved| moved.file == name && Some(moved.was) == dotted.as_deref();
             Some((file.name, file.moved().iter().find(was)?.now.to_owned()))
@@ -44,14 +52,14 @@ fn now_at<'a>(name: &'a str, key: &str) -> (&'a str, String) {
 /// Takes out what the files `key` of the file called `name` moved from
 /// still say of it: this file says it now, or says nothing, so the old
 /// line would only mislead. One that cannot be taken out stays, unread.
-fn forget_old(config: &Path, name: &str, key: &str) {
+fn forget_old(settings: Settings, config: &Path, name: &str, key: &str) {
     let dotted = dotted(key);
-    let moved = file(name).map_or(&[][..], |file| file.moved());
+    let moved = settings.file(name).map_or(&[][..], |file| file.moved());
     for old in moved
         .iter()
         .filter(|moved| Some(moved.now) == dotted.as_deref())
     {
-        let _ = reset_in(config, old.file, old.was);
+        let _ = reset_in(settings, config, old.file, old.was);
     }
 }
 
@@ -62,8 +70,14 @@ fn dotted(key: &str) -> Option<String> {
     Some(parts.iter().map(Key::get).collect::<Vec<_>>().join("."))
 }
 
-fn set_in(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<Problem>> {
-    let mut open = Open::new(config, name, key)?;
+fn set_in(
+    settings: Settings,
+    config: &Path,
+    name: &str,
+    key: &str,
+    value: &str,
+) -> Result<(), Vec<Problem>> {
+    let mut open = Open::new(settings, config, name, key)?;
     let value = value
         .parse::<Value>()
         .unwrap_or_else(|_| Value::from(value));
@@ -108,7 +122,13 @@ fn set_in(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<P
         under_comments(&mut open.document, &open.leaf);
     }
     if name == "keys.toml" {
-        let wrong = wrong_at(&open.path, &open.document.to_string(), &keys, &open.leaf);
+        let wrong = wrong_at(
+            settings,
+            &open.path,
+            &open.document.to_string(),
+            &keys,
+            &open.leaf,
+        );
         if !wrong.is_empty() {
             return Err(wrong);
         }
@@ -160,58 +180,68 @@ fn materialize(
     Ok(())
 }
 
-/// Names `key` in the file called `name` `to` instead, where it is, its
-/// value and comments kept: as a line of `keys.toml` takes another key.
-/// Refuses when the file has `to` already, or would then be wrong.
-pub fn rename(config: &Path, name: &str, key: &str, to: &str) -> Result<(), Vec<Problem>> {
-    let mut open = Open::new(config, name, key)?;
-    let there = written_as(&open.document, name, &open.tables, to);
-    let leaf = &open.leaf;
-    let table = walk(&mut open.document, &open.tables, &open.path)?;
-    if !table.contains_key(leaf) {
-        return Err(whole(&open.path, format!("{key} is not in {name}")));
-    }
-    // Another line names it already; the same line written otherwise is
-    // only written as `to` now.
-    if there != *leaf && table.contains_key(&there) {
-        return Err(whole(&open.path, format!("{to} is in {name} already")));
-    }
-    // Each key from this one on goes to the end, in order, so this one is
-    // back where it was under its new name; each keeps its comments.
-    let names: Vec<String> = table
-        .iter()
-        .map(|(name, _)| name.to_owned())
-        .skip_while(|name| name != leaf)
-        .collect();
-    for name in names {
-        let Some(key) = table.key(&name).cloned() else {
-            continue;
-        };
-        let key = if name == *leaf {
-            Key::new(to).with_leaf_decor(key.leaf_decor().clone())
-        } else {
-            key
-        };
-        if let Some(item) = table.remove(&name) {
-            table.entry_format(&key).or_insert(item);
+impl Settings {
+    /// Names `key` in the file called `name` `to` instead, where it is, its
+    /// value and comments kept: as a line of `keys.toml` takes another key.
+    /// Refuses when the file has `to` already, or would then be wrong.
+    pub fn rename(
+        self,
+        config: &Path,
+        name: &str,
+        key: &str,
+        to: &str,
+    ) -> Result<(), Vec<Problem>> {
+        let mut open = Open::new(self, config, name, key)?;
+        let there = written_as(&open.document, name, &open.tables, to);
+        let leaf = &open.leaf;
+        let table = walk(&mut open.document, &open.tables, &open.path)?;
+        if !table.contains_key(leaf) {
+            return Err(whole(&open.path, format!("{key} is not in {name}")));
         }
+        // Another line names it already; the same line written otherwise is
+        // only written as `to` now.
+        if there != *leaf && table.contains_key(&there) {
+            return Err(whole(&open.path, format!("{to} is in {name} already")));
+        }
+        // Each key from this one on goes to the end, in order, so this one is
+        // back where it was under its new name; each keeps its comments.
+        let names: Vec<String> = table
+            .iter()
+            .map(|(name, _)| name.to_owned())
+            .skip_while(|name| name != leaf)
+            .collect();
+        for name in names {
+            let Some(key) = table.key(&name).cloned() else {
+                continue;
+            };
+            let key = if name == *leaf {
+                Key::new(to).with_leaf_decor(key.leaf_decor().clone())
+            } else {
+                key
+            };
+            if let Some(item) = table.remove(&name) {
+                table.entry_format(&key).or_insert(item);
+            }
+        }
+        open.save(None)
     }
-    open.save(None)
 }
 
-/// Takes `key` out of the file called `name`, so the layer under it
-/// shows; an entry of a list of tables, `harness.gemini`, goes whole. A
-/// key or file not there is already reset. A key that moved to another
-/// file goes there and where it was, under either name.
-pub fn reset(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
-    let (name, key) = now_at(name, key);
-    reset_in(config, name, &key)?;
-    forget_old(config, name, &key);
-    Ok(())
+impl Settings {
+    /// Takes `key` out of the file called `name`, so the layer under it
+    /// shows; an entry of a list of tables, `harness.gemini`, goes whole. A
+    /// key or file not there is already reset. A key that moved to another
+    /// file goes there and where it was, under either name.
+    pub fn reset(self, config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
+        let (name, key) = now_at(self, name, key);
+        reset_in(self, config, name, &key)?;
+        forget_old(self, config, name, &key);
+        Ok(())
+    }
 }
 
-fn reset_in(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
-    let mut open = Open::new(config, name, key)?;
+fn reset_in(settings: Settings, config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
+    let mut open = Open::new(settings, config, name, key)?;
     let leaf = open.leaf.clone();
     if name == "harnesses.toml"
         && open.tables.len() == 1
@@ -275,6 +305,7 @@ fn reset_in(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
 
 /// A file read to change one key of.
 struct Open {
+    settings: Settings,
     path: PathBuf,
     was: String,
     document: DocumentMut,
@@ -284,10 +315,10 @@ struct Open {
 }
 
 impl Open {
-    fn new(config: &Path, name: &str, key: &str) -> Result<Open, Vec<Problem>> {
+    fn new(settings: Settings, config: &Path, name: &str, key: &str) -> Result<Open, Vec<Problem>> {
         let path = config.join(name);
-        let file =
-            file(name).ok_or_else(|| whole(&path, format!("Banda reads no file called {name}")))?;
+        let file = (settings.file(name))
+            .ok_or_else(|| whole(&path, format!("Banda reads no file called {name}")))?;
         let mut tables = Key::parse(key)
             .map_err(|error| whole(&path, format!("{key:?} is not a key: {error}")))?;
         let leaf = tables.pop().ok_or_else(|| whole(&path, "no key to set"))?;
@@ -297,6 +328,7 @@ impl Open {
             .map_err(|error| whole(&path, error))?;
         let leaf = written_as(&document, name, &tables, leaf.get());
         Ok(Open {
+            settings,
             path,
             was,
             document,
@@ -320,13 +352,13 @@ impl Open {
         if text == self.was && self.path.exists() {
             return Ok(());
         }
-        let problems = check_text(&self.path, &text);
+        let problems = self.settings.check_text(&self.path, &text);
         if !problems.is_empty() {
-            if check_text(&self.path, &self.was).is_empty() {
+            if (self.settings.check_text(&self.path, &self.was)).is_empty() {
                 return Err(problems);
             }
             if let Some(alone) = alone {
-                let wrong: Vec<_> = check_text(&self.path, alone)
+                let wrong: Vec<_> = (self.settings.check_text(&self.path, alone))
                     .into_iter()
                     .map(|problem| whole(&self.path, problem.message).remove(0))
                     .collect();
@@ -432,7 +464,13 @@ fn put(table: &mut dyn TableLike, leaf: &str, mut value: Value) {
 /// against every manifest's actions (ADR 0071, decision 4): a line written
 /// is refused for its own fault, not for another line's, as a `none` the
 /// new mod left freeing nothing until the lines move.
-fn wrong_at(path: &Path, text: &str, tables: &[Key], leaf: &str) -> Vec<Problem> {
+fn wrong_at(
+    settings: Settings,
+    path: &Path,
+    text: &str,
+    tables: &[Key],
+    leaf: &str,
+) -> Vec<Problem> {
     let tables: Vec<&str> = tables.iter().map(Key::get).collect();
     let at = banda_look::keyed::spans_in(text, &tables)
         .into_iter()
@@ -441,7 +479,7 @@ fn wrong_at(path: &Path, text: &str, tables: &[Key], leaf: &str) -> Vec<Problem>
     let Some(line) = at else {
         return Vec::new();
     };
-    crate::keys_in_force(path, text)
+    (settings.keys_in_force(path, text))
         .into_iter()
         .filter(|problem| problem.line == Some(line))
         .collect()
@@ -548,6 +586,7 @@ fn write(path: &Path, text: &str) -> std::io::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    use crate::whole::WHOLE;
     #[test]
     fn discovered_account_becomes_an_editable_stable_entry() {
         let dir = tempfile::tempdir().unwrap();
@@ -559,24 +598,31 @@ mod tests {
         account
             .env
             .insert("CLAUDE_CONFIG_DIR".into(), "/existing/c2".into());
-        let mut doc: DocumentMut = file("harnesses.toml").unwrap().template().parse().unwrap();
+        let mut doc: DocumentMut = WHOLE
+            .file("harnesses.toml")
+            .unwrap()
+            .template()
+            .parse()
+            .unwrap();
         let keys = Key::parse("harness.omarchy-claude-c2").unwrap();
         materialize(&mut doc, &keys, &path, &account).unwrap();
         std::fs::write(&path, doc.to_string()).unwrap();
-        set(
-            dir.path(),
-            "harnesses.toml",
-            "harness.omarchy-claude-c2.name",
-            "Work",
-        )
-        .unwrap();
-        set(
-            dir.path(),
-            "harnesses.toml",
-            "harness.omarchy-claude-c2.enabled",
-            "false",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                dir.path(),
+                "harnesses.toml",
+                "harness.omarchy-claude-c2.name",
+                "Work",
+            )
+            .unwrap();
+        WHOLE
+            .set(
+                dir.path(),
+                "harnesses.toml",
+                "harness.omarchy-claude-c2.enabled",
+                "false",
+            )
+            .unwrap();
         let list = banda_harnesses::Harnesses::load(&path).unwrap();
         let account = list.find("omarchy-claude-c2").unwrap();
         assert_eq!(account.name, "Work");
@@ -610,7 +656,9 @@ mod tests {
         let config = tempfile::tempdir().unwrap();
         let agents = "# Mine.\nenter = \"queue\"\n# how I work\nflow = \"free\"\n";
         std::fs::write(config.path().join("agents.toml"), agents).unwrap();
-        set(config.path(), "agents.toml", "flow", "solo").unwrap();
+        WHOLE
+            .set(config.path(), "agents.toml", "flow", "solo")
+            .unwrap();
         let tiling = text_of(&config, "tiling.toml");
         assert!(tiling.ends_with("\nflow = \"solo\"\n"), "{tiling}");
         assert!(tiling.starts_with("#:schema ./schemas/tiling.schema.json\n"));
@@ -621,12 +669,18 @@ mod tests {
             agents.contains("# how I work"),
             "its comment stays: {agents}"
         );
-        assert!(check_text(&config.path().join("agents.toml"), &agents).is_empty());
+        assert!(
+            WHOLE
+                .check_text(&config.path().join("agents.toml"), &agents)
+                .is_empty()
+        );
         // Under its name now, the same.
-        set(config.path(), "tiling.toml", "flow", "row").unwrap();
+        WHOLE
+            .set(config.path(), "tiling.toml", "flow", "row")
+            .unwrap();
         assert!(text_of(&config, "tiling.toml").contains("flow = \"row\""));
         // A value it does not take is refused, and nothing is written.
-        let refused = set(config.path(), "agents.toml", "flow", "sideways");
+        let refused = WHOLE.set(config.path(), "agents.toml", "flow", "sideways");
         assert!(refused.is_err());
         assert!(text_of(&config, "tiling.toml").contains("flow = \"row\""));
     }
@@ -639,26 +693,31 @@ mod tests {
         let config = tempfile::tempdir().unwrap();
         let look = "[columns]\ndefault = \"1/3\" # narrow\nmin = 20\n";
         std::fs::write(config.path().join("look.toml"), look).unwrap();
-        set(config.path(), "look.toml", "columns.default", "2/3").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "columns.default", "2/3")
+            .unwrap();
         let tiling = text_of(&config, "tiling.toml");
         assert!(
             tiling.ends_with("\n[columns]\ndefault = \"2/3\"\n"),
             "{tiling}"
         );
         assert_eq!(text_of(&config, "look.toml"), "[columns]\nmin = 20\n");
-        set(
-            config.path(),
-            "tiling.toml",
-            "columns.presets",
-            "[\"1/4\", \"3/4\"]",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "tiling.toml",
+                "columns.presets",
+                "[\"1/4\", \"3/4\"]",
+            )
+            .unwrap();
         assert!(text_of(&config, "tiling.toml").contains("presets = [\"1/4\", \"3/4\"]"));
         // What is the screen's is still written in look.toml.
-        set(config.path(), "look.toml", "columns.min", "24").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "columns.min", "24")
+            .unwrap();
         assert_eq!(text_of(&config, "look.toml"), "[columns]\nmin = 24\n");
         // A width that is no share is refused, and nothing is written.
-        let refused = set(config.path(), "tiling.toml", "columns.alone", "wide");
+        let refused = WHOLE.set(config.path(), "tiling.toml", "columns.alone", "wide");
         assert!(refused.is_err());
         assert!(!text_of(&config, "tiling.toml").contains("\nalone ="));
     }
@@ -670,7 +729,7 @@ mod tests {
         // reset takes that line out.
         for old in ["workspaces = \"off\"\n", "flow = \"free\"\n"] {
             std::fs::write(config.path().join("agents.toml"), old).unwrap();
-            reset(config.path(), "tiling.toml", "flow").unwrap();
+            WHOLE.reset(config.path(), "tiling.toml", "flow").unwrap();
             assert_eq!(text_of(&config, "agents.toml"), "", "{old}");
         }
         assert!(
@@ -680,7 +739,7 @@ mod tests {
         // Both say it: both lines go, by the old name too.
         std::fs::write(config.path().join("agents.toml"), "flow = \"free\"\n").unwrap();
         std::fs::write(config.path().join("tiling.toml"), "flow = \"solo\"\n").unwrap();
-        reset(config.path(), "agents.toml", "flow").unwrap();
+        WHOLE.reset(config.path(), "agents.toml", "flow").unwrap();
         assert_eq!(text_of(&config, "agents.toml"), "");
         assert_eq!(text_of(&config, "tiling.toml"), "");
     }
@@ -688,20 +747,22 @@ mod tests {
     #[test]
     fn a_rule_is_written_by_its_kind_and_one_of_no_kind_is_refused() {
         let config = tempfile::tempdir().unwrap();
-        set(
-            config.path(),
-            "tiling.toml",
-            "rule.terminal.terminal.width",
-            "1/3",
-        )
-        .unwrap();
-        set(
-            config.path(),
-            "tiling.toml",
-            "rule.terminal.terminal.opens",
-            "below",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "tiling.toml",
+                "rule.terminal.terminal.width",
+                "1/3",
+            )
+            .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "tiling.toml",
+                "rule.terminal.terminal.opens",
+                "below",
+            )
+            .unwrap();
         let text = text_of(&config, "tiling.toml");
         assert!(
             text.contains("\n[rule.terminal.terminal]\nwidth = \"1/3\"\nopens = \"below\"\n"),
@@ -716,11 +777,13 @@ mod tests {
             ("rule.terminal.terminal.width", "wide"),
             ("rule.terminal.terminal.opens", "sideways"),
         ] {
-            let refused = set(config.path(), "tiling.toml", key, value);
+            let refused = WHOLE.set(config.path(), "tiling.toml", key, value);
             assert!(refused.is_err(), "{key} = {value}");
             assert_eq!(text_of(&config, "tiling.toml"), text, "{key} = {value}");
         }
-        reset(config.path(), "tiling.toml", "rule.terminal.terminal").unwrap();
+        WHOLE
+            .reset(config.path(), "tiling.toml", "rule.terminal.terminal")
+            .unwrap();
         let text = text_of(&config, "tiling.toml");
         assert!(
             !text.lines().any(|line| line.starts_with("[rule")),
@@ -731,8 +794,12 @@ mod tests {
     #[test]
     fn a_key_changes_and_every_other_line_stays() {
         let config = config("# Mine.\nradius = 4 # small\n\n[tile]\n# thick\nborder = 3\n");
-        set(config.path(), "look.toml", "radius", "6").unwrap();
-        set(config.path(), "look.toml", "tile.border", "2.5").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "radius", "6")
+            .unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "tile.border", "2.5")
+            .unwrap();
         assert_eq!(
             look(&config),
             "# Mine.\nradius = 6 # small\n\n[tile]\n# thick\nborder = 2.5\n"
@@ -742,8 +809,12 @@ mod tests {
     #[test]
     fn a_new_key_makes_its_table() {
         let config = config("radius = 4\n");
-        set(config.path(), "look.toml", "motion.strip.off", "true").unwrap();
-        set(config.path(), "look.toml", "mode", "dark").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "motion.strip.off", "true")
+            .unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "mode", "dark")
+            .unwrap();
         let text = look(&config);
         assert!(text.contains("mode = \"dark\""), "{text}");
         assert!(text.contains("[motion.strip]\noff = true"), "{text}");
@@ -753,7 +824,9 @@ mod tests {
     #[test]
     fn a_file_not_there_starts_from_its_template() {
         let config = tempfile::tempdir().unwrap();
-        set(config.path(), "sidebar.toml", "sort.by", "title").unwrap();
+        WHOLE
+            .set(config.path(), "sidebar.toml", "sort.by", "title")
+            .unwrap();
         let text = std::fs::read_to_string(config.path().join("sidebar.toml")).unwrap();
         assert!(
             text.starts_with("#:schema ./schemas/sidebar.schema.json\n"),
@@ -770,12 +843,16 @@ mod tests {
     fn a_key_set_to_its_templates_value_writes_a_file_not_there() {
         let config = tempfile::tempdir().unwrap();
         let file = config.path().join("sharing.toml");
-        set(config.path(), "sharing.toml", "problems", "false").unwrap();
+        WHOLE
+            .set(config.path(), "sharing.toml", "problems", "false")
+            .unwrap();
         let text = std::fs::read_to_string(&file).unwrap();
         assert!(text.contains("\nproblems = false\n"), "{text}");
         // Once there, the same value writes nothing.
         let before = std::fs::metadata(&file).unwrap().modified().unwrap();
-        set(config.path(), "sharing.toml", "problems", "false").unwrap();
+        WHOLE
+            .set(config.path(), "sharing.toml", "problems", "false")
+            .unwrap();
         assert_eq!(
             std::fs::metadata(&file).unwrap().modified().unwrap(),
             before
@@ -785,11 +862,17 @@ mod tests {
     #[test]
     fn a_wrong_value_is_refused_and_nothing_written() {
         let config = config("radius = 4\n");
-        let refused = set(config.path(), "look.toml", "radius", "big").unwrap_err();
+        let refused = WHOLE
+            .set(config.path(), "look.toml", "radius", "big")
+            .unwrap_err();
         assert!(refused[0].message.contains("expected f64"), "{refused:?}");
-        let refused = set(config.path(), "look.toml", "nope", "1").unwrap_err();
+        let refused = WHOLE
+            .set(config.path(), "look.toml", "nope", "1")
+            .unwrap_err();
         assert!(refused[0].message.contains("nope"), "{refused:?}");
-        let refused = set(config.path(), "look.toml", "radius.x", "1").unwrap_err();
+        let refused = WHOLE
+            .set(config.path(), "look.toml", "radius.x", "1")
+            .unwrap_err();
         assert_eq!(refused[0].message, "radius is not a table");
         assert_eq!(look(&config), "radius = 4\n");
     }
@@ -797,9 +880,13 @@ mod tests {
     #[test]
     fn what_was_already_wrong_does_not_stop_a_change() {
         let config = config("radius = \"big\"\n");
-        set(config.path(), "look.toml", "mode", "dark").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "mode", "dark")
+            .unwrap();
         assert!(look(&config).contains("mode = \"dark\""));
-        let refused = set(config.path(), "look.toml", "tile.border", "thick").unwrap_err();
+        let refused = WHOLE
+            .set(config.path(), "look.toml", "tile.border", "thick")
+            .unwrap_err();
         assert!(refused[0].message.contains("expected f64"), "{refused:?}");
         assert!(!look(&config).contains("thick"));
     }
@@ -809,8 +896,12 @@ mod tests {
         let config = tempfile::tempdir().unwrap();
         let keys = config.path().join("keys.toml");
         std::fs::write(&keys, "[binds]\n\"alt+k\" = \"pane.new\" # mine\n").unwrap();
-        set(config.path(), "keys.toml", "binds.\"Alt+K\"", "none").unwrap();
-        set(config.path(), "keys.toml", "binds.\"Alt+M\"", "pane.new").unwrap();
+        WHOLE
+            .set(config.path(), "keys.toml", "binds.\"Alt+K\"", "none")
+            .unwrap();
+        WHOLE
+            .set(config.path(), "keys.toml", "binds.\"Alt+M\"", "pane.new")
+            .unwrap();
         assert_eq!(
             std::fs::read_to_string(&keys).unwrap(),
             "[binds]\n\"alt+k\" = \"none\" # mine\n\"Alt+M\" = \"pane.new\"\n"
@@ -826,7 +917,9 @@ mod tests {
             "#:schema ./schemas/keys.schema.json\n# The mod.\n# mod = \"Ctrl+Alt\"\n\n[binds]\n\"Alt+M\" = \"column.maximize\"\n",
         )
         .unwrap();
-        set(config.path(), "keys.toml", "mod", "Ctrl+Alt").unwrap();
+        WHOLE
+            .set(config.path(), "keys.toml", "mod", "Ctrl+Alt")
+            .unwrap();
         assert_eq!(
             std::fs::read_to_string(&keys).unwrap(),
             "#:schema ./schemas/keys.schema.json\n# The mod.\n# mod = \"Ctrl+Alt\"\n\nmod = \"Ctrl+Alt\"\n\n[binds]\n\"Alt+M\" = \"column.maximize\"\n"
@@ -837,7 +930,9 @@ mod tests {
     fn a_line_of_keys_toml_keeps_its_call_on_one_line() {
         let config = tempfile::tempdir().unwrap();
         let call = r#"{ action = "browser.open", args = { address = "https://github.com" } }"#;
-        set(config.path(), "keys.toml", "binds.\"Ctrl+Alt+H\"", call).unwrap();
+        WHOLE
+            .set(config.path(), "keys.toml", "binds.\"Ctrl+Alt+H\"", call)
+            .unwrap();
         assert!(
             std::fs::read_to_string(config.path().join("keys.toml"))
                 .unwrap()
@@ -851,17 +946,22 @@ mod tests {
         let keys = config.path().join("keys.toml");
         std::fs::write(&keys, "[binds]\n\"Alt+F\" = \"pane.new\"\n").unwrap();
         let composer = "binds.composer.\"Ctrl+Return\"";
-        set(config.path(), "keys.toml", composer, "agents.composer.send").unwrap();
-        rename(config.path(), "keys.toml", composer, "ctrl+j").unwrap();
-        set(
-            config.path(),
-            "keys.toml",
-            "binds.composer.\"Return\"",
-            "none",
-        )
-        .unwrap();
+        WHOLE
+            .set(config.path(), "keys.toml", composer, "agents.composer.send")
+            .unwrap();
+        WHOLE
+            .rename(config.path(), "keys.toml", composer, "ctrl+j")
+            .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "keys.toml",
+                "binds.composer.\"Return\"",
+                "none",
+            )
+            .unwrap();
         // A line no key of Banda's needs: its key frees nothing.
-        let wrong = set(
+        let wrong = WHOLE.set(
             config.path(),
             "keys.toml",
             "binds.composer.\"Ctrl+K\"",
@@ -883,41 +983,57 @@ mod tests {
             "[binds]\n# close\n\"alt+j\" = \"pane.close\" # mine\n\"Alt+W\" = \"none\"\n",
         )
         .unwrap();
-        rename(config.path(), "keys.toml", "binds.\"Alt+J\"", "Alt+Q").unwrap();
+        WHOLE
+            .rename(config.path(), "keys.toml", "binds.\"Alt+J\"", "Alt+Q")
+            .unwrap();
         assert_eq!(
             std::fs::read_to_string(&keys).unwrap(),
             "[binds]\n# close\n\"Alt+Q\" = \"pane.close\" # mine\n\"Alt+W\" = \"none\"\n"
         );
         // A key the file has, or one that is no key, is refused.
-        let had = rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "alt+w").unwrap_err();
+        let had = WHOLE
+            .rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "alt+w")
+            .unwrap_err();
         assert!(had[0].message.contains("already"), "{had:?}");
-        let wrong = rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "Alt+Nope").unwrap_err();
+        let wrong = WHOLE
+            .rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "Alt+Nope")
+            .unwrap_err();
         assert!(wrong[0].message.contains("Nope"), "{wrong:?}");
-        let gone = rename(config.path(), "keys.toml", "binds.\"Alt+X\"", "Alt+Y").unwrap_err();
+        let gone = WHOLE
+            .rename(config.path(), "keys.toml", "binds.\"Alt+X\"", "Alt+Y")
+            .unwrap_err();
         assert!(gone[0].message.contains("not in"), "{gone:?}");
         // In any file, a key there already is refused.
         let look = self::config("radius = 4 # small\ngap = 2\n");
-        rename(look.path(), "look.toml", "radius", "gap").unwrap_err();
+        WHOLE
+            .rename(look.path(), "look.toml", "radius", "gap")
+            .unwrap_err();
     }
 
     #[test]
     fn reset_takes_the_key_out() {
         let config = config("radius = 4\n\n[tile]\nborder = 3\n");
-        reset(config.path(), "look.toml", "tile.border").unwrap();
-        reset(config.path(), "look.toml", "tile.nothing").unwrap();
+        WHOLE
+            .reset(config.path(), "look.toml", "tile.border")
+            .unwrap();
+        WHOLE
+            .reset(config.path(), "look.toml", "tile.nothing")
+            .unwrap();
         assert_eq!(look(&config), "radius = 4\n\n[tile]\n");
         let config = self::config("# Mine.\nradius = 4\n# thick\nborder = 3\n");
-        reset(config.path(), "look.toml", "radius").unwrap();
+        WHOLE.reset(config.path(), "look.toml", "radius").unwrap();
         assert_eq!(look(&config), "# Mine.\n# thick\nborder = 3\n");
         let empty = tempfile::tempdir().unwrap();
-        reset(empty.path(), "look.toml", "radius").unwrap();
+        WHOLE.reset(empty.path(), "look.toml", "radius").unwrap();
         assert!(!empty.path().join("look.toml").exists());
     }
 
     #[test]
     fn a_file_of_only_comments_keeps_them_first() {
         let config = tempfile::tempdir().unwrap();
-        set(config.path(), "agents.toml", "enter", "queue").unwrap();
+        WHOLE
+            .set(config.path(), "agents.toml", "enter", "queue")
+            .unwrap();
         let text = std::fs::read_to_string(config.path().join("agents.toml")).unwrap();
         assert!(text.starts_with("#:schema "), "{text}");
         assert!(
@@ -926,7 +1042,9 @@ mod tests {
         );
         let look = config.path().join("look.toml");
         std::fs::write(&look, "#:schema ./schemas/look.schema.json\n# Mine.\n").unwrap();
-        set(config.path(), "look.toml", "tile.border", "3").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "tile.border", "3")
+            .unwrap();
         let text = std::fs::read_to_string(&look).unwrap();
         assert_eq!(
             text,
@@ -938,19 +1056,22 @@ mod tests {
     fn a_new_threads_start_is_a_table_of_its_harness() {
         let config = tempfile::tempdir().unwrap();
         let read = || std::fs::read_to_string(config.path().join("agents.toml")).unwrap();
-        set(
-            config.path(),
-            "agents.toml",
-            "start.fake.mode",
-            "supervised",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "agents.toml",
+                "start.fake.mode",
+                "supervised",
+            )
+            .unwrap();
         assert!(
             read().contains("[start.fake]\nmode = \"supervised\"\n"),
             "{}",
             read()
         );
-        reset(config.path(), "agents.toml", "start.fake").unwrap();
+        WHOLE
+            .reset(config.path(), "agents.toml", "start.fake")
+            .unwrap();
         assert!(!read().contains("[start.fake]"), "{}", read());
         assert!(read().contains("# enter = \"steer\""), "the comments stay");
     }
@@ -959,14 +1080,17 @@ mod tests {
     fn an_entry_taken_out_leaves_the_files_comments() {
         let config = tempfile::tempdir().unwrap();
         let read = || std::fs::read_to_string(config.path().join("harnesses.toml")).unwrap();
-        set(
-            config.path(),
-            "harnesses.toml",
-            "harness.claude.enabled",
-            "false",
-        )
-        .unwrap();
-        reset(config.path(), "harnesses.toml", "harness.claude").unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "harnesses.toml",
+                "harness.claude.enabled",
+                "false",
+            )
+            .unwrap();
+        WHOLE
+            .reset(config.path(), "harnesses.toml", "harness.claude")
+            .unwrap();
         assert!(read().starts_with("#:schema "), "{}", read());
         assert!(!read().contains("id = \"claude\""), "{}", read());
     }
@@ -975,13 +1099,14 @@ mod tests {
     fn a_harness_is_named_by_its_id() {
         let config = tempfile::tempdir().unwrap();
         let read = || std::fs::read_to_string(config.path().join("harnesses.toml")).unwrap();
-        set(
-            config.path(),
-            "harnesses.toml",
-            "harness.codex.enabled",
-            "false",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "harnesses.toml",
+                "harness.codex.enabled",
+                "false",
+            )
+            .unwrap();
         let text = read();
         assert!(
             text.contains("id = \"claude\""),
@@ -991,7 +1116,7 @@ mod tests {
         assert!(text[codex..].contains("enabled = false"), "{text}");
         assert!(!text[..codex].contains("enabled"), "{text}");
 
-        let refused = set(
+        let refused = WHOLE.set(
             config.path(),
             "harnesses.toml",
             "harness.gemini.command",
@@ -1001,35 +1126,43 @@ mod tests {
             refused.unwrap_err()[0].message.contains("name"),
             "an entry needs its name"
         );
-        set(
-            config.path(),
-            "harnesses.toml",
-            "harness.gemini",
-            r#"{ name = "Gemini CLI", command = "gemini", args = ["--acp"] }"#,
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "harnesses.toml",
+                "harness.gemini",
+                r#"{ name = "Gemini CLI", command = "gemini", args = ["--acp"] }"#,
+            )
+            .unwrap();
         let text = read();
         assert!(
             text.ends_with("[[harness]]\nid = \"gemini\"\nname = \"Gemini CLI\"\ncommand = \"gemini\"\nargs = [\"--acp\"]\n"),
             "{text}"
         );
-        set(
-            config.path(),
-            "harnesses.toml",
-            "harness.gemini.env.KEY",
-            "secret",
-        )
-        .unwrap();
+        WHOLE
+            .set(
+                config.path(),
+                "harnesses.toml",
+                "harness.gemini.env.KEY",
+                "secret",
+            )
+            .unwrap();
         assert!(
             read().contains("[harness.env]\nKEY = \"secret\""),
             "{}",
             read()
         );
 
-        reset(config.path(), "harnesses.toml", "harness.gemini").unwrap();
-        reset(config.path(), "harnesses.toml", "harness.nobody").unwrap();
+        WHOLE
+            .reset(config.path(), "harnesses.toml", "harness.gemini")
+            .unwrap();
+        WHOLE
+            .reset(config.path(), "harnesses.toml", "harness.nobody")
+            .unwrap();
         assert!(!read().contains("gemini"), "{}", read());
-        reset(config.path(), "harnesses.toml", "harness.codex.enabled").unwrap();
+        WHOLE
+            .reset(config.path(), "harnesses.toml", "harness.codex.enabled")
+            .unwrap();
         assert!(!read().contains("enabled"), "{}", read());
     }
 
@@ -1042,7 +1175,9 @@ mod tests {
         std::fs::write(&real, "radius = 4\n").unwrap();
         let link = config.path().join("look.toml");
         std::os::unix::fs::symlink(&real, &link).unwrap();
-        set(config.path(), "look.toml", "radius", "6").unwrap();
+        WHOLE
+            .set(config.path(), "look.toml", "radius", "6")
+            .unwrap();
         assert!(link.is_symlink());
         assert_eq!(std::fs::read_to_string(&real).unwrap(), "radius = 6\n");
     }

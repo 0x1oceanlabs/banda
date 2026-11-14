@@ -61,6 +61,33 @@ const PART_FILES: &[&str] = &[
     "window.json",
 ];
 
+/// The parts with a window part, in the window's order: the Apps', then
+/// the Tiling's, the workspaces' own, and the Window's own last (ADR 0071,
+/// decision 2; ADR 0087, decision 13). The first action to take a key
+/// keeps it, so the settings read the window parts in this order. A part
+/// with a window part and no place here stops the build, and so does a
+/// place with no such part.
+const WINDOW_ORDER: [&str; 12] = [
+    "agents",
+    "terminal",
+    "browser",
+    "git",
+    "files",
+    "pulls",
+    "harnesses",
+    "notifications",
+    "clock",
+    "workspaces",
+    "apps",
+    WINDOW,
+];
+
+/// What a part with no settings files hands the settings, as Rust.
+const NO_FILES: &str = "&[]";
+
+/// The id of the Window's own part, a client's and no App's.
+const WINDOW: &str = "window";
+
 /// An App's or a platform part's folder, as the scan finds it.
 struct Part {
     id: String,
@@ -69,6 +96,9 @@ struct Part {
     window: Option<PathBuf>,
     /// Its engine part's crate's name, when it has one.
     engine: Option<String>,
+    /// The settings files its manifest says it owns, as Rust: its engine
+    /// part's crate's `SETTINGS`, or [`NO_FILES`].
+    files: String,
     /// Its packages in the window: the page's and main's.
     pane: Option<String>,
     desktop: Option<String>,
@@ -141,10 +171,7 @@ fn apps() {
          pub const APPS: &[Part] = &[\n",
     );
     for part in &parts {
-        let window = match &part.window {
-            Some(path) => format!("Some(include_str!({}))", literal(path)),
-            None => "None".to_owned(),
-        };
+        let window = included(part.window.as_deref());
         let methods = match &part.engine {
             Some(_) => format!("Some(table_of(build::{}))", part.id),
             None => "None".to_owned(),
@@ -162,14 +189,16 @@ fn apps() {
         )
         .unwrap();
     }
+    out.push_str("];\n\n");
+    handed(&mut out, &parts, &window.join("window.json"));
     write!(
         out,
-        "];\n\n\
+        "\
          /// The window's own part, a client's and no App's (ADR 0071,\n\
          /// decision 2): its manifest, and its actions, the tiling's, which\n\
          /// come after the Apps'.\n\
          pub const WINDOW: Part = Part {{\n    \
-             id: \"window\",\n    \
+             id: {WINDOW:?},\n    \
              manifest: include_str!({}),\n    \
              window: Some(include_str!({})),\n    \
              methods: None,\n\
@@ -256,6 +285,67 @@ fn apps() {
     }
 }
 
+/// A file there or not, as Rust: its text, or none.
+fn included(file: Option<&Path>) -> String {
+    match file {
+        Some(path) => format!("Some(include_str!({}))", literal(path)),
+        None => "None".to_owned(),
+    }
+}
+
+/// Writes what each part hands the settings: the parts with a window
+/// part in the window's order, then the rest with settings files, by the
+/// scan's order.
+fn handed(out: &mut String, parts: &[Part], window: &Path) {
+    let with_window: Vec<&str> = parts
+        .iter()
+        .filter(|part| part.window.is_some())
+        .map(|part| part.id.as_str())
+        .chain([WINDOW])
+        .collect();
+    for id in &with_window {
+        if !WINDOW_ORDER.contains(id) {
+            panic!(
+                "{id} has a window part, so build.rs's WINDOW_ORDER says where its actions come"
+            );
+        }
+    }
+    for id in WINDOW_ORDER {
+        if !with_window.contains(&id) {
+            panic!("build.rs's WINDOW_ORDER names {id}, which has no window part");
+        }
+    }
+    out.push_str(
+        "/// What each part hands the settings: its files and its window part.\n\
+         /// The parts with a window part come first, in the window's order, the\n\
+         /// Window's own last of them; then the rest that own settings files.\n\
+         pub const HANDED: &[banda_settings::Part] = &[\n",
+    );
+    let ordered = WINDOW_ORDER.iter().map(|id| {
+        let part = parts.iter().find(|part| part.id == *id);
+        let json = part.map_or(window, |part| part.window.as_deref().unwrap());
+        (*id, part, Some(json))
+    });
+    let rest = parts
+        .iter()
+        .filter(|part| part.window.is_none() && part.files != NO_FILES)
+        .map(|part| (part.id.as_str(), Some(part), None));
+    for (id, part, window) in ordered.chain(rest) {
+        let files = part.map_or(NO_FILES, |part| &part.files);
+        let window = included(window);
+        writeln!(
+            out,
+            "    banda_settings::Part {{\n        \
+                 id: {id:?},\n        \
+                 files: {files},\n        \
+                 window: {window},\n    \
+             }},"
+        )
+        .unwrap();
+    }
+    out.push_str("];\n\n");
+}
+
 /// The part in `folder`, its manifest checked against where it is.
 fn part(bucket: &str, kind: &str, folder: &Path) -> Part {
     let name = folder.file_name().unwrap().to_string_lossy().into_owned();
@@ -294,10 +384,23 @@ fn part(bucket: &str, kind: &str, folder: &Path) -> Part {
             .unwrap_or_else(|| panic!("{shown}: its [package] has a name"))
             .to_owned()
     });
+    let owns = match table.get("settings") {
+        None => false,
+        Some(toml::Value::Array(files)) => !files.is_empty(),
+        Some(_) => panic!("{shown}: settings is a list of its files' names"),
+    };
+    let files = match &engine {
+        Some(name) if owns => format!("&{}::SETTINGS", name.replace('-', "_")),
+        None if owns => {
+            panic!("{shown}: it owns settings files, which its engine part's crate describes")
+        }
+        _ => NO_FILES.to_owned(),
+    };
     Part {
         manifest,
         window: Some(folder.join("window.json")).filter(|path| path.is_file()),
         engine,
+        files,
         pane: package(&folder.join("pane")),
         desktop: package(&folder.join("desktop")),
         bucket: bucket.to_owned(),

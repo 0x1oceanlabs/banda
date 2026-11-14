@@ -547,7 +547,7 @@ enum SettingsCommand {
 }
 
 fn file_names() -> clap::builder::PossibleValuesParser {
-    clap::builder::PossibleValuesParser::new(banda_settings::files().map(|file| file.name))
+    clap::builder::PossibleValuesParser::new(apps::SETTINGS.files().map(|file| file.name))
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -1196,19 +1196,19 @@ fn settings(what: SettingsCommand) -> ExitCode {
         Err(failure) => return failure.exit(),
     };
     match what {
-        SettingsCommand::Check { files } => report(banda_settings::check(&places, &files)),
+        SettingsCommand::Check { files } => report(apps::SETTINGS.check(&places, &files)),
         SettingsCommand::Set { file, key, value } => {
-            report_done(banda_settings::set(&places.config, &file, &key, &value))
+            report_done(apps::SETTINGS.set(&places.config, &file, &key, &value))
         }
         SettingsCommand::Reset { file, key } => {
-            report_done(banda_settings::reset(&places.config, &file, &key))
+            report_done(apps::SETTINGS.reset(&places.config, &file, &key))
         }
         SettingsCommand::Rename { file, key, to } => {
-            report_done(banda_settings::rename(&places.config, &file, &key, &to))
+            report_done(apps::SETTINGS.rename(&places.config, &file, &key, &to))
         }
         SettingsCommand::Schema { export: true, .. } => {
             let folder = places.config.join("schemas");
-            match banda_settings::export(&folder) {
+            match apps::SETTINGS.export(&folder) {
                 Ok(()) => ExitCode::SUCCESS,
                 Err(error) => Failure::Broken(format!("{}: {error}", folder.display())).exit(),
             }
@@ -1216,12 +1216,13 @@ fn settings(what: SettingsCommand) -> ExitCode {
         SettingsCommand::Schema { file, .. } => {
             let mut out = std::io::stdout().lock();
             // A reader that went away is not an error.
-            let _ = match file.as_deref().and_then(banda_settings::file) {
+            let _ = match file.as_deref().and_then(|name| apps::SETTINGS.file(name)) {
                 Some(file) => {
                     let schema = serde_json::to_string_pretty(&file.schema()).unwrap_or_default();
                     writeln!(out, "{schema}")
                 }
-                None => banda_settings::files()
+                None => apps::SETTINGS
+                    .files()
                     .try_for_each(|file| writeln!(out, "{}\t{}", file.name, file.about())),
             };
             ExitCode::SUCCESS
@@ -1259,9 +1260,9 @@ fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
         Ok(places) => places,
         Err(failure) => return failure.exit(),
     };
-    let config = &places.config;
+    let (settings, config) = (apps::SETTINGS, &places.config);
     let Some(what) = what else {
-        let (listed, problems) = banda_keys::list(config);
+        let (listed, problems) = banda_keys::list(settings, config);
         let mut out = std::io::stdout().lock();
         for action in &listed {
             // A reader that went away is not an error.
@@ -1280,6 +1281,7 @@ fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
             args,
             scope,
         } => banda_keys::bind(
+            settings,
             config,
             &Bind {
                 key,
@@ -1288,9 +1290,11 @@ fn keys(what: Option<KeysCommand>, json: bool) -> ExitCode {
                 scope,
             },
         ),
-        KeysCommand::Free { key, scope } => banda_keys::free(config, &Key { key, scope }),
-        KeysCommand::Reset { key, scope } => banda_keys::reset(config, &Key { key, scope }),
-        KeysCommand::Mod { keys } => banda_keys::set_mod(config, &SetMod { keys }),
+        KeysCommand::Free { key, scope } => banda_keys::free(settings, config, &Key { key, scope }),
+        KeysCommand::Reset { key, scope } => {
+            banda_keys::reset(settings, config, &Key { key, scope })
+        }
+        KeysCommand::Mod { keys } => banda_keys::set_mod(settings, config, &SetMod { keys }),
     };
     report_done(done.map(|said| println!("{said}")))
 }
@@ -1355,7 +1359,7 @@ fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode 
             // The window runs this as it starts: each settings file's
             // schema goes where the files' `#:schema` lines point.
             let schemas = places.config.join("schemas");
-            if let Err(error) = banda_settings::export(&schemas) {
+            if let Err(error) = apps::SETTINGS.export(&schemas) {
                 eprintln!("banda: {}: {error}", schemas.display());
             }
             // The modules' files come with the look: the window reads the
@@ -1363,8 +1367,8 @@ fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode 
             banda_look::follow(
                 &places,
                 Hyprland::from_env(),
-                &banda_settings::also(),
-                &banda_settings::manifests(),
+                &apps::SETTINGS.also(),
+                &apps::SETTINGS.manifests(),
                 |look| print(json!(look)),
             );
             ExitCode::SUCCESS
@@ -1376,8 +1380,8 @@ fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode 
                 banda_look::resolve(
                     &places,
                     &windows,
-                    &banda_settings::also(),
-                    &banda_settings::manifests(),
+                    &apps::SETTINGS.also(),
+                    &apps::SETTINGS.manifests(),
                 )
                 .look
             ));
@@ -1391,6 +1395,6 @@ fn look(what: Option<LookCommand>, follow: bool, with_parent: bool) -> ExitCode 
             }
             ExitCode::SUCCESS
         }
-        Some(LookCommand::Check { files }) => report(banda_settings::check(&places, &files)),
+        Some(LookCommand::Check { files }) => report(apps::SETTINGS.check(&places, &files)),
     }
 }

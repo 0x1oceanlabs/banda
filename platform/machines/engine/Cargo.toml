@@ -43,6 +43,7 @@ axum.workspace = true
 # The settings' `set`, which writes machine.toml in the tests as the
 # window does.
 banda-keys = { path = "../../keys/engine" }
+banda-settings = { path = "../../settings" }
 futures.workspace = true
 tempfile.workspace = true
 tokio-tungstenite.workspace = true

@@ -23,6 +23,16 @@ tracing.workspace = true
 ts-rs.workspace = true
 
 [dev-dependencies]
+# What the tests' whole list of settings names (platform/settings/tests/whole):
+# the parts' files, the Apps' too, which the engine hands the module.
+banda-agents = { path = "../../../apps/agents/engine" }
+banda-browser = { path = "../../../apps/browser/engine" }
+banda-files = { path = "../../../apps/files/engine" }
+banda-harnesses = { path = "../../../platform/harnesses/engine" }
+banda-machines = { path = "../../../platform/machines/engine" }
+banda-sharing = { path = "../../../platform/sharing/engine" }
+banda-terminal = { path = "../../../apps/terminal/engine" }
+banda-workspaces = { path = "../../../platform/workspaces/engine" }
 tempfile.workspace = true
 tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 

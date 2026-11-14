@@ -234,8 +234,6 @@ const PLATFORM_NAMES: &[(&str, usize)] = &[
     ("platform/look/src/settings.rs", 2),
     // agents.toml and its type, for the account a new Thread starts with.
     ("platform/settings/src/accounts.rs", 8),
-    // Each App's SETTINGS and window.json, gathered by name.
-    ("platform/settings/src/lib.rs", 22),
     // agents.toml's start modes, and browser.toml's agents table.
     ("platform/settings/src/person.rs", 13),
     // The Pane kinds whose count is shared.
