@@ -4,6 +4,7 @@ import { ownEngine } from "@banda/core/testing"
 import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
 import type { Action, Args } from "@banda/ui/module"
 import { toast } from "@banda/ui/components/sonner"
+import { sameKey } from "@banda/ui/lib/keys"
 import { expect, test, vi } from "vitest"
 import { keysInForce, pressFor, withKeys } from "../actions/actions"
 import { flowHere, Solo } from "../tiling/flow"
@@ -12,7 +13,9 @@ import { arcHosts, MINE, ON_ARC, R1 } from "../tiling/testing"
 import { SIDEBAR, SIDEBAR_KEYS } from "../sidebar"
 import { handlesOf } from "../tiling/mount"
 import { placingOf } from "../tiling/opening"
+import { branchName, type Choice, isBranch, menuOf } from "../menu/menu"
 import { ACTIONS, ROUTING, runAction, type Shell, windowApiOf } from "./actions"
+import { itemActionsOf } from "./items"
 import { writeFlow } from "./placing"
 
 // What the toasts were told, as Sonner still shows them.
@@ -483,4 +486,96 @@ test("a file attached from a Pane carries the Pane's Project through the router 
     file: "/r1/a.ts",
     project: R1,
   })
+})
+
+test("no key is two actions' in one scope, so the list's order never says which a press runs (#1731)", () => {
+  // `pressFor` takes the first in the list's order that has the key in
+  // the scope: with one at most, an owner may stand anywhere in it.
+  const keyed = withKeys(ACTIONS, [])
+  const twice: string[] = []
+  keyed.forEach((action, at) => {
+    for (const other of keyed.slice(at + 1)) {
+      if (other.scope !== action.scope) continue
+      for (const key of action.keys ?? [])
+        if (other.keys?.some((its) => sameKey(its, key)))
+          twice.push(`${action.id} and ${other.id}: ${key.code}`)
+    }
+  })
+  expect(twice).toEqual([])
+})
+
+/** The key sheet's rows of a section, by name, as the menu lists them. */
+function sheetOf(section: string): string[] {
+  const nameOf = (row: Choice) =>
+    row.kind === "action"
+      ? row.action.title
+      : row.kind === "family"
+        ? row.title
+        : isBranch(row)
+          ? branchName(row)
+          : row.id
+  return (
+    menuOf({
+      words: "",
+      at: "actions",
+      sources: {
+        lists: {},
+        projects: [],
+        actions: ACTIONS,
+        group: "none",
+        theme: {
+          now: {
+            theme: "platform",
+            label: "Banda",
+            mode: "system",
+            both: true,
+          },
+          listed: [],
+        },
+        now: 0,
+        items: itemActionsOf,
+        found: [],
+        weight: () => 0,
+      },
+    })
+      .find((group) => group.label === section)
+      ?.rows.map(nameOf) ?? []
+  )
+}
+
+test("the key sheet lists the Threads' and the Panes' rows by owner: the Apps', the Tiling's, then the Window's own (#1731)", () => {
+  // Pinned, so an owner that takes its actions out moves no row unseen.
+  expect(sheetOf("Threads")).toEqual([
+    "New Thread",
+    "Rename the Thread you look at",
+    "Suggest a title for the Thread you look at, and rename it",
+    "Mark the Thread you look at as unread, or as read",
+    "Move the Thread you look at to Later, or wake it",
+    "Wake the Thread you look at from Later",
+    "Archive the Thread you look at, or bring it back",
+    "The drawer: a quick Thread over the workspace",
+    "Go to what calls you",
+    "Show or hide the sidebar",
+    "Turn Quiet on or off",
+    "Sidebar view",
+  ])
+  expect(sheetOf("Panes")).toEqual([
+    "New terminal",
+    "New browser",
+    "Files",
+    "Focus a Pane",
+    "Move the Pane",
+    "Focus a Pane, or the workspace past it",
+    "Move the Pane, or to the workspace past it",
+    "The Pane's next height in its column, round",
+    "Make the Pane taller",
+    "Make the Pane shorter",
+    "The Pane over the whole window, or back",
+    "Take the Pane into the column on the left, or out of its own",
+    "Take the Pane into the column on the right, or out of its own",
+    "New Pane",
+    "Close the Pane",
+    "Move the Pane to a workspace",
+    "The Pane in a window of its own, and back",
+  ])
 })

@@ -391,6 +391,15 @@ A step that changes pixels shows Roma a before and after first.
       root. The tests of the Tiling's actions run beside them, through a
       fake of `Tiling` and no router (`tiling/actions.test.ts`,
       `tiling/arranged.test.ts`).
+    - _Built_ (WS7, the leftover, #1731; Roma chose the mock's variant
+      A): the list of every action is its owners' one after another, the
+      Apps', the Tiling's, then the Window's own, and the key sheet
+      follows it, with no place kept among another owner's rows. Under
+      Threads the Window's three rows come after the Thread's own,
+      Archive first of them, and the Pane in a window of its own stands
+      last of the Panes. No key is two actions' in one scope, so the
+      order says nothing of what a press runs; a test pins that and the
+      two sections' rows.
     - _Not yet:_ the Window's actions that are an App's or a platform
       part's (a file's, a Project's, the sidebar list's), `pane.pop-out`,
       and the Window's root at 400 lines.
