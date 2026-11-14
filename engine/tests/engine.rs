@@ -887,6 +887,80 @@ fn a_window_quits_with_quit_banda_and_stays_for_any_other_stop_of_its_engine() {
     assert_eq!(ended(&mut engine), Some(3));
 }
 
+/// An engine that moves onto another copy in its own place (ADR 0119,
+/// decision 3) is the same engine to its window: the window's
+/// `start --with-parent` follows it on, past the while it once waited for
+/// it to go and then ended (code 2, and the window started it again), and
+/// still ends with Quit Banda.
+#[cfg(unix)]
+#[test]
+fn a_window_follows_its_engine_on_as_it_moves_onto_another_copy() {
+    let places = Places::new();
+    // Moved only when asked, so the copy moved onto stays put.
+    std::fs::write(places.config.join("machine.toml"), "updates = \"ask\"\n").unwrap();
+    let copy = places._dir.path().join("data/engine/99.0.0");
+    std::fs::create_dir_all(&copy).unwrap();
+    std::fs::copy(env!("CARGO_BIN_EXE_banda"), copy.join("banda")).unwrap();
+    std::fs::write(copy.join("version"), "99.0.0").unwrap();
+    // The machine's service, as a unit or a job runs it: not a child.
+    // Stopped however the test ends, so no engine outlives it.
+    let _engine = Ends(places.banda(&["serve"]).spawn().unwrap());
+    let running = || {
+        let out = places.banda(&["status"]).output().unwrap();
+        let said: Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
+        (said["running"] == true).then_some(said)
+    };
+    let before = wait_for(Duration::from_secs(10), running).expect("the engine answers");
+    let mut window = Ends(
+        places
+            .banda(&["start", "--with-parent"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap(),
+    );
+    let window = &mut window.0;
+    let _stdin = window.stdin.take().unwrap();
+    let mut line = String::new();
+    BufReader::new(window.stdout.take().unwrap())
+        .read_line(&mut line)
+        .unwrap();
+    assert!(line.contains("\"port\""), "{line}");
+
+    let moved = places
+        .banda(&["update", "--now", "--force"])
+        .output()
+        .unwrap();
+    assert!(moved.status.success(), "{moved:?}");
+    let after = wait_for(Duration::from_secs(10), || {
+        running().filter(|said| said["since"] != before["since"])
+    })
+    .expect("the engine moved");
+    assert_eq!(after["pid"], before["pid"], "the same process");
+
+    // Past the while the follower once waited before it ended.
+    std::thread::sleep(Duration::from_secs(22));
+    assert!(
+        window.try_wait().unwrap().is_none(),
+        "the window's follower ended as the engine moved"
+    );
+    let stop = places.banda(&["stop", "--force"]).output().unwrap();
+    assert!(stop.status.success(), "{stop:?}");
+    let ended = wait_for(Duration::from_secs(10), || window.try_wait().unwrap())
+        .expect("the follower ends with Quit Banda");
+    assert_eq!(ended.code(), Some(0), "the window quits too");
+}
+
+/// A process the test started, killed once the test is over.
+struct Ends(Child);
+
+impl Drop for Ends {
+    fn drop(&mut self) {
+        let _ = self.0.kill();
+        let _ = self.0.wait();
+    }
+}
+
 /// `banda mcp` as a Harness runs it: the command, arguments and
 /// environment a session was given.
 struct Mcp {
