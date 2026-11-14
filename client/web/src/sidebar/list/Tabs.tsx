@@ -3,7 +3,7 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { cn } from "@banda/ui/lib/utils"
 import { STAND_WORDS } from "@banda/ui/status"
 import { ArchiveIcon } from "lucide-react"
-import { type Inbox, TABS, type Tab, type TabCount } from "../model/inbox"
+import { TABS, type Tab, type TabCount } from "../model/inbox"
 import { tabId, ViewContext } from "./view"
 
 /** Each tab's name: the Inbox's, then each place's as its heading names
@@ -54,7 +54,13 @@ const STEPS: Readonly<Record<string, (at: number) => number>> = {
  * tab in view and its count as either changes, in a polite line beside
  * them (`tabSaid`); what an act did, its toast says.
  */
-export function Tabs({ tabs, tab }: { tabs: Inbox["tabs"]; tab: Tab }) {
+export function Tabs({
+  tabs,
+  tab,
+}: {
+  tabs: Readonly<Record<Tab, TabCount>>
+  tab: Tab
+}) {
   const view = useContext(ViewContext)
   const keyFor = useKeyLabel()
   const onKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {

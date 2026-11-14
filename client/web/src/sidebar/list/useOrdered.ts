@@ -9,8 +9,9 @@ import {
 } from "react"
 import type { ProjectSummary } from "@banda/contract"
 import { useLaterClock, useLists } from "../../calls/stores"
-import type { Block, Tab } from "../model/inbox"
-import { order, useElsewhere } from "../model/order"
+import { type SidebarInput, sidebarOf } from "../model/drawn"
+import type { Item } from "../model/flat"
+import { useElsewhere } from "../model/order"
 import type { Settings } from "../model/settings"
 import { stillOf } from "../model/still"
 import { useNotNow } from "../../trust/not-now"
@@ -31,58 +32,42 @@ const MOVING_KEYS: ReadonlySet<string> = new Set([
 ])
 
 /**
- * The sidebar list as it is drawn: what every module lists, in the one
- * order the counts and Alt+U take too, as the Person has it in view: the
- * tab, a cut list whole (`more`), the groups folded, and when inbox zero
- * last told of Someday; and this machine's Projects that wait for the
- * Person, but those whose trust they put off on this device. It is drawn
- * as it is, but for one rule (ADR 0098, decision 6; `still.ts`): while
- * the pointer is over the list, its order stays as it was drawn, so no
- * card runs out from under a click. Another view by the Person's hand is
- * drawn at once, under the pointer too. `list` goes on the list's
- * scroller, which is calm for a moment after a wheel, a scroll or a key
- * that moves in it; `now` is the Later clock its words read.
+ * What the sidebar draws (`sidebarOf`) of what the Window's stores hold:
+ * what every module lists, read by the Later clock; the other machines
+ * the order places; and this machine's Projects that wait for the Person,
+ * but those whose trust they put off on this device; as `settings` and
+ * `view` have it. The bar's counts read it as the list does.
  */
-export function useOrdered(
-  projects: ProjectSummary[],
-  settings: Settings,
-  {
-    tab,
-    more,
-    folded,
-    someday,
-  }: {
-    tab: Tab
-    more: boolean
-    folded: ReadonlySet<string>
-    someday?: number
-  }
+export function useDrawn(
+  projects: readonly ProjectSummary[],
+  settings: SidebarInput["settings"],
+  { tab, more, folded, someday }: SidebarInput["view"]
 ) {
   // What every module lists, from the Window's items.
   const lists = useLists()
   // Where each Thread stands is read by the Later clock (ADR 0074).
   const now = useLaterClock()
   // The other machines of `hosts.toml` (ADR 0081): the rows of those the
-  // order places, as the counts and Alt+U place them.
+  // order places, as Alt+U places them.
   const elsewhere = useElsewhere()
   const putOff = useNotNow()
-  const fresh = useMemo(
+  const drawn = useMemo(
     () =>
-      order(lists, projects, now, {
-        settings,
+      sidebarOf({
+        lists,
+        now,
+        projects,
         elsewhere,
+        settings,
         putOff,
-        tab,
-        more,
-        folded,
-        ...(someday === undefined ? {} : { someday }),
+        view: { tab, more, folded, someday },
       }),
     [
       lists,
-      projects,
       now,
-      settings,
+      projects,
       elsewhere,
+      settings,
       putOff,
       tab,
       more,
@@ -90,9 +75,30 @@ export function useOrdered(
       someday,
     ]
   )
+  return { drawn, now, putOff }
+}
+
+/**
+ * The sidebar list as it is drawn (`useDrawn`), as the Person has it in
+ * view: the tab, a cut list whole (`more`), the groups folded, and when
+ * inbox zero last told of Someday. It is drawn as it is, but for one rule
+ * (ADR 0098, decision 6; `still.ts`): while the pointer is over the list,
+ * its order stays as it was drawn, so no card runs out from under a
+ * click. Another view by the Person's hand is drawn at once, under the
+ * pointer too. `list` goes on the list's scroller, which is calm for a
+ * moment after a wheel, a scroll or a key that moves in it; `now` is the
+ * Later clock its words read.
+ */
+export function useOrdered(
+  projects: readonly ProjectSummary[],
+  settings: Settings,
+  view: SidebarInput["view"]
+) {
+  const { tab, more, folded } = view
+  const { drawn: fresh, now, putOff } = useDrawn(projects, settings, view)
   // The list as it was drawn when the pointer came over it; none while
   // the pointer is elsewhere.
-  const [under, setUnder] = useState<readonly Block[]>()
+  const [under, setUnder] = useState<readonly Item[]>()
   // Another view, by the Person's hand, draws its order straight away;
   // so does a Project's trust they put off, which only their hand does.
   const [scene, setScene] = useState({ tab, more, folded, settings, putOff })
@@ -104,7 +110,7 @@ export function useOrdered(
     scene.putOff !== putOff
   ) {
     setScene({ tab, more, folded, settings, putOff })
-    if (under) setUnder(fresh.blocks)
+    if (under) setUnder(fresh.items)
   }
   // The window blurred or hidden lets go, so the order never sticks; the
   // pointer that moves over the list again keeps it again.
@@ -118,8 +124,8 @@ export function useOrdered(
       document.removeEventListener("visibilitychange", hidden)
     }
   }, [])
-  const blocks = useMemo(
-    () => (under ? stillOf(under, fresh.blocks) : fresh.blocks),
+  const items = useMemo(
+    () => (under ? stillOf(under, fresh.items) : fresh.items),
     [under, fresh]
   )
   // After a wheel, a scroll or a key that moves in it, the list is calm
@@ -133,10 +139,10 @@ export function useOrdered(
     calm.current = setTimeout(() => list.removeAttribute("data-calm"), CALM)
   }
   const over = () => {
-    if (!under) setUnder(blocks)
+    if (!under) setUnder(items)
   }
   return {
-    ordered: { ...fresh, blocks },
+    ordered: { ...fresh, items },
     now,
     /** What the list's scroller listens to. */
     list: {

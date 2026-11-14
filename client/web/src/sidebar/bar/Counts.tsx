@@ -4,11 +4,12 @@
  * says. A click opens the small inbox under them (`SmallInbox`, ADR 0098,
  * decision 22, as amended). While the Sidebar is hidden they name the
  * Thread the Pane in focus shows, an Agent's (ADR 0065, decision 9). What
- * every module lists it reads from the Window's items, and where the
- * Person is from Here.
+ * it counts it reads from what the sidebar draws, so the two never
+ * differ, and where the Person is from Here.
  *
- *   in    lists      what every App lists, from the Window's items
- *                    (`useLists`), and the Later clock (`useLaterClock`)
+ *   in    drawn      what the sidebar draws (`useDrawn`): each count,
+ *                    how many work, whether all is calm
+ *         lists      what every App lists, for the Thread in focus
  *         Here       whether the Sidebar shows, and the Project and the
  *                    one thing the Pane in focus shows (`useHere`)
  *         settings   `sidebar.toml`'s `[bar]`: what it counts, when it
@@ -32,11 +33,12 @@ import {
 import { type Here, useHere } from "@banda/core/react"
 import { cn } from "@banda/ui/lib/utils"
 import type { Widget, WidgetProps } from "@banda/ui/module"
-import { useMemo, useState } from "react"
-import { useLaterClock, useLists } from "../../calls/stores"
+import { useState } from "react"
+import { useLists } from "../../calls/stores"
 import { useLookSidebar } from "../../look"
 import { SmallInbox } from "./SmallInbox"
-import { calm, tally } from "../model/tally"
+import type { SidebarInput } from "../model/drawn"
+import { useDrawn } from "../list/useOrdered"
 
 /** Each count's words, after its number: the sidebar's own, its Your
  * turn and "7 at work" (ADR 0098), as the bar's count says them. */
@@ -63,8 +65,12 @@ const aheadThingOf = (here: Here) => here.pane?.subject
 const aheadProjectOf = (here: Here) =>
   here.pane?.subject ? here.pane.project : undefined
 
+/** The sidebar's Inbox, as the counts read it: whatever tab the list
+ * shows, its counts are the same. */
+const INBOX: SidebarInput["view"] = { tab: "inbox" }
+
 /** The counts, as the top of this file says. */
-function Counts({ engine }: WidgetProps) {
+function Counts({ engine, projects }: WidgetProps) {
   const sidebarShown = useHere(sidebarOf)
   const aheadProject = useHere(aheadProjectOf)
   const aheadThing = useHere(aheadThingOf)
@@ -73,25 +79,22 @@ function Counts({ engine }: WidgetProps) {
     ? lists[aheadProject]?.find((listed) => listed.id === aheadThing)
     : undefined
   const current = aheadRow?.agent !== undefined ? aheadRow : undefined
-  const settings = useLookSidebar().bar
-  const now = useLaterClock()
-  const tallies = useMemo(
-    () => tally(lists, settings.counts, now),
-    [lists, settings.counts, now]
+  const look = useLookSidebar()
+  const settings = look.bar
+  // What the sidebar draws says the counts, so they say what it says.
+  const { drawn } = useDrawn(projects, look, INBOX)
+  // The counts in `[bar] counts`' order; a count of none is left out.
+  const tallies = settings.counts.flatMap((count) =>
+    drawn.counts[count].count > 0 ? [{ of: count, ...drawn.counts[count] }] : []
   )
   // How many work, for the small inbox's way to Working, whatever the
   // bar counts.
-  const working = useMemo(
-    () =>
-      tally(lists, ["working"], now).find((t) => t.count === "working")?.things
-        .length ?? 0,
-    [lists, now]
-  )
+  const working = drawn.tabs.working.count
   const shows =
     settings.show === "always" || (settings.show === "closed" && !sidebarShown)
   if (!shows) return null
   if (tallies.length === 0) {
-    if (settings.empty === "hide" || !calm(lists, now)) return null
+    if (settings.empty === "hide" || !drawn.calm) return null
     // The calm square, where the counts come.
     return (
       <span className="flex h-6 items-center px-2">
@@ -105,9 +108,7 @@ function Counts({ engine }: WidgetProps) {
       </span>
     )
   }
-  const words = tallies
-    .map((t) => `${t.things.length} ${WORDS[t.count]}`)
-    .join(" · ")
+  const words = tallies.map((t) => `${t.count} ${WORDS[t.of]}`).join(" · ")
   return (
     <SmallInbox engine={engine} working={working} label={words}>
       {current && !sidebarShown && (
@@ -117,7 +118,7 @@ function Counts({ engine }: WidgetProps) {
       )}
       {tallies.map((t) => (
         <span
-          key={t.count}
+          key={t.of}
           className={cn(
             "flex items-center gap-1",
             colourOf(t.mark, settings.color)
@@ -130,10 +131,10 @@ function Counts({ engine }: WidgetProps) {
             tone={settings.color}
             className="size-4"
           />
-          <Number value={t.things.length} />
+          <Number value={t.count} />
           {settings.words && (
             <span className="font-normal text-muted-foreground">
-              {WORDS[t.count]}
+              {WORDS[t.of]}
             </span>
           )}
         </span>
