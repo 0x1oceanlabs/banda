@@ -201,6 +201,19 @@ command = "$trial/bin/banda-fake-agent"
 EOF
 fi
 
+# The trial's own `banda`, for an Agent's shell: every folder the window is
+# started with, and not the pass of the engine the Agent runs in. With
+# BANDA_STATE alone it reaches the trial's engine and writes the settings
+# of every Banda Local on the machine (#1737).
+cat >"$trial/banda" <<EOF
+#!/bin/sh
+exec env -u BANDA_TOKEN -u BANDA_ENGINE \\
+  BANDA_ROOT='$trial/root' BANDA_DATA='$trial/data' BANDA_STATE='$trial/state' \\
+  BANDA_CONFIG='$trial/config' BANDA_CACHE='$trial/cache' \\
+  '$trial/bin/banda' "\$@"
+EOF
+chmod +x "$trial/banda"
+
 # A window of the trial from the last build.
 close
 
@@ -239,6 +252,7 @@ done
 node "$here/scripts/drive.mjs" --trial "$slug" started
 cat <<EOF
 Drive it: scripts/drive.mjs --trial $slug shot (--help)
+Its banda: $trial/banda
 Its logs: $trial/state/logs/{window,engine}.log, and $trial/run.log
 Close it: scripts/try.sh --stop $slug
 EOF
