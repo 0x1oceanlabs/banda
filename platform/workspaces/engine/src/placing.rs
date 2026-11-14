@@ -145,8 +145,8 @@ pub struct Asked {
 /// never puts a Pane where the row would refuse it.
 ///
 /// On an empty workspace no Project owns, on screen, what the Person asks
-/// for with no Pane in front opens there; in the row, a Project that owns
-/// no workspace takes it, when it is the bottom one (ADR 0134, decision 6).
+/// for with no Pane in front opens there, but in the row a Project's that
+/// owns no workspace yet (ADR 0134, decision 6).
 ///
 /// Then by how the Person asked, in every Flow (ADR 0134, decisions 1
 /// and 2). A click in a Thread, or in a Pane in a Thread's Group, opens
@@ -221,14 +221,12 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
     // On an empty workspace no Project owns, on screen, what the Person
     // asks for with no Pane in front opens there, and the screen stays
     // (ADR 0134, decision 6). In the row a Project that owns no workspace
-    // takes it as its own, when it is the bottom one the row gives it
-    // (`model::project_workspace`).
-    let empty = (on.and_then(|on| list.iter().position(|w| w.id == on)))
-        .filter(|&w| list[w].project.is_none() && list[w].columns.is_empty());
-    if let (By::Person { .. }, None, Some(w)) = (by, &at, empty) {
+    // goes as before, to the one the row gives it (`model::project_workspace`).
+    let empty = (on.and_then(|on| list.iter().find(|w| w.id == on)))
+        .is_some_and(|w| w.project.is_none() && w.columns.is_empty());
+    if let (By::Person { .. }, None, true) = (by, &at, empty) {
         let owns = list.iter().any(|w| w.project == Some(project));
-        let takes = flow == Flow::Row && !scratch && !owns && w == list.len() - 1;
-        if !takes {
+        if flow != Flow::Row || scratch || owns {
             return here();
         }
     }
