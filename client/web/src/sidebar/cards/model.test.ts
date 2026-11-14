@@ -5,7 +5,7 @@ import { type Listed, NO_REASON } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { DAY, HOUR, MINUTE } from "@banda/ui/lib/words"
 import { describe, expect, test } from "vitest"
-import type { Row } from "../rows"
+import type { Row } from "../model/rows"
 import { awayShort } from "../../machines/words"
 import {
   agoSaid,
@@ -22,7 +22,7 @@ import {
   workSaid,
   worksWords,
 } from "./model"
-import { atOf } from "../inbox"
+import { atOf } from "../model/inbox"
 
 /** Tuesday, 10 November 2026, 15:00 by the local clock. */
 const NOW = new Date(2026, 10, 10, 15, 0).getTime()

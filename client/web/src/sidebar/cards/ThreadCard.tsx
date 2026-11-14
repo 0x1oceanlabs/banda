@@ -28,10 +28,10 @@ import {
   useEffect,
   useState,
 } from "react"
-import type { Act } from "../acts"
+import type { Act } from "../model/acts"
 import { awayShort } from "../../machines/words"
-import { MachineCard } from "../MachineCard"
-import { keyOf, type Row } from "../rows"
+import { MachineCard } from "../list/MachineCard"
+import { keyOf, type Row } from "../model/rows"
 import { Card, type CardLine, type ShownAct } from "./Card"
 import {
   type CardModel,
