@@ -12,11 +12,9 @@ import {
   type Floor,
   displayOf,
   drawn,
-  type Ends,
   filledAt,
   free,
   groupEnds,
-  padded,
   heightsOf,
   share,
   type Width,
@@ -244,19 +242,16 @@ export function roomLeft(
  */
 export function places(
   strip: HTMLElement,
-  columns: readonly { id: string; width: Width; min: number; ends?: Ends }[],
+  columns: readonly { id: string; width: Width; min: number }[],
   space: ReturnType<typeof room> = room(strip)
 ): Place[] {
   const { pad, gap, inner } = space
-  const out = (side: boolean) => (side ? gap / 2 : 0)
   let left = pad
   return columns.map((column) => {
     const at = drawn(share(column.width) ?? 0.5, floorIn(space, column.min))
     const width = at * (inner + gap) - gap
-    const pads = padded(column.ends)
-    left += out(pads.left)
     const place = { id: column.id, left, right: left + width }
-    left += width + gap + out(pads.right)
+    left += width + gap
     return place
   })
 }

@@ -39,7 +39,6 @@ import {
   groupAttributes,
   type Gone,
   keepsPlace,
-  padded,
   share,
   type Workspaces,
 } from "./model"
@@ -228,15 +227,9 @@ export function Overview({
           Math.min(screen.inner, column.min * screen.rem)
         )
       )
-      // A Group's ends stand out half a gap, as the Strip draws them.
-      const pads = drawn.reduce((sum, { ends }) => {
-        const { left, right } = padded(ends)
-        return sum + (+left + +right) * (screen.gap / 2)
-      }, 0)
       const across =
         columns.reduce((sum, width) => sum + width, 0) +
-        screen.gap * Math.max(0, columns.length - 1) +
-        pads
+        screen.gap * Math.max(0, columns.length - 1)
       // A workspace is never narrower than its screen.
       const whole = Math.max(across, screen.inner) + 2 * screen.outer
       return { columns, whole: columns.length ? whole : 0 }

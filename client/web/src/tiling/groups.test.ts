@@ -60,17 +60,9 @@ describe("a Group", () => {
     expect(runOf(columns, 2)).toEqual({ start: 1, end: 3 })
     expect(runOf(columns, 0)).toEqual({ start: 0, end: 1 })
     const workspace = strip("abcd", ".gg.", 0).list[0]
-    expect(groupEnds(workspace, 1)).toEqual({
-      first: true,
-      last: false,
-      pad: true,
-    })
+    expect(groupEnds(workspace, 1)).toEqual({ first: true, last: false })
     expect(groupEnds(workspace, 2).last).toBe(true)
-    expect(groupEnds(workspace, 0)).toEqual({
-      first: false,
-      last: false,
-      pad: false,
-    })
+    expect(groupEnds(workspace, 0)).toEqual({ first: false, last: false })
   })
 
   test("Alt+G only starts one", () => {
@@ -152,9 +144,7 @@ describe("a Group", () => {
     expect(widthIn(workspace, a)).toBe("0.5")
     expect(widthIn(workspace, b)).toBe("0.5")
     expect(widthIn(workspace, c)).toBe("1")
-    expect(groupEnds(workspace, 2).pad).toBe(false)
     expect(widthIn(workspace, d)).toBe("1")
-    expect(groupEnds(workspace, 3).pad).toBe(false)
     // The engine's arrangement is not touched.
     expect(state.list[0].solo).toBeUndefined()
     // The workspace Alt+M shows as the row for a while is as it is, and
@@ -286,8 +276,6 @@ describe("a Group", () => {
     expect(widthIn(workspace, a)).toBe("0.333")
     expect(widthIn(workspace, b)).toBe("0.667")
     expect(widthIn(workspace, c)).toBe("1/2")
-    // It stands out into the Strip's padding, not the gaps.
-    expect(groupEnds(workspace, 0).pad).toBe(false)
   })
 
   test("what a Thread opens goes into its Group, in the Deck right of it", () => {

@@ -61,8 +61,7 @@ export function landingAt(
   gap: number
 ): Landing | undefined {
   if (!lanes.length) return undefined
-  // Each column's share of the gap after it reaches its middle, however
-  // wide: a Group's ends leave more room (ADR 0065).
+  // Each column's share of the gap after it reaches its middle.
   const at = lanes.findIndex((lane, i) => {
     const next = lanes[i + 1]
     return x < (next ? (lane.right + next.left) / 2 : lane.right + gap / 2)
@@ -73,25 +72,22 @@ export function landingAt(
   const sideways = (side: "left" | "right"): Landing | undefined => {
     const left = side === "left"
     const beside = lanes[left ? c - 1 : c + 1]
-    const middle = left ? lane.left - gap / 2 : lane.right + gap / 2
-    // At a Group's end: inside its plate, which stands half a gap out,
+    const edge = left ? lane.left : lane.right
+    const middle = left ? edge - gap / 2 : edge + gap / 2
+    // At a Group's end: inside its plate, which fills the column's place,
     // it goes in; past it, out (ADR 0065, decision 5).
     const end = lane.group !== undefined && beside?.group !== lane.group
-    const grouped = end ? (left ? x >= middle : x <= middle) : undefined
+    const grouped = end ? (left ? x >= edge : x <= edge) : undefined
     // Its own column, alone, stays where it is beside its neighbours,
     // unless it goes into the Group there.
     const own = (l: Lane | undefined) =>
       l?.panes.length === 1 && l.panes[0] === moving
     if (own(lane) || (own(beside) && !grouped)) return undefined
     const pane = lane.panes.find((id) => id !== moving)!
-    // In the plate, which stands half a gap out (`--group-pad`), between
-    // it and the tile; out of it, in the middle of the gap past it.
+    // In the plate, between its edge and the tile, `--group-pad` in;
+    // out of it, in the middle of the gap past it.
     const out = left ? -1 : 1
-    const at = !end
-      ? middle
-      : grouped
-        ? middle - (out * gap) / 4
-        : middle + (out * gap) / 2
+    const at = end && grouped ? edge - (out * gap) / 4 : middle
     const hint = standing(at, lane.top, lane.bottom)
     return { pane, side, hint, ...(end && { grouped }) }
   }

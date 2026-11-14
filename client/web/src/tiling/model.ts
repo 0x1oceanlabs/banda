@@ -287,40 +287,29 @@ export function soloed(state: Workspaces, row?: string): Workspaces {
   }
 }
 
-/** Where a column stands in its Group: its first, its last, and whether
- * those ends stand out half a gap, for its plate (ADR 0065). */
-export type Ends = { first: boolean; last: boolean; pad: boolean }
+/** Where a column stands in its Group: its first, its last, for its
+ * plate (ADR 0065). */
+export type Ends = { first: boolean; last: boolean }
 
-/** Which of a column's sides stand out half a gap, `--group-pad`, for
- * its Group's plate: every measure of the columns counts these. */
-export function padded(ends: Ends | undefined): {
-  left: boolean
-  right: boolean
-} {
-  return { left: !!ends?.pad && ends.first, right: !!ends?.pad && ends.last }
-}
-
-/** The attributes a column draws its Group by: its plate's margins come
- * from them in CSS, with `--group-pad` (globals.css). */
+/** The attributes a column draws its Group by: the plate fills the
+ * columns' own place, and their Panes stand `--group-pad` in from its
+ * edge (globals.css), so a Group measures as any column does. */
 export function groupAttributes(group: string | undefined, ends: Ends) {
-  const { left, right } = padded(ends)
   return {
     "data-group": group,
-    "data-pad-left": left ? "" : undefined,
-    "data-pad-right": right ? "" : undefined,
+    "data-first": group !== undefined && ends.first ? "" : undefined,
+    "data-last": group !== undefined && ends.last ? "" : undefined,
   }
 }
 
-/** Where the column at `c` stands in its Group; a Group that fills the
- * screen stands out into the Strip's own padding instead of the gaps. */
+/** Where the column at `c` stands in its Group. */
 export function groupEnds(workspace: Workspace, c: number): Ends {
   const { columns } = workspace
   const group = columns[c]?.group
-  if (group === undefined) return { first: false, last: false, pad: false }
+  if (group === undefined) return { first: false, last: false }
   return {
     first: columns[c - 1]?.group !== group,
     last: columns[c + 1]?.group !== group,
-    pad: !filledAt(workspace, c),
   }
 }
 

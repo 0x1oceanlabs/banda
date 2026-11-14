@@ -120,23 +120,28 @@ describe("pushed", () => {
   })
 
   test("at a Group's end, inside its plate goes in, past it out", () => {
-    // B and C's column, then D, in a Group "g"; A out of it, 18 px off.
+    // B and C's column, then D, in a Group "g"; A out of it. The plate
+    // fills the columns' place: from 312 to 924.
     const lanes = LANES.map((lane, i) => ({
       ...lane,
-      ...(i > 0 && { group: "g", left: lane.left + 6, right: lane.right + 6 }),
+      ...(i > 0 && { group: "g" }),
     }))
+    const landed = (x: number) => landingAt(lanes, x, 300, "z", 12)
     const at = (x: number) => {
-      const landing = landingAt(lanes, x, 300, "z", 12)
+      const landing = landed(x)
       return landing && [landing.pane, landing.side, landing.grouped]
     }
-    // The Group's first column starts at 318; its plate at 312.
     expect(at(314)).toEqual(["b", "left", true])
     expect(at(309)).toEqual(["b", "left", false])
     // Inside, between its columns, it says nothing of the Group.
-    expect(at(625)).toEqual(["d", "left", undefined])
-    // Past its last, which ends at 930: in to its plate's edge at 936.
-    expect(at(933)).toEqual(["d", "right", true])
+    expect(at(620)).toEqual(["d", "left", undefined])
+    // Past its last: in to the plate's edge at 924.
+    expect(at(922)).toEqual(["d", "right", true])
     expect(at(2000)).toEqual(["d", "right", false])
+    // Inside, the hint stands between the plate's edge and the Pane;
+    // outside, in the middle of the gap.
+    expect(landed(314)!.hint.left + 2).toBe(315)
+    expect(landed(309)!.hint.left + 2).toBe(306)
   })
 
   test("a Group by its handle lands between columns, never inside another", () => {
