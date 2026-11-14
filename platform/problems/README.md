@@ -7,9 +7,7 @@ kept on this computer with a fingerprint, so it can be looked into (ADR
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `problems.list`, `problems.problem`, `problems.record`,
-  `problems.send_issue`.
+  says what it does and why, and its `methods!` table there is its contract.
 - **`skill/`**, its topics of the Banda skill.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

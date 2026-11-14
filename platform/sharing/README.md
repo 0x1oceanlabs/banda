@@ -8,8 +8,7 @@ goes.
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `sharing.state`, `sharing.new_id`, `sharing.example`.
+  says what it does and why, and its `methods!` table there is its contract.
 - Its settings: `~/.config/banda/sharing.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

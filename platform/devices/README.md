@@ -9,9 +9,7 @@ and a device removed loses its sessions at once.
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `devices.list`, `devices.add`, `devices.remove`, `devices.asking`,
-  `devices.allow`, `devices.refuse`, `devices.hand`.
+  says what it does and why, and its `methods!` table there is its contract.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).
 

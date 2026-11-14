@@ -12,10 +12,7 @@ window of another device (ADR 0106).
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `keys.list`, `keys.act`, `keys.bind`, `keys.free`, `keys.reset`,
-  `keys.set_mod`, `keys.settings_set`, `keys.settings_reset`,
-  `keys.settings_rename`, `keys.settings_read`, `keys.settings_changed`.
+  says what it does and why, and its `methods!` table there is its contract.
 - **`skill/`**, its topics of the Banda skill.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

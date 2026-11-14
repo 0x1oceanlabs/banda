@@ -13,8 +13,7 @@ only while a window hears it (ADR 0097).
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `machines.get`.
+  says what it does and why, and its `methods!` table there is its contract.
 - Its settings: `~/.config/banda/machine.toml`.
 - **`app.toml`**, what no code says ([how a module declares
   itself](../../apps/README.md)).

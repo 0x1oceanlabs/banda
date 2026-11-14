@@ -8,9 +8,7 @@ something follows it, and works out what each needs and whose turn it is.
 ## Where things are
 
 - **`engine/`**, its part in the engine. The head of `engine/src/lib.rs`
-  says what it does and why, and its `methods!` table there is its contract:
-  `pulls.list`, `pulls.watch`, `pulls.refresh`, `pulls.link`,
-  `pulls.unlink`, `pulls.list_thread`.
+  says what it does and why, and its `methods!` table there is its contract.
 - **`pane/`**, its part in the page: one `defineModule` in
   `pane/src/index.ts`, with its Panes, actions and widgets.
 - **`app.toml`**, what no code says ([how a module declares
