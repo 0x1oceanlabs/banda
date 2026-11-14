@@ -57,6 +57,7 @@ const here = new Store<Here>({
 const tiled: Tiled = {
   store: new Store(WAITING),
   aside: null,
+  flow: "row",
 }
 
 test("an App's part reads the run and Here the Window gives, by the path its package takes to them", async () => {

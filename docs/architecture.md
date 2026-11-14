@@ -215,7 +215,11 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   width and where the kind opens when no one named a place. The
   `workspaces` module reads that file as a Pane opens, so `placing`
   decides by it for the window, an Agent and `banda` alike; the page
-  takes the same file from the look for what it draws ahead. The Flow
+  takes the same file from the look for what it draws ahead. The file's
+  `flow` says how the engine places, `free` or `row`; Solo is a view of
+  the row and each device's own, kept in the window's storage and written
+  to no file, and `flow = "solo"` is the Person's default, for a device
+  that has not chosen (ADR 0127, decision 3; `tiling/flow.ts`). The Flow
   was `agents.toml`'s: what that file still says is read while
   `tiling.toml` does not say it, and the writer writes it in the
   Tiling's file under either name (ADR 0069 grace). The settings Pane writes every file through `banda
@@ -809,7 +813,7 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; how its last run went (`run.json`); the passes, hashed (`passes.sqlite3`); while the engine runs, its port and per-run secret |
-| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
+| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane, and Solo as this device chose it; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
 | `machine/` SQLite, in the engine's state | this machine's, in no Project: the workspaces, their columns, each Pane with its Project and the widths (ADR 0025) |
 | `projects/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `projects/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
@@ -2057,7 +2061,12 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
     keeps the arrangement and its rules, and says each change in one
     event that holds it whole. The window keeps only the view, in its
     storage (`$BANDA_STATE/window` when that is set), and draws the two
-    together (`tiling/arrange.ts`). A key works out its change with
+    together (`tiling/arrange.ts`). Solo is part of that view, and so is
+    the row `Alt+M` shows for a while: neither writes a file or the
+    arrangement (ADR 0127, decision 3). An empty workspace the Person
+    left goes by `workspaces.tidy`, which a window sends by itself only
+    while it is in front, so a window behind never takes away the one
+    the Person looks at on another device. A key works out its change with
     `model.ts` and sends it as one command; the window draws the event
     that comes back. Changes go one after another through one queue
     (`tiling/useTiling.ts`), each worked out from what the last one drew,

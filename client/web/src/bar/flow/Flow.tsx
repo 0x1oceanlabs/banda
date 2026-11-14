@@ -1,13 +1,15 @@
 /**
  * The Flow, on the bar beside the workspaces' numbers (ADR 0098, decision
  * 20): it arranges the workspaces, not the sidebar's list. Its icon draws the
- * one in force, and its menu picks one by the Window's `flow.pick`, which
- * writes tiling.toml beside `flow.solo`, its key (ADR 0079; ADR 0127,
- * decision 4). In the row
+ * one in force on this device, and its menu picks one by the Window's
+ * `flow.pick`, beside `flow.solo`, its key (ADR 0079): Solo is this
+ * device's view and writes nothing, and a pick between free and the row
+ * writes tiling.toml (ADR 0127, decisions 3 and 4). In the row
  * and solo it also offers Arrange by Project, as Panes already open stay
  * where they are (ADR 0102, decision 9).
  *
- *   in    flow   tiling.toml's `flow`, as the look resolves it (`useFile`)
+ *   in    flow   the Flow this device shows, as the Window gives it
+ *                (`useFlow`): tiling.toml's `flow`, and its own Solo
  *         keys   the key in force for `flow.solo` (`useKeyLabel`)
  *   draws the icon of the Flow in force, with `flow.solo`'s key in its
  *         title; a click opens its menu: Free, Row and Solo, each with
@@ -18,7 +20,7 @@
  *   gives `isFlow` and `nextFlow` to the Window's `flow.pick` and
  *         `flow.solo` (`window/actions.ts`)
  */
-import { type Flow, TILING_FILE } from "@banda/contract/workspaces"
+import type { Flow } from "@banda/contract/workspaces"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -34,8 +36,8 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { useRun } from "@banda/core/react"
-import { useFile } from "@banda/ui/lib/look"
 import type { Widget } from "@banda/ui/module"
+import { useFlow } from "../../tiling/kept"
 import {
   Columns3Icon,
   FolderInputIcon,
@@ -80,7 +82,7 @@ export function nextFlow(flow: Flow): Flow {
 /** The Flow's widget, as the top of this file says. */
 function FlowWidget() {
   const run = useRun()
-  const flow = useFile(TILING_FILE).flow
+  const flow = useFlow()
   const keyFor = useKeyLabel()
   const key = keyFor("flow.solo")
   const Icon = FLOWS[flow].icon

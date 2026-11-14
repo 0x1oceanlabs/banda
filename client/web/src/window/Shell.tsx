@@ -103,9 +103,7 @@ import {
   step,
   widthIn,
 } from "../tiling/model"
-import { unsoloing } from "../tiling/groups"
-import { TILING_FILE } from "@banda/contract/workspaces"
-import { useFile } from "@banda/ui/lib/look"
+import { useFlowHere } from "../tiling/flow"
 import { Drawer, useDrawer } from "./Drawer"
 import { Peek, usePeek } from "./Peek"
 import { Sheet, useSheet, useSheetTilesGo } from "./Sheet"
@@ -176,8 +174,9 @@ export function Shell({
   // Solo (ADR 0079, decision 2): every Agent's Group on a Project's
   // workspace is drawn the whole screen wide, and the Strip scrolls
   // from one to the next. `Alt+M` shows the workspace in view as the row
-  // for a while (`row`), until it goes or the Flow changes.
-  const flow = useFile(TILING_FILE).flow
+  // for a while (`row`), until it goes or the Flow changes. Both are this
+  // device's view, and write nothing (ADR 0127, decision 3).
+  const { flow, pick: pickFlow } = useFlowHere()
   const solo = flow === "solo"
   const [row, setRow] = useState<string>()
   const [stores] = useState(newStores)
@@ -535,6 +534,7 @@ export function Shell({
     fillPeek,
     closeSheet: sheet.close,
     glance,
+    pickFlow,
     peek: (pane, project) =>
       setPeek((was) =>
         pane
@@ -605,13 +605,6 @@ export function Shell({
         : startThread(project, ask),
     [startThread, route]
   )
-  // Back from solo to the row, a Group that `Alt+M` filled gives the
-  // room back on the workspace in view.
-  const flowWas = useRef(flow)
-  useEffect(() => {
-    if (flowWas.current === "solo" && flow !== "solo") change(unsoloing)
-    flowWas.current = flow
-  }, [flow, change])
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024). Where the Person is they read
   // from Here, so a move of the focus draws only those it concerns.
@@ -752,7 +745,7 @@ export function Shell({
       <Kept
         stores={stores}
         here={here}
-        tiled={{ store: tiling.store, aside }}
+        tiled={{ store: tiling.store, aside, flow }}
         run={parts.run}
       >
         <ThreadMenus engine={engine} projects={projects}>

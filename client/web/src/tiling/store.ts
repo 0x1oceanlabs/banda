@@ -1,6 +1,6 @@
 /**
  * What the window keeps between runs in its own storage on this computer
- * (in the engine's state folder, `window/`): the view, the focus,
+ * (in the engine's state folder, `window/`): the view, the focus, Solo,
  * whether the sidebar shows and how wide it is. The workspaces themselves are the engine's
  * (ADR 0025, decisions 1 and 2): the arrangement the window kept before
  * moves over once.
@@ -25,6 +25,7 @@ const SIDEBAR = "banda.sidebar"
 const SIDEBAR_WIDTH = "banda.sidebar.width"
 const LOOKED = "banda.looked"
 const DRAWER = "banda.drawer"
+const SOLO = "banda.solo"
 
 /**
  * Moves the window's arrangement to the engine, which takes one once: the
@@ -83,6 +84,22 @@ export function keepView(view: View): void {
   if (text === keptView) return
   keptView = text
   keep(VIEW, text)
+}
+
+/**
+ * Solo as the Person chose it on this device, while it is other than
+ * their default, tiling.toml's `flow`: none while the device follows the
+ * default. Solo is the device's view, so it is kept here, beside the rest
+ * of the view, and written to no file (ADR 0127, decision 3).
+ */
+export function loadSolo(): boolean | undefined {
+  const kept = read(SOLO)
+  return kept === null ? undefined : kept === "on"
+}
+
+export function keepSolo(solo: boolean | undefined): void {
+  if (solo === undefined) forget(SOLO)
+  else keep(SOLO, solo ? "on" : "off")
 }
 
 /** Whether the sidebar shows; it does unless the Person hid it. */

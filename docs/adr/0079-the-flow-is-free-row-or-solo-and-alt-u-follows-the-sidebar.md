@@ -62,6 +62,9 @@ sidebar's to keep, not a second order of the window's.
      comes to fills the screen again.
    - Going from solo to the row gives the room back on the workspace you
      look at.
+     _Changed_ by ADR 0127, decision 3 (WS5): solo is the device's view
+     and writes nothing, so going back to the row sends no `fill`, and a
+     Group `Alt+M` filled stays as the Person left it.
    - _Changed_ on 2026-11-09: a Group filling the screen only when the
      focus came to it was seen to grow under the eye, one Agent after
      another. Now in solo every Group on a Project's workspace is the

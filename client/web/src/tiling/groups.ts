@@ -6,7 +6,6 @@
 import { type Plan, columnTo } from "./arrange"
 import {
   type Column,
-  current,
   type Entry,
   focusedColumn,
   runOf,
@@ -69,16 +68,6 @@ export function filling(state: Workspaces): Plan | undefined {
   const { workspace, column } = focusedColumn(state)
   if (column?.group === undefined) return undefined
   return fillPlan(column.id, workspace.filled !== column.group)
-}
-
-/** Back from solo to the row: a Group `Alt+M` filled on the workspace in
- * view gives the room back. */
-export function unsoloing(state: Workspaces): Plan | undefined {
-  const workspace = current(state)
-  const column = workspace.columns.find(
-    (one) => one.group !== undefined && one.group === workspace.filled
-  )
-  return column && fillPlan(column.id, false)
 }
 
 /** Each Group's owner, by the first Pane in it whose Item names one, as

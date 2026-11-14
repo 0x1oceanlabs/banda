@@ -804,7 +804,9 @@ How an Agent's Panes stand, as its icon on the bar switches it (ADR
 workspace; or solo, as the row, what has the focus filling the screen
 (ADR 0079, ADR 0102). Free and the row are where the Tiling places a
 Pane; solo is each client's own view, so a phone and a desktop open at
-once do not fight over it (ADR 0087).
+once do not fight over it (ADR 0087): a device turns it on and off for
+itself and writes nothing, and `flow = "solo"` in `tiling.toml` is the
+Person's default, for a device that has not chosen (ADR 0127).
 
 **Strip**:
 How a workspace lays out its Panes: columns side by side that scroll

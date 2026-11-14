@@ -140,7 +140,7 @@ async function toastedOutOfView(
   ).toContainText("Done")
 }
 
-test("the Flow is picked on the bar, after the workspaces, and kept in tiling.toml, and Alt+Shift+M goes between the row and solo (ADR 0079, ADR 0098, ADR 0127)", async () => {
+test("the Flow is picked on the bar, after the workspaces: free and the row are kept in tiling.toml, Solo is this window's own and writes nothing, and Alt+Shift+M goes between the row and solo (ADR 0079, ADR 0098, ADR 0127)", async () => {
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
@@ -168,8 +168,8 @@ test("the Flow is picked on the bar, after the workspaces, and kept in tiling.to
 
   // Its menu names the three, in the prototype's words for Free and in
   // ADR 0102's for the row and solo, and in the row offers Arrange by
-  // Project (ADR 0102, decision 9); a pick draws its icon and writes the
-  // file, and Esc closes the menu.
+  // Project (ADR 0102, decision 9); a pick draws its icon, and Esc closes
+  // the menu.
   const arrange = page.getByRole("menuitem", { name: "Arrange by Project" })
   await flow.click()
   await expect(page.getByRole("menuitemradio")).toHaveText([
@@ -179,18 +179,21 @@ test("the Flow is picked on the bar, after the workspaces, and kept in tiling.to
   ])
   await expect(arrange).toBeVisible()
   await page.keyboard.press("Escape")
+  // Solo is this device's view: nothing is written for it (ADR 0127,
+  // decision 3; view.spec.ts holds a second window to it).
   await pickFlow(page, "Solo")
-  await expect.poll(written).toBe("solo")
+  expect(written()).toBeUndefined()
 
-  // Alt+Shift+M goes from solo to the row, and back.
+  // Alt+Shift+M goes from solo to the row, and back, and writes nothing.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect(flow).toHaveAccessibleName("Flow: Row")
-  await expect.poll(written).toBe("row")
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect(flow).toHaveAccessibleName("Flow: Solo")
-  await expect.poll(written).toBe("solo")
+  expect(written()).toBeUndefined()
 
-  // From free, it goes to solo; free's menu offers no Arrange.
+  // Free is how the engine places: it is written. From free, the key
+  // goes to solo, which takes the row with it; free's menu offers no
+  // Arrange.
   await pickFlow(page, "Free")
   await expect.poll(written).toBe("free")
   await flow.click()
@@ -200,7 +203,7 @@ test("the Flow is picked on the bar, after the workspaces, and kept in tiling.to
   await expect(page.getByRole("menuitemradio")).toHaveCount(0)
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect(flow).toHaveAccessibleName("Flow: Solo")
-  await expect.poll(written).toBe("solo")
+  await expect.poll(written).toBe("row")
 })
 
 test("in the row and solo the Flow menu's Arrange by Project takes each Pane to its Project's workspace (ADR 0102, decision 9)", async () => {
@@ -289,7 +292,7 @@ test("in solo every Agent is the whole screen wide at once, and the Strip scroll
   expect(await shares()).toEqual([100, 100, 100])
 
   // Alt+M shows the row for a while, the focus where it was, and again
-  // goes back to solo; tiling.toml keeps solo.
+  // goes back to solo: the window's own, as solo is.
   await page.keyboard.press("Alt+KeyM")
   await expect.poll(shares).toEqual([50, 50, 50])
   await expect(a).toHaveAttribute("data-focused", "true")
