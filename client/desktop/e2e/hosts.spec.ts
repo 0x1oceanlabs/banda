@@ -2376,11 +2376,14 @@ test("a message whose time ran out while the window was closed is never sent: as
   window = await again(window, arc)
   const { page } = window
   const thread = benchIn(page)
+  // The time it gave up at, with its day where that was yesterday: as it
+  // is for a run in the ten minutes after midnight.
+  const at = until.slice("until ".length)
   const notSent = page
     .getByRole("region", { name: "Notifications" })
     .getByRole("listitem")
     .filter({
-      hasText: `Not sent: arc was still away at ${until.slice("until ".length)}.`,
+      hasText: new RegExp(`Not sent: arc was still away at (\\w{3} )?${at}\\.`),
     })
   await expect(notSent).toBeVisible()
   // Its Thread is on screen: no Open.
