@@ -1,14 +1,17 @@
 # Architecture
 
-This is the shape Banda is built to. The decisions and their reasons are in
-[ADR 0001](adr/0001-one-engine-a-small-kernel-and-modules.md) and
-[ADR 0002](adr/0002-how-the-engine-writes-and-keeps-the-work.md), and the
-words are in [`GLOSSARY.md`](../GLOSSARY.md). This page changes when the code
-does.
+This is the shape Banda is built to, as a map: each part in a line or
+two, with a link to where its detail is. The detail lives beside the
+code, in the `README.md` of the kernel, the engine, each App, each part
+of the platform and each client. Read this page whole, then the pages of
+the parts you change. This page changes when the shape does; a part's
+page changes with its code, in the same PR.
 
-Where it is going, accepted on 2026-11-06: [the architecture
-vision](research/2026-11-06-architecture-vision.md). Its decisions become ADRs
-and then code, step by step; this page follows the code.
+The words are in [`GLOSSARY.md`](../GLOSSARY.md), the decisions in
+[`adr/`](adr/README.md), whose index says which still bind. Where it is
+going, accepted on 2026-11-06: [the architecture
+vision](research/2026-11-06-architecture-vision.md). Its decisions
+become ADRs and then code, step by step; this page follows the code.
 
 ## Three levels
 
@@ -85,18 +88,8 @@ the answer, the publish, the outbox.
 | `projects/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `projects/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
-Events are facts with a version, and the log is never rewritten. Each module
-keeps its own ledger of migrations. A module whose tables do not come up to
-date in a Project (a step that fails, a step that reaches past its prefix,
-or data a newer version of it wrote) is turned off in that Project alone:
-the Project opens, its other modules go on, the module's methods there
-answer `app_unavailable` with why, and its effects wait as they are. A step
-that failed left nothing, so the next start runs it again, put right or
-not. The machine's own modules are not turned off: the engine starts with
-all of them or does not start (ADR 0085, decision 8). Our IDs are UUIDv7, but those derived
-from another, as UUIDv5: a command's ID from what sent it, and what a
-workspaces command makes from its command's ID (ADR 0088, decision 11). A
-Harness's IDs are stored as references.
+What an event, a migration and an ID are is in
+[`kernel/README.md`](../kernel/README.md#events-migrations-and-ids).
 
 ## Modules
 
@@ -122,85 +115,35 @@ part is the `Module` it gives the kernel, its window part one
 what `app.toml` holds and how the engine gathers the one list of Apps
 are in [`apps/README.md`](../apps/README.md).
 
-**Its contract** is everything it shows outward:
+Its contract is everything it shows outward: the methods it accepts,
+the events it publishes, its tables, the tools it offers Agents, and its
+Panes. Modules connect only by commands and events, so one removed
+leaves the others working
+([`apps/README.md`](../apps/README.md#a-modules-contract)).
 
-- **Methods it accepts**, each a call, a command or a stream with typed
-  params and answer: one line in its `methods!` table, which makes the
-  right, the dispatch and the module's methods as TypeScript, so the
-  window's `engine.call`, `engine.command` and `engine.stream` take only
-  those (ADR 0014). Each is a read or an act (ADR 0106, law 4): a command
-  acts; a call or a stream reads when its right is Read, or when its line
-  ends `, read`, as `terminal.watch` does, and acts otherwise. The tests
-  write which each is to `sdk/contract/src/generated/does.ts`, and the
-  window's client fails an act at once while its machine is away, or
-  while that machine's engine answers nothing (ADR 0082, decision 11).
-- **Events it publishes.** These are its published language, and they carry a
-  version.
-- **Its tables.** Only this module writes them, and no other module reads
-  them: the kernel refuses any table outside its prefix (Tables by
-  prefix, above).
-- **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
-  is one, with its `///` as its description and the JSON Schema of its
-  params, from `schemars` (ADR 0019, decision 3). The agents module's
-  `threads`, `thread` and `send` are `threads`, `read` and `send`.
-- **Panes.** They reach the engine only through the API.
+| Module | What it is | Its page |
+| --- | --- | --- |
+| agents | Threads, turns, Questions, Visuals, sub-agents, and the ACP adapter | [`apps/agents`](../apps/agents/README.md) |
+| browser | Chromium in a Pane, for the Person and every Agent | [`apps/browser`](../apps/browser/README.md) |
+| clock | The day and the time on the bar | [`apps/clock`](../apps/clock/README.md) |
+| files | Any folder as a Finder shows it, a file in its Pane, and Quick Look | [`apps/files`](../apps/files/README.md) |
+| git | The Project's folder as git sees it: its changes, diffs and commits | [`apps/git`](../apps/git/README.md) |
+| pulls | The pull requests linked to a Project's Threads | [`apps/pulls`](../apps/pulls/README.md) |
+| terminal | A program on a PTY, run as the Person, drawn by Ghostty | [`apps/terminal`](../apps/terminal/README.md) |
+| apps | The Apps on this machine, and those installed from a folder | [`platform/apps`](../platform/apps/README.md) |
+| bytes | A file's bytes by a token, from the machine that has the file | [`platform/bytes`](../platform/bytes/README.md) |
+| devices | The devices this machine lets in at its door, and its host key | [`platform/devices`](../platform/devices/README.md) |
+| harnesses | The machine's Harnesses, their Accounts and their usage | [`platform/harnesses`](../platform/harnesses/README.md) |
+| keys | Every action with its keys, and the one writer of settings for an Agent | [`platform/keys`](../platform/keys/README.md) |
+| machines | A machine's name and icon, its battery, and no idle sleep while Agents work | [`platform/machines`](../platform/machines/README.md) |
+| notifications | Toasts, the desktop's notifications, and the bell on the bar | [`platform/notifications`](../platform/notifications/README.md) |
+| problems | What broke in Banda itself, kept on this computer | [`platform/problems`](../platform/problems/README.md) |
+| sharing | The one part that sends anything anywhere, and only what the Person turned on | [`platform/sharing`](../platform/sharing/README.md) |
+| updates | Each machine updates its own Banda, with or without a window | [`platform/updates`](../platform/updates/README.md) |
+| workspaces | How this machine's Panes are arranged, and where a Pane opens | [`platform/workspaces`](../platform/workspaces/README.md) |
 
-**Modules connect only by commands and events.** Here is an example, once
-Chat exists:
-
-1. A Person writes "@agent do X" in a Room.
-2. Chat publishes an event that a message with a Mention was posted.
-3. Agents turns that event into a request for the Agent, and the Agent works
-   through a turn.
-4. Agents publishes "the Agent answered", and Chat adds the answer to the
-   Room.
-
-If Chat is removed, Agents still works through its own Thread.
-
-| Module | Its words | When |
-|---|---|---|
-| agents | Thread, Harness, Agent, Turn, Question | first |
-| harnesses | Harness, account; the machine's (ADR 0040) | first |
-| terminal | Terminal | first |
-| browser | Tab; the pages are the window's; an Agent reaches its Project's tabs through its tools (ADR 0013, ADR 0029, ADR 0083) | first |
-| files | any folder, a file in its Pane (ADR 0073) | first |
-| chat | Room, Message, Mention | later |
-| databases | Database, Field, Record, View | later |
-
-### apps
-
-`platform/apps`: the Apps on this machine, what the engine runs and
-the Apps installed from a folder, each run by a worker (ADR 0126).
-Its rules are in
-[`platform/apps/README.md`](../platform/apps/README.md).
-
-### agents
-
-`apps/agents`: Threads, turns, Questions, Visuals, sub-agents, and the
-ACP adapter that speaks to every Harness. Its rules are in
-[`apps/agents/README.md`](../apps/agents/README.md); its Panes' files are
-in [`apps/agents/pane/README.md`](../apps/agents/pane/README.md).
-
-### harnesses
-
-`platform/harnesses`: the machine's Harnesses, their Accounts and
-usage, and the crate that speaks to a Harness (ADR 0040, ADR 0108).
-Its rules are in
-[`platform/harnesses/README.md`](../platform/harnesses/README.md).
-
-### terminal
-
-`apps/terminal`: a program on a PTY in the engine, run as the Person,
-and its Pane, drawn by Ghostty (ADR 0047).
-Its rules are in
-[`apps/terminal/README.md`](../apps/terminal/README.md).
-
-### files
-
-`apps/files`: any folder as a Finder shows it, a file in its Pane, and
-Quick Look; `files.find` answers every "which file" (ADR 0073).
-Its rules are in
-[`apps/files/README.md`](../apps/files/README.md).
+Chat (Room, Message, Mention) and Databases (Database, Field, Record,
+View) come later.
 
 ## Inside a module
 
@@ -250,30 +193,15 @@ The detail of each part is beside its code:
 banda/
   kernel/             Rust: Project, event log, access, registry, API
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu
-  apps/               each App's module (ADR 0062, decision 11)
-    agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it
-                      thread/, entries/ and lines/ with their tables, composer/, asking/, visual/ (ADR 0091; its README)
-    agents/desktop/   Electron main: serves the Visuals Agents show (ADR 0037)
-    terminal/engine/  Rust: Terminals, their PTYs and what they printed
-    terminal/pane/    React: a terminal, drawn by Ghostty
-    browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
-    browser/desktop/  Electron main: the browser's pages and profiles, extensions, blocker and tab sockets (ADR 0028)
-  platform/           what the Apps stand on; it names no App (ADR 0062)
-    apps/             Rust: the Apps on this machine: what the engine runs, described, and the Apps installed from a folder (ADR 0126)
+  apps/               each App's module, one folder each (ADR 0062, decision 11): the table under Modules
+  platform/           what the Apps stand on; it names no App (ADR 0062): its modules are in that table, and beside them
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
     look/             Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
     settings/         Rust: Banda's settings files, each described once, and the one writer that changes them (ADR 0016)
     git-cli/          Rust: how Banda starts git: its own bookkeeping, which runs no program a repository names, and the acts the Person asks for
     environments/     Rust: where a Project's programs run, the adapters of the kernel's Environment port: local (ADR 0084)
     fence/            Rust: the fence a Harness's programs run behind on Linux, and `banda fence`, its launcher and probe (ADR 0083)
-    harnesses/        Rust: the Harnesses and how each starts; adapters/ the ACP adapters Banda carries and its shim of Claude's Agent SDK, a Node package run on the host (ADR 0059, ADR 0078)
-  client/             the window
-    ui/               shadcn/ui and the Pane contract
-    ghostty/          T3 Code's Ghostty adapter and its WebAssembly, vendored
-    web/              React: the Window (window/: the Bar, the Sidebar, the Top layer), the Tiling (tiling/: the workspaces, the overview), the actions, the Pane registry
-    desktop/          Electron: the window and the engine's start; e2e tests
-    desktop-kit/      what a module's part in main may use of main (ADR 0028)
+  client/             the window: its folders are under Window, above
   sdk/contract/       the engine's API for TypeScript: generated types and the client
   site/               banda.so: static Astro pages drawn with Banda UI, served by Vercel (ADR 0128)
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too

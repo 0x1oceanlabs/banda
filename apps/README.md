@@ -84,3 +84,40 @@ still kept by hand are held to it by the engine's tests:
 window parts (until B2), and the window's `client/web/src/modules.ts`
 and `client/desktop/src/modules.ts`; the tests write the contract's
 `Methods` (`sdk/contract/src/generated/Methods.ts`) from it.
+
+## A module's contract
+
+**Its contract** is everything it shows outward:
+
+- **Methods it accepts**, each a call, a command or a stream with typed
+  params and answer: one line in its `methods!` table, which makes the
+  right, the dispatch and the module's methods as TypeScript, so the
+  window's `engine.call`, `engine.command` and `engine.stream` take only
+  those (ADR 0014). Each is a read or an act (ADR 0106, law 4): a command
+  acts; a call or a stream reads when its right is Read, or when its line
+  ends `, read`, as `terminal.watch` does, and acts otherwise. The tests
+  write which each is to `sdk/contract/src/generated/does.ts`, and the
+  window's client fails an act at once while its machine is away, or
+  while that machine's engine answers nothing (ADR 0082, decision 11).
+- **Events it publishes.** These are its published language, and they carry a
+  version.
+- **Its tables.** Only this module writes them, and no other module reads
+  them: the kernel refuses any table outside its prefix (Tables by
+  prefix, above).
+- **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
+  is one, with its `///` as its description and the JSON Schema of its
+  params, from `schemars` (ADR 0019, decision 3). The agents module's
+  `threads`, `thread` and `send` are `threads`, `read` and `send`.
+- **Panes.** They reach the engine only through the API.
+
+**Modules connect only by commands and events.** Here is an example, once
+Chat exists:
+
+1. A Person writes "@agent do X" in a Room.
+2. Chat publishes an event that a message with a Mention was posted.
+3. Agents turns that event into a request for the Agent, and the Agent works
+   through a turn.
+4. Agents publishes "the Agent answered", and Chat adds the answer to the
+   Room.
+
+If Chat is removed, Agents still works through its own Thread.

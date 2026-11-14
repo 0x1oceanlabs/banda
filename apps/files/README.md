@@ -1,7 +1,7 @@
 # Files
 
 The Files App: any folder as a Finder shows it, one file in a Pane, and
-Quick Look. [The architecture](../../docs/architecture.md#files) is the
+Quick Look. [The architecture](../../docs/architecture.md#modules) is the
 map this page is one part of. A change to this App changes this page in
 the same PR.
 

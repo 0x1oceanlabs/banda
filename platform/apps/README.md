@@ -1,7 +1,7 @@
 # The apps module
 
 `platform/apps`: the Apps on this machine, and the Apps a Person's Agent
-writes as a folder. [The architecture](../../docs/architecture.md#apps)
+writes as a folder. [The architecture](../../docs/architecture.md#modules)
 is the map this page is one part of. A change to this part changes this
 page in the same PR.
 
