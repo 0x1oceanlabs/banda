@@ -823,7 +823,7 @@ look as one: a plate behind them, in the colour of their Agent's state
 (ADR 0065). `Alt+G` starts one; an Agent's Thread is a Group from its
 opening, and what its Thread opens joins it: what its Agent opens, and
 what the Person opens with a click in it. What the Person opens by a key
-opens beside it (ADR 0133). The mod and a drag of
+opens beside it (ADR 0134). The mod and a drag of
 any of its Panes move it whole. It lays out only, and gives no access.
 
 **Zoom**:
