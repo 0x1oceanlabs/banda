@@ -376,7 +376,7 @@ test("the bar's workspaces come and go on the look's motion", async () => {
   await expect(two).toHaveCount(0)
 })
 
-test("a sideways swipe moves the Strip and lands on a column; a scroll up and down leaves it be", async () => {
+test("a sideways swipe scrolls the Strip freely and stops where it does; a scroll up and down leaves it be", async () => {
   window = await startWindow({ files: FREE })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -412,17 +412,28 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
   const box = await launcher.boundingBox()
   await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
 
-  // A scroll up that drifts sideways a little moves nothing sideways.
+  // A scroll up moves nothing sideways. (One that drifts sideways scrolls
+  // the Strip by its drift, as the system scrolls a page, unless the Pane
+  // under the pointer scrolls up and down and takes the whole swipe.)
   const before = await scrolled()
-  for (let i = 0; i < 6; i++) await page.mouse.wheel(-4, -40)
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(0, -40)
   await page.waitForTimeout(300)
   expect(await scrolled()).toBe(before)
   await expect(launcher).toHaveAttribute("data-focused", "true")
 
-  // A swipe to the left brings the Thread into view, and it takes the focus.
-  for (let i = 0; i < 10; i++) await page.mouse.wheel(-60, 0)
-  await expect(thread).toHaveAttribute("data-focused", "true")
+  // A swipe to the left scrolls the Strip by as much, as the system scrolls
+  // a page: no column pulls it on, and the focus stays where it was.
+  for (let i = 0; i < 5; i++) await page.mouse.wheel(-60, 0)
+  await expect.poll(scrolled).toBe(before - 300)
+  await page.waitForTimeout(500)
+  expect(await scrolled()).toBe(before - 300)
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  // Further, it stops at the Strip's left end; a click gives the Thread the
+  // focus.
+  for (let i = 0; i < 40; i++) await page.mouse.wheel(-60, 0)
   await expect.poll(scrolled).toBe(0)
+  await thread.locator("header").click()
+  await expect(thread).toHaveAttribute("data-focused", "true")
 
   // Alt and a long swipe down moves one workspace, however long it is.
   // The Thread goes to the second, which the screen follows once the engine

@@ -234,7 +234,10 @@ On the list, Roma decided:
      hears it too (`html[data-alt]`): the page lets the mouse through, so
      `Alt` and either button move and size over it. `Alt` and the middle
      button drag the Strip with the pointer and land as a swipe does; up
-     or down, 48 px, they step one workspace, once.
+     or down, 48 px, they step one workspace, once. _Amended 2026-11-14
+     (Roma): nothing lands. A sideways swipe scrolls the Strip as the
+     system scrolls a page, its glide too, and it stays where the hand
+     leaves it, as a drag does; the focus stays where it was._
    - **The view.** `Alt` and the middle button drag the Strip sideways
      and the workspaces up and down. The wheel stays as it is (the
      architecture's swipes): `Alt` and the wheel go a workspace up or

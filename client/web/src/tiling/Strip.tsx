@@ -31,7 +31,6 @@ import {
 import {
   type Aim,
   ColumnMotion,
-  columnIn,
   drawnColumns,
   minWidthOf,
   type Place,
@@ -42,7 +41,6 @@ import {
   sized,
   type Space,
   scrollOf,
-  landing,
   widthAt,
 } from "./layout"
 import { type Shows, useGroups, useShows } from "./shows"
@@ -50,15 +48,7 @@ import { type Frame, PaneFrame } from "./PaneFrame"
 import { aimed, drawnStrip, leftStrip } from "./tiles"
 
 import { Tabs } from "./Tabs"
-import {
-  pixels,
-  scrollsSideways,
-  SWIPE_END,
-  Swipe,
-  THROW,
-  Tracker,
-  type Way,
-} from "./swipe"
+import { pixels, scrollsSideways, Swipe, type Way } from "./swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
 import { usePlates } from "./usePlates"
@@ -75,15 +65,15 @@ const VIEW_STEP = 48
  * fills the screen, as every one does in solo, the Group comes whole into
  * view, from its first column.
  *
- * A sideways swipe moves the Strip with the fingers, the mod held or not;
- * let go, it carries on as niri's does, to the column edge nearest where
- * its throw would rest, on one spring at the hand's speed (`land`). Over what scrolls sideways by itself, a swipe without the mod is that
- * Pane's. A swipe up or down is the Pane's under the pointer: the Strip
- * never moves by itself.
+ * A sideways swipe scrolls the Strip freely, as the system scrolls any
+ * page, its glide too: it stops where the hand leaves it, and the focus
+ * stays where it was. Over what scrolls sideways by itself, a swipe without
+ * the mod is that Pane's. A swipe up or down is the Pane's under the
+ * pointer: the Strip never moves by itself.
  *
  * the mod and the middle button drag the view, as niri's `Mod` and the
- * middle button: sideways the Strip follows the pointer, and lands as a
- * swipe does; up or down, the workspaces step once.
+ * middle button: sideways the Strip follows the pointer, and stays where
+ * it is let go; up or down, the workspaces step once.
  *
  * It is drawn again only as its own props change, or what `shows` says
  * of its Panes (ADR 0088, decision 7).
@@ -309,7 +299,6 @@ export const Strip = memo(function Strip({
     if (!strip) return
     const swipe = new Swipe()
     let mine = false
-    let ending: ReturnType<typeof setTimeout> | undefined
     const onWheel = (event: WheelEvent) => {
       const { x, y } = pixels(event)
       const held = holdsMod(event)
@@ -320,24 +309,14 @@ export const Strip = memo(function Strip({
       }
       if (held) event.preventDefault()
       if (!mine || swipe.way !== "sideways") return
-      // The system's glide after the fingers threw the Strip is not theirs:
-      // Banda carries it on its own spring.
-      if (swipe.gliding) return
       // The fingers take the Strip from wherever the spring has it.
       scrollOf(strip).stop()
-      strip.scrollLeft += x
-      clearTimeout(ending)
-      if (swipe.lifted()) {
-        land(strip, now.current, swipe.tracker.speed(event.timeStamp))
-        return
-      }
-      ending = setTimeout(() => land(strip, now.current), SWIPE_END)
+      // Without the mod the system scrolls it, as any page; with it, the
+      // swipe was the mod's, so Banda moves it by as much.
+      if (held) strip.scrollLeft += x
     }
     strip.addEventListener("wheel", onWheel, { passive: false })
-    return () => {
-      strip.removeEventListener("wheel", onWheel)
-      clearTimeout(ending)
-    }
+    return () => strip.removeEventListener("wheel", onWheel)
   }, [holdsMod])
 
   useEffect(() => {
@@ -345,15 +324,7 @@ export const Strip = memo(function Strip({
     if (!strip) return
     const root = document.documentElement
     let drag:
-      | {
-          pointer: number
-          x: number
-          y: number
-          scroll: number
-          way?: Way
-          /** Its speed, for the throw it is let go with. */
-          tracker: Tracker
-        }
+      | { pointer: number; x: number; y: number; scroll: number; way?: Way }
       | undefined
     const onDown = (event: PointerEvent) => {
       if (event.button !== 1 || !holdsMod(event)) return
@@ -367,7 +338,6 @@ export const Strip = memo(function Strip({
         x: event.clientX,
         y: event.clientY,
         scroll: strip.scrollLeft,
-        tracker: new Tracker(),
       }
       root.dataset.drag = "view"
     }
@@ -378,11 +348,7 @@ export const Strip = memo(function Strip({
       if (!drag.way && Math.max(Math.abs(dx), Math.abs(dy)) >= THRESHOLD) {
         drag.way = Math.abs(dx) >= Math.abs(dy) ? "sideways" : "upright"
       }
-      if (drag.way === "sideways") {
-        const was = strip.scrollLeft
-        strip.scrollLeft = drag.scroll - dx
-        drag.tracker.push(strip.scrollLeft - was, event.timeStamp)
-      }
+      if (drag.way === "sideways") strip.scrollLeft = drag.scroll - dx
       if (drag.way === "upright" && Math.abs(dy) >= VIEW_STEP) {
         // Pulled up, the next one comes up from below.
         now.current.onStep(dy < 0 ? 1 : -1)
@@ -391,11 +357,8 @@ export const Strip = memo(function Strip({
     }
     const finish = () => {
       if (!drag) return
-      const { way, tracker } = drag
       drag = undefined
       delete root.dataset.drag
-      const speed = tracker.speed(performance.now())
-      if (way === "sideways") land(strip, now.current, speed)
     }
     const onUp = (event: PointerEvent) => {
       if (drag?.pointer === event.pointerId) finish()
@@ -441,7 +404,7 @@ export const Strip = memo(function Strip({
         hover(target?.closest<HTMLElement>("[data-column]")?.dataset.group)
       }}
       onPointerLeave={() => hover(undefined)}
-      className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
+      className="relative flex h-full gap-(--gap-inner) overflow-x-auto overflow-y-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))] [scrollbar-width:none]"
     >
       <Before read={() => motion.current.before(scroller.current)} />
       {/* The Strip stays when its last Pane goes, so that Pane fades out
@@ -691,36 +654,4 @@ function reveal(
   // and the sidebar floating there.
   const to = revealTo(all, room(strip), at, id, { ...aim, center })
   if (to !== undefined && to !== at) scroll.to(to, moveOf("strip"))
-}
-
-/**
- * Where a sideways swipe ends, let go at `speed` pixels a second, as
- * niri's does (`landing`): on the snap nearest to where it would come to
- * rest by itself, by one spring at the hand's speed; the focus on the
- * furthest column whole there, the way it went.
- */
-function land(
-  strip: HTMLElement,
-  {
-    columns,
-    frame,
-  }: { columns: Drawn; focus: string | undefined; frame: Frame },
-  speed = 0
-) {
-  const all = places(strip, columns)
-  const scroll = scrollOf(strip)
-  const from = scroll.value
-  const rest = from + speed * THROW
-  const landed = landing(all, columns, room(strip), columnsOf().center, {
-    from,
-    rest,
-  })
-  if (!landed) return
-  if (landed.at !== from) {
-    scroll.to(landed.at, moveOf("strip"), from, speed)
-  }
-  // Where it goes shows from now, before it slides in.
-  aimed(strip)
-  const entry = columnIn(strip, landed.id)?.dataset.entry
-  if (entry) frame.focus(entry)
 }

@@ -207,7 +207,8 @@ day.
    `Alt+M` shows as the row stays as it is. After the UX review: the Flow
    menu, Settings and the title of `Alt+Shift+M` say so. A focus that
    goes into a Group shows it whole from its first column, as a pick
-   does, by keys and at a swipe's end. The width keys do nothing on a
+   does, by keys (and at a swipe's end, until 2026-11-14: Roma had
+   the swipe scroll freely, in solo too, as ADR 0025 says as amended). The width keys do nothing on a
    column that fills the screen alone, so the row never gets a width the
    Person did not see, and on a column of a Group each press steps the
    share it shows on. A Group `Alt+M` filled in the row does the same.

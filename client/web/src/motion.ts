@@ -112,15 +112,10 @@ export class Moving {
    * Moves to `target` as `move` says; `off` jumps there. It starts where it
    * is, or at `from` when the thing it moves was just put elsewhere, as a
    * column that the layout moved: then it keeps its speed all the same.
-   * A thing a hand threw starts at the hand's `velocity`, in units a
-   * second. The start is on screen at once, before the next frame.
+   * The start is on screen at once, before the next frame.
    */
-  to(
-    target: number,
-    move: Move,
-    from: number = this.value,
-    velocity: number = this.moving ? this.#velocity : 0
-  ): void {
+  to(target: number, move: Move, from: number = this.value): void {
+    const velocity = this.moving ? this.#velocity : 0
     this.stop()
     if (move.kind === "off" || from === target) {
       this.#land(target)

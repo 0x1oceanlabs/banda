@@ -155,9 +155,6 @@ test("a terminal draws nothing while it is hidden, and has drawn what it printed
   await page.evaluate(resetTexts)
   for (let i = 0; i < 6; i++) await page.mouse.wheel(60, 0)
   expect(await drewBefore(page, 2), "drawn before it shows").toContain(saidEdge)
-  // The swipe lands 160 ms after its last wheel (`SWIPE_END`), and focuses
-  // the column it lands on: a click before that loses its focus to it.
-  await page.waitForTimeout(500)
 
   // On a workspace away, as on the Strip.
   const away = files("away")
