@@ -242,14 +242,14 @@ test("an act taken back by its toast or its ghost line is kept no more, and one 
   expect(undoLast(run, NOW)).toBeUndefined()
 })
 
-test("an act on several cards at once is one: one Ctrl+Z takes it all back, and its toast says what it left, still selected (spec S10b)", () => {
+test("Archive N done is one act: one Ctrl+Z takes it all back, and its toast says what it left (ADR 0098, decision 15)", () => {
   const run = vi.fn()
   const set = ["t1", "t2", "t3"].map(archived)
   keep([archived("before")], NOW)
   keep(set, NOW)
-  toldArchived(run, set, "1 asks you, still selected")
+  toldArchived(run, set, "1 not reached (mac is away)")
   expect(toasts.shown).toHaveBeenLastCalledWith(
-    "Archived 3 · 1 asks you, still selected",
+    "Archived 3 · 1 not reached (mac is away)",
     expect.objectContaining({ id: UNDO_TOAST })
   )
   // One Ctrl+Z, the whole set, and the toast goes with it.

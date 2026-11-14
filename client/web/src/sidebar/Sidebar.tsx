@@ -150,7 +150,7 @@ export function Sidebar({
                 </PickList>
               </div>
             </ScrollArea>
-            <Foot bulk={keys.bulk} />
+            <Foot />
             <AskedTrust engine={engine} projects={projects} />
             <DeleteDialog deleting={keys.deleting} />
           </ProjectRows>

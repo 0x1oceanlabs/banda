@@ -22,7 +22,7 @@ import { ProjectMenu } from "./ProjectMenu"
 import type { Region } from "./regions"
 import type { Settings } from "./settings"
 import { ThreadRow } from "./ThreadRow"
-import { useActs, useSetActs } from "./useActs"
+import { useActs, useArchiveAll } from "./useActs"
 import { PickContext, pickProps, pieceKey } from "./usePick"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
@@ -78,9 +78,7 @@ export function SectionView({
   now: number
 }) {
   const keyFor = useKeyLabel()
-  const { picked, expand, checked } = useContext(PickContext)
-  // In check mode an option says whether it is checked; a piece never is.
-  const checking = checked.size > 0
+  const { picked, expand } = useContext(PickContext)
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
   // Grouped, a header names what each card then leaves out.
@@ -93,7 +91,7 @@ export function SectionView({
   const label = !named && view.group === "project" ? here : undefined
   const items = itemsOf(regions)
   const actOn = useActs()
-  const actOnSet = useSetActs()
+  const archiveAll = useArchiveAll()
   // Your turn's cards that are done, as drawn: not one that asks, failed
   // or woke.
   const done = items.flatMap((item) =>
@@ -132,7 +130,6 @@ export function SectionView({
         view={view}
         current={isCurrent(row.project.id, row.listed.pane)}
         picked={item.key === picked}
-        {...(checking ? { checked: checked.has(item.key) } : {})}
         strayed={strayed.has(row.listed.id)}
         named={named || (label !== undefined && row.host === undefined)}
         machines={settings.machines}
@@ -166,9 +163,7 @@ export function SectionView({
                 data-done-all=""
                 className="ml-auto flex items-center gap-1 self-center rounded-small bg-foreground/7 px-1.5 text-meta font-normal text-muted-foreground outline-none hover:text-foreground"
                 onMouseDown={(event) => event.preventDefault()}
-                onClick={(event) =>
-                  actOnSet(done, "archive", { anchor: event.currentTarget })
-                }
+                onClick={() => archiveAll(done)}
               >
                 <CheckIcon className="size-3" />
                 Archive {done.length} done
@@ -188,7 +183,7 @@ export function SectionView({
         return (
           <button
             type="button"
-            {...pickProps(stop, stop === picked, checking ? false : undefined)}
+            {...pickProps(stop, stop === picked)}
             data-more=""
             data-unfold={children ? block.parent : undefined}
             tabIndex={-1}
@@ -216,14 +211,7 @@ export function SectionView({
         return <EmptyPlace place={block} />
       case "project": {
         const stop = pieceKey(host, item.key)
-        return (
-          <ProjectCard
-            call={block}
-            stop={stop}
-            picked={stop === picked}
-            checking={checking}
-          />
-        )
+        return <ProjectCard call={block} stop={stop} picked={stop === picked} />
       }
       case "group": {
         const { project } = block
@@ -236,7 +224,6 @@ export function SectionView({
             settings={settings}
             stop={stop}
             picked={stop === picked}
-            checking={checking}
             onFold={() => onToggle(block.key)}
           />
         )

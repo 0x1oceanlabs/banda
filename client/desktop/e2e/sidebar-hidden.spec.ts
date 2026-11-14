@@ -135,7 +135,7 @@ test("with the sidebar hidden, the count beside the logo says whose turn it is a
   ).toHaveCount(0)
 })
 
-test("a click on the count opens the small inbox: Your turn alone in one-line cards in the sidebar's scope, the focus on the first; ↓, S and X work as in the sidebar, 1–4 do nothing; Esc clears what is checked, then gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
+test("a click on the count opens the small inbox: Your turn alone in one-line cards in the sidebar's scope, the focus on the first; ↓ and S work as in the sidebar, 1–4 do nothing; Esc gives the focus back where it was; Enter opens the card's Thread in its Pane (ADR 0098, S15)", async () => {
   test.setTimeout(240_000)
   window = await startWindow()
   const { page } = window
@@ -179,17 +179,7 @@ test("a click on the count opens the small inbox: Your turn alone in one-line ca
   await page.keyboard.press("2")
   await expect(inbox).toBeVisible()
   await expect(cards).toHaveCount(2)
-  // X checks the card picked; Esc clears it first, and the small inbox
-  // stays.
-  await page.keyboard.press("x")
-  await expect(cardOf(list, "call three")).toHaveAttribute("data-checked", "")
-  await page.keyboard.press("Escape")
-  await expect(cardOf(list, "call three")).not.toHaveAttribute(
-    "data-checked",
-    ""
-  )
-  await expect(inbox).toBeVisible()
-  // Esc again closes it, and the focus goes back where it was.
+  // Esc closes it, and the focus goes back where it was.
   await page.keyboard.press("Escape")
   await expect(inbox).toBeHidden()
   await focusIs(page, "was")

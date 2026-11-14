@@ -317,7 +317,7 @@ export const WINDOW_ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell, args) => {
       const at = itemOf(shell, args)
-      pickLater(at && { targets: [at] })
+      pickLater(at && { thread: at })
     },
   },
   {

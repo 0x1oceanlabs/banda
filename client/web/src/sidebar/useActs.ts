@@ -1,19 +1,10 @@
 import { useEngineOf, useRun } from "@banda/core/react"
 import { toast } from "@banda/ui/components/sonner"
-import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import type { ItemAction } from "@banda/ui/module"
 import { type Act, actsOf } from "./acts"
-import { itemKey, type Row } from "./rows"
+import type { Row } from "./rows"
 import { itemActionOf } from "../window/items"
-import {
-  type Left,
-  leftSaid,
-  REFUSED,
-  refusalOf,
-  refused,
-  setRefusalOf,
-} from "./refusals"
-import { keyId } from "./keys"
+import { leftSaid, REFUSED } from "./refusals"
 import { pickLater } from "./LaterPicker"
 import { keep, toldArchived, type Undoable, undoOf } from "./undo"
 
@@ -71,7 +62,7 @@ export function useActs(): (row: Row, act: Act | "unread", on: ActOn) => void {
     }
     if (act === "later") {
       pickLater({
-        targets: [{ project, listed }],
+        thread: { project, listed },
         anchor: card,
         onPicked: done,
       })
@@ -98,137 +89,38 @@ function useAway(): (row: Row) => string | undefined {
   }
 }
 
-/** An act on the selection: Archive, which brings back in the Archive,
- * Later, or Unread. */
-export type SetAct = "archive" | "later" | "unread"
-
-/** The act `act` is on `row`, where it may be done: Unarchive in the
- * Archive; none on one that asks or works for Archive, nor on one that
- * asks for Unread, nor on an archived one for Later. */
-export function actOnRow(
-  { stand, listed }: Pick<Row, "stand" | "listed">,
-  act: SetAct
-): Act | "unread" | undefined {
-  switch (act) {
-    case "archive": {
-      const one = stand === "archived" ? "unarchive" : "archive"
-      return actsOf(stand, listed).includes(one) ? one : undefined
-    }
-    case "later":
-      return stand === "later" || actsOf(stand, listed).includes("later")
-        ? "later"
-        : undefined
-    case "unread":
-      return listed.mark === "asking" ? undefined : "unread"
-  }
-}
-
-/** What an act on several cards is told besides its cards: the element
- * the Later picker opens at; by a key, what to do as it takes the cards
- * `keys` out of the tab; and which cards are still selected after it,
- * those it left, once it is done. */
-export type OnSet = {
-  anchor: Element
-  gone?: (keys: ReadonlySet<string>) => void
-  after?: (left: readonly Row[]) => void
-}
-
 /**
- * The Person's acts on several cards at once (ADR 0098, decision 15), as
- * on each by itself (`useActs`), but one act: one Undo takes it all back,
- * one Later time serves them all, and the Archived toast tells of them
- * all. What an act may not do stays selected, named in the toast: a card
- * that asks or works, for Archive; one whose machine the Window does not
- * reach, in the words of its Panes' pill. Where Archive may do none, a
- * toast says why, as `S` does on one card. Unread keeps every card
- * selected: those read are marked unread, or, where none is, all read.
+ * Archives every card of `rows` at once, as Your turn's "Archive N done"
+ * does (ADR 0098, decision 15): one act, which one Undo takes all back,
+ * told in the Archived toast. A card whose machine the Window does not
+ * reach stays, and the toast says so, in the words of its Panes' pill.
  */
-export function useSetActs(): (
-  rows: readonly Row[],
-  act: SetAct,
-  on: OnSet
-) => void {
+export function useArchiveAll(): (rows: readonly Row[]) => void {
   const run = useRun()
   const doing = useDoing()
   const away = useAway()
-  const keyLabel = useKeyLabel()
-  return (rows, act, { anchor, gone, after }) => {
-    // What it does on each card, and what it leaves: those that ask or
-    // work, which Archive refuses, and those it does not reach, each said.
-    const acted: { row: Row; does: Act | "unread" }[] = []
-    const stays: Row[] = []
-    const refusing: Row[] = []
-    const left: Left[] = []
+  return (rows) => {
+    const acted: Row[] = []
+    const left: string[] = []
     for (const row of rows) {
-      const does = actOnRow(row, act)
-      const why = does && away(row)
-      if (does && why === undefined) {
-        acted.push({ row, does })
-        continue
-      }
-      stays.push(row)
-      if (why) left.push({ away: why })
-      else if (act === "archive" && refusalOf(row, undefined)) {
-        refusing.push(row)
-        left.push(row.stand === "working" ? "works" : "asks")
-      }
+      const why = away(row)
+      if (why !== undefined) left.push(why)
+      else if (actsOf(row.stand, row.listed).includes("archive"))
+        acted.push(row)
     }
-    // Unread marks unread those read, or, where none is, all read.
-    const read = acted.filter(({ row }) => row.listed.seen)
-    const doings = act === "unread" && read.length > 0 ? read : acted
     const said = leftSaid(left)
-    // Nothing done: why, and every card stays selected.
-    if (doings.length === 0) {
-      const later = keyLabel(keyId("later"))
-      const only = refusing.length === left.length
-      const [one] = refusing
-      if (only && refusing.length === 1 && one) refused(one, later)
-      else {
-        const why = only ? setRefusalOf(refusing, later) : said
-        if (why) toast(why, { id: REFUSED })
-      }
-      after?.(stays)
+    if (acted.length === 0) {
+      if (said) toast(said, { id: REFUSED })
       return
     }
-    // What leaves the tab: none for Unread, nor for Later in Later.
-    const going = doings.filter(
-      ({ row }) =>
-        act === "archive" || (act === "later" && row.stand !== "later")
-    )
-    /** Each done, kept as one act. */
-    const done = () => {
-      if (going.length > 0)
-        gone?.(new Set(going.map(({ row }) => itemKey(row))))
-      const now = Date.now()
-      const undos = doings.map(({ row, does }) => ({
-        project: row.project.id,
-        listed: row.listed,
-        steps: undoOf(does, row.listed, now),
-      }))
-      keep(undos)
-      after?.(act === "unread" ? rows : stays)
-      return undos
-    }
-    if (act === "later") {
-      pickLater({
-        targets: doings.map(({ row }) => ({
-          project: row.project.id,
-          listed: row.listed,
-        })),
-        anchor,
-        onPicked: () => {
-          done()
-          if (said) toast(said, { id: REFUSED })
-        },
-      })
-      return
-    }
-    const undos = done()
-    for (const { row, does } of doings)
-      if (does === "unread") doing(row, "unread")
-      else doing(row, "archive", { archived: does === "archive" })
-    const archived = undos.filter((_, at) => doings[at]!.does === "archive")
-    if (archived.length > 0) toldArchived(run, archived, said)
-    else if (said) toast(said, { id: REFUSED })
+    const now = Date.now()
+    const undos = acted.map((row) => ({
+      project: row.project.id,
+      listed: row.listed,
+      steps: undoOf("archive", row.listed, now),
+    }))
+    keep(undos)
+    for (const row of acted) doing(row, "archive", { archived: true })
+    toldArchived(run, undos, said)
   }
 }

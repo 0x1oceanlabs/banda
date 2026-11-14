@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import type { Listed } from "@banda/ui/pane"
-import { leftSaid, refusalOf, setRefusalOf } from "./refusals"
+import { leftSaid, refusalOf } from "./refusals"
 
 const thread = (more: Partial<Listed> = {}): Listed => ({
   id: "t1",
@@ -37,38 +37,9 @@ test("S on a card that asks or works says why, with the key in force that puts i
   ).toBeUndefined()
 })
 
-test("what an act on several cards left, still selected, and why Archive leaves them all (spec S10b)", () => {
+test("what Archive N done left: the cards whose machine is not reached, by why", () => {
   expect(leftSaid([])).toBeUndefined()
-  expect(leftSaid(["asks"])).toBe("1 asks you, still selected")
-  expect(
-    leftSaid([
-      "asks",
-      "works",
-      "asks",
-      "works",
-      { away: "mac is away" },
-      { away: "mac is away" },
-    ])
-  ).toBe(
-    "2 ask you, 2 are at work, 2 not reached (mac is away), still selected"
-  )
-  const asks = {
-    stand: "turn" as const,
-    listed: { title: "A", mark: "asking" as const },
-  }
-  const works = {
-    stand: "working" as const,
-    listed: { title: "W", mark: "working" as const },
-  }
-  expect(setRefusalOf([asks, asks], "Z")).toBe("They ask you. Z puts them off.")
-  expect(setRefusalOf([works, works], "Z")).toBe(
-    "They are at work. Z puts them off until they're done."
-  )
-  expect(setRefusalOf([asks, works], undefined)).toBe(
-    "They ask you or are at work. Put them off."
-  )
-  // One card says it as S does on it.
-  expect(setRefusalOf([asks], "Z")).toBe(
-    "“A” asks you. Answer it, or Z puts it off."
+  expect(leftSaid(["mac is away", "mac is away", "pi is off"])).toBe(
+    "2 not reached (mac is away), 1 not reached (pi is off)"
   )
 })
