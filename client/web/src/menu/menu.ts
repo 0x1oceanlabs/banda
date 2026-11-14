@@ -415,18 +415,21 @@ export type Found = { id: string; label: string; rows: readonly MenuRow[] }
  * Code's rows, never these. */
 const KEPT = ["sidebar.toggle", "menu.keys", "theme"]
 
-/** The Actions an empty menu offers, as T3 Code's palette offers its own,
- * by the action's id or the branch's; then the kept ones. */
-export const ROOT_ACTIONS = [
-  "thread.new",
-  "browser.new",
-  "pane.new",
-  "calls.answer",
-  "overview.toggle",
-  ...KEPT,
-]
+/** The window's own Actions an empty menu offers, as T3 Code's palette
+ * offers its own, by the action's id or the branch's; then the kept ones. */
+const OWN_USUAL = ["pane.new", "calls.answer", "overview.toggle", ...KEPT]
 
-/** A row's id among ROOT_ACTIONS: an action's own, or the branch's. */
+/** The Actions an empty menu offers: those the Apps say are usual
+ * (`Action.usual`), in their order, then the window's own. The menu names
+ * no App's (the window's rule 4). */
+function usualOf(actions: readonly Action<Shell>[]): string[] {
+  return [
+    ...actions.filter((action) => action.usual).map((action) => action.id),
+    ...OWN_USUAL,
+  ]
+}
+
+/** A row's id among the usual Actions: an action's own, or the branch's. */
 function rootIdOf(row: Choice): string {
   return row.kind === "action" ? row.action.id : row.id
 }
@@ -616,17 +619,16 @@ export function menuOf({
   if (!query) {
     // The actions run most, then the ones T3 Code's palette offers; the
     // kept ones keep their room, each in its place among the rest.
+    const offers = usualOf(actions)
     const usual = (row: Choice) => {
-      const place = ROOT_ACTIONS.indexOf(rootIdOf(row))
-      return place === -1 ? ROOT_ACTIONS.length : place
+      const place = offers.indexOf(rootIdOf(row))
+      return place === -1 ? offers.length : place
     }
     const kept = (row: Choice) => KEPT.includes(rootIdOf(row))
     const ranked = actionRows
-      .filter(
-        (row) => byWeight(row) > 0 || ROOT_ACTIONS.includes(rootIdOf(row))
-      )
+      .filter((row) => byWeight(row) > 0 || offers.includes(rootIdOf(row)))
       .toSorted((a, b) => byWeight(b) - byWeight(a) || usual(a) - usual(b))
-    const room = ROOT_ACTIONS.length - ranked.filter(kept).length
+    const room = offers.length - ranked.filter(kept).length
     const others = ranked.filter((row) => !kept(row)).slice(0, room)
     const offered = ranked.filter((row) => kept(row) || others.includes(row))
     return nonEmpty([

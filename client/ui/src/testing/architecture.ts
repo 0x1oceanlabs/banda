@@ -118,15 +118,45 @@ export function imports(source: string): string[] {
 }
 
 /**
- * What `source`, the code of `file`, says of an App (ADR 0087, decision
- * 1), once for each place it does: a string that names an action or a
- * kind of the agents module's (`agents.…`) or a Thread's (`thread.…`), a
- * template that starts so, and that module's settings file
- * (`AGENTS_FILE`). Read as TypeScript reads it, by the file's kind, so
- * comments and imports are not taken for a place.
+ * The first words of what the Apps under `root` declare: each App's id,
+ * its folder's name in `apps/`, and the first word of each action and
+ * kind of Pane its `window.json` lists, as `thread` of the agents App's
+ * `thread.new`. Not a platform part's: those are Banda's own.
  */
-export function appStrings(source: string, file: string): string[] {
-  const named = /^(agents|thread)\./
+export function appWords(root: string): string[] {
+  const words = new Set<string>()
+  for (const [id, folder] of parts(root)) {
+    if (dirname(folder) !== join(root, "apps")) continue
+    words.add(id)
+    const declared = join(folder, "window.json")
+    if (!existsSync(declared)) continue
+    const { panes = [], actions = [] } = JSON.parse(
+      readFileSync(declared, "utf8")
+    ) as { panes?: { kind: string }[]; actions?: { id: string }[] }
+    for (const name of [
+      ...panes.map((pane) => pane.kind),
+      ...actions.map((action) => action.id),
+    ])
+      words.add(name.split(".", 1)[0]!)
+  }
+  return [...words]
+}
+
+/**
+ * What `source`, the code of `file`, says of an App (ADR 0087, decision
+ * 1), once for each place it does: a string that starts with one of
+ * `words` and a dot, as an action, a kind or a settings file of the
+ * agents module's (`agents.…`) or a Thread's (`thread.…`), a template
+ * that starts so, and that module's settings file (`AGENTS_FILE`). Read
+ * as TypeScript reads it, by the file's kind, so comments and imports are
+ * not taken for a place.
+ */
+export function appStrings(
+  source: string,
+  file: string,
+  words: readonly string[] = ["agents", "thread"]
+): string[] {
+  const named = new RegExp(`^(${words.join("|")})\\.`)
   const found: string[] = []
   const visit = (node: ts.Node): void => {
     if (ts.isImportDeclaration(node)) return

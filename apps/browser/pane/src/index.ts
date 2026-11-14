@@ -26,6 +26,7 @@ export const browser = defineModule({
       section: "Panes",
       // As Omarchy's Super+Shift+Return.
       keys: [{ code: "Enter", mod: true, shift: true }],
+      usual: true,
       run: (window) => window.open(paneOf(browserPane, NEW_BROWSER)),
     },
     {

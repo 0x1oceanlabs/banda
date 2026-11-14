@@ -48,9 +48,10 @@ const action = (
   title: string,
   section = "Banda"
 ): Action<Shell> => ({ id, title, section, run: () => {} })
+// The two an App says are usual, as the agents' and the browser's do.
 const actions = [
-  action("thread.new", "New Thread", "Threads"),
-  action("browser.new", "New browser", "Panes"),
+  { ...action("thread.new", "New Thread", "Threads"), usual: true as const },
+  { ...action("browser.new", "New browser", "Panes"), usual: true as const },
   action("sidebar.toggle", "Show or hide the sidebar", "Threads"),
 ]
 
@@ -190,6 +191,34 @@ describe("the Banda menu", () => {
         "Actions",
         ["New Thread", "New browser", "Show or hide the sidebar", "Theme"],
       ],
+    ])
+  })
+
+  test("empty, it offers the Actions the Apps say are usual, in their order, before the window's own, and names none itself", () => {
+    const more = {
+      actions: [
+        action("pane.new", "New Pane", "Panes"),
+        action("notes.find", "Find a note", "Panes"),
+        { ...action("notes.new", "New note", "Panes"), usual: true as const },
+        ...actions,
+      ],
+    }
+    expect(labels("", "root", undefined, more).at(-1)).toEqual([
+      "Actions",
+      [
+        "New note",
+        "New Thread",
+        "New browser",
+        "New Pane",
+        "Show or hide the sidebar",
+        "Theme",
+      ],
+    ])
+    // With its App off, an action is not there to offer.
+    const off = { actions: actions.filter((one) => one.id !== "browser.new") }
+    expect(labels("", "root", undefined, off).at(-1)).toEqual([
+      "Actions",
+      ["New Thread", "Show or hide the sidebar", "Theme"],
     ])
   })
 
