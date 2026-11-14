@@ -123,10 +123,13 @@ they went. Never start one with a bare `electron .`, and never stop one
 by killing its process group or its unit while it runs: `try.sh --stop`
 closes it as the Person does, and SIGTERM to its main process does too.
 
-The trial's own `banda` is its `bin/banda`, with `BANDA_STATE` set to its
-`state`. In an Agent's shell, `banda` acts under the Agent's pass for the
-engine the Agent runs in, and refuses a `BANDA_STATE` that names another:
-call the trial's engine under `env -u BANDA_TOKEN -u BANDA_ENGINE`.
+The trial's own `banda` is the `banda` in its folder,
+`~/.local/state/banda-trial/<slug>/banda`, which `try.sh` writes and
+names as it starts: it runs the trial's `bin/banda` with every folder of
+the trial's and without the Agent's pass. Never call `bin/banda` with
+`BANDA_STATE` alone: it reaches the trial's engine, yet reads and writes
+the settings in `~/.config/banda-local`, which are every Banda Local's on
+the machine.
 
 ## Behind the fence
 
