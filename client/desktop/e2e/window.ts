@@ -512,12 +512,18 @@ export function wallpaper(dir: string) {
 
 /** Opens the Banda menu at "Add Project" as the Person does: by its
  * key, then its action, Add Project (ADR 0026). The menu, at its ways to
- * add one. */
+ * add one on this machine. */
 export async function addProject(page: Page, mod?: string): Promise<Locator> {
   const menu = await bandaMenu(page, mod)
   await menu.getByRole("combobox", { name: "Search" }).fill("add project")
   await menu.getByRole("option", { name: /^Add Project/ }).click()
-  await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
+  // Where the window reaches another machine it asks where first (ADR
+  // 0120, decision 1): on this one.
+  const ways = menu.getByRole("option", { name: /New Project/ })
+  const here = menu.getByRole("option", { name: /this (machine|Mac)/ })
+  await expect(ways.or(here)).toBeVisible()
+  if (await here.isVisible()) await here.click()
+  await expect(ways).toBeVisible()
   return menu
 }
 
