@@ -1155,11 +1155,15 @@ function roomOf(page: Page): Promise<{ from: number; to: number }> {
   })
 }
 
-/** How far `tile` stands from the left of the Strip on screen, in pixels:
- * none for a picked Agent (ADR 0065, decision 8). */
+/** How far the column of `tile` stands from the left of the Strip on
+ * screen, in pixels: none for a picked Agent (ADR 0065, decision 8). The
+ * column, not the Pane: in a Group a Pane stands inside its plate. */
 export async function fromLeft(page: Page, tile: Locator): Promise<number> {
   const { from } = await roomOf(page)
-  return Math.abs((await tile.boundingBox())!.x - from)
+  const left = await tile.evaluate(
+    (el) => (el.closest("[data-column]") ?? el).getBoundingClientRect().left
+  )
+  return Math.abs(left - from)
 }
 
 /** How much of `tile`'s width shows in the room of the Strip on screen, in
