@@ -58,30 +58,26 @@ const switchOf = (label: string) =>
 
 const writes = () => vi.mocked(device.settings.set).mock.calls
 
-test("the view menu picks how the list is grouped, a card's lines and Your turn's order, each as sidebar.toml has it (ADR 0098, decisions 3, 7 and 9)", () => {
-  draw({ ...DEFAULT_SIDEBAR, group: "project", card: 2 })
+test("the view menu picks how the list is grouped and Your turn's order, each as sidebar.toml has it (ADR 0098, decisions 3 and 7)", () => {
+  draw({ ...DEFAULT_SIDEBAR, group: "project" })
   expect(
     [...page.querySelectorAll("[role=radiogroup]")].map((one) => [
       one.getAttribute("aria-label"),
       [...one.querySelectorAll("[role=radio]")].map((it) => it.textContent),
     ])
   ).toEqual([
-    ["Group by", ["None", "Project", "Machine"]],
-    ["Card", ["Auto", "3", "2", "1"]],
+    ["Group by", ["None", "Project"]],
     ["Your turn first", ["Oldest", "Newest"]],
   ])
   expect(picked("Group by")).toEqual(["Project"])
-  expect(picked("Card")).toEqual(["2"])
   expect(picked("Your turn first")).toEqual(["Oldest"])
 
-  act(() => option("Group by", "Machine").click())
-  act(() => option("Card", "Auto").click())
+  act(() => option("Group by", "None").click())
   act(() => option("Your turn first", "Newest").click())
   // The one picked already writes nothing.
-  act(() => option("Card", "2").click())
+  act(() => option("Your turn first", "Oldest").click())
   expect(writes()).toEqual([
-    ["sidebar.toml", "group", '"machine"'],
-    ["sidebar.toml", "card", '"auto"'],
+    ["sidebar.toml", "group", '"none"'],
     ["sidebar.toml", "inbox.order", '"newest"'],
   ])
 })
@@ -100,13 +96,6 @@ test("its switches show the Inbox's parts as they are, and a click writes the ot
     ["sidebar.toml", "inbox.open", "false"],
     ["sidebar.toml", "inbox.working", "true"],
   ])
-})
-
-test("under the places preset the list groups by Project, and a group picked is one write (ADR 0098, decision 16)", () => {
-  draw({ ...DEFAULT_SIDEBAR, preset: "places", group: "project" })
-  expect(picked("Group by")).toEqual(["Project"])
-  act(() => option("Group by", "None").click())
-  expect(writes()).toEqual([["sidebar.toml", "group", '"none"']])
 })
 
 test("Edit sidebar.toml opens the file", () => {

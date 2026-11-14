@@ -153,7 +153,7 @@ test("every empty place says what goes there: each tab, and each part of the Inb
     ],
   ]
   const views = TABS.flatMap((tab) =>
-    (["none", "project", "machine"] as const).flatMap((group) =>
+    (["none", "project"] as const).flatMap((group) =>
       [true, false].flatMap((open) =>
         [true, false].map((working): InboxView => ({
           tab,

@@ -59,7 +59,7 @@ export function Sidebar({
   const settings = useLookSidebar()
   // The element the list scrolls in goes to its ScrollArea alone: else
   // React's compiler reads the whole view as a ref.
-  const { scrollsIn, ...view } = useSidebarView(settings.preset)
+  const { scrollsIn, ...view } = useSidebarView()
   // The other machines of `hosts.toml`, below this one's (ADR 0081): each
   // host's state by its name.
   const hosts = useHosts()

@@ -24,26 +24,14 @@ type Choice = {
   value: (sidebar: Sidebar) => JsonValue
 }
 
-/** The view's choices, in the menu's order (ADR 0098, decisions 3, 7 and
- * 9): how the list is grouped, as it is drawn; how many lines a card
- * has; and Your turn's order. */
+/** The view's choices, in the menu's order (ADR 0098, decisions 3 and
+ * 7): how the list is grouped, as it is drawn; and Your turn's order. */
 export const CHOICES: readonly Choice[] = [
   {
     label: "Group by",
     key: "group",
     options: Object.entries(GROUP_WORDS),
     value: ({ group }) => group,
-  },
-  {
-    label: "Card",
-    key: "card",
-    options: [
-      ["auto", "Auto"],
-      [3, "3"],
-      [2, "2"],
-      [1, "1"],
-    ],
-    value: (sidebar) => sidebar.card,
   },
   {
     label: "Your turn first",
@@ -76,9 +64,8 @@ export const SWITCHES: readonly {
 
 /**
  * The sidebar's view menu, in its foot (ADR 0098, decisions 7 and 21): how
- * the list is grouped, how many lines a card has, Your turn's order, and
- * what the Inbox shows, each written into `sidebar.toml`
- * by the settings, whose look brings the list back so; and the file
+ * the list is grouped, Your turn's order, and what the Inbox shows, each
+ * written into `sidebar.toml` by the settings, whose look brings the list back so; and the file
  * itself, in the Person's editor.
  */
 export function ViewMenu() {

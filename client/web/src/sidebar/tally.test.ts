@@ -139,7 +139,7 @@ test("the list is what Alt+U walks from the top: Your turn oldest first, however
     expect(working).toEqual(sidebar.filter((key) => working.includes(key)))
     return { waiting, working }
   }
-  // Each preset: what called first first, across Projects, then what
+  // Each arrangement: what called first first, across Projects, then what
   // works, by when it began.
   const projects: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
   for (const settings of [

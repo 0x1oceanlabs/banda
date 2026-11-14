@@ -46,10 +46,9 @@ const scrollerOf = (list: HTMLElement | null) =>
  * the tab (ADR 0098, decision 2), each where it was scrolled to; a cut
  * list whole (`more`), until the tab changes; the groups (`folded`) and the
  * other machines (`foldedHosts`) folded, each flipped by its key; when
- * inbox zero last told of Someday. Another `preset` starts afresh, on the
- * same tab.
+ * inbox zero last told of Someday.
  */
-export function useSidebarView(preset: string) {
+export function useSidebarView() {
   const [tab, setTab] = useState<Tab>("inbox")
   const [more, setMore] = useState(false)
   const [folded, setFolded] = useState<ReadonlySet<string>>(new Set())
@@ -80,14 +79,6 @@ export function useSidebarView(preset: string) {
         scroller.getBoundingClientRect().top
       : (scrolls.current.get(tab) ?? 0)
   }, [tab, list])
-  // Another preset starts afresh: nothing folded by hand.
-  const [arrangedBy, setArrangedBy] = useState(preset)
-  if (arrangedBy !== preset) {
-    setArrangedBy(preset)
-    setMore(false)
-    setFolded(new Set())
-    setFoldedHosts(new Set())
-  }
   return {
     tab,
     more,

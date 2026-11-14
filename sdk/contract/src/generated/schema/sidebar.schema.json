@@ -1,22 +1,12 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "sidebar.toml",
-  "description": "How the sidebar arranges Threads: a preset, and the keys that change\nit. A preset file in sidebars/ takes the same keys; every key is\noptional.",
+  "description": "How the sidebar arranges Threads: every key is optional.",
   "type": "object",
   "properties": {
-    "preset": {
-      "description": "Banda's inbox, projects or places, or one of yours in sidebars/.",
-      "type": "string",
-      "x-class": "shared"
-    },
     "group": {
-      "description": "How the list is grouped: one list, each Project under its header,\nor each machine.",
+      "description": "How the list is grouped: one list, or each Project under its\nheader.",
       "$ref": "#/$defs/GroupBy",
-      "x-class": "shared"
-    },
-    "card": {
-      "description": "How many lines a card has: by where it stands, or 3, 2 or 1\neverywhere.",
-      "$ref": "#/$defs/Card",
       "x-class": "shared"
     },
     "inbox": {
@@ -54,7 +44,7 @@
   "x-class": "shared",
   "$defs": {
     "GroupBy": {
-      "description": "How the list is grouped (ADR 0098, decision 7).",
+      "description": "How the list is grouped (ADR 0098, decision 7, as amended): one list,\nthe Inbox, or by Project.",
       "oneOf": [
         {
           "description": "One list.",
@@ -65,21 +55,7 @@
           "description": "Each Project under its header.",
           "type": "string",
           "const": "project"
-        },
-        {
-          "description": "Each machine under its header.",
-          "type": "string",
-          "const": "machine"
         }
-      ]
-    },
-    "Card": {
-      "description": "How many lines a card has: \"auto\", by where it stands, or 3, 2 or 1 everywhere.",
-      "enum": [
-        "auto",
-        3,
-        2,
-        1
       ]
     },
     "InboxSettings": {

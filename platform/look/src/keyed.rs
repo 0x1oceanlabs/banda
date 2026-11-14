@@ -15,7 +15,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct From {
-    /// `defaults`, `theme`, `hyprland`, `preset`, or `file`: the
+    /// `defaults`, `theme`, `hyprland`, or `file`: the
     /// Person's own.
     pub layer: String,
     /// The file it is in, when it is in one: the file it moved out of,

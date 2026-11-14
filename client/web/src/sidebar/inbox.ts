@@ -24,14 +24,11 @@ export const TABS: readonly Tab[] = ["inbox", "working", "later", "archive"]
  * a tab but the Inbox, whose is inbox zero. */
 export type EmptyAt = Exclude<Tab, "inbox">
 
-/** What the list may be grouped by, when it is (decision 7). */
-type InboxGroup = Exclude<GroupBy, "none">
-
 /** How the Person has the list in view. */
 export type InboxView = {
   tab: Tab
-  /** What the list is grouped by (`group` in `sidebar.toml`): none by
-   * default. */
+  /** Whether the list is grouped by Project (`group` in `sidebar.toml`):
+   * not by default. */
   group?: GroupBy
   /** Your turn's order (`[inbox] order`): oldest first by default, so no
    * one waits forever. */
@@ -119,14 +116,13 @@ export type ProjectsHeard = {
 export type Block =
   /** A part's or a bucket's heading, with how many it holds. */
   | { kind: "head"; key: string; label: string; count?: number }
-  /** A group's header (decision 7): its Project, or its machine (none
-   * for this one), whether it is folded, and its rollup: the loudest
-   * look of what calls in it, how many wait for the Person and how many
-   * work. */
+  /** A group's header (decision 7): its Project (none for the group of
+   * no Project) and the other machine it is on, whether it is folded,
+   * and its rollup: the loudest look of what calls in it, how many wait
+   * for the Person and how many work. */
   | {
       kind: "group"
       key: string
-      by: InboxGroup
       project?: ProjectSummary
       host?: string
       folded: boolean
@@ -298,7 +294,7 @@ export function inboxOf(
     open: shown,
     working: view.working === false ? [] : working,
   }
-  const group = view.group ?? "none"
+  const byProject = view.group === "project"
   const folded = view.folded ?? new Set<string>()
   // A child goes in its parent's group (decision 24).
   const rootOf = (row: Row) => {
@@ -315,15 +311,15 @@ export function inboxOf(
       case "inbox":
         return [
           ...(zero ? [{ kind: "zero" as const, key: "zero", ...zero }] : []),
-          ...(group === "none"
-            ? inbox(parts, view.more === true, folded, asks)
-            : grouped(parts, group, folded, now, rootOf, asks)),
+          ...(byProject
+            ? grouped(parts, folded, now, rootOf, asks)
+            : inbox(parts, view.more === true, folded, asks)),
         ]
       case "working":
         if (working.length === 0) return [empty("working")]
-        return group === "none"
-          ? workingOf("working", familiesOf(working), folded)
-          : grouped({ working }, group, folded, now, rootOf)
+        return byProject
+          ? grouped({ working }, folded, now, rootOf)
+          : workingOf("working", familiesOf(working), folded)
       case "later":
         return later.length === 0 ? [empty("later")] : laterOf(later, now)
       case "archive":
@@ -479,16 +475,14 @@ function workingOf(
 /** Where a group is: its Project and the other machine it is on. */
 type Place = Pick<Row, "project" | "host">
 
-/** Each group with something to show: its header, then, unless it is
- * folded, the Projects of it that `asks`, and its rows by place, Open
- * under a divider. Projects go by name, with no Project's last; machines
- * by name, this one's first. A child goes in its parent's group, the
- * group of the first of its parents that `rootOf` finds. A header's mark
- * is the loudest look of what calls in it, as its cards draw them at
- * `now`. */
+/** Each Project's group with something to show: its header, then,
+ * unless it is folded, the Projects of it that `asks`, and its rows by
+ * place, Open under a divider. Projects go by name, with no Project's
+ * last. A child goes in its parent's group, the group of the first of its
+ * parents that `rootOf` finds. A header's mark is the loudest look of
+ * what calls in it, as its cards draw them at `now`. */
 function grouped(
   parts: Parts,
-  by: InboxGroup,
   folded: ReadonlySet<string>,
   now: number,
   rootOf: (row: Row) => Row,
@@ -497,7 +491,7 @@ function grouped(
   type Group = { first: Place; parts: Parts; asks: ProjectCall[] }
   const groups = new Map<string, Group>()
   const groupOf = (place: Place) => {
-    const key = groupKey(place, by)
+    const key = groupKey(place)
     const group = groups.get(key) ?? { first: place, parts: {}, asks: [] }
     groups.set(key, group)
     return group
@@ -509,7 +503,7 @@ function grouped(
       ;(group.parts[part] ??= []).push(entry)
     }
   return [...groups]
-    .sort(([, a], [, b]) => groupOrder(a.first, b.first, by))
+    .sort(([, a], [, b]) => groupOrder(a.first, b.first))
     .flatMap(([key, group]): Block[] => {
       const { turn = [], working = [] } = group.parts
       const shut = folded.has(key)
@@ -521,8 +515,7 @@ function grouped(
         {
           kind: "group",
           key,
-          by,
-          ...placeOf(group.first, by),
+          ...placeOf(group.first),
           folded: shut,
           mark: loudest(looks),
           waiting: looks.length,
@@ -534,38 +527,30 @@ function grouped(
 }
 
 /** A group's key: its Project's, another machine's after its name, and
- * one for every Thread with no Project; or its machine's. */
-function groupKey({ project, host }: Place, by: InboxGroup): string {
-  if (by === "machine") return `machine:${host ?? ""}`
+ * one for every Thread with no Project. */
+function groupKey({ project, host }: Place): string {
   if (project.scratch) return "project:none"
   return `project:${host === undefined ? "" : `${host}/`}${project.id}`
 }
 
 /** What a group's header names: its Project, and the other machine it
- * is on; or its machine, none for this one. The group of no Project
- * names neither. */
-function placeOf(
-  { project, host }: Place,
-  by: InboxGroup
-): { project?: ProjectSummary; host?: string } {
-  if (by === "project" && project.scratch) return {}
-  return {
-    ...(by === "project" ? { project } : {}),
-    ...(host === undefined ? {} : { host }),
-  }
+ * is on. The group of no Project names neither. */
+function placeOf({ project, host }: Place): {
+  project?: ProjectSummary
+  host?: string
+} {
+  if (project.scratch) return {}
+  return { project, ...(host === undefined ? {} : { host }) }
 }
 
 /** The groups' order, by the first row of each: by name, Projects with
  * no Project's last; this machine's first, then the others by name. */
-function groupOrder(a: Place, b: Place, by: InboxGroup): number {
-  const machines =
-    Number(a.host !== undefined) - Number(b.host !== undefined) ||
-    (a.host ?? "").localeCompare(b.host ?? "")
-  if (by === "machine") return machines
+function groupOrder(a: Place, b: Place): number {
   return (
     Number(a.project.scratch) - Number(b.project.scratch) ||
     a.project.name.localeCompare(b.project.name) ||
-    machines
+    Number(a.host !== undefined) - Number(b.host !== undefined) ||
+    (a.host ?? "").localeCompare(b.host ?? "")
   )
 }
 

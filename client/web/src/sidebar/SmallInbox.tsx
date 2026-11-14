@@ -52,7 +52,7 @@ function inOtherLayer(node: unknown, inbox: Element | null): boolean {
  * small inbox it opens (ADR 0098, decision 22): "3 · 7", the Person's turn
  * in its loudest call's colour, then the working in grey; nothing when
  * nothing calls, and nothing while the sidebar shows. A click opens the
- * small inbox, a popover, the sidebar's own list of Your turn in one-line
+ * small inbox, a popover, the sidebar's own list of Your turn in its
  * cards with the same keys (`SmallList`), and "7 at work ›", which shows
  * the sidebar on Working with the focus in its list. Esc gives the focus
  * back where it was before it opened; a card opened, the Pane has it.
@@ -184,7 +184,7 @@ const same = <T,>(value: T) => value
 
 /**
  * The small inbox's list (ADR 0098, decision 22; spec §6.9 of the keys'
- * research): the sidebar's Inbox with Your turn alone, in one-line cards,
+ * research): the sidebar's Inbox with Your turn alone, in its cards,
  * in the same `listbox` in the scope `sidebar`, so the same keys work
  * (`useSidebarKeys`), but no tabs and no `1`–`4`. It takes the
  * focus as it is drawn, on the first card; the sidebar's own Esc closes
@@ -206,9 +206,7 @@ function SmallList({
   const settings: Settings = useMemo(
     () => ({
       ...look,
-      preset: "inbox",
       group: "none",
-      card: 1,
       inbox: { ...look.inbox, open: false, working: false },
     }),
     [look]

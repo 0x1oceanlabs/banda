@@ -50,9 +50,9 @@ Banda is changed through text files, the same way the Person changes it.
    what Banda sends (sharing.toml), and this machine's name and icon
    (machine.toml). A key is bound with `banda keys bind`, as the topic
    `keys` says. A new file of the Person's own that no command writes, a
-   sidebar preset or a theme, you write in your Project, and give your
-   Person the line that copies it into their settings folder. Every key
-   is optional: set only what changes.
+   theme, you write in your Project, and give your Person the line that
+   copies it into their settings folder. Every key is optional: set only
+   what changes.
 3. Check it: `banda settings check`, or `banda settings check <file>` for
    a new file, prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
@@ -99,7 +99,7 @@ does: `banda menu actions` at its Actions, each with its key;
 `banda menu project.<name>` in a Project, its Threads and a new one there;
 `banda menu project.add` at "Add Project" (`project.add.folder` at its path
 field, `project.add.new` at a new Project's name);
-`banda menu views` at the sidebar's presets; `banda menu
+`banda menu views` at the sidebar's ways to group; `banda menu
 settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
 not open, and always behind Banda's fence (see below), which keeps the
@@ -234,7 +234,6 @@ in `~/.config/banda-local/`, as their data and state too:
 | `look.toml` | the theme, colours, corners, gaps, motion and sounds |
 | `themes/<name>/` | the Person's own themes |
 | `sidebar.toml` | how the sidebar arranges Threads |
-| `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
 | `tiling.toml` | how the Tiling behaves: the Flow, `flow`; a column's widths, `[columns]` with `default`, `alone`, `presets`, `heights` and `display`; and rules by kind of Pane, `[rule.terminal.terminal]` with `width = "1/3"` and `opens`, which is `"beside"`, `"below"`, `"group"` or `"project"`. The engine places by it for the window, an Agent and `banda` alike |

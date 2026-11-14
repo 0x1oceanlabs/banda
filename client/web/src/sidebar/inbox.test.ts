@@ -215,20 +215,6 @@ test.each<[string, InboxView, string[]]>([
     ),
   ],
   [
-    "the Inbox by machine: this one's first",
-    { tab: "inbox", group: "machine" },
-    [
-      "[machine:] 5 wait, 2 work",
-      "turn: jot done asks woke invoices",
-      "---",
-      "open: font seen",
-      "working: build tests",
-      "[machine:mac] 1 wait, 1 work",
-      "turn: ship",
-      "working: lint",
-    ],
-  ],
-  [
     "the Inbox without Open and the shelf",
     { tab: "inbox", open: false, working: false },
     ["# Your turn · 6", "turn: jot done ship asks woke invoices"],
@@ -251,16 +237,6 @@ test.each<[string, InboxView, string[]]>([
     ],
   ],
   [
-    "Working by machine",
-    { tab: "working", group: "machine" },
-    [
-      "[machine:] 0 wait, 2 work",
-      "working: build tests",
-      "[machine:mac] 0 wait, 1 work",
-      "working: lint",
-    ],
-  ],
-  [
     "Later by the local day, Someday and When done last",
     { tab: "later" },
     LATER,
@@ -271,7 +247,7 @@ test.each<[string, InboxView, string[]]>([
     { tab: "archive" },
     ARCHIVE,
   ],
-  ["Archive is not grouped", { tab: "archive", group: "machine" }, ARCHIVE],
+  ["Archive is not grouped", { tab: "archive", group: "project" }, ARCHIVE],
 ])("%s", (_, view, blocks) => {
   expect(shape(inboxOf(ROWS, view, NOW))).toEqual(blocks)
 })
@@ -337,16 +313,6 @@ test("a folded group keeps its rollup and hides its rows", () => {
   })
   const none = blocks.find((block) => block.key === "project:none")
   expect(none).not.toHaveProperty("project")
-})
-
-test("grouped by machine, each machine is a header, this one's naming none, another's its name, and none names a Project", () => {
-  const blocks = inboxOf(ROWS, { tab: "inbox", group: "machine" }, NOW).blocks
-  const groups = blocks.filter((block) => block.kind === "group")
-  expect(groups.map((group) => [group.key, group.host])).toEqual([
-    ["machine:", undefined],
-    ["machine:mac", "mac"],
-  ])
-  for (const group of groups) expect(group).not.toHaveProperty("project")
 })
 
 test("a group's rollup says how many wait and how many work, and the loudest of what calls, folded or not: never a Thread at work's", () => {
@@ -889,7 +855,4 @@ test("grouped, a child goes in its parent's group, under it at work (ADR 0098, S
       "working: tests",
     ]
   )
-  expect(
-    shape(inboxOf(rows, { tab: "working", group: "machine" }, NOW))
-  ).toEqual(["[machine:] 0 wait, 3 work", "working: plan ↳card tests"])
 })

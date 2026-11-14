@@ -1,7 +1,7 @@
 /**
- * The sidebar's card (ADR 0098, S6a): three lines in Your turn, each a
- * left and a right; two there when the list is grouped by Project, whose
- * header names it; one line everywhere else. Colour only on a call's mark
+ * The sidebar's card (ADR 0098, S6a): three lines wherever it stands,
+ * each a left and a right; grouped by Project, line 3 leaves the Project
+ * to its header (decisions 8 and 9, as amended). Colour only on a call's mark
  * and time: an asking card is orange, says Asks and its question; Failed
  * is red, says why, and has nothing on its right; Done is green with its
  * note, which is never red; Woke is yellow and says who put it off. Later
@@ -13,17 +13,17 @@
  * whose first message says "wait" works until it is finished, "fail" fails
  * and "ask" asks; any other is answered at once and, unseen, calls its
  * Person. A Thread away from its Project's workspace bears a small diamond
- * after its title, or at the start of line 3's right on a card of three
- * (ADR 0102, decision 6), shot as `sidebar-s6a-away-*`.
+ * at the start of line 3's right (ADR 0102, decision 6), shot as
+ * `sidebar-s6a-away-*`.
  *
  * S6b: another machine's card, arc's, is an ordinary card, its icon on
  * line 3, alone where sidebar.toml asks; a long title fades out at its end and shows whole beside the
- * sidebar after a 500 ms rest; the counts' list draws one-line cards.
+ * sidebar after a 500 ms rest; the counts' list draws the same cards.
  * Shot as `sidebar-s6b-*.png`.
  *
  * A working card says what its Agent does, held as its Mark shows it (ADR
- * 0099, M3b): line 2's words where the card has the lines, its time at a
- * usage limit, and what a screen reader hears. The Working tab with its
+ * 0099, M3b): line 2's words, its time at a usage limit, and what a
+ * screen reader hears. The Working tab with its
  * Agents each at something else is shot as `sidebar-m3b-working-*`.
  *
  * F1b: a Done card shows on line 2's right how many lines its last work
@@ -295,9 +295,10 @@ test("a card's three lines: Asks orange on its mark and time with its question, 
   await expect(linesOf(woke).nth(1)).toContainText(/^Woke You put it off /)
   expect(await colourOf(woke.locator("[data-time]"))).toBe(yellow)
 
-  // Open and at work: one line each, with no colour; the time is short.
-  await expect(linesOf(open)).toHaveCount(1)
-  await expect(linesOf(working)).toHaveCount(1)
+  // Open and at work: three lines each too, with no colour; the time is
+  // short.
+  await expect(linesOf(open)).toHaveCount(3)
+  await expect(linesOf(working)).toHaveCount(3)
   await expect(open).not.toHaveAttribute("data-tone")
   await expect(working.locator("[data-time]")).toHaveText(/^(now|\d+[smh])$/)
   // The open Thread's card has a fill of the text, with no shadow and no
@@ -312,48 +313,45 @@ test("a card's three lines: Asks orange on its mark and time with its question, 
     "turn-3-failed": failed,
     "turn-3-done": done,
     "turn-3-woke": woke,
-    "open-1": open,
-    "working-1": working,
+    "open-3": open,
+    "working-3": working,
   })
 
-  // Later and the Archive: one line each.
+  // Later and the Archive: three lines each.
   const tab = (name: string) =>
     sidebar.getByRole("tab", { name: new RegExp(`^${name}`) })
   await tab("Later").click()
   const later = cardOf(panel, "sleep one")
-  await expect(linesOf(later)).toHaveCount(1)
+  await expect(linesOf(later)).toHaveCount(3)
   // On 24 hours, whatever the system's locale: "18:30" or "Wed 9:00".
   await expect(later.locator("[data-time]")).toHaveText(
     /^([A-Z][a-z]{2} )?\d{1,2}:\d\d$/
   )
-  await shots(window, "later", { "later-1": later })
+  await shots(window, "later", { "later-3": later })
   await tab("Archive").click()
   const archived = cardOf(panel, "old one")
-  await expect(linesOf(archived)).toHaveCount(1)
-  await shots(window, "archive", { "archive-1": archived })
+  await expect(linesOf(archived)).toHaveCount(3)
+  await shots(window, "archive", { "archive-3": archived })
   await tab("Inbox").click()
   await leaveSidebar(page)
 
-  // Grouped by Project, Your turn's cards have two lines: the header names
-  // the Project.
-  writeFileSync(
-    join(window.dir, "config/sidebar.toml"),
-    'preset = "projects"\n'
-  )
+  // Grouped by Project, the cards keep three lines: line 3 leaves the
+  // Project to the header.
+  writeFileSync(join(window.dir, "config/sidebar.toml"), 'group = "project"\n')
   await expect(placeOf(sidebar, "Work").first()).toBeVisible()
-  await expect(linesOf(asks)).toHaveCount(2)
-  await expect(linesOf(failed)).toHaveCount(2)
-  await expect(linesOf(woke)).toHaveCount(2)
-  await expect(linesOf(open)).toHaveCount(1)
+  for (const card of [asks, failed, woke, open]) {
+    await expect(linesOf(card)).toHaveCount(3)
+    await expect(linesOf(card).nth(2)).not.toContainText("Work")
+  }
   await shots(window, "grouped", {
-    "turn-2-asks": asks,
-    "turn-2-failed": failed,
-    "turn-2-done": done,
-    "turn-2-woke": woke,
+    "turn-3-asks": asks,
+    "turn-3-failed": failed,
+    "turn-3-done": done,
+    "turn-3-woke": woke,
   })
 })
 
-test("a Thread away from its Project's workspace bears a small diamond right after its title and before its time, or at the start of line 3's right on a card of three, which the card's acts never cover: the Later clock, or Wake in Later (ADR 0102, decision 6; S6b)", async () => {
+test("a Thread away from its Project's workspace bears a small diamond at the start of line 3's right, which the card's acts never cover: the Later clock, or Wake in Later (ADR 0102, decision 6; S6b)", async () => {
   test.setTimeout(180_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
   const { page } = window
@@ -388,17 +386,13 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await expect(asks).toContainText("Asks Run a check")
   await expect(stray.locator(".lucide-diamond")).toHaveCount(0)
 
-  /** `card`'s diamond: on one line, right after its title and before its
-   * time; on three, at the start of line 3's right, after its Project and
-   * before its Harness's emblem, never on line 1's right. A screen reader
-   * hears it once, in the card's description. While the card's act
+  /** `card`'s diamond: at the start of line 3's right, after its Project
+   * and before its Harness's emblem, never on line 1's right. A screen
+   * reader hears it once, in the card's description. While the card's act
    * `name` shows, the time hides under it and the diamond stays in
    * sight. */
-  const away = async (card: Locator, title: string, name: string) => {
-    const three = (await linesOf(card).count()) === 3
-    const diamond = linesOf(card)
-      .nth(three ? 2 : 0)
-      .locator(".lucide-diamond")
+  const away = async (card: Locator, name: string) => {
+    const diamond = linesOf(card).nth(2).locator(".lucide-diamond")
     await expect(diamond).toBeVisible()
     await expect(card.locator(".lucide-diamond")).toHaveCount(1)
     await expect(diamond).toHaveAttribute("aria-hidden", "true")
@@ -410,32 +404,19 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
       /Away from its Project's workspace$/
     )
     const mark = (await diamond.boundingBox())!
-    const time = card.locator("[data-time]")
-    if (three) {
-      // Line 3's right starts with it, before the emblem.
-      const third = linesOf(card).nth(2)
-      const right = third.locator(":scope > span").last().locator(":scope > *")
-      await expect(right.first()).toHaveAttribute(
-        "title",
-        "Away from its Project's workspace"
-      )
-      const project = (await third
-        .locator("[data-slot=fade-text]")
-        .boundingBox())!
-      const emblem = (await right.last().boundingBox())!
-      expect(mark.x).toBeGreaterThanOrEqual(project.x + project.width)
-      expect(mark.x + mark.width).toBeLessThanOrEqual(emblem.x)
-    } else {
-      const words = (await card
-        .getByText(title, { exact: true })
-        .first()
-        .boundingBox())!
-      expect(mark.x).toBeGreaterThanOrEqual(words.x + words.width)
-      expect(mark.x).toBeLessThanOrEqual(words.x + words.width + 8)
-      expect(mark.x + mark.width).toBeLessThanOrEqual(
-        (await time.boundingBox())!.x
-      )
-    }
+    // Line 3's right starts with it, before the emblem.
+    const third = linesOf(card).nth(2)
+    const right = third.locator(":scope > span").last().locator(":scope > *")
+    await expect(right.first()).toHaveAttribute(
+      "title",
+      "Away from its Project's workspace"
+    )
+    const project = (await third
+      .locator("[data-slot=fade-text]")
+      .boundingBox())!
+    const emblem = (await right.last().boundingBox())!
+    expect(mark.x).toBeGreaterThanOrEqual(project.x + project.width)
+    expect(mark.x + mark.width).toBeLessThanOrEqual(emblem.x)
     // The acts show under the pointer: a card takes no focus (S7b).
     await card.hover()
     const action = card
@@ -447,8 +428,7 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
     await expect(card.locator("[data-acts-time]")).toHaveCSS("opacity", "0")
     await expect(diamond).toBeVisible()
     const box = (await action.boundingBox())!
-    if (!three) expect(box.x).toBeGreaterThanOrEqual(mark.x + mark.width)
-    // §2.5's size, level with line 1 at every density.
+    // §2.5's size, level with line 1.
     const line = (await linesOf(card).first().boundingBox())!
     expect(box.height).toBe(20)
     expect(box.y + box.height / 2).toBeCloseTo(line.y + line.height / 2, 0)
@@ -459,11 +439,11 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   // Back in the row, Work has its own workspace: both stand away from it.
   await pickFlow(page, "Row")
   await leaveSidebar(page)
-  await expect(linesOf(stray)).toHaveCount(1)
+  await expect(linesOf(stray)).toHaveCount(3)
   await expect(linesOf(asks)).toHaveCount(3)
-  await away(stray, "stray one", "Later")
-  await away(asks, "please ask first", "Later")
-  await shots(window, "away", { "open-1": stray, "turn-3-asks": asks })
+  await away(stray, "Later")
+  await away(asks, "Later")
+  await shots(window, "away", { "open-3": stray, "turn-3-asks": asks })
   await focusShots(window, "away-turn-3-asks", asks)
 
   // Put off, its act is Wake: the diamond stays in sight beside it.
@@ -474,13 +454,13 @@ test("a Thread away from its Project's workspace bears a small diamond right aft
   await expect.poll(() => threadNamed(window, "stray one")?.later).toBeTruthy()
   await sidebar.getByRole("tab", { name: /^Later/ }).click()
   await leaveSidebar(page)
-  await expect(linesOf(stray)).toHaveCount(1)
-  await away(stray, "stray one", "Wake")
-  await focusShots(window, "away-later-1", stray)
+  await expect(linesOf(stray)).toHaveCount(3)
+  await away(stray, "Wake")
+  await focusShots(window, "away-later-3", stray)
 })
 
 /** The Inbox, with the counts always on the bar. */
-const INBOX = 'preset = "inbox"\n[bar]\nshow = "always"\n'
+const INBOX = 'group = "none"\n[bar]\nshow = "always"\n'
 
 /** The counts in the bar's middle, where the Person lists them: none
  * stand there by default (ADR 0098, decision 22). */
@@ -489,7 +469,7 @@ const COUNTS = '[bar]\ncenter = ["sidebar.counts"]\n'
 /** A title too long for a card of the sidebar. */
 const LONG = "Bench the window tests on arc against the new sidebar cards"
 
-test("another machine's card is an ordinary card, its icon on line 3; a long title fades out at its end and shows whole beside the sidebar after a 500 ms rest, one that fits gets no fade and no tooltip; the counts' list draws one-line cards (ADR 0098, S6b; #1067)", async () => {
+test("another machine's card is an ordinary card, its icon on line 3; a long title fades out at its end and shows whole beside the sidebar after a 500 ms rest, one that fits gets no fade and no tooltip; the counts' list draws the same cards (ADR 0098, S6b; #1067)", async () => {
   test.setTimeout(300_000)
   // arc holds two Threads done in its Project banda; this machine, named
   // mac, one in Work. The sidebar is the Inbox, so arc's cards stand among
@@ -610,8 +590,9 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   writeFileSync(sidebarToml, INBOX)
   await expect(arcMark.locator(".sr-only")).toHaveCount(0)
 
-  // The counts' list draws each as a one-line card: its mark, its title,
-  // arc's icon where it is arc's, and its time; no Project's sign.
+  // The counts' list draws each as the sidebar's card of three lines: its
+  // mark, its title, its time, its Project, and arc's icon where it is
+  // arc's.
   const counts = page.getByRole("banner").getByRole("button", { name: /done/ })
   const waiting = page.getByRole("group", { name: "Your turn" })
   const items = waiting.getByRole("menuitem")
@@ -630,8 +611,8 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
   }
   await counts.click()
   for (const one of await items.all()) {
-    await expect(one.locator(":scope > span")).toHaveCount(1)
-    await expect(one.locator("[data-sign]")).toHaveCount(0)
+    await expect(one.locator(":scope > span")).toHaveCount(3)
+    await expect(one.locator("[data-sign]")).toHaveCount(1)
     await expect(one.locator("[data-time]")).toBeVisible()
   }
   await expect(
@@ -668,9 +649,9 @@ test("another machine's card is an ordinary card, its icon on line 3; a long tit
 const GOES_ON = String.raw`([A-Z][a-z]{2} )?\d{1,2}:\d\d`
 
 // ADR 0099, step 3 (M3b): line 2 of a working card says what its Agent
-// does, by the same hold as its Mark. A card in Working has one line
-// (ADR 0098, decision 9), so these are drawn in Your turn's three, where
-// the list holds each under the pointer as its Agent starts work again.
+// does, by the same hold as its Mark. These are drawn in Your turn,
+// where the list holds each under the pointer as its Agent starts work
+// again.
 test("a Done card shows on line 2's right how many lines its last work added and removed, in grey; a Failed card nothing there (ADR 0098, decision 8; F1b)", async () => {
   test.setTimeout(180_000)
   window = await startWindow({ look: 'mode = "dark"\n' })
@@ -871,26 +852,26 @@ test("a working card says what its Agent does as its Mark shows it: the command 
   await expect(said(silent)).toHaveText("No events for 3m")
   await expect(markOf(silent)).toHaveAttribute("data-doing", "stuck")
 
-  // Away, each goes to Working, one line. At its limit, line 1's right
-  // says when it goes on; a screen reader hears what each does.
+  // Away, each goes to Working, of three lines still. At its limit, line
+  // 1's right says when it goes on; a screen reader hears what each does.
   const goesOn = (await said(limited).textContent())!.replace(
     "Usage limit · goes on at ",
     ""
   )
   await leaveSidebar(page)
   await sidebar.getByRole("tab", { name: /^Working/ }).click()
-  await expect(linesOf(limited)).toHaveCount(1)
+  await expect(linesOf(limited)).toHaveCount(3)
   await expect(limited.locator("[data-time]")).toHaveText(goesOn)
   await expect(limited).toHaveAccessibleName(
     new RegExp(`^card three, Working, goes on `)
   )
   await expect(limited).toHaveAttribute(
     "aria-description",
-    `Usage limit. goes on at ${goesOn}`
+    new RegExp(`^Usage limit\\. goes on at ${goesOn}\\. Work\\. `)
   )
   await expect(silent).toHaveAttribute(
     "aria-description",
-    "No events for 3 minutes"
+    /^No events for 3 minutes\. Work\. /
   )
 })
 

@@ -877,8 +877,8 @@ it a column of the one on screen.
 The Window's area at its left edge, and Banda's list that fills it, the
 sidebar list: every Thread of every Project, and whatever else an App
 lists as an Item. Each row shows its own Mark. It is the Person's inbox:
-tabs Inbox, Working, Later and Archive, grouped by nothing, Project or
-machine, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
+tabs Inbox, Working, Later and Archive, grouped by Project or not, every
+card of three lines, and the Person's own keys change any part of it (ADR 0098). The list is a part of Banda,
 not of the Threads App: it reads only what Apps list (ADR 0087). On a
 phone it is the home screen. Where the two must be told apart, say "the
 Sidebar" for the area and "the sidebar list" for the list.
@@ -918,15 +918,8 @@ area such as `look` or `sidebar` (ADR 0012).
 One page of the Banda skill, written beside the code it describes, in its
 part's `skill/` folder.
 
-**Preset**:
-A named arrangement of the sidebar: `inbox`, `projects` or `places`, or a file
-of the Person's own in `~/.config/banda/sidebars/`. It sets how Threads are
-grouped and sorted and what a row shows; the Person's keys in
-`sidebar.toml` win over it.
-
 **Shelf**:
-A section at the bottom of the sidebar, folded or open, with its count,
-as a Person's `group.bottom` asks; none of Banda's presets has one.
+A section at the bottom of the sidebar, folded or open, with its count.
 
 **Bar**:
 The Window's line across its top: the Mark, which shows and hides the

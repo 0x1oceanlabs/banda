@@ -202,8 +202,8 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   its `[notify]` where the window tells of a call (ADR 0011); the look's
   layers apply to them as to every other key. The sidebar's arrangement
   comes with it (ADR 0008): `~/.config/banda/sidebar.toml` over the
-  preset it names, Banda's or `sidebars/<name>.toml`, over the defaults.
-  The view menu asks the desktop to write the preset into the file. The browser's
+  defaults. The view menu writes its keys into the file through
+  `banda settings set`. The browser's
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
   `pinned` into it, through `banda settings set`; its `blocker` turns
@@ -2132,14 +2132,14 @@ apps/*/desktop, platform/*/desktop  a module's part in Electron main
   Agent's `act` tool, through the engine (`window/asked.ts`; ADR 0127,
   decision 2).
 - **The sidebar** lists every Thread of every Project, arranged as the
-  Person's keys say (ADR 0008, as ADR 0098 amends it): grouped by Project,
-  by machine or not at all; Your turn oldest or newest first; Open and the
-  Working shelf in the Inbox or not; cards of one, two or three lines.
+  Person's keys say (ADR 0008, as ADR 0098 amends it): grouped by Project
+  or not at all; Your turn oldest or newest first; Open and the Working
+  shelf in the Inbox or not; every card of three lines.
   `order.ts` is the one order, from the rows of `rows.ts`, laid out by
   `inbox.ts`. `banda look` resolves the keys from `sidebar.toml`
-  (`platform/look/src/sidebar.rs`; a file that names one of Banda's old
-  presets, `inbox`, `projects` or `places`, still reads as a group), and the
-  view menu writes them into the file, keeping the Person's other keys and
+  (`platform/look/src/sidebar.rs`; a file that still names a preset, a
+  card's lines or `group = "machine"` reads as one list of three-line
+  cards, and is told so), and the view menu writes them into the file, keeping the Person's other keys and
   comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per
   row (its title, mark, times, what calls the Person, what it was last

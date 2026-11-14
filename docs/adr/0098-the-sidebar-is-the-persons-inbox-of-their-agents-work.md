@@ -120,6 +120,15 @@ From the audit (`2-code.md`):
    - The order of the Projects does not follow need: the rollup says
      where the calls are, and `Alt+U` still walks the oldest first.
 
+   _Amended 2026-11-14 by Roma ("keep 3 lines and 2 groupings: by
+   project and inbox"): **Group by: None, Project**, and `group = "none"
+   | "project"`; None is the plain Inbox. By Machine goes: another
+   machine's cards name it on line 3, and its Projects stand under its
+   label. What is left of the presets goes too: no `preset` key, no
+   `sidebars/` folder, no preset row in Settings. A file that still says
+   `preset` or `group = "machine"` reads, as one list, and is told so at
+   the line._
+
 ### The card
 
 8. **A card has three lines, each with a left and a right.**
@@ -149,6 +158,14 @@ From the audit (`2-code.md`):
    turn, one for the rest; two for Your turn when grouped by Project. A
    one-line working row shows the machine and the time. No card grows on
    hover or click: tried and dropped, rows jumped.
+
+   _Amended 2026-11-14 by Roma ("keep 3 lines and 2 groupings: by
+   project and inbox"): no density. Every card is decision 8's, of three
+   lines, wherever it stands and however the list is grouped, in the
+   counts' list and the small inbox too; grouped by Project, line 3
+   leaves the Project to its header and keeps the machine and the
+   Harness. The `card` key and the view menu's Card row go; a file that
+   still says `card` reads, and is told so at the line._
 
 ### Acting on it
 

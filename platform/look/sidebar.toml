@@ -1,15 +1,9 @@
 #:schema ./schemas/sidebar.schema.json
 # How Banda's sidebar arranges your Threads. Every key is optional: what
-# you leave out comes from the preset, and what the preset leaves out from
-# Banda's defaults, written below. Check a change with: banda settings check
-#
-# The presets: "inbox" (one list), "projects" (each Project under its
-# header), "places" (the Projects listed above), or one of your own:
-# ~/.config/banda/sidebars/<name>.toml, with the keys of this file.
-preset = "inbox"
+# you leave out is Banda's default, written below. Check a change with:
+# banda settings check
 
-# group = "none"                     # "none", "project" or "machine": each under its header
-# card = "auto"                      # a card's lines: "auto" (by where it stands), 3, 2 or 1
+# group = "none"                     # "none" (one list) or "project" (each Project under its header)
 
 # [inbox]
 # order = "oldest"                   # Your turn: "oldest" or "newest" first

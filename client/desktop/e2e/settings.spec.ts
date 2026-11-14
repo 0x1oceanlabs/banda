@@ -280,7 +280,7 @@ test("Agents show each account as a card, its page who is signed in, and write h
   )
 })
 
-test("General, the sidebar's presets, and hearing a sound", async () => {
+test("General, how the sidebar groups, and hearing a sound", async () => {
   window = await startWindow()
   const { page, dir } = window
   const { composer } = await firstThread(page)
@@ -310,19 +310,21 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   await expect(settings.getByRole("group", { name: "Fake AI" })).toBeVisible()
 
   await sections.getByRole("button", { name: /Sidebar/ }).click()
-  const preset = settings.locator('[data-key="preset"]')
-  await expect(preset.getByRole("radio", { name: "inbox" })).toHaveAttribute(
+  // No preset row: Group by is one key, None or Project (ADR 0098,
+  // decision 7, as amended).
+  await expect(settings.locator('[data-key="preset"]')).toHaveCount(0)
+  const group = settings.locator('[data-key="group"]')
+  await expect(group.getByRole("radio", { name: "none" })).toHaveAttribute(
     "aria-checked",
     "true"
   )
-  await preset.getByRole("radio", { name: "projects" }).click()
+  await expect(group.getByRole("radio")).toHaveCount(2)
+  await group.getByRole("radio", { name: "project" }).click()
   await expect
     .poll(() => textOf(join(dir, "config/sidebar.toml")))
-    .toContain('preset = "projects"')
+    .toContain('group = "project"')
   // Each key says what it does.
-  await expect(settings.locator('[data-key="group"]')).toContainText(
-    "How the list is grouped"
-  )
+  await expect(group).toContainText("How the list is grouped")
 
   await sections.getByRole("button", { name: /Sounds/ }).click()
   await settings.getByRole("button", { name: "Play done" }).click()

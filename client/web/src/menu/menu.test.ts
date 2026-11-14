@@ -461,18 +461,16 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("the sidebar's view groups the list by none, Project or Machine, the one in force ticked (ADR 0098, decision 7)", () => {
+  test("the sidebar's view groups the list by none or Project, the one in force ticked (ADR 0098, decision 7)", () => {
     expect(labels("view")[0]).toEqual(["Actions", ["Sidebar view"]])
     const views: Branch = { kind: "views", id: "views" }
-    expect(labels("", "root", views)).toEqual([
-      ["", ["none ✓", "project", "machine"]],
-    ])
-    expect(labels("", "root", views, { group: "machine" })).toEqual([
-      ["", ["none", "project", "machine ✓"]],
+    expect(labels("", "root", views)).toEqual([["", ["none ✓", "project"]]])
+    expect(labels("", "root", views, { group: "project" })).toEqual([
+      ["", ["none", "project ✓"]],
     ])
     // Found by its words, as the menu names it.
-    expect(labels("mach", "root", views)).toEqual([["", ["machine"]]])
-    expect(labels("group by", "root", views)[0]?.[1]).toHaveLength(3)
+    expect(labels("proj", "root", views)).toEqual([["", ["project"]]])
+    expect(labels("group by", "root", views)[0]?.[1]).toHaveLength(2)
   })
 
   test("the theme holds its schemes, the one in force ticked, then Themes…", () => {

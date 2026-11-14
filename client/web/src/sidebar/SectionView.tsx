@@ -82,7 +82,7 @@ export function SectionView({
   // Its regions are one machine's, whose stops' keys say it.
   const host = regions[0]?.host
   // Grouped, a header names what each card then leaves out.
-  const view: CardView = { density: settings.card, group: settings.group }
+  const view: CardView = { group: settings.group }
   // Grouped by Project, this machine's groups stand under its own label,
   // as another's do, where the Person asked it named too (ADR 0095,
   // decision 4). The label names only this machine's cards: another's,

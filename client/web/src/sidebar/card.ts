@@ -1,8 +1,8 @@
 /**
- * A sidebar card as one model (ADR 0098, decisions 8, 9 and 27): from a
- * Thread, the place it is drawn in and how the list is viewed, its lines,
- * each a left and a right; the colour of its call; how quiet it is; and
- * its time. `CardView.tsx` and the counts' list only draw it, and `spokenOf`
+ * A sidebar card as one model (ADR 0098, decisions 8 and 27): from a
+ * Thread, the place it is drawn in and how the list is grouped, its three
+ * lines, each a left and a right; the colour of its call; how quiet it
+ * is; and its time. `CardView.tsx` and the counts' list only draw it, and `spokenOf`
  * says it to a screen reader. Pure, with no clock of its own: a time is a
  * moment and a kind, put into words as it is drawn, against the list's
  * clock (`clock.ts`).
@@ -10,6 +10,7 @@
 import type { ProjectSummary } from "@banda/contract"
 import type { DoingKind } from "@banda/contract/agents"
 import type { Named } from "@banda/contract/machines"
+import type { GroupBy } from "@banda/contract/sidebar"
 import type { Checks, Pull } from "@banda/contract/pulls"
 import { type CallColor, callColor } from "@banda/ui/components/banda-mark"
 import { type MarkDoing, type MarkState, works } from "@banda/ui/lib/mark-state"
@@ -28,16 +29,10 @@ import type { Row } from "./rows"
 import type { Child } from "./inbox"
 import type { OnRow } from "./machine-on-row"
 
-/** How many lines a card draws (decision 9): by where it is, or as many
- * as the Person set. */
-export type Density = "auto" | 1 | 2 | 3
-
-/** What the list is grouped by (decision 7): a group's header names what
- * its cards then leave out. */
-export type Grouped = "none" | "project" | "machine"
-
-/** How the list is viewed, as its cards take it. */
-export type CardView = { density: Density; group: Grouped }
+/** How the list is viewed, as its cards take it: grouped by Project
+ * (decision 7), a group's header names the Project its cards then leave
+ * out. */
+export type CardView = { group: GroupBy }
 
 /** A call's colour (decision 8): on its mark and its time, and nowhere
  * else. */
@@ -109,12 +104,12 @@ export type Line = { left: Slot[]; right: Slot[] }
 export type CardModel = {
   /** Where its Thread stands now, which its words say. */
   stand: Stand
-  /** The place it is drawn in, whose lines it keeps while the pointer
-   * keeps the list's order (decision 6), even as its Thread stands
-   * elsewhere. */
+  /** The place it is drawn in, whose title's weight it keeps while the
+   * pointer keeps the list's order (decision 6), even as its Thread
+   * stands elsewhere. */
   place: Stand
   title: string
-  /** One to three. */
+  /** Three (decision 8). */
   lines: Line[]
   /** The colour of its call, on its mark and its time. */
   tone?: Tone
@@ -173,19 +168,6 @@ export type CardOf = {
   child?: Child
 }
 
-/** The lines a card of `place` draws, in `view` (decision 9): auto, three
- * in Your turn, two there when grouped by Project, whose header names it,
- * unless a `child`'s line 3 names its parent; and one for the rest. */
-export function linesOf(
-  place: Stand,
-  { density, group }: CardView,
-  child?: Child
-): 1 | 2 | 3 {
-  if (density !== "auto") return density
-  if (place !== "turn") return 1
-  return group === "project" && !child ? 2 : 3
-}
-
 /** Each call's word, by its colour. */
 const WORDS: Readonly<Record<Tone, Word>> = {
   attention: "Asks",
@@ -210,45 +192,36 @@ export function cardOf(input: CardOf): CardModel {
   const does = works(look) ? doesOf(listed, now) : undefined
   const subagents = does && subagentsSaid(does, listed.subagents?.said)
   const tone = callColor(look)
-  const count = linesOf(place, view, child)
-  // The machine stands on line 3; with none, on line 1's right, by its
-  // icon. Grouped by machine, its header names it.
-  const on = view.group === "machine" ? undefined : machine
+  // Line 2's right: its pull requests, once it links one (F2); else the
+  // diff of its last work that ended, but at work, where the work since
+  // has none yet. Failed's stays empty (decision 8).
+  const failed = tone === "destructive"
+  const pulls = failed ? undefined : listed.pulls
+  const changed = does || failed ? undefined : listed.changedLines
   const lines: Line[] = [
     {
       left: [{ kind: "mark", look }, { kind: "title" }],
-      right: [
-        ...(on && count < 3 ? [machineSlot(row, on, false)] : []),
-        { kind: "time" },
-      ],
+      right: [{ kind: "time" }],
     },
-  ]
-  if (count >= 2) {
-    // Its right: its pull requests, once it links one (F2); else the
-    // diff of its last work that ended, but at work, where the work since
-    // has none yet. Failed's stays empty (decision 8).
-    const failed = tone === "destructive"
-    const pulls = failed ? undefined : listed.pulls
-    const changed = does || failed ? undefined : listed.changedLines
-    lines.push({
+    {
       left: [does ? { kind: "works" } : saysOf(row, tone && WORDS[tone])],
       right: pulls?.[0]
         ? [pullSlot(pulls[0], pulls.length)]
         : changed
           ? [{ kind: "diff", ...changed }]
           : [],
-    })
-  }
-  if (count >= 3)
-    lines.push({
+    },
+    {
       left: child
         ? [{ kind: "parent", title: child.parent }]
         : view.group === "project" || !("name" in row.project)
           ? []
           : [{ kind: "project", project: row.project }],
       right: [
-        ...(on ? [machineSlot(row, on, true)] : []),
-        ...(away === undefined ? [] : [{ kind: "away" as const, dot: !!on }]),
+        ...(machine ? [machineSlot(row, machine)] : []),
+        ...(away === undefined
+          ? []
+          : [{ kind: "away" as const, dot: !!machine }]),
         ...(listed.harness
           ? [
               {
@@ -259,7 +232,8 @@ export function cardOf(input: CardOf): CardModel {
             ]
           : []),
       ],
-    })
+    },
+  ]
   const quiet = stand === "turn" || stand === "open" ? undefined : stand
   return {
     stand,
@@ -288,18 +262,17 @@ export function cardOf(input: CardOf): CardModel {
   }
 }
 
-/** `machine`'s slot on `row`'s card: by its name too where `named`, unless
- * it shows by its icon `alone`. */
+/** `machine`'s slot on `row`'s card: by its name too, unless it shows by
+ * its icon `alone`. */
 function machineSlot(
   { host }: Pick<Row, "host">,
-  { alone, ...machine }: OnRow,
-  named: boolean
+  { alone, ...machine }: OnRow
 ): Slot {
   return {
     kind: "machine",
     ...(host === undefined ? {} : { host }),
     machine,
-    named: named && !alone,
+    named: !alone,
   }
 }
 
@@ -522,11 +495,10 @@ const STAND_SAID: Readonly<Record<Stand, string>> = {
  * How `card` is said at `now` (§2.8): its name is its title, its word,
  * "Later by its Agent" where its Agent put it off, and its time in full
  * ("14 minutes", never "14m", which a reader may say as metres); its
- * description, what its Agent does at work, on a card of one line too, as
- * its Mark shows it there, then what its other lines say, each `·` a full
- * stop, ✓ "passed" and ✗ "failed"; then that it strayed from its
- * Project's workspace, who started it if another Agent did, and that its
- * machine is away.
+ * description, what its Agent does at work, as its Mark shows it there,
+ * then what its other lines say, each `·` a full stop, ✓ "passed" and ✗
+ * "failed"; then that it strayed from its Project's workspace, who
+ * started it if another Agent did, and that its machine is away.
  */
 export function spokenOf(card: CardModel, now: number): Spoken {
   const word = card.tone

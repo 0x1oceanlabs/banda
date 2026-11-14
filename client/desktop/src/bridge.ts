@@ -2,7 +2,7 @@
  * What the desktop gives the page, on `window.banda`
  * (client/desktop/src/preload.ts). The page reaches the engine only through
  * the address it hands out, gets the look the desktop reads (ADR 0007),
- * and asks it to write the sidebar's preset (ADR 0008), to show system
+ * and asks it to open the sidebar's file (ADR 0008), to show system
  * notifications (ADR 0011) and to pick a folder (ADR 0026). The browser's
  * pages live in it too (ADR 0013).
  *
@@ -110,8 +110,6 @@ export const BRIDGE = bridge({
   },
   /** `sidebar.toml`, which the desktop writes; the look brings it back. */
   sidebar: {
-    /** Names the preset in the file, keeping the Person's other keys. */
-    preset: invoke<[name: string]>(),
     /** Opens the file in the Person's editor, from the template if new. */
     edit: invoke(),
   },

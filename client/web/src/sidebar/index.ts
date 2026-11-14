@@ -18,7 +18,7 @@
  * as they load, and may load while the rest of this file still does.
  */
 export { SIDEBAR, SIDEBAR_KEYS } from "./keys"
-export { GROUP_WORDS, PRESET_WORDS, type Settings } from "./settings"
+export { GROUP_WORDS, type Settings } from "./settings"
 export { kept, WIDTH } from "./width"
 export { askTab, isTab } from "./showing"
 export { byOrder, placeIn, useOrderNow } from "./order"

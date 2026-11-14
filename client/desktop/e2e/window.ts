@@ -995,7 +995,7 @@ export const viewMenuOf = (page: Page) =>
  */
 export async function groupBy(
   page: Page,
-  by: "None" | "Project" | "Machine"
+  by: "None" | "Project"
 ): Promise<void> {
   await sidebarOf(page)
     .getByRole("button", { name: "View", exact: true })

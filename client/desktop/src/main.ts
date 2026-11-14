@@ -8,8 +8,8 @@
  * bar, its icon there saying who works and who waits (closing.ts,
  * menubar.ts, tray.ts). It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
- * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
- * opens the system's folder picker for "Add Project" (ADR 0026), and a
+ * opens `sidebar.toml` in the Person's editor (ADR 0008), and opens the
+ * system's folder picker for "Add Project" (ADR 0026), and a
  * Pane in a window of its own, the same page at `#pane/<id>` (ADR 0025,
  * decision 9); nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The modules' parts in main run here too, as the
@@ -56,7 +56,6 @@ import {
   pickFolder,
   pickSave,
   type Relayed,
-  Refused,
   serve,
   Settings,
   tellPage,
@@ -454,9 +453,6 @@ async function ready(): Promise<void> {
     (_contents, permission, answer) =>
       answer(permission === "clipboard-sanitized-write")
   )
-  const write = (file: string, key: string, value: unknown) =>
-    Settings.use((settings) => settings.write(file, key, value))
-
   // The app's own update, the updates module's part here (ADR 0119,
   // decision 2): the engine's updates module says what is newest, and
   // this window swaps its app. Its restart leaves the engine and its
@@ -597,18 +593,6 @@ async function ready(): Promise<void> {
       ],
     },
     sidebar: {
-      preset: [
-        text,
-        ([name]) =>
-          Effect.gen(function* () {
-            const sidebar = yield* Look.part("sidebar", "The sidebar's file")
-            if (!sidebar.presets.some((preset) => preset.name === name))
-              return yield* new Refused({
-                message: `There is no preset ${JSON.stringify(name)}.`,
-              })
-            yield* write("sidebar.toml", "preset", name)
-          }),
-      ],
       edit: [
         none,
         () =>

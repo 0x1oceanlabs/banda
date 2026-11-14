@@ -2,7 +2,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
 import { expect, test } from "vitest"
-import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
+import { DEFAULT_SIDEBAR, type GroupBy } from "@banda/contract/sidebar"
 import { type Ordered, order } from "./order"
 import type { Elsewhere } from "./rows"
 import type { Settings } from "./settings"
@@ -63,10 +63,10 @@ const archive = (lists: Lists, ids: readonly string[]): Lists =>
 const ids = (ordered: Ordered) =>
   ordered.rows.map((row) => [row.listed.id, row.stand])
 
-/** What the list is grouped by, as its first header says: none with no
- * header. */
+/** What the list is grouped by: by Project with a group's header, else
+ * none. */
 const groupedBy = ({ blocks }: Ordered) =>
-  blocks.find((block) => block.kind === "group")?.by ?? "none"
+  blocks.some((block) => block.kind === "group") ? "project" : "none"
 
 /** The sidebar's order of `held` with `settings`, as the list draws it. */
 const arrange = (
@@ -77,31 +77,22 @@ const arrange = (
   elsewhere: readonly Elsewhere[] = []
 ) => order(held, all, now, { settings, elsewhere })
 
-/** Banda's presets, as platform/look/sidebars/*.toml group the list. */
-const PRESETS = {
-  inbox: "none",
-  projects: "project",
-  places: "project",
-} satisfies Record<string, Settings["group"]>
-type Preset = keyof typeof PRESETS
-
-/** What `banda look` gives for `preset`, the Person's `keys` over it
+/** What `banda look` gives for `group`, the Person's other `keys` with it
  * (platform/look/src/sidebar.rs, whose tests lay the layers). */
-const resolve = (preset: Preset, keys: Partial<Settings> = {}): Settings => ({
+const resolve = (group: GroupBy, keys: Partial<Settings> = {}): Settings => ({
   ...DEFAULT_SIDEBAR,
-  preset,
-  group: PRESETS[preset],
+  group,
   ...keys,
 })
 
 const of = (
-  preset: Preset,
+  group: GroupBy,
   keys?: Partial<Settings>,
   archived: readonly string[] = []
-) => arrange(archive(lists, archived), projects, resolve(preset, keys), NOW)
+) => arrange(archive(lists, archived), projects, resolve(group, keys), NOW)
 
 test("every Project's rows, each where it stands, the archived among them", () => {
-  expect(ids(of("inbox", {}, ["logo"]))).toEqual([
+  expect(ids(of("none", {}, ["logo"]))).toEqual([
     ["form", "turn"],
     ["headers", "working"],
     ["logo", "archived"],
@@ -110,21 +101,15 @@ test("every Project's rows, each where it stands, the archived among them", () =
     ["letters", "turn"],
   ])
   // A Thread at work is never archived.
-  expect(ids(of("inbox", {}, ["headers"]))).toContainEqual([
+  expect(ids(of("none", {}, ["headers"]))).toContainEqual([
     "headers",
     "working",
   ])
 })
 
-test("the list is grouped as `group` says, the preset's or the Person's; places groups by Project, as the list of Projects went (ADR 0098, decisions 7 and 16)", () => {
-  expect(groupedBy(of("inbox"))).toBe("none")
-  expect(groupedBy(of("places"))).toBe("project")
-  expect(groupedBy(of("projects"))).toBe("project")
-  // The Person's key wins over the preset's.
-  expect(groupedBy(of("projects", { group: "none" }))).toBe("none")
-  expect(groupedBy(of("inbox", { group: "project" }))).toBe("project")
-  expect(groupedBy(of("projects", { group: "machine" }))).toBe("machine")
-  expect(groupedBy(of("places", { group: "machine" }))).toBe("machine")
+test("the list is grouped as `group` says (ADR 0098, decision 7)", () => {
+  expect(groupedBy(of("none"))).toBe("none")
+  expect(groupedBy(of("project"))).toBe("project")
 })
 
 test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+U keep theirs (ADR 0098, decision 3)", () => {
@@ -136,13 +121,13 @@ test("the Inbox shows what `[inbox]` says, in its order, and the counts and Alt+
           ]
         : []
     )
-  const inbox = of("inbox", {}, ["logo"])
+  const inbox = of("none", {}, ["logo"])
   expect(shown(inbox)).toEqual([
     "turn: form migration letters",
     "working: release headers",
   ])
   const newest = of(
-    "inbox",
+    "none",
     { inbox: { order: "newest", open: true, working: false } },
     ["logo"]
   )
@@ -154,7 +139,7 @@ test("scratch Threads are rows as others are", () => {
   const scratch = { ...project("scratch", "", "/scratch"), scratch: true }
   const allProjects = [...projects, scratch]
   const allLists = { ...lists, scratch: [listed("loose", "rest", 7)] }
-  const result = arrange(allLists, allProjects, resolve("places"), NOW)
+  const result = arrange(allLists, allProjects, resolve("project"), NOW)
   expect(ids(result)).toContainEqual(["loose", "open"])
 })
 
@@ -165,7 +150,7 @@ test("a Thread that woke stands with what calls, as of when it woke", () => {
       one.id === "logo" ? { ...one, later: { at: 0, until: 10 } } : one
     ),
   }
-  const woke = arrange(wokeAt10, projects, resolve("inbox"), NOW).rows.find(
+  const woke = arrange(wokeAt10, projects, resolve("none"), NOW).rows.find(
     (row) => row.listed.id === "logo"
   )
   expect([woke?.stand, woke?.woke]).toEqual(["turn", 10])
@@ -180,19 +165,19 @@ const withArc = {
   r1: [listed("bench", "done", 7), listed("hosts", "working", 8)],
   r2: [listed("idea", "asking", 9)],
 }
-const elsewhere = (preset: Preset) =>
-  arrange(withArc, projects, resolve(preset), NOW, [arc])
+const elsewhere = (group: GroupBy) =>
+  arrange(withArc, projects, resolve(group), NOW, [arc])
 
-test("with no other host, every preset arranges as it did, and no row names one", () => {
-  for (const preset of Object.keys(PRESETS) as Preset[]) {
-    const none = arrange(lists, projects, resolve(preset), NOW)
-    expect(arrange(lists, projects, resolve(preset), NOW, [])).toEqual(none)
+test("with no other host, either way to group arranges as it did, and no row names one", () => {
+  for (const group of ["none", "project"] as const) {
+    const none = arrange(lists, projects, resolve(group), NOW)
+    expect(arrange(lists, projects, resolve(group), NOW, [])).toEqual(none)
     expect(JSON.stringify(none)).not.toContain('"host"')
   }
 })
 
 test("another host's rows join this machine's, each with its name", () => {
-  const inbox = elsewhere("inbox")
+  const inbox = elsewhere("none")
   const hostOf = (id: string) =>
     inbox.rows.find((row) => row.listed.id === id)?.host
   expect([hostOf("bench"), hostOf("idea"), hostOf("form")]).toEqual([
