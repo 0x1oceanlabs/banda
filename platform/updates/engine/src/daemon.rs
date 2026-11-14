@@ -269,7 +269,7 @@ pub async fn start(program: &Path, banda: &Banda, service: &Service) -> bool {
             true
         }
         other => {
-            tracing::warn!(?other, service = %service.name, "banda-update did not start as a service: the engine looks itself");
+            tracing::warn!(?other, service = %service.name, "banda-update did not start as a service: the engine asks it each hour");
             false
         }
     }
