@@ -1,16 +1,15 @@
 /**
  * The one order of what calls (ADR 0079, decision 4; ADR 0087, decision
- * 8): the Person's sidebar, as the Inbox lays it out (ADR 0098). The
- * sidebar list draws it, the small inbox too, `Alt+U` goes by its rows'
- * `project:thing` keys, and only `order` works it out. Its keys are
- * Your turn oldest first, then Open, then Working, whatever the list
- * shows and however it is grouped, so Alt+U takes them whole, while the
- * Sidebar is hidden too, and only when asked, on the key. The sidebar
- * list, the small inbox's among them, and Alt+U place the other
- * machines' Threads alike, by the one `elsewhereOf`.
+ * 8): the Person's sidebar, as `sidebarOf` lays it out (ADR 0098). The
+ * sidebar list draws it, the small inbox too, and `Alt+U` goes by its
+ * `keys`: Your turn oldest first, then Open, then Working, whatever the
+ * list shows and however it is grouped, so Alt+U takes them whole, while
+ * the Sidebar is hidden too, and only when asked, on the key. The sidebar
+ * list, the small inbox's among them, the counts and Alt+U place the
+ * other machines' Threads alike, by the one `elsewhereOf`.
  */
 import { useCallback, useContext } from "react"
-import type { ProjectId, ProjectSummary } from "@banda/contract"
+import type { ProjectSummary } from "@banda/contract"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import {
   holds,
@@ -21,67 +20,11 @@ import {
 } from "@banda/core/react"
 import { currentLook } from "@banda/ui/lib/look"
 import type { Lists } from "@banda/ui/pane"
-import { type Inbox, inboxOf, type InboxView, projectCallsOf } from "./inbox"
-import { type Elsewhere, type Row, rowsOf } from "./rows"
-import type { Settings } from "./settings"
+import { type Drawn, sidebarOf } from "./drawn"
+import type { Elsewhere } from "./rows"
 
-/** What of the order the sidebar list shows: the tab in view, a cut list
- * whole, the groups the Person folded, when inbox zero last told of
- * Someday and the Projects whose trust the Person put off, which the
- * counts and Alt+U leave as they come, their keys the same whatever these
- * say; and the other machines' Projects, whose rows it places among this
- * one's, which they hand too. `settings` are the look's, as the Person
- * arranged the sidebar, unless a test hands its own: how the list is
- * grouped, and what the Inbox shows in what order. */
-export type View = Partial<
-  Pick<InboxView, "tab" | "more" | "folded" | "someday">
-> & {
-  settings?: Settings
-  elsewhere?: readonly Elsewhere[]
-  /** The Projects whose trust the Person put off on this device. */
-  putOff?: ReadonlySet<ProjectId>
-}
-
-/** The sidebar as it is drawn: the Inbox, and every row it was made of. */
-export type Ordered = Inbox & { rows: Row[] }
-
-/**
- * The sidebar's Inbox of every Project's list, as the Person's settings
- * say, each Thread where it stands at `now`, the Later clock; this
- * machine's Projects that wait for the Person first in Your turn.
- */
-export function order(
-  lists: Lists,
-  projects: readonly ProjectSummary[],
-  now: number,
-  {
-    settings = currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
-    elsewhere = [],
-    putOff,
-    ...shown
-  }: View = {}
-): Ordered {
-  const rows = [
-    ...rowsOf(lists, projects, now),
-    ...elsewhere.flatMap((host) =>
-      rowsOf(lists, host.projects, now, host.name)
-    ),
-  ]
-  const view: InboxView = {
-    tab: "inbox",
-    group: settings.group,
-    ...settings.inbox,
-    ...shown,
-  }
-  const heard = {
-    calls: projectCallsOf(projects, putOff),
-    none: projects.every((project) => project.scratch),
-  }
-  return {
-    ...inboxOf(rows, view, now, heard),
-    rows,
-  }
-}
+/** Alt+U walks no Project's card, so none is put off for it. */
+const NONE: ReadonlySet<never> = new Set()
 
 /** The other machines whose Projects the order places among this one's:
  * those of `hosts.toml` the Window shows rows of, live or away (ADR 0081,
@@ -96,7 +39,7 @@ export const useElsewhere = (): readonly Elsewhere[] =>
   useHostsBy(elsewhereOf, sameEach)
 
 /**
- * `order` with the other machines as they stand when it is asked, for
+ * `sidebarOf` with the other machines as they stand when it is asked, for
  * Alt+U, which works the order out on the key and draws nothing; the same
  * function while the Window's hosts stay.
  */
@@ -104,11 +47,19 @@ export function useOrderNow(): (
   lists: Lists,
   projects: readonly ProjectSummary[],
   now: number
-) => Ordered {
+) => Drawn {
   const kept = useContext(HostsContext)
   return useCallback(
     (lists, projects, now) =>
-      order(lists, projects, now, { elsewhere: elsewhereOf(kept.get()) }),
+      sidebarOf({
+        lists,
+        now,
+        projects,
+        elsewhere: elsewhereOf(kept.get()),
+        settings: currentLook()?.sidebar ?? DEFAULT_SIDEBAR,
+        putOff: NONE,
+        view: { tab: "inbox" },
+      }),
     [kept]
   )
 }

@@ -1,8 +1,9 @@
 /**
  * The sidebar's rows (ADR 0008, as ADR 0098 amends it): what each Project
  * lists, each Thread where `status.ts` says it stands, and when it woke.
- * The Inbox (`inbox.ts`) puts the rows in their places, and `order`
- * gathers them; this only makes them. Pure, so plain tests cover it.
+ * The Inbox (`inbox.ts`) puts the rows in their places, and `sidebarOf`
+ * (`drawn.ts`) gathers them; this only makes them. Pure; its tests go
+ * through `sidebarOf`.
  *
  * The other machines of `hosts.toml` come after this one's (ADR 0081,
  * decision 4): their rows are among this machine's, each with its host's

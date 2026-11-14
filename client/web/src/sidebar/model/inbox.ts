@@ -1,19 +1,21 @@
 /**
  * The sidebar as the Person's inbox of their Agents' work (ADR 0098,
- * decisions 1–5, 12 and 24): the rows in, each where `status.ts` says it
- * stands (`rowsOf`), and this machine's Projects that wait for the Person
- * (decision 16); out, each tab's count, the blocks the list draws for the
- * tab in view, what inbox zero or the first run says (decision 25), and
- * the one order of what calls, which `Alt+U` and the counts go by. A
- * Thread another Agent started is its child: at work, it sits under its
- * parent. It never works out where a Thread stands, only where it goes in
- * its place. Pure, with no DOM and no React, so plain tests cover it.
+ * decisions 1–5, 12 and 24), a step of `sidebarOf` (`drawn.ts`): the
+ * rows in, each where `status.ts` says it stands (`rowsOf`), and this
+ * machine's Projects that wait for the Person (decision 16); out, each
+ * tab's count, the blocks the list draws for the tab in view, what inbox
+ * zero or the first run says (decision 25), and the one order of what
+ * calls, which `Alt+U` and the counts go by. A Thread another Agent
+ * started is its child: at work, it sits under its parent. It never works
+ * out where a Thread stands, only where it goes in its place. Pure, with
+ * no DOM and no React; its tests go through `sidebarOf`.
  */
 import type { ProjectSummary } from "@banda/contract"
-import type { GroupBy } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/lib/mark-state"
 import { lookOf, STAND_WORDS, type Stand } from "@banda/ui/status"
+import type { Drawn, SidebarInput } from "./drawn"
 import { itemKey, keyOf, type Row, rowKey } from "./rows"
+import type { Settings } from "./settings"
 import { dayAt } from "../../calls/later-time"
 
 /** The tabs at the sidebar's top, in their order, as `1`–`4` pick them. */
@@ -24,31 +26,12 @@ export const TABS: readonly Tab[] = ["inbox", "working", "later", "archive"]
  * a tab but the Inbox, whose is inbox zero. */
 export type EmptyAt = Exclude<Tab, "inbox">
 
-/** How the Person has the list in view. */
-export type InboxView = {
-  tab: Tab
-  /** Whether the list is grouped by Project (`group` in `sidebar.toml`):
-   * not by default. */
-  group?: GroupBy
-  /** Your turn's order (`[inbox] order`): oldest first by default, so no
-   * one waits forever. */
-  order?: "oldest" | "newest"
-  /** Whether the Inbox shows Open (`[inbox] open`); it does by default. */
-  open?: boolean
-  /** Whether the Inbox shows the Working shelf (`[inbox] working`); it
-   * does by default. */
-  working?: boolean
-  /** The rest of a cut list shows: the shelf's "+ N more", the Archive's
-   * "Show older". */
-  more?: boolean
-  /** What the Person turned from how it first shows, by its key: the
-   * groups they folded, and the parents whose children at work they
-   * unfolded past three, by their cards' keys. */
-  folded?: ReadonlySet<string>
-  /** When inbox zero last said how many sleep until Someday, as this
-   * device keeps it; it says so once a week (decision 12). */
-  someday?: number
-}
+/** How the Person has the list in view, with what `sidebar.toml` says of
+ * it: how it is grouped, and Your turn's order and whether the Inbox
+ * shows Open and the Working shelf, each as by default when left out. */
+export type InboxView = SidebarInput["view"] &
+  Partial<Pick<Settings, "group">> &
+  Partial<Settings["inbox"]>
 
 /** A row as its place draws it, with the moment its time counts from:
  * the call's, or when it woke; the start of the turn at work; the last
@@ -149,21 +132,14 @@ export type Block =
    * 25). */
   | { kind: "empty"; key: string; tab: EmptyAt }
 
+/** A group's header, when the list is grouped. */
+export type GroupBlock = Extract<Block, { kind: "group" }>
+
 /** A tab's count, and whether it is the Person's turn there. */
 export type TabCount = { count: number; calls: boolean }
 
-export type Inbox = {
-  /** Each tab's count. */
-  tabs: Record<Tab, TabCount>
-  blocks: Block[]
-  /** Set while nothing in the Inbox is the Person's. */
-  zero?: Zero
-  /** The `project:thing` key of each row Alt+U and the counts walk, in
-   * their one order: Your turn oldest first, whatever `[inbox] order`
-   * says, then Open, then Working by when it began; across groups,
-   * folds and machines (decision 7). */
-  keys: string[]
-}
+/** The Inbox as `sidebarOf` says it, the list still in its blocks. */
+export type Inbox = Pick<Drawn, "tabs" | "zero" | "keys"> & { blocks: Block[] }
 
 /** How many of Working the Inbox's shelf shows before "+ N more": its
  * Threads that are no child at work, each with its children. */
