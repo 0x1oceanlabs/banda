@@ -203,6 +203,12 @@ desktop, web and the PWA now.
    and the window buttons' place on macOS, each window's first colour,
    and the look told to each window as it can show it, followed in the
    layer's scope; it answers the bridge's `look` and `frame`.
+   Part 7b: the windows themselves are `os-window/windows.ts`, the
+   `Windows` service over the material: it keeps which window the main
+   one is, opens it and a Pane's own, brings one to the front, and hides
+   the main one as it closes on macOS; the kit's `Window` is answered
+   from it. What quitting is, the Dock and the Panes' own windows stay
+   in the root, which hands them in.
 
 10. **The catalogue's code stays where the vision put it,** `sdk/kit` as
     `@banda/kit` (L3). The Tree runtime goes in the core; the web renderer
