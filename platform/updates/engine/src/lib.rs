@@ -639,17 +639,24 @@ impl Updates {
     /// Takes what `banda-update` said into the state: what the look and
     /// the take own, never what the engine does (what the copy waits for,
     /// how the engine came to its version, machine.toml's word).
+    /// A copy it names ready that did not start (`guard::bad`) is not: a
+    /// look kept from before the engine came back from it says so, and
+    /// does not hide why.
     fn heard(&self, said: &UpdateState) {
         if said.running != self.0.banda.version {
             return;
         }
+        let bad = guard::bad(&self.0.banda.engine);
+        let stale = (said.ready.as_ref()).is_some_and(|ready| bad.contains(ready));
         self.0.state.send_modify(|state| {
             state.newest.clone_from(&said.newest);
             state.looked = said.looked;
             state.taking.clone_from(&said.taking);
-            state.ready.clone_from(&said.ready);
+            state.ready = said.ready.clone().filter(|_| !stale);
             state.chosen.clone_from(&said.chosen);
-            state.failed.clone_from(&said.failed);
+            if !stale {
+                state.failed.clone_from(&said.failed);
+            }
             state.off.clone_from(&said.off);
             state.published = said.published;
         });
@@ -970,6 +977,11 @@ impl Updates {
             self.0.state.send_modify(|state| state.ready = None);
             return None;
         }
+        if guard::bad(&self.0.banda.engine).contains(&to) {
+            tracing::warn!(version = %to, "the copy ready did not start before: not moved onto");
+            self.0.state.send_modify(|state| state.ready = None);
+            return None;
+        }
         let from = self.0.banda.version.clone();
         tracing::info!(%from, %to, "the engine moves onto the copy ready");
         let said = serde_json::json!({
@@ -1276,6 +1288,26 @@ mod tests {
         let failed = state.failed.expect("it says why");
         assert!(failed.contains("0.1.0-dev.11 did not start"), "{failed}");
         assert_eq!(guard::bad(&machine.engine), ["0.1.0-dev.11"]);
+        // What banda-update kept of its last look, from before the move,
+        // still names it ready: as the engine reads it once it starts.
+        let kept = UpdateState {
+            running: "0.1.0-dev.10".into(),
+            ready: Some("0.1.0-dev.11".into()),
+            ..UpdateState::default()
+        };
+        machine.updates.heard(&kept);
+        let state = machine.updates.watch().borrow().clone();
+        assert_eq!(state.ready, None, "a copy that did not start is not ready");
+        assert!(state.failed.is_some(), "and why stays said");
+        // Nor is it moved onto, whoever says it is ready.
+        let restarting = machine.updates.0.restarting.as_ref().unwrap();
+        machine
+            .updates
+            .0
+            .state
+            .send_modify(|state| state.ready = Some("0.1.0-dev.11".into()));
+        assert!(machine.updates.move_now(restarting, true).is_none());
+        assert_eq!(machine.updates.watch().borrow().ready, None);
 
         tokio::spawn(machine.updates.clone().drive());
         let asked = tokio::time::timeout(Duration::from_millis(300), machine.restart.asked());
