@@ -4299,12 +4299,18 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   const threads = page.getByRole("textbox", { name: "Message to Fake AI" })
 
-  // On an empty workspace, a new Thread of the Project goes to its own.
+  // On an empty workspace no Project owns, a new Thread stays there (ADR
+  // 0134, decision 6); from that free workspace, which holds it now, the
+  // next goes to its Project's own.
+  const current = numbers.locator("[aria-current]:not([inert])")
   await page.getByRole("button", { name: "New workspace" }).click()
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("")
+  await expect(current).toHaveText("")
+  await page.keyboard.press("Alt+Enter")
+  await expect(current).toHaveText("2")
+  await expect(threads).toHaveCount(1)
   await page.keyboard.press("Alt+Enter")
   // Its sign, the Project's letter (ADR 0070).
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("W")
+  await expect(current).toHaveText("W")
   await expect(threads).toHaveCount(2)
   // The bar shows it as the Project's: its sign, and its name on it.
   await expect(
@@ -4318,7 +4324,6 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
 
 type Kept = {
   project?: string
-  own?: string
   columns: { group?: string; panes: { id: string; kind: string }[] }[]
 }
 
@@ -4378,12 +4383,12 @@ async function freeThenRow(window: Window) {
   }
 }
 
-test("Arrange by Project puts a Project's terminal into its own Group, first on its workspace, and its Agents after it (ADR 0102, decisions 4 and 9)", async () => {
+test("Arrange by Project puts a Project's terminal first on its workspace, in no Group, and its Agents after it (ADR 0102, decision 9; ADR 0134, decision 3)", async () => {
   window = await startWindow({ files: FREE })
   const { arrange, workspaces } = await freeThenRow(window)
 
   // Arranged from the Banda menu, on Work's workspace as the engine keeps
-  // it: the terminal is the own Group, first, and each Thread its Group.
+  // it: the terminal first, in no Group, and each Thread its Group.
   const work = projectId(window, "Work")
   const works = () =>
     workspaces().find((workspace) => workspace.project === work)
@@ -4391,14 +4396,14 @@ test("Arrange by Project puts a Project's terminal into its own Group, first on 
     const home = works()
     return {
       kinds: home?.columns.map((c) => c.panes.map((pane) => pane.kind)),
-      own: home !== undefined && home.own === home.columns[0]?.group,
+      loose: home !== undefined && home.columns[0]?.group === undefined,
       groups: new Set(home?.columns.map((c) => c.group ?? "none")).size,
     }
   }
   await arrange()
   await expect.poll(arranged).toEqual({
     kinds: [["terminal.terminal"], ["agents.thread"], ["agents.thread"]],
-    own: true,
+    loose: true,
     groups: 3,
   })
 
@@ -4740,15 +4745,15 @@ test("in the row, the Pane menu greys out another Project's workspace, and Open 
   await expect(on(1).getByRole("region", { name: "hello" })).toBeVisible()
 })
 
-test("in the row, Alt+Shift+N takes a Pane of the Project's own Group alone, and onto another Project's workspace the toast and the drag's note say whose it is (ADR 0102, decisions 4 and 6)", async () => {
+test("in the row, Alt+Shift+N takes a Pane in no Group alone, and onto another Project's workspace the toast and the drag's note say whose it is (ADR 0102, decision 6; ADR 0134, decision 3)", async () => {
   window = await startWindow({ look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { on, refused } = await twoProjects(page)
   const terminals = (n: number) =>
     on(n).getByRole("region", { name: "Terminal screen" })
 
-  // Work's workspace, emptied, stays: two terminals opened there go into
-  // its own Group.
+  // Work's workspace, emptied, stays: two terminals opened there go first
+  // on it, in no Group.
   await page.keyboard.press("Alt+Digit1")
   const hello = on(1).getByRole("region", { name: "hello" })
   await expect(hello).toHaveAttribute("data-focused", "true")
@@ -4769,8 +4774,8 @@ test("in the row, Alt+Shift+N takes a Pane of the Project's own Group alone, and
     "Work's Panes go to its workspace, a free one or a new one."
   )
   await expect(terminals(1)).toHaveCount(2)
-  // Onto a new workspace, the terminal goes alone: the other stays in
-  // Work's own Group.
+  // Onto a new workspace, the terminal goes alone: the other stays on
+  // Work's.
   await page.keyboard.press("Alt+Shift+Digit3")
   await expect(terminals(3)).toHaveCount(1)
   await page.keyboard.press("Alt+Digit1")
@@ -6506,7 +6511,7 @@ test("a Project's workspace goes once its last Thread is archived and the window
   await expect(plays).toHaveCount(0)
 })
 
-test("an emptied Project's workspace says whose it is, its first terminal starts the own Group, and the Person closes it (ADR 0102)", async () => {
+test("an emptied Project's workspace says whose it is, its terminals open first on it in no Group, and the Person closes it (ADR 0102; ADR 0134, decision 3)", async () => {
   window = await startWindow({ sidebar: 'group = "project"\n' })
   const { page } = window
   // Work, the first Project, is workspace 1; Play's, 2, is the one emptied.
@@ -6534,8 +6539,8 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
     .filter({ hasText: "Play's workspace is empty." })
   await expect(words).toContainText("It keeps its place until you close it.")
 
-  // Its Terminal starts the Project's own Group, which bears Play's name;
-  // the next terminal goes right of it, into the Group (decision 4).
+  // Its Terminal opens there, in no Group and with no handle or tag; the
+  // next terminal goes right of it (ADR 0134, decision 3).
   await tiling.getByRole("button", { name: "Terminal", exact: true }).click()
   const screens = tiling.getByRole("region", { name: "Terminal screen" })
   await expect(screens).toHaveCount(1)
@@ -6547,19 +6552,15 @@ test("an emptied Project's workspace says whose it is, its first terminal starts
     .locator("[data-column]")
     .filter({ has: page.getByRole("region", { name: "Terminal screen" }) })
   const [first, second] = [columns.nth(0), columns.nth(1)]
-  const group = await first.getAttribute("data-group")
-  expect(group).toBeTruthy()
-  await expect(second).toHaveAttribute("data-group", group!)
+  await expect(first).not.toHaveAttribute("data-group")
+  await expect(second).not.toHaveAttribute("data-group")
   await expect(second.locator("section[data-tile]")).toHaveAttribute(
     "data-focused",
     "true"
   )
   const left = async (column: Locator) => (await column.boundingBox())!.x
   expect(await left(second)).toBeGreaterThan(await left(first))
-  const tag = page.locator("[data-group-tag]")
-  await expect(tag).toHaveCount(1)
-  await expect(tag).toHaveText("Play")
-  await page.screenshot({ path: "test-results/42-own-group-tag.png" })
+  await expect(tiling.locator("[data-group-handle]")).toHaveCount(0)
 
   // Emptied again, the Person closes it: the window goes to Work's, and
   // the bar has Play no more.
@@ -6663,6 +6664,50 @@ test("Alt+Enter starts in the Project in front, on its workspace; beside a Threa
   await expect(current).toHaveText("1")
   await page.keyboard.press("Alt+Enter")
   await startsIn("No Project")
+})
+
+test("on an empty workspace no Project owns, Alt+Enter opens the new Thread there, as its button does: the screen stays (ADR 0134, decision 6)", async () => {
+  window = await startWindow()
+  const { page } = window
+  // Work's draft on its workspace, and the empty one at the bottom.
+  await firstThread(page)
+  const names = () => workspaceNames(page)
+  await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
+  const fresh = page.getByRole("button", { name: "New workspace" })
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const current = numbers.locator("[aria-current]:not([inert])")
+  const drafts = page
+    .locator(`${ON_SCREEN} [data-strip]`)
+    .getByRole("region", { name: "New Thread" })
+  const inWork = drafts
+    .and(page.locator('[data-focused="true"]'))
+    .getByRole("button", { name: "Project: Work", exact: true })
+
+  // Alt+Enter on it: Work's new Thread opens there, not on Work's.
+  await fresh.click()
+  await expect(fresh).toHaveAttribute("aria-current", "true")
+  await page.keyboard.press("Alt+Enter")
+  await expect(inWork).toBeVisible()
+  await expect(drafts).toHaveCount(1)
+  await expect(current).toHaveAccessibleName("Workspace 2")
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "New workspace"])
+  await page.screenshot({ path: "test-results/thread-here-key.png" })
+
+  // Its button on the next empty one does the same.
+  await fresh.click()
+  await expect(fresh).toHaveAttribute("aria-current", "true")
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "New Thread", exact: true })
+    .click()
+  await expect(inWork).toBeVisible()
+  await expect(drafts).toHaveCount(1)
+  await expect(current).toHaveAccessibleName("Workspace 3")
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "Workspace 3", "New workspace"])
 })
 
 test("banda menu opens the Banda menu at a route, from outside the window", async () => {

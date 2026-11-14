@@ -18,7 +18,6 @@ import {
   usePaneOn,
   useStore,
 } from "@banda/core/react"
-import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/layout/Widgets"
@@ -126,7 +125,6 @@ import {
   focusedIn,
   openingFrom,
   placed,
-  startingHere,
   strayedIn,
 } from "../tiling/opening"
 import { runAction, type Shell as Parts, useWindowApi } from "./actions"
@@ -374,16 +372,10 @@ export function Shell({
       }),
     [change]
   )
-  // A swipe up or down with the mod held steps once; a first Pane
-  // started on an empty workspace opens in its Project, there or into
-  // the Project's own Group (`startingHere`).
+  // A swipe up or down with the mod held steps once.
   const stepBy = useCallback(
     (by: 1 | -1) => change((w) => step(w, by)),
     [change]
-  )
-  const startHere = useCallback(
-    (pane: PaneState) => change((w) => startingHere(w, home, pane, placing)),
-    [change, home, placing]
   )
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
@@ -790,7 +782,10 @@ export function Shell({
                     frame={frame}
                     onStep={stepBy}
                     onGo={goTo}
-                    onStart={startHere}
+                    // A first Pane started on an empty workspace opens as a
+                    // key opens it; the engine places it, there on one no
+                    // Project owns (ADR 0134, decision 6).
+                    onStart={parts.open}
                   />
                 )}
                 <Toaster />

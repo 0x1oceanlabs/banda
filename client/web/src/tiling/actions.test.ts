@@ -44,7 +44,6 @@ import {
   placed,
   type Placing,
   placingOf,
-  startingHere,
   strayedIn,
 } from "./opening"
 import { hear, look, predict, unseen } from "./unheard"
@@ -354,8 +353,8 @@ test("a Pane the window opens is drawn at once where the engine's rule puts it, 
   const free = opened("free")
   expect(free.layout()).toEqual([[[1], [2], [3], [4], [5], [6], [7]], []])
   expect(free.state.list[0].project).toBeUndefined()
-  expect(free.state.list[0].own).toBeUndefined()
-  // The row, and solo, its view: the Project's own Group, the Thread last
+  // The row, and solo, its view: the Person's first in no Group (ADR
+  // 0134, decision 3), the Thread last
   // on its workspace, what a key opens from it right of its Group (ADR
   // 0134, decision 2), another Project's on its own workspace, one of no
   // Project right of the Pane in front, and what is opened for an Agent
@@ -366,13 +365,10 @@ test("a Pane the window opens is drawn at once where the engine's rule puts it, 
     const [mine, theirs] = window.state.list
     expect([mine.project, theirs.project]).toEqual([A, B])
     const groups = mine.columns.map((column) => column.group)
-    expect(groups[0]).toBe(mine.own)
-    expect(groups[1]).toBe(mine.own)
-    expect(groups[2]).not.toBe(mine.own)
     expect(groups[2]).toBeDefined()
-    expect(groups.slice(3)).toEqual([undefined, undefined])
+    expect(groups.with(2, undefined)).toEqual(Array(5).fill(undefined))
     expect(theirs.columns.map((column) => column.group)).toEqual([
-      theirs.own,
+      undefined,
       undefined,
     ])
   }
@@ -807,13 +803,13 @@ test("a refused move names the workspace by its number before the move, though t
   }
 })
 
-test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Agent's Group, the whole Group (ADR 0102, decision 4)", () => {
+test("Alt+Shift+N on a Pane in no Group moves it alone; on an Agent's Group, the whole Group (ADR 0065)", () => {
   inFlow("row")
   const terminal = { kind: "terminal.terminal", args: {} }
-  const column = (id: string, group: string, pane = terminal): Column => ({
+  const column = (id: string, group?: string, pane = terminal): Column => ({
     id,
     active: 0,
-    group,
+    ...(group !== undefined && { group }),
     entries: [{ id: `${id}-e`, project: "a", pane }],
   })
   const on = (focus: number): Workspaces => ({
@@ -821,11 +817,10 @@ test("Alt+Shift+N on a Pane of the Project's own Group moves it alone; on an Age
       {
         id: "mine",
         project: "a",
-        own: "own",
         focus,
         columns: [
-          column("x1", "own"),
-          column("x2", "own"),
+          column("x1"),
+          column("x2"),
           column("t1", "agent", thread("t1")),
         ],
       },
@@ -1005,7 +1000,7 @@ test("Arrange by Project names every Project its Panes are of, as a Pane opens, 
   })
 })
 
-test("a first Pane started on an emptied Project's workspace goes where the keys put it, into its own Group, and on one of no Project there (ADR 0102, decision 4)", () => {
+test("a first Pane started on an empty workspace goes as a key puts it: on an emptied Project's, first there in no Group; on one no Project owns, there, which a Project with none takes (ADR 0134, decisions 3 and 6)", () => {
   const started = (flow: Flow) => {
     const window = windowIn(flow)
     // A's workspace, emptied, and the empty one at the bottom.
@@ -1019,8 +1014,8 @@ test("a first Pane started on an emptied Project's workspace goes where the keys
   }
   const row = started("row")
   expect(row.state.list.map((w) => w.project)).toEqual([A, undefined])
-  // On the Project's, in its Project: asked of the engine, as a key's.
-  const asked = startingHere(row.state, B, terminal(2), placingOf("row", []))
+  // On the Project's: asked of the engine, as a key's.
+  const asked = placed(row.state, A, terminal(2), placingOf("row", []))
   expect(paramsOf(asked)).toEqual({
     project: A,
     kind: "terminal.terminal",
@@ -1029,20 +1024,26 @@ test("a first Pane started on an emptied Project's workspace goes where the keys
     on: row.state.list[0].id,
     via: "key",
   })
-  row.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  row.change((w, placing) => placed(w, A, terminal(2), placing))
   expect(row.layout()).toEqual([[[2]], []])
-  expect(row.state.list[0].columns[0].group).toBe(row.state.list[0].own)
-  // On the empty one at the bottom, a column there, in the home Project.
+  expect(row.state.list[0].columns[0].group).toBeUndefined()
+  // On the empty one at the bottom, A's Thread stays there, though A owns
+  // a workspace, and the window names no place.
   row.change((w) => ({ ...w, current: 1 }))
-  const bottom = row.state.list[1].id
-  const there = startingHere(row.state, B, terminal(3), placingOf("row", []))
-  expect(paramsOf(there)).toMatchObject({
-    project: B,
-    place: { to: "column", workspace: bottom, index: 0 },
-  })
-  // In the Flow free, there too, in its Project.
+  const thread = { kind: "agents.thread", args: { n: 3 } }
+  const there = placed(row.state, A, thread, placingOf("row", []))
+  expect(paramsOf(there)).not.toHaveProperty("place")
+  row.change((w, placing) => placed(w, A, thread, placing))
+  expect(row.layout()).toEqual([[[2]], [[3]], []])
+  expect(row.state.list[1].project).toBeUndefined()
+  // B, which owns no workspace, takes the empty one at the bottom.
+  row.change((w) => ({ ...w, current: 2 }))
+  row.change((w, placing) => placed(w, B, terminal(4), placing))
+  expect(row.layout()).toEqual([[[2]], [[3]], [[4]], []])
+  expect(row.state.list[2].project).toBe(B)
+  // In the Flow free, there too.
   const free = started("free")
-  free.change((w, placing) => startingHere(w, B, terminal(2), placing))
+  free.change((w, placing) => placed(w, A, terminal(2), placing))
   expect(free.layout()).toEqual([[[2]], []])
   expect(free.state.list[0].columns[0].group).toBeUndefined()
 })

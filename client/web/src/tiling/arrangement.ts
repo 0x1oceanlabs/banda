@@ -180,15 +180,11 @@ type Seed = Record<
 > & {
   /** The `n`th of the new empty workspaces it makes under the last. */
   nth: (n: number) => string
-  /** The own Group it starts on `project`'s workspace, at most one on
-   * each. */
-  own: (project: string) => string
 }
 
 function seedOf(command: string): Seed {
   return {
     nth: (n) => seeded(command, `bottom ${n}`),
-    own: (project) => seeded(command, `own ${project}`),
     pane: seeded(command, "pane"),
     column: seeded(command, "column"),
     group: seeded(command, "group"),
@@ -199,7 +195,7 @@ function seedOf(command: string): Seed {
 
 /** Refuses a seed whose IDs the workspaces hold: its command ran before. */
 function unused(seed: Seed, list: Arrangement): void {
-  // Every ID it makes but those made afresh by `nth` and `own`.
+  // Every ID it makes but those made afresh by `nth`.
   const made = new Set(
     Object.values(seed).filter((id) => typeof id === "string")
   )
@@ -475,18 +471,25 @@ function placeAsked(
     if (opens === "below") return { to: "beside", pane: from, side: "below" }
     if (opens === "group") return { to: "group", pane: from }
   }
+  // On an empty workspace no Project owns, on screen, what the Person asks
+  // for with no Pane in front opens there; in the row a Project that owns
+  // no workspace goes as before (ADR 0134, decision 6).
+  const empty = list.some(
+    (w) => w.id === on && w.project === undefined && w.columns.length === 0
+  )
+  if (!at && !agents && empty) {
+    const owns = list.some((w) => w.project === project)
+    if (flow !== "row" || scratch || owns) return here()
+  }
   const homeward = flow === "row" && home
   if (at && from !== undefined && !agents) {
-    const workspace = list[at.workspace]
-    const { columns } = workspace
+    const { columns } = list[at.workspace]
     const column = columns[at.column]
-    // A Thread's Group: any but the Project's own.
-    const inThreads =
-      column.group !== undefined && column.group !== workspace.own
+    const grouped = column.group !== undefined
     const leadsOne = leads.includes(column.panes[at.pane].kind)
-    if (via === "click" && (inThreads || leadsOne))
+    if (via === "click" && (grouped || leadsOne))
       return { to: "group", pane: from }
-    if (via === "key" && inThreads && !theirs && !homeward) {
+    if (via === "key" && grouped && !theirs && !homeward) {
       // Right of its last column, which no column of it flanks.
       const last = columns[run(columns, at.column).end - 1]
       return right(last.panes[0].id)
@@ -495,14 +498,10 @@ function placeAsked(
   if (homeward) return itsWorkspace
   if (flow === "free") return at && from !== undefined ? right(from) : here()
   if (!at || from === undefined)
-    return scratch ? here() : { to: "own", project }
-  const workspace = list[at.workspace]
-  const column = workspace.columns[at.column]
-  if (scratch) return right(from)
-  if (column.group !== undefined && column.group === workspace.own)
-    return { to: "own", project }
-  // A free one: no Project owns it, and the Pane in front is on it.
-  return workspace.project === undefined ? right(from) : { to: "own", project }
+    return scratch ? here() : { to: "start", project }
+  // From another Project's workspace, first on its own (ADR 0134,
+  // decision 3); else right of the Pane in front.
+  return theirs ? { to: "start", project } : right(from)
 }
 
 /** As `placing::moves_away`: whether a Pane opened in place of `instead`,
@@ -591,11 +590,11 @@ function lands(
       at = spotOr(list, place.pane)?.workspace ?? -1
       break
     case "project":
-    case "own": {
+    case "start": {
       // Its Project's workspace, or the empty one at the bottom, which it
       // owns then.
-      const own = list.findIndex((w) => w.project === place.project)
-      return { at: own < 0 ? list.length - 1 : own, owner: place.project }
+      const its = list.findIndex((w) => w.project === place.project)
+      return { at: its < 0 ? list.length - 1 : its, owner: place.project }
     }
     case "workspace":
     case "free":
@@ -798,8 +797,10 @@ function placeOf(value: unknown): Place {
       return { to: "workspace", index: indexOf(f.index) }
     case "project":
       return { to: "project", project: id(f.project) }
+    // `{"to": "own", …}` before ADR 0134 (grace).
     case "own":
-      return { to: "own", project: id(f.project) }
+    case "start":
+      return { to: "start", project: id(f.project) }
     case "free":
       return { to: "free" }
     case "group":
@@ -843,7 +844,6 @@ function workspaceOf(value: unknown): Workspace {
     columns: listOf(f.columns, columnOf),
     filled: optional(f.filled, id),
     project: optional(f.project, id),
-    own: optional(f.own, id),
   })
 }
 
@@ -1060,11 +1060,9 @@ function put(
       putLast(list, projectWorkspace(list, place.project), column, seed)
       return
     }
-    case "own": {
+    case "start": {
       const w = projectWorkspace(list, place.project)
-      const at = afterOwn(list[w])
-      const group = (list[w].own ??= seed.group)
-      list[w].columns.splice(at, 0, { ...column, group })
+      list[w].columns.splice(atStart(list[w]), 0, column)
       return
     }
     case "free": {
@@ -1096,12 +1094,11 @@ function projectWorkspace(list: Arrangement, project: string): number {
   return w
 }
 
-/** Just past the last column of a workspace's own Group, where `own` puts
- * a Pane; its start when it has none. */
-function afterOwn(workspace: Workspace): number {
-  const own = workspace.own
-  if (own === undefined) return 0
-  return workspace.columns.findLastIndex((c) => c.group === own) + 1
+/** Just past the columns in no Group at a workspace's start, where
+ * `start` puts a column. */
+function atStart(workspace: Workspace): number {
+  const grouped = workspace.columns.findIndex((c) => c.group !== undefined)
+  return grouped < 0 ? workspace.columns.length : grouped
 }
 
 /** The top free workspace, one no Project owns that holds a Pane; else
@@ -1316,8 +1313,9 @@ type Moving = {
   /** The Project whose workspace it goes to; none, a free one. */
   home: string | undefined
   columns: Column[]
-  /** It goes into the Project's own Group, or just after it. */
-  own: boolean
+  /** It goes to the start of its Project's workspace, as `start` puts a
+   * Pane. */
+  first: boolean
   /** It filled the screen. */
   filled: boolean
 }
@@ -1327,14 +1325,13 @@ type Moving = {
  * when it is one of `projects`, which have one; else last on the top free
  * one. What it is of is its lead's Project, a Pane of one of the kinds
  * that `leads` (an Agent's Thread), else its first Pane's, as when it
- * moves (decision 6). On its Project's workspace, the Person's own goes
- * into the own Group, first: one with no lead and no Pane an Agent
- * opened, or the Project's own Group. A column in none joins it, and a
- * Group becomes it or stands just after it, in the order they stood. Any
- * other goes last. A Group that filled the screen fills it there, when
- * none does. One already there stays, but for the Person's own column in
- * none, which joins the own Group; with `only`, only that Project's move, and
- * none already there. */
+ * moves (decision 6). On its Project's workspace, the Person's own column
+ * in none, with no Pane an Agent opened, goes to its start, right of the
+ * columns in no Group there, in the order they stood (ADR 0134, decision
+ * 3). Any other goes last. A Group that filled the screen fills it there,
+ * when none does. One already there stays, but for the Person's own column
+ * in none past the start, which goes to it; with `only`, only that
+ * Project's move, and none already there. */
 function arrange(
   list: Arrangement,
   projects: readonly string[],
@@ -1357,54 +1354,33 @@ function arrange(
       const project = (lead ?? workspace.columns[c].panes[0]).project
       const home = projects.includes(project) ? project : undefined
       const group = workspace.columns[c].group
-      const wasOwn = group !== undefined && group === workspace.own
-      const own = home !== undefined && (wasOwn || !ofAnAgent)
+      const first = home !== undefined && group === undefined && !ofAnAgent
       // On its workspace, but for the Person's own column in none
-      // when the Person arranges.
-      const settled = group !== undefined || !own || only !== undefined
+      // past its start when the Person arranges.
+      const settled = !first || only !== undefined || c < atStart(workspace)
       const there = workspace.project === home && settled
       if (there || (only !== undefined && only !== project)) {
         c = end
         continue
       }
       const filled = group !== undefined && group === workspace.filled
-      if (wasOwn) delete workspace.own
       if (filled) delete workspace.filled
       moving.push({
         home,
         columns: workspace.columns.splice(start, end - start),
-        own,
+        first,
         filled,
       })
     }
   }
   let made = 0
-  // On each workspace, the columns of the Groups put just after its own
-  // Group: the next Group goes past them, so they stand as they stood.
-  const after = new Map<number, number>()
-  for (const { home, columns, own, filled } of moving) {
+  for (const { home, columns, first, filled } of moving) {
     const w =
       home === undefined ? freeWorkspace(list) : projectWorkspace(list, home)
     const group = columns[0].group
     const to = list[w]
-    if (own && home !== undefined) {
-      // Last into the own Group, as the place `own` puts a Pane; made
-      // first when there is none.
-      let at = afterOwn(to)
-      if (to.own === undefined) {
-        to.own = group ?? seed.own(home)
-      } else if (group !== undefined) {
-        // A Group goes past those put there before.
-        const past = after.get(w) ?? 0
-        at += past
-        after.set(w, past + columns.length)
-      }
-      // A column in none joins it; a Group stays itself.
-      columns[0].group = group ?? to.own
-      to.columns.splice(at, 0, ...columns)
-    } else {
-      to.columns.push(...columns)
-    }
+    const at = first ? atStart(to) : to.columns.length
+    to.columns.splice(at, 0, ...columns)
     if (filled && to.filled === undefined) to.filled = group
     // The empty one at the bottom taken: a new one under it.
     if (w === list.length - 1) list.push(blank(seed.nth(made++)))
@@ -1559,9 +1535,6 @@ function normalize(list: Arrangement, seed: Seed): void {
     const holds = (g: string) => workspace.columns.some((c) => c.group === g)
     if (workspace.filled !== undefined && !holds(workspace.filled)) {
       delete workspace.filled
-    }
-    if (workspace.own !== undefined && !holds(workspace.own)) {
-      delete workspace.own
     }
   }
   // A Project's, emptied, is never the empty one at the bottom (ADR 0102,

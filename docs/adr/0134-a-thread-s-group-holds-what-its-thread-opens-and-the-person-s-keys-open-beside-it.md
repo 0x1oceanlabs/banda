@@ -74,6 +74,13 @@ and its principle 1 (one thing, one place).
    An arrangement saved with an own Group reads it as columns in no Group,
    in their order. Solo fills the screen with a column in no Group as it
    does now (ADR 0102, decision 8).
+   _Built_ in step 2 (#1785): the place `start` (`{"to": "own"}` still
+   reads as it) puts the column right of the columns in no Group at the
+   workspace's start; the store reads a kept own Group as columns in none.
+   From a column in no Group on its Project's workspace, a Pane opens right
+   of it, not at the start: so `Alt+N` twice in a Thread puts the second
+   right of the first, both right of the Group. The start is for no Pane
+   in front and for one on another Project's workspace.
 
 4. **`banda` says the Pane it runs in.** A terminal gives what runs in it
    its Pane's ID in `BANDA_PANE`, and `banda` sends it as `from` when it

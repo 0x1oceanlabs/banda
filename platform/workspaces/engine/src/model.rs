@@ -108,12 +108,6 @@ impl Seed {
         WorkspaceId(self.made(&format!("bottom {n}")))
     }
 
-    /// The own Group a command starts on `project`'s workspace, at most
-    /// one on each.
-    pub fn own(&self, project: ProjectId) -> GroupId {
-        GroupId(self.made(&format!("own {project}")))
-    }
-
     /// Refuses a seed whose IDs the workspaces hold: its command ran
     /// before, past the receipt that would have answered it, and what it
     /// made is still there.
@@ -160,12 +154,6 @@ pub struct Workspace {
     #[serde(default, skip_serializing_if = "Option::is_none", alias = "space")]
     #[ts(optional)]
     pub project: Option<ProjectId>,
-    /// The Project's own Group, first here: the Panes the Person opened for
-    /// the Project and not for an Agent (ADR 0102, decision 4). Left out,
-    /// none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    #[ts(optional)]
-    pub own: Option<GroupId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -304,10 +292,12 @@ pub enum Place {
         #[serde(alias = "space")]
         project: ProjectId,
     },
-    /// Last into the Project's own Group, first on its workspace (ADR 0102,
-    /// decision 4): the workspace as `Project` finds it; the Group made
-    /// there at the start when it has none.
-    Own { project: ProjectId },
+    /// A column of its own first on a Project's workspace, right of the
+    /// columns in no Group at its start (ADR 0134, decision 3): the
+    /// workspace as `Project` finds it. `{"to": "own", …}` before ADR 0134
+    /// (grace).
+    #[serde(alias = "own")]
+    Start { project: ProjectId },
     /// Last on the top free workspace, one no Project owns that holds a
     /// Pane, as a Thread of no Project opens (ADR 0102, decision 1); else
     /// the empty one at the bottom, which is free then.
@@ -349,7 +339,6 @@ fn blank(id: WorkspaceId) -> Workspace {
         columns: Vec::new(),
         filled: None,
         project: None,
-        own: None,
     }
 }
 
@@ -582,17 +571,10 @@ fn put(
             let w = project_workspace(list, project);
             put_last(list, w, column, seed)?;
         }
-        Place::Own { project } => {
+        Place::Start { project } => {
             let w = project_workspace(list, project);
-            let at = after_own(&list[w]);
-            let group = *list[w].own.get_or_insert_with(|| seed.group());
-            list[w].columns.insert(
-                at,
-                Column {
-                    group: Some(group),
-                    ..column
-                },
-            );
+            let at = at_start(&list[w]);
+            list[w].columns.insert(at, column);
         }
         Place::Free => {
             let w = free_workspace(list);
@@ -627,12 +609,12 @@ fn project_workspace(list: &mut Arrangement, project: ProjectId) -> usize {
     w
 }
 
-/// Just past the last column of a workspace's own Group, where `own` puts
-/// a Pane; its start when it has none.
-fn after_own(workspace: &Workspace) -> usize {
-    (workspace.own)
-        .and_then(|g| workspace.columns.iter().rposition(|c| c.group == Some(g)))
-        .map_or(0, |last| last + 1)
+/// Just past the columns in no Group at a workspace's start, where
+/// `Place::Start` puts a column.
+fn at_start(workspace: &Workspace) -> usize {
+    (workspace.columns.iter())
+        .take_while(|c| c.group.is_none())
+        .count()
 }
 
 /// The top free workspace, one no Project owns that holds a Pane; else the
@@ -988,8 +970,9 @@ struct Moving {
     /// The Project whose workspace it goes to; none, a free one.
     home: Option<ProjectId>,
     columns: Vec<Column>,
-    /// It goes into the Project's own Group, or just after it.
-    own: bool,
+    /// It goes to the start of its Project's workspace, as `Place::Start`
+    /// puts a Pane.
+    first: bool,
     /// It filled the screen.
     filled: bool,
 }
@@ -1000,13 +983,12 @@ struct Moving {
 /// the top free one. What it is of is its lead's Project, a Pane of one of
 /// the kinds that `leads` (an Agent's Thread), else its first Pane's, as
 /// when it moves (decision 6). On its Project's workspace, the Person's
-/// own goes into the own Group, first: one with no lead and no Pane an
-/// Agent opened, or the Project's own Group. A column in none joins it,
-/// and a Group becomes it or stands just after it, in the order they
-/// stood. Any other goes last. A Group that filled the screen fills it
-/// there, when none does. One already there stays, but for the Person's
-/// own column in none, which joins the own Group; with `only`, only that
-/// Project's move, and none already there.
+/// own column in none, with no Pane an Agent opened, goes to its start,
+/// right of the columns in no Group there, in the order they stood (ADR
+/// 0134, decision 3). Any other goes last. A Group that filled the screen
+/// fills it there, when none does. One already there stays, but for the
+/// Person's own column in none past the start, which goes to it; with
+/// `only`, only that Project's move, and none already there.
 pub fn arrange(
     list: &mut Arrangement,
     projects: &[ProjectId],
@@ -1026,39 +1008,32 @@ pub fn arrange(
             let project = lead.unwrap_or(&workspace.columns[c].panes[0]).shows.project;
             let home = projects.contains(&project).then_some(project);
             let group = workspace.columns[c].group;
-            let was_own = group.is_some() && group == workspace.own;
-            let own = home.is_some() && (was_own || !of_an_agent);
+            let first = home.is_some() && group.is_none() && !of_an_agent;
             // On its workspace, but for the Person's own column in none
-            // when the Person arranges.
-            let settled = group.is_some() || !own || only.is_some();
+            // past its start when the Person arranges.
+            let settled = !first || only.is_some() || c < at_start(workspace);
             let there = workspace.project == home && settled;
             if there || only.is_some_and(|one| one != project) {
                 c = range.end;
                 continue;
             }
             let filled = group.is_some() && group == workspace.filled;
-            if was_own {
-                workspace.own = None;
-            }
             if filled {
                 workspace.filled = None;
             }
             moving.push(Moving {
                 home,
                 columns: workspace.columns.drain(range).collect(),
-                own,
+                first,
                 filled,
             });
         }
     }
     let mut made = 0;
-    // On each workspace, the columns of the Groups put just after its own
-    // Group: the next Group goes past them, so they stand as they stood.
-    let mut after = std::collections::HashMap::new();
     for Moving {
         home,
-        mut columns,
-        own,
+        columns,
+        first,
         filled,
     } in moving
     {
@@ -1068,24 +1043,12 @@ pub fn arrange(
         };
         let group = columns[0].group;
         let to = &mut list[w];
-        if let Some(project) = home.filter(|_| own) {
-            // Last into the own Group, as `Place::Own` puts a Pane; made
-            // first when there is none.
-            let mut at = after_own(to);
-            if to.own.is_none() {
-                to.own = Some(group.unwrap_or_else(|| seed.own(project)));
-            } else if group.is_some() {
-                // A Group goes past those put there before.
-                let past: &mut usize = after.entry(w).or_default();
-                at += *past;
-                *past += columns.len();
-            }
-            // A column in none joins it; a Group stays itself.
-            columns[0].group = group.or(to.own);
-            to.columns.splice(at..at, columns);
+        let at = if first {
+            at_start(to)
         } else {
-            to.columns.extend(columns);
-        }
+            to.columns.len()
+        };
+        to.columns.splice(at..at, columns);
         if filled && to.filled.is_none() {
             to.filled = group;
         }
@@ -1225,9 +1188,6 @@ fn normalize(list: &mut Arrangement, seed: &Seed) {
         let holds = |w: &Workspace, g: GroupId| w.columns.iter().any(|c| c.group == Some(g));
         if workspace.filled.is_some_and(|g| !holds(workspace, g)) {
             workspace.filled = None;
-        }
-        if workspace.own.is_some_and(|g| !holds(workspace, g)) {
-            workspace.own = None;
         }
     }
     // A Project's, emptied, is never the empty one at the bottom (ADR 0102,
@@ -1951,33 +1911,30 @@ pub(crate) mod tests {
     }
 
     #[test]
-    fn a_projects_own_panes_open_in_its_own_group_first_on_its_workspace() {
+    fn a_projects_own_panes_open_first_on_its_workspace_in_no_group() {
         let mut list = start();
         let (work, home) = (ProjectId::new(), ProjectId::new());
-        let own = |project| Some(Place::Own { project });
-        opened(
+        let first = |project| Some(Place::Start { project });
+        let thread = opened(
             &mut list,
             shown(work, "agents.thread", 1),
             Some(Place::Project { project: work }),
         );
-        // The first starts the Group, at the start of the workspace.
-        opened(&mut list, shown(work, "terminal.terminal", 2), own(work));
-        opened(&mut list, shown(work, "terminal.terminal", 3), own(work));
+        group_pane(&mut list, thread, &seed()).unwrap();
+        // The first at the start of the workspace, the next right of it,
+        // each a column in no Group.
+        opened(&mut list, shown(work, "terminal.terminal", 2), first(work));
+        opened(&mut list, shown(work, "terminal.terminal", 3), first(work));
         assert_eq!(layout(&list)[0], [vec![2], vec![3], vec![1]]);
-        let group = list[0].columns[0].group;
-        assert!(group.is_some());
-        assert_eq!(list[0].own, group);
-        assert_eq!(list[0].columns[1].group, group);
-        assert_ne!(list[0].columns[2].group, group);
-        // A Project with no workspace gets one, its own Group on it.
-        opened(&mut list, shown(home, "files.files", 4), own(home));
+        assert_eq!(grouping(&list)[0], [0, 0, 1]);
+        // A Project with no workspace gets one.
+        opened(&mut list, shown(home, "files.files", 4), first(home));
         assert_eq!(layout(&list)[1], [vec![4]]);
         assert_eq!(list[1].project, Some(home));
-        assert!(list[1].own.is_some());
-        // Its last Pane gone, the workspace has no own Group.
-        let four = list[1].columns[0].panes[0].id;
-        close(&mut list, four, &seed()).unwrap();
-        assert_eq!(list[1].own, None);
+        assert_eq!(grouping(&list)[1], [0]);
+        // An old name for the place still reads.
+        let old: Place = serde_json::from_value(json!({ "to": "own", "project": home })).unwrap();
+        assert_eq!(old, Place::Start { project: home });
     }
 
     #[test]
@@ -2010,10 +1967,8 @@ pub(crate) mod tests {
         assert_eq!(layout(&list)[2], [vec![1], vec![4]]);
         assert_eq!(list[2].project, Some(work));
         assert!(list.last().unwrap().columns.is_empty());
-        // Each Project's terminals are its own Group, one Group each.
-        assert_eq!(grouping(&list), [vec![0], vec![1], vec![2, 2], vec![]]);
-        assert_eq!(list[1].own, list[1].columns[0].group);
-        assert_eq!(list[2].own, list[2].columns[0].group);
+        // Each Project's terminals stand in no Group.
+        assert_eq!(grouping(&list), [vec![0], vec![0], vec![0, 0], vec![]]);
         // Again, nothing moves.
         let before = (layout(&list), grouping(&list));
         arrange(&mut list, &[work, home], None, &leads(), &seed());
@@ -2042,13 +1997,12 @@ pub(crate) mod tests {
         assert_eq!(layout(&list), [EMPTY, vec![vec![2], vec![1]], EMPTY]);
         assert_eq!(list[1].project, Some(work));
         // It goes last, as an Agent's, and fills the screen there still.
-        assert_eq!(list[1].own, None);
         assert!(list[1].filled.is_some());
         assert_eq!(list[1].filled, list[1].columns[0].group);
     }
 
     #[test]
-    fn arranging_gathers_a_projects_own_panes_into_its_own_group_first() {
+    fn arranging_puts_a_projects_own_columns_first_in_no_group() {
         let mut list = start();
         let (work, brand) = (ProjectId::new(), ProjectId::new());
         let free = |list: &Arrangement, w: usize| {
@@ -2070,20 +2024,19 @@ pub(crate) mod tests {
         thread(&mut list, brand, 3, 0);
         thread(&mut list, work, 4, 1);
         arrange(&mut list, &[work, brand], None, &leads(), &seed());
-        // `work`'s own Group first, then its Agents in the order met.
+        // `work`'s terminal first, in no Group, then its Agents in the
+        // order met.
         assert_eq!(layout(&list)[2], [vec![2], vec![1], vec![4]]);
-        assert_eq!(grouping(&list)[2], [1, 2, 3]);
+        assert_eq!(grouping(&list)[2], [0, 1, 2]);
         assert_eq!(list[2].project, Some(work));
-        assert_eq!(list[2].own, list[2].columns[0].group);
         assert_eq!(layout(&list)[3], [vec![3]]);
-        assert_eq!(list[3].own, None);
         // Again, nothing moves.
         let before = (layout(&list), grouping(&list));
         arrange(&mut list, &[work, brand], None, &leads(), &seed());
         assert_eq!((layout(&list), grouping(&list)), before);
         // Later, a Group the Person made of `work`'s terminals, and one in
-        // none: the Group stands just after the own Group, and the one in
-        // none joins it.
+        // none: the one in none goes right of the columns in none at the
+        // start, and the Group last.
         for n in [5, 6, 7] {
             let at = free(&list, 0);
             opened(&mut list, shown(work, "terminal.terminal", n), at);
@@ -2094,10 +2047,9 @@ pub(crate) mod tests {
         arrange(&mut list, &[work, brand], None, &leads(), &seed());
         assert_eq!(
             layout(&list)[2],
-            [vec![2], vec![7], vec![5], vec![6], vec![1], vec![4]]
+            [vec![2], vec![7], vec![1], vec![4], vec![5], vec![6]]
         );
-        assert_eq!(grouping(&list)[2], [1, 1, 2, 2, 3, 4]);
-        assert_eq!(list[2].own, list[2].columns[0].group);
+        assert_eq!(grouping(&list)[2], [0, 0, 1, 2, 3, 3]);
     }
 
     #[test]
@@ -2119,7 +2071,7 @@ pub(crate) mod tests {
             };
             open(list, opening, &seed()).unwrap()
         };
-        // `work`'s own Group, of a terminal.
+        // `work`'s terminal, in no Group.
         open_at(&mut list, "terminal.terminal", 1, None);
         arrange(&mut list, &[work], None, &leads(), &seed());
         assert_eq!(layout(&list)[1], [vec![1]]);
@@ -2136,14 +2088,13 @@ pub(crate) mod tests {
         }
         open_at(&mut list, "browser.browser", 5, agent);
         arrange(&mut list, &[work], None, &leads(), &seed());
-        // The Person's just after the own Group, as they stood; the
-        // Agent's last.
+        // The Groups in the order they stood; what the Agent opened in
+        // none last.
         assert_eq!(
             layout(&list)[1],
             [vec![1], vec![2], vec![3], vec![4], vec![5]]
         );
-        assert_eq!(grouping(&list)[1], [1, 2, 3, 4, 0]);
-        assert_eq!(list[1].own, list[1].columns[0].group);
+        assert_eq!(grouping(&list)[1], [0, 1, 2, 3, 0]);
     }
 
     #[test]
@@ -2493,7 +2444,6 @@ pub(crate) mod tests {
             columns,
             filled: None,
             project: None,
-            own: None,
         };
         let window = vec![
             workspace(vec![column(vec![pane(1), pane(2)])]),

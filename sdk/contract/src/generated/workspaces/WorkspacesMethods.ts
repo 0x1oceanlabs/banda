@@ -111,9 +111,9 @@ fill: CommandMethod<Fill, Done>,
 tidy: CommandMethod<Tidy, Done>, 
 /**
  * Puts every Pane where the row would have opened it: on its
- * Project's workspace, the Person's own into its own Group and an
- * Agent's last, or of no Project on a free one (ADR 0102,
- * decisions 4, 7 and 9).
+ * Project's workspace, the Person's own columns in no Group first
+ * and the rest last, or of no Project on a free one (ADR 0102,
+ * decisions 7 and 9; ADR 0134, decision 3).
  */
 arrange: CommandMethod<Arrange, Done>, 
 /**

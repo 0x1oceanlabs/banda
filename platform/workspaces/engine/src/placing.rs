@@ -144,6 +144,10 @@ pub struct Asked {
 /// where that Pane stands on a workspace another Project owns: a rule
 /// never puts a Pane where the row would refuse it.
 ///
+/// On an empty workspace no Project owns, on screen, what the Person asks
+/// for with no Pane in front opens there, but in the row a Project's that
+/// owns no workspace yet (ADR 0134, decision 6).
+///
 /// Then by how the Person asked, in every Flow (ADR 0134, decisions 1
 /// and 2). A click in a Thread, or in a Pane in a Thread's Group, opens
 /// into that Group. In the row, a Pane whose kind stands on its Project's
@@ -152,12 +156,14 @@ pub struct Asked {
 /// its own right of the whole Group, but where the row would refuse it.
 /// Else, in the Flow `free`: right of the Pane in front, else last on the
 /// workspace on screen. In the row:
-/// - with no Pane in front, into its Project's own Group, first on its
-///   workspace; of no Project, last on the workspace on screen;
+/// - with no Pane in front, first on its Project's workspace, right of
+///   the columns in no Group at its start (ADR 0134, decision 3); of no
+///   Project, last on the workspace on screen;
 /// - another Pane of no Project, right of the Pane in front;
-/// - from the Project's own Group, last into it;
 /// - on a workspace no Project owns, right of the Pane in front;
-/// - any other, last into its Project's own Group.
+/// - on its Project's workspace, from a column in no Group, right of the
+///   Pane in front;
+/// - from another Project's workspace, first on its own, as with none.
 pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
     let Asked {
         flow,
@@ -212,17 +218,27 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
             Opens::Project => {}
         }
     }
+    // On an empty workspace no Project owns, on screen, what the Person
+    // asks for with no Pane in front opens there, and the screen stays
+    // (ADR 0134, decision 6). In the row a Project that owns no workspace
+    // goes as before, to the one the row gives it (`model::project_workspace`).
+    let empty = (on.and_then(|on| list.iter().find(|w| w.id == on)))
+        .is_some_and(|w| w.project.is_none() && w.columns.is_empty());
+    if let (By::Person { .. }, None, true) = (by, &at, empty) {
+        let owns = list.iter().any(|w| w.project == Some(project));
+        if flow != Flow::Row || scratch || owns {
+            return here();
+        }
+    }
     let homeward = flow == Flow::Row && home;
     if let (By::Person { via }, Some((pane, at))) = (by, &at) {
-        let workspace = &list[at.workspace];
-        let columns = &workspace.columns;
-        // A Thread's Group: any but the Project's own.
-        let in_threads = (columns[at.column].group).is_some_and(|g| Some(g) != workspace.own);
+        let columns = &list[at.workspace].columns;
+        let in_group = columns[at.column].group.is_some();
         let leads_one = leads.contains(&columns[at.column].panes[at.pane].shows.kind);
-        if via == Via::Click && (in_threads || leads_one) {
+        if via == Via::Click && (in_group || leads_one) {
             return Some(Place::Group { pane: *pane });
         }
-        if via == Via::Key && in_threads && !theirs && !homeward {
+        if via == Via::Key && in_group && !theirs && !homeward {
             // Right of its last column, which no column of it flanks.
             let last = &columns[model::run(columns, at.column).end - 1];
             return Some(right(last.panes[0].id));
@@ -234,24 +250,19 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
     if flow == Flow::Free {
         return at.map(|(pane, _)| right(pane)).or_else(here);
     }
-    let Some((pane, at)) = at else {
+    let Some((pane, _)) = at else {
         return if scratch {
             here()
         } else {
-            Some(Place::Own { project })
+            Some(Place::Start { project })
         };
     };
-    let workspace = &list[at.workspace];
-    let column = &workspace.columns[at.column];
-    Some(if scratch {
-        right(pane)
-    } else if column.group.is_some() && column.group == workspace.own {
-        Place::Own { project }
-    } else if workspace.project.is_none() {
-        // A free one: no Project owns it, and the Pane in front is on it.
-        right(pane)
+    // From another Project's workspace, first on its own (ADR 0134,
+    // decision 3); else right of the Pane in front.
+    Some(if theirs {
+        Place::Start { project }
     } else {
-        Place::Own { project }
+        right(pane)
     })
 }
 
@@ -341,7 +352,7 @@ fn lands(list: &Arrangement, place: &Place) -> Option<(usize, ProjectId)> {
         }
         // Its Project's workspace, or the empty one at the bottom, which
         // it owns then.
-        Place::Project { project } | Place::Own { project } => {
+        Place::Project { project } | Place::Start { project } => {
             let at =
                 (list.iter().position(|w| w.project == Some(project))).unwrap_or(list.len() - 1);
             return Some((at, project));
@@ -457,8 +468,8 @@ mod tests {
         })
     }
 
-    fn own(project: ProjectId) -> Option<Place> {
-        Some(Place::Own { project })
+    fn at_start(project: ProjectId) -> Option<Place> {
+        Some(Place::Start { project })
     }
 
     fn on_its_workspace(project: ProjectId) -> Option<Place> {
@@ -496,7 +507,7 @@ mod tests {
         assert_eq!(place(&list, &leads(), asked(work, Flow::Free, gone)), None);
         assert_eq!(
             place(&list, &leads(), asked(work, Flow::Row, gone)),
-            own(work)
+            at_start(work)
         );
     }
 
@@ -522,11 +533,11 @@ mod tests {
     }
 
     #[test]
-    fn with_nothing_in_front_a_pane_goes_into_its_projects_own_group() {
+    fn with_nothing_in_front_a_pane_goes_first_on_its_projects_workspace() {
         let list = start();
         let work = ProjectId::new();
         let asked = asked(work, Flow::Row, NOTHING);
-        assert_eq!(place(&list, &leads(), asked), own(work));
+        assert_eq!(place(&list, &leads(), asked), at_start(work));
         assert_eq!(place(&list, &leads(), scratch(asked)), None);
     }
 
@@ -613,7 +624,10 @@ mod tests {
     fn a_key_from_a_group_on_another_projects_workspace_goes_home_in_the_row() {
         let (list, _, [thread, ..]) = a_threads_group(on_its_workspace);
         let other = ProjectId::new();
-        assert_eq!(place(&list, &leads(), asked_row(other, thread)), own(other));
+        assert_eq!(
+            place(&list, &leads(), asked_row(other, thread)),
+            at_start(other)
+        );
         // A Thread goes last on its Project's workspace, as before.
         let home = Asked {
             home: true,
@@ -654,12 +668,6 @@ mod tests {
     }
 
     #[test]
-    fn from_the_projects_own_group_a_pane_goes_last_into_it() {
-        let (list, work, pane) = one_pane(own);
-        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
-    }
-
-    #[test]
     fn on_a_free_workspace_a_pane_goes_right_of_the_one_in_front() {
         let (list, work, pane) = one_pane(|_| None);
         assert_eq!(place(&list, &leads(), asked_row(work, pane)), right(pane));
@@ -675,9 +683,34 @@ mod tests {
     }
 
     #[test]
-    fn on_a_projects_workspace_outside_a_group_a_pane_goes_into_the_own_group() {
+    fn in_the_row_a_key_twice_from_a_thread_opens_each_right_of_the_last() {
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = opened(&mut list, shown(work, "t.t", 1), on_its_workspace(work));
+        group_pane(&mut list, thread, &seed()).unwrap();
+        // As Alt+N in the Thread, then in what it opened.
+        let mut key = |from| {
+            let place = place(&list, &leads(), asked_row(work, from));
+            let n = 2 + list[0].columns.len() as u32;
+            opened(&mut list, shown(work, "a.a", n), place)
+        };
+        let a = key(thread);
+        let b = key(a);
+        let order: Vec<_> = (list[0].columns.iter()).map(|c| c.panes[0].id).collect();
+        assert_eq!(order, [thread, a, b]);
+        assert!(list[0].columns[1..].iter().all(|c| c.group.is_none()));
+    }
+
+    #[test]
+    fn on_a_projects_workspace_outside_a_group_a_pane_goes_right_of_the_one_in_front() {
         let (list, work, pane) = one_pane(on_its_workspace);
-        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), right(pane));
+        // From another Project's workspace, first on its own.
+        let other = ProjectId::new();
+        assert_eq!(
+            place(&list, &leads(), asked_row(other, pane)),
+            at_start(other)
+        );
     }
 
     #[test]
@@ -699,8 +732,49 @@ mod tests {
         let bottom = list.last().unwrap().id;
         let here = asked(work, Flow::Row, on(bottom));
         assert_eq!(place(&list, &leads(), scratch(here)), there(bottom));
-        // A Project's goes home all the same.
-        assert_eq!(place(&list, &leads(), here), own(work));
+        // A Project's that owns no workspace takes it, at its start.
+        assert_eq!(place(&list, &leads(), here), at_start(work));
+    }
+
+    #[test]
+    fn on_an_empty_free_workspace_on_screen_what_the_person_asks_opens_there() {
+        // Work owns the top workspace, a free one shows a Pane of Home, and
+        // the empty one at the bottom is on screen.
+        let (mut list, work, _) = one_pane(on_its_workspace);
+        let home = ProjectId::new();
+        opened(&mut list, shown(home, "a.a", 2), Some(Place::Free));
+        let [owned, free, bottom] = [0, 1, 2].map(|w| list[w].id);
+        let thread = |on| Asked {
+            home: true,
+            ..asked(work, Flow::Row, (None, Some(on), KEY))
+        };
+        // A Thread there, of a Project or of none, and any other Pane.
+        assert_eq!(place(&list, &leads(), thread(bottom)), there(bottom));
+        assert_eq!(
+            place(&list, &leads(), scratch(thread(bottom))),
+            there(bottom)
+        );
+        let terminal = asked(work, Flow::Row, on(bottom));
+        assert_eq!(place(&list, &leads(), terminal), there(bottom));
+        // A free workspace that holds Panes keeps the row's way.
+        assert_eq!(place(&list, &leads(), thread(free)), on_its_workspace(work));
+        assert_eq!(
+            place(&list, &leads(), scratch(thread(free))),
+            Some(Place::Free)
+        );
+        assert_eq!(
+            place(&list, &leads(), asked(work, Flow::Row, on(free))),
+            at_start(work)
+        );
+        // So does a Project's workspace, emptied.
+        list[0].columns.clear();
+        assert_eq!(
+            place(&list, &leads(), thread(owned)),
+            on_its_workspace(work)
+        );
+        // An Agent's goes as an Agent's.
+        let agents = asked(work, Flow::Row, (None, Some(bottom), FOR_AGENT));
+        assert_eq!(place(&list, &leads(), agents), on_its_workspace(work));
     }
 
     #[test]
@@ -738,8 +812,8 @@ mod tests {
             let group = Some(Place::Group { pane });
             assert_eq!(place(&list, &leads(), ruled(flow, Opens::Group)), group);
         }
-        // Without it, in the row, the Pane goes into its Project's own Group.
-        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
+        // Without it, in the row, right of the Pane in front too.
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), right(pane));
     }
 
     #[test]
@@ -752,7 +826,7 @@ mod tests {
         // No Pane in front, or one that has gone: as the Flow says.
         assert_eq!(
             place(&list, &leads(), ruled(asked(work, Flow::Row, NOTHING))),
-            own(work)
+            at_start(work)
         );
         assert_eq!(
             place(&list, &leads(), ruled(asked(work, Flow::Free, NOTHING))),
@@ -761,14 +835,14 @@ mod tests {
         let gone = from(PaneId::new());
         assert_eq!(
             place(&list, &leads(), ruled(asked(work, Flow::Row, gone))),
-            own(work)
+            at_start(work)
         );
         // In the row, from a workspace another Project owns, it goes home,
         // as the row has it; in the Flow free every workspace is free.
         let other = ProjectId::new();
         assert_eq!(
             place(&list, &leads(), ruled(asked_row(other, pane))),
-            own(other)
+            at_start(other)
         );
         let free = ruled(asked(other, Flow::Free, from(pane)));
         assert!(matches!(
@@ -930,7 +1004,7 @@ mod tests {
             },
             Place::Group { pane: theirs },
             Place::Project { project: home },
-            Place::Own { project: home },
+            Place::Start { project: home },
         ] {
             assert_eq!(refuses(&list, &row(), Moved::Pane(loose), &place), refused);
             assert_eq!(refuses(&list, &row(), Moved::Pane(thread), &place), refused);

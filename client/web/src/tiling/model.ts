@@ -102,8 +102,6 @@ export type Workspace = {
   solo?: true
   /** The Project whose Agents' Threads open here (ADR 0065, decision 9). */
   project?: ProjectId
-  /** The Project's own Group, first here (ADR 0102, decision 4). */
-  own?: string
 }
 
 export type Workspaces = {
@@ -319,15 +317,12 @@ export function isFree(workspace: Workspace): boolean {
   return workspace.project === undefined && workspace.columns.length > 0
 }
 
-/** Whether a Pane in `column` of `workspace` moves to another workspace
- * by the keys with its whole Group, as one window (ADR 0065): not in the
- * Project's own Group, whose Panes the Person opened one by one (ADR
- * 0102, decision 4). */
+/** Whether a Pane in `column` moves to another workspace by the keys
+ * with its whole Group, as one window (ADR 0065). */
 export function takesGroup(
-  workspace: Workspace,
   column: Column | undefined
 ): column is Column & { group: string } {
-  return column?.group !== undefined && column.group !== workspace.own
+  return column?.group !== undefined
 }
 
 /** Whether a Project's emptied workspace goes once the window leaves it:
@@ -1108,9 +1103,8 @@ export function step(state: Workspaces, by: 1 | -1): Workspaces {
 
 /**
  * Sends the focused Pane to a workspace, as a column on its right, and
- * follows it there; in a Group, the whole Group goes, but from the
- * Project's own Group the Pane goes alone (`takesGroup`). Past the last,
- * it goes to the empty one at the bottom.
+ * follows it there; in a Group, the whole Group goes (`takesGroup`). Past
+ * the last, it goes to the empty one at the bottom.
  */
 export function send(state: Workspaces, index: number): Workspaces {
   const entry = focused(state)
@@ -1119,7 +1113,7 @@ export function send(state: Workspaces, index: number): Workspaces {
   const target = state.list[to]
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
-  if (takesGroup(workspace, column)) {
+  if (takesGroup(column)) {
     // A Pane in a Group takes its whole Group, as one window (ADR 0065).
     const { start, end } = runOf(workspace.columns, workspace.focus)
     const left = setWorkspace(state, state.current, {

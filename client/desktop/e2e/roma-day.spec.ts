@@ -236,7 +236,7 @@ test("in the row and solo the Flow menu's Arrange by Project takes each Pane to 
   await expect(arrange).toHaveCount(0)
 })
 
-test("in free a new Thread opens on the workspace the Person is on; in solo, as in the row, on its Project's (ADR 0065, ADR 0079)", async () => {
+test("a new Thread asked for on an empty workspace no Project owns opens there, in free as in solo (ADR 0065, ADR 0079; ADR 0134, decision 6)", async () => {
   window = await startWindow()
   const { page } = window
   await agents(window, "hello a")
@@ -256,15 +256,15 @@ test("in free a new Thread opens on the workspace the Person is on; in solo, as 
   await expect(current).toHaveText("2")
   await expect(threads).toHaveCount(1)
 
-  // Solo places as the row does: from an empty workspace, the new Thread
-  // goes to its Project's, beside its Agent.
+  // Solo places as the row does: from an empty workspace no Project owns,
+  // the new Thread stays there too, not on its Project's.
   await page.keyboard.press("Alt+Shift+KeyM")
   await expect(flowOf(page)).toHaveAccessibleName("Flow: Solo")
   await page.getByRole("button", { name: "New workspace" }).click()
   await expect(current).toHaveText("")
   await page.keyboard.press("Alt+Enter")
-  await expect(current).toHaveText("W")
-  await expect(threads).toHaveCount(2)
+  await expect(current).toHaveText("3")
+  await expect(threads).toHaveCount(1)
 })
 
 test("in solo every Agent is the whole screen wide at once, and the Strip scrolls from one to the next (ADR 0079)", async () => {

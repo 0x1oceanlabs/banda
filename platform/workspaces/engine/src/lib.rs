@@ -199,9 +199,9 @@ banda_kernel::methods! {
         /// and the last.
         command tidy(Tidy) -> Done, Write;
         /// Puts every Pane where the row would have opened it: on its
-        /// Project's workspace, the Person's own into its own Group and an
-        /// Agent's last, or of no Project on a free one (ADR 0102,
-        /// decisions 4, 7 and 9).
+        /// Project's workspace, the Person's own columns in no Group first
+        /// and the rest last, or of no Project on a free one (ADR 0102,
+        /// decisions 7 and 9; ADR 0134, decision 3).
         command arrange(Arrange) -> Done, Write;
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
@@ -1068,9 +1068,31 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
 /// An arrangement as this module keeps it, each Pane's args as its kind
 /// reads them now, and none an Agent may not give.
 fn parsed(text: &str) -> Result<Arrangement, Error> {
-    let mut list: Arrangement = serde_json::from_str(text)?;
+    read(serde_json::from_str(text)?)
+}
+
+/// An arrangement as kept, read as this module keeps it now.
+fn read(mut kept: serde_json::Value) -> Result<Arrangement, Error> {
+    unowned(&mut kept);
+    let mut list: Arrangement = serde_json::from_value(kept)?;
     upgraded(&mut list);
     Ok(list)
+}
+
+/// Reads a Project's own Group, kept before ADR 0134, as columns in no
+/// Group, in their order (decision 3). A grace: it goes once every kept
+/// arrangement has been written again.
+fn unowned(kept: &mut serde_json::Value) {
+    for workspace in kept.as_array_mut().into_iter().flatten() {
+        let Some(own) = workspace.as_object_mut().and_then(|w| w.remove("own")) else {
+            continue;
+        };
+        for column in workspace["columns"].as_array_mut().into_iter().flatten() {
+            if column.get("group") == Some(&own) {
+                column.as_object_mut().map(|c| c.remove("group"));
+            }
+        }
+    }
 }
 
 /// Reads each Pane's args of `list` as its kind reads them now, and drops
@@ -1084,7 +1106,7 @@ fn upgraded(list: &mut Arrangement) {
 
 /// The last Arrange by Project, while Undo may put it back: the
 /// arrangement before it, and after it (ADR 0102, decision 9).
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize)]
 struct LastArrange {
     before: Arrangement,
     after: Arrangement,
@@ -1100,10 +1122,11 @@ fn load_arranged(sql: &rusqlite::Connection) -> Result<Option<LastArrange>, Erro
     let Some(text) = text else {
         return Ok(None);
     };
-    let mut last: LastArrange = serde_json::from_str(&text)?;
-    upgraded(&mut last.before);
-    upgraded(&mut last.after);
-    Ok(Some(last))
+    let mut kept: serde_json::Value = serde_json::from_str(&text)?;
+    Ok(Some(LastArrange {
+        before: read(kept["before"].take())?,
+        after: read(kept["after"].take())?,
+    }))
 }
 
 /// Keeps `last` as the last Arrange by Project; none, when there is none
@@ -1145,4 +1168,38 @@ fn keep(tx: &Tx<'_>, list: &Arrangement) -> Result<(), Error> {
         [serde_json::to_string(list)?],
     )?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use banda_kernel::ProjectId;
+    use serde_json::json;
+
+    #[test]
+    fn a_projects_own_group_kept_before_adr_0134_reads_as_columns_in_no_group() {
+        let (own, thread) = (model::GroupId::new(), model::GroupId::new());
+        let project = ProjectId::new();
+        let column = |n: u32, group: model::GroupId| {
+            json!({
+                "id": ColumnId::new(),
+                "panes": [{ "id": PaneId::new(), "project": project, "kind": "a.a", "args": { "n": n } }],
+                "group": group,
+            })
+        };
+        let kept = json!([{
+            "id": WorkspaceId::new(),
+            "columns": [column(1, own), column(2, own), column(3, thread)],
+            "project": project,
+            "own": own,
+        }]);
+        let list = parsed(&kept.to_string()).unwrap();
+        let groups: Vec<_> = list[0].columns.iter().map(|c| c.group).collect();
+        assert_eq!(groups, [None, None, Some(thread)]);
+        let order: Vec<_> = (list[0].columns.iter())
+            .map(|c| c.panes[0].shows.args["n"].clone())
+            .collect();
+        assert_eq!(order, [json!(1), json!(2), json!(3)]);
+        assert_eq!(list[0].project, Some(project));
+    }
 }

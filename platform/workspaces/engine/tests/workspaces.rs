@@ -1201,14 +1201,14 @@ async fn in_the_row_a_pane_opened_with_no_place_goes_by_the_rule() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
     let work = machine.project("Work").await;
-    // Into its Project's own Group, first on its workspace.
+    // First on its Project's workspace, in no Group.
     let open = |project, kind: &str, n, more: Value| {
         machine.command("workspaces.open", numbered(project, kind, n, more))
     };
     let pane = open(work, "a.a", 1, json!({})).await.unwrap()["pane"].clone();
     let list = machine.opened().await;
     assert_eq!(list["workspaces"][0]["project"], json!(work));
-    assert!(group_of(&list, &pane).is_string());
+    assert!(group_of(&list, &pane).is_null());
 
     // A place that is named still wins: this Pane starts a free workspace.
     let free = json!({ "place": { "to": "free" } });
@@ -1284,9 +1284,9 @@ async fn the_window_a_program_and_an_agent_open_a_pane_by_one_rule() {
     let top = vec![vec![1], vec![3], vec![2], vec![5], vec![6]];
     assert_eq!(layout(&list), [top, vec![vec![4]], vec![]]);
 
-    // In the row: the Person's go into the Project's own Group, from the
-    // window and from a program alike, and an Agent's last on its
-    // Project's workspace.
+    // In the row: the Person's go first on the Project's workspace, in no
+    // Group, from the window and from a program alike, and an Agent's
+    // last on it.
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::in_the_row(root.path(), PersonId::new()).await;
     let work = machine.project("Work").await;
@@ -1301,11 +1301,11 @@ async fn the_window_a_program_and_an_agent_open_a_pane_by_one_rule() {
     let from = open(3, json!({ "from": one })).await.unwrap()["pane"].clone();
     let program = open(4, json!({})).await.unwrap()["pane"].clone();
     let list = machine.list().await;
-    assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![4], vec![2]]);
-    let own = &list["workspaces"][0]["own"];
-    assert!(own.is_string());
-    assert_eq!(&group_of(&list, &from), own);
-    assert_eq!(&group_of(&list, &program), own);
+    // From the Pane in front, right of it; with none, right of the columns
+    // in no Group at the start, the Agent's among them.
+    assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![2], vec![4]]);
+    assert!(group_of(&list, &from).is_null());
+    assert!(group_of(&list, &program).is_null());
 }
 
 /// The Tiling's file holds for every caller (ADR 0127, decision 4): the
@@ -1342,14 +1342,14 @@ async fn a_rule_of_tiling_toml_holds_for_the_window_a_program_and_an_agent() {
     let list = machine.list().await;
     assert_eq!(
         layout(&list)[0],
-        [vec![1, 5], vec![2], vec![4], vec![6], vec![3]]
+        [vec![1, 5], vec![6], vec![2], vec![3], vec![4]]
     );
     let widths: Vec<_> = (list["workspaces"][0]["columns"].as_array().unwrap().iter())
         .map(|column| column["width"].as_str())
         .collect();
     assert_eq!(
         widths,
-        [Some("1/3"), Some("1/3"), Some("1/2"), None, Some("1/3")]
+        [Some("1/3"), None, Some("1/3"), Some("1/3"), Some("1/2")]
     );
 }
 
