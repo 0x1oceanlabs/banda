@@ -1,6 +1,7 @@
 import {
   memo,
   type ReactNode,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -73,8 +74,9 @@ export type Frame = {
   ) => void
   update: (entry: string, pane: PaneState) => void
   close: (entry: string) => void
-  /** Runs an action by its id, as a key would. */
-  run: (action: string, args?: Args) => void
+  /** Runs an action by its id, as a key would; with `from`, as a click in
+   * that tile asks it, as a path clicked in a Thread (ADR 0134). */
+  run: (action: string, args?: Args, from?: string) => void
   /** Sends the engine a change, as the mouse's sizing does; done once
    * it is drawn, or refused. */
   arrange: (plan: Plan) => Promise<void>
@@ -267,6 +269,11 @@ export const PaneFrame = memo(function PaneFrame({
     [entry.project, onHost]
   )
   const { runs } = usePaneHandles(owner, frame.run, onHost)
+  // What its own content runs, it asks by a click in it.
+  const clicked = useCallback(
+    (action: string, args?: Args) => frame.run(action, args, entry.id),
+    [frame, entry.id]
+  )
   useWelcome(there === undefined ? undefined : reach.engine)
   const gate = gateOf(
     entry.pane,
@@ -514,7 +521,7 @@ export const PaneFrame = memo(function PaneFrame({
                   selected={selected}
                   alone={noRoom}
                   handle={handle}
-                  run={frame.run}
+                  run={clicked}
                 />
               </TileContext>
             )}

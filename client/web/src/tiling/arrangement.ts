@@ -42,6 +42,7 @@ import {
   type Rule,
   seeded,
   type Side,
+  type Via,
   type Workspace,
 } from "@banda/contract/workspaces"
 
@@ -403,7 +404,7 @@ function openCommand(
       : undefined
   if (away !== undefined) instead = undefined
   if (place === undefined && instead === undefined)
-    place = placeAsked(list, {
+    place = placeAsked(list, facts.leads ?? [], {
       flow: facts.flow,
       project: open.project,
       home: homeIn(facts, open.kind),
@@ -412,6 +413,7 @@ function openCommand(
       from: away ?? open.from,
       on: open.on,
       agents: open.agents === true,
+      via: open.via ?? "key",
     })
   // A new column with no width takes the one its kind's rule gives, or
   // a list's.
@@ -438,12 +440,19 @@ type Asked = {
   on: string | undefined
   /** Opened for an Agent whose Thread no workspace shows. */
   agents: boolean
+  /** How the Person asked for it (ADR 0134). */
+  via: Via
 }
 
 /** As `placing::place`: where the Pane goes by the Flow; none, where a
- * Pane with no place goes. */
-function placeAsked(list: Arrangement, asked: Asked): Place | undefined {
-  const { flow, project, home, opens, scratch, from, on, agents } = asked
+ * Pane with no place goes. `leads` are the kinds of Pane that lead a
+ * Group, a Thread's. */
+function placeAsked(
+  list: Arrangement,
+  leads: readonly string[],
+  asked: Asked
+): Place | undefined {
+  const { flow, project, home, opens, scratch, from, on, agents, via } = asked
   const right = (pane: string): Place => ({ to: "beside", pane, side: "right" })
   const itsWorkspace: Place = scratch
     ? { to: "free" }
@@ -466,19 +475,32 @@ function placeAsked(list: Arrangement, asked: Asked): Place | undefined {
     if (opens === "below") return { to: "beside", pane: from, side: "below" }
     if (opens === "group") return { to: "group", pane: from }
   }
+  const homeward = flow === "row" && home
+  if (at && from !== undefined && !agents) {
+    const workspace = list[at.workspace]
+    const { columns } = workspace
+    const column = columns[at.column]
+    // A Thread's Group: any but the Project's own.
+    const inThreads =
+      column.group !== undefined && column.group !== workspace.own
+    const leadsOne = leads.includes(column.panes[at.pane].kind)
+    if (via === "click" && (inThreads || leadsOne))
+      return { to: "group", pane: from }
+    if (via === "key" && inThreads && !theirs && !homeward) {
+      // Right of its last column, which no column of it flanks.
+      const last = columns[run(columns, at.column).end - 1]
+      return right(last.panes[0].id)
+    }
+  }
+  if (homeward) return itsWorkspace
   if (flow === "free") return at && from !== undefined ? right(from) : here()
-  if (home) return itsWorkspace
   if (!at || from === undefined)
     return scratch ? here() : { to: "own", project }
   const workspace = list[at.workspace]
   const column = workspace.columns[at.column]
-  const inItsGroup =
-    column.group !== undefined && column.panes[at.pane].project === project
-  const group: Place = { to: "group", pane: from }
-  if (scratch) return inItsGroup ? group : right(from)
+  if (scratch) return right(from)
   if (column.group !== undefined && column.group === workspace.own)
     return { to: "own", project }
-  if (inItsGroup) return group
   // A free one: no Project owns it, and the Pane in front is on it.
   return workspace.project === undefined ? right(from) : { to: "own", project }
 }
@@ -802,6 +824,7 @@ function readOpen(f: Fields): Open {
     width: optional(f.width, text),
     again: optional(f.again, bool),
     grouped: optional(f.grouped, bool),
+    via: optional(f.via, (v) => oneOf(v, ["click", "key"] as const)),
   })
 }
 

@@ -26,6 +26,7 @@ import type {
   Changed,
   Pane,
   Place,
+  Via,
   Workspace as Kept,
 } from "@banda/contract/workspaces"
 import type { PaneState } from "@banda/ui/pane"
@@ -484,6 +485,7 @@ export function asking(
     grouped?: boolean
     agents?: boolean
     scratch?: boolean
+    via?: Via
   } = {}
 ): Plan {
   const from = how.from ?? focused(state)?.id
@@ -502,6 +504,7 @@ export function asking(
             { again: true, ...(from && { from }), ...(on && { on }) }),
         ...(how.agents && { agents: true }),
         ...(how.scratch && { scratch: true }),
+        ...(how.via && { via: how.via }),
       },
     },
   }

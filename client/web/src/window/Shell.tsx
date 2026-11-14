@@ -532,7 +532,7 @@ export function Shell({
       void lookingInto(engine, fingerprint)
         .then((thread) => runAction(parts, "thread.new", thread))
         .catch(() => undefined),
-    run: (action, args) => void runAction(parts, action, args),
+    run: (action, args, from) => void runAction(parts, action, args, from),
     engine,
     hosts: kept,
     ...useTops(kept),

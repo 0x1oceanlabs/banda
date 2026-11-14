@@ -3,6 +3,7 @@ import type { ProjectId } from "../ProjectId";
 import type { JsonValue } from "../serde_json/JsonValue";
 import type { PaneId } from "./PaneId";
 import type { Place } from "./Place";
+import type { Via } from "./Via";
 import type { WorkspaceId } from "./WorkspaceId";
 
 export type Open = { 
@@ -68,6 +69,12 @@ again?: boolean,
  * Left out, as its kind declares.
  */
 grouped?: boolean, 
+/**
+ * How the Person asked for it, with no place: a click in `from`
+ * opens into its Thread's Group, a key beside it (ADR 0134). Left
+ * out, a key's.
+ */
+via?: Via, 
 /**
  * Kept as `space` before ADR 0069 (for good).
  */

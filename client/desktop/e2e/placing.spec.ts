@@ -1,3 +1,4 @@
+import { mkdirSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import {
@@ -11,6 +12,9 @@ import {
 } from "./window"
 
 let window: Window
+
+/** A Thread's kind of Pane. */
+const THREAD = "agents.thread"
 
 test.afterEach(async () => {
   await window?.close()
@@ -327,3 +331,54 @@ test("in the row, banda moves no Pane onto another Project's workspace: the engi
   const columns = kept(window).find((one) => one.id === theirs.workspace)!
   expect(columns.columns[0].panes[0].id).toBe(ours.pane)
 })
+
+for (const flow of ["free", "row"] as const)
+  test(`in the Flow ${flow}, a path clicked in a Thread opens in its Group, and Alt+E and Alt+D open right of the Group (ADR 0134)`, async () => {
+    window = await startWindow({
+      files: { "config/tiling.toml": `flow = "${flow}"\n` },
+    })
+    const { page, dir } = window
+    const { thread, composer } = await firstThread(page)
+    mkdirSync(join(dir, "root", "Work", "src"))
+    writeFileSync(join(dir, "root", "Work", "src", "app.js"), "export {}\n")
+    await composer.fill("See src/app.js in prose.")
+    await composer.press("Enter")
+    const link = thread.locator("[data-quotable] a[data-file]")
+    await expect(link).toHaveText("src/app.js")
+
+    /** Each column of the Thread's workspace by its Panes' kinds, and by
+     * whether it is in the Thread's Group. */
+    const columns = () => {
+      const workspace = kept(window).find((one) =>
+        one.columns.some((c) => c.panes.some((p) => p.kind === THREAD))
+      )!
+      const group = workspace.columns.find((c) =>
+        c.panes.some((p) => p.kind === THREAD)
+      )!.group
+      return workspace.columns.map((c) => ({
+        kinds: c.panes.map((p) => p.kind),
+        inGroup: group !== undefined && c.group === group,
+      }))
+    }
+    // A click: into the Thread's Group.
+    await link.click()
+    await expect.poll(columns).toEqual([
+      { kinds: [THREAD], inGroup: true },
+      { kinds: ["files.file"], inGroup: true },
+    ])
+
+    // Alt+E and Alt+D from the Thread: right of the whole Group, each
+    // next to it.
+    await thread.click({ position: { x: 10, y: 10 } })
+    await page.keyboard.press("Alt+KeyE")
+    await expect.poll(() => columns().length).toBe(3)
+    await thread.click({ position: { x: 10, y: 10 } })
+    await page.keyboard.press("Alt+KeyD")
+    await expect.poll(columns).toEqual([
+      { kinds: [THREAD], inGroup: true },
+      { kinds: ["files.file"], inGroup: true },
+      { kinds: ["git.diff"], inGroup: false },
+      { kinds: ["files.tree"], inGroup: false },
+    ])
+    await page.screenshot({ path: `test-results/placing-via-${flow}.png` })
+  })

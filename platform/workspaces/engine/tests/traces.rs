@@ -1208,6 +1208,11 @@ fn thread(project: &str, n: u32) -> Value {
     and(shows(project, THREAD, n), json!({ "grouped": true }))
 }
 
+/// `open`'s params from a click in `pane` (ADR 0134, decision 1).
+fn clicked(pane: &str) -> Value {
+    json!({ "from": pane, "via": "click" })
+}
+
 /// `open`'s params, of no Project, as the engine says of its own Projects
 /// and the window of another machine's.
 fn of_none(params: Value) -> Value {
@@ -1263,7 +1268,7 @@ fn placed_row() -> Tracing {
         16,
         "placed-row",
         "In the row, a Pane with no place opens by where it is opened from: from the \
-         Project's own Group, last into it; from a Group of its Project, into that \
+         Project's own Group, last into it; by a click in a Group, into that \
          Group; on a free workspace, right of the Pane in front; any other, and with \
          none in front, into its Project's own Group. A Thread goes last on its \
          Project's workspace, and so does what is opened for an Agent. A Pane of no \
@@ -1276,9 +1281,10 @@ fn placed_row() -> Tracing {
     // workspace; from it, last into it.
     let one = t.opened(shows(WORK, "a.a", 1));
     t.ok("open", and(shows(WORK, "a.a", 2), from(&one)));
-    // A Thread, last on its Project's workspace; from it, into its Group.
+    // A Thread, last on its Project's workspace; by a click in it, into
+    // its Group.
     let three = t.opened(and(thread(WORK, 3), from(&one)));
-    t.ok("open", and(shows(WORK, "a.a", 4), from(&three)));
+    t.ok("open", and(shows(WORK, "a.a", 4), clicked(&three)));
     assert_eq!(
         t.layout(),
         [vec![vec![1], vec![2], vec![3], vec![4]], EMPTY]
@@ -1289,12 +1295,12 @@ fn placed_row() -> Tracing {
     let five = t.opened(and(shows(HOME, "a.a", 5), from(&three)));
     assert_eq!(t.list()[1].project.unwrap().to_string(), HOME);
     // Of no Project: right of the Pane in front; a Thread, on the top free
-    // workspace; from its Group, into it; with none in front, on the
-    // workspace on screen.
+    // workspace; by a click in its Group, into it; with none in front, on
+    // the workspace on screen.
     let none = |n| of_none(shows(FIFTH, "a.a", n));
     t.ok("open", and(none(6), from(&five)));
     let seven = t.opened(and(of_none(thread(FIFTH, 7)), from(&five)));
-    t.ok("open", and(none(8), from(&seven)));
+    t.ok("open", and(none(8), clicked(&seven)));
     let free = t.workspace(2);
     let nine = t.opened(and(none(9), json!({ "on": free })));
     // On a free workspace, a Project's stays, right of the Pane in front.
@@ -1584,6 +1590,47 @@ fn rules() -> Tracing {
     t
 }
 
+fn clicks_and_keys() -> Tracing {
+    let mut t = Tracing::new(
+        20,
+        "clicks-and-keys",
+        "A Thread's Group holds what its Thread opens, and the Person's keys open \
+         beside it (ADR 0134): a click in a Thread, or in a Pane in its Group, \
+         opens into that Group; a key from either opens as a column of its own \
+         right of the whole Group, in the Flow free and in the row alike. A rule \
+         that opens into a Group wins over a key.",
+    );
+    t.led_by_threads();
+    let key = |pane: &str| json!({ "from": pane, "via": "key" });
+    // Each on a workspace of its own: the Thread's Group numbered `g`.
+    for (at, flow, project, n, g) in [(0, Flow::Free, HOME, 0, 1), (1, Flow::Row, WORK, 10, 3)] {
+        t.in_the_flow(flow);
+        let on = t.bottom();
+        let one = t.opened(and(shows(project, "a.a", n + 1), json!({ "on": on })));
+        let two = t.opened(and(thread(project, n + 2), key(&one)));
+        // By a click in the Thread, and in a Pane in its Group, into it.
+        let three = t.opened(and(shows(project, "a.a", n + 3), clicked(&two)));
+        t.ok("open", and(shows(project, "a.a", n + 4), clicked(&three)));
+        // By a key from either, right of the whole Group, so the last
+        // opened stands next to it.
+        t.ok("open", and(shows(project, "a.a", n + 5), key(&two)));
+        t.ok("open", and(shows(project, "a.a", n + 6), key(&three)));
+        // Left out, as a key.
+        t.ok(
+            "open",
+            and(shows(project, "a.a", n + 7), json!({ "from": two })),
+        );
+        let ns = |more: [u32; 7]| more.map(|m| vec![u64::from(n + m)]);
+        assert_eq!(t.layout()[at], ns([1, 2, 3, 4, 7, 6, 5]));
+        assert_eq!(t.grouping()[at][1..], [g, g, g, 0, 0, 0]);
+    }
+    // A rule that opens into a Group wins over a key.
+    t.ruled("g.g", None, Some(Opens::Group));
+    let thread_pane = t.pane(1, 1, 0);
+    t.ok("open", and(shows(WORK, "g.g", 21), key(&thread_pane)));
+    t
+}
+
 #[test]
 fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
     let traces = [
@@ -1606,6 +1653,7 @@ fn the_traces_the_clients_copy_replays_are_what_the_engine_does() {
         moved_away(),
         refused_moves(),
         rules(),
+        clicks_and_keys(),
     ];
     let steps = || traces.iter().flat_map(|t| &t.trace.steps);
 

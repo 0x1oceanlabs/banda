@@ -266,6 +266,7 @@ test("a Pane the Person opens names no place: the window says the Pane in front 
       args: { n: 1 },
       again: true,
       on: here,
+      via: "key",
     })
     // From the Pane in front, a Thread as a Group of its own.
     state = open(state, A, terminal(1), { place: "right" })
@@ -285,6 +286,49 @@ test("a Pane the Person opens names no place: the window says the Pane in front 
     const below = placed(state, A, terminal(3), placing, { place: "below" })
     expect(paramsOf(below)).toMatchObject({ place: { to: "stack", index: 1 } })
     expect(paramsOf(below)).not.toHaveProperty("from")
+  }
+})
+
+test("what a tile opens by a click in it the engine places into its Thread's Group, and a key's beside it, in the Flows free, row and solo (ADR 0134)", () => {
+  for (const flow of ["free", "row", "solo"] as const) {
+    const window = windowIn(flow)
+    const thread = window.change((w, placing) =>
+      placed(w, A, { kind: "agents.thread", args: { n: 1 } }, placing)
+    )!
+    // A click in the Thread, with no place or into its Group: asked of the
+    // engine, from the Thread, by a click.
+    for (const place of [undefined, "group"] as const) {
+      const step = openingFrom(
+        window.state,
+        A,
+        terminal(9),
+        placingOf(flow, []),
+        thread,
+        place
+      )
+      expect(paramsOf(step)).toMatchObject({ from: thread, via: "click" })
+      expect(paramsOf(step)).not.toHaveProperty("place")
+    }
+    window.change((w, placing) =>
+      openingFrom(w, A, terminal(2), placing, thread)
+    )
+    // A key from the Thread: right of its Group.
+    window.change((w, placing) => placed(w, A, terminal(3), placing))
+    const [columns] = window.state.list.map((w) => w.columns)
+    expect(window.layout()[0]).toEqual([[1], [2], [3]])
+    expect(columns[1].group).toBe(columns[0].group)
+    expect(columns[2].group).toBeUndefined()
+    // A place the tile names goes as named.
+    const right = openingFrom(
+      window.state,
+      A,
+      terminal(4),
+      placingOf(flow, []),
+      thread,
+      "right"
+    )
+    expect(paramsOf(right)).toHaveProperty("place")
+    expect(paramsOf(right)).not.toHaveProperty("via")
   }
 })
 
@@ -312,9 +356,10 @@ test("a Pane the window opens is drawn at once where the engine's rule puts it, 
   expect(free.state.list[0].project).toBeUndefined()
   expect(free.state.list[0].own).toBeUndefined()
   // The row, and solo, its view: the Project's own Group, the Thread last
-  // on its workspace, what is opened from it in its Group, another
-  // Project's on its own workspace, one of no Project right of the Pane in
-  // front, and what is opened for an Agent last on its Project's.
+  // on its workspace, what a key opens from it right of its Group (ADR
+  // 0134, decision 2), another Project's on its own workspace, one of no
+  // Project right of the Pane in front, and what is opened for an Agent
+  // last on its Project's.
   for (const flow of ["row", "solo"] as const) {
     const window = opened(flow)
     expect(window.layout()).toEqual([[[1], [2], [3], [4], [7]], [[5], [6]], []])
@@ -324,8 +369,8 @@ test("a Pane the window opens is drawn at once where the engine's rule puts it, 
     expect(groups[0]).toBe(mine.own)
     expect(groups[1]).toBe(mine.own)
     expect(groups[2]).not.toBe(mine.own)
-    expect(groups[3]).toBe(groups[2])
-    expect(groups[4]).toBeUndefined()
+    expect(groups[2]).toBeDefined()
+    expect(groups.slice(3)).toEqual([undefined, undefined])
     expect(theirs.columns.map((column) => column.group)).toEqual([
       theirs.own,
       undefined,
@@ -982,6 +1027,7 @@ test("a first Pane started on an emptied Project's workspace goes where the keys
     args: { n: 2 },
     again: true,
     on: row.state.list[0].id,
+    via: "key",
   })
   row.change((w, placing) => startingHere(w, B, terminal(2), placing))
   expect(row.layout()).toEqual([[[2]], []])

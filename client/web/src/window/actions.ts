@@ -5,6 +5,7 @@
  * Banda menu, its key sheet and `keys.toml` read the same list.
  */
 import type { Engine, ProjectId } from "@banda/contract"
+import type { Via } from "@banda/contract/workspaces"
 import {
   type Act,
   type Hosts,
@@ -50,9 +51,20 @@ import { notNow } from "../trust/not-now"
 import { askTrust } from "../trust/TrustCard"
 import { TILING_ACTIONS, type Tiling } from "../tiling/actions"
 
+/** How the window opens a Pane: as `WindowApi.open` says, and, of its
+ * own, `from` the tile and `via` how the Person asked there (ADR 0134). */
+type OpenHow = NonNullable<Parameters<WindowApi["open"]>[2]> & {
+  from?: string
+  via?: Via
+}
+
 /** What the window's own actions can change: its parts, more than a
  * module's get (`WindowApi`), and what the Tiling's take (`Tiling`). */
-export type Shell = WindowApi & {
+export type Shell = Omit<WindowApi, "open" | "run"> & {
+  open: (pane: PaneState, project?: ProjectId, how?: OpenHow) => void
+  /** As `WindowApi.run`; with `from`, as a click in that tile asks it
+   * (`clickedIn`). */
+  run: (action: string, args?: Args, from?: string) => void
   /** What the Top layer was asked to show of an App's (`WindowApi.top`),
    * which `TopPart` draws. */
   tops: Store<TopAsked>
@@ -91,6 +103,19 @@ export type Shell = WindowApi & {
    * (ADR 0106, law 3). */
   hosts: Hosts & Pick<KeptHosts, "reread">
 } & Tiling
+
+/** `shell` as a click in the tile `from` runs an action: what the action
+ * opens goes as that click asks, into the Group of the Thread `from` is
+ * or stands with (ADR 0134, decision 1). */
+function clickedIn(shell: Shell, from: string): Shell {
+  return {
+    ...shell,
+    open: (pane, project, how) =>
+      shell.open(pane, project, { from, via: "click", ...how }),
+    // An action it runs in turn, as `file.open` runs Files', runs so too.
+    run: (action, args, by) => shell.run(action, args, by ?? from),
+  }
+}
 
 /** What a module is given of `shell`, a steady face of it (`useSteady`):
  * its `WindowApi` alone, so an App's `start` and its widgets reach no more
@@ -853,21 +878,24 @@ export function fromHere(shell: Pick<Shell, "here">): {
  * through here, and a Pane's acts after its own route (`handlesOf`), so
  * an action does the same from each. One that does not run says why, as
  * "Not on arc yet: Open in a browser", never nothing; how it went is for
- * what asked from outside the window (asked.ts).
+ * what asked from outside the window (asked.ts). With `from`, as a click
+ * in that tile asks it (`clickedIn`).
  */
 export function runAction(
   shell: Shell,
   action: string | Action<Shell>,
-  args?: Args
+  args?: Args,
+  from?: string
 ): Promise<Route> {
+  const as = from === undefined ? shell : clickedIn(shell, from)
   const known =
     typeof action === "string"
       ? ACTIONS.find((one) => one.id === action)
       : action
   if (!known) throw new Error(`Banda has no action ${String(action)}`)
   return actAs(
-    shell.hosts,
-    () => routeAct(shell.hosts, actOf(known), fromHere(shell), args),
-    (routed) => known.run(shell, routed)
+    as.hosts,
+    () => routeAct(as.hosts, actOf(known), fromHere(as), args),
+    (routed) => known.run(as, routed)
   )
 }

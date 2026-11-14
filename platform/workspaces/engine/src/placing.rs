@@ -9,8 +9,9 @@
 use crate::model::{self, Arrangement, ColumnId, PaneId, Place, Shown, Side, WorkspaceId};
 use crate::tiling::{Opens, Rule};
 use banda_kernel::{ProjectId, Refusal};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, BTreeSet};
+use ts_rs::TS;
 use uuid::Uuid;
 
 /// How the Person works the Panes, as far as placement goes. Solo is each
@@ -87,11 +88,26 @@ impl Facts {
 /// Who a Pane is opened by, or for.
 #[derive(Clone, Copy, Debug)]
 pub enum By {
-    /// The Person, or a program of theirs.
-    Person,
+    /// The Person, or a program of theirs, and how they asked.
+    Person { via: Via },
     /// An Agent, of the Thread its pass was made for; none, when the window
     /// opens it for an Agent whose Thread no workspace shows.
     Agent { thread: Option<Uuid> },
+}
+
+/// How the Person asked for a Pane (ADR 0134, decision 5).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export_to = "workspaces/")]
+pub enum Via {
+    /// A click in the Pane it is opened from: a path, a link, a Diff in a
+    /// Thread, a file in a Group's Files. It opens into that Pane's
+    /// Thread's Group (ADR 0134, decision 1).
+    Click,
+    /// A key, a menu, the sidebar or `banda`: it opens beside, never into
+    /// a Group (ADR 0134, decision 2).
+    #[default]
+    Key,
 }
 
 /// A Pane to place, and the facts it is placed by.
@@ -116,7 +132,8 @@ pub struct Asked {
 }
 
 /// Where the Pane goes by the Flow; none, where a Pane with no place goes
-/// (ADR 0102, decision 3).
+/// (ADR 0102, decision 3). `leads` are the kinds of Pane that lead a
+/// Group, a Thread's (`Facts::leads`).
 ///
 /// What an Agent opens goes into its Thread's Group, while a workspace
 /// shows the Thread; in the row, else, last on its Project's workspace, or,
@@ -125,19 +142,23 @@ pub struct Asked {
 /// it, under it or into its Group (`tiling.toml`; ADR 0127, decision 4).
 /// The rule gives way where there is no Pane in front, and in the row
 /// where that Pane stands on a workspace another Project owns: a rule
-/// never puts a Pane where the row would refuse it. Then, in the Flow
-/// `free`: right of the Pane in front, else last on the workspace on
-/// screen. In the row:
-/// - a Pane whose kind stands on its Project's workspace, a Thread, goes
-///   last there, or, of no Project, on the top free one;
+/// never puts a Pane where the row would refuse it.
+///
+/// Then by how the Person asked, in every Flow (ADR 0134, decisions 1
+/// and 2). A click in a Thread, or in a Pane in a Thread's Group, opens
+/// into that Group. In the row, a Pane whose kind stands on its Project's
+/// workspace, a Thread, goes last there, or, of no Project, on the top
+/// free one. A key from a Pane in a Thread's Group opens as a column of
+/// its own right of the whole Group, but where the row would refuse it.
+/// Else, in the Flow `free`: right of the Pane in front, else last on the
+/// workspace on screen. In the row:
 /// - with no Pane in front, into its Project's own Group, first on its
 ///   workspace; of no Project, last on the workspace on screen;
-/// - from a Group of its Project, into that Group, of no Project too;
 /// - another Pane of no Project, right of the Pane in front;
 /// - from the Project's own Group, last into it;
 /// - on a workspace no Project owns, right of the Pane in front;
 /// - any other, last into its Project's own Group.
-pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
+pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Option<Place> {
     let Asked {
         flow,
         project,
@@ -175,9 +196,13 @@ pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
             index: usize::MAX,
         })
     };
-    if let (Some(opens), Some((pane, at))) = (opens, &at) {
+    // In the row, the Pane in front stands on a workspace another Project
+    // owns, where none of this one's goes.
+    let theirs = at.as_ref().is_some_and(|(_, at)| {
         let owner = list[at.workspace].project;
-        let theirs = flow == Flow::Row && !scratch && owner.is_some_and(|owner| owner != project);
+        flow == Flow::Row && !scratch && owner.is_some_and(|owner| owner != project)
+    });
+    if let (Some(opens), Some((pane, _))) = (opens, &at) {
         match opens {
             _ if theirs => {}
             Opens::Beside => return Some(right(*pane)),
@@ -187,11 +212,27 @@ pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
             Opens::Project => {}
         }
     }
+    let homeward = flow == Flow::Row && home;
+    if let (By::Person { via }, Some((pane, at))) = (by, &at) {
+        let workspace = &list[at.workspace];
+        let columns = &workspace.columns;
+        // A Thread's Group: any but the Project's own.
+        let in_threads = (columns[at.column].group).is_some_and(|g| Some(g) != workspace.own);
+        let leads_one = leads.contains(&columns[at.column].panes[at.pane].shows.kind);
+        if via == Via::Click && (in_threads || leads_one) {
+            return Some(Place::Group { pane: *pane });
+        }
+        if via == Via::Key && in_threads && !theirs && !homeward {
+            // Right of its last column, which no column of it flanks.
+            let last = &columns[model::run(columns, at.column).end - 1];
+            return Some(right(last.panes[0].id));
+        }
+    }
+    if homeward {
+        return Some(its_workspace);
+    }
     if flow == Flow::Free {
         return at.map(|(pane, _)| right(pane)).or_else(here);
-    }
-    if home {
-        return Some(its_workspace);
     }
     let Some((pane, at)) = at else {
         return if scratch {
@@ -202,14 +243,10 @@ pub fn place(list: &Arrangement, asked: Asked) -> Option<Place> {
     };
     let workspace = &list[at.workspace];
     let column = &workspace.columns[at.column];
-    let in_its_group = column.group.is_some() && column.panes[at.pane].shows.project == project;
-    let group = Place::Group { pane };
     Some(if scratch {
-        if in_its_group { group } else { right(pane) }
+        right(pane)
     } else if column.group.is_some() && column.group == workspace.own {
         Place::Own { project }
-    } else if in_its_group {
-        group
     } else if workspace.project.is_none() {
         // A free one: no Project owns it, and the Pane in front is on it.
         right(pane)
@@ -381,16 +418,22 @@ mod tests {
         }
     }
 
-    const NOTHING: From = (None, None, By::Person);
+    /// The kinds that lead a Group: a Thread's, `t.t`.
+    fn leads() -> BTreeSet<String> {
+        BTreeSet::from(["t.t".to_owned()])
+    }
+
+    const KEY: By = By::Person { via: Via::Key };
+    const NOTHING: From = (None, None, KEY);
     const FOR_AGENT: By = By::Agent { thread: None };
     const AGENT: From = (None, None, FOR_AGENT);
 
     fn from(pane: PaneId) -> From {
-        (Some(pane), None, By::Person)
+        (Some(pane), None, KEY)
     }
 
     fn on(workspace: WorkspaceId) -> From {
-        (None, Some(workspace), By::Person)
+        (None, Some(workspace), KEY)
     }
 
     fn there(workspace: WorkspaceId) -> Option<Place> {
@@ -438,23 +481,29 @@ mod tests {
             home: true,
             ..plain
         };
-        assert_eq!(place(&list, plain), right(pane));
-        assert_eq!(place(&list, at_home), right(pane));
-        assert_eq!(place(&list, asked(work, Flow::Free, NOTHING)), None);
+        assert_eq!(place(&list, &leads(), plain), right(pane));
+        assert_eq!(place(&list, &leads(), at_home), right(pane));
+        assert_eq!(
+            place(&list, &leads(), asked(work, Flow::Free, NOTHING)),
+            None
+        );
     }
 
     #[test]
     fn a_pane_in_front_that_has_gone_counts_as_none() {
         let (list, work, _) = one_pane(|_| None);
         let gone = from(PaneId::new());
-        assert_eq!(place(&list, asked(work, Flow::Free, gone)), None);
-        assert_eq!(place(&list, asked(work, Flow::Row, gone)), own(work));
+        assert_eq!(place(&list, &leads(), asked(work, Flow::Free, gone)), None);
+        assert_eq!(
+            place(&list, &leads(), asked(work, Flow::Row, gone)),
+            own(work)
+        );
     }
 
     #[test]
     fn in_the_flow_free_an_agents_pane_owns_no_workspace() {
         let (list, work, _) = one_pane(on_its_workspace);
-        assert_eq!(place(&list, asked(work, Flow::Free, AGENT)), None);
+        assert_eq!(place(&list, &leads(), asked(work, Flow::Free, AGENT)), None);
     }
 
     #[test]
@@ -465,11 +514,11 @@ mod tests {
             home: true,
             ..asked(work, Flow::Row, NOTHING)
         };
-        assert_eq!(place(&list, at_home), on_its_workspace(work));
+        assert_eq!(place(&list, &leads(), at_home), on_its_workspace(work));
         let agent = asked(work, Flow::Row, AGENT);
-        assert_eq!(place(&list, agent), on_its_workspace(work));
+        assert_eq!(place(&list, &leads(), agent), on_its_workspace(work));
         // Of no Project, on the top free workspace.
-        assert_eq!(place(&list, scratch(agent)), Some(Place::Free));
+        assert_eq!(place(&list, &leads(), scratch(agent)), Some(Place::Free));
     }
 
     #[test]
@@ -477,21 +526,127 @@ mod tests {
         let list = start();
         let work = ProjectId::new();
         let asked = asked(work, Flow::Row, NOTHING);
-        assert_eq!(place(&list, asked), own(work));
-        assert_eq!(place(&list, scratch(asked)), None);
+        assert_eq!(place(&list, &leads(), asked), own(work));
+        assert_eq!(place(&list, &leads(), scratch(asked)), None);
+    }
+
+    /// Work's Thread in its Group, with a Pane its Agent opened there, and
+    /// a column in no Group right of them: on Work's workspace, or with
+    /// `to` none, on a free one.
+    fn a_threads_group(
+        to: impl Fn(ProjectId) -> Option<Place>,
+    ) -> (Arrangement, ProjectId, [PaneId; 3]) {
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = opened(&mut list, shown(work, "t.t", 1), to(work));
+        group_pane(&mut list, thread, &seed()).unwrap();
+        let deck = opened(
+            &mut list,
+            shown(work, "a.a", 2),
+            Some(Place::Group { pane: thread }),
+        );
+        let after = Some(Place::Beside {
+            pane: deck,
+            side: Side::Right,
+        });
+        let loose = opened(&mut list, shown(work, "a.a", 3), after);
+        assert_eq!(list[0].columns.len(), 3);
+        assert_eq!(list[0].columns[2].group, None);
+        (list, work, [thread, deck, loose])
+    }
+
+    fn clicked(asked: Asked) -> Asked {
+        Asked {
+            by: By::Person { via: Via::Click },
+            ..asked
+        }
     }
 
     #[test]
-    fn from_a_group_of_its_project_a_pane_joins_that_group() {
-        let (mut list, work, pane) = one_pane(on_its_workspace);
-        group_pane(&mut list, pane, &seed()).unwrap();
-        let group = Some(Place::Group { pane });
-        let there = asked(work, Flow::Row, from(pane));
-        assert_eq!(place(&list, there), group);
-        assert_eq!(place(&list, scratch(there)), group);
-        // Of another Project, not.
+    fn a_click_in_a_thread_or_its_group_opens_into_that_group() {
+        for to in [on_its_workspace, |_| None] {
+            let (list, work, [thread, deck, loose]) = a_threads_group(to);
+            for flow in [Flow::Free, Flow::Row] {
+                let click = |project, pane| clicked(asked(project, flow, from(pane)));
+                assert_eq!(place(&list, &leads(), click(work, thread)), group(thread));
+                assert_eq!(place(&list, &leads(), click(work, deck)), group(deck));
+                // Another Project's too, as what its Agent opens, and one
+                // of no Project.
+                let other = ProjectId::new();
+                assert_eq!(place(&list, &leads(), click(other, thread)), group(thread));
+                let none = scratch(click(other, deck));
+                assert_eq!(place(&list, &leads(), none), group(deck));
+                // A click in a Pane in no Group opens as a key's does.
+                let plain = asked(work, flow, from(loose));
+                assert_eq!(
+                    place(&list, &leads(), click(work, loose)),
+                    place(&list, &leads(), plain)
+                );
+            }
+        }
+        // A Thread in no Group starts one.
+        let mut list = start();
+        let work = ProjectId::new();
+        let thread = opened(&mut list, shown(work, "t.t", 1), on_its_workspace(work));
+        let click = clicked(asked(work, Flow::Free, from(thread)));
+        assert_eq!(place(&list, &leads(), click), group(thread));
+    }
+
+    #[test]
+    fn a_key_from_a_thread_or_its_group_opens_right_of_the_whole_group() {
+        for to in [on_its_workspace, |_| None] {
+            let (list, work, [thread, deck, loose]) = a_threads_group(to);
+            for flow in [Flow::Free, Flow::Row] {
+                for pane in [thread, deck] {
+                    let key = asked(work, flow, from(pane));
+                    assert_eq!(place(&list, &leads(), key), right(deck));
+                    assert_eq!(place(&list, &leads(), scratch(key)), right(deck));
+                }
+            }
+            // From a column in no Group, as the Flow says.
+            let free = asked(work, Flow::Free, from(loose));
+            assert_eq!(place(&list, &leads(), free), right(loose));
+        }
+    }
+
+    #[test]
+    fn a_key_from_a_group_on_another_projects_workspace_goes_home_in_the_row() {
+        let (list, _, [thread, ..]) = a_threads_group(on_its_workspace);
         let other = ProjectId::new();
-        assert_eq!(place(&list, asked_row(other, pane)), own(other));
+        assert_eq!(place(&list, &leads(), asked_row(other, thread)), own(other));
+        // A Thread goes last on its Project's workspace, as before.
+        let home = Asked {
+            home: true,
+            ..asked_row(other, thread)
+        };
+        assert_eq!(place(&list, &leads(), home), on_its_workspace(other));
+    }
+
+    #[test]
+    fn a_rule_that_opens_into_a_group_wins_over_a_key() {
+        let (list, work, [thread, ..]) = a_threads_group(on_its_workspace);
+        for flow in [Flow::Free, Flow::Row] {
+            let ruled = Asked {
+                opens: Some(Opens::Group),
+                ..asked(work, flow, from(thread))
+            };
+            assert_eq!(place(&list, &leads(), ruled), group(thread));
+        }
+    }
+
+    #[test]
+    fn what_an_agent_opens_goes_by_its_thread_not_by_a_click_or_a_key() {
+        let (list, work, [_, deck, _]) = a_threads_group(on_its_workspace);
+        let agents = |flow| asked(work, flow, (Some(deck), None, FOR_AGENT));
+        assert_eq!(place(&list, &leads(), agents(Flow::Free)), right(deck));
+        assert_eq!(
+            place(&list, &leads(), agents(Flow::Row)),
+            on_its_workspace(work)
+        );
+    }
+
+    fn group(pane: PaneId) -> Option<Place> {
+        Some(Place::Group { pane })
     }
 
     fn asked_row(project: ProjectId, pane: PaneId) -> Asked {
@@ -501,25 +656,28 @@ mod tests {
     #[test]
     fn from_the_projects_own_group_a_pane_goes_last_into_it() {
         let (list, work, pane) = one_pane(own);
-        assert_eq!(place(&list, asked_row(work, pane)), own(work));
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
     }
 
     #[test]
     fn on_a_free_workspace_a_pane_goes_right_of_the_one_in_front() {
         let (list, work, pane) = one_pane(|_| None);
-        assert_eq!(place(&list, asked_row(work, pane)), right(pane));
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), right(pane));
     }
 
     #[test]
     fn of_no_project_a_pane_in_no_group_goes_right_of_the_one_in_front() {
         let (list, work, pane) = one_pane(on_its_workspace);
-        assert_eq!(place(&list, scratch(asked_row(work, pane))), right(pane));
+        assert_eq!(
+            place(&list, &leads(), scratch(asked_row(work, pane))),
+            right(pane)
+        );
     }
 
     #[test]
     fn on_a_projects_workspace_outside_a_group_a_pane_goes_into_the_own_group() {
         let (list, work, pane) = one_pane(on_its_workspace);
-        assert_eq!(place(&list, asked_row(work, pane)), own(work));
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
     }
 
     #[test]
@@ -527,12 +685,12 @@ mod tests {
         let (list, work, _) = one_pane(|_| None);
         let bottom = list.last().unwrap().id;
         assert_eq!(
-            place(&list, asked(work, Flow::Free, on(bottom))),
+            place(&list, &leads(), asked(work, Flow::Free, on(bottom))),
             there(bottom)
         );
         // One that has gone since counts as none.
         let gone = on(WorkspaceId::new());
-        assert_eq!(place(&list, asked(work, Flow::Free, gone)), None);
+        assert_eq!(place(&list, &leads(), asked(work, Flow::Free, gone)), None);
     }
 
     #[test]
@@ -540,9 +698,9 @@ mod tests {
         let (list, work, _) = one_pane(|_| None);
         let bottom = list.last().unwrap().id;
         let here = asked(work, Flow::Row, on(bottom));
-        assert_eq!(place(&list, scratch(here)), there(bottom));
+        assert_eq!(place(&list, &leads(), scratch(here)), there(bottom));
         // A Project's goes home all the same.
-        assert_eq!(place(&list, here), own(work));
+        assert_eq!(place(&list, &leads(), here), own(work));
     }
 
     #[test]
@@ -552,9 +710,12 @@ mod tests {
         let agents = |flow| asked(other, flow, (Some(pane), None, FOR_AGENT));
         // In the row, home, whatever is in front; in the Flow free, right
         // of the Pane in front, as the Person's.
-        assert_eq!(place(&list, agents(Flow::Row)), on_its_workspace(other));
-        assert_eq!(place(&list, agents(Flow::Free)), right(pane));
-        assert_eq!(place(&list, asked(work, Flow::Free, AGENT)), None);
+        assert_eq!(
+            place(&list, &leads(), agents(Flow::Row)),
+            on_its_workspace(other)
+        );
+        assert_eq!(place(&list, &leads(), agents(Flow::Free)), right(pane));
+        assert_eq!(place(&list, &leads(), asked(work, Flow::Free, AGENT)), None);
     }
 
     #[test]
@@ -569,13 +730,16 @@ mod tests {
             side: Side::Below,
         });
         for flow in [Flow::Free, Flow::Row] {
-            assert_eq!(place(&list, ruled(flow, Opens::Beside)), right(pane));
-            assert_eq!(place(&list, ruled(flow, Opens::Below)), below);
+            assert_eq!(
+                place(&list, &leads(), ruled(flow, Opens::Beside)),
+                right(pane)
+            );
+            assert_eq!(place(&list, &leads(), ruled(flow, Opens::Below)), below);
             let group = Some(Place::Group { pane });
-            assert_eq!(place(&list, ruled(flow, Opens::Group)), group);
+            assert_eq!(place(&list, &leads(), ruled(flow, Opens::Group)), group);
         }
         // Without it, in the row, the Pane goes into its Project's own Group.
-        assert_eq!(place(&list, asked_row(work, pane)), own(work));
+        assert_eq!(place(&list, &leads(), asked_row(work, pane)), own(work));
     }
 
     #[test]
@@ -587,19 +751,28 @@ mod tests {
         };
         // No Pane in front, or one that has gone: as the Flow says.
         assert_eq!(
-            place(&list, ruled(asked(work, Flow::Row, NOTHING))),
+            place(&list, &leads(), ruled(asked(work, Flow::Row, NOTHING))),
             own(work)
         );
-        assert_eq!(place(&list, ruled(asked(work, Flow::Free, NOTHING))), None);
+        assert_eq!(
+            place(&list, &leads(), ruled(asked(work, Flow::Free, NOTHING))),
+            None
+        );
         let gone = from(PaneId::new());
-        assert_eq!(place(&list, ruled(asked(work, Flow::Row, gone))), own(work));
+        assert_eq!(
+            place(&list, &leads(), ruled(asked(work, Flow::Row, gone))),
+            own(work)
+        );
         // In the row, from a workspace another Project owns, it goes home,
         // as the row has it; in the Flow free every workspace is free.
         let other = ProjectId::new();
-        assert_eq!(place(&list, ruled(asked_row(other, pane))), own(other));
+        assert_eq!(
+            place(&list, &leads(), ruled(asked_row(other, pane))),
+            own(other)
+        );
         let free = ruled(asked(other, Flow::Free, from(pane)));
         assert!(matches!(
-            place(&list, free),
+            place(&list, &leads(), free),
             Some(Place::Beside {
                 side: Side::Below,
                 ..
@@ -607,17 +780,19 @@ mod tests {
         ));
         // One of no Project stands where it is opened, as the row lets it.
         assert!(
-            place(&list, ruled(scratch(asked_row(other, pane)))).is_some_and(|place| matches!(
-                place,
-                Place::Beside {
-                    side: Side::Below,
-                    ..
-                }
-            ))
+            place(&list, &leads(), ruled(scratch(asked_row(other, pane)))).is_some_and(
+                |place| matches!(
+                    place,
+                    Place::Beside {
+                        side: Side::Below,
+                        ..
+                    }
+                )
+            )
         );
         // What an Agent opens goes as an Agent's, rule or no rule.
         let agents = ruled(asked(work, Flow::Row, (Some(pane), None, FOR_AGENT)));
-        assert_eq!(place(&list, agents), on_its_workspace(work));
+        assert_eq!(place(&list, &leads(), agents), on_its_workspace(work));
     }
 
     #[test]
@@ -659,7 +834,7 @@ mod tests {
             opens: facts.opens("a.a"),
             ..asked_row(work, pane)
         };
-        assert_eq!(place(&list, at_home), on_its_workspace(work));
+        assert_eq!(place(&list, &leads(), at_home), on_its_workspace(work));
     }
 
     #[test]

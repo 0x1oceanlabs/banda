@@ -484,3 +484,26 @@ test("a file attached from a Pane carries the Pane's Project through the router 
     project: R1,
   })
 })
+
+test("what a click in a tile runs opens as that click asks, and so does an action it runs in turn, as file.open runs Files' (ADR 0134, decision 1)", async () => {
+  const [open, run] = [vi.fn(), vi.fn()]
+  const shell = shellOf({ open, run })
+  const pane = { kind: "files.file", args: {} }
+  // A window act, with what it does in the test's hands.
+  const act: Action<Shell> = {
+    ...ACTIONS.find((one) => one.id === "menu.at")!,
+    run: (as) => {
+      as.open(pane, "a" as ProjectId)
+      as.run("files.open")
+    },
+  }
+  await runAction(shell, act, undefined, "e1")
+  expect(open).toHaveBeenCalledWith(pane, "a", { from: "e1", via: "click" })
+  expect(run).toHaveBeenCalledWith("files.open", undefined, "e1")
+  // From a key, as it asked.
+  open.mockClear()
+  run.mockClear()
+  await runAction(shell, act)
+  expect(open).toHaveBeenCalledWith(pane, "a")
+  expect(run).toHaveBeenCalledWith("files.open")
+})
