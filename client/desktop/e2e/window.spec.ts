@@ -3515,8 +3515,8 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await expect.poll(() => layoutOf(page)).toEqual([[t], [l, term]])
   await expect(bar).toHaveCount(2)
 
-  // Alt and the middle button: sideways the Strip follows, and a column
-  // most in view takes the focus; up, the next workspace.
+  // Alt and the middle button: sideways the Strip follows and stays where
+  // it is let go, the focus where it was; up, the next workspace.
   await page.keyboard.press("Alt+KeyN")
   await expect(launchers).toHaveCount(2)
   const third = launchers.nth(1)
@@ -3532,8 +3532,10 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await page.mouse.down({ button: "middle" })
   await page.mouse.move(view.x + 600, view.y, { steps: 10 })
   await page.mouse.up({ button: "middle" })
-  await expect(third).toHaveAttribute("data-focused", "false")
   await expect.poll(() => strip.evaluate((e) => e.scrollLeft)).toBe(0)
+  await page.waitForTimeout(500)
+  expect(await strip.evaluate((e) => e.scrollLeft)).toBe(0)
+  await expect(third).toHaveAttribute("data-focused", "true")
   await page.mouse.move(view.x, view.y)
   await page.mouse.down({ button: "middle" })
   await page.mouse.move(view.x, view.y - 100, { steps: 6 })
