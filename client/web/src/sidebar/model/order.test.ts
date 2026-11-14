@@ -8,8 +8,9 @@ import { createElement } from "react"
 import { renderToStaticMarkup } from "react-dom/server"
 import { expect, test } from "vitest"
 import { nextCall } from "../../calls/sight"
+import { type SidebarInput, sidebarOf } from "./drawn"
 import { type Elsewhere, rowKey } from "./rows"
-import { byOrder, order, useElsewhere, useOrderNow } from "./order"
+import { byOrder, useElsewhere, useOrderNow } from "./order"
 import type { Settings } from "./settings"
 
 const project = (id: string): ProjectSummary => ({
@@ -44,25 +45,53 @@ function walk(lists: Lists, keys: readonly string[]): string[] {
 
 const byProject: Settings = { ...DEFAULT_SIDEBAR, group: "project" }
 
+/** What the sidebar draws of `lists`, with `settings` and the other
+ * machines `elsewhere`, in `view`. */
+const order = (
+  lists: Lists,
+  projects: readonly ProjectSummary[],
+  {
+    settings = DEFAULT_SIDEBAR,
+    elsewhere = [],
+    view = { tab: "inbox" },
+  }: {
+    settings?: Settings
+    elsewhere?: readonly Elsewhere[]
+    view?: SidebarInput["view"]
+  } = {}
+) =>
+  sidebarOf({
+    lists,
+    now: 0,
+    projects,
+    elsewhere,
+    settings,
+    putOff: new Set(),
+    view,
+  })
+
 test("the sidebar list, the small inbox's among them, and Alt+U go by one order, Your turn oldest first, whatever the sidebar list shows (ADR 0087, decision 8; ADR 0098, decision 7)", () => {
   const lists = {
     ["a" as ProjectId]: [one("ask", "asking", 3), one("old", "done", 1)],
     ["b" as ProjectId]: [one("broke", "failed", 6), one("run", "working", 7)],
   }
   const projects = [project("a"), project("b")]
-  const { keys } = order(lists, projects, 0)
+  const { keys } = order(lists, projects)
   expect(keys).toEqual(["a:old", "a:ask", "b:broke", "b:run"])
   // Another tab, another arrangement, a group folded, a cut list whole,
   // one Project alone in view: the same order.
   for (const view of [
     { settings: byProject },
-    { settings: byProject, folded: new Set(["project:a"]) },
-    { tab: "archive" as const, more: true },
+    {
+      settings: byProject,
+      view: { tab: "inbox" as const, folded: new Set(["project:a"]) },
+    },
+    { view: { tab: "archive" as const, more: true } },
   ])
-    expect(order(lists, projects, 0, view).keys).toEqual(keys)
+    expect(order(lists, projects, view).keys).toEqual(keys)
   // The list draws the calls in that order.
-  const drawn = order(lists, projects, 0).blocks.flatMap((block) =>
-    block.kind === "rows" ? block.rows.map(({ row }) => rowKey(row)) : []
+  const drawn = order(lists, projects).items.flatMap((item) =>
+    item.kind === "card" ? [rowKey(item.entry.row)] : []
   )
   expect(drawn).toEqual(keys)
   const waiting = keys.filter((key) => !key.endsWith(":run"))
@@ -83,7 +112,7 @@ test("another machine's Threads stand in one place in the sidebar list and for A
   // What called first first, wherever it is, grouped by Project or not.
   const placed = ["a:old", "a:ask", "far:there"]
   for (const settings of [DEFAULT_SIDEBAR, byProject]) {
-    const { keys } = order(twoMachines, [project("a")], 0, {
+    const { keys } = order(twoMachines, [project("a")], {
       settings,
       elsewhere,
     })
@@ -92,11 +121,13 @@ test("another machine's Threads stand in one place in the sidebar list and for A
   }
   // Grouped by Project, the list draws the other machine's group with its
   // name, apart from this one's.
-  const groups = order(twoMachines, [project("a")], 0, {
+  const groups = order(twoMachines, [project("a")], {
     settings: byProject,
     elsewhere,
-  }).blocks.flatMap((block) =>
-    block.kind === "group" ? [[block.key, block.host]] : []
+  }).items.flatMap((item) =>
+    item.kind === "piece" && item.piece.kind === "group"
+      ? [[item.key, item.host]]
+      : []
   )
   expect(groups).toEqual([
     ["project:a", undefined],

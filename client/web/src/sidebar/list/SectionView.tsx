@@ -12,7 +12,7 @@ import { type CardView, callWordOf, LATER_BY_AGENT } from "../cards/model"
 import { type CardAct, SignMenu } from "../cards/ThreadCard"
 import { ChildArrow } from "../cards/parts"
 import { EmptyPlace } from "./Empty"
-import { gapAbove, type Item, itemsOf } from "../model/flat"
+import { gapAbove, type Item } from "../model/flat"
 import { itemActionOf } from "../../window/items"
 import { keyId } from "../model/keys"
 import { EDGE } from "./MachineCard"
@@ -20,7 +20,6 @@ import { HerePart } from "./HostPart"
 import { GroupHeader } from "./GroupHeader"
 import { ProjectCard } from "../cards/ProjectCard"
 import { ProjectMenu } from "./ProjectMenu"
-import type { Region } from "../model/regions"
 import type { Settings } from "../model/settings"
 import { ThreadRow } from "./ThreadRow"
 import { useActs, useArchiveAll } from "./useActs"
@@ -39,8 +38,8 @@ const signMenu = (project: ProjectSummary, sign: ReactElement) => (
 )
 
 /**
- * The regions of the tab in view (ADR 0098, decisions 3–6 and 24), as one
- * flat list, keyed, its heads and headers among its cards: Your turn under
+ * The tab in view (ADR 0098, decisions 3–6 and 24), as one flat list,
+ * keyed, its heads and headers among its cards: Your turn under
  * its head, Open under a hairline, the Working shelf in grey with "+ N
  * more", which opens in place, each child at work under its parent with
  * ↳, past three "↳ + N more at work"; Later and the Archive by day; inbox
@@ -55,7 +54,7 @@ const signMenu = (project: ProjectSummary, sign: ReactElement) => (
  * and sign have its menu (decision 16).
  */
 export function SectionView({
-  regions,
+  items,
   settings,
   named,
   isCurrent,
@@ -63,7 +62,8 @@ export function SectionView({
   engine,
   now,
 }: {
-  regions: readonly Region[]
+  /** One machine's items of the list, as `sidebarOf` lays them out. */
+  items: readonly Item[]
   settings: Settings
   /** A label above names their machine, as another machine's part. */
   named: boolean
@@ -79,8 +79,8 @@ export function SectionView({
   const sidebar = useContext(ViewContext)
   const picked = useView(pickedOf)
   const expand = useContext(Expand)
-  // Its regions are one machine's, whose stops' keys say it.
-  const host = regions[0]?.host
+  // Its items are one machine's, whose stops' keys say it.
+  const host = items[0]?.host
   // Grouped, a header names what each card then leaves out; each card
   // has as many lines as the Person picked.
   const view: CardView = { group: settings.group, lines: settings.card }
@@ -90,7 +90,6 @@ export function SectionView({
   // in the No Project group they share, still name theirs.
   const here = useThisNamed(settings.machines.thisToo)
   const label = !named && view.group === "project" ? here : undefined
-  const items = itemsOf(regions)
   const actOn = useActs()
   const archiveAll = useArchiveAll()
   // Your turn's cards that are done, as drawn: not one that asks, failed

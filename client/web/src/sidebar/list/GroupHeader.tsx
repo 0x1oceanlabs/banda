@@ -11,7 +11,7 @@ import { ChevronRightIcon, EllipsisIcon } from "lucide-react"
 import { useState } from "react"
 import { TONES } from "../cards/Time"
 import { HOVER_FILL } from "../cards/Card"
-import type { GroupBlock } from "../model/regions"
+import type { GroupBlock } from "../model/inbox"
 import type { Settings } from "../model/settings"
 import { pickProps } from "./usePick"
 

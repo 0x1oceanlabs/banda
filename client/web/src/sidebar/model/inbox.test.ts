@@ -4,16 +4,13 @@ import { HOUR, MINUTE } from "@banda/ui/lib/words"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Stand } from "@banda/ui/status"
 import { expect, test } from "vitest"
-import { rowsOf } from "./rows"
+import { type Drawn, sidebarOf } from "./drawn"
+import type { Piece } from "./flat"
 import {
   ARCHIVE_SHOWN,
-  type Block,
   CHILDREN,
-  type Inbox,
-  inboxOf,
   type InboxView,
   PROJECT_LOOK,
-  projectCallsOf,
   SHELF,
 } from "./inbox"
 
@@ -103,17 +100,58 @@ const LISTS: Lists = {
   ],
 }
 
-/** The rows as the sidebar takes them: each where `status.ts` says it
- * stands, this machine's, then the Mac's. */
-const rowsIn = (lists: Lists) => [
-  ...rowsOf(lists, [banda, work, loose], NOW),
-  ...rowsOf(lists, [onMac], NOW, "mac"),
-]
-const ROWS = rowsIn(LISTS)
+/** This machine's Projects, and the Mac with its own. */
+const HERE = [banda, work, loose]
+const MAC = { name: "mac", projects: [onMac] }
 
-/** The blocks, a line each, as a Person would read them. */
-const shape = ({ blocks }: Pick<Inbox, "blocks">) => blocks.map(line)
-function line(block: Block): string {
+/** What the sidebar draws of `lists` as `view` has it, this machine's
+ * Projects `projects` but those whose trust is `putOff`. */
+const of = (
+  lists: Lists,
+  {
+    group = "none",
+    order = "oldest",
+    open = true,
+    working = true,
+    ...view
+  }: InboxView,
+  projects: readonly ProjectSummary[] = HERE,
+  putOff: readonly string[] = []
+): Drawn =>
+  sidebarOf({
+    lists,
+    now: NOW,
+    projects,
+    elsewhere: [MAC],
+    settings: { group, inbox: { order, open, working } },
+    putOff: new Set(putOff),
+    view,
+  })
+
+/** The pieces the list draws, top down: all but the cards. */
+const pieces = ({ items }: Pick<Drawn, "items">) =>
+  items.flatMap((item) => (item.kind === "piece" ? [item.piece] : []))
+
+/** The list, a line each, as a Person would read it: a part's cards on
+ * one line. */
+function shape({ items }: Pick<Drawn, "items">): string[] {
+  const lines: string[] = []
+  let part: string | undefined
+  for (const item of items) {
+    if (item.kind === "piece") {
+      lines.push(line(item.piece))
+      part = undefined
+      continue
+    }
+    const { row, child } = item.entry
+    const id = `${child?.under ? "↳" : ""}${row.listed.id}`
+    if (item.block === part) lines.push(`${lines.pop()} ${id}`)
+    else lines.push(`${item.stand}: ${id}`)
+    part = item.block
+  }
+  return lines
+}
+function line(block: Piece): string {
   switch (block.kind) {
     case "head":
       return `# ${block.label}${block.count === undefined ? "" : ` · ${block.count}`}`
@@ -121,8 +159,6 @@ function line(block: Block): string {
       return `[${block.key}] ${block.waiting} wait, ${block.working} work${block.folded ? ", folded" : ""}`
     case "divider":
       return "---"
-    case "rows":
-      return `${block.stand}: ${block.rows.map(({ row, child }) => `${child?.under ? "↳" : ""}${row.listed.id}`).join(" ")}`
     case "more":
       return `+ ${block.count} ${block.of}`
     case "zero": {
@@ -139,14 +175,21 @@ function line(block: Block): string {
   }
 }
 
-/** Each card's Thread and the moment its time counts from, top down: of
- * the place `stand`, or of every place. */
-const times = ({ blocks }: Pick<Inbox, "blocks">, stand?: Stand) =>
-  blocks.flatMap((block) =>
-    block.kind === "rows" && (stand === undefined || block.stand === stand)
-      ? block.rows.map(({ row, at }): [string, number] => [row.listed.id, at])
+/** Each card, top down: of the place `stand`, or of every place. */
+const cards = ({ items }: Pick<Drawn, "items">, stand?: Stand) =>
+  items.flatMap((item) =>
+    item.kind === "card" && (stand === undefined || item.stand === stand)
+      ? [item.entry]
       : []
   )
+
+/** Each card's Thread and the moment its time counts from, top down: of
+ * the place `stand`, or of every place. */
+const times = (drawn: Pick<Drawn, "items">, stand?: Stand) =>
+  cards(drawn, stand).map(({ row, at }): [string, number] => [
+    row.listed.id,
+    at,
+  ])
 
 const INBOX = [
   "# Your turn · 6",
@@ -249,11 +292,11 @@ test.each<[string, InboxView, string[]]>([
   ],
   ["Archive is not grouped", { tab: "archive", group: "project" }, ARCHIVE],
 ])("%s", (_, view, blocks) => {
-  expect(shape(inboxOf(ROWS, view, NOW))).toEqual(blocks)
+  expect(shape(of(LISTS, view))).toEqual(blocks)
 })
 
 test("each tab counts its own: the Inbox Your turn and Open, and calls while Your turn has cards", () => {
-  const { tabs } = inboxOf(ROWS, { tab: "later" }, NOW)
+  const { tabs } = of(LISTS, { tab: "later" })
   expect(tabs).toEqual({
     inbox: { count: 8, calls: true },
     working: { count: 3, calls: false },
@@ -261,12 +304,12 @@ test("each tab counts its own: the Inbox Your turn and Open, and calls while You
     archive: { count: 2, calls: false },
   })
   // Open left out of the Inbox is not counted there.
-  expect(inboxOf(ROWS, { tab: "inbox", open: false }, NOW).tabs.inbox).toEqual({
+  expect(of(LISTS, { tab: "inbox", open: false }).tabs.inbox).toEqual({
     count: 6,
     calls: true,
   })
-  const settled = rowsIn({ p1: [listed("seen", "rest", ago(HOUR))] })
-  expect(inboxOf(settled, { tab: "inbox" }, NOW).tabs.inbox).toEqual({
+  const settled = { p1: [listed("seen", "rest", ago(HOUR))] }
+  expect(of(settled, { tab: "inbox" }).tabs.inbox).toEqual({
     count: 1,
     calls: false,
   })
@@ -279,7 +322,7 @@ test("Alt+U and the counts walk Your turn oldest first, whatever the order, the 
     group: "project",
     folded: new Set(["project:p1"]),
   }
-  expect(inboxOf(ROWS, view, NOW).keys).toEqual([
+  expect(of(LISTS, view).keys).toEqual([
     "p3:jot",
     "p1:done",
     "p9:ship",
@@ -300,11 +343,12 @@ test("a folded group keeps its rollup and hides its rows", () => {
     group: "project",
     folded: new Set(["project:p1"]),
   }
-  const blocks = inboxOf(ROWS, view, NOW).blocks
-  expect(shape({ blocks }).slice(0, 2)).toEqual([
+  const drawn = of(LISTS, view)
+  expect(shape(drawn).slice(0, 2)).toEqual([
     "[project:p1] 3 wait, 1 work, folded",
     "[project:mac/p9] 1 wait, 1 work",
   ])
+  const blocks = pieces(drawn)
   expect(blocks[0]).toMatchObject({ project: banda, mark: "asking" })
   // Another machine's group names it; no Project's names no Project.
   expect(blocks.find((block) => block.key === "project:mac/p9")).toMatchObject({
@@ -317,13 +361,12 @@ test("a folded group keeps its rollup and hides its rows", () => {
 
 test("a group's rollup says how many wait and how many work, and the loudest of what calls, folded or not: never a Thread at work's", () => {
   const rollup = (lists: Lists, folded: boolean) => {
-    const rows = rowsIn(lists)
     const view: InboxView = {
       tab: "inbox",
       group: "project",
       folded: new Set(folded ? ["project:p1"] : []),
     }
-    const [group] = inboxOf(rows, view, NOW).blocks
+    const [group] = pieces(of(lists, view))
     return group?.kind === "group"
       ? [group.mark, group.waiting, group.working, group.folded]
       : undefined
@@ -360,50 +403,49 @@ test("a group's rollup says how many wait and how many work, and the loudest of 
 })
 
 test("the shelf shows its first six, then how many more; asked, all of them", () => {
-  const busy = rowsIn({
+  const busy = {
     p1: Array.from({ length: SHELF + 2 }, (_, i) =>
       listed(`w${i}`, "working", ago(MINUTE), { began: ago((10 - i) * MINUTE) })
     ),
-  })
-  expect(shape(inboxOf(busy, { tab: "inbox" }, NOW))).toEqual([
+  }
+  expect(shape(of(busy, { tab: "inbox" }))).toEqual([
     "zero: 8 at work",
     "# Working · 8",
     "working: w0 w1 w2 w3 w4 w5",
     "+ 2 working",
   ])
-  expect(shape(inboxOf(busy, { tab: "inbox", more: true }, NOW))).toEqual([
+  expect(shape(of(busy, { tab: "inbox", more: true }))).toEqual([
     "zero: 8 at work",
     "# Working · 8",
     "working: w0 w1 w2 w3 w4 w5 w6 w7",
   ])
   // The Working tab shows every one.
-  expect(shape(inboxOf(busy, { tab: "working" }, NOW))).toEqual([
+  expect(shape(of(busy, { tab: "working" }))).toEqual([
     "working: w0 w1 w2 w3 w4 w5 w6 w7",
   ])
 })
 
 test("the Archive draws the last 200, then Show older; asked, all of them", () => {
-  const many = rowsIn({
+  const many = {
     p1: Array.from({ length: ARCHIVE_SHOWN + 1 }, (_, i) =>
       listed(`a${i}`, "rest", on(-1, 12) - i * MINUTE, { archived: true })
     ),
-  })
-  const cut = inboxOf(many, { tab: "archive" }, NOW).blocks
-  expect(cut.at(-1)).toEqual({
+  }
+  const cut = of(many, { tab: "archive" })
+  expect(pieces(cut).at(-1)).toEqual({
     kind: "more",
     key: "archived:more",
     of: "archived",
     count: 1,
   })
-  expect(cut.flatMap((b) => (b.kind === "rows" ? b.rows : []))).toHaveLength(
-    ARCHIVE_SHOWN
-  )
-  const all = inboxOf(many, { tab: "archive", more: true }, NOW).blocks
-  expect(all.map((block) => block.kind)).toEqual(["head", "rows"])
+  expect(cards(cut)).toHaveLength(ARCHIVE_SHOWN)
+  const all = of(many, { tab: "archive", more: true })
+  expect(pieces(all).map((block) => block.kind)).toEqual(["head"])
+  expect(cards(all)).toHaveLength(ARCHIVE_SHOWN + 1)
 })
 
 test("a tab with nothing says so; the Inbox with nothing is inbox zero", () => {
-  const blocks = (tab: InboxView["tab"]) => shape(inboxOf([], { tab }, NOW))
+  const blocks = (tab: InboxView["tab"]) => shape(of({}, { tab }))
   expect(blocks("inbox")).toEqual(["zero: 0 at work"])
   expect(blocks("working")).toEqual(["empty: working"])
   expect(blocks("later")).toEqual(["empty: later"])
@@ -416,49 +458,48 @@ const gone = { ...project("p5", "Old"), missing: true }
 const shelved = { ...project("p6", "Shelved"), trusted: false, archived: true }
 
 test("this machine's Projects that wait for the Person: one missing, or one not trusted and not put off (ADR 0098, decision 16)", () => {
-  const asked = (put: string[] = []) =>
-    projectCallsOf([banda, client, gone, loose, shelved], new Set(put)).map(
-      ({ project: { name }, asks }) => `${asks}: ${name}`
+  const asked = (projects: ProjectSummary[], put: string[] = []) =>
+    pieces(of({}, { tab: "inbox" }, projects, put)).flatMap((block) =>
+      block.kind === "project" ? [`${block.asks}: ${block.project.name}`] : []
     )
-  expect(asked()).toEqual(["trust: Client", "missing: Old"])
+  const all = [banda, client, gone, loose, shelved]
+  expect(asked(all)).toEqual(["trust: Client", "missing: Old"])
   // Not now puts off the trust; a missing folder asks still.
-  expect(asked(["p4", "p5"])).toEqual(["missing: Old"])
+  expect(asked(all, ["p4", "p5"])).toEqual(["missing: Old"])
   // One missing is missing first, trusted or not.
-  expect(
-    projectCallsOf([{ ...gone, trusted: false }]).map(({ asks }) => asks)
-  ).toEqual(["missing"])
+  expect(asked([{ ...gone, trusted: false }])).toEqual(["missing: Old"])
   expect(PROJECT_LOOK).toEqual({ trust: "asking", missing: "failed" })
 })
 
 test("a Project that waits is a card first in Your turn, which it counts and calls by (ADR 0098, decision 16)", () => {
-  const calls = projectCallsOf([client, gone])
-  const inbox = inboxOf(ROWS, { tab: "inbox" }, NOW, { calls })
+  const asking = [...HERE, client, gone]
+  const inbox = of(LISTS, { tab: "inbox" }, asking)
   expect(shape(inbox)).toEqual([
     "# Your turn · 8",
     "project trust: Client",
     "project missing: Old",
     ...INBOX.slice(1),
   ])
-  expect(inbox.blocks[1]).toMatchObject({
+  expect(pieces(inbox)[1]).toMatchObject({
     key: "project-card:p4",
     project: client,
     asks: "trust",
   })
   expect(inbox.tabs.inbox).toEqual({ count: 10, calls: true })
   // With no Thread of the Person's, it is still their turn: no inbox zero.
-  const alone = inboxOf([], { tab: "inbox" }, NOW, { calls: [calls[0]] })
+  const alone = of({}, { tab: "inbox" }, [client])
   expect(shape(alone)).toEqual(["# Your turn · 1", "project trust: Client"])
   expect(alone.zero).toBeUndefined()
   expect(alone.tabs.inbox).toEqual({ count: 1, calls: true })
   // The other tabs show none.
-  expect(shape(inboxOf(ROWS, { tab: "later" }, NOW, { calls }))).toEqual(LATER)
+  expect(shape(of(LISTS, { tab: "later" }, asking))).toEqual(LATER)
 })
 
 test("grouped, a Project's card is first in its group, whose header calls with its look", () => {
   const view: InboxView = { tab: "inbox", group: "project" }
-  const calls = projectCallsOf([{ ...work, missing: true }, client])
-  const blocks = inboxOf(ROWS, view, NOW, { calls }).blocks
-  expect(shape({ blocks })).toEqual([
+  const asking = [banda, { ...work, missing: true }, loose, client]
+  const drawn = of(LISTS, view, asking)
+  expect(shape(drawn)).toEqual([
     ...BY_PROJECT.slice(0, 8),
     "[project:p4] 1 wait, 0 work",
     "project trust: Client",
@@ -466,36 +507,31 @@ test("grouped, a Project's card is first in its group, whose header calls with i
     "project missing: Work",
     ...BY_PROJECT.slice(9),
   ])
-  expect(blocks.find((block) => block.key === "project:p4")).toMatchObject({
-    mark: "asking",
-  })
+  expect(
+    pieces(drawn).find((block) => block.key === "project:p4")
+  ).toMatchObject({ mark: "asking" })
   // Folded, its group keeps the call in its rollup.
-  const folded = inboxOf(
-    ROWS,
-    { ...view, folded: new Set(["project:p4"]) },
-    NOW,
-    { calls }
-  )
+  const folded = of(LISTS, { ...view, folded: new Set(["project:p4"]) }, asking)
   expect(shape(folded)).toContain("[project:p4] 1 wait, 0 work, folded")
   expect(shape(folded)).not.toContain("project trust: Client")
 })
 
 test("with no Project and no Thread at all, inbox zero is the first run (ADR 0098, decision 25)", () => {
-  const first = inboxOf([], { tab: "inbox" }, NOW, { none: true })
+  const first = of({}, { tab: "inbox" }, [])
   expect(first.zero).toEqual({ working: 0, first: true })
   expect(shape(first)).toEqual(["zero: 0 at work, first run"])
   // A Project, or a Thread even archived, and it is plain inbox zero.
-  expect(inboxOf([], { tab: "inbox" }, NOW, {}).zero).toEqual({ working: 0 })
-  const archived = rowsIn({
+  expect(of({}, { tab: "inbox" }, [banda]).zero).toEqual({ working: 0 })
+  const archived = {
     p3: [listed("old", "rest", ago(HOUR), { archived: true })],
+  }
+  expect(of(archived, { tab: "inbox" }, [loose]).zero).toEqual({
+    working: 0,
   })
-  expect(inboxOf(archived, { tab: "inbox" }, NOW, { none: true }).zero).toEqual(
-    { working: 0 }
-  )
 })
 
 test("inbox zero says how many work and when the next wakes by its time", () => {
-  const calm = rowsIn({
+  const calm = {
     p1: [
       listed("build", "working", ago(MINUTE), { began: ago(HOUR) }),
       listed("old", "rest", ago(HOUR), { archived: true }),
@@ -508,8 +544,8 @@ test("inbox zero says how many work and when the next wakes by its time", () => 
         later: { at: ago(HOUR), until: on(0, 18, 30) },
       }),
     ],
-  })
-  const inbox = inboxOf(calm, { tab: "inbox" }, NOW)
+  }
+  const inbox = of(calm, { tab: "inbox" })
   expect(inbox.zero).toEqual({ working: 1, next: on(0, 18, 30) })
   expect(shape(inbox)).toEqual([
     `zero: 1 at work, next ${on(0, 18, 30)}`,
@@ -517,26 +553,26 @@ test("inbox zero says how many work and when the next wakes by its time", () => 
     "working: build",
   ])
   // Inbox zero is told on every tab, for what reads it there.
-  expect(inboxOf(calm, { tab: "later" }, NOW).zero).toEqual(inbox.zero)
+  expect(of(calm, { tab: "later" }).zero).toEqual(inbox.zero)
   // Something that is the Person's is no zero.
-  expect(inboxOf(ROWS, { tab: "inbox" }, NOW).zero).toBeUndefined()
+  expect(of(LISTS, { tab: "inbox" }).zero).toBeUndefined()
   // Open left out of the Inbox leaves it at zero.
-  const open = rowsIn({ p1: [listed("seen", "rest", ago(HOUR))] })
-  expect(inboxOf(open, { tab: "inbox", open: false }, NOW).zero).toEqual({
+  const open = { p1: [listed("seen", "rest", ago(HOUR))] }
+  expect(of(open, { tab: "inbox", open: false }).zero).toEqual({
     working: 0,
   })
 })
 
 test("inbox zero says how many sleep until Someday once a week, from Monday", () => {
-  const dreaming = rowsIn({
+  const dreaming = {
     p1: ["a", "b"].map((id) =>
       listed(id, "rest", ago(HOUR), {
         later: { at: ago(9 * 24 * HOUR), someday: true },
       })
     ),
-  })
+  }
   const zero = (someday?: number) =>
-    inboxOf(dreaming, { tab: "inbox", someday }, NOW).zero
+    of(dreaming, { tab: "inbox", someday }).zero
   expect(zero()).toEqual({ working: 0, someday: 2 })
   // Told on Sunday night, last week: this week has not been told.
   expect(zero(on(-2, 23))).toEqual({ working: 0, someday: 2 })
@@ -545,7 +581,7 @@ test("inbox zero says how many sleep until Someday once a week, from Monday", ()
 })
 
 test("Woke counts from when it woke, and a Thread woken by hand goes to the top of Open", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       // Its time came while it slept since five hours ago.
       listed("woke", "rest", ago(5 * HOUR), {
@@ -570,8 +606,8 @@ test("Woke counts from when it woke, and a Thread woken by hand goes to the top 
         },
       }),
     ],
-  })
-  const inbox = inboxOf(rows, { tab: "inbox" }, NOW)
+  }
+  const inbox = of(lists, { tab: "inbox" })
   expect(times(inbox, "turn")).toEqual([
     ["call", ago(20 * MINUTE)],
     ["woke", ago(10 * MINUTE)],
@@ -584,7 +620,7 @@ test("Woke counts from when it woke, and a Thread woken by hand goes to the top 
 })
 
 test("a call after it woke counts from the call, not the wake", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       listed("call", "asking", ago(10 * MINUTE)),
       // Put off while at work, its time came half an hour ago; it
@@ -597,8 +633,8 @@ test("a call after it woke counts from the call, not the wake", () => {
         },
       }),
     ],
-  })
-  const inbox = inboxOf(rows, { tab: "inbox" }, NOW)
+  }
+  const inbox = of(lists, { tab: "inbox" })
   expect(times(inbox, "turn")).toEqual([
     ["call", ago(10 * MINUTE)],
     ["finished", ago(5 * MINUTE)],
@@ -607,8 +643,7 @@ test("a call after it woke counts from the call, not the wake", () => {
 })
 
 test("each place's time counts from its own moment", () => {
-  const at = (view: InboxView) =>
-    Object.fromEntries(times(inboxOf(ROWS, view, NOW)))
+  const at = (view: InboxView) => Object.fromEntries(times(of(LISTS, view)))
   expect(at({ tab: "inbox" })).toMatchObject({
     // A call, from the call; Woke, from when it woke.
     asks: ago(14 * MINUTE),
@@ -627,7 +662,7 @@ test("each place's time counts from its own moment", () => {
 })
 
 test("the Archive counts from when each was archived, not its last change", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       listed("yesterday", "rest", on(-1, 9), {
         archived: true,
@@ -643,8 +678,8 @@ test("the Archive counts from when each was archived, not its last change", () =
         archivedAt: ago(MINUTE),
       }),
     ],
-  })
-  const inbox = inboxOf(rows, { tab: "archive" }, NOW)
+  }
+  const inbox = of(lists, { tab: "archive" })
   expect(shape(inbox)).toEqual([
     "# Today",
     "archived: stale lunch",
@@ -660,28 +695,26 @@ test("the Archive counts from when each was archived, not its last change", () =
 
 // What the prototype's own rules did, read from what the Apps list.
 test("the one the Person saw becomes Open, at the top", () => {
-  const before = rowsIn({
+  const before = {
     p1: [
       listed("done", "done", ago(10 * MINUTE)),
       listed("older", "rest", ago(HOUR)),
     ],
-  })
-  expect(shape(inboxOf(before, { tab: "inbox" }, NOW))).toEqual([
+  }
+  expect(shape(of(before, { tab: "inbox" }))).toEqual([
     "# Your turn · 1",
     "turn: done",
     "---",
     "open: older",
   ])
   // Seen, its App lists it at rest: it calls no more.
-  const after = rowsIn({
+  const after = {
     p1: [
       listed("done", "rest", ago(10 * MINUTE)),
       listed("older", "rest", ago(HOUR)),
     ],
-  })
-  expect(shape(inboxOf(after, { tab: "inbox" }, NOW))).toEqual([
-    "open: done older",
-  ])
+  }
+  expect(shape(of(after, { tab: "inbox" }))).toEqual(["open: done older"])
 })
 
 test("unread puts it back in Your turn at its call's own time", () => {
@@ -689,17 +722,17 @@ test("unread puts it back in Your turn at its call's own time", () => {
     listed("first", "failed", ago(30 * MINUTE)),
     listed("last", "asking", ago(10 * MINUTE)),
   ]
-  const seen = rowsIn({
+  const seen = {
     p1: [...calls, listed("read", "rest", ago(20 * MINUTE))],
-  })
-  expect(shape(inboxOf(seen, { tab: "inbox" }, NOW)).slice(0, 2)).toEqual([
+  }
+  expect(shape(of(seen, { tab: "inbox" })).slice(0, 2)).toEqual([
     "# Your turn · 2",
     "turn: first last",
   ])
-  const unread = rowsIn({
+  const unread = {
     p1: [...calls, listed("read", "done", ago(20 * MINUTE))],
-  })
-  expect(shape(inboxOf(unread, { tab: "inbox" }, NOW))).toEqual([
+  }
+  expect(shape(of(unread, { tab: "inbox" }))).toEqual([
     "# Your turn · 3",
     "turn: first read last",
   ])
@@ -708,13 +741,18 @@ test("unread puts it back in Your turn at its call's own time", () => {
 test("an answer sends it to Working, last, by when its turn began", () => {
   const asking = listed("asks", "asking", ago(10 * MINUTE))
   const busy = listed("busy", "working", ago(MINUTE), { began: ago(HOUR) })
-  expect(
-    shape(inboxOf(rowsIn({ p1: [asking, busy] }), { tab: "inbox" }, NOW))
-  ).toEqual(["# Your turn · 1", "turn: asks", "# Working · 1", "working: busy"])
+  expect(shape(of({ p1: [asking, busy] }, { tab: "inbox" }))).toEqual([
+    "# Your turn · 1",
+    "turn: asks",
+    "# Working · 1",
+    "working: busy",
+  ])
   const answered = { ...asking, mark: "working" as const, began: NOW }
-  expect(
-    shape(inboxOf(rowsIn({ p1: [answered, busy] }), { tab: "inbox" }, NOW))
-  ).toEqual(["zero: 2 at work", "# Working · 2", "working: busy asks"])
+  expect(shape(of({ p1: [answered, busy] }, { tab: "inbox" }))).toEqual([
+    "zero: 2 at work",
+    "# Working · 2",
+    "working: busy asks",
+  ])
 })
 
 /** A Thread at work that began `minutes` ago, started by `parent`'s Agent
@@ -726,7 +764,7 @@ const busy = (id: string, minutes: number, parent?: string) =>
   })
 
 test("at work, a child sits under its parent with ↳, not by when it began, and its own children under it; one whose parent does not work stands by itself (ADR 0098, decision 24)", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       busy("plan", 50),
       busy("lint", 40),
@@ -740,16 +778,13 @@ test("at work, a child sits under its parent with ↳, not by when it began, and
       // Its parent was deleted: it lists as before.
       busy("orphan", 35, "gone"),
     ],
-  })
-  const inbox = inboxOf(rows, { tab: "working" }, NOW)
+  }
+  const inbox = of(lists, { tab: "working" })
   expect(shape(inbox)).toEqual([
     "working: plan ↳fold ↳card ↳deep lint orphan alone",
   ])
-  const entries = inbox.blocks.flatMap((block) =>
-    block.kind === "rows" ? block.rows : []
-  )
   const childOf = (id: string) =>
-    entries.find(({ row }) => row.listed.id === id)?.child
+    cards(inbox).find(({ row }) => row.listed.id === id)?.child
   expect(childOf("card")).toEqual({ parent: "plan", under: true })
   expect(childOf("deep")).toEqual({ parent: "card", under: true })
   // Standing by itself, it still names its parent, for its line 3.
@@ -770,23 +805,22 @@ test("at work, a child sits under its parent with ↳, not by when it began, and
 })
 
 test("a child that asks or fails goes to Your turn by itself, by when it called, naming its parent (ADR 0098, decision 24)", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       busy("plan", 50),
       listed("split", "asking", ago(3 * MINUTE), { parent: "plan" }),
       listed("broke", "failed", ago(MINUTE), { parent: "plan" }),
       listed("done", "done", ago(2 * MINUTE)),
     ],
-  })
-  const inbox = inboxOf(rows, { tab: "inbox" }, NOW)
+  }
+  const inbox = of(lists, { tab: "inbox" })
   expect(shape(inbox)).toEqual([
     "# Your turn · 3",
     "turn: split done broke",
     "# Working · 1",
     "working: plan",
   ])
-  const [, turn] = inbox.blocks
-  expect(turn?.kind === "rows" && turn.rows.map(({ child }) => child)).toEqual([
+  expect(cards(inbox, "turn").map(({ child }) => child)).toEqual([
     { parent: "plan" },
     undefined,
     { parent: "plan" },
@@ -797,14 +831,14 @@ test("past three children at work, a parent shows how many more, which unfold on
   const kids = Array.from({ length: CHILDREN + 4 }, (_, i) =>
     busy(`c${i}`, 40 - i, "plan")
   )
-  const rows = rowsIn({ p1: [busy("plan", 50), ...kids, busy("lint", 30)] })
-  const cut = inboxOf(rows, { tab: "working" }, NOW)
+  const lists = { p1: [busy("plan", 50), ...kids, busy("lint", 30)] }
+  const cut = of(lists, { tab: "working" })
   expect(shape(cut)).toEqual([
     "working: plan ↳c0 ↳c1 ↳c2",
     "+ 4 children",
     "working: lint",
   ])
-  expect(cut.blocks[1]).toEqual({
+  expect(pieces(cut)[0]).toEqual({
     kind: "more",
     key: ":plan:children",
     of: "children",
@@ -814,21 +848,21 @@ test("past three children at work, a parent shows how many more, which unfold on
   // Every child is still counted, and walked by Alt+U.
   expect(cut.tabs.working.count).toBe(CHILDREN + 6)
   expect(cut.keys).toHaveLength(CHILDREN + 6)
-  const all = inboxOf(rows, { tab: "working", folded: new Set([":plan"]) }, NOW)
+  const all = of(lists, { tab: "working", folded: new Set([":plan"]) })
   expect(shape(all)).toEqual([
     `working: plan ${kids.map(({ id }) => `↳${id}`).join(" ")} lint`,
   ])
 })
 
 test("the shelf keeps a family whole: it cuts after six Threads that are no one's child at work, and counts the rest (ADR 0098, S14b)", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [
       ...Array.from({ length: SHELF + 1 }, (_, i) => busy(`w${i}`, 60 - i)),
       busy("kid", 5, "w0"),
       busy("late", 1, "w6"),
     ],
-  })
-  expect(shape(inboxOf(rows, { tab: "inbox" }, NOW))).toEqual([
+  }
+  expect(shape(of(lists, { tab: "inbox" }))).toEqual([
     "zero: 9 at work",
     "# Working · 9",
     "working: w0 ↳kid w1 w2 w3 w4 w5",
@@ -837,7 +871,7 @@ test("the shelf keeps a family whole: it cuts after six Threads that are no one'
 })
 
 test("grouped, a child goes in its parent's group, under it at work (ADR 0098, S14b)", () => {
-  const rows = rowsIn({
+  const lists = {
     p1: [busy("plan", 50)],
     // Started in Work by banda's Agent: it goes in banda's group.
     p2: [
@@ -845,14 +879,12 @@ test("grouped, a child goes in its parent's group, under it at work (ADR 0098, S
       busy("card", 30, "plan"),
       listed("split", "asking", ago(MINUTE), { parent: "plan" }),
     ],
-  })
-  expect(shape(inboxOf(rows, { tab: "inbox", group: "project" }, NOW))).toEqual(
-    [
-      "[project:p1] 1 wait, 2 work",
-      "turn: split",
-      "working: plan ↳card",
-      "[project:p2] 0 wait, 1 work",
-      "working: tests",
-    ]
-  )
+  }
+  expect(shape(of(lists, { tab: "inbox", group: "project" }))).toEqual([
+    "[project:p1] 1 wait, 2 work",
+    "turn: split",
+    "working: plan ↳card",
+    "[project:p2] 0 wait, 1 work",
+    "working: tests",
+  ])
 })

@@ -28,9 +28,9 @@
  *   is listed with what it measures, and what still sizes a Pane's
  *   content by itself only falls.
  * - What calls has one order, the sidebar's (ADR 0087, decision 8): the
- *   sidebar list, the counts and Alt+U take it from one `order`, a mark's
- *   rank is read only to pick the loudest, on the lines listed, and no
- *   list sorts by it.
+ *   sidebar list, the counts and Alt+U take it from one `sidebarOf`, a
+ *   mark's rank is read only to pick the loudest, on the lines listed,
+ *   and no list sorts by it.
  * - The calls part reads no page, and of the Tiling only its model (ADR
  *   0087, decision 9).
  * - The Window and the Tiling reach the desktop only through the device's
@@ -1187,24 +1187,28 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
 /**
  * What calls has one order, the Person's arrangement of the sidebar (ADR
  * 0087, decision 8; the plan's §6.3): the sidebar list, and the small
- * inbox the bar's counts open with it, and Alt+U each take it from
- * `order`, and only `order` works the
- * arrangement out. Each places another machine's Threads alike (ADR 0079,
- * decision 4; #999): a file that takes `order` takes the other machines
- * from `useElsewhere` too, and Alt+U takes them on the key, through
- * `useOrderNow`. Alt+U sorts what it shows by its keys in `byOrder`: the
- * sidebar list's file, the counts', Alt+U's, and a file
+ * inbox the bar's counts open with it, the counts themselves and Alt+U
+ * each take what the sidebar draws from `sidebarOf`, and only
+ * `sidebarOf` works the arrangement out, so the engine can give it in its
+ * place (SE7). Each places another machine's Threads alike (ADR 0079,
+ * decision 4; #999): the list and the counts take the other machines
+ * from `useElsewhere` in `useDrawn`, and Alt+U takes them on the key,
+ * through `useOrderNow`. Alt+U sorts what it shows by its keys in
+ * `byOrder`: the sidebar list's file, the counts', Alt+U's, and a file
  * that reads a place in it, as Alt+U's start does, sort nothing by
  * themselves. What a file takes is read in each form of import and
- * re-export (`valuesTaken`), and neither the rows' module nor `order`'s
- * is taken whole, so none gathers the rows by another name. Outside the
- * sidebar they come through its door (`sidebar/index.ts`), which hands
- * `useOrderNow`, `byOrder` and `placeIn` on and never `order` itself.
+ * re-export (`valuesTaken`), and neither the rows' module nor
+ * `sidebarOf`'s is taken whole, so none gathers the rows by another
+ * name. Outside the sidebar they come through its door
+ * (`sidebar/index.ts`), which hands `useOrderNow`, `byOrder` and
+ * `placeIn` on and never `sidebarOf` itself.
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
   const sidebar = join(app, "web/src/sidebar")
   const rowing = join(sidebar, "model/rows")
+  const deciding = join(sidebar, "model/drawn")
   const ordering = join(sidebar, "model/order")
+  const using = join(sidebar, "list/useOrdered")
   const taken = new Map(
     sources(join(app, "web/src"), { tests: false }).map((file) => [
       relative(app, file),
@@ -1228,14 +1232,30 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
           )
       )
       .map(([file]) => file)
-  expect([...taking(rowing, "*"), ...taking(ordering, "*")]).toEqual([])
+  expect([
+    ...taking(rowing, "*"),
+    ...taking(deciding, "*"),
+    ...taking(ordering, "*"),
+  ]).toEqual([])
   expect(taken.get(door)?.[ordering]?.toSorted()).toEqual([
     "byOrder",
     "placeIn",
     "useOrderNow",
   ])
-  expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/model/order.ts"])
+  expect(taken.get(door)?.[deciding]).toBeUndefined()
+  expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/model/drawn.ts"])
   const list = "web/src/sidebar/list/useOrdered.ts"
+  const counts = "web/src/sidebar/bar/Counts.tsx"
+  const altU = "web/src/window/Shell.tsx"
+  // Only the list's hook and Alt+U's ask `sidebarOf`, each with the
+  // other machines; the counts and the list take its answer from them.
+  expect(taking(deciding, "sidebarOf").toSorted()).toEqual([
+    "web/src/sidebar/list/useOrdered.ts",
+    "web/src/sidebar/model/order.ts",
+  ])
+  expect(taken.get(list)?.[ordering]).toContain("useElsewhere")
+  expect(taking(using, "useDrawn")).toEqual([counts])
+  expect(taking(ordering, "useOrderNow")).toEqual([altU])
   // The parts that draw the list take its order as it comes.
   const drawing = [
     "Sidebar.tsx",
@@ -1243,29 +1263,12 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
     "HostPart.tsx",
     "ThreadRow.tsx",
   ].map((file) => `web/src/sidebar/list/${file}`)
-  const altU = "web/src/window/Shell.tsx"
-  const going = [...taken]
-    .filter(([file]) => file !== door)
-    .map(([file, of]) => ({ file, taken: ofOrder(of) }))
-    .filter(
-      ({ taken: names }) =>
-        names.includes("order") || names.includes("useOrderNow")
-    )
-  expect(going).toEqual([
-    { file: list, taken: expect.arrayContaining(["order", "useElsewhere"]) },
-    { file: altU, taken: expect.arrayContaining(["useOrderNow"]) },
-  ])
-  for (const { file, taken: names } of going)
-    if (names.includes("order")) expect(names, file).toContain("useElsewhere")
   expect(readFileSync(join(app, "web/src/calls/sight.ts"), "utf8")).toMatch(
     /\bbyOrder\(/
   )
   const placing = taking(ordering, "placeIn")
   expect(placing).toEqual(["web/src/calls/sight.ts"])
-  const counting = [
-    "web/src/sidebar/model/tally.ts",
-    "web/src/sidebar/bar/Counts.tsx",
-  ]
+  const counting = ["web/src/sidebar/model/drawn.ts", counts]
   for (const file of [...counting, ...placing, list, ...drawing, altU])
     expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(
       /\.(?:sort|toSorted)\(/
