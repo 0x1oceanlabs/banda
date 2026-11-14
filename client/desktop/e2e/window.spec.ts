@@ -4286,12 +4286,18 @@ test("a Project's Agents open in a row on its workspace, from wherever the Perso
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   const threads = page.getByRole("textbox", { name: "Message to Fake AI" })
 
-  // On an empty workspace, a new Thread of the Project goes to its own.
+  // On an empty workspace no Project owns, a new Thread stays there (ADR
+  // 0134, decision 6); from that free workspace, which holds it now, the
+  // next goes to its Project's own.
+  const current = numbers.locator("[aria-current]:not([inert])")
   await page.getByRole("button", { name: "New workspace" }).click()
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("")
+  await expect(current).toHaveText("")
+  await page.keyboard.press("Alt+Enter")
+  await expect(current).toHaveText("2")
+  await expect(threads).toHaveCount(1)
   await page.keyboard.press("Alt+Enter")
   // Its sign, the Project's letter (ADR 0070).
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("W")
+  await expect(current).toHaveText("W")
   await expect(threads).toHaveCount(2)
   // The bar shows it as the Project's: its sign, and its name on it.
   await expect(
