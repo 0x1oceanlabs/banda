@@ -142,9 +142,18 @@ test("a rule of tiling.toml holds from a key, a program and banda: how wide a ki
     const { pane, at } = filesAt(window)!
     await expect(tiles).toHaveCount(2)
     const column = columns()[at.column]
-    const drawn = await Promise.all(
-      [tiles.first(), tiles.last()].map((tile) => tile.boundingBox())
-    )
+    // Drawn wider than the terminal's third, where its kind's own width
+    // would be as narrow, once its column has come to its width: the
+    // look's `min` keeps a third readable, so it is not twice as wide on
+    // this screen.
+    await expect
+      .poll(async () => {
+        const [terminal, tree] = await Promise.all(
+          [tiles.first(), tiles.last()].map((tile) => tile.boundingBox())
+        )
+        return tree!.width / terminal!.width
+      })
+      .toBeGreaterThan(1.2)
     window.banda("call", "workspaces.close", "--params", `{"pane":"${pane}"}`)
     await expect.poll(() => filesAt(window)).toBeUndefined()
     await expect(tiles).toHaveCount(1)
@@ -152,7 +161,6 @@ test("a rule of tiling.toml holds from a key, a program and banda: how wide a ki
       at: at.column,
       width: column.width,
       panes: column.panes.length,
-      drawn,
     }
   }
   const params = { project: work, kind: "files.tree", args: { dir: folder } }
@@ -166,11 +174,6 @@ test("a rule of tiling.toml holds from a key, a program and banda: how wide a ki
   for (const way of ways) {
     const files = await opened(way)
     expect(files).toMatchObject({ at: 1, width: "2/3", panes: 1 })
-    // Drawn so: wider than the terminal's third, where its kind's own
-    // width would be as narrow. The look's `min` keeps a third readable,
-    // so it is not twice as wide on this screen.
-    const [terminal, tree] = files.drawn
-    expect(tree!.width / terminal!.width).toBeGreaterThan(1.2)
   }
 
   // A rule written through banda holds from the next Pane, with no
