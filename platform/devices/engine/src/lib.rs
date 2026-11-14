@@ -25,6 +25,7 @@ use banda_kernel::devices::{Asked, Asking, Device, Devices};
 use banda_kernel::methods::Nothing;
 use banda_kernel::{
     Call, DeviceId, Kind, Module, PersonId, Refusal, Right, Scope, Stream, now_ms, watching,
+    watching_as,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
@@ -174,6 +175,8 @@ struct Kept {
     /// Held by one change at a time, across its write.
     changing: Mutex<()>,
     removals: watch::Sender<u64>,
+    /// Counts the changes kept, for who hears what a device was handed.
+    kept: watch::Sender<u64>,
 }
 
 /// This machine's host key and the devices it paired, as the engine holds
@@ -209,6 +212,7 @@ impl Paired {
             known: Mutex::new(known),
             changing: Mutex::new(()),
             removals: watch::channel(0).0,
+            kept: watch::channel(0).0,
         })))
     }
 
@@ -322,6 +326,16 @@ impl Paired {
         Ok(handed)
     }
 
+    /// The other machines `device` was handed; none for one this machine
+    /// lets in no more, and for a caller that is no device.
+    fn handed(&self, device: Option<DeviceId>) -> Vec<Machine> {
+        let known = self.0.known.lock().unwrap();
+        (known.iter())
+            .find(|one| Some(one.id) == device && one.removed_at.is_none())
+            .map(|one| one.machines.clone())
+            .unwrap_or_default()
+    }
+
     /// The doors of the other machines this machine's devices were handed,
     /// each once, as `name` or `name:port`: where a page this machine
     /// serves may connect besides its own door.
@@ -411,6 +425,7 @@ impl Paired {
         let bytes = serde_json::to_vec_pretty(&known).map_err(internal)?;
         banda_kernel::host::write_private(&self.0.file, &bytes).map_err(internal)?;
         *self.0.known.lock().unwrap() = known;
+        self.0.kept.send_modify(|kept| *kept += 1);
         Ok(())
     }
 }
@@ -594,6 +609,10 @@ banda_kernel::methods! {
         /// (`devices.list`) and reaches each at its door, and the page
         /// this machine serves may connect there.
         command hand(Hand) -> PairedDevice, Manage;
+        /// The other machines the device that asks was handed, then again
+        /// as this machine's devices change: where it reaches each, and
+        /// as which device. None for a program on the machine.
+        stream machines(Nothing) -> Vec<Machine>, Manage, read;
     }
 }
 
@@ -687,6 +706,13 @@ impl DevicesModule {
 
     async fn refuse(&self, _: Call, Answer { code }: Answer) -> Result<(), Refusal> {
         self.paired.refuse(&code)
+    }
+
+    async fn machines(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        let (paired, device) = (self.paired.clone(), call.device());
+        Ok(watching_as(self.paired.0.kept.subscribe(), move |_| {
+            serde_json::to_value(paired.handed(device)).ok()
+        }))
     }
 
     async fn hand(&self, _: Call, hand: Hand) -> Result<PairedDevice, Refusal> {
@@ -936,6 +962,10 @@ mod tests {
             .hand(phone.id, vec![devbox.clone(), mac.clone()])
             .unwrap();
         assert_eq!(handed.machines, [devbox.clone(), mac]);
+        // The device reads them as its own; a program on the machine has none.
+        assert_eq!(paired.handed(Some(phone.id)).len(), 2);
+        assert!(paired.handed(None).is_empty());
+        assert!(paired.handed(Some(DeviceId::new())).is_empty());
         assert_eq!(
             paired.handed_doors(),
             ["devbox.example.ts.net", "m1pro.example.ts.net:8443"]
@@ -960,6 +990,7 @@ mod tests {
         }
         // A device removed hands nothing on, and is handed nothing.
         paired.remove(phone.id).unwrap();
+        assert!(paired.handed(Some(phone.id)).is_empty());
         assert!(paired.handed_doors().is_empty());
         assert!(paired.hand(phone.id, Vec::new()).is_err());
     }

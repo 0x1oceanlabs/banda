@@ -56,14 +56,21 @@ export const device = {
     return { ...at, door: { ...at.door, sign } }
   },
   /** The other machines of `hosts.toml`, as the desktop reaches them over
-   * ssh (ADR 0081, decision 4). */
+   * ssh (ADR 0081, decision 4). A browser has those the machine at its
+   * door handed it, each at its own door (ADR 0124, decision 7): it
+   * follows and reaches them, and changes none. */
   hosts: {
+    /** Whether none but a host's own connection says it answers: a
+     * browser's, with no desktop to say. */
+    get alone(): boolean {
+      return !desktop()
+    },
     /** Hands `take` the hosts now, then each time one changes, until it
      * is stopped. A change told while the first answer was on its way is
      * the newer, so it wins. */
     follow: (take: (hosts: HostState[]) => void) => {
       const hosts = desktop()?.hosts
-      if (!hosts) return undefined
+      if (!hosts) return browser.hosts.follow(take)
       let on = true
       let told = false
       hosts.current().then(
@@ -83,7 +90,7 @@ export const device = {
     /** Where host `name`'s engine listens: asked of the desktop each time,
      * and kept nowhere in the page. */
     engine: (name: string): Promise<Address> =>
-      desktop()?.hostEngine(name) ?? elsewhere(),
+      desktop()?.hostEngine(name) ?? browser.hosts.engine(name),
     /** Starts host `name`'s engine again there, as the Person asks; no
      * name is this machine's own. Settled once the desktop was told. */
     start: (name: string): Promise<void> =>

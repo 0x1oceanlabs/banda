@@ -53,6 +53,9 @@ export type HostsDevice = {
    * its key (`HERE`). Settled, where it says so, once the device was
    * told. */
   start: (name: string) => void | Promise<void>
+  /** No one but a host's own connection says whether it answers, as in
+   * a browser, with no desktop to say so: one that stays lost is away. */
+  alone?: boolean
 }
 
 /**
@@ -718,6 +721,8 @@ export class KeptHosts implements Readable<readonly Shown[]> {
           // Another machine's engine is asked whether it still answers:
           // stale, its host shows away until it answers again.
           ping: PING,
+          // Nothing starts it from here: never heard, it is away too.
+          staleOnLoss: this.#device.alone === true && "unheard",
         }
       )
       const made = engine

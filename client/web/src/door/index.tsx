@@ -5,9 +5,11 @@
  * asked again: the page starts over with the pairing forgotten.
  */
 import type { Engine } from "@banda/contract"
+import type { Machine } from "@banda/contract/devices"
 import { ownEngine } from "@banda/core"
 import type { ReactNode } from "react"
 import { browser, machineAtDoor, selfOf } from "../boot/browser"
+import { servedAgain } from "../safe/starts"
 
 /**
  * Opens the window with `open`, on the engine at the door, as the device
@@ -27,8 +29,15 @@ export async function atDoor(
       // say so: only the host key's signature makes it the machine's.
       const { code } = status.refusal
       if (code !== "revoked" && code !== "forbidden") return
-      void browser.forget().then(() => location.reload())
+      void browser.forget().then(servedAgain)
     })
+    // The other machines this device was handed, now and as the window
+    // that allowed it hands them: kept for the next start. One with a
+    // door the page was not served for is reached once it is served again.
+    // An engine from before it says them ends the stream: none, then.
+    const handed = (machines: readonly Machine[]) =>
+      void browser.hosts.hand(machines).then((again) => again && servedAgain())
+    engine.stream(undefined, "devices.machines", {}, handed, () => {})
     open(engine)
   }
   // The card's code is asked for with the pairing: a page that has
