@@ -58,8 +58,8 @@ const switchOf = (label: string) =>
 
 const writes = () => vi.mocked(device.settings.set).mock.calls
 
-test("the view menu picks how the list is grouped and Your turn's order, each as sidebar.toml has it (ADR 0098, decisions 3 and 7)", () => {
-  draw({ ...DEFAULT_SIDEBAR, group: "project" })
+test("the view menu picks how the list is grouped, a card's lines and Your turn's order, each as sidebar.toml has it (ADR 0098, decisions 3, 7 and 9)", () => {
+  draw({ ...DEFAULT_SIDEBAR, group: "project", card: 2 })
   expect(
     [...page.querySelectorAll("[role=radiogroup]")].map((one) => [
       one.getAttribute("aria-label"),
@@ -67,17 +67,21 @@ test("the view menu picks how the list is grouped and Your turn's order, each as
     ])
   ).toEqual([
     ["Group by", ["None", "Project"]],
+    ["Card lines", ["3", "2", "1"]],
     ["Your turn first", ["Oldest", "Newest"]],
   ])
   expect(picked("Group by")).toEqual(["Project"])
+  expect(picked("Card lines")).toEqual(["2"])
   expect(picked("Your turn first")).toEqual(["Oldest"])
 
   act(() => option("Group by", "None").click())
+  act(() => option("Card lines", "1").click())
   act(() => option("Your turn first", "Newest").click())
   // The one picked already writes nothing.
   act(() => option("Your turn first", "Oldest").click())
   expect(writes()).toEqual([
     ["sidebar.toml", "group", '"none"'],
+    ["sidebar.toml", "card", "1"],
     ["sidebar.toml", "inbox.order", '"newest"'],
   ])
 })

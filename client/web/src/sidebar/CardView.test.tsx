@@ -80,7 +80,7 @@ const cardElement = (
       place: row.stand,
       at: row.listed.changed,
       now: Date.now(),
-      view: { group: "none" },
+      view: { group: "none", lines: 3 },
       ...more,
     })}
     row={row}
@@ -298,10 +298,20 @@ test("this machine named too has no card, as it is here; alone, its name is the 
   ).toContain('title="mac"')
 })
 
-test("a Thread away from its Project's workspace bears a small diamond at the start of line 3's right, never at line 1's right, where the acts show (ADR 0102, decision 6; spec S6b)", () => {
+test("a Thread away from its Project's workspace bears a small diamond: right after its title on one or two lines, at the start of line 3's right on three, never at line 1's right, where the acts show (ADR 0102, decision 6; spec S6b)", () => {
   for (const group of ["none", "project"] as const) {
+    for (const lines of [1, 2] as const) {
+      const html = drawn(rowOf("turn"), {
+        view: { group, lines },
+        strayed: true,
+      })
+      const mark = html.indexOf("lucide-diamond")
+      expect(mark, `${lines} lines`).toBeGreaterThan(-1)
+      expect(mark).toBeGreaterThan(html.indexOf(">Bench window tests<"))
+      expect(mark).toBeLessThan(html.indexOf('class="ml-auto'))
+    }
     const three = drawn(rowOf("turn"), {
-      view: { group },
+      view: { group, lines: 3 },
       strayed: true,
     })
     // Line 3's right starts with it, before the Harness's emblem.
@@ -336,7 +346,7 @@ test('a card\'s text fades where it does not fit, never with "…"; the title is
           place: "turn",
           at: NOW - 14 * MINUTE,
           now: NOW,
-          view: { group: "none" },
+          view: { group: "none", lines: 3 },
         })}
         row={rowOf("turn")}
         current={false}
@@ -428,7 +438,18 @@ test("the acts and line 1's right share one cell, which keeps the acts' room whi
   expect(drawn(rowOf("turn"))).not.toMatch(/data-acts/)
 })
 
-test("the acts' room keeps the diamond in sight, on line 3 (ADR 0102, decision 6)", () => {
+test("the acts' room keeps the diamond in sight: on one or two lines it stands after the title, before the cell; on three, on line 3 (ADR 0102, decision 6)", () => {
+  for (const lines of [1, 2] as const) {
+    const html = drawn(
+      rowOf("open", { mark: "idle", calls: undefined }),
+      { strayed: true, view: { group: "none", lines } },
+      false,
+      acts({ act: "later" }, { act: "archive" })
+    )
+    const diamond = html.indexOf("lucide-diamond")
+    expect(diamond).toBeGreaterThan(html.indexOf(">Bench window tests<"))
+    expect(diamond).toBeLessThan(html.indexOf("data-acts-time"))
+  }
   const three = drawn(
     rowOf("turn"),
     { strayed: true },

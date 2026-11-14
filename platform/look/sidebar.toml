@@ -4,6 +4,7 @@
 # banda settings check
 
 # group = "none"                     # "none" (one list) or "project" (each Project under its header)
+# card = 3                           # a card's lines, the same everywhere: 3, 2 or 1
 
 # [inbox]
 # order = "oldest"                   # Your turn: "oldest" or "newest" first
