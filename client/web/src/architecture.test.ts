@@ -577,7 +577,7 @@ test("the sidebar list takes no more code than the list holds, and no Project's 
   const files = sources(join(app, "web/src/sidebar"), { tests: false }).filter(
     (file) => file.endsWith(".tsx")
   )
-  expect(files).toContain(join(app, "web/src/sidebar/CardView.tsx"))
+  expect(files).toContain(join(app, "web/src/sidebar/cards/Card.tsx"))
   const program = programOver(files, join(app, "web/tsconfig.json"))
   const read = files.map(
     (file) => [relative(app, file), componentProps(program, file)] as const
