@@ -126,7 +126,8 @@ pub struct Updated {
 }
 
 /// The file in `engine/` that keeps how the engine last moved, for the
-/// copy it moved onto: `{ "to": …, "from": …, "at": …, "idle": … }`.
+/// copy it moved onto: `{ "to": …, "from": …, "at": …, "idle": … }`,
+/// and `"arrived": true` once that copy ran two minutes (`guard`).
 pub(crate) const MOVED: &str = "moved";
 
 /// How the engine that runs `version` came to it, as `engine/moved`
@@ -214,18 +215,10 @@ const CHOSEN: &str = "chosen";
 
 impl Updates {
     pub fn new(banda: Banda, take: watch::Receiver<TakeUpdates>) -> Updates {
-        let chosen = chosen(&banda.engine);
-        let copies = takeable(&banda.engine);
-        let ready = match &chosen {
-            Some(chosen) => {
-                (*chosen != banda.version && copies.contains(chosen)).then(|| chosen.clone())
-            }
-            None => (copies.into_iter()).find(|copy| feed::is_above(copy, &banda.version)),
-        };
         let state = UpdateState {
             running: banda.version.clone(),
-            ready,
-            chosen,
+            ready: in_place(&banda),
+            chosen: chosen(&banda.engine),
             updated: moved(&banda.engine, &banda.version),
             takes: Some(*take.borrow()),
             ..UpdateState::default()
@@ -440,10 +433,12 @@ impl Updates {
             tracing::info!(%version, "no {feed_name} in its release yet");
             return Ok(Err(format!("{version}'s release has no {feed_name}")));
         };
-        let text = (take::get(&asset.browser_download_url).await?)
-            .text()
-            .await
-            .map_err(|e| format!("{feed_name}: {}", banda_kernel::https::cause(&e)))?;
+        let text = take::within(
+            &feed_name,
+            (take::get(&asset.browser_download_url).await?).text(),
+        )
+        .await?
+        .map_err(|e| format!("{feed_name}: {}", banda_kernel::https::cause(&e)))?;
         let Some(feed) = Feed::read(&text) else {
             tracing::warn!(%version, "{feed_name} names no file: not taken");
             return Ok(Err(format!("{version}'s {feed_name} names no file")));
@@ -471,6 +466,7 @@ impl Updates {
         let client = banda_kernel::https::client()?;
         let response = (client.get(&url))
             .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+            .timeout(take::ANSWERS)
             .send()
             .await
             .map_err(|e| format!("GitHub: {}", banda_kernel::https::cause(&e)))?;
@@ -629,6 +625,30 @@ impl Updates {
         });
     }
 
+    /// Marks the copy this engine moved onto and came back from as one
+    /// that did not start, before anything moves: it crashed, and the
+    /// engine's unit, or job, started this copy again, which else moves
+    /// onto it again, and again (`guard::came_back`).
+    fn back_from_a_copy(&self) {
+        let banda = &self.0.banda;
+        let Some(to) = guard::came_back(&banda.engine, &banda.version) else {
+            return;
+        };
+        tracing::warn!(%to, running = %banda.version, "the new engine did not start: Banda went back");
+        if let Err(error) = guard::mark_bad(&banda.engine, &to) {
+            tracing::warn!(%error, "the copy that did not start is not marked");
+            // Unmarked, it is still not moved onto while this engine runs.
+        }
+        let ready = in_place(banda).filter(|ready| *ready != to);
+        self.0.state.send_modify(|state| {
+            state.ready = ready;
+            state.failed = Some(format!(
+                "{to} did not start: Banda went back to {}",
+                banda.version
+            ));
+        });
+    }
+
     /// Starts `banda-update run` as its own service, where the engine is
     /// its machine's service too and takes updates: says whether it runs.
     async fn service_started(&self) -> bool {
@@ -655,6 +675,16 @@ impl Updates {
             }
             tokio::time::sleep(Duration::from_secs(10)).await;
         }
+    }
+}
+
+/// The copy in place `banda` moves onto: the one chosen, when it is not
+/// the one running, else the newest above it.
+fn in_place(banda: &Banda) -> Option<String> {
+    let copies = takeable(&banda.engine);
+    match chosen(&banda.engine) {
+        Some(chosen) => (chosen != banda.version && copies.contains(&chosen)).then_some(chosen),
+        None => (copies.into_iter()).find(|copy| feed::is_above(copy, &banda.version)),
     }
 }
 
@@ -862,6 +892,7 @@ impl Updates {
         let client = banda_kernel::https::client()?;
         let response = (client.get(&url))
             .header(reqwest::header::ACCEPT, "application/vnd.github+json")
+            .timeout(take::ANSWERS)
             .send()
             .await
             .map_err(|e| format!("GitHub: {}", banda_kernel::https::cause(&e)))?;
@@ -1023,6 +1054,14 @@ impl Module for Updates {
         if self.0.started.swap(true, Ordering::SeqCst) {
             return Ok(());
         }
+        self.back_from_a_copy();
+        // A copy that ran this long arrived: a later start of the copy
+        // before is not read as its crash.
+        let (engine, version) = (self.0.banda.engine.clone(), self.0.banda.version.clone());
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(guard::GRACE_MS.unsigned_abs())).await;
+            guard::keep_arrived(&engine, &version);
+        });
         tokio::spawn(self.clone().drive());
         // machine.toml's `updates`, as the state says it.
         let said = self.0.state.clone();
@@ -1185,6 +1224,48 @@ mod tests {
         );
         let updated = moved(&machine.engine, "0.1.0-dev.11").unwrap();
         assert!(!updated.idle, "the Person said");
+    }
+
+    /// The engine moved from dev.10 onto dev.11, as `engine/moved` says.
+    fn moved_onto_the_copy(machine: &Machine) {
+        std::fs::write(
+            machine.engine.join(MOVED),
+            r#"{"to":"0.1.0-dev.11","from":"0.1.0-dev.10","at":1000,"idle":true}"#,
+        )
+        .unwrap();
+    }
+
+    #[tokio::test]
+    async fn an_engine_back_from_a_copy_that_crashed_does_not_move_onto_it_again() {
+        let machine = machine(Moves::Itself);
+        // dev.11 crashed as it started, and the unit started dev.10 again.
+        moved_onto_the_copy(&machine);
+        machine.updates.back_from_a_copy();
+        let state = machine.updates.watch().borrow().clone();
+        assert_eq!(state.ready, None);
+        let failed = state.failed.expect("it says why");
+        assert!(failed.contains("0.1.0-dev.11 did not start"), "{failed}");
+        assert_eq!(guard::bad(&machine.engine), ["0.1.0-dev.11"]);
+
+        tokio::spawn(machine.updates.clone().drive());
+        let asked = tokio::time::timeout(Duration::from_millis(300), machine.restart.asked());
+        assert!(asked.await.is_err(), "nothing runs, and it stays");
+        // Nor the next start of it.
+        let again = Updates::new(machine.updates.0.banda.clone(), machine.take.subscribe());
+        assert_eq!(again.watch().borrow().ready, None);
+    }
+
+    #[tokio::test]
+    async fn a_copy_that_arrived_is_moved_onto_again_from_the_copy_before() {
+        let machine = machine(Moves::Itself);
+        // dev.11 ran, said so, and stopped; dev.10 was started after it.
+        moved_onto_the_copy(&machine);
+        guard::keep_arrived(&machine.engine, "0.1.0-dev.11");
+        machine.updates.back_from_a_copy();
+        let state = machine.updates.watch().borrow().clone();
+        assert_eq!(state.ready.as_deref(), Some("0.1.0-dev.11"));
+        assert_eq!(state.failed, None);
+        assert!(guard::bad(&machine.engine).is_empty());
     }
 
     #[tokio::test]
