@@ -58,6 +58,7 @@ import {
 import {
   call,
   finish,
+  FREE,
   loadACore,
   newTerminal,
   leaveSidebar,
@@ -100,7 +101,9 @@ test("how the Tiling moves, against motion-budget.json", async () => {
   await new Promise<void>((done) => site!.listen(0, "127.0.0.1", done))
   const address = `http://127.0.0.1:${(site.address() as AddressInfo).port}/`
 
-  window = await startWindow({ deviceScaleFactor: scale })
+  // In the Flow free each Pane opens right of the one in front, so the
+  // terminals and the browser stand in the order they opened.
+  window = await startWindow({ deviceScaleFactor: scale, files: FREE })
   const { app, page } = window
   // The first terminal, printing all the while, as an Agent's would, and
   // keeping what it printed where the test counts it, until the test
