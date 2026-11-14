@@ -104,8 +104,32 @@ test("a browser at this machine's door shows a code; the window asks the Person,
   await expect(shown).toBeAttached({ timeout: 30_000 })
   expect(listed().filter((device) => device.kind === "browser")).toHaveLength(1)
 
-  // Removed on the machine, the page drops at once and asks again.
-  window.banda("devices", "remove", paired!.id)
+  // Settings → Devices lists who this machine lets in: its own window,
+  // which pairs itself and is not removed, and the browser.
+  await page.keyboard.press("Alt+Comma")
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Devices/ })
+    .click()
+  const row = settings.locator(`[data-device="${paired!.id}"]`)
+  await expect(row).toContainText("The test's browser")
+  await expect(row).toContainText(`from ${new URL(door).host}`)
+  const own = settings.locator("[data-device]", {
+    hasText: "this machine's window",
+  })
+  await expect(own).toHaveCount(1)
+  await expect(own.getByRole("button")).toHaveCount(0)
+  // Removed there, the page drops at once and asks again.
+  await row.getByRole("button", { name: /^Remove / }).click()
+  const removal = page.getByRole("dialog", {
+    name: "Remove The test's browser?",
+  })
+  await expect(removal.getByRole("radio")).toHaveCount(0)
+  await removal
+    .getByRole("button", { name: "Remove The test's browser" })
+    .click()
+  await expect(row).toHaveCount(0)
   await expect(card).toHaveAttribute("data-pairing", "asked", {
     timeout: 30_000,
   })

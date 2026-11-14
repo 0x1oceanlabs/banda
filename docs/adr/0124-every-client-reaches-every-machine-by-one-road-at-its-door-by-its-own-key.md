@@ -275,8 +275,17 @@ repository), with an adversarial check.
   paired on the others by the key that machine says it proved
   (`devices.add`), and one that did not pair it is named. Don't allow
   sends it away. Closed with no answer, it waits out its time, and that
-  window says no more of it. Focus starts on neither button. Not yet:
-  Settings → Devices, where a device is removed.
+  window says no more of it. Focus starts on neither button.
+- **Settings → Devices lists and removes them (SE5, PR 3b).** The section
+  shows the devices of the machine picked under "Settings for", as that
+  machine keeps them: its name, kind, when it was added and the address
+  its page came from. A machine's own window has no Remove, as it pairs
+  itself again. Remove cuts a device from every machine the window
+  reaches, or only from that one: on each other it is found by its key,
+  as each machine keeps it under an ID of its own, and a machine that did
+  not answer is named. Nothing there adds a device: one joins by asking
+  at a door. Not yet: which row is the device the Person sits at, and a
+  browser reaching the other machines by their host keys.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
