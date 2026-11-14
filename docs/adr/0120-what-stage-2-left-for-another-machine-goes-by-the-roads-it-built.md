@@ -132,11 +132,15 @@ and it takes as it is, and what is **new**.
 
 1. **Add Project adds on the machine it is asked on** (#1011).
    - Add Project names a machine: it is a machine's own act (law 3's
-     second target). Each machine's group in the sidebar, the new
-     Thread's menu and the Banda menu has its own "Add Project…", and an
-     arc Thread's empty state offers it on arc.
-   - A machine with no Projects shows its label with "Add Project…"
-     under it, so devbox, with no window of its own, starts from the Mac.
+     second target). The Window keeps its one door, the Banda menu's
+     "Add Project" branch: where the Window reaches other machines, the
+     branch asks where first, "This Mac", "arc", "devbox", and goes on
+     as it does today. A door that knows its machine, as an arc Thread's
+     Project list, opens the branch there.
+   - A machine with no Projects is a row of that step, "no Projects
+     yet", so devbox, with no window of its own, starts from the Mac. It
+     gets no row of its own in the sidebar, and an away machine's row
+     says so and adds nothing (Roma, 2026-11-14, on the mock).
    - The path field, New Project, the trust question and the add each go
      to that machine's engine: `projects.browse`, `create`, `foreign`,
      `add` and `locate` there. The menu's top says where: "Add Project on
@@ -147,8 +151,7 @@ and it takes as it is, and what is **new**.
      whole road.
    - **Road.** `sessionOf` by the machine's Host scope ID; the kernel's
      project methods as they are; the Banda menu's Add Project branch.
-   - **New.** Nothing in the engine. The branch carries its machine, and
-     the menus place one Add Project per machine.
+   - **New.** Nothing in the engine. The branch carries its machine.
 
 2. **A port of another machine opens here through a forward of its own,
    when the Person opens a link to it** (#1240).
@@ -394,7 +397,7 @@ same-path job (ADR 0106, step 1a′).
 | Step | Track, size | What it does |
 |---|---|---|
 | 0 | docs | This ADR |
-| 1 | window, S-M | Add Project on another machine: the branch by machine, one Add Project per group, an empty machine's row, no picker there (decision 1) |
+| 1 | window, S-M | Add Project on another machine: the branch asks where and carries its machine, an empty machine is a row of that step, no picker there (decision 1) |
 | 2 | desktop, M | `Hosts.forward`: the same port or the next, the engine's port refused, an end with the link; `forward_port` (decision 2) |
 | 3 | window, S | A `Link` of arc's opens through the forward on a click; the words; an Agent's browser Pane at arc's address (decision 2) |
 | 4 | both, S | Codex's ChatGPT way in a terminal on arc, its callback forwarded at the same port; its device code in the card (decision 3) |
@@ -413,7 +416,8 @@ may go beside the window's.
 
 **What Roma tries.**
 
-- **1.** On the Mac, devbox's label shows "Add Project…" under it. Type
+- **1.** On the Mac, Add Project in the Banda menu asks where; pick
+  devbox. Type
   `/work/code/` and see devbox's folders; add one, trust it, and start a
   Thread there.
 - **2 to 4.** `pnpm dev` in arc's terminal on the Mac; click
