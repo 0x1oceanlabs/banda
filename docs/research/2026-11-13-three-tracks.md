@@ -2,6 +2,8 @@
 
 Plan, 2026-11-13. Agreed between the session that leads story 1 and the session that wrote this. Roma accepted tracks 1 and 2 (2026-11-13); track 3 gets its plan from a design session of its own first. [The roadmap](2026-11-08-roadmap-in-slices.md) says what is built and what Roma tries in each slice. This file says how its three tracks run side by side: the order inside each, the weeks, the files where they meet, who leads, and what waits for Roma. It does not repeat the slices.
 
+Since then (2026-11-14): track 3 has its plan. Its rules are [the window](../window.md), its decisions ADR 0127, and its slices WS1 to WS11 are in [the window's plan](2026-11-13-window-plan.md) and the roadmap. Where this file says "until track 3 has a plan", that plan now holds.
+
 It serves stories 1 and 2 and principles 3, 4 and 9 of [what we build](../what-we-build.md). It takes the place of the two-track weeks in the story 1 design, which was written before the third track and is kept outside the repository.
 
 ## The tracks
