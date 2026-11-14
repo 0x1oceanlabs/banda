@@ -40,6 +40,26 @@ pub struct SettingsFile {
     sections: &'static [(&'static str, Class)],
     /// Its keys that moved here from other files (ADR 0069 grace).
     moved: &'static [Moved],
+    /// Which of its keys only the Person changes (ADR 0083); none when
+    /// an Agent may change them all.
+    person: Option<OnlyThePerson>,
+}
+
+/// Why only the Person changes the key of these parts, as `start`,
+/// `claude`, `mode`, to the value given as `banda settings set` takes it,
+/// or takes it out with none; none when an Agent may change it.
+pub type OnlyThePerson = fn(&[&str], Option<&str>) -> Option<&'static str>;
+
+/// Whether `value`, as `banda settings set` takes it, is a whole table
+/// that names one of the keys `wanted`: a table set at once sets each.
+pub fn names(value: Option<&str>, wanted: &[&str]) -> bool {
+    value
+        .and_then(|value| value.parse::<toml_edit::Value>().ok())
+        .is_some_and(|value| {
+            value
+                .as_inline_table()
+                .is_some_and(|table| table.iter().any(|(key, _)| wanted.contains(&key)))
+        })
 }
 
 /// How the look resolves a file, from its text at a path, there or not:
@@ -97,6 +117,7 @@ impl SettingsFile {
             class: Class::Device,
             sections: &[],
             moved: &[],
+            person: None,
         }
     }
 
@@ -121,6 +142,21 @@ impl SettingsFile {
             sections,
             ..self
         }
+    }
+
+    /// This file, with `person` to say which of its keys only the Person
+    /// changes: the engine refuses an Agent those (ADR 0083).
+    pub const fn only_the_person(self, person: OnlyThePerson) -> SettingsFile {
+        SettingsFile {
+            person: Some(person),
+            ..self
+        }
+    }
+
+    /// Why only the Person changes the key of `parts` to `value`, or takes
+    /// it out with none, as the file says; none when an Agent may.
+    pub fn person_alone(&self, parts: &[&str], value: Option<&str>) -> Option<&'static str> {
+        self.person.and_then(|person| person(parts, value))
     }
 
     /// Whose copy `key` is, dotted, by its top-level key: `start` of

@@ -232,10 +232,8 @@ const NOT_AN_APP: [(&str, &str); 5] = [
 const PLATFORM_NAMES: &[(&str, usize)] = &[
     // Two widgets of the Bar by their ids.
     ("platform/look/src/settings.rs", 2),
-    // agents.toml and its type, for the account a new Thread starts with.
-    ("platform/settings/src/accounts.rs", 8),
-    // agents.toml's start modes, and browser.toml's agents table.
-    ("platform/settings/src/person.rs", 13),
+    // agents.toml, for the account a new Thread starts with.
+    ("platform/settings/src/accounts.rs", 6),
     // The Pane kinds whose count is shared.
     ("platform/sharing/engine/src/events.rs", 2),
     // The agents module's events, heard for the usage shared.

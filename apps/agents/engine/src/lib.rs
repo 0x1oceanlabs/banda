@@ -124,7 +124,8 @@ const FILE: banda_look::SettingsFile = banda_look::SettingsFile::of::<sending::A
             ("models", banda_look::Class::Machine),
             ("enter", banda_look::Class::Shared),
         ],
-    );
+    )
+    .only_the_person(chosen_modes::only_the_person);
 
 pub struct Agents {
     harnesses: Harnesses,

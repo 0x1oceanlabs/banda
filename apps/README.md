@@ -84,13 +84,18 @@ still kept by hand are held to it by the engine's tests:
 `engine/Cargo.toml`'s crates and the workspace's members, and the
 window's `client/web/src/modules.ts` and `client/desktop/src/modules.ts`; the tests write the contract's
 `Methods` (`sdk/contract/src/generated/Methods.ts`) from it. The
-settings' crate takes no App's crate but the agents': the scan writes
+settings' crate takes no App's crate: the scan writes
 what each part hands it, its settings files and its window part
 (`apps::HANDED`), the window parts in the window's order (`WINDOW_ORDER`
 in `engine/build.rs`: a window part with no place there stops the
 build). The settings' tests and the keys' read the same parts from
 `platform/settings/tests/whole`, with the Apps' crates as
 dev-dependencies, which the engine's tests count and hold to the list.
+Which of its keys only the Person changes, a part's file says itself
+(`SettingsFile::only_the_person`, as `agents.toml`'s start modes), and
+what a part does as the Person changes one through the engine, the
+engine gives the keys module (`KeysModule::tells`, as the agents' part
+keeps the mode they chose).
 
 ## A module's contract
 

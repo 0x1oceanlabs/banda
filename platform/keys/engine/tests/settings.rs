@@ -4,7 +4,7 @@
 //! machine file's `rev`, then each again as its part changes, by a set or
 //! by hand, and nothing for a change of what is not the machine's.
 
-use banda_kernel::{Code, Kernel, Participant, PersonId, Stream};
+use banda_kernel::{AgentId, Code, Kernel, Participant, PersonId, Stream};
 use banda_keys::KeysModule;
 use banda_keys::read::SettingChanged;
 use serde_json::{Value, json};
@@ -121,4 +121,70 @@ async fn a_machine_s_settings_are_read_and_followed_through_its_engine() {
         .await
         .unwrap_err();
     assert_eq!(refused.code, Code::Invalid);
+}
+
+/// What the Person changes through the engine is told to what hears them,
+/// a key renamed as taken out under either name; an Agent is refused what
+/// only the Person changes, as the file says, and what it may change is
+/// told to none (ADR 0083).
+#[tokio::test]
+async fn the_person_s_changes_are_told_and_an_agent_s_are_refused_or_not_told() {
+    let root = tempfile::tempdir().unwrap();
+    let told = Arc::new(std::sync::Mutex::new(Vec::new()));
+    let hears = told.clone();
+    let keys = KeysModule::new(whole::WHOLE, root.path().join("config")).tells(Arc::new(
+        move |file, key, value| {
+            let said = (file.to_owned(), key.to_owned(), value.map(str::to_owned));
+            hears.lock().unwrap().push(said);
+            Ok(())
+        },
+    ));
+    let owner = PersonId::new();
+    let kernel = Kernel::builder(
+        root.path().join("projects"),
+        root.path().join("data"),
+        owner,
+    )
+    .machine(root.path().join("state/machine"))
+    .module(keys)
+    .open()
+    .await
+    .unwrap();
+    let call = async |by: Participant, method: &str, params: Value| {
+        kernel.call(by, method, None, None, params).await
+    };
+    let person = Participant::Person(owner);
+    let agent = Participant::Agent(AgentId::new());
+    let mode =
+        json!({ "file": "agents.toml", "key": "start.claude.mode", "value": "\"full_access\"" });
+
+    for refused in [
+        mode.clone(),
+        json!({ "file": "browser.toml", "key": "agents.screenshots", "value": "true" }),
+    ] {
+        let refused = call(agent, "keys.settings_set", refused).await.unwrap_err();
+        assert!(refused.message.contains("Only your Person"), "{refused:?}");
+    }
+    let enter = json!({ "file": "agents.toml", "key": "enter", "value": "\"queue\"" });
+    call(agent, "keys.settings_set", enter).await.unwrap();
+    assert_eq!(*told.lock().unwrap(), [], "an Agent's change is no choice");
+
+    call(person, "keys.settings_set", mode).await.unwrap();
+    let rename = json!({ "file": "agents.toml", "key": "start.claude.mode", "to": "plan" });
+    call(person, "keys.settings_rename", rename)
+        .await
+        .unwrap_err();
+    let reset = json!({ "file": "agents.toml", "key": "start.claude.mode" });
+    call(person, "keys.settings_reset", reset).await.unwrap();
+    let said = |key: &str, value: Option<&str>| {
+        let value = value.map(str::to_owned);
+        ("agents.toml".to_owned(), key.to_owned(), value)
+    };
+    assert_eq!(
+        *told.lock().unwrap(),
+        [
+            said("start.claude.mode", Some("\"full_access\"")),
+            said("start.claude.mode", None),
+        ]
+    );
 }
