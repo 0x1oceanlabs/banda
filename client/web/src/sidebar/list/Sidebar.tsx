@@ -14,9 +14,9 @@ import { DeleteDialog } from "./CardMenu"
 import { ProjectRows } from "./ProjectMenu"
 import { SectionView } from "./SectionView"
 import { PickList, useSidebarKeys } from "./PickList"
-import { ShowTab, Tabs } from "./Tabs"
+import { Tabs } from "./Tabs"
 import { useOrdered } from "./useOrdered"
-import { ToldSomeday, useSidebarView } from "./useSidebarView"
+import { useSidebarView, ViewContext } from "./view"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -57,13 +57,12 @@ export function Sidebar({
   strayed: ReadonlySet<string>
 }) {
   const settings = useLookSidebar()
-  // The element the list scrolls in goes to its ScrollArea alone: else
-  // React's compiler reads the whole view as a ref.
-  const { scrollsIn, ...view } = useSidebarView()
+  // How the Person has the list in view, which its parts read and change.
+  const { view, state, scrollsIn } = useSidebarView()
   // The other machines of `hosts.toml`, below this one's (ADR 0081): each
   // host's state by its name.
   const hosts = useHosts()
-  const ordering = useOrdered(projects, settings, view)
+  const ordering = useOrdered(projects, settings, state)
   const { ordered, now, list } = ordering
   // The aside, the keys' scope, goes to it alone, as the list's element.
   const { aside, ...keys } = useSidebarKeys(
@@ -85,7 +84,6 @@ export function Sidebar({
           named={host !== undefined}
           isCurrent={isCurrent}
           strayed={strayed}
-          onToggle={view.toggle}
           engine={engine}
           now={now}
         />
@@ -98,7 +96,7 @@ export function Sidebar({
     <HostPart
       key={host.name}
       host={host}
-      folded={view.foldedHosts.has(host.name)}
+      folded={state.foldedHosts.has(host.name)}
       onFold={() => view.foldHost(host.name)}
     >
       {held}
@@ -107,7 +105,7 @@ export function Sidebar({
 
   return (
     <Dismiss value={onDismiss}>
-      <ShowTab value={view.show}>
+      <ViewContext value={view}>
         <aside
           aria-label="Sidebar"
           data-sidebar=""
@@ -123,7 +121,7 @@ export function Sidebar({
               "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
           )}
         >
-          <Tabs tabs={ordered.tabs} tab={view.tab} />
+          <Tabs tabs={ordered.tabs} tab={state.tab} />
           {/* A Project's menu archives its Threads by their rows. */}
           <ProjectRows value={ordered.rows}>
             {/* Where more Threads are below, the list fades out at its foot
@@ -134,14 +132,8 @@ export function Sidebar({
               className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
             >
               <div className="flex flex-col gap-1 px-1.5 pb-2">
-                <PickList
-                  tab={view.tab}
-                  picking={keys.picking}
-                  deleting={keys.deleting}
-                >
-                  {/* This machine's list, where inbox zero tells the view it
-                  told of Someday. */}
-                  <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
+                <PickList tab={state.tab} picking={keys.picking}>
+                  {drawn()}
                   {/* Grouped by Project, each host's groups follow under its
                   label; grouped otherwise, its cards are among this
                   machine's, and the foot says how it stands. */}
@@ -152,10 +144,10 @@ export function Sidebar({
             </ScrollArea>
             <Foot />
             <AskedTrust engine={engine} projects={projects} />
-            <DeleteDialog deleting={keys.deleting} />
+            <DeleteDialog />
           </ProjectRows>
         </aside>
-      </ShowTab>
+      </ViewContext>
     </Dismiss>
   )
 }
