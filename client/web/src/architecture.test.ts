@@ -362,7 +362,7 @@ test("the Tiling names nothing the Apps list", () => {
 const AGENT_READERS = [
   "web/src/calls/fold.ts",
   "web/src/calls/sight.ts",
-  "web/src/sidebar/Counts.tsx",
+  "web/src/sidebar/bar/Counts.tsx",
   "web/src/window/shows.ts",
 ]
 
@@ -523,7 +523,9 @@ test("outside the sidebar, its code is taken only through its door", () => {
       .trim()
       .split("\n")
   ).toSatisfy((lines: string[]) =>
-    lines.every((line) => /^export \{.*\} from "\.\/[\w-]+"$/.test(line))
+    lines.every((line) =>
+      /^export \{.*\} from "\.\/(?:[\w-]+\/)*[\w-]+"$/.test(line)
+    )
   )
 })
 
@@ -544,27 +546,27 @@ test("outside the sidebar, its code is taken only through its door", () => {
  * Project's or a Thread's verb.
  */
 const SIDEBAR_CODE: Record<string, Record<string, string[]>> = {
-  "web/src/sidebar/Edge.tsx": {
+  "web/src/sidebar/list/Edge.tsx": {
     Edge: ["onWidth", "onHide", "onHiding"],
   },
-  "web/src/sidebar/Sidebar.tsx": {
+  "web/src/sidebar/list/Sidebar.tsx": {
     Sidebar: ["onDismiss", "isCurrent"],
   },
-  "web/src/sidebar/SectionView.tsx": {
-    SectionView: ["isCurrent", "onToggle"],
+  "web/src/sidebar/list/SectionView.tsx": {
+    SectionView: ["isCurrent"],
   },
-  "web/src/sidebar/GroupHeader.tsx": {
+  "web/src/sidebar/list/GroupHeader.tsx": {
     GroupHeader: ["onFold"],
   },
-  "web/src/sidebar/HostPart.tsx": {
+  "web/src/sidebar/list/HostPart.tsx": {
     HostPart: ["onFold"],
   },
-  "web/src/sidebar/LaterPicker.tsx": {
+  "web/src/sidebar/list/LaterPicker.tsx": {
     Picking: ["onPick"],
   },
   // The small inbox's list is the sidebar's own, and tells the counts'
   // popover of Esc and of "7 at work ›" (ADR 0098, decision 22).
-  "web/src/sidebar/SmallList.tsx": {
+  "web/src/sidebar/bar/SmallList.tsx": {
     SmallList: ["onEsc", "onWorking"],
   },
 }
@@ -626,7 +628,7 @@ test("the sidebar list pins no Project and writes no agents.toml or tiling.toml"
   const writing =
     /\bupdateProject\b|\bprojects\.update\b|(?:writeSetting|settings\.set)\(\s*(?:AGENTS_FILE|TILING_FILE|["'`](?:agents|tiling)\.toml)/
   const files = sources(join(app, "web/src/sidebar"), { tests: false })
-  expect(files).toContain(join(app, "web/src/sidebar/ProjectMenu.tsx"))
+  expect(files).toContain(join(app, "web/src/sidebar/list/ProjectMenu.tsx"))
   expect(
     files
       .filter((file) => writing.test(readFileSync(file, "utf8")))
@@ -776,7 +778,10 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
 const SIDEBAR_LINES = 161
 
 test("the sidebar's frame keeps under its ceiling, and the ceiling follows it down", () => {
-  const text = readFileSync(join(app, "web/src/sidebar/Sidebar.tsx"), "utf8")
+  const text = readFileSync(
+    join(app, "web/src/sidebar/list/Sidebar.tsx"),
+    "utf8"
+  )
   const lines = text.split("\n").length - 1
   expect(lines).toBeLessThanOrEqual(SIDEBAR_LINES)
   expect(
@@ -992,7 +997,7 @@ const OWN_FRAMES: Record<string, number> = {
   "client/ui/src/components/code-file.tsx": 4,
   "client/ui/src/components/file-tree.tsx": 3,
   "client/ui/src/components/line-comment.tsx": 1,
-  "client/web/src/sidebar/Edge.tsx": 1,
+  "client/web/src/sidebar/list/Edge.tsx": 1,
   "client/web/src/tiling/reorder.ts": 1,
   "client/web/src/tiling/useMoving.ts": 2,
   "client/web/src/titles/Title.tsx": 2,
@@ -1198,8 +1203,8 @@ test("a mark's rank is read only to pick the loudest, where the list holds", () 
  */
 test("the sidebar list, the counts and Alt+U go by one order", () => {
   const sidebar = join(app, "web/src/sidebar")
-  const rowing = join(sidebar, "rows")
-  const ordering = join(sidebar, "order")
+  const rowing = join(sidebar, "model/rows")
+  const ordering = join(sidebar, "model/order")
   const taken = new Map(
     sources(join(app, "web/src"), { tests: false }).map((file) => [
       relative(app, file),
@@ -1229,15 +1234,15 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
     "placeIn",
     "useOrderNow",
   ])
-  expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/order.ts"])
-  const list = "web/src/sidebar/useOrdered.ts"
+  expect(taking(rowing, "rowsOf")).toEqual(["web/src/sidebar/model/order.ts"])
+  const list = "web/src/sidebar/list/useOrdered.ts"
   // The parts that draw the list take its order as it comes.
   const drawing = [
     "Sidebar.tsx",
     "SectionView.tsx",
     "HostPart.tsx",
     "ThreadRow.tsx",
-  ].map((file) => `web/src/sidebar/${file}`)
+  ].map((file) => `web/src/sidebar/list/${file}`)
   const altU = "web/src/window/Shell.tsx"
   const going = [...taken]
     .filter(([file]) => file !== door)
@@ -1257,7 +1262,10 @@ test("the sidebar list, the counts and Alt+U go by one order", () => {
   )
   const placing = taking(ordering, "placeIn")
   expect(placing).toEqual(["web/src/calls/sight.ts"])
-  const counting = ["web/src/sidebar/tally.ts", "web/src/sidebar/Counts.tsx"]
+  const counting = [
+    "web/src/sidebar/model/tally.ts",
+    "web/src/sidebar/bar/Counts.tsx",
+  ]
   for (const file of [...counting, ...placing, list, ...drawing, altU])
     expect(readFileSync(join(app, file), "utf8"), file).not.toMatch(
       /\.(?:sort|toSorted)\(/
@@ -1470,11 +1478,11 @@ test("an App reaches the title field's store no more than the list holds", () =>
  */
 const BY_DOES = [
   "web/src/menu/menu.ts: action.does",
-  "web/src/sidebar/LaterPicker.tsx: itemActionOf",
-  "web/src/sidebar/LaterPicker.tsx: itemActionOf",
-  "web/src/sidebar/SectionView.tsx: itemActionOf",
-  "web/src/sidebar/undo.ts: itemActionOf",
-  "web/src/sidebar/useActs.ts: itemActionOf",
+  "web/src/sidebar/list/LaterPicker.tsx: itemActionOf",
+  "web/src/sidebar/list/LaterPicker.tsx: itemActionOf",
+  "web/src/sidebar/list/SectionView.tsx: itemActionOf",
+  "web/src/sidebar/list/useActs.ts: itemActionOf",
+  "web/src/sidebar/model/undo.ts: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
   "web/src/titles/Title.tsx: itemActionOf",
@@ -1504,7 +1512,7 @@ test("the Window finds an item action by what it does no more than the list hold
  */
 const MODULE_STORES = [
   "apps/agents/pane/src/list/sent.ts: sent",
-  "client/web/src/sidebar/LaterPicker.tsx: picking",
+  "client/web/src/sidebar/list/LaterPicker.tsx: picking",
   "client/web/src/titles/MakeProject.tsx: making",
   "platform/harnesses/pane/src/look.ts: picked",
 ]

@@ -12,9 +12,9 @@ import { Button } from "@banda/ui/components/button"
 import { cn } from "@banda/ui/lib/utils"
 import type { LucideIcon } from "lucide-react"
 import type { CSSProperties, ReactNode } from "react"
-import { actsWidth } from "../acts"
-import { useOpen } from "../open"
-import { pickProps } from "../usePick"
+import { actsWidth } from "../model/acts"
+import { useOpen } from "../list/open"
+import { pickProps } from "../list/usePick"
 import { ChildArrow } from "./parts"
 
 /** The hover's fill, a layer under a card or a group's header that fades

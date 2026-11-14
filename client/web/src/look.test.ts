@@ -252,8 +252,8 @@ const LISTED: Listed[] = [
     rule: "design.12",
     why: "Step 5: the rest of the Window's own takes its layer's name: the sidebar and its edge with the sidebar's steps, a carried Pane's place with the Tiling's. The Top layer's are named (ADR 0110, step 3).",
     cases: [
-      "client/web/src/sidebar/Edge.tsx: z-30",
-      "client/web/src/sidebar/Sidebar.tsx: z-20",
+      "client/web/src/sidebar/list/Edge.tsx: z-30",
+      "client/web/src/sidebar/list/Sidebar.tsx: z-20",
       "client/web/src/tiling/PaneMenu.tsx: z-40",
     ],
   },
