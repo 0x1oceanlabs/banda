@@ -904,7 +904,7 @@ fn a_window_follows_its_engine_on_as_it_moves_onto_another_copy() {
     std::fs::write(copy.join("version"), "99.0.0").unwrap();
     // The machine's service, as a unit or a job runs it: not a child.
     // Stopped however the test ends, so no engine outlives it.
-    let _engine = Ends(places.banda(&["serve"]).spawn().unwrap());
+    let mut engine = Ends(places.banda(&["serve"]).spawn().unwrap());
     let running = || {
         let out = places.banda(&["status"]).output().unwrap();
         let said: Value = serde_json::from_slice(&out.stdout).unwrap_or_default();
@@ -944,7 +944,16 @@ fn a_window_follows_its_engine_on_as_it_moves_onto_another_copy() {
         window.try_wait().unwrap().is_none(),
         "the window's follower ended as the engine moved"
     );
-    let stop = places.banda(&["stop", "--force"]).output().unwrap();
+    // The engine is this test's child, so its end is heard here while
+    // `banda stop` waits for it to be gone.
+    let stop = places
+        .banda(&["stop", "--force"])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .unwrap();
+    wait_for(Duration::from_secs(25), || engine.0.try_wait().unwrap()).expect("the engine stops");
+    let stop = stop.wait_with_output().unwrap();
     assert!(stop.status.success(), "{stop:?}");
     let ended = wait_for(Duration::from_secs(10), || window.try_wait().unwrap())
         .expect("the follower ends with Quit Banda");
