@@ -58,7 +58,7 @@ jobs:
         run: |
           changes() { [[ "$GITHUB_EVENT_NAME" != pull_request ]] || ! git diff --quiet HEAD^1 HEAD -- "$@"; }
           if changes . ':!*.md' ':!docs/' ':!site/' ':!vercel.json'; then code=true; else code=false; fi
-          if changes site/ vercel.json client/ui/ docs/design/kit/mark.js sdk/contract/src/generated/look/ \
+          if changes site/ vercel.json client/ui/src/styles/theme.css sdk/contract/src/generated/look/tokens.css docs/design/kit/mark.js \
             pnpm-lock.yaml pnpm-workspace.yaml .github/workflows/ci.yml scripts/check.sh; then site=true; else site=false; fi
           if changes '*.rs' '*Cargo.toml' Cargo.lock rust-toolchain.toml .cargo/ \
             .github/workflows/ci.yml scripts/check.sh; then rust=true; else rust=false; fi
