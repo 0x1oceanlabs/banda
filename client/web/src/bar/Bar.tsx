@@ -88,6 +88,7 @@ export function Bar({
     // empty space moves the window, as a title bar's does.
     <header
       ref={header}
+      data-bar=""
       className={cn(
         "relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5 frame:ps-[calc(var(--frame-inset)+--spacing(1.5))] frame:[-webkit-app-region:drag] frame:*:[-webkit-app-region:no-drag]",
         dragging && "cursor-grabbing select-none"

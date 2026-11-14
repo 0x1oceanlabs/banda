@@ -317,6 +317,19 @@ repository), with an adversarial check.
   page is served again once, which is no broken start. Not yet: bytes,
   as images and files, from another machine's door; the browser adding,
   changing or removing a machine; hosts by host key (SE4).
+- **The phone's form (SE6, PR 1).** A browser as narrow as a phone
+  (30rem; never Banda's app, whose narrow window keeps the desktop's
+  form) draws the same window as a phone holds it: its home is the list,
+  the sidebar as it is, the whole screen wide; a Thread, or a Pane opened
+  from one, is the whole screen; its header has the way back, to the list
+  from a Thread and to what was there before from another Pane, by
+  closing it. There is no bar, no window's buttons on a Pane and no key
+  named; a button over the list starts a new Thread, the one door a phone
+  has to it. The Window places the Panes as ever, and the phone shows the
+  one with the focus. With no Pane to show, the list shows whatever was
+  asked. Not yet: Stop beside Send while text is typed; rows a thumb's
+  height; how many Threads call, at the way back; the screen's safe
+  areas.
 - **The window stays for every stop but Quit Banda (SE3, PR 4a).**
   `banda stop`, which Quit Banda runs, says it asked before it stops the
   engine (a `quit` file in the state, which the next run takes away). The
