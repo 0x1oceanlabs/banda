@@ -85,3 +85,23 @@ test("the forward's words name the address, the machine and the port taken", () 
   )
   expect(words.away).toBe("arc is away: localhost:3000 did not open.")
 })
+
+test("a public page of another machine's that answers to that machine's own port carries it, as a sign-in's redirect does", () => {
+  const page =
+    "https://auth.openai.com/oauth/authorize?client_id=x&redirect_uri=http%3A%2F%2Flocalhost%3A1455%2Fauth%2Fcallback&state=s"
+  expect(linkOf(page, "arc")).toEqual({
+    url: page,
+    back: { of: "arc", port: 1455 },
+  })
+  // On this machine the answer comes here anyway.
+  expect(linkOf(page)).toEqual({ url: page })
+  // An answer to a public address, or to what is no web address, is no
+  // port of that machine's.
+  for (const to of ["https%3A%2F%2Fexample.com%2Fcb", "app%3A%2F%2Fx", "x"])
+    expect(linkOf(`https://a.example/?redirect_uri=${to}`, "arc")).toEqual({
+      url: `https://a.example/?redirect_uri=${to}`,
+    })
+  expect(forwardWords("localhost:1455", "arc").taken(1455, "this Mac")).toBe(
+    "Port 1455 is taken on this Mac: sign in with a code instead."
+  )
+})

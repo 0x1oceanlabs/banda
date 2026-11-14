@@ -405,7 +405,8 @@ _Avoid_: Person document; replica.
 A port of another machine opened on this device's loopback, over ssh.
 Banda keeps one to each machine's engine, and opens one more to a port
 there when the Person clicks a link to that machine's own computer, as
-`localhost:3000` (ADR 0120, decision 2).
+`localhost:3000`, or a sign-in page that answers to that machine's own
+port (ADR 0120, decisions 2 and 3).
 _Avoid_: tunnel, proxy.
 
 **Machine file**:

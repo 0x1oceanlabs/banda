@@ -183,6 +183,15 @@ PR.
     to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
     (`harnesses.sign_in`).
+  - On another machine that browser is one no one sees, so the machine
+    adds ways for another machine's window (`SignInWay.elsewhere`), each
+    Codex's own CLI in a terminal there: `codex login`, whose page opens
+    in this device's browser, and `codex login --device-auth`. The card
+    shows them on another machine alone (`waysShown`). That page answers
+    to the machine's `localhost:1455`: a click on a public address whose
+    `redirect_uri` names the machine's own port opens that port here
+    first, the same one, and says "Port 1455 is taken on this Mac: sign
+    in with a code instead." where it cannot (ADR 0120, decision 3).
   - A sign-in writes nothing to the Project, and its receipt keeps the
     answer. Every process of that Harness entry is let go, so each reads
     the account when it next starts.

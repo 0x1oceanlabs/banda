@@ -21,7 +21,7 @@ import {
   LogInIcon,
   SquareTerminalIcon,
 } from "lucide-react"
-import { commandLine } from "./sign-in"
+import { commandLine, waysShown } from "./sign-in"
 
 /** How a Pane opens another, as the window gives it. */
 export type Open = PaneProps<unknown>["open"]
@@ -86,7 +86,9 @@ export type Elsewhere = { on: string; name: string }
  * in one in `project`; with no Project, its line shows, to run by hand.
  * `elsewhere`, the Harness is on another machine, whose terminal this
  * device draws: a way that opens a browser would open it there, where no
- * one sees it (#1240), so it says so, and not a button.
+ * one sees it, so the machine's ways for another's window stand for it,
+ * each in a terminal there (ADR 0120, decision 3); a Harness with none
+ * says so, and not a button.
  */
 export function Ways({
   engine,
@@ -119,6 +121,7 @@ export function Ways({
     )
     if (done !== undefined) onSignedIn?.()
   }
+  const shown = waysShown(ways, elsewhere !== undefined)
   return (
     <div className="flex flex-col gap-2">
       {ways.length === 0 && (
@@ -128,7 +131,7 @@ export function Ways({
             : "Sign in from a terminal, then try again."}
         </span>
       )}
-      {ways.map((way) =>
+      {shown.ways.map((way) =>
         way.terminal ? (
           <TerminalWay
             key={way.id}
@@ -143,7 +146,7 @@ export function Ways({
             busy={signing.busy}
             onSignIn={() => void signIn(way)}
           />
-        ) : elsewhere ? null : (
+        ) : (
           <Way
             key={way.id}
             way={way}
@@ -152,7 +155,7 @@ export function Ways({
           />
         )
       )}
-      {elsewhere && ways.some((way) => !way.terminal) && (
+      {elsewhere && shown.unseen && (
         <span className="text-meta text-muted-foreground">
           {elsewhere.name} signs in on a web page in a browser on {elsewhere.on}
           &apos;s own computer. Sign in on {elsewhere.on} for now.

@@ -37,7 +37,9 @@ const arcOf = (page: Page) =>
 
 /** The window and arc's Thread open from arc's part of the sidebar; with
  * `account`, its first turn failed as its Person must sign in on arc. */
-async function onArc({ account = false } = {}) {
+async function onArc({
+  account = false,
+}: { account?: boolean | "codex" } = {}) {
   arc = newArc({ latency: 40, account })
   stopArc = await arc.start()
   const folder = join(arc.code.arc, "banda")
@@ -143,6 +145,41 @@ test("a sign-in that runs in a terminal runs in arc's, where a code signs in and
   await shot(page, "sign-in-on-arc")
   await screen.click()
   await page.keyboard.type("fake-code")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => arc!.signedIn()).toBe(true)
+  await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()
+  await expect(terminal).toBeHidden()
+})
+
+test("Codex on arc signs in by its own CLI in arc's terminal, on a page or with a device code, and no one is sent to arc", async () => {
+  test.setTimeout(SHOTS ? 300_000 : 180_000)
+  const { page, thread } = await onArc({ account: "codex" })
+  await expect(thread.getByText("needs you to sign in.")).toBeVisible()
+  // The way it does by itself would open a browser on arc: its CLI's
+  // ways stand for it (ADR 0120, decision 3).
+  await expect(
+    thread.getByRole("button", { name: "Sign in with ChatGPT", exact: true })
+  ).toBeVisible()
+  const code = thread.getByRole("button", {
+    name: "Sign in with ChatGPT (device code)",
+  })
+  await expect(code).toBeVisible()
+  await expect(
+    thread.getByRole("button", { name: "Sign in with Fake browser" })
+  ).toHaveCount(0)
+  await expect(thread.getByText(/Sign in on arc for now/)).toHaveCount(0)
+  await shot(page, "codex-sign-in-on-arc")
+
+  await code.click()
+  const terminal = page.getByRole("region", {
+    name: "Sign in: ChatGPT (device code)",
+  })
+  const screen = terminal.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await expect(terminal.locator("header").first()).toContainText("arc")
+  await shot(page, "codex-device-code-on-arc")
+  // The Person entered the code on its page: Codex's CLI ends well.
+  await screen.click()
   await page.keyboard.press("Enter")
   await expect.poll(() => arc!.signedIn()).toBe(true)
   await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()

@@ -10,6 +10,25 @@ export function commandLine({ program, args, env }: Program): string {
   return [...set, word(program), ...args.map(word)].join(" ")
 }
 
+/**
+ * The ways of `ways` a card shows, the Harness being on another machine
+ * or not (ADR 0120, decision 3). There, one for another machine's window
+ * stands for what the Harness does by itself, which would open a browser
+ * no one sees; here those are left out, and nothing changes. `unseen`
+ * says that the Harness has a way of its own with nothing to stand for it.
+ */
+export function waysShown<
+  Way extends { terminal?: unknown; elsewhere: boolean },
+>(ways: readonly Way[], elsewhere: boolean): { ways: Way[]; unseen: boolean } {
+  if (!elsewhere)
+    return { ways: ways.filter((way) => !way.elsewhere), unseen: false }
+  const shown = ways.filter((way) => way.terminal)
+  return {
+    ways: shown,
+    unseen: shown.length < ways.length && !ways.some((way) => way.elsewhere),
+  }
+}
+
 function word(text: string): string {
   return /^[\w@%+:,./-]+$/.test(text)
     ? text

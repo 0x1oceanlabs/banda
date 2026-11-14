@@ -11,4 +11,10 @@ export type SignInWay = { id: string, name: string, description?: string,
  * code 0 when that worked. Without one the Harness signs in by itself,
  * as Codex does in the browser.
  */
-terminal?: Program, };
+terminal?: Program, 
+/**
+ * Whether it is for a Person at another machine's window alone (ADR
+ * 0120, decision 3): on its own machine a way the Harness does by
+ * itself signs in the same account, in the browser there.
+ */
+elsewhere: boolean, };

@@ -381,7 +381,10 @@ export type Arc = {
 
 /** The machine "arc": its own folders and disk, the fake agent its
  * Harness, `latency` ms a round trip away. */
-export function newArc({ latency = 0, account = false } = {}): Arc {
+export function newArc({
+  latency = 0,
+  account = false,
+}: { latency?: number; account?: boolean | "codex" } = {}): Arc {
   const dir = mkdtempSync(join(tmpdir(), "banda-arc-"))
   const at = (path: string) => join(dir, path)
   // A throwaway home that stands in for this machine's, and arc's own,
@@ -404,9 +407,33 @@ export function newArc({ latency = 0, account = false } = {}): Arc {
     ? `FAKE_AGENT_HOME = ${JSON.stringify(at("arc/fake-home"))}, `
     : ""
   if (account) mkdirSync(at("arc/fake-home"))
+  // As `codex`, it is an account of Codex's with Codex's CLI, a fake of
+  // it: its `login` says where to sign in, and Enter stands for the
+  // Person having done so there.
+  const codex = account === "codex"
+  if (codex)
+    writeFileSync(
+      at("arc/bin/codex"),
+      `#!/bin/sh
+[ "$1" = --version ] && echo "codex-cli 9.9.9" && exit 0
+[ "$1" = login ] || exit 1
+if [ "$2" = --device-auth ]; then
+  printf 'Open https://example.invalid/device and enter FAKE-CODE\\r\\n'
+else
+  printf 'Starting local login server on http://localhost:1455.\\r\\n'
+fi
+read done
+printf yes > "$FAKE_AGENT_HOME/signed-in"
+`,
+      { mode: 0o755 }
+    )
+  const harness = codex ? "codex" : "fake"
+  const cli = codex
+    ? `cli = { program = ${JSON.stringify(at("arc/bin/codex"))}, variable = "CODEX_PATH" }\n`
+    : ""
   writeFileSync(
     at("config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\nenv = { ${signedIn}FAKE_AGENT_MCP = ${JSON.stringify(at("mcp.json"))} }\n`
+    `[[harness]]\nid = "${harness}"\nname = "Fake AI"\ncommand = ${JSON.stringify(agent)}\n${cli}env = { ${signedIn}FAKE_AGENT_MCP = ${JSON.stringify(at("mcp.json"))} }\n`
   )
   writeFileSync(at("config/sharing.toml"), "problems = false\n")
   writeFileSync(at("config/machine.toml"), 'name = "arc"\nicon = "server"\n')
@@ -512,7 +539,7 @@ export function newArc({ latency = 0, account = false } = {}): Arc {
         "--project",
         project,
         "--params",
-        JSON.stringify({ harness: "fake", text, settings: null })
+        JSON.stringify({ harness, text, settings: null })
       )
     },
     states: (project) => {
