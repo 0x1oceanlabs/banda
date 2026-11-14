@@ -994,6 +994,30 @@ async fn what_an_agent_opens_with_no_place_goes_into_its_threads_group_as_a_deck
     assert_eq!(last["group"], Value::Null);
 }
 
+/// `banda` run by an Agent goes by its pass, whatever `BANDA_PANE` says
+/// (ADR 0134, decision 4): `banda files`, which asks `workspaces.open`
+/// from the Pane of its terminal, stays refused under an Agent's pass,
+/// which opens only through `open_pane`, so naming the Person's Pane
+/// places nothing as the Person's.
+#[tokio::test]
+async fn banda_under_an_agents_pass_opens_nothing_as_the_person_whatever_pane_it_names() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let work = machine.project("Work").await;
+    let terminal = json!({ "project": work, "kind": "terminal.terminal", "args": {} });
+    let terminal = machine.command("workspaces.open", terminal).await.unwrap();
+    let before = machine.list().await;
+
+    let files = json!({
+        "project": work, "kind": "files.tree", "args": { "dir": "/w" },
+        "from": terminal["pane"], "via": "key",
+    });
+    let agent = agent_in(AgentId::new(), work, Uuid::now_v7());
+    let refused = machine.answer_from(CommandId::new(), agent, "workspaces.open", files);
+    assert_eq!(refused.await.unwrap_err().code, Code::Forbidden);
+    assert_eq!(machine.list().await, before);
+}
+
 #[tokio::test]
 async fn what_an_agent_opens_goes_beside_its_thread_on_its_workspace_and_only_its_own() {
     let root = tempfile::tempdir().unwrap();

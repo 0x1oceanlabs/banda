@@ -3,6 +3,7 @@
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
+use uuid::Uuid;
 
 banda_kernel::id!(
     /// A terminal. The window chooses it, so a Pane names its terminal
@@ -65,6 +66,12 @@ pub struct Open {
     #[serde(default)]
     #[ts(as = "Option<Size>", optional)]
     pub size: Size,
+    /// The workspaces' Pane that shows it, which what runs in it is told
+    /// in `BANDA_PANE`, so `banda` opens a Pane from there (ADR 0134,
+    /// decision 4). None where no Pane does, as a dialog's terminal.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(as = "Option<String>", optional)]
+    pub pane: Option<Uuid>,
 }
 
 /// How a terminal's program ended.

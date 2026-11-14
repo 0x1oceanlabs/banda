@@ -36,11 +36,36 @@ async fn a_terminal_starts_its_program_in_its_projects_environment() {
     assert_eq!(program.env["BANDA_PROJECT"], world.project.to_string());
     assert_eq!(program.env["BANDA_TERMINAL"], terminal.to_string());
     assert_eq!(program.env["TERM"], "xterm-256color");
+    // No Pane named it: it is told none, nor the one of another Banda's
+    // terminal the engine was started in.
+    assert_eq!(program.env.get("BANDA_PANE"), None);
     let unset = program.unset.iter();
     assert!(
-        unset.clone().all(|name| name.starts_with("ELECTRON_")),
+        unset
+            .clone()
+            .all(|name| name.starts_with("ELECTRON_") || name == "BANDA_PANE"),
         "{unset:?}"
     );
+    assert!(unset.clone().any(|name| name == "BANDA_PANE"), "{unset:?}");
+}
+
+/// What runs in a terminal a Pane shows is told that Pane's ID, so
+/// `banda` opens a Pane from there, as a key there would (ADR 0134,
+/// decision 4).
+#[tokio::test]
+async fn what_runs_in_a_panes_terminal_is_told_its_pane() {
+    let world = World::new().await;
+    let pane = uuid::Uuid::now_v7();
+    let open = json!({
+        "terminal": TerminalId::new(), "program": "sh", "args": ["-c", "true"],
+        "pane": pane,
+    });
+    world.call("terminal.open", open).await.unwrap();
+    let asked = world.asks.all();
+    let [asked] = &asked[..] else {
+        panic!("one program: {asked:?}");
+    };
+    assert_eq!(asked.program.env["BANDA_PANE"], pane.to_string());
 }
 
 #[tokio::test]

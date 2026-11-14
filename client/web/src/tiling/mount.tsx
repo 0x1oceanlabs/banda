@@ -265,6 +265,7 @@ export function PaneMount({
   engine,
   project,
   pane,
+  id,
   owner,
   elsewhere = false,
   focused,
@@ -278,6 +279,10 @@ export function PaneMount({
   engine: Engine
   project: ProjectId
   pane: PaneState
+  /** Its ID in the workspaces, where they hold it (`PaneProps.id`): given
+   * only to a Pane of this machine's, as another machine's engine knows
+   * no Pane of this window's. */
+  id?: string
   owner: Owner
   /** The Pane's values are another machine's: it is handed only the
    * previewers that say `elsewhere` (ADR 0106, decision 2). */
@@ -304,6 +309,7 @@ export function PaneMount({
             engine={engine}
             project={project}
             args={pane.args}
+            {...(id !== undefined && !elsewhere && { id })}
             focused={focused}
             selected={selected}
             {...(peek && { peek })}

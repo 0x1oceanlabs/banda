@@ -153,6 +153,17 @@ pub fn project_from_env() -> Option<ProjectId> {
         .find_map(|key| std::env::var(key).ok()?.parse().ok())
 }
 
+/// The variable that names, to what runs in a terminal, the Pane that
+/// terminal shows: `banda` opens a Pane from it, as a key there would
+/// (ADR 0134, decision 4).
+pub const PANE_VARIABLE: &str = "BANDA_PANE";
+
+/// The Pane this process's environment names in `PANE_VARIABLE`; one that
+/// is no Pane's ID names none.
+pub fn pane_from_env() -> Option<uuid::Uuid> {
+    std::env::var(PANE_VARIABLE).ok()?.parse().ok()
+}
+
 /// The variable that holds an Agent's pass for `banda`, in its `banda
 /// mcp` and in the shell it runs commands in (ADR 0019, decision 2).
 pub const TOKEN_VARIABLE: &str = "BANDA_TOKEN";

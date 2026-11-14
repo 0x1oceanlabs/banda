@@ -36,7 +36,14 @@ pub async fn open(
         "dir": dir.display().to_string(),
         "selected": selected.map_or(Value::Null, Value::from),
     });
-    let params = json!({ "project": project, "kind": "files.tree", "args": args });
+    // As by a key, from the Pane of the terminal this runs in, where it
+    // runs in one, so it lands where that key would there (ADR 0134,
+    // decision 4). An Agent's pass is refused it, whatever Pane it names:
+    // an Agent opens through `open_pane`, which takes no `files.tree` yet.
+    let params = json!({
+        "project": project, "kind": "files.tree", "args": args,
+        "from": banda_kernel::pane_from_env(), "via": "key",
+    });
     let opened = (client.call("workspaces.open", None, CommandId::new(), params)).await?;
     println!("{}", json!({ "ok": opened }));
     Ok(())

@@ -13,7 +13,9 @@ use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Drawn, Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
-use banda_kernel::{ModuleProject, Program, ProjectId, PtyControl, Started, Stream, project_env};
+use banda_kernel::{
+    ModuleProject, PANE_VARIABLE, Program, ProjectId, PtyControl, Started, Stream, project_env,
+};
 use std::collections::BTreeMap;
 use std::os::unix::process::ExitStatusExt;
 use std::sync::{Arc, Mutex};
@@ -78,15 +80,20 @@ impl Terminal {
         env.extend(open.env.clone());
         env.extend(project_env(project.id()).map(|(key, id)| (key.to_owned(), id)));
         env.insert(TERMINAL_VARIABLE.to_owned(), open.terminal.to_string());
+        if let Some(pane) = open.pane {
+            env.insert(PANE_VARIABLE.to_owned(), pane.to_string());
+        }
         // The Person's, outside the fence (ADR 0083, decision 1).
         let shell_or_program = open.program.clone().unwrap_or_else(shell);
         let mut program = Program::terminal(shell_or_program, open.args.clone());
         program.env = env;
         // What Electron tells its own children is not for a Person's
-        // program.
+        // program, nor the Pane of another Banda's terminal the engine
+        // was started in.
         program.unset = (std::env::vars_os())
             .filter_map(|(key, _)| key.into_string().ok())
             .filter(|key| key.starts_with("ELECTRON_"))
+            .chain([PANE_VARIABLE.to_owned()])
             .collect();
         program.cwd = Some(project.folder());
         let (started, pty) = (project.environment().pty(&program, open.size.pty()))

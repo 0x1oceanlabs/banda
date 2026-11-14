@@ -382,3 +382,67 @@ for (const flow of ["free", "row"] as const)
     ])
     await page.screenshot({ path: `test-results/placing-via-${flow}.png` })
   })
+
+// The row joins once the Project's own Group goes (ADR 0134, step 2,
+// #1785): until then Alt+E in the row opens into it.
+for (const flow of ["free"] as const)
+  test(`in the Flow ${flow}, banda files typed in a terminal beside a Thread's Group lands where Alt+E in that terminal does (ADR 0134, decision 4)`, async () => {
+    window = await startWindow({
+      files: { "config/tiling.toml": `flow = "${flow}"\n` },
+    })
+    const { page } = window
+    await firstThread(page)
+    // Two terminals right of the Thread's Group, by the Person's key: the
+    // first is where `banda` is typed, the second keeps it from being
+    // last, so "right of it" is not "last on the workspace".
+    const screens = page.getByRole("region", { name: "Terminal screen" })
+    await page.keyboard.press("Control+Alt+Enter")
+    await expect(screens).toHaveCount(1)
+    await expect(screens.first()).toHaveAttribute("data-state", "running")
+    await page.keyboard.press("Control+Alt+Enter")
+    await expect(screens).toHaveCount(2)
+    await expect(screens.nth(1)).toHaveAttribute("data-state", "running")
+    const terminal = screens.first()
+
+    /** Each column of the Thread's workspace by its Panes' kinds, and
+     * whether it is in a Group. */
+    const columns = () => {
+      const workspace = kept(window).find((one) =>
+        one.columns.some((c) => c.panes.some((p) => p.kind === THREAD))
+      )!
+      return workspace.columns.map((c) => ({
+        kinds: c.panes.map((p) => p.kind),
+        grouped: c.group !== undefined,
+      }))
+    }
+    /** The columns once `open` opened Files from the first terminal;
+     * then Files closes. */
+    const placed = async (open: () => Promise<unknown>) => {
+      await terminal.click()
+      await open()
+      await expect.poll(() => filesAt(window)).toBeDefined()
+      const at = columns()
+      const { pane } = filesAt(window)!
+      window.banda("call", "workspaces.close", "--params", `{"pane":"${pane}"}`)
+      await expect.poll(() => filesAt(window)).toBeUndefined()
+      return at
+    }
+
+    const byKey = await placed(() => page.keyboard.press("Alt+KeyE"))
+    expect(byKey).toEqual([
+      { kinds: [THREAD], grouped: true },
+      { kinds: ["terminal.terminal"], grouped: false },
+      { kinds: ["files.tree"], grouped: false },
+      { kinds: ["terminal.terminal"], grouped: false },
+    ])
+    // The CLI typed in that terminal, which tells it its Pane.
+    const banda = join(import.meta.dirname, "../../../target/debug/banda")
+    const typed = await placed(async () => {
+      await page.keyboard.type(`'${banda}' files .`)
+      await page.keyboard.press("Enter")
+    })
+    expect(typed).toEqual(byKey)
+    await page.screenshot({
+      path: `test-results/placing-banda-pane-${flow}.png`,
+    })
+  })
