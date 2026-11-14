@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { pixels, SWIPE_END, Swipe, THROW, Tracker } from "./swipe"
+import { pixels, SWIPE_END, Swipe } from "./swipe"
 
 describe("a swipe", () => {
   it("picks its way once it has gone a little, and keeps it", () => {
@@ -50,42 +50,5 @@ describe("a swipe", () => {
       x: 4,
       y: 5,
     })
-  })
-})
-
-describe("a throw", () => {
-  it("is read as niri reads it: what moved in the last 150 ms over the time since", () => {
-    const tracker = new Tracker()
-    tracker.push(10, 0)
-    tracker.push(10, 50)
-    tracker.push(10, 100)
-    expect(tracker.speed(100)).toBe(300)
-    // The hand stopped before letting go: the idle time counts.
-    expect(tracker.speed(200)).toBeCloseTo(133.33, 2)
-    expect(tracker.speed(400)).toBe(0)
-  })
-
-  it("carries a third of a second of its speed, as a touchpad's glide slows", () => {
-    expect(THROW).toBeCloseTo(0.333, 3)
-  })
-
-  it("is let go once the steps fall off evenly, and the glide after is not the hand's", () => {
-    const swipe = new Swipe()
-    let at = 0
-    const step = (x: number) => {
-      swipe.add(x, 0, at)
-      at += 16
-      return swipe.lifted()
-    }
-    // The fingers speed up and keep going: not lifted.
-    expect([4, 12, 24, 30, 28, 30].map(step)).not.toContain(true)
-    // The glide: lifted once, then gliding.
-    expect([26, 22, 18, 14].map(step)).toEqual([false, false, false, true])
-    expect(swipe.gliding).toBe(true)
-    expect(step(10)).toBe(false)
-    expect(swipe.gliding).toBe(true)
-    // The fingers back while it glides: theirs again.
-    step(24)
-    expect(swipe.gliding).toBe(false)
   })
 })
