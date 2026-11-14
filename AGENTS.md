@@ -1,13 +1,35 @@
-## Design principles
+# Working on Banda
+
+The rules for whoever changes this repository, a Person or an Agent. They
+are short on purpose: what a document or a test already says is linked,
+not said again.
+
+## How we write code
 
 UNIX composition + deep modules + explicit contracts.
 
-- Small interfaces hide substantial complexity.
-- Contracts define ownership, permissions, outcomes and failures, not just
-  data formats.
-- Splitting code into more packages does not, by itself, make the design
-  modular.
-- Complexity is added only on a user's request or with a new module.
+- **A module is deep.** A small interface hides substantial work: its
+  caller knows what it does, never how. The test of one is that
+  `banda call` can drive it. A layer that only passes calls on is shallow:
+  fold it into its caller.
+- **One thing, one place, one owner.** A record has one writer, a
+  behaviour one place, a function one door. Before you build, find the
+  place that does it already and change that.
+- **A contract is written once.** It defines ownership, permissions,
+  outcomes and failures, not just data formats. The engine's types are
+  written in Rust and generated for TypeScript, never typed again.
+- **Text is the interface.** What the window does with a button, the CLI
+  and an Agent do with the same call.
+- **A border is real when a check holds it.** Splitting code into more
+  packages does not, by itself, make the design modular
+  ([Borders](#borders-are-held-by-checks)).
+- **The smallest change on the roads there are.** Complexity is added
+  only on a user's request or with a new module: no layer, option or
+  abstraction for a future that has not asked.
+- **A slice in its end shape.** Build a thin thing that works from end to
+  end, in the shape it will keep. A foundation is built when a slice
+  needs it
+  ([the roadmap](docs/research/2026-11-08-roadmap-in-slices.md)).
 
 ## Before you change things
 
@@ -26,30 +48,84 @@ UNIX composition + deep modules + explicit contracts.
 - The decisions: [`docs/adr/`](docs/adr/). A change that contradicts an ADR
   needs a new ADR first.
 
+## Borders are held by checks
+
+Who may import, name or call whom is held by a test, not by this page:
+[the architecture's list](docs/architecture.md#checks-that-hold-the-shape)
+says which test holds which border.
+
+- A case a check must allow goes in its list, with its reason. The lists
+  only fall: never raise a count or add a line to make a test pass. Take
+  the other road (the registry, a fact, an intent, the kit), or ask Roma.
+- A new border comes with its check, in the same PR.
+- A rule you find held only in words, here or in an ADR, becomes a check
+  or an issue.
+
 ## Workflow
 
 One change, one branch, one PR. Nothing is pushed straight to `main`.
 
-Each branch has its own worktree in `../banda-worktrees/<slug>`, never
-loose beside the main checkout:
-`git worktree add -b <kind>/<slug> ../banda-worktrees/<slug> origin/main`.
-Remove it once its PR is merged.
+1. **Branch.** Each branch has its own worktree in
+   `../banda-worktrees/<slug>`, never loose beside the main checkout:
+   `git worktree add -b <kind>/<slug> ../banda-worktrees/<slug> origin/main`.
+2. **Show it first**, if Roma will see the change ([below](#show-it-first)).
+3. **Build it**, and try it in the window if it shows there
+   ([below](#see-what-you-changed)).
+4. **Review it for bugs**, if it changes what Banda does: read the whole
+   diff as a stranger would, for what is wrong and not for how it reads.
+   In Claude Code that is `/code-review medium`, and `high` for the
+   kernel, the contract, access and the fence. A change to documents,
+   mocks or tests alone skips this step.
+5. **Simplify it**: look for what the code base has already, what can be
+   shorter, and what sits at the wrong depth; in Claude Code,
+   `/simplify`. After the review, so nothing is polished that will change.
+6. **Check what you touched** ([below](#checks-before-a-pr)).
+7. **Open the PR and arm the merge:** `gh pr merge --auto --rebase`, and
+   go on. The PR merges itself once `ci` is green.
+8. **Remove the worktree** once its PR is merged.
 
-Before a PR, run `scripts/check.sh --no-window`. CI runs every part,
-the window's end-to-end tests too, on runners on devbox, builds the Rust
-for Windows on GitHub's runner, and runs the fence's tests and the
-same-path test on GitHub's Ubuntu runner ([`ci/README.md`](ci/README.md));
-the `ci` status sums them up. A call only Unix has goes behind `cfg(unix)`,
-with Windows code beside it or a refusal that says it is not on Windows
-yet (ADR 0090); `scripts/check.sh windows` checks that here, with
-cargo-xwin and clang. A path is made whole with `dunce::canonicalize`,
-never std's, which `clippy.toml` refuses. Merge with
-`gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
-green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
+A red `ci` is yours to fix, on the PR or, after a merge, on `main`. So is
+a red `tests (Windows)` on `main` after your merge: it is no merge gate,
+so nothing else stops for it
+([`windows.yml`](.github/workflows/windows.yml)).
+
 That is for Roma's PRs and yours. A PR with someone else's commits, taken
 in from a fork, Roma merges by hand: never arm auto-merge on it
 ([ADR 0038](docs/adr/0038-banda-is-open-source-under-apache-2-0.md),
 decision 4).
+
+### Checks before a PR
+
+CI runs every check on every PR, and nothing merges while `ci` is red
+([`ci/README.md`](ci/README.md)). So before a PR you run what is cheap and
+tells you most, not all of it:
+
+- **Format and lints** of the language you changed.
+  Rust: `cargo fmt --all --check` and
+  `cargo clippy --workspace --all-targets -- -D warnings`.
+  TypeScript: `pnpm exec prettier --check .`, `pnpm exec eslint .` and
+  `pnpm -r typecheck`.
+- **The tests of what you changed:** `cargo test -p <crate>`,
+  `pnpm --filter <package> test`.
+- **The generated types**, after a change to a Rust type the contract
+  carries: that crate's tests rewrite `sdk/contract/src/generated`.
+  Commit what they wrote.
+- **The architecture tests**, after a new import, dependency or name of
+  another part: `cargo test -p banda-kernel --test architecture`,
+  `cargo test -p banda apps::tests` and
+  `pnpm --filter @banda/web exec vitest run src/architecture.test.ts`.
+- **Windows**, after a change to code behind `cfg`:
+  `scripts/check.sh windows`, with cargo-xwin and clang. A call only Unix
+  has goes behind `cfg(unix)`, with Windows code beside it or a refusal
+  that says it is not on Windows yet (ADR 0090). A path is made whole
+  with `dunce::canonicalize`, never std's, which `clippy.toml` refuses.
+
+`scripts/check.sh --no-window` is all of it but the window's end-to-end
+tests. Run it when a change crosses the contract or many crates, or when
+`ci` is red and you cannot see why. Read a check's result before you
+push: never chain the push to it.
+
+### Dependencies
 
 Renovate opens the dependency PRs on Mondays
 ([`.github/renovate.json5`](.github/renovate.json5)), and none merges
