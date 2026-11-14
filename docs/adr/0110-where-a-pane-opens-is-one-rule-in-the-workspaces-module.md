@@ -174,4 +174,5 @@ Each step is its own PR, and the window keeps working after each.
 ## Not decided here
 
 - Whether `Alt+Enter` on a free workspace stays there or goes to the
-  Project's workspace.
+  Project's workspace. _Answered for an empty free workspace
+  by ADR 0134, decision 6: it stays there._
