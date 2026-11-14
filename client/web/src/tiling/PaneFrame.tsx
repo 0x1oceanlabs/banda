@@ -515,6 +515,7 @@ export const PaneFrame = memo(function PaneFrame({
                   engine={reach.engine}
                   project={entry.project}
                   pane={onHost}
+                  id={entry.id}
                   owner={owner}
                   elsewhere={there !== undefined}
                   focused={focused}

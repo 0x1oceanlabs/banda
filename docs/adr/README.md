@@ -189,7 +189,7 @@ The Tiling, the sidebar, the bar, the menu, the keys, Settings, and the client.
 | [0102](0102-in-the-row-and-solo-a-project-has-its-own-workspace-and-free-workspaces-hold-the-rest.md) | In the row and solo, a Project has its own workspace, and free workspaces hold the rest | **standing** | decisions 3.2, 3.3, 4 changed by 0134 (own Group goes); placing carried out by 0110 |
 | [0110](0110-where-a-pane-opens-is-one-rule-in-the-workspaces-module.md) | Where a Pane opens is one rule, in the `workspaces` module | **standing** | open question answered by 0134; decision 10 carried on by 0127 |
 | [0127](0127-the-window-shows-and-asks-and-each-thing-has-one-place.md) | The window shows and asks, and each thing has one place | **standing** | six rules in docs/window.md; decision 6 intent and per-device arrangement not built yet |
-| [0134](0134-a-thread-s-group-holds-what-its-thread-opens-and-the-person-s-keys-open-beside-it.md) | A Thread's Group holds what its Thread opens, and the Person's keys open beside it | **standing** | changes 0102 decisions 3, 4 and 0065 decision 7; BANDA_PANE not built yet |
+| [0134](0134-a-thread-s-group-holds-what-its-thread-opens-and-the-person-s-keys-open-beside-it.md) | A Thread's Group holds what its Thread opens, and the Person's keys open beside it | **standing** | changes 0102 decisions 3, 4 and 0065 decision 7; BANDA_PANE built, an Agent's `banda files` still refused |
 
 ### One App each
 

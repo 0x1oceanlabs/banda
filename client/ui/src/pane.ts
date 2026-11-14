@@ -139,6 +139,11 @@ export type PaneProps<A> = {
   engine: Engine
   project: ProjectId
   args: A
+  /** This Pane's ID, as `workspaces.list` names it: a terminal tells what
+   * runs in it, so `banda` opens a Pane from there (ADR 0134, decision 4).
+   * None where no workspace holds it, as Quick Look or a dialog of the
+   * settings. */
+  id?: string
   /** Whether this tile has the focus: keys go to it. */
   focused: boolean
   /** Looks selected while the overview owns the keys; defaults to focused. */

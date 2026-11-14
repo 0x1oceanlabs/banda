@@ -139,6 +139,7 @@ function TerminalPane({
   engine,
   project,
   args,
+  id,
   focused,
   update,
   close,
@@ -205,6 +206,7 @@ function TerminalPane({
       engine={engine}
       project={project}
       terminal={args.terminal}
+      pane={id}
       shell={args.shell}
       done={listed(args.done, project)}
       focused={focused}
@@ -241,6 +243,7 @@ function Screen({
   engine,
   project,
   terminal,
+  pane,
   shell,
   done,
   focused,
@@ -259,6 +262,9 @@ function Screen({
   engine: Engine
   project: ProjectId
   terminal: TerminalId
+  /** The Pane that shows it, which its shell is told as it starts, so
+   * `banda` there opens a Pane from it (ADR 0134, decision 4). */
+  pane: string | undefined
   shell: boolean
   done: Done[] | null
   focused: boolean
@@ -288,6 +294,7 @@ function Screen({
   const heardTitle = useEffectEvent(titled)
   const heardLink = useEffectEvent(followed)
   const hint = useEffectEvent(hinted)
+  const paneOf = useEffectEvent(() => (pane === undefined ? {} : { pane }))
   // What runs in front, last heard: where the paths it prints start.
   const front = useRef<Title>(undefined)
   // Where a link goes, from where the program is now.
@@ -446,6 +453,7 @@ function Screen({
       call("terminal.open", {
         terminal,
         size: { cols: drawn?.cols ?? 80, rows: drawn?.rows ?? 24 },
+        ...paneOf(),
       })
     // How much of the terminal's output this screen has drawn, as its
     // pieces said: after a reconnect the watch goes on from here, with no
