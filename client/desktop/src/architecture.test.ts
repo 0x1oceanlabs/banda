@@ -79,7 +79,7 @@ function projectReads(source: string, file: string): string[] {
  * file more than `SLACK` lines below it lowers it; what main gains goes
  * into a part, not the root.
  */
-const MAIN_LINES = 1289
+const MAIN_LINES = 1181
 const SLACK = 20
 
 test("main's root keeps under its ceiling, and the ceiling follows it down", () => {
@@ -92,11 +92,88 @@ test("main's root keeps under its ceiling, and the ceiling follows it down", () 
   ).toBeLessThanOrEqual(SLACK)
 })
 
+/**
+ * The parts of the bridge's table `main.ts` still answers itself, written
+ * out in its `serve(…)`: a part answered beside its code, as `acts.ts`
+ * answers `act` and `device/files.ts` `files`, is named there by its
+ * table alone. The list only falls: a part that leaves the root leaves
+ * it, and a new one is answered beside its code from the start (ADR 0089,
+ * decision 9). The `engine`, `sign` and `host*` parts wait for the hosts'
+ * move to the core (track 1, SE4).
+ */
+const MAIN_ANSWERS = [
+  "engine",
+  "hosts",
+  "hostEngine",
+  "sign",
+  "hostStart",
+  "hostAdd",
+  "hostSet",
+  "hostRemove",
+  "hostTest",
+  "hostInstall",
+  "hostInstallCancel",
+  "hostTerminal",
+  "hostInstalling",
+  "hostStop",
+  "sshSuggestions",
+  "look",
+  "frame",
+  "menu",
+  "quit",
+  "update",
+  "popped",
+]
+
+/** The parts `source` answers itself in its `serve(…)`: those written
+ * there as a table or an answer, not named by one made elsewhere. */
+function answeredInPlace(source: string): string[] {
+  const found: string[] = []
+  const visit = (node: ts.Node): void => {
+    const answers = ts.isCallExpression(node) && node.arguments[3]
+    if (
+      answers &&
+      node.expression.getText() === "serve" &&
+      ts.isObjectLiteralExpression(answers)
+    )
+      for (const part of answers.properties)
+        if (
+          ts.isPropertyAssignment(part) &&
+          (ts.isObjectLiteralExpression(part.initializer) ||
+            ts.isArrayLiteralExpression(part.initializer))
+        )
+          found.push(part.name.getText())
+    ts.forEachChild(node, visit)
+  }
+  visit(ts.createSourceFile("main.ts", source, ts.ScriptTarget.Latest, true))
+  return found
+}
+
+test("main's root answers no more of the bridge itself than it did", () => {
+  const text = readFileSync(join(root, "client/desktop/src/main.ts"), "utf8")
+  expect(answeredInPlace(text)).toEqual(MAIN_ANSWERS)
+})
+
+test("the lint tells a part answered in place from one named by its table", () => {
+  expect(
+    answeredInPlace(
+      `serve(runtime, fromPage, BRIDGE, {
+        engine: [none, () => reached],
+        popped: { current: [none, () => now] },
+        act: actsAnswers,
+        problems: problemsAnswers(state),
+        ...modules.answers,
+      })`
+    )
+  ).toEqual(["engine", "popped"])
+})
+
 test("main's code is found: the window's, the kit's and the Apps' parts in main", () => {
   const found = new Set(mains.map((file) => relative(root, file)))
   for (const file of [
     "client/desktop/src/main.ts",
     "client/desktop/src/os-window/system.ts",
+    "client/desktop/src/device/files.ts",
     "client/desktop-kit/src/files.ts",
     "apps/agents/desktop/src/index.ts",
     "apps/browser/desktop/src/index.ts",

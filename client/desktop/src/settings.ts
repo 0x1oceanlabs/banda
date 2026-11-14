@@ -8,10 +8,19 @@
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
 import type { Listed } from "@banda/contract/look"
-import { Broke, Refused, Settings } from "@banda/desktop-kit"
+import {
+  type Answers,
+  Broke,
+  Look,
+  none,
+  Refused,
+  Settings,
+  text,
+} from "@banda/desktop-kit"
 import { Duration, Effect, Exit, Layer, Schema, Stream } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { shell } from "electron"
+import type { BRIDGE } from "./bridge"
 import { Editors } from "./editors"
 import { Program } from "./program"
 
@@ -102,3 +111,31 @@ export const settingsLayer = Layer.effect(Settings)(
     }
   })
 )
+
+/** Main's answers to the page's channels of `settings`, and the Banda
+ * menu's (ADR 0017). */
+export const settingsAnswers: Answers<typeof BRIDGE.settings, Settings | Look> =
+  {
+    set: [
+      Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+      ([file, key, value]) =>
+        Settings.use((settings) => settings.set(file, key, value)),
+    ],
+    reset: [
+      Schema.Tuple([Schema.String, Schema.String]),
+      ([file, key]) => Settings.use((settings) => settings.reset(file, key)),
+    ],
+    rename: [
+      Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+      ([file, key, to]) =>
+        Settings.use((settings) => settings.rename(file, key, to)),
+    ],
+    reveal: [
+      text,
+      ([file]) =>
+        Effect.flatMap(Look.part("config", "The config folder"), (config) =>
+          Settings.use((settings) => settings.reveal(config, file))
+        ),
+    ],
+    themes: [none, () => Settings.use((settings) => settings.themes)],
+  }
