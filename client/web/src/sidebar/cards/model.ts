@@ -25,9 +25,9 @@ import {
   type Stand,
   STAND_WORDS,
 } from "@banda/ui/status"
-import type { Row } from "../rows"
-import type { Child } from "../inbox"
-import type { OnRow } from "../machine-on-row"
+import type { Row } from "../model/rows"
+import type { Child } from "../model/inbox"
+import type { OnRow } from "../model/machine-on-row"
 
 /** How the list is viewed, as its cards take it: grouped by Project
  * (decision 7), a group's header names the Project its cards then leave

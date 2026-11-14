@@ -17,13 +17,13 @@
  * reaches neither the registry nor the Window's actions: both name these
  * as they load, and may load while the rest of this file still does.
  */
-export { SIDEBAR, SIDEBAR_KEYS } from "./keys"
-export { GROUP_WORDS, type Settings } from "./settings"
-export { kept, WIDTH } from "./width"
-export { askTab, isTab } from "./showing"
-export { byOrder, placeIn, useOrderNow } from "./order"
-export { countsWidget } from "./Counts"
-export { writeSidebar } from "./write-setting"
-export { LaterPicker, pickLater } from "./LaterPicker"
-export { Edge } from "./Edge"
-export { Sidebar } from "./Sidebar"
+export { SIDEBAR, SIDEBAR_KEYS } from "./model/keys"
+export { GROUP_WORDS, type Settings } from "./model/settings"
+export { kept, WIDTH } from "./model/width"
+export { askTab, isTab } from "./list/showing"
+export { byOrder, placeIn, useOrderNow } from "./model/order"
+export { countsWidget } from "./bar/Counts"
+export { writeSidebar } from "./list/write-setting"
+export { LaterPicker, pickLater } from "./list/LaterPicker"
+export { Edge } from "./list/Edge"
+export { Sidebar } from "./list/Sidebar"
