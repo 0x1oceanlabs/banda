@@ -77,6 +77,18 @@ done
 # The engine alone, for a machine with no window and for each machine's
 # engine to update itself (ADR 0119, decision 5). Not on Windows yet, whose
 # engine is no service (ADR 0090).
+bundle=
 if [[ ${OS:-} != Windows_NT ]]; then
   node scripts/engine.mjs "$resources"
+  bundle=$(find "$PWD/client/desktop/dist" -maxdepth 1 -name '*-engine-*.tar.gz' -print -quit)
 fi
+
+# The window makes its own copy of the engine it was packed with, and
+# checks it at each start (client/desktop/src/program.ts): tried here on
+# what was really packed, as no test's own `banda` is, so an app whose
+# window cannot start is not released. The copy carries what the engine's
+# bundle carries, so an engine the window started lacks nothing that one
+# that updated itself has. Windows' paths as Node reads them.
+packed=$(cd "$resources" && { pwd -W 2>/dev/null || pwd; })
+BANDA_PACKED=$packed BANDA_PACKED_BUNDLE=$bundle \
+  pnpm --filter @banda/desktop exec vitest run src/packed.test.ts

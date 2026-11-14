@@ -24,6 +24,8 @@ on:
       - .github/workflows/release-windows.yml
       - client/desktop/electron-builder.config.mjs
       - client/desktop/installer.nsh
+      - client/desktop/src/program.ts
+      - client/desktop/src/packed.test.ts
       - scripts/licenses.mjs
       - scripts/node.mjs
       - scripts/package.sh

@@ -33,6 +33,8 @@ on:
       - scripts/install.sh
       - client/desktop/electron-builder.config.mjs
       - client/desktop/src/channel.ts
+      - client/desktop/src/program.ts
+      - client/desktop/src/packed.test.ts
       - client/desktop/package.json
   workflow_dispatch:
 
