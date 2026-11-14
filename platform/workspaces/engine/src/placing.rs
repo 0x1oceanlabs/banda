@@ -221,9 +221,10 @@ pub fn place(list: &Arrangement, leads: &BTreeSet<String>, asked: Asked) -> Opti
     // On an empty workspace no Project owns, on screen, what the Person
     // asks for with no Pane in front opens there, and the screen stays
     // (ADR 0134, decision 6). In the row a Project that owns no workspace
-    // takes it as its own, when it is the bottom one the row gives it.
-    let empty = on.and_then(|on| list.iter().position(|w| w.id == on));
-    let empty = empty.filter(|&w| list[w].project.is_none() && list[w].columns.is_empty());
+    // takes it as its own, when it is the bottom one the row gives it
+    // (`model::project_workspace`).
+    let empty = (on.and_then(|on| list.iter().position(|w| w.id == on)))
+        .filter(|&w| list[w].project.is_none() && list[w].columns.is_empty());
     if let (By::Person { .. }, None, Some(w)) = (by, &at, empty) {
         let owns = list.iter().any(|w| w.project == Some(project));
         let takes = flow == Flow::Row && !scratch && !owns && w == list.len() - 1;

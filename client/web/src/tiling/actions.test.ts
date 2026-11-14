@@ -1000,7 +1000,7 @@ test("Arrange by Project names every Project its Panes are of, as a Pane opens, 
   })
 })
 
-test("a first Pane started on an empty workspace goes as a key puts it: on an emptied Project's, first there in no Group; on one no Project owns, there (ADR 0134, decisions 3 and 6)", () => {
+test("a first Pane started on an empty workspace goes as a key puts it: on an emptied Project's, first there in no Group; on one no Project owns, there, which a Project with none takes (ADR 0134, decisions 3 and 6)", () => {
   const started = (flow: Flow) => {
     const window = windowIn(flow)
     // A's workspace, emptied, and the empty one at the bottom.
@@ -1036,6 +1036,11 @@ test("a first Pane started on an empty workspace goes as a key puts it: on an em
   row.change((w, placing) => placed(w, A, thread, placing))
   expect(row.layout()).toEqual([[[2]], [[3]], []])
   expect(row.state.list[1].project).toBeUndefined()
+  // B, which owns no workspace, takes the empty one at the bottom.
+  row.change((w) => ({ ...w, current: 2 }))
+  row.change((w, placing) => placed(w, B, terminal(4), placing))
+  expect(row.layout()).toEqual([[[2]], [[3]], [[4]], []])
+  expect(row.state.list[2].project).toBe(B)
   // In the Flow free, there too.
   const free = started("free")
   free.change((w, placing) => placed(w, A, terminal(2), placing))

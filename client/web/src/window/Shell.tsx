@@ -18,7 +18,6 @@ import {
   usePaneOn,
   useStore,
 } from "@banda/core/react"
-import type { PaneState } from "@banda/ui/pane"
 import { Bar } from "../bar/Bar"
 import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/layout/Widgets"
@@ -537,13 +536,6 @@ export function Shell({
         change((w) => focusEntry(w, entry))
       ),
   })
-  // A first Pane started on an empty workspace opens as its key opens it,
-  // a Thread as `Alt+Enter`, where Here says it starts; the engine places
-  // it, there on a workspace no Project owns (ADR 0134, decision 6).
-  const startHere = useCallback(
-    (pane: PaneState) => parts.open(pane, here.get().starts),
-    [parts, here]
-  )
   // A Thread that woke by itself is told of once (ADR 0074, decision 7).
   useWokeNote(stores, parts.run)
   // A new Problem of Banda's own tells too, silently (ADR 0039).
@@ -785,7 +777,10 @@ export function Shell({
                     frame={frame}
                     onStep={stepBy}
                     onGo={goTo}
-                    onStart={startHere}
+                    // A first Pane started on an empty workspace opens as a
+                    // key opens it; the engine places it, there on one no
+                    // Project owns (ADR 0134, decision 6).
+                    onStart={parts.open}
                   />
                 )}
                 <Toaster />
