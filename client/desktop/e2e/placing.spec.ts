@@ -142,9 +142,31 @@ test("a rule of tiling.toml holds from a key, a program and banda: how wide a ki
     const { pane, at } = filesAt(window)!
     await expect(tiles).toHaveCount(2)
     const column = columns()[at.column]
-    const drawn = await Promise.all(
-      [tiles.first(), tiles.last()].map((tile) => tile.boundingBox())
-    )
+    // The columns' widths once they are still: two reads that agree.
+    const read = () =>
+      page.evaluate(() => {
+        const strip = document
+          .querySelector("section[data-tile]")!
+          .closest<HTMLElement>("[data-strip]")!
+        const style = getComputedStyle(strip)
+        const px = (length: string) => parseFloat(length) || 0
+        return {
+          columns: [
+            ...strip.querySelectorAll<HTMLElement>("[data-column]"),
+          ].map((one) => one.offsetWidth),
+          room:
+            strip.clientWidth - px(style.paddingLeft) - px(style.paddingRight),
+          gap: px(style.columnGap),
+        }
+      })
+    let drawn = await read()
+    await expect
+      .poll(async () => {
+        const was = drawn
+        drawn = await read()
+        return drawn.columns.join() === was.columns.join()
+      })
+      .toBe(true)
     window.banda("call", "workspaces.close", "--params", `{"pane":"${pane}"}`)
     await expect.poll(() => filesAt(window)).toBeUndefined()
     await expect(tiles).toHaveCount(1)
@@ -166,11 +188,16 @@ test("a rule of tiling.toml holds from a key, a program and banda: how wide a ki
   for (const way of ways) {
     const files = await opened(way)
     expect(files).toMatchObject({ at: 1, width: "2/3", panes: 1 })
-    // Drawn so: wider than the terminal's third, where its kind's own
-    // width would be as narrow. The look's `min` keeps a third readable,
-    // so it is not twice as wide on this screen.
-    const [terminal, tree] = files.drawn
-    expect(tree!.width / terminal!.width).toBeGreaterThan(1.2)
+    // Drawn so: two thirds of the Strip's room, where its kind's own
+    // width would be as narrow as the terminal's third. The look's `min`
+    // keeps a third readable, so it is not twice as wide on this screen.
+    // The columns are measured, not their tiles: a column opens at its
+    // width, and its tile comes in from half its size (the look's `open`),
+    // so a tile read on the way is any width up to its column's.
+    const { room, gap } = files.drawn
+    const [terminal, tree] = files.drawn.columns
+    expect(Math.abs(tree - ((2 / 3) * (room + gap) - gap))).toBeLessThan(1)
+    expect(tree / terminal).toBeGreaterThan(1.2)
   }
 
   // A rule written through banda holds from the next Pane, with no
