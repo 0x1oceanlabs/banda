@@ -63,7 +63,7 @@ resources=$(find client/desktop/dist -maxdepth 4 -type d \
   \( -path '*-unpacked/resources' -o -path '*.app/Contents/Resources' \) -print -quit)
 carried=(adapters/claude-agent-acp.mjs adapters/codex-acp.mjs)
 if [[ ${OS:-} == Windows_NT ]]; then
-  carried+=(banda.exe banda.pdb node/node.exe)
+  carried+=(banda.exe banda-update.exe banda.pdb node/node.exe)
 else
   carried+=(banda-update)
 fi

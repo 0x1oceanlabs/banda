@@ -116,7 +116,7 @@ jobs:
           "### What Windows did`n" >> $env:GITHUB_STEP_SUMMARY
 
           Run $installer
-          foreach ($file in 'banda-dev.exe', 'resources\banda.exe', 'resources\banda.pdb', 'resources\node\node.exe', 'resources\adapters\claude-agent-acp.mjs', 'resources\adapters\codex-acp.mjs') {
+          foreach ($file in 'banda-dev.exe', 'resources\banda.exe', 'resources\banda-update.exe', 'resources\banda.pdb', 'resources\node\node.exe', 'resources\adapters\claude-agent-acp.mjs', 'resources\adapters\codex-acp.mjs') {
             if (-not (Test-Path (Join-Path $dir $file))) { throw "the install has no $file" }
           }
           $said = & (Join-Path $dir 'resources\banda.exe') --version
@@ -217,7 +217,7 @@ jobs:
           $copy = Split-Path (@(Engine)[0].ExecutablePath)
           $engines = Split-Path $copy
           Fact "the engine's copy: ``$copy``"
-          foreach ($file in 'version', 'banda.pdb', 'node\node.exe', 'adapters\claude-agent-acp.mjs', 'adapters\codex-acp.mjs') {
+          foreach ($file in 'version', 'banda-update.exe', 'banda.pdb', 'node\node.exe', 'adapters\claude-agent-acp.mjs', 'adapters\codex-acp.mjs') {
             if (-not (Test-Path (Join-Path $copy $file))) { throw "the copy has no $file" }
           }
           # What keeps a copy whose engine runs: its program will not go.
