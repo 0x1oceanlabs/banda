@@ -257,7 +257,7 @@ test("arc's Thread restored as the window starts again with arc away from the fi
   await expect(thread.getByText(`You said: ${TITLE}`)).toBeVisible()
 })
 
-test("what waits for arc still shows after a restart with arc held from the first moment, by the directory alone, and goes to arc once it is back (H5e-2)", async () => {
+test("what waits for arc still shows after a restart with arc held from the first moment, by the directory and the row this device kept, and goes to arc once it is back (H5e-2)", async () => {
   test.setTimeout(SHOTS ? 300_000 : 180_000)
   await onArc()
   expect(window!.banda("call", "workspaces.list")).not.toContain('"host"')
@@ -275,8 +275,9 @@ test("what waits for arc still shows after a restart with arc held from the firs
     held.getByRole("list", { name: "Waiting for arc" })
   ).toContainText(words)
 
-  // Started again with arc held: its Pane knows arc only from the
-  // directory this device keeps, and the rest from what the message kept.
+  // Started again with arc held: its Pane knows arc from the directory
+  // this device keeps, and its Thread's row as the device kept it, as of
+  // when it last heard arc (#1243).
   const page = await again()
   const thread = page.getByRole("region", { name: TITLE, exact: true })
   const waits = thread.getByRole("list", { name: "Waiting for arc" })
@@ -284,8 +285,9 @@ test("what waits for arc still shows after a restart with arc held from the firs
   await expect(waits).toContainText(words)
   const pill = thread.locator("[data-machine-pill]")
   await expect(pill).toHaveText("arc is away · 1 waiting", { timeout: 60_000 })
-  // "banda · arc · its title" in its header.
+  // "banda · arc · its title" in its header, with its Mark as last heard.
   expect(await headerShows(thread)).toEqual([
+    "mark",
     "project",
     "machine",
     TITLE,

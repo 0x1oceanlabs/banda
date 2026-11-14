@@ -18,6 +18,7 @@ export {
   poppedRoute,
 } from "./device"
 export { isPlaced, type Placed } from "./directory"
+export { Cache, type Shelf } from "./cache"
 export {
   type DeviceFile,
   deviceFile,
@@ -53,6 +54,7 @@ export {
   otherBuild,
   type Ours,
   reachWords,
+  type RowsAsOf,
   type Shown,
   thisNamed,
   shownOf,

@@ -4,6 +4,7 @@ import type { Engine, ProjectSummary, Status } from "@banda/contract"
 import { vi } from "vitest"
 import type { HostState } from "./device"
 import type { HostsDevice } from "./hosts"
+import type { DeviceStorage } from "./queue"
 
 /** Project `id`, trusted and in its own folder, with `more`. */
 export const project = (id: string, more: Partial<ProjectSummary> = {}) =>
@@ -38,6 +39,21 @@ export const away = {
   state: "away",
   why: "ssh ended",
 } satisfies HostState
+
+/** A device's storage, which outlives each window, kept in a map the
+ * test reads. */
+export function deviceStorage(kept = new Map<string, string>()) {
+  const device: DeviceStorage = {
+    get length() {
+      return kept.size
+    },
+    key: (index) => [...kept.keys()][index] ?? null,
+    getItem: (key) => kept.get(key) ?? null,
+    setItem: (key, value) => void kept.set(key, value),
+    removeItem: (key) => void kept.delete(key),
+  }
+  return { device, kept }
+}
 
 /** A desktop whose hosts the test tells, and whose engines it answers. */
 export function desktop() {
