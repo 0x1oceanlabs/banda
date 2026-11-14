@@ -124,6 +124,16 @@ page is one part of. A change to main changes this page in the same PR.
   runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
   brings its part of the table and of main; `client/desktop/src/modules.ts`
   is the one file in main that names one.
+- **A Pane has a window of its own when the main window pops it out**
+  (ADR 0025, decision 9). It is the same page at `#pane/<id>`, drawing
+  that Pane alone, in a solid window with the system's frame. Which Panes
+  have one, opening and closing it, and the bridge's `popped` are kept in
+  `client/desktop/src/os-window/popped.ts`, a service over the windows
+  (`os-window/windows.ts`): only the main window's page pops a Pane out,
+  it hears which there are each time they change and keeps each Pane's
+  place, and what a popped Pane asks (to open a Pane beside it, to run an
+  action) goes to the main window's page, brought to the front. They are
+  the main window's: they close as it closes, or hides on macOS.
 - **A port of another machine opens here on the Person's click.** A web
   address of another machine's own computer, as `localhost:3000` in an
   arc reply, a terminal or a file, opens through a forward of that port

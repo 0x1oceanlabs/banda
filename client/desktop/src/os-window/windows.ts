@@ -7,8 +7,9 @@
  *
  * On macOS the main window hides as it closes, unless Banda quits, and
  * leaves full screen first (closing.ts; ADR 0086, decision 4). What
- * quitting is, the Dock, and which Panes have windows of their own are
- * main's root's still: it hands them in (`Root`).
+ * quitting is and the Dock are main's root's still: it hands them in
+ * (`Root`), and with them how the Panes' own windows close, which are
+ * kept over the windows (popped.ts).
  *
  * A part of the device's window (ADR 0089, decision 9), made of what the
  * look says (material.ts).
