@@ -1306,11 +1306,12 @@ mod tests {
             // Nowhere: a look in its own process would fail on it.
             .reading("http://127.0.0.1:9", Duration::MAX, Duration::MAX)
             .lacking();
-        // Where Banda packs no engine alone, as on Windows yet, that is
-        // said first.
-        let why = match feed::system() {
-            Some(_) => "no banda-update",
-            None => "packs no engine alone",
+        // Where Banda packs no engine alone, that is said first; but on
+        // Windows, where the app brings the engine (ADR 0090, step 6).
+        let why = if feed::system().is_none() && !cfg!(windows) {
+            "packs no engine alone"
+        } else {
+            "no banda-update"
         };
         let state = updates.look().await;
         let off = state.off.expect("it says why");
