@@ -65,3 +65,21 @@ export function rowsOf(
     }))
   )
 }
+
+/** A row's key: its Project's and its own, as Alt+U and the counts walk
+ * them. */
+export function rowKey(row: Row): string {
+  return `${row.project.id}:${row.listed.id}`
+}
+
+/** A card's key in the list: its machine's and its Thread's, so it stays
+ * the same node, with its Mark, from one part to another, and to another
+ * Project. */
+export function itemKey(row: Row): string {
+  return keyOf(row.host, row.listed.id)
+}
+
+/** The key of `thread` on `host`; none for this machine. */
+export function keyOf(host: string | undefined, thread: string): string {
+  return `${host ?? ""}:${thread}`
+}

@@ -3,8 +3,7 @@ import { toast } from "@banda/ui/components/sonner"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import type { ItemAction } from "@banda/ui/module"
 import { type Act, actsOf } from "./acts"
-import type { Row } from "./rows"
-import { type By, itemKey } from "./hold"
+import { itemKey, type Row } from "./rows"
 import { itemActionOf } from "../window/items"
 import {
   type Left,
@@ -17,14 +16,12 @@ import {
 import { keyId } from "./keys"
 import { pickLater } from "./LaterPicker"
 import { keep, toldArchived, type Undoable, undoOf } from "./undo"
-import type { Holding } from "./useHold"
 
 /** What an act on a card is told besides: the card's element, where the
- * Later picker opens; how the Person took it, else as their last input in
- * the list did, as from the card's menu; by a key, what to do as it takes
- * the card out of the tab, before the list draws it so; and, for Later,
- * that it is put off until its turn ends, with no picker. */
-export type ActOn = { card: Element; by?: By; gone?: () => void; done?: true }
+ * Later picker opens; by a key, what to do as it takes the card out of
+ * the tab, before the list draws it so; and, for Later, that it is put
+ * off until its turn ends, with no picker. */
+export type ActOn = { card: Element; gone?: () => void; done?: true }
 
 /** Runs the item action of a card's Thread that does `what`, its App's,
  * with `more` args: none where its App has none. */
@@ -44,24 +41,19 @@ export function useDoing(): (
 /**
  * The Person's acts on a card (ADR 0098, decision 10), by its buttons or
  * by a key on the pick (decision 13), Unread by its key alone: the
- * Thread's App's, by its item actions (ADR 0087, decision 12), which the
- * list draws at once, with what takes each back. Later opens the picker
- * at the card, which then holds the list, and tells `gone` once a time is
- * picked, or puts it off until its turn ends at once, as the card's menu
- * asks; Archive acts at once, and is told in the toast. Each is kept for
- * `Ctrl+Z` too. The Window that does not reach a card's host has its App
+ * Thread's App's, by its item actions (ADR 0087, decision 12). Later
+ * opens the picker at the card, and tells `gone` once a time is picked,
+ * or puts it off until its turn ends at once, as the card's menu asks;
+ * Archive acts at once, and is told in the toast. Each is kept for
+ * `Ctrl+Z`. The Window that does not reach a card's host has its App
  * refuse at once, in its toast: the pick stays, and nothing is kept to
- * undo. For a moment after an act by key closed a slot, the buttons take
- * no click.
+ * undo.
  */
-export function useActs(
-  holding: Holding | undefined
-): (row: Row, act: Act | "unread", on: ActOn) => void {
+export function useActs(): (row: Row, act: Act | "unread", on: ActOn) => void {
   const run = useRun()
   const doing = useDoing()
   const away = useAway()
-  return (row, act, { card, by, gone, done: untilDone }) => {
-    if (by === "pointer" && holding?.quiet()) return
+  return (row, act, { card, gone, done: untilDone }) => {
     const { listed } = row
     const project = row.project.id
     // What takes it back, kept, as the card goes; none where it is refused.
@@ -73,7 +65,7 @@ export function useActs(
       return undo
     }
     if (act === "later" && untilDone) {
-      holding?.act(row, by, done())
+      done()
       doing(row, "later", { done: true })
       return
     }
@@ -81,12 +73,11 @@ export function useActs(
       pickLater({
         targets: [{ project, listed }],
         anchor: card,
-        onPicked: () => holding?.act(row, by, done()),
+        onPicked: done,
       })
       return
     }
     const undo = done()
-    holding?.act(row, by, undo)
     if (act === "wake" || act === "unread") doing(row, act)
     else doing(row, "archive", { archived: act === "archive" })
     if (act === "archive" && undo) toldArchived(run, [undo])
@@ -133,12 +124,11 @@ export function actOnRow(
 }
 
 /** What an act on several cards is told besides its cards: the element
- * the Later picker opens at; how the Person took it; by a key, what to do
- * as it takes the cards `keys` out of the tab; and which cards are still
- * selected after it, those it left, once it is done. */
+ * the Later picker opens at; by a key, what to do as it takes the cards
+ * `keys` out of the tab; and which cards are still selected after it,
+ * those it left, once it is done. */
 export type OnSet = {
   anchor: Element
-  by: By
   gone?: (keys: ReadonlySet<string>) => void
   after?: (left: readonly Row[]) => void
 }
@@ -153,14 +143,16 @@ export type OnSet = {
  * toast says why, as `S` does on one card. Unread keeps every card
  * selected: those read are marked unread, or, where none is, all read.
  */
-export function useSetActs(
-  holding: Holding | undefined
-): (rows: readonly Row[], act: SetAct, on: OnSet) => void {
+export function useSetActs(): (
+  rows: readonly Row[],
+  act: SetAct,
+  on: OnSet
+) => void {
   const run = useRun()
   const doing = useDoing()
   const away = useAway()
   const keyLabel = useKeyLabel()
-  return (rows, act, { anchor, by, gone, after }) => {
+  return (rows, act, { anchor, gone, after }) => {
     // What it does on each card, and what it leaves: those that ask or
     // work, which Archive refuses, and those it does not reach, each said.
     const acted: { row: Row; does: Act | "unread" }[] = []
@@ -203,7 +195,7 @@ export function useSetActs(
       ({ row }) =>
         act === "archive" || (act === "later" && row.stand !== "later")
     )
-    /** Each done, kept as one act, and drawn as the Person's own. */
+    /** Each done, kept as one act. */
     const done = () => {
       if (going.length > 0)
         gone?.(new Set(going.map(({ row }) => itemKey(row))))
@@ -214,7 +206,6 @@ export function useSetActs(
         steps: undoOf(does, row.listed, now),
       }))
       keep(undos)
-      doings.forEach(({ row }, at) => holding?.act(row, by, undos[at]))
       after?.(act === "unread" ? rows : stays)
       return undos
     }

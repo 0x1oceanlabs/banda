@@ -751,7 +751,7 @@ test("the Window's root keeps under its ceiling, and the ceiling follows it down
  * into a part, not the frame. It only falls, as the Window's does: a PR
  * that cuts the file more than `SLACK` lines below it lowers it.
  */
-const SIDEBAR_LINES = 165
+const SIDEBAR_LINES = 161
 
 test("the sidebar's frame keeps under its ceiling, and the ceiling follows it down", () => {
   const text = readFileSync(join(app, "web/src/sidebar/Sidebar.tsx"), "utf8")

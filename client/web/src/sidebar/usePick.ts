@@ -68,12 +68,9 @@ export function pickProps(key: string, picked: boolean, checked?: boolean) {
   } as const
 }
 
-/** The stops drawn in `list`, in their order: a ghost line, or a card
- * deleted while the list held, is none. */
+/** The stops drawn in `list`, in their order. */
 function stopsIn(list: Element): HTMLElement[] {
-  return [...list.querySelectorAll<HTMLElement>(`[${PICK}]`)].filter(
-    (stop) => !stop.closest("[inert]")
-  )
+  return [...list.querySelectorAll<HTMLElement>(`[${PICK}]`)]
 }
 
 const keyOf = (stop: Element) => stop.getAttribute(PICK)!
@@ -82,16 +79,12 @@ const isCard = (stop: Element) => stop.hasAttribute("data-card")
 const unfolded = (stop: Element) =>
   stop.getAttribute("aria-expanded") === "true"
 
-/** `stops` as the selection reads them: a card that left the tab while
- * the list held is no card to check, nor is a Project's (`data-asks`),
- * which is no Thread. */
+/** `stops` as the selection reads them: a Project's card (`data-asks`)
+ * is no card to check, as it is no Thread. */
 const checkable = (stops: readonly Element[]): Stop[] =>
   stops.map((stop) => ({
     key: keyOf(stop),
-    card:
-      isCard(stop) &&
-      !stop.hasAttribute("data-went") &&
-      !stop.hasAttribute("data-asks"),
+    card: isCard(stop) && !stop.hasAttribute("data-asks"),
   }))
 
 /** The keys that move the pick, which Shift makes a range of. */

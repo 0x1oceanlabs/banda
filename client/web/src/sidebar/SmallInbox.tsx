@@ -229,7 +229,7 @@ function SmallList({
     someday,
     checks,
   }
-  const ordering = useOrdered(projects, settings, view, isCurrent)
+  const ordering = useOrdered(projects, settings, view)
   const { aside, ...keys } = useSidebarKeys(
     ordering,
     {
@@ -265,7 +265,7 @@ function SmallList({
             strayed={NONE}
             onToggle={NOTHING}
             engine={engine}
-            holds={ordering.holds}
+            now={ordering.now}
           />
         </PickList>
       </div>

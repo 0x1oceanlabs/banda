@@ -53,13 +53,6 @@ export type LaterTarget = {
 /** The Thread the picker is open for; none while it is closed. */
 const picking = new Store<LaterTarget | undefined>(undefined)
 const now = (target: LaterTarget | undefined) => target
-const anchorOf = (target: LaterTarget | undefined) => target?.anchor
-
-/** What the picker stands by while it is open: the list holds still while
- * that is one of its cards. */
-export function useLaterAnchor(): Element | undefined {
-  return useStore(picking, anchorOf)
-}
 
 /** Where the focus was as the picker opened, which it goes back to as it
  * closes (spec §2.7): the sidebar's list, or the Pane, never the page; and

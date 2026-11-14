@@ -86,24 +86,19 @@ test("the view menu picks how the list is grouped, a card's lines and Your turn'
   ])
 })
 
-test("its switches show the Inbox's parts and the hold as they are, and a click writes the other way", () => {
+test("its switches show the Inbox's parts as they are, and a click writes the other way", () => {
   draw({
     ...DEFAULT_SIDEBAR,
     inbox: { order: "oldest", open: true, working: false },
   })
-  const labels = [
-    "Open in the inbox",
-    "Working shelf in the inbox",
-    "Keep order under the pointer",
-  ]
+  const labels = ["Open in the inbox", "Working shelf in the inbox"]
   expect(
     labels.map((label) => switchOf(label).getAttribute("aria-checked"))
-  ).toEqual(["true", "false", "true"])
+  ).toEqual(["true", "false"])
   for (const label of labels) act(() => switchOf(label).click())
   expect(writes()).toEqual([
     ["sidebar.toml", "inbox.open", "false"],
     ["sidebar.toml", "inbox.working", "true"],
-    ["sidebar.toml", "hold.still", "false"],
   ])
 })
 

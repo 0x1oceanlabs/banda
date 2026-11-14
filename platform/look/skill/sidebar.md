@@ -28,9 +28,6 @@ not there yet, it starts as this template:
   no one waits forever) or `"newest"`. Alt+U walks the oldest first
   whatever it says. `open = false` leaves Open out of the Inbox, and
   `working = false` its Working shelf.
-- `[hold]` `still = false` lets the list move under the pointer; by
-  default its order keeps still there, and what is new takes its place
-  when the pointer leaves.
 
 ## Presets
 

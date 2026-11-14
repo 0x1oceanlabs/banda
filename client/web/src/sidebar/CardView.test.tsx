@@ -251,16 +251,6 @@ test("a working card's words and its Mark change together, each doing held 1.5 s
   host.remove()
 })
 
-test("one that left while the list held says where it went in its time's place, with no action", () => {
-  const html = drawn(rowOf("archived", { mark: "rest", archived: true }), {
-    place: "open",
-    went: { to: "archived", from: "open" },
-  })
-  expect(html).toContain(">Archived</span>")
-  expect(html).not.toContain("data-time")
-  expect(html).toContain("data-row")
-})
-
 test("its machine away, its time stands as it was then", () => {
   const html = drawn(rowOf("working", { mark: "working" }, "arc"), {
     machine: arc,
@@ -424,7 +414,7 @@ test("a card's acts: Later's clock first, then Archive's check, Wake's arrow bac
   expect(archived).toContain("lucide-archive-restore")
 })
 
-test("the acts and line 1's right share one cell, which keeps the acts' room while they show; no button holds them, and a card with none, or one that left, has no room", () => {
+test("the acts and line 1's right share one cell, which keeps the acts' room while they show; no button holds them, and a card with none has no room", () => {
   const html = drawn(
     rowOf("turn", { mark: "done" }),
     {},
@@ -444,16 +434,8 @@ test("the acts and line 1's right share one cell, which keeps the acts' room whi
   )
   expect(html).toMatch(/<\/button><\/span><\/div>$/)
 
-  // Without acts, line 1's right is as it was; one that left has none.
+  // Without acts, line 1's right is as it was.
   expect(drawn(rowOf("turn"))).not.toMatch(/data-acts/)
-  const gone = drawn(
-    rowOf("archived", { mark: "rest", archived: true }),
-    { place: "open", went: { to: "archived", from: "open" } },
-    false,
-    acts({ act: "unarchive" })
-  )
-  expect(gone).not.toMatch(/data-acts/)
-  expect(gone).toContain(">Archived</span>")
 })
 
 test("the acts' room keeps the diamond in sight: on one or two lines it stands after the title, before the cell; on three, on line 3 (ADR 0102, decision 6)", () => {

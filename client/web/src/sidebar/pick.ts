@@ -74,8 +74,7 @@ export function stepped(
 }
 
 /** A stop of the pick as the selection reads it: its key, and whether it
- * is a card that may be selected, not a folded group, "+ N more" or a
- * card that left the tab while the list held. */
+ * is a card that may be selected, not a folded group or "+ N more". */
 export type Stop = { key: string; card: boolean }
 
 /**

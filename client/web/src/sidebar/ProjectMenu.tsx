@@ -5,7 +5,6 @@ import {
   type RefObject,
   useContext,
   useRef,
-  useState,
 } from "react"
 import type { ProjectSummary } from "@banda/contract"
 import {
@@ -38,7 +37,6 @@ import type { ProjectAsks } from "./inbox"
 import type { Row } from "./rows"
 import { useOpen } from "./open"
 import { useActs } from "./useActs"
-import { HoldingContext, useHoldWhile } from "./useHold"
 
 /** Every row the sidebar list was made of, from which a Project's menu
  * archives its Threads; none outside the list. */
@@ -67,9 +65,8 @@ export function archivableIn(
  * settings…; then Archive its Threads,
  * those its cards may archive, told in the one Archived toast whose Undo
  * takes them all back; and Remove from Banda…, which asks first. Each runs
- * by the Window's actions, as their keys would. Open, it holds the list
- * still (decision 6). It is this machine's Projects' alone: another's acts
- * would go to this machine's engine.
+ * by the Window's actions, as their keys would. It is this machine's
+ * Projects' alone: another's acts would go to this machine's engine.
  */
 export function ProjectMenu({
   project,
@@ -84,11 +81,9 @@ export function ProjectMenu({
   className?: string
   children: ReactElement
 }) {
-  const [shown, setShown] = useState(false)
-  useHoldWhile(shown)
   const trigger = useRef<HTMLDivElement>(null)
   return (
-    <ContextMenu onOpenChange={setShown}>
+    <ContextMenu>
       <ContextMenuTrigger ref={trigger} className={className}>
         {children}
       </ContextMenuTrigger>
@@ -150,7 +145,7 @@ function Entries({
   const open = useOpen()
   const run = useRun()
   const later = useAfterMenu()
-  const actOn = useActs(useContext(HoldingContext))
+  const actOn = useActs()
   const archivable = archivableIn(useContext(ProjectRows), project)
   const { id, missing } = project
   const runs: Record<ProjectEntry, () => void> = {

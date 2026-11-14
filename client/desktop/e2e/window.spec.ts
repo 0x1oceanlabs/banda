@@ -5760,7 +5760,7 @@ test("a Thread's marks are its host's: unread and read, archived and back, each 
   await archive.click()
   await shelf.getByRole("option", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /^Unarchive/ }).click()
-  // Its ghost line stands in its slot till the pointer leaves the list.
+  // The pointer leaves the list, which then is drawn as it is.
   await leaveSidebar(page)
   await expect(shelf).toHaveCount(0)
   await expect(archive).toHaveAccessibleName("Archive")
@@ -6012,7 +6012,7 @@ test("the marks this window kept move to its host once, and its first list shows
   await archive.click()
   await shelf.getByRole("option", { name: /hello/ }).click({ button: "right" })
   await page.getByRole("menuitem", { name: /^Unarchive/ }).click()
-  // Its ghost line stands in its slot till the pointer leaves the list.
+  // The pointer leaves the list, which then is drawn as it is.
   await leaveSidebar(page)
   await expect(shelf).toHaveCount(0)
   await sidebar.getByRole("tab", { name: /^Inbox/ }).click()
@@ -6988,8 +6988,8 @@ test("a Project whose folder is gone is a card in Your turn, and Locate folder o
   await search.press("Enter")
   await expect(menu).toBeHidden()
   await expect(page.getByRole("button", { name: "Project: old" })).toBeVisible()
-  // Found, its card goes once the list no longer holds still under the
-  // pointer (ADR 0098, decision 6).
+  // Found, its card goes, and the list is drawn as it is once the pointer
+  // is off it (ADR 0098, decision 6).
   await leaveSidebar(page)
   await expect(old).toHaveCount(0)
 })

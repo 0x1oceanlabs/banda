@@ -13,8 +13,7 @@ import type { ProjectSummary } from "@banda/contract"
 import type { GroupBy } from "@banda/contract/sidebar"
 import { loudest, type MarkState } from "@banda/ui/lib/mark-state"
 import { lookOf, STAND_WORDS, type Stand } from "@banda/ui/status"
-import type { Row } from "./rows"
-import { itemKey, keyOf, rowKey } from "./hold"
+import { itemKey, keyOf, type Row, rowKey } from "./rows"
 import { dayAt } from "../calls/later-time"
 
 /** The tabs at the sidebar's top, in their order, as `1`–`4` pick them. */

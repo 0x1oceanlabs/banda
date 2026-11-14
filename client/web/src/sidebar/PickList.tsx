@@ -20,9 +20,8 @@ import { FIELDS } from "@banda/ui/lib/keys"
 import { focusedTile, type PaneState } from "@banda/ui/pane"
 import { PROJECT_CARD } from "../trust/TrustCard"
 import { actsOf } from "./acts"
-import type { Row } from "./rows"
+import { itemKey, keyOf, type Row } from "./rows"
 import { AskDelete, type Deleting, openCardMenu } from "./CardMenu"
-import { itemKey, keyOf } from "./hold"
 import type { ProjectAsks, Tab } from "./inbox"
 import { refused } from "./refusals"
 import {
@@ -42,7 +41,6 @@ import { useAskedTab } from "./showing"
 import { PANEL, tabId } from "./Tabs"
 import { undoLast } from "./undo"
 import { type SetAct, useActs, useDoing, useSetActs } from "./useActs"
-import type { Holding } from "./useHold"
 import { PICK, PickContext, usePick } from "./usePick"
 
 /** What the selection's bar reads (`BulkBar`): the cards checked, in
@@ -69,7 +67,7 @@ function toPane() {
  * card not again as its key is held. Undo takes back the newest act kept,
  * and the pick goes back to its card. Delete's question is the list's own
  * popup, kept here as `deleting`. A tab shown by its key is said
- * aloud, and so is inbox zero, when the Person's act brought it (`said`).
+ * aloud, and so is inbox zero, as it comes with the focus in the list (`said`).
  * `X` and `Space` check the card picked, `Ctrl+A` every card drawn
  * (decision 15); while cards are checked, `S`, `Z` and `U` act on them
  * all, as one act, and what an act leaves stays checked; how many are
@@ -80,11 +78,7 @@ function toPane() {
  * the focus in it.
  */
 export function useSidebarKeys(
-  {
-    ordered,
-    holder,
-    acted,
-  }: { ordered: Ordered; holder: Holding; acted: boolean },
+  { ordered }: { ordered: Ordered },
   view: {
     tab: Tab
     show: (tab: Tab) => void
@@ -115,8 +109,8 @@ export function useSidebarKeys(
     checks: [view.checks, view.setChecks],
   })
   const listbox = picking.list.ref
-  const actOn = useActs(holder)
-  const actOnSet = useSetActs(holder)
+  const actOn = useActs()
+  const actOnSet = useSetActs()
   // The cards checked, in the order the list has them.
   const checked = picking.checked
   const checkedRows = useMemo(
@@ -133,13 +127,11 @@ export function useSidebarKeys(
     return () => clearTimeout(timer)
   }, [count])
 
-  /** Does `act` on every card checked, from `anchor`, as the Person took
-   * it; what it leaves stays checked. By a key, the pick goes on as the
-   * cards go. */
+  /** Does `act` on every card checked, from `anchor`; what it leaves
+   * stays checked. By a key, the pick goes on as the cards go. */
   const onSet = (act: SetAct, anchor: Element, by: "key" | "pointer") =>
     actOnSet(checkedRows, act, {
       anchor,
-      by,
       ...(by === "key" ? { gone: picking.goneFrom } : {}),
       after: (left) => picking.checkOnly(left.map(itemKey)),
     })
@@ -156,13 +148,14 @@ export function useSidebarKeys(
   // The card whose Thread Delete asks about.
   const [deleting, setDeleting] = useState<Row>()
 
-  // Inbox zero, as the Person's own act brings it, is said once.
+  // Inbox zero, as it comes while the focus is in the list, is said once.
   const zero = ordered.zero
   const zeroed = useRef(zero !== undefined)
   useEffect(() => {
-    if (zero && !zeroed.current && acted) said.say(zeroSaid(zero, Date.now()))
+    if (zero && !zeroed.current && document.activeElement === listbox.current)
+      said.say(zeroSaid(zero, Date.now()))
     zeroed.current = zero !== undefined
-  }, [zero, acted])
+  }, [zero, listbox])
 
   /**
    * What a key does on the pick. On a group's header, Enter folds or
@@ -179,8 +172,7 @@ export function useSidebarKeys(
    * it. An act that takes the card out of the tab hands the pick on in the
    * keydown. S on a card that asks or works says why not, in a toast, and
    * the pick stays; U on one that asks does nothing, as a question waits
-   * until it is answered; a card that left the tab while the list held
-   * only opens.
+   * until it is answered.
    */
   const onPick = (does: Does) => {
     const at = picking.at()
@@ -205,12 +197,11 @@ export function useSidebarKeys(
     }
     const key = at.getAttribute(PICK)!
     const row = rows.get(key)
-    if (!row || (at.hasAttribute("data-went") && does !== "open")) return
+    if (!row) return
     const { listed } = row
     const project = row.project.id
     const on = {
       card: at.closest("[data-row]") ?? at,
-      by: "key" as const,
       gone: () => picking.goneFrom(new Set([key])),
     }
     switch (does) {

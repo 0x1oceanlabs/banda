@@ -19,7 +19,6 @@ import { useFence } from "@banda/ui/hooks/use-status"
 import { trustProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderIcon, GitBranchIcon, PlugIcon } from "lucide-react"
-import { useHoldWhile } from "../sidebar"
 import {
   askedOf,
   GITHUB_AND_SSH,
@@ -166,9 +165,6 @@ export function TrustCard({
 }) {
   const project = projects.find((one) => one.id === target?.project)
   const shown = target !== undefined && project !== undefined
-  // Anchored at a row of the sidebar list, it holds the list still while
-  // open (ADR 0098, decision 6); in Settings, nothing.
-  useHoldWhile(shown)
   return (
     <Popover open={shown} onOpenChange={(open) => !open && onClose()}>
       {target && project && (

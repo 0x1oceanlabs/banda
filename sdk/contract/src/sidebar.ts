@@ -11,7 +11,6 @@ export type { GroupBy } from "./generated/sidebar/GroupBy"
 export type { Card } from "./generated/sidebar/Card"
 export type { Inbox } from "./generated/sidebar/Inbox"
 export type { InboxOrder } from "./generated/sidebar/InboxOrder"
-export type { Hold } from "./generated/sidebar/Hold"
 export type { Sort } from "./generated/sidebar/Sort"
 export type { SortBy } from "./generated/sidebar/SortBy"
 export type { Projects } from "./generated/sidebar/Projects"
@@ -38,7 +37,6 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   group: "none",
   card: "auto",
   inbox: { order: "oldest", open: true, working: true },
-  hold: { still: true },
   sort: { by: "attention" },
   projects: { order: "changed", rollup: true },
   bar: {

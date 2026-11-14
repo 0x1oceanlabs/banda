@@ -1015,14 +1015,14 @@ export const toastsOf = (page: Page) =>
   page.getByRole("region", { name: "Notifications" })
 
 /**
- * The pointer leaves the Sidebar for the Strip: its list holds still
- * under the pointer, and moves once it leaves; a card the pointer put
- * away leaves a ghost line in its slot until then (ADR 0098, S5c).
+ * The pointer leaves the Sidebar for the Strip: its list keeps its order
+ * under the pointer, where a card new to the tab waits, and is drawn as
+ * it is once the pointer leaves (ADR 0098, decision 6).
  *
  * It never lands on a browser Pane's page, but just above it, on its
  * Pane: a move CDP sends goes straight to the frame under the point, so
  * one into a `<webview>` can reach that page alone, and the window's page
- * never hears the pointer leave its list, which then holds for good (seen
+ * never hears the pointer leave its list, which then keeps its order (seen
  * in motion.spec.ts). Whether a real mouse's moves do the same is not
  * checked yet: they go through Chromium's input router, which may tell the
  * window's page the pointer left. Until the window hears it from main,

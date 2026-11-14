@@ -15,7 +15,6 @@ import { ProjectRows } from "./ProjectMenu"
 import { SectionView } from "./SectionView"
 import { PickList, useSidebarKeys } from "./PickList"
 import { ShowTab, Tabs } from "./Tabs"
-import { HoldingContext } from "./useHold"
 import { useOrdered } from "./useOrdered"
 import { ToldSomeday, useSidebarView } from "./useSidebarView"
 
@@ -64,8 +63,8 @@ export function Sidebar({
   // The other machines of `hosts.toml`, below this one's (ADR 0081): each
   // host's state by its name.
   const hosts = useHosts()
-  const ordering = useOrdered(projects, settings, view, isCurrent)
-  const { ordered, holds, list } = ordering
+  const ordering = useOrdered(projects, settings, view)
+  const { ordered, now, list } = ordering
   // The aside, the keys' scope, goes to it alone, as the list's element.
   const { aside, ...keys } = useSidebarKeys(
     ordering,
@@ -88,7 +87,7 @@ export function Sidebar({
           strayed={strayed}
           onToggle={view.toggle}
           engine={engine}
-          holds={holds}
+          now={now}
         />
       )
     )
@@ -125,39 +124,36 @@ export function Sidebar({
           )}
         >
           <Tabs tabs={ordered.tabs} tab={view.tab} />
-          {/* What is in the list holds it, and so does the trust card; a
-          Project's menu archives its Threads by their rows. */}
-          <HoldingContext value={ordering.holder}>
-            <ProjectRows value={ordered.rows}>
-              {/* Where more Threads are below, the list fades out at its foot
+          {/* A Project's menu archives its Threads by their rows. */}
+          <ProjectRows value={ordered.rows}>
+            {/* Where more Threads are below, the list fades out at its foot
             instead of a line. */}
-              <ScrollArea
-                ref={scrollsIn}
-                {...list}
-                className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
-              >
-                <div className="flex flex-col gap-1 px-1.5 pb-2">
-                  <PickList
-                    tab={view.tab}
-                    picking={keys.picking}
-                    deleting={keys.deleting}
-                  >
-                    {/* This machine's list, where inbox zero tells the view it
+            <ScrollArea
+              ref={scrollsIn}
+              {...list}
+              className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]"
+            >
+              <div className="flex flex-col gap-1 px-1.5 pb-2">
+                <PickList
+                  tab={view.tab}
+                  picking={keys.picking}
+                  deleting={keys.deleting}
+                >
+                  {/* This machine's list, where inbox zero tells the view it
                   told of Someday. */}
-                    <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
-                    {/* Grouped by Project, each host's groups follow under its
+                  <ToldSomeday value={view.told}>{drawn()}</ToldSomeday>
+                  {/* Grouped by Project, each host's groups follow under its
                   label; grouped otherwise, its cards are among this
                   machine's, and the foot says how it stands. */}
-                    {settings.group === "project" &&
-                      hosts.map((host) => part(host, drawn(host.name)))}
-                  </PickList>
-                </div>
-              </ScrollArea>
-              <Foot bulk={keys.bulk} />
-              <AskedTrust engine={engine} projects={projects} />
-              <DeleteDialog deleting={keys.deleting} />
-            </ProjectRows>
-          </HoldingContext>
+                  {settings.group === "project" &&
+                    hosts.map((host) => part(host, drawn(host.name)))}
+                </PickList>
+              </div>
+            </ScrollArea>
+            <Foot bulk={keys.bulk} />
+            <AskedTrust engine={engine} projects={projects} />
+            <DeleteDialog deleting={keys.deleting} />
+          </ProjectRows>
         </aside>
       </ShowTab>
     </Dismiss>
