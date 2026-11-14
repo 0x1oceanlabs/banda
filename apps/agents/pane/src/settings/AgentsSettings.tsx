@@ -51,9 +51,6 @@ import { AccountSetup } from "./AccountSetup"
 import { AccountPage, Row, type Roles } from "./AccountPage"
 import { groupsOf, pickStart, useUses } from "./accounts"
 
-/** Where the window's settings say why a new Thread starts Supervised. */
-export { FENCE_LINK } from "./fence"
-
 /**
  * A settings file, as the settings Pane writes it (ADR 0016): through
  * `banda settings`, which keeps the Person's text and refuses what the

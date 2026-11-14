@@ -11,8 +11,9 @@ import { expect, test } from "vitest"
 const PANE = [
   // The browser's contract says what `browser.toml` holds: where the tabs
   // go, and the search. The bridge says what the desktop does for the
-  // browser (ADR 0028).
-  /^@banda\/contract(\/browser|\/bridge)?$/,
+  // browser (ADR 0028). The settings' say what its section of Settings
+  // is about, and write a value as TOML.
+  /^@banda\/contract(\/browser|\/bridge|\/settings)?$/,
   // The client's core, by the one door an App takes to it (ADR 0089).
   /^@banda\/core\/react$/,
   /^@banda\/ui\//,

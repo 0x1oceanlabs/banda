@@ -11,8 +11,8 @@ import { type Chime, player } from "@banda/ui/sound"
 import { PlayIcon } from "lucide-react"
 import { useLookSidebar, useLookSound } from "../look"
 import { PRESET_WORDS } from "../sidebar"
-import type { CustomRow } from "./sections"
-import { Choice } from "./SettingRow"
+import type { CustomRow } from "@banda/ui/settings"
+import { Choice } from "@banda/ui/components/setting-row"
 
 /** The sidebar's preset, from Banda's and the Person's own. */
 export const PresetPicker: CustomRow = ({ set }) => {

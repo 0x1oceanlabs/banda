@@ -156,6 +156,21 @@ test("Agents show each account as a card, its page who is signed in, and write h
   await asking.getByRole("button", { name: "Sign out" }).click()
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
+  // A way that runs in a terminal opens one over the settings, in a
+  // dialog (`SectionProps.open`): a code there signs in.
+  await fake.getByRole("button", { name: "Sign in with Fake account" }).click()
+  const over = page.getByRole("dialog", { name: "Sign in: Fake account" })
+  const screen = over.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type("fake-code")
+  await page.keyboard.press("Enter")
+  await expect(fake.getByText("person@example.invalid")).toBeVisible()
+  await expect(over).toBeHidden()
+  await fake.getByRole("button", { name: "Sign out" }).click()
+  await asking.getByRole("button", { name: "Sign out" }).click()
+  await expect(fake.getByText("Not signed in.")).toBeVisible()
+
   // What a new Thread starts with is agents.toml's, set from the
   // composer's own bar, and ↶ gives it back to the Harness. The file's
   // Full access shows as Supervised until the Person picks it here.

@@ -25,7 +25,7 @@ use std::collections::{BTreeMap, BTreeSet};
 /// How many unstable marks the modules hold (ADR 0022, decision 6). A
 /// mark more fails the tests until a PR raises this and says why; a mark
 /// fewer fails them until it is lowered, so the count only falls.
-pub const CEILING: usize = 2;
+pub const CEILING: usize = 1;
 
 /// What a manifest holds: only what no code says.
 #[derive(Serialize, Deserialize)]

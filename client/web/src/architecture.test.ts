@@ -158,7 +158,6 @@ const reachesModule = (name: string) =>
 /** Each file that still reaches a module, and the mark that says why:
  * `<module>.<mark>`, from `[unstable]` in its module's manifest. */
 const STILL: Record<string, string> = {
-  "web/src/settings/Agents.tsx": "agents.settings-section",
   "desktop/src/preload.ts": "browser.desktop-preload",
 }
 
@@ -697,8 +696,6 @@ test("one place answers a pick, and only the action reaches it", () => {
  * list and the boot were, for the agents App's alone. None of them names
  * an App (ADR 0087, decision 1). What is left, and what takes it:
  *
- * - `settings/sections.ts` and `settings/Agents.tsx`: the sections of the
- *   Apps' settings files, which each App declares next (WS8, part 2).
  * - `thread.new` in the Window's root, the menu and Settings' Problems,
  *   `terminal.run` in Settings' Machines and `files.…` in the Window's
  *   actions: asked of an App by name, which go with intents (B8c, #1748).
@@ -710,29 +707,19 @@ test("one place answers a pick, and only the action reaches it", () => {
  *   (#1750).
  *
  * The menu's usual Actions left it with WS8: an App says its own
- * (`Action.usual`). None joins the list, and one that goes leaves it. Not
- * what only tests use.
+ * (`Action.usual`); and so did the sections of the Apps' settings files,
+ * which each App declares (`Module.settings`). None joins the list, and
+ * one that goes leaves it. Not what only tests use.
  */
 const APP_STRINGS = [
   "web/src/enter-key.ts: agents.toml",
   "web/src/enter-key.ts: agents.toml",
   "web/src/menu/BandaMenu.tsx: thread.new",
-  "web/src/settings/Agents.tsx: agents.toml",
   "web/src/settings/MachinesSettings.tsx: terminal.run",
   "web/src/settings/Mod.tsx: thread.new",
   "web/src/settings/Mod.tsx: terminal.new",
   "web/src/settings/ProblemsSettings.tsx: thread.new",
   "web/src/settings/RemoveProject.tsx: agents.threads",
-  "web/src/settings/sections.ts: agents.toml",
-  "web/src/settings/sections.ts: agents.toml",
-  "web/src/settings/sections.ts: browser.toml",
-  "web/src/settings/sections.ts: browser.toml",
-  "web/src/settings/sections.ts: agents.sites",
-  "web/src/settings/sections.ts: browser.toml",
-  "web/src/settings/sections.ts: terminal.toml",
-  "web/src/settings/sections.ts: terminal.toml",
-  "web/src/settings/sections.ts: files.toml",
-  "web/src/settings/sections.ts: files.toml",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",
   "web/src/window/Shell.tsx: thread.new",

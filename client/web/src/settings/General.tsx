@@ -20,8 +20,8 @@ import { useLookConfig } from "../look"
 import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 import { THIS_COMPUTER } from "@banda/ui/lib/outside"
 import { FenceRow } from "./Fence"
-import type { SectionProps } from "./sections"
-import { Whose } from "./SettingRow"
+import type { SectionProps } from "@banda/ui/settings"
+import { Whose } from "@banda/ui/components/setting-row"
 import { device } from "../boot"
 
 export function General({ engine, there, lit, run }: SectionProps) {

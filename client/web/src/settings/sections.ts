@@ -1,43 +1,25 @@
 /**
- * The settings Pane's sections (ADR 0016, decision 8). Sections follow
- * what a Person looks for, not the files: Sounds & calls is a section, yet
- * its keys stay in `look.toml`. A section names its files and the tables of
- * each that it shows; a file that names none shows the tables no other
- * section takes. Its rows come from the file's schema, so a new key in Rust
- * shows with no list kept here; a row the schema cannot draw well, the
- * section draws itself (decision 4).
+ * The settings Pane's sections (ADR 0016, decision 8): the Window's own,
+ * which are here, and each App's, which the App declares
+ * (`Module.settings`; the window's rule 4), in the modules' order. What a
+ * section is, `@banda/ui/settings` says.
  */
-import type { ComponentType, ReactNode } from "react"
-import type { Engine } from "@banda/contract"
-import type { WindowApi } from "@banda/ui/module"
-import type { Handles } from "../tiling/mount"
-import {
-  aboutOf,
-  type Row,
-  rowsOf,
-  type Setting,
-  titleOf,
-} from "@banda/contract/settings"
+import type { Section, SectionFile } from "@banda/ui/settings"
+import { aboutOf, type Row, rowsOf, titleOf } from "@banda/contract/settings"
 import {
   BellIcon,
-  BotIcon,
   BugIcon,
   Columns3Icon,
   FileCogIcon,
-  FolderIcon,
   FoldersIcon,
-  GlobeIcon,
   KeyboardIcon,
-  type LucideIcon,
   MonitorSmartphoneIcon,
   PaletteIcon,
   PanelLeftIcon,
   SettingsIcon,
   Share2Icon,
-  TerminalIcon,
 } from "lucide-react"
-import { Agents } from "./Agents"
-import { BrowserSites } from "./BrowserSites"
+import { modules } from "../modules"
 import { General } from "./General"
 import { Keys } from "./Keys"
 import { MachinesSettings } from "./MachinesSettings"
@@ -49,79 +31,6 @@ import { SharingSettings } from "./SharingSettings"
 import { ProjectsSettings } from "./ProjectsSettings"
 import { ThemePicker } from "./ThemePicker"
 import { RULES_ROW, Shares, TilingRules } from "./Tiling"
-
-/** A row a section draws itself: the value now, how to set it, and the
- * control the schema would draw, to wrap. */
-export type CustomRow = ComponentType<{
-  row: Row
-  setting?: Setting
-  set: (value: string) => void
-  control: ReactNode
-}>
-
-/** A file a section shows. */
-export type SectionFile = {
-  name: string
-  /** Its tables the section shows; none, the ones no other section takes. */
-  tables?: string[]
-  /** One heading over all its rows, instead of one for each table. */
-  title?: string
-  /** Its tables are the section's Body's or Foot's to draw, not rows:
-   * `agents.toml`'s `start`, on each Harness's card. */
-  drawn?: boolean
-  /** Individual keys drawn by the section's Body or Foot. Other keys
-   * still get their controls from the schema. */
-  drawnKeys?: string[]
-  /** The rows of a `drawn` file a search still finds, in the words its
-   * Body draws them with, and lands on there. */
-  found?: Row[]
-  /** They matter only with another machine in `hosts.toml`: with none,
-   * the section draws them nowhere, so a search finds none of them. */
-  others?: boolean
-}
-
-export type Section = {
-  /** Its part of a link: `appearance` in `appearance/radius`. */
-  id: string
-  title: string
-  icon: LucideIcon
-  /** The files its rows are in, its own first: the one it opens, and
-   * the one its Body draws. None for Settings files, which lists them. */
-  files?: SectionFile[]
-  /** What it holds, under its title. */
-  about: string
-  /** Whether it shows one machine's part, the one picked under "Settings
-   * for" (`switches`): said where its files do not say it. General,
-   * Projects and Problems show what a machine's engine keeps, in no file
-   * (ADR 0124, principle 9); Machines shows every machine itself. */
-  machine?: boolean
-  /** Its own rows, by key. */
-  custom?: { [key: string]: CustomRow }
-  /** What it shows instead of its first file's rows, as a module draws
-   * it; `lit` is the part a link names. */
-  Body?: ComponentType<SectionProps>
-  /** What it shows under its rows, as a module draws it. */
-  Foot?: ComponentType<SectionProps>
-}
-
-/** What a section's own Body is drawn with. */
-export type SectionProps = {
-  /** The engine of the machine it shows: this one's, or the machine
-   * picked under "Settings for" (ADR 0106, step 5b). */
-  engine: Engine
-  /** That other machine, by its key in `hosts.toml`; none for this one. */
-  on?: string
-  /** That other machine's name, as the Window shows it, for the words
-   * that say whose a thing is; none for this one. */
-  there?: string
-  /** The part of it a link names. */
-  lit?: string
-  /** Runs a window's action for the machine it shows, through the router
-   * (ADR 0106, law 3); none in a dialog of the settings. */
-  run?: WindowApi["run"]
-  /** Whether an action runs for that machine, and why not. */
-  runs?: Handles["runs"]
-}
 
 export const SECTIONS: Section[] = [
   {
@@ -210,49 +119,8 @@ export const SECTIONS: Section[] = [
       "sound.failed": PlaySound,
     },
   },
-  {
-    id: "agents",
-    title: "Agents",
-    icon: BotIcon,
-    files: [
-      { name: "harnesses.toml" },
-      { name: "agents.toml", tables: ["start"], drawn: true },
-      { name: "agents.toml", title: "Writing to an Agent" },
-    ],
-    about:
-      "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",
-    Body: Agents,
-  },
-  {
-    id: "browser",
-    title: "Browser",
-    icon: GlobeIcon,
-    files: [
-      { name: "browser.toml" },
-      {
-        name: "browser.toml",
-        tables: ["agents"],
-        title: "Agent tools",
-        drawnKeys: ["agents.sites"],
-      },
-    ],
-    about: aboutOf("browser.toml"),
-    Foot: BrowserSites,
-  },
-  {
-    id: "terminal",
-    title: "Terminal",
-    icon: TerminalIcon,
-    files: [{ name: "terminal.toml" }],
-    about: aboutOf("terminal.toml"),
-  },
-  {
-    id: "files",
-    title: "Files",
-    icon: FolderIcon,
-    files: [{ name: "files.toml" }],
-    about: aboutOf("files.toml"),
-  },
+  // Each App's own, as it declares it.
+  ...modules.flatMap((module) => module.settings ?? []),
   {
     id: "keys",
     title: "Keys",

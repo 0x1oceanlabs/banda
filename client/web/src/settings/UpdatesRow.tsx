@@ -23,7 +23,7 @@ import type { Named } from "@banda/contract/machines"
 import { useHeard } from "../bar/update/heard"
 import { rowOf, TAKES } from "../bar/update/machines"
 import { useUpdateThere } from "../bar/update/Update"
-import { RowFrame } from "./SettingRow"
+import { RowFrame } from "@banda/ui/components/setting-row"
 
 /** The line of machine `host`'s updates, this machine's where none:
  * "dev.640 → dev.642. Updates by itself once 2 Agents finish." */

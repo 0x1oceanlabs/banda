@@ -16,8 +16,3 @@ settings = ["agents.toml"]
 # What it needs of Banda (ADR 0082, decision 2): nothing it could
 # declare here is built yet.
 [needs]
-
-# Paths it takes that a module from elsewhere would lack (ADR 0022,
-# decision 6), each with why. One that gets its place in the contract goes.
-[unstable]
-settings-section = "the settings Pane draws its Harnesses section (client/web/src/settings/Agents.tsx): a module cannot declare a section yet (ADR 0016)"

@@ -5,8 +5,8 @@
  */
 import { tomlOf } from "@banda/contract/settings"
 import { useThemes } from "../look"
-import type { CustomRow } from "./sections"
-import { Choice } from "./SettingRow"
+import type { CustomRow } from "@banda/ui/settings"
+import { Choice } from "@banda/ui/components/setting-row"
 
 export const ThemePicker: CustomRow = ({ setting, set }) => {
   const themes = useThemes(true)

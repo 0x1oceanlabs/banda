@@ -11,7 +11,8 @@ import { expect, test } from "vitest"
 const PANE = [
   // Ghostty draws the screen: T3 Code's adapter, vendored in client/ghostty.
   /^@banda\/ghostty$/,
-  /^@banda\/contract(\/terminal)?$/,
+  // The settings' say what its section of Settings is about.
+  /^@banda\/contract(\/terminal|\/settings)?$/,
   // The client's core, by the one door an App takes to it (ADR 0089).
   /^@banda\/core\/react$/,
   /^@banda\/ui\//,

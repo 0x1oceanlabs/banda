@@ -7,15 +7,14 @@
  */
 import { BROWSER_FILE, type SiteRule, siteKey } from "@banda/contract/browser"
 import { tomlOf } from "@banda/contract/settings"
+import { Choice, Group, RowFrame } from "@banda/ui/components/setting-row"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { useFile } from "@banda/ui/lib/look"
-import type { SectionProps } from "./sections"
-import { Choice, Group, RowFrame } from "./SettingRow"
-import { device } from "../boot"
+import type { SectionProps, SettingsWriter } from "@banda/ui/settings"
 
 const RULES = [{ value: "allow" }, { value: "deny" }]
 
-export function BrowserSites({ lit }: SectionProps) {
+export function BrowserSites({ lit, device }: SectionProps) {
   const { sites } = useFile(BROWSER_FILE)
   const all = Object.entries(sites)
   return (
@@ -27,7 +26,13 @@ export function BrowserSites({ lit }: SectionProps) {
           </p>
         ) : (
           all.map(([site, rule]) => (
-            <Site key={site} site={site} rule={rule} lit={lit} />
+            <Site
+              key={site}
+              site={site}
+              rule={rule}
+              lit={lit}
+              settings={device}
+            />
           ))
         )}
       </Group>
@@ -44,14 +49,16 @@ function Site({
   site,
   rule,
   lit,
+  settings,
 }: {
   site: string
   rule: SiteRule
   /** The key a link names. */
   lit?: string
+  /** This device's files, where the window writes them. */
+  settings?: SettingsWriter
 }) {
   const { refused, write } = useWrite({ against: rule })
-  const settings = device.settings.writes() ? device.settings : undefined
   const key = siteKey(site)
   return (
     <RowFrame

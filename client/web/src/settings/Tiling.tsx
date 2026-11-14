@@ -11,8 +11,9 @@ import { Button } from "@banda/ui/components/button"
 import { useFile } from "@banda/ui/lib/look"
 import { ExternalLinkIcon } from "lucide-react"
 import { device } from "../boot"
-import type { CustomRow, SectionProps } from "./sections"
-import { Field, Group, RowFrame } from "./SettingRow"
+import type { CustomRow, SectionProps } from "@banda/ui/settings"
+import { Group, RowFrame } from "@banda/ui/components/setting-row"
+import { Field } from "./SettingRow"
 
 /** A list of shares, `columns.presets`, as one field: `1/3, 1/2, 2/3, 1`.
  * What is no share the file's own check refuses, and the row says so. */

@@ -1,6 +1,6 @@
 import type { Engine } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
-import { RowFrame, Rows } from "../settings/SettingRow"
+import { RowFrame, Rows } from "@banda/ui/components/setting-row"
 import { asideWords, useBringBack } from "../tiling/AsidePill"
 import { useArranged } from "../tiling/useArranged"
 

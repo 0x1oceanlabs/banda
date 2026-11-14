@@ -17,8 +17,8 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/core/react"
 import { PLACES, useProblems } from "../problems/live"
 import { lookingInto } from "../problems/look"
-import type { SectionProps } from "./sections"
-import { Group, Rows } from "./SettingRow"
+import type { SectionProps } from "@banda/ui/settings"
+import { Group, Rows } from "@banda/ui/components/setting-row"
 import { device } from "../boot"
 
 /** Where the window keeps when the section was last open: for this

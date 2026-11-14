@@ -14,8 +14,8 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/core/react"
-import type { SectionProps } from "./sections"
-import { Group, Rows } from "./SettingRow"
+import type { SectionProps } from "@banda/ui/settings"
+import { Group, Rows } from "@banda/ui/components/setting-row"
 
 const NEVER: Record<Never, string> = {
   checkout:
